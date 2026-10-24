@@ -46,6 +46,11 @@ public_ed_key="$(ac_identity AC_PUBLIC_ED_KEY)"
 for setting in product_name team_id bundle_id repo notes_page public_ed_key; do
   [ -n "${!setting}" ] || { echo "error: the app's identity has no $setting (apps/browser/macos/Identity.xcconfig, Fork.xcconfig)" >&2; exit 1; }
 done
+case "$public_ed_key" in
+  PLACEHOLDER* | *[!A-Za-z0-9+/=]*)
+    echo "error: AC_PUBLIC_ED_KEY is '$public_ed_key', not a Sparkle public key: generate the key and paste its public half into Fork.xcconfig (docs/releasing.md › Shipping your own fork)" >&2
+    exit 1 ;;
+esac
 notary_profile="${NOTARY_PROFILE:-ardia}"
 [ -f "$root/scripts/.notary.env" ] && . "$root/scripts/.notary.env"
 if [ -n "${NOTARY_KEY:-}" ]; then

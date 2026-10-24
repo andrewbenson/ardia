@@ -220,28 +220,38 @@ so any machine releases the same app.
 `PRODUCT_NAME` stays `Ardia`: the executable, `Ardia.app` in `dist/`, the dSYM and the test scripts all depend on it.
 The bundle the user sees is named after `AC_PRODUCT_NAME`; the release assets keep their `Ardia-<version>` names.
 
-To ship a fork:
+This fork is **Vista**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Vista`, `com.hill.vista`, team
+`33W8BDN775`, Sparkle account `vista`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
+switches empty) except `AC_PUBLIC_ED_KEY`, which is `PLACEHOLDER_VISTA_SPARKLE_PUBLIC_KEY` until the key exists.
+release.sh refuses to run with a placeholder key. It stays inactive until it's copied into place.
 
-1. `cp apps/browser/macos/Fork.xcconfig.example apps/browser/macos/Fork.xcconfig`, then pick the name: `AC_PRODUCT_NAME`,
-   `AC_BUNDLE_ID` (`com.hill.<name>`, lower-case letters and digits) and `AC_SPARKLE_ACCOUNT`. An xcconfig reads `//` as
-   the start of a comment, so URLs are written `https:/$()/host/…`, and so is a public key that contains `//`. Keep
-   `AC_TELEMETRY_URL` and `AC_SWITCHES_URL` empty unless the fork runs its own: a fork must never post into upstream's
-   telemetry or obey upstream's kill switches. Check what it resolves to:
+To turn it on:
+
+1. Generate the Sparkle key on a machine with Pods:
+   `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account vista`. It makes the key in the login keychain and
+   prints its public half. Back it up at once (`generate_keys --account vista -x <file>`, kept outside the repo):
+   without it no copy can ever be updated again.
+2. Paste the public half into `AC_PUBLIC_ED_KEY` in `Fork.xcconfig.example`. An xcconfig reads `//` as the start of a
+   comment, so a key that contains `//` is written with `/$()/` there, as the URLs are.
+3. `git mv apps/browser/macos/Fork.xcconfig.example apps/browser/macos/Fork.xcconfig` and commit it, so every machine
+   builds Vista. Check what it resolves to:
    `xcodebuild -showBuildSettings -project apps/browser/macos/Ardia.xcodeproj -target Ardia-macOS -configuration Release | grep ' AC_'`.
-2. The Sparkle key: `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account <name>` makes it in the login keychain
-   and prints its public half, which goes in `AC_PUBLIC_ED_KEY`. Back it up at once
-   (`generate_keys --account <name> -x <file>`, kept outside the repo): without it no copy can ever be updated again.
-   release.sh refuses to sign with a key whose public half isn't `AC_PUBLIC_ED_KEY`.
-3. Apple: the team's **Developer ID Application** certificate in the login keychain (release.sh takes the identity whose
+   Keep `AC_TELEMETRY_URL` and `AC_SWITCHES_URL` empty unless the fork runs its own: a fork must never post into
+   upstream's telemetry or obey upstream's kill switches. release.sh refuses to sign with a Sparkle key whose public
+   half isn't `AC_PUBLIC_ED_KEY`.
+
+Then, once per release machine:
+
+1. Apple: the team's **Developer ID Application** certificate in the login keychain (release.sh takes the identity whose
    name ends in `(<team id>)`), and Xcode signed in to the team. Register the App ID `<bundle id>` and make a Developer ID
    provisioning profile for it that allows the keychain groups `<team id>.<bundle id>.webauthn`, `.unexportable-keys`
    and `.secure-payment-confirmation` (`Ardia.entitlements`); the export fetches it with `-allowProvisioningUpdates`,
    and release.sh stops without an `embedded.provisionprofile`.
-4. Notarization: an App Store Connect API key for the team in `scripts/.notary.env`, or a notarytool profile
+2. Notarization: an App Store Connect API key for the team in `scripts/.notary.env`, or a notarytool profile
    (`NOTARY_PROFILE=<profile>`), as in "Once per machine".
-5. The DMG's layout positions icons by name: run `scripts/dmg/layout.sh <Name>` once and commit
-   `scripts/dmg/DS_Store-<Name>`, which release.sh prefers over upstream's `DS_Store`.
-6. The first release has no published feed to build on: `APPCAST_BASE=none scripts/release.sh <version>`. Later ones
+3. The DMG's layout positions icons by name: run `scripts/dmg/layout.sh Vista` once and commit
+   `scripts/dmg/DS_Store-Vista`, which release.sh prefers over upstream's `DS_Store`.
+4. The first release has no published feed to build on: `APPCAST_BASE=none scripts/release.sh <version>`. Later ones
    read `https://github.com/<repo>/releases/latest/download/appcast.xml`, which `AC_FEED_URL` should point at.
 
 Still upstream's in a fork:

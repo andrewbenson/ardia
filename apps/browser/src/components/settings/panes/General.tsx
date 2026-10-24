@@ -6,6 +6,7 @@ import {
   setLaunchAtLogin,
   setUpdateChannel,
   Symbol,
+  systemInfo,
   type UpdateChannel,
 } from "@ardia/shell";
 import { useEffect } from "react";
@@ -130,7 +131,7 @@ function UpdatesSection() {
     <>
       <SectionHeader title="Updates" description={ready ? undefined : "Updates aren't set up for this build."} />
       <Group>
-        <Row anchor="general.updateChecks" description={`${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}`}>
+        <Row anchor="general.updateChecks" description={systemInfo().switchesURL ? `${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}` : undefined}>
           <Toggle value={ready && state.automaticChecks} disabled={!ready} onChange={(v) => set({ automaticChecks: v })} />
         </Row>
         <Row anchor="general.autoUpdate">

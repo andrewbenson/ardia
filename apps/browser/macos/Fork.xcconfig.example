@@ -1,0 +1,10 @@
+AC_PRODUCT_NAME = Name
+AC_TEAM_ID = 33W8BDN775
+AC_BUNDLE_ID = com.hill.name
+AC_FEED_URL = https:/$()/github.com/andrewbenson/ardia/releases/latest/download/appcast.xml
+AC_PUBLIC_ED_KEY = REPLACE_WITH_GENERATE_KEYS_PUBLIC_KEY
+AC_SPARKLE_ACCOUNT = name
+AC_RELEASE_REPO = andrewbenson/ardia
+AC_NOTES_URL = https:/$()/github.com/andrewbenson/ardia/releases
+AC_TELEMETRY_URL =
+AC_SWITCHES_URL =

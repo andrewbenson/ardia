@@ -1,5 +1,6 @@
 import { launchEnvironment, readDocument, stopIntroMusic, writeDocument } from "@ardia/shell";
 import { create } from "zustand";
+import { telemetryAvailable } from "../../telemetry/client";
 import { useBrowser } from "../../store/browser";
 import { resolveWindowId } from "../../store/model";
 import { pinSites } from "./sites";
@@ -28,7 +29,7 @@ export const useOnboarding = create<OnboardingState>((set, get) => ({
   go: (step) => set({ step }),
   next() {
     const i = STEPS.indexOf(get().step);
-    const step = STEPS[i + 1];
+    const step = STEPS.slice(i + 1).find((s) => s !== "privacy" || telemetryAvailable());
     if (step) set({ step });
     else finishOnboarding();
   },

@@ -142,6 +142,7 @@ export const TabRow = memo(function TabRow({ tabId, onto = false, shift = null }
                 <HoverSlot
                   hovered={hovered && !renaming}
                   width={22}
+                  idleWidth={0}
                   hover={<IconButton icon="xmark" size={10} weight="semibold" box={22} radius={6} onPress={() => void closeTab(tab.id)} tooltip="Close Tab (⌘W)" />}
                 >
                   {loading && <ActivitySpinner style={{ width: 12, height: 12, marginRight: 2 }} />}

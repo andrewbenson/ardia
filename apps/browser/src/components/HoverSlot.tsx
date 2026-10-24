@@ -5,18 +5,20 @@ export function HoverSlot({
   hovered,
   hover,
   width,
+  idleWidth = width,
   children,
   style,
 }: {
   hovered: boolean;
   hover: ReactNode;
   width: number;
+  idleWidth?: number;
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
   const showHover = hovered && hover != null && hover !== false;
   return (
-    <View style={[{ minWidth: width, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }, style]}>
+    <View style={[{ minWidth: showHover ? width : idleWidth, alignSelf: "stretch", flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }, style]}>
       {children != null && children !== false ? (
         <View pointerEvents={showHover ? "none" : "box-none"} style={{ flexDirection: "row", alignItems: "center", opacity: showHover ? 0 : 1 }}>
           {children}

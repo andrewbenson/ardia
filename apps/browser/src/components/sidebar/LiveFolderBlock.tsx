@@ -344,6 +344,7 @@ function LiveItemRow({ folderId, item, windowId, indent = 0 }: { folderId: strin
                 <HoverSlot
                   hovered={hovered && !!tabId && !completion}
                   width={22}
+                  idleWidth={0}
                   hover={<IconButton icon="xmark" size={10} weight="semibold" box={22} radius={6} onPress={() => tabId && void closeTab(tabId)} tooltip="Close Tab (⌘W)" />}
                 >
                   <Trailing item={item} completion={completion} colors={colors} />

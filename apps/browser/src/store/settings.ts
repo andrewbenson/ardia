@@ -11,6 +11,7 @@ import {
   type SearchEngine,
 } from "@ardia/core";
 import type { StateCreator } from "zustand";
+import type { DeveloperModeState } from "../lib/developerMode";
 import type { BrowserState } from "./browser";
 
 export type SearchEngineId = string;
@@ -42,8 +43,8 @@ export type Settings = {
   autoGroupMeetingTabs: boolean;
   cleanUpInactiveTabsAfterHours: number | null;
   mutedSites: string[];
-  developerModeSites: string[];
   neverTranslateSites: Record<string, string[]>;
+  developerMode: Record<string, DeveloperModeState>;
   autoPictureInPicture: boolean;
   videoUpscaling: boolean;
   sidebarMediaControls: boolean;
@@ -106,8 +107,8 @@ export const DEFAULT_SETTINGS: Settings = {
   autoGroupMeetingTabs: true,
   cleanUpInactiveTabsAfterHours: null,
   mutedSites: [],
-  developerModeSites: [],
   neverTranslateSites: {},
+  developerMode: {},
   autoPictureInPicture: true,
   videoUpscaling: true,
   sidebarMediaControls: true,

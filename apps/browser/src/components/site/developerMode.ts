@@ -1,66 +1,77 @@
-import { setDeveloperHosts } from "@ardia/ardiacore";
-import { canToggleDeveloperMode, isDeveloperMode, withDeveloperMode } from "../../lib/developerMode";
+import { developerModeOf, isDeveloperMode, NO_DEVELOPER_MODE, withDeveloperMode, developerHostOf, type DeveloperModeState, type DeveloperReload } from "../../lib/developerMode";
 import { useBrowser } from "../../store/browser";
-import { useSettings } from "../../store/hooks";
-import { isIncognitoProfile } from "../../store/model";
+import { incognitoOriginal, isIncognitoProfile } from "../../store/model";
 import type { Settings } from "../../store/settings";
-import { patchPage, pageOf } from "../layout/pageState";
 
-const NO_SITES: string[] = [];
+const ownerOf = (profileId: string) => (isIncognitoProfile(profileId) ? incognitoOriginal(profileId) : profileId);
 
-export const developerSites = (settings: Pick<Settings, "developerModeSites">): string[] =>
-  Array.isArray(settings.developerModeSites) ? settings.developerModeSites.filter((h) => typeof h === "string") : NO_SITES;
+export function developerModeFor(settings: Pick<Settings, "developerMode">, profileId: string): DeveloperModeState {
+  const raw = settings.developerMode?.[ownerOf(profileId)];
+  return raw ? developerModeOf(raw) : NO_DEVELOPER_MODE;
+}
 
-export const inDeveloperMode = (url: string | undefined): boolean =>
-  !!url && isDeveloperMode(url, { sites: developerSites(useBrowser.getState().settings) });
+const tabOf = (tabId: string | undefined) => (tabId ? useBrowser.getState().tabs[tabId] : undefined);
 
-export function useDeveloperMode(url: string | undefined): boolean {
-  const sites = useSettings((s) => s.developerModeSites);
-  return !!url && isDeveloperMode(url, { sites: Array.isArray(sites) ? sites : NO_SITES });
+export function tabInDeveloperMode(tabId: string | undefined): boolean {
+  const tab = tabOf(tabId);
+  return !!tab && isDeveloperMode(tab.url, developerModeFor(useBrowser.getState().settings, tab.profileId));
+}
+
+export function useDeveloperMode(url: string | undefined, profileId: string | undefined): boolean {
+  const raw = useBrowser((s) => (profileId ? s.settings.developerMode?.[ownerOf(profileId)] : undefined));
+  return !!url && !!profileId && isDeveloperMode(url, raw ? developerModeOf(raw) : NO_DEVELOPER_MODE);
 }
 
 export function canToggleDeveloperModeFor(tabId: string | undefined): boolean {
-  const tab = tabId ? useBrowser.getState().tabs[tabId] : undefined;
-  return !!tab && !isIncognitoProfile(tab.profileId) && canToggleDeveloperMode(tab.url);
+  const tab = tabOf(tabId);
+  return !!tab && !isIncognitoProfile(tab.profileId) && !!developerHostOf(tab.url);
+}
+
+function updateProfile(profileId: string, change: (state: DeveloperModeState) => DeveloperModeState) {
+  const s = useBrowser.getState();
+  const all = s.settings.developerMode ?? {};
+  s.updateSettings({ developerMode: { ...all, [profileId]: change(developerModeFor(s.settings, profileId)) } });
 }
 
 export function setDeveloperModeFor(tabId: string, on: boolean) {
-  const s = useBrowser.getState();
-  const tab = s.tabs[tabId];
+  const tab = tabOf(tabId);
   if (!tab || !canToggleDeveloperModeFor(tabId)) return;
-  s.updateSettings({ developerModeSites: withDeveloperMode(developerSites(s.settings), tab.url, on) });
+  updateProfile(tab.profileId, (state) => withDeveloperMode(state, tab.url, on));
 }
 
 export function toggleDeveloperModeFor(tabId: string | undefined) {
-  const tab = tabId ? useBrowser.getState().tabs[tabId] : undefined;
-  if (tab) setDeveloperModeFor(tab.id, !inDeveloperMode(tab.url));
+  if (tabId) setDeveloperModeFor(tabId, !tabInDeveloperMode(tabId));
+}
+
+export function developerReloadFor(tabId: string): DeveloperReload {
+  const tab = tabOf(tabId);
+  return tab ? developerModeFor(useBrowser.getState().settings, tab.profileId).reload : "reload";
+}
+
+export function setDeveloperReload(tabId: string, reload: DeveloperReload) {
+  const tab = tabOf(tabId);
+  if (!tab || isIncognitoProfile(tab.profileId) || developerReloadFor(tabId) === reload) return;
+  updateProfile(tab.profileId, (state) => ({ ...state, reload }));
+}
+
+export function hasDeveloperModeChanges(settings: Pick<Settings, "developerMode">): boolean {
+  return Object.values(settings.developerMode ?? {}).some((raw) => {
+    const state = developerModeOf(raw);
+    return state.on.length > 0 || state.off.length > 0;
+  });
 }
 
 export function resetDeveloperModeSites() {
-  useBrowser.getState().updateSettings({ developerModeSites: [] });
+  const s = useBrowser.getState();
+  const all = s.settings.developerMode ?? {};
+  s.updateSettings({
+    developerMode: Object.fromEntries(Object.entries(all).map(([id, raw]) => [id, { ...developerModeOf(raw), on: [], off: [] }])),
+  });
 }
 
-export function noteConsoleCounts(tabId: string, data: unknown) {
-  if (!data || typeof data !== "object") return;
-  const { errors, warnings } = data as { errors?: unknown; warnings?: unknown };
-  if (typeof errors !== "number" || typeof warnings !== "number") return;
-  const current = pageOf(tabId).console;
-  if (current && current.errors === errors && current.warnings === warnings) return;
-  patchPage(tabId, { console: { errors, warnings } });
-}
-
-let started = false;
-
-export function startDeveloperMode() {
-  if (started) return;
-  started = true;
-  let sent: string[] | null = null;
-  const sync = () => {
-    const sites = developerSites(useBrowser.getState().settings);
-    if (sent && sent.length === sites.length && sent.every((h, i) => h === sites[i])) return;
-    sent = sites;
-    void setDeveloperHosts(sites);
-  };
-  sync();
-  useBrowser.subscribe(sync);
+export function useTabDeveloperMode(tabId: string | undefined): boolean {
+  return useBrowser((s) => {
+    const tab = tabId ? s.tabs[tabId] : undefined;
+    return !!tab && isDeveloperMode(tab.url, developerModeFor(s.settings, tab.profileId));
+  });
 }

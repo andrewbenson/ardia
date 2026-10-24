@@ -1,7 +1,7 @@
 import type { CommandAction } from "@ardia/core";
 import type { BrowserCommand } from "@ardia/shell";
 import { runCommand } from "../../lib/commands";
-import { canToggleDeveloperModeFor, inDeveloperMode } from "../site/developerMode";
+import { canToggleDeveloperModeFor, tabInDeveloperMode } from "../site/developerMode";
 import { isBookmarked } from "../../store/bookmarks";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { activeTab, bookmarkProfileId, isPinnedRow } from "../../store/model";
@@ -71,9 +71,9 @@ const DEFS: ActionDef[] = [
   { command: "devTools", title: "Developer Tools", icon: "hammer", hint: "⌥⌘I", keywords: ["inspect", "devtools", "console"], needs: page },
   {
     command: "toggleDeveloperMode",
-    title: ({ tab }) => (inDeveloperMode(tab?.url) ? "Turn off Developer Mode for this site" : "Turn on Developer Mode for this site"),
+    title: ({ tab }) => (tabInDeveloperMode(tab?.id) ? "Turn off Developer Mode for this site" : "Turn on Developer Mode for this site"),
     icon: "hammer",
-    keywords: ["developer mode", "dev mode", "localhost", "console errors"],
+    keywords: ["developer mode", "dev mode", "localhost", "devtools"],
     needs: "toggleableSite",
   },
   { command: "toggleFullUrl", title: ({ s }) => (s.settings.showFullUrl ? "Hide Full URL" : "Show Full URL"), icon: "text.alignleft" },

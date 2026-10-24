@@ -115,7 +115,6 @@ export const setDisplayMediaPicker = (enabled: boolean) => Cef.setDisplayMediaPi
 export const setAutoPictureInPicture = (enabled: boolean) => Cef.setAutoPictureInPicture?.(enabled) ?? Promise.resolve();
 export const setVideoUpscaling = (enabled: boolean) => Cef.setVideoUpscaling?.(enabled) ?? Promise.resolve();
 export const setPeekModifier = (modifier: "alt" | "shift" | "off") => Cef.setPeekModifier?.(modifier) ?? Promise.resolve();
-export const setDeveloperHosts = (hosts: string[]) => Cef.setDeveloperHosts?.(hosts) ?? Promise.resolve();
 export const setSearchEngineName = (name: string) => Cef.setSearchEngineName(name);
 export const getDisplayMediaSources = () => Cef.displayMediaSources();
 

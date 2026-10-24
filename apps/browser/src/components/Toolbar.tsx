@@ -23,8 +23,8 @@ import { showUrlBarMenu } from "./omnibox/paste";
 import { useHover } from "./primitives";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { GlassFill, liquidGlass } from "./glass";
-import { ConsoleButton } from "./site/ConsoleButton";
-import { useDeveloperMode } from "./site/developerMode";
+import { DeveloperButtons, developerReload, showDeveloperReloadMenu } from "./site/DeveloperButtons";
+import { useTabDeveloperMode } from "./site/developerMode";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
 
@@ -155,6 +155,13 @@ export const ReloadButton = memo(function ReloadButton({
   onFocus: () => void;
 }) {
   const web = () => webviews.get(tab.id);
+  const developer = useTabDeveloperMode(tab.id);
+  const openMenu = developer
+    ? () => {
+        onFocus();
+        void showDeveloperReloadMenu(tab.id);
+      }
+    : undefined;
   return (
     <ToolbarButton
       style={style}
@@ -167,9 +174,12 @@ export const ReloadButton = memo(function ReloadButton({
         onFocus();
         if (loading) return void web()?.stopLoading();
         if (m.metaKey) return void useBrowser.getState().newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
+        if (developer && !m.shiftKey) return developerReload(tab.id);
         void withLivePage(tab.id, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
       }}
-      tooltip={loading ? "Stop Loading This Page" : "Refresh (⌘R)"}
+      onLongPress={openMenu}
+      onContextMenu={openMenu}
+      tooltip={loading ? "Stop Loading This Page" : developer ? "Refresh (⌘R) · Hold for Reload Options" : "Refresh (⌘R)"}
     />
   );
 });
@@ -271,7 +281,7 @@ export const UrlField = memo(function UrlField({
 }) {
   const theme = useTheme();
   const showFullUrl = useSettings((s) => s.showFullUrl);
-  const developer = useDeveloperMode(tab.url);
+  const developer = useTabDeveloperMode(tab.id);
   const bookmarked = useIsBookmarked(tab.url);
   const insecure = usePage(tab.id, insecureLevel);
   const popups = usePage(tab.id, (p) => p.popups.length);
@@ -297,7 +307,7 @@ export const UrlField = memo(function UrlField({
   const full = isFile ? ` ${safeDecode(tab.url.slice("file://".length))}` : urlForDisplay(tab.url);
   const path = !isFile && full.startsWith(host) ? full.slice(host.length) : full;
   const web = isWebUrl(tab.url);
-  const trail = hovered || developer ? path : showFullUrl ? path.replace(/\/$/, "") : !web && tab.title ? ` / ${tab.title}` : "";
+  const trail = hovered ? path : showFullUrl ? path.replace(/\/$/, "") : !web && tab.title ? ` / ${tab.title}` : "";
 
   return (
     <View
@@ -359,7 +369,7 @@ export const UrlField = memo(function UrlField({
       </ContextMenuArea>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 3 }}>
         {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
-        {developer && <ConsoleButton tabId={tab.id} palette={palette} onFocus={onFocus} />}
+        {developer && <DeveloperButtons tabId={tab.id} palette={palette} onFocus={onFocus} />}
         <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
         <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} />
         {popups > 0 && (

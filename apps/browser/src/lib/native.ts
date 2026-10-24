@@ -41,7 +41,7 @@ import { flushPersistence, resumePersistence } from "./persist";
 import { startWindowCloseGuard } from "./windowClose";
 import { startExtensionsBridge } from "../components/extensions/bridge";
 import { extensionMenu, useExtensions } from "../components/extensions/state";
-import { canToggleDeveloperModeFor, inDeveloperMode } from "../components/site/developerMode";
+import { canToggleDeveloperModeFor, tabInDeveloperMode } from "../components/site/developerMode";
 
 let quitting = false;
 export const isQuitting = () => quitting;
@@ -261,7 +261,7 @@ export function menuState(s: BrowserState): MenuState {
 
   const titles: Record<string, string> = {};
   if (!canToggleDeveloperModeFor(page?.id)) disabled.push("toggleDeveloperMode");
-  if (inDeveloperMode(page?.url)) titles.toggleDeveloperMode = "Turn off Developer Mode for this site";
+  if (tabInDeveloperMode(page?.id)) titles.toggleDeveloperMode = "Turn off Developer Mode for this site";
   if (tab?.pinned) titles.togglePin = "Unpin";
   if (page?.muted) titles.toggleMute = "Unmute Site";
   if (page?.url && isBookmarked(s.bookmarks, bookmarkProfile, page.url)) {

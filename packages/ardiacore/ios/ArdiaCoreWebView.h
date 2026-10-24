@@ -45,7 +45,6 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)installOutgoingFocusSnapshots;
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setPeekModifier:(NSString *)modifier;
-+ (void)setDeveloperHosts:(NSArray<NSString *> *)hosts;
 + (BOOL)devPostPeekMouseUp:(NSString *)keys over:(NSString *)transferKey;
 + (void)setAutoPictureInPictureEnabled:(BOOL)enabled NS_SWIFT_NAME(setAutoPictureInPictureEnabled(_:));
 + (void)setVideoUpscalingEnabled:(BOOL)enabled NS_SWIFT_NAME(setVideoUpscalingEnabled(_:));

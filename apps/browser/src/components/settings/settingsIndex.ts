@@ -307,7 +307,7 @@ const ROWS: Record<SettingsPane, Section[]> = {
         bookmarksImport: { title: "Show the Import bookmarks button", description: "On an empty bookmarks bar.", keywords: ["bookmarks bar"] },
         developerMode: {
           title: "Developer Mode sites",
-          description: "Sites you turned Developer Mode on for show their full URL and a console button. localhost is always on.",
+          description: "Developer Mode adds console, network and inspect buttons and a reload menu. localhost is on until you turn it off.",
           keywords: ["developer mode", "dev mode", "reset", "localhost", "console"],
         },
       },

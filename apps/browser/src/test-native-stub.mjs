@@ -12,7 +12,6 @@ export const saveDocument = (name, contents) =>
   });
 export const setZoom = () => Promise.resolve();
 export const setBatterySaver = () => Promise.resolve(null);
-export const setDeveloperHosts = () => Promise.resolve();
 export const launchEnvironment = () => null;
 export const killSwitchEnvironment = () => null;
 export const appInfo = { appVersion: "1.0", switchesURL: "https://ardia.dev/switches.json", telemetryURL: "https://ardia.dev/otel/v1/logs" };

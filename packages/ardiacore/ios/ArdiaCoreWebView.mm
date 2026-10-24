@@ -238,18 +238,6 @@ void NoteEvent(int browserId, NSString *name, NSDictionary *payload) {
 NSString *gSearchEngineName = @"Google";
 BOOL gDisplayMediaPicker = NO;
 NSString *gPeekModifier = @"shift";
-static NSSet<NSString *> *gDeveloperHosts;
-
-static BOOL IsDeveloperURL(NSString *url) {
-  NSURLComponents *parts = url.length ? [NSURLComponents componentsWithString:url] : nil;
-  NSString *scheme = parts.scheme.lowercaseString;
-  if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return NO;
-  NSString *host = parts.host.lowercaseString ?: @"";
-  if (!host.length) return NO;
-  if ([@[ @"localhost", @"127.0.0.1", @"[::1]", @"::1" ] containsObject:host] || [host hasSuffix:@".localhost"]) return YES;
-  if ([host hasPrefix:@"www."]) host = [host substringFromIndex:4];
-  return [gDeveloperHosts containsObject:host];
-}
 static const NSEventModifierFlags kPeekKeyMask = NSEventModifierFlagOption | NSEventModifierFlagShift | NSEventModifierFlagCommand | NSEventModifierFlagControl;
 static NSEventModifierFlags gPeekUpKeys = 0;
 static CFTimeInterval gPeekUpAt = -1;
@@ -546,7 +534,6 @@ static void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSDictionary *hell
       config[@"displayMediaPicker"] = @YES;
     if (main && ACFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
     config[@"peek"] = gPeekModifier;
-    if (main) config[@"developer"] = @(IsDeveloperURL(frameURL));
     if (PeekTracing()) config[@"peekTrace"] = @YES;
     static const BOOL fixedAudioPoll = [@(getenv("ARDIA_WEB_AUDIO_POLL") ?: "") isEqualToString:@"fixed"];
     if (fixedAudioPoll) config[@"fixedAudioPoll"] = @YES;
@@ -748,6 +735,7 @@ static BOOL HeldSelector(SEL selector) {
   NSInteger _tabIndex;
   BOOL _pinned;
   NSView *_devtoolsView;
+  NSString *_devToolsPanel;
   BOOL _navigationQueued;
   NSString *_pageTheme;
   NSString *_pageThemeSource;
@@ -1498,6 +1486,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
     [_devtoolsView removeFromSuperview];
   }
   _devtoolsView = devToolsView;
+  if (!devToolsView) _devToolsPanel = nil;
   if (devToolsView && devToolsView.superview != self) {
     [devToolsView removeFromSuperview];
     NSView *page = _tab.view;
@@ -1512,6 +1501,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   AcceptDrops(_devtoolsView, YES);
   if (_devtoolsView.superview == self) [_devtoolsView removeFromSuperview];
   _devtoolsView = nil;
+  _devToolsPanel = nil;
 }
 
 - (void)setFrameSize:(NSSize)newSize {
@@ -2048,20 +2038,6 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
   for (ArdiaCoreWebView *view in LiveViews().allObjects) [view pushPeekModifier];
 }
 
-+ (void)setDeveloperHosts:(NSArray<NSString *> *)hosts {
-  NSMutableSet<NSString *> *next = [NSMutableSet set];
-  for (NSString *host in hosts)
-    if ([host isKindOfClass:NSString.class] && host.length && host.length <= 253 && next.count < 4096) [next addObject:host.lowercaseString];
-  if ([next isEqualToSet:gDeveloperHosts ?: [NSSet set]]) return;
-  gDeveloperHosts = [next copy];
-  for (ArdiaCoreWebView *view in LiveViews().allObjects) [view pushDeveloperMode];
-}
-
-- (void)pushDeveloperMode {
-  if (!_tab || ![_tab respondsToSelector:@selector(callFrame:kind:json:)]) return;
-  [self callFrame:@"" kind:@"developer" json:JSONString(@{@"on" : @(IsDeveloperURL(_tab.url))})];
-}
-
 + (void)setAutoPictureInPictureEnabled:(BOOL)enabled {
   if ([ArdiaCoreEngine respondsToSelector:@selector(setAutoPictureInPicture:)]) [ArdiaCoreEngine setAutoPictureInPicture:enabled];
 }
@@ -2255,8 +2231,6 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
   if ([kind isEqualToString:@"hello"]) {
     PeekTrace(@{@"event" : @"hello", @"main" : @(main), @"frame" : frameId ?: @"", @"url" : Text(dict, @"url", 8192) ?: @""});
     if (main) [self resetPageMedia];
-    if (main && IsDeveloperURL(Text(dict, @"url", 8192)))
-      [self emit:@"pageMessage" payload:@{@"kind" : @"console", @"data" : @{@"errors" : @0, @"warnings" : @0}}];
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requestedURL = nil;
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON()];
@@ -2293,13 +2267,6 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
       NSNumber *at = [dict[what] isKindOfClass:NSNumber.class] ? dict[what] : nil;
       if (at && fabs(at.doubleValue - ACFieldNow()) < 600000) ACFieldMark(_transferKey, what, at.doubleValue);
     }
-  } else if ([kind isEqualToString:@"console"] && main && dict) {
-    double errors, warnings;
-    if (!Finite(dict, @"errors", &errors) || !Finite(dict, @"warnings", &warnings)) return;
-    if (errors < 0 || warnings < 0 || errors != floor(errors) || warnings != floor(warnings)) return;
-    if (!IsDeveloperURL(tab.url)) return;
-    [self emit:@"pageMessage"
-        payload:@{@"kind" : @"console", @"data" : @{@"errors" : @(MIN(errors, 1e9)), @"warnings" : @(MIN(warnings, 1e9))}}];
   } else if ([kind isEqualToString:@"scroll"] && main) {
     NSString *state = Text(dict, @"state", 8);
     if ([@[ @"down", @"up", @"top" ] containsObject:state ?: @""])
@@ -2683,7 +2650,20 @@ static NSEventModifierFlags PeekModifierFlag() {
   [_tab showDevTools];
 }
 
+- (void)toggleDevToolsPanel:(NSString *)panel {
+  if (_devtoolsView && [_devToolsPanel isEqualToString:panel]) {
+    _devToolsPanel = nil;
+    [_tab closeDevTools];
+    return;
+  }
+  _devToolsPanel = [panel copy];
+  if ([panel isEqualToString:@"console"]) [self showDevToolsPanel:@"console"];
+  else if ([panel isEqualToString:@"elements"]) [self showDevToolsPanel:@"inspect"];
+  else [_tab showDevTools];
+}
+
 - (void)showDevToolsPanel:(NSString *)panel {
+  if ([panel hasPrefix:@"toggle:"]) return [self toggleDevToolsPanel:[panel substringFromIndex:7]];
   const int command = [panel isEqualToString:@"console"]   ? 40005
                       : [panel isEqualToString:@"inspect"] ? 40023
                       : [panel isEqualToString:@"toggle"]  ? 40237

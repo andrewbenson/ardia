@@ -991,39 +991,39 @@ model at 120 Hz ticks: 26–36 % of the way at 0.1 s, 58–73 % at 0.25 s, 92–
 
 ## Developer Mode (Arc 1.160.0, Dia 1.54.2)
 
-Read from the app bundles only (`strings`, the Swift reflection names in `__swift5_reflstr`, asset catalogues) on
-2026-10-24; neither browser was launched. **Recovered** means the string or name is in the binary; **inferred** means
-it's our reading of where it sits.
+Read from the app bundles only on 2026-10-24: `strings`, `otool -tV` disassembly for short labels (Swift builds strings of
+15 bytes or less into the code), and Swift type metadata (`__swift5_types`, field descriptors, `__swift5_reflstr`).
+Neither browser was launched. **Recovered** means it is in the binary; **inferred** is our reading.
 
-- **Built-in hosts (recovered).** Both match `(localhost|127\.0\.0\.1)`; Arc also has `localhost.local`. Those pages are
-  in Developer Mode with nothing turned on. Whether they can be switched off isn't in the strings (inferred: no; ours
-  can't, and we add `[::1]` and `*.localhost`).
-- **State (recovered).** A per-host list, `developerModeEnabledForHosts`, in both (a user-defaults key next to
-  `autoPipDisabledForHosts`); Dia also writes `StorableDeveloperModeState.json`. Arc's `DeveloperModeClient` has
-  `setDeveloperModeStatusForHost`, `getDeveloperModeState`, `reset` and `subscription`; "Reset developer mode enabled
-  hosts" is an item of Arc's internal debug menu (`onSelectResetDeveloperModeEnabledHosts`), not a user setting.
-  Whether the list is per profile isn't known (inferred: one list, like the other per-host defaults).
-- **Site Controls row (recovered).** Arc's site-settings enum is `unavailable, contentSettings, sidebarPreview,
-  developerMode, contentBlocking, popupBlocking`; the row's strings are only the comments "Title of developer mode item
-  in site settings view" and "Subtitle … when it's on" / "… when it's off". Their English values aren't next to them
-  (Swift dedupes them into shared strings), so the exact text isn't recovered (inferred: "Developer Mode", On / Off,
-  which ours uses). Dia 1.54.2 still has the title comment and the defaults keys but not the subtitles, the menu items
-  or the toggle's description (inferred: carried over from Arc's code, maybe not shown).
-- **Menu and command bar (recovered, Arc).** "Turn on Developer Mode for this site" / "Turn off Developer Mode for this
-  site" ("Menu item for enabling / disabling developer mode", among the main window's menu items, next to "View
-  Downloads"); the key binding `toggleDeveloperMode`, "Toggles developer mode on or off for the current site.", grouped
-  with `toggleDevTools`, `viewSource`, `inspectElements`. Nothing points to the tab's context menu.
-- **Developer toolbar (recovered, Arc).** Button labels "Developer console button", "Toggle Network Panel", "Inspect
-  element button", "Extensions button", "Site settings button" (`toggleConsoleTapped`, `openConsoleView`); analytics
-  `developer_tab_activated`, `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`,
-  `dev_tools_inspect_elements_opened`, `is_from_dev_tab_shortcut` (Dia has the same analytics names). Whether the
-  console button shows counts, and of what, isn't in the strings (inferred from Arc's announcement: errors).
-- **Full URL (recovered, Arc).** Settings' "Show full URL when Toolbar is enabled" and the "Show Full URL" / "Hide Full
-  URL" context-menu action exist; that Developer Mode forces the full URL (port and path) is inferred.
-- **Reload (recovered names, inferred meaning).** `devModeReloadState` is a defaults key; `DeveloperTabReloadSetting` is a
-  type of Arc's `BrowserNavigationButtonsFeature`, next to "Refresh (Ignore Cache)", "Clear Cookies and Refresh" and the
-  `reloadButton` / `forceReloadButton` / `reloadOptionsButton` views; a nearby type stores `reload`, `forceReload` through
-  `_userDefaultsClient`. Reading: in a developer tab the reload button remembers whether it reloads or force-reloads.
-- **Sidebar (recovered names, inferred meaning).** Sidebar items have `isDeveloperTab` and a `developerTab` display style
-  / highlight (with `isTabCapturingOrRecording`, `shouldDim`): a developer tab looks different in the sidebar. Nothing
-  recovered says Developer Mode changes archiving or caching.
+- **Site Controls row (recovered).** Both have `enum SiteSetting { contentSettings, sidebarPreview, developerMode,
+  contentBlocking, popupBlocking }` (Arc adds `unavailable`). Arc (`SiteControlCenter/SiteSetting+Display.swift`): title
+  "Developer Mode", subtitle "On" when on, "Off" when off. Dia: title "Developer Mode", no subtitle keys (inferred: a
+  plain toggle).
+- **State (recovered).** Arc: `StorableDeveloperModeState { version, state }` holding `DeveloperModeState { enabledHosts,
+  disabledDefaultHosts }`, through `DeveloperModeClient` (`subscription`, `setDeveloperModeStatusForHost`,
+  `getDeveloperModeState`, `reset`). So some hosts are on by default and each can be switched off. Dia keeps
+  `developerModeEnabledForHosts` and `StorableDeveloperModeState.json`, with no `disabledDefaultHosts` and no client type.
+  "Reset developer mode enabled hosts" is an item of Arc's internal debug menu.
+- **Default hosts (not recovered).** The list itself wasn't found. `(localhost|127\.0\.0\.1)` is one alternative of a
+  general URL-validation regex (`ARCFoundationBase/String+URL.swift`, both apps), not a Developer Mode list, and
+  `localhost.local` comes from Google's GTMSessionFetcher. A host check for `localhost` / `127.0.0.1` / `::1` exists in
+  Arc's link-classifying code (inferred: not this list). Ours: localhost, 127.0.0.1, [::1] and *.localhost.
+- **Switch (recovered, Arc).** Main menu "Turn on Developer Mode for this site" / "Turn off Developer Mode for this site",
+  in the submenu with Developer Tools, View Source, Inspect Elements, JavaScript Console, the network inspector and "Allow
+  JavaScript from Apple Events". Key binding / command `toggleDeveloperMode`: "Toggles developer mode on or off for the
+  current site." (in Dia only as a key-binding id). Nothing points to the tab's context menu.
+- **Developer toolbar (recovered, Arc only).** "Toggle Console" (`terminal`), "Toggle Network Panel" (`network`), "Inspect
+  Element" (`scope`), beside Copy link, "Capture a portion of this page" (`camera`), "Extensions Menu" and "Site
+  Settings". `enum DevToolViews { console, network, elements }`; DevTools dock states `closed, undocked, dockedLeft,
+  dockedRight, dockedBottom`. No strings for error or warning counts, hot or auto reload, or disabling the cache.
+- **Reload (recovered, Arc).** `enum DeveloperTabReloadSetting { reload, forceReload }`; the defaults key
+  `devModeReloadState` defaults to "reload" (Dia keeps the key, not the type). The reload button has a `chevron.down`
+  menu: "Refresh page", "Refresh (Ignore Cache)", "Clear Cookies and Refresh". Inferred: a developer tab's reload
+  button repeats the remembered normal or hard reload.
+- **Full URL (recovered).** "Show Full URL" / "Hide Full URL" (Arc), "Show full URL" / "Hide full URL" (Dia) and "Show full
+  URL when Toolbar is enabled" are a general toolbar setting, not tied to Developer Mode (inferred).
+- **Sidebar, archiving, caching.** `isDeveloperTab` sits beside `shouldDim` on Arc's sidebar tab-icon models, with a
+  `developerTab` display style (inferred: a developer tab looks different there). Nothing ties Developer Mode to
+  auto-archive or caching; `DeveloperModeContextFlags` is an option set whose flag names aren't in the binary.
+- **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
+  `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

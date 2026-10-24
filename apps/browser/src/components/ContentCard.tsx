@@ -65,7 +65,6 @@ import { isSmallWindow } from "../store/small";
 import { closeLittleArdiaOnEscape } from "./littleArdia/actions";
 import { PeekOverlay } from "./peek/PeekOverlay";
 import { closePeekOnEscape, dismissPeek, startPeeks } from "./peek/actions";
-import { noteConsoleCounts, startDeveloperMode } from "./site/developerMode";
 
 export function ContentCard() {
   const windowId = useWindowId();
@@ -86,7 +85,6 @@ export function ContentCard() {
   useEffect(startMedia, []);
   useEffect(startSelectionTools, []);
   useEffect(startPeeks, []);
-  useEffect(startDeveloperMode, []);
   const peekId = useBrowser((s) => s.peeks[windowId]?.tabId);
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   useEffect(() => {
@@ -672,7 +670,6 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
       onPageMessage={(kind, data) => {
         if (kind === "selection") setPageSelection(tabId, data as PageSelection | null);
         else if (kind === "scroll") noteScroll(tabId, data);
-        else if (kind === "console") noteConsoleCounts(tabId, data);
       }}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url) => {

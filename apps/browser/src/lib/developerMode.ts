@@ -1,6 +1,11 @@
-export type DeveloperModeState = { sites: readonly string[] };
+export type DeveloperReload = "reload" | "forceReload";
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+export type DeveloperModeState = { on: string[]; off: string[]; reload: DeveloperReload };
+
+export const NO_DEVELOPER_MODE: DeveloperModeState = { on: [], off: [], reload: "reload" };
+
+const DEFAULT_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const MAX_HOSTS = 1000;
 
 export function developerHostOf(url: string): string | null {
   let parsed: URL;
@@ -14,29 +19,39 @@ export function developerHostOf(url: string): string | null {
   return host ? host.replace(/^www\./, "") : null;
 }
 
-export function isLocalDeveloperHost(host: string): boolean {
+export function isDefaultDeveloperHost(host: string): boolean {
   const h = host.toLowerCase();
-  return LOCAL_HOSTS.has(h) || h.endsWith(".localhost");
-}
-
-export function isLocalDeveloperUrl(url: string): boolean {
-  const host = developerHostOf(url);
-  return !!host && isLocalDeveloperHost(host);
+  return DEFAULT_HOSTS.has(h) || h.endsWith(".localhost");
 }
 
 export function isDeveloperMode(url: string, state: DeveloperModeState): boolean {
   const host = developerHostOf(url);
-  return !!host && (isLocalDeveloperHost(host) || state.sites.includes(host));
+  if (!host) return false;
+  return isDefaultDeveloperHost(host) ? !state.off.includes(host) : state.on.includes(host);
 }
 
-export function canToggleDeveloperMode(url: string): boolean {
+export function withDeveloperMode(state: DeveloperModeState, url: string, on: boolean): DeveloperModeState {
   const host = developerHostOf(url);
-  return !!host && !isLocalDeveloperHost(host);
+  if (!host) return state;
+  const list = isDefaultDeveloperHost(host) ? "off" : "on";
+  const listed = list === "on" ? on : !on;
+  const rest = state[list].filter((h) => h !== host);
+  return { ...state, [list]: listed ? [...rest, host].slice(-MAX_HOSTS) : rest };
 }
 
-export function withDeveloperMode(sites: readonly string[], url: string, on: boolean): string[] {
-  const host = developerHostOf(url);
-  if (!host || isLocalDeveloperHost(host)) return [...sites];
-  const rest = sites.filter((h) => h !== host);
-  return on ? [...rest, host] : rest;
+const hostList = (value: unknown, keep: (host: string) => boolean): string[] =>
+  Array.isArray(value)
+    ? [...new Set(value.filter((h): h is string => typeof h === "string" && h.length > 0 && h.length <= 253).map((h) => h.toLowerCase()))].filter(keep).slice(-MAX_HOSTS)
+    : [];
+
+export function developerModeOf(value: unknown): DeveloperModeState {
+  if (!value || typeof value !== "object") return NO_DEVELOPER_MODE;
+  const v = value as { on?: unknown; off?: unknown; reload?: unknown };
+  return {
+    on: hostList(v.on, (h) => !isDefaultDeveloperHost(h)),
+    off: hostList(v.off, isDefaultDeveloperHost),
+    reload: v.reload === "forceReload" ? "forceReload" : "reload",
+  };
 }
+
+export const isEmptyDeveloperMode = (state: DeveloperModeState) => !state.on.length && !state.off.length && state.reload === "reload";

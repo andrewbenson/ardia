@@ -22,10 +22,7 @@ export type PageState = {
   wasNewTab: boolean;
   backToNewTab: boolean;
   newTabShown: { url: string; title: string; favicon: string | null } | null;
-  console: ConsoleCounts | null;
 };
-
-export type ConsoleCounts = { errors: number; warnings: number };
 
 const IDLE_PAGE: PageState = {
   status: "",
@@ -44,7 +41,6 @@ const IDLE_PAGE: PageState = {
   wasNewTab: false,
   backToNewTab: false,
   newTabShown: null,
-  console: null,
 };
 
 type Store = {

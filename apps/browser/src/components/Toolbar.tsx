@@ -317,9 +317,9 @@ export const UrlField = memo(function UrlField({
       {liquidGlass ? (
         sidebar ? (
           <GlassFill radius={SIDEBAR_FIELD.radius} border={StyleSheet.hairlineWidth * 2} fill={hovered ? theme.tabHover : theme.pinnedResting} />
-        ) : (
-          <GlassFill radius={8} fill={hovered ? palette.pressed : palette.pill} dark={palette.background ? palette.text.startsWith("#FFFFFF") : undefined} />
-        )
+        ) : hovered ? (
+          <GlassFill radius={8} fill={palette.pill} dark={palette.background ? palette.text.startsWith("#FFFFFF") : undefined} />
+        ) : null
       ) : null}
       {insecure && (
         <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">

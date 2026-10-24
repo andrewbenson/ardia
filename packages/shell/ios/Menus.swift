@@ -288,7 +288,7 @@ enum MainMenu {
   private static var extensionIcons: [String: NSImage] = [:]
 
   static func build() -> NSMenu {
-    let appName = ProcessInfo.processInfo.processName
+    let appName = Bundle.main.productName
     let main = NSMenu()
     moveToProfile = NSMenu(title: "Move to Profile")
     moveToWindow = NSMenu(title: "Move to Window")
@@ -346,7 +346,7 @@ enum MainMenu {
       cmd("New Tab in Group", "newTabInGroup", "t", [.command, .option]),
       cmd("New Window", "newWindow", "n"),
       cmd("New Incognito Window", "newIncognitoWindow", "n", [.command, .shift]),
-      cmd("New Little Ardia Window", "newLittleArdia", "n", [.command, .option]),
+      cmd("New Little \(Bundle.main.productName) Window", "newLittleArdia", "n", [.command, .option]),
       cmd("Open Links from Other Apps in Main Window", "toggleOpenLinksInLittleArdia"),
       cmd("Reopen Closed Tab", "reopenClosedTab", "t", [.command, .shift]),
       cmd("Reopen Closed Window", "reopenClosedWindow"),
@@ -960,7 +960,7 @@ enum MainMenu {
     let incognito = CommandItem("New Incognito Window", "newIncognitoWindow")
     incognito.windowless = true
     menu.addItem(incognito)
-    let small = CommandItem("New Little Ardia Window", "newLittleArdia")
+    let small = CommandItem("New Little \(Bundle.main.productName) Window", "newLittleArdia")
     small.windowless = true
     menu.addItem(small)
     return menu

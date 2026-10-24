@@ -15,6 +15,7 @@ import { useHover } from "../primitives";
 import { copyPageUrl } from "../site/selection";
 import { openInMainWindow } from "./actions";
 import { PageLabel, SMALL_BAR_HEIGHT, SMALL_INSET, SmallBar } from "./SmallChrome";
+import { PRODUCT } from "../../lib/productName";
 
 const LIGHTS_CENTER: [number, number] = [20, SMALL_BAR_HEIGHT / 2];
 const FIELD_LEFT = 84;
@@ -62,7 +63,7 @@ function LittleArdiaBar() {
       field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
       buttons={[
         { icon: copied ? "checkmark" : "link", size: 14, disabled: !tab?.url, tooltip: "Copy Link (⇧⌘C)", onPress: copy },
-        { icon: "arrow.up.left.and.arrow.down.right", size: 13, tooltip: "Open in Ardia (⌘O)", onPress: () => openInMainWindow(windowId) },
+        { icon: "arrow.up.left.and.arrow.down.right", size: 13, tooltip: `Open in ${PRODUCT} (⌘O)`, onPress: () => openInMainWindow(windowId) },
       ]}
     >
       <WindowDragRegion style={StyleSheet.absoluteFill} />

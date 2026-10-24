@@ -41,6 +41,7 @@ import { flushPersistence, resumePersistence } from "./persist";
 import { startWindowCloseGuard } from "./windowClose";
 import { startExtensionsBridge } from "../components/extensions/bridge";
 import { extensionMenu, useExtensions } from "../components/extensions/state";
+import { PRODUCT } from "./productName";
 import { canToggleDeveloperModeFor, tabInDeveloperMode } from "../components/site/developerMode";
 
 let quitting = false;
@@ -268,7 +269,7 @@ export function menuState(s: BrowserState): MenuState {
     titles.bookmarkPage = "Edit Bookmark…";
   }
 
-  if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = "Open Links from Other Apps in Little Ardia";
+  if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = `Open Links from Other Apps in Little ${PRODUCT}`;
 
   const sidebar = sidebarMenuState(s, windowId);
   disabled.push(...sidebar.disabled);
@@ -279,7 +280,7 @@ export function menuState(s: BrowserState): MenuState {
   }
   if (w?.kind === "small") {
     disabled.push(...LITTLE_ARDIA_DISABLED_COMMANDS);
-    titles.openFile = "Open in Ardia";
+    titles.openFile = `Open in ${PRODUCT}`;
   }
 
   const closed = [

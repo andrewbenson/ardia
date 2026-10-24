@@ -10,8 +10,9 @@ import { Button, Group, PopUp, Row, SectionHeader, Toggle, useFormColors } from 
 import { engineVersion, widevine as widevineComponent } from "../paneData";
 import { useResource } from "../resources";
 import { hasDeveloperModeChanges, resetDeveloperModeSites } from "../../site/developerMode";
+import { PRODUCT } from "../../../lib/productName";
 
-const SOURCE_NOTICE = "Ardia is free software under the GNU General Public License v3, with no warranty.";
+const SOURCE_NOTICE = `${PRODUCT} is free software under the GNU General Public License v3, with no warranty.`;
 
 const BATTERY_SAVER_DESCRIPTIONS: Record<BatterySaverWhen, string> = {
   lowBattery: "At 20% battery or less, or in Low Power Mode, busy background tabs pause and animations slow down.",

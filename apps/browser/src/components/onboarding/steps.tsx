@@ -15,6 +15,7 @@ import { PROFILE_COLORS, themeFor, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { Favicon, useHover } from "../primitives";
 import { openImport } from "../settings/windows";
+import { ONBOARDING_COPY } from "./copy";
 import { PERSONALIZE_COPY, TabLayoutPicker, ThemeColorPicker } from "./personalize";
 import { PINNABLE_SITES, pinSites, preselectedSites } from "./sites";
 import { finishOnboarding, recordDefaultBrowserTrial, useOnboarding } from "./state";
@@ -98,13 +99,13 @@ export function DefaultBrowserStep() {
       preview={<SystemPreview isDefault={!!(defaultOn || trying)} dock={!!(system?.inDock || dock)} login={login} />}
     >
       <Reveal delay={60}>
-        <StepTitle title="Fast, secure, and packed with all your browser essentials" subtitle="Ardia works best as your default browser." />
+        <StepTitle title={ONBOARDING_COPY.system.title} subtitle={ONBOARDING_COPY.system.subtitle} />
       </Reveal>
       <Reveal delay={140} style={{ gap: 6 }}>
         <CheckRow
           icon="globe"
-          title="Set Ardia as default browser"
-          subtitle={system?.isDefault ? "Ardia is already your default browser" : "Open links and web pages in Ardia by default"}
+          title={ONBOARDING_COPY.system.setDefault}
+          subtitle={system?.isDefault ? ONBOARDING_COPY.system.alreadyDefault : ONBOARDING_COPY.system.openByDefault}
           value={defaultOn}
           disabled={!system || system.isDefault}
           onChange={setSetDefault}
@@ -112,16 +113,16 @@ export function DefaultBrowserStep() {
         {system && !defaultOn ? (
           <CheckRow
             icon="calendar"
-            title="Try Ardia as your default for seven days"
+            title={ONBOARDING_COPY.system.trial}
             subtitle="We'll check in to make sure you love it."
             value={trial}
             onChange={setTrial}
           />
         ) : null}
         {system && !system.inDock ? (
-          <CheckRow icon="dock.rectangle" title="Add Ardia to Dock" subtitle="Quick access to Ardia whenever you need it" value={dock} onChange={setDock} />
+          <CheckRow icon="dock.rectangle" title={ONBOARDING_COPY.system.dock} subtitle={ONBOARDING_COPY.system.dockSubtitle} value={dock} onChange={setDock} />
         ) : null}
-        <CheckRow icon="power" title="Open Ardia at login" subtitle="Automatically open Ardia when you sign in" value={login} onChange={setLogin} />
+        <CheckRow icon="power" title={ONBOARDING_COPY.system.login} subtitle={ONBOARDING_COPY.system.loginSubtitle} value={login} onChange={setLogin} />
       </Reveal>
     </StepLayout>
   );
@@ -300,7 +301,7 @@ export function ImportStep() {
           title="Bring your browsing with you"
           subtitle={
             opened
-              ? "Finish up in the import window, then continue here. You can import more any time from the Ardia menu."
+              ? ONBOARDING_COPY.importOpened
               : "Import bookmarks, history, passwords and tabs from the browser you use now, and stay signed in to your sites. It all stays on this Mac."
           }
         />
@@ -334,7 +335,7 @@ export function PinnedTabsStep() {
       preview={<PinnedPreview selected={selected} />}
     >
       <Reveal delay={60}>
-        <StepTitle title="Keep your favorite apps handy" subtitle="Pin important apps so they're always available when you open Ardia." />
+        <StepTitle title="Keep your favorite apps handy" subtitle={ONBOARDING_COPY.pinnedSubtitle} />
       </Reveal>
       <Reveal delay={140} style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {PINNABLE_SITES.map((site) => (

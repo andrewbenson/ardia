@@ -10,6 +10,7 @@ import { Favicon, IconButton } from "../../primitives";
 import { Button, Group, Row, SectionHeader, Sheet, TextField, Toggle, useFormColors } from "../controls";
 import { closeSettingsSheet, showSettingsSheet } from "../sheet";
 import { openSettings } from "../windows";
+import { PRODUCT } from "../../../lib/productName";
 
 export function SearchPane() {
   const settings = useBrowser((s) => s.settings);
@@ -56,7 +57,7 @@ export function SearchPane() {
 
       {fromExtensions.length > 0 && (
         <>
-          <SectionHeader title="Extensions" description="Some extensions can add search engines to Ardia." />
+          <SectionHeader title="Extensions" description={`Some extensions can add search engines to ${PRODUCT}.`} />
           <Group>
             {fromExtensions.map((e) => (
               <EngineRow key={e.id} engine={e} selected={selectedId === e.id} locked={locked} />

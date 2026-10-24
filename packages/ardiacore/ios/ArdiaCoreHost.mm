@@ -376,7 +376,6 @@ static void StartEarlyWindow() {
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   if (ArdiaCoreProfile *profile = ardiacore_host::PersonalIfLoaded(engine)) Profiles()[@""] = profile;
   ardiacore_host::LoadContentBlocker(@"");
-  [ArdiaCoreWebView installScrollZoom];
   [ArdiaCoreWebView installSwitchPrewarm];
   [ArdiaCoreWebView installOutgoingFocusSnapshots];
   [ArdiaCoreServices watchDownloads:@""];

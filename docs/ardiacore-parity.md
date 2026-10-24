@@ -300,7 +300,6 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `onPermissionDismissed` | partial | Wired; no check dismisses a prompt by navigating yet |
 | `onContentBlocker` | partial | Reported by the blocker's state changes; not asserted on its own |
 | `setDisplayMediaPicker`, `displayMediaSources` | partial | Kept, but pages keep Chrome's picker until the engine grants app-picked desktop sources; `displayMediaSources` lists screens and windows as CEF (no prompt) |
-| `devScrollZoom` | stubbed | CEF's test hook for its own pinch path; ArdiaCore's pinch is Chrome's |
 
 ## `ArdiaExtensions` (`packages/ardiacore/src/extensions.ts`)
 

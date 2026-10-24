@@ -148,9 +148,6 @@ public class CefModule: Module {
     AsyncFunction("getZoomLevels") { (profile: String, promise: Promise) in
       ArdiaCoreServices.zoomLevels(profile: profile) { promise.resolve($0) }
     }.runOnQueue(.main)
-    AsyncFunction("devScrollZoom") { (steps: [[String: Any]], browserId: Int?) in
-      ArdiaCoreWebView.devScrollZoom(steps, browserId: Int32(browserId ?? 0))
-    }.runOnQueue(.main)
 
     AsyncFunction("listPasswords") { (profile: String, promise: Promise) in
       ArdiaCoreServices.listPasswords(profile: profile) { promise.resolve($0) }

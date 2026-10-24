@@ -49,7 +49,7 @@ const usesPageA = [
   "bluetooth-settings", "cast-dialog", "cast-routes", "theme-commit", "user-selection",
   "password-prompt", "screen-share-picker", "tab-capture", "share-instead-two-captures",
   "restore-after-close", "discard-outcomes", "capture-picture", "unresponsive", "permission-dismissed",
-  "save-page", "activate-request", "extension-popup-and-panel", "scroll-zoom", "print-preview",
+  "save-page", "activate-request", "extension-popup-and-panel", "print-preview",
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
   "private-windows-create", "extension-installed-bubble", "popup-window", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
@@ -1862,38 +1862,6 @@ try {
       await evalApp(`ac.extensions.closeExtensionPopup(); ac.extensions.closeSidePanel(${JSON.stringify(mainWindow)}); return true`).catch(() => null);
       await exts(`uninstall("${installed.id}", "")`);
     }
-  });
-
-  await check("scroll-zoom", async () => {
-    await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
-    await until("A shown", async () => (await state()).active === first.id);
-    const zoom = () => evalApp(`return ac.store.getState().tabs["${first.id}"]?.zoom ?? 1`);
-    const reset = async () => {
-      await evalApp(`return ac.webviews.get("${first.id}").zoomStep(0)`);
-      await until("zoom 100%", async () => ((await zoom()) === 1 ? true : null), 5000);
-    };
-    const browser = await browserOf(first.id);
-    const scroll = (steps) => evalApp(`return globalThis.expo.modules.ArdiaCEF.devScrollZoom(${JSON.stringify(steps)}, ${browser})`);
-    const gesture = (trackpad) => [
-      { phase: "mayBegin", dy: 0, trackpad }, { phase: "began", dy: 12, trackpad },
-      ...Array.from({ length: 4 }, () => ({ phase: "changed", dy: 40, trackpad })),
-      { phase: "ended", dy: 0, trackpad }, ...Array.from({ length: 3 }, () => ({ phase: "momentum", dy: 30 })),
-    ];
-    await reset();
-    const trackpad = await scroll(gesture(true));
-    await sleep(800);
-    const afterTrackpad = await zoom();
-    const wheel = await scroll([{ phase: "wheel", dy: 1 }, { phase: "wheel", dy: 1 }]);
-    const afterWheel = await until("zoomed", async () => { const z = await zoom(); return z > 1 ? z : null; }, 5000)
-      .catch(async (e) => {
-        const why = appLog.join().split("\n").filter((l) => l.includes("[scroll-zoom]")).slice(-3).map((l) => l.replace(/^.*\[scroll-zoom\] /, ""));
-        const ui = await evalApp(`return ac.store.getState().windowUi[${JSON.stringify(mainWindow)}] ?? null`).catch(() => null);
-        throw new Error(`${e.message}; trackpad ${JSON.stringify(trackpad)} wheel ${JSON.stringify(wheel)} zoom ${await zoom()} why ${JSON.stringify(why)} ui ${JSON.stringify(ui)} events ${JSON.stringify((await eventsOf(first.id)).filter((x) => x.name === "zoom").slice(-2))}`);
-      });
-    await reset();
-    if (trackpad.some(Boolean) || afterTrackpad !== 1) throw new Error(`a trackpad ⌘-scroll zoomed: ${JSON.stringify(trackpad)} → ${afterTrackpad}`);
-    if (!wheel.some(Boolean)) throw new Error(`the wheel didn't zoom: ${JSON.stringify(wheel)}`);
-    return { trackpad, wheel, afterWheel };
   });
 
   await check("print-preview", async () => {

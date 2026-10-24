@@ -41,11 +41,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)startLinkTabs:(NSArray<NSString *> *)urls profile:(NSString *)profile;
 + (NSDictionary<NSString *, id> *)routeLinkTabs:(NSArray<NSString *> *)urls;
 + (void)setSearchEngineName:(NSString *)name;
-+ (void)installScrollZoom;
 + (void)installSwitchPrewarm;
 + (void)installOutgoingFocusSnapshots;
-+ (NSArray<NSNumber *> *)devScrollZoom:(NSArray<NSDictionary<NSString *, id> *> *)steps
-                               browser:(int)browserId NS_SWIFT_NAME(devScrollZoom(_:browserId:));
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setPeekModifier:(NSString *)modifier;
 + (BOOL)devPostPeekMouseUp:(NSString *)keys over:(NSString *)transferKey;

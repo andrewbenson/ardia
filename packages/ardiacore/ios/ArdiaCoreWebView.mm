@@ -736,6 +736,7 @@ static BOOL HeldSelector(SEL selector) {
   BOOL _pinned;
   NSView *_devtoolsView;
   NSString *_devToolsPanel;
+  NSString *_devToolsReopen;
   BOOL _navigationQueued;
   NSString *_pageTheme;
   NSString *_pageThemeSource;
@@ -1486,7 +1487,15 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
     [_devtoolsView removeFromSuperview];
   }
   _devtoolsView = devToolsView;
-  if (!devToolsView) _devToolsPanel = nil;
+  if (!devToolsView) {
+    _devToolsPanel = nil;
+    if (_devToolsReopen) {
+      __weak ArdiaCoreWebView *weakSelf = self;
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [weakSelf reopenDevToolsPanel];
+      });
+    }
+  }
   if (devToolsView && devToolsView.superview != self) {
     [devToolsView removeFromSuperview];
     NSView *page = _tab.view;
@@ -2651,14 +2660,37 @@ static NSEventModifierFlags PeekModifierFlag() {
 }
 
 - (void)toggleDevToolsPanel:(NSString *)panel {
+  const BOOL network = [panel isEqualToString:@"network"];
+  if (!network && ![panel isEqualToString:@"console"] && ![panel isEqualToString:@"elements"]) return;
   if (_devtoolsView && [_devToolsPanel isEqualToString:panel]) {
     _devToolsPanel = nil;
+    _devToolsReopen = nil;
     [_tab closeDevTools];
     return;
   }
+  if (_devtoolsView && network) return;
+  if (_devtoolsView) {
+    _devToolsReopen = [panel copy];
+    [_tab closeDevTools];
+    __weak ArdiaCoreWebView *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      [weakSelf reopenDevToolsPanel];
+    });
+    return;
+  }
+  [self openDevToolsPanel:panel];
+}
+
+- (void)reopenDevToolsPanel {
+  NSString *panel = _devToolsReopen;
+  _devToolsReopen = nil;
+  if (panel && !_devtoolsView) [self openDevToolsPanel:panel];
+}
+
+- (void)openDevToolsPanel:(NSString *)panel {
   _devToolsPanel = [panel copy];
-  if ([panel isEqualToString:@"console"]) [self showDevToolsPanel:@"console"];
-  else if ([panel isEqualToString:@"elements"]) [self showDevToolsPanel:@"inspect"];
+  if ([panel isEqualToString:@"console"]) [self runChromeCommand:40005];
+  else if ([panel isEqualToString:@"elements"]) [self runChromeCommand:40023];
   else [_tab showDevTools];
 }
 

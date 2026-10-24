@@ -334,6 +334,21 @@ export const UrlField = memo(function UrlField({
           <GlassFill radius={8} fill={palette.pill} dark={palette.background ? palette.text.startsWith("#FFFFFF") : undefined} />
         ) : null
       ) : null}
+      {developer && !sidebar && (
+        <ToolbarButton
+          palette={palette}
+          icon="chevron.down"
+          size={9}
+          weight="semibold"
+          box={18}
+          radius={5}
+          onPress={() => {
+            onFocus();
+            void showDeveloperReloadMenu(tab.id);
+          }}
+          tooltip="Reload Options"
+        />
+      )}
       {insecure && (
         <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
           <Symbol

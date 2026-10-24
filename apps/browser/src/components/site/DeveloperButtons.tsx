@@ -46,6 +46,10 @@ export async function showDeveloperReloadMenu(tabId: string) {
     { id: "forceReload", title: "Refresh (Ignore Cache)", checked: current === "forceReload" },
     { id: "clearCookies", title: "Clear Cookies and Refresh" },
   ]);
+  if (choice) await runDeveloperReloadChoice(tabId, choice);
+}
+
+export async function runDeveloperReloadChoice(tabId: string, choice: string) {
   if (choice === "reload" || choice === "forceReload") {
     setDeveloperReload(tabId, choice);
     return developerReload(tabId);

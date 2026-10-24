@@ -69,6 +69,7 @@ export type Settings = {
 
   chosen?: string[];
   inferred?: string[];
+  migrations?: string[];
 };
 
 export type PeekModifier = "alt" | "shift" | "off";
@@ -77,6 +78,8 @@ export const peekModifierOf = (settings: Pick<Settings, "peekModifier">): PeekMo
   PEEK_MODIFIERS.includes(settings.peekModifier) ? settings.peekModifier : DEFAULT_SETTINGS.peekModifier;
 
 export const DEFAULT_PROFILE_ID = "default";
+
+const TOOLBAR_STAYS_ON_SCROLL = "toolbarStaysOnScroll";
 
 export const DEFAULT_SETTINGS: Settings = {
   warnBeforeQuitting: false,
@@ -89,7 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   searchSuggestions: true,
   commandBarPreference: "website",
   tabLayout: "sidebar",
-  hideToolbarWhileScrolling: true,
+  hideToolbarWhileScrolling: false,
   newTabPosition: "bottom",
   newTabOpens: "page",
   warnBeforeClosingLastTab: true,
@@ -121,6 +124,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shortcuts: {},
   openLinksInLittleArdia: true,
   littleArdiaSize: [900, 640],
+  migrations: [TOOLBAR_STAYS_ON_SCROLL],
 };
 
 const NO_CUSTOM_ENGINES: CustomSearchEngine[] = [];
@@ -168,8 +172,19 @@ export function choose(settings: Settings, patch: Partial<Settings>): Settings {
   return { ...settings, ...patch, ...(added.length ? { chosen: [...chosen, ...added] } : {}), ...(inferred ? { inferred } : {}) };
 }
 
-export function migrateSavedSettings(saved: (Partial<Settings> & { batterySaver?: unknown }) | undefined): Partial<Settings> | undefined {
-  if (!saved || !("batterySaver" in saved)) return saved;
+type SavedSettings = Partial<Settings> & { batterySaver?: unknown };
+
+export function migrateSavedSettings(saved: SavedSettings | undefined): Partial<Settings> | undefined {
+  return saved && keepToolbarOnScroll(migrateBatterySaver(saved));
+}
+
+function keepToolbarOnScroll(saved: Partial<Settings>): Partial<Settings> {
+  if (saved.migrations?.includes(TOOLBAR_STAYS_ON_SCROLL)) return saved;
+  return { ...saved, hideToolbarWhileScrolling: false, migrations: [...(saved.migrations ?? []), TOOLBAR_STAYS_ON_SCROLL] };
+}
+
+function migrateBatterySaver(saved: SavedSettings): Partial<Settings> {
+  if (!("batterySaver" in saved)) return saved;
   const { batterySaver, ...rest } = saved;
   const explicit = batterySaver === false || (batterySaver === true && !!rest.chosen?.includes("batterySaver") && !rest.inferred?.includes("batterySaver"));
   const without = (keys: string[]) => keys.filter((k) => k !== "batterySaver");

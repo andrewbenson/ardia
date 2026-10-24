@@ -141,8 +141,56 @@ test("groups stay contiguous; splits need two panes", () => {
   const sp = S().createSplit([a, b]);
   S().closeTab(b);
   assert.equal(S().splits[sp], undefined);
-  S().closeTab(a);
+  S().closeWindow(w);
   assert.equal(S().closedWindows.at(-1).groups.length, 1);
+});
+
+test("closing the last tab keeps the window with one selected New Tab page; ⌘W there closes the window", () => {
+  for (const newTabOpens of ["page", "commandBar"]) {
+    reset({ newTabOpens });
+    const [w, a] = setup("a");
+    const windows = S().closedWindows.length;
+    S().closeTab(a);
+    assert.ok(S().windows[w], `${newTabOpens}: the window stays`);
+    const blank = model.activeTabId(S(), w);
+    assert.deepEqual(S().windows[w].tabIds, [blank], `${newTabOpens}: one tab`);
+    assert.equal(S().tabs[blank].url, "");
+    assert.equal(model.activeTabId(S(), w), blank, "selected");
+    assert.equal(S().closedTabs.at(-1).tab.url, "https://a.com", "recorded as a closed tab");
+    assert.equal(S().closedWindows.length, windows, "not as a closed window");
+    S().reopenClosed(w);
+    assert.ok(view(w).includes("https://a.com"), "⇧⌘T reopens it in the same window");
+    assert.equal(shown(w), "a");
+    S().closeTab(model.activeTabId(S(), w));
+    S().closeTab(model.activeTabId(S(), w));
+    assert.equal(S().windows[w], undefined, "⌘W on the empty New Tab page closes the window");
+  }
+});
+
+test("closing the last tab still closes Little Ardia and private windows", () => {
+  reset();
+  setup("main");
+  const small = S().createWindow({ small: true, url: "https://link.com/" });
+  S().closeTab(S().windows[small].tabIds[0]);
+  assert.equal(S().windows[small], undefined, "Little Ardia");
+  const priv = S().createWindow({ incognito: true, url: "https://secret.com/" });
+  S().closeTab(S().windows[priv].tabIds[0]);
+  assert.equal(S().windows[priv], undefined, "private");
+});
+
+test("closing the last tab next to unloaded pinned tiles leaves them unloaded", () => {
+  reset();
+  const [w, p, a] = setup("p", "a");
+  S().togglePin(p);
+  S().activate(a);
+  S().closeTab(p);
+  assert.equal(S().tabs[p].unloaded, true);
+  S().closeTab(a);
+  assert.ok(S().windows[w], "the window stays");
+  const blank = model.activeTabId(S(), w);
+  assert.equal(S().tabs[blank].url, "");
+  assert.equal(S().tabs[p].unloaded, true, "the tile is not reloaded");
+  assert.deepEqual(S().windows[w].tabIds, [p, blank]);
 });
 
 test("hydrate drops broken splits", () => {

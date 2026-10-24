@@ -108,7 +108,6 @@ const ROWS: Record<SettingsPane, Section[]> = {
           keywords: ["new tab page", "command bar", "cmd t"],
         },
         newTabPosition: { title: "Add new tabs to the top", keywords: ["new tab position", "left", "bottom", "order"] },
-        warnBeforeClosingLastTab: { title: "Warn before closing last tab in a Profile", keywords: ["confirm", "close tab"] },
         tabReorderHaptics: { title: "Haptic feedback when reordering tabs", keywords: ["trackpad", "vibration", "drag"] },
         extendWebsiteColor: { title: "Extend website color into tab bar", keywords: ["theme color", "tint", "colour"] },
         sidebarMediaControls: {

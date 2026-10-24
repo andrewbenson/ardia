@@ -9,7 +9,6 @@ export const NEW_TAB_BAR_POLICY = {
   dismissOnWindowDeactivation: true,
   showOnceOverNewEmptyWindow: true,
   showOnLaunch: false,
-  closingLastTabLeavesEmptyWindow: true,
 };
 
 export const newTabOpensBar = (s: Pick<BrowserState, "settings">) => s.settings.newTabOpens === "commandBar";
@@ -23,7 +22,6 @@ export const hiddenEmptyCard = (s: BrowserState, tab: Tab) => !tab.pinned && new
 export function leavesEmptyWindow(s: BrowserState, id: string): boolean {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
-  if (!NEW_TAB_BAR_POLICY.closingLastTabLeavesEmptyWindow || !newTabOpensBar(s) || !w) return false;
-  if (w.kind === "small" || w.incognito || isEmptyCardTab(s, tab)) return false;
+  if (!w || w.kind === "small" || w.incognito || isEmptyCardTab(s, tab)) return false;
   return closesWindow(s, id);
 }

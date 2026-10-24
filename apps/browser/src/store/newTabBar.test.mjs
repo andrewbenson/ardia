@@ -24,7 +24,7 @@ function windowWith(...hosts) {
   return { w, ids };
 }
 
-test("setting off: no bar, and the last tab still closes its window", () => {
+test("setting off: no bar, and the last tab leaves a New Tab page in its window", () => {
   reset();
   const { w, ids: [a] } = windowWith("a", "b");
   assert.equal(toggleNewTabBar(w), false);
@@ -32,7 +32,8 @@ test("setting off: no bar, and the last tab still closes its window", () => {
   assert.equal(panel(w).open, false);
   const solo = S().createWindow({ url: "https://solo.com/" });
   S().closeTab(S().windows[solo].tabIds[0]);
-  assert.equal(S().windows[solo], undefined, "the last tab closes its window");
+  assert.equal(S().windows[solo].tabIds.length, 1, "the window stays");
+  assert.equal(urlOf(model.activeTabId(S(), solo)), "", "with a New Tab page");
 });
 
 test("setting on: the bar adds nothing; closing it again leaves everything as it was", () => {

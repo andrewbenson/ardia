@@ -3,12 +3,9 @@ import { confirm, focusWindow } from "@ardia/shell";
 import { pageToProfile } from "../components/layout/profilePager";
 import { profileNames, requestCreateProfile, type CreateProfilePreset } from "../components/profiles/CreateProfile";
 import { useBrowser, type CreateWindowOptions } from "../store/browser";
-import { closesWindow, engineProfile, isIncognitoProfile, resolveWindowId } from "../store/model";
-import { leavesEmptyWindow } from "../store/newTabBar";
+import { engineProfile, isIncognitoProfile, resolveWindowId } from "../store/model";
 import { engineIdOf, sharingProfiles } from "../store/profiles";
-import { applyHeldReports } from "./nativeEvents";
 import { webviews } from "./webviews";
-import { closeWindowDialog } from "./windowClose";
 
 const store = () => useBrowser.getState();
 
@@ -28,18 +25,7 @@ export function switchToTab(tabId: string) {
   if (tab.windowId !== store().ui.focusedWindowId) focus(tab.windowId);
 }
 
-export async function closeTab(tabId: string) {
-  const s = store();
-  const tab = s.tabs[tabId];
-  const w = tab && s.windows[tab.windowId];
-  if (!tab || !w) return;
-  const last = closesWindow(s, tabId) && !leavesEmptyWindow(s, tabId);
-  if (last && s.settings.warnBeforeClosingLastTab && !w.incognito) {
-    const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(w.id), suppression: "Don’t ask me again", windowId: w.id });
-    if (suppressed) store().updateSettings({ warnBeforeClosingLastTab: false });
-    if (!confirmed) return;
-    applyHeldReports();
-  }
+export function closeTab(tabId: string) {
   store().closeTab(tabId);
 }
 

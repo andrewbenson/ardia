@@ -225,7 +225,7 @@ id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same
 digest into the app; the app's installer passes its own product and repo. So Vista installs `~/.local/bin/vista` into
 `~/Library/Application Support/Vista/CLI`, downloads from `andrewbenson/ardia`'s releases and drives
 `~/Library/Application Support/com.hill.vista`. The tarball must be uploaded to the same release as the app:
-`publish-nightly.sh` does, reading the repo from the identity.
+`publish-nightly.sh` and the stable steps in the release skill both read the repo from the identity.
 
 This fork is **Vista**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Vista`, `com.hill.vista`, team
 `33W8BDN775`, Sparkle account `vista`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
@@ -275,9 +275,6 @@ Still upstream's in a fork:
   quit or try again.
 - **The legacy migration** from Netnyahoo (`LegacyMigration.swift`, `LegacyDockTile.swift`) runs only when the bundle id is
   `LegacyName.successorBundleId`, upstream's own. A fork never moves, copies or regroups another app's data.
-- **The stable publish steps in the release skill.** `.claude/skills/release/SKILL.md` § 5 and its appcast and
-  size steps name `-R mantrakp04/ardia` and upstream's feed URL outright, so run them with the fork's repo
-  (`AC_RELEASE_REPO`) in their place, or the app and its CLI tarball land in upstream's release.
 - **First install.** A new bundle id is a new app to macOS: its own data folder and defaults, fresh keychain and privacy
   (TCC) prompts, and a fresh Developer ID profile. Nothing carries over from upstream Ardia.
 

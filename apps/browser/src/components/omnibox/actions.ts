@@ -1,6 +1,7 @@
 import type { CommandAction } from "@ardia/core";
 import type { BrowserCommand } from "@ardia/shell";
 import { runCommand } from "../../lib/commands";
+import { canToggleDeveloperModeFor, inDeveloperMode } from "../site/developerMode";
 import { isBookmarked } from "../../store/bookmarks";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { activeTab, bookmarkProfileId, isPinnedRow } from "../../store/model";
@@ -15,7 +16,7 @@ type ActionDef = {
   icon: string;
   hint?: string;
   keywords?: string[];
-  needs?: "page" | "tab" | "profiles";
+  needs?: "page" | "tab" | "profiles" | "toggleableSite";
 };
 
 const page = "page" as const;
@@ -68,6 +69,13 @@ const DEFS: ActionDef[] = [
   { command: "zoomOut", title: "Zoom Out", icon: "minus.magnifyingglass", hint: "⌘-", needs: page },
   { command: "zoomReset", title: "Actual Size", icon: "1.magnifyingglass", hint: "⌘0", keywords: ["reset zoom"], needs: page },
   { command: "devTools", title: "Developer Tools", icon: "hammer", hint: "⌥⌘I", keywords: ["inspect", "devtools", "console"], needs: page },
+  {
+    command: "toggleDeveloperMode",
+    title: ({ tab }) => (inDeveloperMode(tab?.url) ? "Turn off Developer Mode for this site" : "Turn on Developer Mode for this site"),
+    icon: "hammer",
+    keywords: ["developer mode", "dev mode", "localhost", "console errors"],
+    needs: "toggleableSite",
+  },
   { command: "toggleFullUrl", title: ({ s }) => (s.settings.showFullUrl ? "Hide Full URL" : "Show Full URL"), icon: "text.alignleft" },
   { command: "toggleSidebar", title: "Auto-Hide Tabs", icon: "sidebar.left", hint: "⌘S", keywords: ["toggle sidebar", "hide sidebar", "show sidebar", "focus mode"] },
   { command: "toggleBookmarksBar", title: "Toggle Bookmarks Bar", icon: "menubar.rectangle", hint: "⇧⌘B", keywords: ["bookmarks bar"] },
@@ -95,6 +103,7 @@ export function barActions(s: BrowserState, windowId: string): CommandAction[] {
   for (const d of DEFS) {
     if (d.needs === "page" && !tab?.url) continue;
     if (d.needs === "tab" && !tab) continue;
+    if (d.needs === "toggleableSite" && !canToggleDeveloperModeFor(tab?.id)) continue;
     if (d.needs === "profiles" && w?.incognito) continue;
     out.push({
       id: actionId(d),

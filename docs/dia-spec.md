@@ -988,3 +988,42 @@ model at 120 Hz ticks: 26–36 % of the way at 0.1 s, 58–73 % at 0.25 s, 92–
   (a, b clamped from `self+0x14` / `self+0x94`), each lit or unlit by its dot product with the light direction
   (−0.2, −1, −0.55)/√1.34, joined into a closed CGPath: the unlit crescent of the rim. Not rendered at 84 pt yet.
 - Light appearance of everything above (the user's Dia runs dark).
+
+## Developer Mode (Arc 1.160.0, Dia 1.54.2)
+
+Read from the app bundles only (`strings`, the Swift reflection names in `__swift5_reflstr`, asset catalogues) on
+2026-10-24; neither browser was launched. **Recovered** means the string or name is in the binary; **inferred** means
+it's our reading of where it sits.
+
+- **Built-in hosts (recovered).** Both match `(localhost|127\.0\.0\.1)`; Arc also has `localhost.local`. Those pages are
+  in Developer Mode with nothing turned on. Whether they can be switched off isn't in the strings (inferred: no; ours
+  can't, and we add `[::1]` and `*.localhost`).
+- **State (recovered).** A per-host list, `developerModeEnabledForHosts`, in both (a user-defaults key next to
+  `autoPipDisabledForHosts`); Dia also writes `StorableDeveloperModeState.json`. Arc's `DeveloperModeClient` has
+  `setDeveloperModeStatusForHost`, `getDeveloperModeState`, `reset` and `subscription`; "Reset developer mode enabled
+  hosts" is an item of Arc's internal debug menu (`onSelectResetDeveloperModeEnabledHosts`), not a user setting.
+  Whether the list is per profile isn't known (inferred: one list, like the other per-host defaults).
+- **Site Controls row (recovered).** Arc's site-settings enum is `unavailable, contentSettings, sidebarPreview,
+  developerMode, contentBlocking, popupBlocking`; the row's strings are only the comments "Title of developer mode item
+  in site settings view" and "Subtitle … when it's on" / "… when it's off". Their English values aren't next to them
+  (Swift dedupes them into shared strings), so the exact text isn't recovered (inferred: "Developer Mode", On / Off,
+  which ours uses). Dia 1.54.2 still has the title comment and the defaults keys but not the subtitles, the menu items
+  or the toggle's description (inferred: carried over from Arc's code, maybe not shown).
+- **Menu and command bar (recovered, Arc).** "Turn on Developer Mode for this site" / "Turn off Developer Mode for this
+  site" ("Menu item for enabling / disabling developer mode", among the main window's menu items, next to "View
+  Downloads"); the key binding `toggleDeveloperMode`, "Toggles developer mode on or off for the current site.", grouped
+  with `toggleDevTools`, `viewSource`, `inspectElements`. Nothing points to the tab's context menu.
+- **Developer toolbar (recovered, Arc).** Button labels "Developer console button", "Toggle Network Panel", "Inspect
+  element button", "Extensions button", "Site settings button" (`toggleConsoleTapped`, `openConsoleView`); analytics
+  `developer_tab_activated`, `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`,
+  `dev_tools_inspect_elements_opened`, `is_from_dev_tab_shortcut` (Dia has the same analytics names). Whether the
+  console button shows counts, and of what, isn't in the strings (inferred from Arc's announcement: errors).
+- **Full URL (recovered, Arc).** Settings' "Show full URL when Toolbar is enabled" and the "Show Full URL" / "Hide Full
+  URL" context-menu action exist; that Developer Mode forces the full URL (port and path) is inferred.
+- **Reload (recovered names, inferred meaning).** `devModeReloadState` is a defaults key; `DeveloperTabReloadSetting` is a
+  type of Arc's `BrowserNavigationButtonsFeature`, next to "Refresh (Ignore Cache)", "Clear Cookies and Refresh" and the
+  `reloadButton` / `forceReloadButton` / `reloadOptionsButton` views; a nearby type stores `reload`, `forceReload` through
+  `_userDefaultsClient`. Reading: in a developer tab the reload button remembers whether it reloads or force-reloads.
+- **Sidebar (recovered names, inferred meaning).** Sidebar items have `isDeveloperTab` and a `developerTab` display style
+  / highlight (with `isTabCapturingOrRecording`, `shouldDim`): a developer tab looks different in the sidebar. Nothing
+  recovered says Developer Mode changes archiving or caching.

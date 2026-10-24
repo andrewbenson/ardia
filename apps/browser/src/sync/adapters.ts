@@ -42,6 +42,7 @@ export const SYNCED_SETTINGS = [
   "autoGroupMeetingTabs",
   "cleanUpInactiveTabsAfterHours",
   "mutedSites",
+  "developerModeSites",
   "autoPictureInPicture",
   "videoUpscaling",
   "sidebarMediaControls",

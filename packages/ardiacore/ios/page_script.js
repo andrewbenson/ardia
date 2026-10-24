@@ -755,8 +755,75 @@
     addEventListener("pagehide", guard((e) => e.isTrusted && send("peekGone", {})));
   } catch (e) {}
 
+  const developerConsole = (() => {
+    if (!isTop) return null;
+    const target = console;
+    const levels = ["error", "warn"];
+    const originals = setPrototypeOf({}, null);
+    for (let i = 0; i < levels.length; i++) originals[levels[i]] = target[levels[i]];
+    const NativeErrorEvent = window.ErrorEvent;
+    const NativeRejectionEvent = window.PromiseRejectionEvent;
+    let errors = 0;
+    let warnings = 0;
+    let on = false;
+    let wrapped = null;
+    let sent = "";
+    const report = later(() => {
+      const key = errors + ":" + warnings;
+      if (!on || key === sent) return;
+      sent = key;
+      send("console", { errors, warnings });
+    }, 250);
+    const counter = (level, original) =>
+      function () {
+        if (level === "error") errors++;
+        else warnings++;
+        report();
+        return apply(original, this, arguments);
+      };
+    const wrap = () => {
+      if (wrapped) return;
+      wrapped = setPrototypeOf({}, null);
+      for (let i = 0; i < levels.length; i++) {
+        const original = originals[levels[i]];
+        if (typeof original !== "function") continue;
+        try {
+          target[levels[i]] = wrapped[levels[i]] = counter(levels[i], original);
+        } catch (e) {}
+      }
+    };
+    const unwrap = () => {
+      if (!wrapped) return;
+      const names = keys(wrapped);
+      for (let i = 0; i < names.length; i++)
+        try {
+          if (target[names[i]] === wrapped[names[i]]) target[names[i]] = originals[names[i]];
+        } catch (e) {}
+      wrapped = null;
+    };
+    const uncaught = (Kind) =>
+      guard((e) => {
+        if (!e.isTrusted || (Kind && !(e instanceof Kind))) return;
+        errors++;
+        report();
+      });
+    addEventListener("error", uncaught(NativeErrorEvent));
+    addEventListener("unhandledrejection", uncaught(NativeRejectionEvent));
+    const set = (next) => {
+      on = !!next;
+      if (!on) return unwrap();
+      wrap();
+      sent = "";
+      report();
+    };
+    if (/^(localhost|127\.0\.0\.1|\[::1\])$|\.localhost$/i.test(location.hostname)) set(true);
+    return set;
+  })();
+  handlers.developer = (config) => developerConsole && developerConsole(!!(config && config.on));
+
   handlers.config = (config) => {
     handlers.peekConfig({ modifier: config.peek, trace: config.peekTrace });
+    if (developerConsole && "developer" in config) developerConsole(!!config.developer);
     blockAutoplay = !!config.blockAutoplay;
     if (blockAutoplay)
       pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], !!(navigator.userActivation && navigator.userActivation.hasBeenActive));

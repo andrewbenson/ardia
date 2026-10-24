@@ -23,6 +23,8 @@ import { showUrlBarMenu } from "./omnibox/paste";
 import { useHover } from "./primitives";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { GlassFill, liquidGlass } from "./glass";
+import { ConsoleButton } from "./site/ConsoleButton";
+import { useDeveloperMode } from "./site/developerMode";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
 
@@ -269,6 +271,7 @@ export const UrlField = memo(function UrlField({
 }) {
   const theme = useTheme();
   const showFullUrl = useSettings((s) => s.showFullUrl);
+  const developer = useDeveloperMode(tab.url);
   const bookmarked = useIsBookmarked(tab.url);
   const insecure = usePage(tab.id, insecureLevel);
   const popups = usePage(tab.id, (p) => p.popups.length);
@@ -294,7 +297,7 @@ export const UrlField = memo(function UrlField({
   const full = isFile ? ` ${safeDecode(tab.url.slice("file://".length))}` : urlForDisplay(tab.url);
   const path = !isFile && full.startsWith(host) ? full.slice(host.length) : full;
   const web = isWebUrl(tab.url);
-  const trail = hovered ? path : showFullUrl ? path.replace(/\/$/, "") : !web && tab.title ? ` / ${tab.title}` : "";
+  const trail = hovered || developer ? path : showFullUrl ? path.replace(/\/$/, "") : !web && tab.title ? ` / ${tab.title}` : "";
 
   return (
     <View
@@ -356,6 +359,7 @@ export const UrlField = memo(function UrlField({
       </ContextMenuArea>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 3 }}>
         {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
+        {developer && <ConsoleButton tabId={tab.id} palette={palette} onFocus={onFocus} />}
         <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
         <ZoomIndicator tabId={tab.id} zoom={tab.zoom} palette={palette} onFocus={onFocus} />
         {popups > 0 && (

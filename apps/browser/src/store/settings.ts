@@ -42,6 +42,7 @@ export type Settings = {
   autoGroupMeetingTabs: boolean;
   cleanUpInactiveTabsAfterHours: number | null;
   mutedSites: string[];
+  developerModeSites: string[];
   neverTranslateSites: Record<string, string[]>;
   autoPictureInPicture: boolean;
   videoUpscaling: boolean;
@@ -105,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoGroupMeetingTabs: true,
   cleanUpInactiveTabsAfterHours: null,
   mutedSites: [],
+  developerModeSites: [],
   neverTranslateSites: {},
   autoPictureInPicture: true,
   videoUpscaling: true,

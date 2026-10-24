@@ -48,6 +48,7 @@ import { groupOf } from "../store/organize";
 import { isSmall, mainWindowFor, originalProfile } from "../store/small";
 import { closeLittleArdia, openInMainWindow, openLittleArdia } from "../components/littleArdia/actions";
 import { runPeekCommand } from "../components/peek/actions";
+import { toggleDeveloperModeFor } from "../components/site/developerMode";
 import { peekTabId } from "../store/peek";
 import { expectFocus, findFocus } from "./focusClaims";
 
@@ -225,6 +226,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       return void web?.showDevTools("inspect");
     case "javaScriptConsole":
       return void web?.showDevTools("console");
+    case "toggleDeveloperMode":
+      return toggleDeveloperModeFor(page?.id);
     case "viewSource":
       if (!page || !web || !/^(https?|file):/.test(page.url)) return;
       return void s.newTab(windowId, { url: `view-source:${page.url}`, openerId: page.id, profileId: page.profileId });

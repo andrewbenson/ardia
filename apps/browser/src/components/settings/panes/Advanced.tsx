@@ -9,6 +9,7 @@ import type { BatterySaverWhen } from "../../../store/settings";
 import { Button, Group, PopUp, Row, SectionHeader, Toggle, useFormColors } from "../controls";
 import { engineVersion, widevine as widevineComponent } from "../paneData";
 import { useResource } from "../resources";
+import { developerSites, resetDeveloperModeSites } from "../../site/developerMode";
 
 const SOURCE_NOTICE = "Ardia is free software under the GNU General Public License v3, with no warranty.";
 
@@ -38,6 +39,9 @@ export function AdvancedPane() {
         </Row>
         <Row anchor="advanced.bookmarksImport">
           <Toggle value={!settings.hideBookmarksBarImport} onChange={(v) => update({ hideBookmarksBarImport: !v })} />
+        </Row>
+        <Row anchor="advanced.developerMode">
+          <Button title="Reset Developer Mode Sites" disabled={!developerSites(settings).length} onPress={resetDeveloperModeSites} />
         </Row>
       </Group>
 

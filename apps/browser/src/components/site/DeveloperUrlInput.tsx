@@ -44,7 +44,7 @@ export function DeveloperUrlInput({ tabId, windowId, initial, color }: { tabId: 
       }}
       keyDownEvents={[{ key: "Escape" }]}
       onKeyDown={(e) => e.nativeEvent.key === "Escape" && finish(false)}
-      style={{ height: 18, marginLeft: -2, marginTop: 1, fontSize: 11, fontFamily: MONOSPACED, color, paddingVertical: 0, paddingHorizontal: 0 }}
+      style={{ height: 18, marginLeft: -2, marginTop: 4, fontSize: 11, fontFamily: MONOSPACED, color, paddingVertical: 0, paddingHorizontal: 0 }}
     />
   );
 }

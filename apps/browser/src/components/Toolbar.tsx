@@ -352,7 +352,7 @@ export const UrlField = memo(function UrlField({
         {developer && editing ? (
           <DeveloperUrlInput tabId={tab.id} windowId={windowId} initial={developerUrl(tab.url)} color={palette.text} />
         ) : developer ? (
-          <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontFamily: MONOSPACED, color: palette.text }}>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 11, fontFamily: MONOSPACED, color: palette.text }}>
             {developerUrl(tab.url)}
           </Text>
         ) : sidebar ? (

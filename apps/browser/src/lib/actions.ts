@@ -6,9 +6,11 @@ import { useBrowser, type CreateWindowOptions } from "../store/browser";
 import { rootOf } from "../store/groups";
 import { engineProfile, isIncognitoProfile, plural, resolveWindowId } from "../store/model";
 import { groupLabel } from "../store/organize";
+import { windowClosingWithTab } from "../store/newTabBar";
 import { engineIdOf, sharingProfiles } from "../store/profiles";
 import { applyHeldReports } from "./nativeEvents";
 import { webviews } from "./webviews";
+import { closeWindowDialog } from "./closeWindowDialog";
 
 const store = () => useBrowser.getState();
 
@@ -28,7 +30,15 @@ export function switchToTab(tabId: string) {
   if (tab.windowId !== store().ui.focusedWindowId) focus(tab.windowId);
 }
 
-export function closeTab(tabId: string) {
+export async function closeTab(tabId: string) {
+  const s = store();
+  const windowId = windowClosingWithTab(s, tabId);
+  if (windowId && s.settings.warnBeforeClosingWindow) {
+    const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(windowId), suppression: "Don’t ask me again", windowId });
+    if (suppressed) store().updateSettings({ warnBeforeClosingWindow: false });
+    if (!confirmed) return;
+    applyHeldReports();
+  }
   store().closeTab(tabId);
 }
 

@@ -5,6 +5,7 @@ const model = await import("./model.ts");
 const organize = await import("./organize.ts");
 const { controllingSearchExtension, defaultSearchEngine, searchUrlPrefix } = await import("./settings.ts");
 const media = await import("../components/media/state.ts");
+const { windowClosingWithTab } = await import("./newTabBar.ts");
 
 const S = () => useBrowser.getState();
 const view = (w) => model.viewTabIds(S(), w).map((id) => S().tabs[id].url);
@@ -176,6 +177,34 @@ test("closing the last tab still closes Little Ardia and private windows", () =>
   const priv = S().createWindow({ incognito: true, url: "https://secret.com/" });
   S().closeTab(S().windows[priv].tabIds[0]);
   assert.equal(S().windows[priv], undefined, "private");
+});
+
+test("a tab close that takes the window asks first only when other tabs would go with it", () => {
+  reset();
+  const [w, a] = setup("a");
+  assert.equal(windowClosingWithTab(S(), a), null, "the last page leaves a New Tab page: nothing to ask");
+  S().closeTab(a);
+  const blank = model.activeTabId(S(), w);
+  assert.equal(windowClosingWithTab(S(), blank), null, "an empty window closes without asking");
+
+  const [x, b] = setup("b");
+  S().togglePin(b);
+  const tile = S().windows[x].tabIds[0];
+  S().closeTab(tile);
+  const empty = model.activeTabId(S(), x);
+  assert.equal(windowClosingWithTab(S(), empty), null, "pinned tiles stay with the profile, so they don't count");
+
+  const [y] = setup("c");
+  S().switchProfile(y, S().createProfile({ name: "Work" }));
+  const workBlank = model.activeTabId(S(), y);
+  assert.equal(windowClosingWithTab(S(), workBlank), y, "another profile's page in the window would close with it");
+
+  const small = S().createWindow({ small: true, url: "https://link.com/" });
+  assert.equal(windowClosingWithTab(S(), S().windows[small].tabIds[0]), null, "Little Ardia's only tab");
+  const priv = S().createWindow({ incognito: true, url: "https://one.com/" });
+  const second = S().newTab(priv, { url: "https://two.com/" });
+  S().closeTab(second);
+  assert.equal(windowClosingWithTab(S(), S().windows[priv].tabIds[0]), null, "a private window's only tab");
 });
 
 test("closing the last tab next to unloaded pinned tiles leaves them unloaded", () => {

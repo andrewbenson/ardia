@@ -22,7 +22,6 @@ import { setToolbarExtensionsWidth, SIDEBAR_FIELD } from "./layout/windowLayout"
 import { showUrlBarMenu } from "./omnibox/paste";
 import { useHover } from "./primitives";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
-import { GlassFill, liquidGlass } from "./glass";
 import { DeveloperButtons, developerReload, showDeveloperReloadMenu } from "./site/DeveloperButtons";
 import { useTabDeveloperMode } from "./site/developerMode";
 import { TranslateButton } from "./site/TranslateControls";
@@ -320,20 +319,13 @@ export const UrlField = memo(function UrlField({
               height: sidebar.height,
               borderRadius: SIDEBAR_FIELD.radius,
               borderWidth: StyleSheet.hairlineWidth * 2,
-              borderColor: liquidGlass ? "transparent" : theme.pinnedRestingStroke,
-              backgroundColor: liquidGlass ? undefined : hovered ? theme.tabHover : theme.pinnedResting,
+              borderColor: theme.pinnedRestingStroke,
+              backgroundColor: hovered ? theme.tabHover : theme.pinnedResting,
               overflow: "hidden",
             }
-          : { height: 30, borderRadius: 8, backgroundColor: hovered && !liquidGlass ? palette.pill : undefined },
+          : { height: 30, borderRadius: 8, backgroundColor: hovered ? palette.pill : undefined },
       ]}
     >
-      {liquidGlass ? (
-        sidebar ? (
-          <GlassFill radius={SIDEBAR_FIELD.radius} border={StyleSheet.hairlineWidth * 2} fill={hovered ? theme.tabHover : theme.pinnedResting} />
-        ) : hovered ? (
-          <GlassFill radius={8} fill={palette.pill} dark={palette.background ? palette.text.startsWith("#FFFFFF") : undefined} />
-        ) : null
-      ) : null}
       {developer && !sidebar && (
         <ToolbarButton
           palette={palette}

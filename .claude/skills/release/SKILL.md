@@ -72,7 +72,7 @@ everything since the previous stable, nightlies included.
   plain `open`. The smoke script does this for you.
 - **Build from a clean tree.** release.sh archives the working tree, so another agent's half-finished
   edit would ship. Check `git status` first (below).
-- **Commits** go to `main` and carry no `Co-Authored-By` trailer.
+- **Commits** go to `main`.
 
 ## 1. Check the tree
 

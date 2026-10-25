@@ -1025,5 +1025,18 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
 - **Sidebar, archiving, caching.** `isDeveloperTab` sits beside `shouldDim` on Arc's sidebar tab-icon models, with a
   `developerTab` display style (inferred: a developer tab looks different there). Nothing ties Developer Mode to
   auto-archive or caching; `DeveloperModeContextFlags` is an option set whose flag names aren't in the binary.
+- **Toolbar in Developer Mode (recovered from the owner's Arc 1.160 screenshot, 2026-10-24,** `http://localhost:5050`,
+  dark, 2x, the bar about 37 pt tall). Left to right: an "i" (info) where the site-controls / lock button sits; the URL as
+  `http://localhost:5050`, the full URL with the scheme, in a monospaced font (SF Mono-like, about 13 pt, light text);
+  the whole bar covered in thin, low-contrast diagonal stripes going up to the right at about 45°, light over the bar
+  colour, period about 10–12 pt, with nothing else on the bar changing colour. On the right, groups separated by thin
+  vertical dividers: copy link | two capture buttons (a photo-style icon, a camera) | terminal, globe, crosshair (console,
+  network, inspect) | extensions, pinned extensions, split view. No reload button or chevron on that bar. So Developer
+  Mode does change the URL display, which corrects the "Full URL" item above for developer tabs.
+- **Ours.** Stripes: a pre-drawn image (12 pt period at 45°, 1 pt lines; white at 7 % on a dark bar, black at 6 % on a
+  light one, chosen from the bar's text colour so a website-coloured bar gets the right one), behind the toolbar band
+  and the auto-hide band; no per-frame work. URL: the full URL with the scheme in the monospaced system font, no
+  trailing "/" on a bare origin, in the toolbar and sidebar fields. `info` in place of the lock; the three DevTools
+  buttons as their own group between dividers. Not matched: Increase Contrast, and Arc's capture buttons.
 - **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
   `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

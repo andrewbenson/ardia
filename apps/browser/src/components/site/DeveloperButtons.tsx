@@ -1,5 +1,6 @@
 import { showMenu } from "@ardia/shell";
 import { memo } from "react";
+import { StyleSheet, View } from "react-native";
 import { withLivePage } from "../../lib/livePage";
 import { webviews } from "../../lib/webviews";
 import { ToolbarButton } from "../layout/controls";
@@ -13,8 +14,10 @@ const PANELS = [
 ] as const;
 
 export const DeveloperButtons = memo(function DeveloperButtons({ tabId, palette, onFocus }: { tabId: string; palette: ToolbarPalette; onFocus: () => void }) {
+  const divider = <View style={{ width: StyleSheet.hairlineWidth * 2, height: 16, marginHorizontal: 5, backgroundColor: palette.divider }} />;
   return (
     <>
+      {divider}
       {PANELS.map(({ panel, icon, tooltip }) => (
         <ToolbarButton
           key={panel}
@@ -30,6 +33,7 @@ export const DeveloperButtons = memo(function DeveloperButtons({ tabId, palette,
           tooltip={tooltip}
         />
       ))}
+      {divider}
     </>
   );
 });

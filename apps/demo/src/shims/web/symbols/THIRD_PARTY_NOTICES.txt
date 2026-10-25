@@ -52,7 +52,7 @@ SOFTWARE.
 
 ==============================================================================
 Tabler Icons (@tabler/icons 3.49.0, MIT) https://tabler.io/icons
-Icons used: alarm, alert-triangle, archive, bolt, book, chevrons-right, circle-arrow-down, circle-arrow-right, clock-hour-9, cloud-exclamation, code, contrast, device-gamepad-2, device-vision-pro, hand-stop, letter-a, letter-z, lock, logout, map, message, microphone, mood-smile, number-1, palette, paw, plane, player-track-next, player-track-prev, power, puzzle, question-mark, search, settings, zoom-in, zoom-out
+Icons used: alarm, alert-triangle, archive, bolt, book, chevrons-right, circle-arrow-down, circle-arrow-right, clock-hour-9, cloud-exclamation, code, contrast, device-gamepad-2, device-vision-pro, hand-stop, info-small, letter-a, letter-z, lock, logout, map, message, microphone, mood-smile, number-1, palette, paw, plane, player-track-next, player-track-prev, power, puzzle, question-mark, search, settings, zoom-in, zoom-out
 ------------------------------------------------------------------------------
 MIT License
 

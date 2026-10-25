@@ -23,6 +23,7 @@ import { showUrlBarMenu } from "./omnibox/paste";
 import { useHover } from "./primitives";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { DeveloperButtons, developerReload, showDeveloperReloadMenu } from "./site/DeveloperButtons";
+import { DeveloperStripes } from "./site/DeveloperStripes";
 import { useTabDeveloperMode } from "./site/developerMode";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
@@ -64,6 +65,7 @@ export function Toolbar({
   const website = extendColor && tab?.url ? themeColor : null;
   const palette = toolbarPalette(theme, website);
   const band = useEasedColor(bare ? null : palette.background);
+  const developer = useTabDeveloperMode(tabId);
   const history = useHistoryAvailability(tabId);
   const extensionsWidth = useToolbarExtensionsWidth(windowId);
   useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
@@ -90,6 +92,7 @@ export function Toolbar({
   return (
     <View style={{ height: layout.toolbarHeight }}>
       {!bare && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />}
+      {!bare && developer && <DeveloperStripes palette={palette} />}
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: dim }]} pointerEvents="box-none">
         {geometry.sidebarButton !== null && (
@@ -130,9 +133,11 @@ export function ToolbarBackdrop({ tabId }: { tabId: string }) {
   const extendColor = useSettings((s) => s.extendWebsiteColor);
   const palette = toolbarPalette(theme, extendColor && url ? themeColor : null);
   const band = useEasedColor(palette.background);
+  const developer = useTabDeveloperMode(tabId);
   return (
     <View pointerEvents="none" style={{ height: layout.toolbarHeight }}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
+      {developer && <DeveloperStripes palette={palette} />}
       {url ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: StyleSheet.hairlineWidth, backgroundColor: palette.divider }} /> : null}
     </View>
   );
@@ -178,7 +183,7 @@ export const ReloadButton = memo(function ReloadButton({
       }}
       onLongPress={openMenu}
       onContextMenu={openMenu}
-      tooltip={loading ? "Stop Loading This Page" : developer ? "Refresh (⌘R) · Hold for Reload Options" : "Refresh (⌘R)"}
+      tooltip={loading ? "Stop Loading This Page" : developer ? "Refresh (⌘R) · Right-Click for Reload Options" : "Refresh (⌘R)"}
     />
   );
 });
@@ -326,22 +331,11 @@ export const UrlField = memo(function UrlField({
           : { height: 30, borderRadius: 8, backgroundColor: hovered ? palette.pill : undefined },
       ]}
     >
-      {developer && !sidebar && (
-        <ToolbarButton
-          palette={palette}
-          icon="chevron.down"
-          size={9}
-          weight="semibold"
-          box={18}
-          radius={5}
-          onPress={() => {
-            onFocus();
-            void showDeveloperReloadMenu(tab.id);
-          }}
-          tooltip="Reload Options"
-        />
-      )}
-      {insecure && (
+      {developer ? (
+        <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Site Controls">
+          <Symbol name="info" size={12} weight="semibold" color={palette.secondary} style={{ width: LOCK.width, height: 30 }} />
+        </Pressable>
+      ) : insecure && (
         <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
           <Symbol
             name="lock.open.trianglebadge.exclamationmark.fill"
@@ -352,8 +346,12 @@ export const UrlField = memo(function UrlField({
         </Pressable>
       )}
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
-      <Pressable onPress={() => openPanel(tab.url)} style={{ flex: 1, height: sidebar?.height ?? 30, justifyContent: "center", paddingLeft: insecure ? LOCK.gap : sidebar ? 10 : urlTextLeft(false) }}>
-        {sidebar ? (
+      <Pressable onPress={() => openPanel(tab.url)} style={{ flex: 1, height: sidebar?.height ?? 30, justifyContent: "center", paddingLeft: insecure || developer ? LOCK.gap : sidebar ? 10 : urlTextLeft(false) }}>
+        {developer ? (
+          <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontFamily: MONOSPACED, color: palette.text }}>
+            {developerUrl(tab.url)}
+          </Text>
+        ) : sidebar ? (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 13, fontWeight: "500", color: palette.text }}>
               {host}
@@ -427,6 +425,10 @@ function CaptureIndicator({ camera, microphone, screen, onPress }: { camera: boo
     </Pressable>
   );
 }
+
+const MONOSPACED = ".AppleSystemUIFontMonospaced-Regular";
+
+const developerUrl = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)\/$/i, "$1");
 
 const currentPopover = (tabId: string) => usePages.getState().popover[tabId] ?? null;
 

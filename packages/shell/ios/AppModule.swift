@@ -16,6 +16,7 @@ public class AppModule: Module {
       DispatchQueue.main.async {
         NotificationHub.shared.install()
         AppIcons.restore()
+        DockTile.relabel()
         AppUpdater.shared.start()
       }
     }

@@ -1038,5 +1038,13 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   and the auto-hide band; no per-frame work. URL: the full URL with the scheme in the monospaced system font, no
   trailing "/" on a bare origin, in the toolbar and sidebar fields. `info` in place of the lock; the three DevTools
   buttons as their own group between dividers. Not matched: Increase Contrast, and Arc's capture buttons.
+- **Sidebar row (recovered from the owner's two Arc screenshots, 2026-10-24, dark, 2x).** A Developer Mode tab's row is
+  two lines: the title, and below it, smaller and dimmer, the host with its port (`localhost:5050`, no scheme). Active:
+  the normal selected fill plus a dashed border around the rounded row, amber dashes (about `#F5C52A`) about 2 pt thick
+  with near-black between and around them, dashes and gaps about 6–8 pt, following the corner radius. Inactive: no
+  border and no fill, still two lines. Ours: both lines inside the normal 34 pt row (13 pt title in 16 pt, 11 pt
+  host:port in 14 pt, `textSecondary`), so a tab entering Developer Mode never changes the list's geometry; the border
+  is a 2 pt `#141414` ring under a 2 pt `#F5C52A` dashed ring at radius 10, only on the active tab. The top-strip layout
+  is unchanged.
 - **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
   `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

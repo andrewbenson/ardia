@@ -5,9 +5,14 @@ import type { Settings } from "../../store/settings";
 
 const ownerOf = (profileId: string) => (isIncognitoProfile(profileId) ? incognitoOriginal(profileId) : profileId);
 
+const sanitized = new WeakMap<object, DeveloperModeState>();
+
 export function developerModeFor(settings: Pick<Settings, "developerMode">, profileId: string): DeveloperModeState {
-  const raw = settings.developerMode?.[ownerOf(profileId)];
-  return raw ? developerModeOf(raw) : NO_DEVELOPER_MODE;
+  const raw: unknown = settings.developerMode?.[ownerOf(profileId)];
+  if (!raw || typeof raw !== "object") return NO_DEVELOPER_MODE;
+  let state = sanitized.get(raw);
+  if (!state) sanitized.set(raw, (state = developerModeOf(raw)));
+  return state;
 }
 
 const tabOf = (tabId: string | undefined) => (tabId ? useBrowser.getState().tabs[tabId] : undefined);

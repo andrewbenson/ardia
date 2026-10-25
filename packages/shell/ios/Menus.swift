@@ -514,7 +514,7 @@ enum MainMenu {
       cmd("Select Last Tab", "selectLastTab", "9").hiddenShortcut(),
       .separator(),
       cmd("Pin", "togglePin"),
-      cmd("Move to Pinned", "togglePinnedRow", "d", [.command, .option, .shift]),
+      cmd("Move to Pinned", "togglePinnedRow", "d"),
       cmd("Duplicate", "duplicateTab"),
       cmd("New Group with Tab", "newGroupWithTabs", "n", [.command, .control]),
       cmd("New Group with Tab", "newGroupWithTabs", "p", [.command, .control]).hiddenShortcut(),
@@ -524,7 +524,7 @@ enum MainMenu {
       sub("Move to Profile", [], menu: moveToProfile),
       sub("Move to Window", [], menu: moveToWindow),
       .separator(),
-      cmd("Add to Bookmarks…", "bookmarkPage", "d"),
+      cmd("Add to Bookmarks…", "bookmarkPage", "d", [.command, .option, .shift]),
       sub("Add Bookmark to Folder", [], menu: bookmarkToFolder),
       .separator(),
       cmd("Rename…", "renameTab"),
@@ -533,7 +533,7 @@ enum MainMenu {
     ])
 
     bookmarks = top("Bookmarks", [
-      cmd("Bookmark This Page", "bookmarkPage", "d"),
+      cmd("Bookmark This Page", "bookmarkPage", "d", [.command, .option, .shift]),
       cmd("Bookmark All Tabs…", "bookmarkAllTabs", "d", [.command, .shift]),
       cmd("Manage Bookmarks", "manageBookmarks", "b", [.command, .option]),
     ])

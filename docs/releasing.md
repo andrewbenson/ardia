@@ -224,12 +224,12 @@ The bundle the user sees is named after `AC_PRODUCT_NAME`; the release assets ke
 The command-line tool follows the identity too (`docs/cli.md` › Fork identity). release.sh bakes the product, bundle
 id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same name in every build) and pins its
 digest into the app; the app's installer passes its own product and repo. So Solara installs `~/.local/bin/solara` into
-`~/Library/Application Support/Solara/CLI`, downloads from `andrewbenson/ardia`'s releases and drives
+`~/Library/Application Support/Solara/CLI`, downloads from `andrewbenson/solara`'s releases and drives
 `~/Library/Application Support/com.hill.solara`. The tarball must be uploaded to the same release as the app:
 `publish-nightly.sh` and the stable steps in the release skill both read the repo from the identity.
 
 This fork is **Solara**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Solara`, `com.hill.solara`, team
-`33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
+`33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/solara`, its GitHub feed and releases page, telemetry and
 switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) and committed as `apps/browser/macos/Fork.xcconfig`, so this checkout always builds Solara. Its Sparkle key was
 generated on 2026-10-24 (account `solara` in the login keychain, public half in `AC_PUBLIC_ED_KEY`); release.sh
 refuses to run with a placeholder key, which is what the steps below are for in another fork.

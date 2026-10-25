@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ardia_cli import cli, endpoint, identity, skills
 
 INSTALL_SCRIPT = Path(__file__).resolve().parents[1] / "install.sh"
-SOLARA = {"PRODUCT": "Solara", "COMMAND": "solara", "BUNDLE_ID": "com.hill.solara", "RELEASE_REPO": "andrewbenson/ardia"}
+SOLARA = {"PRODUCT": "Solara", "COMMAND": "solara", "BUNDLE_ID": "com.hill.solara", "RELEASE_REPO": "andrewbenson/solara"}
 
 
 def as_solara():
@@ -127,7 +127,7 @@ class Installer(unittest.TestCase):
         return subprocess.run(["/bin/sh", str(INSTALL_SCRIPT), *flags], env=env, capture_output=True, text=True, timeout=120)
 
     def test_a_fork_installs_its_own_command_and_home(self):
-        result = self.install(self.tarball("solara"), "--product", "Solara", "--repo", "andrewbenson/ardia")
+        result = self.install(self.tarball("solara"), "--product", "Solara", "--repo", "andrewbenson/solara")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         link = self.home / ".local" / "bin" / "solara"
         cli_home = self.home / "Library" / "Application Support" / "Solara" / "CLI"

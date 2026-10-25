@@ -1,11 +1,11 @@
 AC_PRODUCT_NAME = Solara
 AC_TEAM_ID = 33W8BDN775
 AC_BUNDLE_ID = com.hill.solara
-AC_FEED_URL = https:/$()/github.com/andrewbenson/ardia/releases/latest/download/appcast.xml
+AC_FEED_URL = https:/$()/github.com/andrewbenson/solara/releases/latest/download/appcast.xml
 AC_PUBLIC_ED_KEY = hzKidH98MRGTWByMi7iIVQfsNWaCWaEq0ZMNWWgmNH8=
 AC_SPARKLE_ACCOUNT = solara
-AC_RELEASE_REPO = andrewbenson/ardia
-AC_NOTES_URL = https:/$()/github.com/andrewbenson/ardia/releases
+AC_RELEASE_REPO = andrewbenson/solara
+AC_NOTES_URL = https:/$()/github.com/andrewbenson/solara/releases
 AC_TELEMETRY_URL =
 AC_SWITCHES_URL =
 AC_APP_ICON = SolaraIcon

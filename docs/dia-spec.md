@@ -1047,5 +1047,12 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   host:port in 14 pt, `textSecondary`), so a tab entering Developer Mode never changes the list's geometry; the border
   is a 2 pt `#141414` ring under a 2 pt `#F5C52A` dashed ring at radius 10, only on the active tab. The top-strip layout
   is unchanged.
+- **Editing the URL (recovered from the owner's Arc screenshot, 2026-10-24).** In Developer Mode a click on the URL or
+  ⌘L edits it in place: no command bar, the monospaced `http://localhost:5050` simply selected with the system
+  highlight where it sits, the striped bar, the "i" and everything else unchanged. Ours: the field becomes a text input
+  at the same place (its 2 pt inset offset, so every glyph lands on the same pixel as at rest, measured), the whole URL
+  selected; Return resolves the text with the command bar's rules (`resolveInput`: a URL, host:port, or a search) in
+  the same tab; Esc, a click elsewhere or another tab ends it with the URL unchanged. No suggestions and no new-tab
+  modifier, as in Arc. Ordinary tabs keep the command bar.
 - **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
   `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

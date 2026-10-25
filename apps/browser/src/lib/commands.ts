@@ -48,9 +48,9 @@ import { groupOf } from "../store/organize";
 import { isSmall, mainWindowFor, originalProfile } from "../store/small";
 import { closeLittleArdia, openInMainWindow, openLittleArdia } from "../components/littleArdia/actions";
 import { runPeekCommand } from "../components/peek/actions";
-import { toggleDeveloperModeFor } from "../components/site/developerMode";
+import { startUrlEdit, tabInDeveloperMode, toggleDeveloperModeFor } from "../components/site/developerMode";
 import { peekTabId } from "../store/peek";
-import { expectFocus, findFocus } from "./focusClaims";
+import { expectFocus, findFocus, urlEditFocus } from "./focusClaims";
 
 export function runCommand({ command, arg, windowId: requested }: CommandEvent) {
   const s = useBrowser.getState();
@@ -147,6 +147,10 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     case "restoreClosed":
       return arg ? s.restoreClosed(arg, windowId) : undefined;
     case "focusCommandBar":
+      if (page && tabInDeveloperMode(page.id)) {
+        expectFocus(windowId, urlEditFocus(page.id));
+        return startUrlEdit(page.id);
+      }
       if (page) return s.openPanel(windowId, page.url);
       if (isEmptyCardTab(s, tab) && showNewTabBar(windowId)) return;
       if (tab && addressBarInSidebar(s, windowId)) return s.openPanel(windowId, "");

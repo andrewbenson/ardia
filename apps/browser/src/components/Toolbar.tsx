@@ -24,7 +24,8 @@ import { useHover } from "./primitives";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { DeveloperButtons, developerReload, showDeveloperReloadMenu } from "./site/DeveloperButtons";
 import { DeveloperStripes } from "./site/DeveloperStripes";
-import { useTabDeveloperMode } from "./site/developerMode";
+import { endUrlEdit, startUrlEdit, useTabDeveloperMode, useUrlEdit } from "./site/developerMode";
+import { DeveloperUrlInput } from "./site/DeveloperUrlInput";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
 
@@ -286,6 +287,11 @@ export const UrlField = memo(function UrlField({
   const theme = useTheme();
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const developer = useTabDeveloperMode(tab.id);
+  const editing = useUrlEdit((u) => u.tabId === tab.id);
+  useEffect(() => () => endUrlEdit(tab.id), [tab.id]);
+  useEffect(() => {
+    if (!developer) endUrlEdit(tab.id);
+  }, [developer, tab.id]);
   const bookmarked = useIsBookmarked(tab.url);
   const insecure = usePage(tab.id, insecureLevel);
   const popups = usePage(tab.id, (p) => p.popups.length);
@@ -346,8 +352,10 @@ export const UrlField = memo(function UrlField({
         </Pressable>
       )}
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
-      <Pressable onPress={() => openPanel(tab.url)} style={{ flex: 1, height: sidebar?.height ?? 30, justifyContent: "center", paddingLeft: insecure || developer ? LOCK.gap : sidebar ? 10 : urlTextLeft(false) }}>
-        {developer ? (
+      <Pressable onPress={() => (!developer ? openPanel(tab.url) : editing ? undefined : startUrlEdit(tab.id))} style={{ flex: 1, height: sidebar?.height ?? 30, justifyContent: "center", paddingLeft: insecure || developer ? LOCK.gap : sidebar ? 10 : urlTextLeft(false) }}>
+        {developer && editing ? (
+          <DeveloperUrlInput tabId={tab.id} windowId={windowId} initial={developerUrl(tab.url)} color={palette.text} />
+        ) : developer ? (
           <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 13, fontFamily: MONOSPACED, color: palette.text }}>
             {developerUrl(tab.url)}
           </Text>

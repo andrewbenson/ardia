@@ -1,5 +1,8 @@
 import { developerModeOf, isDeveloperMode, NO_DEVELOPER_MODE, withDeveloperMode, developerHostOf, type DeveloperModeState, type DeveloperReload } from "../../lib/developerMode";
+import { resolveInput } from "@ardia/core";
+import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
+import { searchUrlPrefix } from "../../store/settings";
 import { incognitoOriginal, isIncognitoProfile } from "../../store/model";
 import type { Settings } from "../../store/settings";
 
@@ -79,4 +82,21 @@ export function useTabDeveloperMode(tabId: string | undefined): boolean {
     const tab = tabId ? s.tabs[tabId] : undefined;
     return !!tab && isDeveloperMode(tab.url, developerModeFor(s.settings, tab.profileId));
   });
+}
+
+export const useUrlEdit = create<{ tabId: string | null; request: number }>(() => ({ tabId: null, request: 0 }));
+
+export function startUrlEdit(tabId: string) {
+  useUrlEdit.setState((s) => ({ tabId, request: s.request + 1 }));
+}
+
+export function endUrlEdit(tabId: string) {
+  if (useUrlEdit.getState().tabId === tabId) useUrlEdit.setState({ tabId: null });
+}
+
+export function submitUrlEdit(tabId: string, text: string) {
+  endUrlEdit(tabId);
+  const s = useBrowser.getState();
+  const url = resolveInput(text, searchUrlPrefix(s.settings));
+  if (url && s.tabs[tabId]) s.navigate(tabId, url);
 }

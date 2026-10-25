@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/apple/bundle_locations.h"
 #include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
@@ -142,8 +143,44 @@ class AppSchemeThrottle : public content::NavigationThrottle {
 
 }
 
+namespace {
+
+const std::string& ProductAppScheme() {
+  static const base::NoDestructor<std::string> scheme([] {
+    NSString* product = [base::apple::OuterBundle()
+        objectForInfoDictionaryKey:@"CFBundleName"];
+    if (![product isKindOfClass:[NSString class]]) {
+      return std::string();
+    }
+    std::string name = base::ToLowerASCII(base::SysNSStringToUTF8(
+        [product stringByTrimmingCharactersInSet:
+                     NSCharacterSet.whitespaceAndNewlineCharacterSet]));
+    std::string out;
+    for (char c : name) {
+      if (base::IsAsciiLower(c) || base::IsAsciiDigit(c) || c == '+' ||
+          c == '.' || c == '-') {
+        out += c;
+      }
+    }
+    static constexpr std::string_view kReserved[] = {
+        "http",       "https", "file",        "about",
+        "data",       "blob",  "javascript",  "view-source",
+        "chrome",     "chrome-extension",     "devtools"};
+    if (out.empty() || !base::IsAsciiLower(out[0]) ||
+        std::find(std::begin(kReserved), std::end(kReserved), out) !=
+            std::end(kReserved)) {
+      return std::string();
+    }
+    return out;
+  }());
+  return *scheme;
+}
+
+}
+
 bool IsAppURL(const GURL& url) {
-  return url.SchemeIs("ardia");
+  const std::string& product = ProductAppScheme();
+  return url.SchemeIs("ardia") || (!product.empty() && url.SchemeIs(product));
 }
 
 bool IsWebUIURL(const GURL& url) {

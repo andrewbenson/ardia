@@ -230,8 +230,9 @@ digest into the app; the app's installer passes its own product and repo. So Sol
 
 This fork is **Solara**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Solara`, `com.hill.solara`, team
 `33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
-switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) except `AC_PUBLIC_ED_KEY`, which is `PLACEHOLDER_SOLARA_SPARKLE_PUBLIC_KEY` until the key exists.
-release.sh refuses to run with a placeholder key. It stays inactive until it's copied into place.
+switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) and committed as `apps/browser/macos/Fork.xcconfig`, so this checkout always builds Solara. Its Sparkle key was
+generated on 2026-10-24 (account `solara` in the login keychain, public half in `AC_PUBLIC_ED_KEY`); release.sh
+refuses to run with a placeholder key, which is what the steps below are for in another fork.
 
 To turn it on:
 

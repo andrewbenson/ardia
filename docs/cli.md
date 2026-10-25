@@ -248,14 +248,14 @@ committed `identity.py` holds upstream's values, so a repo checkout and an upstr
 Everything the CLI calls itself follows the baked identity, so a fork ships its own command. Nothing else in the
 tarball changes: the asset name, its `ardia-cli-<V>/` folder, `bin/ardia` inside it and the `ardia_cli` package stay.
 
-| | Upstream | Vista |
+| | Upstream | Solara |
 |---|---|---|
-| Command, `prog`, help and errors | `ardia` | `vista` |
-| Link | `~/.local/bin/ardia` | `~/.local/bin/vista` |
-| Install home | `~/Library/Application Support/Ardia/CLI` | `~/Library/Application Support/Vista/CLI` |
-| Data dir it connects to | `~/Library/Application Support/com.ardia.browser` | `~/Library/Application Support/com.hill.vista` |
+| Command, `prog`, help and errors | `ardia` | `solara` |
+| Link | `~/.local/bin/ardia` | `~/.local/bin/solara` |
+| Install home | `~/Library/Application Support/Ardia/CLI` | `~/Library/Application Support/Solara/CLI` |
+| Data dir it connects to | `~/Library/Application Support/com.ardia.browser` | `~/Library/Application Support/com.hill.solara` |
 | Downloads from | `github.com/mantrakp04/ardia` releases | `github.com/andrewbenson/ardia` releases |
-| Agent skill | `<skills dir>/ardia`, `name: ardia` | `<skills dir>/vista`, `name: vista` |
+| Agent skill | `<skills dir>/ardia`, `name: ardia` | `<skills dir>/solara`, `name: solara` |
 
 `identity.brand()` renders the help text and the skill for a fork: `Ardia` becomes the product and `ardia` the
 command, except names the engine or the web owns (`ArdiaControl.json`, `/ardia/active`, `ardia://`, `ardia.dev`,
@@ -286,7 +286,7 @@ HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1
 HOME=/tmp/ardia-cli-home ardia skills install --target claude-code
 ```
 
-A fork's tarball installs the same way with `--product Vista --repo andrewbenson/ardia`, which makes `~/.local/bin/vista`
+A fork's tarball installs the same way with `--product Solara --repo andrewbenson/ardia`, which makes `~/.local/bin/solara`
 under that `HOME`. `apps/cli/tests/test_identity.py` covers both identities and the installer:
 `python3 -m unittest discover -s apps/cli/tests`.
 

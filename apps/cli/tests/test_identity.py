@@ -15,11 +15,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ardia_cli import cli, endpoint, identity, skills
 
 INSTALL_SCRIPT = Path(__file__).resolve().parents[1] / "install.sh"
-VISTA = {"PRODUCT": "Vista", "COMMAND": "vista", "BUNDLE_ID": "com.hill.vista", "RELEASE_REPO": "andrewbenson/ardia"}
+SOLARA = {"PRODUCT": "Solara", "COMMAND": "solara", "BUNDLE_ID": "com.hill.solara", "RELEASE_REPO": "andrewbenson/ardia"}
 
 
-def as_vista():
-    return mock.patch.multiple(identity, **VISTA)
+def as_solara():
+    return mock.patch.multiple(identity, **SOLARA)
 
 
 class Upstream(unittest.TestCase):
@@ -40,15 +40,15 @@ class Upstream(unittest.TestCase):
 
 class Fork(unittest.TestCase):
     def setUp(self):
-        patch = as_vista()
+        patch = as_solara()
         patch.start()
         self.addCleanup(patch.stop)
         self.home = Path(tempfile.mkdtemp(prefix="ardia-identity-")).resolve()
         self.addCleanup(shutil.rmtree, self.home, True)
 
     def test_brand_renames_the_app_and_the_command(self):
-        self.assertEqual(identity.brand("Let the ardia command control Ardia."), "Let the vista command control Vista.")
-        self.assertEqual(identity.brand("ardia exec 'x'; Ardia's window; ardia: no"), "vista exec 'x'; Vista's window; vista: no")
+        self.assertEqual(identity.brand("Let the ardia command control Ardia."), "Let the solara command control Solara.")
+        self.assertEqual(identity.brand("ardia exec 'x'; Ardia's window; ardia: no"), "solara exec 'x'; Solara's window; solara: no")
 
     def test_brand_keeps_what_the_engine_and_the_web_name(self):
         kept = [
@@ -69,28 +69,28 @@ class Fork(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             cli.build_parser().parse_args(["exec", "--help"])
-        self.assertIn("usage: vista exec", out.getvalue())
-        self.assertIn("Run Python against the running Vista", out.getvalue())
-        self.assertIn("vista exec 'await tab.title()'", out.getvalue())
+        self.assertIn("usage: solara exec", out.getvalue())
+        self.assertIn("Run Python against the running Solara", out.getvalue())
+        self.assertIn("solara exec 'await tab.title()'", out.getvalue())
         self.assertNotIn("ardia exec", out.getvalue())
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             cli.main(["--version"])
-        self.assertTrue(out.getvalue().startswith("vista "))
+        self.assertTrue(out.getvalue().startswith("solara "))
 
     def test_the_installed_data_dir_follows_the_bundle_id(self):
         with mock.patch.dict(os.environ, {"HOME": str(self.home)}):
             os.environ.pop("ARDIA_DATA_DIR", None)
-            self.assertEqual(endpoint.data_root(), Path.home() / "Library" / "Application Support" / "com.hill.vista")
+            self.assertEqual(endpoint.data_root(), Path.home() / "Library" / "Application Support" / "com.hill.solara")
             os.environ["ARDIA_DATA_DIR"] = str(self.home / "scratch")
             self.assertEqual(endpoint.data_root(), self.home / "scratch")
 
     def test_the_skill_installs_as_the_fork(self):
         with mock.patch.object(Path, "home", lambda: self.home), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(skills.install(["claude-code"], False), 0)
-        folder = self.home / ".claude" / "skills" / "vista"
+        folder = self.home / ".claude" / "skills" / "solara"
         page = (folder / "SKILL.md").read_text(encoding="utf-8")
-        self.assertTrue(page.startswith("---\nname: vista\ndescription: Drive the user's running Vista browser"))
+        self.assertTrue(page.startswith("---\nname: solara\ndescription: Drive the user's running Solara browser"))
         self.assertTrue(skills.is_ours(folder))
         for path in folder.rglob("*.md"):
             text = path.read_text(encoding="utf-8")
@@ -127,16 +127,16 @@ class Installer(unittest.TestCase):
         return subprocess.run(["/bin/sh", str(INSTALL_SCRIPT), *flags], env=env, capture_output=True, text=True, timeout=120)
 
     def test_a_fork_installs_its_own_command_and_home(self):
-        result = self.install(self.tarball("vista"), "--product", "Vista", "--repo", "andrewbenson/ardia")
+        result = self.install(self.tarball("solara"), "--product", "Solara", "--repo", "andrewbenson/ardia")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        link = self.home / ".local" / "bin" / "vista"
-        cli_home = self.home / "Library" / "Application Support" / "Vista" / "CLI"
+        link = self.home / ".local" / "bin" / "solara"
+        cli_home = self.home / "Library" / "Application Support" / "Solara" / "CLI"
         self.assertIn(f"installed {link}", result.stdout)
         self.assertEqual(os.readlink(link), str(cli_home / "current" / "bin" / "ardia"))
         self.assertEqual(os.readlink(cli_home / "current"), "1.2.3")
         self.assertFalse((self.home / ".local" / "bin" / "ardia").exists())
         self.assertFalse((self.home / "Library" / "Application Support" / "Ardia").exists())
-        result = self.install(self.tarball("vista"), "--product", "Vista", "--uninstall")
+        result = self.install(self.tarball("solara"), "--product", "Solara", "--uninstall")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(link.is_symlink())
         self.assertFalse((cli_home / "current").is_symlink())
@@ -150,10 +150,10 @@ class Installer(unittest.TestCase):
         self.assertEqual(os.readlink(link), str(self.home / "Library" / "Application Support" / "Ardia" / "CLI" / "current" / "bin" / "ardia"))
 
     def test_a_tarball_baked_for_another_app_is_refused(self):
-        result = self.install(self.tarball("ardia"), "--product", "Vista")
+        result = self.install(self.tarball("ardia"), "--product", "Solara")
         self.assertEqual(result.returncode, 1)
-        self.assertIn("error the tarball is for another app: it says ardia 1.2.3, not vista 1.2.3", result.stdout)
-        self.assertFalse((self.home / ".local" / "bin" / "vista").exists())
+        self.assertIn("error the tarball is for another app: it says ardia 1.2.3, not solara 1.2.3", result.stdout)
+        self.assertFalse((self.home / ".local" / "bin" / "solara").exists())
 
     def test_bad_names_are_refused(self):
         for flags in (["--product", "../x"], ["--product", "My App"], ["--repo", "no-slash"], ["--repo", "a/b c"]):

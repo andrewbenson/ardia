@@ -10,8 +10,8 @@
 # --repo OWNER/REPO  the GitHub repository whose releases ship the CLI (default: mantrakp04/ardia).
 # --uninstall        remove the installed CLI and its ardia link.
 #
-# A fork's app passes its own --product and --repo, so Vista installs a vista command from its own releases into
-# ~/Library/Application Support/Vista/CLI. The paths below are for the defaults.
+# A fork's app passes its own --product and --repo, so Solara installs a solara command from its own releases into
+# ~/Library/Application Support/Solara/CLI. The paths below are for the defaults.
 # Installs into ${ARDIA_CLI_HOME:-~/Library/Application Support/Ardia/CLI}/<version>, points its `current` link
 # there and links ${ARDIA_CLI_BIN_DIR:-~/.local/bin}/ardia to current/bin/ardia. When the default bin dir isn't on
 # the login shell's PATH, it adds one PATH line to ~/.zprofile (~/.bash_profile for bash), once.

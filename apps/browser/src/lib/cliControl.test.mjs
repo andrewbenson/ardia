@@ -111,10 +111,10 @@ test("the command is the app's name in lowercase, so a fork ships its own", asyn
   const { appInfo } = await import("@ardia/shell");
   assert.equal(cli.cliProduct(), "Ardia");
   assert.equal(cli.cliCommand(), "ardia");
-  appInfo.appName = "Vista";
+  appInfo.appName = "Solara";
   try {
-    assert.equal(cli.cliProduct(), "Vista");
-    assert.equal(cli.cliCommand(), "vista");
+    assert.equal(cli.cliProduct(), "Solara");
+    assert.equal(cli.cliCommand(), "solara");
   } finally {
     delete appInfo.appName;
   }

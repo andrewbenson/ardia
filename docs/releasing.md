@@ -223,26 +223,26 @@ The bundle the user sees is named after `AC_PRODUCT_NAME`; the release assets ke
 
 The command-line tool follows the identity too (`docs/cli.md` › Fork identity). release.sh bakes the product, bundle
 id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same name in every build) and pins its
-digest into the app; the app's installer passes its own product and repo. So Vista installs `~/.local/bin/vista` into
-`~/Library/Application Support/Vista/CLI`, downloads from `andrewbenson/ardia`'s releases and drives
-`~/Library/Application Support/com.hill.vista`. The tarball must be uploaded to the same release as the app:
+digest into the app; the app's installer passes its own product and repo. So Solara installs `~/.local/bin/solara` into
+`~/Library/Application Support/Solara/CLI`, downloads from `andrewbenson/ardia`'s releases and drives
+`~/Library/Application Support/com.hill.solara`. The tarball must be uploaded to the same release as the app:
 `publish-nightly.sh` and the stable steps in the release skill both read the repo from the identity.
 
-This fork is **Vista**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Vista`, `com.hill.vista`, team
-`33W8BDN775`, Sparkle account `vista`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
-switches empty, icon `VistaIcon`: the Outrun synthwave sun, `docs/brand/vista`) except `AC_PUBLIC_ED_KEY`, which is `PLACEHOLDER_VISTA_SPARKLE_PUBLIC_KEY` until the key exists.
+This fork is **Solara**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Solara`, `com.hill.solara`, team
+`33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
+switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) except `AC_PUBLIC_ED_KEY`, which is `PLACEHOLDER_SOLARA_SPARKLE_PUBLIC_KEY` until the key exists.
 release.sh refuses to run with a placeholder key. It stays inactive until it's copied into place.
 
 To turn it on:
 
 1. Generate the Sparkle key on a machine with Pods:
-   `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account vista`. It makes the key in the login keychain and
-   prints its public half. Back it up at once (`generate_keys --account vista -x <file>`, kept outside the repo):
+   `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account solara`. It makes the key in the login keychain and
+   prints its public half. Back it up at once (`generate_keys --account solara -x <file>`, kept outside the repo):
    without it no copy can ever be updated again.
 2. Paste the public half into `AC_PUBLIC_ED_KEY` in `Fork.xcconfig.example`. An xcconfig reads `//` as the start of a
    comment, so a key that contains `//` is written with `/$()/` there, as the URLs are.
 3. `git mv apps/browser/macos/Fork.xcconfig.example apps/browser/macos/Fork.xcconfig` and commit it, so every machine
-   builds Vista. Check what it resolves to:
+   builds Solara. Check what it resolves to:
    `xcodebuild -showBuildSettings -project apps/browser/macos/Ardia.xcodeproj -target Ardia-macOS -configuration Release | grep ' AC_'`.
    Keep `AC_TELEMETRY_URL` and `AC_SWITCHES_URL` empty unless the fork runs its own: a fork must never post into
    upstream's telemetry or obey upstream's kill switches. release.sh refuses to sign with a Sparkle key whose public
@@ -257,8 +257,8 @@ Then, once per release machine:
    and release.sh stops without an `embedded.provisionprofile`.
 2. Notarization: an App Store Connect API key for the team in `scripts/.notary.env`, or a notarytool profile
    (`NOTARY_PROFILE=<profile>`), as in "Once per machine".
-3. The DMG's layout positions icons by name: run `scripts/dmg/layout.sh Vista` once and commit
-   `scripts/dmg/DS_Store-Vista`, which release.sh prefers over upstream's `DS_Store`.
+3. The DMG's layout positions icons by name: run `scripts/dmg/layout.sh Solara` once and commit
+   `scripts/dmg/DS_Store-Solara`, which release.sh prefers over upstream's `DS_Store`.
 4. The first release has no published feed to build on: `APPCAST_BASE=none scripts/release.sh <version>`. Later ones
    read `https://github.com/<repo>/releases/latest/download/appcast.xml`, which `AC_FEED_URL` should point at.
 

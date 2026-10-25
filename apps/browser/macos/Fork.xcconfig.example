@@ -1,11 +1,11 @@
-AC_PRODUCT_NAME = Vista
+AC_PRODUCT_NAME = Solara
 AC_TEAM_ID = 33W8BDN775
-AC_BUNDLE_ID = com.hill.vista
+AC_BUNDLE_ID = com.hill.solara
 AC_FEED_URL = https:/$()/github.com/andrewbenson/ardia/releases/latest/download/appcast.xml
-AC_PUBLIC_ED_KEY = PLACEHOLDER_VISTA_SPARKLE_PUBLIC_KEY
-AC_SPARKLE_ACCOUNT = vista
+AC_PUBLIC_ED_KEY = PLACEHOLDER_SOLARA_SPARKLE_PUBLIC_KEY
+AC_SPARKLE_ACCOUNT = solara
 AC_RELEASE_REPO = andrewbenson/ardia
 AC_NOTES_URL = https:/$()/github.com/andrewbenson/ardia/releases
 AC_TELEMETRY_URL =
 AC_SWITCHES_URL =
-AC_APP_ICON = VistaIcon
+AC_APP_ICON = SolaraIcon

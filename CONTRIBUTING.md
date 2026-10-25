@@ -203,5 +203,5 @@ finding before acting on it. Check the agent's diff yourself before you open the
 
 Solara's own files are Apache-2.0, as are Ardia's, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
 work is released under Apache-2.0, and so may ship in the GPL-3.0 app. A change meant for upstream Ardia goes to
-[mantrakp04/ardia](https://github.com/mantrakp04/ardia), where you sign its [Contributor License Agreement](CLA.md)
+[mantrakp04/ardia](https://github.com/mantrakp04/ardia), where you sign its [Contributor License Agreement](https://github.com/mantrakp04/ardia/blob/main/CLA.md)
 before your first pull request is merged.

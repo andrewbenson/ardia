@@ -17,6 +17,15 @@ HERMES_DEBUG_SHA256="3f457b04de07e8ffdcc81da86acbaf64af56ae9c7132124c46a899e096b
 HERMES_RELEASE_SHA256="a5ca8b2eac8c8f4e5339adbda25ff6c851ae099fcc93df31f3707b12523534ee"
 HERMES_DEBUG_TREE="410f60af0f8b588a53d57c70fc49c7ed60206939529ce812e08247c3e8061311"
 HERMES_RELEASE_TREE="b3aa073beb75195a596620a079b53cb395a000b5108368c4ab7ec9f127196d9f"
+SOURCE_PODS="
+boost 1.84.0 47d83a9cd7e72a43e474e495c85d2e853c1e2040b78c1b0f9471776814e02dcc
+DoubleConversion 1.1.6 bc8e2ca596d14eb37c224db3c15a89e2c6c7ce4c9047ddea6aa1c2501d36e75f
+fast_float 8.0.0 975474e7d39397bd794df7cb6c4b151fa8ea77a0ca8d4a7160e8bf2d9aec7f8b
+fmt 12.1.0 b3fea00d7e07195d052a0d17506457f21c2c88e0c118100656b4440025c9f59b
+glog 0.3.5 cd2675108eb52be482909e55b11ebf68c4da785eb3c074a795163f9b95d47271
+RCT-Folly 2024.11.18.00 0dad2e2beae656164a76600f718536f9c3f8128d6ce8405e720cc17ec45c7132
+SocketRocket 0.7.1 e9c2235924eea8d31456822ab77ebdfeb59f4ba252197cfe7418c8770c2fc050
+"
 
 print=0
 case "${1:-}" in
@@ -38,6 +47,11 @@ if [ "$print" = 1 ]; then
   echo "HERMES_RELEASE_SHA256=\"$(file_sha256 "$pods/hermes-engine-artifacts/hermes-ios-$HERMES_VERSION-release.tar.gz")\""
   echo "HERMES_DEBUG_TREE=\"$(tree "$pods/hermes-engine" .ardia-from)\""
   echo "HERMES_RELEASE_TREE=\"$(tree "$pods/hermes-engine-Release" .ardia-from)\""
+  echo "SOURCE_PODS=\""
+  while read -r name version _; do
+    [ -n "$name" ] && echo "$name $version $(tree "$pods/$name")"
+  done <<<"$SOURCE_PODS"
+  echo "\""
   exit 0
 fi
 
@@ -62,6 +76,12 @@ check_file "$pods/hermes-engine-artifacts/hermes-ios-$HERMES_VERSION-release.tar
 check_tree "$pods/Sparkle" "$SPARKLE_TREE"
 check_tree "$pods/hermes-engine" "$HERMES_DEBUG_TREE" .ardia-from
 check_tree "$pods/hermes-engine-Release" "$HERMES_RELEASE_TREE" .ardia-from
-[ "$failed" = 0 ] || { echo "error: verify-pods: the Pods don't match the pinned Sparkle $SPARKLE_VERSION and Hermes $HERMES_VERSION; not building from them" >&2; exit 1; }
-echo "verify-pods: Sparkle $SPARKLE_VERSION and Hermes $HERMES_VERSION match their pins"
+while read -r name version want; do
+  [ -n "$name" ] || continue
+  grep -qE "^  - $name \($version\):?$" "$macos/Podfile.lock" \
+    || fail "Podfile.lock doesn't lock $name $version: compare the new Pods/$name with upstream's source at the tag's commit, then re-pin here (--print)"
+  check_tree "$pods/$name" "$want"
+done <<<"$SOURCE_PODS"
+[ "$failed" = 0 ] || { echo "error: verify-pods: the Pods don't match their pins; not building from them" >&2; exit 1; }
+echo "verify-pods: Sparkle $SPARKLE_VERSION, Hermes $HERMES_VERSION and the source pods match their pins"
 [ $# -eq 0 ] || exec "$@"

@@ -58,6 +58,7 @@ if [ -n "${NOTARY_KEY:-}" ]; then
 else
   notary_auth=(--keychain-profile "$notary_profile")
 fi
+"$root/scripts/verify-pods.sh"
 sparkle="$macos/Pods/Sparkle/bin"
 if [ -n "${SPARKLE_ACCOUNT:-}" ]; then
   sparkle_account="$SPARKLE_ACCOUNT"
@@ -190,7 +191,7 @@ echo "==> Content blocker"
 
 echo "==> Archive"
 (cd "$app_dir" && ARDIACORE_FRAMEWORK="$framework_src" "$root/scripts/agent/locked" pod --wait 1800 -- \
-  "$root/scripts/agent/locked" xcodebuild --wait 1800 -- xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS \
+  "$root/scripts/verify-pods.sh" -- "$root/scripts/agent/locked" xcodebuild --wait 1800 -- xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS \
   -configuration Release -destination 'generic/platform=macOS' ARCHS=arm64 ARDIACORE_STAGE_DIR="$build/ArdiaCoreFramework" \
   ${version_settings[@]+"${version_settings[@]}"} AC_UPDATE_CHANNEL="$channel" \
   -derivedDataPath "$build" -archivePath "$archive" -allowProvisioningUpdates archive) \
@@ -445,6 +446,7 @@ mkdir -p "$updates"
 cp "$zip" "$updates/"
 { printf '**%s**\n\n' "$headline"; notes_body; } > "$updates/Ardia-$version.md"
 [ -s "$base_feed" ] && cp "$base_feed" "$updates/appcast.xml"
+"$root/scripts/verify-pods.sh"
 key="$(mktemp -d)/sparkle-key"
 trap 'rm -rf "$(dirname "$key")" "$base_feed"' EXIT
 "$sparkle/generate_keys" --account "$sparkle_account" -x "$key" >/dev/null

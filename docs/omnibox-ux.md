@@ -1,4 +1,4 @@
-# Omnibox / command bar: Chrome's defaults vs Dia vs Ardia
+# Omnibox / command bar: Chrome's defaults vs Dia vs Solara
 
 Audit of 2026-10-08. Not a spec: a map of what users expect from Chrome's address bar, what Dia does (Dia runs Chromium's
 `AutocompleteController` behind its own Swift UI: its binary has `ArcAutocompleteMatch`, `autocomplete:cursorPosition:preventInlineAutocomplete:`,
@@ -16,11 +16,11 @@ How ours was checked: "pure" = node scripts over `packages/core` and `inline.ts`
 and the omnibox dev driver for logic keys (`ac.omnibox.get(id).key(...)`). Synthetic `devTypeKeys` arrows/Tab/End do **not** reach RN's `onKeyDown` (they move the caret natively),
 so keys marked "read" were checked by reading the code and by driving `onKeyDown` directly.
 
-Status: ✅ compliant, ❌ gap, ⚠️ unsure or a deliberate Dia/Ardia choice.
+Status: ✅ compliant, ❌ gap, ⚠️ unsure or a deliberate Dia/Solara choice.
 
 ## Behavior table
 
-| Behavior | Chrome (file:function) | Dia | Ardia (file:line, how checked) | |
+| Behavior | Chrome (file:function) | Dia | Solara (file:line, how checked) | |
 |---|---|---|---|---|
 | Inline completion when | Any edit that isn't a deletion/paste: `EM::StartAutocomplete` sets `prevent_inline_autocomplete = prevent \|\| just_deleted_text_ \|\| paste_state_ != kNone`; one term, caret at end | Types `gi` → `gi`+selected `thub.com`, search row second (recording f003) | `suggest.ts:433` `completes` (one word, website-first, no scope, `!preventInline` in working tree); native guard `InlineCompletion.swift:18-20` (caret at end, no marked text). Live ✅ | ✅ |
 | Eligible targets | `HistoryURLProvider` `CanPromoteMatchForInlineAutocomplete` (typed_count ≥ 1 for host-only, ≥ 2 otherwise); `scored_history_match.cc` `likely_can_inline` (single term, no trailing space); bookmarks/open tabs are not inlined | Chromium's providers, so Chrome's rule; the recording only shows a typed-and-visited host (`github.com`), so it neither confirms nor contradicts a looser rule | `suggest.ts` `inlineMatch` + `c.visits > 0` (2026-10-08): host prefix of a **visited** page, or path prefix when the typed text has `/` and the page has no `?#`. A bookmark-only or open-tab-only host no longer completes (still listed). No typed-count gate (needs the typed count from Chrome's history, not in the store) | ⚠️ visited-only now, no typed count |

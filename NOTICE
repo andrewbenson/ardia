@@ -1,3 +1,14 @@
+Solara
+Copyright 2026 Hill Technologies
+
+Solara is a derivative of Ardia (https://github.com/mantrakp04/ardia), licensed under the Apache License, Version 2.0.
+Ardia's notice follows unchanged, and its terms hold for Solara the same way: Solara as distributed is GPL-3.0, and
+its own source files, Ardia's and Solara's changes alike, are Apache-2.0. Corresponding Source for Solara's releases:
+every release's notes on GitHub (https://github.com/andrewbenson/solara/releases) link the repository at that
+release's tag; the engine and its source tarball are upstream Ardia's, as below.
+
+----
+
 Ardia
 Copyright 2026 Mantra Patel
 

@@ -4,9 +4,10 @@ One Markdown file per version: `docs/release-notes/<version>.md`, where `<versio
 `MARKETING_VERSION` exactly (`0.1.4.md`). Write it before running `scripts/release.sh`, which refuses
 to build without it. The same file ends up in three places:
 
-- **The website**, `https://ardia.dev/release-notes#<version>` (`apps/site/src/pages/release-notes.astro`),
-  newest first. The app opens that anchor in a new tab the first time it launches after an update, and from
-  Help › Release Notes. The page only shows a version once the site is rebuilt and deployed.
+- **The notes page**, `AC_NOTES_URL`: for Solara its GitHub releases page; for upstream the website,
+  `https://ardia.dev/release-notes#<version>` (`apps/site/src/pages/release-notes.astro`), newest first. The app opens
+  it in a new tab the first time it launches after an update, and from Help › Release Notes. Upstream's page only
+  shows a version once the site is rebuilt and deployed.
 - **The GitHub release**: `release.sh` writes `dist/<version>/release-notes.md` (the body, then the standard
   Install section, a link to the page, and a Source section linking this version's tag) for
   `gh release create --notes-file`. Don't write a Source line in the notes file: `release.sh` adds it to every release
@@ -83,9 +84,9 @@ channel: nightly
 The notes are plain and useful. The wit goes in the headline only.
 
 **Headline.** One sentence, 30 to 60 characters, ending with a full stop. It's about the release's most
-noticeable change, said flatly, as if nothing much had happened. Ardia is Arc plus Dia, its logo is a painted
-field, and using it should feel like touching grass. So the wit is dry and calm. A light
-open-country touch (a lamb, a field, a quiet week) is welcome where it fits; most headlines won't need one,
+noticeable change, said flatly, as if nothing much had happened. Solara is Arc plus Dia under a low sun, its icon is
+an Outrun synthwave sunset, and using it should feel like a long evening drive. So the wit is dry and calm. A light
+sundown touch (a horizon, an empty road, a quiet evening) is welcome where it fits; most headlines won't need one,
 and none should be bent to make room for it. Deadpan, never a pun on the change, never an exclamation mark.
 The fact under it must be true.
 
@@ -108,7 +109,7 @@ user's expense.
   "sites like Google waited forever at 'Complete sign-in using your passkey'".
 - One short "why" is welcome when it explains the fix in user terms ("The menu items pointed at the wrong
   method."). No file names, class names, commit hashes or internal flags.
-- Name menus by their path (Ardia › Check for Updates…, System Settings › Privacy & Security), shortcuts
+- Name menus by their path (Solara › Check for Updates…, System Settings › Privacy & Security), shortcuts
   with symbols (⌘T, ⇧⌘T), settings by their label in quotes.
 - Say which versions a regression affected when it matters ("In 0.1.0 and 0.1.1, …").
 - "Like Dia" / "as in Dia" is fine where the feature copies Dia's behaviour.

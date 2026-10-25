@@ -1,7 +1,7 @@
 # Agent brief (read first)
 
 You are one of several engineers working **in parallel in the same working tree** on
-Ardia, a macOS browser that must reach **full feature and visual parity with Dia**
+Solara, a macOS browser that must reach **full feature and visual parity with Dia**
 (The Browser Company). The feature checklist is `docs/dia-feature-parity.md`; the
 visual spec (colors, sizes, animations recovered from Dia's binary) is `docs/dia-spec.md`.
 The user is demanding: no sloppy work, every hover state/animation/detail matters.
@@ -131,7 +131,7 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     BackgroundOnly and every activation path is guarded (`packages/ardiacore/ios/ArdiaCoreActivation.mm`); each
     attempt is logged to `$ARDIA_DATA_DIR/activation.log`. `lsappinfo front` must never show
     your pid. Its windows never come up over the owner's: every window (Chrome's bubbles and popups, panels, PiP,
-    Little Ardia, sheets) has its level set a band below normal (normal at layer -1000000, floating at -999997), so
+    Little Solara, sheets) has its level set a band below normal (normal at layer -1000000, floating at -999997), so
     it sits behind every other app's window, above the desktop, in production's order among its own and out of Mission
     Control (same file, "Behind the owner's windows"; `-level` still answers the level asked for).
   - Any standalone test program or prototype window you create must be unable to take focus

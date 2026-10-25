@@ -1,7 +1,8 @@
 # AGENTS.md
 
-Ardia is a macOS browser: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 154) through ArdiaCore, our thin layer,
-with no account. This file is how the owner works; follow it.
+Solara is a macOS browser: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 154) through ArdiaCore, our thin layer,
+with no account. Hill Technologies ships it. Solara is built on Ardia (mantrakp04/ardia, Apache-2.0); upstream lives at
+https://github.com/mantrakp04/ardia and ardia.dev, and Solara's own repo is andrewbenson/solara. This file is how the owner works; follow it.
 For the architecture and the test tooling, read `docs/agent-brief.md`.
 
 ## How work gets done
@@ -26,8 +27,8 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **No git worktrees, ever.** Everyone works in this checkout.
 - **Commit straight to `main`.** Stage only your own hunks (`git add -p` or explicit paths), never
   someone else's work in progress. Never stage with `git apply --unidiff-zero`: it drops hunks into the wrong
-  place (it once committed an `ACClient.mm` that didn't compile). Check `git diff --cached` reads as you meant. End every message with
-  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+  place (it once committed an `ACClient.mm` that didn't compile). Check `git diff --cached` reads as you meant. Commit
+  messages carry no Co-Authored-By trailer.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -42,7 +43,9 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   and never run `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. Engine changes are
   incremental builds only, holding the chromium lock (`scripts/agent/locked chromium`,
   `docs/engine-build.md`). When freeing disk space, stay out of `~/chromium-build`.
-- **Never launch or touch `/Applications/Ardia.app`** (`Netnyahoo.app` until the owner updates past the rename). The owner is using it.
+- **Never launch or touch `/Applications/Ardia.app`** (the owner's installed upstream Ardia; `Netnyahoo.app` until the
+  owner updates past the rename), an installed `/Applications/Solara.app`, or the owner's preview builds in
+  `apps/browser/build-vista`. The owner is using them.
 - **Never steal focus.** Run builds only as hidden instances:
   `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<throwaway dir> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
   Never use plain `open`. Background mode logs context menus and file panels instead of showing them.
@@ -66,8 +69,8 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   frame difference, and measure positions and timings from the pixels. A position or size in the owner's
   recording may be their saved preference rather than Dia's default.
 - **Errors get fixed without asking.** When `crash.log` shows up in the repo root, a crash report appears, or
-  our telemetry (`telemetry.events` and `telemetry.logs` in our ClickHouse, see the `stats` skill) shows a new
-  `$exception` from the site or the app, find the cause and fix it; don't wait for the
+  upstream Ardia's telemetry (`telemetry.events` and `telemetry.logs` in its ClickHouse, see the `stats` skill; Solara
+  sends none) shows a new `$exception` from the site or the app, find the cause and fix it; don't wait for the
   owner to ask. Check the binary UUID against the current build first (older builds are usually
   known-fixed), and skip noise that isn't ours (X's in-app browser, wallet extensions, telemetry self-tests).
   Site fixes deploy right away; app fixes ship in the next release. Delete `crash.log` once handled.
@@ -102,11 +105,11 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   - run `scripts/release.sh`, which signs and notarizes;
   - run the smoke test;
   - publish the GitHub release and the appcast;
-  - bump `VERSION` in `apps/site/src/data/release.ts`;
-  - deploy the site with `pnpm -C apps/site run deploy`.
+  - upstream Ardia only: bump `VERSION` in `apps/site/src/data/release.ts` and deploy the site with
+    `pnpm -C apps/site run deploy`. Solara has no site yet, so its releases skip both.
 
   The owner has authorized releases to go all the way through. After an update, the app opens the
-  release notes on ardia.dev.
+  release notes at `AC_NOTES_URL` (Solara's GitHub releases page; ardia.dev upstream).
 - **Every release gets a tweet draft**: a version line, 4–5 short, witty, simple bullets and
   the URL, under 280 characters. Add a 1600×1000 image in the site's style built from
   real captures of neutral pages (no random user posts or personal data) at `output/tweets/<version>.png`.
@@ -114,12 +117,12 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Other public actions** (a site deploy outside a release, posting anywhere) need the owner's OK first.
 
 ## Site and videos
-- **Site** (`apps/site`, Astro): short and witty, with real product captures and no generic AI-site
+- **Site** (`apps/site`, Astro): upstream Ardia's ardia.dev; Solara has none yet. Short and witty, with real product captures and no generic AI-site
   patterns. It has to look great on phones.
 - **Videos** (`apps/videos`): Remotion videos (Remocn Studio project); each folder in `src/videos` is a
   composition; render with `pnpm -C apps/videos render <id>`.
 
 ## Repo map
 `apps/browser` is the React Native macOS app. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer,
-and `packages/core` holds the omnibox logic and its tests. `apps/site` is ardia.dev and
+and `packages/core` holds the omnibox logic and its tests. `apps/site` is upstream's ardia.dev and
 `apps/videos` holds the Remotion videos. The license is Apache-2.0.

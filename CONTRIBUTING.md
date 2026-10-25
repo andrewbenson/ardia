@@ -1,12 +1,13 @@
-# Contributing to Ardia
+# Contributing to Solara
 
-Ardia is a macOS browser with Dia's polish and Arc's sidebar, running on Chrome's own framework (Chromium 154). One
-person runs it, with a lot of help from coding agents, and ships nightlies most days. Pull requests are welcome. This
-page is what the owner keeps asking for, written down so you don't have to learn it from a review.
+Solara is a macOS browser with Dia's polish and Arc's sidebar, running on Chrome's own framework (Chromium 154). Hill
+Technologies ships it, with a lot of help from coding agents. It's built on Ardia (mantrakp04/ardia, Apache-2.0), whose
+upstream lives at https://github.com/mantrakp04/ardia. Pull requests are welcome. This page is what the owner keeps
+asking for, written down so you don't have to learn it from a review.
 
 ## What we will and won't take
 
-Ardia copies Dia's look and behaviour on purpose, and uses Arc's layout for the sidebar. A change that makes it
+Solara copies Dia's look and behaviour on purpose, and uses Arc's layout for the sidebar. A change that makes it
 behave more like Dia is almost always welcome. A change that restyles it to taste is not, unless the owner asked.
 
 Out of scope:
@@ -36,7 +37,7 @@ If you change the engine you need your own Chromium build: `docs/engine-build.md
 build takes about five hours.
 
 `pnpm macos` runs the app on its own data folder, `~/Library/Application Support/Ardia Dev`, so it never touches the
-Ardia you browse with. Keep it that way. A Debug build refuses to start without `ARDIA_DATA_DIR`, and every test
+Solara you browse with. Keep it that way. A Debug build refuses to start without `ARDIA_DATA_DIR`, and every test
 instance should get a throwaway one. To run a build without it popping up over your work:
 
 ```sh
@@ -56,7 +57,7 @@ Where things live:
 | `packages/core` | Omnibox parsing and suggestions, pure TypeScript with tests |
 | `packages/import`, `packages/sync`, `packages/shaders` | Importing from other browsers, iCloud sync, Metal views |
 | `engine/` | Our patches to Chromium and our Chrome-side code |
-| `apps/site` | ardia.dev (Astro) |
+| `apps/site` | upstream Ardia's site, ardia.dev (Astro) |
 | `infra/<service>` | Deploy setups, one folder per service |
 
 `docs/agent-brief.md` explains the architecture in depth. It's written for agents and is just as useful to people.
@@ -89,7 +90,7 @@ Parity covers behaviour too. Most bugs the owner reports are UX that any browser
 
 ### It lets Chrome do the work
 
-Ardia is real Chromium. Before writing our own version of something, check whether Chrome already does it and we're
+Solara is real Chromium. Before writing our own version of something, check whether Chrome already does it and we're
 getting in the way. "Shouldn't Chrome's default behaviour just work here?" is the first question the owner asks about
 a bug, and the answer is often yes. When a fix needs a hook in Chrome's code, keep it the smallest hook that works.
 
@@ -139,7 +140,7 @@ The end-to-end checks (shortcuts, tab dragging, profile swipes, windowing, sync,
 need a built app and run hidden instances. `docs/testing.md` lists each one with what it guards. When you fix a
 regression, add its case to the matching check so it can't come back quietly.
 
-Never read a real browser profile in a test, Ardia's included. Build fixtures. Screenshots for the site, the README or
+Never read a real browser profile in a test, Solara's included. Build fixtures. Screenshots for the site, the README or
 a PR use neutral pages, never someone's feed or personal data.
 
 ## Engine changes
@@ -189,7 +190,7 @@ follow `docs/release-notes/README.md`. The site has to look right on a phone.
 
 ## Working with a coding agent
 
-Plenty of Ardia was written by agents, so using one is fine. Point it at `AGENTS.md` and `docs/agent-brief.md`
+Plenty of Solara, and of Ardia before it, was written by agents, so using one is fine. Point it at `AGENTS.md` and `docs/agent-brief.md`
 first. Those files hold the owner's standing rules (hidden test instances, no focus stealing, isolated builds, the
 no-comments rule), and they're why a change goes in without a long back-and-forth. For risky logic (races, object
 lifetimes, security, migrations, sync), get a second model to review the change before and after, and reproduce each
@@ -197,5 +198,5 @@ finding before acting on it. Check the agent's diff yourself before you open the
 
 ## License
 
-Ardia's own files are Apache-2.0, and Ardia as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
+Solara's own files are Apache-2.0, as are Ardia's, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
 work is released under Apache-2.0, and so may ship in the GPL-3.0 app.

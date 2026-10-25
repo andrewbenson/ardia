@@ -1,6 +1,7 @@
 # Releasing
 
-Releases are GitHub releases of `mantrakp04/ardia`, tagged `v<version>`, on two channels: **stable** (`0.2.37`, a full
+Releases are GitHub releases of the identity's repo (`AC_RELEASE_REPO`: `andrewbenson/solara` for Solara,
+`mantrakp04/ardia` upstream), tagged `v<version>`, on two channels: **stable** (`0.2.37`, a full
 release) and **nightly** (`0.2.37-nightly.1`, a GitHub prerelease: one fix, shipped the day it's made; "Channels" below).
 Each has three assets, four when the engine changed:
 
@@ -8,7 +9,8 @@ Each has three assets, four when the engine changed:
   site's poster behind them: `scripts/dmg`, where `render.sh` redraws the picture and `layout.sh` the layout).
 - `Ardia-<version>.zip`: the archive Sparkle installs updates from.
 - `appcast.xml`: the Sparkle feed, both channels' items in one file. The latest stable release's appcast is the feed
-  (a nightly rewrites that asset; "Channels" below). Builds after 0.2.13 poll
+  (a nightly rewrites that asset; "Channels" below). Solara polls it straight from GitHub (`AC_FEED_URL`). Upstream
+  builds after 0.2.13 poll
   `https://ardia.dev/appcast.xml` (`SUFeedURL`), which counts the check by version and day (and whether
   it's the copy's first) and redirects to
   `https://github.com/mantrakp04/ardia/releases/latest/download/appcast.xml`, the URL 0.2.13 and
@@ -23,14 +25,15 @@ Each has three assets, four when the engine changed:
   repo (`scripts/engine-source.sh`), and where Chromium's source is. See "Source and licenses" below.
 
 Each version's notes are a file in the repo, `docs/release-notes/<version>.md` (how to write one:
-`docs/release-notes/README.md`). The GitHub release, the update dialog and the website's
-`https://ardia.dev/release-notes` all come from it. The first launch after an update opens
-`/release-notes#<version>` in a new tab (`apps/browser/src/lib/releaseNotesPage.ts`), so the site has to be
-deployed with the new entry by the time the update reaches people.
+`docs/release-notes/README.md`). The GitHub release, the update dialog and upstream's
+`https://ardia.dev/release-notes` all come from it. The first launch after an update opens `AC_NOTES_URL` in a new
+tab (`apps/browser/src/lib/releaseNotesPage.ts`): Solara's GitHub releases page, or upstream's
+`/release-notes#<version>`, so upstream's site has to be deployed with the new entry by the time the update reaches
+people. Solara has no site yet.
 
 ## Channels
 
-Ardia is one app with two Sparkle channels. A stable item in the appcast has no channel; a nightly item carries
+Solara is one app with two Sparkle channels. A stable item in the appcast has no channel; a nightly item carries
 `<sparkle:channel>nightly</sparkle:channel>` (`generate_appcast --channel nightly`). Sparkle skips items on a channel the
 app doesn't allow, and allows none by default, so every shipped build (all on Sparkle 2.9.6, which has channels) and
 every copy on Stable sees only stable items. A copy on Nightly allows `nightly` (`allowedChannels(for:)` in
@@ -45,9 +48,10 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   every release on either channel; the version string is only shown. A nightly is `<next stable>-nightly.<n>`, so
   0.2.36 (44) < 0.2.37-nightly.1 (45) < 0.2.37-nightly.2 (46) < 0.2.37 (47). Sparkle's comparator can't order the
   strings themselves (it reads `0.2.37-nightly.1` and `0.2.37-nightly.2` as equal), which is why it never sees them.
-  `release.sh` refuses a build number that isn't above every build already in the feed, nightly or stable. About Ardia
+  `release.sh` refuses a build number that isn't above every build already in the feed, nightly or stable. About Solara
   and Settings show a nightly as "0.2.37 Nightly 1".
-- **The feed.** It stays where every shipped build reads it: `https://ardia.dev/appcast.xml` redirects to
+- **The feed.** It stays where every shipped build reads it (upstream's URLs here; Solara's `AC_FEED_URL` is the GitHub
+  URL itself): `https://ardia.dev/appcast.xml` redirects to
   `releases/latest/download/appcast.xml`, and GitHub's "latest" skips prereleases, so it's always the newest stable
   release's `appcast.xml`. A stable release publishes the merged feed as its own asset and becomes latest; a nightly
   re-uploads the merged feed onto that same latest stable release (`gh release upload … --clobber`). Nothing moved:
@@ -56,7 +60,7 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   `appcast-merge.sh` puts the new item onto the feed as published at that moment, so a nightly that shipped while a
   stable was being tested isn't dropped. `generate_appcast` keeps 3 items per channel.
 - **Downloads.** Stable keeps its versioned link (`releases/latest/download/Ardia-<version>.dmg`, from
-  `apps/site/src/data/release.ts`). Nightly has one fixed link, `https://ardia.dev/nightly` (`infra/site/nginx.conf`),
+  `apps/site/src/data/release.ts`, upstream's site). Upstream's nightly has one fixed link, `https://ardia.dev/nightly` (`infra/site/nginx.conf`),
   which redirects to the `nightly` prerelease's `Ardia-Nightly.dmg`; each nightly re-uploads that asset, so the site
   never redeploys for a nightly.
 - **Proof.** `.claude/skills/release/scripts/channel-test.sh dist/<stable>/export/Ardia.app` runs that build's own
@@ -78,16 +82,16 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
   (`publish-nightly.sh` rewrites it each time).
 - Never delete or move a `v*` tag, or a release's source asset, while its release is up. A release can come down;
   its tag stays.
-- About Ardia and Settings › Advanced › "Source and licenses" link the running version's tag. The app carries
+- About Solara and Settings › Advanced › "Source and licenses" link the running version's tag. The app carries
   `LICENSE*` and `NOTICE` in `Contents/Resources/Licenses`.
 
 ## Once per machine
 
-- The **Developer ID Application: mantra patel (U5L5T3NGVV)** identity in the login keychain, and Xcode
-  signed in to the team: the export fetches the Developer ID provisioning profile
+- The identity's **Developer ID Application** certificate (team `AC_TEAM_ID`: `33W8BDN775` for Solara; upstream's is
+  mantra patel (U5L5T3NGVV)) in the login keychain, and Xcode signed in to the team: the export fetches the Developer ID provisioning profile
   (`-allowProvisioningUpdates`) that the keychain-group entitlements need.
 - The **Sparkle EdDSA key**, a login keychain item (service `https://sparkle-project.org`, account
-  `ardia`, or the app's old name in lower case on the Mac that made it before the rename: `LegacyName.appName`;
+  `AC_SPARKLE_ACCOUNT`: `solara` for Solara; upstream's is `ardia`, or the app's old name in lower case on the Mac that made it before the rename: `LegacyName.appName`;
   release.sh finds either, `SPARKLE_ACCOUNT` overrides). Its public half is `SUPublicEDKey` in
   `apps/browser/macos/Ardia-macOS/Info.plist`. Every update must be signed with it, so keep a backup:
   `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account <account> -x <file>` exports it, and `-f <file>`
@@ -121,11 +125,11 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
    appcast, or if the build number isn't above every build in it. It writes `dist/<version>/`:
    - archives the Release configuration of `apps/browser/macos` (arm64 only), staging the engine into its own
      derived data so a development build restaging can't change it mid-build, and exports it with Developer ID,
-   - leaves out what Ardia never loads (`packages/ardiacore/scripts/prune-bundle.sh`, after `strip-engine.sh`): Chrome's
+   - leaves out what Solara never loads (`packages/ardiacore/scripts/prune-bundle.sh`, after `strip-engine.sh`): Chrome's
      locales other than English and the app's own languages (Chrome takes its locale from the app bundle's
-     localizations, and Ardia has none, so it runs in en-US whatever the Mac's language), SwiftShader and its Vulkan
+     localizations, and Solara has none, so it runs in en-US whatever the Mac's language), SwiftShader and its Vulkan
      loader (WebGL and WebGPU run on Metal; Chrome dropped SwiftShader's WebGL fallback), Chrome's first-run sounds
-     and pictures inside `resources.pak` (blanked by hash, `first-run-resources.sha256`; Ardia always passes
+     and pictures inside `resources.pak` (blanked by hash, `first-run-resources.sha256`; Solara always passes
      `--no-first-run`), uBlock Origin's other locales, React Native's `@3x` images (Macs draw at 1x or 2x) and hermes's
      local symbols. Each step has a kill switch: `ARDIA_PRUNE_LOCALES`, `ARDIA_PRUNE_SWIFTSHADER`,
      `ARDIA_PRUNE_FIRST_RUN`, `ARDIA_PRUNE_UBO_LOCALES`, `ARDIA_PRUNE_RN_3X`, `ARDIA_STRIP_HERMES` (or `ARDIA_PRUNE` for
@@ -139,7 +143,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
      helpers under the hardened runtime with library validation, except the renderer and GPU ones (Aperitif's too),
      which get `allow-jit` (`packages/ardiacore/scripts/signing`) instead; then the framework, then the app again with
      the entitlements the export gave it,
-   - checks what an in-place update depends on: the identity's bundle id (`com.ardia.browser`), executable `Ardia`, the
+   - checks what an in-place update depends on: the identity's bundle id (`com.hill.solara`; upstream `com.ardia.browser`), executable `Ardia`, the
      designated requirement (the identity's team), the keychain groups, Sparkle's feed and key and the usage strings in
      `Info.plist`; that every piece of code is Developer ID with a timestamp and no `get-task-allow`; and that the app
      isn't signed with `com.apple.developer.web-browser.public-key-credential` (Apple hasn't granted it yet;
@@ -168,14 +172,14 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
    ```bash
    git tag v<version> && git push origin main v<version>
    .claude/skills/release/scripts/appcast-merge.sh <version>
-   gh release create v<version> -R mantrakp04/ardia --title "Ardia <version>" \
+   gh release create v<version> -R andrewbenson/solara --title "Solara <version>" \
      --notes-file dist/<version>/release-notes.md \
      dist/<version>/Ardia-<version>.dmg dist/<version>/Ardia-<version>.zip dist/<version>/appcast.xml \
      $(ls dist/<version>/ArdiaCore-*.tar.xz 2>/dev/null)
    ```
    With a new engine, then append `dist/<version>/prebuilt-engine.tsv` to `packages/ardiacore/prebuilt-engines.tsv` and
    commit it.
-5. Deploy the site so `/release-notes` shows the new version (for a nightly too: the updated app opens its entry) (the updated app opens it on its first launch):
+5. Upstream only (Solara has no site yet, so it skips this step): deploy the site so `/release-notes` shows the new version (for a nightly too: the updated app opens its entry) (the updated app opens it on its first launch):
    `pnpm -C apps/site run deploy` builds `apps/site` with `SITE_URL=https://ardia.dev` and ships it
    (`infra/site/hexclave.deploy.ts`). Also bump `VERSION` and `DMG_SIZE` in `apps/site/src/data/release.ts`
    first so the download button points at the new DMG. The owner has authorized releases to go all the way
@@ -311,7 +315,8 @@ are involved; the real identity and signature are what smoke.sh's other update c
 The framework and its helpers keep Chrome's names (`Chromium Framework`, `Chromium Helper (Renderer)`): they are
 compiled in from the branding file, so renaming them is a full engine rebuild. Their bundle ids and team are ours,
 and the keychain and macOS permissions belong to the app itself, so only Activity Monitor shows the names. Their
-icon is Ardia's (the Alerts helpers' shows on every notification): `engine/chromium` replaces Chromium's logo.
+icon is upstream Ardia's, in Solara too until it builds its own engine (the Alerts helpers' shows on every
+notification): `engine/chromium` replaces Chromium's logo.
 
 ## The rename (0.2.32 → 0.2.33)
 
@@ -327,7 +332,7 @@ good (`infra/site/hexclave.deploy.ts`).
 
 ## Unnotarized builds
 
-Releases are notarized since 0.2.1 (the `ardia` profile holds an App Store Connect API key; with an
+Releases are notarized since 0.2.1 (upstream's `ardia` profile holds an App Store Connect API key; with an
 Apple ID it's `--apple-id … --team-id …` and an app-specific password, which also works but locks the
 Apple ID after repeated failures). If a build ever ships unnotarized, Gatekeeper refuses to open the download. Either open it once from System Settings › Privacy &
-Security › Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Ardia.app`.
+Security › Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Solara.app`.

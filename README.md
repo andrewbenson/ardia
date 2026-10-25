@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="apps/site/src/assets/app-icon.png" width="128" height="128" alt="Ardia's app icon">
+  <img src="apps/browser/assets/app-icon-solara.png" width="128" height="128" alt="Solara's app icon: a striped synthwave sun setting over a neon grid">
 </p>
 
-<h1 align="center">Touch grass.</h1>
+<h1 align="center">Solara</h1>
 
 <p align="center">
   Arc’s sidebar and Dia’s polish on real Chromium.<br>
@@ -10,42 +10,43 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/latest/download/Ardia-0.2.39.dmg">Download Ardia 0.2.39 for Mac</a>
+  <a href="https://github.com/andrewbenson/solara/releases">Download Solara for Mac</a>
 </h3>
 
 <p align="center">
-  109 MB DMG · macOS 14 Sonoma or later · Apple Silicon · Notarized by Apple<br>
-  Like your paint wet? <a href="https://ardia.dev/nightly">The nightly</a> has every fix the day it’s made, smudges and all.<br>
-  <a href="https://ardia.dev">ardia.dev</a> · <a href="https://ardia.dev/release-notes">What’s new</a> · <a href="https://github.com/mantrakp04/ardia/releases">All releases</a> · <a href="https://discord.gg/TdhuXrbcA6">Discord</a>
+  macOS 14 Sonoma or later · Apple Silicon<br>
+  Nightlies are the prereleases on the same page, with every fix the day it’s made.<br>
+  Solara is built on <a href="https://github.com/mantrakp04/ardia">Ardia</a> (Apache-2.0), whose upstream lives at
+  <a href="https://github.com/mantrakp04/ardia">mantrakp04/ardia</a> and <a href="https://ardia.dev">ardia.dev</a>.
 </p>
 
 <p align="center">
-  <img src="apps/site/src/assets/shots/window.webp" alt="The Ardia window in light mode: pinned tiles and tabs in the sidebar, and Wikipedia’s article on The Hay Wain open on the right.">
+  <img src="apps/site/src/assets/shots/window.webp" alt="The browser window in light mode: pinned tiles and tabs in the sidebar, and Wikipedia’s article on The Hay Wain open on the right.">
 </p>
 
 ## Lose the toolbar.
 
 Move the address bar into the sidebar and the page runs all the way to the top of the window.
 
-<img src="apps/site/src/assets/shots/address-sidebar.webp" alt="Ardia with the address bar in the sidebar under the traffic lights and Wikipedia running to the top of the window.">
+<img src="apps/site/src/assets/shots/address-sidebar.webp" alt="The browser with the address bar in the sidebar under the traffic lights and Wikipedia running to the top of the window.">
 
 ## Two pages, one window.
 
 Drag a tab onto the page. Up to three panes, side by side or stacked.
 
-<img src="apps/site/src/assets/shots/split.webp" alt="Ardia in split view: MDN on the left, Wikipedia on the right, both in one window.">
+<img src="apps/site/src/assets/shots/split.webp" alt="Split view: MDN on the left, Wikipedia on the right, both in one window.">
 
 ## Refuses to leave the picture.
 
 Switch tabs mid-video and it floats along in the corner. Go back to its tab and it slips back into the page.
 
-<img src="apps/site/src/assets/shots/pip.webp" alt="Ardia on Wikipedia’s article about Big Buck Bunny, while the film keeps playing in a small floating window at the bottom right.">
+<img src="apps/site/src/assets/shots/pip.webp" alt="Wikipedia’s article about Big Buck Bunny, while the film keeps playing in a small floating window at the bottom right.">
 
 ## Your extensions come along.
 
-The Chrome Web Store just works, its button says Add to Ardia, and Sync takes them to your other Macs.
+The Chrome Web Store just works, its button says Add to Solara, and Sync takes them to your other Macs.
 
-<img src="apps/site/src/assets/shots/extensions.webp" alt="Dark Reader’s page on the Chrome Web Store, open in Ardia, with an Add to Ardia button.">
+<img src="apps/site/src/assets/shots/extensions.webp" alt="Dark Reader’s page on the Chrome Web Store, open in the browser, with its Add button.">
 
 ## Ads and trackers stay out.
 
@@ -55,7 +56,7 @@ opt-in and never carry your sites or searches.
 ## Also in there
 
 - **Work stays at work.** Each profile keeps its own logins, history, extensions and colour. Swipe the sidebar to switch.
-- **Little Ardia.** ⌥⌘N opens a small window with one page and no sidebar.
+- **Little Solara.** ⌥⌘N opens a small window with one page and no sidebar.
 - **Groups on contact.** Drop a tab on a tab and they’re a group, named for you.
 - **Moves in for you.** Bookmarks, history, passwords and logins from Chrome, Safari, Firefox, Arc, Dia and five more. Arc’s spaces, pinned tabs and themes too.
 - **Paints like Arc.** Gradient themes per profile: up to three colours, some grain, some blur.
@@ -84,11 +85,11 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/latest/download/Ardia-0.2.39.dmg">Download Ardia 0.2.39</a>
+  <a href="https://github.com/andrewbenson/solara/releases">Download Solara</a>
 </h3>
 
 <p align="center">
-  It’s 109 MB and one drag into Applications.<br>
+  It’s one drag into Applications.<br>
   Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
 </p>
 
@@ -160,7 +161,7 @@ Shortcuts: ⌘T new tab, ⌘L command bar, ⌘W close, ⇧⌘T reopen, ⌘S side
 ## How Dia's New Tab light works
 
 Dia 1.50 turns this light off along with its rebrand (a painted mark, a single-colour power-up band
-and a halo around the bar; `docs/dia-spec.md` › "1.50 Sunglow"), and so does Ardia. The
+and a halo around the bar; `docs/dia-spec.md` › "1.50 Sunglow"), and so does Solara. The
 reconstruction left the tree with it: `git show f2c0e251:packages/shaders/ios/AreaLightView.swift`.
 
 These findings come from disassembling the Metal libraries in `Dia.app` (v1.49.1) with
@@ -218,12 +219,12 @@ Only math and colour values are reused. No Dia images, fonts or binaries are cop
 ## Status
 
 Feature parity with Dia (everything but its AI) is tracked row by row in
-[docs/dia-feature-parity.md](docs/dia-feature-parity.md); releases and their notes are at
-[ardia.dev/release-notes](https://ardia.dev/release-notes).
+[docs/dia-feature-parity.md](docs/dia-feature-parity.md); Solara's releases and their notes are at
+[github.com/andrewbenson/solara/releases](https://github.com/andrewbenson/solara/releases).
 
 ## License
 
-Ardia as distributed is licensed under the [GNU General Public License v3](LICENSE), because its engine is built
-with GPL-3.0 patches. Ardia's own source files are under the [Apache License 2.0](LICENSE.Apache-2.0). It builds on
+Solara as distributed is licensed under the [GNU General Public License v3](LICENSE), because its engine is built
+with GPL-3.0 patches. Its own source files, Ardia's and Solara's, are under the [Apache License 2.0](LICENSE.Apache-2.0). It builds on
 Chromium, carries a few of the Chromium Embedded Framework's patches to Chromium (BSD-3-Clause), and bundles uBlock
 Origin, each under its own license; see [NOTICE](NOTICE). Every release links its source.

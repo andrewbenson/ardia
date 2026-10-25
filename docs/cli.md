@@ -1,8 +1,9 @@
-# The `ardia` command
+# The `solara` command
 
-`ardia` drives a running Ardia from the terminal with Python and [pydoll](https://pydoll.tech) 3.0. It's a separate
-download, not part of the app bundle. The app ships `install.sh`, and runs it when the user opts in during onboarding
-or in Settings ("Let the ardia command control Ardia").
+The command is named after the identity: `solara` in Solara, `ardia` upstream (Fork identity below). This page
+uses the name the source spells, `ardia`, for the command, its tarball and its paths. It drives a running Solara
+from the terminal with Python and [pydoll](https://pydoll.tech) 3.0. It's a separate download, not part of
+the app bundle. The app ships `install.sh`, and runs it when the user opts in during onboarding or in Settings ("Let the solara command control Solara").
 
 Code: `apps/cli` (`ardia_cli`, `install.sh`, `scripts/build.sh`). Dependencies are pinned with hashes in
 `apps/cli/requirements.lock` (regenerate with `uv pip compile requirements.in --python-version 3.13
@@ -12,7 +13,7 @@ the pins into `pyproject.toml`).
 ## Commands
 
 - `ardia exec [CODE | -] [-f FILE] [--data-dir DIR] [--port N] [--ws URL] [--timeout S] [--json]` runs Python with
-  top-level `await`. In scope: `browser` (pydoll `Chrome`), `tab` (the page shown in Ardia's last focused window,
+  top-level `await`. In scope: `browser` (pydoll `Chrome`), `tab` (the page shown in Solara's last focused window,
   from `GET /ardia/active?token=…` on the token path, so it holds while the window is covered; `--port`/`--ws` test
   servers fall back to visible and focused, else visible; with no page, as on New Tab, it's a placeholder that raises
   `NoPageTab` on first use), `tabs` (http, https, about, data and blob pages, plus what `new_tab` opens, minus
@@ -21,7 +22,7 @@ the pins into `pyproject.toml`).
   `new_tab(url, background=True)`, `js(expression, tab=None)` (default: `tab`, else the last `new_tab`), `await pinned()`,
   `await history(days=1, limit=200, profile=None, domains=False)` (see Browsing data), `By`, `Key`,
   `asyncio`, pydoll's exports and its common exceptions. It prints the last expression's value. Exit 0 done, 1 the
-  code raised or timed out (default 300 s), 2 Ardia can't be reached or closed the browser socket (it watches the
+  code raised or timed out (default 300 s), 2 Solara can't be reached or closed the browser socket (it watches the
   socket, so turning the setting off ends an idle run at once), 130 interrupted.
 - `ardia skills install --target general|codex|claude-code|cursor|opencode [--target …] [--project]` installs the
   agent skill (`ardia_cli/skill`: `SKILL.md` and `references/pydoll.md`) into `~/.agents/skills` (general, codex),
@@ -30,7 +31,7 @@ the pins into `pyproject.toml`).
 - `ardia scripts new|test|install|uninstall|list` writes, tests and installs userscripts (see Userscripts).
 - `ardia --version`, `ardia --help`, `ardia exec --help`, `ardia scripts <command> --help`.
 
-`exec` never quits Ardia: it refuses `browser.stop()`, and every WebSocket it opens checks each outgoing message (and
+`exec` never quits Solara: it refuses `browser.stop()`, and every WebSocket it opens checks each outgoing message (and
 refuses fragmented sends), so
 `Browser.close`, `Browser.crash` and `Browser.crashGpuProcess` never leave the process, whether sent one at a time, in
 an `execute_commands` batch (checked whole before anything is sent) or straight on the socket. On exit (normal, an
@@ -39,7 +40,7 @@ ignoring `http_proxy`, `ws_proxy` and the like, so no proxy sees the token.
 
 ## Browsing data
 
-For daily reports, `exec` has two helpers that read files in Ardia's data dir. They're coroutines that run in a daemon
+For daily reports, `exec` has two helpers that read files in Solara's data dir. They're coroutines that run in a daemon
 thread with one 20 s deadline from the call (the session read, the snapshot, every SQLite connection through a
 progress handler that aborts past it, row fetching capped at 200,000), so the event loop and the browser socket stay
 live (`await history()`; a bare last expression is awaited anyway), `exec --timeout` returns promptly even if a call
@@ -49,7 +50,7 @@ then deletes any temp folder still registered. The data dir is the token path's
 (`--data-dir`, `$ARDIA_DATA_DIR`, else the installed app's); with `--port`, `--ws` or `$ARDIA_CDP_URL` it's only
 `--data-dir` or `$ARDIA_DATA_DIR`, and without one they raise `BrowsingDataError`. Both run the same
 `ArdiaControl.json` checks as the token path first (regular file, owned, 0600, live pid), so they work only while
-Ardia runs with control on. Neither reads cookies, passwords, Login Data or Web Data.
+Solara runs with control on. Neither reads cookies, passwords, Login Data or Web Data.
 
 - `await pinned()` reads `<data dir>/session.json` (the app's persisted state, `apps/browser/src/lib/persist.ts`) and returns
   one dict per pin: `title` (custom title first), `url` (else the pinned URL), `pinned_url`, `kind` (`favorite` for a
@@ -62,7 +63,7 @@ Ardia runs with control on. Neither reads cookies, passwords, Login Data or Web 
   navigations and hidden URLs are left out. `domains=True` rolls rows up per domain (`domain`, `visits`, `pages`,
   `last_visit`, `top_title`, `profile`), most visited first. It never touches the live file for writing: it opens it
   read-only (`mode=ro`) and copies it with SQLite's backup API into a private temp dir; the progress callback ends
-  the backup once 0.5 s have passed. Chromium keeps `History` exclusively locked while Ardia runs, so that usually
+  the backup once 0.5 s have passed. Chromium keeps `History` exclusively locked while Solara runs, so that usually
   fails, and it falls back to copying `History` plus its `-wal`/`-journal` (no symlinks, regular files only), checking
   the copy opens, up to 3 tries. A copy taken mid-write can miss the last few visits. The copy checks the deadline
   between 1 MB chunks.
@@ -86,7 +87,7 @@ Builds go through esbuild: `--bundle --format=iife --platform=browser --target=c
 minified, so relative imports bundle in and no `tsconfig.json` is read (no `paths` aliases). Types are stripped, not
 checked. Every input esbuild reports in its metafile must be a `.ts .tsx .mts .cts .js .jsx .mjs .cjs .css` source
 (JSON, text and other loader types are refused), a regular file with no other hard links, and inside the script's
-own folder tree; nothing may come from Ardia's data dir (the `--data-dir`/`$ARDIA_DATA_DIR` one and the installed
+own folder tree; nothing may come from Solara's data dir (the `--data-dir`/`$ARDIA_DATA_DIR` one and the installed
 app's), even inside the tree. Both are decided by file identity (`st_dev`, `st_ino` of each ancestor after
 resolving symlinks), not by path spelling, since APFS is case-insensitive. A script directly in the home folder or
 `/` may import nothing. Otherwise the build fails
@@ -99,7 +100,7 @@ looks in the cwd.
 - `ardia scripts new NAME [--match PATTERN]…` writes `NAME.user.ts` in the cwd (default match
   `https://example.com/*`), never over an existing file.
 - `ardia scripts test FILE [--url URL] [--expect JS] [--wait S] [--screenshot PATH] [--keep] [--json] [--data-dir DIR]
-  [--port N] [--ws URL]` finds Ardia like `exec` (same exit 2), opens its own background target at `about:blank`,
+  [--port N] [--ws URL]` finds Solara like `exec` (same exit 2), opens its own background target at `about:blank`,
   attaches a flat session, turns on Runtime and Page, registers the script with `Page.addScriptToEvaluateOnNewDocument`
   (no `worldName`: the token policy refuses named worlds), and only then navigates to `--url` (default: the first
   `@match` whose host has no wildcard, path up to its first `*`). The registered source is a wrapper around the
@@ -112,7 +113,7 @@ looks in the cwd.
   controls, spaces, default-ignorable and format characters, lock emoji) (`/café/*` matches `/caf%C3%A9`), with a
   raw fallback, and `/foo/*`
   matching `/foo`. `apps/cli/tests` runs both against cases taken from `url_pattern_unittest.cc` and
-  `pattern_unittest.cc`, and they agreed with a real Ardia on the glob and percent-encoding cases. Console output and uncaught exceptions count
+  `pattern_unittest.cc`, and they agreed with a real Solara on the glob and percent-encoding cases. Console output and uncaught exceptions count
   as the script's when a stack frame is the script's `sourceURL`; positions map back to the sources through esbuild's
   source map. Cross-origin iframes are reached by `Target.setAutoAttach` with `waitForDebuggerOnStart`, on the token
   path too: the token policy attaches a web frame while it waits to commit, so the script runs at its document start.
@@ -124,7 +125,7 @@ looks in the cwd.
   first pass that starts and never finishes, in any frame, fails the test; when the top frame's doesn't finish in 30 s
   the test stops there. Then, in a bounded cleanup, it removes the registration and
   closes the target it made, unless `--keep`. `@inject-into content` is tested in the page's world, with a warning.
-  Exit 0 ran without uncaught exceptions and `--expect` truthy, 1 otherwise, 2 Ardia unreachable.
+  Exit 0 ran without uncaught exceptions and `--expect` truthy, 1 otherwise, 2 Solara unreachable.
 - `ardia scripts install FILE [--data-dir DIR]`, `ardia scripts uninstall NAME [--data-dir DIR]` (by `@name` or id),
   `ardia scripts list [--json] [--data-dir DIR]`. Install and uninstall need control on (the `ArdiaControl.json`
   checks, else the exit-2 line); list doesn't.
@@ -142,7 +143,7 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
    is staged in a temp sibling and only swapped in after the extension built from it validated and was published; if
    that swap fails, the previous extension is swapped back.
 3. It regenerates `Scripts/extension/` in a temp sibling: `manifest.json` with only `manifest_version` 3, `name`
-   "Ardia Scripts", `version` (`1.<generation / 65536>.<generation % 65536>`), `description` and `content_scripts`;
+   `<product> Scripts` ("Solara Scripts"), `version` (`1.<generation / 65536>.<generation % 65536>`), `description` and `content_scripts`;
    `js/<id>.js`; and `generation`. Each content script entry has exactly `matches`, `exclude_matches`,
    `include_globs`, `exclude_globs`, `js`, `run_at`, `all_frames` (false with `@noframes`) and `world` (`MAIN` or
    `ISOLATED`). The whole manifest is checked (keys, every pattern and glob, files, values) before it's published, so
@@ -165,20 +166,20 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
    no `extension/` means every script was uninstalled.
 5. It drops the lock, then polls `Scripts/status.json` for up to 10 s: `{"generation": N, "profiles": {"<profile>":
    {"ok": true} | {"error": "…"} | {"disabled": true} | {"removed": true}}}`; `removed` means no scripts are left and the extension is gone from that profile. Exit 0 when every profile loaded or is turned off, 1 on any
-   error, 3 when Ardia didn't report in 10 s (the outcome is unknown; it may still be loading), and 0 with "loads on
-   its next launch" when Ardia quit or turned control off while it waited. A newer generation in `status.json` means
+   error, 3 when Solara didn't report in 10 s (the outcome is unknown; it may still be loading), and 0 with "loads on
+   its next launch" when Solara quit or turned control off while it waited. A newer generation in `status.json` means
    another change replaced this one, and its result is printed.
 
-## How it finds Ardia
+## How it finds Solara
 
 1. `--ws URL`, a browser WebSocket URL.
 2. `--port N`, a plain DevTools server on 127.0.0.1 (`/json/version`). For test servers only.
 3. `$ARDIA_CDP_URL`, like `--ws`.
 4. `<data dir>/Chromium/ArdiaControl.json`, with `--data-dir` or `$ARDIA_DATA_DIR`, else the installed app's
-   `~/Library/Application Support/com.ardia.browser/Chromium/ArdiaControl.json`.
+   `~/Library/Application Support/com.ardia.browser/Chromium/ArdiaControl.json` (`com.hill.solara` in Solara).
 
 The active-page route is `GET http://127.0.0.1:P/ardia/active?token=<token>`: `{"targetId": "<id>"}`, or `null` when
-New Tab or an Ardia view is showing; anything else is a 404. The CLI calls it directly (no proxy, no Origin header)
+New Tab or a Solara view is showing; anything else is a 404. The CLI calls it directly (no proxy, no Origin header)
 with the token redacted like everywhere else, and falls back to the visibility check if it fails.
 
 The app writes `ArdiaControl.json` when the setting is on:
@@ -259,7 +260,7 @@ tarball changes: the asset name, its `ardia-cli-<V>/` folder, `bin/ardia` inside
 
 `identity.brand()` renders the help text and the skill for a fork: `Ardia` becomes the product and `ardia` the
 command, except names the engine or the web owns (`ArdiaControl.json`, `/ardia/active`, `ardia://`, `ardia.dev`,
-`Ardia Scripts`, the engine's `isn't allowed for the ardia command` error) and the `$ARDIA_*` variables, which keep
+the engine's `Ardia Scripts` messages and its `isn't allowed for the ardia command` error) and the `$ARDIA_*` variables, which keep
 their names in every build. With upstream's identity it returns the text unchanged.
 
 `scripts/release.sh` builds it into the release's dist dir after the export, passing the release's identity, and writes its digest to

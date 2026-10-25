@@ -45,10 +45,10 @@ modules before using them — this is a summary from the agent that built it.
 ## Actions
 - Windows: `createWindow`, `closeWindow`, `switchProfile`, `moveTabsToWindow`, `moveTabToProfile`,
   `mergeAllWindows`, `reopenClosed` / `reopenClosedTab` / `reopenClosedWindow`, `restoreClosed`.
-  Little Ardia (Little Arc): `createWindow({ small: true, url })` makes a `kind: "small"` window with one tab (store/small.ts),
+  Little Solara (Little Arc): `createWindow({ small: true, url })` makes a `kind: "small"` window with one tab (store/small.ts),
   in `lastActiveProfile(s)` unless `profileId` says otherwise; never private.
   `newTab` into it goes to `mainWindowFor(s, profileId)`; `resolveWindowId(s, null)` never picks it; closing it records a
-  `ClosedTab` with `small: true` that reopens in a new Little Ardia; it isn't saved with the session.
+  `ClosedTab` with `small: true` that reopens in a new Little Solara; it isn't saved with the session.
 - Tabs: `newTab(windowId, { url, background, adoptId, openerId, profileId, pinned, index })`, `closeTab`,
   `closeTabs`, `activate`, `navigate`, `updateTab(id, patch, live?)` (the live patch lands in the same store update), `updateLive`,
   `togglePin`, `moveTab`, `duplicateTab`. The engine's page reports go through `navigated(id, { url, title }, live)` and
@@ -125,7 +125,7 @@ that act on it: translate's detection, the web store's script, a screen-share re
 
 ## Live tabs: Chrome's tab strips (lib/chromeTabs.ts, store/liveTabs.ts, packages/ardiacore/src/tabStrip.ts)
 
-One writer per fact. The store owns the **workspace**: sidebar order, pins, groups, splits, Little Ardia, unloaded
+One writer per fact. The store owns the **workspace**: sidebar order, pins, groups, splits, Little Solara, unloaded
 and parked tiles, and which tab each window shows per profile (`activeTabIds`). Chrome's `TabStripModel` owns
 the **live tabs**: which tabs each Chrome window ("strip": one per engine profile per app window) has, their order,
 the active one, pins (and groups, once the engine reports them). JS never writes a live fact and never guesses who

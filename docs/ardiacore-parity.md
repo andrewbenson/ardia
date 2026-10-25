@@ -190,7 +190,7 @@ Test hygiene the run keeps (each was a real failure):
 | second-profile, settings-window, incognito-window | A second profile's tab in the same window with its own cookies; the settings window; a private window |
 | move-tab-to-window | A tab moved to a new window keeps its page (same WebContents) and its strip follows |
 | title-bar-close | The title bar's close button asks the app (`windowShouldClose:`), which closes the window |
-| little-ardia | A Little Ardia window opens and navigates |
+| little-ardia | A Little Solara window opens and navigates |
 | quit | ⌘Q → the app's quit flow → ArdiaCore's quit; the session is saved; no crash report |
 
 ### Activation (who is in front)

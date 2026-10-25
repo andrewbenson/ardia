@@ -2,8 +2,8 @@
 
 End-to-end-encrypted sync with no server, no account and no Apple entitlement. Every Mac reads
 and writes sealed files in a folder the user picks; any service that syncs a folder carries them
-between Macs. The default is `iCloud Drive › Ardia Sync`
-(`~/Library/Mobile Documents/com~apple~CloudDocs/Ardia Sync`: iCloud Drive syncs any folder
+between Macs. The default is `iCloud Drive › Solara Sync`
+(`~/Library/Mobile Documents/com~apple~CloudDocs/Solara Sync`: iCloud Drive syncs any folder
 under it, with no CloudKit container and no entitlement). Dropbox, a NAS or a USB drive work
 the same way. A Mac that turned sync on before the rename keeps `Netnyahoo Sync`, and one setting up after it is
 offered that folder while it holds the data (`SyncModule.defaultFolder`).
@@ -45,7 +45,7 @@ Apple, Dropbox, whoever has the NAS or finds the USB drive, malware that reads c
   (CRIME-style).
 
 What they do see (metadata): how many profiles sync (one folder each) and how many devices; when
-and how much each writes (file count, times, sizes to 1 KiB); and that it's Ardia sync data
+and how much each writes (file count, times, sizes to 1 KiB); and that it's Solara sync data
 (the `NNS1` magic and `.nns` extension).
 
 What they can do: delete or withhold files (denial of service). Withheld files show as
@@ -57,9 +57,9 @@ within a file, or move data between profiles.
 Not protected against:
 - Someone with the phrase. The phrase is the key, like Dia's.
 - Someone with the unlocked Mac. They have the data in the clear anyway.
-- A compromised Ardia binary.
+- A compromised Solara binary.
 
-The phrase's entropy is in each Mac's login Keychain (`Ardia Sync Key`, this device only,
+The phrase's entropy is in each Mac's login Keychain (`Solara Sync Key`, this device only,
 never iCloud Keychain). Losing every Mac and the Recovery Kit loses the synced data. There's no
 reset by email, because there's no one to email.
 
@@ -79,7 +79,7 @@ reset by email, because there's no one to email.
   - `name-key` (HMAC-SHA256) names folders: the chain tag is `HMAC("chain")` and a scope's tag
     is `HMAC("scope/<scope id>")`, each cut to 128 bits and written in base32.
   - The phrase already has 256 bits of entropy, so no password stretching is needed.
-- Where the entropy is kept: the login Keychain, as a generic password (`Ardia Sync Key`,
+- Where the entropy is kept: the login Keychain, as a generic password (`Solara Sync Key`,
   account = this device's sync id, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, not
   synchronizable).
   - Test instances (`ARDIA_DATA_DIR`) keep it in a 0600 file in their data folder instead,
@@ -272,7 +272,7 @@ What Chrome Sync does for extensions, through our folder (`packages/sync/src/ext
 `apps/browser/src/sync/extensions.ts`, Chrome's side in `engine/chromium/…/ardia/ac_extensions_sync.cc`).
 - **What syncs.** Extensions from the Chrome Web Store that Chrome itself would sync (`sync_util::ShouldSync`:
   installed by the user from the store, not by default, policy or a component, not blocklisted, no other update
-  URL), and not themes or apps. Unpacked extensions, Ardia Scripts and uBlock Origin (bundled) stay on their Mac. Per
+  URL), and not themes or apps. Unpacked extensions, Solara Scripts and uBlock Origin (bundled) stay on their Mac. Per
   extension: on or off (the user's choice, Chrome's `DISABLE_USER_ACTION`), allowed in private windows, pinned to
   the toolbar (Chrome's saved pin, not whether it shows now). Not synced: its data and settings (`storage.sync`
   included), site access.
@@ -342,7 +342,7 @@ Settings › Sync. Dia puts sync in Account › Sync, with the section icon
     lose access to this device.", with "another" underlined.
   - A preview of the page.
   - Buttons: Save…, Close, and Other Options (Copy, Share…, Save as Text…).
-  - The PDF is "Ardia Recovery Kit.pdf", US Letter as Dia's, with the 24 words and a QR code.
+  - The PDF is "Solara Recovery Kit.pdf", US Letter as Dia's, with the 24 words and a QR code.
 - **Connect with Recovery Phrase.**
   - Dia's copy: "Enter your 24-word recovery phrase to sync with another device.", the
     placeholder "Enter your 24-word recovery phrase", the "%d/%d words" counter, "too many

@@ -216,6 +216,7 @@ so any machine releases the same app.
 | `AC_NOTES_URL` | the page opened after an update, Help › Release Notes, the appcast's notes link | `https://ardia.dev/release-notes` |
 | `AC_TELEMETRY_URL` | where shared diagnostics go; empty turns sharing off and hides its prompt, onboarding step and setting | `https://ardia.dev/otel/v1/logs` |
 | `AC_SWITCHES_URL` | the kill-switch file read at launch; empty never fetches, so every switch stays on | `https://ardia.dev/switches.json` |
+| `AC_APP_ICON` | `ASSETCATALOG_COMPILER_APPICON_NAME`, so the `.appiconset` in `Assets.xcassets` that becomes the bundle's icon (`CFBundleIconName`, `<name>.icns`), the DMG's volume icon and the Dock tile plug-in's artwork. Any other name than `AppIcon` also hides Settings › Appearance › App Icon, whose variants are drawn from upstream's hills, and the in-app copy of the icon (onboarding, What's New, the check-in banner) comes from `apps/browser/src/lib/appIcon.ts`, keyed by `AC_PRODUCT_NAME` | `AppIcon` |
 
 `PRODUCT_NAME` stays `Ardia`: the executable, `Ardia.app` in `dist/`, the dSYM and the test scripts all depend on it.
 The bundle the user sees is named after `AC_PRODUCT_NAME`; the release assets keep their `Ardia-<version>` names.
@@ -229,7 +230,7 @@ digest into the app; the app's installer passes its own product and repo. So Vis
 
 This fork is **Vista**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Vista`, `com.hill.vista`, team
 `33W8BDN775`, Sparkle account `vista`, repo `andrewbenson/ardia`, its GitHub feed and releases page, telemetry and
-switches empty) except `AC_PUBLIC_ED_KEY`, which is `PLACEHOLDER_VISTA_SPARKLE_PUBLIC_KEY` until the key exists.
+switches empty, icon `VistaIcon`: the Outrun synthwave sun, `docs/brand/vista`) except `AC_PUBLIC_ED_KEY`, which is `PLACEHOLDER_VISTA_SPARKLE_PUBLIC_KEY` until the key exists.
 release.sh refuses to run with a placeholder key. It stays inactive until it's copied into place.
 
 To turn it on:

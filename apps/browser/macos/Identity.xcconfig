@@ -8,5 +8,6 @@ AC_RELEASE_REPO = mantrakp04/ardia
 AC_NOTES_URL = https:/$()/ardia.dev/release-notes
 AC_TELEMETRY_URL = https:/$()/ardia.dev/otel/v1/logs
 AC_SWITCHES_URL = https:/$()/ardia.dev/switches.json
+AC_APP_ICON = AppIcon
 
 #include? "Fork.xcconfig"

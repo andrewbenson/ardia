@@ -8,3 +8,4 @@ AC_RELEASE_REPO = andrewbenson/ardia
 AC_NOTES_URL = https:/$()/github.com/andrewbenson/ardia/releases
 AC_TELEMETRY_URL =
 AC_SWITCHES_URL =
+AC_APP_ICON = VistaIcon

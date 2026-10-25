@@ -13,7 +13,19 @@ enum AppIcons {
   static let defaultsKey = "ACAppIcon"
   static func changedNotification(bundleId: String) -> Notification.Name { .init("\(bundleId).AppIconChanged") }
 
-  static let variants: [Variant] = [
+  static let upstreamIconName = "AppIcon"
+
+  static func bundleIconName(_ bundle: Bundle) -> String {
+    (bundle.object(forInfoDictionaryKey: "CFBundleIconName") as? String).flatMap { $0.isEmpty ? nil : $0 } ?? upstreamIconName
+  }
+
+  static var iconName: String = bundleIconName(.main) {
+    didSet { cache.removeAll() }
+  }
+
+  static var variants: [Variant] { iconName == upstreamIconName ? upstreamVariants : [upstreamVariants[0]] }
+
+  private static let upstreamVariants: [Variant] = [
     Variant(id: "default", name: "Default", plate: nil, mono: false),
     Variant(id: "midnight", name: "Midnight", plate: (NSColor(srgbRed: 0.20, green: 0.19, blue: 0.22, alpha: 1), NSColor(srgbRed: 0.07, green: 0.07, blue: 0.08, alpha: 1)), mono: false, tint: "neutral"),
     Variant(id: "daylight", name: "Daylight", plate: (NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1), NSColor(srgbRed: 0.90, green: 0.90, blue: 0.91, alpha: 1)), mono: false, tint: "neutral"),
@@ -48,7 +60,7 @@ enum AppIcons {
 
   private static var cache: [String: NSImage] = [:]
 
-  static var base: NSImage = NSImage(named: "AppIcon") ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath) {
+  static var base: NSImage = NSImage(named: iconName) ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath) {
     didSet { cache.removeAll() }
   }
 

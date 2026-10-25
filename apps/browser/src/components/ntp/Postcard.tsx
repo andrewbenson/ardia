@@ -9,7 +9,7 @@ import { useHover } from "../primitives";
 import type { ReleaseNotes } from "./releaseNotes";
 import { PRODUCT } from "../../lib/productName";
 
-const ICON = require("../../../assets/app-icon.png");
+import { APP_ICON as ICON } from "../../lib/appIcon";
 
 const CARD = { width: 320, height: 200, overhangRight: 40, overhangTop: 30, tilt: 2, radius: 10 };
 const HOVER_SLOP = 24;

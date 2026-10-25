@@ -21,7 +21,7 @@ import { PINNABLE_SITES, pinSites, preselectedSites } from "./sites";
 import { finishOnboarding, recordDefaultBrowserTrial, useOnboarding } from "./state";
 import { CheckMark, CheckRow, PrimaryButton, Reveal, SecondaryButton, StepProgress, StepTitle, useOnboardingColors } from "./ui";
 
-const ICON = require("../../../assets/app-icon.png");
+import { APP_ICON as ICON } from "../../lib/appIcon";
 
 export function StepLayout({ children, actions, preview }: { children: ReactNode; actions: ReactNode; preview: ReactNode }) {
   const colors = useOnboardingColors();

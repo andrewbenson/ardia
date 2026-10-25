@@ -5,7 +5,7 @@ import { CHECK_IN_COPY, useDefaultBrowserCheckIn } from "../../lib/defaultBrowse
 import { hex, useTheme } from "../../lib/theme";
 import { useHover } from "../primitives";
 
-const ICON = require("../../../assets/app-icon.png");
+import { APP_ICON as ICON } from "../../lib/appIcon";
 
 const FRAME = { width: 282, height: 69 };
 

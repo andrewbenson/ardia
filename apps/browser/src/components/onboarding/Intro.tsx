@@ -9,7 +9,7 @@ import { introMusicMuted, saveIntroMusicMuted } from "./state";
 import { SecondaryButton, useOnboardingColors } from "./ui";
 
 const WORDMARK = ONBOARDING_COPY.wordmark;
-const ICON = require("../../../assets/app-icon.png");
+import { APP_ICON as ICON } from "../../lib/appIcon";
 
 const LETTER = 0.52;
 const TAGLINE = 0.6;

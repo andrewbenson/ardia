@@ -994,7 +994,7 @@ public enum LegacyMigration {
 
   static func alert(_ title: String, _ message: String, _ buttons: [String]) -> Int? {
     var response: CFOptionFlags = 0
-    let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") as CFURL?
+    let icon = Bundle.main.url(forResource: (Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "AppIcon", withExtension: "icns") as CFURL?
     let result = CFUserNotificationDisplayAlert(
       0, kCFUserNotificationNoteAlertLevel, icon, nil, nil, title as CFString, message as CFString,
       buttons.first as CFString?, buttons.count > 1 ? buttons[1] as CFString : nil, buttons.count > 2 ? buttons[2] as CFString : nil,

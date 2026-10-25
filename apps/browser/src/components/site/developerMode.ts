@@ -2,6 +2,7 @@ import { developerModeOf, isDeveloperMode, NO_DEVELOPER_MODE, withDeveloperMode,
 import { resolveInput } from "@ardia/core";
 import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
+import { useTabLive } from "../../store/hooks";
 import { searchUrlPrefix } from "../../store/settings";
 import { incognitoOriginal, isIncognitoProfile } from "../../store/model";
 import type { Settings } from "../../store/settings";
@@ -99,4 +100,12 @@ export function submitUrlEdit(tabId: string, text: string) {
   const s = useBrowser.getState();
   const url = resolveInput(text, searchUrlPrefix(s.settings));
   if (url && s.tabs[tabId]) s.navigate(tabId, url);
+}
+
+export function useToolbarSiteColor(tabId: string | undefined): string | null {
+  const extend = useBrowser((s) => s.settings.extendWebsiteColor);
+  const hasUrl = useBrowser((s) => !!(tabId && s.tabs[tabId]?.url));
+  const themeColor = useTabLive(tabId, (l) => l.themeColor);
+  const developer = useTabDeveloperMode(tabId);
+  return extend && hasUrl && !developer ? (themeColor ?? null) : null;
 }

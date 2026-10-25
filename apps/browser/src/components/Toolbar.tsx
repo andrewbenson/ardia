@@ -24,7 +24,7 @@ import { useHover } from "./primitives";
 import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { DeveloperButtons, developerReload, showDeveloperReloadMenu } from "./site/DeveloperButtons";
 import { DeveloperStripes } from "./site/DeveloperStripes";
-import { endUrlEdit, startUrlEdit, useTabDeveloperMode, useUrlEdit } from "./site/developerMode";
+import { endUrlEdit, startUrlEdit, useTabDeveloperMode, useToolbarSiteColor, useUrlEdit } from "./site/developerMode";
 import { DeveloperUrlInput } from "./site/DeveloperUrlInput";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
@@ -61,10 +61,7 @@ export function Toolbar({
   const theme = useTheme();
   const tab = useToolbarTab(tabId);
   const isLoading = useTabLive(tabId, (l) => l.isLoading);
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const extendColor = useSettings((s) => s.extendWebsiteColor);
-  const website = extendColor && tab?.url ? themeColor : null;
-  const palette = toolbarPalette(theme, website);
+  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
   const band = useEasedColor(bare ? null : palette.background);
   const developer = useTabDeveloperMode(tabId);
   const history = useHistoryAvailability(tabId);
@@ -130,9 +127,7 @@ export function Toolbar({
 export function ToolbarBackdrop({ tabId }: { tabId: string }) {
   const theme = useTheme();
   const url = useBrowser((s) => s.tabs[tabId]?.url ?? "");
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const extendColor = useSettings((s) => s.extendWebsiteColor);
-  const palette = toolbarPalette(theme, extendColor && url ? themeColor : null);
+  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
   const band = useEasedColor(palette.background);
   const developer = useTabDeveloperMode(tabId);
   return (

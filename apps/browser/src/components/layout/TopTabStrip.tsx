@@ -4,7 +4,7 @@ import { Animated, Easing, findNodeHandle, PanResponder, Pressable, ScrollView, 
 import { closeTab, toggleMute } from "../../lib/actions";
 import { hex, layout, ThemeScope, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
-import { PageProfileContext, useIsActiveTab, usePageProfileId, useSettings, useTab, useTabLive, useWindowId, useWindowProfileId } from "../../store/hooks";
+import { PageProfileContext, useIsActiveTab, usePageProfileId, useTab, useTabLive, useWindowId, useWindowProfileId } from "../../store/hooks";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../ProfileIndicator";
 import { HoverSlot } from "../HoverSlot";
 import { IconButton, useHover } from "../primitives";
@@ -50,6 +50,7 @@ import { makeRoom, registerSlot, reorderOffsets, settleRoom, shiftRoom, SLIDE } 
 import { beginExternalDrag, beginTabDrag, cancelTabDrag, endExternalDrag, endTabDrag, moveExternalDrag, setDragPicture, setInsert, setInsertResolver, updateTabDrag, useTabDrag } from "./tabDrag";
 import { TabDropArea, type TabDropTarget } from "./fileDrop";
 import { toolbarPalette, useEasedColor, type ToolbarPalette } from "./toolbarColors";
+import { useToolbarSiteColor } from "../site/developerMode";
 
 export const TOP_STRIP_HEIGHT = 42;
 export const TOP_CARD_INSET = 6;
@@ -796,10 +797,7 @@ function DraggableChip({
 
 function useWebsiteBand(tabId: string) {
   const theme = useTheme();
-  const extend = useSettings((s) => s.extendWebsiteColor);
-  const url = useTab(tabId)?.url;
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const palette = toolbarPalette(theme, extend && url ? themeColor : null);
+  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
   return { palette, band: useEasedColor(palette.background) };
 }
 

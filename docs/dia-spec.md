@@ -1054,5 +1054,9 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   selected; Return resolves the text with the command bar's rules (`resolveInput`: a URL, host:port, or a search) in
   the same tab; Esc, a click elsewhere or another tab ends it with the URL unchanged. No suggestions and no new-tab
   modifier, as in Arc. Ordinary tabs keep the command bar.
+- **Toolbar colour (owner, 2026-10-24, matching Arc).** A Developer Mode tab's toolbar ignores the website colour (the
+  "extend website colour" tint) and uses the window's own palette for the appearance, so the stripes sit on a dark bar
+  in dark mode even over a white page with `theme-color: #ffffff`; ordinary tabs keep the site colour. It applies to the
+  card toolbar, the auto-hide strip and the top-strip layout's band, and eases between the two like any tab switch.
 - **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
   `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

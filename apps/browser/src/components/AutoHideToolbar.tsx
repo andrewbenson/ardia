@@ -3,7 +3,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { layout, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
-import { useSettings, useTabLive } from "../store/hooks";
 import { useStoreWhile } from "../store/tabWatch";
 import type { ToolbarGeometry } from "./layout/geometry";
 import { toolbarPalette, useEasedColor } from "./layout/toolbarColors";
@@ -13,7 +12,7 @@ import { useExtensions } from "./extensions/store";
 import { needsBar, revealToolbar, setToolbarPeek, STRIP_HEIGHT, toolbarMode, useToolbarAutoHide, type ToolbarMode } from "./layout/toolbarAutoHide";
 import { Toolbar } from "./Toolbar";
 import { DeveloperStripes } from "./site/DeveloperStripes";
-import { useTabDeveloperMode } from "./site/developerMode";
+import { useTabDeveloperMode, useToolbarSiteColor } from "./site/developerMode";
 
 const HIDE_MS = 150;
 const HIDE_EASING = Easing.out(Easing.quad);
@@ -136,9 +135,7 @@ export function useToolbarMotion({
 export function AutoHideBackdrop({ tabId, mode, motion }: { tabId: string; mode: ToolbarMode; motion: Pick<ToolbarMotion, "bar"> }) {
   const theme = useTheme();
   const url = useBrowser((s) => s.tabs[tabId]?.url ?? "");
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const extendColor = useSettings((s) => s.extendWebsiteColor);
-  const palette = toolbarPalette(theme, extendColor && url ? themeColor : null);
+  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
   const band = useEasedColor(palette.background);
   const developer = useTabDeveloperMode(tabId);
   const { bar } = motion;
@@ -190,9 +187,7 @@ export function AutoHideToolbar({
 }) {
   const theme = useTheme();
   const url = useBrowser((s) => s.tabs[tabId]?.url ?? "");
-  const themeColor = useTabLive(tabId, (l) => l.themeColor);
-  const extendColor = useSettings((s) => s.extendWebsiteColor);
-  const palette = toolbarPalette(theme, extendColor && url ? themeColor : null);
+  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
   const collapsed = mode === "collapsed";
   const modeNow = useRef(mode);
   modeNow.current = mode;

@@ -2,6 +2,7 @@ import { PowerUp } from "@ardia/shaders";
 import { useEffect, useState } from "react";
 import { Surface } from "@ardia/shell";
 import { AccessibilityInfo, Animated, StyleSheet, View } from "react-native";
+import { PRODUCT } from "../lib/productName";
 import { hex, layout, useTheme } from "../lib/theme";
 import { useWindowId } from "../store/hooks";
 import { useCardAnchors } from "./layout/windowLayout";
@@ -23,6 +24,19 @@ const MARKS = {
   yellow: { back: require("../../assets/ntp-mark-yellow-back.png"), front: require("../../assets/ntp-mark-yellow-front.png"), sun: require("../../assets/ntp-mark-yellow-sun.png") },
   neutral: { back: require("../../assets/ntp-mark-neutral-back.png"), front: require("../../assets/ntp-mark-neutral-front.png"), sun: require("../../assets/ntp-mark-neutral-sun.png") },
 };
+const SOLARA_MARKS = {
+  green: { back: require("../../assets/solara/ntp-mark-back.png"), front: require("../../assets/solara/ntp-mark-front.png"), sun: require("../../assets/solara/ntp-mark-sun.png") },
+  plum: { back: require("../../assets/solara/ntp-mark-plum-back.png"), front: require("../../assets/solara/ntp-mark-plum-front.png"), sun: require("../../assets/solara/ntp-mark-plum-sun.png") },
+  blue: { back: require("../../assets/solara/ntp-mark-blue-back.png"), front: require("../../assets/solara/ntp-mark-blue-front.png"), sun: require("../../assets/solara/ntp-mark-blue-sun.png") },
+  purple: { back: require("../../assets/solara/ntp-mark-purple-back.png"), front: require("../../assets/solara/ntp-mark-purple-front.png"), sun: require("../../assets/solara/ntp-mark-purple-sun.png") },
+  pink: { back: require("../../assets/solara/ntp-mark-pink-back.png"), front: require("../../assets/solara/ntp-mark-pink-front.png"), sun: require("../../assets/solara/ntp-mark-pink-sun.png") },
+  red: { back: require("../../assets/solara/ntp-mark-red-back.png"), front: require("../../assets/solara/ntp-mark-red-front.png"), sun: require("../../assets/solara/ntp-mark-red-sun.png") },
+  orange: { back: require("../../assets/solara/ntp-mark-orange-back.png"), front: require("../../assets/solara/ntp-mark-orange-front.png"), sun: require("../../assets/solara/ntp-mark-orange-sun.png") },
+  yellow: { back: require("../../assets/solara/ntp-mark-yellow-back.png"), front: require("../../assets/solara/ntp-mark-yellow-front.png"), sun: require("../../assets/solara/ntp-mark-yellow-sun.png") },
+  neutral: { back: require("../../assets/solara/ntp-mark-neutral-back.png"), front: require("../../assets/solara/ntp-mark-neutral-front.png"), sun: require("../../assets/solara/ntp-mark-neutral-sun.png") },
+};
+const FORK_MARKS: Record<string, typeof MARKS> = { Solara: SOLARA_MARKS };
+const PRODUCT_MARKS = FORK_MARKS[PRODUCT] ?? MARKS;
 const MARK_SIZE = 100;
 const MARK_ABOVE_BAR = 84.1;
 const SUN_DELAY = 250;
@@ -119,7 +133,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
         {rise.layers.map((l) => (
           <Animated.Image
             key={l.name}
-            source={(MARKS[theme.profileColor === "incognito" ? "neutral" : theme.profileColor] ?? MARKS.green)[l.name]}
+            source={(PRODUCT_MARKS[theme.profileColor === "incognito" ? "neutral" : theme.profileColor] ?? PRODUCT_MARKS.green)[l.name]}
             style={{
               position: "absolute",
               width: MARK_SIZE,

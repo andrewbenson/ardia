@@ -84,7 +84,7 @@ export const DEFAULT_PROFILE_ID = "default";
 const TOOLBAR_STAYS_ON_SCROLL = "toolbarStaysOnScroll";
 
 export const DEFAULT_SETTINGS: Settings = {
-  warnBeforeQuitting: false,
+  warnBeforeQuitting: true,
   warnBeforeClosingWindow: true,
   restoreSession: true,
   searchEngine: "google",

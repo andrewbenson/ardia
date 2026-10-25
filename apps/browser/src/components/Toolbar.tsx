@@ -293,7 +293,8 @@ export const UrlField = memo(function UrlField({
     if (!developer) endUrlEdit(tab.id);
   }, [developer, tab.id]);
   const bookmarked = useIsBookmarked(tab.url);
-  const insecure = usePage(tab.id, insecureLevel);
+  const pageInsecure = usePage(tab.id, insecureLevel);
+  const insecure = developer && pageInsecure === "insecure" && isLoopbackUrl(tab.url) ? null : pageInsecure;
   const popups = usePage(tab.id, (p) => p.popups.length);
   const capture = usePage(tab.id, (p) => p.mediaAccess);
   const openPanel = (text: string) => {
@@ -429,6 +430,17 @@ function CaptureIndicator({ camera, microphone, screen, onPress }: { camera: boo
 }
 
 const MONOSPACED = ".AppleSystemUIFontMonospaced-Regular";
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+const isLoopbackUrl = (url: string) => {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return LOOPBACK_HOSTS.has(host) || host.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+};
 
 const developerUrl = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)\/$/i, "$1");
 

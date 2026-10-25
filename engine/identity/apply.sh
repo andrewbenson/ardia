@@ -8,6 +8,7 @@ mode=apply
 drift=0
 
 . "$here/../patches/build/identity.sh"
+brand="$here/$(printf %s "$AC_PRODUCT_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
 
 read -r -d '' rewritelib <<'PY' || true
 import os
@@ -109,5 +110,20 @@ rewrite "$src/tools/licenses/licenses.py" <<'PY'
 rewrite(("'opensource_project': 'Ardia',", f"'opensource_project': '{product}',"),
         ("'opensource_link': 'https://github.com/mantrakp04/ardia',", f"'opensource_link': 'https://github.com/{repo}',"))
 PY
+
+brand() {
+  local from="$brand/$1" to="$2"
+  [[ -f "$from" ]] || return 0
+  if [[ $mode == check ]]; then
+    cmp -s "$from" "$to" || { echo "apply.sh --check: $to isn't $AC_PRODUCT_NAME's $1" >&2; drift=1; }
+  elif ! cmp -s "$from" "$to"; then
+    cp "$from" "$to"
+    echo "identity: $to"
+  fi
+}
+
+brand chrome/app/theme/chromium/product_logo_22_mono.png "$src/chrome/app/theme/chromium/product_logo_22_mono.png"
+brand components/resources/default_100_percent/chromium/favicon_product.png "$src/chrome/app/theme/default_100_percent/common/favicon_ntp.png"
+brand components/resources/default_200_percent/chromium/favicon_product.png "$src/chrome/app/theme/default_200_percent/common/favicon_ntp.png"
 
 exit "$drift"

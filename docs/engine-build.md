@@ -117,13 +117,14 @@ values in a fork's checkout. Upstream's identity makes every rewrite a no-op.
 | Bundle and team id, the keychain access groups for passkeys, device-bound session keys and secure payment confirmation | `chrome/app/theme/ardia/BRANDING` (`chromium-branding.patch`) | `com.ardia.browser`, `U5L5T3NGVV` | `AC_BUNDLE_ID`, `AC_TEAM_ID` |
 | The Safe Storage item | `keychain_password_mac.mm` (`chromium-safe-storage-name.patch`) | "Ardia Safe Storage" / "Ardia" | "<Product> Safe Storage" / "<Product>" |
 | Chrome's strings | every `.grd`, `.grdp` and `.xtb` (step 3's `brand-namesub`, `ardia_namesub.py --product`) | Ardia, ardia:// | the product, and its scheme as `appSchemeFor` makes it (solara://) |
+| The product logo and favicon (chrome://version, About, the NTP favicon, notifications) | `engine/chromium/src`'s logos and `ardia_resources.txt`'s step-3 copies; a file in `engine/identity/<product>` (the product name lower-cased, alphanumerics only) replaces `engine/chromium/src`'s at the same path, and `engine/identity/apply.sh` copies it over `product_logo_22_mono.png` and `favicon_ntp.png` | Ardia's | `engine/identity/solara` |
 | The Web Store's "Add to …" and its console lines, chrome://flags descriptions, screenshot file names, chrome://credits' project and link, chrome://crashes' issue tracker, the crash product, the services notice | `chromium-helium-branding.patch`'s literals | Ardia, `ardia_screenshot`, `mantrakp04/ardia` | the product, its lower-case name, `AC_RELEASE_REPO` |
 
 The strings come from step 3, so a tree takes the identity it had when step 3 ran: changing the product name means a new
 tree (steps 1, 3, 4, 2, 5). The other rows follow the identity at step 4. The app reads the same names: `SyncModule`
 decrypts with "<CFBundleName> Safe Storage", and ArdiaCore's Safe Storage dialogs name the app's `CFBundleName`, so a
 fork's app needs a fork-built engine. Flag ids (`ardia-*`), the `Chromium Framework` name, ArdiaCore's other strings and
-Ardia's logos (`ardia_resources.txt`) stay upstream's. The engine hands the app both `ardia://` and the app's own
+the vector `.icon` logos (`ardia-icons`) stay upstream's. The engine hands the app both `ardia://` and the app's own
 scheme (`IsAppURL`, `ac_page_channel.mm`, from `CFBundleName` by `appSchemeFor`'s rule), so a link to
 `solara://history` or `ardia://history` in an engine page opens the app's page. Since the layer rewrites lines our patches added, `series.py
 apply` can't run again over a fork's tree; `engine-build` and `series.py check` don't need it to.

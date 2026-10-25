@@ -134,7 +134,7 @@ if [ -n "$framework_engine" ]; then
     || die "ARDIACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's engine tree is $(git -C "$root" rev-parse HEAD:engine): that framework wasn't built from this commit's engine"
 fi
 if [ -z "${ARDIACORE_FRAMEWORK:-}" ]; then
-  for layer in ardiacore chromium; do
+  for layer in ardiacore chromium identity; do
     "$root/engine/$layer/apply.sh" --check \
       || die "the Chromium tree differs from engine/$layer: run engine/$layer/apply.sh and rebuild chrome_framework"
   done

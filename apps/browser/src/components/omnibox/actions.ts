@@ -59,7 +59,7 @@ const DEFS: ActionDef[] = [
     title: ({ s, windowId, tab }) =>
       tab?.url && isBookmarked(s.bookmarks, bookmarkProfileId(s, s.windows[windowId]), tab.url) ? "Remove Bookmark" : "Bookmark This Page",
     icon: "bookmark",
-    hint: "⌘D",
+    hint: "⌥⇧⌘D",
     keywords: ["add bookmark", "bookmark"],
     needs: page,
   },

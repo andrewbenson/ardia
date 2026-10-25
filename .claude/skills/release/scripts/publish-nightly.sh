@@ -9,6 +9,9 @@ root="$(git -C "$here" rev-parse --show-toplevel)"
 . "$root/scripts/identity.sh"
 repo="$(ac_identity AC_RELEASE_REPO)"
 [ -n "$repo" ] || { echo "error: the app's identity has no AC_RELEASE_REPO" >&2; exit 1; }
+product="$(ac_identity AC_PRODUCT_NAME)"
+[ -n "$product" ] || { echo "error: the app's identity has no AC_PRODUCT_NAME" >&2; exit 1; }
+notes_page="$(ac_identity AC_NOTES_URL)"
 dist="${RELEASE_DIST:-$root/dist/$version}"
 feed_url="https://github.com/$repo/releases/latest/download/appcast.xml"
 nightly_dmg_url="https://github.com/$repo/releases/download/nightly/Ardia-Nightly.dmg"
@@ -44,11 +47,11 @@ fi
 
 engine=()
 for archive in "$dist"/ArdiaCore-*.tar.xz; do [ -f "$archive" ] && engine+=("$archive"); done
-run gh release create "v$version" -R "$repo" --prerelease --latest=false --verify-tag --title "Ardia $version" \
+run gh release create "v$version" -R "$repo" --prerelease --latest=false --verify-tag --title "$product $version" \
   --notes-file "$dist/release-notes.md" "$dmg" "$zip" "$dist/appcast.xml" "$cli" "$cli.sha256" ${engine[@]+"${engine[@]}"}
-nightly_notes="The newest nightly, always as Ardia-Nightly.dmg (https://ardia.dev/nightly). Now $version: its notes and source are at https://github.com/$repo/releases/tag/v$version. Every nightly's notes: https://ardia.dev/release-notes"
+nightly_notes="The newest nightly of $product, always as Ardia-Nightly.dmg ($nightly_dmg_url). Now $version: its notes and source are at https://github.com/$repo/releases/tag/v$version. Every nightly's notes: $notes_page"
 if ! gh release view nightly -R "$repo" >/dev/null 2>&1; then
-  run gh release create nightly -R "$repo" --prerelease --latest=false --title "Ardia Nightly" --notes "$nightly_notes"
+  run gh release create nightly -R "$repo" --prerelease --latest=false --title "$product Nightly" --notes "$nightly_notes"
 fi
 cp -c "$dmg" "$work/Ardia-Nightly.dmg"
 run gh release upload nightly -R "$repo" --clobber "$work/Ardia-Nightly.dmg"
@@ -67,7 +70,9 @@ grep -q "<sparkle:shortVersionString>$version<" <<<"$feed" \
 size="$(curl -fsSLI --max-time 30 "$nightly_dmg_url" | awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }')"
 [ "$size" = "$(stat -f %z "$dmg")" ] && echo "PASS  $nightly_dmg_url is $version's DMG" \
   || { echo "FAIL  $nightly_dmg_url is $version's DMG (size $size, expected $(stat -f %z "$dmg"))"; status=1; }
-to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' https://ardia.dev/nightly || true)"
-[ "$to" = "$nightly_dmg_url" ] && echo "PASS  https://ardia.dev/nightly leads there" \
-  || { echo "FAIL  https://ardia.dev/nightly leads there (goes to ${to:-nothing}: deploy the site, infra/site/nginx.conf)"; status=1; }
+if [ "$repo" = mantrakp04/ardia ]; then
+  to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' https://ardia.dev/nightly || true)"
+  [ "$to" = "$nightly_dmg_url" ] && echo "PASS  https://ardia.dev/nightly leads there" \
+    || { echo "FAIL  https://ardia.dev/nightly leads there (goes to ${to:-nothing}: deploy the site, infra/site/nginx.conf)"; status=1; }
+fi
 exit $status

@@ -8,7 +8,7 @@ import { clickhouse, hasTelemetryEnv } from "./telemetry-env.mjs";
 
 const USAGE = `usage: node scripts/stats.mjs [--since <when>] [--json] [--no-save]
 
-Ardia's numbers in one report: users and installs, the site, phones, GitHub and errors, for a window
+Upstream Ardia's numbers in one report: users and installs, the site, phones, GitHub and errors, for a window
 ending now, plus what changed since the last run. Writes the visual as an SVG and prints its path.
 
   --since <when>   start of the window (default 24h): 6h, 90m, 2d, 1w, "8:30pm IST", "20:30",

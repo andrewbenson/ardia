@@ -114,7 +114,7 @@ if [ -f "$notes" ]; then
 elif [ "$rc" = 1 ]; then
   headline="Release candidate $version"
   notes_channel="$channel"
-  notes_body() { echo "A release candidate of Ardia $version. Not published."; }
+  notes_body() { echo "A release candidate of $product_name $version. Not published."; }
 else
   die "no release notes: write docs/release-notes/$version.md first"
 fi

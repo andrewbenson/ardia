@@ -9,6 +9,8 @@ die() { echo "error: $*" >&2; exit 1; }
 . "$root/scripts/identity.sh"
 repo="$(ac_identity AC_RELEASE_REPO)"
 [ -n "$repo" ] || die "the app's identity has no AC_RELEASE_REPO"
+product="$(ac_identity AC_PRODUCT_NAME)"
+[ -n "$product" ] || die "the app's identity has no AC_PRODUCT_NAME"
 pinned() { [ -n "${!1:-}" ] && echo "${!1}" || sed -n "s/^export $1=//p" "$root/engine/patches/build/env.sh"; }
 chromium="$(pinned CHROMIUM_VERSION)"
 helium="$(pinned HELIUM_TAG)"
@@ -38,9 +40,9 @@ fetch helium-onboarding "$onboarding"
 fetch uBlock "$ublock"
 
 cat >"$src/README.txt" <<EOF
-The source of the engine in Ardia $version, besides Ardia's own repository.
+The source of the engine in $product $version, besides $product's own repository.
 
-Ardia, with the engine's patches and build scripts:
+$product, with the engine's patches and build scripts:
   https://github.com/$repo/tree/v$version
   How to build it: docs/engine-build.md there.
 

@@ -12,7 +12,7 @@ old="${old:-$root/dist/$previous/export/Ardia.app}"
 port="${SMOKE_CDP_PORT:-9398}"
 pages_port="${SMOKE_PAGES_PORT:-8798}"
 [ -d "$app" ] || { echo "error: no $app (run scripts/release.sh $version first)" >&2; exit 1; }
-[ "$(cd "$app" && pwd -P)" != /Applications/Ardia.app ] || { echo "error: never the installed app (/Applications/Ardia.app)" >&2; exit 1; }
+case "$(cd "$app" && pwd -P)" in /Applications/*) echo "error: never an installed app ($app)" >&2; exit 1 ;; esac
 for p in "$port" "$pages_port"; do
   if nc -z -G 2 127.0.0.1 "$p" 2>/dev/null; then
     echo "error: something already listens on port $p (SMOKE_CDP_PORT, SMOKE_PAGES_PORT)" >&2

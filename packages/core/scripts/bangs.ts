@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bangTable, slimBangs } from "../src/bangs.ts";
 
-const HELP = `Turns Helium's bang list into Ardia's bundled snapshot, packages/core/src/bangList.ts.
+const HELP = `Turns Helium's bang list into the app's bundled snapshot, packages/core/src/bangList.ts.
 
   curl -sS --compressed -D headers.txt -o bangs.json https://services.helium.imput.net/bangs.json
   node packages/core/scripts/bangs.ts <bangs.json> <the ETag in headers.txt, with the quotes>

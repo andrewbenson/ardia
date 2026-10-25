@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -11,6 +12,9 @@ if (!appArg) {
   process.exit(2);
 }
 const appPath = resolve(appArg);
+const product = execFileSync("plutil", ["-extract", "CFBundleName", "raw", join(appPath, "Contents/Info.plist")], { encoding: "utf8" }).trim();
+const defaultBrowserRow = `Set ${product} as default browser`;
+const defaultBrowserAx = new RegExp(`AXCheckBox: ${defaultBrowserRow}`);
 const port = args.find((a) => a.startsWith("--port="))?.slice(7);
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-onboarding-"));
@@ -58,11 +62,11 @@ try {
 
   await rep.check("the default-browser step has no text field behind its card", async () => {
     const ax = await run(`acOnboarding.store.getState().go("defaultBrowser"); return settle(1200).then(() => act("ax"));`);
-    assert.match(ax, /AXCheckBox: Set Ardia as default browser/, "the step is on screen");
+    assert.match(ax, defaultBrowserAx, "the step is on screen");
     assert.deepEqual(textFields(ax), [], "a text field behind the card takes the first row's cursor and clicks");
   });
 
-  const label = JSON.stringify("Set Ardia as default browser");
+  const label = JSON.stringify(defaultBrowserRow);
   const toggles = "a click on the first row's checkbox toggles it";
   if (await run(`return !!checkRow(${label})?.memoizedProps.accessibilityState?.disabled;`))
     rep.record(toggles, { skip: "this build is the system's default browser, so the row is disabled" });
@@ -75,7 +79,7 @@ try {
   await rep.check("another window keeps its New Tab field during onboarding", async () => {
     const axes = await run(`const id = ac.store.getState().createWindow(); return settle(1500).then(windowsAx).then((axes) => { ac.store.getState().closeWindow(id); return settle(500).then(() => axes); });`);
     assert.equal(axes.length, 2, "two windows");
-    const [onboarding, other] = /AXCheckBox: Set Ardia as default browser/.test(axes[0]) ? axes : [...axes].reverse();
+    const [onboarding, other] = defaultBrowserAx.test(axes[0]) ? axes : [...axes].reverse();
     assert.deepEqual(textFields(onboarding), [], "the onboarding window");
     assert.equal(textFields(other).length, 1, "the other window's New Tab field");
   });

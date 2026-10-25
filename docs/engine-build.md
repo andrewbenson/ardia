@@ -108,7 +108,9 @@ Removed, all in git history:
 The app's build (`apps/browser/macos`) stages `out/Release_GN_arm64/Chromium Framework.framework` itself
 (`packages/ardiacore/scripts/stage-framework.sh`, under the chromium lock) and embeds it (`embed.sh`). A checkout without a
 Chromium tree downloads the prebuilt engine matching `engine/` instead (`packages/ardiacore/scripts/fetch-engine.sh`,
-published with each release whose engine changed; `docs/releasing.md`). After an engine change, rebuild incrementally
+published with each release whose engine changed; `docs/releasing.md`). It trusts only the SHA-256 committed in
+`packages/ardiacore/prebuilt-engines.tsv`: an engine with no entry there isn't fetched, and no table is ever read from
+the network, so every engine the build accepts is a reviewed change in this repo. After an engine change, rebuild incrementally
 (`scripts/agent/engine-build`, or `scripts/agent/locked chromium -- autoninja -C out/Release_GN_arm64 chrome_framework`)
 and the next app build picks it up.
 

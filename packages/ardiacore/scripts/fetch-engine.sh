@@ -21,15 +21,10 @@ git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || die "$root isn't a git che
   || die "engine/ has uncommitted changes, and no prebuilt has them: build the engine (docs/engine-build.md)"
 tree=$(git -C "$root" rev-parse HEAD:engine)
 
-remote_table=""
 lookup() {
   local line
   [ -n "$1" ] || return 0
   line=$(awk -v t="$1" '$1 == t { print; exit }' "$table" 2>/dev/null || true)
-  if [ -z "$line" ]; then
-    [ -n "$remote_table" ] || remote_table=$(curl -fsL --retry 2 "https://raw.githubusercontent.com/$repo/main/packages/ardiacore/prebuilt-engines.tsv" || echo "#")
-    line=$(awk -v t="$1" '$1 == t { print; exit }' <<<"$remote_table")
-  fi
   echo "$line"
 }
 

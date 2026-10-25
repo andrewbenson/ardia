@@ -1,5 +1,5 @@
 import { Symbol } from "@ardia/shell";
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { useHover } from "../primitives";
@@ -14,23 +14,29 @@ export const ClearDivider = memo(function ClearDivider({ windowId, spaced }: { w
   const { hovered: rowHovered, hoverProps: rowHoverProps } = useHover();
   const { hovered, hoverProps } = useHover();
   const shown = rowHovered || hovered;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const [clearWidth, setClearWidth] = useState(0);
+  const reveal = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(opacity, {
+    Animated.timing(reveal, {
       toValue: shown ? 1 : 0,
       duration: shown ? FADE_IN_MS : FADE_OUT_MS,
       easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
-  }, [opacity, shown]);
+  }, [reveal, shown]);
+  const lineInset = reveal.interpolate({ inputRange: [0, 1], outputRange: [0, clearWidth] });
   const clear = () => closeAllTabs(windowId);
   return (
     <View
       {...rowHoverProps}
       style={{ height: CLEAR_DIVIDER_HEIGHT, marginTop: spaced ? 7 : 0, flexDirection: "row", alignItems: "center", paddingLeft: 9, paddingRight: 9 }}
     >
-      <View style={{ flex: 1, height: 1, backgroundColor: theme.divider }} />
-      <Animated.View {...hoverProps} style={{ opacity }}>
+      <Animated.View style={{ flex: 1, height: 1, marginRight: lineInset, backgroundColor: theme.divider }} />
+      <Animated.View
+        {...hoverProps}
+        onLayout={(e) => setClearWidth(e.nativeEvent.layout.width)}
+        style={{ position: "absolute", right: 9, top: 0, bottom: 0, opacity: reveal }}
+      >
         <Pressable tooltip="Clear unpinned tabs" accessibilityRole="button" accessibilityLabel="Clear unpinned tabs" onAccessibilityTap={clear} onPress={clear}>
           {({ pressed }) => {
             const color = hovered && !pressed ? theme.textPrimary : theme.textSecondary;

@@ -1,17 +1,20 @@
 import { ContextMenuArea, FadeLabel, raiseView, setTrafficLightsCenter, Surface, Symbol, WindowDragRegion } from "@ardia/shell";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, findNodeHandle, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
-import { closeTab, toggleMute } from "../../lib/actions";
+import { create } from "zustand";
+import { toggleMute } from "../../lib/actions";
 import { hex, layout, ThemeScope, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { PageProfileContext, useIsActiveTab, usePageProfileId, useTab, useTabLive, useWindowId, useWindowProfileId } from "../../store/hooks";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../ProfileIndicator";
 import { HoverSlot } from "../HoverSlot";
 import { IconButton, useHover } from "../primitives";
+import { DownloadsButton } from "../Downloads";
 import { clickTab } from "../sidebar/actions";
+import { pressGroupClose, pressTabClose, useGroupCloseControl, useTabCloseControl } from "../sidebar/closeControl";
 import { openGroupMenu, openTabMenu } from "../sidebar/menus";
 import { groupLabel } from "../../store/organize";
-import { TabIcon } from "../sidebar/TabIcon";
+import { hasOwnGroupIcon, SYMBOL_PREFIX, TabIcon } from "../sidebar/TabIcon";
 import { TabBadges } from "../media/TabBadges";
 import { GROUP_COLORS, NEUTRAL_GROUP_SWATCH, useSidebarTokens, withAlpha } from "../sidebar/tokens";
 import { modifiersOf } from "./controls";
@@ -27,6 +30,7 @@ import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/t
 import { usePeek } from "./usePeek";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import {
+  aimDrop,
   dragGeometry,
   dragRange,
   dropIndex,
@@ -75,12 +79,18 @@ const FOLDER_RADIUS = 7;
 const LIFT_SLOP = 12;
 const LIFT_MS = 150;
 const LIGHTS_GAP = 8;
+const ONTO_EDGE = MAX_CHIP / 4;
 
 const FloatingStrip = createContext(false);
 
 type Member = { kind: "tab"; id: string; group: string | null } | { kind: "split" | "folder"; id: string; tabIds: string[]; group: string | null };
 type GroupEntry = { kind: "group"; id: string; collapsed: boolean; members: Member[] };
 type Entry = { kind: "dock"; ids: string[]; members: Map<string, string[]> } | GroupEntry | Member;
+type DropTarget = { kind: "tab" | "group"; id: string };
+
+const useStripOnto = create<{ key: string | null }>(() => ({ key: null }));
+const ontoKey = (target: DropTarget | null) => (target ? `${target.kind}:${target.id}` : null);
+const useOnto = (target: DropTarget) => useStripOnto((s) => s.key === ontoKey(target));
 
 const PROFILE_ROOM = 140;
 const DOWNLOADS_BOX = 34;
@@ -114,17 +124,7 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
         </View>
         <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
           <ProfileIndicator room={PROFILE_ROOM} />
-          <IconButton
-            icon="arrow.down.circle"
-            size={16}
-            box={DOWNLOADS_BOX}
-            radius={10}
-            tooltip="Downloads (⇧⌘J)"
-            onPress={() => {
-              const s = useBrowser.getState();
-              s.setDownloadsOpen(windowId, !s.windowUi[windowId]?.downloadsOpen);
-            }}
-          />
+          <DownloadsButton windowId={windowId} />
         </View>
         {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
         {!floating && <StripDropHighlight left={left} right={right} />}
@@ -273,12 +273,13 @@ function StripPage({ profileId, slot, pageWidth, current, resting }: { profileId
     }),
     GAP,
   );
+  const targets = parsed.flatMap((e): (DropTarget | null)[] => (e.kind === "dock" ? [] : e.kind === "group" || e.kind === "tab" ? [{ kind: e.kind, id: e.id }] : [null]));
   const slotOf = (id: string) => top.slots.findIndex((slot) => slot.tabIds[0] === id);
   const dockIds = parsed.flatMap((e) => (e.kind === "dock" ? e.ids : []));
   const dockTabs = (cell: string) => parsed.find((e) => e.kind === "dock")?.members.get(cell) ?? [cell];
   const grow = useRef(new Animated.Value(0)).current;
   const dockGeometry = useMemo(() => dragGeometry(dockIds.map((id) => ({ tabIds: dockTabs(id), width: PINNED_CELL })), PINNED_SPACING), [entries.filter((e) => e.startsWith("pinned:") || e.startsWith("tilefolder:")).join()]);
-  const strip: Strip = { top, chip, grow, dock: dockIds.length ? { ids: dockIds, left: -(dockWidth(dockIds.length) + DOCK_GAP), geometry: dockGeometry } : null };
+  const strip: Strip = { top, targets, chip, grow, dock: dockIds.length ? { ids: dockIds, left: -(dockWidth(dockIds.length) + DOCK_GAP), geometry: dockGeometry } : null };
   const incoming = useIncomingTab(windowId, current, top);
   let slotIndex = 0;
   const gap = (i: number) => (incoming.active ? <IncomingGap key={`gap${i}`} open={incoming.at === i} width={chip} origin={i === 0 ? incoming.origin : undefined} /> : null);
@@ -377,6 +378,7 @@ type StripDrag = {
   range?: [number, number] | ((grab: number) => [number, number]);
   drop?: (dx: number, ids: string[]) => boolean;
   cross?: Cross;
+  targets?: (DropTarget | null)[];
   levels?: number;
   local?: boolean;
 };
@@ -385,7 +387,7 @@ type Landing = { dx: number; commit: () => void };
 type Cross = { at: (dx: number, grab: number) => boolean; land: (dx: number, grab: number, ids: string[]) => Landing | null; clear: () => void };
 
 type Dock = { ids: string[]; left: number; geometry: DragGeometry };
-type Strip = { dock: Dock | null; top: DragGeometry; chip: number; grow: Animated.Value };
+type Strip = { dock: Dock | null; top: DragGeometry; targets: (DropTarget | null)[]; chip: number; grow: Animated.Value };
 const CELL_STEP = PINNED_CELL + PINNED_SPACING;
 const dockWidth = (cells: number) => cells * CELL_STEP - PINNED_SPACING;
 const DockContext = createContext<Strip | null>(null);
@@ -520,8 +522,19 @@ function useStripDrag(item: StripDrag) {
   const view = useRef<View>(null);
   const latest = useRef(item);
   latest.current = item;
-  const drag = useRef({ stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids: [] as string[], dx: 0, to: -1, grab: item.width / 2, crossed: false });
+  const drag = useRef({ stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids: [] as string[], dx: 0, to: -1, grab: item.width / 2, crossed: false, onto: null as DropTarget | null });
   useEffect(() => registerSlot(() => latest.current.geometry, () => latest.current.from, shift), []);
+  const aimAt = (dx: number) => {
+    const { geometry, from, targets } = latest.current;
+    if (!targets || from < 0) return null;
+    return aimDrop(geometry, from, geometry.lefts[from]! + drag.current.grab + dx, (i) => !!targets[i], ONTO_EDGE);
+  };
+  const indexAt = (dx: number) => aimAt(dx)?.to ?? dropIndex(latest.current.geometry, latest.current.from, dx);
+  const setOnto = (target: DropTarget | null) => {
+    if (ontoKey(drag.current.onto) === ontoKey(target)) return;
+    drag.current.onto = target;
+    useStripOnto.setState({ key: ontoKey(target) });
+  };
   const setLifted = (lifted: boolean) => {
     if (drag.current.lifted === lifted) return;
     drag.current.lifted = lifted;
@@ -552,6 +565,7 @@ function useStripDrag(item: StripDrag) {
   const reset = () => {
     owns.current = false;
     setCross(false);
+    setOnto(null);
     makeRoomAt(-1);
     dx.setValue(0);
     setLifted(false);
@@ -598,6 +612,7 @@ function useStripDrag(item: StripDrag) {
     () => () => {
       settle.current?.land();
       if (!owns.current) return;
+      setOnto(null);
       if (drag.current.crossed) latest.current.cross?.clear();
       settleRoom(latest.current.geometry);
       if (!latest.current.local) cancelTabDrag();
@@ -620,7 +635,8 @@ function useStripDrag(item: StripDrag) {
           settle.current?.land();
           dx.stopAnimation();
           dx.setValue(0);
-          const mine = { stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids, dx: 0, to: -1, grab: latest.current.width / 2, crossed: false };
+          const mine = { stripBottom: TOP_STRIP_HEIGHT, lifted: false, ids, dx: 0, to: -1, grab: latest.current.width / 2, crossed: false, onto: null };
+          setOnto(null);
           drag.current = mine;
           owns.current = true;
           setDragging(true);
@@ -645,7 +661,9 @@ function useStripDrag(item: StripDrag) {
           }
           const across = !lifted && !!cross?.at(drag.current.dx, drag.current.grab);
           setCross(across);
-          if (!across) makeRoomAt(lifted || from < 0 ? -1 : dropIndex(geometry, from, g.dx));
+          const aim = across || lifted ? null : aimAt(g.dx);
+          setOnto(aim?.onto != null ? (latest.current.targets?.[aim.onto] ?? null) : null);
+          if (!across) makeRoomAt(lifted || from < 0 ? -1 : (aim?.to ?? dropIndex(geometry, from, g.dx)));
           if (!local) updateTabDrag(g.moveX, g.moveY, lifted);
         },
         onPanResponderRelease: (_, g) => {
@@ -657,21 +675,26 @@ function useStripDrag(item: StripDrag) {
           const landing = drag.current.crossed ? latest.current.cross?.land(drag.current.dx, drag.current.grab, ids) : null;
           if (landing) return settleAcross(landing);
           setCross(false);
+          const onto = drag.current.onto;
+          setOnto(null);
+          if (!local && onto && dropOnto(onto, ids)) {
+            settleRoom(geometry);
+            return reset();
+          }
           const bounds = typeof range === "function" ? range(drag.current.grab) : range;
           const travelled = bounds ? Math.max(bounds[0], Math.min(bounds[1], g.dx)) : g.dx;
           if (!local) {
             const store = useBrowser.getState();
-            const moved = drop?.(travelled, ids) || (from >= 0 && ids.length > 1 && reorder(ids, latest.current, g.dx));
+            const moved = drop?.(travelled, ids) || (from >= 0 && ids.length > 1 && reorder(ids, latest.current, indexAt(g.dx)));
             if (moved && useBrowser.getState() !== store) settleRoom(geometry);
             if (moved) return reset();
           }
           if (from < 0) return reset();
-          const at = g.dx;
-          const to = dropIndex(geometry, from, at);
+          const to = indexAt(g.dx);
           settleInto(to === from ? null : to, () => {
             const store = useBrowser.getState();
             if (local) drop?.(travelled, ids);
-            else reorder(ids, latest.current, at);
+            else reorder(ids, latest.current, to);
             return useBrowser.getState() !== store;
           });
         },
@@ -692,12 +715,11 @@ function useStripDrag(item: StripDrag) {
   return { ref: view, panHandlers: responder.panHandlers, style, dragging, crossed, grab: drag.current.grab, dx };
 }
 
-function reorder(ids: string[], { geometry, from, pinned, groupId }: StripDrag, dx: number): boolean {
+function reorder(ids: string[], { geometry, from, pinned, groupId }: StripDrag, to: number): boolean {
   const s = useBrowser.getState();
   const tab = s.tabs[ids[0] ?? ""];
   const w = tab && s.windows[tab.windowId];
   if (!tab || !w) return false;
-  const to = dropIndex(geometry, from, dx);
   if (ids.length === 1) {
     const section = w.tabIds.filter((id) => s.tabs[id]?.profileId === tab.profileId && !!s.tabs[id]?.pinned === pinned);
     const index = moveIndex(section, tab.id, geometry.slots, from, to);
@@ -714,6 +736,14 @@ function reorder(ids: string[], { geometry, from, pinned, groupId }: StripDrag, 
   }
   s.placeTabs(ids, { pinned, beforeId, groupId });
   return true;
+}
+
+function dropOnto(target: DropTarget, ids: string[]): boolean {
+  const s = useBrowser.getState();
+  if (target.kind === "tab") return !!s.groupOnto(ids, target.id);
+  const before = s.groups[target.id]?.tabIds;
+  s.placeTabs(ids, { pinned: false, groupId: target.id });
+  return useBrowser.getState().groups[target.id]?.tabIds !== before;
 }
 
 function withSelection(tabId: string): string[] {
@@ -766,6 +796,7 @@ function DraggableChip({
     gap: GAP,
     range,
     cross: dock ? tabIn(() => latestStrip.current, from, width) : undefined,
+    targets: !group && from >= 0 ? strip?.targets : undefined,
     drop: (dx, ids) => {
       if (!member) return false;
       const at = leaveIndex(member.top, member.slot, member.chip, member.expanded, member.left + dx, width);
@@ -805,10 +836,12 @@ function TabChip({ tabId, width, tuck, dragged }: { tabId: string; width: number
   const theme = useTheme();
   const windowId = useWindowId();
   const tab = useTab(tabId);
+  const onto = useOnto({ kind: "tab", id: tabId });
   const active = useIsActiveTab(tabId);
   const floating = useContext(FloatingStrip);
   const playing = useTabLive(tabId, (l) => l.playingAudio);
   const { palette, band } = useWebsiteBand(tabId);
+  const closeControl = useTabCloseControl(tabId);
   const { hovered, hoverProps } = useHover();
   if (!tab) return null;
   const title = tab.customTitle || tab.title || tab.url || "New Tab";
@@ -819,10 +852,11 @@ function TabChip({ tabId, width, tuck, dragged }: { tabId: string; width: number
       {dragged && !active && (
         <View pointerEvents="none" style={{ position: "absolute", left: 0, width, top: ITEM_TOP, height: ITEM_HEIGHT, borderRadius: TAB_RADIUS, backgroundColor: theme.windowTint[0] }} />
       )}
+      {onto && <OntoRing width={width} />}
       <ContextMenuArea onContextMenu={() => void openTabMenu(windowId, tab)} style={StyleSheet.absoluteFill}>
         <Pressable onPress={(e) => clickTab(windowId, tab.id, modifiersOf(e))} style={{ flex: 1 }}>
           {({ pressed }) => (
-            <ItemRow hovered={(hovered || dragged) && !active} pressed={pressed && !active}>
+            <ItemRow hovered={(hovered || dragged) && !active && !onto} pressed={pressed && !active}>
               <View pointerEvents="none">
                 <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
                 <TabBadges tabId={tab.id} pip={false} />
@@ -843,14 +877,14 @@ function TabChip({ tabId, width, tuck, dragged }: { tabId: string; width: number
                 width={20}
                 hover={
                   <IconButton
-                    icon={tuck ? "minus" : "xmark"}
+                    icon={tuck ? "minus" : closeControl.icon}
                     size={9}
                     weight="semibold"
                     box={20}
                     radius={5}
                     color={onBand ? palette.icon : undefined}
-                    onPress={tuck ?? (() => void closeTab(tab.id))}
-                    tooltip={tuck ? "Hide in Group" : "Close Tab"}
+                    onPress={tuck ?? (() => pressTabClose(tab.id))}
+                    tooltip={tuck ? "Hide in Group" : closeControl.tooltip}
                   />
                 }
               />
@@ -859,6 +893,26 @@ function TabChip({ tabId, width, tuck, dragged }: { tabId: string; width: number
         </Pressable>
       </ContextMenuArea>
     </View>
+  );
+}
+
+function OntoRing({ width }: { width: number | Animated.Value }) {
+  const theme = useTheme();
+  return (
+    <FadeIn
+      style={{
+        left: 0,
+        top: ITEM_TOP,
+        width,
+        height: ITEM_HEIGHT,
+        borderRadius: TAB_RADIUS,
+        borderWidth: 1.5,
+        borderColor: theme.accent,
+        backgroundColor: theme.tabPressed,
+      }}
+    >
+      {null}
+    </FadeIn>
   );
 }
 
@@ -1090,7 +1144,7 @@ function FolderCell({ folderId, tabIds, geometry, from }: { folderId: string; ta
     gap: PINNED_SPACING,
     levels: 2,
     local: true,
-    drop: (dx, ids) => reorder(ids, { tabId: null, ids: () => ids, pinned: true, groupId: null, geometry, from, width: PINNED_CELL, gap: PINNED_SPACING }, dx),
+    drop: (dx, ids) => reorder(ids, { tabId: null, ids: () => ids, pinned: true, groupId: null, geometry, from, width: PINNED_CELL, gap: PINNED_SPACING }, dropIndex(geometry, from, dx)),
   });
   return (
     <Animated.View ref={drag.ref} {...drag.panHandlers} mouseDownCanMoveWindow={false} style={drag.style}>
@@ -1140,6 +1194,8 @@ function StripGroup({
   const windowId = useWindowId();
   const profileId = usePageProfileId();
   const group = useBrowser((s) => s.groups[entry.id]);
+  const groupClose = useGroupCloseControl(entry.id);
+  const onto = useOnto({ kind: "group", id: entry.id });
   const { hovered, hoverProps } = useHover();
   const expanded = !entry.collapsed;
   const widths = entry.members.map(memberWidth);
@@ -1217,6 +1273,7 @@ function StripGroup({
           backgroundColor: tint ? withAlpha(tint, hovered ? 0.24 : 0.18) : hovered ? tokens.groupHeaderHover : tokens.groupFill,
         }}
       />
+      {onto && <OntoRing width={size} />}
       <Animated.View pointerEvents="none" style={{ position: "absolute", left: chipSize + 0.75, top: MID - 7.5, width: 0.5, height: 15, backgroundColor: divider, opacity: fade }} />
       {entry.members.map((m, i) => (
         <GroupMember
@@ -1239,7 +1296,7 @@ function StripGroup({
       ))}
       <Animated.View pointerEvents={expanded ? "box-none" : "none"} mouseDownCanMoveWindow={false} style={{ position: "absolute", top: ITEM_TOP, height: ITEM_HEIGHT, left: tail, flexDirection: "row", alignItems: "center", opacity: fade }}>
         <View style={{ width: 0.5, height: 15, backgroundColor: divider }} />
-        <IconButton icon="xmark" size={9} weight="semibold" box={24} radius={6} style={{ marginLeft: 1 }} onPress={() => useBrowser.getState().closeGroup(entry.id)} tooltip="Close Group" />
+        {groupClose && <IconButton icon={groupClose.icon} size={9} weight="semibold" box={24} radius={6} style={{ marginLeft: 1 }} onPress={() => pressGroupClose(entry.id)} tooltip={groupClose.tooltip} />}
       </Animated.View>
       <View
         {...hoverProps}
@@ -1254,7 +1311,7 @@ function StripGroup({
             onPress={() => useBrowser.getState().updateGroup(entry.id, { collapsed: expanded })}
             style={{ height: ITEM_HEIGHT, flexDirection: "row", alignItems: "center", paddingLeft: 8.5, paddingRight: 7 }}
           >
-            {group.icon ? <Text style={{ width: 13, fontSize: 12, textAlign: "center" }}>{group.icon}</Text> : <GroupGlyph color={tint ?? (theme.dark ? NEUTRAL_GROUP_SWATCH.dark : NEUTRAL_GROUP_SWATCH.light)} />}
+            <StripGroupIcon icon={group.icon} tint={tint} />
             <Text numberOfLines={1} style={{ marginLeft: 12.5, maxWidth: 120, fontSize: 12, fontWeight: "600", color: tint ?? (shown >= 0 ? theme.tabSelectedText : theme.textTab) }}>
               {group.name || `${group.tabIds.length} Tabs`}
             </Text>
@@ -1371,7 +1428,7 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
                 backgroundColor: pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : tokens.groupFill,
               }}
             >
-              {group.icon ? <Text style={{ width: 13, fontSize: 12, textAlign: "center" }}>{group.icon}</Text> : <GroupGlyph color={tint ?? (theme.dark ? NEUTRAL_GROUP_SWATCH.dark : NEUTRAL_GROUP_SWATCH.light)} />}
+              <StripGroupIcon icon={group.icon} tint={tint} />
               <Text numberOfLines={1} style={{ marginLeft: 7, maxWidth: 110, fontSize: 12, fontWeight: "600", color: ink }}>
                 {label}
               </Text>
@@ -1382,6 +1439,13 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
       </ContextMenuArea>
     </View>
   );
+}
+
+function StripGroupIcon({ icon, tint }: { icon: string | null; tint: string | null | undefined }) {
+  const theme = useTheme();
+  if (!hasOwnGroupIcon(icon)) return <GroupGlyph color={tint ?? (theme.dark ? NEUTRAL_GROUP_SWATCH.dark : NEUTRAL_GROUP_SWATCH.light)} />;
+  if (icon.startsWith(SYMBOL_PREFIX)) return <Symbol name={icon.slice(SYMBOL_PREFIX.length)} size={11} weight="medium" color={tint ?? theme.icon} style={{ width: 13, height: 13 }} />;
+  return <Text style={{ width: 13, fontSize: 12, textAlign: "center" }}>{icon}</Text>;
 }
 
 function GroupGlyph({ color }: { color: string }) {
@@ -1456,7 +1520,7 @@ function NewTabButton({ windowId, geometry }: { windowId: string; geometry: Drag
       <Pressable
         onPress={(e) => {
           if (modifiersOf(e).altKey) openNewTabInSplit(windowId);
-          else toggleNewTabBar(windowId) || useBrowser.getState().newTab(windowId);
+          else toggleNewTabBar(windowId) || useBrowser.getState().newTab(windowId, { newTabCommand: true });
         }}
       >
         {({ pressed }) => (
@@ -1476,7 +1540,11 @@ const PEEK_TOP = 4;
 export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
-  const { slide, live, show, hide } = usePeek(enabled);
+  const downloadsOpen = useBrowser((s) => !!s.windowUi[windowId]?.downloadsOpen);
+  const { slide, live, show, hide, recheck } = usePeek(enabled, false, () => !!useBrowser.getState().windowUi[windowId]?.downloadsOpen);
+  useEffect(() => {
+    if (!downloadsOpen) recheck();
+  }, [downloadsOpen]);
   useEffect(() => {
     if (!enabled) return;
     void setTrafficLightsCenter(windowId, lightsCenter(layout.sidebarWidth));

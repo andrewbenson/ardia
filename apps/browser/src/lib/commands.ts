@@ -11,6 +11,7 @@ import { markdownLink } from "@ardia/core";
 import { useBrowser } from "../store/browser";
 import { activeTabId, bookmarkProfileId, isPinnedRow, pinSection, resolveWindowId } from "../store/model";
 import {
+  closeGroup,
   closeTab,
   createProfile,
   cycleProfile,
@@ -29,10 +30,11 @@ import { focusSettingsSearch } from "../components/settings/searchState";
 import { closePanelToHeroBar, focusHeroBar } from "../components/omnibox/barState";
 import { closeNewTabBar, isEmptyCardTab, showNewTabBar, toggleNewTabBar } from "../components/omnibox/newTabBar";
 import { NEW_TAB_BAR_POLICY } from "../store/newTabBar";
-import { addressBarInSidebar } from "../components/layout/windowLayout";
+import { addressBarInSidebar, commandBarCentred } from "../components/layout/windowLayout";
 import { addFolderToSidebar, restoreArcFolders } from "./bookmarkGroups";
 import { withLivePage } from "./livePage";
 import { webviews } from "./webviews";
+import { togglePageEngine } from "./engines";
 import { goBack, goForward } from "../components/layout/history";
 import { openSplitPane } from "../components/layout/splitActions";
 import { runSidebarCommand } from "../components/sidebar/commands";
@@ -46,7 +48,14 @@ import { shareTab } from "../components/site/share";
 import { openProfileMenu } from "../components/ProfileIndicator";
 import { groupOf } from "../store/organize";
 import { isSmall, mainWindowFor, originalProfile } from "../store/small";
-import { closeLittleArdia, openInMainWindow, openLittleArdia } from "../components/littleArdia/actions";
+import {
+  closeLittleArdia,
+  cycleLittleArdiaProfile,
+  moveLittleArdiaToProfile,
+  openInMainWindow,
+  openLittleArdia,
+  openLittleArdiaProfileMenu,
+} from "../components/littleArdia/actions";
 import { runPeekCommand } from "../components/peek/actions";
 import { startUrlEdit, tabInDeveloperMode, toggleDeveloperModeFor } from "../components/site/developerMode";
 import { peekTabId } from "../store/peek";
@@ -60,7 +69,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
     requested = null;
   }
-  if (isSmall(s, requested) && runLittleArdiaCommand(command, requested!)) return;
+  if (isSmall(s, requested) && runLittleArdiaCommand(command, arg, requested!)) return;
   if (runPeekCommand(command, resolveWindowId(s, requested) ?? "")) return;
 
   switch (command) {
@@ -69,7 +78,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     case "newIncognitoWindow":
       return void openWindow({ incognito: true, profileId: originalProfile(s, s.windows[requested ?? ""]) });
     case "newLittleArdia":
-      return void openLittleArdia();
+      return void openLittleArdia(undefined, arg ?? undefined);
     case "toggleOpenLinksInLittleArdia":
       return s.updateSettings({ openLinksInLittleArdia: !s.settings.openLinksInLittleArdia });
     case "reopenClosedWindow":
@@ -95,7 +104,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     case "openFile":
       return void openFiles(requested);
     case "manageExtensions":
-      return openManageExtensions();
+      return openManageExtensions(requested);
     case "setBookmarksBar":
       if (arg === "always" || arg === "newTab" || arg === "never") s.updateSettings({ bookmarksBar: arg });
       return;
@@ -141,7 +150,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
   switch (command) {
     case "newTab":
       if (toggleNewTabBar(windowId)) return;
-      return void s.newTab(windowId);
+      return void s.newTab(windowId, { newTabCommand: true });
     case "reopenClosedTab":
       return s.reopenClosed(windowId);
     case "restoreClosed":
@@ -153,7 +162,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       }
       if (page) return s.openPanel(windowId, page.url);
       if (isEmptyCardTab(s, tab) && showNewTabBar(windowId)) return;
-      if (tab && addressBarInSidebar(s, windowId)) return s.openPanel(windowId, "");
+      if (tab && addressBarInSidebar(s, windowId) && !commandBarCentred(s, windowId)) return s.openPanel(windowId, "");
       if (!focusHeroBar(windowId, tabId)) return tab ? s.openPanel(windowId, "") : undefined;
       return ui?.panel.open ? s.closePanel(windowId) : undefined;
     case "closeTab":
@@ -252,6 +261,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     case "togglePin":
       if (!tab) return;
       if (arg === "row") return s.pinTabs([tab.id], true, !isPinnedRow(tab));
+      if (arg === "tile") return isPinnedRow(tab) ? s.pinTabs([tab.id], true, false) : undefined;
       return s.togglePin(tab.id);
     case "moveTabDown":
     case "moveTabUp": {
@@ -262,7 +272,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     }
     case "closeTabGroup": {
       const group = groupOf(s, tabId);
-      return group ? s.closeGroup(group.id) : undefined;
+      return group ? void closeGroup(group.id) : undefined;
     }
     case "openProfileMenu":
       return s.windows[windowId]?.incognito ? undefined : void openProfileMenu(windowId);
@@ -280,6 +290,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       const node = arg ? s.bookmarks.nodes[arg] : undefined;
       return node?.kind === "url" && tab ? s.navigate(tab.id, node.url) : undefined;
     }
+    case "togglePageEngine":
+      return void (tabId && togglePageEngine(tabId));
     case "toggleMute":
       return page ? toggleMute(page.id) : undefined;
     case "downloads":
@@ -324,7 +336,7 @@ const LITTLE_ARDIA_PAGE_COMMANDS = new Set<string>([
   "cast", "openExtension", "addExtension", "autofill", "reopenClosedTab", "restoreClosed", "downloads",
 ]);
 
-function runLittleArdiaCommand(command: string, windowId: string): boolean {
+function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
   const s = useBrowser.getState();
   const tabId = activeTabId(s, windowId);
   const tab = tabId ? s.tabs[tabId] : undefined;
@@ -338,6 +350,18 @@ function runLittleArdiaCommand(command: string, windowId: string): boolean {
       return true;
     case "openFile":
       openInMainWindow(windowId);
+      return true;
+    case "switchProfile":
+      if (arg) moveLittleArdiaToProfile(windowId, arg);
+      return true;
+    case "nextProfile":
+      cycleLittleArdiaProfile(windowId, 1);
+      return true;
+    case "previousProfile":
+      cycleLittleArdiaProfile(windowId, -1);
+      return true;
+    case "openProfileMenu":
+      void openLittleArdiaProfileMenu(windowId);
       return true;
   }
   return false;

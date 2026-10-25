@@ -1,3 +1,4 @@
+import type { PageEngine } from "@ardia/ardiacore";
 
 export type Frame = [number, number, number, number];
 
@@ -17,6 +18,7 @@ export type ThemeLook = {
   grain: number;
   texture: ThemeTexture;
   translucency: number;
+  angle?: number;
 };
 
 export type ProfileTheme = ThemeLook & {
@@ -45,6 +47,7 @@ export type BrowserWindow = {
   frame: Frame | null;
   createdAt: number;
   kind?: "small";
+  linkPointer?: [number, number];
   originalProfileId?: string;
   chromeWindow?: string;
 };
@@ -72,6 +75,7 @@ export type Tab = {
   unloaded?: boolean;
   pinKey?: string;
   pageIn?: string;
+  engine?: PageEngine;
   createdAt: number;
   lastActiveAt: number;
 };
@@ -87,6 +91,8 @@ export type TabLive = {
 };
 
 export type GroupColor = "grey" | "blue" | "red" | "yellow" | "green" | "pink" | "purple" | "cyan" | "orange";
+
+export type ClosedGroupInfo = Pick<TabGroup, "id" | "name" | "icon" | "color"> & { pinned?: boolean };
 
 export type TabGroup = {
   id: string;
@@ -138,7 +144,7 @@ export type TabSnapshot = Pick<
   Tab,
   "url" | "title" | "favicon" | "pinned" | "muted" | "zoom" | "customTitle" | "customIcon" | "profileId"
 > &
-  Partial<Pick<Tab, "pinnedUrl" | "pinnedAsRow" | "tileFolder">>;
+  Partial<Pick<Tab, "pinnedUrl" | "pinnedAsRow" | "tileFolder" | "engine">>;
 
 export type ClosedTab = {
   kind: "tab";
@@ -148,8 +154,8 @@ export type ClosedTab = {
   restoreFrom?: string;
   windowId: string;
   index: number;
-  group: Pick<TabGroup, "id" | "name" | "icon" | "color"> | null;
-  parents?: Pick<TabGroup, "id" | "name" | "icon" | "color">[];
+  group: ClosedGroupInfo | null;
+  parents?: ClosedGroupInfo[];
   closedAt: number;
   pinnedTile?: boolean;
   small?: boolean;
@@ -167,6 +173,7 @@ export type ClosedWindow = {
 export type ParkedPins = {
   tabs: (TabSnapshot & { id: string; groupId: string | null; restoreFrom?: string })[];
   groups: (Pick<TabGroup, "id" | "name" | "icon" | "color" | "collapsed"> & { parentId?: string })[];
+  splits?: (Pick<SplitView, "orientation" | "sizes" | "stack"> & { ids: string[] })[];
 };
 
 export type NestedGroupSnapshot = Pick<TabGroup, "id" | "name" | "icon" | "color" | "collapsed"> & { parentId: string; tabIndexes: number[] };

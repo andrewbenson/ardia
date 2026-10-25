@@ -1,6 +1,9 @@
 import {
   getContentBlocker,
   getSiteSettings,
+  getWebKitSiteSettings,
+  setWebKitSiteSetting,
+  WEBKIT_SITE_SETTINGS,
   isContentBlockerAllowed,
   setContentBlockerAllowed,
   setSiteSetting,
@@ -17,7 +20,9 @@ import { useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";
 import { useBrowser } from "../../store/browser";
 import { useSettings, useTab } from "../../store/hooks";
-import { engineProfile, tabLabel } from "../../store/model";
+import { engineProfile, isIncognitoProfile, tabLabel } from "../../store/model";
+import { defaultEngine, ENGINE_NAMES, ENGINE_SYMBOLS, otherEngine, ruleFor, tabEngine } from "../../store/engines";
+import { openPageIn, togglePageEngine } from "../../lib/engines";
 import { Favicon } from "../primitives";
 import { PANEL, PanelHeader, Popover, PopoverRow, PopoverSeparator, PopoverValue, Toggle, usePopoverPresence } from "../layout/controls";
 import { pageOf, patchPage, setPopover, usePage } from "../layout/pageState";
@@ -65,7 +70,7 @@ export function SiteControls({ tabId, open, right, left, top }: { tabId: string;
   return <SiteControlsPanel tabId={tabId} right={right} left={left} top={top} closing={presence.closing} onClosed={presence.onClosed} />;
 }
 
-function featuredPermissions(tabId: string, settings: SiteSettings): Set<SiteSettingType> {
+function featuredPermissions(tabId: string, settings: SiteSettings, list: Permission[]): Set<SiteSettingType> {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   const access = pageOf(tabId).mediaAccess;
@@ -74,7 +79,7 @@ function featuredPermissions(tabId: string, settings: SiteSettings): Set<SiteSet
     microphone: !!access?.microphone,
     sound: !!tab?.muted || !!s.live[tabId]?.playingAudio,
   };
-  return new Set(PERMISSIONS.filter((p) => !settings[p.type]?.isDefault || inUse[p.type]).map((p) => p.type));
+  return new Set(list.filter((p) => !settings[p.type]?.isDefault || inUse[p.type]).map((p) => p.type));
 }
 
 function SiteControlsPanel({
@@ -112,28 +117,34 @@ function SiteControlsPanel({
   const [pip, togglePip] = usePictureInPicture(tabId);
   const developer = useDeveloperMode(url, tab?.profileId);
   const developerToggles = canToggleDeveloperModeFor(tabId);
+  const pageEngine = useBrowser((s) => tabEngine(s, tabId));
+  const webkitPage = pageEngine === "webkit";
+  const permissionList = webkitPage ? PERMISSIONS.filter((p) => WEBKIT_SITE_SETTINGS.includes(p.type)) : PERMISSIONS;
+  const readSettings = webkitPage ? getWebKitSiteSettings : getSiteSettings;
+  const engineRule = useBrowser((s) => ruleFor(s, url));
+  const defaultEngineName = useBrowser((s) => ENGINE_NAMES[defaultEngine(s)]);
 
   useEffect(() => {
     if (!origin) return;
     let live = true;
-    void getSiteSettings(profile, origin).then((s) => {
+    void readSettings(profile, origin).then((s) => {
       if (!live) return;
       setSettings(s);
-      setFeatured((f) => f ?? featuredPermissions(tabId, s));
+      setFeatured((f) => f ?? featuredPermissions(tabId, s, permissionList));
     });
     void Promise.all([getContentBlocker(), isContentBlockerAllowed(host)]).then(([state, allowed]) => live && setBlocker({ enabled: state.enabled, allowed }));
     void webviews.get(tabId)?.getSecurityInfo().then((info) => live && info && patchPage(tabId, { security: info }));
     return () => {
       live = false;
     };
-  }, [origin, profile]);
+  }, [origin, profile, webkitPage]);
 
   if (!tab) return null;
 
   const setPermission = async (type: SiteSettingType, value: SiteSettingValue) => {
     if (!origin) return;
-    await setSiteSetting(profile, origin, type, value);
-    setSettings(await getSiteSettings(profile, origin));
+    await (webkitPage ? setWebKitSiteSetting : setSiteSetting)(profile, origin, type, value);
+    setSettings(await readSettings(profile, origin));
     if (type === "sound") {
       useBrowser.getState().updateTab(tabId, { muted: value === "block" });
       void webviews.get(tabId)?.setMuted(value === "block");
@@ -174,6 +185,23 @@ function SiteControlsPanel({
   const cast = () => {
     close();
     void toggleCastPicker(tab.windowId);
+  };
+  const privatePage = isIncognitoProfile(tab.profileId);
+  const opensIn = privatePage ? ENGINE_NAMES[pageEngine] : engineRule ? ENGINE_NAMES[engineRule] : `Default (${defaultEngineName})`;
+  const pickEngine = async () => {
+    const checked = (engine: "chromium" | "webkit") => (privatePage ? pageEngine === engine : engineRule === engine);
+    const choice = await showMenu([
+      ...(privatePage ? [] : [{ id: "default", title: `Default (${defaultEngineName})`, checked: !engineRule }, { separator: true as const }]),
+      { id: "chromium", title: ENGINE_NAMES.chromium, checked: checked("chromium") },
+      { id: "webkit", title: ENGINE_NAMES.webkit, checked: checked("webkit") },
+    ]);
+    if (!choice) return;
+    close();
+    if (choice === "default") void openPageIn(tabId, defaultEngine(useBrowser.getState()), { rule: null });
+    else {
+      const engine = choice === "webkit" ? "webkit" : "chromium";
+      void openPageIn(tabId, engine, { rule: engine });
+    }
   };
   const toggle = (section: Exclude<Expanded, null>) => setExpanded((e) => (e === section ? null : section));
 
@@ -217,7 +245,9 @@ function SiteControlsPanel({
     ) : null,
   ].filter(Boolean);
 
-  const blockerValue = !blocker
+  const blockerValue = pageEngine === "webkit"
+    ? "Chromium only for now"
+    : !blocker
     ? "…"
     : !blocker.enabled
       ? "Off in Settings"
@@ -226,8 +256,8 @@ function SiteControlsPanel({
         : blocked > 0
           ? `On · ${blocked} blocked on this page`
           : "On";
-  const shownPermissions = featured ? PERMISSIONS.filter((p) => featured.has(p.type)) : [];
-  const otherPermissions = PERMISSIONS.filter((p) => !featured?.has(p.type));
+  const shownPermissions = featured ? permissionList.filter((p) => featured.has(p.type)) : [];
+  const otherPermissions = permissionList.filter((p) => !featured?.has(p.type));
   const value = (p: Permission) => (settings ? choiceTitle(p.type, settings[p.type]?.value ?? "ask") : "…");
 
   return (
@@ -244,9 +274,9 @@ function SiteControlsPanel({
               icon="shield.lefthalf.filled"
               title="Block Ads & Trackers"
               value={blockerValue}
-              on={!!blocker?.enabled && !blocker.allowed}
+              on={pageEngine !== "webkit" && !!blocker?.enabled && !blocker.allowed}
               onPress={
-                !blocker
+                !blocker || pageEngine === "webkit"
                   ? undefined
                   : blocker.enabled
                     ? () => void toggleBlocker(blocker.allowed)
@@ -263,6 +293,7 @@ function SiteControlsPanel({
               on={developer}
               onPress={developerToggles ? () => setDeveloperModeFor(tabId, !developer) : undefined}
             />
+            <SettingRow icon={ENGINE_SYMBOLS[pageEngine]} title="Opens in" value={opensIn} on={!!engineRule} onPress={() => void pickEngine()} />
             {shownPermissions.map((p) => (
               <SettingRow
                 key={p.type}
@@ -294,6 +325,16 @@ function SiteControlsPanel({
             <PopoverSeparator />
             <PopoverRow icon="plus.magnifyingglass" title="Zoom" accessory={<ZoomStepper tabId={tabId} zoom={tab.zoom} />} />
             {origin && !castTile ? <PopoverRow icon="tv.and.mediabox" title="Cast…" onPress={cast} /> : null}
+            {origin ? (
+              <PopoverRow
+                icon={ENGINE_SYMBOLS[otherEngine(pageEngine)]}
+                title={`Open Page in ${ENGINE_NAMES[otherEngine(pageEngine)]}`}
+                onPress={() => {
+                  close();
+                  void togglePageEngine(tabId);
+                }}
+              />
+            ) : null}
             {origin ? (
               <>
                 <PopoverSeparator />

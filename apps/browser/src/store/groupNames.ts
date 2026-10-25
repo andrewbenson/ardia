@@ -14,7 +14,10 @@ const hostOf = (url: string) => {
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+const isIpAddress = (host: string) => host.startsWith("[") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+
 function hostLabel(host: string): string {
+  if (isIpAddress(host)) return host;
   const parts = host.split(".").filter(Boolean);
   if (parts.length < 2) return parts[0] ?? "";
   const second = parts.at(-2)!;
@@ -47,6 +50,16 @@ function siteFromTitles(host: string, titles: string[]): string | undefined {
   if (titles.length < 2) return undefined;
   for (const [site] of ends(titles[0]!)) if (titles.every((t) => ends(t).some(([s]) => s === site))) return site;
   return undefined;
+}
+
+export const siteKey = (url: string) => hostLabel(hostOf(url)).toLowerCase();
+
+export function siteName(members: Member[]): string {
+  const host = members.map((m) => hostOf(m.url)).find(Boolean) ?? "";
+  const titles = members.flatMap((m) => (m.title && m.title !== m.url ? [m.title] : []));
+  const label = squash(hostLabel(host));
+  const titledLikeHost = label ? titles.find((t) => squash(t) === label)?.trim() : undefined;
+  return (titles.length ? siteFromTitles(host, titles) : undefined) ?? titledLikeHost ?? tidyHost(host);
 }
 
 function pageOf(title: string, site: string | undefined): string {

@@ -10,6 +10,7 @@ import { useWindowId, useWindowProfileId } from "../store/hooks";
 import { activeTabId, viewTabIds } from "../store/model";
 import { defaultSearchEngine } from "../store/settings";
 import { runBarAction } from "./omnibox/actions";
+import { runBarExtension } from "./omnibox/extensions";
 import { createBangSubmitter, mayBeBang } from "./omnibox/bangs";
 import { traceOmnibox, useOmniboxDriver } from "./omnibox/devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../lib/focusClaims";
@@ -20,7 +21,7 @@ import type { NewTabTarget } from "../store/types";
 import { clipboardPasteAction, pasteMenuItem, pasteTarget, readClipboard } from "./omnibox/paste";
 import { ScopeChip } from "./omnibox/ScopeChip";
 import { SuggestionIcon, SuggestionList, isRemovable, type RowActions } from "./omnibox/SuggestionRow";
-import { useDropdownStart } from "./omnibox/dropdownStart";
+import { useDropdownStart, useOpenTabsStart } from "./omnibox/dropdownStart";
 import { useInlineCompletion } from "./omnibox/useInlineCompletion";
 import { keywordScope, offeredScope, useSuggestions } from "./omnibox/useSuggestions";
 import { setPopover } from "./layout/pageState";
@@ -79,7 +80,8 @@ export function Omnibox({
   const [typed, setTyped] = useState(restored?.typed ?? initialText);
   const [edited, setEdited] = useState(restored?.edited ?? false);
   const [suppressCompletion, setSuppressCompletion] = useState(true);
-  const [selected, setSelected] = useState(restored?.selected ?? 0);
+  const noneSelected = opensTab ? -1 : 0;
+  const [selected, setSelected] = useState(restored?.selected ?? noneSelected);
   const [scope, setScope] = useState<SearchScope | null>(restored?.scope ?? null);
   const scopeFrom = useRef(restored?.scopeFrom ?? "");
   const [pendingSelection, setPendingSelection] = useState<Selection | null>(
@@ -113,11 +115,13 @@ export function Omnibox({
     preventInline: suppressCompletion,
   });
   const start = useDropdownStart(dropdown && !edited && !scope, tabId, profileId);
-  const items = dropdown && !edited && !scope ? start : suggested;
+  const idle = !!opensTab && !scope && !typed.trim();
+  const openTabs = useOpenTabsStart(idle, windowId, profileId);
+  const items = dropdown && !edited && !scope ? start : idle ? openTabs : suggested;
   const inline = useInlineCompletion(input, typed, suppressCompletion || scope ? "" : completion);
   const shownCompletion = inline.shown;
   const value = typed + shownCompletion;
-  const selectedIndex = Math.min(selected, items.length - 1);
+  const selectedIndex = selected < 0 && idle ? -1 : Math.min(Math.max(selected, 0), items.length - 1);
   const current = items[selectedIndex];
   const tabScope = useMemo(
     () => (!scope && edited ? offeredScope(typed, shownCompletion, windowId) : null),
@@ -163,7 +167,7 @@ export function Omnibox({
     setTyped("");
     setEdited(false);
     setScope(null);
-    setSelected(0);
+    setSelected(noneSelected);
     setSuppressCompletion(true);
     selection.current = { start: 0, end: 0 };
   };
@@ -220,6 +224,9 @@ export function Omnibox({
       case "action":
         dismiss();
         return runBarAction(s.id, windowId);
+      case "extension":
+        dismiss();
+        return runBarExtension(s, windowId);
     }
   };
 
@@ -250,7 +257,12 @@ export function Omnibox({
   };
 
   const move = (delta: 1 | -1) =>
-    setSelected((i) => (items.length ? (Math.min(i, items.length - 1) + delta + items.length) % items.length : 0));
+    setSelected(() => {
+      const n = items.length;
+      if (!n) return 0;
+      if (selectedIndex < 0) return delta > 0 ? 0 : n - 1;
+      return (selectedIndex + delta + n) % n;
+    });
 
   const onKeyDown = (e: { nativeEvent: { key: string; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; ctrlKey?: boolean } }) => {
     const { key, metaKey, altKey, shiftKey, ctrlKey } = e.nativeEvent;
@@ -347,7 +359,7 @@ export function Omnibox({
     setEdited(true);
     setTyped(change.typed);
     setSuppressCompletion(change.suppress);
-    setSelected(0);
+    setSelected(opensTab && !change.typed.trim() ? -1 : 0);
   };
 
   useOmniboxDriver(`${windowId}:${variant}`, {

@@ -1,4 +1,4 @@
-import { WebView, type OpenWindowRequest } from "@ardia/ardiacore";
+import { WebView, type OpenWindowRequest, type PageEngine } from "@ardia/ardiacore";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
@@ -10,10 +10,13 @@ import { isQuitting } from "../lib/native";
 import { layout, useTheme } from "../lib/theme";
 import { opaqueCard } from "../lib/opaqueCard";
 import { startChromeTabs } from "../lib/chromeTabs";
-import { handOff, isHandedOff, wantsPage } from "../lib/tabPages";
+import { handOff, takeHandOff, wantsPage } from "../lib/tabPages";
 import { noteDiscarded, noteGone, noteReady } from "../lib/tabLifecycle";
 import { usePrewarm } from "../lib/preload";
-import { webviewRef, webviews } from "../lib/webviews";
+import { clearEngineOffer, noteWebKitPage, offerWebKit, persistEngine } from "../lib/engines";
+import { tabEngine } from "../store/engines";
+import { EngineOfferPrompt } from "./site/EnginePrompt";
+import { noteIssued, webviewRef, webviews } from "../lib/webviews";
 import { useBrowser } from "../store/browser";
 import { setPageProgress } from "../store/pageProgress";
 import { shallowEqual, useProfilesValue, useStoreWhile, useTabValue } from "../store/tabWatch";
@@ -23,7 +26,7 @@ import { removeTabs } from "../store/tabs";
 import { splitOf } from "../store/splits";
 import type { SplitView, Tab } from "../store/types";
 import { BOOKMARKS_BAR_HEIGHT, BookmarksBar, bookmarksBarShown, useBookmarksBarMode, type BookmarksBarMode } from "./bookmarks/BookmarksBar";
-import { CliControlBar, CliControlPill } from "./CliControlBar";
+import { CliControlPill } from "./CliControlPill";
 import { FindBar } from "./FindBar";
 import { POPOVER_MARGIN } from "./layout/controls";
 import { NO_TOOLBAR, splitGeometry, toolbarGeometry, type Rect, type ToolbarGeometry } from "./layout/geometry";
@@ -35,7 +38,7 @@ import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
 import { pagerFor } from "./layout/profilePager";
 import { openFromPage } from "./layout/openFromPage";
-import { dockMoving, useDockMotion } from "./layout/dockMotion";
+import { dockMoving, useDockMotion, usePeekEdge } from "./layout/dockMotion";
 import { FrozenPage } from "./layout/frozenPage";
 import { holderOf } from "../store/pinShare";
 import { closeFolderPanelIn } from "./sidebar/tileFolderUi";
@@ -43,9 +46,10 @@ import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useTabLayout, useT
 import { NewTabPage } from "./NewTabPage";
 import { EmptyCard } from "./EmptyCard";
 import { InternalPage } from "./pages";
-import { AutofillPrompt, BlockedPopupsPrompt, ExternalAppPrompt, PasswordPrompt, PermissionPrompt, answerExternalApp, shouldPromptForPopups, showAutofillPrompt, showPasswordPrompt } from "./site/Prompts";
+import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, ExternalAppPrompt, PasswordPrompt, PermissionPrompt, answerExternalApp, shouldPromptForPopups, showAutofillPrompt, showPasswordPrompt } from "./site/Prompts";
 import { SiteControls } from "./site/SiteControls";
-import { ZoomPopover } from "./site/ZoomControls";
+import { SITE_PANEL } from "./site/SiteControlsParts";
+import { ZOOM_POPOVER_WIDTH, ZoomPopover } from "./site/ZoomControls";
 import { SelectionPopover } from "./site/SelectionPopover";
 import { copyLinkToSelection, searchSelection, setPageSelection, startSelectionTools, type PageSelection } from "./site/selection";
 import { startMedia, useAutoPictureInPicture } from "./media/pip";
@@ -244,6 +248,9 @@ export function ContentCard() {
   );
 
   const windowToolbar = !split && !fullscreenTab && !addressInSidebar && !small;
+  const peekEdge = usePeekEdge(windowId);
+  const activeRect = activeId ? panes[activeId] : undefined;
+  const popoversOverCard = peekEdge !== undefined && addressInSidebar && !small && !fullscreenTab && origin && activeRect ? activeId : undefined;
 
   return (
     <View
@@ -280,6 +287,8 @@ export function ContentCard() {
               warm={warmPanes[tabId]}
               barMode={barMode}
               windowToolbar={windowToolbar}
+              popovers={tabId !== popoversOverCard}
+              peekShown={!!peekId}
             />
           );
         })}
@@ -290,6 +299,14 @@ export function ContentCard() {
         <FrozenPage windowId={windowId} tabId={activeId} top={(!addressInSidebar && !small && !hideWhileScrolling ? layout.toolbarHeight : 0) + (barMode === "always" && !small && !hideWhileScrolling ? BOOKMARKS_BAR_HEIGHT : 0)} />
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
+      {size.width > 0 && popoversOverCard && origin && activeRect && peekEdge !== undefined && (
+        <BesidePeekPopovers
+          tabId={popoversOverCard}
+          left={Math.max(activeRect.x, peekEdge - origin.x) + POPOVER_MARGIN}
+          top={activeRect.y + POPOVER_MARGIN}
+          room={size.width}
+        />
+      )}
       {!fullscreenTab && <DropTargets panes={panes} origin={origin} />}
       {(!fullscreenTab || peekFullscreen) && !small && (
         <PeekOverlay
@@ -325,6 +342,8 @@ const TabPane = memo(function TabPane({
   warm,
   barMode,
   windowToolbar,
+  popovers,
+  peekShown,
 }: {
   tabId: string;
   windowId: string;
@@ -344,6 +363,8 @@ const TabPane = memo(function TabPane({
   warm: Rect | undefined;
   barMode: BookmarksBarMode;
   windowToolbar: boolean;
+  popovers: boolean;
+  peekShown: boolean;
 }) {
   const theme = useTheme();
   const visible = !!rect;
@@ -399,7 +420,6 @@ const TabPane = memo(function TabPane({
       <Animated.View style={autoLayout ? motion.groupStyle : { flex: 1 }}>
         {autoLayout && bookmarksBar && <BookmarksBar placeholder={!visible} />}
         <View style={autoLayout ? { height: motion.pageHeight } : { flex: 1 }}>
-          {visible && !fullscreen && (focused || !inSplit) && <CliControlBar />}
           {visible && !fullscreen && <ShareBar tabId={tabId} />}
           <View style={{ flex: 1 }}>
             {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
@@ -415,6 +435,8 @@ const TabPane = memo(function TabPane({
                 fullscreen={fullscreen}
                 newTabShown={newTabShown}
                 statusStyle={autoLayout ? motion.bottomStyle : undefined}
+                popovers={popovers}
+                cliPill={!peekShown && (fullscreen || focused || !inSplit)}
               />
             )}
           </View>
@@ -435,6 +457,8 @@ function PageOverlays({
   fullscreen,
   newTabShown,
   statusStyle,
+  popovers = true,
+  cliPill = false,
 }: {
   tabId: string;
   windowId: string;
@@ -444,24 +468,32 @@ function PageOverlays({
   fullscreen: boolean;
   newTabShown: boolean;
   statusStyle?: Animated.WithAnimatedValue<ViewStyle>;
+  popovers?: boolean;
+  cliPill?: boolean;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
+  const popoverSide = toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN };
   return (
     <>
       <FindBar tabId={tabId} />
-      {fullscreen && <CliControlPill />}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>
         <StatusBubble tabId={tabId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
       <SadTab tabId={tabId} />
+      {cliPill && (
+        <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, statusStyle]}>
+          <CliControlPill />
+        </Animated.View>
+      )}
       {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {!newTabShown && <ExternalAppPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
-      <SiteControls tabId={tabId} open={popover === "siteControls"} {...(toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN })} top={POPOVER_MARGIN} />
-      {popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...(toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN })} top={POPOVER_MARGIN} />}
-      {popover === "zoom" && <ZoomPopover tabId={tabId} {...(toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN })} top={POPOVER_MARGIN} />}
+      {!newTabShown && <EngineOfferPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
+      {popovers && <SiteControls tabId={tabId} open={popover === "siteControls"} {...popoverSide} top={POPOVER_MARGIN} />}
+      {popovers && popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} />}
+      {popovers && popover === "zoom" && <ZoomPopover tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} />}
       <SharePicker tabId={tabId} paneWidth={width} />
       {!newTabShown && <DeviceChooser tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       <CastPicker tabId={tabId} paneWidth={width} />
@@ -471,11 +503,23 @@ function PageOverlays({
   );
 }
 
+function BesidePeekPopovers({ tabId, left, top, room }: { tabId: string; left: number; top: number; room: number }) {
+  const popover = usePages((s) => s.popover[tabId] ?? null);
+  const fit = (width: number) => ({ left: Math.max(POPOVER_MARGIN, Math.min(left, room - width - POPOVER_MARGIN)), top });
+  return (
+    <>
+      <SiteControls tabId={tabId} open={popover === "siteControls"} {...fit(SITE_PANEL.width)} />
+      {popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...fit(BLOCKED_POPUPS_WIDTH)} />}
+      {popover === "zoom" && <ZoomPopover tabId={tabId} {...fit(ZOOM_POPOVER_WIDTH)} />}
+    </>
+  );
+}
+
 function PeekPage({ tabId, sourceId, windowId, width, fullscreen }: { tabId: string; sourceId: string; windowId: string; width: number; fullscreen: boolean }) {
   return (
     <>
       <TabWebView tabId={tabId} visible warm={false} peekOf={sourceId} />
-      <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} fullscreen={fullscreen} newTabShown={false} />
+      <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} fullscreen={fullscreen} newTabShown={false} cliPill />
     </>
   );
 }
@@ -487,7 +531,14 @@ const isBlank = (url: string) => !url || url === "about:blank";
 const pageKey = (url: string) => url.replace(/#.*$/, "");
 const hostOf = (url: string) => url.match(/^[a-z][\w+.-]*:\/\/([^/?#]*)/i)?.[1]?.toLowerCase() ?? "";
 
-const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { tabId: string; visible: boolean; warm: boolean; peekOf?: string }) {
+type TabWebViewProps = { tabId: string; visible: boolean; warm: boolean; peekOf?: string };
+
+const TabWebView = memo(function TabWebView(props: TabWebViewProps) {
+  const engine = useBrowser((s) => tabEngine(s, props.tabId));
+  return <EngineWebView key={engine} engine={engine} {...props} />;
+});
+
+function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps & { engine: PageEngine }) {
   const { navigation, adoptId, profileId, shownUrl } = useTabValue(tabId, webViewTab, shallowEqual);
   const neighbour = useStoreWhile(useBrowser, warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.profileId !== profileId);
   const tab = () => useBrowser.getState().tabs[tabId];
@@ -503,9 +554,12 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
 
   const seq = navigation?.seq;
   const adopted = useRef<string | null>(null);
-  const arrived = useRef(isHandedOff(tabId));
+  const [handoff] = useState(() => takeHandOff(tabId, engine));
+  const arrived = useRef(!!handoff && handoff.seq === navigation?.seq);
+  const loadsOnCreate = useRef(engine === "webkit" && !handoff ? navigation?.seq : undefined);
   useEffect(() => {
     if (!navigation) return;
+    noteIssued(tabId, navigation.seq);
     if (arrived.current) {
       arrived.current = false;
       return;
@@ -516,21 +570,24 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
     }
     pending.current = navigation.url;
     if (pageOf(tabId).newTabShown) patchPage(tabId, { newTabShown: null });
+    if (loadsOnCreate.current === navigation.seq) {
+      loadsOnCreate.current = undefined;
+      return;
+    }
     if (takeStartedNavigation(tabId, navigation.seq)) return;
     void webviews.get(tabId)?.loadUrl(navigation.url, { userInitiated: !!navigation.userInitiated });
   }, [seq]);
   const fromNewTab = useRef(pageOf(tabId).wasNewTab && !adoptId);
-  useEffect(
-    () => () => {
-      noteGone(tabId);
-    },
-    [],
-  );
+  useEffect(() => {
+    persistEngine(tabId, engine);
+    return () => noteGone(tabId);
+  }, []);
   const mountedProfile = useRef(profileId);
   useLayoutEffect(
     () => () => {
       const t = tab();
-      if (wantsPage(t) && engineProfile(t.profileId) === engineProfile(mountedProfile.current) && !isQuitting()) handOff(tabId, engineProfile(t.profileId));
+      const sameEngine = tabEngine(store(), tabId) === engine;
+      if (wantsPage(t) && sameEngine && engineProfile(t.profileId) === engineProfile(mountedProfile.current) && !isQuitting()) handOff(tabId, engineProfile(t.profileId), engine);
       else setPageProgress(tabId, 0);
     },
     [],
@@ -546,6 +603,7 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
   return (
     <WebView
       ref={ref}
+      engine={engine}
       style={StyleSheet.absoluteFill}
       url={navigation?.url ?? (adoptId ? tab()?.url : undefined)}
       profile={engineProfile(profileId)}
@@ -566,7 +624,7 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
         noteReady(tabId);
         if (tab()?.muted) void webviews.get(tabId)?.setMuted(true);
       }}
-      onNavigationChange={({ url: reported, title, canGoBack, canGoForward, isLoading, themeColor, themeColorSource, initialDocumentAccessed, committedInitial }) => {
+      onNavigationChange={({ url: reported, title, canGoBack, canGoForward, isLoading, themeColor, themeColorSource, initialDocumentAccessed, committedInitial, committedUrl }) => {
         const url = initialDocumentAccessed && committedInitial ? "about:blank" : reported;
         const untouched = committedInitial === undefined ? reported === "" && !(tab()?.openerId && adoptId) : committedInitial && !initialDocumentAccessed;
         const target = pending.current ?? (lastPage.current === null ? (tab()?.navigation?.url ?? null) : null);
@@ -591,11 +649,13 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
         }
         if (fromNewTab.current && url && !isBlank(url)) patchPage(tabId, { backToNewTab: true });
         store().navigated(tabId, { url, title }, { isLoading, canGoBack, canGoForward, themeColor });
+        if (engine === "webkit") noteWebKitPage(tabId, { url, title, isLoading, committedUrl: committedUrl ?? "" });
         if (lastPage.current !== null && pageKey(url) !== lastPage.current) {
           if (pageOf(tabId).externalApp && hostOf(url) !== hostOf(lastPage.current)) answerExternalApp(tabId, false);
           dismissPermissions(tabId);
           setPopover(tabId, null);
           setPageSelection(tabId, null);
+          clearEngineOffer(tabId);
           patchPage(tabId, { popups: [], passwordPrompt: null, crashed: null, status: "" });
           revealToolbar(tabId);
         }
@@ -670,6 +730,7 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
       onPageMessage={(kind, data) => {
         if (kind === "selection") setPageSelection(tabId, data as PageSelection | null);
         else if (kind === "scroll") noteScroll(tabId, data);
+        else if (kind === "drm") offerWebKit(tabId, data);
       }}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url) => {
@@ -688,4 +749,4 @@ const TabWebView = memo(function TabWebView({ tabId, visible, warm, peekOf }: { 
       }}
     />
   );
-});
+}

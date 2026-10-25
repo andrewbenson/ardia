@@ -19,9 +19,14 @@ export function isEmptyCardTab(s: Pick<BrowserState, "splits">, tab: Tab | undef
 
 export const hiddenEmptyCard = (s: BrowserState, tab: Tab) => !tab.pinned && newTabOpensBar(s) && isEmptyCardTab(s, tab);
 
+let lastTabKeepsWindow = false;
+export const setLastTabKeepsWindow = (keeps: boolean) => void (lastTabKeepsWindow = keeps);
+
 export function leavesEmptyWindow(s: BrowserState, id: string): boolean {
   const tab = s.tabs[id];
   const w = tab && s.windows[tab.windowId];
-  if (!w || w.kind === "small" || w.incognito || isEmptyCardTab(s, tab)) return false;
+  if (!w || w.kind === "small") return false;
+  if (lastTabKeepsWindow) return closesWindow(s, id);
+  if (w.incognito || isEmptyCardTab(s, tab)) return false;
   return closesWindow(s, id);
 }

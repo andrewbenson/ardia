@@ -1,4 +1,4 @@
-import { requireNativeModule, requireNativeViewManager, type EventSubscription } from "expo-modules-core";
+import { requireNativeModule, requireNativeViewManager, requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import type { ViewProps } from "react-native";
 
 export * from "./system";
@@ -66,6 +66,7 @@ export type BrowserCommand =
   | "addFolderToSidebar"
   | "restoreArcFolders"
   | "toggleMute"
+  | "togglePageEngine"
   | "downloads"
   | "mergeAllWindows"
   | "switchProfile"
@@ -83,6 +84,7 @@ export type BrowserCommand =
   | "newTabInGroup"
   | "newGroupWithTabs"
   | "cleanUpTabs"
+  | "tidyPins"
   | "searchTabs"
   | "renameTab"
   | "changeTabIcon"
@@ -143,7 +145,7 @@ export type AppEvent =
 
 type ShellEvents = {
   onCommand: (e: CommandEvent) => void;
-  onOpenURLs: (e: { urls: string[] }) => void;
+  onOpenURLs: (e: { urls: string[]; pointer?: [number, number] }) => void;
   onWindowEvent: (e: WindowEvent) => void;
   onAppEvent: (e: AppEvent) => void;
 };
@@ -160,6 +162,7 @@ export type MenuItem =
       modifiers?: ("command" | "shift" | "option" | "control")[];
       enabled?: boolean;
       checked?: boolean;
+      alternate?: boolean;
       children?: MenuItem[];
       share?: boolean;
     };
@@ -174,6 +177,7 @@ export type OpenWindowOptions = {
   size?: [number, number];
   behind?: string;
   chromeWindow?: string;
+  pointer?: [number, number];
 };
 
 export type MenuEntry = { id: string; title: string; current?: boolean };
@@ -193,6 +197,7 @@ export type MenuState = {
   recentlyClosedGroups?: MenuEntry[];
   warnBeforeQuitting: boolean;
   warnBeforeClosingWindow?: boolean;
+  undoReopensClosedTab?: boolean;
   downloadsInProgress?: number;
   extensions?: { id: string; title: string; icon?: string | null; enabled: boolean }[];
   shortcuts?: Record<string, string[]>;
@@ -225,9 +230,13 @@ const Shell = requireNativeModule<{
   setDragEscapeCapture?(active: boolean): Promise<void>;
   cancelFocusMove(generation: number, restoringSource: boolean): Promise<void>;
   claimFocus(generation: number, tag: number): Promise<void>;
+  saveKeyResponder?(windowId: string): Promise<number>;
+  restoreKeyResponder?(token: number): Promise<boolean>;
+  discardKeyResponder?(token: number): Promise<void>;
   switcherPointerMoved?(): boolean;
   startDictation(): void;
   pickFiles(): Promise<string[]>;
+  pickFolder?(current: string | null, prompt: string | null): Promise<string | null>;
   readDocument(name: string): string | null;
   writeDocument(name: string, contents: string): void;
   saveDocument(name: string, contents: string): Promise<void>;
@@ -235,6 +244,7 @@ const Shell = requireNativeModule<{
   fetchBangList?(etag: string | null): Promise<BangListReply>;
   openWindow(id: string, options: OpenWindowOptions): Promise<void>;
   closeWindow(id: string): Promise<void>;
+  animateWindowClose?(id: string, after: string | null): Promise<void>;
   focusWindow(id: string): Promise<void>;
   setTrafficLightsCenter(id: string, center: [number, number] | null): Promise<void>;
   watchLeftEdge?(id: string, on: boolean, hold: number): Promise<void>;
@@ -271,16 +281,35 @@ export const setDragEscapeCapture = (active: boolean) => void Shell.setDragEscap
 export const cancelFocusMove = (generation: number, restoringSource: boolean) =>
   void Shell.cancelFocusMove(generation, restoringSource);
 export const claimFocus = (generation: number, tag: number) => void Shell.claimFocus(generation, tag);
+export const saveKeyResponder = (windowId: string): Promise<number> => Shell.saveKeyResponder?.(windowId) ?? Promise.resolve(0);
+export const restoreKeyResponder = (token: number): Promise<boolean> => (token ? (Shell.restoreKeyResponder?.(token) ?? Promise.resolve(false)) : Promise.resolve(false));
+export const discardKeyResponder = (token: number): void => {
+  if (token) void Shell.discardKeyResponder?.(token);
+};
 export const restartSwitcherPointer = () => Shell.setSwitcherCapture(true);
 export const switcherPointerMoved = () => Shell.switcherPointerMoved?.() ?? true;
 export const pickFiles = () => Shell.pickFiles();
+export const pickFolder = (current: string | null, prompt: string | null = null) => Shell.pickFolder?.(current, prompt) ?? Promise.resolve(null);
 
 export function copyText(text: string) {
   Shell.copyText(text);
 }
 
+let menusShown = 0;
+const menuWatchers = new Set<() => void>();
+const menusChanged = (by: number) => {
+  menusShown += by;
+  for (const watcher of menuWatchers) watcher();
+};
+export const menuShown = () => menusShown > 0;
+export function watchMenus(watcher: () => void): () => void {
+  menuWatchers.add(watcher);
+  return () => void menuWatchers.delete(watcher);
+}
+
 export function showMenu(items: MenuItem[]): Promise<string | null> {
-  return Shell.showMenu(items);
+  menusChanged(1);
+  return Promise.resolve(Shell.showMenu(items)).finally(() => menusChanged(-1));
 }
 
 export const openWindow = (id: string, options: OpenWindowOptions = {}) => Shell.openWindow(id, options);
@@ -293,6 +322,7 @@ export type WindowProfileProps = ViewProps & {
 export const WindowProfile = requireNativeViewManager<WindowProfileProps>("ArdiaWindowProfile");
 
 export const closeWindow = (id: string) => Shell.closeWindow(id);
+export const animateWindowClose = (id: string, after: string | null = null) => Shell.animateWindowClose?.(id, after) ?? Promise.resolve();
 export const focusWindow = (id: string) => Shell.focusWindow(id);
 export const setWindowTitle = (id: string, title: string) => Shell.setWindowTitle(id, title);
 export const setTrafficLightsCenter = (id: string, center: [number, number] | null) =>
@@ -331,10 +361,12 @@ export const prompt = (options: PromptOptions) => Shell.prompt(options);
 export const onCommand = (listener: (e: CommandEvent) => void) => Shell.addListener("onCommand", listener);
 export const onWindowEvent = (listener: (e: WindowEvent) => void) => Shell.addListener("onWindowEvent", listener);
 export const onAppEvent = (listener: (e: AppEvent) => void) => Shell.addListener("onAppEvent", listener);
-export const onOpenURLs = (listener: (urls: string[]) => void) =>
-  Shell.addListener("onOpenURLs", ({ urls }) => listener(urls));
+export const onOpenURLs = (listener: (urls: string[], pointer?: [number, number]) => void) =>
+  Shell.addListener("onOpenURLs", ({ urls, pointer }) => listener(urls, pointer));
 
-export const WindowDragRegion = requireNativeViewManager<ViewProps & { titleBarDoubleClick?: boolean; onRegionDoubleClick?: () => void }>("ArdiaShell");
+export const WindowDragRegion = requireNativeViewManager<
+  ViewProps & { titleBarDoubleClick?: boolean; onRegionDoubleClick?: () => void; clickable?: boolean; onRegionClick?: () => void }
+>("ArdiaShell");
 
 export const OutsidePressArea = requireNativeViewManager<ViewProps & { onOutsidePress?: (event: { nativeEvent: { timestamp?: number } }) => void }>("ArdiaOutsidePressArea");
 
@@ -425,6 +457,37 @@ const GlassEffectModule = requireNativeModule<{ isLiquidGlass(): boolean }>("Ard
 export const isLiquidGlass = (): boolean => GlassEffectModule.isLiquidGlass();
 
 export const GlassEffect = requireNativeViewManager<GlassEffectProps>("ArdiaGlassEffect");
+
+export type PopoverBubbleProps = ViewProps & {
+  material?: "popover" | "menu" | "hudWindow" | "sheet" | "toolTip";
+  dark?: boolean;
+  cornerRadius?: number;
+  arrowEdge?: "top" | "bottom" | "none";
+  arrowX?: number;
+  arrowWidth?: number;
+  arrowHeight?: number;
+  tint?: string;
+  edgeColor?: string;
+  edgeWidth?: number;
+  shadowOpacity?: number;
+  shadowRadius?: number;
+  shadowOffsetY?: number;
+};
+
+type NativePopoverBubbleProps = Omit<PopoverBubbleProps, "shadowOpacity" | "shadowRadius" | "shadowOffsetY"> & {
+  bubbleShadowOpacity?: number;
+  bubbleShadowRadius?: number;
+  bubbleShadowOffsetY?: number;
+};
+
+export const popoverBubbleAvailable = !!requireOptionalNativeModule<{ isAvailable(): boolean }>("ArdiaPopoverBubble")?.isAvailable();
+
+const NativePopoverBubble = popoverBubbleAvailable ? requireNativeViewManager<NativePopoverBubbleProps>("ArdiaPopoverBubble") : null;
+
+export function PopoverBubble({ shadowOpacity, shadowRadius, shadowOffsetY, ...props }: PopoverBubbleProps) {
+  if (!NativePopoverBubble) return null;
+  return <NativePopoverBubble {...props} bubbleShadowOpacity={shadowOpacity} bubbleShadowRadius={shadowRadius} bubbleShadowOffsetY={shadowOffsetY} />;
+}
 
 export type IconTheme = { kind: "blur" } | { kind: "template"; fill: string; stroke?: string };
 

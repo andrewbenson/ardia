@@ -28,6 +28,8 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Commit straight to `main`.** Stage only your own hunks (`git add -p` or explicit paths), never
   someone else's work in progress. Never stage with `git apply --unidiff-zero`: it drops hunks into the wrong
   place (it once committed an `ACClient.mm` that didn't compile). Check `git diff --cached` reads as you meant.
+- **Upstream PRs: issues first.** A pull request to upstream (mantrakp04/ardia) closes an issue (`Closes #N` in its
+  description); its "Linked issue" check fails without one. Open the issue first, then link it.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -94,7 +96,7 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   stable releases too.
   - **Nightly** is for fast iteration. Each fix is reproduced, fixed and verified, its adjacent tests run, then it
     is built and released as a nightly (`scripts/release.sh <version> --channel nightly`). Run only the focused
-    checks for what changed: no full suite, no perf gate, no tweet, no landing-page refresh. A nightly is a GitHub
+    checks for what changed: no full suite, no perf gate, no landing-page refresh. A nightly is a GitHub
     prerelease and never reaches stable users.
   - **Stable** gets the full run (about 1.5 h): smoke, update test, perf ratchet and perf gate. Its perf is
     compared against the previous stable release, never against a nightly.
@@ -109,10 +111,7 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 
   The owner has authorized releases to go all the way through. After an update, the app opens the
   release notes at `AC_NOTES_URL` (Solara's GitHub releases page; ardia.dev upstream).
-- **Every release gets a tweet draft**: a version line, 4–5 short, witty, simple bullets and
-  the URL, under 280 characters. Add a 1600×1000 image in the site's style built from
-  real captures of neutral pages (no random user posts or personal data) at `output/tweets/<version>.png`.
-  Only the owner posts it.
+- **No tweet drafts.** Don't write announcement drafts or make tweet images for a release.
 - **Other public actions** (a site deploy outside a release, posting anywhere) need the owner's OK first.
 
 ## Site and videos

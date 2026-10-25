@@ -39,6 +39,7 @@ chromium chromium-helium-bangs-off.patch
 chromium chromium-helium-rlz-for-cdm-storage-id.patch
 chromium chromium-helium-ntp-third-party.patch
 chromium chromium-helium-context-menu-cast.patch
+chromium chromium-helium-devtools-inspect-shortcut.patch
 chromium chromium-neterror-game.patch
 chromium chromium-branding.patch
 # Load-bearing for every user's data: the Safe Storage item ("Ardia Safe Storage" / "Ardia") holds the key to
@@ -52,6 +53,7 @@ chromium chromium-window-hosted.patch
 chromium chromium-extension-installed-bubble.patch
 chromium chromium-pip-overlay-window.patch
 chromium chromium-tab-sharing-capturer.patch
+chromium chromium-desktop-capture-window-audio.patch
 chromium chromium-video-super-resolution.patch
 chromium chromium-begin-frame-warm-up.patch
 chromium chromium-main-frame-throttle-after-show.patch
@@ -66,6 +68,8 @@ chromium chromium-angle-metal-shader-cache.patch
 chromium chromium-ungoogled-disable-default-extensions.patch
 chromium chromium-ungoogled-disable-missing-key-warning.patch
 chromium chromium-ungoogled-mime-util-ymp.patch
+chromium chromium-background-instance-no-default-handlers.patch
+chromium chromium-apple-passwords-host-skipped.patch
 chromium chromium-ardia-layer.patch
 
 layer engine/chromium

@@ -1,4 +1,4 @@
-import { onDownload, releaseProfile } from "@ardia/ardiacore";
+import { lastTabClosesWindow, onDownload, releaseProfile } from "@ardia/ardiacore";
 import {
   cancelFocusMove,
   claimFocus,
@@ -21,7 +21,9 @@ import {
 import { Appearance } from "react-native";
 import { folderChildren, isBookmarked } from "../store/bookmarks";
 import { useBrowser, type BrowserState } from "../store/browser";
-import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, tabLabel, windowTitle } from "../store/model";
+import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle } from "../store/model";
+import { canSwitchEngine, tabEngine } from "../store/engines";
+import { setLastTabKeepsWindow } from "../store/newTabBar";
 import { peekTabId } from "../store/peek";
 import { splitOf } from "../store/splits";
 import { canGoBack, canGoForward } from "../components/layout/history";
@@ -34,6 +36,7 @@ import { openWindow as createWindow } from "./actions";
 import { windowOpens } from "./windowOpenOrder";
 import { openExternalUrls } from "../components/littleArdia/actions";
 import { LITTLE_ARDIA_DISABLED_COMMANDS } from "../components/littleArdia/menu";
+import { SMALL_LIGHTS_CENTER } from "../components/littleArdia/SmallChrome";
 import { runCommand } from "./commands";
 import { setFocusSenders } from "./focusClaims";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "./focusHandoff";
@@ -56,7 +59,8 @@ export function startNativeSync() {
   onCommand((e) => settlingCommandFocus(e, runCommand));
   startWindowCloseGuard();
   startExtensionsBridge();
-  onOpenURLs((urls) => openExternalUrls(urls));
+  onOpenURLs((urls, pointer) => openExternalUrls(urls, pointer));
+  void lastTabClosesWindow().then((closes) => setLastTabKeepsWindow(!closes));
   onDownload((d) => store.getState().upsertDownload(d));
 
   store.getState().setAppDark(Appearance.getColorScheme() === "dark");
@@ -107,9 +111,11 @@ export function startNativeSync() {
       titles.set(id, windowTitle(s, id));
       const profile = engineProfile(w.profileId);
       const claim = w.kind === "small" ? s.tabs[w.tabIds[0] ?? ""]?.adoptId : undefined;
-      const small = w.kind === "small" ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}) } : {};
+      const small = w.kind === "small"
+        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}) }
+        : {};
       const made = w.chromeWindow ? { chromeWindow: w.chromeWindow } : {};
-      if (w.kind !== "small") void setTrafficLightsCenter(id, openingLightsCenter(s, id));
+      void setTrafficLightsCenter(id, w.kind === "small" ? SMALL_LIGHTS_CENTER : openingLightsCenter(s, id));
       void openWindow(id, { frame: w.frame, incognito: w.incognito, title: titles.get(id), focus, profile, ...(behind ? { behind } : {}), ...small, ...made });
     }
     for (const id of [...open]) {
@@ -263,8 +269,12 @@ export function menuState(s: BrowserState): MenuState {
   const titles: Record<string, string> = {};
   if (!canToggleDeveloperModeFor(page?.id)) disabled.push("toggleDeveloperMode");
   if (tabInDeveloperMode(page?.id)) titles.toggleDeveloperMode = "Turn off Developer Mode for this site";
-  if (tab?.pinned) titles.togglePin = "Unpin";
+  if (tab?.pinned) titles.togglePin = togglePinTitle(tab);
+  if (isPinnedRow(tab)) titles["togglePin:tile"] = "Move to Top Apps";
+  else disabled.push("togglePin:tile");
   if (page?.muted) titles.toggleMute = "Unmute Site";
+  if (page && tabEngine(s, page.id) === "webkit") titles.togglePageEngine = "Open Page in Chromium";
+  if (!canSwitchEngine(page?.url)) disabled.push("togglePageEngine");
   if (page?.url && isBookmarked(s.bookmarks, bookmarkProfile, page.url)) {
     titles.bookmarkPage = "Edit Bookmark…";
   }
@@ -302,6 +312,7 @@ export function menuState(s: BrowserState): MenuState {
     recentlyClosedGroups: sidebar.recentlyClosedGroups,
     warnBeforeQuitting: s.settings.warnBeforeQuitting,
     warnBeforeClosingWindow: s.settings.warnBeforeClosingWindow,
+    undoReopensClosedTab: s.settings.undoReopensClosedTab,
     downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
     shortcuts: s.settings.shortcuts,
     extensions: extensionMenu(s, windowId),

@@ -10,7 +10,7 @@ of its time in `swift test`'s first build. Each package also runs its own:
 | `packages/sync` | `pnpm --filter @ardia/sync test` (`swift test`, `node --test`, then the rename's launch migration end to end, `scripts/legacy-migration-e2e.mjs`) | 66 + 9 |
 | `packages/import` | `pnpm --filter @ardia/import test` (`swift test`) | 26 |
 | `packages/ardiacore` | `pnpm --filter @ardia/ardiacore test` (`tests/pip-zoom.test.cc`, compiled with `clang++`) | 1 program |
-| `extras/raycast-ardia` | `node --test extras/raycast-ardia/src/scripts.test.ts` | 1 |
+| `extras/raycast-ardia` | `node --test extras/raycast-ardia/src/scripts.test.ts` | 6 |
 
 `apps/browser` runs its TypeScript under plain Node: `src/test-loader.mjs` maps `@ardia/shell`,
 `@ardia/ardiacore` and `expo-modules-core` to `src/test-native-stub.mjs`. One file:
@@ -94,10 +94,13 @@ make an instance a test instance; the rest are hooks for one test.
   Full screen is acted out (no new Space); windows answer NO to `-[NSWindow isOccluded]`, so a covered
   window shows a tab at once instead of after Chrome's 1 s delay, with `--disable-backgrounding-occluded-windows`;
   PiP windows stay at alpha 0 and click-through; the drag preview stays above its own window only.
-- **Media:** `--mute-audio`, no intro music, `--use-fake-device-for-media-stream` with the microphone kept on a fake
+- **Media:** `--mute-audio` (Chrome then reports no tab as audible, so the speaker never lights; the ArdiaCore
+  acceptance run sets `ARDIA_ALLOW_AUDIO=1` with `--disable-audio-output`, so Chrome still hears its -60 dBFS fixtures and the speakers get nothing), no intro music, `--use-fake-device-for-media-stream` with the microphone kept on a fake
   input (`ac_fake_media.mm`), and `--disable-modal-animations` (a locked screen never ends a dialog's close animation).
 - **Other:** macOS re-auth prompts never show; requests are refused unless `ARDIA_TEST_REAUTH=granted` in a build that
-  honours it (above).
+  honours it (above). Nothing system-wide changes: Set as Default (onboarding, whose checkbox starts unticked, and
+  Settings), Chrome's own default browser, scheme and file type setters, Add to Dock and Launch at Login are no-ops
+  that log a line (`ArdiaSystem`, `chromium-background-instance-no-default-handlers.patch`).
 
 A scratch `ARDIA_DATA_DIR` holds Chrome's user data and the app's documents, its defaults, keychain items and
 Sparkle state (`ACIsolation.h`); Chrome gets `--use-mock-keychain`; update checks are off without
@@ -149,7 +152,7 @@ lose or leak data, or when the bug is invisible by eye and has shipped before.
 | `packages/core/src/suggest.test.ts` | Inline completion never fills a long sign-in URL; free text never autocompletes; open tabs switchable; frecency ranking; a newer fetch aborts the older one | Omnibox ranking |
 | `packages/sync` | The 9 convergence cases above, and the crypto's 5 (`docs/sync.md` › Tests) | Sync correctness and encryption |
 | `packages/import/tests/ImportTests.swift` | Importing never writes to the source profile, never leaves its data folder, decrypts logins only with the right key and only after consent | Another browser's data and secrets |
-| `extras/raycast-ardia` | Ids are quoted in the AppleScript it sends | Script injection |
+| `extras/raycast-ardia` | Tab and profile ids, and what's typed into New Tab, are quoted in the AppleScript it sends; its answer reads back into the right tabs and profiles; a profile name matches whole, then by a start only one profile has, ignoring case, and a start several share names them instead of picking one | Script injection; New Window opening the wrong profile |
 
 ## What went, and why
 

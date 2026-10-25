@@ -1,6 +1,7 @@
 import { savePassword } from "@ardia/ardiacore";
-import type { BookmarkNode as ImportedNode, Credential, DiaTabsProfile, ImportedTab, ImportKind, ImportResult, SafariExport, SpaceSuggestion } from "@ardia/import";
+import type { BookmarkNode as ImportedNode, Credential, DiaTabsProfile, ImportedFavicon, ImportedTab, ImportKind, ImportResult, SafariExport, SpaceSuggestion } from "@ardia/import";
 import { addGroupsFromDrafts } from "../../lib/bookmarkGroups";
+import { adoptFavicons, pageKey as faviconPage } from "../../lib/favicons";
 import type { BookmarkDraft } from "../../store/bookmarks";
 import type { GroupDraft } from "../../store/draftGroups";
 import { useBrowser } from "../../store/browser";
@@ -11,6 +12,9 @@ import type { ProfileColor } from "../../store/types";
 import { importModule } from "./module";
 import { adoptProfileTheme } from "../../sync/engine";
 import { parseArcTheme } from "./arcTheme";
+import { newProfileLiveFolder } from "../../live/engine";
+import { live } from "../../live/store";
+import type { LiveSourceId } from "../../live/types";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number };
 
@@ -25,6 +29,31 @@ const toGroupDraft = (n: ImportedNode): GroupDraft =>
   n.type === "url"
     ? { title: n.pageTitle ?? n.title, url: n.url ?? "", ...(n.pageTitle ? { customTitle: n.title } : {}) }
     : { title: n.title, children: (n.children ?? []).map(toGroupDraft) };
+
+const LIVE_SOURCES: Partial<Record<NonNullable<ImportedNode["role"]>, LiveSourceId>> = {
+  liveGitHubPullRequests: "github",
+  liveBitbucketPullRequests: "bitbucket",
+};
+const liveSourceOf = (n: ImportedNode) => (n.role ? LIVE_SOURCES[n.role] : undefined);
+const liveSources = (nodes: ImportedNode[]): LiveSourceId[] =>
+  nodes.flatMap((n) => [...(liveSourceOf(n) ? [liveSourceOf(n)!] : []), ...liveSources(n.children ?? [])]);
+const withoutLiveFolders = (nodes: ImportedNode[]): ImportedNode[] =>
+  nodes.filter((n) => !liveSourceOf(n)).map((n) => (n.children ? { ...n, children: withoutLiveFolders(n.children) } : n));
+
+function importPullRequestsFolders(profileId: string, nodes: ImportedNode[]) {
+  for (const source of new Set(liveSources(nodes))) {
+    const have = Object.values(live().folders).some((f) => f.profileId === profileId && f.kind === "pullRequests" && f.sources.includes(source));
+    if (!have) newProfileLiveFolder(profileId, "pullRequests", [source]);
+  }
+}
+
+const linksOf = (nodes: ImportedNode[]): string[] => nodes.flatMap((n) => (n.type === "url" ? (n.url ? [n.url] : []) : linksOf(n.children ?? [])));
+
+function importFavicons(profileId: string, favicons: ImportedFavicon[] | undefined, urls: string[]) {
+  if (!favicons?.length || !urls.length) return;
+  const wanted = new Set(urls.map(faviconPage));
+  adoptFavicons(profileId, favicons.filter((f) => wanted.has(faviconPage(f.page))));
+}
 
 const linkCount = (nodes: ImportedNode[]): number => nodes.reduce((n, c) => n + (c.type === "url" ? 1 : linkCount(c.children ?? [])), 0);
 
@@ -143,9 +172,11 @@ export function importTabs(
   return usable.length;
 }
 
-export function importArcSpace(profileId: string, space: SpaceSuggestion): { tabs: number; bookmarks: number; skipped: number } {
+export function importArcSpace(profileId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[]): { tabs: number; bookmarks: number; skipped: number } {
+  importFavicons(profileId, favicons, [...linksOf(space.pinned), ...space.tabs.map((t) => t.url)]);
   const links = space.pinned.filter((n) => n.type === "url" && n.url);
-  const folders = space.pinned.filter((n) => n.type === "folder");
+  importPullRequestsFolders(profileId, space.pinned);
+  const folders = withoutLiveFolders(space.pinned.filter((n) => n.type === "folder"));
   let tabs = importTabs(
     profileId,
     links.map((n) => ({ url: n.url!, title: n.pageTitle ?? n.title, pinned: true, row: true, customTitle: n.pageTitle ? n.title : undefined })),
@@ -164,7 +195,8 @@ export function importArcSpace(profileId: string, space: SpaceSuggestion): { tab
   return { tabs, bookmarks: 0, skipped };
 }
 
-export function importDiaProfile(profileId: string, profile: DiaTabsProfile, what: { pinned: boolean; open: boolean }): number {
+export function importDiaProfile(profileId: string, profile: DiaTabsProfile, what: { pinned: boolean; open: boolean }, favicons?: ImportedFavicon[]): number {
+  importFavicons(profileId, favicons, [...(what.pinned ? profile.pinned : []), ...(what.open ? profile.tabs : [])].map((t) => t.url));
   const have = openPages(useBrowser.getState(), profileId);
   const fresh = (tabs: ImportedTab[]) => tabs.filter((t) => !have.has(pageKey(t.url)));
   let n = what.pinned ? importTabs(profileId, fresh(profile.pinned), null) : 0;
@@ -176,12 +208,16 @@ export async function applyResult(
   profileId: string,
   result: ImportResult,
   browserName: string,
+  requested: ImportKind[],
   onFailed?: (kind: ImportKind) => void,
 ): Promise<ImportCounts> {
+  const toolbar = (result.bookmarks?.children ?? []).filter((c) => c.role === "toolbar");
+  importFavicons(profileId, result.favicons, [...result.favorites.map((t) => t.url), ...(result.spaces.length ? [] : result.tabs.map((t) => t.url)), ...linksOf(toolbar)]);
   const counts = emptyCounts();
   counts.bookmarks += importBookmarks(profileId, result.bookmarks, browserName);
   if (result.history.length) counts.history += importHistory(profileId, result.history);
-  Object.assign(counts, await importNative(profileId, result.vaultToken, ["cookies", "autofill"], onFailed));
+  const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
+  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed));
   if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
   if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null);
   if (result.credentials.length) counts.passwords += await importPasswords(profileId, result.credentials);

@@ -12,7 +12,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
   var emit: ((String, [String: Any]) -> Void)?
   private var closingFromJS = Set<String>()
   private weak var lastPlaced: NSWindow?
-  private var legacyFrame = UserDefaults.standard.string(forKey: "NSWindow Frame BrowserWindow")
+  private static let lastFrameKey = "ArdiaLastWindowFrame"
+  private var lastFrame = UserDefaults.standard.string(forKey: WindowManager.lastFrameKey) ?? UserDefaults.standard.string(forKey: "NSWindow Frame BrowserWindow")
   private(set) var auxKinds: [String: String] = [:]
   private(set) var smallIds = Set<String>()
 
@@ -55,6 +56,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     var frame: [Double]?, incognito: Bool, title: String, kind: String, profile: String?, size: [Double]?, behind: String
     var chromeWindow: String?
     var claim: String?
+    var pointer: NSPoint?
   }
   private var pendingOpens: [String: PendingOpen] = [:]
   private var pendingOrder: [String] = []
@@ -64,7 +66,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   func open(
     id: String, frame: [Double]?, incognito: Bool, title: String, focus: Bool, kind: String = "browser", profile: String? = nil,
-    size: [Double]? = nil, behind: String? = nil, chromeWindow: String? = nil, claim: String? = nil
+    size: [Double]? = nil, behind: String? = nil, chromeWindow: String? = nil, claim: String? = nil, pointer: NSPoint? = nil
   ) {
     if let existing = windows[id] {
       if focus { existing.makeKeyAndOrderFront(nil) }
@@ -74,7 +76,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       if pendingOpens[id] == nil { pendingOrder.append(id) }
       pendingOpens[id] = PendingOpen(
         frame: frame, incognito: incognito, title: title, kind: kind, profile: profile, size: size, behind: behind, chromeWindow: chromeWindow,
-        claim: claim)
+        claim: claim, pointer: pointer)
       DispatchQueue.main.asyncAfter(deadline: .now() + Self.behindTimeout) { [weak self] in self?.openPending(behind: behind) }
       return
     }
@@ -94,13 +96,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
       if incognito { chromeWindow.appearance = NSAppearance(named: .darkAqua) }
       let root = makeContentView(id)
       ChromeWindows.embed(root, in: chromeWindow)
+      if small, !chromeWindow.isVisible { entrances[id] = frame == nil }
       holdUntilContent(chromeWindow, id: id, root: root)
       noteFirstContent(id: id, root: root)
       keepContentSizedAcrossReloads(id: id, root: root)
       ChromeWindows.onSwap { [weak self] from, to in self?.adopt(from: from, to: to) }
       observeDelegateNotifications(chromeWindow)
       if small { configureSmall(chromeWindow) }
-      return show(chromeWindow, id: id, frame: frame, title: title, focus: focus, smallSize: small ? size ?? [] : nil, behind: behind)
+      return show(chromeWindow, id: id, frame: frame, title: title, focus: focus, smallSize: small ? size ?? [] : nil, smallPointer: pointer, behind: behind)
     }
     let window = makeWindow()
     let controller = NSViewController()
@@ -110,12 +113,15 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.delegate = self
     if incognito { window.appearance = NSAppearance(named: .darkAqua) }
     if small { configureSmall(window) }
-    show(window, id: id, frame: frame, title: title, focus: focus, smallSize: small ? size ?? [] : nil)
+    show(window, id: id, frame: frame, title: title, focus: focus, smallSize: small ? size ?? [] : nil, smallPointer: pointer)
   }
 
-  private func show(_ window: NSWindow, id: String, frame: [Double]?, title: String, focus: Bool, smallSize: [Double]? = nil, behind: String? = nil) {
+  private func show(
+    _ window: NSWindow, id: String, frame: [Double]?, title: String, focus: Bool, smallSize: [Double]? = nil, smallPointer: NSPoint? = nil,
+    behind: String? = nil
+  ) {
     window.title = title
-    if let smallSize { placeSmall(window, size: smallSize) } else if frame != nil || !window.isVisible { place(window, frame: frame) }
+    if let smallSize, frame == nil { placeSmall(window, size: smallSize, pointer: smallPointer) } else if frame != nil || !window.isVisible { place(window, frame: frame) }
     relayoutRoot(window)
     windows[id] = window
     if let center = lightsCenters[id] { ChromeWindows.setTrafficLightsCenter(center, in: window) }
@@ -149,9 +155,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private static let revealTimeout = 0.6
   private var unrevealed: [String: [() -> Void]] = [:]
+  private var entrances: [String: Bool] = [:]
+  private var exits: [String: [() -> Void]] = [:]
 
   private func holdUntilContent(_ window: NSWindow, id: String, root: NSView) {
-    guard !window.isVisible, windows.values.contains(where: { $0.isVisible && isBrowserWindow($0) }) else { return }
+    guard !window.isVisible, entrances[id] != nil || windows.values.contains(where: { $0.isVisible && isBrowserWindow($0) }) else { return }
     window.alphaValue = 0
     unrevealed[id] = []
     var observer: NSObjectProtocol?
@@ -159,7 +167,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
       if let observer { NotificationCenter.default.removeObserver(observer) }
       observer = nil
       guard let self, let waiting = self.unrevealed.removeValue(forKey: id) else { return }
-      window?.alphaValue = 1
+      if let window, let scales = self.entrances.removeValue(forKey: id) {
+        LittleWindowMotion.enter(window, scales: scales)
+      } else {
+        window?.alphaValue = 1
+      }
       CATransaction.flush()
       waiting.forEach { $0() }
     }
@@ -192,7 +204,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       contentShown.insert(behind)
       open(
         id: id, frame: o.frame, incognito: o.incognito, title: o.title, focus: false, kind: o.kind, profile: o.profile, size: o.size,
-        behind: behind, chromeWindow: o.chromeWindow, claim: o.claim)
+        behind: behind, chromeWindow: o.chromeWindow, claim: o.claim, pointer: o.pointer)
     }
   }
 
@@ -348,9 +360,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.collectionBehavior.insert(.moveToActiveSpace)
   }
 
-  private func placeSmall(_ window: NSWindow, size: [Double]) {
-    let mouse = NSEvent.mouseLocation
-    let screen = (NSApp.isActive ? NSApp.keyWindow?.screen : nil)
+  private func placeSmall(_ window: NSWindow, size: [Double], pointer: NSPoint?) {
+    let mouse = pointer ?? NSEvent.mouseLocation
+    let screen = (pointer == nil && NSApp.isActive ? NSApp.keyWindow?.screen : nil)
       ?? NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
     guard let visible = screen?.visibleFrame else { return window.center() }
     let width = min(max(size.count == 2 ? size[0] : 900, window.minSize.width), visible.width)
@@ -371,12 +383,32 @@ final class WindowManager: NSObject, NSWindowDelegate {
       window.setFrame(NSRect(origin: .zero, size: source.frame.size), display: false)
       let topLeft = NSPoint(x: source.frame.minX, y: source.frame.maxY)
       window.setFrameTopLeftPoint(window.cascadeTopLeft(from: topLeft))
-    } else if let legacy = legacyFrame, windows.isEmpty {
-      window.setFrame(from: legacy)
-      legacyFrame = nil
+    } else if let lastFrame {
+      window.setFrame(from: lastFrame)
     } else {
       window.center()
     }
+  }
+
+  func animateClose(id: String, after replacement: String?, done: @escaping () -> Void) {
+    if exits[id] != nil { return exits[id]!.append(done) }
+    guard smallIds.contains(id), let window = windows[id], window.isVisible, unrevealed[id] == nil else { return done() }
+    exits[id] = [done]
+    if keyOnReveal === window { keyOnReveal = nil }
+    if typeAhead?.window === window { endTypeAhead(send: false) }
+    let finish: () -> Void = { [weak self] in
+      guard let waiting = self?.exits.removeValue(forKey: id) else { return }
+      waiting.forEach { $0() }
+    }
+    if let replacement, replacement != id, windows[replacement] != nil {
+      return whenRevealed(replacement) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + LittleWindowMotion.entranceDuration) { [weak window] in
+          window?.orderOut(nil)
+          finish()
+        }
+      }
+    }
+    LittleWindowMotion.exit(window, then: finish)
   }
 
   func close(id: String) {
@@ -384,6 +416,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       pendingOrder.removeAll { $0 == id }
       return
     }
+    entrances[id] = nil
     contentShown.remove(id)
     if let observer = firstContentObservers.removeValue(forKey: id) { NotificationCenter.default.removeObserver(observer) }
     guard let window = windows[id] else { return }
@@ -409,7 +442,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
   func focus(id: String) {
     if let o = pendingOpens.removeValue(forKey: id) {
       pendingOrder.removeAll { $0 == id }
-      return open(id: id, frame: o.frame, incognito: o.incognito, title: o.title, focus: true, kind: o.kind, profile: o.profile, size: o.size)
+      return open(
+        id: id, frame: o.frame, incognito: o.incognito, title: o.title, focus: true, kind: o.kind, profile: o.profile, size: o.size,
+        pointer: o.pointer)
     }
     windows[id]?.makeKeyAndOrderFront(nil)
   }
@@ -421,7 +456,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {
-    guard let id = id(of: sender), auxKinds[id] == nil, !smallIds.contains(id), appEventsObserved, let emit else { return true }
+    guard let id = id(of: sender), auxKinds[id] == nil, appEventsObserved, let emit else { return true }
     emit("onWindowEvent", ["type": "closeRequest", "id": id])
     return false
   }
@@ -436,6 +471,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let window = notification.object as? NSWindow, let id = id(of: window) else { return }
     NotificationCenter.default.removeObserver(self, name: nil, object: window)
     windows[id] = nil
+    entrances[id] = nil
     stopKeepingContentSized(id)
     lightsCenters[id] = nil
     auxKinds[id] = nil
@@ -449,9 +485,17 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
   }
 
+  private static let resizeReportDelay: TimeInterval = 0.25
+
   @objc private func sizeChanged(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, !window.inLiveResize else { return }
     relayoutRoot(window)
+    NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(reportResized(_:)), object: window)
+    perform(#selector(reportResized(_:)), with: window, afterDelay: Self.resizeReportDelay)
+  }
+
+  @objc private func reportResized(_ window: NSWindow) {
+    reportFrame(window)
   }
 
   private var contentSizers: [String: NSObjectProtocol] = [:]
@@ -496,11 +540,20 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   @objc private func frameChanged(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, !window.inLiveResize else { return }
+    NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(reportMoved(_:)), object: window)
+    perform(#selector(reportMoved(_:)), with: window, afterDelay: 0, inModes: [.default])
+  }
+
+  @objc private func reportMoved(_ window: NSWindow) {
     reportFrame(window)
   }
 
   private func reportFrame(_ window: NSWindow) {
     guard let id = id(of: window), !window.styleMask.contains(.fullScreen), window.parent == nil else { return }
+    if isMainWindow(window) {
+      lastFrame = window.frameDescriptor
+      UserDefaults.standard.set(lastFrame, forKey: Self.lastFrameKey)
+    }
     let f = window.frame
     emit?("onWindowEvent", ["type": "frame", "id": id, "frame": [f.minX, f.minY, f.width, f.height]])
   }
@@ -535,12 +588,22 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
 
   func shouldTerminate() -> NSApplication.TerminateReply {
-    guard appEventsObserved, let emit else { return .terminateNow }
+    guard appEventsObserved, let emit else {
+      guard AppUpdater.shared.holdsQuitForStagedUpdate else { return .terminateNow }
+      quitAfterUpdaterSettles()
+      return .terminateLater
+    }
     guard confirmActiveDownloads() else { return .terminateCancel }
+    quitAttempt += 1
+    quitStep = .saving
     emit("onAppEvent", ["type": "willQuit"])
     waitForSave()
     return .terminateLater
   }
+
+  private enum QuitStep { case none, saving, waitingForUpdater }
+  private var quitStep = QuitStep.none
+  private var quitAttempt = 0
 
   private var saveWait: Timer?
   private var lateSaveAlert: NSAlert?
@@ -570,8 +633,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
     switch response {
     case .alertFirstButtonReturn: waitForSave()
     case .alertSecondButtonReturn:
+      guard quitStep == .saving else { return }
       DocumentStore.close()
-      NSApp.reply(toApplicationShouldTerminate: true)
+      quitAfterUpdaterSettles()
     default: break
     }
   }
@@ -590,13 +654,29 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
 
   func replyToTerminate(_ ok: Bool) {
+    guard quitStep != .waitingForUpdater else { return }
     saveWait?.invalidate()
     saveWait = nil
     if lateSaveAlert != nil { NSApp.stopModal(withCode: .abort) }
-    if ok {
-      if DocumentStore.flush() { ChromeWindows.recordLaunchLayout() } else { ChromeWindows.forgetLaunchPictures() }
+    guard ok else {
+      quitStep = .none
+      quitAttempt += 1
+      return NSApp.reply(toApplicationShouldTerminate: false)
     }
-    NSApp.reply(toApplicationShouldTerminate: ok)
+    guard quitStep == .saving else { return }
+    if DocumentStore.flush() { ChromeWindows.recordLaunchLayout() } else { ChromeWindows.forgetLaunchPictures() }
+    quitAfterUpdaterSettles()
+  }
+
+  private func quitAfterUpdaterSettles() {
+    if quitStep == .none { quitAttempt += 1 }
+    quitStep = .waitingForUpdater
+    let attempt = quitAttempt
+    AppUpdater.shared.dropOffChannelStagedUpdateBeforeQuit { [weak self] in
+      guard let self, self.quitAttempt == attempt, self.quitStep == .waitingForUpdater else { return }
+      self.quitStep = .none
+      NSApp.reply(toApplicationShouldTerminate: true)
+    }
   }
 
   func reopen() {
@@ -604,6 +684,136 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
 }
 
+enum LittleWindowMotion {
+  static let entranceDuration: CFTimeInterval = 0.2
+  private static let exitDuration: CFTimeInterval = 0.15
+  private static let entranceScale: CGFloat = 0.97
+  private static let exitScale: CGFloat = 0.985
+  private static let settleAfter: TimeInterval = 0.5
+  private static let entranceKey = "ardia.little.entrance"
+  private static let exitKey = "ardia.little.exit"
+  private static let curve = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
+
+  private final class Look {
+    let opaque: Bool
+    let shadow: Bool
+    init(_ window: NSWindow) {
+      opaque = window.isOpaque
+      shadow = window.hasShadow
+    }
+  }
+  private static let looks = NSMapTable<NSWindow, Look>.weakToStrongObjects()
+
+  private static var scales: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+  private static func frameView(of window: NSWindow) -> NSView? {
+    guard let view = window.contentView?.superview ?? window.contentView else { return nil }
+    view.wantsLayer = true
+    return view.layer == nil ? nil : view
+  }
+
+  private static func scaled(_ layer: CALayer, by factor: CGFloat) -> CATransform3D {
+    let bounds = layer.bounds
+    var scale = CATransform3DMakeScale(factor, factor, 1)
+    scale.m41 = (bounds.midX - (bounds.minX + layer.anchorPoint.x * bounds.width)) * (1 - factor)
+    scale.m42 = (bounds.midY - (bounds.minY + layer.anchorPoint.y * bounds.height)) * (1 - factor)
+    return CATransform3DConcat(scale, layer.transform)
+  }
+
+  private static func dropShadow(_ window: NSWindow) {
+    if looks.object(forKey: window) == nil { looks.setObject(Look(window), forKey: window) }
+    window.isOpaque = false
+    window.hasShadow = false
+  }
+
+  private static func restoreShadow(_ window: NSWindow) {
+    guard let look = looks.object(forKey: window) else { return }
+    looks.removeObject(forKey: window)
+    window.isOpaque = look.opaque
+    window.hasShadow = look.shadow
+    if look.shadow { window.invalidateShadow() }
+  }
+
+  private static func group(_ parts: [CAAnimation], duration: CFTimeInterval) -> CAAnimationGroup {
+    let group = CAAnimationGroup()
+    group.animations = parts
+    group.duration = duration
+    group.timingFunction = curve
+    group.fillMode = .backwards
+    return group
+  }
+
+  static func enter(_ window: NSWindow, scales scaling: Bool) {
+    guard window.isVisible, let view = frameView(of: window), let layer = view.layer else {
+      window.alphaValue = 1
+      return
+    }
+    dropShadow(window)
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = 0
+    fade.toValue = 1
+    var parts: [CAAnimation] = [fade]
+    if scaling, scales {
+      let grow = CABasicAnimation(keyPath: "transform")
+      grow.fromValue = NSValue(caTransform3D: scaled(layer, by: entranceScale))
+      grow.toValue = NSValue(caTransform3D: layer.transform)
+      parts.append(grow)
+    }
+    let settle: () -> Void = { [weak window, weak layer] in
+      guard let window, let layer, layer.animation(forKey: exitKey) == nil else { return }
+      layer.removeAnimation(forKey: entranceKey)
+      restoreShadow(window)
+    }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    CATransaction.setCompletionBlock(settle)
+    view.alphaValue = 1
+    layer.add(group(parts, duration: entranceDuration), forKey: entranceKey)
+    CATransaction.commit()
+    CATransaction.flush()
+    window.alphaValue = 1
+    DispatchQueue.main.asyncAfter(deadline: .now() + settleAfter, execute: settle)
+  }
+
+  static func exit(_ window: NSWindow, then done: @escaping () -> Void) {
+    guard window.isVisible, window.alphaValue > 0, let view = frameView(of: window), let layer = view.layer else { return done() }
+    let shown = layer.presentation() ?? layer
+    let fromTransform = shown.transform
+    let fromOpacity = shown.opacity
+    layer.removeAnimation(forKey: entranceKey)
+    dropShadow(window)
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = fromOpacity
+    fade.toValue = 0
+    var parts: [CAAnimation] = [fade]
+    if scales {
+      let shrink = CABasicAnimation(keyPath: "transform")
+      shrink.fromValue = NSValue(caTransform3D: fromTransform)
+      shrink.toValue = NSValue(caTransform3D: scaled(layer, by: exitScale))
+      parts.append(shrink)
+    }
+    var finished = false
+    let finish: () -> Void = { [weak window, weak view, weak layer] in
+      guard !finished else { return }
+      finished = true
+      window?.orderOut(nil)
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      layer?.removeAnimation(forKey: exitKey)
+      view?.alphaValue = 1
+      CATransaction.commit()
+      if let window { restoreShadow(window) }
+      done()
+    }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    CATransaction.setCompletionBlock(finish)
+    view.alphaValue = 0
+    layer.add(group(parts, duration: exitDuration), forKey: exitKey)
+    CATransaction.commit()
+    DispatchQueue.main.asyncAfter(deadline: .now() + settleAfter, execute: finish)
+  }
+}
 
 final class FocusHandoff {
   static let shared = FocusHandoff()

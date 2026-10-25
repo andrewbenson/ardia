@@ -2,6 +2,7 @@ import {
   engineInfo,
   getAutofillSettings,
   getContentBlocker,
+  getDownloadSettings,
   getExternalAppAllowances,
   getPasswordAutofill,
   getSiteSettingsOrigins,
@@ -16,7 +17,7 @@ import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
 import { folderInfo } from "../../sync/engine";
 import { useSync } from "../../sync/engine";
-import { refreshExtensions } from "../extensions/state";
+import { extensionsProfileId, refreshExtensions } from "../extensions/state";
 import { load, loadAll, need, resource, useAllLoaded, type Needed } from "./resources";
 import type { SettingsPane } from "./windows";
 
@@ -39,6 +40,7 @@ export const cards = resource("cards", (profile: string) => listCards(profile).c
 export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
   load(addresses, [profile]).then(() => getAutofillSettings(profile).catch(() => ({ addresses: true, cards: true }))),
 );
+export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
 export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
 export const shortcutItems = resource("menuShortcuts", () => menuShortcuts().catch(() => []));
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));
@@ -55,7 +57,7 @@ export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[
   const profile = profileId ? engineProfile(profileId) : defaultProfile();
   switch (pane) {
     case "general":
-      return [need(loginItem), need(defaultBrowser), need(updater)];
+      return [need(loginItem), need(defaultBrowser), need(updater), need(downloadSettings, profile)];
     case "sync":
       return [need(syncFolder, useSync.getState().folder ?? null)];
     case "appearance":
@@ -67,7 +69,7 @@ export function paneNeeds(pane: SettingsPane, profileId: string | null): Needed[
     case "autofill":
       return [need(addresses, profile), need(cards, profile), need(autofillEnabled, profile)];
     case "extensions":
-      return [need(extensionList, defaultProfile())];
+      return [need(extensionList, engineProfile(extensionsProfileId(profileId)))];
     case "shortcuts":
       return [need(shortcutItems)];
     case "advanced":

@@ -3,8 +3,11 @@ import { confirm, focusWindow } from "@ardia/shell";
 import { pageToProfile } from "../components/layout/profilePager";
 import { profileNames, requestCreateProfile, type CreateProfilePreset } from "../components/profiles/CreateProfile";
 import { useBrowser, type CreateWindowOptions } from "../store/browser";
-import { engineProfile, isIncognitoProfile, resolveWindowId } from "../store/model";
+import { rootOf } from "../store/groups";
+import { engineProfile, isIncognitoProfile, plural, resolveWindowId } from "../store/model";
+import { groupLabel } from "../store/organize";
 import { engineIdOf, sharingProfiles } from "../store/profiles";
+import { applyHeldReports } from "./nativeEvents";
 import { webviews } from "./webviews";
 
 const store = () => useBrowser.getState();
@@ -27,6 +30,27 @@ export function switchToTab(tabId: string) {
 
 export function closeTab(tabId: string) {
   store().closeTab(tabId);
+}
+
+export async function closeGroup(groupId: string) {
+  const s = store();
+  const group = s.groups[groupId];
+  const w = group && s.windows[group.windowId];
+  if (!group || !w) return;
+  if (s.settings.warnBeforeClosingTabGroup && !rootOf(s.groups, groupId)?.pinned) {
+    const tabs = plural(group.tabIds.length, "tab");
+    const { confirmed, suppressed } = await confirm({
+      title: `Close “${groupLabel(s, group)}”?`,
+      message: w.incognito ? `Its ${tabs} close with it.` : `Its ${tabs} close with it. History › Recently Closed Groups brings it back.`,
+      confirmTitle: "Close Group",
+      suppression: "Don’t ask me again",
+      windowId: w.id,
+    });
+    if (suppressed) store().updateSettings({ warnBeforeClosingTabGroup: false });
+    if (!confirmed) return;
+    applyHeldReports();
+  }
+  if (store().groups[groupId]) store().closeGroup(groupId);
 }
 
 export function toggleMute(tabId: string) {

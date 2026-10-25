@@ -503,6 +503,14 @@ bool HostExtensionInstallPrompt(Profile* profile,
       ![g_delegate respondsToSelector:@selector(engine:extensionInstallPrompt:tab:)]) {
     return false;
   }
+  if (prompt.type() == extensions::InstallPromptData::EXTERNAL_INSTALL_PROMPT) {
+    using Payload = extensions::ExtensionInstallPromptClient::DoneCallbackPayload;
+    using Result = extensions::ExtensionInstallPromptClient::Result;
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(*done_callback), Payload(Result::ABORTED)));
+    return true;
+  }
   static int last_id = 0;
   const std::string request_id = "install" + std::to_string(++last_id);
   NSMutableArray* permissions = [NSMutableArray array];
@@ -1024,10 +1032,19 @@ void WatchTracingStart(std::shared_ptr<TracingStart> start, int checks_left) {
 + (void)allowDesktopCapture:(NSString*)sourceId
                         tab:(ArdiaCoreTab*)tab
                       frame:(NSString*)frameId
-                     origin:(NSString*)origin {
+                     origin:(NSString*)origin
+                      audio:(NSString*)audio {
   ardiacore::AllowDesktopCapture(tab.contents, base::SysNSStringToUTF8(sourceId ?: @""),
                               base::SysNSStringToUTF8(frameId ?: @""),
-                              base::SysNSStringToUTF8(origin ?: @""));
+                              base::SysNSStringToUTF8(origin ?: @""),
+                              base::SysNSStringToUTF8(audio ?: @""));
+}
+
++ (NSDictionary<NSString*, NSNumber*>*)desktopCaptureAudio {
+  return @{
+    @"system" : @(ardiacore::IsDesktopCaptureSystemAudioSupported()),
+    @"application" : @(ardiacore::IsDesktopCaptureApplicationAudioSupported()),
+  };
 }
 
 + (NSArray<NSDictionary*>*)testExternalLaunches {

@@ -129,6 +129,7 @@ enum AppIcons {
 enum DockTile {
   private static let domain = "com.apple.dock" as CFString
   private static let key = "persistent-apps" as CFString
+  private static let background = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
 
   private static var tiles: [[String: Any]] {
     CFPreferencesCopyAppValue(key, domain) as? [[String: Any]] ?? []
@@ -175,6 +176,10 @@ enum DockTile {
   @discardableResult
   static func add() -> Bool {
     guard !isInDock else { return true }
+    if background {
+      NSLog("ArdiaSystem: background instance, not adding to the Dock")
+      return false
+    }
     let tile: [String: Any] = [
       "tile-type": "file-tile",
       "tile-data": [

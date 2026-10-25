@@ -239,6 +239,8 @@ void NoteEvent(int browserId, NSString *name, NSDictionary *payload) {
 NSString *gSearchEngineName = @"Google";
 BOOL gDisplayMediaPicker = NO;
 NSString *gPeekModifier = @"shift";
+NSString *gSplitLinkModifier = @"altShift";
+static BOOL gSelectionPopover = YES;
 static const NSEventModifierFlags kPeekKeyMask = NSEventModifierFlagOption | NSEventModifierFlagShift | NSEventModifierFlagCommand | NSEventModifierFlagControl;
 static NSEventModifierFlags gPeekUpKeys = 0;
 static CFTimeInterval gPeekUpAt = -1;
@@ -496,8 +498,12 @@ static void PeekTrace(NSDictionary *entry) {
   [file closeFile];
 }
 
+static NSString *SplitLinkModifier() {
+  return [gSplitLinkModifier isEqualToString:@"alt"] && ![gPeekModifier isEqualToString:@"alt"] ? @"alt" : @"altShift";
+}
+
 static NSString *PeekConfigJSON() {
-  return JSONString(@{@"modifier" : gPeekModifier, @"trace" : @(PeekTracing())});
+  return JSONString(@{@"modifier" : gPeekModifier, @"split" : SplitLinkModifier(), @"trace" : @(PeekTracing())});
 }
 
 const char kPageReportsKey = 0;
@@ -540,6 +546,26 @@ static NSString *StoreProductName() {
   return product;
 }
 
+static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
+  if (!Flag(message, @"audio")) return nil;
+  NSDictionary *support = [ArdiaCoreEngine respondsToSelector:@selector(desktopCaptureAudio)] ? ArdiaCoreEngine.desktopCaptureAudio : @{};
+  const bool system = Flag(support, @"system"), application = Flag(support, @"application");
+  NSString *preference = Text(message, @"windowAudio", 16);
+  NSString *window = nil;
+  if ([preference isEqualToString:@"window"])
+    window = application ? @"application" : system ? @"system" : nil;
+  else if ([preference isEqualToString:@"system"])
+    window = system ? @"system" : nil;
+  return @{@"tab" : @YES, @"screen" : @(system && Flag(message, @"systemAudio")), @"window" : window ?: NSNull.null};
+}
+
+static NSString *DisplayMediaAudioFor(NSDictionary *offer, NSString *sourceId) {
+  if ([sourceId hasPrefix:@"screen:"]) return Flag(offer, @"screen") ? @"system" : nil;
+  if ([sourceId hasPrefix:@"window:"]) return Field<NSString>(offer, @"window");
+  if ([sourceId hasPrefix:@"web-contents-media-stream://"]) return Flag(offer, @"tab") ? @"tab" : nil;
+  return nil;
+}
+
 static void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSDictionary *hello, NSString *frameId, BOOL main) {
   NSString *frameURL = Text(hello, @"url", 8192) ?: tab.url;
   NSString *origin = OriginOf(main ? frameURL : tab.url);
@@ -549,13 +575,13 @@ static void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSDictionary *hell
     if (!frameId.length || ![to respondsToSelector:@selector(callFrame:kind:json:)]) return;
     NSMutableDictionary *config = [NSMutableDictionary dictionary];
     if (blockAutoplay) config[@"blockAutoplay"] = @YES;
-    if (gDisplayMediaPicker && [ArdiaCoreEngine respondsToSelector:@selector(allowDesktopCapture:tab:frame:origin:)])
+    if (gDisplayMediaPicker && [ArdiaCoreEngine respondsToSelector:@selector(allowDesktopCapture:tab:frame:origin:audio:)])
       config[@"displayMediaPicker"] = @YES;
     if (main && ACFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
+    if (main) config[@"selectionPopover"] = @(gSelectionPopover);
     config[@"peek"] = gPeekModifier;
+    config[@"split"] = SplitLinkModifier();
     if (PeekTracing()) config[@"peekTrace"] = @YES;
-    static const BOOL fixedAudioPoll = [@(getenv("ARDIA_WEB_AUDIO_POLL") ?: "") isEqualToString:@"fixed"];
-    if (fixedAudioPoll) config[@"fixedAudioPoll"] = @YES;
     static const BOOL broadThemeObserver = [@(getenv("ARDIA_THEME_OBSERVER") ?: "") isEqualToString:@"broad"];
     if (broadThemeObserver) config[@"broadThemeObserver"] = @YES;
     if (main && IsWebStoreURL(frameURL)) {
@@ -775,7 +801,6 @@ static BOOL HeldSelector(SEL selector) {
   double _sentProgress;
   BOOL _progressQueued;
   CFTimeInterval _linkDropAt;
-  NSMutableDictionary<NSString *, NSNumber *> *_mediaFrames;
   NSMutableDictionary<NSString *, NSDictionary *> *_nowPlaying;
   NSString *_nowPlayingFrame;
   NSMutableDictionary<NSString *, NSString *> *_notificationFrames;
@@ -791,6 +816,10 @@ static BOOL HeldSelector(SEL selector) {
   NSUInteger _leaveGeneration;
   BOOL _handingOff;
   BOOL _revealed;
+  BOOL _littlePageHeld;
+  BOOL _littlePageSettled;
+  float _littlePageOpacity;
+  NSUInteger _littlePageGeneration;
   NSUInteger _revealGeneration;
   __weak NSView *_loweredPane;
   CGFloat _loweredPaneZ;
@@ -1308,6 +1337,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
 
 - (void)attach:(ArdiaCoreTab *)tab {
   if (TraceVisibility()) NSLog(@"[ardiacore-vis] %@ attach tab=%d visible=%d", _transferKey, (int)tab.tabId, _visible);
+  const BOOL shownEarly = [ArdiaCoreEarlyWindow holdsPage:tab];
   [LiveViews() addObject:self];
   InstallControlPressMonitor();
   _tab = tab;
@@ -1315,6 +1345,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   [ArdiaCoreTabs setView:self forTab:tab];
   [self markTemporary];
   [self pushPeekModifier];
+  [self pushSelectionPopover];
   [self bindRestoreKey];
   [self takePageReports];
   if ([tab respondsToSelector:@selector(deliverHeldPageMessages)]) [tab deliverHeldPageMessages];
@@ -1329,6 +1360,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   if (NSView *devtools = tab.devToolsView) [self devToolsChanged:devtools];
   [self layoutPage];
   [self applyPainting];
+  if (!shownEarly && (_creatingURL.length || tab.loading)) [self holdLittlePage];
   if (_muted && [tab respondsToSelector:@selector(setMuted:)]) tab.muted = YES;
   if (_pageBackgroundColor && [tab respondsToSelector:@selector(setPageBackgroundColor:)]) tab.pageBackgroundColor = _pageBackgroundColor;
   if (_contentsBackgroundColor && [tab respondsToSelector:@selector(setContentsBackgroundColor:)]) tab.contentsBackgroundColor = _contentsBackgroundColor;
@@ -1341,7 +1373,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   [self emitNavigation];
   if (_extensionHost.length && [tab respondsToSelector:@selector(preferredSize)] && tab.preferredSize.width > 0)
     [self tab:tab preferredSizeDidChange:tab.preferredSize];
-  if (_mediaFrames.count) [self emitMedia];
+  [self emitMedia];
   [self tabDidChangeFavicon:tab];
   if (_tabIndex >= 0) [self placeTab];
   if (ArdiaCoreWindowController *controller = self.controller)
@@ -1357,6 +1389,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
 - (void)detach {
   if (!_tab) return;
   if (TraceVisibility()) NSLog(@"[ardiacore-vis] %@ detach tab=%d", _transferKey, (int)_tab.tabId);
+  [self revealLittlePage:NO];
   if (_tab.delegate == self) _tab.delegate = nil;
   [ArdiaCoreTabs setView:nil forTab:_tab];
   [ArdiaCoreWebView noteShown:_tab];
@@ -1384,7 +1417,6 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   reports[@"greeted"] = @(_pageScriptGreeted);
   reports[@"blocked"] = @(_blockedCount);
   reports[@"lastBlocked"] = _lastBlocked;
-  reports[@"media"] = _mediaFrames;
   reports[@"nowPlaying"] = _nowPlaying;
   reports[@"nowPlayingFrame"] = _nowPlayingFrame;
   reports[@"notifications"] = _notificationFrames;
@@ -1411,7 +1443,6 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   _pageScriptGreeted = [reports[@"greeted"] boolValue];
   _blockedCount = [reports[@"blocked"] integerValue];
   _lastBlocked = reports[@"lastBlocked"];
-  _mediaFrames = reports[@"media"];
   _nowPlaying = reports[@"nowPlaying"];
   _nowPlayingFrame = reports[@"nowPlayingFrame"];
   _notificationFrames = reports[@"notifications"];
@@ -1617,6 +1648,47 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
 + (void)repaintWarmPagesIn:(NSWindow *)window {
   for (ArdiaCoreWebView *view in LiveViews().allObjects)
     if (view->_warm && view.window == window) [view schedulePainting];
+}
+
+- (void)holdLittlePage {
+  NSView *page = _tab.view;
+  if (_littlePageHeld || _littlePageSettled || !page || page.superview != self ||
+      ![self.window.identifier isEqualToString:@"ardia.window.small"])
+    return;
+  _littlePageHeld = YES;
+  page.wantsLayer = YES;
+  _littlePageOpacity = page.layer.opacity;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  page.layer.opacity = 0;
+  [CATransaction commit];
+  [self callFrame:@"" kind:@"firstPaint" json:@"{}"];
+  const NSUInteger generation = ++_littlePageGeneration;
+  __weak ArdiaCoreWebView *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    ArdiaCoreWebView *view = weakSelf;
+    if (view && view->_littlePageGeneration == generation) [view revealLittlePage:YES];
+  });
+}
+
+- (void)revealLittlePage:(BOOL)animated {
+  if (!_littlePageHeld) return;
+  _littlePageHeld = NO;
+  _littlePageSettled = YES;
+  _littlePageGeneration++;
+  CALayer *layer = _tab.view.layer;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  layer.opacity = _littlePageOpacity;
+  if (animated) {
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = @0;
+    fade.toValue = @(_littlePageOpacity);
+    fade.duration = 0.16;
+    fade.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.23 :1 :0.32 :1];
+    [layer addAnimation:fade forKey:@"ardia.little.page"];
+  }
+  [CATransaction commit];
 }
 
 - (void)applyPainting {
@@ -2073,6 +2145,20 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
   for (ArdiaCoreWebView *view in LiveViews().allObjects) [view pushPeekModifier];
 }
 
++ (void)setSplitLinkModifier:(NSString *)modifier {
+  InstallPeekMonitor();
+  NSString *next = [modifier isEqualToString:@"alt"] ? @"alt" : @"altShift";
+  if ([next isEqualToString:gSplitLinkModifier]) return;
+  gSplitLinkModifier = [next copy];
+  for (ArdiaCoreWebView *view in LiveViews().allObjects) [view pushPeekModifier];
+}
+
++ (void)setSelectionPopoverEnabled:(BOOL)enabled {
+  if (enabled == gSelectionPopover) return;
+  gSelectionPopover = enabled;
+  for (ArdiaCoreWebView *view in LiveViews().allObjects) [view pushSelectionPopover];
+}
+
 + (void)setAutoPictureInPictureEnabled:(BOOL)enabled {
   if ([ArdiaCoreEngine respondsToSelector:@selector(setAutoPictureInPicture:)]) [ArdiaCoreEngine setAutoPictureInPicture:enabled];
 }
@@ -2179,6 +2265,7 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
 }
 
 - (void)tabDidChangeLoading:(ArdiaCoreTab *)tab {
+  if (!tab.loading && tab.url.length && ![tab.url hasPrefix:@"about:"]) [self revealLittlePage:YES];
   if (tab.loading) [self resetBlocked:YES];
   if (tab.loading) ACFieldMarkNow(_transferKey, @"start");
   [self queueNavigation];
@@ -2275,6 +2362,10 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON()];
     AnswerHello(tab, _profile, dict, frameId, main);
+    if (main && _littlePageHeld) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
+  } else if ([kind isEqualToString:@"firstPaint"] && main) {
+    NSString *url = Text(dict, @"url", 8192);
+    if (url.length && ![url hasPrefix:@"about:"] && SamePage(url, tab.url)) [self revealLittlePage:YES];
   } else if ([kind isEqualToString:@"peek"] && dict) {
     [self peekLink:dict frame:frameId main:main];
   } else if ([kind isEqualToString:@"peekHello"]) {
@@ -2311,14 +2402,8 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
     NSString *state = Text(dict, @"state", 8);
     if ([@[ @"down", @"up", @"top" ] containsObject:state ?: @""])
       [self emit:@"pageMessage" payload:@{@"kind" : @"scroll", @"data" : @{@"state" : state}}];
-  } else if ([kind isEqualToString:@"media"] && dict) {
-    NSString *mediaFrame = Text(dict, @"frame", 64);
-    if (!mediaFrame) return;
-    if (!_mediaFrames) _mediaFrames = [NSMutableDictionary dictionary];
-    NSString *key = [NSString stringWithFormat:@"%@:%@", frameId, mediaFrame];
-    if (_mediaFrames.count >= 256 && !_mediaFrames[key]) return;
-    _mediaFrames[key] = @(Flag(dict, @"playing"));
-    [self emitMedia];
+  } else if ([kind isEqualToString:@"drm"] && dict) {
+    [self emit:@"pageMessage" payload:@{@"kind" : @"drm", @"data" : @{@"keySystem" : Text(dict, @"keySystem", 64) ?: @"", @"main" : @(main)}}];
   } else if ([kind isEqualToString:@"nowPlaying"]) {
     if (!_nowPlaying) _nowPlaying = [NSMutableDictionary dictionary];
     if (dict) _nowPlaying[frameId] = NowPlayingState(dict);
@@ -2389,13 +2474,14 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
     if (!_displayRequests) _displayRequests = [NSMutableDictionary dictionary];
     if (_displayRequests.count >= 16) return;
     NSString *requestId = NSUUID.UUID.UUIDString;
-    _displayRequests[requestId] = @{@"frame" : frameId, @"id" : @((int)pageId), @"audio" : @(Flag(dict, @"audio")), @"origin" : sender};
+    NSDictionary *audio = DisplayMediaAudioOffer(dict);
+    _displayRequests[requestId] = @{@"frame" : frameId, @"id" : @((int)pageId), @"audio" : audio ?: NSNull.null, @"origin" : sender};
     [self emit:@"displayMediaRequest"
         payload:@{
           @"id" : requestId,
           @"origin" : OriginOf(tab.url) ?: sender,
           @"frameOrigin" : sender,
-          @"audio" : @(Flag(dict, @"audio")),
+          @"audio" : audio ?: NSNull.null,
           @"sources" : ArdiaCoreHost.displayMediaSources
         }];
   }
@@ -2428,6 +2514,10 @@ static NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   if (frameId.length) [ScriptFramesOf(_tab) removeObject:frameId];
 }
 
+- (void)pushSelectionPopover {
+  if (_tab) [self callFrame:@"" kind:@"selectionPopover" json:gSelectionPopover ? @"true" : @"false"];
+}
+
 - (void)pushPeekModifier {
   if (!_tab) return;
   NSString *json = PeekConfigJSON();
@@ -2435,17 +2525,36 @@ static NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   for (NSString *frameId in [ScriptFramesOf(_tab) copy]) [self callFrame:frameId kind:@"peekConfig" json:json];
 }
 
+static NSEventModifierFlags LinkKeyFlags(NSString *key) {
+  static NSDictionary<NSString *, NSNumber *> *flags = @{
+    @"alt" : @(NSEventModifierFlagOption),
+    @"shift" : @(NSEventModifierFlagShift),
+    @"altShift" : @(NSEventModifierFlagOption | NSEventModifierFlagShift),
+    @"altMeta" : @(NSEventModifierFlagOption | NSEventModifierFlagCommand),
+  };
+  return key.length ? flags[key].unsignedIntegerValue : 0;
+}
+
+static NSString *LinkKeyAction(NSString *key) {
+  if (!LinkKeyFlags(key)) return nil;
+  if ([key isEqualToString:gPeekModifier]) return @"peek";
+  if ([key isEqualToString:@"altShift"] || [key isEqualToString:@"altMeta"] || [key isEqualToString:SplitLinkModifier()]) return @"split";
+  return nil;
+}
+
 - (void)fallBackFromPeek:(NSDictionary *)dict url:(NSString *)url frame:(NSString *)frameId reason:(NSString *)reason test:(BOOL)test {
   NSString *key = Text(dict, @"key", 8) ?: @"";
-  const NSEventModifierFlags pageFlag = [key isEqualToString:@"alt"] ? NSEventModifierFlagOption : [key isEqualToString:@"shift"] ? NSEventModifierFlagShift : 0;
+  const NSEventModifierFlags pageFlag = LinkKeyFlags(key);
+  const BOOL split = [LinkKeyAction(key) isEqualToString:@"split"];
   NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";
   const BOOL fresh = gPeekUpAt >= 0 && CACurrentMediaTime() - gPeekUpAt <= kPeekFallbackLifetime && !gPeekPressedSinceUp;
   const BOOL userClicked = test || (fresh && gPeekUpSeq != gPeekUsedSeq && gPeekUpView == self && gPeekUpKeys == pageFlag);
-  const BOOL fallsBack = pageFlag && [@[ @"http", @"https" ] containsObject:scheme] && userClicked;
+  const BOOL fallsBack = !split && pageFlag && [@[ @"http", @"https" ] containsObject:scheme] && userClicked;
   NSString *origin = Text(dict, @"origin", 1024).lowercaseString;
   const BOOL sameOrigin = origin.length && [OriginOf(url).lowercaseString isEqualToString:origin];
   NSString *action = !fallsBack ? @"none" : pageFlag == NSEventModifierFlagShift ? @"new window" : sameOrigin ? @"page download" : @"background tab";
-  PeekTrace(@{@"event" : @"fallback", @"url" : url ?: @"", @"key" : key, @"reason" : reason, @"userClicked" : @(userClicked), @"action" : action});
+  PeekTrace(@{@"event" : @"fallback", @"url" : url ?: @"", @"key" : key, @"reason" : reason, @"userClicked" : @(userClicked), @"split" : @(split), @"action" : action});
+  if (split && userClicked && !test) gPeekUsedSeq = gPeekUpSeq;
   if (!fallsBack) return;
   if (!test) gPeekUsedSeq = gPeekUpSeq;
   if (pageFlag == NSEventModifierFlagShift) return [self emit:@"openWindow" payload:@{@"url" : url, @"disposition" : @"window", @"userGesture" : @YES}];
@@ -2453,22 +2562,18 @@ static NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   [self emit:@"openWindow" payload:@{@"url" : url, @"disposition" : @"background", @"userGesture" : @YES}];
 }
 
-static NSEventModifierFlags PeekModifierFlag() {
-  if ([gPeekModifier isEqualToString:@"alt"]) return NSEventModifierFlagOption;
-  if ([gPeekModifier isEqualToString:@"shift"]) return NSEventModifierFlagShift;
-  return 0;
-}
-
 - (void)peekLink:(NSDictionary *)dict frame:(NSString *)frameId main:(BOOL)main {
   NSString *url = Text(dict, @"url", 8192);
   NSString *scheme = (url.length ? [NSURL URLWithString:url].scheme.lowercaseString : nil) ?: @"";
   NSWindow *window = self.window;
-  const NSEventModifierFlags flag = PeekModifierFlag();
+  NSString *key = Text(dict, @"key", 8);
+  const NSEventModifierFlags flag = LinkKeyFlags(key);
+  NSString *action = LinkKeyAction(key);
   const CFTimeInterval sinceUp = gPeekUpAt < 0 ? -1 : CACurrentMediaTime() - gPeekUpAt;
   static const BOOL strict = getenv("ARDIA_PEEK_STRICT") != nullptr;
   const BOOL test = PeekTestHooks() && !strict;
   NSString *refused = nil;
-  if (!flag) refused = @"peek is off";
+  if (!action) refused = @"that key opens nothing now";
   else if (!_visible || !window) refused = @"page not shown";
   else if (![@[ @"http", @"https" ] containsObject:scheme]) refused = @"not http(s)";
   else if (!test && gPeekUpAt < 0) refused = @"no left mouse-up yet";
@@ -2476,12 +2581,15 @@ static NSEventModifierFlags PeekModifierFlag() {
   else if (!test && gPeekPressedSinceUp) refused = @"the mouse was pressed again since that mouse-up";
   else if (!test && sinceUp > kPeekGestureLifetime) refused = @"the last mouse-up is too old";
   else if (!test && gPeekUpView != self) refused = @"the mouse-up wasn't over this page";
-  else if (!test && gPeekUpKeys != flag) refused = @"the mouse-up's keys aren't the chosen key alone";
+  else if (!test && gPeekUpKeys != flag) refused = @"the mouse-up's keys aren't the page's key alone";
   PeekTrace(@{
     @"event" : @"peek",
     @"url" : url ?: @"",
     @"main" : @(main),
     @"chosen" : gPeekModifier,
+    @"split" : SplitLinkModifier(),
+    @"key" : key ?: NSNull.null,
+    @"action" : action ?: NSNull.null,
     @"refused" : refused ?: NSNull.null,
     @"mouseUpKeys" : PeekKeyNames(gPeekUpKeys),
     @"sinceMouseUp" : @(sinceUp),
@@ -2496,6 +2604,7 @@ static NSEventModifierFlags PeekModifierFlag() {
   });
   if (refused) return [self fallBackFromPeek:dict url:url frame:frameId reason:refused test:test];
   if (!test) gPeekUsedSeq = gPeekUpSeq;
+  if ([action isEqualToString:@"split"]) return [self emit:@"openWindow" payload:@{@"url" : url, @"disposition" : @"split", @"userGesture" : @YES}];
   double x, y;
   NSPoint point;
   if (main && Finite(dict, @"x", &x) && Finite(dict, @"y", &y)) {
@@ -2518,8 +2627,7 @@ static NSEventModifierFlags PeekModifierFlag() {
 }
 
 - (void)emitMedia {
-  BOOL playing = NO;
-  for (NSNumber *p in _mediaFrames.allValues) playing |= p.boolValue;
+  const BOOL playing = [_tab respondsToSelector:@selector(audible)] && _tab.audible;
   const BOOL muted = [_tab respondsToSelector:@selector(muted)] ? _tab.muted : _muted;
   [self emit:@"media" payload:@{@"playing" : @(playing), @"muted" : @(muted)}];
 }
@@ -2551,11 +2659,9 @@ static NSEventModifierFlags PeekModifierFlag() {
 }
 
 - (void)resetPageMedia {
-  const BOOL hadMedia = _mediaFrames.count > 0, hadNowPlaying = _nowPlaying.count > 0;
-  [_mediaFrames removeAllObjects];
+  const BOOL hadNowPlaying = _nowPlaying.count > 0;
   [_nowPlaying removeAllObjects];
   _nowPlayingFrame = nil;
-  if (hadMedia) [self emitMedia];
   if (hadNowPlaying) [self emit:@"nowPlaying" payload:@{@"state" : NSNull.null}];
 }
 
@@ -2601,6 +2707,7 @@ static NSEventModifierFlags PeekModifierFlag() {
 
 - (void)loadNow:(NSString *)url userInitiated:(BOOL)userInitiated {
   if ([self skipsNavigationDownload:url userInitiated:userInitiated]) return;
+  if (url.length && ![url hasPrefix:@"about:"]) [self holdLittlePage];
   ACFieldMarkNow(_transferKey, @"request");
   if ([_tab respondsToSelector:@selector(loadURL:userInitiated:)]) [_tab loadURL:url userInitiated:userInitiated];
   else [_tab loadURL:url];
@@ -2912,17 +3019,19 @@ static NSEventModifierFlags PeekModifierFlag() {
   return [_tab respondsToSelector:@selector(executeExtensionAction:)] ? [_tab executeExtensionAction:extensionId] : nil;
 }
 
-- (void)resolveDisplayMedia:(NSString *)requestId sourceId:(NSString *)sourceId {
+- (void)resolveDisplayMedia:(NSString *)requestId sourceId:(NSString *)sourceId audio:(BOOL)shareAudio {
   NSDictionary *request = requestId ? _displayRequests[requestId] : nil;
   if (!request) return;
   [_displayRequests removeObjectForKey:requestId];
-  if (sourceId.length && _tab && [ArdiaCoreEngine respondsToSelector:@selector(allowDesktopCapture:tab:frame:origin:)])
+  NSString *audio = shareAudio && sourceId.length ? DisplayMediaAudioFor(Field<NSDictionary>(request, @"audio"), sourceId) : nil;
+  if (sourceId.length && _tab && [ArdiaCoreEngine respondsToSelector:@selector(allowDesktopCapture:tab:frame:origin:audio:)])
     [ArdiaCoreEngine allowDesktopCapture:sourceId
                                   tab:_tab
                                 frame:[request[@"frame"] length] ? request[@"frame"] : nil
-                               origin:request[@"origin"]];
+                               origin:request[@"origin"]
+                                audio:audio];
   [self callFrame:request[@"frame"] kind:@"displayMedia"
-             json:JSONString(@{@"id" : request[@"id"], @"sourceId" : sourceId.length ? sourceId : NSNull.null})];
+             json:JSONString(@{@"id" : request[@"id"], @"sourceId" : sourceId.length ? sourceId : NSNull.null, @"audio" : @(audio != nil)})];
 }
 
 - (NSString *)mediaCaptureSourceId {

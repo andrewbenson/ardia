@@ -83,8 +83,8 @@ Parity covers behaviour too. Most bugs the owner reports are UX that any browser
 - Hover never moves anything.
 - Motion animates. Sidebars slide, the toolbar eases away, the command bar grows out of the URL field. Nothing snaps
   into place or flickers, traffic lights included.
-- Shortcuts match Chrome and Dia, in every focus. On a trackpad ⌘-scroll scrolls; with a mouse it zooms. That one
-  has regressed twice.
+- Shortcuts match Chrome and Dia, in every focus. ⌘-scroll never zooms in Solara: it scrolls with a trackpad and a
+  mouse alike (upstream Ardia zooms on ⌘-wheel with a mouse).
 - Check every layout you touched: address bar in the sidebar, address bar on top, horizontal tabs. Several bugs only
   showed up in one of them.
 
@@ -168,6 +168,9 @@ The fastest bug to fix is one with a screen recording. Include:
 
 ## Pull requests
 
+- **Issue first.** Every PR closes an issue. Open one (or find the existing one) describing the bug or the request
+  before you open the PR, then put `Closes #<issue>` in the PR description. A PR with no linked issue fails the
+  "Linked issue" check and won't be reviewed. Several PRs can point at the same issue.
 - One change per PR. Describe it the way a user would notice it ("dragging a tab onto another groups them"), then
   how you checked it.
 - For anything visible, attach a recording or before-and-after captures, ideally next to Dia's.
@@ -199,4 +202,6 @@ finding before acting on it. Check the agent's diff yourself before you open the
 ## License
 
 Solara's own files are Apache-2.0, as are Ardia's, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
-work is released under Apache-2.0, and so may ship in the GPL-3.0 app.
+work is released under Apache-2.0, and so may ship in the GPL-3.0 app. A change meant for upstream Ardia goes to
+[mantrakp04/ardia](https://github.com/mantrakp04/ardia), where you sign its [Contributor License Agreement](CLA.md)
+before your first pull request is merged.

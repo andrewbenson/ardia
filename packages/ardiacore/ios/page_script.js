@@ -8,7 +8,6 @@
   const { keys, setPrototypeOf } = Object;
   const { isArray } = Array;
   const { isFinite } = Number;
-  const startsWith = String.prototype.startsWith;
   const plain = (value, depth) => {
     if (value === null || typeof value === "string" || typeof value === "boolean") return value;
     if (typeof value === "number") return isFinite(value) ? value : null;
@@ -46,15 +45,7 @@
   const frame = Math.random().toString(36).slice(2);
   const tracked = new WeakSet();
   let active = null;
-  let lastPlaying = null;
   const heard = new WeakSet();
-  const audible = (m) => !m.paused && !m.ended && !m.muted && m.volume > 0 && m.readyState > 2 && heard.has(m);
-  const reportAudible = () => {
-    const playing = [...document.querySelectorAll("video,audio")].some(audible) || (active && audible(active)) || webAudible();
-    if (playing === lastPlaying) return;
-    lastPlaying = playing;
-    send("media", { frame, playing });
-  };
 
   const session = navigator.mediaSession;
   const actions = new Map();
@@ -71,10 +62,9 @@
     if (decodedAudio(m)) {
       heard.add(m);
       listening.delete(m);
-      reportAudible();
       return reportNowPlaying();
     }
-    if (tries >= LISTEN_TRIES) return;
+    if (tries >= LISTEN_TRIES) return listening.delete(m);
     setTimeout(guard(() => listenFor(m, tries + 1)), 500);
   };
   const noteHeard = (m) => {
@@ -153,7 +143,6 @@
       watchRemoval(m);
     }
     noteHeard(m);
-    reportAudible();
     if (e.type !== "volumechange") reportNowPlaying();
   };
   const watched = new WeakSet();
@@ -162,7 +151,6 @@
     watched.add(m);
     m.addEventListener("pause", () => {
       if (m.isConnected || tracked.has(m)) return;
-      reportAudible();
       reportNowPlaying();
     });
   };
@@ -178,63 +166,6 @@
     }
     return play.apply(this, arguments);
   };
-  const QUIET_MS = 3000;
-  const audioContexts = new Set();
-  const taps = new WeakMap();
-  const samples = new Float32Array(256);
-  const AUDIO_POLL_MS = 500;
-  const SILENT_AUDIO_POLL_MS = 2000;
-  const SILENT_AFTER_MS = 10000;
-  let webAudioUntil = 0;
-  let audioPoll = 0;
-  let audioPollActiveSince = 0;
-  let fixedAudioPoll = false;
-  function webAudible() {
-    return Date.now() < webAudioUntil;
-  }
-  const nextAudioPollMs = () =>
-    fixedAudioPoll || Date.now() - Math.max(webAudioUntil - QUIET_MS, audioPollActiveSince) < SILENT_AFTER_MS ? AUDIO_POLL_MS : SILENT_AUDIO_POLL_MS;
-  const pollWebAudio = guard(() => {
-    clearTimeout(audioPoll);
-    audioPoll = 0;
-    let running = false;
-    for (const ctx of audioContexts) {
-      if (ctx.state === "closed") audioContexts.delete(ctx);
-      if (ctx.state !== "running") continue;
-      running = true;
-      taps.get(ctx).getFloatTimeDomainData(samples);
-      let peak = 0;
-      for (let i = 0; i < samples.length; i++) peak = Math.max(peak, Math.abs(samples[i]));
-      if (peak > 1e-4) webAudioUntil = Date.now() + QUIET_MS;
-    }
-    if (running || webAudible()) audioPoll = setTimeout(pollWebAudio, nextAudioPollMs());
-    reportAudible();
-  });
-  const pollAudio = () => {
-    if (audioPoll) return;
-    audioPollActiveSince = Date.now();
-    audioPoll = setTimeout(pollWebAudio, AUDIO_POLL_MS);
-  };
-  if (window.AudioNode && window.AudioDestinationNode && window.AudioContext) {
-    const connect = AudioNode.prototype.connect;
-    AudioNode.prototype.connect = function (target, output) {
-      const result = connect.apply(this, arguments);
-      guard(() => {
-        const ctx = target instanceof AudioDestinationNode ? target.context : null;
-        if (!(ctx instanceof AudioContext)) return;
-        if (!taps.has(ctx)) {
-          const tap = ctx.createAnalyser();
-          tap.fftSize = samples.length;
-          taps.set(ctx, tap);
-          audioContexts.add(ctx);
-          ctx.addEventListener("statechange", () => (ctx.state === "running" ? pollAudio() : pollWebAudio()));
-        }
-        connect.call(this, taps.get(ctx), output || 0);
-        pollAudio();
-      })();
-      return result;
-    };
-  }
 
   const proto = session && Object.getPrototypeOf(session);
   if (proto) {
@@ -543,13 +474,15 @@
       const self = this;
       return new Promise((resolve, reject) => {
         const id = ++displaySeq;
-        displayRequests.set(id, { self, resolve, reject, constraints: constraints || {} });
-        send("displayMedia", { id, audio: !!(constraints && constraints.audio) });
+        const options = constraints || {};
+        displayRequests.set(id, { self, resolve, reject, constraints: options });
+        const windowAudio = options.windowAudio === "exclude" || options.windowAudio === "window" ? options.windowAudio : "system";
+        send("displayMedia", { id, audio: !!options.audio, systemAudio: options.systemAudio !== "exclude", windowAudio });
       });
     };
     Object.defineProperty(getDisplayMedia, "__ac", { value: true });
     proto.getDisplayMedia = getDisplayMedia;
-    handlers.displayMedia = ({ id, sourceId }) => {
+    handlers.displayMedia = ({ id, sourceId, audio }) => {
       const request = displayRequests.get(id);
       if (!request) return;
       displayRequests.delete(id);
@@ -559,10 +492,9 @@
       }
       const video = request.constraints.video;
       const frameRate = (video && video.frameRate && (video.frameRate.max || video.frameRate.ideal || video.frameRate)) || 30;
-      const tabAudio = !!request.constraints.audio && apply(startsWith, sourceId, ["web-contents-media-stream://"]);
       apply(getUserMedia, request.self, [
         {
-          audio: tabAudio ? { mandatory: { chromeMediaSource: "desktop" } } : false,
+          audio: audio === true ? { mandatory: { chromeMediaSource: "desktop" } } : false,
           video: { mandatory: { chromeMediaSource: "desktop", chromeMediaSourceId: sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: +frameRate || 30 } },
         },
       ]).then(request.resolve, request.reject);
@@ -602,6 +534,24 @@
     apply(listen, document, ["visibilitychange", state.onVisibility]);
   };
   handlers.fieldTiming = (message) => setFieldTiming(!!(message && message.on));
+  let firstPaintObserver = null;
+  handlers.firstPaint = () => {
+    if (!isTop || firstPaintObserver) return;
+    const painted = () => send("firstPaint", { url: location.href });
+    try {
+      firstPaintObserver = new PO((list) => {
+        for (const e of list.getEntries())
+          if (e.name === "first-contentful-paint") {
+            apply(disconnect, firstPaintObserver, []);
+            return painted();
+          }
+      });
+      firstPaintObserver.observe({ type: "paint", buffered: true });
+    } catch (e) {
+      firstPaintObserver = true;
+      onReady(() => apply(raf, window, [painted]));
+    }
+  };
   handlers.wakeFrames = () => apply(raf, window, [() => {}]);
 
   const pauseUnasked = (media, activated) => {
@@ -616,9 +566,11 @@
   };
 
   let peekKey = null;
+  let splitKey = null;
   let peekTrace = false;
   handlers.peekConfig = (config) => {
     peekKey = config && (config.modifier === "alt" || config.modifier === "shift") ? config.modifier : null;
+    splitKey = config && (config.split === "alt" || config.split === "altShift") ? config.split : null;
     peekTrace = !!(config && config.trace);
   };
   try {
@@ -688,13 +640,22 @@
     const peekable = (hit) =>
       !!hit && !!hit.url && !apply(hasAttribute, hit.link, ["download"]) && apply(test, /^https?:/i, [hit.url]) && !inEditable(hit.path);
     const keys = (e) => ({ alt: altKey(e), shift: shiftKey(e), meta: metaKey(e), ctrl: ctrlKey(e) });
-    const chosen = (e) => {
-      if (metaKey(e) || ctrlKey(e)) return false;
-      if (peekKey === "alt") return altKey(e) && !shiftKey(e);
-      if (peekKey === "shift") return shiftKey(e) && !altKey(e);
-      return false;
+    const keyOf = (e) => {
+      if (ctrlKey(e)) return null;
+      if (metaKey(e)) return altKey(e) && !shiftKey(e) ? "altMeta" : null;
+      if (altKey(e)) return shiftKey(e) ? "altShift" : "alt";
+      return shiftKey(e) ? "shift" : null;
     };
-    const trace = (what, data) => peekTrace && send("peekTrace", { what, key: peekKey, ...data });
+    const chosen = (e) => {
+      const key = keyOf(e);
+      if (!key) return null;
+      if (key === peekKey) return key;
+      if (!splitKey) return null;
+      if (key === "altShift" || key === "altMeta") return key;
+      return key === "alt" && splitKey === "alt" ? key : null;
+    };
+    const anyKey = () => !!(peekKey || splitKey);
+    const trace = (what, data) => peekTrace && send("peekTrace", { what, key: peekKey, split: splitKey, ...data });
     let press = null;
     let peeked = null;
     let sent = null;
@@ -717,7 +678,7 @@
         const hit = linkAt(e);
         if (!peekable(hit)) return;
         press = { link: hit.link, url: hit.url, x: clientX(e), y: clientY(e) };
-        if (!peekKey) trace("no key chosen yet", { url: hit.url, ...keys(e) });
+        if (!anyKey()) trace("no key chosen yet", { url: hit.url, ...keys(e) });
       }),
       true,
     );
@@ -726,8 +687,9 @@
       guard((e) => {
         const pressed = press;
         press = null;
-        if (!pressed || !peekKey || !e.isTrusted || button(e) !== 0) return;
-        if (!chosen(e)) return trace("other keys", { url: pressed.url, ...keys(e) });
+        if (!pressed || !anyKey() || !e.isTrusted || button(e) !== 0) return;
+        const key = chosen(e);
+        if (!key) return trace("other keys", { url: pressed.url, ...keys(e) });
         const hit = linkAt(e);
         const moved = hypot(clientX(e) - pressed.x, clientY(e) - pressed.y);
         if (!hit || hit.link !== pressed.link) return trace("released off the link", { url: pressed.url, moved });
@@ -736,7 +698,7 @@
         peeked = { link: hit.link, stamp: timeStamp(e) };
         sent = { url: hit.url, at: now() };
         const scale = ratio(window);
-        send("peek", { url: hit.url, key: peekKey, origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved });
+        send("peek", { url: hit.url, key, origin: pageOrigin, x: clientX(e) * scale, y: clientY(e) * scale, moved });
       }),
       true,
     );
@@ -783,17 +745,47 @@
     top && typeof product === "string" && product && product !== "Ardia" && isWebStorePage(href) ? renameStoreButton(doc, product, Observer) : null;
   const StoreObserver = window.MutationObserver;
   let storeButtonRenamer = null;
+  try {
+    const NavigatorType = window.Navigator;
+    const requestAccess = NavigatorType && NavigatorType.prototype.requestMediaKeySystemAccess;
+    if (typeof requestAccess === "function") {
+      const protectedSystem = /^com\.(widevine\.alpha|microsoft\.playready|apple\.fps)/;
+      const { test } = RegExp.prototype;
+      const then = Promise.prototype.then;
+      let drmSent = false;
+      const wrapped = {
+        requestMediaKeySystemAccess(keySystem, configurations) {
+          const result = apply(requestAccess, this, arguments);
+          if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
+            apply(then, result, [
+              null,
+              () => {
+                if (drmSent) return;
+                drmSent = true;
+                send("drm", { keySystem });
+              },
+            ]);
+          }
+          return result;
+        },
+      }.requestMediaKeySystemAccess;
+      Object.defineProperty(NavigatorType.prototype, "requestMediaKeySystemAccess", {
+        ...Object.getOwnPropertyDescriptor(NavigatorType.prototype, "requestMediaKeySystemAccess"),
+        value: wrapped,
+      });
+    }
+  } catch (e) {}
 
   handlers.config = (config) => {
-    handlers.peekConfig({ modifier: config.peek, trace: config.peekTrace });
+    handlers.peekConfig({ modifier: config.peek, split: config.split, trace: config.peekTrace });
     blockAutoplay = !!config.blockAutoplay;
     if (blockAutoplay)
       pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], !!(navigator.userActivation && navigator.userActivation.hasBeenActive));
     if (config.displayMediaPicker) installDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
-    if (config.fixedAudioPoll) fixedAudioPoll = true;
     if (config.broadThemeObserver) broadThemeObserver = true;
     if (!storeButtonRenamer) storeButtonRenamer = renameStoreButtonFor(config.storeProduct, location.href, isTop, document, StoreObserver);
+    if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
   };
   send("hello", { top: isTop, url: location.href });
 
@@ -1008,28 +1000,44 @@
     selectionShown = true;
     send("selection", { text: text.slice(0, 2000), rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
   });
-  document.addEventListener(
-    "mousedown",
-    (e) => {
-      selecting = e.button === 0;
-      hideSelection();
-    },
-    true,
-  );
-  document.addEventListener(
-    "mouseup",
-    (e) => {
-      if (e.button !== 0 || !selecting) return;
+  const selectionListeners = [
+    [
+      document,
+      "mousedown",
+      (e) => {
+        selecting = e.button === 0;
+        hideSelection();
+      },
+      true,
+    ],
+    [
+      document,
+      "mouseup",
+      (e) => {
+        if (e.button !== 0 || !selecting) return;
+        selecting = false;
+        setTimeout(reportSelection, 0);
+      },
+      true,
+    ],
+    [document, "selectionchange", () => selectionShown && !selecting && getSelection().isCollapsed && hideSelection(), false],
+    [document, "keydown", (e) => e.metaKey || /^(Shift|Meta|Alt|Control)$/.test(e.key) || hideSelection(), true],
+    [window, "scroll", hideSelection, { passive: true, capture: true }],
+    [window, "resize", hideSelection, false],
+    [window, "pagehide", hideSelection, false],
+  ];
+  let selectionListening = false;
+  handlers.selectionPopover = (on) => {
+    if (!on === !selectionListening) return;
+    selectionListening = !!on;
+    if (!on) {
       selecting = false;
-      setTimeout(reportSelection, 0);
-    },
-    true,
-  );
-  document.addEventListener("selectionchange", () => selectionShown && !selecting && getSelection().isCollapsed && hideSelection());
-  document.addEventListener("keydown", (e) => e.metaKey || /^(Shift|Meta|Alt|Control)$/.test(e.key) || hideSelection(), true);
-  addEventListener("scroll", hideSelection, { passive: true, capture: true });
-  addEventListener("resize", hideSelection);
-  addEventListener("pagehide", hideSelection);
+      hideSelection();
+    }
+    for (const [target, type, listener, options] of selectionListeners)
+      on ? target.addEventListener(type, listener, options) : target.removeEventListener(type, listener, options);
+  };
+  handlers.selectionPopover(true);
 
   if (isTop) try {
     const DRAG_MIN = 40;

@@ -50,8 +50,8 @@ The Chrome Web Store just works, its button says Add to Solara, and Sync takes t
 
 ## Ads and trackers stay out.
 
-The full uBlock Origin is built in, cookie banners included. Google’s pings are compiled out. Crash reports are
-opt-in and never carry your sites or searches.
+The full uBlock Origin is built in, cookie banners included. Google’s pings are compiled out. Solara sends no
+crash reports or telemetry at all.
 
 ## Also in there
 
@@ -80,7 +80,7 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | DevTools | Docked, with device mode. Like Chrome. | ✓ Yes |
 | Sync | End-to-end encrypted, through your own iCloud Drive. | ✓ Yes |
 | Translate | On your Mac. Nothing leaves it. | ✓ macOS 26 |
-| Passkeys | Touch ID yes. iCloud Keychain waits on Apple. | ~ Partly |
+| Passkeys | Not yet: upstream's prebuilt engine asks for upstream's keychain groups. | ✗ Not yet |
 | Widevine | Google hasn’t signed off. So no Netflix. | ✗ Not yet |
 | Intel Macs | Apple Silicon only. | ✗ No |
 
@@ -123,10 +123,11 @@ pnpm install
 
 The engine (Chrome's framework, built from our patched Chromium) comes prebuilt: with no local engine build, the app's
 build downloads the one matching your checkout's `engine/` (about 110 MB, once; Apple Silicon only) and checks it
-against `packages/ardiacore/prebuilt-engines.tsv`. Every release whose engine changed publishes one. If `main`'s engine
-is newer than the last release's, work from a release tag (`v0.2.30`, say), or run
-`packages/ardiacore/scripts/fetch-engine.sh --nearest` to build against the newest prebuilt anyway. Passkeys and saved
-cards need our team ID and won't work in a build signed by anyone else.
+against `packages/ardiacore/prebuilt-engines.tsv`. Every upstream Ardia release whose engine changed publishes one, on
+`mantrakp04/ardia`. If `main`'s engine is newer than the last of those, work from a release tag (`v0.2.30`, say), or run
+`packages/ardiacore/scripts/fetch-engine.sh --nearest` to build against the newest prebuilt anyway. Passkeys, device-bound
+session keys and secure payment confirmation need the engine's own team ID, so they fail in Solara until it builds its
+own engine (`docs/releasing.md` › "Still upstream's in a fork").
 
 To change the engine itself (anything under `engine/`), build it from source: Chrome's framework from our patched
 Chromium tree in `~/chromium-build` (Chromium 155.0.8059.84 with the patch series in `engine/patches`;

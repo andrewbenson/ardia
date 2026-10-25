@@ -21,8 +21,6 @@ MAX_MANIFEST = 256 * 1024
 MAX_ENTRIES = 256
 MAX_FILES_PER_ENTRY = 256
 MAX_FILES = 512
-EXTENSION_NAME = "Ardia Scripts"
-EXTENSION_DESCRIPTION = "Userscripts installed with the ardia command."
 EXTENSION = "extension"
 GENERATION = "generation"
 STATUS = "status.json"
@@ -328,9 +326,9 @@ class Store:
                 os.close(js_fd)
             manifest = {
                 "manifest_version": 3,
-                "name": EXTENSION_NAME,
+                "name": f"{identity.PRODUCT} Scripts",
                 "version": manifest_version(generation),
-                "description": EXTENSION_DESCRIPTION,
+                "description": f"Userscripts installed with the {identity.COMMAND} command.",
                 "content_scripts": entries,
             }
             validate_manifest(manifest, {f"js/{meta['id']}.js" for meta, _ in records})

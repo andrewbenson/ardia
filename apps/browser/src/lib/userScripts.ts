@@ -10,6 +10,7 @@ import {
 } from "@ardia/shell";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { engineProfile, isIncognitoProfile } from "../store/model";
+import { PRODUCT } from "./productName";
 
 export type ScriptsOutcome = { ok: true } | { disabled: true } | { removed: true } | { error: string };
 type Status = { generation: number; profiles: Record<string, ScriptsOutcome> };
@@ -39,7 +40,7 @@ const loadedFrom = (ext: InstalledExtension, path: string) => !!ext.path && with
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const BLOCKED = "Ardia Scripts can only hold content scripts, and the engine blocked this copy.";
+const BLOCKED = `${PRODUCT} Scripts can only hold content scripts, and the engine blocked this copy.`;
 
 async function load(profile: string, path: string): Promise<ScriptsOutcome> {
   try {

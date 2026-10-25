@@ -175,7 +175,7 @@ public enum DiaAutomation {
     case OSStatus(procNotFound), OSStatus(connectionInvalid):
       .notRunning("Dia isn't running")
     case OSStatus(errAEEventNotPermitted), OSStatus(errAEEventWouldRequireUserConsent):
-      .locked("macOS didn't allow Ardia to read Dia's tabs")
+      .locked("macOS didn't allow \(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Ardia") to read Dia's tabs")
     case OSStatus(errAETimeout):
       .unreadable("Dia didn't answer within \(Int(timeout)) seconds")
     default:

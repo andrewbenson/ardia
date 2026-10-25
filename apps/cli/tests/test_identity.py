@@ -49,6 +49,7 @@ class Fork(unittest.TestCase):
     def test_brand_renames_the_app_and_the_command(self):
         self.assertEqual(identity.brand("Let the ardia command control Ardia."), "Let the solara command control Solara.")
         self.assertEqual(identity.brand("ardia exec 'x'; Ardia's window; ardia: no"), "solara exec 'x'; Solara's window; solara: no")
+        self.assertEqual(identity.brand("the Ardia Scripts extension"), "the Solara Scripts extension")
 
     def test_brand_keeps_what_the_engine_and_the_web_name(self):
         kept = [
@@ -59,7 +60,8 @@ class Fork(unittest.TestCase):
             "GET /ardia/active?token=",
             "python -m ardia_cli",
             "ardia-userscript:///x",
-            "the Ardia Scripts extension",
+            "Ardia Scripts: Scripts/extension must be a plain folder",
+            "Ardia Scripts can only hold content scripts: x",
             "`ardia: <Method> isn't allowed for the ardia command`",
         ]
         for text in kept:

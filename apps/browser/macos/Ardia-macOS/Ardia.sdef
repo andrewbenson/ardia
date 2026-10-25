@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
-<dictionary title="Ardia Terminology" xmlns:xi="http://www.w3.org/2003/XInclude">
+<dictionary title="Solara Terminology" xmlns:xi="http://www.w3.org/2003/XInclude">
   <suite name="Standard Suite" code="core" description="Common classes and commands for all applications.">
-    <class name="application" code="capp" description="The Ardia application.">
+    <class name="application" code="capp" description="The Solara application.">
       <cocoa class="NSApplication"/>
       <property name="name" code="pnam" type="text" access="r" description="The name of the application."/>
       <property name="frontmost" code="pisf" type="boolean" access="r" description="Is this the active application?">
@@ -95,7 +95,7 @@
     </command>
   </suite>
 
-  <suite name="Ardia Suite" code="NNys" description="Browsing: tabs, profiles and page scripting.">
+  <suite name="Solara Suite" code="NNys" description="Browsing: tabs, profiles and page scripting.">
     <class name="tab" code="DiaT" plural="tabs" description="A browser tab.">
       <cocoa class="ACScriptTab"/>
       <property name="id" code="ID  " type="text" access="r" description="The unique identifier of the tab.">

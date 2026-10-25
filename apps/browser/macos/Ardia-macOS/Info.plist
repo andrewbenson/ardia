@@ -91,19 +91,19 @@
 		<true/>
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Ardia asks Dia for its profiles, open tabs and pinned tabs when you import them. It only reads them and changes nothing in Dia.</string>
+	<string>$(AC_PRODUCT_NAME) asks Dia for its profiles, open tabs and pinned tabs when you import them. It only reads them and changes nothing in Dia.</string>
 	<key>NSAppleScriptEnabled</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Signing in with a passkey from your phone uses Bluetooth, and websites may ask to use Bluetooth devices.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Ardia shows your upcoming meetings on pinned calendar tabs, alerts you before they start, and groups the tabs you open during a call.</string>
+	<string>$(AC_PRODUCT_NAME) shows your upcoming meetings on pinned calendar tabs, alerts you before they start, and groups the tabs you open during a call.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Websites may ask to use your camera.</string>
 	<key>NSDockTilePlugIn</key>
 	<string>ArdiaDockTile.plugin</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Ardia finds Cast devices on your network so you can cast tabs to them.</string>
+	<string>$(AC_PRODUCT_NAME) finds Cast devices on your network so you can cast tabs to them.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Websites may ask to use your location.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

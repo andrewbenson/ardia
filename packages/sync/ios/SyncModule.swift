@@ -220,7 +220,7 @@ public class SyncModule: Module {
   }
 
   private func temporaryKit() throws -> URL {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("Ardia Recovery Kit", isDirectory: true)
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(RecoveryKit.title, isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     let url = dir.appendingPathComponent(RecoveryKit.pdfName)
     try Self.kit(try words(), text: false).write(to: url, options: [.atomic])

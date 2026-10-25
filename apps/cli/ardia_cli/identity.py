@@ -7,7 +7,7 @@ RELEASE_REPO = "mantrakp04/ardia"
 
 UPSTREAM_PRODUCT = "Ardia"
 UPSTREAM_COMMAND = "ardia"
-_ENGINE_NAMES = re.compile(r"`ardia: [^`]*isn't allowed for the ardia command`|\bArdia Scripts\b")
+_ENGINE_NAMES = re.compile(r"`ardia: [^`]*isn't allowed for the ardia command`|\bArdia Scripts(?=:| can only)")
 _PRODUCT_WORD = re.compile(r"(?<![\w.$/-])Ardia(?![\w-]|\.(?=\w))")
 _COMMAND_WORD = re.compile(r"(?<![\w.$/:-])ardia(?![\w/-]|:/|\.(?=\w))")
 

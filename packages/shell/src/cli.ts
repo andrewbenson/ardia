@@ -20,7 +20,7 @@ const Cli = requireOptionalNativeModule<{
 export const installedCliVersion = () => Cli?.installedVersion() ?? null;
 
 export const installCli = (): Promise<CliInstallResult> =>
-  Cli ? Cli.install() : Promise.resolve({ ok: false, appVersion: "", error: "This build of Ardia can't install the ardia command.", lines: [] });
+  Cli ? Cli.install() : Promise.resolve({ ok: false, appVersion: "", error: "This build can't install the command-line tool.", lines: [] });
 
 export const onCliInstallLine = (listener: (line: string) => void) =>
   Cli?.addListener("onInstallLine", (e) => listener(e.line)) ?? { remove() {} };

@@ -278,7 +278,12 @@ Still upstream's in a fork:
   until it builds its own engine with its own `BRANDING`. `chromium-safe-storage-name.patch` names the key to saved
   passwords and cookies "Ardia Safe Storage" / "Ardia", so on a Mac that also runs upstream Ardia, the fork's first
   launch finds upstream's item: macOS asks whether the fork may use it, and if the user denies it the fork can only
-  quit or try again.
+  quit or try again. The Chrome Web Store fixup (`components/extstore_fixups/chrome-webstore.js`, patched in
+  `chromium-helium-branding.patch`) writes the literal "Ardia" into the store's install button ("Add to Ardia"). The
+  app covers it: on the store's main frame, when the product isn't Ardia, native passes the product name in the page
+  script's config (`storeProduct`, `AnswerHello` in `ArdiaCoreWebView.mm`) and `page_script.js` rewrites that button's
+  "Ardia" to it, with the same selectors and observer as the engine's fixup. The real fix is an engine build with the
+  fork's name in that patch.
 - **The legacy migration** from Netnyahoo (`LegacyMigration.swift`, `LegacyDockTile.swift`) runs only when the bundle id is
   `LegacyName.successorBundleId`, upstream's own. A fork never moves, copies or regroups another app's data.
 - **First install.** A new bundle id is a new app to macOS: its own data folder and defaults, fresh keychain and privacy

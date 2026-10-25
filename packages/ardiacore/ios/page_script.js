@@ -755,6 +755,35 @@
     addEventListener("pagehide", guard((e) => e.isTrusted && send("peekGone", {})));
   } catch (e) {}
 
+  const isWebStorePage = (url) => /^https:\/\/(?:chromewebstore\.google\.com(?:[/?#]|$)|chrome\.google\.com\/webstore(?:[/?#]|$))/.test(url);
+  const renameStoreButton = (doc, product, Observer) => {
+    const engineName = /\bArdia\b/;
+    const rewrite = (node) => {
+      if (node.nodeType === 3) {
+        const next = node.nodeValue.replace(engineName, product);
+        if (next === node.nodeValue) return false;
+        node.nodeValue = next;
+        return true;
+      }
+      return Array.from(node.childNodes).some(rewrite);
+    };
+    const run = () => {
+      for (const title of doc.querySelectorAll("main section h1")) {
+        const section = title.parentElement && title.parentElement.parentElement;
+        const button = Array.from(section ? section.querySelectorAll("button") : []).find((b) => engineName.test(b.textContent));
+        if (button && rewrite(button)) break;
+      }
+    };
+    run();
+    const observer = new Observer(run);
+    observer.observe(doc, { childList: true, characterData: true, subtree: true });
+    return observer;
+  };
+  const renameStoreButtonFor = (product, href, top, doc, Observer) =>
+    top && typeof product === "string" && product && product !== "Ardia" && isWebStorePage(href) ? renameStoreButton(doc, product, Observer) : null;
+  const StoreObserver = window.MutationObserver;
+  let storeButtonRenamer = null;
+
   handlers.config = (config) => {
     handlers.peekConfig({ modifier: config.peek, trace: config.peekTrace });
     blockAutoplay = !!config.blockAutoplay;
@@ -764,6 +793,7 @@
     if (config.fieldTiming) setFieldTiming(true);
     if (config.fixedAudioPoll) fixedAudioPoll = true;
     if (config.broadThemeObserver) broadThemeObserver = true;
+    if (!storeButtonRenamer) storeButtonRenamer = renameStoreButtonFor(config.storeProduct, location.href, isTop, document, StoreObserver);
   };
   send("hello", { top: isTop, url: location.href });
 

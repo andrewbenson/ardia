@@ -373,6 +373,21 @@ export const UrlField = memo(function UrlField({
       </Pressable>
       </ContextMenuArea>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 3 }}>
+        <View pointerEvents={hovered ? "auto" : "none"} style={{ flexDirection: "row", alignItems: "center", opacity: hovered ? 1 : 0 }}>
+          <ToolbarButton palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} size={13} box={24} radius={6} onPress={toggleBookmark} tooltip={bookmarked ? "Remove Bookmark" : "Bookmark This Page (⌘D)"} />
+          {!inSplit && !sidebar && (
+            <ToolbarButton
+              palette={palette}
+              icon="rectangle.split.2x1"
+              size={13}
+              box={24}
+              radius={6}
+              onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
+              tooltip="Open Split View (⌃⇧=)"
+            />
+          )}
+          <ToolbarButton palette={palette} icon="slider.horizontal.3" size={13} box={24} radius={6} onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
+        </View>
         {capture && <CaptureIndicator camera={capture.camera} microphone={capture.microphone} screen={capture.screen} onPress={toggleSiteControls} />}
         {developer && <DeveloperButtons tabId={tab.id} palette={palette} onFocus={onFocus} />}
         <TranslateButton tabId={tab.id} palette={palette} onFocus={onFocus} />
@@ -391,23 +406,6 @@ export const UrlField = memo(function UrlField({
             active={popover === "popups"}
             tooltip="Pop-ups blocked on this page"
           />
-        )}
-        {hovered && (
-          <>
-            <ToolbarButton palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} size={13} box={24} radius={6} onPress={toggleBookmark} tooltip={bookmarked ? "Remove Bookmark" : "Bookmark This Page (⌘D)"} />
-            {!inSplit && !sidebar && (
-              <ToolbarButton
-                palette={palette}
-                icon="rectangle.split.2x1"
-                size={13}
-                box={24}
-                radius={6}
-                onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
-                tooltip="Open Split View (⌃⇧=)"
-              />
-            )}
-            <ToolbarButton palette={palette} icon="slider.horizontal.3" size={13} box={24} radius={6} onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />
-          </>
         )}
         {sidebar?.accessory}
       </View>

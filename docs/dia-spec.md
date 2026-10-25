@@ -1033,11 +1033,12 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   vertical dividers: copy link | two capture buttons (a photo-style icon, a camera) | terminal, globe, crosshair (console,
   network, inspect) | extensions, pinned extensions, split view. No reload button or chevron on that bar. So Developer
   Mode does change the URL display, which corrects the "Full URL" item above for developer tabs.
-- **Ours.** Stripes: a pre-drawn image (12 pt period at 45°, 1 pt lines; white at 7 % on a dark bar, black at 6 % on a
-  light one, chosen from the bar's text colour so a website-coloured bar gets the right one), behind the toolbar band
+- **Ours.** Stripes: a pre-drawn image (12 pt period at 45°, equal 6 pt bands and gaps (owner, 2026-10-24); white at 2 %
+  on a dark bar, black at 1.8 % on a light one, which keeps the bar's mean brightness where the earlier 1 pt lines at
+  7 % / 6 % had it: 21.6 vs 21.0 dark, 253.0 vs 253.2 light, 0–255), chosen from the bar's text colour so a website-coloured bar gets the right one), behind the toolbar band
   and the auto-hide band; no per-frame work. URL: the full URL with the scheme in the monospaced system font, no
   trailing "/" on a bare origin, in the toolbar and sidebar fields. `info` in place of the lock; the three DevTools
-  buttons as their own group between dividers. Not matched: Increase Contrast, and Arc's capture buttons.
+  buttons as their own group between dividers. The hover-only buttons (bookmark, split view, Site Controls) sit left of every persistent item and keep their space at rest, so nothing in the field moves when the pointer enters or leaves. Not matched: Increase Contrast, and Arc's capture buttons.
 - **Sidebar row (recovered from the owner's two Arc screenshots, 2026-10-24, dark, 2x).** A Developer Mode tab's row is
   two lines: the title, and below it, smaller and dimmer, the host with its port (`localhost:5050`, no scheme). Active:
   the normal selected fill plus a dashed border around the rounded row, amber dashes (about `#F5C52A`) about 2 pt thick

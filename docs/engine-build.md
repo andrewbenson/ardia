@@ -370,7 +370,9 @@ The step scripts are copied in `engine/patches/build/`, and each expects `~/chro
 without `--apply` and the chromium lock (`scripts/agent/locked chromium`); `--help` prints its usage. Run them in the
 order 1, 3, 4, 2, 5 on a fresh checkout (`gn gen` once the tree is patched). A new machine needs depot_tools cloned into
 `~/chromium-build/depot_tools`, Helium's two checkouts (below), `git-lfs` (a dep, `third_party/litert/src`, uses it) and
-GNU `timeout` on `PATH`, which macOS lacks (`brew install coreutils`; it's `gtimeout` there). Helium's checkouts are
+GNU `timeout` on `PATH`, which macOS lacks (`brew install coreutils`; it's `gtimeout` there), and Xcode's Metal
+Toolchain (`xcodebuild -downloadComponent MetalToolchain`, 840 MB: ANGLE compiles its Metal shaders with it). Step 2's
+`gn` needs depot_tools bootstrapped once (`depot_tools/ensure_bootstrap`), which `gclient` alone doesn't do. Helium's checkouts are
 `~/chromium-build/helium` and `~/chromium-build/helium-macos` (`HELIUM_DIR`, `HELIUM_MACOS_DIR`), at the commits
 `helium-pins.ini` names.
 

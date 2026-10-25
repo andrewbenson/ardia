@@ -24,11 +24,23 @@ name="ardia-engine-source-$version"
 src="$work/$name"
 mkdir -p "$src"
 fetch() {
-  curl -fsSL --retry 3 --max-time 600 "https://codeload.github.com/imputnet/$1/tar.gz/refs/tags/$2" -o "$src/$1-$2.tar.gz" \
+  curl -fsSL --proto =https --retry 3 --max-time 600 "https://codeload.github.com/imputnet/$1/tar.gz/refs/tags/$2" -o "$src/$1-$2.tar.gz" \
     || die "couldn't download imputnet/$1 at $2"
 }
-fetch helium-chromium "$helium"
-fetch helium-macos "$helium_macos"
+pins="$root/engine/patches/build/helium-pins.ini"
+pin() { awk -v s="[$1]" -v k="$2" '$0 == s { on = 1; next } /^\[/ { on = 0 } on && $1 == k { print $3; exit }' "$pins"; }
+fetch_pinned() {
+  local repo="$1" tag="$2" commit top
+  [ "$(pin "$repo" tag)" = "$tag" ] || die "helium-pins.ini pins $repo at tag $(pin "$repo" tag), env.sh at $tag"
+  commit="$(pin "$repo" commit)"
+  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || die "helium-pins.ini pins no commit for $repo"
+  curl -fsSL --proto =https --retry 3 --max-time 600 "https://codeload.github.com/imputnet/$repo/tar.gz/$commit" -o "$src/$repo-$tag.tar.gz" \
+    || die "couldn't download imputnet/$repo at $commit"
+  top="$(tar -tzf "$src/$repo-$tag.tar.gz" | awk 'NR == 1')"
+  case "${top%%/*}" in *-"$commit") ;; *) die "imputnet/$repo's tarball for $commit unpacks into ${top%%/*}" ;; esac
+}
+fetch_pinned helium-chromium "$helium"
+fetch_pinned helium-macos "$helium_macos"
 helium_top="$(tar -tzf "$src/helium-chromium-$helium.tar.gz" | awk 'NR == 1')"
 deps="$(tar -xzOf "$src/helium-chromium-$helium.tar.gz" "${helium_top%%/*}/deps.ini")" \
   || die "helium-chromium $helium has no deps.ini"
@@ -50,7 +62,7 @@ Chromium $chromium (BSD-3-Clause and others):
   https://chromium.googlesource.com/chromium/src/+/refs/tags/$chromium
   https://commondatastorage.googleapis.com/chromium-browser-official/chromium-$chromium.tar.xz
 
-Helium (GPL-3.0), copies of github.com/imputnet's tags:
+Helium (GPL-3.0), copies of github.com/imputnet's tags (helium-chromium and helium-macos at the commits the engine was built from):
   helium-chromium-$helium.tar.gz   its patches, domain substitution and build utilities
   helium-macos-$helium_macos.tar.gz   its macOS patches
   helium-onboarding-$onboarding.tar.gz   pinned in its deps.ini

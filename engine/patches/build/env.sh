@@ -6,6 +6,8 @@ unset _ac_repo
 export DEPOT_TOOLS_UPDATE=0
 export PATH="$CB/depot_tools:$PATH"
 export CHROMIUM_VERSION=155.0.8059.84
+export CHROMIUM_COMMIT=5869fe313571d75152b77813cf0a4ee26a4e6df0
+export SISO_VERSION=git_revision:dfc32e4edca158cff2b64a1658ee3940f0116b3a
 export HELIUM_TAG=0.19.4
 export HELIUM_MACOS_TAG=0.19.4.1
 export HELIUM_DIR="$CB/helium"

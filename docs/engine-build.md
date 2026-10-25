@@ -123,7 +123,9 @@ The strings come from step 3, so a tree takes the identity it had when step 3 ra
 tree (steps 1, 3, 4, 2, 5). The other rows follow the identity at step 4. The app reads the same names: `SyncModule`
 decrypts with "<CFBundleName> Safe Storage", and ArdiaCore's Safe Storage dialogs name the app's `CFBundleName`, so a
 fork's app needs a fork-built engine. Flag ids (`ardia-*`), the `Chromium Framework` name, ArdiaCore's other strings and
-Ardia's logos (`ardia_resources.txt`) stay upstream's. Since the layer rewrites lines our patches added, `series.py
+Ardia's logos (`ardia_resources.txt`) stay upstream's. The engine hands the app both `ardia://` and the app's own
+scheme (`IsAppURL`, `ac_page_channel.mm`, from `CFBundleName` by `appSchemeFor`'s rule), so a link to
+`solara://history` or `ardia://history` in an engine page opens the app's page. Since the layer rewrites lines our patches added, `series.py
 apply` can't run again over a fork's tree; `engine-build` and `series.py check` don't need it to.
 
 ## Using it
@@ -380,7 +382,7 @@ The live tree in `~/chromium-build` has been Helium's since 2026-10-23 (0.2.40-n
 
 | Step | Script | Time (M5 Pro, shared machine) |
 |---|---|---|
-| 1. Fetch Chromium's tag (`CHROMIUM_VERSION` in `env.sh`) at depth 1 and check it out, then `gclient sync --no-history` of its deps for the Mac with the PGO profiles (`checkout_pgo_profiles`), then its hooks; clears the series base | `01-sync.sh` | ~40 min, 30 GB (deps alone, re-cloned: 7 min) |
+| 1. Fetch Chromium's tag (`CHROMIUM_VERSION` in `env.sh`) at depth 1 and check it out, refusing unless the tag on Chromium's server and the checkout are both `CHROMIUM_COMMIT`, then `gclient sync --no-history` of its deps for the Mac with the PGO profiles (`checkout_pgo_profiles`), then its hooks; clears the series base | `01-sync.sh` | ~40 min, 30 GB (deps alone, re-cloned: 7 min) |
 | 2. Write `out/Release_GN_arm64/args.gn` from `gn_defines.sh`, then `gn gen` | `02-gn-args.sh` | ~1 min |
 | 3. Helium, as Solara takes it ([Helium](#helium)), in stages: `pins` (the checkouts are at the pinned commits, unmodified and made for this Chromium, and `deps.ini` downloads nothing we don't leave out), `guard`, `patches` (Helium's series, then helium-macos's, minus the skip list, with no fuzz), `fixups`, `domsub`, `namesub`, `brand-namesub` (the app's product name, [The engine's identity](#the-engines-identity)), `version`, `resources`. It runs once per tree: `.helium-stages-src`, beside the tree, records the stages that ran and refuses a second run or one that died mid-stage. Each patch's result goes to `~/chromium-build/logs/helium-patches.tsv` | `03-helium.py` | not timed on the live tree yet |
 | 4. Our series: `apply-chromium-patches.sh` (`series.py capture-base` and `apply --phase chromium`: the patches, then the layers `engine/chromium/apply.sh` and `engine/ardiacore/apply.sh`) | `04-series.sh` | not timed on the live tree yet |
@@ -412,7 +414,9 @@ Rules for editing the tree after the first build:
      commit (`git reset --hard` and `git clean -ffd` in `src` and through `gclient recurse`). `01-sync.sh` runs
      `gclient sync --reset --force -D` too. Set `.helium-stages-src` aside as well: step 3 refuses a tree whose
      stages it has recorded.
-  2. Set `CHROMIUM_VERSION`, `HELIUM_TAG` and `HELIUM_MACOS_TAG` in `env.sh`, and the version, tags and commits in
+  2. Set `CHROMIUM_VERSION`, `CHROMIUM_COMMIT` (what the tag resolves to: `git ls-remote
+     https://chromium.googlesource.com/chromium/src.git refs/tags/<version>`), `SISO_VERSION`, `HELIUM_TAG` and
+     `HELIUM_MACOS_TAG` in `env.sh`, and the version, tags and commits in
      `helium-pins.ini`, and check those commits out in `~/chromium-build/helium{,-macos}`. Helium's patches and
      lists are made for exactly one Chromium version: step 3's `pins` stage fails unless `env.sh`, the pins, Helium's
      `chromium_version.txt` and the tree agree.
@@ -429,6 +433,13 @@ Rules for editing the tree after the first build:
   6. Our patches and the hooks may need their context refreshed; `series.py check` and `apply.sh --check` say
      which. A patch whose file moved is rewritten for the new path, and the new path's file goes into the series
      base (`series-base/`) as steps 3 and 4 left it.
+
+Two pins in `env.sh` hold the build's inputs still: `CHROMIUM_COMMIT`, the commit `CHROMIUM_VERSION`'s tag must
+resolve to (step 1 checks the tag on Chromium's server and the checkout), and `SISO_VERSION`, the CIPD version of siso
+the `.gclient` asks for (Chromium's DEPS pins an older one; the first build on 2026-10-24 used
+`git_revision:dfc32e4edca158cff2b64a1658ee3940f0116b3a`, siso v1.6.7, CIPD instance
+`odWdRy-d8MF0eSxwgST3a2BEZhc7qTa2O98jxeF6-ygC` for mac-arm64). Before them, step 1 took whatever the tag and siso's
+`latest` were at the time.
 
 ## Helium
 

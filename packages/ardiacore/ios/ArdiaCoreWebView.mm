@@ -762,6 +762,7 @@ static BOOL HeldSelector(SEL selector) {
   NSString *_devToolsReopen;
   BOOL _navigationQueued;
   NSString *_pageTheme;
+  BOOL _pageScriptGreeted;
   NSString *_pageThemeSource;
   NSUInteger _createGeneration;
   NSUInteger _blockedGeneration;
@@ -1380,6 +1381,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
   reports[@"url"] = _tab.url ?: @"";
   reports[@"theme"] = _pageTheme;
   reports[@"themeSource"] = _pageThemeSource;
+  reports[@"greeted"] = @(_pageScriptGreeted);
   reports[@"blocked"] = @(_blockedCount);
   reports[@"lastBlocked"] = _lastBlocked;
   reports[@"media"] = _mediaFrames;
@@ -1406,6 +1408,7 @@ static void ExpireLaunchTab(ArdiaCoreTab *tab) {
 - (void)takeReports:(NSDictionary *)reports {
   _pageTheme = reports[@"theme"];
   _pageThemeSource = reports[@"themeSource"];
+  _pageScriptGreeted = [reports[@"greeted"] boolValue];
   _blockedCount = [reports[@"blocked"] integerValue];
   _lastBlocked = reports[@"lastBlocked"];
   _mediaFrames = reports[@"media"];
@@ -2119,7 +2122,7 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
 - (void)emitNavigation {
   _navigationQueued = NO;
   if (!_tab) return;
-  NSString *theme = _pageTheme ?: ([_tab respondsToSelector:@selector(themeColor)] ? _tab.themeColor : nil);
+  NSString *theme = _pageTheme ?: (_pageScriptGreeted && [_tab respondsToSelector:@selector(themeColor)] ? _tab.themeColor : nil);
   NSString *themeSource = _pageTheme ? _pageThemeSource : (theme ? @"meta" : nil);
   NSString *url = _tab.url ?: @"";
   if (IsRendererDebugURL(url)) url = _sentNavigation[@"url"] ?: @"";
@@ -2203,6 +2206,7 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
   [ArdiaCoreEarlyWindow pageCommitted:tab shownURL:_shownURL];
   _pageTheme = nil;
   _pageThemeSource = nil;
+  _pageScriptGreeted = NO;
   [self queueNavigation];
 }
 
@@ -2263,6 +2267,10 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
   if ([kind isEqualToString:@"hello"]) {
     PeekTrace(@{@"event" : @"hello", @"main" : @(main), @"frame" : frameId ?: @"", @"url" : Text(dict, @"url", 8192) ?: @""});
     if (main) [self resetPageMedia];
+    if (main && !_pageScriptGreeted) {
+      _pageScriptGreeted = YES;
+      [self queueNavigation];
+    }
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requestedURL = nil;
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON()];

@@ -1058,5 +1058,10 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   "extend website colour" tint) and uses the window's own palette for the appearance, so the stripes sit on a dark bar
   in dark mode even over a white page with `theme-color: #ffffff`; ordinary tabs keep the site colour. It applies to the
   card toolbar, the auto-hide strip and the top-strip layout's band, and eases between the two like any tab switch.
+  Error pages: Chrome's network error page carries `<meta name="theme-color" content="#fff">`, and Chrome's own
+  `GetThemeColor` reported it, so a failed load (ERR_CONNECTION_REFUSED, a bad host) tinted the bar white over the
+  page's dark style, Developer Mode or not. Chrome's meta colour is now used only once our page script has greeted the
+  document (it runs in every http(s) and file document but not in error pages, and normally reports the colour
+  itself), so an error page or any page that reports no colour keeps the window's own toolbar colours.
 - **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
   `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

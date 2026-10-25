@@ -382,7 +382,7 @@ export const UrlField = memo(function UrlField({
       </ContextMenuArea>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 3 }}>
         <View pointerEvents={hovered ? "auto" : "none"} style={{ flexDirection: "row", alignItems: "center", opacity: hovered ? 1 : 0 }}>
-          <ToolbarButton palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} size={13} box={24} radius={6} onPress={toggleBookmark} tooltip={bookmarked ? "Remove Bookmark" : "Bookmark This Page (⌘D)"} />
+          <ToolbarButton palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} size={13} box={24} radius={6} onPress={toggleBookmark} tooltip={bookmarked ? "Remove Bookmark" : "Bookmark This Page (⌥⇧⌘D)"} />
           {!inSplit && !sidebar && (
             <ToolbarButton
               palette={palette}

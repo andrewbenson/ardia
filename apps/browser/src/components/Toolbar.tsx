@@ -337,11 +337,7 @@ export const UrlField = memo(function UrlField({
           : { height: 30, borderRadius: 8, backgroundColor: hovered ? palette.pill : undefined },
       ]}
     >
-      {developer ? (
-        <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Site Controls">
-          <Symbol name="info" size={12} weight="semibold" color={palette.secondary} style={{ width: LOCK.width, height: 30 }} />
-        </Pressable>
-      ) : insecure && (
+      {insecure && (
         <Pressable onPress={toggleSiteControls} style={{ paddingLeft: LOCK.left }} tooltip="Connection is not secure">
           <Symbol
             name="lock.open.trianglebadge.exclamationmark.fill"
@@ -352,7 +348,7 @@ export const UrlField = memo(function UrlField({
         </Pressable>
       )}
       <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => void showUrlBarMenu(tab)}>
-      <Pressable onPress={() => (!developer ? openPanel(tab.url) : editing ? undefined : startUrlEdit(tab.id))} style={{ flex: 1, height: sidebar?.height ?? 30, justifyContent: "center", paddingLeft: insecure || developer ? LOCK.gap : sidebar ? 10 : urlTextLeft(false) }}>
+      <Pressable onPress={() => (!developer ? openPanel(tab.url) : editing ? undefined : startUrlEdit(tab.id))} style={{ flex: 1, height: sidebar?.height ?? 30, justifyContent: "center", paddingLeft: insecure ? LOCK.gap : sidebar ? 10 : urlTextLeft(false) }}>
         {developer && editing ? (
           <DeveloperUrlInput tabId={tab.id} windowId={windowId} initial={developerUrl(tab.url)} color={palette.text} />
         ) : developer ? (

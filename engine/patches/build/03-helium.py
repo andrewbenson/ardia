@@ -14,7 +14,7 @@ entirely: no stage fetches them, and the hunks of Helium's patches that edit the
   fixups         saving passwords, addresses and cards on by default
   domsub         Helium's domain substitution, minus domsub-keep-store.txt (the Web Store and extension updates)
   namesub        Helium's name_substitution.py --sub and i18n_apply.py
-  brand-namesub  ardia_namesub.py: Helium -> Ardia in the string files
+  brand-namesub  ardia_namesub.py: Helium -> the app's product name (identity.sh: Ardia, or a fork's) in the string files
   version        HELIUM_* in chrome/VERSION, equal to Chromium's own version, so Helium's version is never shown
   resources      Helium's icons (its generated ones made with sips), then ardia_resources.txt over them
 
@@ -361,6 +361,14 @@ def stage_namesub(ctx):
     print(f'i18n: {len(p.stdout.strip().splitlines())} languages')
 
 
+def product_name():
+    p = subprocess.run(['bash', '-c', '. "$1" && printf %s "$AC_PRODUCT_NAME"', 'identity', str(HERE / 'identity.sh')],
+                       capture_output=True, text=True)
+    if p.returncode or not p.stdout:
+        raise StageError(f'the app\'s product name (identity.sh) is unreadable:\n{p.stderr[-2000:]}')
+    return p.stdout
+
+
 def stage_brand_namesub(ctx):
     script = HERE / 'ardia_namesub.py'
     if ctx.no_brand:
@@ -368,8 +376,8 @@ def stage_brand_namesub(ctx):
         return
     if not script.exists():
         raise StageError(f'{script} is missing; --no-brand skips the Ardia branding')
-    p = subprocess.run([sys.executable, str(script), '--tree', str(ctx.tree), '--helium', str(ctx.hc)],
-                       cwd=ctx.work, capture_output=True, text=True)
+    p = subprocess.run([sys.executable, str(script), '--tree', str(ctx.tree), '--helium', str(ctx.hc),
+                        '--product', product_name()], cwd=ctx.work, capture_output=True, text=True)
     if p.returncode:
         raise StageError(f'ardia_namesub.py failed:\n{p.stdout[-3000:]}{p.stderr[-3000:]}')
     print((p.stdout.strip().splitlines() or ['done'])[-1])

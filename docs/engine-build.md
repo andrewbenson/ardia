@@ -16,9 +16,9 @@ What the build adds:
   mac-arm profile).
 - **Helium** (`HELIUM_TAG` and `HELIUM_MACOS_TAG` in `env.sh`, pinned by commit in `helium-pins.ini`). It is built on
   ungoogled-chromium: its series, domain substitution and name substitution strip Google's background services and
-  rename the product, and we rename it again, to Ardia: the engine's branding stays upstream's name in Solara too,
-  since Solara ships upstream's prebuilt engine (`docs/releasing.md` › "Still upstream's in a fork"). Helium's own services stay off, and the Chrome Web Store,
-  extension updates and the security components still reach Google. See [Helium](#helium).
+  rename the product, and we rename it again, to the app's product name: Ardia upstream, and a fork's own name when
+  the fork builds its engine ([The engine's identity](#the-engines-identity)). Helium's own services stay off, and the
+  Chrome Web Store, extension updates and the security components still reach Google. See [Helium](#helium).
 - **Our patches**, in `engine/patches/`, applied in the order `engine/patches/series` gives (see
   [The patch series](#the-patch-series)):
 
@@ -39,8 +39,8 @@ What the build adds:
 | `chromium-helium-devtools-inspect-shortcut.patch` | DevTools' Select an Element (`elements.toggle-element-search`) is ⇧⌘C again, as in Chrome and 0.2.39: it reverts the `elements-meta.ts` hunk of Helium's `keyboard-shortcuts`, which moved it to ⇧⌘E, so ⇧⌘C in a focused DevTools fell through to the app's Copy URL. Helium's other changes there (`IDC_COPY_OR_INSPECT_SHORTCUT`, its reserved commands and global shortcut table) don't reach ArdiaCore's windows, whose keys go through ArdiaCore's own command dispatcher and the app's menu |
 | `chromium-password-bubble-hook.patch` | ArdiaCore may replace Chrome's password bubble (`g_ardia_password_bubble`) |
 | `chromium-extension-install-prompt-hook.patch` | ArdiaCore may replace Chrome's extension install dialog (`g_ardia_extension_install_prompt`) |
-| `chromium-branding.patch` | Ardia's bundle and team id (`branding_file_path`), for the passkey and payments keychain access groups; product names stay "Chromium" |
-| `chromium-safe-storage-name.patch` | The Safe Storage key lives in its own "Ardia Safe Storage" keychain item, account "Ardia". **Load-bearing:** it's Chromium's own `os_crypt` code, so ArdiaCore uses it too, and every user's saved passwords and cookies are encrypted with that item's key. Keep it, unchanged, through every re-sync and version bump; without it Chrome reads "Chromium Safe Storage" and nothing decrypts |
+| `chromium-branding.patch` | Ardia's bundle and team id (`branding_file_path`), for the passkey and payments keychain access groups; product names stay "Chromium". A fork's engine gets its own ids from `engine/identity` ([The engine's identity](#the-engines-identity)) |
+| `chromium-safe-storage-name.patch` | The Safe Storage key lives in its own "Ardia Safe Storage" keychain item, account "Ardia" (a fork's engine: "<Product> Safe Storage" / "<Product>", from `engine/identity`). **Load-bearing:** it's Chromium's own `os_crypt` code, so ArdiaCore uses it too, and every user's saved passwords and cookies are encrypted with that item's key. Keep it, unchanged, through every re-sync and version bump; without it Chrome reads "Chromium Safe Storage" and nothing decrypts |
 | `chromium-safe-storage-no-silent-reset.patch` | Solara never replaces its Safe Storage key. Chromium added a new key whenever the item didn't show up, and its add looked the item up again and overwrote it if it was there by then, so an item briefly invisible at login left every saved password and cookie undecryptable. Now a missing item may be created only when `g_ardia_safe_storage_key_may_be_created` says so: ArdiaCore (`ac_safe_storage.mm`) allows it when, at startup, the user data dir had no `Local State` and no entry holding `Preferences`, `Cookies`, `Network/Cookies`, `Login Data` or `Web Data` and every check answered cleanly (any error but "not found", and any link that doesn't resolve, counts as existing data), or once after the user chose to start over. The add is add-only (`KeychainV2::AddGenericPasswordIfAbsent`): an item that appeared meanwhile is read back, never overwritten. Otherwise the key provider retries 3 × 1 s and fails closed; `g_ardia_safe_storage_unreadable` then gets the error and the retry, and ArdiaCore asks: a missing item, "Ardia can't read its Safe Storage key." with Quit (the default) or Start Over with a New Key, the only choice that lets one key be made; a locked keychain or denied access, unlock it or allow Ardia in Keychain Access; a missing entitlement, reinstall Ardia from ardia.dev; an undecodable secret, "Ardia's Safe Storage key is damaged." (restore the keychain from a backup, or delete the item and try again, which then reaches the missing-item dialog); anything else, a neutral try-again. Each of those offers Quit or Try Again and creates nothing. Test instances can use a file-backed keychain (`ARDIA_TEST_KEYCHAIN=file`, `ARDIA_TEST_KEYCHAIN_HIDDEN_READS=<n>`, `ARDIA_TEST_KEYCHAIN_FAIL=decode|denied|interaction|entitlement|io`, `ARDIA_TEST_SAFE_STORAGE_ANSWER=start-over`), honoured only on the mock keychain with `--user-data-dir` resolving to `$ARDIA_DATA_DIR/Chromium` |
 | `chromium-device-chooser-hook.patch` | `chrome::ShowDeviceChooserDialog` (and its extension-page variant) asks ArdiaCore (`g_ardia_device_chooser`) once Chrome's `DropFullscreenForChooserDialog` has dropped the page's full screen and revalidated the frame and active tab: ArdiaCore gets that WebContents and the full-screen blocker, which its chooser holds until it closes |
 | `chromium-cast-dialog-hook.patch` | The Media Router's Cast dialog (and Presentation API requests) asks ArdiaCore first (`g_ardia_wants_cast_dialog`, `g_ardia_cast_dialog`). Both paths reach `CreateMediaRouterDialog`, which asks ArdiaCore only after Chrome's `ForSecurityDropFullscreen` has dropped the page's full screen and the window has survived the drop; ArdiaCore gets the full-screen blocker and its Cast dialog (`ac_cast_dialog.mm`) holds it until it closes, so a page can't re-enter full screen over the picker |
@@ -102,6 +102,29 @@ Removed, all in git history:
 - After 0.2.19: `chromium-zz-extensions-page-uninstall.patch` (chrome://extensions uninstalled without Chrome's
   dialog), with the hidden chrome:// pages it served.
 - 0.2.0: `chromium-context-menu-hosted.patch`, with the hidden "ghost" Browser windows.
+
+## The engine's identity
+
+The engine compiles in the app's identity in a few places. Upstream's patches carry Ardia's values, and the last line of
+the series, `layer engine/identity`, rewrites exactly those literals from the app's identity, so a fork's engine is its
+own and upstream's engine is byte for byte what the patches say. `engine/patches/build/identity.sh` reads the identity
+once, from `scripts/identity.sh` (the app's `AC_PRODUCT_NAME`, `AC_BUNDLE_ID`, `AC_TEAM_ID` and `AC_RELEASE_REPO`, so
+`Fork.xcconfig` when there is one); the same variables in the environment override it, which is how to try upstream's
+values in a fork's checkout. Upstream's identity makes every rewrite a no-op.
+
+| What | Where | Upstream | A fork (Solara) |
+|---|---|---|---|
+| Bundle and team id, the keychain access groups for passkeys, device-bound session keys and secure payment confirmation | `chrome/app/theme/ardia/BRANDING` (`chromium-branding.patch`) | `com.ardia.browser`, `U5L5T3NGVV` | `AC_BUNDLE_ID`, `AC_TEAM_ID` |
+| The Safe Storage item | `keychain_password_mac.mm` (`chromium-safe-storage-name.patch`) | "Ardia Safe Storage" / "Ardia" | "<Product> Safe Storage" / "<Product>" |
+| Chrome's strings | every `.grd`, `.grdp` and `.xtb` (step 3's `brand-namesub`, `ardia_namesub.py --product`) | Ardia, ardia:// | the product, and its scheme as `appSchemeFor` makes it (solara://) |
+| The Web Store's "Add to …" and its console lines, chrome://flags descriptions, screenshot file names, chrome://credits' project and link, chrome://crashes' issue tracker, the crash product, the services notice | `chromium-helium-branding.patch`'s literals | Ardia, `ardia_screenshot`, `mantrakp04/ardia` | the product, its lower-case name, `AC_RELEASE_REPO` |
+
+The strings come from step 3, so a tree takes the identity it had when step 3 ran: changing the product name means a new
+tree (steps 1, 3, 4, 2, 5). The other rows follow the identity at step 4. The app reads the same names: `SyncModule`
+decrypts with "<CFBundleName> Safe Storage", and ArdiaCore's Safe Storage dialogs name the app's `CFBundleName`, so a
+fork's app needs a fork-built engine. Flag ids (`ardia-*`), the `Chromium Framework` name, ArdiaCore's other strings and
+Ardia's logos (`ardia_resources.txt`) stay upstream's. Since the layer rewrites lines our patches added, `series.py
+apply` can't run again over a fork's tree; `engine-build` and `series.py check` don't need it to.
 
 ## Using it
 
@@ -345,7 +368,9 @@ pathbuilder, which doesn't read CRLSets.
 Everything lives outside the repo in `~/chromium-build`, which carries `.metadata_never_index`.
 The step scripts are copied in `engine/patches/build/`, and each expects `~/chromium-build`. Each refuses to run
 without `--apply` and the chromium lock (`scripts/agent/locked chromium`); `--help` prints its usage. Run them in the
-order 1, 3, 4, 2, 5 on a fresh checkout (`gn gen` once the tree is patched). Helium's checkouts are
+order 1, 3, 4, 2, 5 on a fresh checkout (`gn gen` once the tree is patched). A new machine needs depot_tools cloned into
+`~/chromium-build/depot_tools`, Helium's two checkouts (below), `git-lfs` (a dep, `third_party/litert/src`, uses it) and
+GNU `timeout` on `PATH`, which macOS lacks (`brew install coreutils`; it's `gtimeout` there). Helium's checkouts are
 `~/chromium-build/helium` and `~/chromium-build/helium-macos` (`HELIUM_DIR`, `HELIUM_MACOS_DIR`), at the commits
 `helium-pins.ini` names.
 
@@ -355,7 +380,7 @@ The live tree in `~/chromium-build` has been Helium's since 2026-10-23 (0.2.40-n
 |---|---|---|
 | 1. Fetch Chromium's tag (`CHROMIUM_VERSION` in `env.sh`) at depth 1 and check it out, then `gclient sync --no-history` of its deps for the Mac with the PGO profiles (`checkout_pgo_profiles`), then its hooks; clears the series base | `01-sync.sh` | ~40 min, 30 GB (deps alone, re-cloned: 7 min) |
 | 2. Write `out/Release_GN_arm64/args.gn` from `gn_defines.sh`, then `gn gen` | `02-gn-args.sh` | ~1 min |
-| 3. Helium, as Solara takes it ([Helium](#helium)), in stages: `pins` (the checkouts are at the pinned commits, unmodified and made for this Chromium, and `deps.ini` downloads nothing we don't leave out), `guard`, `patches` (Helium's series, then helium-macos's, minus the skip list, with no fuzz), `fixups`, `domsub`, `namesub`, `brand-namesub`, `version`, `resources`. It runs once per tree: `.helium-stages-src`, beside the tree, records the stages that ran and refuses a second run or one that died mid-stage. Each patch's result goes to `~/chromium-build/logs/helium-patches.tsv` | `03-helium.py` | not timed on the live tree yet |
+| 3. Helium, as Solara takes it ([Helium](#helium)), in stages: `pins` (the checkouts are at the pinned commits, unmodified and made for this Chromium, and `deps.ini` downloads nothing we don't leave out), `guard`, `patches` (Helium's series, then helium-macos's, minus the skip list, with no fuzz), `fixups`, `domsub`, `namesub`, `brand-namesub` (the app's product name, [The engine's identity](#the-engines-identity)), `version`, `resources`. It runs once per tree: `.helium-stages-src`, beside the tree, records the stages that ran and refuses a second run or one that died mid-stage. Each patch's result goes to `~/chromium-build/logs/helium-patches.tsv` | `03-helium.py` | not timed on the live tree yet |
 | 4. Our series: `apply-chromium-patches.sh` (`series.py capture-base` and `apply --phase chromium`: the patches, then the layers `engine/chromium/apply.sh` and `engine/ardiacore/apply.sh`) | `04-series.sh` | not timed on the live tree yet |
 | 5. Regenerate the offline page (`game-resource.sh`), compile `chrome_framework` (ArdiaCore; the app's build stages it from `out/Release_GN_arm64`) | `05-build.sh` | first build 2.5 h (official, ThinLTO, PGO; 2026-10-18); incremental: the compile, then a ThinLTO relink of the framework, about 7 min (its cache, `thinlto-cache`, keeps that short) |
 
@@ -444,8 +469,9 @@ After the patches, `fixups` turns saving passwords, addresses and cards back on 
   strings, chrome:// becomes helium://, and the translations follow.
 - `brand-namesub`: `ardia_namesub.py` runs Helium's machinery again with our rules over every `.grd`, `.grdp` and
   `.xtb`: "The Helium Authors" goes back to "The Chromium Authors" (first, so "Die Helium-Autoren" becomes "Die
-  Chromium-Autoren"), Helium becomes Ardia, helium:// shown to the user becomes ardia://, and links inside strings go
-  back to chrome:// so they keep opening in the engine. It fails if any string still says helium or imput.
+  Chromium-Autoren"), Helium becomes the app's product name (Ardia, or a fork's), helium:// shown to the user becomes
+  its scheme (ardia://, solara://), and links inside strings go back to chrome:// so they keep opening in the engine.
+  It fails if any string still says helium or imput.
 - `version`: `HELIUM_*` lines in `chrome/VERSION` equal to Chromium's own version, so Helium's version never shows.
 - `resources`: Helium's icons (its generated ones made with `sips`), then `ardia_resources.txt` over them: Ardia's
   logos and product icons (`engine/chromium/src`, `engine/patches/build/ardia-icons`) and Chromium's own favicons

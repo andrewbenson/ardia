@@ -74,3 +74,4 @@ chromium chromium-ardia-layer.patch
 
 layer engine/chromium
 layer engine/ardiacore
+layer engine/identity

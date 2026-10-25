@@ -274,7 +274,7 @@ public class SyncModule: Module {
 
   static func safeStorageSecret() throws -> Data {
     if dataDirectory != nil || !isTeamSigned { return Data("mock_password".utf8) }
-    return try SafeStorageKeychain.secret(service: "Ardia Safe Storage", account: "Ardia")
+    return try SafeStorageKeychain.secret(service: "\(productName) Safe Storage", account: productName)
   }
 
   static let isTeamSigned: Bool = {

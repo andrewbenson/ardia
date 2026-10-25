@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Rename Helium to Ardia in a Chromium tree's strings, after Helium's own name_substitution.py and i18n_apply.py.
+"""Rename Helium to the product (Ardia, or a fork's AC_PRODUCT_NAME) in a Chromium tree's strings, after Helium's own
+name_substitution.py and i18n_apply.py.
 
-Runs Helium's name substitution machinery (its utils, unchanged) with Ardia's rules over every .grd, .grdp and
-.xtb: "Helium" becomes "Ardia", helium:// shown to the user becomes ardia://, links inside strings go back to
+Runs Helium's name substitution machinery (its utils, unchanged) with our rules over every .grd, .grdp and
+.xtb: "Helium" becomes the product, helium:// shown to the user becomes the app's scheme (ardia://, or the product
+name in lower case, as packages/core's appSchemeFor makes it), links inside strings go back to
 chrome:// so they keep opening inside the engine, and the copyright and company lines that Helium's pass made "The
 Helium Authors" go back to "The Chromium Authors" in every language (first, so a translation like "Die
 Helium-Autoren" becomes "Die Chromium-Autoren", never "Die Ardia-Autoren"). Helium's copyright and licence live
@@ -10,7 +12,8 @@ in the credits page's licence data, not in strings. Translation ids are remapped
 translation of a changed message. Running it again changes nothing. Exits non-zero if any string, its
 placeholders and link targets included, still says helium or imput in any case.
 
-Usage: ardia_namesub.py --tree <chromium/src> --helium <helium-chromium checkout> [--workers N] [--check-only]
+Usage: ardia_namesub.py --tree <chromium/src> --helium <helium-chromium checkout> [--product NAME] [--workers N]
+                        [--check-only]
 """
 import argparse
 import multiprocessing
@@ -19,12 +22,31 @@ import re
 import sys
 import xml.etree.ElementTree as xml
 
-ARDIA_RULES = [
-    (r'The Helium Authors', 'The Chromium Authors'),
-    (r'''(href\s*=\s*["']?)helium://''', r'\1chrome://'),
-    (r'helium://', 'ardia://'),
-    (r'(?<![/._0-9])Helium(?![A-Z0-9_])', 'Ardia'),
-]
+UPSTREAM_PRODUCT = 'Ardia'
+UPSTREAM_SCHEME = 'ardia'
+RESERVED_SCHEMES = {'http', 'https', 'file', 'about', 'data', 'blob', 'javascript', 'view-source', 'chrome',
+                    'chrome-extension', 'devtools'}
+
+
+def app_scheme(product):
+    scheme = re.sub(r'[^a-z0-9+.-]', '', product.strip().lower())
+    return scheme if re.fullmatch(r'[a-z][a-z0-9+.-]*', scheme) and scheme not in RESERVED_SCHEMES else UPSTREAM_SCHEME
+
+
+def product_rules(product):
+    escaped = product.replace('\\', '\\\\')
+    return [
+        (r'The Helium Authors', 'The Chromium Authors'),
+        (r'''(href\s*=\s*["']?)helium://''', r'\1chrome://'),
+        (r'helium://', f'{app_scheme(product)}://'),
+        (r'(?<![/._0-9])Helium(?![A-Z0-9_])', escaped),
+    ]
+
+
+def product_sanity(product):
+    scheme = app_scheme(product)
+    return [(source, expected.replace(f'{UPSTREAM_SCHEME}://', f'{scheme}://').replace(UPSTREAM_PRODUCT, product))
+            for source, expected in SANITY]
 
 SANITY = [
     ('Helium', 'Ardia'),
@@ -49,7 +71,7 @@ COPYRIGHT_MARK = 'Helium Authors'
 LEFTOVER = re.compile(r'(?i)helium|imput')
 
 
-def helium_utils(helium):
+def helium_utils(helium, rules):
     utils = pathlib.Path(helium).resolve() / 'utils'
     if not (utils / 'name_substitution.py').is_file():
         sys.exit(f'ardia_namesub: no Helium utils at {utils}')
@@ -57,7 +79,7 @@ def helium_utils(helium):
         sys.path.insert(0, str(utils))
     import name_substitution
     import name_substitution_utils
-    use_rules(name_substitution_utils, ARDIA_RULES)
+    use_rules(name_substitution_utils, rules)
     remap_every_translation(name_substitution_utils)
     return name_substitution, name_substitution_utils
 
@@ -86,7 +108,7 @@ def write(path, root):
     path.write_text(text.replace('!!dollar-sign-literal!!', '&#36;'), encoding='utf-8')
 
 
-def restore_copyright(namesub, util, tree):
+def restore_copyright(namesub, util, tree, rules):
     util.add_grit_to_path(tree)
     use_rules(util, COPYRIGHT_RULES)
     fp_map = {}
@@ -113,26 +135,26 @@ def restore_copyright(namesub, util, tree):
                 t.set('id', fp_map[t.get('id')])
                 translations += 1
         write(path, root)
-    use_rules(util, ARDIA_RULES)
+    use_rules(util, rules)
     return set(fp_map.values()), translations
 
 
-def copyright_claims(namesub, tree, copyright_ids):
+def copyright_claims(namesub, tree, copyright_ids, product):
     found = []
     for path in namesub.get_substitutable_files(tree, ['xtb', 'grd', 'grdp']):
         raw = path.read_text(encoding='utf-8')
-        if 'Ardia Authors' in raw:
-            found.append(f'{path.relative_to(tree)}: Ardia Authors')
+        if f'{product} Authors' in raw:
+            found.append(f'{path.relative_to(tree)}: {product} Authors')
         if path.suffix != '.xtb' or not any(f'id="{i}"' in raw for i in copyright_ids):
             continue
         for t in xml.fromstring(raw.replace('&#36;', '$')).iter('translation'):
-            if t.get('id') in copyright_ids and 'Ardia' in ''.join(t.itertext()):
+            if t.get('id') in copyright_ids and product in ''.join(t.itertext()):
                 found.append(f'{path.relative_to(tree)}: {t.get("id")}: {"".join(t.itertext())[:80]!r}')
     return found
 
 
-def sanity(util):
-    for source, expected in SANITY:
+def sanity(util, product):
+    for source, expected in product_sanity(product):
         got, _ = util.replace_text(source)
         if got != expected:
             sys.exit(f'ardia_namesub: rule check failed: {source!r} -> {got!r}, expected {expected!r}')
@@ -162,22 +184,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--tree', type=pathlib.Path, required=True)
     parser.add_argument('--helium', type=pathlib.Path, required=True)
+    parser.add_argument('--product', default=UPSTREAM_PRODUCT)
     parser.add_argument('--workers', type=int, default=multiprocessing.cpu_count())
     parser.add_argument('--check-only', action='store_true')
     args = parser.parse_args()
     tree = args.tree.resolve()
     if not (tree / 'chrome/app/chromium_strings.grd').is_file():
         sys.exit(f'ardia_namesub: {tree} is not a chromium/src tree')
-    namesub, util = helium_utils(args.helium)
-    sanity(util)
+    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9 ._-]*', args.product):
+        sys.exit(f'ardia_namesub: the strings can\'t take the product name {args.product!r}')
+    namesub, util = helium_utils(args.helium, product_rules(args.product))
+    sanity(util, args.product)
     copyright_ids = set()
     if not args.check_only:
-        copyright_ids, translations = restore_copyright(namesub, util, tree)
+        copyright_ids, translations = restore_copyright(namesub, util, tree, product_rules(args.product))
         print(f'ardia_namesub: copyright lines back to The Chromium Authors: {len(copyright_ids)} messages, '
               f'{translations} translations')
         multiprocessing.set_start_method('fork', force=True)
         namesub.do_substitution(tree, None, args.workers, False)
-    claims = copyright_claims(namesub, tree, copyright_ids)
+    claims = copyright_claims(namesub, tree, copyright_ids, args.product)
     if claims:
         print('ardia_namesub: copyright lines that name Ardia:', *claims, sep='\n  ', file=sys.stderr)
         sys.exit(1)

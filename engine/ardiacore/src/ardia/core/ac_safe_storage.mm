@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/apple/bundle_locations.h"
 #include "base/command_line.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
@@ -180,6 +181,16 @@ KeyProblem Classify(int status) {
   }
 }
 
+NSString* InProductName(NSString* text) {
+  NSString* product = [base::apple::OuterBundle()
+      objectForInfoDictionaryKey:@"CFBundleName"];
+  if (![product isKindOfClass:[NSString class]] || !product.length) {
+    return text;
+  }
+  return [text stringByReplacingOccurrencesOfString:@"Ardia"
+                                         withString:product];
+}
+
 void AskAboutKey(int status, base::OnceClosure retry) {
   const KeyProblem problem = Classify(status);
   const bool missing = problem == KeyProblem::kMissing;
@@ -236,6 +247,8 @@ void AskAboutKey(int status, base::OnceClosure retry) {
     quit = [alert addButtonWithTitle:@"Quit"];
     second = [alert addButtonWithTitle:@"Try Again"];
   }
+  alert.messageText = InProductName(alert.messageText);
+  alert.informativeText = InProductName(alert.informativeText);
   LOG(ERROR) << "[ardiacore] Safe Storage key unreadable (" << status
              << "): asking";
   const NSModalResponse response = [alert runModal];

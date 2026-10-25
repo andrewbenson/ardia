@@ -1,3 +1,4 @@
+import { setAppScheme } from "@ardia/core";
 import { systemInfo, type SystemInfo } from "@ardia/shell";
 
 export const DEFAULT_PRODUCT = "Ardia";
@@ -25,6 +26,8 @@ const feed = urlOf(info.updateFeedURL);
 const switches = urlOf(info.switchesURL);
 
 export const PRODUCT = info.appName?.trim() || DEFAULT_PRODUCT;
+
+export const APP_SCHEME = setAppScheme(PRODUCT);
 
 export const SERVICES = {
   telemetryHost: telemetry?.host || UPSTREAM_HOST,

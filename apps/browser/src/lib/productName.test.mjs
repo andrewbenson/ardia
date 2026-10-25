@@ -40,3 +40,19 @@ test("sharing copy names the servers this build talks to", () => {
   assert.match(SHARING_COPY.footnote, /^Sent to stats\.example\.com /);
   assert.match(SHARING_COPY.switchFile, /reads stats\.example\.com\/flags\.json:/);
 });
+
+test("a fork opens its own pages under its scheme and still knows ardia:// ones", async () => {
+  const { APP_SCHEME } = await import("./productName.ts");
+  const { internalPageOf, internalUrl } = await import("../components/pages/internalUrls.ts");
+  const { urlForDisplay } = await import("@ardia/core");
+  assert.equal(APP_SCHEME, "vista");
+  assert.equal(internalUrl("history"), "vista://history");
+  assert.equal(internalUrl("history", "a b"), "vista://history?q=a%20b");
+  assert.equal(internalPageOf("vista://history?q=x"), "history");
+  assert.equal(internalPageOf("ardia://bookmarks"), "bookmarks");
+  assert.equal(internalPageOf("VISTA://Downloads/"), "downloads");
+  assert.equal(internalPageOf("chrome://history"), null);
+  assert.equal(internalPageOf("vista://version"), null);
+  assert.equal(internalPageOf("https://vista.example/history"), null);
+  assert.equal(urlForDisplay("chrome://version/"), "vista://version");
+});

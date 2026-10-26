@@ -130,3 +130,26 @@ import Testing
     #expect(await rig.engine.state.calendar.alertLead == "never")
   }
 }
+
+@Suite struct LossyLoadTests {
+  @Test func oneMalformedEntryOrUnknownSourceKeepsEveryOtherEntry() {
+    let good = #"{"id":"a","source":"github","url":"u","title":"t","subtitle":"s","icon":null,"updatedAt":1}"#
+    let state = LiveState.load(
+      #"""
+      {"folders":{"f":{"id":"f","profileId":"p","kind":"documents","name":"D","icon":null,"collapsed":false,"sources":["notion","jira"],"filters":{"authored":true,"reviewRequests":true},"createdAt":1},"bad":{"id":3}},
+       "folderOrder":["f",7],
+       "items":{"f":[\#(good),{"id":"b"},"junk",\#(good.replacingOccurrences(of: "\"a\"", with: "\"c\""))],"g":"broken"},
+       "hidden":{"f":[{"id":"x","source":"jira"}]},
+       "accounts":{"github":{"login":"o","name":null,"avatar":null,"connectedAt":1},"jira":{"login":"j","name":null,"avatar":null,"connectedAt":1},"notion":{"login":1}},
+       "dismissedAlerts":["a@1",null,"b@2"]}
+      """#)
+    #expect(state.folders.keys.sorted() == ["f"])
+    #expect(state.folders["f"]?.sources == [.notion])
+    #expect(state.folderOrder == ["f"])
+    #expect(state.items["f"]?.map(\.id) == ["a", "c"])
+    #expect(state.items["g"] == nil)
+    #expect(state.hidden["f"] == [])
+    #expect(Array(state.accounts.keys) == [.github])
+    #expect(state.dismissedAlerts == ["a@1", "b@2"])
+  }
+}

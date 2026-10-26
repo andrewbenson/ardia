@@ -67,7 +67,7 @@ public struct LiveFolder: Codable, Sendable, Equatable {
     name = try c.decode(String.self, forKey: .name)
     icon = try c.decodeIfPresent(String.self, forKey: .icon)
     collapsed = try c.decodeIfPresent(Bool.self, forKey: .collapsed) ?? false
-    sources = try c.decodeIfPresent([LiveSourceId].self, forKey: .sources) ?? []
+    sources = (try? c.decodeIfPresent([String].self, forKey: .sources))?.compactMap(LiveSourceId.init(rawValue:)) ?? []
     filters = try c.decodeIfPresent(LiveFilters.self, forKey: .filters) ?? LiveFilters()
     groupStacks = try c.decodeIfPresent(Bool.self, forKey: .groupStacks) ?? true
     showCompleted = try c.decodeIfPresent(Bool.self, forKey: .showCompleted) ?? true

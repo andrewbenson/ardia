@@ -131,19 +131,26 @@ public struct LiveState: Codable, Sendable, Equatable {
     func field<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
       (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback
     }
-    folders = field(.folders, [:])
-    folderOrder = field(.folderOrder, [])
-    items = field(.items, [:])
-    known = field(.known, [:])
-    unread = field(.unread, [:])
-    hidden = field(.hidden, [:])
-    completed = field(.completed, [:])
-    expandedStacks = field(.expandedStacks, [:])
-    accounts = field(.accounts, [:])
+    func map<T: Decodable>(_ key: CodingKeys) -> [String: T] {
+      (try? c.decodeIfPresent(LossyMap<T>.self, forKey: key))?.values ?? [:]
+    }
+    func lists<T: Decodable>(_ key: CodingKeys) -> [String: [T]] {
+      ((try? c.decodeIfPresent(LossyMap<LossyList<T>>.self, forKey: key))?.values ?? [:]).mapValues(\.values)
+    }
+    folders = map(.folders)
+    folderOrder = (try? c.decodeIfPresent(LossyList<String>.self, forKey: .folderOrder))?.values ?? []
+    items = lists(.items)
+    known = lists(.known)
+    unread = lists(.unread)
+    hidden = lists(.hidden)
+    completed = lists(.completed)
+    expandedStacks = map(.expandedStacks)
+    let accountsByName: [String: LiveAccount] = map(.accounts)
+    accounts = Dictionary(uniqueKeysWithValues: accountsByName.compactMap { key, value in LiveSourceId(rawValue: key).map { ($0, value) } })
     config = field(.config, .defaults)
     calendar = field(.calendar, .defaults)
-    meetingGroups = field(.meetingGroups, [:])
-    dismissedAlerts = field(.dismissedAlerts, [])
+    meetingGroups = map(.meetingGroups)
+    dismissedAlerts = (try? c.decodeIfPresent(LossyList<String>.self, forKey: .dismissedAlerts))?.values ?? []
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -367,6 +374,41 @@ public struct LiveState: Codable, Sendable, Equatable {
       meetingGroups[group.groupId] = group
     } else if let groupId {
       meetingGroups[groupId] = nil
+    }
+  }
+}
+
+struct LossyMap<T: Decodable>: Decodable {
+  var values: [String: T] = [:]
+
+  struct Key: CodingKey {
+    var stringValue: String
+    var intValue: Int? { nil }
+    init(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { nil }
+  }
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: Key.self)
+    for key in c.allKeys {
+      if let value = try? c.decode(T.self, forKey: key) { values[key.stringValue] = value }
+    }
+  }
+}
+
+struct LossyList<T: Decodable>: Decodable {
+  var values: [T] = []
+
+  struct Skip: Decodable { init(from decoder: Decoder) throws {} }
+
+  init(from decoder: Decoder) throws {
+    var c = try decoder.unkeyedContainer()
+    while !c.isAtEnd {
+      if let value = try? c.decode(T.self) {
+        values.append(value)
+      } else {
+        _ = try? c.decode(Skip.self)
+      }
     }
   }
 }

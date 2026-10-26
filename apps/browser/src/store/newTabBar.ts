@@ -2,6 +2,7 @@ import type { BrowserState } from "./browser";
 import { closesWindow, inPinnedContainer, tabsClosingWithWindow } from "./model";
 import { splitOf } from "./splits";
 import type { Tab } from "./types";
+import { nativeOwnsWorkspace, nativeWrite } from "./nativeStore";
 
 export const NEW_TAB_BAR_POLICY = {
   closeTabKeyOnlyDismissesBar: true,
@@ -19,7 +20,10 @@ export function isEmptyCardTab(s: Pick<BrowserState, "splits">, tab: Tab | undef
 export const hiddenEmptyCard = (s: BrowserState, tab: Tab) => !tab.pinned && newTabOpensBar(s) && isEmptyCardTab(s, tab);
 
 let lastTabKeepsWindow = false;
-export const setLastTabKeepsWindow = (keeps: boolean) => void (lastTabKeepsWindow = keeps);
+export const setLastTabKeepsWindow = (keeps: boolean) => {
+  lastTabKeepsWindow = keeps;
+  if (nativeOwnsWorkspace()) nativeWrite({ name: "setLastTabKeepsWindow", args: [keeps] });
+};
 
 export function leavesEmptyWindow(s: BrowserState, id: string): boolean {
   const tab = s.tabs[id];

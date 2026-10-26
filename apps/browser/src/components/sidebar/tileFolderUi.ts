@@ -5,6 +5,8 @@ import { plural } from "../../store/model";
 import { dissolveTileFolder, folderIn, folderLabel, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../../store/tileFolders";
 import { dismissHover } from "./hover";
 import { measureRow } from "./state";
+import { encodeCommand } from "@ardia/store";
+import { nativeOwnsWorkspace, nativeWrite } from "../../store/nativeStore";
 
 type Open = { windowId: string; folderId: string; anchor: { x: number; y: number; width: number; height: number } };
 
@@ -47,18 +49,26 @@ export async function renameFolder(windowId: string, folderId: string, title = "
   const folder = folderIn(store(), windowId, folderId);
   if (!folder) return;
   const name = await prompt({ title, value: folder.name, placeholder: "Folder", confirmTitle: "Update", windowId });
-  if (name !== null) useBrowser.setState((s) => renameTileFolder(s, windowId, folderId, name));
+  if (name === null) return;
+  if (nativeOwnsWorkspace()) nativeWrite(encodeCommand("renameTileFolder", [windowId, folderId, name]));
+  else useBrowser.setState((s) => renameTileFolder(s, windowId, folderId, name));
 }
 
 export function newFolderWithTab(windowId: string, tabId: string) {
-  const { state, folderId } = newTileFolder(store(), [tabId]);
+  let folderId: string | null | undefined;
+  if (nativeOwnsWorkspace()) folderId = nativeWrite(encodeCommand("newTileFolder", [[tabId]]))?.result as string | undefined;
+  else {
+    const made = newTileFolder(store(), [tabId]);
+    folderId = made.folderId;
+    if (folderId) useBrowser.setState(made.state);
+  }
   if (!folderId) return;
-  useBrowser.setState(state);
   void renameFolder(windowId, folderId, "Name Folder");
 }
 
 export function removeFromFolder(tabId: string) {
-  useBrowser.setState((s) => leaveTileFolder(s, [tabId]));
+  if (nativeOwnsWorkspace()) nativeWrite(encodeCommand("leaveTileFolder", [[tabId]]));
+  else useBrowser.setState((s) => leaveTileFolder(s, [tabId]));
 }
 
 export async function openTileFolderMenu(windowId: string, folderId: string) {
@@ -72,7 +82,10 @@ export async function openTileFolderMenu(windowId: string, folderId: string) {
     { id: "unpin", title: `Unpin ${plural(members.length, "Tab")}`, symbol: "pin.slash" },
   ]);
   if (choice === "rename") void renameFolder(windowId, folderId);
-  else if (choice === "remove") useBrowser.setState((s) => dissolveTileFolder(s, windowId, folderId));
+  else if (choice === "remove") {
+    if (nativeOwnsWorkspace()) nativeWrite(encodeCommand("dissolveTileFolder", [windowId, folderId]));
+    else useBrowser.setState((s) => dissolveTileFolder(s, windowId, folderId));
+  }
   else if (choice === "unpin") store().pinTabs(folderMembers(store(), windowId, folderId), false);
   if (choice) closeFolderPanel();
 }

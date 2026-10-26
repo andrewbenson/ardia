@@ -225,6 +225,30 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
   };
 }
 
+const OWNED_KEYS: ReadonlySet<string> = new Set([...WORKSPACE_SLICES, "settings", "downloads"]);
+
+export function writeState(store: Replica, update: Partial<BrowserState> | ((s: BrowserState) => Partial<BrowserState>)) {
+  const s = store.getState();
+  const partial = typeof update === "function" ? update(s) : update;
+  if (!nativeOwnsWorkspace()) return store.setState(partial);
+  const before = s as unknown as Record<string, unknown>;
+  const owned: Record<string, unknown> = {};
+  const local: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(partial)) {
+    if (value === before[key]) continue;
+    if (OWNED_KEYS.has(key)) owned[key] = value;
+    else if (key === "ui") {
+      const ui = value as BrowserState["ui"];
+      if (UI_KEYS.some((k) => ui[k] !== s.ui[k])) owned.ui = Object.fromEntries(UI_KEYS.map((k) => [k, ui[k]]));
+      if (ui.appDark !== s.ui.appDark) local.ui = { ...s.ui, appDark: ui.appDark };
+    } else local[key] = value;
+  }
+  if (Object.keys(local).length) withApplier(() => store.setState(local as Partial<BrowserState>));
+  if (!Object.keys(owned).length) return;
+  nativeWrite({ name: "applyState", args: [owned] });
+  resync(store, Object.keys(owned));
+}
+
 function resync(store: Replica, keys: string[]) {
   const snapshot = nativeSnapshot();
   if (!snapshot) return;

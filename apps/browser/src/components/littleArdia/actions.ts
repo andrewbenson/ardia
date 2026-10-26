@@ -9,6 +9,7 @@ import { profileAccent } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
 import { isSmall, lastActiveProfile, mainWindowFor } from "../../store/small";
+import { nativeOwnsWorkspace, nativeWrite } from "../../store/nativeStore";
 
 const store = () => useBrowser.getState();
 
@@ -92,7 +93,8 @@ export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
   const id = store().createWindow({ small: true, url, profileId, frame: w.frame });
   if (!url) store().openPanel(id, "");
   closeWindowAnimated(windowId, id, () => {
-    if (tabId) useBrowser.setState((now) => ({ closedTabs: now.closedTabs.filter((c) => c.tabId !== tabId) }));
+    if (tabId && nativeOwnsWorkspace()) nativeWrite({ name: "forgetClosedTab", args: [tabId] });
+    else if (tabId) useBrowser.setState((now) => ({ closedTabs: now.closedTabs.filter((c) => c.tabId !== tabId) }));
   });
 }
 

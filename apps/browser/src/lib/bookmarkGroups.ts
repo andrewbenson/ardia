@@ -2,6 +2,8 @@ import { useBrowser, type BrowserState } from "../store/browser";
 import { bookmarkDraft, hasLinks, MAX_DRAFT_LINKS, withDraftGroups, type DraftGroups, type GroupDraft } from "../store/draftGroups";
 import { bookmarkProfileId, plural } from "../store/model";
 import { mainWindowFor } from "../store/small";
+import { encodeCommand } from "@ardia/store";
+import { nativeOwnsWorkspace, nativeWrite } from "../store/nativeStore";
 
 export const ARC_HOLDER = " (Arc)";
 
@@ -14,8 +16,13 @@ function sidebarWindow(s: BrowserState, profileId: string, near?: string | null)
 export function addGroupsFromDrafts(profileId: string, drafts: GroupDraft[], near?: string | null): DraftGroups {
   const s = useBrowser.getState();
   const windowId = sidebarWindow(s, profileId, near) ?? s.createWindow({ profileId });
-  const [next, result] = withDraftGroups(useBrowser.getState(), windowId, profileId, drafts);
-  if (result.made.length) useBrowser.setState(next);
+  let result: DraftGroups;
+  if (nativeOwnsWorkspace()) result = nativeWrite(encodeCommand("openDraftGroups", [windowId, profileId, drafts]))?.result as DraftGroups;
+  else {
+    const [next, made] = withDraftGroups(useBrowser.getState(), windowId, profileId, drafts);
+    result = made;
+    if (result.made.length) useBrowser.setState(next);
+  }
   if (result.skipped) (require("../components/layout/splitActions") as typeof import("../components/layout/splitActions")).showToast(windowId, `${plural(result.skipped, "link")} left out`, `A folder brings up to ${MAX_DRAFT_LINKS.toLocaleString("en-US")} links.`);
   return result;
 }

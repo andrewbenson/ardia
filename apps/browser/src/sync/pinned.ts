@@ -12,6 +12,7 @@ import { removeTabs } from "../store/tabs";
 import { tileFolderOf, withTileFolder } from "../store/tileFolders";
 import type { Tab, TabGroup, TileFolder } from "../store/types";
 import { inTodaysNames } from "./adapters";
+import { writeState } from "../store/nativeStore";
 
 const store = () => useBrowser.getState();
 
@@ -421,7 +422,7 @@ export function pinnedAdapter(profileId: string): Adapter {
       }
       const { find, splits, selection, windowOrder, windowUi } = s;
       const pinSync = noted.size ? { ...s.pinSync, [profileId]: { ...s.pinSync[profileId], ...Object.fromEntries(noted) } } : s.pinSync;
-      fromSync(() => useBrowser.setState({ tabs, windows, groups, live, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync }));
+      fromSync(() => writeState(useBrowser, { tabs, windows, groups, live, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync }));
     },
   };
 }
@@ -479,7 +480,7 @@ export function pinnedOrderAdapter(profileId: string): Adapter {
       const park = s.parkedPins[profileId];
       const parked = park && arrangeParked(park, anchorOf);
       if (windows === s.windows && parked === park) return true;
-      fromSync(() => useBrowser.setState({ windows, groups, ...(park && parked !== park ? { parkedPins: { ...s.parkedPins, [profileId]: parked! } } : {}) }));
+      fromSync(() => writeState(useBrowser, { windows, groups, ...(park && parked !== park ? { parkedPins: { ...s.parkedPins, [profileId]: parked! } } : {}) }));
       return true;
     },
   };
@@ -496,7 +497,7 @@ function settleChoices(profileId: string, published: Record<string, number>) {
   const left = Object.fromEntries(Object.entries(mine).filter(([key, n]) => published[key] !== n));
   if (Object.keys(left).length === Object.keys(mine).length) return;
   const { [profileId]: _, ...others } = now;
-  useBrowser.setState({ pinChoices: Object.keys(left).length ? { ...now, [profileId]: left } : others });
+  writeState(useBrowser, { pinChoices: Object.keys(left).length ? { ...now, [profileId]: left } : others });
 }
 
 export function pinnedRowsAdapter(profileId: string): Adapter {
@@ -569,7 +570,7 @@ export function pinnedRowsAdapter(profileId: string): Adapter {
       const parkEdited = !!park && parked!.some((p, i) => p !== park.tabs[i]);
       if (!edited && !parkEdited) return true;
       fromSync(() =>
-        useBrowser.setState({
+        writeState(useBrowser, {
           tabs,
           windows,
           ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, tabs: parked! } } } : {}),
@@ -622,7 +623,7 @@ export function groupLooksAdapter(profileId: string): Adapter {
       const parkEdited = !!park && parkedGroups!.some((g, i) => g !== park.groups[i]);
       if (!groups && !parkEdited) return true;
       fromSync(() =>
-        useBrowser.setState({
+        writeState(useBrowser, {
           ...(groups ? { groups } : {}),
           ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, groups: parkedGroups! } } } : {}),
         }),
@@ -705,7 +706,7 @@ export function pinnedHomesAdapter(profileId: string): Adapter {
       const parkEdited = !!park && parked!.some((p, i) => p !== park.tabs[i]);
       if (!tabs && !parkEdited) return true;
       fromSync(() =>
-        useBrowser.setState({
+        writeState(useBrowser, {
           ...(tabs ? { tabs } : {}),
           ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, tabs: parked! } } } : {}),
         }),
@@ -807,7 +808,7 @@ export function tileFoldersAdapter(profileId: string): Adapter {
       const parkEdited = !!park && parked!.some((p, i) => p !== park.tabs[i]);
       if (!tabs && !parkEdited) return true;
       fromSync(() =>
-        useBrowser.setState({
+        writeState(useBrowser, {
           ...(tabs ? { tabs } : {}),
           ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, tabs: parked! } } } : {}),
         }),

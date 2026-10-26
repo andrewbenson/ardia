@@ -15,6 +15,7 @@ import { parseArcTheme } from "./arcTheme";
 import { newProfileLiveFolder } from "../../live/engine";
 import { live } from "../../live/store";
 import type { LiveSourceId } from "../../live/types";
+import { writeState } from "../../store/nativeStore";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number };
 
@@ -168,7 +169,7 @@ export function importTabs(
     next = { ...made, tabs: { ...made.tabs, [id]: { ...made.tabs[id]!, navigation: null } } };
     if (!t.pinned) unpinned.push(id);
   }
-  useBrowser.setState(next);
+  writeState(useBrowser, next);
   if (group && unpinned.length) useBrowser.getState().createGroup(unpinned, { name: group });
   return usable.length;
 }

@@ -3,15 +3,18 @@ import { isIncognitoProfile } from "./model";
 import { nextPinChoice, orderChoiceKey } from "./organize";
 import { anchorsOf, pinnedAreaKeys } from "./pinnedArea";
 import type { TabGroup } from "./types";
-import { nativeOwnsWorkspace } from "./nativeStore";
+import { nativeOwnsWorkspace, nativeWrite } from "./nativeStore";
 
 let remote = 0;
 
 export function fromSync<T>(apply: () => T): T {
   remote++;
+  const native = nativeOwnsWorkspace();
+  if (native) nativeWrite({ name: "beginFromSync", args: [] });
   try {
     return apply();
   } finally {
+    if (native) nativeWrite({ name: "endFromSync", args: [] });
     remote--;
   }
 }

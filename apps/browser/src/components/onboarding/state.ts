@@ -7,6 +7,7 @@ import type { Settings } from "../../store/settings";
 import type { ProfileColor } from "../../store/types";
 import { pinSites } from "./sites";
 import { endToolTour, startToolTour } from "./tour/state";
+import { writeState } from "../../store/nativeStore";
 
 export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
 
@@ -156,7 +157,7 @@ type OnboardingState = {
 const stepAfter = (step: OnboardingStep, delta: number) => STEPS[STEPS.indexOf(step) + delta];
 
 const setWindowLayout = (windowId: string, tabLayout: Settings["tabLayout"]) =>
-  useBrowser.setState((s) => {
+  writeState(useBrowser, (s) => {
     const w = s.windows[windowId];
     return w && w.tabLayout !== tabLayout ? { windows: { ...s.windows, [windowId]: { ...w, tabLayout } } } : {};
   });

@@ -10,6 +10,7 @@ import { lastUsedOf, sharedLastUsed } from "./tabShare";
 import { activated, apply, removeTabs, withNewTab } from "./tabs";
 import { clickedSelection, dropping, type ClickMods, type Drop } from "./drops";
 import type { BrowserWindow, ClosedGroup, ClosedTab, NestedGroupSnapshot, Tab, TabGroup, TileFolder } from "./types";
+import { nativeOwnsWorkspace, nativeWrite } from "./nativeStore";
 
 export type TabPlacement = {
   pinned: boolean;
@@ -125,6 +126,7 @@ const remotePinDeletions = new Map<string, number>();
 
 export function noteRemotePinDeletion(profileId: string) {
   remotePinDeletions.set(profileId, (remotePinDeletions.get(profileId) ?? 0) + 1);
+  if (nativeOwnsWorkspace()) nativeWrite({ name: "noteRemotePinDeletion", args: [profileId] });
 }
 
 export function unpinnedTabIds(s: BrowserState, windowId: string): string[] {

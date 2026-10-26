@@ -41,7 +41,10 @@ public final class DecodeLog: Sendable {
 
 final class UnreadableKeys: @unchecked Sendable {
   var keys: Set<String> = []
+  var coerced = JSONObject()
 }
+
+public let coercedKey = "\u{0}coerced"
 
 public struct Fields {
   public let object: JSONObject
@@ -53,7 +56,13 @@ public struct Fields {
     self.known = known
   }
 
-  public var extra: JSONObject { object.filter { key, _ in !known.contains(key) || unreadable.keys.contains(key) } }
+  public var extra: JSONObject {
+    var out = object.filter { key, _ in (!known.contains(key) || unreadable.keys.contains(key)) && key != coercedKey }
+    var coerced = object[coercedKey]?.object ?? JSONObject()
+    for (key, record) in unreadable.coerced { coerced[key] = record }
+    if !coerced.isEmpty { out[coercedKey] = .object(coerced) }
+    return out
+  }
 
   public var order: [String] { object.keys }
 
@@ -61,16 +70,83 @@ public struct Fields {
     Set(keys.filter { !object.contains($0) })
   }
 
-  public func string(_ key: String) -> String { object[key]?.string ?? "" }
-  public func optionalString(_ key: String) -> String? { object[key]?.string }
-  public func bool(_ key: String) -> Bool { object[key]?.bool ?? false }
-  public func optionalBool(_ key: String) -> Bool? { object[key]?.bool }
-  public func number(_ key: String) -> Double { object[key]?.number ?? 0 }
-  public func optionalNumber(_ key: String) -> Double? { object[key]?.number }
-  public func strings(_ key: String) -> [String] { object[key]?.array?.compactMap(\.string) ?? [] }
-  public func optionalStrings(_ key: String) -> [String]? { object[key]?.array?.compactMap(\.string) }
-  public func numbers(_ key: String) -> [Double] { object[key]?.array?.compactMap(\.number) ?? [] }
-  public func optionalNumbers(_ key: String) -> [Double]? { object[key]?.array?.compactMap(\.number) }
+  func coerce<T>(_ key: String, to fallback: T, as decoded: JSONValue) -> T {
+    var record: JSONObject = ["decoded": decoded]
+    if let raw = object[key] {
+      record["raw"] = raw
+      unreadable.keys.insert(key)
+      DecodeLog.note("kept \(key) of the wrong type as written")
+    }
+    unreadable.coerced[key] = .object(record)
+    return fallback
+  }
+
+  func wrongType<T>(_ key: String, _ read: (JSONValue) -> T?) -> (T?, Bool) {
+    guard let raw = object[key], !raw.isNull else { return (nil, false) }
+    guard let value = read(raw) else { return (nil, true) }
+    return (value, false)
+  }
+
+  public func string(_ key: String) -> String {
+    if let value = object[key]?.string { return value }
+    return coerce(key, to: "", as: "")
+  }
+
+  public func optionalString(_ key: String) -> String? {
+    let (value, wrong) = wrongType(key, \.string)
+    return wrong ? coerce(key, to: nil, as: .null) : value
+  }
+
+  public func bool(_ key: String) -> Bool {
+    if let value = object[key]?.bool { return value }
+    return coerce(key, to: false, as: false)
+  }
+
+  public func optionalBool(_ key: String) -> Bool? {
+    let (value, wrong) = wrongType(key, \.bool)
+    return wrong ? coerce(key, to: nil, as: .null) : value
+  }
+
+  public func number(_ key: String, default fallback: Double = 0) -> Double {
+    if let value = object[key]?.number { return value }
+    return coerce(key, to: fallback, as: .number(fallback))
+  }
+
+  public func optionalNumber(_ key: String) -> Double? {
+    let (value, wrong) = wrongType(key, \.number)
+    return wrong ? coerce(key, to: nil, as: .null) : value
+  }
+
+  static func all<T>(_ items: [JSONValue], _ read: (JSONValue) -> T?) -> [T]? {
+    var out: [T] = []
+    out.reserveCapacity(items.count)
+    for item in items {
+      guard let value = read(item) else { return nil }
+      out.append(value)
+    }
+    return out
+  }
+
+  public func strings(_ key: String) -> [String] {
+    if let items = object[key]?.array { return items.compactMap(\.string) }
+    return coerce(key, to: [], as: .array([]))
+  }
+
+  public func optionalStrings(_ key: String) -> [String]? {
+    let (value, wrong) = wrongType(key) { $0.array?.compactMap(\.string) }
+    return wrong ? coerce(key, to: nil, as: .null) : value
+  }
+
+  public func numbers(_ key: String) -> [Double] {
+    if let items = object[key]?.array, let values = Self.all(items, \.number) { return values }
+    return coerce(key, to: [], as: .array([]))
+  }
+
+  public func optionalNumbers(_ key: String) -> [Double]? {
+    let (value, wrong) = wrongType(key) { $0.array.flatMap { Self.all($0, \.number) } }
+    return wrong ? coerce(key, to: nil, as: .null) : value
+  }
+
   public func value(_ key: String) -> JSONValue? { object[key] }
 
   public func model<T: JSONConvertible>(_ key: String) throws -> T? {
@@ -86,6 +162,10 @@ public struct Fields {
 
   public func models<T: JSONConvertible>(_ key: String) throws -> [T] {
     Self.readable(object[key]?.array ?? [], key)
+  }
+
+  public func strictModels<T: JSONConvertible>(_ key: String) throws -> [T] {
+    try (object[key]?.array ?? []).map { try T(value: $0) }
   }
 
   public func optionalModels<T: JSONConvertible>(_ key: String) throws -> [T]? {
@@ -133,11 +213,17 @@ public struct Encoder {
 
   public var object: JSONObject {
     var merged = fields
-    for (key, value) in extra where !fields.contains(key) { merged[key] = value }
+    for (key, value) in extra where !fields.contains(key) && key != coercedKey { merged[key] = value }
+    for (key, record) in extra[coercedKey]?.object ?? [:] {
+      guard let decoded = record["decoded"] else { continue }
+      let current = merged[key]
+      guard current == decoded || (current == nil && decoded == .null) else { continue }
+      if let raw = record["raw"] { merged[key] = raw } else { _ = merged.removeValue(forKey: key) }
+    }
     return merged.ordered(by: order)
   }
 
-  func carries(_ key: String) -> Bool { fields.contains(key) || extra.contains(key) }
+  func carries(_ key: String) -> Bool { fields.contains(key) || (key != coercedKey && extra.contains(key)) }
 
   public mutating func set(_ key: String, _ value: String) { fields[key] = .string(value) }
   public mutating func set(_ key: String, _ value: Bool) { fields[key] = .bool(value) }

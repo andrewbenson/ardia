@@ -59,7 +59,7 @@ public struct TabSnapshot: JSONConvertible {
     favicon = f.optionalString("favicon")
     pinned = f.bool("pinned")
     muted = f.bool("muted")
-    zoom = f.optionalNumber("zoom") ?? 1
+    zoom = f.number("zoom", default: 1)
     customTitle = f.optionalString("customTitle")
     customIcon = f.optionalString("customIcon")
     profileId = f.string("profileId")
@@ -334,7 +334,7 @@ public struct ClosedWindow: JSONConvertible {
     windowExtra = w.extra
     windowKeyOrder = w.order
     absent = w.absent(["frame"])
-    tabs = try f.models("tabs")
+    tabs = try f.strictModels("tabs")
     groups = try f.models("groups")
     closedAt = f.number("closedAt")
     extra = f.extra

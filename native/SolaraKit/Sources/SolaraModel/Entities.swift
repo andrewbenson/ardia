@@ -556,7 +556,8 @@ public struct Tab: JSONConvertible, @unchecked Sendable {
     markAbsent(src.absent.intersection(["openerId"]))
   }
 
-  public mutating func overlay(_ object: JSONObject) {
+  public mutating func overlay(_ spread: JSONObject) {
+    let object = spread.filter { key, _ in key != coercedKey }
     guard object.keys.contains(where: TabFields.keys.contains) else {
       for (key, value) in object { extra[key] = value }
       return
@@ -647,7 +648,7 @@ public struct TabFields: Sendable, Equatable {
     favicon = f.optionalString("favicon")
     pinned = f.bool("pinned")
     muted = f.bool("muted")
-    zoom = f.optionalNumber("zoom") ?? 1
+    zoom = f.number("zoom", default: 1)
     customTitle = f.optionalString("customTitle")
     customIcon = f.optionalString("customIcon")
     pinnedUrl = f.optionalString("pinnedUrl")

@@ -287,6 +287,21 @@ const expectations = {
   "parked-pins-tab-string": { normalizes: normalized },
   "profile-string": { normalizes: normalized },
 };
+const wrongScalars = {
+  "title-absent": (d) => delete d.tabs[0].title,
+  "title-null": (d) => (d.tabs[0].title = null),
+  "zoom-string": (d) => (d.tabs[0].zoom = "1.5"),
+  "created-string": (d) => (d.tabs[0].createdAt = "1700000000000"),
+  "name-number": (d) => (d.profiles.work.name = 42),
+  "sidebar-number": (d) => (d.windows[0].sidebarOpen = 1),
+  "frame-strings": (d) => (d.windows[0].frame = ["0", 0, 100, 100]),
+  "tabids-mixed": (d) => (d.windows[0].tabIds = ["a", 5, "b", "p"]),
+};
+for (const [name, mutate] of Object.entries(wrongScalars)) {
+  const doc = richBase();
+  mutate(doc);
+  fixtures[`scalar-${name}`] = doc;
+}
 for (const [name, mutate] of Object.entries(wrongShapes)) {
   const doc = richBase();
   mutate(doc);

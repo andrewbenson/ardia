@@ -665,7 +665,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   func confirmQuit() {
     if MenuState.current.warnBeforeQuitting {
       let alert = NSAlert()
-      alert.messageText = "Are you sure you want to quit \(ProcessInfo.processInfo.processName)?"
+      alert.messageText = "Are you sure you want to quit \(Bundle.main.productName)?"
       alert.informativeText = "Your windows and tabs will be restored the next time you open it."
       alert.addButton(withTitle: "Quit")
       alert.addButton(withTitle: "Cancel")
@@ -708,7 +708,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private func saveIsLate() {
     saveWait = nil
-    let message = "\(ProcessInfo.processInfo.processName) can't save your session right now."
+    let message = "\(Bundle.main.productName) can't save your session right now."
     if background {
       NSLog("[shell] quit alert: \(message) (Wait / Quit Without Saving): Wait")
       return waitForSave()
@@ -735,7 +735,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     let count = MenuState.current.downloadsInProgress
     guard count > 0 else { return true }
     let alert = NSAlert()
-    alert.messageText = "Are you sure you want to quit \(ProcessInfo.processInfo.processName)?"
+    alert.messageText = "Are you sure you want to quit \(Bundle.main.productName)?"
     alert.informativeText = count == 1
       ? "You have 1 download in progress. If you quit now, this download will be cancelled."
       : "You have \(count) downloads in progress. If you quit now, these downloads will be cancelled."

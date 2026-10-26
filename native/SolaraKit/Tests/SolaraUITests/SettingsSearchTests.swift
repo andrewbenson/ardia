@@ -88,14 +88,21 @@ struct SettingsSearchTests {
     #expect(SettingsSearch.normalize("--") == "")
   }
 
-  @Test func theIndexHas110RowsWithUniqueIds() {
-    #expect(index.entries.count == 110)
+  @Test func theIndexHas116RowsWithUniqueIds() {
+    #expect(index.entries.count == 116)
     #expect(Set(index.entries.map(\.id)).count == index.entries.count)
   }
 
   @Test func theAppNameFillsTheWording() {
     #expect(index["general.openAtLogin"].title == "Open Solara at login")
     #expect(index["advanced.cliControl"].title == "Let the solara command control Solara")
+  }
+
+  @Test func aboutAnswersVersionQuestions() {
+    #expect(ids("chromium").contains("about.chromium"))
+    #expect(ids("version").contains("about.version"))
+    #expect(hits("update").first?.entry.pane == .about)
+    #expect(!index.entries.contains { $0.pane == .general && $0.section == "Updates" })
   }
 
   @Test func liquidGlassOnlyRowsAreHiddenWithoutLiquidGlass() async {
@@ -150,6 +157,7 @@ struct SettingsSearchTests {
     case .liveFolders: "LiveFoldersPane"
     case .calendar: "CalendarPane"
     case .advanced: "AdvancedPane"
+    case .about: "AboutPane"
     }
   }
 }

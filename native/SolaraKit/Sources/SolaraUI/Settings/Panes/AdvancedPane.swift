@@ -107,9 +107,6 @@ public final class AdvancedPaneModel: SettingsPaneProvider {
     return "Not installed."
   }
 
-  static func sourceNotice(app: String) -> String {
-    "\(app) is open source under the Apache License 2.0."
-  }
 }
 
 struct AdvancedPane: View {
@@ -180,13 +177,7 @@ struct AdvancedPane: View {
         SettingRow("advanced.widevine", description: .text(model.widevineDescription))
       }
 
-      SettingsSection("Source and licenses") {
-        let info = services.systemInfo
-        if let repo = info.releaseRepo {
-          SettingRow("advanced.source", description: AdvancedPaneModel.sourceNotice(app: context?.appName ?? "")) {
-            Button("Show on GitHub") { services.openURL("https://github.com/\(repo)/tree/v\(info.appVersion)") }
-          }
-        }
+      SettingsSection("Licenses") {
         SettingRow("advanced.licenses") {
           Button("Show Licenses") { services.openURL("chrome://credits") }
         }

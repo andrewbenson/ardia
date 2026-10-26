@@ -31,16 +31,6 @@ final class FakeSettingsStore: SettingsStoreSource {
 final class FakeGeneralServices: GeneralServices {
   var login: LoginItemStatus = .notRegistered
   var isDefault = true
-  var updater: UpdaterState? = UpdaterState(
-    configured: true,
-    automaticChecks: true,
-    automaticDownloads: true,
-    canCheck: true,
-    sessionInProgress: false,
-    lastCheck: Date(timeIntervalSince1970: 1_792_000_000),
-    version: "0.3.0",
-    channel: "stable"
-  )
   var downloads: [String: DownloadSettings] = [
     "default": DownloadSettings(folder: "/Users/owner/Downloads", askWhereToSave: false, managed: false),
     "work": DownloadSettings(folder: "/Users/owner/Work Downloads", askWhereToSave: true, managed: false),
@@ -54,12 +44,6 @@ final class FakeGeneralServices: GeneralServices {
     isDefault = true
     return true
   }
-  func updaterState() async -> UpdaterState? { updater }
-  func setAutomaticUpdateChecks(_ on: Bool) async { updater?.automaticChecks = on }
-  func setAutomaticUpdateDownloads(_ on: Bool) async { updater?.automaticDownloads = on }
-  func setUpdateChannel(_ channel: String) async { updater?.channel = channel }
-  func checkForUpdates() async { updater?.lastCheck = Date() }
-  var updateChecksNote: String? { nil }
   func downloadSettings(profile: String) async -> DownloadSettings? { downloads[profile] }
   func setDownloadSettings(folder: String?, askWhereToSave: Bool?, profile: String) async -> DownloadSettings? {
     guard var current = downloads[profile] else { return nil }
@@ -73,6 +57,42 @@ final class FakeGeneralServices: GeneralServices {
 }
 
 @MainActor
+final class FakeAboutServices: AboutServices {
+  var aboutInfo = AboutInfo(
+    appVersion: "0.3.0",
+    build: "412",
+    chromiumVersion: "156.0.8078.47",
+    engine: "ArdiaCore",
+    osVersion: "27.0.1 (26A434)",
+    architecture: "Apple silicon (arm64)",
+    copyright: "© 2026 Andrew Benson.",
+    upstreamCredit: nil,
+    releaseRepo: "andrewbenson/solara"
+  )
+  var updater: UpdaterState? = UpdaterState(
+    configured: true,
+    automaticChecks: true,
+    automaticDownloads: true,
+    canCheck: true,
+    sessionInProgress: false,
+    lastCheck: Date(timeIntervalSince1970: 1_792_000_000),
+    version: "0.3.0",
+    channel: "stable"
+  )
+  var copiedText: String?
+  var opened: [String] = []
+
+  func updaterState() async -> UpdaterState? { updater }
+  func setAutomaticUpdateChecks(_ on: Bool) async { updater?.automaticChecks = on }
+  func setAutomaticUpdateDownloads(_ on: Bool) async { updater?.automaticDownloads = on }
+  func setUpdateChannel(_ channel: String) async { updater?.channel = channel }
+  func checkForUpdates() async { updater?.lastCheck = Date() }
+  var updateChecksNote: String? { nil }
+  func copyText(_ text: String) { copiedText = text }
+  func openURL(_ url: String) { opened.append(url) }
+}
+
+@MainActor
 enum SettingsFixture {
   static func context(liquidGlass: Bool = false) -> (SettingsContext, FakeSettingsStore) {
     let store = FakeSettingsStore()
@@ -83,6 +103,7 @@ enum SettingsFixture {
     context.panes[.search] = SearchEnginePaneModel(services: FakeSearchEngineServices(), store: store)
     context.panes[.engines] = EnginesPaneModel(services: FakeEnginesServices(store: store), store: store)
     context.panes[.advanced] = AdvancedPaneModel(services: FakeAdvancedServices(), store: store)
+    context.panes[.about] = AboutPaneModel(services: FakeAboutServices())
     context.profileForPane = { pane, current in pane == .extensions ? (current.pane == .extensions ? current.profileId : nil) ?? "default" : nil }
     return (context, store)
   }

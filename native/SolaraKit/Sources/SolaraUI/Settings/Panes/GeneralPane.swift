@@ -9,30 +9,6 @@ public enum LoginItemStatus: String, Sendable {
   case notFound
 }
 
-public struct UpdaterState: Sendable, Equatable {
-  public var configured: Bool
-  public var automaticChecks: Bool
-  public var automaticDownloads: Bool
-  public var canCheck: Bool
-  public var sessionInProgress: Bool
-  public var lastCheck: Date?
-  public var version: String
-  public var displayVersion: String?
-  public var channel: String?
-
-  public init(configured: Bool, automaticChecks: Bool, automaticDownloads: Bool, canCheck: Bool, sessionInProgress: Bool, lastCheck: Date?, version: String, displayVersion: String? = nil, channel: String? = nil) {
-    self.configured = configured
-    self.automaticChecks = automaticChecks
-    self.automaticDownloads = automaticDownloads
-    self.canCheck = canCheck
-    self.sessionInProgress = sessionInProgress
-    self.lastCheck = lastCheck
-    self.version = version
-    self.displayVersion = displayVersion
-    self.channel = channel
-  }
-}
-
 public struct DownloadSettings: Sendable, Equatable {
   public var folder: String
   public var askWhereToSave: Bool
@@ -51,12 +27,6 @@ public protocol GeneralServices: AnyObject {
   func setLaunchAtLogin(_ on: Bool) async
   func isDefaultBrowser() async -> Bool
   func setAsDefaultBrowser() async -> Bool
-  func updaterState() async -> UpdaterState?
-  func setAutomaticUpdateChecks(_ on: Bool) async
-  func setAutomaticUpdateDownloads(_ on: Bool) async
-  func setUpdateChannel(_ channel: String) async
-  func checkForUpdates() async
-  var updateChecksNote: String? { get }
   func downloadSettings(profile: String) async -> DownloadSettings?
   func setDownloadSettings(folder: String?, askWhereToSave: Bool?, profile: String) async -> DownloadSettings?
   func pickFolder(current: String, prompt: String) async -> String?
@@ -70,7 +40,6 @@ public final class GeneralPaneModel: SettingsPaneProvider {
   @ObservationIgnored let store: SettingsStoreSource
   var loginStatus: LoginItemStatus?
   var isDefault: Bool?
-  var updater: UpdaterState??
   var downloads: [String: DownloadSettings?] = [:]
   var downloadsProfileId: String
 
@@ -83,14 +52,13 @@ public final class GeneralPaneModel: SettingsPaneProvider {
   var downloadsProfile: String { store.engineProfile(downloadsProfileId) }
 
   public func isLoaded(_ place: SettingsPlace) -> Bool {
-    loginStatus != nil && isDefault != nil && updater != nil && downloads.keys.contains(store.engineProfile(store.string("defaultProfileId")))
+    loginStatus != nil && isDefault != nil && downloads.keys.contains(store.engineProfile(store.string("defaultProfileId")))
   }
 
   public func prepare(_ place: SettingsPlace) async {
     let profile = store.engineProfile(store.string("defaultProfileId"))
     loginStatus = await services.loginItemStatus()
     isDefault = await services.isDefaultBrowser()
-    updater = .some(await services.updaterState())
     downloads[profile] = .some(await services.downloadSettings(profile: profile))
   }
 
@@ -100,7 +68,6 @@ public final class GeneralPaneModel: SettingsPaneProvider {
 
   func refreshLogin() async { loginStatus = await services.loginItemStatus() }
   func refreshDefault() async { isDefault = await services.isDefaultBrowser() }
-  func refreshUpdater() async { updater = .some(await services.updaterState()) }
 
   func loadDownloads(_ profile: String) async {
     downloads[profile] = .some(await services.downloadSettings(profile: profile))
@@ -112,12 +79,6 @@ public final class GeneralPaneModel: SettingsPaneProvider {
         downloads[profile] = .some(next)
       }
     }
-  }
-
-  func setUpdater(_ change: (inout UpdaterState) -> Void) {
-    guard case .some(.some(var state)) = updater else { return }
-    change(&state)
-    updater = .some(state)
   }
 }
 
@@ -178,8 +139,6 @@ struct GeneralPane: View {
 
       DownloadsSection(model: model)
 
-      UpdatesSection(model: model)
-
       SettingsSection("Import") {
         SettingRow("general.importBrowser") {
           Button("Import…") { model.services.openImport() }
@@ -187,10 +146,7 @@ struct GeneralPane: View {
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-      Task {
-        await model.refreshDefault()
-        await model.refreshUpdater()
-      }
+      Task { await model.refreshDefault() }
     }
   }
 }
@@ -283,70 +239,5 @@ struct DownloadsSection: View {
     .task(id: profile) {
       if model.downloads[profile] == nil { await model.loadDownloads(profile) }
     }
-  }
-}
-
-struct UpdatesSection: View {
-  @Environment(\.settingsContext) private var context
-  let model: GeneralPaneModel
-
-  var body: some View {
-    if case .some(.some(let state)) = model.updater {
-      let app = context?.appName ?? ""
-      let ready = state.configured
-      SettingsSection("Updates", description: ready ? nil : "Updates aren't set up for this build.") {
-        SettingRow("general.updateChecks", description: model.services.updateChecksNote) {
-          Toggle("", isOn: Binding(
-            get: { ready && state.automaticChecks },
-            set: { on in
-              model.setUpdater { $0.automaticChecks = on }
-              Task { await model.services.setAutomaticUpdateChecks(on); await model.refreshUpdater() }
-            }
-          ))
-          .labelsHidden()
-          .toggleStyle(.switch)
-          .disabled(!ready)
-        }
-        SettingRow("general.autoUpdate") {
-          Toggle("", isOn: Binding(
-            get: { ready && state.automaticChecks && state.automaticDownloads },
-            set: { on in
-              model.setUpdater { $0.automaticDownloads = on }
-              Task { await model.services.setAutomaticUpdateDownloads(on); await model.refreshUpdater() }
-            }
-          ))
-          .labelsHidden()
-          .toggleStyle(.switch)
-          .disabled(!ready || !state.automaticChecks)
-        }
-        if let channel = state.channel {
-          SettingRow("general.updateChannel") {
-            SettingPicker(
-              [SettingOption("stable", "Stable"), SettingOption("nightly", "Nightly")],
-              selection: Binding(get: { channel }, set: { next in
-                model.setUpdater { $0.channel = next }
-                Task { await model.services.setUpdateChannel(next); await model.refreshUpdater() }
-              })
-            )
-            .disabled(!ready)
-          }
-        }
-        SettingRow(
-          "general.checkNow",
-          title: "\(app) \(state.displayVersion ?? state.version)",
-          description: ready ? Self.lastCheck(state.lastCheck) : nil
-        ) {
-          Button("Check Now") {
-            Task { await model.services.checkForUpdates(); await model.refreshUpdater() }
-          }
-          .disabled(ready && (!state.canCheck || state.sessionInProgress))
-        }
-      }
-    }
-  }
-
-  static func lastCheck(_ date: Date?) -> String {
-    guard let date else { return "Not checked yet." }
-    return "Last checked \(date.formatted(date: .abbreviated, time: .shortened))."
   }
 }

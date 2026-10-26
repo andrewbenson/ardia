@@ -16,6 +16,7 @@ public enum SettingsPane: String, CaseIterable, Identifiable, Sendable, Codable 
   case liveFolders
   case calendar
   case advanced
+  case about
 
   public var id: String { rawValue }
 
@@ -36,6 +37,7 @@ public enum SettingsPane: String, CaseIterable, Identifiable, Sendable, Codable 
     case .liveFolders: "Live Folders"
     case .calendar: "Calendar"
     case .advanced: "Advanced"
+    case .about: "About"
     }
   }
 
@@ -56,6 +58,7 @@ public enum SettingsPane: String, CaseIterable, Identifiable, Sendable, Codable 
     case .liveFolders: "dot.radiowaves.left.and.right"
     case .calendar: "calendar"
     case .advanced: "slider.horizontal.3"
+    case .about: "info.circle"
     }
   }
 }

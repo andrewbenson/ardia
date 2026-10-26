@@ -170,11 +170,52 @@ struct SimplePanesTests {
     #expect(model.widevineDescription == "Version 4.10.2891.0")
   }
 
+  @Test func aboutReportIsPlainTextForBugReports() async {
+    let services = FakeAboutServices()
+    let model = AboutPaneModel(services: services)
+    await model.prepare(SettingsPlace(pane: .about))
+    model.copy(app: "Solara")
+    #expect(services.copiedText == "Solara 0.3.0 (412), Stable\nChromium 156.0.8078.47\nEngine ArdiaCore\nmacOS 27.0.1 (26A434), Apple silicon (arm64)")
+    services.updater?.channel = "nightly"
+    await model.refreshUpdater()
+    #expect(AboutPaneModel.versionLine(services.aboutInfo, channel: model.channel) == "0.3.0 (412), Nightly")
+  }
+
+  @Test func aboutCopyrightShowsTheUpstreamCreditOnlyWhenSet() {
+    var info = FakeAboutServices().aboutInfo
+    #expect(AboutPaneModel.copyrightLine(info) == "© 2026 Andrew Benson.")
+    info.upstreamCredit = "Built on Ardia, © 2026 Mantra Patel."
+    #expect(AboutPaneModel.copyrightLine(info) == "© 2026 Andrew Benson. Built on Ardia, © 2026 Mantra Patel.")
+    info.copyright = nil
+    info.upstreamCredit = nil
+    #expect(AboutPaneModel.copyrightLine(info) == nil)
+  }
+
+  @Test func aboutInfoReadsTheBundleAndTheEngineFramework() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("about-\(UUID().uuidString)")
+    let app = root.appendingPathComponent("Solara.app/Contents")
+    let framework = app.appendingPathComponent("Frameworks/Chromium Framework.framework/Resources")
+    try FileManager.default.createDirectory(at: framework, withIntermediateDirectories: true)
+    let appPlist: [String: Any] = ["CFBundleIdentifier": "test.solara", "CFBundleShortVersionString": "0.4.0", "CFBundleVersion": "500", "ACCopyright": "© 2026 Andrew Benson.", "ACUpstreamCredit": "", "CFBundlePackageType": "APPL"]
+    try (appPlist as NSDictionary).write(to: app.appendingPathComponent("Info.plist"))
+    let enginePlist: [String: Any] = ["CFBundleIdentifier": "test.chromium", "CFBundleShortVersionString": "156.0.8078.47", "CFBundlePackageType": "FMWK"]
+    try (enginePlist as NSDictionary).write(to: framework.appendingPathComponent("Info.plist"))
+    let bundle = try #require(Bundle(url: root.appendingPathComponent("Solara.app")))
+    let info = AboutInfo.read(app: bundle)
+    #expect(info.appVersion == "0.4.0")
+    #expect(info.build == "500")
+    #expect(info.chromiumVersion == "156.0.8078.47")
+    #expect(info.copyright == "© 2026 Andrew Benson.")
+    #expect(info.upstreamCredit == nil)
+    #expect(!info.osVersion.isEmpty)
+    try? FileManager.default.removeItem(at: root)
+  }
+
   @Test(.enabled(if: Snapshot.directory != nil))
   func rendersSimplePanes() async throws {
     let (context, store) = await SettingsFixture.loaded()
     store.values["websiteEngines"] = ["https://netflix.com": "webkit", "https://www.disneyplus.com": "webkit"]
-    try await Snapshot.renderPanes(context, [.tabs, .appearance, .search, .engines, .advanced])
+    try await Snapshot.renderPanes(context, [.tabs, .appearance, .search, .engines, .advanced, .about])
     store.topTabLayout = true
     try await Snapshot.renderPanes(context, [], places: [SettingsPlace(pane: .tabs, detail: "top")]) { _ in "tabs-top" }
   }

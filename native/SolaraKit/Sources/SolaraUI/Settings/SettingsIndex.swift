@@ -99,12 +99,6 @@ public struct SettingsIndex: Sendable {
             keywords: ["all profiles", "global", "download location"]
           ),
         ]),
-        Section(section: "Updates", rows: [
-          Row(key: "updateChecks", title: "Check for updates automatically", keywords: ["update", "sparkle"]),
-          Row(key: "autoUpdate", title: "Automatically update \(app)", description: "Downloads updates in the background and installs them the next time it restarts.", keywords: ["update", "install"]),
-          Row(key: "updateChannel", title: "Update channel", description: "Nightly gets every fix first. Switching back to Stable never downgrades.", keywords: ["nightly", "stable", "beta"]),
-          Row(key: "checkNow", title: "Check for updates now", keywords: ["version", "update", "about"]),
-        ]),
         Section(section: "Import", rows: [
           Row(
             key: "importBrowser",
@@ -501,9 +495,27 @@ public struct SettingsIndex: Sendable {
           Row(key: "chromium", title: "Chromium", keywords: ["engine", "version", "ardiacore"]),
           Row(key: "widevine", title: "Widevine (protected video)", keywords: ["drm", "netflix", "disney", "spotify"]),
         ]),
-        Section(section: "Source and licenses", rows: [
-          Row(key: "source", title: "Source code", description: "\(app) is open source under the Apache License 2.0.", keywords: ["github", "open source"]),
+        Section(section: "Licenses", rows: [
           Row(key: "licenses", title: "Licenses", description: "Every open-source part of the engine, with its copyright and license.", keywords: ["credits", "legal"]),
+        ]),
+      ],
+      .about: [
+        Section(section: app, rows: [
+          Row(key: "version", title: "\(app) version", keywords: ["version", "build", "about", "bug report", "channel"]),
+          Row(key: "chromium", title: "Chromium", keywords: ["chromium", "engine", "version", "chrome", "ardiacore"]),
+          Row(key: "macOS", title: "macOS", keywords: ["os", "system", "version", "architecture", "apple silicon", "intel"]),
+          Row(key: "copy", title: "Copy version information", description: "For bug reports.", keywords: ["copy", "bug report", "version", "support"]),
+        ]),
+        Section(section: "Updates", rows: [
+          Row(key: "updateChecks", title: "Check for updates automatically", keywords: ["update", "sparkle"]),
+          Row(key: "autoUpdate", title: "Automatically update \(app)", description: "Downloads updates in the background and installs them the next time it restarts.", keywords: ["update", "install"]),
+          Row(key: "updateChannel", title: "Update channel", description: "Nightly gets every fix first. Switching back to Stable never downgrades.", keywords: ["nightly", "stable", "beta"]),
+          Row(key: "checkNow", title: "Check for updates now", keywords: ["version", "update", "about"]),
+        ]),
+        Section(section: "License", rows: [
+          Row(key: "license", title: "License", description: "\(app) is free software under the GNU General Public License v3.", keywords: ["gpl", "license", "open source", "legal"]),
+          Row(key: "source", title: "Source code", keywords: ["github", "open source"]),
+          Row(key: "copyright", title: "Copyright", keywords: ["credits", "notice", "legal", "author"]),
         ]),
       ],
     ]

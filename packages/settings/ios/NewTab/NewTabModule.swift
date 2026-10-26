@@ -10,7 +10,7 @@ public class NewTabModule: Module {
     Name("SolaraNewTab")
 
     Function("available") { () -> Bool in
-      ProcessInfo.processInfo.environment["ARDIA_NATIVE_NEWTAB"] != "0" && NativeSettingsHandle.active
+      ProcessInfo.processInfo.environment["ARDIA_NATIVE_NEWTAB"] == "1" && NativeSettingsHandle.active
     }
 
     AsyncFunction("setTabs") { (profileId: String, json: String) in

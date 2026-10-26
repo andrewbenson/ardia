@@ -225,6 +225,16 @@ import Testing
     }
   }
 
+  @Test func anAppOrAboutURLWhoseFragmentHasALineBreakStillParses() {
+    AppScheme.withScheme(productName: "Solara") {
+      #expect(urlForDisplay("ardia://x#a\nb") == "solara://x#a\nb")
+      #expect(appUrlOrigin("about:flags#a\nb") == "solara://flags")
+      #expect(breadcrumb("solara://settings/sync#a\u{2028}b", title: "Settings") == Breadcrumb(host: "solara://settings", trail: ["Settings"]))
+      #expect(appUrlRoute("ardia://settings/sync#a\nb") == .settings(section: "sync"))
+      #expect(displayUrl("chrome://version/#a\rb") == "solara://version#a\rb")
+    }
+  }
+
   @Test func setAppSchemeReturnsTheSchemeItSets() {
     #expect(setAppScheme(nil) == "ardia")
     #expect(appScheme() == "ardia")

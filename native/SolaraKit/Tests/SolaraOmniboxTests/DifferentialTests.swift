@@ -84,7 +84,7 @@ private func json(_ r: AppUrlRoute?) -> ParsedJSON {
           guard let want = c[name] else { return }
           if let error = want["throws"] {
             threw += 1
-            #expect(error.str.hasPrefix("TypeError: Cannot read properties of null"), "\(label) \(name): \(error.str)")
+            Issue.record("packages/core threw on \(label) \(name): \(error.str)")
             return
           }
           m.check("\(label) \(name)", got(), want)
@@ -115,7 +115,7 @@ private func json(_ r: AppUrlRoute?) -> ParsedJSON {
   @Test func underTheUpstreamScheme() throws {
     let (m, threw) = try run("ardia", product: nil)
     #expect(m.total == 0, "\(m.report)")
-    print("UrlDifferential: packages/core threw a TypeError on \(threw) calls (an app URL whose fragment has a line break); Swift returns a value")
+    #expect(threw == 0)
   }
 
   @Test func underSolarasScheme() throws {

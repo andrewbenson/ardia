@@ -15,7 +15,7 @@ case "move":
   if args.count == 4, args[2] == "--wait" {
     while !FileManager.default.fileExists(atPath: args[3]) { usleep(20_000) }
   }
-  LegacyMigration.moveToNewName()
+  LegacyMigration.moveToNewName(bundleId: LegacyName.successorBundleId)
   let launched = LegacyMigration.launchedExecutable() ?? "?"
   print("at \(launched)|\(ProcessInfo.processInfo.environment["MOVE_MARK"] ?? "")|\(args.dropFirst().joined(separator: " "))")
 default:

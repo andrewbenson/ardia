@@ -205,6 +205,10 @@ function run(cmd, args, { locked = false, cwd = repoRoot, env = {}, log: file } 
 }
 
 let dragPid = 0;
+const journeyCopies = () => {
+  if (!state.meta.preparedJourneys?.app) throw new Error("no journeys copies (prepare makes them, with --telemetry-sink): rerun --only prepare");
+  return state.meta.preparedJourneys;
+};
 const nb = join(here, "native-bench.mjs");
 const labelOfPrepared = (path) => basename(dirname(dirname(path)));
 function dsymOf(app) {
@@ -222,9 +226,10 @@ function originalOf(label) {
   return null;
 }
 const node = process.execPath;
-const preparedArgs = () => [
-  "--app", state.meta.prepared.app, "--prepared", "--port", String(port),
-  ...(state.meta.prepared.control ? ["--control", state.meta.prepared.control] : []),
+const TELEMETRY_SINK = "https://bench-telemetry.invalid/v1/logs";
+const preparedArgs = (copies = state.meta.prepared) => [
+  "--app", copies.app, "--prepared", "--port", String(port),
+  ...(copies.control ? ["--control", copies.control] : []),
 ];
 const benchResults = (dir) => {
   const found = {};
@@ -234,13 +239,13 @@ const benchResults = (dir) => {
   }
   return found;
 };
-async function bench(phase, args, extra = {}) {
+async function bench(phase, args, { copies, ...extra } = {}) {
   const dir = join(out, phase);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   let failure = null;
   try {
-    await run(node, [nb, "--out", dir, ...preparedArgs(), ...args], { locked: true, log: join(dir, "stdout.txt"), ...extra });
+    await run(node, [nb, "--out", dir, ...preparedArgs(copies), ...args], { locked: true, log: join(dir, "stdout.txt"), ...extra });
   } catch (error) {
     failure = error;
   }
@@ -309,6 +314,12 @@ const phases = {
     const apps = [...said.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
     if (!apps.length) throw new Error("native-bench prepare named no copies");
     state.meta.prepared = { app: apps[0], control: apps[1] ?? null };
+    const jdir = join(out, "prepare-journeys");
+    const jsaid = await run(node, [nb, "--out", jdir, "--app", resolve(opt.app), "--only", "prepare", "--port", String(port), "--telemetry-sink", TELEMETRY_SINK,
+      ...(opt.label ? ["--label", opt.label] : []), ...(opt["control-label"] ? ["--control-label", opt["control-label"]] : []),
+      "--bundle", bundles.app.bundle, ...(opt.control ? ["--control", resolve(opt.control), "--control-bundle", bundles.control.bundle] : [])]);
+    const japps = [...jsaid.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
+    state.meta.preparedJourneys = { app: japps[0], control: japps[1] ?? null };
     const pre = await bench("preflight", ["--only", "launch", "--launch-runs", "1"]);
     for (const [label, r] of Object.entries(pre)) {
       const ok = (r.launch ?? []).some((x) => Number.isFinite(x.js));
@@ -320,7 +331,7 @@ const phases = {
     const watch = new ConnectionWatch(500);
     let results, net;
     try {
-      results = await bench("netcheck", ["--only", "newtabkey", "--runs", "1", "--journey-n", "2", "--seed", "big"]);
+      results = await bench("netcheck", ["--only", "newtabkey", "--runs", "1", "--journey-n", "2", "--seed", "big"], { copies: journeyCopies() });
     } finally {
       net = watch.stop();
     }
@@ -344,7 +355,7 @@ const phases = {
     };
   },
   async journeys() {
-    return bench("journeys", ["--only", "newtabkey,navigate", "--journey-n", "10", "--runs", runs, "--seed", "big"]);
+    return bench("journeys", ["--only", "newtabkey,navigate", "--journey-n", "10", "--runs", runs, "--seed", "big"], { copies: journeyCopies() });
   },
   async tabactions() {
     const dir = join(out, "tabactions");
@@ -551,6 +562,7 @@ function render() {
   if (skipped.length) md.push(`**Left for a run with the display awake and unlocked:** ${skipped.join(", ")}.`, "");
   const lost = PHASES.filter((n) => P[n]?.partial || P[n]?.error);
   if (lost.length) md.push(`**Phases that failed or lost runs (their rows hold fewer samples):** ${lost.map((n) => `${n} (${(P[n].partial ?? [P[n].error]).join("; ").slice(0, 300)})`).join("; ")}.`, "");
+  md.push(`The journeys (M2, M3, J4) and netcheck phases run on copies whose empty telemetry URL is filled with \`${TELEMETRY_SINK}\`: a build without one keeps sharing off, and the field timing those rows read only runs while it's on. Uploads go to bench-offline.js's answered fetch, and the host can't resolve. Every other phase runs the copies as built.`, "");
   md.push("Where this run departs from [baseline.md](baseline.md): the one-tab and seed launches run as two interleaved series (app and control interleaved within each), not interleaved with each other; acsample.c samples only in the framecounts runs, so the frames runs' timing carries no sampling cost.", "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
   const nc = P.netcheck?.result;

@@ -70,6 +70,11 @@
 //                             (`--trace-startup`, 4 s, JSON) into <out>/<label>/traces/launch-<i>.json, named in its
 //                             result's `trace`; launch-trace.mjs compares two sides'. Tracing slows the launch:
 //                             compare traced launches with traced launches only.
+//     --telemetry-sink <url>  prepare: fill the copies' empty ACTelemetryURL with this https URL on a .invalid host. A
+//                             build with no telemetry URL forces sharing off, and the field timing newtabkey and navigate
+//                             read (journeys.ts) only runs while sharing is on. Every upload then goes through
+//                             bench-offline.js's answered fetch, and the host can't resolve if it didn't. Use these copies
+//                             for newtabkey and navigate only
 //     --hold <secs>           keep each measured instance alive that long before it quits, its pid and data dir logged
 //                             (lldb -p <pid>, heap <pid>, vmmap --summary <pid>). Ctrl-C quits it and stops.
 //     --port <n>              the instances' CDP port (default 9377). One instance runs at a time.
@@ -177,6 +182,7 @@ const { values: opt } = parseArgs({
     "frames-stalls": { type: "boolean" },
     "mem-windows": { type: "string", default: "4" },
     hold: { type: "string", default: "0" },
+    "telemetry-sink": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -395,6 +401,14 @@ function prepareApp(app, out, bundle) {
   mkdirSync(out, { recursive: true });
   execFileSync("cp", ["-Rc", app, copy]);
   cpSync(bundle, join(copy, "Contents/Resources/main.jsbundle"));
+  const sink = opt["telemetry-sink"];
+  if (sink) {
+    if (!/^https:\/\/[a-z0-9.-]+\.invalid(\/|$)/i.test(sink)) throw new Error(`--telemetry-sink must be an https URL on a .invalid host (it can never resolve), got ${sink}`);
+    const plist = join(copy, "Contents/Info.plist");
+    const current = spawnSync("plutil", ["-extract", "ACTelemetryURL", "raw", plist], { encoding: "utf8" }).stdout.trim();
+    if (current) throw new Error(`${app} already has a telemetry URL (${current}); --telemetry-sink only fills an empty one`);
+    execFileSync("plutil", ["-replace", "ACTelemetryURL", "-string", sink, plist]);
+  }
   const info = spawnSync("codesign", ["-dvv", app], { encoding: "utf8" }).stderr;
   const identity = info.match(/^Authority=(.+)$/m)?.[1] ?? "-";
   const entitlements = join(out, "entitlements.plist");
@@ -403,7 +417,7 @@ function prepareApp(app, out, bundle) {
     .filter((key) => !granted.includes(`<key>${key}</key>`)).map((key) => `<key>${key}</key><true/>`).join("");
   writeFileSync(entitlements, granted.replace(/<\/dict>\s*<\/plist>\s*$/, `${marker}</dict></plist>`));
   execFileSync("codesign", ["--force", "--sign", identity, "--timestamp=none", "--options", "runtime", "--entitlements", entitlements, copy], { stdio: "inherit" });
-  writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, date: new Date().toISOString() }));
+  writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, telemetrySink: sink ?? null, date: new Date().toISOString() }));
   return copy;
 }
 

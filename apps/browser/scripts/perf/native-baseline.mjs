@@ -4,7 +4,9 @@
 //
 //   node apps/browser/scripts/perf/native-baseline.mjs --app <dist/<v>/export/X.app> --out <dir> [options]
 //     --port <n>              CDP port of every instance (default 9481); tab-actions uses <n>+1, its pages <n>+2
+//     --label <name>          the app's name in the results (default: native-bench's, the folder two levels up)
 //     --control <app>         a previous stable, interleaved run by run with --app in every phase that supports it
+//     --control-label <name>  the control's name (default as --label)
 //     --bundle <file>         the bench bundle for native-bench (default: built from the tree by its prepare)
 //     --control-bundle <file> the control's bench bundle, when its NATIVE_API_VERSION differs
 //     --version <v>           the version in the report's name (default: the app's CFBundleShortVersionString)
@@ -27,6 +29,8 @@
 //                                           it moves the pointer and needs the owner's go-ahead. Without it the M5 rows
 //                                           say "needs owner run"
 //     --drag                  allow the drag phase (adds it to the default list)
+//     --locked-ok             start even with the screen locked or the display asleep: the phases that need display-link
+//                             frames (journeys, tabactions, frames, framecounts, drag) are left out and listed in the report
 //     --runs <n>              runs of journeys, frames, framecounts, session and memslope (default 3)
 //     --symbols <file>        Chromium Framework's DWARF file, for stall-samples.mjs's names
 //     --resume                skip phases whose results are already in <out>/baseline.json
@@ -53,6 +57,9 @@ const { values: opt } = parseArgs({
     out: { type: "string", default: join(tmpdir(), "ac-native-baseline") },
     port: { type: "string", default: "9481" },
     control: { type: "string" },
+    label: { type: "string" },
+    "control-label": { type: "string" },
+    "locked-ok": { type: "boolean" },
     bundle: { type: "string" },
     "control-bundle": { type: "string" },
     version: { type: "string" },
@@ -75,6 +82,7 @@ if (opt.help) {
 }
 
 const PHASES = ["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
+const NEEDS_DISPLAY = new Set(["journeys", "tabactions", "frames", "framecounts", "drag"]);
 const LOCKED = new Set(["launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
 const out = resolve(opt.out);
 const stateFile = join(out, "baseline.json");
@@ -176,6 +184,7 @@ const phases = {
   async prepare() {
     const dir = join(out, "prepare");
     const said = await run(node, [nb, "--out", dir, "--app", resolve(opt.app), "--only", "prepare", "--port", String(port),
+      ...(opt.label ? ["--label", opt.label] : []), ...(opt["control-label"] ? ["--control-label", opt["control-label"]] : []),
       ...(opt.bundle ? ["--bundle", resolve(opt.bundle)] : []),
       ...(opt.control ? ["--control", resolve(opt.control), ...(opt["control-bundle"] ? ["--control-bundle", resolve(opt["control-bundle"])] : [])] : [])]);
     const apps = [...said.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
@@ -202,8 +211,9 @@ const phases = {
     const dir = join(out, "tabactions");
     rmSync(dir, { recursive: true, force: true });
     const app = resolve(opt.app);
-    const sides = ["--side", `stable=${join(app, "Contents/Resources/main.jsbundle")}`];
-    if (opt.control) sides.push("--side", `control=${join(resolve(opt.control), "Contents/Resources/main.jsbundle")}`, "--side-app", `control=${resolve(opt.control)}`);
+    const label = opt.label ?? "app";
+    const sides = ["--side", `${label}=${join(app, "Contents/Resources/main.jsbundle")}`];
+    if (opt.control) sides.push("--side", `${opt["control-label"] ?? "control"}=${join(resolve(opt.control), "Contents/Resources/main.jsbundle")}`, "--side-app", `${opt["control-label"] ?? "control"}=${resolve(opt.control)}`);
     await run(node, [join(here, "tab-actions.mjs"), "run", "--app", app, ...sides, "--launches", "4", "--n", "5",
       "--actions", "click,ctrlTab,cmdNumber,cmdT,cmdW,hoverClose,pin,unpin", "--out", dir, "--port", String(port + 1), "--page-port", String(port + 2)], { locked: true });
     return { samples: readFileSync(join(dir, "samples.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) };
@@ -322,6 +332,10 @@ function render() {
   const v = state.meta.version ?? "?";
   md.push(`# Native move: baseline ${v}`, "");
   md.push(`Measured by \`apps/browser/scripts/perf/native-baseline.mjs\` (plan: [baseline.md](baseline.md)) on \`${state.meta.app ?? "?"}\`${state.meta.control ? `, interleaved with \`${state.meta.control}\`` : ""}.`, "");
+  const dark = PHASES.filter((n) => P[n]?.before?.display?.locked || P[n]?.before?.display?.asleep);
+  const skipped = PHASES.filter((n) => P[n]?.skipped && !P[n]?.result);
+  if (dark.length) md.push(`**Run with the screen locked or the display asleep:** ${dark.join(", ")}. macOS gives windows no display-link frames then and pages paint about once a second, so in those phases only rows that don't wait on a frame or a paint stand (launch → window shown and → JS running, memory, idle CPU and wakeups, compute); the paint and frame rows are left for the unlocked rerun.`, "");
+  if (skipped.length) md.push(`**Left for a run with the display awake and unlocked:** ${skipped.join(", ")}.`, "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
   md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");
   for (const name of PHASES) {
@@ -434,6 +448,7 @@ function render() {
         lr.push({ name: `${k}: window shown`, side: sideName(label), values: L.map((x) => x.window) });
         lr.push({ name: `${k}: JS running`, side: sideName(label), values: L.map((x) => x.js) });
         lr.push({ name: `${k}: window with content`, side: sideName(label), values: L.map((x) => x.withContent) });
+        if (dark.includes(phase)) continue;
         lr.push({ name: `${k}: page's first frame`, side: sideName(label), values: L.map((x) => x.firstFrame) });
         lr.push({ name: `${k}: first contentful paint`, side: sideName(label), values: L.map((x) => x.firstPaint) });
       }
@@ -498,7 +513,8 @@ Object.assign(state.meta, { app: resolve(opt.app), control: opt.control ? resolv
 const exe = join(resolve(opt.app), "Contents/MacOS", plist(opt.app, "CFBundleExecutable"));
 if (spawnSync("pgrep", ["-f", `/${basename(exe)}( |$)`]).status === 0) log(`note: another ${basename(exe)} process is running (yours to check: never quit the owner's)`);
 const disp = machine().display;
-if (disp.asleep || disp.locked) fail(`the display is ${disp.asleep ? "asleep" : "locked"}: macOS gives no display-link frames then; wake and unlock it first`);
+const dark = disp.asleep || disp.locked;
+if (dark && !opt["locked-ok"]) fail(`the display is ${disp.asleep ? "asleep" : "locked"}: macOS gives no display-link frames then; wake and unlock it first, or pass --locked-ok to run only what doesn't need them`);
 
 const caffeinate = spawn("caffeinate", ["-d", "-w", String(process.pid)], { stdio: "ignore" });
 let held = false;
@@ -514,6 +530,15 @@ process.on("SIGINT", () => {
 try {
   if (!wanted.includes("prepare") && !state.meta.prepared) fail("no prepared copies in this --out: run the prepare phase first");
   for (const name of wanted) {
+    if (NEEDS_DISPLAY.has(name)) {
+      const d = machine().display;
+      if (d.asleep || d.locked) {
+        log(`${name}: left out, the display is ${d.asleep ? "asleep" : "locked"}`);
+        state.phases[name] = { ...(state.phases[name]?.result ? state.phases[name] : {}), skipped: `the display was ${d.asleep ? "asleep" : "locked"}` };
+        save();
+        continue;
+      }
+    }
     if (opt.resume && state.phases[name]?.result) {
       log(`${name}: done already (--resume)`);
       continue;

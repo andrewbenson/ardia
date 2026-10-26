@@ -38,6 +38,10 @@
 //                               framecounts the same interactions with the JS perf probe on: commits, host updates, layout
 //                                          passes, mount batches (counts, no timing; the ratchet's numbers)
 //                               windows    8 new windows per run, alone
+//                               memslope   memory per window: after 30 s settled, phys_footprint of the browser process and
+//                                          of the whole tree, then --mem-windows more windows (default 4), each holding a New
+//                                          Tab, 10 s apart; the deltas and a least-squares slope (MB per window). Works with
+//                                          --seed big
 //                               throttle   hidden animating tabs' rAF and timer rates
 //                               churn      leak check: open and close 10 tabs 5 times
 //                               sample     main-thread `sample`s, idle and while switching and scrolling
@@ -46,6 +50,12 @@
 //                             the marker library). Instances stay muted; don't pass ARDIA_ALLOW_AUDIO.
 //     --frames-n <n>          repetitions of each interaction per run in frames (default 8; framecounts uses at most 3)
 //     --frames-only <regex>   frames, framecounts: only the interactions whose name matches (case-insensitive)
+//     --frames-stalls         frames, framecounts: the main and JS threads' run-loop iterations bucketed by length
+//                             (acframes.m AC_BENCH_STALLS: 8–16, 16–33, 33–50, 50–100, 100–250, ≥250 ms) in a 60 s idle
+//                             window first, then per interaction, which adds typing in the command bar and a page load.
+//                             With --env AC_SAMPLE_SCENARIO=1 and acsample.dylib inserted, acframes arms acsample.c for
+//                             each window, so stall-samples.mjs can attribute the long iterations
+//     --mem-windows <n>       memslope: windows to add (default 4)
 //     --frames-sample         frames: `sample` the app over the first repetition of each interaction (<out>/frames-sample/*.txt)
 //     --journey-n <n>         iterations of each journey per run in newtabkey and navigate (default 10)
 //     --page-port <n>         the test pages' server port (default: any free port)
@@ -129,7 +139,7 @@ import { parseArgs } from "node:util";
 import { appEnv } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
-import { frameRows, frameTable, framesLibrary, framesRun } from "./frames-phase.mjs";
+import { frameRows, frameTable, framesLibrary, framesRun, stallTable } from "./frames-phase.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = resolve(here, "../..");
@@ -160,6 +170,8 @@ const { values: opt } = parseArgs({
     "frames-n": { type: "string", default: "8" },
     "frames-only": { type: "string" },
     "frames-sample": { type: "boolean" },
+    "frames-stalls": { type: "boolean" },
+    "mem-windows": { type: "string", default: "4" },
     hold: { type: "string", default: "0" },
     help: { type: "boolean", short: "h" },
   },
@@ -912,6 +924,40 @@ async function journeyRun(side, i, parts) {
 
 const SESSION_PARTS = ["idle", "memory", "switch", "newtab", "newwindow"];
 
+function slope(points, key) {
+  const xs = points.map((p) => p.k), ys = points.map((p) => p[key]);
+  const n = xs.length, mx = xs.reduce((a, b) => a + b, 0) / n, my = ys.reduce((a, b) => a + b, 0) / n;
+  const sxx = xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+  return sxx ? xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / sxx : NaN;
+}
+
+async function memSlopeRun(side, i) {
+  const app = new Instance(side, freshDir(side, `memslope-${i}`));
+  const r = { points: [], load: [Math.round(loadavg()[0])] };
+  try {
+    await app.launch();
+    await app.pageState("id=seed", 30_000, (s) => s.fcp);
+    await sleep(30_000);
+    const point = (k) => {
+      const f = footprint(usage(app.pid));
+      r.points.push({ k, totalMB: f.totalMB, browserMB: f.kinds.browser ?? NaN, processes: f.processes, kinds: f.kinds });
+    };
+    point(0);
+    for (let k = 1; k <= +opt["mem-windows"]; k++) {
+      await app.run(`ac.actions.openWindow(); return 1;`);
+      await sleep(10_000);
+      point(k);
+    }
+    r.slopeTotalMB = slope(r.points, "totalMB");
+    r.slopeBrowserMB = slope(r.points, "browserMB");
+    r.load.push(Math.round(loadavg()[0]));
+  } finally {
+    await app.done();
+  }
+  log(`${side.tag}memslope ${i}: ${r.points.map((p) => Math.round(p.totalMB)).join(" → ")} MB total, slope ${r.slopeTotalMB.toFixed(1)} MB/window (browser ${r.slopeBrowserMB.toFixed(1)})`);
+  side.results.memslope.push(r);
+}
+
 async function sessionRun(side, i, parts) {
   const has = (part) => parts.has(part);
   const secs = +opt.idle;
@@ -1107,6 +1153,15 @@ function summary(res) {
   for (const m of ["tabs1", "tabs10", "tabs20", "closed"]) add(`memory (phys_footprint), ${m === "closed" ? "after closing back to 1 tab" : m.slice(4) + " tab(s)"}`, S.map((r) => r.memory[m]?.totalMB), "MB");
   add("memory, browser process, 20 tabs", S.map((r) => r.memory.tabs20?.kinds.browser), "MB");
   add("memory, browser process, after closing", S.map((r) => r.memory.closed?.kinds.browser), "MB");
+  const M = res.memslope ?? [];
+  if (M.length) {
+    add("memory per window, slope (all processes)", M.map((r) => r.slopeTotalMB), "MB", 1);
+    add("memory per window, slope (browser process)", M.map((r) => r.slopeBrowserMB), "MB", 1);
+    for (let k = 1; k < Math.max(...M.map((r) => r.points.length)); k++) {
+      add(`memory, window ${k} added (Δ all processes)`, M.map((r) => r.points[k] && r.points[k].totalMB - r.points[k - 1].totalMB), "MB", 1);
+      add(`memory, window ${k} added (Δ browser process)`, M.map((r) => r.points[k] && r.points[k].browserMB - r.points[k - 1].browserMB), "MB", 1);
+    }
+  }
   const used = (r, k) => {
     const windows = [r.idle.tabs1, r.idle.tabs20].filter(Boolean);
     return windows.length ? windows.reduce((n, w) => n + (w.input?.[k] ?? NaN), 0) : NaN;
@@ -1185,14 +1240,15 @@ const fail = (message) => {
 if (!opt.app) fail("usage: native-bench.mjs --app <Ardia.app> [--control <app>] [--out dir] [--only phases] … (--help)");
 const JOURNEY_PHASES = ["newtabkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
-const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "throttle", "churn", "sample", "prepare"];
+const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "memslope", "throttle", "churn", "sample", "prepare"];
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));
 for (const p of only) if (!PHASES.includes(p)) fail(`--only: no phase "${p}"; phases: ${PHASES.join(", ")}`);
 if (only.has("frames") || only.has("framecounts")) opt.seed ??= "big";
 if (opt.seed && opt.seed !== "big") fail(`--seed: only "big" exists, got "${opt.seed}"`);
 if (opt["fresh-copy"] && ![...only].every((p) => p === "launch" || p === "prepare")) fail("--fresh-copy works with --only launch");
 if (opt["trace-startup"] && ![...only].every((p) => p === "launch")) fail("--trace-startup works with --only launch");
-if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with --only launch, newtabkey, navigate, frames and framecounts (the other phases measure a one-tab session)");
+if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || p === "memslope" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with --only launch, newtabkey, navigate, frames, framecounts and memslope (the other phases measure a one-tab session)");
+if (!(+opt["mem-windows"] >= 1)) fail(`--mem-windows wants a count, got "${opt["mem-windows"]}"`);
 for (const e of opt.env) if (!/^[A-Za-z_]\w*=/.test(e)) fail(`--env wants K=V, got "${e}"`);
 if (!(+opt.hold >= 0)) fail(`--hold wants seconds, got "${opt.hold}"`);
 if (opt.control && opt.compare) log("--compare is ignored with --control: the control is the before column");
@@ -1202,7 +1258,7 @@ function makeSide(app, label, role) {
   const dir = join(opt.out, label);
   mkdirSync(dir, { recursive: true });
   return { role, label, tag: "", src: resolve(app), dir, template: join(dir, "template"), app: null, bundle: null,
-    results: { meta: {}, launch: [], session: [], windows: [], journeys: [], frames: [], throttle: [], sample: [] } };
+    results: { meta: {}, launch: [], session: [], windows: [], memslope: [], journeys: [], frames: [], throttle: [], sample: [] } };
 }
 const candidate = makeSide(opt.app, opt.label ?? labelOf(opt.app), "candidate");
 let control = null;
@@ -1260,6 +1316,7 @@ try {
   const journeys = new Set(JOURNEY_PHASES.filter((p) => only.has(p)));
   if (journeys.size) await interleaved(+opt.runs, (side, i) => journeyRun(side, i, journeys));
   if (only.has("windows")) await interleaved(+opt.runs, windowsRun);
+  if (only.has("memslope")) await interleaved(+opt.runs, memSlopeRun);
   if (only.has("throttle")) await interleaved(1, throttleRun);
   if (only.has("churn")) await interleaved(1, churnRun);
   if (only.has("sample")) await interleaved(1, sampleRun);
@@ -1273,6 +1330,7 @@ try {
     if (results.sample.length) console.log(`${tag}Main thread samples:`, JSON.stringify(results.sample[0]));
   }
   if (sides.some((x) => x.results.frames.length)) console.log(`\n${frameTable(Object.fromEntries(sides.map((x) => [x.label, x.results])))}`);
+  if (opt["frames-stalls"]) for (const side of sides) console.log(`\n${stallTable(side.results, `Run-loop iterations by length, ${side.label}:`)}`);
   if (control) console.log(`\nresults: ${join(candidate.dir, "results.json")}, ${join(control.dir, "results.json")}`);
 } finally {
   await cleanup();

@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <dlfcn.h>
 
 @interface CATransaction (ACMarkPrivate)
 + (void)addCommitHandler:(void (^)(void))block forPhase:(unsigned int)phase;
@@ -10,6 +11,18 @@ static FILE *gOut;
 static void Mark(NSString *key, NSInteger window) {
   fprintf(gOut, "{\"%s\":%.1f,\"window\":%ld}\n", key.UTF8String, NSDate.date.timeIntervalSince1970 * 1000, (long)window);
   fflush(gOut);
+}
+
+static void Signpost(const char *name, long window, double at) {
+  fprintf(gOut, "{\"signpost\":\"%s\",\"at\":%.1f,\"window\":%ld}\n", name, at, window);
+  fflush(gOut);
+}
+
+static BOOL HookSignposts(void) {
+  void (*set)(void (*)(const char *, long, double)) = dlsym(RTLD_DEFAULT, "SolaraSignpostsSetObserver");
+  if (!set) return NO;
+  set(Signpost);
+  return YES;
 }
 
 __attribute__((constructor)) static void Start(void) {
@@ -26,6 +39,13 @@ __attribute__((constructor)) static void Start(void) {
       fflush(gOut);
       return event;
     }];
+  }
+  if (!HookSignposts()) {
+    __block int tries = 0;
+    CFRunLoopTimerRef retry = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + 0.5, 0.5, 0, 0, ^(CFRunLoopTimerRef t) {
+      if (HookSignposts() || ++tries >= 20) CFRunLoopTimerInvalidate(t);
+    });
+    CFRunLoopAddTimer(CFRunLoopGetMain(), retry, kCFRunLoopCommonModes);
   }
   [NSNotificationCenter.defaultCenter addObserverForName:@"RCTContentDidAppearNotification" object:nil queue:nil
                                               usingBlock:^(NSNotification *note) {

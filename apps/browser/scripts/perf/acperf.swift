@@ -34,7 +34,7 @@ func windows(_ pid: pid_t) -> [[String: Any]] {
     guard (w[kCGWindowOwnerPID as String] as? Int32) == pid else { return nil }
     let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
     return ["id": w[kCGWindowNumber as String] ?? 0, "layer": w[kCGWindowLayer as String] ?? 0,
-            "alpha": w[kCGWindowAlpha as String] ?? 0, "w": b["Width"] ?? 0, "h": b["Height"] ?? 0]
+            "alpha": w[kCGWindowAlpha as String] ?? 0, "w": b["Width"] ?? 0, "h": b["Height"] ?? 0, "x": b["X"] ?? 0, "y": b["Y"] ?? 0]
   }
 }
 
@@ -56,6 +56,11 @@ case "rusage":
   for p in args.dropFirst(2) { if let pid = pid_t(p), let r = rusage(pid) { printJSON(r) } }
 case "windows":
   printJSON(windows(pid_t(args[2]) ?? 0))
+case "hididle":
+  guard let idle = hidIdleNs() else { exit(1) }
+  print(idle)
+case "activate":
+  exit(NSRunningApplication(processIdentifier: pid_t(args[2]) ?? 0)?.activate() == true ? 0 : 1)
 case "display":
   let session = CGSessionCopyCurrentDictionary() as? [String: Any]
   printJSON(["asleep": CGDisplayIsAsleep(CGMainDisplayID()) != 0, "locked": (session?["CGSSessionScreenIsLocked"] as? Bool) ?? false])
@@ -275,7 +280,69 @@ case "postmouse":
   usleep(useconds_t(holdMs * 1000))
   click(middle ? .otherMouseUp : right ? .rightMouseUp : .leftMouseUp)
   printJSON(["heldMs": holdMs])
+case "postdrag":
+  let pair = { (text: String) -> CGPoint? in
+    let parts = text.split(separator: ",").compactMap { Double($0) }
+    return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
+  }
+  guard args.count >= 8, let pid = pid_t(args[2]), pid > 1, let window = CGWindowID(args[3]), let from = pair(args[4]), let delta = pair(args[5]),
+        let steps = Int(args[6]), steps > 0, let gap = Double(args[7]) else {
+    FileHandle.standardError.write("usage: acperf postdrag <pid> <window id> <from x,y> <dx,dy> <steps> <gap ms> [line|wiggle]\n".data(using: .utf8)!)
+    exit(64)
+  }
+  let shape = args.count > 8 ? args[8] : "line"
+  func origin() -> CGPoint? {
+    guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], window) as? [[String: Any]],
+          let b = list.first?[kCGWindowBounds as String] as? [String: Double] else { return nil }
+    return CGPoint(x: b["X"] ?? 0, y: b["Y"] ?? 0)
+  }
+  func post(_ type: CGEventType, _ at: CGPoint) {
+    guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: at, mouseButton: .left) else { return }
+    if type != .mouseMoved { event.setIntegerValueField(.mouseEventClickState, value: 1) }
+    event.post(tap: .cghidEventTap)
+  }
+  func point(_ i: Int) -> CGPoint {
+    let f = Double(i) / Double(steps)
+    if shape == "wiggle" {
+      let phase = Double(i % 20) / 10
+      let tri = phase <= 1 ? phase : 2 - phase
+      return CGPoint(x: from.x + delta.x * tri, y: from.y + delta.y * tri)
+    }
+    return CGPoint(x: from.x + delta.x * f, y: from.y + delta.y * f)
+  }
+  guard let start = origin() else {
+    printJSON(["error": "no window \(window)"])
+    exit(1)
+  }
+  post(.mouseMoved, from)
+  usleep(50_000)
+  let downAt = nowMs()
+  post(.leftMouseDown, from)
+  var rows: [[String: Any]] = []
+  var firstMove: [String: Any]? = nil
+  for i in 1...steps {
+    let p = point(i)
+    let at = nowMs()
+    post(.leftMouseDragged, p)
+    usleep(useconds_t(gap * 1000))
+    guard let w = origin() else { continue }
+    let read = nowMs()
+    let row: [String: Any] = ["i": i, "at": at - downAt, "read": read - downAt, "px": p.x, "py": p.y, "wx": w.x - start.x, "wy": w.y - start.y,
+                              "trail": hypot((p.x - from.x) - (w.x - start.x), (p.y - from.y) - (w.y - start.y))]
+    if firstMove == nil && (w.x != start.x || w.y != start.y) {
+      firstMove = ["ms": read - downAt, "travelPt": hypot(p.x - from.x, p.y - from.y), "step": i]
+    }
+    rows.append(row)
+  }
+  let last = point(steps)
+  post(.leftMouseUp, last)
+  usleep(200_000)
+  let end = origin() ?? start
+  let endError = hypot((last.x - from.x) - (end.x - start.x), (last.y - from.y) - (end.y - start.y))
+  let trails = rows.compactMap { $0["trail"] as? Double }.sorted()
+  printJSON(["shape": shape, "steps": steps, "gapMs": gap, "firstMove": firstMove ?? NSNull(), "endErrorPt": endError,
+             "trailMedianPt": trails.isEmpty ? 0 : trails[trails.count / 2], "trailMaxPt": trails.last ?? 0, "rows": rows])
 default:
-  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture> [events/s] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right]\n".data(using: .utf8)!)
+  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | hididle | activate <pid> | display | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture> [events/s] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right] | postdrag <pid> <window id> <from x,y> <dx,dy> <steps> <gap ms> [line|wiggle]\n".data(using: .utf8)!)
   exit(64)
 }

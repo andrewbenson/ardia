@@ -1,0 +1,551 @@
+#!/usr/bin/env node
+// Phase 0 of the native move (docs/native/baseline.md): the measurement baseline of a shipped build, run phase by phase
+// under the perflab lock, then rendered as docs/native/baseline-<version>.md.
+//
+//   node apps/browser/scripts/perf/native-baseline.mjs --app <dist/<v>/export/X.app> --out <dir> [options]
+//     --port <n>              CDP port of every instance (default 9481); tab-actions uses <n>+1, its pages <n>+2
+//     --control <app>         a previous stable, interleaved run by run with --app in every phase that supports it
+//     --bundle <file>         the bench bundle for native-bench (default: built from the tree by its prepare)
+//     --control-bundle <file> the control's bench bundle, when its NATIVE_API_VERSION differs
+//     --version <v>           the version in the report's name (default: the app's CFBundleShortVersionString)
+//     --only <a,b>            phases (default: all but drag), in this order:
+//                               prepare     signed copies with the bench bundle (native-bench --only prepare)
+//                               launch      M7 warm: 8 launches, one tab then the seed
+//                               coldlaunch  M7 cold: 4 launches from fresh APFS clones, one tab then the seed
+//                               journeys    M2, M3, J4: ⌘T, keystroke → suggestions, Enter → page (seed, 10 × 3 runs)
+//                               tabactions  M1, M2: tab-actions.mjs, 4 launches × 5 of click, ⌃Tab, ⌘number, ⌘T, ⌘W,
+//                                           the row's ✕, pin and unpin, on the app's own JS bundle
+//                               frames      M4, M6: the frame rig with the stall histogram (idle 60 s, then each interaction)
+//                               framecounts M6 attribution, M9: the same interactions with counts, acsample.c armed per
+//                                           window; stall-samples.mjs groups the long iterations' stacks by image
+//                               session     idle CPU and wakeups at 1 and 20 tabs, memory at 1/10/20 tabs, new window
+//                               memslope    M8: memory per window, k = 1..4 New Tab windows on the seed, slope
+//                               suggest     M3 compute: suggest-hermes.mjs (Hermes), omnibox-bench.mts (node V8) and
+//                                           SolaraOmnibox's OmniboxBench (release); run after the lock is given back,
+//                                           under its own
+//                               drag        M5: real HID drags of a visible window (acperf postdrag). Only with --drag:
+//                                           it moves the pointer and needs the owner's go-ahead. Without it the M5 rows
+//                                           say "needs owner run"
+//     --drag                  allow the drag phase (adds it to the default list)
+//     --runs <n>              runs of journeys, frames, framecounts, session and memslope (default 3)
+//     --symbols <file>        Chromium Framework's DWARF file, for stall-samples.mjs's names
+//     --resume                skip phases whose results are already in <out>/baseline.json
+//     --report                render the report from <out>/baseline.json without running anything
+//     --md <file>             where the report goes (default docs/native/baseline-<version>.md)
+//     --keep                  keep <out> (default: removed after the report, except baseline.json and the report)
+//     --who <name>            the perflab lock's holder name (default native-baseline)
+//
+// Conditions it checks: the display awake and unlocked (macOS gives no display-link frames otherwise), caffeinate -d for
+// the whole run, the load average and seconds of HID input recorded per phase. It never starts while another
+// instance of the app runs. Hidden instances only (ARDIA_BACKGROUND=1, scratch data folders), except --drag.
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { loadavg, tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, "../../../..");
+const { values: opt } = parseArgs({
+  options: {
+    app: { type: "string" },
+    out: { type: "string", default: join(tmpdir(), "ac-native-baseline") },
+    port: { type: "string", default: "9481" },
+    control: { type: "string" },
+    bundle: { type: "string" },
+    "control-bundle": { type: "string" },
+    version: { type: "string" },
+    only: { type: "string" },
+    drag: { type: "boolean" },
+    runs: { type: "string", default: "3" },
+    symbols: { type: "string" },
+    resume: { type: "boolean" },
+    report: { type: "boolean" },
+    md: { type: "string" },
+    keep: { type: "boolean" },
+    who: { type: "string", default: "native-baseline" },
+    help: { type: "boolean", short: "h" },
+  },
+});
+if (opt.help) {
+  const lines = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
+  console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  process.exit(0);
+}
+
+const PHASES = ["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
+const LOCKED = new Set(["launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
+const out = resolve(opt.out);
+const stateFile = join(out, "baseline.json");
+const log = (...a) => console.error(`[baseline ${new Date().toISOString().slice(11, 19)}]`, ...a);
+const fail = (message) => {
+  console.error(message);
+  process.exit(64);
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const port = +opt.port;
+const runs = String(+opt.runs);
+
+const toolDir = join(out, ".tools");
+function tool(name, src, build) {
+  const bin = join(toolDir, name);
+  const text = readFileSync(join(here, src), "utf8");
+  if (!existsSync(bin) || !existsSync(bin + ".src") || readFileSync(bin + ".src", "utf8") !== text) {
+    mkdirSync(toolDir, { recursive: true });
+    execFileSync(build[0], [...build.slice(1), join(here, src), "-o", bin], { stdio: "inherit" });
+    if (name.endsWith(".dylib")) execFileSync("codesign", ["--force", "--sign", "-", bin]);
+    writeFileSync(bin + ".src", text);
+  }
+  return bin;
+}
+const acperfBin = () => tool("acperf", "acperf.swift", ["swiftc", "-O"]);
+const acsampleLib = () => tool("acsample.dylib", "acsample.c", ["clang", "-dynamiclib", "-arch", "arm64", "-framework", "CoreFoundation"]);
+const acperf = (...args) => {
+  const r = spawnSync(acperfBin(), args, { encoding: "utf8", timeout: 600_000 });
+  return { code: r.status, out: (r.stdout ?? "").trim() };
+};
+
+const plist = (app, key) => execFileSync("defaults", ["read", join(resolve(app), "Contents/Info.plist"), key], { encoding: "utf8" }).trim();
+
+function loadState() {
+  if (!existsSync(stateFile)) return { meta: {}, phases: {} };
+  return JSON.parse(readFileSync(stateFile, "utf8"));
+}
+const state = loadState();
+const save = () => writeFileSync(stateFile, JSON.stringify(state, null, 1));
+
+function machine() {
+  const disp = JSON.parse(acperf("display").out || "{}");
+  return { load: loadavg().map((x) => Math.round(x * 10) / 10), display: disp, at: new Date().toISOString() };
+}
+
+class InputWatch {
+  constructor() {
+    this.secs = 0;
+    this.timer = setInterval(() => {
+      const ns = +acperf("hididle").out;
+      if (Number.isFinite(ns) && ns < 2.5e9) this.secs += 2;
+    }, 2000);
+  }
+  stop() {
+    clearInterval(this.timer);
+    return this.secs;
+  }
+}
+
+function run(cmd, args, { locked = false, cwd = repoRoot, env = {}, log: file } = {}) {
+  const full = locked ? [join(repoRoot, "scripts/agent/locked"), "perflab", "--as", opt.who, "--wait", "500", "--", cmd, ...args] : [cmd, ...args];
+  log(`$ ${full.slice(locked ? 7 : 0).join(" ")}`);
+  return new Promise((done, failed) => {
+    const child = spawn(full[0], full.slice(1), { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (d) => ((stdout += d), process.stdout.write(d)));
+    child.stderr.on("data", (d) => ((stderr += d), process.stderr.write(d)));
+    child.on("error", failed);
+    child.on("close", (code) => {
+      if (file) writeFileSync(file, stdout + (stderr ? `\n--- stderr\n${stderr}` : ""));
+      code === 0 ? done(stdout) : failed(new Error(`${basename(cmd)} ${args[0] ?? ""} exited ${code}`));
+    });
+  });
+}
+
+const nb = join(here, "native-bench.mjs");
+const node = process.execPath;
+const preparedArgs = () => [
+  "--app", state.meta.prepared.app, "--prepared", "--port", String(port),
+  ...(state.meta.prepared.control ? ["--control", state.meta.prepared.control] : []),
+];
+const benchResults = (dir) => {
+  const found = {};
+  for (const label of readdirSync(dir)) {
+    const f = join(dir, label, "results.json");
+    if (existsSync(f)) found[label] = JSON.parse(readFileSync(f, "utf8"));
+  }
+  return found;
+};
+async function bench(phase, args, extra = {}) {
+  const dir = join(out, phase);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  await run(node, [nb, "--out", dir, ...preparedArgs(), ...args], { locked: true, log: join(dir, "stdout.txt"), ...extra });
+  return benchResults(dir);
+}
+
+const phases = {
+  async prepare() {
+    const dir = join(out, "prepare");
+    const said = await run(node, [nb, "--out", dir, "--app", resolve(opt.app), "--only", "prepare", "--port", String(port),
+      ...(opt.bundle ? ["--bundle", resolve(opt.bundle)] : []),
+      ...(opt.control ? ["--control", resolve(opt.control), ...(opt["control-bundle"] ? ["--control-bundle", resolve(opt["control-bundle"])] : [])] : [])]);
+    const apps = [...said.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
+    if (!apps.length) throw new Error("native-bench prepare named no copies");
+    state.meta.prepared = { app: apps[0], control: apps[1] ?? null };
+    return { copies: apps };
+  },
+  async launch() {
+    return {
+      oneTab: await bench("launch-onetab", ["--only", "launch", "--launch-runs", "8"]),
+      seed: await bench("launch-seed", ["--only", "launch", "--launch-runs", "8", "--seed", "big"]),
+    };
+  },
+  async coldlaunch() {
+    return {
+      oneTab: await bench("coldlaunch-onetab", ["--only", "launch", "--launch-runs", "4", "--fresh-copy"]),
+      seed: await bench("coldlaunch-seed", ["--only", "launch", "--launch-runs", "4", "--fresh-copy", "--seed", "big"]),
+    };
+  },
+  async journeys() {
+    return bench("journeys", ["--only", "newtabkey,navigate", "--journey-n", "10", "--runs", runs, "--seed", "big"]);
+  },
+  async tabactions() {
+    const dir = join(out, "tabactions");
+    rmSync(dir, { recursive: true, force: true });
+    const app = resolve(opt.app);
+    const sides = ["--side", `stable=${join(app, "Contents/Resources/main.jsbundle")}`];
+    if (opt.control) sides.push("--side", `control=${join(resolve(opt.control), "Contents/Resources/main.jsbundle")}`, "--side-app", `control=${resolve(opt.control)}`);
+    await run(node, [join(here, "tab-actions.mjs"), "run", "--app", app, ...sides, "--launches", "4", "--n", "5",
+      "--actions", "click,ctrlTab,cmdNumber,cmdT,cmdW,hoverClose,pin,unpin", "--out", dir, "--port", String(port + 1), "--page-port", String(port + 2)], { locked: true });
+    return { samples: readFileSync(join(dir, "samples.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) };
+  },
+  async frames() {
+    return bench("frames", ["--only", "frames", "--runs", runs, "--frames-stalls"]);
+  },
+  async framecounts() {
+    const results = await bench("framecounts", ["--only", "framecounts", "--runs", runs, "--frames-stalls",
+      "--env", "AC_SAMPLE_SCENARIO=1", "--env", `DYLD_INSERT_LIBRARIES=${acsampleLib()}`]);
+    const json = join(out, "framecounts", "stall-samples.json");
+    await run(node, [join(here, "stall-samples.mjs"), ...(opt.symbols ? ["--symbols", opt.symbols] : []), "--json", json, join(out, "framecounts")]).catch((e) => log(`stall-samples: ${e.message}`));
+    return { results, attribution: existsSync(json) ? JSON.parse(readFileSync(json, "utf8")) : null };
+  },
+  async session() {
+    return bench("session", ["--only", "idle,memory,newwindow", "--runs", runs]);
+  },
+  async memslope() {
+    return bench("memslope", ["--only", "memslope", "--seed", "big", "--runs", runs, "--mem-windows", "4"]);
+  },
+  async suggest() {
+    const dir = join(out, "suggest");
+    mkdirSync(dir, { recursive: true });
+    const seed = join(dir, "bench-seed.json");
+    const hermes = await run(join(repoRoot, "scripts/agent/locked"), ["perflab", "--wait", "500", "--", node, join(here, "suggest-hermes.mjs"), "--rounds", "300"],
+      { env: { SUGGEST_HERMES_DIR: join(dir, "hermes") } });
+    const v8 = await run(join(repoRoot, "scripts/agent/locked"), ["perflab", "--wait", "500", "--", node, join(repoRoot, "native/SolaraKit/Scripts/omnibox-bench.mts"), "--seed-out", seed]);
+    let swift = "";
+    try {
+      swift = await run(join(repoRoot, "scripts/agent/locked"), ["perflab", "--wait", "500", "--", "swift", "test", "-c", "release", "-Xswiftc", "-enable-testing",
+        "--build-path", join(dir, "swift-build"), "--filter", "OmniboxBench"], { cwd: join(repoRoot, "native/SolaraKit"), env: { SOLARA_OMNIBOX_BENCH: seed } });
+    } catch (e) {
+      log(`OmniboxBench: ${e.message}`);
+    }
+    return { hermes, v8, swift };
+  },
+  async drag() {
+    if (!opt.drag) throw new Error("the drag phase needs --drag (it moves the real pointer over a visible window)");
+    const app = state.meta.prepared.app;
+    const data = join(out, "drag", "data");
+    rmSync(join(out, "drag"), { recursive: true, force: true });
+    mkdirSync(data, { recursive: true });
+    const exe = join(app, "Contents/MacOS", plist(app, "CFBundleExecutable"));
+    execFileSync("open", ["-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
+    let pid = 0;
+    for (let i = 0; i < 400 && !pid; i++) {
+      const r = spawnSync("pgrep", ["-f", `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`], { encoding: "utf8" });
+      if (r.status === 0) pid = +r.stdout.trim().split("\n")[0];
+      else await sleep(25);
+    }
+    if (!pid) throw new Error("the app didn't start");
+    const drags = [];
+    try {
+      if (acperf("waitwindow", String(pid), "60").code !== 0) throw new Error("no window");
+      await sleep(4000);
+      acperf("activate", String(pid));
+      await sleep(800);
+      const win = () => JSON.parse(acperf("windows", String(pid)).out).filter((w) => w.w >= 300 && w.h >= 200 && w.alpha > 0 && w.layer === 0)[0];
+      const starts = { toolbar: (w) => [w.x + w.w * 0.6, w.y + 20], "sidebar top": (w) => [w.x + 90, w.y + 44], "top strip": (w) => [w.x + w.w / 2, w.y + 4] };
+      for (const [where, at] of Object.entries(starts))
+        for (const gap of [4, 8]) {
+          for (const shape of ["line", "wiggle"]) {
+            const w = win();
+            if (!w) throw new Error("the window went away");
+            const [x, y] = at(w);
+            const r = JSON.parse(acperf("postdrag", String(pid), String(w.id), `${x},${y}`, "80,40", "120", String(gap), shape).out);
+            drags.push({ where, gap, shape, ...r });
+            if (shape === "line") {
+              const back = win();
+              acperf("postdrag", String(pid), String(back.id), `${x + 80},${y + 40}`, "-80,-40", "40", "8", "line");
+            }
+            await sleep(600);
+          }
+        }
+    } finally {
+      acperf("quit", String(pid));
+      await sleep(3000);
+    }
+    return { drags, settingsTitle: "not measured: the run opens no Settings window" };
+  },
+};
+
+const median = (v) => {
+  const s = v.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!s.length) return NaN;
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const quantile = (v, q) => {
+  const s = v.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!s.length) return NaN;
+  const i = (s.length - 1) * q;
+  return s[Math.floor(i)] + (s[Math.ceil(i)] - s[Math.floor(i)]) * (i - Math.floor(i));
+};
+function stats(values) {
+  const v = values.filter(Number.isFinite);
+  return { median: median(v), p75: quantile(v, 0.75), p95: quantile(v, 0.95), min: v.length ? Math.min(...v) : NaN, max: v.length ? Math.max(...v) : NaN, n: v.length };
+}
+const fmt = (x, digits = 0) => (Number.isFinite(x) ? x.toFixed(digits) : "–");
+function table(rows, digits = 0) {
+  const out = ["| Row | Side | Median | p75 | p95 | Min–max | n |", "|---|---|---|---|---|---|---|"];
+  for (const r of rows) {
+    const s = stats(r.values);
+    if (!s.n) continue;
+    out.push(`| ${r.name} | ${r.side} | ${fmt(s.median, r.digits ?? digits)} ${r.unit ?? "ms"} | ${fmt(s.p75, r.digits ?? digits)} | ${fmt(s.p95, r.digits ?? digits)} | ${fmt(s.min, r.digits ?? digits)}–${fmt(s.max, r.digits ?? digits)} | ${s.n} |`);
+  }
+  return out.join("\n");
+}
+
+const sidesOf = (results) => Object.entries(results ?? {});
+const sideName = (label) => (state.meta.prepared?.control && label.includes("control") ? `${label} (control)` : label);
+
+function render() {
+  const P = state.phases;
+  const md = [];
+  const v = state.meta.version ?? "?";
+  md.push(`# Native move: baseline ${v}`, "");
+  md.push(`Measured by \`apps/browser/scripts/perf/native-baseline.mjs\` (plan: [baseline.md](baseline.md)) on \`${state.meta.app ?? "?"}\`${state.meta.control ? `, interleaved with \`${state.meta.control}\`` : ""}.`, "");
+  md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
+  md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");
+  for (const name of PHASES) {
+    const p = P[name];
+    if (!p) continue;
+    md.push(`| ${name} | ${p.before?.at?.slice(0, 16).replace("T", " ") ?? "–"} | ${p.before?.load.join("/") ?? "–"} → ${p.after?.load.join("/") ?? "–"} | ${p.before?.display?.locked ? "locked" : p.before?.display?.asleep ? "asleep" : "awake"} | ${p.inputSecs ?? "–"} | ${p.minutes ? p.minutes.toFixed(0) : "–"} |`);
+  }
+  md.push("");
+
+  const section = (title, body) => md.push(`## ${title}`, "", body, "");
+
+  const tabSamples = P.tabactions?.result?.samples ?? [];
+  const tabRows = [];
+  for (const side of [...new Set(tabSamples.map((s) => s.side))])
+    for (const action of ["click", "ctrlTab", "cmdNumber", "cmdT", "cmdW", "hoverClose", "pin", "unpin"]) {
+      const ok = tabSamples.filter((s) => s.side === side && s.action === action && !s.error && s.worked !== false);
+      if (!ok.length) continue;
+      tabRows.push({ name: `${action}: event → selection committed (ui)`, side, values: ok.map((s) => s.ui), unit: "ms", digits: 1 });
+      if (["click", "ctrlTab", "cmdNumber"].includes(action)) tabRows.push({ name: `${action}: event → page's second rAF (page)`, side, values: ok.map((s) => s.page), unit: "ms", digits: 1 });
+      tabRows.push({ name: `${action}: main wait`, side, values: ok.map((s) => s.mainWait), unit: "ms", digits: 1 });
+      if (action === "click") tabRows.push({ name: "click: mouse-down → mouse-up (press)", side, values: ok.map((s) => s.press), unit: "ms", digits: 1 });
+    }
+  section("M1 Tab switch (and the close and pin rows)", tabRows.length ? table(tabRows) : "Not run.");
+
+  const J = (res) => sidesOf(res).map(([label, r]) => [label, r.journeys ?? []]);
+  const pooled = (list, kind, field) => list.flatMap((r) => r[kind].map((x) => x[field]));
+  const jr = [];
+  for (const [label, list] of J(P.journeys?.result)) {
+    jr.push({ name: "⌘T key → command bar committed", side: sideName(label), values: pooled(list, "j2", "commit") });
+    jr.push({ name: "⌘T key → bar on screen and typeable", side: sideName(label), values: pooled(list, "j2", "typeable") });
+    jr.push({ name: "keystroke → suggestions on screen (M3)", side: sideName(label), values: pooled(list, "j2", "suggest") });
+    jr.push({ name: "J4 Enter in a new tab's bar → first contentful paint", side: sideName(label), values: pooled(list, "j4new", "fcp") });
+    jr.push({ name: "J4 Enter in a page's panel → first contentful paint", side: sideName(label), values: pooled(list, "j4page", "fcp") });
+  }
+  for (const side of [...new Set(tabSamples.map((s) => s.side))]) {
+    const ok = tabSamples.filter((s) => s.side === side && s.action === "cmdT" && !s.error && s.worked !== false);
+    if (ok.length) jr.push({ name: "⌘T (tab-actions): event → new tab's last paint", side, values: ok.map((s) => s.total), digits: 1 });
+  }
+  section("M2, M3 New tab, keystroke → suggestions, J4", jr.length ? table(jr) : "Not run.");
+
+  const sg = P.suggest?.result;
+  if (sg) {
+    const lines = [];
+    for (const [who, text] of [["Hermes (suggest-hermes.mjs)", sg.hermes], ["node V8 (omnibox-bench.mts)", sg.v8], ["SolaraOmnibox, release (OmniboxBench)", sg.swift]])
+      for (const l of (text ?? "").split("\n").filter((l) => /per key|prepare/.test(l))) lines.push(`| ${who} | ${l.replace(/\|/g, "/").trim()} |`);
+    section("M3 compute per keystroke", ["| Engine | Result |", "|---|---|", ...lines].join("\n"));
+  }
+
+  const fr = [];
+  for (const [label, res] of sidesOf(P.frames?.result)) {
+    const runsOk = (res.frames ?? []).filter((r) => !r.skipped);
+    const hover = runsOk.flatMap((r) => r.interactions?.["sidebar hover (20 rows, 60 ms apart)"] ?? []);
+    fr.push({ name: "hover sweep: frames delivered", side: sideName(label), values: hover.map((x) => x.frames), unit: "" });
+    fr.push({ name: "hover sweep: frames expected", side: sideName(label), values: hover.map((x) => x.expected), unit: "" });
+    fr.push({ name: "hover sweep: ticks over 8.33 ms", side: sideName(label), values: hover.map((x) => x.over8), unit: "" });
+    fr.push({ name: "hover sweep: worst frame", side: sideName(label), values: hover.map((x) => x.worst), digits: 1 });
+    fr.push({ name: "hover sweep: main thread longest stall", side: sideName(label), values: hover.map((x) => x.mainWorst), digits: 1 });
+    const skipped = (res.frames ?? []).length - runsOk.length;
+    if (skipped) fr.push({ name: "frames runs skipped (display asleep or locked)", side: sideName(label), values: [skipped], unit: "" });
+  }
+  section("M4 Sidebar hover", fr.length ? `${table(fr)}\n\nPointer enters a row → its background in a Core Animation commit isn't timed by the rig yet; the rows above are the sweep's frame pacing.` : "Not run.");
+
+  const drags = P.drag?.result?.drags;
+  if (drags?.length) {
+    const dr = [];
+    for (const where of [...new Set(drags.map((d) => d.where))])
+      for (const gap of [4, 8])
+        for (const shape of ["line", "wiggle"]) {
+          const d = drags.filter((x) => x.where === where && x.gap === gap && x.shape === shape);
+          if (!d.length) continue;
+          const k = `${where}, ${shape}, ${gap} ms`;
+          dr.push({ name: `${k}: mouse-down → first window move`, side: "", values: d.map((x) => x.firstMove?.ms), digits: 1 });
+          dr.push({ name: `${k}: pointer travel before it moved`, side: "", values: d.map((x) => x.firstMove?.travelPt), unit: "pt", digits: 1 });
+          dr.push({ name: `${k}: trail (median per drag)`, side: "", values: d.map((x) => x.trailMedianPt), unit: "pt", digits: 1 });
+          dr.push({ name: `${k}: trail (worst per drag)`, side: "", values: d.map((x) => x.trailMaxPt), unit: "pt", digits: 1 });
+          dr.push({ name: `${k}: error after mouse-up`, side: "", values: d.map((x) => x.endErrorPt), unit: "pt", digits: 1 });
+        }
+    section("M5 Window drag frame pacing", `${table(dr)}\n\nThe Settings title drag: ${P.drag.result.settingsTitle}.`);
+  } else {
+    section("M5 Window drag frame pacing", "**Needs owner run.** It posts real HID drags to a visible window (`native-baseline.mjs --only drag --drag`), so it waits for the owner's go-ahead.");
+  }
+
+  const stallBlocks = [];
+  for (const [label, res] of sidesOf(P.frames?.result)) {
+    const names = [...new Set((res.frames ?? []).flatMap((r) => Object.keys(r.stalls ?? {})))];
+    const lines = ["| Scenario | Thread | Iterations | Busy ms | Worst ms | 8–16 | 16–33 | 33–50 | 50–100 | 100–250 | ≥250 |", "|---|---|---|---|---|---|---|---|---|---|---|"];
+    for (const name of names)
+      for (const th of ["main", "js"]) {
+        const ws = (res.frames ?? []).flatMap((r) => r.stalls?.[name] ?? []).map((w) => w[th]).filter(Boolean);
+        if (!ws.length) continue;
+        const sum = (f) => ws.reduce((n, w) => n + f(w), 0);
+        lines.push(`| ${name} | ${th === "main" ? "main" : "JS"} | ${sum((w) => w.iterations)} | ${Math.round(sum((w) => w.busyMs))} | ${fmt(Math.max(...ws.map((w) => w.worstMs)), 0)} | ${[0, 1, 2, 3, 4, 5].map((i) => sum((w) => w.buckets[i])).join(" | ")} |`);
+      }
+    stallBlocks.push(`${sideName(label)}, summed over ${(res.frames ?? []).filter((r) => r.stalls).length} runs:\n\n${lines.join("\n")}`);
+  }
+  const attribution = P.framecounts?.result?.attribution;
+  if (attribution?.length) {
+    const lines = ["| Scenario | Iterations ≥ 50 ms | Stalled ms | Samples | Chrome | Hermes | React | App | System |", "|---|---|---|---|---|---|---|---|---|"];
+    for (const r of attribution) lines.push(`| ${r.scenario} | ${r.iterations} | ${r.stalledMs} | ${r.samples} | ${["chrome", "hermes", "react", "app", "system"].map((c) => `${Math.round(r.share[c] * 100)}%`).join(" | ")} |`);
+    stallBlocks.push(`Where the main thread's iterations of 50 ms or more went (stack samples from the framecounts runs, acsample.c, grouped by stall-samples.mjs):\n\n${lines.join("\n")}`);
+  }
+  section("M6 Main-thread stall histogram", stallBlocks.length ? stallBlocks.join("\n\n") : "Not run.");
+
+  const lr = [];
+  for (const [phase, title] of [["launch", "warm"], ["coldlaunch", "cold"]])
+    for (const [profile, res] of Object.entries(P[phase]?.result ?? {}))
+      for (const [label, r] of sidesOf(res)) {
+        const L = r.launch ?? [];
+        const k = `${title}, ${profile === "seed" ? "seed" : "one tab"}`;
+        lr.push({ name: `${k}: window shown`, side: sideName(label), values: L.map((x) => x.window) });
+        lr.push({ name: `${k}: JS running`, side: sideName(label), values: L.map((x) => x.js) });
+        lr.push({ name: `${k}: window with content`, side: sideName(label), values: L.map((x) => x.withContent) });
+        lr.push({ name: `${k}: page's first frame`, side: sideName(label), values: L.map((x) => x.firstFrame) });
+        lr.push({ name: `${k}: first contentful paint`, side: sideName(label), values: L.map((x) => x.firstPaint) });
+      }
+  section("M7 Launch → first window", lr.length ? table(lr) : "Not run.");
+
+  const mr = [];
+  for (const [label, r] of sidesOf(P.memslope?.result)) {
+    const M = r.memslope ?? [];
+    mr.push({ name: "slope, all processes (MB per window)", side: sideName(label), values: M.map((x) => x.slopeTotalMB), unit: "MB", digits: 1 });
+    mr.push({ name: "slope, browser process (MB per window)", side: sideName(label), values: M.map((x) => x.slopeBrowserMB), unit: "MB", digits: 1 });
+    for (let k = 1; k <= 4; k++) {
+      mr.push({ name: `window ${k}: Δ all processes`, side: sideName(label), values: M.map((x) => x.points[k] && x.points[k].totalMB - x.points[k - 1].totalMB), unit: "MB", digits: 1 });
+      mr.push({ name: `window ${k}: Δ browser process`, side: sideName(label), values: M.map((x) => x.points[k] && x.points[k].browserMB - x.points[k - 1].browserMB), unit: "MB", digits: 1 });
+    }
+  }
+  for (const [label, r] of sidesOf(P.session?.result)) {
+    const S = r.session ?? [];
+    for (const m of ["tabs1", "tabs10", "tabs20", "closed"]) mr.push({ name: `phys_footprint, ${m === "closed" ? "closed back to 1 tab" : m.slice(4) + " tab(s)"} (one-tab session)`, side: sideName(label), values: S.map((x) => x.memory?.[m]?.totalMB), unit: "MB" });
+    mr.push({ name: "new window → on screen", side: sideName(label), values: S.flatMap((x) => x.newWindow.map((w) => w.window)) });
+    mr.push({ name: "new window → on screen with its content", side: sideName(label), values: S.flatMap((x) => x.newWindow.map((w) => w.withContent)) });
+  }
+  section("M8 Memory per window", mr.length ? table(mr) : "Not run.");
+
+  const cr = [];
+  for (const [label, res] of sidesOf(P.framecounts?.result?.results)) {
+    const runsOk = (res.frames ?? []).filter((r) => !r.skipped);
+    for (const name of [...new Set(runsOk.flatMap((r) => Object.keys(r.interactions ?? {})))]) {
+      const reps = runsOk.flatMap((r) => r.interactions[name] ?? []);
+      for (const [key, label2] of [["commits", "React commits"], ["storeUpdates", "store updates"], ["layoutPasses", "layout passes"], ["viewUpdates", "view updates"], ["mountBatches", "mount batches"]])
+        cr.push({ name: `${name}: ${label2}`, side: sideName(label), values: reps.map((x) => x[key]), unit: "" });
+    }
+  }
+  section("M9 Counts per action", cr.length ? `${table(cr)}\n\nCore Animation commits and SolaraSignposts counters join these rows once the app emits them (\`SolaraSignposts.count\`).` : "Not run.");
+
+  const ir = [];
+  for (const [label, r] of sidesOf(P.session?.result)) {
+    const S = r.session ?? [];
+    for (const t of ["tabs1", "tabs20"]) {
+      ir.push({ name: `idle CPU, ${t.slice(4)} tab(s), all processes`, side: sideName(label), values: S.map((x) => x.idle?.[t]?.total.cpu), unit: "%", digits: 2 });
+      ir.push({ name: `idle wakeups/s, ${t.slice(4)} tab(s), all processes`, side: sideName(label), values: S.map((x) => x.idle?.[t]?.total.wakeups), unit: "/s", digits: 1 });
+      ir.push({ name: `idle input seconds, ${t.slice(4)} tab(s) (nonzero: someone used the Mac)`, side: sideName(label), values: S.map((x) => x.idle?.[t]?.input?.inputSecs), unit: "s", digits: 1 });
+    }
+  }
+  section("Idle", ir.length ? table(ir) : "Not run.");
+  return md.join("\n");
+}
+
+if (opt.report) {
+  const file = opt.md ? resolve(opt.md) : join(repoRoot, "docs/native", `baseline-${state.meta.version ?? "unknown"}.md`);
+  writeFileSync(file, render() + "\n");
+  console.log(`wrote ${file}`);
+  process.exit(0);
+}
+
+if (!opt.app) fail("usage: native-baseline.mjs --app <dist/<v>/export/X.app> --out <dir> [options] (--help)");
+const wanted = opt.only ? opt.only.split(",").map((p) => p.trim()) : PHASES.filter((p) => p !== "drag" || opt.drag);
+for (const p of wanted) if (!PHASES.includes(p)) fail(`--only: no phase "${p}"; phases: ${PHASES.join(", ")}`);
+if (wanted.includes("drag") && !opt.drag) fail("the drag phase needs --drag: it moves the real pointer over a visible window, so only with the owner's go-ahead");
+mkdirSync(out, { recursive: true });
+Object.assign(state.meta, { app: resolve(opt.app), control: opt.control ? resolve(opt.control) : null, version: opt.version ?? state.meta.version ?? plist(opt.app, "CFBundleShortVersionString") });
+
+const exe = join(resolve(opt.app), "Contents/MacOS", plist(opt.app, "CFBundleExecutable"));
+if (spawnSync("pgrep", ["-f", `/${basename(exe)}( |$)`]).status === 0) log(`note: another ${basename(exe)} process is running (yours to check: never quit the owner's)`);
+const disp = machine().display;
+if (disp.asleep || disp.locked) fail(`the display is ${disp.asleep ? "asleep" : "locked"}: macOS gives no display-link frames then; wake and unlock it first`);
+
+const caffeinate = spawn("caffeinate", ["-d", "-w", String(process.pid)], { stdio: "ignore" });
+let held = false;
+const release = () => {
+  if (held) spawnSync(join(repoRoot, "scripts/agent/locked"), ["perflab", "--release", opt.who]);
+  held = false;
+};
+process.on("SIGINT", () => {
+  release();
+  caffeinate.kill();
+  process.exit(130);
+});
+try {
+  if (!wanted.includes("prepare") && !state.meta.prepared) fail("no prepared copies in this --out: run the prepare phase first");
+  for (const name of wanted) {
+    if (opt.resume && state.phases[name]?.result) {
+      log(`${name}: done already (--resume)`);
+      continue;
+    }
+    if (LOCKED.has(name) && !held) {
+      const r = spawnSync(join(repoRoot, "scripts/agent/locked"), ["perflab", "--take", opt.who, "--ttl", "240", "--wait", "500"], { stdio: "inherit" });
+      if (r.status !== 0) fail("couldn't take the perflab lock");
+      held = true;
+    }
+    if (!LOCKED.has(name)) release();
+    const watch = new InputWatch();
+    const before = machine();
+    const t0 = Date.now();
+    log(`${name}: start (load ${before.load.join("/")})`);
+    try {
+      const result = await phases[name]();
+      state.phases[name] = { before, after: machine(), inputSecs: watch.stop(), minutes: (Date.now() - t0) / 60000, result };
+    } catch (error) {
+      state.phases[name] = { before, after: machine(), inputSecs: watch.stop(), minutes: (Date.now() - t0) / 60000, error: String(error.message ?? error) };
+      log(`${name}: FAILED ${error.message ?? error}`);
+    }
+    save();
+  }
+} finally {
+  release();
+  caffeinate.kill();
+  spawnSync(join(repoRoot, "scripts/agent/unregister-builds"), { stdio: "inherit" });
+}
+const report = opt.md ? resolve(opt.md) : join(repoRoot, "docs/native", `baseline-${state.meta.version}.md`);
+writeFileSync(report, render() + "\n");
+log(`wrote ${report} and ${stateFile}`);
+const failed = Object.entries(state.phases).filter(([, p]) => p.error).map(([n]) => n);
+if (failed.length) log(`kept ${out}: ${failed.join(", ")} failed (rerun them with --resume)`);
+else if (!opt.keep)
+  for (const name of readdirSync(out)) if (name !== "baseline.json" && statSync(join(out, name)).isDirectory()) rmSync(join(out, name), { recursive: true, force: true });

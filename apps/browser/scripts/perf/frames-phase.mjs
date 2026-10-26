@@ -125,6 +125,22 @@ export function windowStats(rec, a, b, refresh) {
   };
 }
 
+function stallInteractions(c, reset, k0) {
+  const { app, key, sleep, run, W, base, acperf } = c;
+  let k = k0;
+  const type = (gap, text) => acperf("postkeys", String(app.pid), String(gap), `text:${text}`);
+  return [
+    { name: "type in the command bar (github.com/net, 60 ms apart)", window: 1500, before: async () => { await reset(); await key.open("cmd+t"); },
+      verify: `const s = ac.store.getState(); return !!s.windowUi[${W}]?.panel.open;`,
+      go: async () => { const t = Date.now(); type(60, "github.com/net"); return t; },
+      after: async () => { await key("esc").catch(() => {}); await sleep(300); await reset(); } },
+    { name: "page load (⌘T, a URL, Enter)", window: 1500, before: async () => { await reset(); await key.open("cmd+t"); },
+      verify: `const s = ac.store.getState(); return Object.values(s.tabs).some((t) => t.url.includes("id=pl"));`,
+      go: async () => { type(0, `${base()}/static?id=pl${k++}`); await sleep(150); const t = Date.now(); acperf("postkeys", String(app.pid), "0", "enter"); return t; },
+      after: async () => { await run(`const s = ac.store.getState(); for (const id of Object.keys(s.tabs)) if (s.tabs[id].url.includes("id=pl")) ac.store.getState().closeTab(id); return true;`); await sleep(500); await reset(); } },
+  ];
+}
+
 function interactions(c) {
   const { app, key, sleep, run, W, probe, base } = c;
   const seedTab = `(() => { const s = ac.store.getState(); return Object.keys(s.tabs).find((id) => s.tabs[id].url.includes("id=seed")); })()`;
@@ -170,6 +186,7 @@ function interactions(c) {
     { name: "new window", window: 1200, verify: `return ac.store.getState().windowOrder.length > globalThis.__frameWindows;`, before: async () => { await reset(); await run(`globalThis.__frameWindows = ac.store.getState().windowOrder.length; return 1;`); },
       go: () => store(`ac.actions.openWindow({ url: "${base()}/static?id=fw${k++}" })`),
       after: async () => { await sleep(1500); await run(`const s = ac.store.getState(); for (const id of s.windowOrder) if (s.windows[id] && id !== ${W} && !s.windows[id].kind) ac.store.getState().closeWindow(id); return true;`); await sleep(1500); } },
+    ...(c.stalls ? stallInteractions(c, reset, 1000) : []),
   ];
 }
 
@@ -186,6 +203,8 @@ export async function framesRun(c, side, i, { counts }) {
   const app = new Instance(side, dir);
   app.frames = true;
   app.env.push("AC_BENCH_FRAMES=1");
+  const stalls = !!opt["frames-stalls"];
+  if (stalls) app.env.push("AC_BENCH_STALLS=1");
   const rec = new Records(join(dir, "bench-frames.jsonl"));
   const run = (code) => app.run(code);
   let seq = 0;
@@ -213,7 +232,17 @@ export async function framesRun(c, side, i, { counts }) {
     await sleep(900);
   };
   const capFrom = capSize();
-  const out = { info: null, display, counts, interactions: {}, load: [Math.round(c.loadavg()[0])], cpuCap: { running: capRunning(), pauses: 0 } };
+  const out = { info: null, display, counts, interactions: {}, ...(stalls ? { stalls: {} } : {}), load: [Math.round(c.loadavg()[0])], cpuCap: { running: capRunning(), pauses: 0 } };
+  const stallWindow = async (scenario, body) => {
+    if (!stalls) return body();
+    await probe("stalls", { action: "begin", scenario });
+    try {
+      return await body();
+    } finally {
+      const r = await probe("stalls", { action: "end" });
+      (out.stalls[scenario] ??= []).push(r.window);
+    }
+  };
   const counters = () => probe("counters");
   const quiet = async (maxMs) => {
     let last = null, since = Date.now();
@@ -244,7 +273,8 @@ export async function framesRun(c, side, i, { counts }) {
     log(`${side.tag}frames ${i}${counts ? " (counts)" : ""}: ${info.screen} ${info.maxFPS} Hz, JS thread ${info.js ? "observed" : "NOT found"}; ${out.settled ? "quiet" : "never quiet"} after ${Math.round(out.settleMs / 1000)} s`);
     const reps = counts ? Math.min(3, +opt["frames-n"]) : +opt["frames-n"];
     const only = opt["frames-only"] ? new RegExp(opt["frames-only"], "i") : null;
-    const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base }).filter((it) => !only || only.test(it.name));
+    if (stalls) await stallWindow("idle 60 s", () => sleep(60_000));
+    const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base, acperf, stalls }).filter((it) => !only || only.test(it.name));
     for (const it of list) {
       const rows = [];
       const taken = [];
@@ -262,8 +292,11 @@ export async function framesRun(c, side, i, { counts }) {
           if (counts) await run(`globalThis.acPerf?.reset(); return 1;`);
           const c0 = await counters();
 
-          const t0 = await it.go();
-          await sleep(it.window + 250);
+          const t0 = await stallWindow(it.name, async () => {
+            const t = await it.go();
+            await sleep(it.window + 250);
+            return t;
+          });
           const c1 = await counters();
           if (it.verify && !(await run(it.verify))) {
             log(`${side.tag}frames ${i} ${it.name} #${rep}: no effect (the interaction didn't do what it should); left out`);
@@ -321,6 +354,23 @@ const METRICS = [
   ["storeUpdates", "store updates", "", 0],
 ];
 const SHOWN = new Set(["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "layoutPasses", "commits", "hostUpdates"]);
+
+const STALL_EDGES = ["8–16", "16–33", "33–50", "50–100", "100–250", "≥250"];
+
+export function stallTable(results, label) {
+  const runs = (results.frames ?? []).filter((r) => r.stalls);
+  const names = [...new Set(runs.flatMap((r) => Object.keys(r.stalls)))];
+  const out = [`| Scenario | Thread | Windows | Iterations | Busy ms | Worst ms | ${STALL_EDGES.map((e) => `${e} ms`).join(" | ")} |`, `|---|---|---|---|---|---|${STALL_EDGES.map(() => "---").join("|")}|`];
+  for (const name of names)
+    for (const th of ["main", "js"]) {
+      const ws = runs.flatMap((r) => r.stalls[name] ?? []).map((w) => w[th]).filter(Boolean);
+      if (!ws.length) continue;
+      const sum = (f) => ws.reduce((n, w) => n + f(w), 0);
+      const buckets = STALL_EDGES.map((_, i) => sum((w) => w.buckets[i]));
+      out.push(`| ${name} | ${th === "main" ? "main" : "JS"} | ${ws.length} | ${sum((w) => w.iterations)} | ${Math.round(sum((w) => w.busyMs))} | ${Math.round(Math.max(...ws.map((w) => w.worstMs)))} | ${buckets.join(" | ")} |`);
+    }
+  return `${label ? `${label}\n\n` : ""}${out.join("\n")}`;
+}
 
 export function frameRows(results) {
   const runs = (results.frames ?? []).filter((r) => !r.skipped);

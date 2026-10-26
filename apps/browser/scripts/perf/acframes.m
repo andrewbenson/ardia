@@ -101,17 +101,58 @@ static double ThreadCpuMs(mach_port_t t) {
 typedef struct {
   char th;
   double start;
+  double iterStart;
 } LoopState;
-static LoopState gMainLoop = {'m', 0}, gJSLoop = {'j', 0};
+static LoopState gMainLoop = {'m', 0, 0}, gJSLoop = {'j', 0, 0};
+
+static const double kStallEdges[] = {8, 16, 33, 50, 100, 250};
+#define STALL_BUCKETS 6
+#define STALL_LONG 400
+typedef struct {
+  long n, buckets[STALL_BUCKETS];
+  double busy, worst;
+  long longCount;
+  double longs[STALL_LONG][2];
+} StallCounts;
+static pthread_mutex_t gStallLock = PTHREAD_MUTEX_INITIALIZER;
+static BOOL gStallsOn, gStallOpen;
+static StallCounts gStallMain, gStallJS;
+static double gStallBegan;
+static char gStallScenario[256];
+
+static void StallRecord(char th, double a, double d) {
+  if (!gStallsOn) return;
+  pthread_mutex_lock(&gStallLock);
+  if (gStallOpen && a >= gStallBegan) {
+    StallCounts *c = th == 'm' ? &gStallMain : &gStallJS;
+    c->n++;
+    c->busy += d;
+    if (d > c->worst) c->worst = d;
+    for (int i = STALL_BUCKETS - 1; i >= 0; i--)
+      if (d >= kStallEdges[i]) {
+        c->buckets[i]++;
+        break;
+      }
+    if (d >= 50 && c->longCount < STALL_LONG) {
+      c->longs[c->longCount][0] = a;
+      c->longs[c->longCount][1] = d;
+      c->longCount++;
+    }
+  }
+  pthread_mutex_unlock(&gStallLock);
+}
 
 static void LoopActivity(CFRunLoopObserverRef observer, CFRunLoopActivity activity, void *info) {
   LoopState *st = info;
   if (activity == kCFRunLoopAfterWaiting) {
     st->start = EpochMs();
-  } else if (st->start > 0) {
+    st->iterStart = st->start;
+  } else {
     double end = EpochMs();
-    if (end - st->start >= 0.05) Push('r', st->th, st->start, end - st->start, 0, 0, 0);
+    if (st->start > 0 && end - st->start >= 0.05) Push('r', st->th, st->start, end - st->start, 0, 0, 0);
     st->start = 0;
+    if (st->iterStart > 0) StallRecord(st->th, st->iterStart, end - st->iterStart);
+    st->iterStart = 0;
   }
 }
 
@@ -335,8 +376,59 @@ static void FindJSThread(void) {
   };
 }
 
+- (NSDictionary *)stallJSON:(StallCounts *)c {
+  NSMutableArray *buckets = [NSMutableArray array];
+  for (int i = 0; i < STALL_BUCKETS; i++) [buckets addObject:@(c->buckets[i])];
+  NSMutableArray *longs = [NSMutableArray array];
+  for (long i = 0; i < c->longCount; i++) [longs addObject:@[@(round(c->longs[i][0] * 1000) / 1000), @(round(c->longs[i][1] * 1000) / 1000)]];
+  return @{@"iterations": @(c->n), @"busyMs": @(c->busy), @"worstMs": @(c->worst), @"buckets": buckets, @"long": longs};
+}
+
+- (void)armSampler:(NSString *)scenario {
+  if (!getenv("AC_SAMPLE_SCENARIO")) return;
+  NSString *arm = [gDir stringByAppendingPathComponent:@"acsample-arm"];
+  if (scenario.length) [[scenario dataUsingEncoding:NSUTF8StringEncoding] writeToFile:arm atomically:YES];
+  else [NSFileManager.defaultManager removeItemAtPath:arm error:nil];
+}
+
+- (NSDictionary *)stalls:(NSDictionary *)cmd {
+  if (!gStallsOn) return @{@"ok": @NO, @"error": @"AC_BENCH_STALLS is off"};
+  NSString *action = cmd[@"action"];
+  if ([action isEqualToString:@"begin"]) {
+    NSString *scenario = cmd[@"scenario"] ?: @"";
+    pthread_mutex_lock(&gStallLock);
+    memset(&gStallMain, 0, sizeof gStallMain);
+    memset(&gStallJS, 0, sizeof gStallJS);
+    gStallBegan = EpochMs();
+    snprintf(gStallScenario, sizeof gStallScenario, "%s", scenario.UTF8String);
+    gStallOpen = YES;
+    pthread_mutex_unlock(&gStallLock);
+    [self armSampler:scenario];
+    return @{@"ok": @YES, @"op": @"stalls", @"began": @(gStallBegan)};
+  }
+  if ([action isEqualToString:@"end"]) {
+    [self armSampler:nil];
+    pthread_mutex_lock(&gStallLock);
+    gStallOpen = NO;
+    double ended = EpochMs();
+    NSDictionary *window = @{@"scenario": @(gStallScenario), @"from": @(gStallBegan), @"to": @(ended), @"edgesMs": @[@8, @16, @33, @50, @100, @250],
+                             @"main": [self stallJSON:&gStallMain], @"js": [self stallJSON:&gStallJS]};
+    pthread_mutex_unlock(&gStallLock);
+    NSData *line = [NSJSONSerialization dataWithJSONObject:window options:0 error:nil];
+    FILE *f = fopen([gDir stringByAppendingPathComponent:@"bench-stalls.jsonl"].UTF8String, "a");
+    if (f) {
+      fwrite(line.bytes, 1, line.length, f);
+      fputc('\n', f);
+      fclose(f);
+    }
+    return @{@"ok": @YES, @"op": @"stalls", @"window": window};
+  }
+  return @{@"ok": @NO, @"error": @"stalls wants action begin or end"};
+}
+
 - (void)handle:(NSDictionary *)cmd {
   NSString *cid = cmd[@"id"], *op = cmd[@"op"];
+  if ([op isEqualToString:@"stalls"]) return [self answer:cid with:[self stalls:cmd]];
   if ([op isEqualToString:@"info"]) {
     return [self answer:cid with:@{@"ok": @YES, @"screen": self.screenName ?: @"", @"maxFPS": @(self.maxFPS), @"js": @(gJSObserved), @"link": @(self.link != nil)}];
   } else if ([op isEqualToString:@"counters"]) {
@@ -357,6 +449,7 @@ __attribute__((constructor)) static void Start(void) {
   if (!dir || !getenv("AC_BENCH_FRAMES")) return;
   if (![NSBundle.mainBundle.bundlePath hasSuffix:@".app"] || [NSBundle.mainBundle.bundlePath containsString:@"Helper"]) return;
   gMainThread = mach_thread_self();
+  gStallsOn = getenv("AC_BENCH_STALLS") != NULL;
   gDir = [NSString stringWithUTF8String:dir];
   gOut = fopen([gDir stringByAppendingPathComponent:@"bench-frames.jsonl"].UTF8String, "a");
   if (!gOut) return;

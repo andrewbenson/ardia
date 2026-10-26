@@ -13,6 +13,10 @@ release's notes must be on its GitHub release.
 Solara has no site or domain yet. Step 6 (the site deploy) and every `ardia.dev` and `apps/site` step below describe
 upstream Ardia's site; skip them for Solara until the owner decides what Solara's site is.
 
+Upstream builds and publishes from GitHub Actions (the **Release** workflow, `.github/workflows/release.yml`,
+`docs/releasing.md` › CI releases). That workflow runs only in `mantrakp04/ardia`, so Solara releases from this machine:
+`scripts/release.sh`, then `publish.sh`.
+
 There are two channels (`docs/releasing.md` › Channels):
 
 - **Nightly** (`0.2.37-nightly.1`): fast iteration, one fix at a time. Only the focused checks for what changed run;
@@ -46,7 +50,7 @@ For each fix:
      appcast item twice: a copy of the previous build on Stable must not be offered it, one on Nightly must install it.
      All of it must pass, as for stable.
    - Publish: `git tag v<version> && git push origin main v<version>`, then
-     `.claude/skills/release/scripts/publish-nightly.sh <version>` (a prerelease with the DMG, zip and appcast; the
+     `.claude/skills/release/scripts/publish.sh <version>` (a prerelease with the DMG, zip, appcast and CLI tarball; the
      merged feed onto the latest stable release; `Ardia-Nightly.dmg` on the `nightly` release (upstream also serves it at https://ardia.dev/nightly); it checks them;
      the asset keeps its `Ardia-` name, like every release asset). In upstream's repo it also moves the Homebrew tap's
      `ardia@nightly` cask to this version (step 5c). With a new engine, commit `prebuilt-engine.tsv`'s line as in step 5.
@@ -141,6 +145,16 @@ scripts/release.sh <version>     # ~15–25 min with notarization; run it in the
 For a nightly, set `MARKETING_VERSION` to `<version>` (`0.2.37-nightly.1`) the same way, commit as "Nightly <version>",
 and run `scripts/release.sh <version> --channel nightly`.
 
+To release from CI instead, push the commit and dispatch the Release workflow (step 5): it runs this same `release.sh`
+on GitHub's runner, so everything below about what it checks holds there too.
+When `engine/` changed since the last published engine, publish the engine you built first, or CI has nothing to link:
+
+```bash
+scripts/publish-engine.sh --dry-run    # packs into dist/engine-<tree>, prints what it would upload
+scripts/publish-engine.sh              # the engine-<tree> prerelease, never latest; appends prebuilt-engines.tsv's line
+git add packages/ardiacore/prebuilt-engines.tsv && git commit -m "Prebuilt engine: <tree>" && git push origin main
+```
+
 `CURRENT_PROJECT_VERSION` is the build number Sparkle compares — it must go up every release, nightlies included
 (release.sh refuses one that isn't above every build in the published feed; read the current value with `grep CURRENT_PROJECT_VERSION …project.pbxproj | sort -u`). release.sh refuses to run
 if `MARKETING_VERSION` doesn't match, the notes file is missing, the tree has uncommitted app or engine
@@ -173,7 +187,7 @@ First it checks the update from `<previous>` (its export in `dist/<previous>/exp
 Then it launches `dist/<version>/export/Ardia.app` hidden with a data dir that says `<previous>` ran last,
 and a session whose window was left on its second profile, and checks, over CDP and the window list:
 
-- engine is Chromium 154, the after-update release-notes tab opened exactly once;
+- the engine and chrome://version are the Chromium version `engine/patches/build/env.sh` names, and the after-update release-notes tab opened exactly once;
 - the browser's child processes are the bundle's own helpers (Chrome's process checks pass under Developer ID);
 - pages load, uBlock blocks an ad script, H.264/AAC/WebGL2;
 - no hidden full-size Chrome window (since 0.2.0 the app window is Chrome's own; before, a hidden "ghost"
@@ -243,23 +257,20 @@ Faster section. (0.2.28 and 0.2.29 were also timed against 0.2.17, the last CEF 
 
 ## 5. Publish
 
-A nightly publishes with `publish-nightly.sh` (the nightly loop above). A stable release goes to the identity's
-`AC_RELEASE_REPO` (`mantrakp04/ardia` upstream, a fork's own repo with its `Fork.xcconfig`), as `publish-nightly.sh`
-and `appcast-merge.sh` read it. Run these from the repo root:
+Both channels publish with `publish.sh` (`docs/releasing.md` › Cutting a release, step 4), to the identity's
+`AC_RELEASE_REPO` (`mantrakp04/ardia` upstream, a fork's own repo with its `Fork.xcconfig`). It merges the appcast onto
+the published feed, creates the release (a stable as latest) with the DMG, zip, appcast and CLI tarball, and checks
+`releases/latest/download/appcast.xml` lists the version (upstream also checks `https://ardia.dev/appcast.xml` and
+updates the Homebrew tap). It holds the `release-lock` branch while it publishes, so it refuses to run alongside another
+publish, naming the holder; `--break-lock` clears a lock older than 2 h left by a publish that died. Upstream runs it
+from the Release workflow (`gh workflow run release.yml -R mantrakp04/ardia …`, `docs/releasing.md` › CI releases);
+Solara runs it here, from the repo root:
 
 ```bash
-repo=$(bash -c '. scripts/identity.sh && ac_identity AC_RELEASE_REPO')
-product=$(bash -c '. scripts/identity.sh && ac_identity AC_PRODUCT_NAME')
 git tag v<version> && git push origin main v<version>
-.claude/skills/release/scripts/appcast-merge.sh <version>
-gh release create v<version> -R "$repo" --title "$product <version>" \
-  --notes-file dist/<version>/release-notes.md \
-  dist/<version>/Ardia-<version>.dmg dist/<version>/Ardia-<version>.zip dist/<version>/appcast.xml \
-  dist/<version>/ardia-cli-<version>-macos-arm64.tar.gz dist/<version>/ardia-cli-<version>-macos-arm64.tar.gz.sha256 \
-  $(ls dist/<version>/ArdiaCore-*.tar.xz 2>/dev/null)
-curl -fsL "https://github.com/$repo/releases/latest/download/appcast.xml" | grep -o 'shortVersionString>[0-9.]*' | head -1
+.claude/skills/release/scripts/publish.sh <version> --dry-run
+.claude/skills/release/scripts/publish.sh <version>
 .claude/skills/release/scripts/feed.sh <version>
-[ "$repo" = mantrakp04/ardia ] && .claude/skills/release/scripts/update-tap.sh <version>
 ```
 
 When engine/ changed since the last prebuilt engine, release.sh also packed `ArdiaCore-<tree>.tar.xz` (the command
@@ -302,26 +313,25 @@ the final RC and said ship).
    publish a fixed build with a higher build number: copies that haven't updated yet go straight to it.
 3. **Everyone.** Remove the interval from the published appcast, so every copy sees the update:
    ```bash
-   repo=$(bash -c '. scripts/identity.sh && ac_identity AC_RELEASE_REPO')
-   gh release download v<version> -R "$repo" -p appcast.xml -D /tmp/ac-appcast --clobber
-   sed -i '' '/<sparkle:phasedRolloutInterval>/d' /tmp/ac-appcast/appcast.xml
-   gh release upload v<version> -R "$repo" /tmp/ac-appcast/appcast.xml --clobber
-   .claude/skills/release/scripts/feed.sh <version>
+   .claude/skills/release/scripts/rollout-everyone.sh <version> --dry-run   # the diff it would upload
+   .claude/skills/release/scripts/rollout-everyone.sh <version>
    ```
-   (The appcast isn't signed as a whole, only its zip's `edSignature`, so editing the line keeps it valid.) The next
-   release's `release.sh` starts from this published appcast, so it doesn't bring the interval back.
+   It holds the publish lock (`release-lock`, the same one `publish.sh` takes), so a nightly published meanwhile can't
+   be overwritten. It edits the feed on the latest stable release as it is at that moment (`appcast.xml`), drops the
+   interval from `<version>`'s item only, uploads it and checks what GitHub serves. (The appcast isn't signed as a whole, only its zip's `edSignature`, so editing the line keeps it
+   valid.) The next release's `release.sh` starts from this published appcast, so it doesn't bring the interval back.
 
 A release without `--phased` goes to everyone at once, as before.
 
 ### 5c. Homebrew tap (upstream Ardia only)
 
-Solara has no Homebrew tap, so a Solara release skips this step; `publish-nightly.sh` runs it only in upstream's repo.
+Solara has no Homebrew tap, so a Solara release skips this step; `publish.sh` runs it only in upstream's repo.
 https://github.com/mantrakp04/homebrew-tap holds `Casks/ardia.rb` (stable) and `Casks/ardia@nightly.rb`, so
 `brew install mantrakp04/tap/ardia` installs the latest DMG. `update-tap.sh <version>` clones the tap into a temp dir,
 sets the matching cask's `version` and `sha256` (GitHub's digest of the published DMG, checked against
 `dist/<version>/`), and pushes; `--dry-run` prints the diff instead. It refuses a version older than the cask's and
-does nothing when the cask is already there. `publish-nightly.sh` runs it for a nightly; run it yourself after a stable
-publish (step 5's last line). The casks have `auto_updates true`: Sparkle updates installed copies and `brew upgrade`
+does nothing when the cask is already there. `publish.sh` runs it for both channels (in CI only with the
+`HOMEBREW_TAP_TOKEN` secret; otherwise run it yourself after the workflow). The casks have `auto_updates true`: Sparkle updates installed copies and `brew upgrade`
 skips them, so a late tap push only delays new installs. Lint after a cask edit by hand (never `brew install` it: that
 writes `/Applications/Ardia.app`): `brew audit --cask --online mantrakp04/tap/ardia` and `brew style mantrakp04/tap`.
 

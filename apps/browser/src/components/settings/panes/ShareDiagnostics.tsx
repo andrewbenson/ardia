@@ -11,7 +11,7 @@ export function ShareDiagnosticsSection() {
   if (!available) return null;
   return (
     <>
-      <SectionHeader title="Crash reports and usage" />
+      <SectionHeader title="Crash reports and usage" description={SHARING_COPY.dailyCountShort} />
       <Group>
         <Row anchor="privacy.shareDiagnostics" title={SHARING_COPY.toggle} description={SHARING_COPY.summary}>
           <Toggle value={sharing} onChange={(on) => setSharing(on, "settings")} />

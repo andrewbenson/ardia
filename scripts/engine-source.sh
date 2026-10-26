@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage="usage: scripts/engine-source.sh <version> <out.tar.xz>"
+usage="usage: scripts/engine-source.sh <version or engine-<tree:12>> <out.tar.xz>"
 version="${1:?$usage}"
 out="${2:?$usage}"
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -11,6 +11,10 @@ repo="$(ac_identity AC_RELEASE_REPO)"
 [ -n "$repo" ] || die "the app's identity has no AC_RELEASE_REPO"
 product="$(ac_identity AC_PRODUCT_NAME)"
 [ -n "$product" ] || die "the app's identity has no AC_PRODUCT_NAME"
+case "$version" in
+  engine-*) ref="$version" shipped="the ArdiaCore engine ${version#engine-}" ;;
+  *) ref="v$version" shipped="$product $version" ;;
+esac
 pinned() { [ -n "${!1:-}" ] && echo "${!1}" || sed -n "s/^export $1=//p" "$root/engine/patches/build/env.sh"; }
 chromium="$(pinned CHROMIUM_VERSION)"
 helium="$(pinned HELIUM_TAG)"
@@ -52,10 +56,10 @@ fetch helium-onboarding "$onboarding"
 fetch uBlock "$ublock"
 
 cat >"$src/README.txt" <<EOF
-The source of the engine in $product $version, besides $product's own repository.
+The source of $shipped, besides $product's own repository.
 
 $product, with the engine's patches and build scripts:
-  https://github.com/$repo/tree/v$version
+  https://github.com/$repo/tree/$ref
   How to build it: docs/engine-build.md there.
 
 Chromium $chromium (BSD-3-Clause and others):

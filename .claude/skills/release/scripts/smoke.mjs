@@ -17,8 +17,10 @@ const checkUnlocked = (name, ok, detail = "") =>
 const windows = () =>
   execFileSync(windowsTool, [pid], { encoding: "utf8" }).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
+const chromiumVersion = readFileSync(new URL("../../../../engine/patches/build/env.sh", import.meta.url), "utf8")
+  .match(/^export CHROMIUM_VERSION=(\S+)$/m)[1];
 const browserInfo = await (await fetch(`http://localhost:${port}/json/version`)).json();
-check("engine is Chromium 155", /Chrome\/155\./.test(browserInfo.Browser), browserInfo.Browser);
+check(`engine is Chromium ${chromiumVersion}`, browserInfo.Browser === `Chrome/${chromiumVersion}`, browserInfo.Browser);
 
 let targets = (await instance.targets()).filter((t) => t.type === "page");
 const notes = targets.filter((t) => new RegExp(`/release-notes/?#${version.replace(/\./g, "\\.")}$`).test(t.url));
@@ -175,7 +177,7 @@ adSteps.push(await adsOnPage());
 check("allowing ads on a site, then not, applies on the next load", adSteps.join(" → ") === "blocked → loaded → blocked", adSteps.join(" → "));
 
 await go("chrome://version");
-check("chrome://version", (await evaluate("document.body.innerText")).includes("155."));
+check("chrome://version", (await evaluate("document.body.innerText")).includes(`Ardia\t${chromiumVersion} (Official Build)`));
 
 await send("Network.enable");
 await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });

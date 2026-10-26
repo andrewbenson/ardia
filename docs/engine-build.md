@@ -1,8 +1,8 @@
 # Building the engine from source
 
 Solara runs on ArdiaCore: Chrome's own framework (`//chrome:chrome_framework`) built from our Chromium tree, with our
-layers linked in (`docs/ardiacore-spike.md`). The tree is **Chromium 155.0.8059.84** (`CHROMIUM_VERSION` in
-`env.sh`), plus **Helium** 0.19.4 (helium-chromium) and 0.19.4.1 (helium-macos) minus a short skip list, then our
+layers linked in (`docs/ardiacore-spike.md`). The tree is **Chromium 156.0.8078.47** (`CHROMIUM_VERSION` in
+`env.sh`), plus **Helium** 0.20.1 (helium-chromium) and 0.20.1.1 (helium-macos) minus a short skip list, then our
 patch series. Nothing of CEF's is checked out or built. CEF left the tree
 on 2026-10-09: its 117 patches to Chrome are gone, except a few kept as `chromium-cef-carryover.patch`
 ([below](#cefs-117-patches)), and the seams of theirs ArdiaCore used are our own hooks H1–H6
@@ -24,7 +24,7 @@ What the build adds:
 
 | Patch | What it does |
 |---|---|
-| `chromium-helium-branding.patch` | First in the series: Helium shows as Ardia, and its services, update feed and crash server can't be reached, for the literals in source that name substitution and `ardia_resources.txt` don't reach. `helium::ShouldAccessServices` is false whatever the prefs say, and both services origins are the unresolvable `services-disabled.qjz9zk`; the update feed and the crash upload URL are empty (no switch sets one) and the crash product is Ardia. Helium's internal-page scheme alias isn't registered, rewritten or shown (the engine shows chrome://, the app shows ardia://). Extension update pings go to no domain (they did to helium.computer). chrome://credits names Ardia and its repository and keeps Helium's GPL-3.0 entry; chrome://crashes files bugs on Ardia's tracker; the Safari import dialog loses its link to Helium's wiki; screenshots save as `ardia_screenshot*.png` and the Web Store's button says "Add to Ardia"; chrome://flags says Ardia, Helium's flag ids are `ardia-*` and the updater channel and update server flags are gone. `cr:chrome-product` is Ardia's mark, Helium's indigo palette is reverted (`helium-color-scheme`), the onboarding and uBlock paks aren't packed or registered, and `chrome/app/theme/chromium/BRANDING` is Chromium's again (Ardia builds with its own, `chromium-branding.patch`) |
+| `chromium-helium-branding.patch` | First in the series: Helium shows as Ardia, and its services, update feed and crash server can't be reached, for the literals in source that name substitution and `ardia_resources.txt` don't reach. `helium::ShouldAccessServices` is false whatever the prefs say, and both services origins are the unresolvable `services-disabled.qjz9zk`; the update feed and the crash upload URL are empty (no switch sets one) and the crash product is Ardia. Helium's internal-page scheme alias isn't registered, rewritten or shown (the engine shows chrome://, the app shows ardia://). Extension update pings go to no domain (they did to helium.computer). chrome://credits names Ardia and its repository and keeps Helium's GPL-3.0 entry; chrome://crashes files bugs on Ardia's tracker; the Safari import dialog loses its link to Helium's wiki; screenshots save as `ardia_screenshot*.png` and the Web Store's button says "Add to Ardia"; chrome://flags says Ardia, Helium's flag ids are `ardia-*`, and the updater channel and update server flags are gone, as are the Proxy server and Proxy bypass list flags (Helium 0.20.1's; on a real profile ArdiaCore drops `--proxy-server` from the browser's command line after chrome://flags apply, so they did nothing there). `cr:chrome-product` is Ardia's mark, Helium's indigo palette is reverted (`helium-color-scheme`), the onboarding and uBlock paks aren't packed or registered, and `chrome/app/theme/chromium/BRANDING` is Chromium's again (Ardia builds with its own, `chromium-branding.patch`) |
 | `chromium-cef-carryover.patch` | The CEF patches we keep ([CEF's 117 patches](#cefs-117-patches)): `BrowserManagerService::DeleteBrowser`'s destruction order, no `NOTREACHED` for unmapped Mac key codes, bubbles kept on screen on the Mac (`kAdjustBubbleIfOffscreen`), a window with a child-modal sheet resizable and the sheet's focus back after the resize, the ResourceBundle delegate parameter H5 passes to `LoadLocalState`, the tab strip API's colour provider without an active tab, and `browser_tests` building without background mode (for `enable_background_mode=false`) |
 | `chromium-extension-window-hidden.patch` | The windows of ArdiaCore's own pages are invisible to chrome.windows/tabs (`g_ardia_hidden_from_extensions`, also read by the next patch and apply.sh's `browser_window_util` hook): not listed, not found by id (`ExtensionTabUtil::GetTabById` and `GetControllerInProfileWithId`, so tabs.get/update/remove, scripting and tabs.sendMessage on a leaked id fail as for a closed tab), no tabs events (`TabsEventRouter::ShouldTrackBrowser`) and no webNavigation events for their tabs, or for tabs they open |
 | `chromium-component-extension-restricted-urls.patch` | Chrome lets every `kComponent` extension script any page (`PermissionsData::CanExecuteScriptEverywhere`), Web Store included. For the component extensions Solara bundles (`g_ardia_restricted_component_extension`, set in every process by `ACMainDelegate`: uBlock Origin's id), `IsRestrictedUrl` makes Chrome's usual checks anyway: no scripts on the Web Store, chrome:// pages or other extensions' pages. Nothing else about `kComponent` changes |
@@ -201,8 +201,8 @@ Otherwise it polls once when something uses the adapter (any call that initializ
 scan…), when CoreBluetooth reports a power or permission change, and when a device connects, never sooner than
 500 ms after the last poll. Chrome polls for as long as anything holds the adapter, and a page with a pending WebAuthn
 request (Google's sign-in page asks for passkeys as soon as it loads) holds it through `BleAdapterManager` once the
-app has the Bluetooth permission: each poll asks `bluetoothd` for the paired devices over XPC, ~2 % of a core on a
-background worker, for as long as the tab is open. Kill switch: `ARDIA_BLUETOOTH_POLL_ON_DEMAND=off`.
+app has the Bluetooth permission: each poll asks `bluetoothd` for the paired devices over XPC, ~2 % of a core (on a
+background worker in 155; Chromium 156 polls on the UI thread again), for as long as the tab is open. Kill switch: `ARDIA_BLUETOOTH_POLL_ON_DEMAND=off`.
 
 `v2_discovery.{h,cc}` and `authenticator_request_dialog_model.cc`: with `g_ardia_hybrid_scan_on_demand` (set by
 `ACMainDelegate`), the hybrid (caBLE v2) discovery listens for a phone's BLE advert only while some request's sheet shows
@@ -379,15 +379,15 @@ Toolchain (`xcodebuild -downloadComponent MetalToolchain`, 840 MB: ANGLE compile
 `~/chromium-build/helium` and `~/chromium-build/helium-macos` (`HELIUM_DIR`, `HELIUM_MACOS_DIR`), at the commits
 `helium-pins.ini` names.
 
-The live tree in `~/chromium-build` has been Helium's since 2026-10-23 (0.2.40-nightly.5's framework).
+The live tree in `~/chromium-build` has been Helium's since 2026-10-23 (0.2.40-nightly.5's framework), on Chromium 156 since 2026-10-25.
 
 | Step | Script | Time (M5 Pro, shared machine) |
 |---|---|---|
-| 1. Fetch Chromium's tag (`CHROMIUM_VERSION` in `env.sh`) at depth 1 and check it out, refusing unless the tag on Chromium's server and the checkout are both `CHROMIUM_COMMIT`, then `gclient sync --no-history` of its deps for the Mac with the PGO profiles (`checkout_pgo_profiles`), then its hooks; clears the series base | `01-sync.sh` | ~40 min, 30 GB (deps alone, re-cloned: 7 min) |
-| 2. Write `out/Release_GN_arm64/args.gn` from `gn_defines.sh`, then `gn gen` | `02-gn-args.sh` | ~1 min |
-| 3. Helium, as Solara takes it ([Helium](#helium)), in stages: `pins` (the checkouts are at the pinned commits, unmodified and made for this Chromium, and `deps.ini` downloads nothing we don't leave out), `guard`, `patches` (Helium's series, then helium-macos's, minus the skip list, with no fuzz), `fixups`, `domsub`, `namesub`, `brand-namesub` (the app's product name, [The engine's identity](#the-engines-identity)), `version`, `resources`. It runs once per tree: `.helium-stages-src`, beside the tree, records the stages that ran and refuses a second run or one that died mid-stage. Each patch's result goes to `~/chromium-build/logs/helium-patches.tsv` | `03-helium.py` | not timed on the live tree yet |
-| 4. Our series: `apply-chromium-patches.sh` (`series.py capture-base` and `apply --phase chromium`: the patches, then the layers `engine/chromium/apply.sh` and `engine/ardiacore/apply.sh`) | `04-series.sh` | not timed on the live tree yet |
-| 5. Regenerate the offline page (`game-resource.sh`), compile `chrome_framework` (ArdiaCore; the app's build stages it from `out/Release_GN_arm64`) | `05-build.sh` | first build 2.5 h (official, ThinLTO, PGO; 2026-10-18); incremental: the compile, then a ThinLTO relink of the framework, about 7 min (its cache, `thinlto-cache`, keeps that short) |
+| 1. Fetch Chromium's tag (`CHROMIUM_VERSION` in `env.sh`) at depth 1 and check it out, refusing unless the tag on Chromium's server and the checkout are both `CHROMIUM_COMMIT`, then `gclient sync --no-history` of its deps for the Mac with the PGO profiles (`checkout_pgo_profiles`), then its hooks; clears the series base | `01-sync.sh` | ~40 min, 30 GB (deps alone, re-cloned: 7 min; 3.5 min for 156 on 2026-10-25, every git dep deleted first) |
+| 2. Write `out/Release_GN_arm64/args.gn` from `gn_defines.sh`, then `gn gen` | `02-gn-args.sh` | 5 s |
+| 3. Helium, as Solara takes it ([Helium](#helium)), in stages: `pins` (the checkouts are at the pinned commits, unmodified and made for this Chromium, and `deps.ini` downloads nothing we don't leave out), `guard`, `patches` (Helium's series, then helium-macos's, minus the skip list, with no fuzz), `fixups`, `domsub`, `namesub`, `brand-namesub` (the app's product name, [The engine's identity](#the-engines-identity)), `version`, `resources`. It runs once per tree: `.helium-stages-src`, beside the tree, records the stages that ran and refuses a second run or one that died mid-stage. Each patch's result goes to `~/chromium-build/logs/helium-patches.tsv` | `03-helium.py` | 2.5 min (2026-10-25: the patches 15 s, the substitutions and resources 2 min) |
+| 4. Our series: `apply-chromium-patches.sh` (`series.py capture-base` and `apply --phase chromium`: the patches, then the layers `engine/chromium/apply.sh` and `engine/ardiacore/apply.sh`) | `04-series.sh` | seconds once every patch applies |
+| 5. Regenerate the offline page (`game-resource.sh`), compile `chrome_framework` (ArdiaCore; the app's build stages it from `out/Release_GN_arm64`) | `05-build.sh` | first build 2.5 h (official, ThinLTO, PGO; 2026-10-18), 2 h for 156 at siso's full parallelism (2026-10-25: 1 h 51 min of compiling, then 7.5 min to the linked framework; free memory never under 59 %); incremental: the compile, then a ThinLTO relink of the framework, about 7 min (its cache, `thinlto-cache`, keeps that short) |
 
 After a build, `helium-check-build.py` (read only) checks the framework and its paks for what we leave out of
 Helium: it fails if Helium's uBlock Origin, its onboarding page or the non-free search engine data were built or
@@ -426,10 +426,12 @@ Rules for editing the tree after the first build:
      (or of a shallow dep) asks for the whole history of every branch: the server builds that pack for an hour
      without sending a byte. So `01-sync.sh` fetches the tag itself at depth 1. If deps stall the same way
      (`STALL DETECTED`, `git fetch --prune --no-tags origin` at 0 % CPU), delete the dep checkouts listed in
-     `.gclient_entries` and sync again: gclient clones them fresh at depth 1.
+     `.gclient_entries` and sync again: gclient clones them fresh at depth 1. On the move to 156 the existing deps
+     fetched their whole history at full bandwidth (packs of over two million objects); deleting every git dep
+     checkout first and syncing again took 3.5 minutes in all, so do that up front.
   5. Step 3's `guard` stage fails when a skipped patch has left Helium's series (check what replaced it) or an
      applied one now touches what a skip protects (Safe Storage, password saving, Sparkle, the product dir, mDNS);
-     `GUARD_ALLOWED` in `03-helium.py` lists the hits reviewed for 0.19.4. A patch that no longer applies without
+     `GUARD_ALLOWED` in `03-helium.py` lists the hits reviewed for 0.19.4 (unchanged for 0.20.1). A patch that no longer applies without
      fuzz fails `patches`, and names any skipped patch that shares its files.
   6. Our patches and the hooks may need their context refreshed; `series.py check` and `apply.sh --check` say
      which. A patch whose file moved is rewritten for the new path, and the new path's file goes into the series
@@ -445,7 +447,7 @@ the `.gclient` asks for (Chromium's DEPS pins an older one; the first build on 2
 ## Helium
 
 [Helium](https://github.com/imputnet/helium-chromium) is built on ungoogled-chromium. Step 3 (`03-helium.py`) applies
-helium-chromium 0.19.4's series and then helium-macos 0.19.4.1's, as `patch -p1 -l -N` with no fuzz (Helium allows 2).
+helium-chromium 0.20.1's series and then helium-macos 0.20.1.1's, as `patch -p1 -l -N` with no fuzz (Helium allows 2).
 Helium's build-time downloads (its uBlock Origin, the onboarding page, the non-free search engine data) are never
 fetched, and the hunks of its patches that edit them are left out.
 
@@ -534,6 +536,42 @@ applied them before Helium): `0005-disable-default-extensions` (without its `web
 leaves out stay out, as before: `disable-download-quarantine` (Chrome quarantines every download itself, with
 `com.apple.quarantine` and its source URL in `kMDItemWhereFroms`), `prefs-always-prompt-for-download-directory`
 (Chrome's default, save to Downloads without asking, is Solara's) and `enable-extra-locales`.
+
+### 0.19.4 → 0.20.1 (Chromium 156.0.8078.47, 2026-10-25)
+
+What changed in Helium, and what we did:
+
+- **Series.** Added: `upstream-fixes/wasm-interpreter-fixes` (V8's Wasm interpreter on 156) and ungoogled's
+  `add-flag-to-hide-window-buttons` (a chrome://flags switch, off by default, for Chrome's own browser windows).
+  Removed: `upstream-fixes/tab-restore-live-tabs` (in Chromium 156 now) and `helium/core/enable-bookmark-bar-settings`.
+  The rest is Helium's context refresh for 156 and its tab layout and zen mode work, which only Chrome's own
+  `BrowserView` shows. helium-macos only refreshed context. `flags.gn`, `flags.macos.gn`, `deps.ini` and the resources
+  are unchanged, and no patch adds a host, a service or a network call.
+- **Skips and guards.** Every `SKIP` entry is still in the series and still a leaf; the `guard` stage finds the same
+  four reviewed hits, so `GUARD_ALLOWED` is unchanged. `domsub-keep-store.txt` keeps the same 16 store files, and
+  `ardia_resources.txt` and Helium's resource list copy the same 56 files.
+- **Proxy flags.** ungoogled's `add-flags-for-existing-switches` already had Proxy server and Proxy bypass list
+  flags in 0.19.4 (0.20.1 only moved their context). On a real profile ArdiaCore drops `--proxy-server`
+  after chrome://flags apply, so they never did anything; the branding patch now takes both flags out.
+- **Step 3.** The `patches` stage counted Chromium's own empty `third_party/search_engines_data/resources_internal`
+  (a gitlink every checkout has) as an omitted download; only a file or a directory with something in it counts now
+  (4309c156).
+- **Our series.** Context refreshed in `chromium-helium-branding` (the crash product), `chromium-helium-services-page-off`
+  (`router.ts`) and `chromium-devtools-control-token`, whose token mode now refuses an Origin before 156's new
+  same-origin acceptance. Rewritten for 156: `chromium-autofill-address-bubble-window` (156 `CHECK`s the save-card
+  bubble's handler; we return instead), `chromium-window-hosted` (`UnloadController` is a state machine; the hook
+  asks `is_attempting_to_close_browser()`), `chromium-thaw-live-connections` (156 gates periodic unfreezing on
+  `IsPeriodicUnfreezingActive()`) and `chromium-video-super-resolution` (`SwapFrameData` carries a `gfx::FrameData`,
+  so the flag goes straight into it; `direct_renderer.h` and `skia_renderer.cc` are no longer touched).
+- **Hooks.** Chromium 156 polls the Mac Bluetooth adapter on the UI thread again (no `OnBackgroundPollComplete`), so
+  `engine/ardiacore/apply.sh`'s on-demand polling hook wraps the synchronous `PollAdapter`. Because that poll now
+  runs inside `LazyInitialize`, before `StartScanWithFilter` starts discovery, it sees no discovery and stops; so a
+  scan that starts asks for the next poll itself (`PollAdapterOnDemand` after `AdapterDiscoveringChanged`), and the
+  500 ms loop runs again for as long as discovery does.
+- **ArdiaCore.** `ACBrowserWindow` answers 156's new `BrowserWindow::GetPinnedToolbarActions()` with null (no toolbar),
+  and `WindowHost`'s close calls `UnloadController`'s renamed `RunBeforeUnloadForShutdown()` and
+  `ResetBeforeUnloadForShutdown()` (155's `TryToCloseWindow()` and `ResetTryToCloseWindow()`); `ACBrowserWindow::Close()`
+  then reaches `HandleBeforeClose()`'s confirmed-shutdown branch, as Chrome's `BrowserCloseManager` does.
 
 ### Licence and source
 

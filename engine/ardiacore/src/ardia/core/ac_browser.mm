@@ -438,7 +438,7 @@ void WindowHost::ContinueClose() {
   }
   asking_ = nullptr;
   for (Browser* browser : browsers()) {
-    if (UnloadController::From(browser)->TryToCloseWindow(
+    if (UnloadController::From(browser)->RunBeforeUnloadForShutdown(
             false,
             base::BindRepeating(&WindowHost::OnBeforeUnloadAnswered,
                                 GetWeakPtr()))) {
@@ -483,7 +483,7 @@ void WindowHost::CancelClose() {
   asking_ = nullptr;
   ++close_attempt_;
   for (Browser* browser : browsers()) {
-    UnloadController::From(browser)->ResetTryToCloseWindow();
+    UnloadController::From(browser)->ResetBeforeUnloadForShutdown();
   }
   NotifyCloseCancelled();
 }
@@ -920,7 +920,7 @@ void WindowHost::QuitCancelled() {
     asking_ = nullptr;
     ++close_attempt_;
     for (Browser* browser : browsers()) {
-      UnloadController::From(browser)->ResetTryToCloseWindow();
+      UnloadController::From(browser)->ResetBeforeUnloadForShutdown();
     }
   }
   NotifyCloseCancelled();
@@ -1607,6 +1607,19 @@ void TabBridge::DidFinishNavigation(content::NavigationHandle* handle) {
 
 void TabBridge::NavigationEntryCommitted(
     const content::LoadCommittedDetails& load_details) {
+  base::AutoReset<int> notifying(&g_navigation_notifying,
+                                 g_navigation_notifying + 1);
+  [tab_ notify:@selector(tabDidChangeNavigationState:)];
+}
+
+void TabBridge::NavigationListPruned(
+    const content::PrunedDetails& pruned_details) {
+  base::AutoReset<int> notifying(&g_navigation_notifying,
+                                 g_navigation_notifying + 1);
+  [tab_ notify:@selector(tabDidChangeNavigationState:)];
+}
+
+void TabBridge::NavigationEntriesDeleted() {
   base::AutoReset<int> notifying(&g_navigation_notifying,
                                  g_navigation_notifying + 1);
   [tab_ notify:@selector(tabDidChangeNavigationState:)];

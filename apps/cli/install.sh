@@ -227,7 +227,7 @@ if [ "$uninstall" -eq 1 ]; then
 fi
 
 [ "$(uname -s)" = Darwin ] || fail "the $command CLI runs on macOS only"
-[ "$(uname -m)" = arm64 ] || fail "the $command CLI needs an Apple silicon Mac"
+[ "$(uname -m)" = arm64 ] || fail "the $command CLI runs on Apple silicon only, not $(uname -m)"
 
 printf 'step resolve\n'
 if [ -n "${ARDIA_CLI_URL:-}" ]; then

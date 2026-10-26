@@ -103,6 +103,7 @@ final class ManualClock: LiveClock, @unchecked Sendable {
   }
 
   func advance(by ms: Double) async {
+    await settle()
     let target = now() + ms
     while true {
       let ready: [Sleeper]? = lock.withLock {

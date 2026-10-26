@@ -171,11 +171,13 @@ func grantable(_ approval: ExtensionApproval?, _ e: LocalExtension) -> Bool {
   return approval.fps.contains(fingerprint)
 }
 
-func approvalToPublish(_ e: LocalExtension, _ known: ExtensionApproval?) -> ExtensionApproval? {
-  guard e.approved ?? false, let fingerprint = e.fingerprint, let version = e.version, !version.isEmpty else { return known }
-  guard let known, compareVersions(version, known.v) <= 0 else { return ExtensionApproval(v: version, fps: [fingerprint]) }
-  if compareVersions(version, known.v) < 0 || known.fps.contains(fingerprint) { return known }
-  return ExtensionApproval(v: known.v, fps: Array((known.fps + [fingerprint]).sorted(by: jsKeyPrecedes).suffix(maxFingerprints)))
+func approvalToPublish(_ e: LocalExtension, _ stored: JSONValue?) -> JSONValue? {
+  let known = ExtensionApproval(json: stored)
+  let storedApproval = known == nil ? nil : stored
+  guard e.approved ?? false, let fingerprint = e.fingerprint, let version = e.version, !version.isEmpty else { return storedApproval }
+  guard let known, compareVersions(version, known.v) <= 0 else { return ExtensionApproval(v: version, fps: [fingerprint]).json }
+  if compareVersions(version, known.v) < 0 || known.fps.contains(fingerprint) { return storedApproval }
+  return ExtensionApproval(v: known.v, fps: Array((known.fps + [fingerprint]).sorted(by: jsKeyPrecedes).suffix(maxFingerprints))).json
 }
 
 func newerApproval(_ approval: ExtensionApproval?, _ e: LocalExtension) -> Bool {
@@ -246,8 +248,7 @@ public final class ExtensionsAdapter: SyncAdapter {
       if !explicit && ((context.known(key) && stored == nil) || isRemoval(stored)) { continue }
       values[key] = localState(e).json
       if explicit { captured[e.id] = intents[e.id]!.g }
-      let approval = approvalToPublish(e, ExtensionApproval(json: context.base(extensionApprovalKey(e.id))))
-      if let approval { values[extensionApprovalKey(e.id)] = approval.json }
+      if let approval = approvalToPublish(e, context.base(extensionApprovalKey(e.id))) { values[extensionApprovalKey(e.id)] = approval }
     }
     for (id, intent) in intents where intent.kind == .uninstalled && !installed.contains(id) {
       values[extensionKey(id)] = ["removed": true]

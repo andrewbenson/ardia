@@ -289,12 +289,13 @@ func runExtensionScenario(_ script: JSONValue) async throws -> [JSONValue] {
     case "clearPending": m!.chrome.pending = OrderedDict()
     case "adapter": m!.adapter = ExtensionsAdapter(host: FakeChromeHost(m!.chrome, nullRead: step["nullRead"]?.truthy ?? false))
     case "legacy": m!.legacy = step["value"]?.truthy ?? false
-    case "nullRecord":
+    case "inject":
       let mac = m!
-      let key = extensionKey(id)
+      let key = step["key"]?.string ?? ""
+      let value = step["value"] ?? .null
       let h = mac.clock.tick()
-      mac.state.records[key] = SyncRecord(h: h, v: .null, o: Origin(mac.id, mac.state.seq + 1))
-      mac.state.outbox.append(Op(k: key, h: h, v: .null))
+      mac.state.records[key] = SyncRecord(h: h, v: value, o: Origin(mac.id, mac.state.seq + 1))
+      mac.state.outbox.append(Op(k: key, h: h, v: value))
     case "compact":
       let mac = m!
       var options = ScopeOptions()

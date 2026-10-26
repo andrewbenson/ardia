@@ -12,7 +12,7 @@ const HELP = `usage: node packages/sync/scripts/extensions-scenario.mjs [--out <
 
 Runs extension sync scenarios through the TypeScript adapter (extensions.ts) over the TypeScript merge, with
 the fake Chrome of extensions.test.ts, and writes each one with its trace: every payload written, every
-removal, every change asked of Chrome, each sync's result or error, and after each step every Mac's scope
+removal, every change asked of Chrome (including remote records of other shapes), each sync's result or error, and after each step every Mac's scope
 state, installed extensions, pending installs, intents and clock. SolaraSyncTests replays the scripts
 through the Swift adapter and must produce the same trace byte for byte. Scenarios are the cases of
 extensions.test.ts plus seeded random runs of three Macs.
@@ -224,11 +224,10 @@ export async function runScenario(script) {
       case "legacy":
         m.legacy = step.value;
         break;
-      case "nullRecord": {
-        const key = extensionKey(step.id);
+      case "inject": {
         const h = m.clock.tick();
-        m.state.records[key] = { h, v: null, o: [m.id, m.state.seq + 1] };
-        m.state.outbox.push({ k: key, h, v: null });
+        m.state.records[step.key] = { h, v: step.value, o: [m.id, m.state.seq + 1] };
+        m.state.outbox.push({ k: step.key, h, v: step.value });
         break;
       }
       case "compact":
@@ -324,7 +323,7 @@ export const namedScripts = () => [
     steps: [
       install("devA", E1),
       ...rounds(["devA", "devB"]),
-      { op: "nullRecord", mac: "devA", id: E1 },
+      { op: "inject", mac: "devA", key: extensionKey(E1), value: null },
       ...rounds(["devA", "devB"]),
       { op: "put", mac: "devB", id: E2, entry: { id: E2, syncable: false, version: "2.0", fingerprint: "storage" } },
       ...rounds(["devB", "devA"]),
@@ -447,6 +446,29 @@ export const namedScripts = () => [
     ],
   },
   {
+    name: "the approval keeps the last eight fingerprints",
+    macs: two,
+    steps: [
+      install("devA", E3),
+      ...rounds(["devA", "devB"], 1),
+      ...["z", "Tabs", "~", "\u{1F600}", "\uFF5E", "a", "b", "all-hosts,x", "m", "\u00e9"].flatMap((fp) => [edit("devA", E3, { fingerprint: fp }), ...sync("devA", "devB")]),
+      edit("devB", E3, { fingerprint: "a" }),
+      ...rounds(["devB", "devA"]),
+    ],
+  },
+  {
+    name: "a stored approval with fields of a newer Mac stays as it is",
+    macs: two,
+    steps: [
+      install("devA", E1),
+      ...rounds(["devA", "devB"], 1),
+      { op: "inject", mac: "devA", key: extensionApprovalKey(E1), value: { v: "1.0", fps: ["tabs"], by: "newer" } },
+      ...rounds(["devA", "devB"]),
+      { op: "inject", mac: "devB", key: extensionKey(E1), value: { on: true, inc: false, pin: true, note: "newer" } },
+      ...rounds(["devB", "devA"]),
+    ],
+  },
+  {
     name: "a removal cancels a queued install",
     macs: two,
     steps: [
@@ -478,7 +500,24 @@ export function randomScript(seed, steps) {
   const ids = ["devA", "devB", "devC"];
   const exts = [E1, E2, E3];
   const versions = ["1.0", "1.1", "2.0", "3.0", "3.1", "10.0", "1.0.1", "2", "3.0.0", "0x1", ""];
-  const fps = ["tabs", "storage", "all-hosts", "all-hosts,downloads", "all-hosts,history", "z", "é"];
+  const fps = ["tabs", "storage", "all-hosts", "all-hosts,downloads", "all-hosts,history", "z", "é", "Tabs", "~", "\u{1F600}", "\uFF5E", "a", "b"];
+  const foreign = () =>
+    pick([
+      null,
+      { removed: "true" },
+      { removed: true, on: true, inc: false, pin: false },
+      { on: 1, inc: false, pin: false },
+      { on: true, inc: false, pin: true, note: "newer" },
+      { pin: false, on: false, inc: true },
+      { v: 3, fps: [] },
+      { v: "1.0", fps: ["a", 2] },
+      { v: pick(versions), fps: [pick(fps), pick(fps)], by: "newer" },
+      { fps: [pick(fps)], v: pick(versions) },
+      [true, false, true],
+      "ext",
+      7,
+      true,
+    ]);
   const script = { name: `random ${seed}`, macs: { devA: false, devB: rand() < 0.7, devC: rand() < 0.7 }, steps: [] };
   for (let i = 0; i < steps; i++) {
     const mac = pick(ids);
@@ -508,8 +547,8 @@ export function randomScript(seed, steps) {
     else if (r < 0.51) script.steps.push({ op: "adapter", mac, nullRead: rand() < 0.3 });
     else if (r < 0.52) script.steps.push({ op: "legacy", mac, value: rand() < 0.4 });
     else if (r < 0.53) script.steps.push({ op: "compact", mac });
-    else if (r < 0.54) script.steps.push({ op: "nullRecord", mac, id });
-    else if (r < 0.6) script.steps.push({ op: "advance", ms: pick([1000, 60_000, 3_600_000, 50 * 86_400_000]) });
+    else if (r < 0.56) script.steps.push({ op: "inject", mac, key: pick([extensionKey, extensionApprovalKey])(id), value: foreign() });
+    else if (r < 0.61) script.steps.push({ op: "advance", ms: pick([1000, 60_000, 3_600_000, 50 * 86_400_000]) });
     else script.steps.push({ op: "sync", mac });
   }
   for (const mac of ids)

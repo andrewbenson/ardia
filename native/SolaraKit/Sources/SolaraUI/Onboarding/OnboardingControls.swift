@@ -69,6 +69,11 @@ struct OnboardingPressable<Label: View>: View {
     Button(action: action) { EmptyView() }
       .buttonStyle(OnboardingPressStyle { pressed in AnyView(label(hovered, pressed)) })
       .disabled(disabled)
+      .onKeyPress(.return) {
+        guard !disabled else { return .ignored }
+        action()
+        return .handled
+      }
       .onHover { hovered = $0 }
   }
 }

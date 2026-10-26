@@ -11,7 +11,6 @@ public final class OnboardingModel {
   @ObservationIgnored public let store: SettingsStoreSource
   @ObservationIgnored public let diagnostics: DiagnosticsSharingServices?
   @ObservationIgnored public var powerUpView: ((PowerUpSpec) -> AnyView)?
-  @ObservationIgnored public var settled = false
   public let copy: OnboardingCopy
   public var appIcon: NSImage?
 

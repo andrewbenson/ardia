@@ -2,11 +2,16 @@
 // Groups acsample.c's scenario-mode samples (main-thread stacks taken inside run-loop iterations of 50 ms or more)
 // by the code they ran: Chrome, React Native / Hermes, the app's own code, or the system.
 //
-//   node apps/browser/scripts/perf/stall-samples.mjs [--symbols <Chromium Framework (dSYM DWARF file)>] [--top <n>] [--json <file>] <dir>...
+//   node apps/browser/scripts/perf/stall-samples.mjs [--symbols <Chromium Framework (dSYM DWARF file)>] [--app-dsym <the app's dSYM DWARF file>]
+//        [--top <n>] [--json <file>] <dir>...
 //
 // Each <dir> is searched for acsample-stalls.txt (one per instance's data folder; native-baseline.mjs passes the
 // bench's --out). A sample counts for the first image, from the leaf up, that isn't the system's, so time in
-// malloc called from Chrome is Chrome's. Without --symbols, Chromium frames show as offsets.
+// malloc called from Chrome is Chrome's. React Native, Yoga, Folly and Expo are static pods linked into the app's
+// executable, so its frames are told apart by symbol name: "react" is RCT…, facebook::react/yoga, YG…, folly::, EX…
+// and Expo…; "hermes" is hermes:: and facebook::hermes; the rest is "app". Release builds are stripped, so pass
+// --app-dsym (the .app.dSYM next to the build) or those frames count as "app". Without --symbols, Chromium frames
+// show as offsets.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +19,7 @@ import { parseArgs } from "node:util";
 
 const { values: o, positionals: dirs } = parseArgs({
   allowPositionals: true,
-  options: { symbols: { type: "string" }, top: { type: "string", default: "8" }, json: { type: "string" }, help: { type: "boolean", short: "h" } },
+  options: { symbols: { type: "string" }, "app-dsym": { type: "string" }, top: { type: "string", default: "8" }, json: { type: "string" }, help: { type: "boolean", short: "h" } },
 });
 if (o.help || !dirs.length) {
   const lines = readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1);
@@ -37,8 +42,15 @@ function find(dir, out = []) {
   return out;
 }
 
-function category(file) {
+const isExecutable = (file) => !!file && /\.app\/Contents\/MacOS\/[^/]+$/.test(file);
+function byName(name) {
+  if (/^(hermes::|facebook::hermes|_?hermes_|HermesRuntime)/.test(name)) return "hermes";
+  if (/^(-?\[?RCT|RCT|facebook::(react|yoga)|YG[A-Z]|folly::|-?\[?EX[A-Z]|EX[A-Z]|Expo|ExpoModulesCore|.*\bExpoModulesCore\b|.*\bReact\b)/.test(name)) return "react";
+  return "app";
+}
+function category(file, name) {
   if (!file) return "system";
+  if (isExecutable(file)) return byName(name ?? "");
   if (file.endsWith("/Chromium Framework") || file.includes("Chromium Framework.framework")) return "chrome";
   if (/hermes/i.test(file)) return "hermes";
   if (/\/(React|RCT|RN|Yoga|yoga|Expo|ExpoModulesCore)[^/]*$/.test(file) || /React[^/]*\.framework/.test(file)) return "react";
@@ -75,6 +87,21 @@ if (!files.length) {
 }
 const parsed = files.map((f) => parse(readFileSync(f, "utf8")));
 
+const exeNames = new Map();
+if (o["app-dsym"]) {
+  for (const p of parsed) {
+    const byBase = new Map();
+    for (const [pc, sy] of p.sym) if (isExecutable(sy.file)) (byBase.get(sy.base) ?? byBase.set(sy.base, []).get(sy.base)).push(pc);
+    for (const [base, pcs] of byBase)
+      for (let i = 0; i < pcs.length; i += 4000) {
+        const chunk = pcs.slice(i, i + 4000);
+        const lines = execFileSync("atos", ["-o", o["app-dsym"], "-l", "0x" + base.toString(16), ...chunk.map((pc) => "0x" + (parseInt(pc, 16) - 1).toString(16))], { encoding: "utf8", maxBuffer: 256 << 20 }).split("\n");
+        chunk.forEach((pc, k) => exeNames.set(`${base}:${pc}`, (lines[k] ?? "?").replace(/ \(in [^)]*\).*$/, "").slice(0, 120)));
+      }
+  }
+}
+const exeName = (sy, pc) => exeNames.get(`${sy.base}:${pc}`) ?? sy.name;
+
 const chromeNames = new Map();
 if (o.symbols) {
   const offsets = new Set();
@@ -94,7 +121,7 @@ for (const p of parsed) {
     const s = p.sym.get(pc);
     if (!s) return "?";
     if (category(s.file) === "chrome") return chromeNames.get(parseInt(pc, 16) - s.base - 1) ?? `Chromium Framework+0x${(parseInt(pc, 16) - s.base).toString(16)}`;
-    return `${s.name} [${s.file.split("/").pop()}]`;
+    return `${isExecutable(s.file) ? exeName(s, pc) : s.name} [${s.file.split("/").pop()}]`;
   };
   for (const it of p.iterations) {
     let row = byScenario.get(it.scenario);
@@ -107,7 +134,8 @@ for (const p of parsed) {
       row.samples++;
       let cat = "system", at = s.pcs[0];
       for (const pc of s.pcs) {
-        const c = category(p.sym.get(pc)?.file);
+        const sy = p.sym.get(pc);
+        const c = category(sy?.file, sy && isExecutable(sy.file) ? exeName(sy, pc) : sy?.name);
         if (c !== "system") {
           cat = c;
           at = pc;

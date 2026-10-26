@@ -79,7 +79,8 @@
 //     BENCH_CMD_TIMEOUT_MS=<ms> how long a command to the app may take to answer (default 30000; raise it for a dry run
 //     on a loaded Mac where scripts/agent/cpu-cap pauses the instance. Timings taken meanwhile are invalid).
 //
-// Results: <out>/<label>/results.json (every sample) and a summary table (median, min–max over runs) on stdout.
+// Results: <out>/<label>/results.json (every sample, rewritten after each run; a run that throws is logged, kept in
+// `errors`, and the next run goes on) and a summary table (median, min–max over runs) on stdout.
 // Needs: Node 22+, swiftc (builds scripts/perf/acperf.swift), clang (builds scripts/perf/acmark.m, loaded into the copy
 // of the app to mark when a window's content appears), the app signed with an identity in the keychain.
 //
@@ -1272,7 +1273,16 @@ if (opt.control) {
 const sides = control ? [candidate, control] : [candidate];
 
 async function interleaved(n, fn) {
-  for (let i = 0; i < n; i++) for (const side of !control ? sides : i % 2 ? [candidate, control] : [control, candidate]) await fn(side, i);
+  for (let i = 0; i < n; i++)
+    for (const side of !control ? sides : i % 2 ? [candidate, control] : [control, candidate]) {
+      try {
+        await fn(side, i);
+      } catch (error) {
+        log(`${side.tag}run ${i} failed: ${String(error?.message ?? error).slice(0, 300)}`);
+        (side.results.errors ??= []).push({ run: i, phase: fn.name || "run", error: String(error?.message ?? error), at: new Date().toISOString() });
+      }
+      writeFileSync(join(side.dir, "results.json"), JSON.stringify(side.results, null, 1));
+    }
 }
 
 const cleanup = async () => {

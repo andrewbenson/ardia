@@ -234,15 +234,20 @@ export async function framesRun(c, side, i, { counts }) {
   const capFrom = capSize();
   const out = { info: null, display, counts, interactions: {}, ...(stalls ? { stalls: {} } : {}), load: [Math.round(c.loadavg()[0])], cpuCap: { running: capRunning(), pauses: 0 } };
   const stallWindow = async (scenario, body) => {
-    if (!stalls) return body();
+    if (!stalls) return { value: await body(), window: null };
     await probe("stalls", { action: "begin", scenario });
+    let value, ended;
     try {
-      return await body();
+      value = await body();
     } finally {
-      const r = await probe("stalls", { action: "end" });
-      (out.stalls[scenario] ??= []).push(r.window);
+      ended = await probe("stalls", { action: "end" });
     }
+    return { value, window: ended.window };
   };
+  const keepStalls = (scenario, window) => {
+    if (window) (out.stalls[scenario] ??= []).push(window);
+  };
+
   const counters = () => probe("counters");
   const quiet = async (maxMs) => {
     let last = null, since = Date.now();
@@ -273,7 +278,7 @@ export async function framesRun(c, side, i, { counts }) {
     log(`${side.tag}frames ${i}${counts ? " (counts)" : ""}: ${info.screen} ${info.maxFPS} Hz, JS thread ${info.js ? "observed" : "NOT found"}; ${out.settled ? "quiet" : "never quiet"} after ${Math.round(out.settleMs / 1000)} s`);
     const reps = counts ? Math.min(3, +opt["frames-n"]) : +opt["frames-n"];
     const only = opt["frames-only"] ? new RegExp(opt["frames-only"], "i") : null;
-    if (stalls) await stallWindow("idle 60 s", () => sleep(60_000));
+    if (stalls) keepStalls("idle 60 s", (await stallWindow("idle 60 s", () => sleep(60_000))).window);
     const list = interactions({ app, key, sleep, run, W: WINDOW, probe, base, acperf, stalls }).filter((it) => !only || only.test(it.name));
     for (const it of list) {
       const rows = [];
@@ -292,7 +297,7 @@ export async function framesRun(c, side, i, { counts }) {
           if (counts) await run(`globalThis.acPerf?.reset(); return 1;`);
           const c0 = await counters();
 
-          const t0 = await stallWindow(it.name, async () => {
+          const { value: t0, window: stallsOf } = await stallWindow(it.name, async () => {
             const t = await it.go();
             await sleep(it.window + 250);
             return t;
@@ -308,6 +313,7 @@ export async function framesRun(c, side, i, { counts }) {
           for (const n of ["layoutPasses", "mountBatches", "uiBlocks", "viewUpdates", "viewCreates"]) extra[n] = c1[n] - c0[n];
           if (counts) Object.assign(extra, await jsCounts());
           taken.push({ t0, extra });
+          keepStalls(it.name, stallsOf);
         } catch (error) {
           log(`${side.tag}frames ${i} ${it.name} #${rep}: lost (${String(error.message ?? error).slice(0, 160)})`);
         }
@@ -358,7 +364,7 @@ const SHOWN = new Set(["frames", "over8", "over16", "worst", "mainBusy", "mainWo
 const STALL_EDGES = ["8–16", "16–33", "33–50", "50–100", "100–250", "≥250"];
 
 export function stallTable(results, label) {
-  const runs = (results.frames ?? []).filter((r) => r.stalls);
+  const runs = (results.frames ?? []).filter((r) => r.stalls && !r.counts);
   const names = [...new Set(runs.flatMap((r) => Object.keys(r.stalls)))];
   const out = [`| Scenario | Thread | Windows | Iterations | Busy ms | Worst ms | ${STALL_EDGES.map((e) => `${e} ms`).join(" | ")} |`, `|---|---|---|---|---|---|${STALL_EDGES.map(() => "---").join("|")}|`];
   for (const name of names)

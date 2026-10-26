@@ -7,13 +7,20 @@
 //     --label <name>          the app's name in the results (default: native-bench's, the folder two levels up)
 //     --control <app>         a previous stable, interleaved run by run with --app in every phase that supports it
 //     --control-label <name>  the control's name (default as --label)
-//     --bundle <file>         the bench bundle for native-bench (default: built from the tree by its prepare)
+//     --js-commit <sha>       the commit the builds' JS came from (required unless --bundle). native-bench drives an app
+//                             through its own bundle, bench-entry.js: the app's index.js plus the command channel,
+//                             which the build's embedded main.jsbundle doesn't have. So the bench bundle is built from
+//                             the tree, and prepare first checks that every input of the app's bundle (apps/browser's
+//                             index.js, src, babel, metro and package files, packages/*'s JS, pnpm-lock.yaml) is the
+//                             same in the tree as at <sha>, committed and clean. tab-actions runs each build's embedded
+//                             main.jsbundle itself
+//     --bundle <file>         a bench bundle built elsewhere from the builds' JS (instead of --js-commit)
 //     --control-bundle <file> the control's bench bundle, when its NATIVE_API_VERSION differs
 //     --version <v>           the version in the report's name (default: the app's CFBundleShortVersionString)
 //     --only <a,b>            phases (default: all but drag), in this order:
 //                               prepare     signed copies with the bench bundle (native-bench --only prepare)
 //                               launch      M7 warm: 8 launches, one tab then the seed
-//                               coldlaunch  M7 cold: 4 launches from fresh APFS clones, one tab then the seed
+//                               coldlaunch  M7 cold: 6 launches from fresh APFS clones, one tab then the seed
 //                               journeys    M2, M3, J4: ⌘T, keystroke → suggestions, Enter → page (seed, 10 × 3 runs)
 //                               tabactions  M1, M2: tab-actions.mjs, 4 launches × 5 of click, ⌃Tab, ⌘number, ⌘T, ⌘W,
 //                                           the row's ✕, pin and unpin, on the app's own JS bundle
@@ -40,8 +47,9 @@
 //     --who <name>            the perflab lock's holder name (default native-baseline)
 //
 // Conditions it checks: the display awake and unlocked (macOS gives no display-link frames otherwise), caffeinate -d for
-// the whole run, the load average and seconds of HID input recorded per phase. It never starts while another
-// instance of the app runs. Hidden instances only (ARDIA_BACKGROUND=1, scratch data folders), except --drag.
+// the whole run, the load average and seconds of HID input recorded per phase. It notes other processes of the same
+// executable name (the owner's app, never touched); native-bench refuses to launch while one of its own copies runs.
+// Hidden instances only (ARDIA_BACKGROUND=1, scratch data folders), except --drag.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
@@ -61,6 +69,7 @@ const { values: opt } = parseArgs({
     "control-label": { type: "string" },
     "locked-ok": { type: "boolean" },
     bundle: { type: "string" },
+    "js-commit": { type: "string" },
     "control-bundle": { type: "string" },
     version: { type: "string" },
     only: { type: "string" },
@@ -83,7 +92,7 @@ if (opt.help) {
 
 const PHASES = ["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
 const NEEDS_DISPLAY = new Set(["journeys", "tabactions", "frames", "framecounts", "drag"]);
-const LOCKED = new Set(["launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
+const LOCKED = new Set(["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
 const out = resolve(opt.out);
 const stateFile = join(out, "baseline.json");
 const log = (...a) => console.error(`[baseline ${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -159,6 +168,13 @@ function run(cmd, args, { locked = false, cwd = repoRoot, env = {}, log: file } 
 }
 
 const nb = join(here, "native-bench.mjs");
+const labelOfPrepared = (path) => basename(dirname(dirname(path)));
+function originalOf(label) {
+  const p = state.meta.prepared ?? {};
+  if (p.app && labelOfPrepared(p.app) === label) return state.meta.app;
+  if (p.control && labelOfPrepared(p.control) === label) return state.meta.control;
+  return null;
+}
 const node = process.execPath;
 const preparedArgs = () => [
   "--app", state.meta.prepared.app, "--prepared", "--port", String(port),
@@ -182,6 +198,15 @@ async function bench(phase, args, extra = {}) {
 
 const phases = {
   async prepare() {
+    if (!opt.bundle) {
+      if (!opt["js-commit"]) throw new Error("prepare needs --js-commit <the builds' commit> (or --bundle): the bench bundle must carry the builds' own JS");
+      const inputs = ["apps/browser/index.js", "apps/browser/src", "apps/browser/app.json", "apps/browser/babel.config.js", "apps/browser/metro.config.js",
+        "apps/browser/package.json", "apps/browser/react-native.config.js", "pnpm-lock.yaml", ":(glob)packages/*/src/**", ":(glob)packages/*/index.ts",
+        ":(glob)packages/*/package.json", ":(glob)packages/*/expo-module.config.json"];
+      const changed = execFileSync("git", ["diff", "--name-only", opt["js-commit"], "--", ...inputs], { cwd: repoRoot, encoding: "utf8" }).trim();
+      const dirty = execFileSync("git", ["status", "--porcelain", "--", ...inputs], { cwd: repoRoot, encoding: "utf8" }).trim();
+      if (changed || dirty) throw new Error(`the tree's app JS differs from ${opt["js-commit"]}, so a bench bundle built now wouldn't be the builds' JS:\n${changed}\n${dirty}`);
+    }
     const dir = join(out, "prepare");
     const said = await run(node, [nb, "--out", dir, "--app", resolve(opt.app), "--only", "prepare", "--port", String(port),
       ...(opt.label ? ["--label", opt.label] : []), ...(opt["control-label"] ? ["--control-label", opt["control-label"]] : []),
@@ -190,7 +215,12 @@ const phases = {
     const apps = [...said.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
     if (!apps.length) throw new Error("native-bench prepare named no copies");
     state.meta.prepared = { app: apps[0], control: apps[1] ?? null };
-    return { copies: apps };
+    const pre = await bench("preflight", ["--only", "launch", "--launch-runs", "1"]);
+    for (const [label, r] of Object.entries(pre)) {
+      const ok = (r.launch ?? []).some((x) => Number.isFinite(x.js));
+      if (!ok || r.errors?.length) throw new Error(`preflight on ${label} failed (a native API skew answers every command with an error): ${JSON.stringify(r.errors ?? r.launch).slice(0, 400)}`);
+    }
+    return { copies: apps, jsCommit: opt["js-commit"] ?? null, bundle: opt.bundle ?? null };
   },
   async launch() {
     return {
@@ -200,8 +230,8 @@ const phases = {
   },
   async coldlaunch() {
     return {
-      oneTab: await bench("coldlaunch-onetab", ["--only", "launch", "--launch-runs", "4", "--fresh-copy"]),
-      seed: await bench("coldlaunch-seed", ["--only", "launch", "--launch-runs", "4", "--fresh-copy", "--seed", "big"]),
+      oneTab: await bench("coldlaunch-onetab", ["--only", "launch", "--launch-runs", "6", "--fresh-copy"]),
+      seed: await bench("coldlaunch-seed", ["--only", "launch", "--launch-runs", "6", "--fresh-copy", "--seed", "big"]),
     };
   },
   async journeys() {
@@ -224,9 +254,17 @@ const phases = {
   async framecounts() {
     const results = await bench("framecounts", ["--only", "framecounts", "--runs", runs, "--frames-stalls",
       "--env", "AC_SAMPLE_SCENARIO=1", "--env", `DYLD_INSERT_LIBRARIES=${acsampleLib()}`]);
-    const json = join(out, "framecounts", "stall-samples.json");
-    await run(node, [join(here, "stall-samples.mjs"), ...(opt.symbols ? ["--symbols", opt.symbols] : []), "--json", json, join(out, "framecounts")]).catch((e) => log(`stall-samples: ${e.message}`));
-    return { results, attribution: existsSync(json) ? JSON.parse(readFileSync(json, "utf8")) : null };
+    const attribution = {};
+    for (const label of Object.keys(results)) {
+      const json = join(out, "framecounts", label, "stall-samples.json");
+      const original = originalOf(label);
+      const exeName = original ? plist(original, "CFBundleExecutable") : null;
+      const dsym = original && join(`${original}.dSYM`, "Contents/Resources/DWARF", exeName);
+      await run(node, [join(here, "stall-samples.mjs"), ...(opt.symbols ? ["--symbols", opt.symbols] : []), ...(dsym && existsSync(dsym) ? ["--app-dsym", dsym] : []),
+        "--json", json, join(out, "framecounts", label)]).catch((e) => log(`stall-samples ${label}: ${e.message}`));
+      if (existsSync(json)) attribution[label] = JSON.parse(readFileSync(json, "utf8"));
+    }
+    return { results, attribution };
   },
   async session() {
     return bench("session", ["--only", "idle,memory,newwindow", "--runs", runs]);
@@ -256,8 +294,9 @@ const phases = {
     const data = join(out, "drag", "data");
     rmSync(join(out, "drag"), { recursive: true, force: true });
     mkdirSync(data, { recursive: true });
+    writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
     const exe = join(app, "Contents/MacOS", plist(app, "CFBundleExecutable"));
-    execFileSync("open", ["-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
+    execFileSync("open", ["-g", "-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
     let pid = 0;
     for (let i = 0; i < 400 && !pid; i++) {
       const r = spawnSync("pgrep", ["-f", `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`], { encoding: "utf8" });
@@ -269,21 +308,25 @@ const phases = {
     try {
       if (acperf("waitwindow", String(pid), "60").code !== 0) throw new Error("no window");
       await sleep(4000);
-      acperf("activate", String(pid));
+      if (acperf("activate", String(pid)).code !== 0) throw new Error("macOS refused to bring the instance to the front; no drag was posted");
       await sleep(800);
       const win = () => JSON.parse(acperf("windows", String(pid)).out).filter((w) => w.w >= 300 && w.h >= 200 && w.alpha > 0 && w.layer === 0)[0];
-      const starts = { toolbar: (w) => [w.x + w.w * 0.6, w.y + 20], "sidebar top": (w) => [w.x + 90, w.y + 44], "top strip": (w) => [w.x + w.w / 2, w.y + 4] };
+      const starts = { toolbar: (w) => [w.x + w.w * 0.6, w.y + 20], "sidebar top": (w) => [w.x + 90, w.y + 44], "top strip": (w) => [w.x + w.w / 2, w.y + 9] };
       for (const [where, at] of Object.entries(starts))
         for (const gap of [4, 8]) {
           for (const shape of ["line", "wiggle"]) {
             const w = win();
             if (!w) throw new Error("the window went away");
             const [x, y] = at(w);
-            const r = JSON.parse(acperf("postdrag", String(pid), String(w.id), `${x},${y}`, "80,40", "120", String(gap), shape).out);
+            const said = acperf("postdrag", String(pid), String(w.id), `${x},${y}`, "80,40", "120", String(gap), shape);
+            const r = JSON.parse(said.out || "{}");
+            if (said.code !== 0 || r.error) throw new Error(`postdrag refused or failed (${r.error ?? `exit ${said.code}`}); stopped the drag phase`);
             drags.push({ where, gap, shape, ...r });
+            if (r.aborted) throw new Error(`a drag stopped early: ${r.aborted}`);
             if (shape === "line") {
               const back = win();
-              acperf("postdrag", String(pid), String(back.id), `${x + 80},${y + 40}`, "-80,-40", "40", "8", "line");
+              const undo = acperf("postdrag", String(pid), String(back.id), `${x + 80},${y + 40}`, "-80,-40", "40", "8", "line");
+              if (undo.code !== 0) throw new Error(`moving the window back was refused: ${undo.out}`);
             }
             await sleep(600);
           }
@@ -336,6 +379,7 @@ function render() {
   const skipped = PHASES.filter((n) => P[n]?.skipped && !P[n]?.result);
   if (dark.length) md.push(`**Run with the screen locked or the display asleep:** ${dark.join(", ")}. macOS gives windows no display-link frames then and pages paint about once a second, so in those phases only rows that don't wait on a frame or a paint stand (launch → window shown and → JS running, memory, idle CPU and wakeups, compute); the paint and frame rows are left for the unlocked rerun.`, "");
   if (skipped.length) md.push(`**Left for a run with the display awake and unlocked:** ${skipped.join(", ")}.`, "");
+  md.push("Where this run departs from [baseline.md](baseline.md): the one-tab and seed launches run as two interleaved series (app and control interleaved within each), not interleaved with each other; acsample.c samples only in the framecounts runs, so the frames runs' timing carries no sampling cost.", "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
   md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");
   for (const name of PHASES) {
@@ -431,12 +475,13 @@ function render() {
       }
     stallBlocks.push(`${sideName(label)}, summed over ${(res.frames ?? []).filter((r) => r.stalls).length} runs:\n\n${lines.join("\n")}`);
   }
-  const attribution = P.framecounts?.result?.attribution;
-  if (attribution?.length) {
-    const lines = ["| Scenario | Iterations ≥ 50 ms | Stalled ms | Samples | Chrome | Hermes | React | App | System |", "|---|---|---|---|---|---|---|---|---|"];
+  for (const [label, attribution] of Object.entries(P.framecounts?.result?.attribution ?? {})) {
+    if (!attribution?.length) continue;
+    const lines = ["| Scenario | Iterations ≥ 50 ms | Stalled ms | Samples | Chrome | Hermes | React Native | App | System |", "|---|---|---|---|---|---|---|---|---|"];
     for (const r of attribution) lines.push(`| ${r.scenario} | ${r.iterations} | ${r.stalledMs} | ${r.samples} | ${["chrome", "hermes", "react", "app", "system"].map((c) => `${Math.round(r.share[c] * 100)}%`).join(" | ")} |`);
-    stallBlocks.push(`Where the main thread's iterations of 50 ms or more went (stack samples from the framecounts runs, acsample.c, grouped by stall-samples.mjs):\n\n${lines.join("\n")}`);
+    stallBlocks.push(`${sideName(label)}: where the main thread's iterations of 50 ms or more went. Stack samples from the framecounts runs (acsample.c, only once an iteration passes 16 ms, so the first 16 ms of a long one aren't sampled), grouped by stall-samples.mjs; "React Native" is RN, Yoga, Folly and Expo's native code, told apart from the app's by symbol name through the build's dSYM. The counts runs have the JS perf probe and the sampler on, so their iteration lengths read longer than the frames runs' histogram above.\n\n${lines.join("\n")}`);
   }
+  if (stallBlocks.length) stallBlocks.push("Busy time is an iteration's after-waiting → before-waiting span. A nested run loop that fires no observers (Chrome's private modes) counts as busy for its whole length, idle time included.");
   section("M6 Main-thread stall histogram", stallBlocks.length ? stallBlocks.join("\n\n") : "Not run.");
 
   const lr = [];
@@ -549,7 +594,7 @@ try {
       held = true;
     }
     if (!LOCKED.has(name)) release();
-    const watch = new InputWatch();
+    const watch = name === "drag" ? { stop: () => null } : new InputWatch();
     const before = machine();
     const t0 = Date.now();
     log(`${name}: start (load ${before.load.join("/")})`);

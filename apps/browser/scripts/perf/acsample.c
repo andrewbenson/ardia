@@ -127,9 +127,25 @@ static unsigned long b_iter;
 static uint64_t b_iterStart;
 static FILE *g_out;
 static uint32_t g_images;
+#define SEEN_SLOTS (1 << 20)
 static uint64_t *g_seen;
 static int g_nseen;
-#define MAXSEEN 400000
+#define MAXSEEN (SEEN_SLOTS / 2)
+
+static int seen_before(uint64_t pc) {
+  uint64_t key = pc + 1;
+  size_t i = (size_t)((key * 0x9E3779B97F4A7C15ull) >> 44) & (SEEN_SLOTS - 1);
+  for (;;) {
+    if (g_seen[i] == key) return 1;
+    if (!g_seen[i]) {
+      if (g_nseen >= MAXSEEN) return 1;
+      g_seen[i] = key;
+      g_nseen++;
+      return 0;
+    }
+    i = (i + 1) & (SEEN_SLOTS - 1);
+  }
+}
 
 static void write_images(void) {
   const uint32_t n = _dyld_image_count();
@@ -140,11 +156,7 @@ static void write_images(void) {
 static void write_syms(int i) {
   for (int k = 0; k < b_n[i]; k++) {
     const uint64_t pc = b_f[i][k];
-    int dup = 0;
-    for (int j = 0; j < g_nseen; j++)
-      if (g_seen[j] == pc) { dup = 1; break; }
-    if (dup || g_nseen >= MAXSEEN) continue;
-    g_seen[g_nseen++] = pc;
+    if (seen_before(pc)) continue;
     Dl_info info;
     if (dladdr((void *)(uintptr_t)(k ? pc - 1 : pc), &info) && info.dli_fname)
       fprintf(g_out, "sym %llx %llx %s\t%s\n", (unsigned long long)pc, (unsigned long long)(uintptr_t)info.dli_fbase, info.dli_fname,
@@ -194,11 +206,12 @@ static void *scenario_sampler(void *arg) {
   char arm[2048], out[2048], scenario[256] = {0}, armed[256] = {0};
   snprintf(arm, sizeof arm, "%s/acsample-arm", dir);
   snprintf(out, sizeof out, "%s/acsample-stalls.txt", dir);
-  g_seen = calloc(MAXSEEN, sizeof *g_seen);
+  g_seen = calloc(SEEN_SLOTS, sizeof *g_seen);
+  if (!g_seen) return NULL;
   int on = 0;
   unsigned long polls = 0;
   for (;;) {
-    if (!on || ++polls % 50 == 0) {
+    if (!on || ++polls % 10 == 0) {
       const int now = read_arm(arm, scenario, sizeof scenario);
       if (now && (!on || strcmp(scenario, armed) != 0)) {
         if (on) end_buffer(armed, 1);
@@ -225,9 +238,14 @@ static void *scenario_sampler(void *arg) {
       usleep(900);
       continue;
     }
+    const uint64_t iterStart = atomic_load(&g_iterStartUs);
+    if (epoch_us() - iterStart < 16000) {
+      usleep(900);
+      continue;
+    }
     if (!b_count) {
       b_iter = it;
-      b_iterStart = atomic_load(&g_iterStartUs);
+      b_iterStart = iterStart;
     }
     if (b_count >= BUF) {
       b_dropped++;
@@ -260,7 +278,7 @@ static void *scenario_sampler(void *arg) {
     thread_resume(g_main);
     b_n[i] = n;
     b_t[i] = epoch_us();
-    if (atomic_load(&g_iter) == b_iter) b_count++;
+    if (atomic_load(&g_iter) == b_iter && atomic_load(&g_inIter)) b_count++;
     usleep(900);
   }
   return NULL;

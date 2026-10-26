@@ -165,7 +165,9 @@ public class SyncModule: Module {
 
     AsyncFunction("shareRecoveryKit") { () throws in
       let url = try self.temporaryKit()
-      guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible), let view = window.contentView else { return }
+      let presenting = NSApp.keyWindow ?? NSApp.windows.first { $0.isVisible && $0.attachedSheet != nil }?.attachedSheet
+        ?? NSApp.windows.first { $0.isVisible && $0.title == "Settings" } ?? NSApp.windows.first(where: \.isVisible)
+      guard let window = presenting, let view = window.contentView else { return }
       let point = view.convert(window.mouseLocationOutsideOfEventStream, from: nil)
       NSSharingServicePicker(items: [url]).show(relativeTo: NSRect(origin: point, size: .zero), of: view, preferredEdge: .minY)
     }.runOnQueue(.main)

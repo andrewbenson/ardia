@@ -31,6 +31,7 @@ public final class Store: Sendable {
     var rev: Int
     var ring: [Patch] = []
     var ringStart = 0
+    var held: Session? = nil
   }
 
   struct Delivery {
@@ -112,9 +113,16 @@ public final class Store: Sendable {
   public func transact(commands: [Command] = [], origin: Origin = .native, durable: Bool = false, _ body: (Session) throws -> Void) throws -> Commit {
     let now = clock()
     let commit: Commit = try core.withLock { core in
-      let session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
+      let session: Session
+      if let held = core.held {
+        held.resume(state: core.state, memory: core.memory, now: now)
+        session = held
+      } else {
+        session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
+      }
       try body(session)
-      if checksInvariants {
+      core.held = session.depth > 0 ? session : nil
+      if checksInvariants && core.held == nil {
         try Invariants.check(session.state)
         let found = Invariants.violations(session.state)
         if !found.isEmpty { invariantHandler(found, commands) }

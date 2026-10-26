@@ -42,7 +42,7 @@ public struct Command: Sendable, Equatable {
     "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate", "tidyPins", "untidyPins",
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
     "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "nextId", "nextNavigation",
-    "beginFromSync", "endFromSync", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
+    "beginFromSync", "endFromSync", "beginTransaction", "endTransaction", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
   ]
 }
 
@@ -313,6 +313,8 @@ extension Session {
       if remote { memory.fromSyncDepth += 1 }
       defer { if remote { memory.fromSyncDepth -= 1 } }
       set(next)
+    case "beginTransaction": beginTransaction()
+    case "endTransaction": endTransaction()
     case "beginFromSync": memory.fromSyncDepth += 1
     case "endFromSync": memory.fromSyncDepth = max(0, memory.fromSyncDepth - 1)
     default:

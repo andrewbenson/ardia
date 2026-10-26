@@ -83,6 +83,24 @@ public final class Session {
     self.now = now
   }
 
+  func resume(state: BrowserState, memory: StoreMemory, now: Double) {
+    self.state = state
+    self.memory = memory
+    self.now = now
+    effects = []
+    result = nil
+  }
+
+  public func beginTransaction() {
+    depth += 1
+  }
+
+  public func endTransaction() {
+    guard depth > 0 else { return }
+    depth -= 1
+    if depth == 0 { hear() }
+  }
+
   public func newId(_ prefix: String) -> String { memory.ids.next(prefix) }
 
   public func navigationTo(_ url: String, userInitiated: Bool = false) -> Navigation {

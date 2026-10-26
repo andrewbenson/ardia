@@ -15,7 +15,7 @@ extension Session {
     return AtPin(url: home, title: entry?.title ?? t.title, favicon: .some(entry?.favicon ?? t.favicon))
   }
 
-  func parkWindowPins(_ parked: Table<ParkedPins>, _ w: BrowserWindow, _ s: BrowserState) -> Table<ParkedPins> {
+  func parkWindowPins(_ parked: Table<ParkedPins>, _ w: BrowserWindow, _ s: BrowserState, otherWindows: Bool = true, history: Bool = true) -> Table<ParkedPins> {
     if w.incognito { return parked }
     let own = s.groups.values.filter { $0.pinned && $0.windowId == w.id }
     let ownIds = Set(own.map(\.id))
@@ -26,7 +26,7 @@ extension Session {
     var next = parked
     let profiles = OrderedSet(w.tabIds.compactMap { s.tabs[$0]?.profileId })
     func shownElsewhere(_ profileId: String) -> Bool {
-      s.windows.values.contains { o in o.id != w.id && !o.incognito && !o.isSmall && o.tabIds.contains { s.tabs[$0]?.profileId == profileId } }
+      otherWindows && s.windows.values.contains { o in o.id != w.id && !o.incognito && !o.isSmall && o.tabIds.contains { s.tabs[$0]?.profileId == profileId } }
     }
     for profileId in profiles {
       if shownElsewhere(profileId) { continue }
@@ -55,7 +55,7 @@ extension Session {
         if ids.contains(t.pinKeyOrId) { continue }
         let g = t.pinned ? nil : groupOf[t.id]
         if t.pinned {
-          let tile = parked(t, atPin(s, t, profileId), groupId: nil)
+          let tile = parked(t, history ? atPin(s, t, profileId) : atPin(BrowserState(), t, profileId), groupId: nil)
           if !splitPanes.contains(t.id) && homes.contains(where: { samePage($0, homeOf(tile.snapshot)) }) {
             paneIds[t.id] = nil
             continue
@@ -69,7 +69,7 @@ extension Session {
             let parent = i > 0 ? chain[i - 1] : nil
             groups.append(ParkedGroup(id: x.pinKeyOrId, name: x.name, icon: x.icon, color: x.color, collapsed: x.collapsed, parentId: parent?.pinKeyOrId))
           }
-          rest.append(parked(t, atPin(s, t, profileId), groupId: g.pinKeyOrId))
+          rest.append(parked(t, history ? atPin(s, t, profileId) : atPin(BrowserState(), t, profileId), groupId: g.pinKeyOrId))
         }
       }
       func isTileEntry(_ p: ParkedTab) -> Bool { p.groupId == nil && p.snapshot.pinnedAsRow != true }

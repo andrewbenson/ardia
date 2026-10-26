@@ -35,6 +35,7 @@ const plainOutput = args.includes("--plain");
 if (plainOutput) args.splice(args.indexOf("--plain"), 1);
 const out = resolve(option("--out", defaultOut));
 const child = option("--child", null);
+const harvest = option("--harvest", null);
 
 
 function orchestrate() {
@@ -47,7 +48,7 @@ function orchestrate() {
   let cases = 0;
   let failed = 0;
   for (const file of files.sort()) {
-    const run = spawnSync(process.execPath, ["--no-warnings", "--max-old-space-size=8192", fileURLToPath(import.meta.url), "--child", file, "--phase", phase, "--out", out, "--cap", String(cap), ...(plainOutput ? ["--plain"] : [])], {
+    const run = spawnSync(process.execPath, ["--no-warnings", "--max-old-space-size=8192", fileURLToPath(import.meta.url), "--child", file, "--phase", phase, "--out", out, "--cap", String(cap), ...(plainOutput ? ["--plain"] : []), ...(harvest ? ["--harvest", resolve(harvest)] : [])], {
       cwd: app,
       encoding: "utf8",
       maxBuffer: 1 << 28,
@@ -84,7 +85,10 @@ const INSTRUMENT = [
     ["function receive(tx: TabStripTransaction) {", "function __replayReceiveImpl(tx: TabStripTransaction) {"],
     ["function project(s: BrowserState) {", "function __replayProjectImpl(s: BrowserState) {"],
   ]],
-  ["/src/lib/persist.ts", "", [["export function startPersistence() {", "export function startPersistence() {\n  globalThis.__replayPersistStarted = true;"]]],
+  ["/src/lib/persist.ts", "", [
+    ["export function startPersistence() {", "export function startPersistence() {\n  globalThis.__replayPersistStarted = true;"],
+    ["    writeDocument(name, json);", "    writeDocument(name, json);\n    globalThis.__replayHarvest?.(name, json);"],
+  ]],
 ];
 
 function readMemory() {
@@ -230,6 +234,18 @@ async function record(file) {
   await import(pathToFileURL(file).href);
 
   const spec = await phases(phase);
+  if (harvest) {
+    const written = new Map();
+    let serial = 0;
+    globalThis.__replayHarvest = (name, json) => {
+      written.set(name, json);
+      if (name !== "session.json") return;
+      const dir = join(harvest, `${relative(join(app, "src"), file).replace(/\.test\.mjs$/, "").replaceAll("/", "__")}__${String(++serial).padStart(3, "0")}`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "session.json"), json);
+      if (written.has("downloads.json")) writeFileSync(join(dir, "downloads.json"), written.get("downloads.json"));
+    };
+  }
   const RealURL = globalThis.URL;
   globalThis.URL = class extends RealURL {
     constructor(input, base) {

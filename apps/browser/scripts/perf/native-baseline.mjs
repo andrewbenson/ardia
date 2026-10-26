@@ -21,6 +21,9 @@
 //     --only <a,b>            phases (default: all but drag), in this order:
 //                               js          the bench bundles from each build's commit (see --js-commit); not timed
 //                               prepare     signed copies with the bench bundle (native-bench --only prepare)
+//                               netcheck    one journeys run per build with telemetry sharing on, the instances' sockets
+//                                           listed every 0.5 s: it fails if any connects to ardia.dev's addresses or if
+//                                           the journeys guard wasn't answered by bench-offline.js; not timed
 //                               launch      M7 warm: 8 launches, one tab then the seed
 //                               coldlaunch  M7 cold: 6 launches from fresh APFS clones, one tab then the seed
 //                               journeys    M2, M3, J4: ⌘T, keystroke → suggestions, Enter → page (seed, 10 × 3 runs)
@@ -93,9 +96,9 @@ if (opt.help) {
   process.exit(0);
 }
 
-const PHASES = ["js", "prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
+const PHASES = ["js", "prepare", "netcheck", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
 const NEEDS_DISPLAY = new Set(["journeys", "tabactions", "frames", "framecounts", "drag"]);
-const LOCKED = new Set(["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
+const LOCKED = new Set(["prepare", "netcheck", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
 const out = resolve(opt.out);
 const stateFile = join(out, "baseline.json");
 const log = (...a) => console.error(`[baseline ${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -141,7 +144,7 @@ function machine() {
 }
 
 class ConnectionWatch {
-  constructor() {
+  constructor(every = 2000) {
     this.seen = new Map();
     this.samples = 0;
     this.ardia = new Set();
@@ -149,7 +152,7 @@ class ConnectionWatch {
       const r = spawnSync("dig", ["+short", type, "ardia.dev"], { encoding: "utf8", timeout: 5000 });
       for (const ip of (r.stdout ?? "").split("\n").map((l) => l.trim()).filter((l) => /^[\d.:a-f]+$/i.test(l))) this.ardia.add(ip);
     }
-    this.timer = setInterval(() => this.sample(), 2000);
+    this.timer = setInterval(() => this.sample(), every);
   }
   sample() {
     const ps = spawnSync("ps", ["-ax", "-o", "pid=", "-o", "command="], { encoding: "utf8", maxBuffer: 64 << 20 });
@@ -313,6 +316,21 @@ const phases = {
     }
     return { copies: apps, bundles };
   },
+  async netcheck() {
+    const watch = new ConnectionWatch(500);
+    let results, net;
+    try {
+      results = await bench("netcheck", ["--only", "newtabkey", "--runs", "1", "--journey-n", "2", "--seed", "big"]);
+    } finally {
+      net = watch.stop();
+    }
+    const guards = Object.fromEntries(Object.entries(results).map(([label, r]) => [label, (r.journeys ?? []).map((j) => j.guard)]));
+    for (const [label, g] of Object.entries(guards))
+      if (!g.length || g.some((x) => x?.blocked !== "1")) throw new Error(`netcheck ${label}: the journeys guard wasn't answered by bench-offline.js: ${JSON.stringify(g)}`);
+    if (net.toArdia) throw new Error(`netcheck: ${net.toArdia} socket(s) to ardia.dev's addresses: ${JSON.stringify(net.remotes.filter((r) => r.ardia))}`);
+    if (!net.samples) throw new Error("netcheck: the socket sampler never saw an instance");
+    return { net, guards };
+  },
   async launch() {
     return {
       oneTab: await bench("launch-onetab", ["--only", "launch", "--launch-runs", "8"]),
@@ -377,8 +395,25 @@ const phases = {
     const v8 = await run(join(repoRoot, "scripts/agent/locked"), ["perflab", "--wait", "500", "--", node, join(repoRoot, "native/SolaraKit/Scripts/omnibox-bench.mts"), "--seed-out", seed]);
     let swift = "";
     try {
+      const kit = join(dir, "kit");
+      const native = join(repoRoot, "native/SolaraKit");
+      for (const sub of ["Sources/SolaraModel", "Sources/SolaraOmnibox", "Tests/OmniboxBench"]) mkdirSync(join(kit, dirname(sub)), { recursive: true });
+      for (const target of ["SolaraModel", "SolaraOmnibox"]) if (!existsSync(join(kit, "Sources", target))) execFileSync("ln", ["-s", join(native, "Sources", target), join(kit, "Sources", target)]);
+      mkdirSync(join(kit, "Tests/OmniboxBench"), { recursive: true });
+      for (const file of ["OmniboxBench.swift", "FixtureSupport.swift"])
+        if (!existsSync(join(kit, "Tests/OmniboxBench", file))) execFileSync("ln", ["-s", join(native, "Tests/SolaraOmniboxTests", file), join(kit, "Tests/OmniboxBench", file)]);
+      writeFileSync(join(kit, "Package.swift"), [
+        "// swift-tools-version:6.2",
+        "import PackageDescription",
+        "let package = Package(name: \"OmniboxBenchKit\", platforms: [.macOS(\"26.0\")], targets: [",
+        "  .target(name: \"SolaraModel\"), .target(name: \"SolaraOmnibox\", dependencies: [\"SolaraModel\"]),",
+        "  .testTarget(name: \"OmniboxBench\", dependencies: [\"SolaraOmnibox\", \"SolaraModel\"]),",
+        "], swiftLanguageModes: [.v6])",
+        "",
+      ].join("\n"));
+      await run("swift", ["build", "-c", "release", "-Xswiftc", "-enable-testing", "--build-tests"], { cwd: kit });
       swift = await run(join(repoRoot, "scripts/agent/locked"), ["perflab", "--wait", "500", "--", "swift", "test", "-c", "release", "-Xswiftc", "-enable-testing",
-        "--build-path", join(dir, "swift-build"), "--filter", "OmniboxBench"], { cwd: join(repoRoot, "native/SolaraKit"), env: { SOLARA_OMNIBOX_BENCH: seed } });
+        "--skip-build", "--filter", "OmniboxBench"], { cwd: kit, env: { SOLARA_OMNIBOX_BENCH: seed } });
     } catch (e) {
       log(`OmniboxBench: ${e.message}`);
     }
@@ -518,6 +553,8 @@ function render() {
   if (lost.length) md.push(`**Phases that failed or lost runs (their rows hold fewer samples):** ${lost.map((n) => `${n} (${(P[n].partial ?? [P[n].error]).join("; ").slice(0, 300)})`).join("; ")}.`, "");
   md.push("Where this run departs from [baseline.md](baseline.md): the one-tab and seed launches run as two interleaved series (app and control interleaved within each), not interleaved with each other; acsample.c samples only in the framecounts runs, so the frames runs' timing carries no sampling cost.", "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
+  const nc = P.netcheck?.result;
+  if (nc) md.push(`**No upstream traffic:** the netcheck phase ran a journeys pass per build with telemetry sharing on and listed the instances' sockets every 0.5 s (${nc.net.samples} samples): none to ardia.dev (${nc.net.ardiaAddresses.join(", ")}); the guard's post to bench-guard.invalid was answered by bench-offline.js on every run (${Object.keys(nc.guards).join(", ")}). Remote endpoints seen: ${nc.net.remotes.map((r) => `${r.remote} ×${r.count}`).join(", ") || "none"}.`, "");
   const c = state.meta.connections;
   if (c) md.push(`**Network:** the instances' sockets were listed every 2 s (${c.samples} samples, \`lsof\`): ${c.toArdia ? `**${c.toArdia} remote endpoint(s) at ardia.dev's addresses**` : "none to ardia.dev's addresses"} (${c.ardiaAddresses.join(", ") || "ardia.dev didn't resolve"}); every remote endpoint seen: ${c.remotes.length ? c.remotes.map((r) => `${r.remote} ×${r.count}`).join(", ") : "none"}.`, "");
   md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");

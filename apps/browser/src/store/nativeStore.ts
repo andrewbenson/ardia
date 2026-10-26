@@ -198,11 +198,10 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
   if (ownsWorkspace) wrapActions(store);
   else wrapProfileSettingsWriters(store);
   const stopCommits = onForeignCommit((commit) => {
-    if (commit.rev <= appliedRev) return;
     if (commit.rev === appliedRev + 1) {
       appliedRev = commit.rev;
       applyPatch(commit.patch);
-    } else {
+    } else if (commit.rev > appliedRev) {
       applyResponse(nativeCatchUp(appliedRev));
     }
     afterApplied(commit.effects);
@@ -275,7 +274,6 @@ export function writeState(store: Replica, update: Partial<BrowserState> | ((s: 
 function resync(store: Replica, keys: string[]) {
   const snapshot = nativeSnapshot();
   if (!snapshot) return;
-  appliedRev = Math.max(appliedRev, snapshot.rev);
   const s = store.getState() as unknown as Record<string, unknown>;
   const data = snapshot.data;
   const next: Record<string, unknown> = {};

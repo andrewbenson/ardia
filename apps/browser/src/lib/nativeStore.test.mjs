@@ -21,7 +21,11 @@ const native = {
 globalThis.acTestNativeModules = {
   ArdiaStore: {
     status: () => ({ active: true }),
-    snapshot: () => JSON.stringify({ rev: native.rev, data: { settings: native.settings, downloads: native.downloads } }),
+    snapshot: () => {
+      native.beforeSnapshot?.();
+      native.beforeSnapshot = null;
+      return JSON.stringify({ rev: native.rev, data: { settings: native.settings, downloads: native.downloads } });
+    },
     dispatch(json, sinceRev) {
       const commands = [JSON.parse(json)].flat();
       sent.push(...commands);
@@ -156,6 +160,42 @@ test("deleting a profile sends its settings repair to the native store, not past
   assert.notEqual(native.settings.defaultProfileId, id);
   assert.equal(S().settings.defaultProfileId, native.settings.defaultProfileId);
   assert.ok(!warnings.some((w) => w.includes("outside the native store's applier")));
+});
+
+test("a commit that only carries effects still runs them, and effects behind a rev jump aren't lost", async () => {
+  const { onStoreEffect } = await import("../store/nativeWorkspace.ts");
+  const seen = [];
+  const stop = onStoreEffect("probe", (effect) => seen.push(effect.n));
+  const send = (rev, patch, effects) => {
+    for (const listener of listeners) listener({ event: JSON.stringify({ rev, patch: { rev, ...patch }, effects }) });
+  };
+  send(native.rev, {}, [{ type: "probe", n: 1 }]);
+  const jumped = native.commit({ settings: { set: { appearance: "light" } } });
+  S().updateSettings({ searchEngine: "qwant" });
+  send(jumped.rev, jumped, [{ type: "probe", n: 2 }]);
+  stop();
+  assert.deepEqual(seen, [1, 2]);
+  assert.equal(S().settings.appearance, "light");
+});
+
+test("a resync after a forwarded write doesn't skip a foreign commit it didn't apply", () => {
+  let pending;
+  native.beforeSnapshot = () => {
+    const downloads = [{ id: "from-elsewhere", url: "https://e/x", state: "complete", profile: "" }];
+    native.downloads = downloads;
+    pending = native.commit({ downloads });
+  };
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    useBrowser.setState({ settings: { ...S().settings, searchEngine: "mojeek" } });
+  } finally {
+    console.warn = warn;
+  }
+  assert.ok(pending, "a commit landed between the dispatch and the resync's snapshot");
+  for (const listener of listeners) listener({ event: JSON.stringify({ rev: pending.rev, patch: pending }) });
+  assert.ok(S().downloads.some((d) => d.id === "from-elsewhere"));
+  assert.equal(S().settings.searchEngine, "mojeek");
 });
 
 test("persist.ts marks session.json and leaves downloads.json to the native store", () => {

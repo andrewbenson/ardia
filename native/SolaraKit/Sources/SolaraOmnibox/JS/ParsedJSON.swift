@@ -74,21 +74,6 @@ public enum ParsedJSON: Sendable, Equatable {
   public init(parsing data: Data) throws {
     try self.init(parsing: String(decoding: data, as: UTF8.self))
   }
-
-  public init(_ any: Any?) {
-    switch any {
-    case nil, is NSNull: self = .null
-    case let n as NSNumber where CFGetTypeID(n) == CFBooleanGetTypeID(): self = .bool(n.boolValue)
-    case let b as Bool: self = .bool(b)
-    case let n as NSNumber: self = .number(n.doubleValue)
-    case let s as String: self = .string(s)
-    case let a as [Any?]: self = .array(a.map(ParsedJSON.init))
-    case let a as [Any]: self = .array(a.map { ParsedJSON($0) })
-    case let pairs as KeyValuePairs<String, Any?>: self = .object(pairs.map { ($0.key, ParsedJSON($0.value)) })
-    case let d as [String: Any]: self = .object(d.keys.sorted().map { ($0, ParsedJSON(d[$0])) })
-    default: self = .null
-    }
-  }
 }
 
 public struct JSONSyntaxError: Error, Sendable {}

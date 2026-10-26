@@ -73,6 +73,33 @@ public final class NativeStore: Sendable {
     return support.appending(path: Bundle.main.bundleIdentifier ?? "Ardia", directoryHint: .isDirectory)
   }
 
+  static let handOffWait: TimeInterval = 15
+
+  static func chromeSingletonPid(_ folder: URL) -> pid_t? {
+    let link = folder.appending(path: "Chromium/SingletonLock").path
+    guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: link), let dash = target.lastIndex(of: "-") else { return nil }
+    return pid_t(target[target.index(after: dash)...])
+  }
+
+  static func waitForHolder(_ folder: URL) throws -> FolderLock? {
+    let data = DataFolder(url: folder)
+    let holder = FolderLock.holder(data)
+    let deadline = Date().addingTimeInterval(handOffWait)
+    while Date() < deadline {
+      if let lock = try FolderLock.acquire(data) { return lock }
+      if let holder, chromeSingletonPid(folder) == holder {
+        handedOff = true
+        unavailableReason = "another instance (pid \(holder)) is using this data folder"
+        NSLog("[store] %@; handing this launch to it", unavailableReason ?? "")
+        return nil
+      }
+      usleep(100_000)
+    }
+    NSLog("[store] the instance holding this data folder never became the browser; quitting")
+    if let holder { NSRunningApplication(processIdentifier: holder)?.activate() }
+    exit(0)
+  }
+
   @discardableResult
   public static func launchAtStartup() -> Bool {
     _ = setAppScheme(productName())
@@ -81,16 +108,12 @@ public final class NativeStore: Sendable {
       return false
     }
     do {
-      guard let lock = try FolderLock.acquire(DataFolder(url: folder)) else {
-        handedOff = true
-        let holder = FolderLock.holder(DataFolder(url: folder)).map { " (pid \($0))" } ?? ""
-        unavailableReason = "another instance\(holder) is using this data folder"
-        NSLog("[store] %@; starting neither store", unavailableReason ?? "")
-        return false
-      }
+      guard let lock = try FolderLock.acquire(DataFolder(url: folder)) ?? waitForHolder(folder) else { return false }
       folderLock = lock
     } catch {
-      NSLog("[store] couldn't lock the data folder: %@", "\(error)")
+      unavailableReason = "couldn't lock the data folder: \(error)"
+      NSLog("[store] %@; running on the JS store", unavailableReason ?? "")
+      return false
     }
     if ProcessInfo.processInfo.environment["ARDIA_NATIVE_STORE"] == "0" {
       unavailableReason = "ARDIA_NATIVE_STORE=0"

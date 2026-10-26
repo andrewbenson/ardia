@@ -76,6 +76,10 @@ public enum Importer {
   }
 
   static func unreadableContainers(_ session: JSONValue?) -> String? {
+    for key in ["windows", "tabs", "profiles", "groups", "splits"] {
+      guard let value = session?[key], !value.isNull else { continue }
+      if value.array == nil && value.object == nil { return "session.json's \(key) is neither a list nor an object" }
+    }
     let windows = session?["windows"]
     let listedWindows = windows?.array ?? windows?.object?.values ?? []
     let badWindows = listedWindows.filter { $0.object == nil || $0["tabIds"]?.array == nil }.count

@@ -633,4 +633,12 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(launch.state.windows.values.first?.sidebarOpen == true)
     #expect(document(launch.state).contains(#""sidebarOpen":1"#))
   }
+
+  @Test func aWindowsOrTabsValueThatIsNoListIsRefused() throws {
+    for session in [#"{"version":2,"windows":"w1","tabs":[]}"#, #"{"version":2,"windows":[],"tabs":"a"}"#] {
+      let folder = try scratchFolder()
+      try write(session, to: folder.session)
+      #expect(throws: ImportRefused.self) { try open(folder) }
+    }
+  }
 }

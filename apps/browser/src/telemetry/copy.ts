@@ -4,25 +4,33 @@ export const SHARING_COPY = {
   toggle: "Share anonymous crash reports and usage stats",
   summary: "Crashes, errors, rough feature counts and speed. Never the sites you visit, anything you type or search, or what's in your tabs.",
   whatsSent: "What's Sent",
-  footnote:
-    `Sent to ${SERVICES.telemetryHost} with a random ID made on this Mac, and kept on our own servers. No third parties. Turning this off stops it at once and deletes anything waiting to be sent. This setting doesn't sync.`,
+  footnote: SERVICES.telemetryHost
+    ? `Sent to ${SERVICES.telemetryHost} with a random ID made on this Mac, and kept on our own servers. No third parties. Turning this off stops it at once and deletes anything waiting to be sent. This setting doesn't sync.`
+    : `Nothing is sent: this copy of ${PRODUCT} has no diagnostics server.`,
   ask: {
     title: `Help fix ${PRODUCT}?`,
     body: "Share anonymous crash reports and usage stats. No sites, searches or typing. Ever.",
     share: "Share",
     notNow: "Not now",
   },
-  dailyCount:
-    "One anonymous “opened today” count a day: app version, update channel, macOS version, chip, and whether it's this copy's first day, week or month. No persistent ID.",
-  dailyCountShort: `Either way, ${PRODUCT} sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID.`,
-  updateChecks: `${SERVICES.updateHost} counts update checks by version and day, and whether it's this copy's first. Nothing else.`,
-  switchFile:
-    `While update checks are on, each launch also reads ${SERVICES.switchFile}: one small file, the same for everyone, that lets us turn off a speed-up that misbehaves. It sends no ID, no cookies and nothing about you.`,
+  dailyCount: SERVICES.telemetryHost
+    ? "One anonymous “opened today” count a day: app version, update channel, macOS version, chip, and whether it's this copy's first day, week or month. No persistent ID."
+    : "No “opened today” count: nothing is sent.",
+  dailyCountShort: SERVICES.telemetryHost
+    ? `Either way, ${PRODUCT} sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID.`
+    : `${PRODUCT} sends nothing: no crash reports, no usage stats, no daily count.`,
+  updateChecks: SERVICES.updateHost
+    ? `${SERVICES.updateHost} counts update checks by version and day, and whether it's this copy's first. Nothing else.`
+    : "No update checks: nothing is sent.",
+  switchFile: SERVICES.switchFile
+    ? `While update checks are on, each launch also reads ${SERVICES.switchFile}: one small file, the same for everyone, that lets us turn off a speed-up that misbehaves. It sends no ID, no cookies and nothing about you.`
+    : "No switch file is read at launch: nothing is sent.",
   onboarding: {
     title: "Help us fix what breaks",
     row: "Crashes, errors, feature counts and speed. Never your sites, typing or tabs.",
-    subtitle:
-      `Off unless you turn it on; change it any time in Settings › Privacy & Security. Either way, ${PRODUCT} sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID.`,
+    subtitle: SERVICES.telemetryHost
+      ? `Off unless you turn it on; change it any time in Settings › Privacy & Security. Either way, ${PRODUCT} sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID.`
+      : `${PRODUCT} sends nothing: no crash reports, no usage stats, no daily count.`,
   },
 } as const;
 

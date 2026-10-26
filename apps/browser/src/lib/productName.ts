@@ -2,7 +2,6 @@ import { setAppScheme } from "@ardia/core";
 import { systemInfo, type SystemInfo } from "@ardia/shell";
 
 export const DEFAULT_PRODUCT = "Ardia";
-const UPSTREAM_HOST = "ardia.dev";
 
 function readInfo(): Partial<SystemInfo> {
   try {
@@ -30,7 +29,7 @@ export const PRODUCT = info.appName?.trim() || DEFAULT_PRODUCT;
 export const APP_SCHEME = setAppScheme(PRODUCT);
 
 export const SERVICES = {
-  telemetryHost: telemetry?.host || UPSTREAM_HOST,
-  updateHost: feed?.host || UPSTREAM_HOST,
-  switchFile: switches?.host ? `${switches.host}${switches.pathname === "/" ? "" : switches.pathname}` : `${UPSTREAM_HOST}/switches.json`,
+  telemetryHost: telemetry?.host || null,
+  updateHost: feed?.host || null,
+  switchFile: switches?.host ? `${switches.host}${switches.pathname === "/" ? "" : switches.pathname}` : null,
 };

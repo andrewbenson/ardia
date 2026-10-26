@@ -28,6 +28,11 @@ public class StoreModule: Module {
       return JSONValue.object(bridge.catchUp(sinceRev: sinceRev)).text()
     }
 
+    Function("freeze") { () -> Bool in
+      NativeStore.shared?.freeze()
+      return NativeStore.shared != nil
+    }
+
     Function("flush") { (timeout: Double) -> Bool in
       NativeStore.shared?.flush(timeout: timeout) ?? false
     }

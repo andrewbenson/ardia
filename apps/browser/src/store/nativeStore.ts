@@ -1,5 +1,6 @@
 import {
   encodeCommand,
+  freezeNativeStore,
   nativeCatchUp,
   nativeDispatch,
   nativeSnapshot,
@@ -59,6 +60,7 @@ export function nativeOwnedSnapshot(): Partial<OwnedSlices> | null {
 }
 
 export function standDown() {
+  freezeNativeStore();
   stopListening?.();
   stopListening = null;
   replica = null;

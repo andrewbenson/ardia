@@ -10,6 +10,7 @@ type NativeStoreModule = {
   dispatch(commandJSON: string, sinceRev: number): string | null;
   catchUp(sinceRev: number): string | null;
   flush(timeout: number): boolean;
+  freeze?(): boolean;
   addListener(event: "onStoreCommit", listener: (payload: { event: string }) => void): EventSubscription;
 };
 
@@ -60,6 +61,10 @@ export function nativeDispatch(commands: StoreCommand | StoreCommand[], sinceRev
 export function nativeCatchUp(sinceRev: number): DispatchResponse | null {
   const text = native?.catchUp(sinceRev);
   return text ? JSON.parse(text) : null;
+}
+
+export function freezeNativeStore(): boolean {
+  return native?.freeze?.() ?? false;
 }
 
 export function flushNativeStore(timeoutSeconds = 0.5): boolean {

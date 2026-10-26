@@ -23,6 +23,7 @@ public final class PersistenceWriter: Sendable {
     var exportedDownloads: JSONValue?
     var failedInARow = 0
     var durable = false
+    var frozen = false
   }
 
   let store: Store
@@ -59,6 +60,10 @@ public final class PersistenceWriter: Sendable {
   }
 
   public var errors: [String] { failures.withLock { $0 } }
+
+  public func freeze() {
+    pending.withLock { $0.frozen = true }
+  }
   public var flushCount: Int { pending.withLock { $0.flushes } }
 
   func note(_ commit: Commit) {
@@ -83,6 +88,7 @@ public final class PersistenceWriter: Sendable {
 
   func flushRows() {
     let (dirty, durable) = pending.withLock { p -> (Bool, Bool) in
+      if p.frozen { return (false, false) }
       defer {
         p.rows = false
         p.rowsScheduled = false
@@ -123,6 +129,7 @@ public final class PersistenceWriter: Sendable {
 
   func writeShadow() {
     let dirty = pending.withLock { p -> Bool in
+      if p.frozen { return false }
       defer {
         p.shadow = false
         p.shadowScheduled = false

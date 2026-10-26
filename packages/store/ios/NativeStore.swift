@@ -134,4 +134,6 @@ public final class NativeStore: Sendable {
   }
 
   public func flush(timeout: TimeInterval) -> Bool { writer.flush(timeout: timeout) }
+
+  public func freeze() { writer.freeze() }
 }

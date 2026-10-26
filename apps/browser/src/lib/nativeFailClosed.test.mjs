@@ -8,6 +8,7 @@ globalThis.acTestNativeModules = {
     dispatch: () => null,
     catchUp: () => null,
     flush: () => false,
+    freeze: () => ((globalThis.__frozenNative = true), true),
     addListener: () => ({ remove() {} }),
   },
 };
@@ -36,4 +37,5 @@ test("when the native store owns the workspace but returns none, nothing is save
   assert.ok(errors.some((e) => e.includes("saves nothing")));
   assert.equal(nativeOwnsWorkspace(), false, "the tab strip and every other writer stop feeding the native store");
   assert.equal(nativeStoreActive(), false);
+  assert.equal(globalThis.__frozenNative, true, "the native writer is frozen too");
 });

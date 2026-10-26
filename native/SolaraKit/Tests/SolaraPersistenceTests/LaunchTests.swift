@@ -702,4 +702,18 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(names(in: folder).contains { $0.hasPrefix("solara.sqlite.pre-reimport-") })
     try again.database.close()
   }
+
+  @Test func aFrozenWriterWritesNothing() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    let launch = try open(folder)
+    let store = store(for: launch)
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
+    let session = contents(folder.session)
+    writer.freeze()
+    try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    #expect(writer.flush(timeout: 5))
+    #expect(contents(folder.session) == session)
+    #expect(try launch.database.load().settings?["appearance"] != "dark")
+  }
 }

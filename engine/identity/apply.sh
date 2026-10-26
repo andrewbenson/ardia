@@ -111,6 +111,21 @@ rewrite(("'opensource_project': 'Ardia',", f"'opensource_project': '{product}',"
         ("'opensource_link': 'https://github.com/mantrakp04/ardia',", f"'opensource_link': 'https://github.com/{repo}',"))
 PY
 
+rewrite "$src/chrome/BUILD.gn" <<'PY'
+rewrite(('chrome_helper_name = chrome_product_full_name + " Helper"', f'chrome_helper_name = "{product} Helper"'),
+        ('substitutions = [ "CHROMIUM_FULL_NAME=$chrome_product_full_name" ]', f'substitutions = [ "CHROMIUM_FULL_NAME={product}" ]'))
+PY
+
+rewrite "$src/chrome/app/helper-Info.plist" <<'PY'
+rewrite(("<string>${CHROMIUM_SHORT_NAME} Helper${CHROMIUM_HELPER_SUFFIX}</string>", f"<string>{product} Helper${{CHROMIUM_HELPER_SUFFIX}}</string>"))
+PY
+
+rewrite "$src/chrome/common/chrome_constants.cc" <<'PY'
+rewrite(('FPL(PRODUCT_FULLNAME_STRING " Helper");', f'FPL("{product} Helper");'),
+        ('FPL(PRODUCT_FULLNAME_STRING\n        " Helper.app/Contents/MacOS/" PRODUCT_FULLNAME_STRING " Helper");',
+         f'FPL("{product} Helper.app/Contents/MacOS/{product} Helper");'))
+PY
+
 brand() {
   local from="$brand/$1" to="$2"
   [[ -f "$from" ]] || return 0

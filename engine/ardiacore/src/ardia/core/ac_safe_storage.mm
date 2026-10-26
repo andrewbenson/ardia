@@ -225,7 +225,7 @@ void AskAboutKey(int status, base::OnceClosure retry) {
     alert.informativeText =
         @"Ardia keeps the key to your saved passwords and cookies in your "
         @"login keychain, and this copy of Ardia isn't allowed to open it. "
-        @"Reinstall Ardia from ardia.dev, then open it again.";
+        @"Reinstall Ardia, then open it again.";
     quit = [alert addButtonWithTitle:@"Quit"];
     second = [alert addButtonWithTitle:@"Try Again"];
   } else if (problem == KeyProblem::kOther) {

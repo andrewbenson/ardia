@@ -37,6 +37,8 @@ source_set("ardia") {
     "ac_passwords.h",
     "ac_process.cc",
     "ac_process.h",
+    "ac_product.h",
+    "ac_product.mm",
     "ac_reauth.cc",
     "ac_reauth.h",
     "ac_scripts_policy.cc",

@@ -17,6 +17,7 @@
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/ardia/ac_product.h"  // nogncheck
 #include "chrome/browser/ardia/ac_tab_restore.h"  // nogncheck
 #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_window.h"
@@ -882,7 +883,8 @@ void WatchTracingStart(std::shared_ptr<TracingStart> start, int checks_left) {
                                            attributes:nil
                                                 error:nil];
   NSString* path = [folder
-      stringByAppendingPathComponent:[NSString stringWithFormat:@"Ardia Trace %@.json",
+      stringByAppendingPathComponent:[NSString stringWithFormat:@"%@ Trace %@.json",
+                                                                base::SysUTF8ToNSString(ardia::ProductName()),
                                                                 [format stringFromDate:NSDate.date]]];
   const bool stopped = content::TracingController::GetInstance()->StopTracing(
       content::TracingController::CreateFileEndpoint(

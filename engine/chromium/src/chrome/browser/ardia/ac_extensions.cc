@@ -15,6 +15,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
+#include "chrome/browser/ardia/ac_product.h"
 #include "chrome/browser/ardia/ac_scripts_policy.h"
 #include "chrome/browser/extensions/api/developer_private/extension_info_generator.h"
 #include "chrome/browser/extensions/extension_install_prompt.h"
@@ -367,8 +368,8 @@ AC_ENGINE_CALL(ac_extensions_install) {
                                    extensions::UNINSTALL_REASON_INTERNAL_MANAGEMENT,
                                    &ignored);
           return reply.Error(
-              "Ardia Scripts: Scripts/extension changed while it was "
-              "installing");
+              ardia::ProductName() +
+              " Scripts: Scripts/extension changed while it was installing");
         }
         ardia::LiftPolicyBlockIfAllowed(profile.get(), id);
         reply.Send(base::DictValue().Set("id", id));

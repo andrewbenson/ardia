@@ -39,6 +39,7 @@
 #include "base/timer/timer.h"
 #include "chrome/browser/ardia/ac_cli_token_policy.h"
 #include "chrome/browser/ardia/ac_engine.h"
+#include "chrome/browser/ardia/ac_product.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -115,7 +116,7 @@ std::string WriteControlFile(const base::FilePath& path,
                              const std::string& contents,
                              uint64_t generation) {
   if (path.empty()) {
-    return "Ardia has no data folder.";
+    return ProductName() + " has no data folder.";
   }
   const base::FilePath temp = path.DirName().Append(
       "." + path.BaseName().value() + "." +

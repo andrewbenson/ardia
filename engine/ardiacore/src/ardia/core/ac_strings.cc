@@ -9,6 +9,7 @@
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/no_destructor.h"
+#include "chrome/browser/ardia/ac_product.h"  // nogncheck
 #include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/ui_base_switches.h"
@@ -85,7 +86,7 @@ ui::ResourceBundle::Delegate* ProductStrings() {
 
 bool RenameProduct(std::u16string& text) {
   static constexpr std::u16string_view kFroms[] = {u"Chromium", u"Helium"};
-  static constexpr std::u16string_view kTo = u"Ardia";
+  const std::u16string& product = ardia::ProductName16();
   static constexpr std::u16string_view kCredits[] = {u" Authors", u" open source",
                                                      u"</a> open source"};
   const auto credit = [&](size_t end) {
@@ -107,8 +108,8 @@ bool RenameProduct(std::u16string& text) {
         at = end;
         continue;
       }
-      text.replace(at, from.size(), kTo);
-      at += kTo.size();
+      text.replace(at, from.size(), product);
+      at += product.size();
       renamed = true;
     }
   }

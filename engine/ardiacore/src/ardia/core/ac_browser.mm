@@ -12,6 +12,7 @@
 #include "base/functional/bind.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
+#include "chrome/browser/ardia/ac_product.h"  // nogncheck
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
@@ -162,7 +163,7 @@ WindowHost::WindowHost(ArdiaCoreWindow* owner, const gfx::Rect& bounds)
   widget_delegate_->SetCanResize(true);
   widget_delegate_->SetCanMaximize(true);
   widget_delegate_->SetCanMinimize(true);
-  widget_delegate_->SetTitle(u"Ardia");
+  widget_delegate_->SetTitle(ardia::ProductName16());
   widget_delegate_->SetClientViewFactory(base::BindOnce(
       [](base::WeakPtr<WindowHost> host, views::Widget* widget,
          views::View* contents) -> std::unique_ptr<views::ClientView> {

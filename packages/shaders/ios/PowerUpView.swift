@@ -471,3 +471,16 @@ fragment float4 powerUpFragment(FullscreenOut in                 [[stage_in]],
     return float4(col.rgb * col.a, col.a);
 }
 """
+
+@MainActor
+public enum PowerUpViews {
+  public static func make(palette: [String], speed: Double, origin: Double, cornerRadius: Double, halo: CGRect?) -> NSView {
+    let view = PowerUpView()
+    view.setPalette(palette)
+    view.speed = Float(speed)
+    view.origin = Float(origin)
+    view.cornerRadius = Float(cornerRadius)
+    view.setHaloFrame(halo)
+    return view
+  }
+}

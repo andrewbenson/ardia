@@ -170,8 +170,8 @@ final class BangListFetch: NSObject, URLSessionDataDelegate {
   }
 }
 
-enum DocumentStore {
-  typealias Done = (Error?) -> Void
+public enum DocumentStore {
+  public typealias Done = (Error?) -> Void
   private struct Staged {
     let url: URL
     let generation: UInt64
@@ -188,7 +188,7 @@ enum DocumentStore {
     forName: NSApplication.willTerminateNotification, object: nil, queue: nil
   ) { _ in flush() }
 
-  static func read(_ name: String) -> String? {
+  public static func read(_ name: String) -> String? {
     guard let url = try? ShellModule.documentURL(name) else { return nil }
     lock.lock()
     let pending = staged[url.lastPathComponent]?.contents
@@ -196,7 +196,7 @@ enum DocumentStore {
     return pending ?? (try? String(contentsOf: url, encoding: .utf8))
   }
 
-  static func write(_ name: String, _ contents: String, done: Done? = nil) throws {
+  public static func write(_ name: String, _ contents: String, done: Done? = nil) throws {
     _ = flushOnQuit
     let url = try ShellModule.documentURL(name)
     let key = url.lastPathComponent

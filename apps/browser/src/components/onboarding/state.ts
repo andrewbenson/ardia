@@ -156,7 +156,7 @@ type OnboardingState = {
 
 const stepAfter = (step: OnboardingStep, delta: number) => STEPS[STEPS.indexOf(step) + delta];
 
-const setWindowLayout = (windowId: string, tabLayout: Settings["tabLayout"]) =>
+export const setWindowLayout = (windowId: string, tabLayout: Settings["tabLayout"]) =>
   writeState(useBrowser, (s) => {
     const w = s.windows[windowId];
     return w && w.tabLayout !== tabLayout ? { windows: { ...s.windows, [windowId]: { ...w, tabLayout } } } : {};

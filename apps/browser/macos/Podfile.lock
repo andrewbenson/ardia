@@ -5,7 +5,7 @@ PODS:
     - ArdiaCore
     - ExpoModulesCore
   - ArdiaSettings (0.0.0):
-    - ArdiaCore
+    - ArdiaShaders
     - ArdiaShell
     - ArdiaStore
     - ExpoModulesCore
@@ -2590,7 +2590,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   ArdiaCore: 5238364a8669034510574dbc9d447700b1407ba2
   ArdiaImport: 535f03b8bdc5866eb05d6d177597e9583bfe7d47
-  ArdiaSettings: 350f2ff65ce91a52b9fe36d998862dd719d6828f
+  ArdiaSettings: 83585d8bc782db8eb8c958972cfa9ce23f36a3da
   ArdiaShaders: d8dc0512dec3ed9d4af792579b320249ef035924
   ArdiaShell: 4de45ace9c0e11ff56d51c81cf9ec9a2fd6bac7c
   ArdiaStore: 2243036434998a6828cd026f377b2456b0fc14a2
@@ -2676,6 +2676,6 @@ SPEC CHECKSUMS:
   Sparkle: b8c9cf4ced217ffc708a1ca5f988a7ba877658db
   Yoga: a88f30ac6f89fded00f9840e7d043315e5ab4fe0
 
-PODFILE CHECKSUM: 3ef55c253a5efbe66903cc2d8e96345f57bec33e
+PODFILE CHECKSUM: 1174e1a984963e07fb8dfa186b99de7d0dac03b1
 
 COCOAPODS: 1.17.0

@@ -1,3 +1,4 @@
+import { hostedKinds, SolaraHostedView } from "@ardia/settings";
 import { Surface, VisualEffect, WindowDragRegion } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, View } from "react-native";
@@ -20,7 +21,11 @@ export function OnboardingOverlay() {
   const session = useOnboarding((s) => s.session);
   return (
     <>
-      {active ? <Overlay key={session} session={session} /> : null}
+      {active && hostedKinds().includes("onboarding") ? (
+        <SolaraHostedView key={session} kind="onboarding" windowId={windowId} active style={StyleSheet.absoluteFill} />
+      ) : active ? (
+        <Overlay key={session} session={session} />
+      ) : null}
       <ToolTour />
     </>
   );

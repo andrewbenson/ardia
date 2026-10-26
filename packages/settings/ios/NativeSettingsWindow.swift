@@ -39,6 +39,7 @@ enum NativeSettingsWindow {
   }
 
   static func install() {
+    NativeOnboarding.register()
     WindowHost.makeAuxController = { id, kind in
       if kind == NativeImportWindow.kind { return NativeImportWindow.makeController() }
       guard kind == "settings", enabled, let context = makeContext() else { return nil }

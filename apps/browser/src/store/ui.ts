@@ -5,6 +5,7 @@ import { engineProfile, isIncognitoProfile, privateSession } from "./model";
 import { linkProfileOf } from "./small";
 import type { FindState, NewTabTarget, WindowUi } from "./types";
 import { commandBarFocus, expectFocus } from "../lib/focusClaims";
+import { nativeStoreActive, nativeWrite } from "./nativeStore";
 
 export type UiSlice = {
   ui: {
@@ -57,71 +58,77 @@ function patchWindowUi(s: BrowserState, windowId: string, patch: Partial<WindowU
   return { windowUi: { ...s.windowUi, [windowId]: { ...(s.windowUi[windowId] ?? DEFAULT_WINDOW_UI), ...patch } } };
 }
 
-export const createUiSlice: StateCreator<BrowserState, [], [], UiSlice> = (set, get) => ({
-  ui: { focusedWindowId: null, focusOrder: [], appDark: true, lastProfileId: null },
-  windowUi: {},
-  find: {},
-  downloads: [],
+export const createUiSlice: StateCreator<BrowserState, [], [], UiSlice> = (set, get) => {
+  const commitDownloads = (downloads: Download[], rest: Partial<BrowserState> = {}) => {
+    if (!nativeStoreActive()) return set({ downloads, ...rest });
+    nativeWrite({ name: "applyState", args: [{ downloads }] });
+    if (Object.keys(rest).length) set(rest);
+  };
+  return {
+    ui: { focusedWindowId: null, focusOrder: [], appDark: true, lastProfileId: null },
+    windowUi: {},
+    find: {},
+    downloads: [],
 
-  setFocusedWindow(id) {
-    const s = get();
-    const { ui, windows } = s;
-    if (!windows[id]) return;
-    const lastProfileId = linkProfileOf(s, windows[id]) ?? ui.lastProfileId;
-    if (ui.focusedWindowId === id && ui.lastProfileId === lastProfileId) return;
-    set({ ui: { ...ui, focusedWindowId: id, focusOrder: [id, ...ui.focusOrder.filter((w) => w !== id)], lastProfileId } });
-  },
+    setFocusedWindow(id) {
+      const s = get();
+      const { ui, windows } = s;
+      if (!windows[id]) return;
+      const lastProfileId = linkProfileOf(s, windows[id]) ?? ui.lastProfileId;
+      if (ui.focusedWindowId === id && ui.lastProfileId === lastProfileId) return;
+      set({ ui: { ...ui, focusedWindowId: id, focusOrder: [id, ...ui.focusOrder.filter((w) => w !== id)], lastProfileId } });
+    },
 
-  setAppDark(appDark) {
-    if (get().ui.appDark !== appDark) set((s) => ({ ui: { ...s.ui, appDark } }));
-  },
+    setAppDark(appDark) {
+      if (get().ui.appDark !== appDark) set((s) => ({ ui: { ...s.ui, appDark } }));
+    },
 
-  openPanel(windowId, initialText = "", newTab) {
-    expectFocus(windowId, commandBarFocus);
-    set((s) => patchWindowUi(s, windowId, { panel: newTab ? { open: true, initialText, newTab } : { open: true, initialText } }));
-  },
+    openPanel(windowId, initialText = "", newTab) {
+      expectFocus(windowId, commandBarFocus);
+      set((s) => patchWindowUi(s, windowId, { panel: newTab ? { open: true, initialText, newTab } : { open: true, initialText } }));
+    },
 
-  closePanel(windowId) {
-    set((s) => patchWindowUi(s, windowId, { panel: { open: false, initialText: "" } }));
-  },
+    closePanel(windowId) {
+      set((s) => patchWindowUi(s, windowId, { panel: { open: false, initialText: "" } }));
+    },
 
-  setDownloadsOpen(windowId, downloadsOpen) {
-    set((s) => patchWindowUi(s, windowId, { downloadsOpen }));
-  },
+    setDownloadsOpen(windowId, downloadsOpen) {
+      set((s) => patchWindowUi(s, windowId, { downloadsOpen }));
+    },
 
-  setFind(tabId, patch) {
-    set((s) => (s.tabs[tabId] ? { find: { ...s.find, [tabId]: { ...(s.find[tabId] ?? CLOSED_FIND), ...patch } } } : {}));
-  },
+    setFind(tabId, patch) {
+      set((s) => (s.tabs[tabId] ? { find: { ...s.find, [tabId]: { ...(s.find[tabId] ?? CLOSED_FIND), ...patch } } } : {}));
+    },
 
-  upsertDownload(d) {
-    set((s) => {
+    upsertDownload(d) {
+      const s = get();
       const exists = s.downloads.some((x) => x.id === d.id);
       const session = downloadSession(d);
       if (!exists && session !== null && (!sessionOpen(s, session) || endedPrivateDownloads.has(d.id))) {
         endedPrivateDownloads.add(d.id);
-        return {};
+        return;
       }
       const downloads = exists ? s.downloads.map((x) => (x.id === d.id ? d : x)) : [d, ...s.downloads].slice(0, MAX_DOWNLOADS);
       const focused = s.ui.focusedWindowId;
       const open = !exists && focused && downloadVisibleIn(d, s.windows[focused]);
-      return { downloads, ...(open ? patchWindowUi(s, focused, { downloadsOpen: true }) : {}) };
-    });
-  },
+      commitDownloads(downloads, open ? patchWindowUi(s, focused, { downloadsOpen: true }) : {});
+    },
 
-  removeDownload(id) {
-    set((s) => ({ downloads: s.downloads.filter((d) => d.id !== id) }));
-  },
+    removeDownload(id) {
+      commitDownloads(get().downloads.filter((d) => d.id !== id));
+    },
 
-  clearDownloads(windowId) {
-    set((s) => ({
-      downloads: s.downloads.filter((d) => d.state === "downloading" || (windowId !== undefined && !downloadVisibleIn(d, s.windows[windowId]))),
-    }));
-  },
+    clearDownloads(windowId) {
+      const s = get();
+      commitDownloads(s.downloads.filter((d) => d.state === "downloading" || (windowId !== undefined && !downloadVisibleIn(d, s.windows[windowId]))));
+    },
 
-  forgetDownloads(profile) {
-    const session = privateSession(profile);
-    const gone = (d: Download) => (session !== null ? downloadSession(d) === session : d.profile === profile);
-    if (session !== null) for (const d of get().downloads) if (gone(d)) endedPrivateDownloads.add(d.id);
-    set((s) => (s.downloads.some(gone) ? { downloads: s.downloads.filter((d) => !gone(d)) } : {}));
-  },
-});
+    forgetDownloads(profile) {
+      const session = privateSession(profile);
+      const gone = (d: Download) => (session !== null ? downloadSession(d) === session : d.profile === profile);
+      if (session !== null) for (const d of get().downloads) if (gone(d)) endedPrivateDownloads.add(d.id);
+      const { downloads } = get();
+      if (downloads.some(gone)) commitDownloads(downloads.filter((d) => !gone(d)));
+    },
+  };
+};

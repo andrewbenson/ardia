@@ -37,6 +37,9 @@ importers:
       '@ardia/shell':
         specifier: workspace:*
         version: link:../../packages/shell
+      '@ardia/store':
+        specifier: workspace:*
+        version: link:../../packages/store
       '@ardia/sync':
         specifier: workspace:*
         version: link:../../packages/sync
@@ -104,6 +107,8 @@ importers:
   packages/shaders: {}
 
   packages/shell: {}
+
+  packages/store: {}
 
   packages/sync:
     devDependencies:

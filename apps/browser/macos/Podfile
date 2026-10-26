@@ -103,8 +103,34 @@ ac_parallel_post_integrate = lambda do |installer|
   end
 end
 
+ac_solara_kit = lambda do |installer|
+  project = installer.pods_project
+  target = project.targets.find { |t| t.name == 'ArdiaStore' }
+  next unless target
+  kit = Pathname.new("#{ws_dir}/native/SolaraKit").relative_path_from(Pathname.new(project.project_dir.to_s)).to_s
+  local = Xcodeproj::Project::Object::XCLocalSwiftPackageReference
+  package = project.root_object.package_references.find { |p| p.is_a?(local) && p.relative_path == kit }
+  unless package
+    package = project.new(local)
+    package.relative_path = kit
+    project.root_object.package_references << package
+  end
+  %w[SolaraBridgeCore SolaraModel SolaraOmnibox SolaraPersistence SolaraStore].each do |name|
+    next if target.package_product_dependencies.any? { |d| d.product_name == name }
+    dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+    dependency.package = package
+    dependency.product_name = name
+    target.package_product_dependencies << dependency
+  end
+  target.build_configurations.each do |c|
+    paths = Array(c.build_settings['SWIFT_INCLUDE_PATHS'] || ['$(inherited)'])
+    built = '${SYMROOT}/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/'
+    c.build_settings['SWIFT_INCLUDE_PATHS'] = paths.include?(built) ? paths : paths + [built]
+  end
+end
+
 target 'Ardia-macOS' do
-  platform :macos, '14.0'
+  platform :macos, '26.0'
 
   use_expo_modules!
   use_native_modules!
@@ -122,10 +148,11 @@ target 'Ardia-macOS' do
     installer.pods_project.build_configurations.each { |c| c.build_settings['REACT_NATIVE_PATH'] = rn_path }
 
     installer.pods_project.targets.each do |t|
-      t.build_configurations.each { |c| c.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0' }
+      t.build_configurations.each { |c| c.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '26.0' }
     end
 
     ac_parallel_post_install.call(installer)
+    ac_solara_kit.call(installer)
   end
 end
 

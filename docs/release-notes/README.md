@@ -37,6 +37,8 @@ Body:
 
 - An intro paragraph before the first section is optional. Use it only for a big release (the first one,
   a redesign) and keep it to two or three plain sentences.
+- Solara requires macOS 26 or later (the appcast states it as `minimumSystemVersion`, and `release.sh` checks it).
+  The first release says so in its intro, and any release that raises the minimum says so in its first section.
 - Sections are `##` headings, only the ones the release needs, in this order: `## New`, `## Faster`,
   `## Fixed`, `## Smaller`, `## Not yet`. When a release is mostly a fix for something broken, put `## Fixed` first
   (0.1.1 does).

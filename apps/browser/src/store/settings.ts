@@ -14,6 +14,7 @@ import type { PageEngine } from "@ardia/ardiacore";
 import type { StateCreator } from "zustand";
 import type { DeveloperModeState } from "../lib/developerMode";
 import type { BrowserState } from "./browser";
+import { nativeStoreActive, nativeWrite } from "./nativeStore";
 
 export type SearchEngineId = string;
 
@@ -273,6 +274,7 @@ const newEngineId = () => `engine-${Date.now().toString(36)}-${(++engineCounter)
 export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSlice> = (set, get) => ({
   settings: DEFAULT_SETTINGS,
   updateSettings(patch, { fromSync = false } = {}) {
+    if (nativeStoreActive()) return void nativeWrite({ name: "updateSettings", args: [patch, { fromSync }] });
     set((s) => ({ settings: fromSync ? { ...s.settings, ...patch } : choose(s.settings, withLinkKeysApart(s.settings, patch)) }));
   },
 

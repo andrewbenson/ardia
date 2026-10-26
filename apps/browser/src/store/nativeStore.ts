@@ -71,14 +71,14 @@ function applyResponse(response: DispatchResponse | null) {
   if (!response || !replica) return;
   if (response.snapshot) {
     const data = response.snapshot as Partial<OwnedSlices>;
+    appliedRev = Math.max(appliedRev, response.rev);
     withApplier(() => replica!.setState({ ...(data.settings ? { settings: data.settings } : {}), ...(data.downloads ? { downloads: data.downloads } : {}) }));
-    appliedRev = response.rev;
     return;
   }
   for (const patch of response.patches ?? []) {
     if (patch.rev <= appliedRev) continue;
-    applyPatch(patch);
     appliedRev = patch.rev;
+    applyPatch(patch);
   }
   appliedRev = Math.max(appliedRev, response.rev);
 }
@@ -102,8 +102,8 @@ export function attachReplica(store: Replica) {
   const stopCommits = onForeignCommit((commit) => {
     if (commit.rev <= appliedRev) return;
     if (commit.rev === appliedRev + 1) {
-      applyPatch(commit.patch);
       appliedRev = commit.rev;
+      applyPatch(commit.patch);
     } else {
       applyResponse(nativeCatchUp(appliedRev));
     }

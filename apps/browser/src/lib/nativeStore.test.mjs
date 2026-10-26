@@ -123,6 +123,23 @@ test("JS-owned profiles are mirrored into the native store for native Settings",
   assert.ok(Object.values(native.profiles).some((p) => p.name === "Work"));
 });
 
+test("a subscriber that dispatches while a patch applies never moves the applied rev backwards", () => {
+  let nested = false;
+  const stop = useBrowser.subscribe((s, prev) => {
+    if (nested || s.settings.searchEngine === prev.settings.searchEngine) return;
+    nested = true;
+    S().updateSettings({ appearance: "light" });
+  });
+  foreign({ settings: { set: { searchEngine: "startpage" } } });
+  stop();
+  assert.equal(S().settings.appearance, "light");
+  assert.equal(nativeStoreRev(), native.rev);
+  const before = sent.length;
+  S().updateSettings({ appearance: "dark" });
+  assert.equal(sent.length, before + 1);
+  assert.equal(nativeStoreRev(), native.rev);
+});
+
 test("persist.ts marks session.json and leaves downloads.json to the native store", () => {
   docs.delete("downloads.json");
   S().updateSettings({ appearance: "dark" });

@@ -78,13 +78,13 @@ enum JSONWriter {
 
   static func string(_ s: String, into out: inout String) {
     out += "\""
-    var plainStart = s.unicodeScalars.startIndex
+    let bytes = s.utf8
+    var plainStart = bytes.startIndex
     var index = plainStart
-    let scalars = s.unicodeScalars
-    while index < scalars.endIndex {
-      let scalar = scalars[index]
+    while index < bytes.endIndex {
+      let byte = bytes[index]
       let escape: String?
-      switch scalar.value {
+      switch byte {
       case 0x22: escape = "\\\""
       case 0x5C: escape = "\\\\"
       case 0x08: escape = "\\b"
@@ -93,20 +93,19 @@ enum JSONWriter {
       case 0x0D: escape = "\\r"
       case 0x09: escape = "\\t"
       case 0..<0x20:
-        let hex = String(scalar.value, radix: 16)
+        let hex = String(byte, radix: 16)
         escape = "\\u" + String(repeating: "0", count: 4 - hex.count) + hex
       default: escape = nil
       }
+      let next = bytes.index(after: index)
       if let escape {
-        out.unicodeScalars.append(contentsOf: scalars[plainStart..<index])
+        out += s[plainStart..<index]
         out += escape
-        index = scalars.index(after: index)
-        plainStart = index
-      } else {
-        index = scalars.index(after: index)
+        plainStart = next
       }
+      index = next
     }
-    out.unicodeScalars.append(contentsOf: scalars[plainStart..<scalars.endIndex])
+    out += s[plainStart..<bytes.endIndex]
     out += "\""
   }
 

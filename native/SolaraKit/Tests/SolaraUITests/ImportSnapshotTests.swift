@@ -6,6 +6,7 @@ import Testing
 @MainActor
 struct ImportSnapshotTests {
   static let size = NSSize(width: 640, height: 600)
+  static let tallSize = NSSize(width: 640, height: 1400)
 
   func model(_ configure: (FakeImportServices) -> Void = { _ in }) async -> (ImportModel, FakeImportServices) {
     let services = FakeImportServices()
@@ -19,8 +20,10 @@ struct ImportSnapshotTests {
   func render(_ model: ImportModel, _ name: String) async throws {
     guard let directory = Snapshot.directory else { return }
     for dark in [false, true] {
-      let url = directory.appendingPathComponent("import").appendingPathComponent("\(name)-\(dark ? "dark" : "light").png")
-      try await Snapshot.render(ImportWindowView(model: model, starts: false), size: Self.size, dark: dark, to: url)
+      let folder = directory.appendingPathComponent("import")
+      let scheme = dark ? "dark" : "light"
+      try await Snapshot.render(ImportWindowView(model: model, starts: false), size: Self.size, dark: dark, to: folder.appendingPathComponent("\(name)-\(scheme).png"))
+      try await Snapshot.render(ImportWindowView(model: model, starts: false), size: Self.tallSize, dark: dark, to: folder.appendingPathComponent("\(name)-\(scheme)-full.png"))
     }
   }
 

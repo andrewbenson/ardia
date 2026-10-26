@@ -453,7 +453,7 @@ public final class ImportModel {
     while pollsDia {
       try? await Task.sleep(for: diaPollInterval)
       guard !Task.isCancelled, pollsDia else { return }
-      await refreshDia()
+      await Task { await self.refreshDia() }.value
     }
   }
 

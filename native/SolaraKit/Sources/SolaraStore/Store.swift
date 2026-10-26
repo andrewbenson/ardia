@@ -48,6 +48,7 @@ public final class Store: Sendable {
   public let env: WebAddressing
   public let config: StoreConfig
   public let checksInvariants: Bool
+  public let invariantHandler: @Sendable ([String], [Command]) -> Void
 
   public init(
     state: BrowserState = BrowserState(),
@@ -56,14 +57,21 @@ public final class Store: Sendable {
     env: WebAddressing = PlainWebAddressing(),
     config: StoreConfig = StoreConfig(),
     checksInvariants: Bool = Store.debugBuild,
+    invariantHandler: @escaping @Sendable ([String], [Command]) -> Void = Store.logInvariants,
     clock: @escaping @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
   ) {
+    self.invariantHandler = invariantHandler
     self.clock = clock
     self.env = env
     self.config = config
     self.checksInvariants = checksInvariants
     let memory = memory ?? StoreMemory(ids: IdSource.random(now: clock()))
     core = Mutex(Core(state: state, memory: memory, rev: rev))
+  }
+
+  public static let logInvariants: @Sendable ([String], [Command]) -> Void = { found, commands in
+    let names = commands.map(\.name).joined(separator: ", ")
+    FileHandle.standardError.write(Data("SolaraStore invariants after \(names): \(found.joined(separator: "; "))\n".utf8))
   }
 
   public static var debugBuild: Bool {
@@ -106,7 +114,11 @@ public final class Store: Sendable {
     let commit: Commit = try core.withLock { core in
       let session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
       try body(session)
-      if checksInvariants { try Invariants.check(session.state) }
+      if checksInvariants {
+        try Invariants.check(session.state)
+        let found = Invariants.violations(session.state)
+        if !found.isEmpty { invariantHandler(found, commands) }
+      }
       let changes = ChangeSet(from: core.state, to: session.state)
       let changed = !changes.isEmpty
       let rev = changed ? core.rev + 1 : core.rev
@@ -178,6 +190,73 @@ public struct InvariantViolation: Error, CustomStringConvertible {
 }
 
 public enum Invariants {
+  public static func violations(_ s: BrowserState) -> [String] {
+    var out: [String] = []
+    var seenIds = Set<String>()
+    for id in s.profiles.keys + s.windows.keys + s.tabs.keys + s.groups.keys + s.splits.keys where !seenIds.insert(id).inserted {
+      out.append("id \(id) is used twice")
+    }
+    var placed: [String: String] = [:]
+    let peekTabs = Set(s.peeks.values.map(\.tabId))
+    for w in s.windows.values {
+      var mine = Set<String>()
+      for id in w.tabIds {
+        if !mine.insert(id).inserted { out.append("window \(w.id) lists \(id) twice") }
+        guard let t = s.tabs[id] else {
+          out.append("window \(w.id) lists missing tab \(id)")
+          continue
+        }
+        if t.windowId != w.id { out.append("window \(w.id) lists \(id) of window \(t.windowId)") }
+        placed[id] = w.id
+      }
+      if pinnedFirst(w.tabIds, s.tabs, s.groups) != w.tabIds { out.append("window \(w.id) is not pinned first") }
+      for (profileId, active) in w.activeTabIds {
+        guard let t = s.tabs[active], t.windowId == w.id, t.profileId == profileId else {
+          out.append("window \(w.id) shows \(active) for \(profileId)")
+          continue
+        }
+      }
+      if !w.tabIds.isEmpty && w.activeTabIds[w.profileId] == nil && w.tabIds.contains(where: { s.tabs[$0]?.profileId == w.profileId }) {
+        out.append("window \(w.id) shows no tab for its profile")
+      }
+    }
+    for t in s.tabs.values where placed[t.id] == nil && !peekTabs.contains(t.id) { out.append("tab \(t.id) is in no window") }
+    for g in s.groups.values {
+      if g.tabIds.isEmpty { out.append("group \(g.id) is empty") }
+      guard let w = s.windows[g.windowId] else {
+        out.append("group \(g.id) is in no window")
+        continue
+      }
+      let spots = g.tabIds.compactMap { w.tabIds.firstIndex(of: $0) }
+      if spots.count != g.tabIds.count { out.append("group \(g.id) holds tabs outside its window") }
+      if let low = spots.min(), let high = spots.max(), high - low + 1 != spots.count { out.append("group \(g.id) is not contiguous") }
+      if let parent = g.parentId {
+        if let p = s.groups[parent] {
+          if !g.tabIds.allSatisfy({ p.tabIds.contains($0) }) { out.append("group \(g.id) sits outside its parent") }
+        } else {
+          out.append("group \(g.id) has a missing parent")
+        }
+      }
+    }
+    var paneOf: [String: String] = [:]
+    for v in s.splits.values {
+      if v.tabIds.count < 2 || v.tabIds.count > Splits.maxPanes { out.append("split \(v.id) has \(v.tabIds.count) panes") }
+      for id in v.tabIds {
+        if let other = paneOf[id] { out.append("tab \(id) is in splits \(other) and \(v.id)") }
+        paneOf[id] = v.id
+      }
+    }
+    let members = s.pinnedGroupMemberSet()
+    for t in s.tabs.values {
+      if t.tileFolder != nil && t.pinSection != .tile { out.append("tab \(t.id) has a folder but is not a tile") }
+      let housed = t.pinned || members.contains(t.id)
+      if housed != (t.pinnedUrl != nil && !(t.pinnedUrl ?? "").isEmpty) && !(housed && t.url.isEmpty) {
+        out.append("tab \(t.id) pinnedUrl does not match its place")
+      }
+    }
+    return out
+  }
+
   public static func check(_ state: BrowserState) throws {
     var seen = Set<String>()
     for download in state.downloads where !seen.insert(download.id).inserted {

@@ -212,3 +212,19 @@ func replayOnce(_ json: JSONValue) throws -> (JSONValue, JSONValue?, [String]) {
     #expect(bad == 0)
   }
 }
+
+@Suite struct InvariantSurvey {
+  @Test func invariantsAcrossEveryRecordedState() throws {
+    var counts: [String: Int] = [:]
+    var examples: [String: String] = [:]
+    for replay in Phase1bReplay.cases {
+      guard let after = replay.json["after"]?.object, let state = try? BrowserState(stateJSON: after) else { continue }
+      for violation in Invariants.violations(state) {
+        let kind = violation.replacingOccurrences(of: #"[a-z]+-[a-z0-9]+-[a-z0-9]+|\b[a-z0-9]{1,3}\b"#, with: "_", options: .regularExpression)
+        counts[kind, default: 0] += 1
+        if examples[kind] == nil { examples[kind] = "\(replay.testDescription): \(violation)" }
+      }
+    }
+    for (kind, n) in counts.sorted(by: { $0.value > $1.value }) { print("\(n)× \(kind)\n    e.g. \(examples[kind]!)") }
+  }
+}

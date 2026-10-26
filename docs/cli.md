@@ -210,7 +210,7 @@ two parts with an explicit flush between them gets through; that gap is accepted
 - Downloads `https://github.com/<repo>/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` (https only)
   into a private temp dir; it runs on Apple silicon only and stops with an error anywhere else. Without `--version` it
   takes the latest release that has the asset. `--sha256` is the only
-  digest it trusts (the app passes `Ardia.app/Contents/Resources/ardia-cli.sha256`, which the signed bundle pins), and
+  digest it trusts (the app passes `Solara.app/Contents/Resources/ardia-cli.sha256`, which the signed bundle pins), and
   a download needs it: a `.sha256` from the same release would only prove the tarball came from wherever the tarball
   came from. Only a `file://` `ARDIA_CLI_URL` (tests) may go without it, reading `<url>.sha256`. A Debug build has no
   pinned digest, so it installs only that way.
@@ -271,7 +271,7 @@ the engine's `Ardia Scripts` messages and its `isn't allowed for the ardia comma
 their names in every build. With upstream's identity it returns the text unchanged.
 
 `scripts/release.sh` builds it into the release's dist dir after the export, passing the release's identity, and writes its digest to
-`Ardia.app/Contents/Resources/ardia-cli.sha256` before the app is signed. The release skill's `publish.sh` uploads the
+`Solara.app/Contents/Resources/ardia-cli.sha256` before the app is signed. The release skill's `publish.sh` uploads the
 tarball and its `.sha256`.
 
 ## Test
@@ -279,7 +279,7 @@ tarball and its `.sha256`.
 Never against the real home. A hidden instance's plain DevTools port works with `--port`:
 
 ```sh
-scripts/agent/ac launch <Ardia.app> --data /tmp/ardia-cli-test --onboarded
+scripts/agent/ac launch <Solara.app> --data /tmp/ardia-cli-test --onboarded
 ardia exec --port <port> 't = await new_tab("https://example.com"); await t.title()'
 scripts/agent/ac quit /tmp/ardia-cli-test
 ```

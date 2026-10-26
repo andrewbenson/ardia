@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { identity } from "../../../../scripts/lib/identity.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = process.env.RATCHET_APP_DIR ? resolve(process.env.RATCHET_APP_DIR) : resolve(here, "../..");
@@ -337,11 +338,12 @@ function newestApp() {
   const versions = readdirSync(dist)
     .filter((d) => /^\d+\.\d+\.\d+(-rc)?$/.test(d))
     .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  const names = [...new Set([identity("FULL_PRODUCT_NAME"), "Ardia.app"])];
   for (const v of versions) {
-    const app = join(dist, v, "export/Ardia.app");
-    if (existsSync(app)) return app;
+    const app = names.map((name) => join(dist, v, "export", name)).find(existsSync);
+    if (app) return app;
   }
-  throw new Error("no dist/<version>/export/Ardia.app: pass --app");
+  throw new Error(`no dist/<version>/export/${names.join(" or ")}: pass --app`);
 }
 
 function jsSetup(flags, out, mark) {

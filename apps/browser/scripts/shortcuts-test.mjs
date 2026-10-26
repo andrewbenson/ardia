@@ -8,7 +8,7 @@ import { isAlive, launch, reporter, session, sleep } from "../../../scripts/lib/
 const [appArg, port] = process.argv.slice(2);
 const appPath = appArg && resolve(appArg);
 if (!appPath) {
-  console.error("usage: node shortcuts-test.mjs <Debug Ardia.app> [cdpPort]");
+  console.error("usage: node shortcuts-test.mjs <Debug Solara.app> [cdpPort]");
   process.exit(2);
 }
 const startedAt = Date.now();

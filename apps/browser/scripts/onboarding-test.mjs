@@ -8,7 +8,7 @@ import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node onboarding-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nNo text field sits behind the onboarding card, where its I-beam and clicks would come through the rows, the first row's checkbox toggles on a click, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once onboarding ends, in a bar that keeps its height.");
+  console.error("usage: node onboarding-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data]\n\nNo text field sits behind the onboarding card, where its I-beam and clicks would come through the rows, the first row's checkbox toggles on a click, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once onboarding ends, in a bar that keeps its height.");
   process.exit(2);
 }
 const appPath = resolve(appArg);

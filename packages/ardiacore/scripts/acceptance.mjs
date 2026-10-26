@@ -3,7 +3,7 @@
 // (ARDIA_BACKGROUND=1, its own data dir and DevTools port; scripts/lib/instance.mjs), serves fixture pages, and
 // drives the real app through its dev harness (lib/devHarness.ts) and Chrome's DevTools protocol.
 //
-//   node packages/ardiacore/scripts/acceptance.mjs <Ardia.app> <scratch dir> [--keep] [check…]
+//   node packages/ardiacore/scripts/acceptance.mjs <Solara.app> <scratch dir> [--keep] [check…]
 //   node packages/ardiacore/scripts/acceptance.mjs --attach <scratch dir> [check…]
 //   node packages/ardiacore/scripts/acceptance.mjs --list
 //
@@ -168,7 +168,7 @@ if (attaching || keep) {
 const [appArg, scratchArg, ...only] = attaching ? [kept.app, ...argv] : argv;
 const { run: selected, deps } = selection(only);
 if (!appArg || !scratchArg) {
-  console.error("usage: acceptance.mjs <Ardia.app> <scratch dir> [--keep] [check…] | --attach <scratch dir> [check…] | --list | --help");
+  console.error("usage: acceptance.mjs <Solara.app> <scratch dir> [--keep] [check…] | --attach <scratch dir> [check…] | --list | --help");
   process.exit(64);
 }
 const app = resolve(appArg);
@@ -1046,7 +1046,7 @@ try {
       const text = (await cdp(t, "Runtime.evaluate", { expression: "document.body?.innerText ?? ''", returnByValue: true })).result?.value ?? "";
       const product = text.split("\n").find((l) => /^\w+\t\d+\.\d+\./.test(l) && !/^CEF/.test(l));
       const credit = text.match(/Copyright \d+ The Chromium Authors/)?.[0];
-      if (!/^Ardia\t/.test(product ?? "") || !credit) throw new Error(`version page: ${product} / ${credit}`);
+      if (!/^(Ardia|Solara)\t/.test(product ?? "") || !credit) throw new Error(`version page: ${product} / ${credit}`);
       return { product, credit };
     } finally {
       await evalApp(`ac.store.getState().navigate("${first.id}", "${base}/a", { userInitiated: true }); return true`);
@@ -4997,7 +4997,7 @@ try {
   // MARK: Crash guard (ends the run)
 
   await check("crash-guard", async () => {
-    const reports = () => readdirSync(join(process.env.HOME, "Library/Logs/DiagnosticReports")).filter((f) => f.startsWith("Ardia-"));
+    const reports = () => readdirSync(join(process.env.HOME, "Library/Logs/DiagnosticReports")).filter((f) => f.startsWith(`${basename(exe)}-`));
     const before = new Set(reports());
     const front = execFileSync("lsappinfo", ["front"]).toString().trim();
     const crashed = pid;

@@ -8,7 +8,7 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node sidebar-click-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data]\n\nOne click on a sidebar tab or pinned tile opens it, through AppKit's event path: as its hover card appears, under another tile's appearing card, after a New Tab and after closing a pinned tab.");
+  console.error("usage: node sidebar-click-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data]\n\nOne click on a sidebar tab or pinned tile opens it, through AppKit's event path: as its hover card appears, under another tile's appearing card, after a New Tab and after closing a pinned tab.");
   process.exit(2);
 }
 const appPath = resolve(appArg);

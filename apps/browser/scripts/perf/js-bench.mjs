@@ -7,7 +7,7 @@
 //       Builds the production JS bundle of the current tree (metro, --dev false) and compiles it with
 //       hermesc, as the Release build does. Prints sizes and the biggest packages. --profiling 1 bundles
 //       React's profiling renderer, which times each component's render (render-bench.mjs uses it).
-//   node js-bench.mjs run --app <Release Ardia.app> --bundle <main.jsbundle> --label <name> [flags]
+//   node js-bench.mjs run --app <Release Solara.app> --bundle <main.jsbundle> --label <name> [flags]
 //       Clones the app (APFS clone), swaps in the bundle, and for each run seeds a fresh data folder
 //       (seed.mjs: 200 tabs, 5000 history entries, 1000 bookmarks), launches a hidden instance, runs
 //       the scenarios of bench-app.js through the dev harness and quits it. Writes <out>/<label>.json.

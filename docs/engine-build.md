@@ -119,12 +119,14 @@ values in a fork's checkout. Upstream's identity makes every rewrite a no-op.
 | The Safe Storage item | `keychain_password_mac.mm` (`chromium-safe-storage-name.patch`) | "Ardia Safe Storage" / "Ardia" | "<Product> Safe Storage" / "<Product>" |
 | Chrome's strings | every `.grd`, `.grdp` and `.xtb` (step 3's `brand-namesub`, `ardia_namesub.py --product`) | Ardia, ardia:// | the product, and its scheme as `appSchemeFor` makes it (solara://) |
 | The product logo and favicon (chrome://version, About, the NTP favicon, notifications) | `engine/chromium/src`'s logos and `ardia_resources.txt`'s step-3 copies; a file in `engine/identity/<product>` (the product name lower-cased, alphanumerics only) replaces `engine/chromium/src`'s at the same path, and `engine/identity/apply.sh` copies it over `product_logo_22_mono.png` and `favicon_ntp.png` | Ardia's | `engine/identity/solara` |
+| The helper apps' and processes' names ("Solara Helper (Renderer)"…) and the Alerts helper's display name | `chrome/BUILD.gn`'s `chrome_helper_name` and alerts `InfoPlist.strings`, `chrome/app/helper-Info.plist`, `chrome/common/chrome_constants.cc` (the identity layer) | "Ardia Helper…" | "<Product> Helper…" |
 | The Web Store's "Add to …" and its console lines, chrome://flags descriptions, screenshot file names, chrome://credits' project and link, chrome://crashes' issue tracker, the crash product, the services notice | `chromium-helium-branding.patch`'s literals | Ardia, `ardia_screenshot`, `mantrakp04/ardia` | the product, its lower-case name, `AC_RELEASE_REPO` |
 
 The strings come from step 3, so a tree takes the identity it had when step 3 ran: changing the product name means a new
 tree (steps 1, 3, 4, 2, 5). The other rows follow the identity at step 4. The app reads the same names: `SyncModule`
 decrypts with "<CFBundleName> Safe Storage", and ArdiaCore's Safe Storage dialogs name the app's `CFBundleName`, so a
-fork's app needs a fork-built engine. Flag ids (`ardia-*`), the `Chromium Framework` name, ArdiaCore's other strings and
+fork's app needs a fork-built engine. ArdiaCore's and `chrome/browser/ardia`'s own strings read the product from the app's `CFBundleName` at run time
+(`ardia::ProductName`, `ac_product.mm`). Flag ids (`ardia-*`), the `Chromium Framework` name and
 the vector `.icon` logos (`ardia-icons`) stay upstream's. The engine hands the app both `ardia://` and the app's own
 scheme (`IsAppURL`, `ac_page_channel.mm`, from `CFBundleName` by `appSchemeFor`'s rule), so a link to
 `solara://history` or `ardia://history` in an engine page opens the app's page. Since the layer rewrites lines our patches added, `series.py
@@ -245,7 +247,7 @@ about 1:1 on a 2x screen, so 256 px sprites (about 1 MB) would be visibly soft.
 
 ## Nothing writes into the app bundle
 
-The signature seals every file in `Ardia.app`, so the app must never write there: one added file and
+The signature seals every file in `Solara.app`, so the app must never write there: one added file and
 `codesign --verify --deep --strict` fails ("a sealed resource is missing or invalid"), and an app on a read-only
 volume or run translocated can't be written at all. A background run of a signed build, with pages, PDFs, the offline
 page, chrome://settings, chrome://extensions, chrome://components and uBlock's own pages, then a diff of the bundle,

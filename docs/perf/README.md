@@ -47,9 +47,10 @@ Each bench drives the app through files in the instance's `ARDIA_DATA_DIR`:
 
 The previous stable release is the control and the new release candidate is the candidate. The gate passes when every
 row is the same or better. Only stable releases are gated, and only against stable: a nightly is never a control, so
-the control stays `dist/<previous stable>/export/Ardia.app` however many nightlies shipped in between.
+the control stays `dist/<previous stable>/export/Solara.app` however many nightlies shipped in between. Dists from
+before the rename hold `Ardia.app` instead, so the commands below find the control with a glob.
 
-1. **Build the candidate with `scripts/release.sh <v> --rc`.** That gives you `dist/<v>-rc/export/Ardia.app`.
+1. **Build the candidate with `scripts/release.sh <v> --rc`.** That gives you `dist/<v>-rc/export/Solara.app`.
    A local Release build is a different app: it's unstripped (about 18 MB against 8.9 MB) and has no secure
    timestamp or notarization ticket, so its launch numbers don't stand for what ships.
 2. **Give each app a bench bundle that matches its `NATIVE_API_VERSION`.** native-bench swaps its own bundle
@@ -93,13 +94,14 @@ the control stays `dist/<previous stable>/export/Ardia.app` however many nightli
 ```sh
 V=0.2.23 PREV=0.2.22 OUT=<your scratch dir>/gate
 scripts/release.sh $V --rc
+CAND=dist/$V-rc/export/Solara.app CONTROL=$(ls -d dist/$PREV/export/*.app)
 # Native. Omit --control-bundle when both apps share NATIVE_API_VERSION.
 node apps/browser/scripts/perf/native-bench.mjs --out $OUT/nb --port 9478 \
-  --app dist/$V-rc/export/Ardia.app --label rc \
-  --control dist/$PREV/export/Ardia.app --control-label $PREV --control-bundle dist/$PREV/bench/main.jsbundle \
+  --app $CAND --label rc \
+  --control $CONTROL --control-label $PREV --control-bundle dist/$PREV/bench/main.jsbundle \
   --only launch,session,windows --launch-runs 6 --runs 2
 # JS: alternate the apps one run at a time.
-for i in 1 2 3; do for app in $PREV:dist/$PREV/export/Ardia.app rc:dist/$V-rc/export/Ardia.app; do
+for i in 1 2 3; do for app in $PREV:$CONTROL rc:$CAND; do
   node apps/browser/scripts/perf/js-bench.mjs run --app ${app#*:} --bundle ${app#*:}/Contents/Resources/main.jsbundle \
     --label ${app%%:*} --runs 1 --append 1 --out $OUT/js
 done; done
@@ -140,7 +142,7 @@ raised only by hand, with the reason in the commit. Nothing runs in CI, so the c
 ```sh
 node apps/browser/scripts/perf/ratchet.mjs run            # 90 s: bundle the tree, run the journeys once, count the Node hot paths, check
 node apps/browser/scripts/perf/ratchet.mjs run --instr    # the same, plus the instruction counter
-node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<v>-rc/export/Ardia.app   # a release candidate's own bundle
+node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<v>-rc/export/Solara.app   # a release candidate's own bundle
 node apps/browser/scripts/perf/ratchet.mjs check <report.json>          # a js-bench report you already have (several runs: the median run)
 node apps/browser/scripts/perf/ratchet.mjs lower <report.json>          # lock in the counts a change cut; prints the diff
 node apps/browser/scripts/perf/ratchet.mjs baseline       # rebuild ratchet.json (8 runs of each session, about 13 minutes, a quiet machine)
@@ -232,7 +234,7 @@ again shows up here at once: `switchTabs.subNotified` grows by the row count per
 
 ### In the release gate
 
-Step 4b of the release skill: `ratchet.mjs run --own --app dist/<v>-rc/export/Ardia.app` must print `ratchet: ok` before
+Step 4b of the release skill: `ratchet.mjs run --own --app dist/<v>-rc/export/Solara.app` must print `ratchet: ok` before
 publishing. Counts need no perflab lock (they aren't timings), but run it on a Mac that isn't busy with someone's timing
 run. After a release that cut counts, `ratchet.mjs lower` and commit.
 

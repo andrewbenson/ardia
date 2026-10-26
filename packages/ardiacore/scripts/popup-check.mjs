@@ -6,7 +6,7 @@ import { devtools, launch, sleep } from "../../../scripts/lib/instance.mjs";
 
 const [appArg, scratchArg] = process.argv.slice(2);
 if (!appArg) {
-  console.error("usage: popup-check.mjs <Ardia.app> [scratch dir]");
+  console.error("usage: popup-check.mjs <Solara.app> [scratch dir]");
   process.exit(64);
 }
 const scratch = resolve(scratchArg ?? join(process.env.TMPDIR ?? "/tmp", `ac-popup-check-${process.pid}`));

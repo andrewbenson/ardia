@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-app="${1:?usage: strip-engine.sh <Ardia.app> <symbols dir>}"
-symbols="${2:?usage: strip-engine.sh <Ardia.app> <symbols dir>}"
+app="${1:?usage: strip-engine.sh <Solara.app> <symbols dir>}"
+symbols="${2:?usage: strip-engine.sh <Solara.app> <symbols dir>}"
 fwv="$(cd "$app/Contents/Frameworks/Chromium Framework.framework/Versions/Current" && pwd -P)" \
   || { echo "error: no Chromium Framework.framework in $app" >&2; exit 1; }
 mkdir -p "$symbols"

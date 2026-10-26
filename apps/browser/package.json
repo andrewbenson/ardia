@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "react-native start",
-    "macos": "xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath build -destination 'platform=macOS,arch=arm64' -quiet -configuration Debug && open -n --env ARDIA_DATA_DIR=\"${ARDIA_DATA_DIR:-$HOME/Library/Application Support/Ardia Dev}\" build/Build/Products/Debug/Ardia.app",
+    "macos": "xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath build -destination 'platform=macOS,arch=arm64' -quiet -configuration Debug && app=\"$(bash -c '. ../../scripts/identity.sh && ac_identity FULL_PRODUCT_NAME')\" && open -n --env ARDIA_DATA_DIR=\"${ARDIA_DATA_DIR:-$HOME/Library/Application Support/Ardia Dev}\" \"build/Build/Products/Debug/$app\"",
     "pods": "cd macos && pod install",
     "build": "xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath build -destination 'platform=macOS,arch=arm64' -quiet -configuration Release",
     "typecheck": "tsc -p .",

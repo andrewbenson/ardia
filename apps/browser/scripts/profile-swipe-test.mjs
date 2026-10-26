@@ -14,7 +14,7 @@ if (args.includes("--self-test")) {
 }
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node profile-swipe-test.mjs <Debug Ardia.app> [--port=<DevTools port>] [--keep-data] [--stale-window] [--only=<case name substring>] [--bundle-port=<Metro port>] | --self-test");
+  console.error("usage: node profile-swipe-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data] [--stale-window] [--only=<case name substring>] [--bundle-port=<Metro port>] | --self-test");
   process.exit(2);
 }
 const app = resolve(appArg);

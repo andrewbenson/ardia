@@ -4,7 +4,7 @@
 //
 // Gate recipe, what each row means and which rows don't compare across engines: docs/perf/README.md.
 //
-//   node apps/browser/scripts/perf/native-bench.mjs --app <Ardia.app> --out <dir> [options]
+//   node apps/browser/scripts/perf/native-bench.mjs --app <Solara.app> --out <dir> [options]
 //     --label <name>          name of this set of results (default: the folder two levels above the app, so
 //                             dist/0.2.22/export/Ardia.app is "0.2.22")
 //     --bundle <file>         Hermes bundle of scripts/perf/bench-entry.js to run (built from the working tree when
@@ -1255,7 +1255,7 @@ const fail = (message) => {
   console.error(message);
   process.exit(64);
 };
-if (!opt.app) fail("usage: native-bench.mjs --app <Ardia.app> [--control <app>] [--out dir] [--only phases] … (--help)");
+if (!opt.app) fail("usage: native-bench.mjs --app <Solara.app> [--control <app>] [--out dir] [--only phases] … (--help)");
 const JOURNEY_PHASES = ["newtabkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
 const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "memslope", "throttle", "churn", "sample", "prepare"];

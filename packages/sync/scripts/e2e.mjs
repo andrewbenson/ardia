@@ -5,10 +5,11 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { identity } from "../../../scripts/lib/identity.mjs";
 import { freePort, launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const APP = path.resolve(process.argv[2] ?? `${repo}/apps/browser/build-sync/Build/Products/Debug/Ardia.app`);
+const APP = path.resolve(process.argv[2] ?? `${repo}/apps/browser/build-sync/Build/Products/Debug/${identity("FULL_PRODUCT_NAME")}`);
 const WORK = path.resolve(process.argv[3] ?? `${process.env.TMPDIR ?? "/tmp"}/ac-sync-e2e`);
 const FOLDER = `${WORK}/folder`;
 const PORT = await freePort();

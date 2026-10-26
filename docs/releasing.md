@@ -6,9 +6,9 @@ release) and **nightly** (`0.1.3-nightly.1`, a GitHub prerelease: one fix, shipp
 Solara builds and publishes from a Mac with `scripts/release.sh` and the release skill's `publish.sh`; upstream also has
 a GitHub Actions workflow ("CI releases" below), which Solara doesn't carry. Each release has these assets:
 
-- `Ardia-<version>.dmg`: what people download (the app and an `/Applications` link, in a window with the
+- `<Product>-<version>.dmg` (`Solara-0.1.1.dmg`): what people download (the app and an `/Applications` link, in a window with the
   site's poster behind them: `scripts/dmg`, where `render.sh` redraws the picture and `layout.sh` the layout).
-- `Ardia-<version>.zip`: the archive Sparkle installs updates from.
+- `<Product>-<version>.zip`: the archive Sparkle installs updates from.
 - `ardia-cli-<version>-macos-arm64.tar.gz` and its `.sha256`: the `ardia` command (`docs/cli.md`).
 - `appcast.xml`: the Sparkle feed, both channels' items in one file. The latest stable release's appcast is the feed
   (a nightly rewrites that asset; "Channels" below). Solara polls it straight from GitHub (`AC_FEED_URL`). Upstream
@@ -64,11 +64,11 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   same file. Both flows build on the published feed (`release.sh` fetches it and refuses to go on without it), and
   `appcast-merge.sh` puts the new item onto the feed as published at that moment, so a nightly that shipped while a
   stable was being tested isn't dropped. `generate_appcast` keeps 3 items per channel.
-- **Downloads.** Stable keeps its versioned link (`releases/latest/download/Ardia-<version>.dmg`, from
+- **Downloads.** Stable keeps its versioned link (`releases/latest/download/<Product>-<version>.dmg`, from
   `apps/site/src/data/release.ts`, upstream's site). Upstream's nightly has one fixed link, `https://ardia.dev/nightly` (`infra/site/nginx.conf`),
-  which redirects to the `nightly` prerelease's `Ardia-Nightly.dmg`; each nightly re-uploads that asset, so the site
+  which redirects to the `nightly` prerelease's `<Product>-Nightly.dmg`; each nightly re-uploads that asset, so the site
   never redeploys for a nightly.
-- **Proof.** `.claude/skills/release/scripts/channel-test.sh dist/<stable>/export/Ardia.app` runs that build's own
+- **Proof.** `.claude/skills/release/scripts/channel-test.sh dist/<stable>/export/Solara.app` runs that build's own
   Sparkle against local feeds made by `generate_appcast`: on stable it isn't offered a nightly, and with a newer
   nightly in the feed it takes the stable; on nightly it takes the nightly, a newer stable, and the newest of both. It
   also checks the build-number order with Sparkle's comparator. `update-test.sh` does the stable-ignores-it half for
@@ -83,7 +83,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
   engine's patches, `gn_defines.sh`, the step scripts and this release flow. Once the engine is built on Helium, it
   also links the `ArdiaCore-<tree>-source.tar.xz` asset of the release that carries that engine (the `v<version>` that first shipped it, or its `engine-<tree:12>` prerelease)
   (`packages/ardiacore/prebuilt-engines.tsv`); `release.sh` refuses such an engine when it can't name that release.
-- The `nightly` release's body names the nightly its `Ardia-Nightly.dmg` is and links that release
+- The `nightly` release's body names the nightly its `<Product>-Nightly.dmg` is and links that release
   (`publish.sh` rewrites it each time).
 - Never delete or move a `v*` tag, or a release's source asset, while its release is up. A release can come down;
   its tag stays.
@@ -181,7 +181,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
    appcast onto the feed as published right now (`appcast-merge.sh`), creates the release (a stable one as latest, a
    nightly as a prerelease that's never latest) with the DMG, zip, appcast, CLI tarball and a local engine archive,
    and checks the feed lists the version on GitHub (and on ardia.dev, upstream only). A nightly also re-uploads the merged feed onto the
-   latest stable release and `Ardia-Nightly.dmg` onto the `nightly` release. With an engine packed here, append
+   latest stable release and `<Product>-Nightly.dmg` onto the `nightly` release. With an engine packed here, append
    `dist/<version>/prebuilt-engine.tsv` to `packages/ardiacore/prebuilt-engines.tsv` and commit it. Last,
    `update-tap.sh <version>` points the Homebrew tap's `ardia` or `ardia@nightly` cask
    (https://github.com/mantrakp04/homebrew-tap) at the new DMG: it sets `version` and `sha256` from GitHub's
@@ -199,7 +199,7 @@ Before publishing, run the smoke test: `.claude/skills/release/scripts/smoke.sh 
 previous build's designated requirement, a higher build number), the appcast's EdDSA signature of the zip, Gatekeeper
 on the app and the DMG, Sparkle actually updating a copy of the previous build (`update-test.sh`) and the previous
 build's data opening in the new one (`carryover.sh`). By hand, check the build the way the script can't: launch
-`dist/<version>/export/Ardia.app` with `ARDIA_BACKGROUND=1`, a throwaway `ARDIA_DATA_DIR` and
+`dist/<version>/export/Solara.app` with `ARDIA_BACKGROUND=1`, a throwaway `ARDIA_DATA_DIR` and
 `ARDIA_REMOTE_DEBUGGING_PORT`, and load a page over CDP. Afterwards `codesign --verify --deep --strict` must still
 pass on it.
 
@@ -230,8 +230,11 @@ so any machine releases the same app.
 | `AC_SWITCHES_URL` | the kill-switch file read at launch; empty never fetches, so every switch stays on | `https://ardia.dev/switches.json` |
 | `AC_APP_ICON` | `ASSETCATALOG_COMPILER_APPICON_NAME`, so the `.appiconset` in `Assets.xcassets` that becomes the bundle's icon (`CFBundleIconName`, `<name>.icns`), the DMG's volume icon and the Dock tile plug-in's artwork. Any other name than `AppIcon` also hides Settings › Appearance › App Icon, whose variants are drawn from upstream's hills, and the in-app copy of the icon (onboarding, What's New, the check-in banner) comes from `apps/browser/src/lib/appIcon.ts`, keyed by `AC_PRODUCT_NAME` | `AppIcon` |
 
-`PRODUCT_NAME` stays `Ardia`: the executable, `Ardia.app` in `dist/`, the dSYM and the test scripts all depend on it.
-The bundle the user sees is named after `AC_PRODUCT_NAME`; the release assets keep their `Ardia-<version>` names.
+`PRODUCT_NAME` is `$(AC_PRODUCT_NAME)`, so the bundle (`Solara.app` in `dist/<v>/export/`), its executable and the dSYM
+are named after the product. Scripts take the name from the identity (`scripts/identity.sh`, `scripts/lib/identity.mjs`)
+or from a bundle's `CFBundleExecutable`, and still accept builds from before the rename (`Ardia.app`, executable
+`Ardia`). The release assets are named for the product too (`Solara-<version>.dmg`, `Solara-Nightly.dmg`);
+releases from before the rename have `Ardia-` ones.
 
 The command-line tool follows the identity too (`docs/cli.md` › Fork identity). release.sh bakes the product, bundle
 id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same name in every build) and pins its
@@ -421,9 +424,9 @@ Sparkle's installer, which swaps a scratch copy of the previous build for the ne
 relaunching it. The copies get a test bundle id and a throwaway key, so neither the real defaults nor the release key
 are involved; the real identity and signature are what smoke.sh's other update checks compare.
 
-The framework and its helpers keep Chrome's names (`Chromium Framework`, `Chromium Helper (Renderer)`): they are
-compiled in from the branding file, so renaming them is a full engine rebuild. Their bundle ids and team are ours,
-and the keychain and macOS permissions belong to the app itself, so only Activity Monitor shows the names. Their
+The framework keeps Chrome's name (`Chromium Framework`); its helpers are the product's (`Solara Helper (Renderer)`,
+from `engine/identity`), as is the Alerts helper's display name. Their bundle ids and team are ours, and the keychain
+and macOS permissions belong to the app itself. Their
 icon is upstream Ardia's, in Solara too until it builds its own engine (the Alerts helpers' shows on every
 notification): `engine/chromium` replaces Chromium's logo.
 

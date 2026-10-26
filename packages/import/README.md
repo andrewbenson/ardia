@@ -97,7 +97,7 @@ sqlite3 CLI: it checkpoints the WAL the tests depend on.
 | Swift tests (`tests/`, against `fixtures/`) | `pnpm --filter @ardia/import test` (`swift test`, scratch path in `$TMPDIR`) |
 | Rebuild fixtures | `pnpm --filter @ardia/import fixtures` |
 | Typecheck the JS wrapper | `pnpm --filter @ardia/import typecheck` |
-| End to end in a hidden Debug instance (cookies, addresses, cards) | `node packages/import/scripts/e2e.mjs <Ardia.app> <scratch dir>` (`--help`) |
+| End to end in a hidden Debug instance (cookies, addresses, cards) | `node packages/import/scripts/e2e.mjs <Solara.app> <scratch dir>` (`--help`) |
 | Run one script in that instance (`e2e.mjs --keep`) | `scripts/agent/ac eval <scratch dir>/data '<js>'` |
 
 ## Test hooks (`ios/ImportModule.swift`)

@@ -2,11 +2,11 @@
 // A/B of Ardia's content blocker (uBlock Origin) on xbench's rows: the same app with the blocker on (as shipped)
 // and off, interleaved. Run only with the Mac quiet (no other benchmark, build or instance running).
 //
-//   node apps/browser/scripts/perf/blocker-ab.mjs prepare --out <dir> [--app <Ardia.app>]
+//   node apps/browser/scripts/perf/blocker-ab.mjs prepare --out <dir> [--app <Solara.app>]
 //       makes <dir>/off-home: a HOME whose Ardia profile has the blocker switched off (uBO trusts every site and
 //       doesn't update its lists, as Ardia's own switch leaves it), by
 //       launching the app hidden once on it
-//   node apps/browser/scripts/perf/blocker-ab.mjs run --out <dir> [--app <Ardia.app>] [-- <more xbench options>]
+//   node apps/browser/scripts/perf/blocker-ab.mjs run --out <dir> [--app <Solara.app>] [-- <more xbench options>]
 //       xbench run --browsers ardia,ardia-off with --base ardia-off=<dir>/off-home, rows session,restore,link,
 //       then xbench report into <dir>/table.md
 //

@@ -452,6 +452,9 @@ if (process.argv[1] === here) {
     assert.ok(commandIsBinary(`${bin} --flag`, bin));
     assert.ok(!commandIsBinary(`${bin}2`, bin));
     assert.ok(!commandIsBinary(`/tmp/Ardia.app/Contents/Frameworks/Ardia Helper.app/Contents/MacOS/Ardia Helper`, bin));
+    const solara = "/tmp/Solara.app/Contents/MacOS/Solara";
+    assert.ok(commandIsBinary(`${solara} --flag`, solara));
+    assert.ok(!commandIsBinary(`/tmp/Solara.app/Contents/Frameworks/Chromium Framework.framework/Helpers/Solara Helper (Renderer).app/Contents/MacOS/Solara Helper (Renderer) --type=renderer`, solara));
     assert.deepEqual(parseProcessLine(`Wed Sep 30 18:44:18 2026     ${bin} --x\n`), { started: "Wed Sep 30 18:44:18 2026", command: `${bin} --x` });
     assert.equal(parseProcessLine(""), null);
     assert.equal(ownedCandidate([], new Set(), cmd({}), bin), null);

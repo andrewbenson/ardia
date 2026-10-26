@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage="usage: scripts/lib/export-developer-id.sh <archived Ardia.app> <exported Ardia.app> <provisioning profile> <entitlements> <identity> <bundle id>"
+usage="usage: scripts/lib/export-developer-id.sh <archived Solara.app> <exported Solara.app> <provisioning profile> <entitlements> <identity> <bundle id>"
 source_app="${1:?$usage}"
 app="${2:?$usage}"
 profile="${3:?$usage}"

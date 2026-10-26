@@ -41,7 +41,7 @@ instance should get a throwaway one. To run a build without it popping up over y
 
 ```sh
 open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=/tmp/ardia-test \
-  --env ARDIA_REMOTE_DEBUGGING_PORT=9333 apps/browser/build/Build/Products/Debug/Ardia.app
+  --env ARDIA_REMOTE_DEBUGGING_PORT=9333 apps/browser/build/Build/Products/Debug/Solara.app
 ```
 
 A JS-only change doesn't need a rebuild. Metro reloads it, though relaunch the instance before you judge the result.

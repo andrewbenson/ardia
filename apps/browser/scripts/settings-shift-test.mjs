@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { attach, launch, reporter } from "../../../scripts/lib/instance.mjs";
 
-const HELP = `usage: node settings-shift-test.mjs <Debug Ardia.app> [--port N] [--attach <data dir>] [--panes a,b] [--keep]
+const HELP = `usage: node settings-shift-test.mjs <Debug Solara.app> [--port N] [--attach <data dir>] [--panes a,b] [--keep]
 
 Opens Settings in a hidden instance and switches to every pane, the first one right after the window opens.
 For each pane it records every view's frame, every text and every switch's value on the first frame the pane

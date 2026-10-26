@@ -4,9 +4,9 @@
 // (apps/browser/src/lib/devHarness.ts) and its `globalThis.acImport` hook (components/import/ImportWindow.tsx,
 // Debug builds only), reads the profile's cookies over CDP, and checks a local fixture site receives them.
 //
-//   node packages/import/scripts/e2e.mjs <Ardia.app> <scratch dir> [import|restart|all] [--keep]
+//   node packages/import/scripts/e2e.mjs <Solara.app> <scratch dir> [import|restart|all] [--keep]
 //
-//   <Ardia.app>  a Debug build at the current NATIVE_API_VERSION (Metro on :8081 serves it the JS)
+//   <Solara.app>  a Debug build at the current NATIVE_API_VERSION (Metro on :8081 serves it the JS)
 //   <scratch dir>    data/ is ARDIA_DATA_DIR and home/ the fake Chrome home (both wiped by the import phase);
 //                    result-<phase>.json lists each phase's failures
 //   import           a private profile is refused; the UI imports 5 cookies, 1 address and

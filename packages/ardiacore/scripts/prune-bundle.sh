@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage="usage: prune-bundle.sh <Ardia.app>"
+usage="usage: prune-bundle.sh <Solara.app>"
 app="${1:?$usage}"
 here="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "error: $*" >&2; exit 1; }

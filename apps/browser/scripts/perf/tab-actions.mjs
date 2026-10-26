@@ -3,8 +3,8 @@
 // hidden instances. The session looks like a real one: 60 tabs over 2 profiles, 10 pinned tiles and 5 pinned rows,
 // 4 groups (one expanded), audible and loading tabs, 2 windows.
 //
-//   node tab-actions.mjs run --app <Release Ardia.app> --side <label>=<main.jsbundle> [--side <label>=<bundle>]
-//        [--side-env <label>:K=V] [--side-app <label>=<Release Ardia.app>] [--launches 4] [--n 5] [--actions a,b] [--out dir] [--port 9317] [--page-port 47917]
+//   node tab-actions.mjs run --app <Release Solara.app> --side <label>=<main.jsbundle> [--side <label>=<bundle>]
+//        [--side-env <label>:K=V] [--side-app <label>=<Release Solara.app>] [--launches 4] [--n 5] [--actions a,b] [--out dir] [--port 9317] [--page-port 47917]
 //       Each launch runs every action --n times; launches alternate between the sides (A B B A ...), so the sides
 //       share the machine. Writes <out>/samples.jsonl, one line per action.
 //   node tab-actions.mjs fixture <session.json> [--page-port 47917]   the session alone; serve: its pages alone

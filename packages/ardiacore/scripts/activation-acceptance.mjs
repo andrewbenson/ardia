@@ -7,7 +7,7 @@ import { freePort, launch as launchInstance, reporter, sleep } from "../../../sc
 
 const [appArg, scratchArg, ...only] = process.argv.slice(2);
 if (!appArg || !scratchArg) {
-  console.error("usage: activation-acceptance.mjs <Ardia.app> <scratch dir> [check…]");
+  console.error("usage: activation-acceptance.mjs <Solara.app> <scratch dir> [check…]");
   process.exit(64);
 }
 const scratch = resolve(scratchArg);

@@ -7,7 +7,7 @@
 //   node apps/browser/scripts/perf/finch-ab.mjs features --out <dir> [--chrome <app>] [--template <dir>]
 //       launches the Chrome copy hidden on a clone of xbench's Chrome template, reads chrome://version's variations
 //       command line, writes <dir>/chrome-variations.txt and <dir>/arms.json (all of it, and the perf subset)
-//   node apps/browser/scripts/perf/finch-ab.mjs run --out <dir> [--app <Ardia.app>] [--arms all,perf] [-- <more xbench options>]
+//   node apps/browser/scripts/perf/finch-ab.mjs run --out <dir> [--app <Solara.app>] [--arms all,perf] [-- <more xbench options>]
 //       xbench run --browsers ardia,ardia-finch[,ardia-perf] with each arm's switches, rows session,restore,link,
 //       then xbench report into <dir>/table.md
 //

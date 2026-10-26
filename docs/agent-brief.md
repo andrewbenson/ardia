@@ -146,12 +146,12 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
-  - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Ardia.app --data <scratch>/data`
+  - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Solara.app --data <scratch>/data`
     (hidden: `open -g -n`, `ARDIA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
     `ac eval|page|quit|status` take that data dir (`--help`); scripts use `scripts/lib/instance.mjs` (`launch`,
     `attach`, `session`, `reporter`), whose pid is the DevTools port's listener, never a process-list diff
     (`ARDIA_DATA_DIR` isolates Chrome's and the app's data; a Debug build refuses to start without one).
-    Quit only your own instance (`ac quit`), never `pkill Ardia`.
+    Quit only your own instance (`ac quit`), never `pkill Ardia` or `pkill Solara`.
   - Open a URL in your instance: CDP `Target.createTarget`, or the dev harness
     (`ac.actions.openUrls([url])`); `open -a` routes to whichever instance macOS picks.
   - Metro (JS dev server) is already running on :8081 and serves this working tree to every

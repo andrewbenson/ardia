@@ -8,7 +8,7 @@ probe reads an RN surface and its native replacement the same way.
 
 ## Conditions
 
-- Run on the shipped stable build (`dist/<v>/export/Ardia.app`), never a local Release or a nightly
+- Run on the shipped stable build (`dist/<v>/export/Solara.app`; `Ardia.app` in dists from before the rename), never a local Release or a nightly
   (`docs/perf/README.md` › "Gating a release" explains why).
 - Wait until the overnight Chromium build and every other agent's build or bench are done. Hold the perflab lock for
   every timing phase, and keep the display awake (`caffeinate -d`). Record the load average with each run

@@ -5,7 +5,7 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 
 const [appArg, port] = process.argv.slice(2);
 if (!appArg) {
-  console.error("usage: node hover-shift-test.mjs <Debug Ardia.app> [cdpPort]");
+  console.error("usage: node hover-shift-test.mjs <Debug Solara.app> [cdpPort]");
   process.exit(2);
 }
 const scratch = mkdtempSync(join(tmpdir(), "ac-hover-shift-"));

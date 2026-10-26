@@ -9,7 +9,7 @@ import { writeSeed } from "./perf/seed.mjs";
 const { values: flags, positionals } = parseArgs({ allowPositionals: true, options: { bundle: { type: "string" }, runs: { type: "string" }, out: { type: "string" } } });
 const appArg = positionals[0];
 if (!appArg) {
-  console.error("usage: node layout-shift-test.mjs <Ardia.app> [--bundle <main.jsbundle>] [--runs 3] [--out <dir>]");
+  console.error("usage: node layout-shift-test.mjs <Solara.app> [--bundle <main.jsbundle>] [--runs 3] [--out <dir>]");
   process.exit(2);
 }
 const out = resolve(flags.out ?? join(tmpdir(), "ac-layout-shift"));

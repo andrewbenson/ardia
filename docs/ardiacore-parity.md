@@ -110,7 +110,7 @@ needs.
 # App: apps/browser/macos (the only app project; pod install there after adding native files).
 scripts/agent/build-app --as <you>     # into apps/browser/build-<you>; --help
 # Acceptance, hidden (open -g -n, ARDIA_BACKGROUND=1, a scratch data dir); METRO_PORT is a Metro for this checkout.
-METRO_PORT=8081 node packages/ardiacore/scripts/acceptance.mjs apps/browser/build-<you>/Build/Products/Debug/Ardia.app <scratch dir> [check…]
+METRO_PORT=8081 node packages/ardiacore/scripts/acceptance.mjs apps/browser/build-<you>/Build/Products/Debug/Solara.app <scratch dir> [check…]
 ```
 
 The app (bundle id `com.ardia.browser`, Apple Development signing with the hardened runtime in

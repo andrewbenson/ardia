@@ -1,0 +1,487 @@
+import SolaraModel
+
+public final class ScopeState: @unchecked Sendable {
+  public var records = JSMap<SyncRecord>()
+  public var base = JSMap<String>()
+  public var unapplied: [String] = []
+  public var vv = JSMap<Double>()
+  public var extra = JSMap<[Double]>()
+  public var files = JSMap<FileMeta>()
+  public var damaged = JSMap<Double>()
+  public var pendingSince: JSMap<Double>? = nil
+  public var seq: Double = 0
+  public var outbox: [Op] = []
+  public var journal: [LogFile]? = nil
+  public var seen = JSMap<Double>()
+  public var joined = false
+  public var awaitRemote: Bool? = nil
+  public var applyAs: JSMap<String>? = nil
+  public var snapshotAt: Double = 0
+  public var pending: Double = 0
+
+  var settling: [() -> Void]? = nil
+  var waitingAfterPull: Bool? = nil
+
+  public init() {}
+
+  public init(json: JSONValue) {
+    for (key, value) in json["records"]?.object ?? [:] { records[key] = SyncRecord(json: value) }
+    for (key, value) in json["base"]?.object ?? [:] { if let text = value.string { base[key] = text } }
+    unapplied = json["unapplied"]?.array?.compactMap(\.string) ?? []
+    vv = numbers(json["vv"])
+    for (key, value) in json["extra"]?.object ?? [:] { extra[key] = value.array?.compactMap(\.number) ?? [] }
+    for (key, value) in json["files"]?.object ?? [:] { files[key] = FileMeta(json: value) }
+    damaged = numbers(json["damaged"])
+    pendingSince = json["pendingSince"].map(numbers)
+    seq = json["seq"]?.number ?? 0
+    outbox = (json["outbox"]?.array ?? []).map(Op.init(json:))
+    journal = json["journal"]?.array.map { $0.map(LogFile.init(json:)) }
+    seen = numbers(json["seen"])
+    joined = json["joined"]?.bool ?? false
+    awaitRemote = json["awaitRemote"]?.bool
+    if let object = json["applyAs"]?.object {
+      var out = JSMap<String>()
+      for (key, value) in object { if let text = value.string { out[key] = text } }
+      applyAs = out
+    }
+    snapshotAt = json["snapshotAt"]?.number ?? 0
+    pending = json["pending"]?.number ?? 0
+  }
+
+  public var json: JSONValue {
+    var out: JSONObject = [
+      "records": .object(records.mapValues(\.json)), "base": .object(base.mapValues(JSONValue.string)), "unapplied": JSONValue(unapplied),
+      "vv": .object(vv.mapValues(JSONValue.number)), "extra": .object(extra.mapValues { .array($0.map(JSONValue.number)) }),
+      "files": .object(files.mapValues(\.json)), "damaged": .object(damaged.mapValues(JSONValue.number)),
+    ]
+    if let pendingSince { out["pendingSince"] = .object(pendingSince.mapValues(JSONValue.number)) }
+    out["seq"] = .number(seq)
+    out["outbox"] = .array(outbox.map(\.json))
+    if let journal { out["journal"] = .array(journal.map(\.json)) }
+    out["seen"] = .object(seen.mapValues(JSONValue.number))
+    out["joined"] = .bool(joined)
+    if let awaitRemote { out["awaitRemote"] = .bool(awaitRemote) }
+    if let applyAs { out["applyAs"] = .object(applyAs.mapValues(JSONValue.string)) }
+    out["snapshotAt"] = .number(snapshotAt)
+    out["pending"] = .number(pending)
+    return .object(out)
+  }
+}
+
+public protocol SyncTransport: Sendable {
+  func write(_ scope: String, _ payload: String) async throws -> String
+  func read(_ scope: String, _ known: [String]) async throws -> Listing
+  func remove(_ scope: String, _ ids: [String]) async throws
+}
+
+public struct Listing: Sendable {
+  public var files: [(id: String, payload: String)]
+  public var pending: [String]
+  public var damaged: [(id: String, age: Double)]
+  public var present: [String]
+
+  public init(files: [(id: String, payload: String)], pending: [String], damaged: [(id: String, age: Double)], present: [String]) {
+    self.files = files
+    self.pending = pending
+    self.damaged = damaged
+    self.present = present
+  }
+}
+
+public struct Extraction {
+  public var values: [(key: String, value: JSONValue?)]
+  public var ignore: ((String) -> Bool)?
+  public var republish: ((String) -> Bool)?
+  public var published: (([String]) -> Void)?
+
+  public init(
+    values: [(key: String, value: JSONValue?)], ignore: ((String) -> Bool)? = nil, republish: ((String) -> Bool)? = nil,
+    published: (([String]) -> Void)? = nil
+  ) {
+    self.values = values
+    self.ignore = ignore
+    self.republish = republish
+    self.published = published
+  }
+}
+
+public struct ExtractContext {
+  public let base: (String) -> JSONValue?
+  public let queued: (String) -> Bool
+  public let now: Double
+  public let known: (String) -> Bool
+  public let remote: (String) -> JSONValue?
+  public let stamp: (String) -> HLC?
+}
+
+public struct ApplyRecords {
+  public let known: (String) -> Bool
+  public let now: Double
+  public let horizon: Double
+  public let joined: Bool
+}
+
+public protocol SyncAdapter: AnyObject {
+  var prefix: String { get }
+  var adoptRemoteOnJoin: Bool { get }
+  var publishAfterPull: Bool { get }
+  func extract(_ context: ExtractContext) async throws -> Extraction?
+  func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool?
+  func editedAt(_ value: JSONValue) -> Double?
+}
+
+public extension SyncAdapter {
+  var adoptRemoteOnJoin: Bool { false }
+  var publishAfterPull: Bool { false }
+  func editedAt(_ value: JSONValue) -> Double? { nil }
+}
+
+public struct ScopeOptions {
+  public var expired: (String, JSONValue, Double) -> Bool = { _, _, _ in false }
+  public var tombstoneTTL: Double = 45 * 86_400_000
+  public var compactAfterFiles: Double = 40
+  public var compactInterval: Double = 10 * 60_000
+  public var pruneGrace: Double = 60 * 60_000
+  public var damagedGiveUp: Double = 86_400_000
+  public var persist: (([LogFile]) async throws -> Void)? = nil
+
+  public init() {}
+}
+
+public struct SyncError: Error, CustomStringConvertible {
+  public let description: String
+}
+
+public func covered(_ vv: JSMap<Double>, _ origin: Origin) -> Bool { vv[device: origin.device] >= origin.seq }
+
+func markApplied(_ state: ScopeState, _ device: String, _ seq: Double) {
+  if covered(state.vv, Origin(device, seq)) { return }
+  var extra = Set(state.extra[device] ?? [])
+  extra.insert(seq)
+  var top = state.vv[device: device]
+  while extra.remove(top + 1) != nil { top += 1 }
+  state.vv[device] = top
+  if extra.isEmpty {
+    state.extra.removeValue(forKey: device)
+  } else {
+    state.extra[device] = extra.sorted()
+  }
+}
+
+func isApplied(_ state: ScopeState, _ origin: Origin) -> Bool {
+  covered(state.vv, origin) || (state.extra[origin.device]?.contains(origin.seq) ?? false)
+}
+
+func see(_ state: ScopeState, _ device: String, _ at: Double) {
+  if let known = state.seen[device], !(at > known) { return }
+  state.seen[device] = at
+}
+
+func mergeRecord(_ state: ScopeState, _ key: String, _ record: SyncRecord, _ clock: Clock) -> Bool {
+  clock.observe(record.h)
+  if let current = state.records[key], !jsKeyPrecedes(current.h, record.h) { return false }
+  state.records[key] = record
+  return true
+}
+
+func ingestLog(_ state: ScopeState, _ file: LogFile, _ clock: Clock, _ changed: inout OrderedSet<String>) {
+  see(state, file.device, file.at)
+  if isApplied(state, Origin(file.device, file.seq)) { return }
+  for op in file.ops where mergeRecord(state, op.k, SyncRecord(h: op.h, v: op.v, o: Origin(file.device, file.seq)), clock) { changed.insert(op.k) }
+  markApplied(state, file.device, file.seq)
+}
+
+public func ingestSnapshot(_ state: ScopeState, _ file: SnapshotFile, _ clock: Clock, _ changed: inout OrderedSet<String>) {
+  for (device, at) in file.seen { see(state, device, at) }
+  see(state, file.device, file.at)
+  for (key, record) in file.records {
+    if !state.records.contains(key) && isApplied(state, record.o) { continue }
+    if mergeRecord(state, key, record, clock) { changed.insert(key) }
+  }
+  for (key, record) in state.records where !file.records.contains(key) && covered(file.vv, record.o) {
+    state.records.removeValue(forKey: key)
+    changed.insert(key)
+  }
+  for (device, seq) in file.vv where seq > state.vv[device: device] {
+    state.vv[device] = seq
+    var extra = (state.extra[device] ?? []).filter { $0 > seq }
+    var top = seq
+    while let first = extra.first, first == top + 1 {
+      state.vv[device] = extra.removeFirst()
+      top += 1
+    }
+    if extra.isEmpty { state.extra.removeValue(forKey: device) } else { state.extra[device] = extra }
+  }
+}
+
+public func visible(_ state: ScopeState, _ prefix: String) -> [(key: String, value: JSONValue)] {
+  state.records.compactMap { key, record in !record.v.isNull && key.hasPrefix(prefix) ? (key, record.v) : nil }
+}
+
+func parseBase(_ text: String?) -> JSONValue? {
+  guard let text else { return nil }
+  return try? JSONValue.parse(text)
+}
+
+func settleWhenDurable(_ state: ScopeState, _ settle: @escaping () -> Void) {
+  if state.settling == nil { state.settling = [] }
+  state.settling!.append(settle)
+}
+
+func settleDurable(_ state: ScopeState) {
+  guard let queue = state.settling else { return }
+  state.settling = nil
+  for settle in queue { settle() }
+}
+
+func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock, _ device: String, _ now: Double) async throws -> OrderedSet<String> {
+  var published = OrderedSet<String>()
+  if adapter.adoptRemoteOnJoin && !state.joined { return published }
+  if adapter.publishAfterPull && state.waitingAfterPull != false { return published }
+  var pendingKeys: Set<String>? = nil
+  let queued: (String) -> Bool = { key in
+    if pendingKeys == nil { pendingKeys = Set((state.outbox + (state.journal ?? []).flatMap(\.ops)).map(\.k)) }
+    return pendingKeys!.contains(key)
+  }
+  let context = ExtractContext(
+    base: { parseBase(state.base[$0]) }, queued: queued, now: now, known: { state.records.contains($0) }, remote: { state.records[$0]?.v },
+    stamp: { state.records[$0]?.h })
+  guard let extraction = try await adapter.extract(context) else { return published }
+  func put(_ key: String, _ value: JSONValue) {
+    let known = state.records[key]
+    let editedAt = known == nil && !value.isNull ? adapter.editedAt(value) : nil
+    let h = editedAt.map(clock.at) ?? clock.tick()
+    if let known, !jsKeyPrecedes(known.h, h) { return }
+    state.records[key] = SyncRecord(h: h, v: value, o: Origin(device, state.seq + 1))
+    state.outbox.append(Op(k: key, h: h, v: value))
+    published.insert(key)
+  }
+  var extracted = Set<String>()
+  for (key, value) in extraction.values {
+    guard let value, !value.isNull else { throw SyncError(description: "[sync] \(key): a live value can't be null") }
+    extracted.insert(key)
+    let json = syncCanonical(value)
+    if state.base[key] == json && !(extraction.republish?(key) ?? false) { continue }
+    state.base[key] = json
+    put(key, value)
+  }
+  for key in state.base.keys {
+    if !key.hasPrefix(adapter.prefix) || extracted.contains(key) || (extraction.ignore?(key) ?? false) { continue }
+    state.base.removeValue(forKey: key)
+    put(key, .null)
+  }
+  if let settle = extraction.published, !published.isEmpty {
+    let keys = published.elements
+    settleWhenDurable(state) { settle(keys) }
+  }
+  return published
+}
+
+public func publish(_ state: ScopeState, _ adapters: [SyncAdapter], _ clock: Clock, _ device: String, _ now: Double) async throws -> OrderedSet<String> {
+  var published = OrderedSet<String>()
+  for adapter in adapters { for key in try await publishAdapter(state, adapter, clock, device, now).elements { published.insert(key) } }
+  return published
+}
+
+public func flush(_ state: ScopeState, _ transport: SyncTransport, _ scope: String, _ device: String, _ now: Double, _ options: ScopeOptions = ScopeOptions()) async throws {
+  if !state.outbox.isEmpty {
+    state.seq += 1
+    if state.journal == nil { state.journal = [] }
+    state.journal!.append(LogFile(device: device, seq: state.seq, at: now, ops: state.outbox))
+    state.outbox = []
+  }
+  guard let journal = state.journal, !journal.isEmpty else { return }
+  if let persist = options.persist {
+    try await persist(journal)
+    settleDurable(state)
+  }
+  while let file = state.journal?.first {
+    let id = try await transport.write(scope, file.json.text())
+    state.files[id] = FileMeta(d: file.device, k: .log, s: file.seq, at: file.at)
+    state.journal!.removeFirst()
+    markApplied(state, file.device, file.seq)
+    see(state, file.device, now)
+  }
+  state.journal = nil
+  settleDurable(state)
+}
+
+public func restoreJournal(_ state: ScopeState, _ batches: [LogFile], _ clock: Clock, _ written: Double = 0) {
+  let saved = state.seq
+  for file in batches.stableSorted(by: { $0.seq < $1.seq }) {
+    if file.seq <= state.seq { continue }
+    if file.seq == saved + 1 { state.outbox = [] }
+    for op in file.ops {
+      _ = mergeRecord(state, op.k, SyncRecord(h: op.h, v: op.v, o: Origin(file.device, file.seq)), clock)
+      if op.v.isNull { state.base.removeValue(forKey: op.k) } else { state.base[op.k] = syncCanonical(op.v) }
+    }
+    state.seq = file.seq
+    if file.seq <= written {
+      markApplied(state, file.device, file.seq)
+    } else {
+      if state.journal == nil { state.journal = [] }
+      state.journal!.append(file)
+    }
+  }
+  state.seq = max(state.seq, written)
+}
+
+public func writtenSeq(_ state: ScopeState) -> Double { state.seq - Double(state.journal?.count ?? 0) }
+
+enum ParsedFile {
+  case log(LogFile)
+  case snapshot(SnapshotFile)
+}
+
+func parseFile(_ payload: String) -> ParsedFile? {
+  guard let json = try? JSONValue.parse(payload), json["v"] == .number(1) else { return nil }
+  switch json["kind"]?.string {
+  case "log": return .log(LogFile(json: json))
+  case "snapshot": return .snapshot(SnapshotFile(json: json))
+  default: return nil
+  }
+}
+
+public func pull(_ state: ScopeState, _ transport: SyncTransport, _ scope: String, _ clock: Clock, _ now: Double, _ options: ScopeOptions = ScopeOptions()) async throws
+  -> OrderedSet<String>
+{
+  let damagedGiveUp = options.damagedGiveUp
+  let listing = try await transport.read(scope, state.files.keys)
+  var changed = OrderedSet<String>()
+  var parsed: [(id: String, file: ParsedFile)] = []
+  func bad(_ id: String) {
+    state.damaged[id] = min(state.damaged[id] ?? now, now)
+    if now - state.damaged[id]! > damagedGiveUp {
+      state.files[id] = FileMeta(d: "", k: .bad, at: now)
+      state.damaged.removeValue(forKey: id)
+    }
+  }
+  for (id, payload) in listing.files {
+    if let file = parseFile(payload) { parsed.append((id, file)) } else { bad(id) }
+  }
+  for (id, _) in listing.damaged { bad(id) }
+  let ordered = parsed.stableSorted { a, b in
+    if case .snapshot = a.file, case .log = b.file { return true }
+    return false
+  }
+  for (id, file) in ordered {
+    switch file {
+    case .snapshot(let snapshot):
+      ingestSnapshot(state, snapshot, clock, &changed)
+      state.files[id] = FileMeta(d: snapshot.device, k: .snapshot, vv: snapshot.vv, at: snapshot.at)
+    case .log(let log):
+      ingestLog(state, log, clock, &changed)
+      state.files[id] = FileMeta(d: log.device, k: .log, s: log.seq, at: log.at)
+    }
+    state.damaged.removeValue(forKey: id)
+  }
+  let present = Set(listing.present)
+  for id in state.files.keys where !present.contains(id) { state.files.removeValue(forKey: id) }
+  for id in state.damaged.keys where !present.contains(id) { state.damaged.removeValue(forKey: id) }
+  state.pending = Double(listing.pending.count)
+  var pendingSince = JSMap<Double>()
+  for id in listing.pending { pendingSince[id] = min(state.pendingSince?[id] ?? now, now) }
+  state.pendingSince = listing.pending.isEmpty ? nil : pendingSince
+  let downloading = pendingSince.values.contains { now - $0 <= damagedGiveUp }
+  state.waitingAfterPull = downloading || !state.damaged.isEmpty
+  return changed
+}
+
+func applyAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ keys: OrderedSet<String>, _ now: Double, _ horizon: Double) async -> Bool {
+  let mine = keys.elements.filter { $0.hasPrefix(adapter.prefix) }
+  if mine.isEmpty { return true }
+  let view = visible(state, adapter.prefix)
+  if state.applyAs == nil { state.applyAs = JSMap() }
+  if state.applyAs![adapter.prefix] == nil { state.applyAs![adapter.prefix] = state.joined ? "joined" : "joining" }
+  let records = ApplyRecords(known: { state.records.contains($0) }, now: now, horizon: horizon, joined: state.applyAs![adapter.prefix] == "joined")
+  let ok: Bool?
+  do {
+    ok = try await adapter.apply(view, mine, { parseBase(state.base[$0]) }, records)
+  } catch {
+    ok = false
+  }
+  if ok == false { return false }
+  state.applyAs![adapter.prefix] = "joined"
+  var shown = JSMap<JSONValue>()
+  for (key, value) in view { shown[key] = value }
+  for key in mine {
+    if let value = shown[key] { state.base[key] = syncCanonical(value) } else { state.base.removeValue(forKey: key) }
+  }
+  return true
+}
+
+@discardableResult
+public func compact(
+  _ state: ScopeState, _ transport: SyncTransport, _ scope: String, _ device: String, _ now: Double, _ options: ScopeOptions = ScopeOptions(),
+  force: Bool = false
+) async throws -> Bool {
+  let count = Double(state.files.count)
+  let newestSnapshot = ([state.snapshotAt] + state.files.values.filter { $0.k == .snapshot }.map(\.at)).reduce(-Double.infinity) { jsMax($0, $1) }
+  if !force && (count <= options.compactAfterFiles || now - newestSnapshot < options.compactInterval) { return false }
+  try await flush(state, transport, scope, device, now, options)
+  var records = JSMap<SyncRecord>()
+  let tombstoneTTL = state.extra.isEmpty ? options.tombstoneTTL : 2 * options.tombstoneTTL
+  for (key, record) in state.records {
+    let drop = record.v.isNull ? now - hlcWall(record.h) > tombstoneTTL : options.expired(key, record.v, now)
+    if drop { state.records.removeValue(forKey: key) } else { records[key] = record }
+  }
+  let vv = state.vv
+  let file = SnapshotFile(device: device, at: now, vv: vv, seen: state.seen, records: records)
+  let id = try await transport.write(scope, file.json.text())
+  state.files[id] = FileMeta(d: device, k: .snapshot, vv: vv, at: now)
+  state.snapshotAt = now
+  func dominated(_ other: JSMap<Double>) -> Bool { other.allSatisfy { d, s in vv[device: d] >= s } }
+  let prune = state.files.filter { fileId, f in
+    if fileId == id || now - f.at < options.pruneGrace { return false }
+    switch f.k {
+    case .log: return covered(vv, Origin(f.d, f.s ?? .infinity))
+    case .snapshot: return dominated(f.vv ?? JSMap())
+    case .bad: return false
+    }
+  }.keys
+  if !prune.isEmpty {
+    try await transport.remove(scope, prune)
+    for fileId in prune { state.files.removeValue(forKey: fileId) }
+  }
+  return true
+}
+
+func jsMax(_ a: Double, _ b: Double) -> Double {
+  if a.isNaN || b.isNaN { return .nan }
+  return max(a, b)
+}
+
+public struct CycleResult: Sendable, Equatable {
+  public var published: Int
+  public var changed: Int
+  public var pending: Double
+  public var compacted: Bool
+}
+
+public func syncScope(
+  scope: String, state: ScopeState, transport: SyncTransport, adapters: [SyncAdapter], clock: Clock, device: String, now: () -> Double,
+  options: ScopeOptions = ScopeOptions()
+) async throws -> CycleResult {
+  var published = try await publish(state, adapters, clock, device, now()).count
+  try await flush(state, transport, scope, device, now(), options)
+  let changed = try await pull(state, transport, scope, clock, now(), options)
+  var keys = OrderedSet(state.unapplied)
+  for key in changed.elements { keys.insert(key) }
+  var unapplied: [String] = []
+  for adapter in adapters {
+    let late = try await publishAdapter(state, adapter, clock, device, now())
+    published += late.count
+    for key in late.elements { keys.remove(key) }
+    if !(await applyAdapter(state, adapter, keys, now(), 2 * options.tombstoneTTL)) {
+      unapplied += keys.elements.filter { $0.hasPrefix(adapter.prefix) }
+    }
+  }
+  state.unapplied = unapplied + keys.elements.filter { key in !adapters.contains { key.hasPrefix($0.prefix) } }
+  if state.awaitRemote != true || state.seen.keys.contains(where: { $0 != device }) {
+    state.joined = true
+    state.awaitRemote = nil
+  }
+  try await flush(state, transport, scope, device, now(), options)
+  let compacted = try await compact(state, transport, scope, device, now(), options)
+  return CycleResult(published: published, changed: changed.count, pending: state.pending, compacted: compacted)
+}

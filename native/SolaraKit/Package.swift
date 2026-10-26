@@ -40,6 +40,7 @@ let package = Package(
     .testTarget(name: "SolaraImportTests", dependencies: ["SolaraImport"], exclude: ["Fixtures"]),
     .testTarget(name: "SolaraUITests", dependencies: ["SolaraUI"]),
     .testTarget(name: "SolaraSignpostsTests", dependencies: ["SolaraSignposts"]),
+    .testTarget(name: "SolaraSyncTests", dependencies: ["SolaraModel", "SolaraSync"], exclude: ["Scenarios"]),
   ],
   swiftLanguageModes: [.v6]
 )

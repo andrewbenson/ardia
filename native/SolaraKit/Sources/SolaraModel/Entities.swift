@@ -7,6 +7,7 @@ public struct Profile: JSONConvertible {
   public var dataId: String?
   public var theme: JSONValue?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
   public internal(set) var absent: Set<String> = []
 
   public init(id: String, name: String, color: String, icon: String?, createdAt: Double, dataId: String? = nil, theme: JSONValue? = nil) {
@@ -31,11 +32,12 @@ public struct Profile: JSONConvertible {
     dataId = f.optionalString("dataId")
     theme = f.value("theme")
     extra = f.extra
+    keyOrder = f.order
     absent = f.absent(["icon"])
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("name", name)
     e.set("color", color)
@@ -195,6 +197,7 @@ public struct BrowserWindowFields: Sendable, Equatable {
   public var originalProfileId: String?
   public var chromeWindow: String?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
   public internal(set) var absent: Set<String> = []
 
   public init(id: String, profileId: String, incognito: Bool, frame: [Double]?, createdAt: Double) {
@@ -232,11 +235,12 @@ public struct BrowserWindowFields: Sendable, Equatable {
     originalProfileId = f.optionalString("originalProfileId")
     chromeWindow = f.optionalString("chromeWindow")
     extra = f.extra
+    keyOrder = f.order
     absent = f.absent(["frame"])
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("profileId", profileId)
     e.set("incognito", incognito)
@@ -293,6 +297,7 @@ public struct TileFolder: JSONConvertible {
   public var name: String
   public var renamedAt: Double?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, name: String, renamedAt: Double? = nil) {
     self.id = id
@@ -306,10 +311,11 @@ public struct TileFolder: JSONConvertible {
     name = f.string("name")
     renamedAt = f.optionalNumber("renamedAt")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("name", name)
     e.optional("renamedAt", renamedAt)
@@ -596,6 +602,7 @@ public struct TabFields: Sendable, Equatable {
   public var createdAt: Double
   public var lastActiveAt: Double
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
   public internal(set) var absent: Set<String> = []
 
   public init(id: String, windowId: String, profileId: String, url: String, now: Double) {
@@ -658,11 +665,12 @@ public struct TabFields: Sendable, Equatable {
     createdAt = f.number("createdAt")
     lastActiveAt = f.number("lastActiveAt")
     extra = f.extra
+    keyOrder = f.order
     absent = f.absent(["favicon", "customTitle", "customIcon", "pinnedUrl", "openerId", "navigation"])
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("windowId", windowId)
     e.set("profileId", profileId)
@@ -853,6 +861,7 @@ public struct TabGroupFields: Sendable, Equatable {
   public var pinKey: String?
   public var parentId: String?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
   public internal(set) var absent: Set<String> = []
 
   public init(id: String, windowId: String, profileId: String, name: String, icon: String?, color: String?, collapsed: Bool, pinned: Bool,
@@ -900,11 +909,12 @@ public struct TabGroupFields: Sendable, Equatable {
     pinKey = f.optionalString("pinKey")
     parentId = f.optionalString("parentId")
     extra = f.extra
+    keyOrder = f.order
     absent = f.absent(["icon", "color"])
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("windowId", windowId)
     e.set("profileId", profileId)
@@ -954,6 +964,7 @@ public struct SplitView: JSONConvertible {
   public var sizes: [Double]
   public var stack: SplitStack?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, windowId: String, tabIds: [String], orientation: String, sizes: [Double], stack: SplitStack? = nil) {
     self.id = id
@@ -973,10 +984,11 @@ public struct SplitView: JSONConvertible {
     sizes = f.numbers("sizes")
     stack = try f.model("stack")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("windowId", windowId)
     e.set("tabIds", tabIds)

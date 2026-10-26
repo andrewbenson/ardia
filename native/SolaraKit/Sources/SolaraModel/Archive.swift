@@ -15,6 +15,7 @@ public struct TabSnapshot: JSONConvertible {
   public var tileFolder: TileFolder?
   public var engine: String?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
   public internal(set) var absent: Set<String> = []
 
   public init(url: String, title: String, favicon: String?, pinned: Bool, muted: Bool, zoom: Double, customTitle: String?,
@@ -67,11 +68,12 @@ public struct TabSnapshot: JSONConvertible {
     tileFolder = try f.model("tileFolder")
     engine = f.optionalString("engine")
     extra = f.extra
+    keyOrder = f.order
     absent = f.absent(["favicon", "customTitle", "customIcon", "pinnedUrl"])
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("url", url)
     e.set("title", title)
     e.nullable("favicon", favicon, absent: absent)
@@ -97,6 +99,7 @@ public struct ClosedGroupInfo: JSONConvertible {
   public var absent: Set<String> = []
   public var pinned: Bool?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, name: String, icon: String?, color: String?, pinned: Bool?) {
     self.id = id
@@ -115,10 +118,11 @@ public struct ClosedGroupInfo: JSONConvertible {
     absent = f.absent(["icon", "color"])
     pinned = f.optionalBool("pinned")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("name", name)
     e.nullable("icon", icon, absent: absent)
@@ -141,6 +145,7 @@ public struct ClosedTab: JSONConvertible {
   public var pinnedTile: Bool?
   public var small: Bool?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, tab: TabSnapshot, tabId: String?, restoreFrom: String?, windowId: String, index: Int, group: ClosedGroupInfo?,
     parents: [ClosedGroupInfo]?, closedAt: Double, pinnedTile: Bool? = nil, small: Bool? = nil)
@@ -172,10 +177,11 @@ public struct ClosedTab: JSONConvertible {
     pinnedTile = f.optionalBool("pinnedTile")
     small = f.optionalBool("small")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("kind", "tab")
     e.set("id", id)
     e.set("tab", tab)
@@ -195,7 +201,8 @@ public struct ClosedTab: JSONConvertible {
 public struct ClosedWindowTab: JSONConvertible {
   public var snapshot: TabSnapshot
   public var active: Bool
-  public var tabId: String?
+  public var tabId: String? { didSet { tabIdIsNull = false } }
+  public var tabIdIsNull = false
 
   public init(snapshot: TabSnapshot, active: Bool, tabId: String?) {
     self.snapshot = snapshot
@@ -207,13 +214,14 @@ public struct ClosedWindowTab: JSONConvertible {
     snapshot = try TabSnapshot(json: json, alsoKnown: ["active", "tabId"])
     active = json["active"]?.bool ?? false
     tabId = json["tabId"]?.string
+    tabIdIsNull = json["tabId"] == .null
   }
 
   public var json: JSONObject {
     var out = snapshot.json
     out["active"] = .bool(active)
-    if let tabId { out["tabId"] = .string(tabId) }
-    return out
+    if let tabId { out["tabId"] = .string(tabId) } else if tabIdIsNull { out["tabId"] = .null }
+    return out.ordered(by: snapshot.keyOrder)
   }
 }
 
@@ -233,6 +241,7 @@ public struct ClosedWindowGroup: JSONConvertible {
   public var parentId: String?
   public var tabIndexes: [Int]
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(group g: TabGroup, tabIndexes: [Int]) {
     id = g.id
@@ -269,10 +278,11 @@ public struct ClosedWindowGroup: JSONConvertible {
     parentId = f.optionalString("parentId")
     tabIndexes = f.numbers("tabIndexes").map { Int($0) }
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("profileId", profileId)
     e.set("name", name)
@@ -299,7 +309,9 @@ public struct ClosedWindow: JSONConvertible {
   public var groups: [ClosedWindowGroup]
   public var closedAt: Double
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
   public var windowExtra: JSONObject = [:]
+  public var windowKeyOrder: [String]? = nil
   public var absent: Set<String> = []
 
   public init(id: String, profileId: String, sidebarOpen: Bool, frame: [Double]?, tabs: [ClosedWindowTab], groups: [ClosedWindowGroup], closedAt: Double) {
@@ -320,19 +332,21 @@ public struct ClosedWindow: JSONConvertible {
     sidebarOpen = w.bool("sidebarOpen")
     frame = w.optionalNumbers("frame")
     windowExtra = w.extra
+    windowKeyOrder = w.order
     absent = w.absent(["frame"])
     tabs = try f.models("tabs")
     groups = try f.models("groups")
     closedAt = f.number("closedAt")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var w = Encoder(extra: windowExtra)
+    var w = Encoder(extra: windowExtra, order: windowKeyOrder)
     w.set("profileId", profileId)
     w.set("sidebarOpen", sidebarOpen)
     if !absent.contains("frame") { w.nullable("frame", frame) }
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("kind", "window")
     e.set("id", id)
     e.set("window", .object(w.object))
@@ -368,7 +382,7 @@ public struct ParkedTab: JSONConvertible {
     if let restoreFrom { out["restoreFrom"] = .string(restoreFrom) }
     out["id"] = .string(id)
     out["groupId"] = JSONValue(groupId)
-    return out
+    return out.ordered(by: snapshot.keyOrder)
   }
 }
 
@@ -381,6 +395,7 @@ public struct ParkedGroup: JSONConvertible {
   public var collapsed: Bool
   public var parentId: String?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, name: String, icon: String?, color: String?, collapsed: Bool, parentId: String?) {
     self.id = id
@@ -401,10 +416,11 @@ public struct ParkedGroup: JSONConvertible {
     collapsed = f.bool("collapsed")
     parentId = f.optionalString("parentId")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("name", name)
     e.nullable("icon", icon, absent: absent)
@@ -451,6 +467,7 @@ public struct ParkedPins: JSONConvertible {
   public var groups: [ParkedGroup]
   public var splits: [ParkedSplit]?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(tabs: [ParkedTab], groups: [ParkedGroup], splits: [ParkedSplit]?) {
     self.tabs = tabs
@@ -464,10 +481,11 @@ public struct ParkedPins: JSONConvertible {
     groups = try f.models("groups")
     splits = try f.optionalModels("splits")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("tabs", tabs)
     e.set("groups", groups)
     e.optional("splits", splits)
@@ -529,6 +547,7 @@ public struct ClosedGroupHead: JSONConvertible {
   public var pinned: Bool
   public var parentId: String?
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, name: String, icon: String?, color: String?, pinned: Bool, parentId: String?) {
     self.id = id
@@ -549,10 +568,11 @@ public struct ClosedGroupHead: JSONConvertible {
     pinned = f.bool("pinned")
     parentId = f.optionalString("parentId")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("id", id)
     e.set("name", name)
     e.nullable("icon", icon, absent: absent)
@@ -573,6 +593,7 @@ public struct ClosedGroup: JSONConvertible {
   public var index: Int
   public var closedAt: Double
   public var extra: JSONObject = [:]
+  public var keyOrder: [String]? = nil
 
   public init(id: String, group: ClosedGroupHead, tabs: [TabSnapshot], tabIds: [String]?, nested: [NestedGroupSnapshot]?, windowId: String,
     index: Int, closedAt: Double)
@@ -598,10 +619,11 @@ public struct ClosedGroup: JSONConvertible {
     index = Int(f.number("index"))
     closedAt = f.number("closedAt")
     extra = f.extra
+    keyOrder = f.order
   }
 
   public var json: JSONObject {
-    var e = Encoder(extra: extra)
+    var e = Encoder(extra: extra, order: keyOrder)
     e.set("kind", "group")
     e.set("id", id)
     e.set("group", group)

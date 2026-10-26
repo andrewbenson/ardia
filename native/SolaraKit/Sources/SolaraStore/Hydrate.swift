@@ -29,19 +29,30 @@ public struct HydrateData: Sendable {
     var out = JSMap<T>()
     if let list = value.array {
       for item in list {
-        let model = try T(value: item)
+        guard let model: T = readable(item, item["id"]?.string) else { continue }
         out[item["id"]?.string ?? ""] = model
       }
     } else {
-      for (key, item) in value.object ?? [:] { out[key] = try T(value: item) }
+      for (key, item) in value.object ?? [:] {
+        if let model: T = readable(item, key) { out[key] = model }
+      }
     }
     return out
   }
 
   static func list<T: JSONConvertible>(_ value: JSONValue?) throws -> [T]? {
     guard let value, !value.isNull else { return nil }
-    if let list = value.array { return try list.map { try T(value: $0) } }
-    return try (value.object ?? [:]).values.map { try T(value: $0) }
+    let items = value.array ?? (value.object ?? [:]).values
+    return items.compactMap { readable($0, $0["id"]?.string) }
+  }
+
+  static func readable<T: JSONConvertible>(_ item: JSONValue, _ id: String?) -> T? {
+    do {
+      return try T(value: item)
+    } catch {
+      DecodeLog.note("dropped unreadable \(T.self) \(id ?? "without an id"): \(error)")
+      return nil
+    }
   }
 
   static func tables<V>(_ value: JSONValue?, _ convert: (JSONValue) -> V?) -> JSMap<JSMap<V>>? {

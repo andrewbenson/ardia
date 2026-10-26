@@ -710,7 +710,33 @@ function suggestCases() {
   return { actions: ACTIONS, extensions: PROPERTY_EXTENSIONS, bangs: BANG_TEXT, runs, edge, stats };
 }
 
+const WHATWG_PIECES = [
+  "http:", "https:", "HTTP:", "file:", "ftp:", "ws:", "wss:", "ardia:", "chrome:", "mailto:", "about:", "data:", "javascript:", "foo:", "a+b-c.d:", "1x:", "//", "/", "\\", "///", "\\\\", "/\\",
+  "example.com", "EXAMPLE.com", "localhost", "LocalHost", "user", "user:pw", ":pw", "@", "a@b@", "%40", "[::1]", "[2001:DB8::0:1]", "[::ffff:1.2.3.4]", "[1:2:3:4:5:6:7:8]", "[1::2::3]", "[::1", "[zz]",
+  "127.0.0.1", "0x7f.1", "0300.0.0.1", "1.2.3.4.5", "256.0.0.1", "4294967295", "4294967296", "1.2.3.", "0x", "09", "1.0x", "münchen", "xn--bcher-kva", "xn--zz", "ＥＸＡＭＰＬＥ", "a\u00adb", "%65xample",
+  "%zz", "%", "exa mple", "a<b", "a^b", "a|b", "a%00b", "\u0000", "\u007f", ":", ":80", ":443", ":8080", ":0080", ":65536", ":abc", ":", "?", "?q=a b'\"<>`", "#", "#frag ment`<>\"", "/a/../b",
+  "/./a", "/a/%2e%2E/b", "/a/.%2e", "/..", "/C:", "/c|", "C|", "c:", "/a b", "/a?b", "/é", "/%41", "\t", "\n", " ", "\u0001", "😀", "{}", "^", "`", "|", ";", "=", "~", "!", "'", "*",
+];
+function whatwgCases() {
+  const r = rng(101);
+  const inputs = ["https://example.com", "https://user:pw@example.com:8443/p?q#h", "file:///Users/me/a%20b.html", "file://localhost/x", "file://host/share", "file:C:/x", "file:///C|/x/../..", "ardia://flags", "chrome://version/", "mailto:hi@example.com", "about:blank", "data:text/plain,hi", "javascript:alert(1)", "http://[::1]:80/", "https://0x7f.1/", "https://ＥＸＡＭＰＬＥ.com/", "  https://a.com/ \t", "https://a\nb.com", "foo://", "foo:///", "foo://h:1/p", "foo:/p/../q", "foo:/.//p", "sc: x ?q", "non-spec:/.//", "https://a.com:443", "http://a.com:080", "ws://a:80", "ftp://a:21/x", "http://example.com/foo/%2e%2", "http://a/b/c/../../..", "https://%E2%82%AC.com"];
+  for (let i = 0; i < 6000; i++) {
+    let s = r.int(8) ? r.pick(WHATWG_PIECES.slice(0, 15)) : "";
+    for (let k = 1 + r.int(7); k > 0; k--) s += r.pick(WHATWG_PIECES);
+    inputs.push(s);
+  }
+  return inputs.filter(wellFormed).map((input) => {
+    try {
+      const u = new URL(input);
+      return [input, { protocol: u.protocol, username: u.username, password: u.password, hostname: u.hostname, host: u.host, port: u.port, pathname: u.pathname, search: u.search, hash: u.hash, href: u.href }];
+    } catch {
+      return [input, null];
+    }
+  });
+}
+
 write("lower.json", lowerCases());
+write("whatwg.json", whatwgCases());
 write("numbers.json", numberCases());
 write("log2.json", log2Cases());
 write("urls.json", urlCases());

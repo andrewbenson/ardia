@@ -115,17 +115,19 @@ ac_solara_kit = lambda do |installer|
     package.relative_path = kit
     project.root_object.package_references << package
   end
-  %w[SolaraBridgeCore SolaraModel SolaraOmnibox SolaraPersistence SolaraStore].each do |name|
+  %w[SolaraBridgeCore SolaraModel SolaraOmnibox SolaraPersistence SolaraStore SolaraUI].each do |name|
     next if target.package_product_dependencies.any? { |d| d.product_name == name }
     dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
     dependency.package = package
     dependency.product_name = name
     target.package_product_dependencies << dependency
   end
-  target.build_configurations.each do |c|
-    paths = Array(c.build_settings['SWIFT_INCLUDE_PATHS'] || ['$(inherited)'])
-    built = '${SYMROOT}/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/'
-    c.build_settings['SWIFT_INCLUDE_PATHS'] = paths.include?(built) ? paths : paths + [built]
+  project.targets.select { |t| %w[ArdiaStore ArdiaSettings].include?(t.name) }.each do |t|
+    t.build_configurations.each do |c|
+      paths = Array(c.build_settings['SWIFT_INCLUDE_PATHS'] || ['$(inherited)'])
+      built = '${SYMROOT}/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/'
+      c.build_settings['SWIFT_INCLUDE_PATHS'] = paths.include?(built) ? paths : paths + [built]
+    end
   end
 end
 

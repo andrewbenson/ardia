@@ -10,7 +10,7 @@ React continues to render the sidebar, top strip, dots and tint.
 settle at its current position. Horizontal recognition starts native tracking, using Dia's half-speed
 movement, 100 ms velocity history, 5 pt/s flick threshold and 0.25 s critically damped spring. A
 screen display link updates the position at the screen's refresh rate; a 60 Hz timer is the fallback
-while unattached. Native direct events drive the existing Animated transform and colour graphs.
+while unattached. Native direct events drive the existing Animated transform and color graphs.
 No per-frame drag callback needs JavaScript.
 
 Profile pages stay mounted in absolute slots. Selection is announced at release so the target

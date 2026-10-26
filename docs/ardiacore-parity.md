@@ -215,7 +215,7 @@ counts its calls) on the media copy.
 | quiet-commands | Save Page on the split's unfocused pane (the call): no `tabs.onActivated`, Chrome's selection unchanged; DevTools docked there (Chrome selects the inspected tab itself, as in Chrome): the call stays put |
 
 The engine's own run (`spikes/ardiacore-host/acceptance.mjs`, 96 checks at 66a7e266; the host was deleted in e360995a,
-when it stopped compiling) covered what the app's can't reach: beforeunload cancelling a close and a quit, Dock/logout quits, IME wiring, tab capture with "Share this tab
+when it stopped compiling) covered what the app's can't reach: beforeunload canceling a close and a quit, Dock/logout quits, IME wiring, tab capture with "Share this tab
 instead" and Stop sharing (`--auto-select-tab-capture-source-by-title`), the context menu's item click path,
 `closeNow` recording the closed tab.
 
@@ -350,10 +350,10 @@ lights are placed again after every switch), `prepareProfiles:forWindow:`, `setT
 | Key equivalents from the page | done | |
 | Quit and terminate (⌘Q, Dock, logout) | done | Cocoa's `applicationShouldTerminate:` contract, cancellable |
 | Full screen, pointer lock and keyboard lock notice | done | Chrome's own "Press Esc to exit full screen" bubble (`ExclusiveAccessBubbleViews`) on the window's widget, ported from Chrome's viewless Webium window (`ACBrowserWindow` is its `ExclusiveAccessBubbleViewsContext`); the window tells Chrome's `FullscreenController` when a page's full screen has started (`WindowFullscreenStateChanged`), which shows it. Esc, and press-and-hold Esc under keyboard lock, are Chrome's (`ExclusiveAccessManager::HandleUserKeyEvent`). A tab leaving full screen gets its visual properties again at once, so the page leaves even while the window is still mid-transition. A hidden run's bubble sits in the test band like every window |
-| Tab-modal dialogs (HTTP auth, FedCM, passkeys, print) | done | Each tab has its own dialog host (`ac_modal_dialog_host.mm`): centred over that tab's own view (each split pane its own), at most the page's size, activated only when its Browser is the last active one, the app is active and its window is main or key (otherwise shown inactive: no focus steal from another app or a background window), and moved whenever the window's bounds or any view frame in it changes while a dialog is up. Browser-modal dialogs use the window's host, over the active tab |
-| EyeDropper | done | `new EyeDropper().open()` shows macOS's colour sampler, as Chrome (`ShowEyeDropper`). A hidden run never shows it: it picks #123456 |
+| Tab-modal dialogs (HTTP auth, FedCM, passkeys, print) | done | Each tab has its own dialog host (`ac_modal_dialog_host.mm`): centered over that tab's own view (each split pane its own), at most the page's size, activated only when its Browser is the last active one, the app is active and its window is main or key (otherwise shown inactive: no focus steal from another app or a background window), and moved whenever the window's bounds or any view frame in it changes while a dialog is up. Browser-modal dialogs use the window's host, over the active tab |
+| EyeDropper | done | `new EyeDropper().open()` shows macOS's color sampler, as Chrome (`ShowEyeDropper`). A hidden run never shows it: it picks #123456 |
 | Emoji & Symbols | done | Drops a page's full screen first, as Chrome |
-| `AppController` stand-in | done | Chrome's code asks `AppController.sharedController` for profiles, colours and quit state; ArdiaCore's stand-in answers every selector `app_controller_mac.h` declares, with Chrome's semantics where Ardia can reach them (`safeProfileForNewWindows:`, `keyWindowIsModal`, `lastActiveColorProvider`, `confirmQuitIfNeeded`). Anything else is logged; it answers zero only for a void, scalar or object return, and stops the process otherwise (and always in a hidden run) |
+| `AppController` stand-in | done | Chrome's code asks `AppController.sharedController` for profiles, colors and quit state; ArdiaCore's stand-in answers every selector `app_controller_mac.h` declares, with Chrome's semantics where Ardia can reach them (`safeProfileForNewWindows:`, `keyWindowIsModal`, `lastActiveColorProvider`, `confirmQuitIfNeeded`). Anything else is logged; it answers zero only for a void, scalar or object return, and stops the process otherwise (and always in a hidden run) |
 | Windows Chrome makes (chrome.windows.create, incognito) | done | Routed into the app's windows (`tab:<id>`) through a hidden stray window. Chrome never shows a window of the host's (`ACBrowserWindow::Show` does nothing; the app shows its own), and the host's own hidden pages are no extension's window (`cef::IsHiddenFromExtensions`, `IsOnCurrentWorkspace`, extensions' `browser_window_util`) |
 | Key window, IME, accessibility | partial | Wiring checked in the engine's run; marked text and VoiceOver need an unlocked screen |
 | Native composition of the page under the RN views, bubbles and sheets | needs a visual check | The screen was locked for stages 1 and 2 |
@@ -411,7 +411,7 @@ working tree carry other agents' uncommitted edits, which turned earlier runs' f
 The earlier visibility flake is gone. What the 0.2.22 push found and fixed:
 - A reloaded or navigated page lost the app's page background (the window's backdrop showed through): a new
   document's view took over the last page's translucent background and told the renderer to paint on a transparent
-  base. `CopyBackgroundColorIfPresentFrom` now takes opacity from the embedder's colours (apply.sh hook).
+  base. `CopyBackgroundColorIfPresentFrom` now takes opacity from the embedder's colors (apply.sh hook).
 - The saved-passwords dropdown showed but was never reported: the engine now hears every dropdown from
   `AutofillPopupControllerImpl::Show` (apply.sh hook), also one whose search bar can't take focus in an inactive app.
 - Auto Picture in Picture closed a page's own document PiP window when the window got covered; hidden runs' PiP

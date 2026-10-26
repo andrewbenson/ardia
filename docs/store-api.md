@@ -11,9 +11,9 @@ modules before using them — this is a summary from the agent that built it.
   `lastActiveProfile`). Its engine profile (`engineProfile`) is that profile's off-the-record one: private windows of one
   profile share a session (`privateSession(profileId)`, the regular engine name), another profile's never. Downloads
   carry `offTheRecord` and their regular profile (`downloadSession`, store/ui.ts); a session's go with its last window.
-- `tabs` (persisted) vs `live` (loading/progress/back-forward/audio/theme colour; never persisted).
+- `tabs` (persisted) vs `live` (loading/progress/back-forward/audio/theme color; never persisted).
 - `groups`: `{ windowId, profileId, name, icon, color, collapsed, pinned, tabIds }` (members contiguous). `color` is
-  `null` for Neutral, `"none"` for a transparent group, or one of Chrome's nine group colours.
+  `null` for Neutral, `"none"` for a transparent group, or one of Chrome's nine group colors.
 - `splits` (store/splits.ts): `{ windowId, tabIds (2–3, pane order), orientation, sizes, stack? }` — `stack` = two panes sharing a slot the other way (Add Bottom Split). Members are contiguous in `window.tabIds`; the window's active tab is the focused pane. A split is one sidebar row (`splitRowPanes`): its panes are all unpinned, or all pinned rows; `placing`, `withGroup`, `createGroup`, `addTabsToGroup` and `removeTabsFromGroup` take every pane of a row they're given one of (`withSplitRows`), pinned panes are always rows, and a pinned split is mirrored to the profile's windows (pinMirror) and parked with them (`ParkedPins.splits`). `window.tabLayout` ("sidebar" | "top", unset = Settings).
 - `history[profileId]`: a view of Chrome's history (HistoryService), one entry per URL, not saved; `historyReady[profileId]`
   once it has been read (lib/history.ts). `bookmarks`: `{ nodes, roots[profileId]: { bar, other } }`.
@@ -68,7 +68,7 @@ modules before using them — this is a summary from the agent that built it.
   the engine copies or restores that tab's back/forward list, else the tab loads its URL.
 - Groups: `createGroup`, `addTabsToGroup`, …
 - Splits: `createSplit`, `openSplitPane(windowId, { tabId | url, anchorTabId, side, background })`, `replaceSplitPane`, `removeTabFromSplit`, `separateSplit`, `flipSplit`, `toggleSplitOrientation`, `movePane`, `focusPane`, `updateSplit`; `toggleTabLayout`. UI entry points with Dia's feedback (max-panes toast, menus): components/layout/splitActions.ts (`openSplitPane`, `openNewTabInSplit`, `openInSplit`, `openLinkInSplit`, `showSplitMenu`). Drag a tab onto the page to split: components/layout/tabDrag.ts.
-- Sidebar organisation (store/organize.ts): `selection[windowId]` with its ⇧-click anchor `selectionAnchors[windowId]`, both set by
+- Sidebar organization (store/organize.ts): `selection[windowId]` with its ⇧-click anchor `selectionAnchors[windowId]`, both set by
   `clickTab(windowId, tabId, mods)` (plain, ⌘ and ⇧ clicks, ⌥⇧ into the shown tab's group), `placeTabs(ids, { pinned, row, beforeId, groupId, last })`
   (`last` puts a row with no `beforeId` after the pinned groups too). Drag and drop in the sidebar and the top strip
   goes through store/drops.ts: a view turns the pointer into a `DropSpot` (zone plus the tab it lands before),
@@ -191,7 +191,7 @@ ordered transaction that names its cause. There are no echo windows, timers or "
     tab moved into a group joins it rather than the group's tab leaving), or that Chrome pinned or unpinned, go
     where Chrome put them (a pane of a split keeps its pin, as in Dia: the split stays and Chrome is put back;
     `placing`, last to first, each before the next tab Chrome has after it that's already in
-    place, keeping a group both neighbours share). A split is one row: its panes move together and nothing lands
+    place, keeping a group both neighbors share). A split is one row: its panes move together and nothing lands
     between them;
   - a new active tab that stayed in the strip is shown (`activate`'s rules, opener bookkeeping included), unless
     it's Chrome's pick of a successor (`activePickedOnClose`; from engines that don't say, any activation that comes
@@ -212,7 +212,7 @@ ordered transaction that names its cause. There are no echo windows, timers or "
 - After every store change and transaction, `stripPlan` gives what the store wants each strip to be (the store's
   tabs in it in window order, pinned first; the shown profile's active tab) and the app sends the command that
   closes the gap: `activate` first, then `arrange`, then `group` (a Chrome group for a store group that has none,
-  missing members, title, color (Neutral and `"none"` go as grey, and Chrome's grey back keeps them) and collapsed, as Dia's engine mirrors it; Chrome's model keeps the active tab when
+  missing members, title, color (Neutral and `"none"` go as gray, and Chrome's gray back keeps them) and collapsed, as Dia's engine mirrors it; Chrome's model keeps the active tab when
   its group collapses);
   one command per strip at a time; no `activate` while Chrome's active tab has no key (a tab Chrome made in front,
   before the app adopts it: its activation is Chrome's, above); the same command isn't sent

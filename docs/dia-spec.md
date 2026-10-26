@@ -42,10 +42,10 @@ owns `backgroundBaseView` + `backgroundOverlayTintView` from the **WindowTreatme
 2. **Base tint** — `WindowBackgroundOverlayTintView.baseTintView`: `WindowBackground/BaseTint`, black 0.4 (dark)
    / white 0.8 (light), full opacity.
 3. **Profile gradient** — `…OverlayTintView.gradientView` (`ARCUI.GradientView`, start (0.5, 0), end (0.5, 1)):
-   colours `[tint.lightened(ΔL) @ gradientAlpha, tint @ gradientAlpha]` (`0x103b0d5b4`), i.e. the tint at the top
-   and the tint with its **HSL lightness + ΔL** (clamped; `0x10052c3dc`, in the colour's own space) at the bottom.
+   colors `[tint.lightened(ΔL) @ gradientAlpha, tint @ gradientAlpha]` (`0x103b0d5b4`), i.e. the tint at the top
+   and the tint with its **HSL lightness + ΔL** (clamped; `0x10052c3dc`, in the color's own space) at the bottom.
    The view's `alphaValue` is **0.5 dark / 0.75 light** (`0x103b0e2e4`).
-   - `tint` = `WindowViewModel.State.BackgroundTintInfo.color` (the profile colour; `overrideTintColor`,
+   - `tint` = `WindowViewModel.State.BackgroundTintInfo.color` (the profile color; `overrideTintColor`,
      falling back to `controlAccentColor`), refreshed on `AppleColorPreferencesChangedNotification`.
    - `gradientAlpha` = `BackgroundTintInfo.gradientAlpha ?? (isNeutralTheme ? 0.12 : 0.36)` (`0x1056004fc`).
    - `ΔL` = `gradientLightnessDelta` = rebrand ? **0.25** : 0.4 (`0x1055ffee4`); the rebrand is on in 1.50.1.
@@ -63,7 +63,7 @@ wallpaper, is P3 (40.7, 33.1, 31.8) (AppKit tints it with the wallpaper). Solvin
 at the top and at the bottom, the bottom one equals the top one with its **P3 HSL lightness + 0.25** to
 **0.3 levels** (1.7 if lightened in sRGB; ΔL = 0.4 or the alpha on the whole overlay do not fit). The tint is
 **Display P3 (177.6, 91.1, 106.8) = #B25B6B ≈ sRGB #BF556A**, HSL 349°, 0.36, 0.53 — next to the New Tab
-band colour measured separately (#B5556B, the palette's primary colour).
+band color measured separately (#B5556B, the palette's primary color).
 
 Window-only captures (`screencapture -l`, ScreenCaptureKit `desktopIndependentWindow`) never contain the
 desktop: an active blur panel over red reads neutral (68, 68, 68) in SCK and (119, 119, 119) in
@@ -99,7 +99,7 @@ The stack is unchanged from 1.50.1. `PlatformWindowViewController` still owns `b
 | Content card fill (rebrand) | #121212 at 0.5 / white 0.7 | #121212 at 0.5 / white 0.7 | `0x103d81118` (the "#121212" literal, 0.5; white 0.7) |
 | `WindowContent/BaseTint` asset (no rebrand) | #121212 at 0.6 / white 0.8 | same | Assets.car |
 
-Two things are new and not identified: a set of `BaseTint/primary…quaternary` colours in the same asset catalogue (dark black
+Two things are new and not identified: a set of `BaseTint/primary…quaternary` colors in the same asset catalog (dark black
 0.5 / 0.35 / 0.2 / 0.05, light white 0.65 / 0.5 / 0.35 / 0.05), and a call at `0x104030544` that hands the content fill
 plus a value of 0.15 or 0, chosen by a flag, to the content container. Neither is in the sidebar's stack.
 
@@ -107,10 +107,10 @@ No capture: Dia's only window (2304 × 1296) was off screen (another Space) and 
 over the desktop wasn't possible without bringing Dia forward.
 
 The owner's impression (Dia's sidebar shows more wallpaper than Solara's) fits the theme, not a change in Dia. With a
-neutral tint (`isNeutral`, 0.12) the dark composite is `0.06·tint + 0.94·0.6·blur`. With a coloured preset (0.36) it is
-`0.18·tint + 0.82·0.6·blur`. So the colour cast is a third as strong and the blurred desktop 15 % stronger. For the
+neutral tint (`isNeutral`, 0.12) the dark composite is `0.06·tint + 0.94·0.6·blur`. With a colored preset (0.36) it is
+`0.18·tint + 0.82·0.6·blur`. So the color cast is a third as strong and the blurred desktop 15 % stronger. For the
 New Tab tint #B25B6B that is about (11, 5, 6) instead of (32, 16, 19) added to every sidebar pixel. A bluish, neutral-looking
-Dia profile is probably the system accent (blue) shown at 0.12. The same profile in Solara with a colour preset gets 0.36. An inactive
+Dia profile is probably the system accent (blue) shown at 0.12. The same profile in Solara with a color preset gets 0.36. An inactive
 window is opaque in both, so comparing an active window with an inactive one also makes a sidebar look flatter.
 
 ## Content card
@@ -125,11 +125,11 @@ window is opaque in both, so comparing an active window with an inactive one als
 - Height 41. Icon centers from the card's left edge: 21, 56, 92, 127 (sidebar.left, chevron.left,
   chevron.right, arrow.clockwise). Glyphs are about 15pt, regular weight.
 - Button hover: a ~30pt rounded square (radius 7) at white 10%.
-- **Dia 1.52 (owner's 2× recording, 2026-10-09, x.com, 191 pt sidebar), measured:** glyph centres 21, 55, 92, 126 from
+- **Dia 1.52 (owner's 2× recording, 2026-10-09, x.com, 191 pt sidebar), measured:** glyph centers 21, 55, 92, 126 from
   the card's edge (34–37 apart), on y 27.2 from the window's top. Ink at 2× (half-peak threshold): `sidebar.left` 30 × 23
   px, chevrons 12 × 22, `arrow.clockwise` 22 × 26, i.e. SF Symbols at **13 pt** regular (15 / 14 pt draw 35 × 27,
   13 × 24, 24 × 29). Forward, disabled, peaks at about half the others' brightness.
-- **Extensions (same capture):** only the pinned ones, at the card toolbar's right end before Chat: icons 16 pt, centres
+- **Extensions (same capture):** only the pinned ones, at the card toolbar's right end before Chat: icons 16 pt, centers
   **30.25** pt apart (nine of them), no extensions (puzzle-piece) button; the rest are in the menu bar's Extensions menu.
   A disabled action (React DevTools on x.com) is drawn dimmed, its translucent backdrop square (12, 11, 20) over the
   black toolbar. The binary has an "Overflow extensions button" in `PinnedExtensionsView`, for pinned ones that don't fit.
@@ -148,7 +148,7 @@ window is opaque in both, so comparing an active window with an inactive one als
   `Input/SelectedText/Go` dark = rgba(120,125,134,.7)). The leading icon becomes the selected
   suggestion's favicon.
 - Suggestion rows: 36 tall, 16pt favicon, title ~15pt white, ` — url` at 50%. The selected row is
-  a warm grey fill (~#5E5A5D) with radius 10, inset 4. A search row (magnifier + query) comes
+  a warm gray fill (~#5E5A5D) with radius 10, inset 4. A search row (magnifier + query) comes
   after the top hit. Inline autocomplete selects the completed remainder.
 - Bottom row (53 tall): outlined chip "+ Add tabs or files" (1px white 15%, fully rounded, 28
   tall), a mic (30%), then "Go ↩" pill (lavender `#DCCBD8`-ish, dark text, ~92×29).
@@ -165,12 +165,12 @@ the same as top"), so if a Dia capture ever differs, the owner's equal insets wi
   **16** from every edge; corner radius 12; rows 32 tall, hover fill 6 in (radius 6, concentric), contents 10 further in;
   a 20 pt icon slot (13 pt glyphs, the header's 20 pt favicon), 10 to the text, so titles start at 46; separators 16
   in, 5 above and below; the first and last rows' icon slots 16 from the top and bottom (list padding 10); a header's
-  icon box 16 from the top and left with its title and subtitle centred on it (13/16 and 11/14 pt), 8 below it; a
+  icon box 16 from the top and left with its title and subtitle centered on it (13/16 and 11/14 pt), 8 below it; a
   row's value ("Ask ⌃⌄") and a prompt's ✕ end their glyphs on the inset.
 - Measured in the 2x snapshots, border pixel to first content pixel (pt, incl. the 0.5 border): Site Controls' favicon
   14.5 left / 18 top before → 17.5 / 17.5 after; the prompts (permission, password, autofill, external app, device
   chooser) 14.5 → 16.5 on all four sides; blocked pop-ups 13.5 → 16.5; history 13.5 → 16.5 (its favicons 18 in, a 16 pt
-  favicon centred in the slot); Cast 14 → 16; Downloads' header caps and rows 16 / 16.
+  favicon centered in the slot); Cast 14 → 16; Downloads' header caps and rows 16 / 16.
 - Placement in the page (`POPOVER_MARGIN`): every panel sits **8** from the card's side and 8 below the page's top
   (the card's top with the address bar in the sidebar and in Little Solara, the toolbar's hairline otherwise); it was 2
   (Site Controls, Zoom, pop-ups, history) or 4 (prompts, Cast, Share) below the top (owner, 2026-10-15). A panel taller
@@ -186,12 +186,12 @@ the same as top"), so if a Dia capture ever differs, the owner's equal insets wi
     the icon (`TabIconProcessorImpl._generateTheme`, a `TabIconTheme`). The icon is drawn at most
     32 px on its long side; its pixels with alpha ≥ 0.975 are averaged (RGB 0…1) and their mean
     Euclidean distance from that mean decides:
-    - ≥ 0.055, colourful → `blur`: the icon through CIGaussianBlur (radius 5), aspect-filled into
-      2.5× the tile, centred. The tile is white 20% (dark) / white (light) under that image at 22%;
+    - ≥ 0.055, colorful → `blur`: the icon through CIGaussianBlur (radius 5), aspect-filled into
+      2.5× the tile, centered. The tile is white 20% (dark) / white (light) under that image at 22%;
       the ring is a 3pt border (`itemStrokeWidth`, backing-aligned) masking the same image over
       black (dark: image at 75% with CIColorControls saturation 2, brightness −0.1) / white (light,
       image at 100%). So YouTube gets a red ring, X a black one.
-    - < 0.055, one colour → `template`: the tile filled with the mean colour, the icon drawn as a
+    - < 0.055, one color → `template`: the tile filled with the mean color, the icon drawn as a
       white template, the ring white with a soft-light compositing filter. A near-white icon (WCAG
       relative luminance > 0.88) gets a black fill and an opaque white 30% ring instead.
     - No theme (a non-RGB image, no opaque pixels, no favicon): fill `TabBackgroundSelectedPrimary`
@@ -209,7 +209,7 @@ the same as top"), so if a Dia capture ever differs, the owner's equal insets wi
   Titles fade out at the trailing edge instead of using an ellipsis.
   - Hover: `TabBackgroundHovered` white 16% (dark) or white 55% (light). An `xmark` close button
     appears on the right, with its own ~22pt hover square.
-  - Pressed: white 31% (dark) or 70% (light). Dia has no pressed colour for the selected tab.
+  - Pressed: white 31% (dark) or 70% (light). Dia has no pressed color for the selected tab.
     Ours also eases the pressed row to scale 0.99 and opacity 0.95 (80 ms in, 180 ms out, ease-out cubic; no scale
     with Reduce Motion), the selected row and split panes included, so a click on the selected tab shows too
     (`sidebar/PressFeedback.tsx`, issue #232).
@@ -242,7 +242,7 @@ corner**, the corner nearest the row.
   recording).
 - Show delay: the controller sleeps **0.5 s** or **0.1 s** before presenting (a flag in the hover source picks which;
   not identified) and **0** when another card is already up. A click or key down dismisses it (local event monitor).
-  The leave delay comes from the hover source's dismissal behaviour; no value in the binary. Both need a recording.
+  The leave delay comes from the hover source's dismissal behavior; no value in the binary. Both need a recording.
 - Ours (`components/sidebar/hoverMotion.ts`): the same curve, spring and scale, anchored at the card's top-left, row to
   row without animation, 0.5 s show delay, 160 ms leave delay. Measured on the native driver's own per-frame values
   (120 Hz, a hidden instance): opacity within 0.007 of Dia's curve over its 12 frames, scale within 0.001 of the spring
@@ -255,7 +255,7 @@ Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the 
   fade, scale or height grow. Every row below the insertion point (the "+ New Tab" row in the recording) starts where
   it was and slides down one pitch, drawn under the new row: it is hidden at first and comes out from beneath its
   bottom edge (Dia's selected fill is translucent, yet nothing shows through it).
-- Close: selection moves to the neighbour at once. The closed row stays in its slot, drops its selected fill at once
+- Close: selection moves to the neighbor at once. The closed row stays in its slot, drops its selected fill at once
   (it shows the hover fill and ✕, the pointer still being on it) and fades out in place. Every row below slides up one
   pitch, starting at the same moment, drawn over the fading row. Hover follows the final layout at once: the row that
   ends up under the pointer shows its hover fill and ✕ while it is still sliding in.
@@ -271,13 +271,13 @@ Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the 
 
 ### Hiding and showing the sidebar (Auto-Hide Tabs, ⌘S; owner recording 2026-10-06, 240 fps)
 
-- The button is the card toolbar's first one (`sidebar.left`, centre 21 from the card's edge: x 211 with a 190
+- The button is the card toolbar's first one (`sidebar.left`, center 21 from the card's edge: x 211 with a 190
   sidebar, x 27 hidden). Clicking it hides the sidebar; clicking it again shows it.
 - Hidden: no sidebar and **no traffic lights** (not even with the pointer on the button, where the close button was).
   The card goes from 6 pt to 6 pt (left and right edges of the page area measured the same way: 6 and 6), top 6; its
   toolbar is the shown state's, starting at the card's edge (toggle 27, back 61, forward 97, reload 131, host 160).
 - Motion: the sidebar, its top row with the traffic lights and the card's left edge move together; the card's right
-  edge and everything anchored to it (extension buttons, Chat) stay. The page is resized as it goes (a centred
+  edge and everything anchored to it (extension buttons, Chat) stay. The page is resized as it goes (a centered
   element moves by half the travel, with Chrome's usual lag of a frame or two). The lights slide out with the sidebar
   and are clipped by the window's edge.
 - Curve: the card's left edge traced through two hides and one show, one spring both ways: response 0.215 s, damping
@@ -316,8 +316,8 @@ shows with the section, not on hover. Button title "Clear", tooltip "Clear unpin
 Clear Tabs; Clear Today"); a toast confirms the clear and offers Undo. Measured on the screenshot (scale from the 36 pt row
 pitch, about 6.3 px/pt): the line is 1 pt at about white 0.08 and starts at the favicons' left edge; it ends 7.5 pt before
 the arrow; the arrow is 7 pt wide and 8 pt tall, 3 pt from the text; "Clear" is semibold with a cap height 0.75 of the
-tab titles' (10 pt beside our 13 pt titles) and ends where the titles do; the line's centre is 25 pt above the first
-row's centre. Ours: `components/sidebar/ClearDivider.tsx`, a 16 pt row with Dia's `divider` colour and secondary text.
+tab titles' (10 pt beside our 13 pt titles) and ends where the titles do; the line's center is 25 pt above the first
+row's center. Ours: `components/sidebar/ClearDivider.tsx`, a 16 pt row with Dia's `divider` color and secondary text.
 What it closes (issue #149): the unselected unpinned tabs (`clearOthers`), keeping the selected tab and, per Arc's 2022
 release notes, tabs playing media. Dia's Close All in the sidebar does the same with the selected tab (the issue's
 recording: of three unpinned tabs, the two unselected close and the selected one stays selected).
@@ -327,7 +327,7 @@ recording: of three unpinned tabs, the two unselected close and the selected one
 - The card is translucent (no black fill). A glass orb (Dia's logo, 68.5pt; see below) sits above the bar.
 - Command bar ≈ 652×108: translucent panel, radius 20, 0.5pt border (see "Command bar panel").
   Row 1: magnifier + placeholder "Ask anything…". Row 2: "+ Add tabs or files" chip, mic, and a
-  round `arrow.up` send button (disabled grey when empty).
+  round `arrow.up` send button (disabled gray when empty).
 - Bar geometry (from `NewTabPageViewController`): width 652 for views 708–1700pt wide (774 above,
   `viewWidth − 20` capped at 616 when narrower), `x = max(midX − width/2, 14)`,
   `top = max(contentH/2 − 158, 100) + 38` below the toolbar (subtract 80 when a flag is set).
@@ -391,7 +391,7 @@ recording: of three unpinned tabs, the two unselected close and the selected one
   - Geometry: with an 810pt field the panel is 888pt, starting about 41pt left of the field's hover pill and ending
     about 40pt past its right end, so the whole field is covered.
   - Text: the address in the panel is at exactly the x and baseline it had in the field (0px shift) and the same size
-    (13pt: `x.com` is 69px wide in both). The text starts 48pt in from the panel's edge; the search icon is centred
+    (13pt: `x.com` is 69px wide in both). The text starts 48pt in from the panel's edge; the search icon is centered
     30pt in.
   - Open: the panel grows out of the field's box. Its left edge per 60fps frame (px at 2x): 676 (the field) → 674, 624,
     609, 601, 598, 595, 594, i.e. 63%, 82%, 92%, 95%, 99% of the way: an exponential ease-out of about 130ms (ours:
@@ -401,9 +401,9 @@ recording: of three unpinned tabs, the two unselected close and the selected one
 ### Logo (orb), measured from a same-screen capture
 
 - Silhouette = Dia's edge-light logo SDF: a circle of diameter s, minus a circle of radius s
-  centred 1.25·s below, smooth-subtracted with k = 0.05·s. Here s = 68.5pt, and the circle's
-  centre is 49.5pt above the bar top. The edge light's `logoFrame` (iconFrame + 5) is that box.
-- Glass shading (dark): about 5% pink-white at the centre, rising Fresnel-like to about 24% at
+  centered 1.25·s below, smooth-subtracted with k = 0.05·s. Here s = 68.5pt, and the circle's
+  center is 49.5pt above the bar top. The edge light's `logoFrame` (iconFrame + 5) is that box.
+- Glass shading (dark): about 5% pink-white at the center, rising Fresnel-like to about 24% at
   the edge, a crisp 1pt rim, and a white highlight at 0.86R, 52° above the +x axis.
 
 ### Intro: power-up band + edge light (recovered from the binary)
@@ -418,9 +418,9 @@ recording: of three unpinned tabs, the two unselected close and the selected one
   logo rim uses the icon frame shifted +5pt in y.
 - The power-up palettes are per hue and separate from the area light's (sRGB, converted to OKLab
   on the CPU). Pink is #FF6AFF #FE8097 #FF9966 #FCE0FF #FA62B1. With the rebrand flag on it is a
-  single theme colour instead.
+  single theme color instead.
 - The band's MTKView layer has a Core Animation `gaussianBlur` filter with inputRadius 24, full
-  resolution and no edge normalisation. This turns the shader's hard stagger bins into soft wings.
+  resolution and no edge normalization. This turns the shader's hard stagger bins into soft wings.
 - `negateAngle` is `showDiaIcon`, which is only on with the rebrand flag, so it is off by default
   even though the logo is visible. Dia's +5° equals −5° in our AreaLight port (verified from a capture).
 - The edge light's `lightColor` is the user's theme `primaryColorPalette.midTone` (0.5 dark /
@@ -469,7 +469,7 @@ and sidebar code. One read-only 2× capture of the user's 1.50.1 window (dark, k
 Release notes: issue 43, "Crafted with care, because you spend your day here." (1.50.0, 2026‑09‑24).
 
 **What Sunglow is.** A brand refresh, not a chrome redesign: a painted brand (by BCNY's An), a Sunglow Yellow app
-icon, and a hand-painted Dia mark per profile colour on the New Tab page. The painted mark is Dia's existing
+icon, and a hand-painted Dia mark per profile color on the New Tab page. The painted mark is Dia's existing
 `ntp-rebrand-enabled` code path (compiled default **false**, flag table `0x100ed7dc0`, definition `0x100ed4428`,
 packed default `0x200`), turned on remotely through LaunchDarkly. It is on for this user: the selected tab in the
 1.50.1 capture is exactly the rebrand tint (below). There is **no Liquid Glass API use** (`NSGlassEffectView`,
@@ -477,7 +477,7 @@ packed default `0x200`), turned on remotely through LaunchDarkly. It is on for t
 what the macOS 26 SDK gives standard AppKit controls, menus and popovers. Our build uses the 27.0 SDK, so it gets the same.
 
 ### Unchanged from 1.49.1 (verified)
-- All 1017 UI colour tokens except the app icon's (see below). Every token in the table above still holds.
+- All 1017 UI color tokens except the app icon's (see below). Every token in the table above still holds.
 - Every Metal shader (window theme, navigation-bar loading indicator, PowerUp library: edge light, halo, power-up,
   area light, chroma power-up, logo volume, unboxing, ripple shimmer, swirl, spotlight): identical IR; only function
   offsets moved.
@@ -487,15 +487,15 @@ what the macOS 26 SDK gives standard AppKit controls, menus and popovers. Our bu
   space, `ConnectAppsUpsellViewModel…reservesLayoutSpace`; it is not a rebrand term), x = `max(midX − w/2, 14)`,
   halo radius 22, edge light, area light, entrance begins +0.25 s from scale 0.99 with the same spring.
   Correction to the 1.49 notes: the height left for the panel below the bar is `contentH − top − 80`.
-- Geometry: the logo's button is 50×50 at `x = (W − 50)/2`, `y = barTop − 74`; the icon view is 84×84 centred 1pt
-  below the button centre, i.e. **48pt above the bar top**. Same constants in 1.49.1; our 68.5pt / 49.5pt logo box was
+- Geometry: the logo's button is 50×50 at `x = (W − 50)/2`, `y = barTop − 74`; the icon view is 84×84 centered 1pt
+  below the button center, i.e. **48pt above the bar top**. Same constants in 1.49.1; our 68.5pt / 49.5pt logo box was
   measured from the screen, not read from these.
 
 ### Changed in 1.50 (delta list)
 1. **App icon.** `AppIcon_Assets/Color-2` p3 (1, 1, 1) → (0.984, 0.976, 0.941); `Color-3` p3 (0.900, 0.900, 0.948) →
    (0.933, 0.925, 0.890): the plate is now cream (sRGB ≈ #FBF8EF top → #EEEBE2 bottom), with a painted Sunglow
    Yellow mark (median sRGB (252, 201, 47), range (251, 197, 45)…(252, 218, 59)). In the 256px icon the plate spans
-   25…230 and the mark 52…202 × 65…185. Same logo shape. The Beta/Canary/Dev/Pro icon colour sets left the main catalog.
+   25…230 and the mark 52…202 × 65…185. Same logo shape. The Beta/Canary/Dev/Pro icon color sets left the main catalog.
 2. **Painted New Tab mark** (rebrand). `diaIconView` is a `LogoParticleView` whose factory (`0x102b6e78c`) takes
    `renderStyle = isRebrandEnabled`: the particle MTKView drops to 30 fps and alpha 0 (it still feeds uniforms) and a
    `LogoTexturedMaskView` on top draws:
@@ -505,7 +505,7 @@ what the macOS 26 SDK gives standard AppKit controls, menus and popovers. Our bu
    - texture opacity `u ≤ 0 ? 1 : 1 − 0.9·min(u, 1)` (uniform +0x14);
    - paintings: `BoostBrowser_PowerUp.bundle/Contents/Resources/{neutral,red,orange,yellow,green,blue,pink,purple}{,-dark}.png`,
      1200×1200 RGBA at 216 dpi (loose files, dated Sep 11). Picked by the theme's palette name (`0x102b6ac70`:
-     0 neutral … 7 purple), with `-dark` when the view's appearance best-matches DarkAqua; neutral themes use grey.
+     0 neutral … 7 purple), with `-dark` when the view's appearance best-matches DarkAqua; neutral themes use gray.
      Each is a different technique: neutral horizontal brush strokes on canvas, red vertical wood-like streaks, orange
      flat matte, yellow soft impasto, green sweeping strokes, blue cloudy wash, pink mottled canvas, purple canvas
      with soft light.
@@ -525,7 +525,7 @@ what the macOS 26 SDK gives standard AppKit controls, menus and popovers. Our bu
 3. **Command bar shadow** (rebrand, only without the daylight effect; new applier `0x104e3cf04`): two layer shadows,
    black 0.08 radius 2 offset (0, 0.5), and black 0.04 radius 1 offset (0, 2), spread 0. The panel itself
    (`AssistantPanelRootView`) is unchanged.
-4. **Power-up band** (rebrand): one theme colour instead of the per-hue palette: the palette's primary colour, or
+4. **Power-up band** (rebrand): one theme color instead of the per-hue palette: the palette's primary color, or
    sRGB (0.502, 0.502, 0.502, 0.65) for neutral. `CommandBarPowerUpView` now takes `cornerRadius` (NTP passes 20; halo
    uses +2 = 22, as before). With the rebrand the area light and edge light are **off**, so the band runs at speed
    1.0 and the halo is shown: see "1.50 New Tab intro" below.
@@ -543,9 +543,9 @@ what the macOS 26 SDK gives standard AppKit controls, menus and popovers. Our bu
    (`0x103d9e9a4`, key `activityRotation`). The view is unflipped, so −2π is clockwise on screen (1.49 turned
    counter-clockwise). It's TabUI's private `ActivitySpinnerView` (`0x103dab0bc`): a `trackLayer` and a `ringLayer`
    (CAShapeLayers, no fill, line width 1.5) on an ellipse in the bounds inset 1.25; the ring has round caps and
-   strokeEnd 0.72; colours `secondaryLabelColor` (ring) and the same at alpha 0.18 (track), resolved per appearance.
+   strokeEnd 0.72; colors `secondaryLabelColor` (ring) and the same at alpha 0.18 (track), resolved per appearance.
    `TabContentView` shows it as its trailing affordance when the view model's `showsActivitySpinner` is set and the
-   row is at least 48 pt wide: 12 × 12 at x = width − 8 − 12, centred vertically (`0x103d9fea4`).
+   row is at least 48 pt wide: 12 × 12 at x = width − 8 − 12, centered vertically (`0x103d9fea4`).
 9. Tab row background change fades 0.3 s easeOut (new, `0x103dbce4c`); an 82pt width gate and a 17.5pt bottom inset
    belong to the Tasks sidebar style (`TabGroupSidebarStyle.tasks`, AI, off by default).
 10. Settings: the Appearance pane (`better-days-appearance-settings-enabled`: Light/Dark/Automatic, app icon options)
@@ -579,10 +579,10 @@ Implemented in `apps/browser/src/components/layout/profilePager.ts` (+ `swipeMot
   top tab strip too (with a content fade on settle, `settleUsesContentFade`, not decoded).
 - **Space switcher** (sidebar footer, `spaces-ui-enabled` defaults **on** in 1.50.1: flag word 0x201):
   `SidebarContainerFooterView` is 41 pt tall (`0x1054263c8`), library cell at the left, overflow button 42 pt wide
-  3 pt from the right; the `SpaceSwitcherView` band is 28 pt tall, centred in the footer above its bottom 3 pt
-  (`0x10541d014`), 31 pt in from each side when those buttons show. `SpaceSwitcherLayout`: 12 pt per item, centred,
+  3 pt from the right; the `SpaceSwitcherView` band is 28 pt tall, centered in the footer above its bottom 3 pt
+  (`0x10541d014`), 31 pt in from each side when those buttons show. `SpaceSwitcherLayout`: 12 pt per item, centered,
   at most 84 pt (7 items) before it scrolls with the edge items scaled 0.75–1 (`0x10540e184`).
-  `SpaceSwitcherItemView`: a 6 × edgeScale pt round dot centred in its cell (`0x10540cb78`), `labelColor` at alpha
+  `SpaceSwitcherItemView`: a 6 × edgeScale pt round dot centered in its cell (`0x10540cb78`), `labelColor` at alpha
   **0.85** selected, **0.4** hovered, **0.2** otherwise (`0x10540cc90`). Clicking a dot focuses that space
   (`SpaceFocusChangedSource.switcherDotClick`).
 - **Sidebar profile indicator** (`SidebarProfileIndicatorButton`, sizing `0x10542eea8`): the header is a stack
@@ -602,7 +602,7 @@ isDaylightEffectEnabled}` (state bytes +0x5a/+0x5b/+0x5c; NTPVC applies it in `0
 So on 1.50.1 with the rebrand rolled out:
 - **No area light** (`NewTabAreaLightView` is removed) and **no edge light**. The page is perfectly flat once the
   band has faded: at t ≥ 3.25 s every pixel around the bar equals the page background.
-- `CommandBarPowerUpView(colors: [theme colour], direction: 0, showHalo: !isAreaLightEnabled, cornerRadius: 20,
+- `CommandBarPowerUpView(colors: [theme color], direction: 0, showHalo: !isAreaLightEnabled, cornerRadius: 20,
   origin: 0.5)` (`0x104e48080`), added at the bottom of the NTP view. **Speed** = `isAreaLightEnabled ? 1.25 : 1.0`
   (`0x104e480bc`), so **1.0**; the speed setter (`0x102b6202c`) also sets the halo's.
 - The command bar panel uses the opaque `AssistantPanelUIBase/Background` (dark sRGB 0.176 = #2D2D2D, light
@@ -614,36 +614,36 @@ So on 1.50.1 with the rebrand rolled out:
 starts at time 0.73 s and ends at 3.4 s. Capture (band region 300–600pt below the bar, mean delta over the page,
 dark): rises within 1 frame, peaks at t = 0.10–0.20 s (≈ +9.3, +3.0, +4.6 RGB levels over (44, 40, 41)), the head
 passes the bar at ≈ 0.3 s, plateau ≈ +5 levels from 0.4 to 1.2 s, then a linear fade to 0 at ≈ 3.25 s (last visible
-levels). The band covers the page from ≈ 125pt above the bar to ≈ 20pt above the bottom edge. Colour fitted from the
+levels). The band covers the page from ≈ 125pt above the bar to ≈ 20pt above the bottom edge. Color fitted from the
 capture: **#B5556B** (the delta is `α·(c − page)` with the same α in all three channels).
 
 **Halo** (`HaloView`, `haloVertex`/`haloFragment` in the PowerUp metallib):
 - View frame = `haloFrame` (the command bar) outset by 50 (`CommandBarPowerUpView.layout`, `0x102b62f0c`); set by
   CBPU init: inset 50, delay 0.18, cornerRadius = bar radius + 2 = 22. HaloView defaults: speed 1, direction 0,
-  cornerRadius 18, fadeOutStart 1.0, fadeOutDuration 0.2, colours #FF844F → #F773A5 (replaced by the theme colour).
+  cornerRadius 18, fadeOutStart 1.0, fadeOutDuration 0.2, colors #FF844F → #F773A5 (replaced by the theme color).
 - Clock: `time += 1/preferredFramesPerSecond` per drawn frame (60 fps); paused once time > 2. Pipeline bgra8Unorm,
-  no blending (the fragment writes premultiplied colour).
-- Fragment (buffers: 0 resolution, 1 direction, 2 two float4 colours (sRGB), 3 isDark (bool), 4 time, 5 speed,
+  no blending (the fragment writes premultiplied color).
+- Fragment (buffers: 0 resolution, 1 direction, 2 two float4 colors (sRGB), 3 isDark (bool), 4 time, 5 speed,
   6 delay, 7 fadeOutStart, 8 fadeOutDuration, 9 inset, 10 cornerRadius):
   - `p = (uv − 0.5)·2`, `p.x ·= w/h`; half size `(1 − 2i/w)·aspect, 1 − 2i/h` (for w > h);
     `r = cornerRadius / min(w − 2i, h − 2i)`; `dist = |length(max(|p| − half + r, 0)) − r|`.
   - `t = 0.8·speed·time − delay`; `sweep = 1.25·(1 − 2^(−10t))`.
   - `around`: angle of `p/half` from +x, + direction·π/2, as a fraction of a turn `a`;
-    `around = 2·fold(fmod(1.25 − a, 1))` (fold: x > 0.5 → 1 − x), so 0 at the bottom centre, 1 at the top.
+    `around = 2·fold(fmod(1.25 − a, 1))` (fold: x > 0.5 → 1 − x), so 0 at the bottom center, 1 at the top.
   - `arc = smoothstep(clamp(1 − |around − sweep|/0.22))`; `line = smoothstep(clamp(1 − dist/0.025))·arc·(dark ? 0.4 : 1)`.
   - `nz = simplex(p·0.5, time) + 0.5` (3D simplex, Hoskins hash33 (.1031, .11369, .13787, +19.19), kernel
     `max(0.6 − d², 0)^4`, ×31.316); glow width `mix(0.1, 0.2, nz)`; `g1 = clamp(1 − dist/(0.95·(1 − t)))`,
     `g2 = clamp(1 − dist/width)`; `glow = (g1·g2)²·(3 − 2g1)(3 − 2g2)·(dark ? 0.1 : 0.12)·arc`.
   - `alpha = mix(c0.a, c1.a, nz)·clamp(glow + line)`, faded by `1 − clamp((t − 1)/0.2)`;
     `rgb = clamp(mix(c0, c1, nz) + line)·alpha`.
-- Timing (delay 0.18 at speed 1): nothing until time 0.225 s; the lit arc starts at the bottom centre, runs up both
+- Timing (delay 0.18 at speed 1): nothing until time 0.225 s; the lit arc starts at the bottom center, runs up both
   sides and meets at the top; faded out by time 1.725 s. Capture (mean of 6 intros, a >20-level line 1pt outside
   the bar): bottom **0.225 ± 0.007 s**, sides peak ≈ 0.30 s (+36, +20, +23), top **0.376 ± 0.007 s** (peak +61, +36,
   +42 at 0.40–0.45 s), top gone at **0.529 ± 0.006 s**. The line sits 1pt outside the bar edge, half under the bar.
 
-**Compared with 1.49** (user-dia.mov): 1.49 showed the multi-colour pink band at speed 1.25, then a persistent
+**Compared with 1.49** (user-dia.mov): 1.49 showed the multi-color pink band at speed 1.25, then a persistent
 magenta area-light haze around a translucent bar (breathing, 60 s), the edge light tracing the border from below,
-and the glass orb. 1.50.1 shows a single-colour band at speed 1.0, a halo that runs around the opaque bar once, the
+and the glass orb. 1.50.1 shows a single-color band at speed 1.0, a halo that runs around the opaque bar once, the
 painted mark, and a completely flat page after ≈ 3.25 s.
 
 **Page background.** In the 1.50.1 capture the NTP page around the bar is (43, 37, 39) at the top to (46, 42, 42) at
@@ -662,14 +662,14 @@ the recording's key/inactive difference is the blur's active output vs its inact
 1174.5 and y 375.5 … 487.5 in the 1512 × 949 window (card 190 … 1505 × 6 … 942), i.e. 652 × 112, 1 pt right of and
 1 pt below `x = midX − w/2`, `top = contentH/2 − 158 + 38` for the card's content area (1315 × 895).
 
-**Painted mark, fitted.** Fitting the orb outline (circle of diameter s minus a circle of radius s centred 1.25·s
+**Painted mark, fitted.** Fitting the orb outline (circle of diameter s minus a circle of radius s centered 1.25·s
 below, smooth-subtracted with k = 0.05·s) to the capture's silhouette: s = 76.5 (≈ 76.1 after the method's bias,
-checked on our own render), centre x 848.5, y 327.0 (≈ 326.9), i.e. **s = 76 = 19/21 of the 84 pt icon view** (the
-shape layer's 19/21 constant) with its centre **48.6 pt above the bar top** and 1 pt right of the page centre, like
+checked on our own render), center x 848.5, y 327.0 (≈ 326.9), i.e. **s = 76 = 19/21 of the 84 pt icon view** (the
+shape layer's 19/21 constant) with its center **48.6 pt above the bar top** and 1 pt right of the page center, like
 the bar. 1.49's glass orb measured 68.5 / 49.5.
 
-**Inside the bar** (same capture, dark): magnifier centre 30.5 pt below the bar top; the chip (31 pt between its
-border lines, 441.5 … 472.5) centred 30.5 pt above the bar bottom, with the mic and send button on the same line.
+**Inside the bar** (same capture, dark): magnifier center 30.5 pt below the bar top; the chip (31 pt between its
+border lines, 441.5 … 472.5) centered 30.5 pt above the bar bottom, with the mic and send button on the same line.
 The magnifier sits at x ≈ 30 pt from the bar's left edge and is about 14 pt wide; the placeholder is ~5 % narrower
 than ours at the same cap height.
 
@@ -699,14 +699,14 @@ than ours at the same cap height.
 - The sidebar width defaults to **190** (`PlatformWindowViewController`, `0x1055fef34`: 190 when no width is stored,
   else the stored one) and the page card starts at the sidebar's width. A 2× capture of the user's Dia (2026-09-26,
   inactive, dark) has its card at x 191 and rows at 6 … 185: that window's sidebar is 191 wide (resized), with the
-  same 6 pt insets. Rows 34 tall (hairline at y 212.0 and 245.5), tiles 54 … 95, favicon, title and colours identical
+  same 6 pt insets. Rows 34 tall (hairline at y 212.0 and 245.5), tiles 54 … 95, favicon, title and colors identical
   to Solara's to the pixel.
-- Header (a horizontal stack, spacing 2, 6 after the window controls; items 34 tall): Dia's traffic lights are centred
+- Header (a horizontal stack, spacing 2, 6 after the window controls; items 34 tall): Dia's traffic lights are centered
   at x 24.75 / 47.75 / 70.75, y 26.75.
   - `SidebarProfileIndicatorButton` (`0x10542e234` …): the profile name, 13 pt semibold (NSFontWeightSemibold), single
     line, truncating the tail; contentInsets 9 either side (`0x10542e760`), background radius 10 on hover/press. It
     shows the name whole, or cut short when at least 52 pt fit, else `person.fill` 14 pt semibold in a 32 pt button
-    (`0x10542eea8`). Colour (`0x104d7a538`): the palette's action colour mixed 0.6 toward white (dark) / 0.4 toward
+    (`0x10542eea8`). Color (`0x104d7a538`): the palette's action color mixed 0.6 toward white (dark) / 0.4 toward
     black (light); `labelColor` in incognito; no key-window or hover change. Capture: "Personal" ink at x 94 … 147,
     y 22 … 32, Display P3 (236, 209, 215) for the pink profile. Tooltip "Switch between profiles"; the click opens a
     menu of the profiles (checkmark, swatch, shortcuts), New Profile, Edit Profiles…; none in incognito.
@@ -716,10 +716,10 @@ than ours at the same cap height.
     or finished; no timeout), removed from the stack when it empties (Clear Downloads). No show/hide animation; the
     0.1 s / 1.3 constants are the new-download "magnet" fly-in.
 - `TabView` (`0x103dbd2f4`): the background is the row inset (1.5, 0, 1.5, 0), i.e. 34 tall; `TabShapeView` radius
-  `min(h/3, 10)`, continuous corners. `TabContentView` (`0x103da24c4`): favicon 16 × 16 at x 9, centred; title at
+  `min(h/3, 10)`, continuous corners. `TabContentView` (`0x103da24c4`): favicon 16 × 16 at x 9, centered; title at
   favicon.maxX + 7 (+ 4 with a badge slot); trailing affordance at W − 8 − size.
 - **Scroll edge** (1.53.0 binary): `TabList.TabListView` lays out the pinned dock (`TabDockView`) at its top, fixed, then a
-  `topSeparatorView` (an `ARCUI.BackgroundColorView`, colour `Primitives/Primary1200`: Display P3 black 0.09 light, white
+  `topSeparatorView` (an `ARCUI.BackgroundColorView`, color `Primitives/Primary1200`: Display P3 black 0.09 light, white
   0.09 dark) at (0, dock.maxY + 4, full width, **1 pt**), then the tab list's scroll view from dock.maxY + 5 with a 1 pt
   top content inset (`SidebarLayoutGuide.tabListTopInset`); without a dock the line sits at the header's foot. The header
   doesn't scroll either. The line starts at alpha 0; on every clip-view bounds change it targets 1 when the visible
@@ -739,25 +739,25 @@ dark, inactive, plum theme, 1512 × 949: two pinned tabs (X, YouTube), "(1) Home
 classes are `TabStrip.TabStripViewController`, `TabStripDockView` (the pinned group) and `TabUI.TabShapeView`
 (`hasInnerCorners`, `cornerRadiusFraction`); the numbers below come from the pixels, not the binary.
 - **Strip and card.** The card starts at y **42**; its left, right and bottom insets are **6** (not the sidebar
-  layout's 7), radius 10. Everything in the strip centres on **y 21**.
-- **The window buttons move** in this layout: centres (20.75, 20.75), (43.75, 20.75), (66.75, 20.75), 4 pt left of
+  layout's 7), radius 10. Everything in the strip centers on **y 21**.
+- **The window buttons move** in this layout: centers (20.75, 20.75), (43.75, 20.75), (66.75, 20.75), 4 pt left of
   and 6 pt above the sidebar layout's (24.75, 26.75).
 - **Pinned group** (`TabStripDockView`): one container at x **86** (12.25 after the zoom button), y 5 … 37 (32 tall),
   **70** wide for two tabs (n × 34 + (n − 1) × 2), radius 10. Fill white 0.10 (`TabDockItemRestingBackground`) with a
   0.5 pt inner stroke of white 0.14 over it (`TabDockItemRestingStroke`); light mode has the same tokens (black 0.05 /
-  0.18). Icons 16 pt, centred at x 102.75 and 138.75 (36 apart, 20 pt between icons) and y 21. No box per icon and
+  0.18). Icons 16 pt, centered at x 102.75 and 138.75 (36 apart, 20 pt between icons) and y 21. No box per icon and
   **no badge**: nothing marks picture in picture or media in the strip (`TabBadgeView` and `PinnedTabBadgeView` are
   unread counts). The group scrolls with the tabs.
 - **Tabs** are **173** wide on a **177** pitch (4 apart); the first starts 4.5 after the pinned group (x 160.5).
-  Favicon 16 at x + 9.5, centred on y 21; the title starts 7 after it, SF **12 pt regular**, `TabTitleSelected` white 1
+  Favicon 16 at x + 9.5, centered on y 21; the title starts 7 after it, SF **12 pt regular**, `TabTitleSelected` white 1
   or `TabTitleUnselected` white 0.78 (measured (213, 210, 211) on (65, 50, 53)). Unselected tabs have no background.
 - **Selected tab**: attached to the card, with no gap and no border between them. Filled from y **3** down to the card
-  (39 tall) with the card's own fill and the toolbar's website colour over it (Reddit: (15, 17, 19) in both). Top
+  (39 tall) with the card's own fill and the toolbar's website color over it (Reddit: (15, 17, 19) in both). Top
   corners radius **10** (the same profile as the card's corner). At its foot, concave flares of radius **15** (a
   circular fit, 0.15 px rms) curve out into the card's top edge on both sides, from y 27 to 42. A 0.5 pt rim sits just
   outside the fill: white **0.23** along the top, fading down the sides (0.15 at y 12, about 0.03 at y 28, gone where
   the flares start).
-- **"+"**: a plain `plus` glyph, 10 pt wide, centred at (530.5, 20.5): a 32 pt button 4 after the last tab, white ~0.55.
+- **"+"**: a plain `plus` glyph, 10 pt wide, centered at (530.5, 20.5): a 32 pt button 4 after the last tab, white ~0.55.
 - Not captured (it would take clicking in Dia): hover and pressed states in the strip, a selected pinned tab, split
   tabs, and light mode (groups: below). Solara uses the sidebar's tokens there (`TabBackgroundHovered` 0.16 / 0.55,
   `TabBackgroundPressed` 0.31 / 0.70, in a 32 pt row with radius 10).
@@ -773,13 +773,13 @@ theme, a group "X" of five tabs after the pinned dock. Positions in points from 
   (40, 26, 29)). With the pointer on the chip the whole container brightens by ~5 levels (TabGroupNeutralBackgroundHovered,
   0.12); hovering a member doesn't.
 - **Chip**: the group glyph (a tab seen edge-on, two slivers behind it: 13 × 10.6, white ~0.3) 8.5 in, then the name 12.5
-  after it, SF 12 semibold, white when the group holds the active tab, else the unselected title colour; 8 after the name.
+  after it, SF 12 semibold, white when the group holds the active tab, else the unselected title color; 8 after the name.
   "X" gives a 49 pt chip.
 - **Collapsed**: chip only (49 wide), or, when the window's active tab is a member, that tab alone right after the chip
   (6.5 after it, x 289, attached to the card like any selected tab) and the container ends 4.5 after the tab. No divider.
-- **Expanded**: a 0.5 pt divider 1 after the chip (white ~0.16, 15 tall, centred on y 21), the members from x 289 at full
+- **Expanded**: a 0.5 pt divider 1 after the chip (white ~0.16, 15 tall, centered on y 21), the members from x 289 at full
   width on a 176–177 pitch (favicons 352–353 px apart), then a divider 2.25 after the last member and Close Group: a 7 pt ✕
-  (white ~0.42) centred 13.5 after that divider; the container ends 14.5 after its centre (30.25 after the last member).
+  (white ~0.42) centered 13.5 after that divider; the container ends 14.5 after its center (30.25 after the last member).
   Unselected members have no background; hovered, the usual hover fill and ✕.
 - **Expand / collapse** (chip click): the members slide out of the first member's slot to their places (every member moves
   from x 289; the active one travels 528.5 pt to its slot) and fade in by half-way, while the container and the tabs after
@@ -808,16 +808,16 @@ right split"; the numbers are from the pixels.
 - **In the strip** a tab follows the pointer and the others trade places; the window never moves, even with one tab.
 - **Leaving the strip**: the targets came when the pointer was 26 pt below the strip (not at 5.5). Both slide in from
   outside the card's edges in ~0.11 s (1.375 → 1.483 s), the tab leaves the strip (the tabs after it close up, nothing
-  is selected), and under the pointer the tab becomes a small window: **209 × 109.5**, centred on the pointer, 0.5 pt
+  is selected), and under the pointer the tab becomes a small window: **209 × 109.5**, centered on the pointer, 0.5 pt
   light rim, a shadow, traffic lights in its title bar (a picture of the window).
-- **Targets at rest**: centred on the card vertically, **198.5 × 333.5** (0.132 × 0.383 of the card), **37.5** in from
+- **Targets at rest**: centered on the card vertically, **198.5 × 333.5** (0.132 × 0.383 of the card), **37.5** in from
   its side. Radius ~20. Fill (38, 31, 28) on the page's (31, 26, 28), a lighter 0.5 pt edge (49, 44, 41), and a dashed
   rounded rect **9.5** inside: **6 pt dashes, 6 pt gaps, ~1.75 pt** wide, (55, 48, 46). The glyph
   (`rectangle.lefthalf.filled` / `righthalf`, ~19 pt) above the title, SF 13 semibold, white ~0.6 ((166, 159, 156)).
 - **Grown**: right after they've slid in (1.508 → ~1.625 s) both grow to **322 × 532** (0.215 × 0.611), 30 from the
-  side, still centred; no overshoot.
+  side, still centered; no overshoot.
 - **Under the dragged card**: a target the card overlaps (the pointer itself was 32 pt outside it, 1.683 s) grows to
-  **362 × 600** (0.241 × 0.69) and leans toward the pointer: its centre moves **43 %** of the way to the pointer's x
+  **362 × 600** (0.241 × 0.69) and leans toward the pointer: its center moves **43 %** of the way to the pointer's x
   (1.70 → 1.83 s). Fill turns the accent at ~0.15 ((54, 35, 35) here, the owner's red theme), the dashes become the
   accent, **7 pt dashes / 7 pt gaps**, ~2 pt; glyph and title the accent ((200, 70, 98)).
 - **Drop** (2.27 s): the page splits, the new pane sliding in on the dropped side; the strip shows the split as one tab.
@@ -825,7 +825,7 @@ right split"; the numbers are from the pixels.
 - **Let go over the page away from a target** (rec1027, 4.475 s): the tab opens in a window of its own. A window
   grows out of the card at the pointer to its full size in **~0.2 s** (4.475 → 4.675 s) and takes focus; a split's pane
   leaves its split that way.
-- **Outside the window** (rec1026, 1.742 s; two Dia windows): the same card, centred on the pointer, drawn over
+- **Outside the window** (rec1026, 1.742 s; two Dia windows): the same card, centered on the pointer, drawn over
   everything (the menu bar too), so it's a window of its own. Over another window's tab strip it turns into a
   tab-shaped pill in ~0.05 s (1.758 → 1.808 s) and that strip makes room for it; let go there, the tab joins it.
 - **The pill** (rec1027, 1.483 s): for a frame or two before the card, the tab itself (its strip look, title and ✕)
@@ -843,22 +843,22 @@ right split"; the numbers are from the pixels.
 - **Reordering, frame by frame** (the owner's 60 fps phone video of Dia and Ardia 0.2.22, 2026-10-02; frame strips in
   `output/tab-drag/`): Dia's tab moves with the pointer from the first move and stays within about a frame of it
   (motion blur limits the reading); it's opaque, so the tab it passes doesn't show through. Once its leading edge
-  passes a neighbour's centre, the neighbour slides into the place it left while the drag goes on: 91 % of the way
+  passes a neighbor's center, the neighbor slides into the place it left while the drag goes on: 91 % of the way
   in 43 ms, 97 % in 60, all of it by ~76 ms (a critically damped spring, ω ≈ 90 rad/s, ~0.07 s). Let go at its
   place, nothing else moves. Ardia 0.2.22 in the same video: the tab stood still for 20 frames (333 ms) after the
-  pointer set off (the drag picture's window snapshot, 0.13–0.35 s of the main thread at the press), the neighbours
+  pointer set off (the drag picture's window snapshot, 0.13–0.35 s of the main thread at the press), the neighbors
   never moved (the dragged tab, at 0.92 opacity, slid over them), and the drop snapped everything in one frame. Now
   (`layout/stripReorder.ts`): the snapshot waits until the tab leaves the strip and costs ~17 ms (the window at
-  half a point a pixel, the pill alone at 2x); the neighbours slide on that spring; the drop is one store update and
+  half a point a pixel, the pill alone at 2x); the neighbors slide on that spring; the drop is one store update and
   one Chrome strip command, and the tab settles into its place on the same spring, the store moving it as it lands.
-  The dragged item draws over its neighbours: React Native macOS's `zIndex` sets the layer's zPosition, which AppKit
+  The dragged item draws over its neighbors: React Native macOS's `zIndex` sets the layer's zPosition, which AppKit
   ignores between sibling views, so `raiseView` (packages/shell) puts its view and layer last among its siblings while
   dragged. The sidebar's rows make room and close up on the same spring, and the dropped row's ghost settles into its
   place before the row shows. With nothing pinned, the pin target is an overlay in room the sidebar already has (the
   band above the first row, or over the address field) instead of a grid that pushed every row down ~45 pt as a drag
   began and back up as it ended.
-- **In the strip** (both layouts): an item takes its neighbour's place once its leading edge passes the neighbour's
-  centre, so a wide group passes a narrow tab. Not in the recordings, matched to Dia's behaviour: a group moves
+- **In the strip** (both layouts): an item takes its neighbor's place once its leading edge passes the neighbor's
+  center, so a wide group passes a narrow tab. Not in the recordings, matched to Dia's behavior: a group moves
   by its chip; a tab dragged into the pinned tabs (its leading edge past the last one's middle) is pinned there, and a
   pinned tab dragged out among the tabs is unpinned.
 - **0.2.18's bug** (rec1026, 11–17.8 s): pressing a tab and dragging moved the whole window. No view in the tab
@@ -874,7 +874,7 @@ right split"; the numbers are from the pixels.
   Show Bookmarks Bar ▸ (Always, On New Tab Only, Never, —, Toggle Bookmarks Bar ⇧⌘B), —, Show Full URL, —, Zoom to
   Actual Size ⌘0, Zoom In ⌘+ (hidden ⌘= alternate), Zoom Out ⌘-, —, Enter Full Screen, —, Developer ▸ (Developer
   Tools ⌥⌘I, hidden F12 alternate). Same as 1.49.1.
-- Help (`0x10001b448`): Chat with Support (help centre, probably help.diabrowser.com), Video Tour
+- Help (`0x10001b448`): Chat with Support (help center, probably help.diabrowser.com), Video Tour
   (www.diabrowser.com/tour), Status (status.diabrowser.com), —, Copy Diagnostics, Record Performance Issue… (titled
   "Cancel Performance Recording" while a trace runs, `0x100856100`), Export Sync Log… (behind an internal Bool of the
   menu builder, `0x10001c468`). AppKit adds "Send Dia Feedback to Apple" and the search field. No gating otherwise.
@@ -915,9 +915,9 @@ to these numbers (`chrome/browser/ardia/pip/` (`engine/chromium`)); a same-crop 
 - **Corner buttons**: back to tab **28 × 28** and close **29 × 28**, both **12** from the top and their side, radius
   ~**6**, white **9 %** (about 13 % under the pointer). Back to tab is a **↖** of 1 pt white lines: two 8 pt arms and the
   diagonal, its corner 10.5 pt into the button. Close is a **×** of 1 pt lines in a 9.5 pt square, 9.5 pt in.
-- **Origin** (`www.youtube.com`): SF **13 pt regular**, white, centred on the window, no pill and no favicon; x-height
-  7 pt, baseline **30** from the top (level with the buttons' centre, 26).
-- **Play/pause**: no circle. Pause is two white capsules **7 × 42**, **10** apart (24 wide), centred (0.5 pt below
+- **Origin** (`www.youtube.com`): SF **13 pt regular**, white, centered on the window, no pill and no favicon; x-height
+  7 pt, baseline **30** from the top (level with the buttons' center, 26).
+- **Play/pause**: no circle. Pause is two white capsules **7 × 42**, **10** apart (24 wide), centered (0.5 pt below
   the middle). No skip ±10 s, time, volume, captions or minimize.
 - **Progress bar**: a **5 pt** capsule from x 12 to width − 12, its bottom **9** above the window's; played part white,
   the rest white ~**27 %**.
@@ -931,7 +931,7 @@ to these numbers (`chrome/browser/ardia/pip/` (`engine/chromium`)); a same-crop 
 | Scrim (content ×) | 0.645 | 0.647 |
 | Back to tab button / glyph | 12, 12, 28 × 28 / ↖ 22.5–30.5 | same / same |
 | Close button / glyph | 427–456 × 12–40 / × 436.5–446, 21.5–31 | same / same |
-| Origin | 13 pt regular, centred, baseline 30 | same (Chrome's label, measured on digits) |
+| Origin | 13 pt regular, centered, baseline 30 | same (Chrome's label, measured on digits) |
 | Pause | 222–246 × 111–153 | same |
 | Progress bar | 12 … w − 12, 249–254 | same |
 | Controls fade in | ~200 ms ease-in-out | ~190 ms ease-in-out |
@@ -940,7 +940,7 @@ to these numbers (`chrome/browser/ardia/pip/` (`engine/chromium`)); a same-crop 
 Solara differs in: the origin includes a port when the page has one (Chrome's formatting), and the play glyph
 (paused) and replay glyph weren't in the recording, so they're a rounded triangle of the same height and Chrome's icon.
 Solara also has ±10 s buttons, which Dia doesn't (a user's request, issue #129): Chrome's replay 10 / forward 10 icons,
-32 pt and bare white like the pause glyph, centred 76 pt either side of it; ← and → seek too. Chrome hides the controls
+32 pt and bare white like the pause glyph, centered 76 pt either side of it; ← and → seek too. Chrome hides the controls
 2.5 s after the pointer stops; Solara keeps them while the pointer rests on one of its buttons or the progress bar, so a
 second click on a still pointer (pause, then play) isn't lost as a window drag.
 
@@ -1044,13 +1044,13 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   dark, 2x, the bar about 37 pt tall). Left to right: an "i" (info) where the site-controls / lock button sits; the URL as
   `http://localhost:5050`, the full URL with the scheme, in a monospaced font (SF Mono-like, about 13 pt, light text);
   the whole bar covered in thin, low-contrast diagonal stripes going up to the right at about 45°, light over the bar
-  colour, period about 10–12 pt, with nothing else on the bar changing colour. On the right, groups separated by thin
+  color, period about 10–12 pt, with nothing else on the bar changing color. On the right, groups separated by thin
   vertical dividers: copy link | two capture buttons (a photo-style icon, a camera) | terminal, globe, crosshair (console,
   network, inspect) | extensions, pinned extensions, split view. No reload button or chevron on that bar. So Developer
   Mode does change the URL display, which corrects the "Full URL" item above for developer tabs.
 - **Ours.** Stripes: a pre-drawn image (36 pt period at 45°, falling to the right, equal 18 pt bands and gaps (owner, 2026-10-24; first 12 pt rising, then this); white at 2 %
   on a dark bar, black at 1.8 % on a light one, which keeps the bar's mean brightness where the earlier 1 pt lines at
-  7 % / 6 % had it: 21.6 vs 21.0 dark, 253.0 vs 253.2 light, 0–255), chosen from the bar's text colour so a website-coloured bar gets the right one), behind the toolbar band
+  7 % / 6 % had it: 21.6 vs 21.0 dark, 253.0 vs 253.2 light, 0–255), chosen from the bar's text color so a website-colored bar gets the right one), behind the toolbar band
   and the auto-hide band; no per-frame work. URL: the full URL with the scheme in the monospaced system font, no
   trailing "/" on a bare origin, in the toolbar and sidebar fields. `info` in place of the lock; the three DevTools
   buttons as their own group between dividers. The hover-only buttons (bookmark, split view, Site Controls) sit left of every persistent item and keep their space at rest, so nothing in the field moves when the pointer enters or leaves. Not matched: Increase Contrast, and Arc's capture buttons.
@@ -1069,14 +1069,14 @@ Neither browser was launched. **Recovered** means it is in the binary; **inferre
   selected; Return resolves the text with the command bar's rules (`resolveInput`: a URL, host:port, or a search) in
   the same tab; Esc, a click elsewhere or another tab ends it with the URL unchanged. No suggestions and no new-tab
   modifier, as in Arc. Ordinary tabs keep the command bar.
-- **Toolbar colour (owner, 2026-10-24, matching Arc).** A Developer Mode tab's toolbar ignores the website colour (the
+- **Toolbar color (owner, 2026-10-24, matching Arc).** A Developer Mode tab's toolbar ignores the website color (the
   "extend website colour" tint) and uses the window's own palette for the appearance, so the stripes sit on a dark bar
-  in dark mode even over a white page with `theme-color: #ffffff`; ordinary tabs keep the site colour. It applies to the
+  in dark mode even over a white page with `theme-color: #ffffff`; ordinary tabs keep the site color. It applies to the
   card toolbar, the auto-hide strip and the top-strip layout's band, and eases between the two like any tab switch.
   Error pages: Chrome's network error page carries `<meta name="theme-color" content="#fff">`, and Chrome's own
   `GetThemeColor` reported it, so a failed load (ERR_CONNECTION_REFUSED, a bad host) tinted the bar white over the
-  page's dark style, Developer Mode or not. Chrome's meta colour is now used only once our page script has greeted the
-  document (it runs in every http(s) and file document but not in error pages, and normally reports the colour
-  itself), so an error page or any page that reports no colour keeps the window's own toolbar colours.
+  page's dark style, Developer Mode or not. Chrome's meta color is now used only once our page script has greeted the
+  document (it runs in every http(s) and file document but not in error pages, and normally reports the color
+  itself), so an error page or any page that reports no color keeps the window's own toolbar colors.
 - **Analytics names (recovered, both).** `developer_tab_activated`, `is_from_dev_tab_shortcut`,
   `dev_tools_javascript_console_opened`, `dev_tools_network_panel_opened`, `dev_tools_inspect_elements_opened`.

@@ -9,7 +9,7 @@ one and every switch stays on; upstream Ardia serves its file at `https://ardia.
 
 - **At most 8 switches live** (`MAX_SWITCHES`). `killSwitches.test.mjs` fails above 8, and for any switch past its
   `removeBy` date: delete the switch and its old path, or move the date and say why in the commit.
-- Every switch is **on by default**, has an `owner` (an area) and an `about` line, and falls back to the behaviour from
+- Every switch is **on by default**, has an `owner` (an area) and an `about` line, and falls back to the behavior from
   before the change when off, with a unit test of both paths.
 - A switch is **`live`** when it's read where it's used (each call, never held in state), so a value that arrives mid-launch
   applies at once. Otherwise it's read once at launch and a change applies at the next one.
@@ -53,7 +53,7 @@ the updater both read it). A test instance has no updater, so it never fetches.
 
 ## Environment-only switches (launch and new tab, 2026-10-19)
 
-Read once at launch from the environment, for a bench or a bisect; each falls back to the behaviour before it.
+Read once at launch from the environment, for a bench or a bisect; each falls back to the behavior before it.
 
 | Variable | Off means |
 |---|---|

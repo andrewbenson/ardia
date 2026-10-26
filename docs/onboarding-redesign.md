@@ -16,7 +16,7 @@ reflects every choice so far and animates from one state to the next.
 |---|---|---|
 | 1 | Intro | unchanged |
 | 2 | Where are you coming from? | Arc · Dia · Chrome · Safari · Firefox · Brave/Edge · Starting fresh. Browsers found on this Mac come first ("Found on this Mac"). Picking one sets the preset (Arc → Arc, otherwise Dia) and, unless it's "Starting fresh", offers the import for that browser, which runs while the next screens are shown. |
-| 3 | Layout | Tabs: Sidebar / Top · Address bar: Toolbar / Sidebar (hidden with top tabs) · ⌘L: Under the address / Centred. A tag shows "Arc-style", "Dia-style" or "Your mix". |
+| 3 | Layout | Tabs: Sidebar / Top · Address bar: Toolbar / Sidebar (hidden with top tabs) · ⌘L: Under the address / Centered. A tag shows "Arc-style", "Dia-style" or "Your mix". |
 | 4 | Tabs | ⌘T: New Tab page / Command bar · New tabs: Bottom / Top · Old tabs: Keep / Tidy after 12 h, 1 day, 1 week · On quit: Restore / Start fresh · Windows: Separate / Shared tabs. More options: Top Apps grid, peek modifier, ⌘Z reopens closed tab, ⌘-click tab groups. |
 | 5 | Look | Theme color · Auto / Light / Dark · Website color in the tab bar on / off. More options: app icon, hide toolbar while scrolling, bookmarks bar. |
 | 6 | Search & privacy | Search engine tiles · Typing a word: Website first / Search first · Block ads, trackers, cookie banners · Crash reports (today's receipt; skipped in a build with no `AC_TELEMETRY_URL`, such as Solara's). |
@@ -32,7 +32,7 @@ CLI step leaves onboarding and stays in Settings › Advanced.
 | | Dia | Arc |
 |---|---|---|
 | `addressBar` | toolbar | sidebar |
-| `commandBarPlacement` | field | centred |
+| `commandBarPlacement` | field | centered |
 | `newTabOpens` | page | commandBar |
 | `newTabPosition` | bottom | top |
 | `balancedTopApps` | false | true |
@@ -51,7 +51,7 @@ still reach people who never saw it.
 - Use short, eased motion in the style of Dia's onboarding: 160–400 ms per move, ease-out, a demo of at most
   about 1.6 s.
 - The mock window animates between states (the sidebar slides away for top tabs, the address field moves to
-  the sidebar, the command bar drops in centred) instead of jumping.
+  the sidebar, the command bar drops in centered) instead of jumping.
 
 ## Choices that stay in Settings
 

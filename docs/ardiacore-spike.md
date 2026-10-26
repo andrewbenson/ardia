@@ -54,7 +54,7 @@ How it fits together:
     is replayed.
 - **The CEF seams.** With CEF's patches in the tree, `//chrome` called a few `cef::` seams (`cef::BrowserDelegate::Create`,
   the WebContentsDelegate factory…), which `ac_cef_seams.mm` defined: our Browsers got our delegate, everything else
-  kept Chrome's behaviour. Since 2026-10-09 CEF is out of the tree and those seams are our hooks H1–H6
+  kept Chrome's behavior. Since 2026-10-09 CEF is out of the tree and those seams are our hooks H1–H6
   (`docs/engine-build.md`). Our own hooks (the password bubble, the install prompt, choosers, docked DevTools,
   keep-without-tabs…) are `g_ardia_*` pointers in Chrome's files that `ac_seams.mm` sets as the browser starts
   (2026-10-08; before that they borrowed CEF's namespace through our `cef-*.patch`).
@@ -70,8 +70,8 @@ The hooks in Chrome's code (`apply.sh`; the CEF build still builds, checked with
 |---|---|---|---|
 | `chrome/BUILD.gn`: `chrome_dll` depends on `//ardia/core` | 1 | No | Stays |
 | `chrome/app/chrome_main.cc`: `ardiacore::ACMainDelegate` instead of `ChromeMainDelegate` | 4 | No | Stays |
-| `browser_window_features.cc`: two CEF-added `CHECK(browser_view)` return early instead | 11 | Yes, same behaviour for CEF | Gone (the CEF code they guard goes) |
-| `read_anything_side_panel_controller.cc`: `CHECK_IS_TEST()` skipped for a Browser with a delegate (no side panel UI; since 2026-10-08, while ArdiaCore's `g_ardia_viewless_browsers` is set) | 5 | Yes, same behaviour for CEF | Replaced by our own `SidePanelUI` |
+| `browser_window_features.cc`: two CEF-added `CHECK(browser_view)` return early instead | 11 | Yes, same behavior for CEF | Gone (the CEF code they guard goes) |
+| `read_anything_side_panel_controller.cc`: `CHECK_IS_TEST()` skipped for a Browser with a delegate (no side panel UI; since 2026-10-08, while ArdiaCore's `g_ardia_viewless_browsers` is set) | 5 | Yes, same behavior for CEF | Replaced by our own `SidePanelUI` |
 
 ## Acceptance
 
@@ -86,7 +86,7 @@ Chrome's DevTools protocol. The last run passed 29 of 29. The screen was locked,
 | 2 | Our window and chrome around a WebContents; navigation; title, favicon, progress callbacks | **Pass** | The page sits at our content frame in our window. Title, favicon, progress, loading and navigation-state callbacks fire. Load, back and forward work. A real AppKit click (through AppKit's hit-testing into `RenderWidgetHostViewCocoa`, not DevTools input) follows a link. Chrome's ⌘F command and find in page report 2 matches. Tab fullscreen enter and exit reach the host |
 | 3 | Two profiles in ONE window | **Pass** | Profile B's tab shows in the same `NSWindow` (same window number). Each profile is its own Browser with its own `chrome.windows` id. A cookie set in A isn't visible in B. The extension popup's `chrome.windows.getCurrent` is profile A's Browser in our window, with its 8 tabs and the right active tab |
 | 4 | Popups land as tabs the host owns, opener and POST intact | **Pass** | target=_blank, window.open, window.open with features, ⌘-click, a form POST to _blank and a ⌘-clicked POST form all arrive as tabs of our Browser. Each carries the opener tab id and Chrome's disposition (`popup`, `background_tab`…). The POST pages show their bodies (`q=hello-post`, `q2=hello-cmd-post`). Chrome makes no window of its own |
-| 5 | Autofill and passkey UI anchor to our window; a basic password save prompt | **Pass** (anchoring checked by frame numbers, not pixels) | The password prompt reaches the host (`username: nnuser`), the host saves it, and it is in Chrome's password store. The saved-login dropdown is a child window of ours, its top edge on the field's bottom edge. Chrome's passkey dialog is a child window centred on the page area and hanging from its top edge, as Chrome places tab-modal dialogs. The macOS iCloud Keychain sheet wasn't exercised (it needs the keychain entitlement) |
+| 5 | Autofill and passkey UI anchor to our window; a basic password save prompt | **Pass** (anchoring checked by frame numbers, not pixels) | The password prompt reaches the host (`username: nnuser`), the host saves it, and it is in Chrome's password store. The saved-login dropdown is a child window of ours, its top edge on the field's bottom edge. Chrome's passkey dialog is a child window centered on the page area and hanging from its top edge, as Chrome places tab-modal dialogs. The macOS iCloud Keychain sheet wasn't exercised (it needs the keychain entitlement) |
 | 6 | Docked DevTools in our window | **Pass** | `DevToolsDockChanged` gives the host the DevTools view. It is laid out with Chrome's own resizing strategy beside the page (page 435 pt, DevTools 990 pt container), in our window |
 | 7 | Unpacked MV3 extension, its action popup, a content script | **Pass** | It installs through `UnpackedInstaller`. Chrome now keeps unpacked extensions disabled outside developer mode, so the API turns it on. The content script marks the fixture page. The action popup opens in a panel attached to our window and runs its script |
 | 8 | Chromium's loop runs the app; quit and terminate are clean | **Pass** | The main thread runs `BrowserMainLoop::RunMainMessageLoop` → `MessagePumpNSApplication` → `[NSApp run]`, with no external pump. Quit closes every Browser, the loop ends (`engineWillShutDown`), the process exits 0, and there's no crash report. The app never took focus (`lsappinfo front` sampled every 0.5 s) |
@@ -310,7 +310,7 @@ New hooks in Chrome's files, all added by `apply.sh` and checked by `--check`:
   crashing. Before this hook, a renderer crash in an ArdiaCore tab crashed the browser.
 
 Known gaps:
-- **IME (marked text) and real focus/key-window behaviour** need an unlocked screen. The page's view is an
+- **IME (marked text) and real focus/key-window behavior** need an unlocked screen. The page's view is an
   `NSTextInputClient` and keys reach it, but marked text was not exercised.
 - **Logout cancel.** A quit Apple event is answered at once, as Chrome's is, so logout isn't vetoed by an
   app that later stays.
@@ -327,7 +327,7 @@ checks in `S7`–`S27`. Hidden runs pass `--disable-backgrounding-occluded-windo
 | Area | What ArdiaCore provides |
 |---|---|
 | Profile | Allow-listed bool prefs (CEF's per-profile prefs set on load). Chrome's `BrowsingDataRemover`. Component extensions. Deleting a profile (the last-used one too, not "Default") and releasing an incognito one. Cast routes. Profile deletion leaves `~/Applications` alone (Chrome's platform-app shortcut cleanup is off) |
-| Tab state | `securityInfo`, per-site zoom and pinch scale, `focusedEditable`, media capture access, base background colour, `mediaCaptureSourceId` |
+| Tab state | `securityInfo`, per-site zoom and pinch scale, `focusedEditable`, media capture access, base background color, `mediaCaptureSourceId` |
 | Tab actions | Chrome commands on a background tab. Discard (`WebContentsDiscard`, so the same tab survives). Freeze. Unresponsive pages. Stop sharing. The host picker's screen-share source, granted once per frame (`allowDesktopCapture`). In-process DevTools calls. Autofill on demand. Scripts with a user gesture. Restore from `ac_tab_restore_take`'s state, and duplicate. "Share this tab instead", answered by Chrome's tab-sharing infobar model with no hook |
 | Chrome UI the host shows instead | Permission prompts (`SetCreatePermissionPromptFunction`, before Chrome's bubble or chip). Blocked popups. Links to other apps. Extension install prompts. Extension actions, states and side panels. Device choosers. The Cast dialog. Context-menu items (Chrome's menu, plus the host's items; in background mode the menu is reported instead of shown) |
 | Events | Download navigations. Activation requests (PiP's back-to-tab, `window.focus()`). Requests the content blocker stopped (`ERR_BLOCKED_BY_CLIENT`), batched per turn. Picture-in-picture open and close (video or document; a document PiP window is always Chrome's own) |

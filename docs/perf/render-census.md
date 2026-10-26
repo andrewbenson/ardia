@@ -123,7 +123,7 @@ store update that touches `tabs`, `live`, `windows` or `selection`, and `Content
 
 ## Per interaction: the top 10 components and what they render for
 
-Before the fixes, 20 tabs, per action. `why`: `props:x` a prop changed, `fn:x` a new function with the same behaviour,
+Before the fixes, 20 tabs, per action. `why`: `props:x` a prop changed, `fn:x` a new function with the same behavior,
 `obj:x` a new but shallow-equal object, `state`/`state~` own state (changed / new but equal), `wasted` nothing changed.
 
 ### launch: first window
@@ -484,7 +484,7 @@ Tooling commits: `ff22f2b3`, `bc34bc05`, `845fc67e` (the census itself).
 
 ## Ranked fix list (what is left)
 
-Savings are per action at 20 tabs unless marked; "risk" is the chance of a visible behaviour change or a regression.
+Savings are per action at 20 tabs unless marked; "risk" is the chance of a visible behavior change or a regression.
 
 | # | Fix | Saves | Risk | Notes |
 |---|---|---|---|---|
@@ -498,4 +498,4 @@ Savings are per action at 20 tabs unless marked; "risk" is the chance of a visib
 | 8 | Launch, for `firstrender`: the first window renders 414-460 components in 24 commits (873 mounts). Offenders above: `Toolbar` 4-5 times (state), `ToolbarButton` 14, `SidebarPage` 4 (new `onListHeight`, `onScrollView`, `onScrollY` each `Sidebar` render, and not memoized), `Dot` 4 wasted, `PageContent`/`ThemeScope`/the scroll view 4 each; `browser.bookmarks` changes 5 times and `browser.live` 6 before the first window settles | not sized here | low | see its section above; 18 module events (`onEngineEvent` 5.8 ms), 13 `topLayout` events (19 ms) and `AppRegistry.runApplication` (34 ms) are the JS tasks |
 | 9 | Sidebar hover and the tab row: already minimal (14 renders per row, `TabIcon` and `TabBadges` don't re-render); tab switch is near its floor (2 panes, 2 rows, the card) | – | – | the remaining switch cost is the pane swap itself (38-49 native view updates) |
 
-Nothing in the first five landed fixes changed visible behaviour. Items 2, 3 and 6 could, and are left for the owner.
+Nothing in the first five landed fixes changed visible behavior. Items 2, 3 and 6 could, and are left for the owner.

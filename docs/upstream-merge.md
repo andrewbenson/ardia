@@ -62,6 +62,9 @@ merge into conflicts.
 
 ## After the merge
 
+- Solara's docs are in US English and upstream's aren't. On a conflict in a doc, take upstream's text, then run
+  `python3 scripts/us-spelling.py $(git diff --name-only HEAD^1 HEAD -- '*.md')` once the merge is committed, and commit
+  what it changes.
 - `pnpm install --frozen-lockfile` (under `scripts/agent/locked pod`) and `pnpm pods` if the lockfile or a podspec moved.
 - `pnpm typecheck` and `pnpm test`.
 - `python3 engine/patches/series.py check` if `engine/` moved, then an incremental engine build. Check that

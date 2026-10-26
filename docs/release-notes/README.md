@@ -100,7 +100,7 @@ user's expense.
 
 - Lead with what the user sees, not with what the code does: "Menu commands no longer crash the app", not
   "Fix selector in MenuTarget".
-- Name the symptom people hit, so they recognise it: "every command in the menu bar crashed Ardia",
+- Name the symptom people hit, so they recognize it: "every command in the menu bar crashed Ardia",
   "sites like Google waited forever at 'Complete sign-in using your passkey'".
 - One short "why" is welcome when it explains the fix in user terms ("The menu items pointed at the wrong
   method."). No file names, class names, commit hashes or internal flags.

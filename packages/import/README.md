@@ -14,7 +14,7 @@ the file and its WAL before opening it.
 | bookmarks | `ChromiumBookmarks.swift`: `Bookmarks`, `AccountBookmarks` | same as Chromium | `Firefox.swift`: `places.sqlite` |
 | history | `HistoryReader.swift`: `History` | same as Chromium | `HistoryReader.swift`: `places.sqlite` |
 | tabs | `ChromiumSessions.swift`: newest readable `Session_*` across `Sessions/` (SNSS v3) and `Sessions_Encrypted/` (v5, Chromium 156+, needs the key; without it the cleartext copy is read), legacy `Current Session` | `ArcSidebar.swift` | `Firefox.swift`: `sessionstore-backups/recovery.jsonlz4`, `sessionstore.jsonlz4` |
-| passwords | `ChromiumSecrets.swift`: `Login Data`, `Login Data For Account` (key from `ChromiumCrypto.swift`) | same as Chromium | `FirefoxLogins.swift`: `key4.db` + `logins.db` (A256GCM JWE, key labelled `as-logins-key`) merged with `logins.json` |
+| passwords | `ChromiumSecrets.swift`: `Login Data`, `Login Data For Account` (key from `ChromiumCrypto.swift`) | same as Chromium | `FirefoxLogins.swift`: `key4.db` + `logins.db` (A256GCM JWE, key labeled `as-logins-key`) merged with `logins.json` |
 | cookies | `ChromiumSecrets.swift`: `Network/Cookies` (or `Cookies`) | same as Chromium | `Firefox.swift`: `cookies.sqlite` |
 | autofill (addresses, cards) | `ChromiumAutofill.swift`: `Web Data` | same as Chromium | none |
 | extensions (listed, never installed) | `ChromiumExtensions.swift`: `Preferences`, `Secure Preferences`, `Extensions/*/manifest.json` | same as Chromium | none |
@@ -64,7 +64,7 @@ Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result ty
   and app runs set `ARDIA_IMPORT_TEST_SECRET`. Firefox has no Keychain item; its primary password goes through
   `unlockBrowser(id, { primaryPassword })`.
 - Cookie values, addresses and card numbers never reach JS. `ImportResult` and `SafariExport` leave them out of their
-  `CodingKeys` and encode only the counts. They're held in `SecretBytes`; `Wire.swift` serialises them into
+  `CodingKeys` and encode only the counts. They're held in `SecretBytes`; `Wire.swift` serializes them into
   `SecretBytes` too, and `ImportWriter` copies that once into the buffer the bridge zeroes after the call. Vault entries expire after 10 minutes. JS drops the token for a private profile.
 - Passwords do reach JS (`credentials`), because `savePassword` takes them from there.
 - `forgetUnlockedKeys` drops the derived keys and the whole vault.

@@ -5,7 +5,7 @@ uses the name the source spells, `ardia`, for the command, its tarball and its p
 from the terminal with Python and [pydoll](https://pydoll.tech) 3.0. It's a separate download, not part of
 the app bundle. The app ships `install.sh`, and runs it when the user opts in from Settings ("Let the solara command control Solara").
 
-While it's connected, a pill floats over the bottom centre of the page ("solara is controlling Solara · Stop"; Stop turns
+While it's connected, a pill floats over the bottom center of the page ("solara is controlling Solara · Stop"; Stop turns
 the setting off; both names follow the identity). It overlays the page and never resizes it. It shows at the first connection and stays 3 s after the
 last one closes, so a burst of commands shows one steady pill; turning the setting off hides it at once. One per
 window: the focused pane of a split, the full screen page, or the Peek while one is open

@@ -254,15 +254,15 @@ handoff makes no second window.
   gets the same `close` event a normal close sends. Clearing history and turning session restore off erase the
   pictures, whatever the switch says.
 - **Launch look** (issue #317). At quit JS also writes `launch-look.json` (`lib/launchLook.ts`): each saved tab's last
-  page colour and the favicons, with their icon themes, that the session's tabs showed (240 icons at most). They are
-  seeded before the first render, so RN's first frame has the tiles' icons, their tint and the address bar's colour
-  instead of letter fallbacks and a white bar. A restored tab keeps its saved colour until its page reports one, leaves
+  page color and the favicons, with their icon themes, that the session's tabs showed (240 icons at most). They are
+  seeded before the first render, so RN's first frame has the tiles' icons, their tint and the address bar's color
+  instead of letter fallbacks and a white bar. A restored tab keeps its saved color until its page reports one, leaves
   that page, or has finished loading for 1.5 s without one. Clearing history erases the file with the pictures.
 - **Without the early window** (a login-item launch, a second profile, no saved hint), the first window now waits,
   transparent, for its RN content (at most 0.6 s) like any other new window, instead of showing the root's flat fill
   first.
 - **Measured** (v10, interleaved, n=4, medians, on vs off): window 329 vs 385 ms, FCP 398 vs 439, navigation start 267
-  vs 317. Every frame shows either the picture or the real UI, and the first frame's sidebar is the real UI's colour.
+  vs 317. Every frame shows either the picture or the real UI, and the first frame's sidebar is the real UI's color.
 - **Memory.** About +2.5 MB of live objects in the browser process 40 s after launch (Chrome memory-infra, n=2 each):
   malloc's allocated objects +1.2 to +1.6 MB with or without the picture, and GPU-owned memory +1.1 MB (0.5 MB without
   the picture). Without the window shown early, the difference goes away. Footprint alone can't see it: PartitionAlloc's

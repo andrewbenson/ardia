@@ -210,6 +210,9 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
     const caught = new Error(`${Object.keys(changed).join(", ")} changed outside the native store's applier; route the write through nativeWrite`);
     nativeWrite({ name: "applyState", args: [changed] });
     resync(store, Object.keys(changed));
+    const forwards = ((globalThis as { __nativeStoreForwards?: string[] }).__nativeStoreForwards ??= []);
+    forwards.push(caught.stack ?? caught.message);
+    if (forwards.length > 50) forwards.shift();
     if (__DEV__) queueMicrotask(() => {
       throw caught;
     });

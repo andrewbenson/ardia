@@ -12,6 +12,8 @@ import {
 import { useBrowser, type BrowserState } from "../store/browser";
 import { changedIds } from "../store/changes";
 import { chromeChanged, groupStep, stripActual, stripPlan, type GroupBindings } from "../store/liveTabs";
+import { nativeOwnsWorkspace, nativeWrite } from "../store/nativeStore";
+import { onStoreEffect } from "../store/nativeWorkspace";
 
 let started = false;
 const mirror = new Map<number, StripState>();
@@ -35,9 +37,45 @@ if (__DEV__) {
   };
 }
 
+function startNativeChromeTabs() {
+  onStoreEffect("stripCommand", (effect) => {
+    const strip = effect.strip as number;
+    const cmd = sendTabStripCommand(effect.command as TabStripCommand);
+    nativeWrite({ name: "stripCommandSent", args: [strip, cmd] });
+  });
+  let ready = false;
+  let queued: TabStripTransaction[] = [];
+  let projectSoon = false;
+  const scheduleNativeProject = () => {
+    if (projectSoon || !ready) return;
+    projectSoon = true;
+    queueMicrotask(() => {
+      projectSoon = false;
+      nativeWrite({ name: "projectStrips", args: [] });
+    });
+  };
+  const receiveNative = (tx: TabStripTransaction) => {
+    nativeWrite({ name: "stripTransaction", args: [tx] });
+    scheduleNativeProject();
+  };
+  onTabStripTransaction((tx) => (ready ? receiveNative(tx) : queued.push(tx)));
+  void tabStrips().then((snapshot) => {
+    nativeWrite({ name: "stripSnapshot", args: [snapshot] });
+    ready = true;
+    const early = queued;
+    queued = [];
+    for (const tx of early) receiveNative(tx);
+    scheduleNativeProject();
+  });
+  useBrowser.subscribe((s, prev) => {
+    if (s.windows !== prev.windows || s.groups !== prev.groups || placed(s, prev)) scheduleNativeProject();
+  });
+}
+
 export function startChromeTabs() {
   if (started) return;
   started = true;
+  if (nativeOwnsWorkspace()) return startNativeChromeTabs();
   onTabStripTransaction((tx) => (lastRev < 0 ? early.push(tx) : receive(tx)));
   void tabStrips().then((snapshot) => {
     for (const strip of snapshot.strips) {

@@ -30,7 +30,7 @@ final class AppDelegate: ExpoAppDelegate {
   }
 
   override func application(_ application: NSApplication, open urls: [URL]) {
-    OpenURLInbox.receive(urls)
+    OpenURLInbox.receiveFromOutside(urls)
   }
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

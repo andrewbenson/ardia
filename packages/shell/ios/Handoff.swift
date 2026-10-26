@@ -27,7 +27,7 @@ public enum Handoff {
 
   public static func `continue`(_ activity: NSUserActivity) -> Bool {
     guard activity.activityType == NSUserActivityTypeBrowsingWeb, let url = activity.webpageURL else { return false }
-    OpenURLInbox.receive([url])
+    OpenURLInbox.receiveFromOutside([url])
     return true
   }
 }

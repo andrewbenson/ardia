@@ -119,6 +119,11 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   are editing other files right now; never revert or reformat code you don't own, and commit only your own hunks
   (`AGENTS.md` › Hard rules).
 - **Never steal focus from the user.** They are working in other apps.
+  - A background instance never keeps a link from outside (another app, a click in Mail, Handoff): LaunchServices
+    may route it there because the bundle id matches, so the app hands it to a running copy that isn't a background
+    instance, else to the default browser or an installed copy in /Applications, and opens it itself only when there
+    is none. A test that sends it links on purpose (the smoke test's GURL event) launches it with
+    `ARDIA_ACCEPT_EXTERNAL_URLS=1`.
   - Launch the app only with `open -g` (never plain `open`, never `activate`) **and** with
     `ARDIA_BACKGROUND=1`: `open -g` alone does not stop LaunchServices from making the app
     frontmost once its windows appear (this stole the user's keystrokes). With it the process is

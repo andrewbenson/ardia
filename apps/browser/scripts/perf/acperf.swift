@@ -290,6 +290,11 @@ case "postmouse":
   usleep(useconds_t(holdMs * 1000))
   click(middle ? .otherMouseUp : right ? .rightMouseUp : .leftMouseUp)
   printJSON(["heldMs": holdMs])
+case "dragguard":
+  var last: UInt8 = UInt8(ascii: "u")
+  var byte: UInt8 = 0
+  while read(0, &byte, 1) == 1 { last = byte }
+  if last == UInt8(ascii: "d") { postMouseUp() }
 case "mouseup":
   postMouseUp()
   printJSON(["posted": "mouseup"])
@@ -347,7 +352,6 @@ case "postdrag":
   }
   var signalSources: [DispatchSourceSignal] = []
   for sig in [SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGTSTP] {
-    signal(sig, SIG_IGN)
     let source = DispatchSource.makeSignalSource(signal: sig, queue: .global())
     source.setEventHandler {
       dragLock.withLock { dragStop = "signal \(sig)" }
@@ -361,7 +365,31 @@ case "postdrag":
       _exit(128 + sig)
     }
     source.resume()
+    signal(sig, SIG_IGN)
     signalSources.append(source)
+  }
+  var guardPipe: [Int32] = [-1, -1]
+  if pipe(&guardPipe) == 0 {
+    var actions: posix_spawn_file_actions_t? = nil
+    posix_spawn_file_actions_init(&actions)
+    posix_spawn_file_actions_adddup2(&actions, guardPipe[0], 0)
+    posix_spawn_file_actions_addclose(&actions, guardPipe[1])
+    var attrs: posix_spawnattr_t? = nil
+    posix_spawnattr_init(&attrs)
+    posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETSID))
+    var guardPid: pid_t = 0
+    let exe = CommandLine.arguments[0]
+    let argv: [UnsafeMutablePointer<CChar>?] = [strdup(exe), strdup("dragguard"), nil]
+    let spawned = posix_spawn(&guardPid, exe, &actions, &attrs, argv, environ)
+    argv.forEach { free($0) }
+    close(guardPipe[0])
+    if spawned != 0 { finish(["error": "couldn't start the drag guard", "posted": "nothing"], code: 2) }
+  } else {
+    finish(["error": "couldn't open the drag guard's pipe", "posted": "nothing"], code: 2)
+  }
+  func tellGuard(_ c: UInt8) {
+    var byte = c
+    _ = write(guardPipe[1], &byte, 1)
   }
   let deadline = DispatchSource.makeTimerSource(queue: .global())
   deadline.schedule(deadline: .now() + .milliseconds(Int(Double(steps) * gap * 3) + 10_000))
@@ -392,6 +420,7 @@ case "postdrag":
   let downAt = nowMs()
   let stoppedBeforeDown: String? = dragLock.withLock {
     if let stop = dragStop { return stop }
+    tellGuard(UInt8(ascii: "d"))
     dragButtonDown = true
     post(.leftMouseDown, from)
     return nil
@@ -428,6 +457,7 @@ case "postdrag":
       dragButtonDown = false
       post(.leftMouseUp, lastPoint)
     }
+    tellGuard(UInt8(ascii: "u"))
   }
   usleep(200_000)
   let end = origin() ?? start

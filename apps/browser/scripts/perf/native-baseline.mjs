@@ -413,12 +413,12 @@ const phases = {
     const postdrag = (...a) => {
       const steps = +a[4], gap = +a[5];
       const r = spawnSync(acperfBin(), ["postdrag", ...a], { encoding: "utf8", timeout: steps * gap * 3 + 15_000 });
-      if (r.status !== 0) acperf("mouseup");
-      let body = {};
+      let body = null;
       try {
-        body = JSON.parse((r.stdout ?? "").trim() || "{}");
+        body = JSON.parse((r.stdout ?? "").trim());
       } catch {}
-      return { code: r.status, signal: r.signal, body };
+      if (r.signal || !body) acperf("mouseup");
+      return { code: r.status, signal: r.signal, body: body ?? {} };
     };
     try {
       if (acperf("waitwindow", String(pid), "60").code !== 0) throw new Error("no window");
@@ -431,6 +431,7 @@ const phases = {
       outer: for (const [where, at] of Object.entries(starts))
         for (const gap of [4, 8])
           for (const shape of ["line", "wiggle"]) {
+            await sleep(5500);
             if (!ownerAway(5)) {
               stopped = "someone used the Mac; the remaining drags weren't posted";
               break outer;
@@ -439,7 +440,7 @@ const phases = {
             if (!w) throw new Error("the window went away");
             const [x, y] = at(w);
             const r = postdrag(String(pid), String(w.id), `${x},${y}`, "80,40", "120", String(gap), shape);
-            if (r.body.rows) drags.push({ where, gap, shape, ...r.body });
+            if (r.body.rows && r.code === 0 && !r.body.aborted) drags.push({ where, gap, shape, ...r.body });
             if (r.code !== 0 || r.body.error || r.body.aborted) {
               stopped = `postdrag ${r.signal ? `was killed (${r.signal})` : r.body.error ?? r.body.aborted ?? `exited ${r.code}`}; the remaining drags weren't posted`;
               break outer;
@@ -456,15 +457,19 @@ const phases = {
                 stopped = `moving the window back stopped: ${undo.body.error ?? undo.body.aborted ?? `exit ${undo.code}`}`;
                 break outer;
               }
+              if (Math.abs(undo.body.movedX + 80) > 4 || Math.abs(undo.body.movedY + 40) > 4) {
+                stopped = `moving the window back moved it (${undo.body.movedX}, ${undo.body.movedY}), not (-80, -40); the remaining drags weren't posted`;
+                break outer;
+              }
             }
             await sleep(600);
           }
     } finally {
-      acperf("mouseup");
       acperf("quit", String(pid));
       dragPid = 0;
       await sleep(3000);
     }
+    if (stopped) partial.push(`drag: ${stopped}`);
     return { drags, stopped, settingsTitle: "not measured: the run opens no Settings window" };
   },
 };
@@ -706,16 +711,13 @@ const release = () => {
 };
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"])
   process.on(sig, () => {
-    if (dragPid) {
-      acperf("mouseup");
-      acperf("quit", String(dragPid));
-    }
+    if (dragPid) acperf("quit", String(dragPid));
     release();
     caffeinate.kill();
     process.exit(128 + ({ SIGINT: 2, SIGTERM: 15, SIGHUP: 1 })[sig]);
   });
 try {
-  if (!wanted.includes("prepare") && !state.meta.prepared) fail("no prepared copies in this --out: run the prepare phase first");
+  if (!wanted.includes("prepare") && !state.meta.prepared && wanted.some((n) => LOCKED.has(n))) fail("no prepared copies in this --out: run the prepare phase first");
   for (const name of wanted) {
     if (NEEDS_DISPLAY.has(name)) {
       const d = machine().display;

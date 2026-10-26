@@ -1,0 +1,63 @@
+import Foundation
+import SolaraModel
+import SolaraStore
+
+public final class StoreBridge: Sendable {
+  public let store: Store
+
+  public init(store: Store) {
+    self.store = store
+  }
+
+  public static func data(_ state: BrowserState) -> JSONValue {
+    ["settings": state.settings.json, "downloads": .array(state.downloads.map { .object($0.json) })]
+  }
+
+  public func snapshot() -> JSONValue {
+    let (rev, state) = store.snapshot
+    return ["rev": JSONValue(rev), "data": Self.data(state)]
+  }
+
+  public func snapshotJSON() -> String { snapshot().text() }
+
+  public func dispatch(_ commandJSON: String, sinceRev: Int) -> String {
+    dispatch(json: commandJSON, sinceRev: sinceRev).text()
+  }
+
+  public func dispatch(json commandJSON: String, sinceRev: Int) -> JSONValue {
+    var response = JSONObject()
+    do {
+      let parsed = try JSONValue.parse(commandJSON)
+      let commands = try (parsed.array ?? [parsed]).map(Command.init(json:))
+      let commit = try store.dispatch(commands, origin: .bridge)
+      if let result = commit.result { response["result"] = result }
+      if !commit.effects.isEmpty { response["effects"] = .array(commit.effects.map(\.json)) }
+    } catch {
+      response["error"] = .string("\(error)")
+    }
+    return .object(catchUp(sinceRev: sinceRev, into: response))
+  }
+
+  public func catchUp(sinceRev: Int, into response: JSONObject = JSONObject()) -> JSONObject {
+    var response = response
+    if let patches = store.patches(since: sinceRev) {
+      response["rev"] = JSONValue(patches.last?.rev ?? max(sinceRev, 0))
+      response["patches"] = .array(patches.map(\.json))
+    } else {
+      let snap = snapshot()
+      response["rev"] = snap["rev"]
+      response["snapshot"] = snap["data"]
+    }
+    return response
+  }
+
+  @discardableResult
+  public func observeForeignCommits(_ handler: @escaping @Sendable (String) -> Void) -> Int {
+    store.subscribe { commit in
+      guard commit.origin != .bridge, !commit.changes.isEmpty || !commit.effects.isEmpty else { return }
+      var event: JSONObject = ["rev": JSONValue(commit.rev), "patch": commit.patch.json]
+      if !commit.effects.isEmpty { event["effects"] = .array(commit.effects.map(\.json)) }
+      handler(JSONValue.object(event).text())
+    }
+  }
+}

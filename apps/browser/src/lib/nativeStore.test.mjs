@@ -140,6 +140,24 @@ test("a subscriber that dispatches while a patch applies never moves the applied
   assert.equal(nativeStoreRev(), native.rev);
 });
 
+test("deleting a profile sends its settings repair to the native store, not past the applier", () => {
+  const id = S().createProfile({ name: "Leaving" });
+  S().setDefaultProfile(id);
+  assert.equal(native.settings.defaultProfileId, id);
+  sent.length = 0;
+  const warn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    S().deleteProfile(id);
+  } finally {
+    console.warn = warn;
+  }
+  assert.notEqual(native.settings.defaultProfileId, id);
+  assert.equal(S().settings.defaultProfileId, native.settings.defaultProfileId);
+  assert.ok(!warnings.some((w) => w.includes("outside the native store's applier")));
+});
+
 test("persist.ts marks session.json and leaves downloads.json to the native store", () => {
   docs.delete("downloads.json");
   S().updateSettings({ appearance: "dark" });

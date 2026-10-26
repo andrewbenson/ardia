@@ -157,6 +157,28 @@ function wrapActions(store: Replica) {
   withApplier(() => store.setState(wrapped as Partial<BrowserState>));
 }
 
+const PROFILE_SETTINGS_WRITERS = ["deleteProfile", "setDefaultProfile"] as const;
+
+function wrapProfileSettingsWriters(store: Replica) {
+  const s = store.getState() as unknown as Record<string, unknown>;
+  const wrapped: Record<string, unknown> = {};
+  for (const name of PROFILE_SETTINGS_WRITERS) {
+    const original = s[name];
+    if (typeof original !== "function") continue;
+    wrapped[name] = (...args: unknown[]) => {
+      const before = store.getState().settings;
+      const result = withApplier(() => (original as (...a: unknown[]) => unknown)(...args));
+      const after = store.getState().settings;
+      if (after !== before && !sameJSON(after, before)) {
+        nativeWrite({ name: "applyState", args: [{ settings: after }] });
+        resync(store, ["settings"]);
+      }
+      return result;
+    };
+  }
+  withApplier(() => store.setState(wrapped as Partial<BrowserState>));
+}
+
 function ownedChanges(s: BrowserState, prev: BrowserState): Record<string, unknown> {
   const changed: Record<string, unknown> = {};
   const state = s as unknown as Record<string, unknown>;
@@ -174,6 +196,7 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
   replica = store;
   stopListening?.();
   if (ownsWorkspace) wrapActions(store);
+  else wrapProfileSettingsWriters(store);
   const stopCommits = onForeignCommit((commit) => {
     if (commit.rev <= appliedRev) return;
     if (commit.rev === appliedRev + 1) {

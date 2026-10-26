@@ -167,8 +167,17 @@ function run(cmd, args, { locked = false, cwd = repoRoot, env = {}, log: file } 
   });
 }
 
+let dragPid = 0;
 const nb = join(here, "native-bench.mjs");
 const labelOfPrepared = (path) => basename(dirname(dirname(path)));
+function dsymOf(app) {
+  const name = plist(app, "CFBundleExecutable");
+  for (const bundle of [`${app}.dSYM`, join(dirname(dirname(app)), `${basename(app, ".app")}.xcarchive`, "dSYMs", `${basename(app)}.dSYM`)]) {
+    const file = join(bundle, "Contents/Resources/DWARF", name);
+    if (existsSync(file)) return file;
+  }
+  return null;
+}
 function originalOf(label) {
   const p = state.meta.prepared ?? {};
   if (p.app && labelOfPrepared(p.app) === label) return state.meta.app;
@@ -192,16 +201,27 @@ async function bench(phase, args, extra = {}) {
   const dir = join(out, phase);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  await run(node, [nb, "--out", dir, ...preparedArgs(), ...args], { locked: true, log: join(dir, "stdout.txt"), ...extra });
-  return benchResults(dir);
+  let failure = null;
+  try {
+    await run(node, [nb, "--out", dir, ...preparedArgs(), ...args], { locked: true, log: join(dir, "stdout.txt"), ...extra });
+  } catch (error) {
+    failure = error;
+  }
+  const results = benchResults(dir);
+  const errors = Object.entries(results).flatMap(([label, r]) => (r.errors ?? []).map((e) => `${label} run ${e.run}: ${e.error}`));
+  if (failure && !Object.keys(results).length) throw failure;
+  if (failure || errors.length) partial.push(`${phase}: ${errors.length ? errors.join("; ") : failure.message}`.slice(0, 600));
+  return results;
 }
+let partial = [];
 
 const phases = {
   async prepare() {
     if (!opt.bundle) {
       if (!opt["js-commit"]) throw new Error("prepare needs --js-commit <the builds' commit> (or --bundle): the bench bundle must carry the builds' own JS");
       const inputs = ["apps/browser/index.js", "apps/browser/src", "apps/browser/app.json", "apps/browser/babel.config.js", "apps/browser/metro.config.js",
-        "apps/browser/package.json", "apps/browser/react-native.config.js", "pnpm-lock.yaml", ":(glob)packages/*/src/**", ":(glob)packages/*/index.ts",
+        "apps/browser/package.json", "apps/browser/react-native.config.js", "apps/browser/assets", "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "patches",
+        ":(glob)packages/*/src/**", ":(glob)packages/*/index.ts",
         ":(glob)packages/*/package.json", ":(glob)packages/*/expo-module.config.json"];
       const changed = execFileSync("git", ["diff", "--name-only", opt["js-commit"], "--", ...inputs], { cwd: repoRoot, encoding: "utf8" }).trim();
       const dirty = execFileSync("git", ["status", "--porcelain", "--", ...inputs], { cwd: repoRoot, encoding: "utf8" }).trim();
@@ -241,9 +261,9 @@ const phases = {
     const dir = join(out, "tabactions");
     rmSync(dir, { recursive: true, force: true });
     const app = resolve(opt.app);
-    const label = opt.label ?? "app";
+    const label = labelOfPrepared(state.meta.prepared.app);
     const sides = ["--side", `${label}=${join(app, "Contents/Resources/main.jsbundle")}`];
-    if (opt.control) sides.push("--side", `${opt["control-label"] ?? "control"}=${join(resolve(opt.control), "Contents/Resources/main.jsbundle")}`, "--side-app", `${opt["control-label"] ?? "control"}=${resolve(opt.control)}`);
+    if (opt.control) sides.push("--side", `${labelOfPrepared(state.meta.prepared.control)}=${join(resolve(opt.control), "Contents/Resources/main.jsbundle")}`, "--side-app", `${labelOfPrepared(state.meta.prepared.control)}=${resolve(opt.control)}`);
     await run(node, [join(here, "tab-actions.mjs"), "run", "--app", app, ...sides, "--launches", "4", "--n", "5",
       "--actions", "click,ctrlTab,cmdNumber,cmdT,cmdW,hoverClose,pin,unpin", "--out", dir, "--port", String(port + 1), "--page-port", String(port + 2)], { locked: true });
     return { samples: readFileSync(join(dir, "samples.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) };
@@ -257,12 +277,14 @@ const phases = {
     const attribution = {};
     for (const label of Object.keys(results)) {
       const json = join(out, "framecounts", label, "stall-samples.json");
+      const windows = join(out, "framecounts", label, "kept-windows.json");
+      writeFileSync(windows, JSON.stringify((results[label].frames ?? []).flatMap((r) => Object.entries(r.stalls ?? {}).flatMap(([scenario, ws]) => ws.map((w) => [scenario, w.from, w.to])))));
       const original = originalOf(label);
-      const exeName = original ? plist(original, "CFBundleExecutable") : null;
-      const dsym = original && join(`${original}.dSYM`, "Contents/Resources/DWARF", exeName);
-      await run(node, [join(here, "stall-samples.mjs"), ...(opt.symbols ? ["--symbols", opt.symbols] : []), ...(dsym && existsSync(dsym) ? ["--app-dsym", dsym] : []),
-        "--json", json, join(out, "framecounts", label)]).catch((e) => log(`stall-samples ${label}: ${e.message}`));
-      if (existsSync(json)) attribution[label] = JSON.parse(readFileSync(json, "utf8"));
+      const dsym = original && dsymOf(original);
+      if (original && !dsym) log(`stall-samples ${label}: no dSYM for ${original}, so React Native frames inside the executable count as the app's`);
+      await run(node, [join(here, "stall-samples.mjs"), ...(opt.symbols ? ["--symbols", opt.symbols] : []), ...(dsym ? ["--app-dsym", dsym] : []),
+        "--windows", windows, "--json", json, join(out, "framecounts", label)]).catch((e) => log(`stall-samples ${label}: ${e.message}`));
+      if (existsSync(json)) attribution[label] = { symbolized: !!dsym, rows: JSON.parse(readFileSync(json, "utf8")) };
     }
     return { results, attribution };
   },
@@ -296,46 +318,80 @@ const phases = {
     mkdirSync(data, { recursive: true });
     writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
     const exe = join(app, "Contents/MacOS", plist(app, "CFBundleExecutable"));
+    const pattern = `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`;
+    if (spawnSync("pgrep", ["-f", pattern]).status === 0) throw new Error(`a copy of ${exe} is already running; no drag was posted`);
+    const ownerAway = (secs) => {
+      const ns = +acperf("hididle").out;
+      return Number.isFinite(ns) && ns >= secs * 1e9;
+    };
+    if (!ownerAway(60)) throw new Error("someone used the mouse or keyboard in the last minute; the drag phase waits for the owner to be away");
     execFileSync("open", ["-g", "-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
     let pid = 0;
     for (let i = 0; i < 400 && !pid; i++) {
-      const r = spawnSync("pgrep", ["-f", `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`], { encoding: "utf8" });
+      const r = spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" });
       if (r.status === 0) pid = +r.stdout.trim().split("\n")[0];
       else await sleep(25);
     }
     if (!pid) throw new Error("the app didn't start");
+    dragPid = pid;
     const drags = [];
+    let stopped = null;
+    const postdrag = (...a) => {
+      const steps = +a[4], gap = +a[5];
+      const r = spawnSync(acperfBin(), ["postdrag", ...a], { encoding: "utf8", timeout: steps * gap * 3 + 15_000 });
+      if (r.status !== 0) acperf("mouseup");
+      let body = {};
+      try {
+        body = JSON.parse((r.stdout ?? "").trim() || "{}");
+      } catch {}
+      return { code: r.status, signal: r.signal, body };
+    };
     try {
       if (acperf("waitwindow", String(pid), "60").code !== 0) throw new Error("no window");
       await sleep(4000);
+      if (!ownerAway(60)) throw new Error("someone used the Mac while the instance started; no drag was posted");
       if (acperf("activate", String(pid)).code !== 0) throw new Error("macOS refused to bring the instance to the front; no drag was posted");
       await sleep(800);
-      const win = () => JSON.parse(acperf("windows", String(pid)).out).filter((w) => w.w >= 300 && w.h >= 200 && w.alpha > 0 && w.layer === 0)[0];
+      const win = () => JSON.parse(acperf("windows", String(pid)).out || "[]").filter((w) => w.w >= 300 && w.h >= 200 && w.alpha > 0 && w.layer === 0)[0];
       const starts = { toolbar: (w) => [w.x + w.w * 0.6, w.y + 20], "sidebar top": (w) => [w.x + 90, w.y + 44], "top strip": (w) => [w.x + w.w / 2, w.y + 9] };
-      for (const [where, at] of Object.entries(starts))
-        for (const gap of [4, 8]) {
+      outer: for (const [where, at] of Object.entries(starts))
+        for (const gap of [4, 8])
           for (const shape of ["line", "wiggle"]) {
+            if (!ownerAway(5)) {
+              stopped = "someone used the Mac; the remaining drags weren't posted";
+              break outer;
+            }
             const w = win();
             if (!w) throw new Error("the window went away");
             const [x, y] = at(w);
-            const said = acperf("postdrag", String(pid), String(w.id), `${x},${y}`, "80,40", "120", String(gap), shape);
-            const r = JSON.parse(said.out || "{}");
-            if (said.code !== 0 || r.error) throw new Error(`postdrag refused or failed (${r.error ?? `exit ${said.code}`}); stopped the drag phase`);
-            drags.push({ where, gap, shape, ...r });
-            if (r.aborted) throw new Error(`a drag stopped early: ${r.aborted}`);
+            const r = postdrag(String(pid), String(w.id), `${x},${y}`, "80,40", "120", String(gap), shape);
+            if (r.body.rows) drags.push({ where, gap, shape, ...r.body });
+            if (r.code !== 0 || r.body.error || r.body.aborted) {
+              stopped = `postdrag ${r.signal ? `was killed (${r.signal})` : r.body.error ?? r.body.aborted ?? `exited ${r.code}`}; the remaining drags weren't posted`;
+              break outer;
+            }
             if (shape === "line") {
               const back = win();
-              const undo = acperf("postdrag", String(pid), String(back.id), `${x + 80},${y + 40}`, "-80,-40", "40", "8", "line");
-              if (undo.code !== 0) throw new Error(`moving the window back was refused: ${undo.out}`);
+              if (!back) throw new Error("the window went away");
+              if (Math.abs(r.body.movedX - 80) > 4 || Math.abs(r.body.movedY - 40) > 4) {
+                stopped = `the window moved (${r.body.movedX}, ${r.body.movedY}), not (80, 40); not moving it back, the remaining drags weren't posted`;
+                break outer;
+              }
+              const undo = postdrag(String(pid), String(back.id), at(back).join(","), "-80,-40", "40", "8", "line");
+              if (undo.code !== 0 || undo.body.error || undo.body.aborted) {
+                stopped = `moving the window back stopped: ${undo.body.error ?? undo.body.aborted ?? `exit ${undo.code}`}`;
+                break outer;
+              }
             }
             await sleep(600);
           }
-        }
     } finally {
+      acperf("mouseup");
       acperf("quit", String(pid));
+      dragPid = 0;
       await sleep(3000);
     }
-    return { drags, settingsTitle: "not measured: the run opens no Settings window" };
+    return { drags, stopped, settingsTitle: "not measured: the run opens no Settings window" };
   },
 };
 
@@ -379,6 +435,8 @@ function render() {
   const skipped = PHASES.filter((n) => P[n]?.skipped && !P[n]?.result);
   if (dark.length) md.push(`**Run with the screen locked or the display asleep:** ${dark.join(", ")}. macOS gives windows no display-link frames then and pages paint about once a second, so in those phases only rows that don't wait on a frame or a paint stand (launch → window shown and → JS running, memory, idle CPU and wakeups, compute); the paint and frame rows are left for the unlocked rerun.`, "");
   if (skipped.length) md.push(`**Left for a run with the display awake and unlocked:** ${skipped.join(", ")}.`, "");
+  const lost = PHASES.filter((n) => P[n]?.partial || P[n]?.error);
+  if (lost.length) md.push(`**Phases that failed or lost runs (their rows hold fewer samples):** ${lost.map((n) => `${n} (${(P[n].partial ?? [P[n].error]).join("; ").slice(0, 300)})`).join("; ")}.`, "");
   md.push("Where this run departs from [baseline.md](baseline.md): the one-tab and seed launches run as two interleaved series (app and control interleaved within each), not interleaved with each other; acsample.c samples only in the framecounts runs, so the frames runs' timing carries no sampling cost.", "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
   md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");
@@ -457,7 +515,7 @@ function render() {
           dr.push({ name: `${k}: trail (worst per drag)`, side: "", values: d.map((x) => x.trailMaxPt), unit: "pt", digits: 1 });
           dr.push({ name: `${k}: error after mouse-up`, side: "", values: d.map((x) => x.endErrorPt), unit: "pt", digits: 1 });
         }
-    section("M5 Window drag frame pacing", `${table(dr)}\n\nThe Settings title drag: ${P.drag.result.settingsTitle}.`);
+    section("M5 Window drag frame pacing", `${table(dr)}\n\n${P.drag.result.stopped ? `The phase stopped early: ${P.drag.result.stopped}.\n\n` : ""}The Settings title drag: ${P.drag.result.settingsTitle}. Mouse-down → first move is read once per step, so it's accurate to the step's gap.`);
   } else {
     section("M5 Window drag frame pacing", "**Needs owner run.** It posts real HID drags to a visible window (`native-baseline.mjs --only drag --drag`), so it waits for the owner's go-ahead.");
   }
@@ -475,8 +533,10 @@ function render() {
       }
     stallBlocks.push(`${sideName(label)}, summed over ${(res.frames ?? []).filter((r) => r.stalls).length} runs:\n\n${lines.join("\n")}`);
   }
-  for (const [label, attribution] of Object.entries(P.framecounts?.result?.attribution ?? {})) {
+  for (const [label, entry] of Object.entries(P.framecounts?.result?.attribution ?? {})) {
+    const attribution = entry?.rows;
     if (!attribution?.length) continue;
+    if (!entry.symbolized) stallBlocks.push(`${sideName(label)}: **no dSYM was found**, so React Native's frames inside the executable count as the app's below.`);
     const lines = ["| Scenario | Iterations ≥ 50 ms | Stalled ms | Samples | Chrome | Hermes | React Native | App | System |", "|---|---|---|---|---|---|---|---|---|"];
     for (const r of attribution) lines.push(`| ${r.scenario} | ${r.iterations} | ${r.stalledMs} | ${r.samples} | ${["chrome", "hermes", "react", "app", "system"].map((c) => `${Math.round(r.share[c] * 100)}%`).join(" | ")} |`);
     stallBlocks.push(`${sideName(label)}: where the main thread's iterations of 50 ms or more went. Stack samples from the framecounts runs (acsample.c, only once an iteration passes 16 ms, so the first 16 ms of a long one aren't sampled), grouped by stall-samples.mjs; "React Native" is RN, Yoga, Folly and Expo's native code, told apart from the app's by symbol name through the build's dSYM. The counts runs have the JS perf probe and the sampler on, so their iteration lengths read longer than the frames runs' histogram above.\n\n${lines.join("\n")}`);
@@ -567,11 +627,16 @@ const release = () => {
   if (held) spawnSync(join(repoRoot, "scripts/agent/locked"), ["perflab", "--release", opt.who]);
   held = false;
 };
-process.on("SIGINT", () => {
-  release();
-  caffeinate.kill();
-  process.exit(130);
-});
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"])
+  process.on(sig, () => {
+    if (dragPid) {
+      acperf("mouseup");
+      acperf("quit", String(dragPid));
+    }
+    release();
+    caffeinate.kill();
+    process.exit(128 + ({ SIGINT: 2, SIGTERM: 15, SIGHUP: 1 })[sig]);
+  });
 try {
   if (!wanted.includes("prepare") && !state.meta.prepared) fail("no prepared copies in this --out: run the prepare phase first");
   for (const name of wanted) {
@@ -584,7 +649,7 @@ try {
         continue;
       }
     }
-    if (opt.resume && state.phases[name]?.result) {
+    if (opt.resume && state.phases[name]?.result && !state.phases[name].partial) {
       log(`${name}: done already (--resume)`);
       continue;
     }
@@ -597,10 +662,12 @@ try {
     const watch = name === "drag" ? { stop: () => null } : new InputWatch();
     const before = machine();
     const t0 = Date.now();
+    partial = [];
     log(`${name}: start (load ${before.load.join("/")})`);
     try {
       const result = await phases[name]();
-      state.phases[name] = { before, after: machine(), inputSecs: watch.stop(), minutes: (Date.now() - t0) / 60000, result };
+      state.phases[name] = { before, after: machine(), inputSecs: watch.stop(), minutes: (Date.now() - t0) / 60000, result, ...(partial.length ? { partial } : {}) };
+      if (partial.length) log(`${name}: PARTIAL ${partial.join(" | ")}`);
     } catch (error) {
       state.phases[name] = { before, after: machine(), inputSecs: watch.stop(), minutes: (Date.now() - t0) / 60000, error: String(error.message ?? error) };
       log(`${name}: FAILED ${error.message ?? error}`);
@@ -615,7 +682,7 @@ try {
 const report = opt.md ? resolve(opt.md) : join(repoRoot, "docs/native", `baseline-${state.meta.version}.md`);
 writeFileSync(report, render() + "\n");
 log(`wrote ${report} and ${stateFile}`);
-const failed = Object.entries(state.phases).filter(([, p]) => p.error).map(([n]) => n);
-if (failed.length) log(`kept ${out}: ${failed.join(", ")} failed (rerun them with --resume)`);
+const failed = Object.entries(state.phases).filter(([, p]) => p.error || p.partial).map(([n]) => n);
+if (failed.length) log(`kept ${out}: ${failed.join(", ")} failed or lost runs (rerun them with --resume)`);
 else if (!opt.keep)
   for (const name of readdirSync(out)) if (name !== "baseline.json" && statSync(join(out, name)).isDirectory()) rmSync(join(out, name), { recursive: true, force: true });

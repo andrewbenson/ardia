@@ -80,7 +80,8 @@
 //     on a loaded Mac where scripts/agent/cpu-cap pauses the instance. Timings taken meanwhile are invalid).
 //
 // Results: <out>/<label>/results.json (every sample, rewritten after each run; a run that throws is logged, kept in
-// `errors`, and the next run goes on) and a summary table (median, min–max over runs) on stdout.
+// `errors`, and the next run goes on; the exit status is then 3. A refused guard, a native API skew or a
+// still-running instance stops the bench) and a summary table (median, min–max over runs) on stdout.
 // Needs: Node 22+, swiftc (builds scripts/perf/acperf.swift), clang (builds scripts/perf/acmark.m, loaded into the copy
 // of the app to mark when a window's content appears), the app signed with an identity in the keychain.
 //
@@ -887,7 +888,7 @@ async function journeyRun(side, i, parts) {
       const j = ac.journeys();
       return { blocked: res.headers.get("x-bench-blocked"), on: j.on, native: j.native, sharing: ac.telemetry().saved.sharing };
     });`);
-    if (r.guard.blocked !== "1") throw new Error("bench-offline.js isn't guarding fetch: refusing to run with sharing on");
+    if (r.guard.blocked !== "1") throw new FatalError("bench-offline.js isn't guarding fetch: refusing to run with sharing on");
     if (!r.guard.on || !r.guard.native) throw new Error(`field timing isn't on in the app: ${JSON.stringify(r.guard)}`);
     const closeTab = (tab) => tab && app.run(`ac.store.getState().closeTab(${JSON.stringify(tab)}); return true;`);
     if (parts.has("newtabkey")) {
@@ -1272,12 +1273,15 @@ if (opt.control) {
 }
 const sides = control ? [candidate, control] : [candidate];
 
+class FatalError extends Error {}
+
 async function interleaved(n, fn) {
   for (let i = 0; i < n; i++)
     for (const side of !control ? sides : i % 2 ? [candidate, control] : [control, candidate]) {
       try {
         await fn(side, i);
       } catch (error) {
+        if (error instanceof FatalError || /Native API skew|a bench instance is still running/.test(String(error?.message ?? error))) throw error;
         log(`${side.tag}run ${i} failed: ${String(error?.message ?? error).slice(0, 300)}`);
         (side.results.errors ??= []).push({ run: i, phase: fn.name || "run", error: String(error?.message ?? error), at: new Date().toISOString() });
       }
@@ -1342,6 +1346,11 @@ try {
   if (sides.some((x) => x.results.frames.length)) console.log(`\n${frameTable(Object.fromEntries(sides.map((x) => [x.label, x.results])))}`);
   if (opt["frames-stalls"]) for (const side of sides) console.log(`\n${stallTable(side.results, `Run-loop iterations by length, ${side.label}:`)}`);
   if (control) console.log(`\nresults: ${join(candidate.dir, "results.json")}, ${join(control.dir, "results.json")}`);
+  const failedRuns = sides.reduce((n, x) => n + (x.results.errors?.length ?? 0), 0);
+  if (failedRuns) {
+    console.error(`${failedRuns} run(s) failed (see "errors" in results.json); exiting 3`);
+    process.exitCode = 3;
+  }
 } finally {
   await cleanup();
 }

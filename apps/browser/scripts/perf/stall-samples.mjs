@@ -3,7 +3,7 @@
 // by the code they ran: Chrome, React Native / Hermes, the app's own code, or the system.
 //
 //   node apps/browser/scripts/perf/stall-samples.mjs [--symbols <Chromium Framework (dSYM DWARF file)>] [--app-dsym <the app's dSYM DWARF file>]
-//        [--top <n>] [--json <file>] <dir>...
+//        [--windows <kept.json>] [--top <n>] [--json <file>] <dir>...
 //
 // Each <dir> is searched for acsample-stalls.txt (one per instance's data folder; native-baseline.mjs passes the
 // bench's --out). A sample counts for the first image, from the leaf up, that isn't the system's, so time in
@@ -11,7 +11,8 @@
 // executable, so its frames are told apart by symbol name: "react" is RCT…, facebook::react/yoga, YG…, folly::, EX…
 // and Expo…; "hermes" is hermes:: and facebook::hermes; the rest is "app". Release builds are stripped, so pass
 // --app-dsym (the .app.dSYM next to the build) or those frames count as "app". Without --symbols, Chromium frames
-// show as offsets.
+// show as offsets. --windows lists the [scenario, from ms, to ms] windows to keep (the bench's reps that passed their
+// check); iterations that start outside them are left out.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,7 +20,7 @@ import { parseArgs } from "node:util";
 
 const { values: o, positionals: dirs } = parseArgs({
   allowPositionals: true,
-  options: { symbols: { type: "string" }, "app-dsym": { type: "string" }, top: { type: "string", default: "8" }, json: { type: "string" }, help: { type: "boolean", short: "h" } },
+  options: { symbols: { type: "string" }, "app-dsym": { type: "string" }, windows: { type: "string" }, top: { type: "string", default: "8" }, json: { type: "string" }, help: { type: "boolean", short: "h" } },
 });
 if (o.help || !dirs.length) {
   const lines = readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1);
@@ -44,8 +45,8 @@ function find(dir, out = []) {
 
 const isExecutable = (file) => !!file && /\.app\/Contents\/MacOS\/[^/]+$/.test(file);
 function byName(name) {
-  if (/^(hermes::|facebook::hermes|_?hermes_|HermesRuntime)/.test(name)) return "hermes";
-  if (/^(-?\[?RCT|RCT|facebook::(react|yoga)|YG[A-Z]|folly::|-?\[?EX[A-Z]|EX[A-Z]|Expo|ExpoModulesCore|.*\bExpoModulesCore\b|.*\bReact\b)/.test(name)) return "react";
+  if (/hermes::|facebook::hermes|\bhermes_|HermesRuntime/.test(name)) return "hermes";
+  if (/RCT|facebook::(react|yoga|jsi)|\bYG[A-Z]|folly::|\[EX[A-Z]|\bEX[A-Z]|Expo|\bReact\b|ReactNative/.test(name)) return "react";
   return "app";
 }
 function category(file, name) {
@@ -85,7 +86,9 @@ if (!files.length) {
   console.error(`stall-samples: no acsample-stalls.txt under ${dirs.join(", ")}`);
   process.exit(1);
 }
-const parsed = files.map((f) => parse(readFileSync(f, "utf8")));
+const kept = o.windows ? JSON.parse(readFileSync(o.windows, "utf8")) : null;
+const inKept = (it) => !kept || kept.some(([scenario, from, to]) => scenario === it.scenario && it.startMs >= from - 1 && it.startMs <= to);
+const parsed = files.map((f) => parse(readFileSync(f, "utf8"))).map((p) => ({ ...p, iterations: p.iterations.filter(inKept) }));
 
 const exeNames = new Map();
 if (o["app-dsym"]) {

@@ -46,6 +46,16 @@ func hidIdleNs() -> UInt64? {
     .takeRetainedValue() as? NSNumber)?.uint64Value
 }
 
+let dragLock = NSLock()
+nonisolated(unsafe) var dragButtonDown = false
+nonisolated(unsafe) var dragFinished = false
+nonisolated(unsafe) var dragStop: String? = nil
+
+func postMouseUp() {
+  let at = CGEvent(source: nil)?.location ?? .zero
+  CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: at, mouseButton: .left)?.post(tap: .cghidEventTap)
+}
+
 func printJSON(_ value: Any) {
   let data = try! JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
   print(String(data: data, encoding: .utf8)!)
@@ -280,44 +290,83 @@ case "postmouse":
   usleep(useconds_t(holdMs * 1000))
   click(middle ? .otherMouseUp : right ? .rightMouseUp : .leftMouseUp)
   printJSON(["heldMs": holdMs])
+case "mouseup":
+  postMouseUp()
+  printJSON(["posted": "mouseup"])
 case "postdrag":
   let pair = { (text: String) -> CGPoint? in
     let parts = text.split(separator: ",").compactMap { Double($0) }
-    return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
+    guard parts.count == 2, parts.allSatisfy({ $0.isFinite && abs($0) <= 20_000 }) else { return nil }
+    return CGPoint(x: parts[0], y: parts[1])
   }
   guard args.count >= 8, let pid = pid_t(args[2]), pid > 1, let window = CGWindowID(args[3]), let from = pair(args[4]), let delta = pair(args[5]),
-        let steps = Int(args[6]), steps > 0, steps <= 400, let gap = Double(args[7]), gap >= 1, gap <= 50 else {
-    FileHandle.standardError.write("usage: acperf postdrag <pid> <window id> <from x,y> <dx,dy> <steps ≤ 400> <gap ms 1–50> [line|wiggle]\n".data(using: .utf8)!)
+        abs(delta.x) <= 2000, abs(delta.y) <= 2000, let steps = Int(args[6]), steps > 0, steps <= 400, let gap = Double(args[7]), gap.isFinite, gap >= 1, gap <= 50
+  else {
+    FileHandle.standardError.write("usage: acperf postdrag <pid> <window id> <from x,y> <dx,dy ≤ 2000> <steps ≤ 400> <gap ms 1–50> [line|wiggle]\n".data(using: .utf8)!)
     exit(64)
   }
   let shape = args.count > 8 ? args[8] : "line"
-  func refuse(_ why: String) -> Never {
-    printJSON(["error": why, "posted": false])
-    exit(2)
-  }
   func origin() -> CGPoint? {
     guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], window) as? [[String: Any]],
           let b = list.first?[kCGWindowBounds as String] as? [String: Double] else { return nil }
     return CGPoint(x: b["X"] ?? 0, y: b["Y"] ?? 0)
   }
-  func topWindow(at p: CGPoint) -> (pid: pid_t, id: CGWindowID)? {
-    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return nil }
-    for w in list {
-      guard (w[kCGWindowAlpha as String] as? Double ?? 0) > 0, let b = w[kCGWindowBounds as String] as? [String: Double],
-            CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0).contains(p) else { continue }
-      return ((w[kCGWindowOwnerPID as String] as? Int32) ?? 0, (w[kCGWindowNumber as String] as? UInt32) ?? 0)
-    }
-    return nil
-  }
+  func onScreen() -> [[String: Any]] { (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? [] }
+  func ownerOf(_ w: [String: Any]) -> pid_t { (w[kCGWindowOwnerPID as String] as? Int32) ?? 0 }
   func ours() -> String? {
+    CFRunLoopRunInMode(.defaultMode, 0, true)
     guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else { return "pid \(pid) isn't the frontmost app" }
-    guard let top = topWindow(at: from) else { return "no window under \(from)" }
-    guard top.pid == pid, top.id == window else { return "the window under \(from) is \(top.id) of pid \(top.pid), not \(window) of pid \(pid)" }
+    let list = onScreen()
+    guard let front = list.first(where: { ($0[kCGWindowLayer as String] as? Int) == 0 }), ownerOf(front) == pid else {
+      return "the frontmost normal window isn't pid \(pid)'s"
+    }
+    guard let top = list.first(where: { w in
+      guard let b = w[kCGWindowBounds as String] as? [String: Double] else { return false }
+      return CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0).contains(from)
+    }) else { return "no window under \(from)" }
+    let topId = (top[kCGWindowNumber as String] as? UInt32) ?? 0
+    guard ownerOf(top) == pid, topId == window else { return "the window under \(from) is \(topId) of pid \(ownerOf(top)), not \(window) of pid \(pid)" }
     return nil
   }
-  if let why = ours() { refuse(why) }
-  guard let start = origin() else { refuse("no window \(window)") }
-  var buttonDown = false
+  func finish(_ body: [String: Any], code: Int32) -> Never {
+    dragLock.withLock {
+      if dragButtonDown { postMouseUp() }
+      dragButtonDown = false
+      dragFinished = true
+    }
+    printJSON(body)
+    exit(code)
+  }
+  if let why = ours() { finish(["error": why, "posted": "nothing"], code: 2) }
+  guard let start = origin() else { finish(["error": "no window \(window)", "posted": "nothing"], code: 2) }
+  atexit {
+    dragLock.withLock {
+      if dragButtonDown { postMouseUp() }
+      dragButtonDown = false
+    }
+  }
+  var signalSources: [DispatchSourceSignal] = []
+  for sig in [SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGTSTP] {
+    signal(sig, SIG_IGN)
+    let source = DispatchSource.makeSignalSource(signal: sig, queue: .global())
+    source.setEventHandler {
+      dragLock.withLock { dragStop = "signal \(sig)" }
+      usleep(300_000)
+      dragLock.withLock {
+        guard !dragFinished else { return }
+        if dragButtonDown { postMouseUp() }
+        dragButtonDown = false
+        dragFinished = true
+      }
+      _exit(128 + sig)
+    }
+    source.resume()
+    signalSources.append(source)
+  }
+  let deadline = DispatchSource.makeTimerSource(queue: .global())
+  deadline.schedule(deadline: .now() + .milliseconds(Int(Double(steps) * gap * 3) + 10_000))
+  deadline.setEventHandler { dragLock.withLock { dragStop = "its own deadline" } }
+  deadline.resume()
   var lastPoint = from
   func post(_ type: CGEventType, _ at: CGPoint, delta d: CGPoint = .zero) {
     guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: at, mouseButton: .left) else { return }
@@ -327,23 +376,6 @@ case "postdrag":
       event.setIntegerValueField(.mouseEventDeltaY, value: Int64(d.y.rounded()))
     }
     event.post(tap: .cghidEventTap)
-  }
-  func release() {
-    guard buttonDown else { return }
-    buttonDown = false
-    post(.leftMouseUp, lastPoint)
-  }
-  atexit {
-    guard let event = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: CGEvent(source: nil)?.location ?? .zero, mouseButton: .left) else { return }
-    if CGEventSource.buttonState(.hidSystemState, button: .left) { event.post(tap: .cghidEventTap) }
-  }
-  var signalSources: [DispatchSourceSignal] = []
-  for sig in [SIGINT, SIGTERM, SIGHUP, SIGQUIT] {
-    signal(sig, SIG_IGN)
-    let source = DispatchSource.makeSignalSource(signal: sig, queue: .global())
-    source.setEventHandler { exit(128 + sig) }
-    source.resume()
-    signalSources.append(source)
   }
   func point(_ i: Int) -> CGPoint {
     if shape == "wiggle" {
@@ -356,14 +388,24 @@ case "postdrag":
   }
   post(.mouseMoved, from)
   usleep(50_000)
-  if let why = ours() { refuse(why) }
+  if let why = ours() { finish(["error": why, "posted": "the pointer moved to the start, no button"], code: 2) }
   let downAt = nowMs()
-  buttonDown = true
-  post(.leftMouseDown, from)
+  let stoppedBeforeDown: String? = dragLock.withLock {
+    if let stop = dragStop { return stop }
+    dragButtonDown = true
+    post(.leftMouseDown, from)
+    return nil
+  }
+  if let stop = stoppedBeforeDown { finish(["error": "stopped by \(stop) before the button went down", "posted": "the pointer only"], code: 2) }
   var rows: [[String: Any]] = []
   var firstMove: [String: Any]? = nil
   var aborted: String? = nil
   for i in 1...steps {
+    CFRunLoopRunInMode(.defaultMode, 0, true)
+    if let stop = dragLock.withLock({ dragStop }) {
+      aborted = "stopped by \(stop) at step \(i)"
+      break
+    }
     if NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
       aborted = "pid \(pid) stopped being frontmost at step \(i)"
       break
@@ -381,14 +423,20 @@ case "postdrag":
       firstMove = ["ms": read - downAt, "travelPt": hypot(p.x - from.x, p.y - from.y), "step": i, "resolutionMs": gap]
     }
   }
-  release()
+  dragLock.withLock {
+    if dragButtonDown {
+      dragButtonDown = false
+      post(.leftMouseUp, lastPoint)
+    }
+  }
   usleep(200_000)
   let end = origin() ?? start
   let endError = hypot((lastPoint.x - from.x) - (end.x - start.x), (lastPoint.y - from.y) - (end.y - start.y))
   let trails = rows.compactMap { $0["trail"] as? Double }.sorted()
-  printJSON(["shape": shape, "steps": steps, "gapMs": gap, "firstMove": firstMove ?? NSNull(), "endErrorPt": endError, "aborted": aborted ?? NSNull(),
-             "trailMedianPt": trails.isEmpty ? 0 : trails[trails.count / 2], "trailMaxPt": trails.last ?? 0, "rows": rows])
+  finish(["shape": shape, "steps": steps, "gapMs": gap, "firstMove": firstMove ?? NSNull(), "endErrorPt": endError, "aborted": aborted ?? NSNull(),
+          "movedX": end.x - start.x, "movedY": end.y - start.y,
+          "trailMedianPt": trails.isEmpty ? 0 : trails[trails.count / 2], "trailMaxPt": trails.last ?? 0, "rows": rows], code: aborted == nil ? 0 : 3)
 default:
-  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | hididle | activate <pid> | display | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture> [events/s] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right] | postdrag <pid> <window id> <from x,y> <dx,dy> <steps> <gap ms> [line|wiggle]\n".data(using: .utf8)!)
+  FileHandle.standardError.write("usage: acperf rusage <pid>... | windows <pid> | hididle | activate <pid> | display | quit <pid> | waitwindow <pid> <secs> | newwindow <pid> <secs> | input <pid> <secs> | postkeys <pid> <gap ms> <spec>... | postscroll <pid> <window id> <x> <y> <window x> <window y> <gesture> [events/s] | postmouse <pid> <window id> <x> <y> <window x> <window y> <hold ms> [left|middle|right] | postdrag <pid> <window id> <from x,y> <dx,dy> <steps> <gap ms> [line|wiggle] | mouseup\n".data(using: .utf8)!)
   exit(64)
 }

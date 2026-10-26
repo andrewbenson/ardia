@@ -22,6 +22,7 @@ public final class PersistenceWriter: Sendable {
     var exportedSession: JSONValue?
     var exportedDownloads: JSONValue?
     var failedInARow = 0
+    var durable = false
   }
 
   let store: Store
@@ -64,6 +65,7 @@ public final class PersistenceWriter: Sendable {
     guard !commit.changes.isEmpty else { return }
     let (scheduleRows, scheduleShadow) = pending.withLock { p -> (Bool, Bool) in
       p.rows = true
+      if commit.durable { p.durable = true }
       p.shadow = true
       let rows = !p.rowsScheduled
       if rows { p.rowsScheduled = true }
@@ -80,12 +82,13 @@ public final class PersistenceWriter: Sendable {
   }
 
   func flushRows() {
-    let dirty = pending.withLock { p -> Bool in
+    let (dirty, durable) = pending.withLock { p -> (Bool, Bool) in
       defer {
         p.rows = false
         p.rowsScheduled = false
+        p.durable = false
       }
-      return p.rows
+      return (p.rows, p.durable)
     }
     guard dirty else { return }
     let (rev, state) = store.snapshot
@@ -95,7 +98,7 @@ public final class PersistenceWriter: Sendable {
     let (previous, previousSettings, previousDownloads) = pending.withLock { ($0.written, $0.settings, $0.downloads) }
     if rows == previous && settings == previousSettings && downloads == previousDownloads { return }
     do {
-      try database.pool.write { db in
+      try database.write(durable: durable) { db in
         if scope == .everything { try Rows.writeWorkspace(db, rows, previous: previous) }
         if settings != previousSettings { try Rows.writeSettings(db, settings) }
         if downloads != previousDownloads { try Rows.writeDownloads(db, downloads) }
@@ -112,6 +115,7 @@ public final class PersistenceWriter: Sendable {
       pending.withLock {
         $0.rows = true
         $0.rowsScheduled = true
+        $0.durable = $0.durable || durable
       }
       failed("rows: \(error)") { self.flushRows() }
     }
@@ -177,7 +181,10 @@ public final class PersistenceWriter: Sendable {
   public func flush(timeout: TimeInterval = 0.5) -> Bool {
     let done = DispatchSemaphore(value: 0)
     queue.async {
-      self.pending.withLock { $0.rows = true }
+      self.pending.withLock {
+        $0.rows = true
+        $0.durable = true
+      }
       self.flushRows()
       self.writeShadow()
       done.signal()

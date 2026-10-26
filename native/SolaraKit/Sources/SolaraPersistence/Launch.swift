@@ -60,7 +60,22 @@ public enum Launcher {
     let fm = FileManager.default
     try fm.createDirectory(at: folder.url, withIntermediateDirectories: true)
     try preserveOriginals(folder)
-    defer { pruneMovedAside(folder) }
+    let launch = try openUnpruned(folder, appVersion: appVersion, now: now, context: context, scope: scope)
+    pruneMovedAside(folder)
+    return launch
+  }
+
+  static let unreadableCodes: [ResultCode] = [.SQLITE_ERROR, .SQLITE_CORRUPT, .SQLITE_NOTADB, .SQLITE_SCHEMA, .SQLITE_MISMATCH, .SQLITE_FORMAT, .SQLITE_RANGE]
+
+  static func everHadDatabase(_ folder: DataFolder) -> Bool {
+    let base = folder.database.lastPathComponent
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.url.path)) ?? []
+    return names.contains { $0 == base || ($0.hasPrefix(base + ".") && $0 != folder.importing.lastPathComponent) }
+  }
+
+  static func openUnpruned(_ folder: DataFolder, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope) throws -> Launch {
+    let fm = FileManager.default
+    let originalsFallback = !everHadDatabase(folder)
     var movedAside: [String] = []
     var importReason: String? = nil
     var carried: PersistedState? = nil
@@ -85,6 +100,9 @@ public enum Launcher {
             carried = try? database.load()
             try database.close()
             importReason = reason
+            for file in [folder.session, folder.downloads] where fm.fileExists(atPath: file.path) {
+              movedAside.append(try copyAside(file, label: "pre-reimport", now: now))
+            }
             movedAside.append(try moveAside(folder.database, label: "superseded", now: now))
           } else {
             return try fromDatabase(database, folder: folder, now: now, context: context, scope: scope)
@@ -92,6 +110,9 @@ public enum Launcher {
         } catch let refused as ImportRefused {
           try? database.close()
           throw refused
+        } catch let error as DatabaseError where !unreadableCodes.contains(error.resultCode) {
+          try? database.close()
+          throw error
         } catch {
           try? database.close()
           importReason = "solara.sqlite could not be read: \(error)"
@@ -100,7 +121,8 @@ public enum Launcher {
       }
     }
 
-    let imported = try Importer.importFolder(folder, carrying: carried, appVersion: appVersion, now: now, context: context, scope: scope)
+    let imported = try Importer.importFolder(
+      folder, carrying: carried, appVersion: appVersion, now: now, context: context, scope: scope, originalsFallback: originalsFallback)
     let database = try SolaraDatabase(url: folder.database)
     var report = LaunchReport(source: .imported(reason: importReason ?? "first launch on the native store"))
     report.movedAside = movedAside
@@ -171,9 +193,10 @@ public enum Launcher {
     let fm = FileManager.default
     guard let names = try? fm.contentsOfDirectory(atPath: folder.url.path) else { return }
     let base = folder.database.lastPathComponent
+    let prefixes = [base + ".", base + "-wal.", base + "-shm.", folder.session.lastPathComponent + ".", folder.downloads.lastPathComponent + "."]
     var byLabel: [String: [String]] = [:]
-    for name in names {
-      for prefix in [base + ".", base + "-wal.", base + "-shm."] where name.hasPrefix(prefix) {
+    for name in names where !name.hasSuffix(".pre-native") {
+      for prefix in prefixes where name.hasPrefix(prefix) {
         let rest = name.dropFirst(prefix.count)
         guard let dash = rest.firstIndex(of: "-"), !name.hasSuffix("-wal"), !name.hasSuffix("-shm") else { continue }
         byLabel[prefix + rest[..<dash], default: []].append(name)
@@ -220,6 +243,18 @@ public enum Launcher {
       if fm.fileExists(atPath: side.path) { try fm.moveItem(at: side, to: URL(fileURLWithPath: target.path + suffix)) }
     }
     try fm.moveItem(at: url, to: target)
+    return name
+  }
+
+  static func copyAside(_ url: URL, label: String, now: Date) throws -> String {
+    let stamp = ISO8601DateFormatter.string(from: now, timeZone: .gmt, formatOptions: [.withFullDate, .withTime])
+    var name = "\(url.lastPathComponent).\(label)-\(stamp)"
+    var serial = 1
+    while FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: name).path) {
+      serial += 1
+      name = "\(url.lastPathComponent).\(label)-\(stamp)-\(serial)"
+    }
+    try FileManager.default.copyItem(at: url, to: url.deletingLastPathComponent().appending(path: name))
     return name
   }
 

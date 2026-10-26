@@ -63,7 +63,7 @@ public enum Importer {
     return value.object?.keys ?? []
   }
 
-  static let checkedCounts = ["profiles", "windows", "tabs"]
+  static let checkedCounts = ["profiles", "windows", "tabs", "groups", "splits", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs"]
 
   static func readableCounts(_ session: JSONValue?) -> [String: Int] {
     var out: [String: Int] = [:]
@@ -78,7 +78,9 @@ public enum Importer {
   static func refusal(before: [String: Int], readable: [String: Int]) -> String? {
     let lost = checkedCounts.filter { key in
       let had = before[key] ?? 0
-      return had > 0 && (readable[key] ?? 0) * 2 < had
+      let kept = readable[key] ?? 0
+      let leastLost = ["profiles", "windows", "tabs"].contains(key) ? 1 : 2
+      return had - kept >= leastLost && kept * 2 < had
     }
     if lost.isEmpty { return nil }
     return "session.json holds far fewer readable " + lost.map { "\($0) (\(readable[$0] ?? 0) of \(before[$0] ?? 0))" }.joined(separator: ", ")
@@ -87,13 +89,13 @@ public enum Importer {
 
   public static func read(
     _ folder: DataFolder, carrying carried: PersistedState?, settings owned: JSONObject? = nil, downloads ownedDownloads: [Download]? = nil,
-    context: LoadContext
+    context: LoadContext, originalsFallback: Bool = true
   ) -> ImportResult {
     var notes: [String] = []
     var refusal: String? = nil
     var meta: [String: String] = ["imported_from": "session.json"]
-    let sessionData = folder.read(folder.session) ?? folder.read(folder.preNativeSession)
-    let downloadsData = folder.read(folder.downloads) ?? folder.read(folder.preNativeDownloads)
+    let sessionData = folder.read(folder.session) ?? (originalsFallback ? folder.read(folder.preNativeSession) : nil)
+    let downloadsData = folder.read(folder.downloads) ?? (originalsFallback ? folder.read(folder.preNativeDownloads) : nil)
     var session: JSONValue? = nil
     if let sessionData {
       meta["source_session_sha256"] = Launcher.sha256(sessionData)
@@ -167,6 +169,9 @@ public enum Importer {
       let dropped = OrderedSet(ids(session, key).filter { !kept.contains($0) }).elements
       if !dropped.isEmpty { notes.append("loading dropped \(dropped.count) \(key): \(dropped.joined(separator: ", "))") }
     }
+    if refusal == nil, let settings = session?["settings"], !settings.isNull, settings.object == nil {
+      refusal = "session.json's settings aren't an object"
+    }
     if refusal == nil {
       refusal = Self.refusal(before: before, readable: readableCounts(session))
     }
@@ -186,9 +191,10 @@ public enum Importer {
   }
 
   public static func importFolder(
-    _ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope = .everything
+    _ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope = .everything,
+    originalsFallback: Bool = true
   ) throws -> ImportResult {
-    var result = read(folder, carrying: carried, context: context)
+    var result = read(folder, carrying: carried, context: context, originalsFallback: originalsFallback)
     if scope == .settingsAndDownloads {
       result.state = settingsAndDownloads(of: result.state)
       result.persisted.workspace = nil
@@ -241,11 +247,19 @@ public enum Importer {
     guard Darwin.fsync(fd) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
   }
 
+  static func barrierSync(_ url: URL) throws {
+    let fd = open(url.path, O_RDONLY)
+    guard fd >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    defer { close(fd) }
+    if fcntl(fd, F_BARRIERFSYNC) == 0 { return }
+    guard Darwin.fsync(fd) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+  }
+
   static func writeDurably(_ data: Data, to url: URL) throws {
     let temporary = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).writing")
     try data.write(to: temporary)
-    try fullSync(temporary)
+    try barrierSync(temporary)
     guard rename(temporary.path, url.path) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-    try fullSync(url.deletingLastPathComponent())
+    try barrierSync(url.deletingLastPathComponent())
   }
 }

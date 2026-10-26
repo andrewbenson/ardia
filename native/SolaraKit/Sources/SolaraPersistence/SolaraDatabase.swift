@@ -15,8 +15,9 @@ public final class SolaraDatabase: Sendable {
   static func configuration() -> Configuration {
     var config = Configuration()
     config.foreignKeysEnabled = true
+    config.busyMode = .timeout(5)
     config.prepareDatabase { db in
-      try db.execute(sql: "PRAGMA synchronous = FULL")
+      try db.execute(sql: "PRAGMA synchronous = NORMAL")
       try db.execute(sql: "PRAGMA fullfsync = ON")
       try db.execute(sql: "PRAGMA checkpoint_fullfsync = ON")
     }
@@ -32,6 +33,17 @@ public final class SolaraDatabase: Sendable {
     if try pool.read({ try migrator.hasBeenSuperseded($0) }) { throw OpenFailure.newerSchema }
     try migrator.migrate(pool)
     try pool.write { db in try Rows.setMeta(db, "schema", Schema.migrationNames.last!) }
+  }
+
+  public func write(durable: Bool, _ body: (Database) throws -> Void) throws {
+    try pool.writeWithoutTransaction { db in
+      if durable { try db.execute(sql: "PRAGMA synchronous = FULL") }
+      defer { if durable { try? db.execute(sql: "PRAGMA synchronous = NORMAL") } }
+      try db.inTransaction {
+        try body(db)
+        return .commit
+      }
+    }
   }
 
   public func close() throws {
@@ -173,8 +185,14 @@ public struct WorkspaceRows: Sendable, Equatable {
   public func readable() -> (rows: WorkspaceRows, unreadable: [String]) {
     var out = self
     var unreadable: [String] = []
-    for (name, keyed) in tables {
-      let bad = keyed.ids.filter { parsed(keyed.payloads[$0]).object == nil }
+    let windows = tables["window"] ?? KeyedRows()
+    let badWindows = Set(windows.ids.filter { parsed(windows.payloads[$0]).object == nil })
+    for (name, keyed) in tables.sorted(by: { $0.key < $1.key }) {
+      let bad = keyed.ids.filter { id in
+        if parsed(keyed.payloads[id]).object == nil { return true }
+        guard name != "window", let window = keyed.columns[id]?["window_id"]?.text else { return false }
+        return badWindows.contains(window)
+      }
       if bad.isEmpty { continue }
       var kept = keyed
       kept.ids = keyed.ids.filter { !bad.contains($0) }

@@ -135,7 +135,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let second = try open(folder)
     guard case .imported(let reason) = second.report.source else { Issue.record("expected a re-import"); return }
     #expect(reason.contains("session.json"))
-    #expect(second.report.movedAside.count == 1)
+    #expect(second.report.movedAside.filter { $0.hasPrefix("solara.sqlite.superseded-") }.count == 1)
     #expect(second.state.settings["searchEngine"] == "ecosia")
     #expect(second.state.settings["onlyNative"] == true)
   }
@@ -486,5 +486,101 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(reason.contains("workspace"))
     #expect(phaseOneB.state.settings["appearance"] == "dark")
     #expect(!phaseOneB.state.tabs.isEmpty)
+  }
+
+  @Test func aRunWithoutTheNativeStoreLooksLikeAnOlderBuildAndKeepsItsSession() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    try open(folder).database.close()
+    let fallbackRun = #"{"version":2,"settings":{"searchEngine":"brave","chosen":["searchEngine"],"inferred":[]}}"#
+    try write(fallbackRun, to: folder.session)
+    let next = try open(folder)
+    guard case .imported = next.report.source else { Issue.record("expected a re-import"); return }
+    #expect(next.state.settings["searchEngine"] == "brave")
+    let copies = names(in: folder).filter { $0.hasPrefix("session.json.pre-reimport-") }
+    #expect(copies.count == 1)
+    #expect(contents(folder.url.appending(path: copies[0])) == Data(fallbackRun.utf8))
+  }
+
+  @Test func aBusyDatabaseFailsTheLaunchWithoutMovingAnythingAside() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    try open(folder).database.close()
+    for day in 1...5 { try write("x", to: folder.url.appending(path: "solara.sqlite.unreadable-2026-10-0\(day)T000000")) }
+    var unsafe = Configuration()
+    unsafe.allowsUnsafeTransactions = true
+    let holder = try DatabaseQueue(path: folder.database.path, configuration: unsafe)
+    try holder.inDatabase { db in try db.execute(sql: "BEGIN EXCLUSIVE") }
+    #expect(throws: DatabaseError.self) { try open(folder) }
+    try holder.inDatabase { db in try db.execute(sql: "ROLLBACK") }
+    try holder.close()
+    #expect(FileManager.default.fileExists(atPath: folder.database.path))
+    #expect(names(in: folder).filter { $0.hasPrefix("solara.sqlite.unreadable-") }.count == 5)
+    let launch = try open(folder)
+    #expect(launch.report.source == .database)
+    #expect(names(in: folder).filter { $0.hasPrefix("solara.sqlite.unreadable-") }.count == 3)
+  }
+
+  @Test func aWrongTypedScalarIsKeptAsWrittenThroughTheDatabase() throws {
+    for (name, expected) in [
+      ("scalar-zoom-string", #""zoom":"1.5""#), ("scalar-created-string", #""createdAt":"1700000000000""#),
+      ("scalar-title-null", #""title":null"#), ("scalar-frame-strings", #""frame":["0",0,100,100]"#),
+    ] {
+      let folder = try scratchFolder()
+      try copyFixture(name, into: folder)
+      try open(folder).database.close()
+      let again = try open(folder)
+      #expect(again.report.source == .database, "\(name)")
+      #expect(document(again.state).contains(expected), "\(name)")
+    }
+    let folder = try scratchFolder()
+    try copyFixture("scalar-title-absent", into: folder)
+    try open(folder).database.close()
+    let doc = try JSONValue.parse(document(try open(folder).state))
+    #expect(doc["tabs"]?.array?.first?.object?.contains("title") == false)
+  }
+
+  @Test func childRowsOfAnUnreadableWindowStayInPlace() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    let first = try open(folder)
+    let window = first.state.windowOrder[0]
+    let tabs = first.state.windows[window]!.tabIds
+    try first.database.pool.write { db in try db.execute(sql: #"UPDATE "window" SET payload = 'not json' WHERE id = ?"#, arguments: [window]) }
+    try first.database.close()
+    let second = try open(folder)
+    let store = store(for: second)
+    let writer = PersistenceWriter(store: store, database: second.database, folder: folder, persisted: second.persisted, clock: { 42 })
+    try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    #expect(writer.flush(timeout: 5))
+    let kept = try second.database.pool.read { db in try Int.fetchOne(db, sql: "SELECT count(*) FROM tab WHERE window_id = ?", arguments: [window]) }
+    #expect(kept == tabs.count)
+  }
+
+  @Test func theOriginalsAreNotReadOnceADatabaseHasExisted() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    try open(folder).database.close()
+    try FileManager.default.removeItem(at: folder.session)
+    try write("not sqlite, not even close, padding padding padding padding padding padding padding", to: folder.database)
+    let launch = try open(folder)
+    #expect(launch.state.tabs.isEmpty)
+  }
+
+  @Test func archivesAndSettingsCountTowardARefusal() throws {
+    let nulls = #"{"version":2,"closedTabs":[null,null,null,{"kind":"tab","id":"c","tab":{"url":"https://c/"},"windowId":"w","index":0,"closedAt":1}]}"#
+    let folder = try scratchFolder()
+    try write(nulls, to: folder.session)
+    #expect(throws: ImportRefused.self) { try open(folder) }
+    let other = try scratchFolder()
+    try write(#"{"version":2,"settings":"dark"}"#, to: other.session)
+    #expect(throws: ImportRefused.self) { try open(other) }
+  }
+
+  @Test func aClosedWindowWithAnUnreadableTabIsDroppedWhole() throws {
+    let folder = try scratchFolder()
+    try copyFixture("wrong-shape-closed-window-tab-number", into: folder)
+    let launch = try open(folder)
+    #expect(launch.state.closedWindows.isEmpty)
   }
 }

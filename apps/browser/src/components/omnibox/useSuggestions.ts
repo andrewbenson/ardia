@@ -30,7 +30,7 @@ const WARM_SLICE_MS = 4;
 type BookmarkRow = { url: string; title: string; favicon: string | null };
 const bookmarkCache = new WeakMap<Bookmarks, Map<string, BookmarkRow[]>>();
 
-function profileBookmarks(b: Bookmarks, profileId: string): BookmarkRow[] {
+export function profileBookmarks(b: Bookmarks, profileId: string): BookmarkRow[] {
   let perProfile = bookmarkCache.get(b);
   if (!perProfile) bookmarkCache.set(b, (perProfile = new Map()));
   let rows = perProfile.get(profileId);

@@ -1,0 +1,131 @@
+import AppKit
+import ExpoModulesCore
+import Foundation
+import SolaraOmnibox
+import SolaraStore
+import SolaraUI
+
+public class NewTabModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("SolaraNewTab")
+
+    Function("available") { () -> Bool in
+      ProcessInfo.processInfo.environment["ARDIA_NATIVE_NEWTAB"] != "0" && NativeSettingsHandle.active
+    }
+
+    AsyncFunction("setTabs") { (profileId: String, json: String) in
+      let rows = NewTabRows.tabs(json)
+      await MainActor.run { NewTabSources.shared.setTabs(rows, profileId: profileId) }
+    }
+
+    AsyncFunction("setHistory") { (profileId: String, json: String) in
+      let rows = NewTabRows.history(json)
+      await MainActor.run { NewTabSources.shared.setHistory(rows, profileId: profileId) }
+    }
+
+    AsyncFunction("setBookmarks") { (profileId: String, json: String) in
+      let rows = NewTabRows.bookmarks(json)
+      await MainActor.run { NewTabSources.shared.setBookmarks(rows, profileId: profileId) }
+    }
+
+    AsyncFunction("setActions") { (windowId: String, json: String) in
+      let rows = NewTabRows.actions(json)
+      await MainActor.run { NewTabSources.shared.setActions(rows, windowId: windowId) }
+    }
+
+    AsyncFunction("setExtensions") { (windowId: String, json: String) in
+      let rows = NewTabRows.extensions(json)
+      await MainActor.run { NewTabSources.shared.setExtensions(rows, windowId: windowId) }
+    }
+
+    AsyncFunction("forgetWindow") { (windowId: String) in
+      await MainActor.run { NewTabSources.shared.forget(windowId: windowId) }
+    }
+
+    View(NativeNewTabView.self) {
+      Events(NativeNewTabView.events)
+
+      Prop("windowId") { (view: NativeNewTabView, v: String) in MainActor.assumeIsolated { view.windowId = v } }
+      Prop("tabId") { (view: NativeNewTabView, v: String) in MainActor.assumeIsolated { view.tabId = v } }
+      Prop("profileId") { (view: NativeNewTabView, v: String) in MainActor.assumeIsolated { view.profileId = v } }
+      Prop("incognito") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.hero.incognito = v ?? false } }
+      Prop("onboarding") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.hero.onboarding = v ?? false } }
+      Prop("playIntro") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.hero.playIntro = v ?? false } }
+      Prop("panelOpen") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.hero.panelOpen = v ?? false } }
+      Prop("under") { (view: NativeNewTabView, v: Double?) in MainActor.assumeIsolated { view.hero.under = v ?? 0 } }
+      Prop("dark") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.dark = v ?? false } }
+      Prop("theme") { (view: NativeNewTabView, v: [String: String]?) in MainActor.assumeIsolated { view.themeTokens = v ?? [:] } }
+      Prop("driven") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.driven = v ?? false } }
+      Prop("marks") { (view: NativeNewTabView, v: [String: String]?) in MainActor.assumeIsolated { view.marks = v ?? [:] } }
+
+      OnViewDidUpdateProps { (view: NativeNewTabView) in MainActor.assumeIsolated { view.propsDidUpdate() } }
+
+      AsyncFunction("focus") { (view: NativeNewTabView) in MainActor.assumeIsolated { view.hero.focusBar() } }.runOnQueue(.main)
+
+      AsyncFunction("applyMenu") { (view: NativeNewTabView, choice: String) in
+        MainActor.assumeIsolated { if let c = HeroMenuChoice(rawValue: choice) { view.hero.model?.apply(c) } }
+      }.runOnQueue(.main)
+
+      AsyncFunction("type") { (view: NativeNewTabView, text: String) in
+        MainActor.assumeIsolated { view.hero.model?.driverType(text) }
+      }.runOnQueue(.main)
+
+      AsyncFunction("clear") { (view: NativeNewTabView) in MainActor.assumeIsolated { view.hero.model?.reset() } }.runOnQueue(.main)
+
+      AsyncFunction("key") { (view: NativeNewTabView, key: String, mods: [String: Bool]?) in
+        MainActor.assumeIsolated { _ = view.hero.model?.driverKey(key, mods ?? [:]) }
+      }.runOnQueue(.main)
+
+      AsyncFunction("select") { (view: NativeNewTabView, start: Int, end: Int) in
+        MainActor.assumeIsolated { view.hero.model?.selectionChanged(TextSelection(start: start, end: end)) }
+      }.runOnQueue(.main)
+
+      AsyncFunction("submit") { (view: NativeNewTabView) in MainActor.assumeIsolated { view.hero.model?.submit() } }.runOnQueue(.main)
+
+      AsyncFunction("state") { (view: NativeNewTabView) -> String in
+        MainActor.assumeIsolated { view.driverStateJSON() }
+      }.runOnQueue(.main)
+
+      AsyncFunction("measure") { (view: NativeNewTabView) -> [String: Double] in MainActor.assumeIsolated { view.measure() } }.runOnQueue(.main)
+    }
+  }
+}
+
+enum NewTabRows {
+  private static func objects(_ json: String) -> [[String: Any]] {
+    guard let data = json.data(using: .utf8), let list = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+    return list
+  }
+
+  private static func string(_ o: [String: Any], _ key: String) -> String { o[key] as? String ?? "" }
+
+  private static func optional(_ o: [String: Any], _ key: String) -> String? { o[key] as? String }
+
+  static func tabs(_ json: String) -> [TabRow] {
+    objects(json).map { TabRow(id: string($0, "id"), url: string($0, "url"), title: string($0, "title"), favicon: optional($0, "favicon")) }
+  }
+
+  static func history(_ json: String) -> [HistoryRow] {
+    objects(json).map {
+      HistoryRow(
+        url: string($0, "url"), title: string($0, "title"), favicon: optional($0, "favicon"), visits: ($0["visits"] as? Double) ?? 0,
+        lastVisit: ($0["lastVisit"] as? Double) ?? 0)
+    }
+  }
+
+  static func bookmarks(_ json: String) -> [BookmarkRow] {
+    objects(json).map { BookmarkRow(url: string($0, "url"), title: string($0, "title"), favicon: optional($0, "favicon")) }
+  }
+
+  static func actions(_ json: String) -> [CommandAction] {
+    objects(json).map {
+      CommandAction(id: string($0, "id"), title: string($0, "title"), keywords: $0["keywords"] as? [String], icon: optional($0, "icon"), hint: optional($0, "hint"))
+    }
+  }
+
+  static func extensions(_ json: String) -> [ExtensionCandidate] {
+    objects(json).map {
+      ExtensionCandidate(id: string($0, "id"), title: string($0, "title"), icon: optional($0, "icon"), action: ($0["action"] as? Bool) ?? false, options: ($0["options"] as? Bool) ?? false)
+    }
+  }
+}

@@ -129,7 +129,7 @@ struct FaviconFallbackTile: View {
 
 struct SuggestionIconView: View {
   @Environment(\.newTab) private var env
-  let suggestion: Suggestion
+  let suggestion: SolaraOmnibox.Suggestion
   var color: Color?
 
   var body: some View {
@@ -156,7 +156,7 @@ struct SuggestionIconView: View {
   }
 }
 
-func suggestionLabels(_ s: Suggestion) -> (String, String?) {
+func suggestionLabels(_ s: SolaraOmnibox.Suggestion) -> (String, String?) {
   switch s {
   case .page(let url, let title, _, let tabId, _, _):
     if let tabId, !tabId.isEmpty { return (title.isEmpty ? displayUrl(url) : title, "Switch to Tab") }
@@ -172,7 +172,7 @@ func suggestionLabels(_ s: Suggestion) -> (String, String?) {
   }
 }
 
-func isRemovable(_ s: Suggestion?) -> String? {
+func isRemovable(_ s: SolaraOmnibox.Suggestion?) -> String? {
   if case .page(let url, _, _, let tabId, _, let visited)? = s, visited, tabId?.isEmpty ?? true { return url }
   return nil
 }
@@ -184,7 +184,7 @@ struct HoverButtonStyle: ButtonStyle {
 struct SuggestionRowView: View {
   @Environment(\.newTab) private var env
   @State private var hovered = false
-  let suggestion: Suggestion
+  let suggestion: SolaraOmnibox.Suggestion
   let selected: Bool
   let trailing: String?
   let model: HeroBarModel
@@ -296,9 +296,10 @@ struct AddChipView: View {
         SymbolImage(name: "arrow.up.right", size: 10, weight: .medium, color: env.theme.chipText.color, box: CGSize(width: 14, height: 14))
         Text("Open a tab or file").font(.system(size: 13)).foregroundStyle(env.theme.chipText.color)
       }
-      .padding(.leading, 9)
-      .padding(.trailing, 12)
+      .padding(.leading, 10)
+      .padding(.trailing, 13)
       .frame(height: 32)
+      .fixedSize()
       .background(Capsule().fill(hovered ? env.theme.rowHover.color : .clear))
       .overlay(Capsule().strokeBorder(env.theme.chipBorder.color, lineWidth: 1))
     }
@@ -346,7 +347,7 @@ struct HeroBarContent: View {
       HStack(spacing: 8) {
         leadingIcon.frame(width: 18)
         if let scope = model.scope { ScopeChipView(scope: scope) }
-        HeroFieldView(model: model, theme: env.theme)
+        HeroFieldView(model: model, theme: env.theme).padding(.leading, 2)
       }
       .padding(.leading, 18)
       .padding(.trailing, 18)
@@ -404,6 +405,7 @@ struct IncognitoHeadingView: View {
       Text("Pages you visit here aren't saved to your history. Cookies and site data are deleted when you close all Incognito windows.")
         .font(.system(size: 13))
         .lineSpacing(18 - NSFont.systemFont(ofSize: 13).lineHeight)
+        .padding(.vertical, (18 - NSFont.systemFont(ofSize: 13).lineHeight) / 2)
         .foregroundStyle(env.theme.textSecondary.color)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 460)

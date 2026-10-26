@@ -52,3 +52,4 @@ export function serveNativeSettings(handlers: Record<string, SettingsHandler>): 
       .catch(() => {});
   });
 }
+export * from "./newTab";

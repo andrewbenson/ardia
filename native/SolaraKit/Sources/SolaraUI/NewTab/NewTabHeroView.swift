@@ -44,7 +44,7 @@ public final class NewTabHeroView: NSView {
   private let surface = BarSurfaceView(frame: .zero)
   private var content: NSHostingView<AnyView>?
   private var heading: NSHostingView<AnyView>?
-  private var barHeight: CGFloat = NewTabLayout.barHeight - 2 * NewTabLayout.barBorder
+  private var barHeight: CGFloat = NewTabLayout.barHeight
   private var headingHeight: CGFloat = 0
   private var reported: (CGFloat, CGFloat)?
   private var intro: MarkIntroPlayer?
@@ -137,7 +137,7 @@ public final class NewTabHeroView: NSView {
     CATransaction.setDisableActions(true)
     mark.frame = frames.mark
     for s in [shadowNear, shadowFar, surface] { s.frame = frames.bar }
-    content?.frame = surface.bounds
+    content?.frame = surface.bounds.insetBy(dx: NewTabLayout.barBorder, dy: NewTabLayout.barBorder)
     if showsHeading {
       if heading == nil { makeHeading() }
       let size = heading?.fittingSize ?? .zero
@@ -208,8 +208,9 @@ public final class NewTabHeroView: NSView {
     heading = hosting
   }
 
-  private func setBarHeight(_ h: CGFloat) {
-    guard h > 0, h != barHeight else { return }
+  private func setBarHeight(_ contentHeight: CGFloat) {
+    let h = contentHeight + 2 * NewTabLayout.barBorder
+    guard contentHeight > 0, h != barHeight else { return }
     barHeight = h
     needsLayout = true
   }

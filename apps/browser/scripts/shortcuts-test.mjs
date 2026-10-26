@@ -237,6 +237,17 @@ const focuses = {
     },
     teardown: () => ac(`ac.store.getState().closePanel("w1");`),
   },
+  heroBar: {
+    press: { asKey: true },
+    setup: async () => {
+      await ac(`ac.runCommand({ command: "newTab", arg: null, windowId: "w1" });`);
+      await sleep(1500);
+    },
+    teardown: async () => {
+      await ac(`const s = ac.store.getState(); for (const t of Object.values(s.tabs)) if (t.windowId === "w1" && !t.url) s.closeTab(t.id);`);
+      await showPage("t3");
+    },
+  },
   devTools: {
     press: { focus: "devtools", asKey: true, wait: 800 },
     setup: async () => {
@@ -272,7 +283,7 @@ for (const [focusName, focus] of Object.entries(focuses)) {
   for (const [name, key, expect, , only] of shortcuts) {
     if (focusName !== "sidebar" && (only === "window-only" || only === "clipboard")) continue;
     const inField =
-      (only === "not-field" && (focusName === "field" || focusName === "commandBar" || focusName === "devTools")) ||
+      (only === "not-field" && (focusName === "field" || focusName === "commandBar" || focusName === "heroBar" || focusName === "devTools")) ||
       (only === "page-field" && (focusName === "field" || focusName === "devTools")) ||
       ((only === "devtools-own" || devToolsOwn.has(name)) && focusName === "devTools");
     await focus.before?.();
@@ -331,6 +342,15 @@ await ac(`ac.runCommand({ command: "focusCommandBar", arg: null, windowId: "w1" 
 await sleep(600);
 await real("⌘2 in the command bar", cmd("2", 19), { asKey: true }, "pin2");
 check("…and the command bar closes", !(await state()).panel, "");
+{
+  await ac(`ac.runCommand({ command: "newTab", arg: null, windowId: "w1" });`);
+  await sleep(1500);
+  const typed = await ac(`return ac.shell.devTypeKeys("key", "abc", 30).then(() => new Promise((r) => setTimeout(r, 400)))
+    .then(() => ac.omnibox.get("w1:hero")?.state().typed ?? null);`);
+  check("⌘T puts the keyboard focus in the New Tab bar", typed === "abc", `the bar holds ${JSON.stringify(typed)}`);
+  await real("⌘2 in the New Tab bar", cmd("2", 19), { asKey: true }, "pin2");
+  await ac(`const s = ac.store.getState(); for (const t of Object.values(s.tabs)) if (t.windowId === "w1" && !t.url) s.closeTab(t.id);`);
+}
 await real("⇧⌘] (Next Tab)", cmd("}", 30, "shift"), sidebar, "t1");
 await real("⇧⌘[ (Previous Tab)", cmd("{", 33, "shift"), sidebar, "pin2");
 await real("⌥⌘→ (Next Tab)", cmd(F(0xf703), 124, "option", "function"), sidebar, "t1");

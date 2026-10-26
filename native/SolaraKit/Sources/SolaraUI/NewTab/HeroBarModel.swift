@@ -27,14 +27,15 @@ public struct HeroBarEvents {
   public var open: (String, Disposition) -> Void = { _, _ in }
   public var switchTo: (String, String, Disposition) -> Void = { _, _, _ in }
   public var runAction: (String) -> Void = { _ in }
-  public var runExtension: (Suggestion) -> Void = { _ in }
+  public var runExtension: (SolaraOmnibox.Suggestion) -> Void = { _ in }
   public var removeHistory: (String) -> Void = { _ in }
-  public var chosen: (Suggestion?) -> Void = { _ in }
+  public var chosen: (SolaraOmnibox.Suggestion?) -> Void = { _ in }
   public var openChip: () -> Void = {}
   public var dictate: () -> Void = {}
   public var contextMenu: (_ hasSelection: Bool, _ hasValue: Bool) -> Void = { _, _ in }
   public var journey: (HeroJourney) -> Void = { _ in }
   public var latency: (Double) -> Void = { _ in }
+  public var changed: () -> Void = {}
   public var copy: (String) -> Void = { text in
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
@@ -137,10 +138,10 @@ public final class HeroBarModel {
   }
 
   public var engine: SearchEngine { defaultSearchEngine(settings()) }
-  public var items: [Suggestion] { result.items }
+  public var items: [SolaraOmnibox.Suggestion] { result.items }
   public var value: String { typed + shown }
   public var selectedIndex: Int { min(max(selected, 0), items.count - 1) }
-  public var current: Suggestion? { items.indices.contains(selectedIndex) ? items[selectedIndex] : nil }
+  public var current: SolaraOmnibox.Suggestion? { items.indices.contains(selectedIndex) ? items[selectedIndex] : nil }
 
   public var tabScope: SearchScope? {
     guard scope == nil, edited else { return nil }
@@ -162,7 +163,7 @@ public final class HeroBarModel {
 
   public var goEnabled: Bool { !jsTrim(typed).isEmpty }
 
-  public var leadingSuggestion: Suggestion? {
+  public var leadingSuggestion: SolaraOmnibox.Suggestion? {
     guard let current, !typed.isEmpty || scope != nil else { return nil }
     if case .search = current { return nil }
     return current
@@ -324,7 +325,7 @@ public final class HeroBarModel {
     choose(current, .current, byEnter: true)
   }
 
-  public func chooseRow(_ s: Suggestion) {
+  public func chooseRow(_ s: SolaraOmnibox.Suggestion) {
     choose(s, .current, byEnter: false)
   }
 
@@ -390,7 +391,7 @@ public final class HeroBarModel {
     if disposition != .current { reset() }
   }
 
-  func choose(_ s: Suggestion?, _ disposition: Disposition, byEnter: Bool) {
+  func choose(_ s: SolaraOmnibox.Suggestion?, _ disposition: Disposition, byEnter: Bool) {
     if s != nil || scope == nil { events.chosen(s) }
     let typedSearch: Bool = {
       guard let s else { return true }
@@ -550,6 +551,7 @@ public final class HeroBarModel {
     let length = full.utf16.count
     selection = TextSelection(start: min(selection.start, length), end: min(selection.end, length))
     field?.show(value: full, selection: selection)
+    events.changed()
   }
 
   private func remoteList(_ query: String) -> [String] {
@@ -578,7 +580,7 @@ public final class HeroBarModel {
     if fetching == key { return }
     fetching = key
     fetcher.request(engine, q) { [weak self] list in
-      Task { @MainActor in
+        Task { @MainActor in
         guard let self, self.fetching == key else { return }
         self.remote = (query, list)
         self.recompute()

@@ -1,15 +1,17 @@
+import { nativeNewTabAvailable } from "@ardia/settings";
 import { PowerUp } from "@ardia/shaders";
 import { useEffect, useState } from "react";
 import { Surface } from "@ardia/shell";
-import { AccessibilityInfo, Animated, PixelRatio, StyleSheet, View } from "react-native";
+import { AccessibilityInfo, Animated, Image, PixelRatio, StyleSheet, View } from "react-native";
 import { PRODUCT } from "../lib/productName";
 import { hex, layout, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
-import { useWindowId } from "../store/hooks";
+import { useWindowId, useWindowProfileId } from "../store/hooks";
 import { useCardAnchors } from "./layout/windowLayout";
 import { springParams } from "./layout/swipeMotion";
 import { NewTabExtras } from "./ntp";
 import { IncognitoHeading } from "./ntp/IncognitoHeading";
+import { NativeNewTabHero, type HeroLayout } from "./ntp/NativeNewTabHero";
 import { DIA_OFFSET, MARK_ABOVE_BAR, newTabBarTop } from "./ntp/newTabLayout";
 import { useOnboarding } from "./onboarding/state";
 import { Omnibox } from "./Omnibox";
@@ -67,7 +69,67 @@ export function barWidth(viewWidth: number) {
   return Math.min(content, viewWidth - 28);
 }
 
-export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
+const markUris = new Map<string, { sun: string; back: string; front: string }>();
+
+function marksFor(color: string) {
+  let uris = markUris.get(color);
+  if (!uris) {
+    const set = (PRODUCT_MARKS as Record<string, (typeof PRODUCT_MARKS)["green"]>)[color] ?? PRODUCT_MARKS.green;
+    const uri = (source: number) => Image.resolveAssetSource(source)?.uri ?? "";
+    markUris.set(color, (uris = { sun: uri(set.sun), back: uri(set.back), front: uri(set.front) }));
+  }
+  return uris;
+}
+
+export function NewTabPage(props: { tabId: string; toolbar?: boolean }) {
+  return nativeNewTabAvailable() ? <NativeNewTabPage {...props} /> : <ReactNewTabPage {...props} />;
+}
+
+function NativeNewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
+  const theme = useTheme();
+  const windowId = useWindowId();
+  const profileId = useWindowProfileId();
+  const incognito = useBrowser((s) => !!s.windows[windowId]?.incognito);
+  const onboarding = useOnboarding((s) => s.windowId === windowId);
+  const [size, setSize] = useState<Size | null>(null);
+  const [hero, setHero] = useState<HeroLayout>({ height: BAR_HEIGHT, headingHeight: 0 });
+  const [playIntro] = useState(() => !introPlayed.has(tabId));
+  useEffect(() => {
+    introPlayed.add(tabId);
+  }, [tabId]);
+  const under = toolbar ? 0 : layout.toolbarHeight;
+  const heading = !onboarding && incognito;
+  const bar = size
+    ? (() => {
+        const width = barWidth(size.width);
+        const x = Math.max(size.width / 2 - width / 2, 14) + DIA_OFFSET;
+        const top = newTabBarTop(size.height, under, heading ? hero.headingHeight : 0);
+        return { x, y: top, width, height: hero.height };
+      })()
+    : null;
+  return (
+    <View style={{ flex: 1 }} onLayout={(e) => setSize((prev) => (prev && sameSize(prev, e.nativeEvent.layout) ? prev : e.nativeEvent.layout))}>
+      {playIntro && theme.powerUpPalette && bar && (
+        <PowerUp style={StyleSheet.absoluteFill} palette={theme.powerUpPalette} speed={1} origin={0.5} cornerRadius={20} halo={bar} />
+      )}
+      <NativeNewTabHero
+        windowId={windowId}
+        tabId={tabId}
+        profileId={profileId}
+        incognito={incognito}
+        onboarding={onboarding}
+        playIntro={playIntro && !reduceMotion}
+        under={under}
+        theme={theme}
+        marks={marksFor(theme.profileColor === "incognito" ? "neutral" : theme.profileColor)}
+        onLayout={setHero}
+      />
+      {size && bar && <NewTabExtras size={size} bar={bar} />}
+    </View>
+  );
+}
+
+function ReactNewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const incognito = useBrowser((s) => !!s.windows[windowId]?.incognito);

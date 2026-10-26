@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-public struct SpringParams: Sendable, Equatable {
+public struct SpringParams: Sendable, Hashable {
   public var stiffness: Double
   public var damping: Double
   public var mass: Double

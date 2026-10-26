@@ -372,6 +372,12 @@ for key in SUFeedURL SUPublicEDKey NSDockTilePlugIn NSCameraUsageDescription NSM
   [ -n "$(info "$key")" ] || die "Info.plist has no $key"
 done
 [ -d "$app/Contents/Frameworks/Sparkle.framework" ] || die "no Sparkle.framework"
+for helper in "$fwv"/Helpers/*.app; do
+  case "$(basename "$helper")" in
+    "$product_name Helper.app" | "$product_name Helper ("*").app") ;;
+    *) die "the framework carries $(basename "$helper"), not one of $product_name's helpers" ;;
+  esac
+done
 [ -d "$app/Contents/PlugIns/$(info NSDockTilePlugIn)" ] || die "no dock tile plug-in"
 [ -f "$app/Contents/embedded.provisionprofile" ] || die "no Developer ID provisioning profile (keychain groups need it)"
 [ -f "$app/Contents/Resources/Extensions/ublock/manifest.json" ] || die "no uBlock Origin in the app"
@@ -542,6 +548,9 @@ phased_args=()
   --link "https://github.com/$repo" -o "$updates/appcast.xml" "$updates"
 mv "$updates/appcast.xml" "$dist/appcast.xml"
 grep -q "<sparkle:shortVersionString>$version<" "$dist/appcast.xml" || die "appcast.xml has no item for $version"
+minimum_system="$(info LSMinimumSystemVersion)"
+[ "$minimum_system" = 26.0 ] || die "the app's LSMinimumSystemVersion is $minimum_system; Solara requires macOS 26.0"
+grep -q "<sparkle:minimumSystemVersion>$minimum_system<" "$dist/appcast.xml" || die "appcast.xml doesn't state minimumSystemVersion $minimum_system"
 rm -rf "$updates"
 
 engine_files=()

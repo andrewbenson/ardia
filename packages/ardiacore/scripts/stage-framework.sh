@@ -3,9 +3,10 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
 name="Chromium Framework"
+product=${AC_PRODUCT_NAME:-}
 
 key_of() {
-  printf '%s %s %s' "$1" "$(stat -f '%m %z' "$1/Versions/Current/$name")" \
+  printf '%s %s %s %s' "$product" "$1" "$(stat -f '%m %z' "$1/Versions/Current/$name")" \
     "$(find "$1/Versions/Current/" -type f -exec stat -f '%m' {} + | sort -n | tail -1)" | shasum -a 256 | cut -c1-16
 }
 if [[ "${1:-}" == --key ]]; then
@@ -38,6 +39,24 @@ if [[ "${1:-}" == --publish ]]; then
   exit 0
 fi
 
+[[ -n "$product" ]] || { echo "error: no AC_PRODUCT_NAME (run from the app's build, which sets it from the identity)" >&2; exit 1; }
+
+keep_product_helpers() {
+  local helpers=$1/Helpers helper suffix
+  for suffix in "" " (Renderer)" " (GPU)" " (Alerts)"; do
+    [[ -d "$helpers/$product Helper$suffix.app" ]] || {
+      echo "error: the engine at $src has no \"$product Helper$suffix.app\": build it with this identity (scripts/agent/engine-build)" >&2
+      return 1
+    }
+  done
+  for helper in "$helpers"/*.app; do
+    case "${helper##*/}" in
+      "$product Helper.app" | "$product Helper ("*").app") ;;
+      *) echo "staging: leaving out ${helper##*/}, not one of $product's helpers" >&2; rm -rf "$helper" || return 1 ;;
+    esac
+  done
+}
+
 [[ -d "$src" ]] || { echo "error: no ArdiaCore framework at $src (engine/ardiacore/apply.sh, then build chrome_framework)" >&2; exit 1; }
 stamp="$dest/.stamp"
 
@@ -57,6 +76,7 @@ fill_cache() {
   key=$(cat "$tmp/.key") || return 1
   sign() { codesign --force --timestamp=none --sign - "$@"; }
   fwv=$(cd "$tmp/$name.framework/Versions/Current" && pwd -P) || return 1
+  keep_product_helpers "$fwv" || return 1
   for lib in "$fwv"/Libraries/*.dylib; do
     if [[ -e "$lib" ]]; then sign "$lib" || return 1; fi
   done

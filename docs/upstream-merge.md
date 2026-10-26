@@ -23,7 +23,6 @@ modify/delete conflict. **Keep it deleted:** `git rm -r <path>`, then go on.
 | `apps/dashboard` | Upstream's stats dashboard |
 | `apps/videos` | Remotion launch videos |
 | `infra/site`, `infra/dashboard`, `infra/telemetry`, `infra/hexclave-cli` | Upstream's deploys, telemetry collector and ClickHouse |
-| `extras/raycast-ardia` | The Raycast extension; it drives `com.ardia.browser`, not Solara |
 | `spikes/` | The ArdiaCore spike; its test extension moved to `packages/ardiacore/scripts/fixtures/ext` |
 | `CLA.md`, `.github/workflows/{cla,linked-issue,deploy}.yml`, `.github/pull_request_template.md` | Upstream's contribution and deploy process |
 | `.github/workflows/release.yml`, `.github/release/` | Upstream's CI release (gated to `mantrakp04/ardia`, upstream's secrets); Solara releases from a Mac |
@@ -55,6 +54,7 @@ Keep Solara's side when these conflict, then carry over any upstream change that
 | `docs/agent-brief.md` | Trimmed to the architecture and tooling |
 | `.claude/skills/release/SKILL.md` | Solara's release steps only; upstream's script changes (`scripts/`) merge normally |
 | `apps/browser/macos/Fork.xcconfig` | Solara's identity; upstream has no such file, so it never conflicts |
+| `extras/raycast-ardia` → `extras/raycast-solara` | The Raycast extension pointed at Solara. Upstream's changes to `raycast-ardia` arrive as modify/delete conflicts: keep it deleted and port the change into `raycast-solara` by hand |
 
 Upstream's own identity stays in `apps/browser/macos/Identity.xcconfig`, and code keeps upstream's names (`Ardia*`
 classes, `@ardia/*` packages, `ARDIA_*` variables, store and settings keys): renaming them would turn every upstream

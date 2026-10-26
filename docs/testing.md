@@ -10,6 +10,7 @@ of its time in `swift test`'s first build. Each package also runs its own:
 | `packages/sync` | `pnpm --filter @ardia/sync test` (`swift test`, `node --test`, then the rename's launch migration end to end, `scripts/legacy-migration-e2e.mjs`) | 66 + 9 |
 | `packages/import` | `pnpm --filter @ardia/import test` (`swift test`) | 26 |
 | `packages/ardiacore` | `pnpm --filter @ardia/ardiacore test` (`tests/pip-zoom.test.cc`, compiled with `clang++`) | 1 program |
+| `extras/raycast-solara` | `node --test extras/raycast-solara/src/scripts.test.ts` | 6 |
 
 `apps/browser` runs its TypeScript under plain Node, with the real `@ardia/shell` and `@ardia/ardiacore` code:
 `src/test-loader.mjs` swaps only the native side. `expo-modules-core` becomes `src/test-native/expo.ts`, which hands
@@ -158,6 +159,7 @@ lose or leak data, or when the bug is invisible by eye and has shipped before.
 | `packages/core/src/suggest.test.ts` | Inline completion never fills a long sign-in URL; free text never autocompletes; open tabs switchable; frecency ranking; a newer fetch aborts the older one | Omnibox ranking |
 | `packages/sync` | The 9 convergence cases above, and the crypto's 5 (`docs/sync.md` › Tests) | Sync correctness and encryption |
 | `packages/import/tests/ImportTests.swift` | Importing never writes to the source profile, never leaves its data folder, decrypts logins only with the right key and only after consent | Another browser's data and secrets |
+| `extras/raycast-solara` | Tab and profile ids, and what's typed into New Tab, are quoted in the AppleScript it sends; its answer reads back into the right tabs and profiles; a profile name matches whole, then by a start only one profile has, ignoring case, and a start several share names them instead of picking one | Script injection; New Window opening the wrong profile |
 
 ## What went, and why
 

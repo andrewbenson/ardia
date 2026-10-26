@@ -1,126 +1,131 @@
 # AGENTS.md
 
-Solara is a macOS browser: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 154) through ArdiaCore, our thin layer,
-with no account. Hill Technologies ships it. Solara is built on Ardia (mantrakp04/ardia, Apache-2.0); upstream lives at
-https://github.com/mantrakp04/ardia and ardia.dev, and Solara's own repo is andrewbenson/solara. This file is how the owner works; follow it.
-For the architecture and the test tooling, read `docs/agent-brief.md`.
+Solara is a macOS browser from Hill Technologies: Arc's sidebar and Dia's polish on Chrome's own framework, built from
+source (Chromium 156 with Helium's patches and ours), with no account, no AI features and no telemetry. It is a fork
+of [Ardia](https://github.com/mantrakp04/ardia) (Apache-2.0, the `upstream` remote); this repo is
+`andrewbenson/solara`. Solara keeps diverging from Ardia but still merges it now and then
+([docs/upstream-merge.md](docs/upstream-merge.md)).
 
-## How work gets done
-- **Move fast.** Don't break work into phases or ask about details you can decide; there are no users to
-  migrate yet. Ask only when the answer changes what you build.
-- **Speed is the point.** Do independent work in parallel: agents, builds, test instances, tool calls. Batch what you
-  plan to check into one script or one call instead of one step at a time. Only timing measurements run one at a
-  time, interleaved with their control, because sharing the CPU skews them.
-- **Orchestrate.** The main session plans, hands implementation to Opus subagents, and verifies what they
-  return (build, run, capture). Give each agent its own files, its own derived-data dir and its own
-  `ARDIA_DATA_DIR`.
-- **Watch the agents.** Every ~30 minutes the main session checks any agent it hasn't heard from (last
-  transcript activity, a pending tool call, `/tmp/ac-*.holder`, its processes). A stuck agent means a root
-  cause to fix (a lock, a wait, a hang), not just a restart. Send new feedback to the agent that owns
-  that area (SendMessage) instead of starting a new one, and batch finished fixes into the next release.
-- **Ask Codex for a second opinion** on risky logic (races, lifetimes, security, migrations, sync) and reviews,
-  before and after the change. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
-  `target: {providerInstanceId: "codex", model: "gpt-6.1-sol", options: {reasoningEffort: "high", serviceTier: "priority"}}`,
-  `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Tell it to review only and edit
-  nothing, and give it the full brief each round (it doesn't share your context). It reads more than it runs:
-  reproduce each finding before fixing it.
-- **No git worktrees, ever.** Everyone works in this checkout.
-- **Commit straight to `main`.** Stage only your own hunks (`git add -p` or explicit paths), never
-  someone else's work in progress. Never stage with `git apply --unidiff-zero`: it drops hunks into the wrong
-  place (it once committed an `ACClient.mm` that didn't compile). Check `git diff --cached` reads as you meant.
-- **Upstream PRs: issues first.** A pull request to upstream (mantrakp04/ardia) closes an issue (`Closes #N` in its
-  description); its "Linked issue" check fails without one. Open the issue first, then link it.
-- **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
-- **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
-  kill processes you didn't start.
+`CLAUDE.md` is a symlink to this file: edit this one. It holds the rules every session needs and points to the docs
+that hold the detail. The architecture, the isolated build and test tooling, and how to drive a running instance are
+in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
+
+## Where things are
+
+| Path | Holds |
+| --- | --- |
+| `apps/browser` | The app: Expo SDK 54 + react-native-macos 0.81, zustand store (`src/store`), UI (`src/components`), Xcode project (`macos/`) |
+| `packages/ardiacore` | ArdiaCore, the engine as the app sees it: Chrome's framework linked in, its Expo modules and JS API |
+| `packages/shell` | Menus, shortcuts, windows, native views |
+| `packages/core` | Omnibox parsing and suggestions, pure TypeScript with tests |
+| `packages/{import,sync,shaders}` | Importing from other browsers, iCloud sync, Metal views |
+| `engine/` | Our Chromium patch series (`engine/patches`), our Chrome-side code (`engine/chromium`, the `ac_*` C calls) and ArdiaCore's window and tab layer (`engine/ardiacore`) |
+| `apps/cli` | The `solara` command-line tool (Python), shipped in each release |
+| `scripts/` | `release.sh`, the DMG layout, and `scripts/agent/*`, the tools for parallel agents (each takes `--help`) |
+| `.claude/skills/release` | The release skill and its smoke, update and publish scripts |
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Install | `scripts/agent/locked pod -- pnpm install --frozen-lockfile` |
+| Pods | `scripts/agent/locked pod -- pnpm pods` |
+| Metro | already running on :8081 for every instance; never start a second one |
+| Build the app | `scripts/agent/build-app --as <you>` (in the background; `--config Release`, `--force`) |
+| Launch it hidden | `scripts/agent/ac launch <app> --data <scratch>/data`; `ac eval`, `ac page`, `ac quit` take that data dir |
+| Typecheck / unit tests | `pnpm typecheck` / `pnpm test` (one package: `pnpm -C apps/browser test`) |
+| End-to-end checks | one script per area, listed in [docs/testing.md](docs/testing.md) |
+| Engine build | `scripts/agent/engine-build --as <you>` (incremental, under the chromium lock) |
+| Engine patch series | `python3 engine/patches/series.py check` |
 
 ## Hard rules
-- **No comments in code.** Don't write comments in any source, script or config file (`//`, `/* */`, `#`,
-  `<!-- -->`, doc comments). Name things so the code says what it does, and put the why in the commit message.
-  Only what a tool reads stays: shebangs, license headers, compiler, linter and type directives
-  (`@ts-expect-error`, `eslint-disable`, `#pragma`, `swiftlint:`, `# noqa`), and the header a script prints as its
-  `--help`.
-- **The Chromium build cache is sacred.** Never touch `~/chromium-build/chromium_git/chromium/src/out`,
-  and never run `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. Engine changes are
-  incremental builds only, holding the chromium lock (`scripts/agent/locked chromium`,
-  `docs/engine-build.md`). When freeing disk space, stay out of `~/chromium-build`.
-- **Never launch or touch `/Applications/Ardia.app`** (the owner's installed upstream Ardia; `Netnyahoo.app` until the
-  owner updates past the rename), an installed `/Applications/Solara.app`, or the owner's preview builds in
-  `apps/browser/build-vista`. The owner is using them.
-- **Never steal focus.** Run builds only as hidden instances:
-  `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<throwaway dir> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
-  Never use plain `open`. Background mode logs context menus and file panels instead of showing them.
-  Keep test data in a scratch dir, not in `~/Documents`.
-- **Dia is a read-only reference.** You may take screenshots and read its app bundle; never click or type
-  in it, and never read its user data or any browser's real profile.
-- **No AI features.** This is the owner's decision. Dia's AI rows in `docs/dia-feature-parity.md`
-  stay ⏸.
+
+- **The Chromium build cache is sacred.** Never touch `~/chromium-build/chromium_git/chromium/src/out`, and never run
+  `gclient sync` or `gn clean`: a full rebuild costs about 5 hours. Engine builds are incremental only, holding the
+  chromium lock ([docs/engine-build.md](docs/engine-build.md)). When freeing disk space, stay out of
+  `~/chromium-build`.
+- **Safe Storage stays as it is.** `chromium-safe-storage-name.patch` and `chromium-safe-storage-no-silent-reset.patch`
+  decide which keychain item holds the key to every saved password and cookie, and that it is never silently
+  replaced. Keep both unchanged through every re-sync and version bump, and don't change when the key may be created
+  (`ac_safe_storage.mm`) without the owner ([docs/engine-build.md](docs/engine-build.md) › The patch series).
+- **Never launch or touch the owner's apps:** `/Applications/Solara.app`, `/Applications/Ardia.app` (`Netnyahoo.app`
+  on older installs), or the preview builds in `apps/browser/build-vista`.
+- **Never steal focus.** Launch builds only hidden: `scripts/agent/ac launch`, or
+  `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<scratch> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
+  Never plain `open`, never `activate`. Test data lives in a scratch dir, never in `~/Documents`. Never give an
+  extension shortcut Global scope in a test instance.
+- **No comments in code.** None in source, scripts or config (`//`, `/* */`, `#`, `<!-- -->`, doc comments). Name
+  things so the code says what it does and put the why in the commit message. Only what a tool reads stays:
+  shebangs, license headers, compiler, linter and type directives, and the header a script prints as its `--help`.
+- **One checkout, shared.** No git worktrees. Never `git checkout`, `git restore`, `git stash`, `git reset --hard` or
+  `git clean` here: they wipe other agents' uncommitted work (`scripts/agent/guard-git` blocks them). Undo your own
+  hunks by editing.
+- **Commit straight to `main`, only your own hunks.** Stage explicit paths or `git add -p`, commit with
+  `git commit --only -- <paths>` (the index is shared), and check `git diff --cached` first. Never
+  `git apply --unidiff-zero`. No `Co-Authored-By` lines.
+- **Dia is a read-only reference.** Screenshots and its app bundle are fine; never click or type in it, and never read
+  its user data or any browser's real profile. Build fixtures instead.
+- **No AI features.** The owner's decision. Dia's AI rows in `docs/dia-feature-parity.md` stay ⏸.
+- **Never wait open-ended.** Every wait has a deadline under 10 minutes and fails fast when what it waits on dies:
+  `scripts/agent/await --pid <pid> -- <test>`. Run builds with `run_in_background`. Wrap screen captures in
+  `timeout 20` (they hang while the screen is locked).
+- **`.claude/settings.local.json` is never committed.**
+
+## How work gets done
+
+- **Move fast.** No phases, no questions about details you can decide; ask only when the answer changes what you
+  build. Run independent work in parallel (agents, builds, instances, tool calls); only timing measurements run one
+  at a time, interleaved with their control.
+- **Orchestrate.** The main session plans, hands implementation to subagents, and verifies what they return. Each agent
+  gets its own files, its own build dir (`--as <name>`) and its own `ARDIA_DATA_DIR`. The main session checks on any
+  agent it hasn't heard from in about 30 minutes; a stuck agent means a root cause to fix (a lock, a wait, a hang).
+  New feedback goes to the agent that owns the area (SendMessage).
+- **Second opinion.** Risky logic (races, lifetimes, security, migrations, sync) gets an independent model review
+  before and after the change. Reproduce each finding before fixing it.
+- **Verify in proportion.** Typecheck, build, and exercise the change in a hidden instance. A JS-only change needs no
+  app build (Metro reloads it; relaunch before judging). Run the checks for what you changed once before and once
+  after, then the nearby ones; the full suite is for engine, native lifetime, focus, quit and security changes. When
+  the screen is locked, use the in-process snapshots ([docs/agent-brief.md](docs/agent-brief.md)) and list what still
+  needs a visual check.
+- **Errors get fixed without asking.** When `crash.log` shows up in the repo root or a crash report appears, check its
+  binary UUID against the current build, find the cause and fix it; delete `crash.log` once handled.
+- **Clean up.** Quit your instances (`ac quit`, never `pkill`), stop what you started, never kill what you didn't.
+- **Reports** are short and plain: what shipped, what's left, what needs the owner.
 
 ## Building features
-- **Sources of truth.** `docs/dia-feature-parity.md` is the checklist; update its row when you ship.
-  `docs/dia-spec.md` has Dia's measured values.
-- **Match Dia with numbers.** Compare against a capture with the same crop and the same state; "looks
-  close" isn't enough. When the owner asks for Arc's layout, keep Dia's styling unless told otherwise.
-- **Parity means UI and UX.** Match what Dia does, not only how it looks: what each click does, what it
-  remembers (positions, sizes), its animations and their timing in frames, and what keeps running.
-  Obvious UX holds everywhere: dismissing something never pauses playback or drags you to another tab;
-  going back to the source ends a temporary view (the mini player); nothing reopens right after you close it.
-- **Owner recordings and screenshots.** Copy a recording out of its temp folder at once (it vanishes, and
-  the name has a narrow no-break space: use a glob). Extract 30 fps frames with ffmpeg, find events by
-  frame difference, and measure positions and timings from the pixels. A position or size in the owner's
-  recording may be their saved preference rather than Dia's default.
-- **Errors get fixed without asking.** When `crash.log` shows up in the repo root, a crash report appears, or
-  upstream Ardia's telemetry (`telemetry.events` and `telemetry.logs` in its ClickHouse, see the `stats` skill; Solara
-  sends none) shows a new `$exception` from the site or the app, find the cause and fix it; don't wait for the
-  owner to ask. Check the binary UUID against the current build first (older builds are usually
-  known-fixed), and skip noise that isn't ours (X's in-app browser, wallet extensions, telemetry self-tests).
-  Site fixes deploy right away; app fixes ship in the next release. Delete `crash.log` once handled.
-- **Verify before you call it done.** Typecheck, build, and exercise the feature in a hidden instance
-  (dev harness, CDP, window snapshots).
-  - The screen is often locked, and then WindowServer captures fail. Use the in-process snapshots
-    (`docs/agent-brief.md`) and say exactly what still needs a visual check.
-  - Verify in proportion. A JS-only change needs no app build (Metro reloads it); run the checks for what
-    you changed, each once before and once after, plus one final pass of the nearby checks. The full suite
-    and Codex are for engine, native lifetime, focus, quit or security changes, and run once at the end.
-- **Build safely.** Build the app with `scripts/agent/build-app --as <you>`: quiet, in parallel with other agents'
-  builds, and it refuses JS-only changes. Run `pod install`/`pnpm install` and Chromium builds through
-  `scripts/agent/locked <pod|chromium> -- <command>` (usage in the script); its lock dies with its holder.
-- **Never wait open-ended.** Every wait has a deadline under the Bash tool's 10-minute limit and fails
-  fast when the thing it waits on dies: `scripts/agent/await --pid <pid> -- <test>` instead of
-  `until …; do sleep; done`. Run builds with `run_in_background` and act on the notification. Wrap
-  screen captures in `timeout 20` (they hang while the screen is locked). Never wait for another agent's
-  edit to appear; report the dependency instead.
+
+- **Sources of truth.** [docs/dia-feature-parity.md](docs/dia-feature-parity.md) is the checklist: update its row
+  when you ship. [docs/dia-spec.md](docs/dia-spec.md) has Dia's measured values.
+- **Match Dia with numbers**, against a capture with the same crop and state. When the owner asks for Arc's layout,
+  keep Dia's styling unless told otherwise.
+- **Parity means UX too:** what each click does, what it remembers, animation timing in frames, what keeps running.
+  Dismissing something never pauses playback or drags you to another tab; going back to the source ends a temporary
+  view; nothing reopens right after you close it.
+- **Owner recordings:** copy them out of their temp folder at once (glob the name: it has a narrow no-break space),
+  extract 30 fps frames with ffmpeg and measure from the pixels. A size in a recording may be a saved preference.
 
 ## Shipping
-- **Two channels: nightly and stable.** One app; Settings › General picks the channel, and nightly users get
-  stable releases too.
-  - **Nightly** is for fast iteration. Each fix is reproduced, fixed and verified, its adjacent tests run, then it
-    is built and released as a nightly (`scripts/release.sh <version> --channel nightly`). Run only the focused
-    checks for what changed: no full suite, no perf gate, no landing-page refresh. A nightly is a GitHub
-    prerelease and never reaches stable users.
-  - **Stable** gets the full run (about 1.5 h): smoke, update test, perf ratchet and perf gate. Its perf is
-    compared against the previous stable release, never against a nightly.
-- **Use the `release` skill** (`.claude/skills/release/SKILL.md`). The stable flow is:
-  - write the notes in `docs/release-notes/<version>.md` (style guide in that folder);
-  - bump the version;
-  - run `scripts/release.sh`, which signs and notarizes;
-  - run the smoke test;
-  - publish the GitHub release and the appcast;
-  - upstream Ardia only: bump `VERSION` in `apps/site/src/data/release.ts` and deploy the site with
-    `pnpm -C apps/site run deploy`. Solara has no site yet, so its releases skip both.
 
-  The owner has authorized releases to go all the way through. After an update, the app opens the
-  release notes at `AC_NOTES_URL` (Solara's GitHub releases page; ardia.dev upstream).
-- **No tweet drafts.** Don't write announcement drafts or make tweet images for a release.
-- **Other public actions** (a site deploy outside a release, posting anywhere) need the owner's OK first.
+- Releases use the `release` skill ([.claude/skills/release/SKILL.md](.claude/skills/release/SKILL.md)); the machinery
+  is in [docs/releasing.md](docs/releasing.md). Two channels in one app: **nightly** (a GitHub prerelease, focused
+  checks only) and **stable** (smoke, update test, perf ratchet and perf gate against the previous stable).
+- Solara releases from this Mac to `andrewbenson/solara`'s GitHub releases; Sparkle reads the appcast there. It has no
+  site, no Homebrew tap and no telemetry. The owner has authorized releases to go all the way through.
+- No announcement or tweet drafts. Any other public action (posting anywhere, a PR or issue upstream) needs the
+  owner's OK. Upstream PRs close an issue there (`Closes #N`), so open the issue first.
 
-## Site and videos
-- **Site** (`apps/site`, Astro): upstream Ardia's ardia.dev; Solara has none yet. Short and witty, with real product captures and no generic AI-site
-  patterns. It has to look great on phones.
-- **Videos** (`apps/videos`): Remotion videos (Remocn Studio project); each folder in `src/videos` is a
-  composition; render with `pnpm -C apps/videos render <id>`.
+## Read when
 
-## Repo map
-`apps/browser` is the React Native macOS app. The native Expo modules are in `packages/{ardiacore,shell,shaders,import,sync}`; `engine/chromium` is our Chrome-services code (the `ac_*` C calls) and `engine/ardiacore` ArdiaCore's window and tab layer,
-and `packages/core` holds the omnibox logic and its tests. `apps/site` is upstream's ardia.dev and
-`apps/videos` holds the Remotion videos. The license is Apache-2.0.
+| Before you | Read |
+| --- | --- |
+| change anything, the first time | [docs/agent-brief.md](docs/agent-brief.md) |
+| touch app state | [docs/store-api.md](docs/store-api.md) |
+| change or build the engine | [docs/engine-build.md](docs/engine-build.md), [docs/ardiacore-parity.md](docs/ardiacore-parity.md) |
+| claim a change works | [docs/testing.md](docs/testing.md) |
+| touch timing-sensitive code or a release's perf | [docs/perf/README.md](docs/perf/README.md) |
+| touch sync or import | [docs/sync.md](docs/sync.md), [packages/import/README.md](packages/import/README.md) |
+| work on the omnibox | [docs/omnibox-ux.md](docs/omnibox-ux.md) |
+| touch the CLI | [docs/cli.md](docs/cli.md) |
+| write release notes | [docs/release-notes/README.md](docs/release-notes/README.md) |
+| merge upstream Ardia | [docs/upstream-merge.md](docs/upstream-merge.md) |
+| change a dependency patch | [docs/agent-brief.md](docs/agent-brief.md) › Stack (`patches/`) |

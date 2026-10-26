@@ -1,10 +1,8 @@
-# Agent brief (read first)
+# Agent brief
 
-You are one of several engineers working **in parallel in the same working tree** on
-Solara, a macOS browser that must reach **full feature and visual parity with Dia**
-(The Browser Company). The feature checklist is `docs/dia-feature-parity.md`; the
-visual spec (colors, sizes, animations recovered from Dia's binary) is `docs/dia-spec.md`.
-The user is demanding: no sloppy work, every hover state/animation/detail matters.
+The architecture and the tooling for working on Solara with several agents **in parallel in the same working tree**.
+The rules are in `AGENTS.md`; this is the detail behind them. Solara aims at full feature and visual parity with Dia
+(`docs/dia-feature-parity.md`, `docs/dia-spec.md`), and every hover state, animation and detail matters.
 
 ## Stack
 - Turborepo + pnpm (hoisted `node_modules` at the repo root).
@@ -47,7 +45,7 @@ The user is demanding: no sloppy work, every hover state/animation/detail matter
   edit there, then `scripts/agent/locked pod -- pnpm patch-commit <scratch dir>`, and read the new `.patch`:
   pnpm can add bogus `deleted file` entries (drop them and run `pnpm install` again under the same lock).
   Mark edits `[Ardia: … Ardia]`. Current patches: `react-native-macos` (a view's `transform` survives
-  AppKit layout and applies from its centre; RCTTiming's display link, c7ebd600; a view in a scroll view observes its bounds once, not once per re-add; focus() on a text field being edited keeps its edit, caret and selection; a placeholder change on an empty field being edited isn't a blur; a placeholder colour change on a field being edited reaches its field editor, so it shows once the field is emptied, and its text keeps the field's own colour; a single-line field with pastedTypes pastes only those as plain text, line breaks folded as in Chrome's omnibox, a088913e; a container whose children change leaves the ones already in place alone instead of re-adding every one, 6d7277fd; a mouse touch matches its own down on the same button and is never recorded twice, so JS never gets a null touch, 8bd086c8; mounts go through one queue in layout order, and a live-resize layout, which React Native mounts on the main thread at once, first mounts every older one still queued, so a zoomed window never keeps an older layout and its views track the window during the animation, 2f4aa603) and `expo-modules-core` (the JS
+  AppKit layout and applies from its center; RCTTiming's display link, c7ebd600; a view in a scroll view observes its bounds once, not once per re-add; focus() on a text field being edited keeps its edit, caret and selection; a placeholder change on an empty field being edited isn't a blur; a placeholder color change on a field being edited reaches its field editor, so it shows once the field is emptied, and its text keeps the field's own color; a single-line field with pastedTypes pastes only those as plain text, line breaks folded as in Chrome's omnibox, a088913e; a container whose children change leaves the ones already in place alone instead of re-adding every one, 6d7277fd; a mouse touch matches its own down on the same button and is never recorded twice, so JS never gets a null touch, 8bd086c8; mounts go through one queue in layout order, and a live-resize layout, which React Native mounts on the main thread at once, first mounts every older one still queued, so a zoomed window never keeps an older layout and its views track the window during the animation, 2f4aa603) and `expo-modules-core` (the JS
   runtime is prepared on the JS thread only, 364f5f7e).
 
 ## The engine
@@ -63,7 +61,7 @@ The user is demanding: no sloppy work, every hover state/animation/detail matter
   with `--as`). Builds are incremental only: `scripts/agent/engine-build [--as <you>] [target…]` (default
   `chrome_framework`; `--help`) runs both `apply.sh` and their checks, then autoninja, under the chromium lock; run it
   with `run_in_background`. By hand, after both `apply.sh`:
-  `cd ~/chromium-build/chromium_git/chromium/src && PATH=$HOME/chromium-build/depot_tools:$PATH DEPOT_TOOLS_UPDATE=0 ~/Documents/ardia/scripts/agent/locked chromium [--as <you>] -- autoninja -C out/Release_GN_arm64 chrome_framework`.
+  `cd ~/chromium-build/chromium_git/chromium/src && PATH=$HOME/chromium-build/depot_tools:$PATH DEPOT_TOOLS_UPDATE=0 <repo>/scripts/agent/locked chromium [--as <you>] -- autoninja -C out/Release_GN_arm64 chrome_framework`.
   `apply.sh` copies the whole working tree, so other agents' uncommitted engine files get compiled too.
   A new framework changes every agent's next build, so say so in your report. To try one privately, build the app with
   `ARDIACORE_FRAMEWORK=<framework> scripts/agent/build-app --as <you>` (it stages into your own derived data).
@@ -118,12 +116,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
 ## Rules
 - **Stay inside the files you own** (listed in your task). If you need a change elsewhere,
   make the smallest possible change, or describe it in your report instead. Other agents
-  are editing other files right now; never revert or reformat code you don't own. Never run
-  `git checkout -- <file>`, `git restore`, `git stash` or `git reset --hard` in this checkout: they wipe other
-  agents' uncommitted work in the same file. Undo your own hunks by editing.
-- **Commit your own work to `main`** (`git add -p` or explicit paths, only your hunks). Never commit another
-  agent's work in progress. The index is shared, so a plain `git commit` sweeps in what others staged: commit
-  with `git commit --only -- <paths>` (or check `git diff --cached --stat` lists only your files).
+  are editing other files right now; never revert or reformat code you don't own, and commit only your own hunks
+  (`AGENTS.md` › Hard rules).
 - **Never steal focus from the user.** They are working in other apps.
   - Launch the app only with `open -g` (never plain `open`, never `activate`) **and** with
     `ARDIA_BACKGROUND=1`: `open -g` alone does not stop LaunchServices from making the app
@@ -228,13 +222,11 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     For the New Tab intro, launch with `ARDIA_SHADERS_FORCE_KEY=1` (it only plays in a key window).
   - The user's screen may be locked: screen captures then fail or deliver no frames. Fall back to
     `ac.shell.devSnapshotWindow(windowId, path)` (`false` means it failed; the window's layers at 2x; Metal views
-    render blank; text opacity is applied twice, so a label at α reads 1 − (1 − α)², don't match colours on it),
+    render blank; text opacity is applied twice, so a label at α reads 1 − (1 − α)², don't match colors on it),
     `globalThis.expo.modules.ArdiaAreaLight.debugSnapshot(dir)` (every Metal view, offscreen, with its frame),
     the accessibility tree and store state, and list "needs visual check" items in your report.
-- Code style: read the surrounding code first and match its naming and idioms. No comments (AGENTS.md).
-  Keep files cohesive; new features go in new files where sensible.
-- Dia fidelity: when you build UI, match Dia, and check it with numbers against a Dia capture
-  (same crop, same state) before calling it a match (`docs/dia-spec.md`, `docs/dia-feature-parity.md`).
+- Code style: read the surrounding code first and match its naming and idioms. Keep files cohesive; new features go
+  in new files where sensible.
 
 ## Report format (your final message)
 1. What you built (bullets, user-visible terms first).

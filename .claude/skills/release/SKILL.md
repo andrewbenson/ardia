@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut and ship a Solara release end to end, stable or nightly — write the Dia-style release notes from git log, bump the version, build/sign/package with scripts/release.sh, smoke-test the build in a hidden instance, publish the GitHub release (a prerelease for a nightly) + Sparkle appcast, and (only for upstream Ardia's site) deploy ardia.dev. Use this whenever the user asks to ship, release, cut/push a new version, a nightly or an update, publish a build, "ship it as a nightly", "get this to me", bump the version, or write release notes for Solara — even if they only say "ship it", "nightly" or "new release" after a batch of fixes.
+description: Cut and ship a Solara release end to end, stable or nightly — write the Dia-style release notes from git log, bump the version, build/sign/package with scripts/release.sh, smoke-test the build in a hidden instance, publish the GitHub release (a prerelease for a nightly) + Sparkle appcast. Use this whenever the user asks to ship, release, cut/push a new version, a nightly or an update, publish a build, "ship it as a nightly", "get this to me", bump the version, or write release notes for Solara — even if they only say "ship it", "nightly" or "new release" after a batch of fixes.
 ---
 
 # Releasing Solara
@@ -10,18 +10,14 @@ Users get it through Sparkle (Solara › Check for Updates…), and the first la
 opens the identity's `AC_NOTES_URL`: for Solara that's the GitHub releases page of `andrewbenson/solara`, so the
 release's notes must be on its GitHub release.
 
-Solara has no site or domain yet. Step 6 (the site deploy) and every `ardia.dev` and `apps/site` step below describe
-upstream Ardia's site; skip them for Solara until the owner decides what Solara's site is.
-
-Upstream builds and publishes from GitHub Actions (the **Release** workflow, `.github/workflows/release.yml`,
-`docs/releasing.md` › CI releases). That workflow runs only in `mantrakp04/ardia`, so Solara releases from this machine:
-`scripts/release.sh`, then `publish.sh`.
+Solara releases from this Mac: `scripts/release.sh`, then `publish.sh`, to `andrewbenson/solara` (the
+`AC_RELEASE_REPO` in `apps/browser/macos/Fork.xcconfig`). It has no site, no Homebrew tap and no telemetry, so the
+scripts skip the steps that only run in upstream Ardia's repo.
 
 There are two channels (`docs/releasing.md` › Channels):
 
 - **Nightly** (`0.2.37-nightly.1`): fast iteration, one fix at a time. Only the focused checks for what changed run;
-  no perf ratchet, no perf gate, no landing-page refresh. It's a GitHub prerelease, so the README and
-  fetch-engine (both on `releases/latest`) keep pointing at stable.
+  no perf ratchet, no perf gate. It's a GitHub prerelease, so `releases/latest` keeps pointing at stable.
 - **Stable** (`0.2.37`): everything below, about 1.5 h with the smoke test, the update test, the ratchet and the
   perf gate. Its perf is compared with the previous **stable** release, never a nightly.
 
@@ -51,11 +47,9 @@ For each fix:
      All of it must pass, as for stable.
    - Publish: `git tag v<version> && git push origin main v<version>`, then
      `.claude/skills/release/scripts/publish.sh <version>` (a prerelease with the DMG, zip, appcast and CLI tarball; the
-     merged feed onto the latest stable release; `Ardia-Nightly.dmg` on the `nightly` release (upstream also serves it at https://ardia.dev/nightly); it checks them;
-     the asset keeps its `Ardia-` name, like every release asset). In upstream's repo it also moves the Homebrew tap's
-     `ardia@nightly` cask to this version (step 5c). With a new engine, commit `prebuilt-engine.tsv`'s line as in step 5.
-   - Site (upstream Ardia only): deploy so the after-update tab finds the nightly's entry (step 6's deploy only: no
-     `release.ts` change, no claims or screenshots). The nightly download link never changes. Solara skips this.
+     merged feed onto the latest stable release; `Ardia-Nightly.dmg` on the `nightly` release; it checks them;
+     the asset keeps its `Ardia-` name, like every release asset). With a new engine, commit `prebuilt-engine.tsv`'s
+     line as in step 5.
    - Report in two lines: the version, the fix, the smoke result.
 
 Batch nightlies when fixes land close together; never hold a fix back for a stable. A stable release's notes cover
@@ -88,8 +82,7 @@ git log --oneline v<previous>..HEAD
 
 Anything modified or untracked under `apps/browser`, `packages/`, `engine/` or `scripts/dmg` that isn't committed
 would end up in the build (release.sh refuses to run with it). If it belongs to a running agent, wait for it or ask; don't commit
-someone else's work in progress. Untracked files under `apps/videos`, `apps/site` or `output/` don't
-affect the app.
+someone else's work in progress. Untracked files under `output/` don't affect the app.
 
 For a stable release `<previous>` is the last stable tag (`git describe --tags --abbrev=0 --match 'v*' --exclude
 '*-nightly*'`); nightlies in between don't count, for the notes range, the smoke test or the perf gate. The next version
@@ -104,16 +97,15 @@ the README's Voice section), then `## New` / `## Faster` (the
 perf-gate table, step 4c) / `## Fixed` / `## Smaller` bullets written from the user's side.
 
 Source material: `git log --format='%h %s%n%b' v<previous>..HEAD -- apps/browser packages`. The commit
-bodies already describe the user-visible symptom; translate them, don't paste them. Leave out the site,
-the videos, docs and version bumps. Each bold lead says what the user can do or what stopped being
+bodies already describe the user-visible symptom; translate them, don't paste them. Leave out docs,
+version bumps and upstream merges that changed nothing visible. Each bold lead says what the user can do or what stopped being
 broken; no file names, flags or commit hashes. Items that came from an outside contributor's PR, or a
 commit co-authored by one, end with `Thanks, [@handle](<PR url>).` (README step 5); check
 `git log --format='%h %an %(trailers:key=Co-authored-by)' v<previous>..HEAD` and the merged PRs
 (`gh pr list --state merged --search "merged:>=<previous release date>"`) so nobody is missed.
 
-For upstream Ardia, check it renders on the site: `pnpm -C apps/site build` and grep the headline in
-`apps/site/dist/release-notes/index.html` (or preview it on port 4321, the "site" launch config). Solara's notes
-are read on its GitHub release, so check the release body there instead.
+The notes are read on the GitHub release (the after-update tab opens `AC_NOTES_URL`, the releases page), so check
+the release body there once it's published.
 
 ## 3. Bump and build
 
@@ -144,16 +136,6 @@ scripts/release.sh <version>     # ~15–25 min with notarization; run it in the
 
 For a nightly, set `MARKETING_VERSION` to `<version>` (`0.2.37-nightly.1`) the same way, commit as "Nightly <version>",
 and run `scripts/release.sh <version> --channel nightly`.
-
-To release from CI instead, push the commit and dispatch the Release workflow (step 5): it runs this same `release.sh`
-on GitHub's runner, so everything below about what it checks holds there too.
-When `engine/` changed since the last published engine, publish the engine you built first, or CI has nothing to link:
-
-```bash
-scripts/publish-engine.sh --dry-run    # packs into dist/engine-<tree>, prints what it would upload
-scripts/publish-engine.sh              # the engine-<tree> prerelease, never latest; appends prebuilt-engines.tsv's line
-git add packages/ardiacore/prebuilt-engines.tsv && git commit -m "Prebuilt engine: <tree>" && git push origin main
-```
 
 `CURRENT_PROJECT_VERSION` is the build number Sparkle compares — it must go up every release, nightlies included
 (release.sh refuses one that isn't above every build in the published feed; read the current value with `grep CURRENT_PROJECT_VERSION …project.pbxproj | sort -u`). release.sh refuses to run
@@ -205,12 +187,8 @@ and a session whose window was left on its second profile, and checks, over CDP 
   within 15 s with status 0 and no crash report (0.2.6 and 0.2.7 crashed on every quit, so every update
   ended in "<product> quit unexpectedly");
 - the bundle's signature is still valid after running (0.1.0 wrote into its own bundle);
-- the feed in the build's Info.plist (`SUFeedURL`: Solara's GitHub `releases/latest/download/appcast.xml`, upstream's
-  `https://ardia.dev/appcast.xml` since the rename) answers
-  with an appcast (`.claude/skills/release/scripts/feed.sh --before-publish`). For upstream, a 404 means ardia.dev is running a deploy
-  without the feed endpoint (`infra/site/nginx.conf`): deploy the site first, or copies of this build never update.
-  Upstream's 0.2.14 to 0.2.32 poll `https://netnyahoo.com/appcast.xml`, which the same site serves: across the rename smoke.sh
-  checks that both lead to the same appcast.
+- the feed in the build's Info.plist (`SUFeedURL`: GitHub's `releases/latest/download/appcast.xml`) answers with an
+  appcast (`.claude/skills/release/scripts/feed.sh --before-publish`).
 
 Everything must pass before publishing. One known exception: the two passkey window-order checks read
 CGWindowList, which isn't reliable while the Mac's screen is locked (window animations freeze). smoke.sh
@@ -258,13 +236,10 @@ Faster section. (0.2.28 and 0.2.29 were also timed against 0.2.17, the last CEF 
 ## 5. Publish
 
 Both channels publish with `publish.sh` (`docs/releasing.md` › Cutting a release, step 4), to the identity's
-`AC_RELEASE_REPO` (`mantrakp04/ardia` upstream, a fork's own repo with its `Fork.xcconfig`). It merges the appcast onto
-the published feed, creates the release (a stable as latest) with the DMG, zip, appcast and CLI tarball, and checks
-`releases/latest/download/appcast.xml` lists the version (upstream also checks `https://ardia.dev/appcast.xml` and
-updates the Homebrew tap). It holds the `release-lock` branch while it publishes, so it refuses to run alongside another
-publish, naming the holder; `--break-lock` clears a lock older than 2 h left by a publish that died. Upstream runs it
-from the Release workflow (`gh workflow run release.yml -R mantrakp04/ardia …`, `docs/releasing.md` › CI releases);
-Solara runs it here, from the repo root:
+`AC_RELEASE_REPO`. It merges the appcast onto the published feed, creates the release (a stable as latest) with the
+DMG, zip, appcast and CLI tarball, and checks `releases/latest/download/appcast.xml` lists the version. It holds the
+`release-lock` branch while it publishes, so it refuses to run alongside another publish, naming the holder;
+`--break-lock` clears a lock older than 2 h left by a publish that died. Run it from the repo root:
 
 ```bash
 git tag v<version> && git push origin main v<version>
@@ -288,11 +263,8 @@ fi
 
 `appcast-merge.sh` puts this release's item onto the feed as it's published right now, so nightlies that shipped while
 this release was being tested stay listed (it rewrites `dist/<version>/appcast.xml`, keeping `appcast.built.xml`).
-Both must show the new version. Upstream Ardia's copies from 0.2.13 and earlier poll GitHub's URL directly; 0.2.14 to 0.2.32 poll
-netnyahoo.com/appcast.xml and later ones ardia.dev/appcast.xml, both served by the site, which counts the check
-(version, day, first check or not) and redirects to the same GitHub file. feed.sh reads the URL from the built
-Info.plist, so it checks what this build will poll; the copies from before the rename poll the other host
-(`curl -sI https://netnyahoo.com/appcast.xml` must redirect to the same file).
+Both must show the new version. feed.sh reads the URL from the built Info.plist, so it checks what this build will
+poll.
 
 ### 5b. Staged rollout (an ArdiaCore-sized or risky release)
 
@@ -307,10 +279,8 @@ the final RC and said ship).
    `grep -c phasedRolloutInterval dist/<version>/appcast.xml`, which must print 1): Sparkle gives each copy a random
    group on that Mac (no ID, nothing sent) and offers the update to the first seventh of copies at once, a seventh more
    every interval, so everyone has it after a week. Someone who clicks Check for Updates… gets it at once. Publish as in
-   step 5 and watch a day or two: `crash.log`, and for upstream Ardia new `$exception`s in `telemetry.events` and
-   errors in `telemetry.logs` (`.claude/skills/stats/queries.md`, Errors) and `update_check` counts by version
-   (`docs/growth.md`); Solara sends no telemetry, so for it that leaves `crash.log` and the owner's reports. A problem found: flip the release's kill switch (`docs/kill-switches.md`) if it has one, and
-   publish a fixed build with a higher build number: copies that haven't updated yet go straight to it.
+   step 5 and watch a day or two: Solara sends no telemetry, so that means `crash.log` and the owner's reports. A
+   problem found: publish a fixed build with a higher build number: copies that haven't updated yet go straight to it.
 3. **Everyone.** Remove the interval from the published appcast, so every copy sees the update:
    ```bash
    .claude/skills/release/scripts/rollout-everyone.sh <version> --dry-run   # the diff it would upload
@@ -323,105 +293,14 @@ the final RC and said ship).
 
 A release without `--phased` goes to everyone at once, as before.
 
-### 5c. Homebrew tap (upstream Ardia only)
+## 6. README
 
-Solara has no Homebrew tap, so a Solara release skips this step; `publish.sh` runs it only in upstream's repo.
-https://github.com/mantrakp04/homebrew-tap holds `Casks/ardia.rb` (stable) and `Casks/ardia@nightly.rb`, so
-`brew install mantrakp04/tap/ardia` installs the latest DMG. `update-tap.sh <version>` clones the tap into a temp dir,
-sets the matching cask's `version` and `sha256` (GitHub's digest of the published DMG, checked against
-`dist/<version>/`), and pushes; `--dry-run` prints the diff instead. It refuses a version older than the cask's and
-does nothing when the cask is already there. `publish.sh` runs it for both channels (in CI only with the
-`HOMEBREW_TAP_TOKEN` secret; otherwise run it yourself after the workflow). The casks have `auto_updates true`: Sparkle updates installed copies and `brew upgrade`
-skips them, so a late tap push only delays new installs. Lint after a cask edit by hand (never `brew install` it: that
-writes `/Applications/Ardia.app`): `brew audit --cask --online mantrakp04/tap/ardia` and `brew style mantrakp04/tap`.
-
-## 6. Deploy the site (upstream Ardia only)
-
-This step is upstream Ardia's: `apps/site` is ardia.dev. Solara has no site yet, so a Solara release skips it,
-except the README's download links and version (below), which follow Solara's releases.
-
-The download button builds its URL from `VERSION` (`releases/latest/download/Ardia-<VERSION>.dmg`),
-so it 404s the moment a newer release is published until this is bumped:
-
-```bash
-repo=$(bash -c '. scripts/identity.sh && ac_identity AC_RELEASE_REPO')
-size=$(gh release view v<version> -R "$repo" --json assets -q '.assets[] | select(.name|endswith(".dmg")) | .size' | awk '{printf "%.0f MB", $1/1000000}')
-# set VERSION = "<version>" and DMG_SIZE = "$size" in apps/site/src/data/release.ts
-```
-
-The root `README.md` is the landing page on GitHub and carries the same link: replace the old version and size there
-too (both download links, the "Download <product> <version>" labels and the "<size> DMG" line), and commit it with
-`release.ts`. If a release changes a claim on the landing page (below), change the README's matching line.
-
-**Bring the landing page's claims up to date.** The home page makes specific promises; a release can make
-one of them stale or earn a new one. Read the new notes against:
-- `apps/site/src/data/features.ts`: the features with screenshots (`features`), and the ones without (`extras`, one
-  line each);
-- `apps/site/src/components/Engine.astro`: the checklist of what's in and what isn't yet;
-- `Faq.astro` (Q&A), `Hero.astro` and `Closing.astro` (the fine print: macOS version, Apple Silicon,
-  Notarized), and `Footer.astro`.
-
-Then:
-- **Something the page says "not yet" or "partly" to is now done:** flip its row in the checklist.
-- **Something the page claims changed** (a new import source, a new requirement): fix the line.
-- **A headline feature isn't on the page:** add an `extras` line in the page's voice: short, plain, dry, and
-  literally true. A light outdoor touch is fine where it lands; most lines need none. The numbering updates
-  itself.
-- **Bug fixes and small changes:** leave the page alone.
-- **Never claim anything the release doesn't do.** Anything unverified or behind a setting says so.
-
-**Bring the landing page's pictures up to date too.** Every screenshot on the site claims "a screenshot,
-not a mockup", so it has to look like the app people download today. Here is what shows which part of the
-app (listed in `apps/site/README.md` › Screenshots):
-
-| Asset | Shows |
-|---|---|
-| `src/assets/shots/window.webp` | the whole window: sidebar, pinned tiles, tabs, a page (Fig. 2, `Showcase.astro`) |
-| `shots/address-{toolbar,sidebar}.webp` | the address bar feature's before and after |
-| `shots/profile-*.webp` | the profiles feature, one window per profile |
-| `shots/split.webp`, `extensions.webp`, `privacy.webp` | split view, the Web Store, Settings › Privacy & Security |
-| `src/assets/app-icon.png` | the header, the favicon source |
-| `src/assets/game/crowd.webp` | the offline game; its hotspot is in `Game.astro` |
-| `public/og.png` | the share card |
-
-- **When:** if the release visibly changes something a shot shows (the sidebar, the tiles, the New Tab page,
-  the logo or mark, the icon, a Settings pane, the window chrome), retake the affected shots from **this
-  release's export** (`dist/<version>/export/Ardia.app`). A new page or feature that earned a place
-  in `features` may also need a new shot.
-- **How:** use a hidden instance with the smoke test's rules (`ARDIA_BACKGROUND=1`, a throwaway
-  `ARDIA_DATA_DIR`, never plain `open`, never `/Applications`).
-  - Set up the same state as the old shot (the same sites, profiles, light or dark).
-  - Take a real window capture at 2× with a transparent outside: `screencapture -l <windowID> -o`.
-- **Screen locked:** WindowServer captures fail. Leave the old shot, and tell the user which shots are stale.
-  An in-process snapshot is not a substitute: it drops glass and Metal views.
-- **Replace in place:** save the new capture over the file with the same name, since Astro makes the sizes.
-  Update the shot's `alt` text if what it shows changed, and check its phone crop (`focus` in `data/features.ts`).
-- **Don't touch the rest:** leave the painted logo (`ardia-mark.png`, from `docs/brand/ardia`) alone unless
-  the brand changed.
-
-Keep to the site's bar: few words, witty over wordy (see the existing lines). Build with `pnpm -C apps/site build`
-and check the changed sections and shots render, on a phone width too (the "site" launch config, port 4321).
-
-```bash
-pnpm -C apps/site run deploy   # the upload can drop on a weak connection: rerun it until it succeeds
-```
-
-Then verify live: `https://ardia.dev/release-notes/` contains the new headline, the home page links
-`Ardia-<version>.dmg`, that URL returns 200, and any claim you changed shows. Commit `release.ts`
-and the claim changes ("Site: download <version>", plus what changed) and push.
-
-The SEO data follows `release.ts` and the notes by itself; check that it did:
-- The home page's JSON-LD `softwareVersion` is the new version.
-- `https://ardia.dev/sitemap.xml` has today's `lastmod`.
-- If the release changed what the product is (a new headline feature, a new platform), update the home page's
-  `description` in `src/pages/index.astro`: ~150 characters, and it is also the share text.
-- If `og.png` changes, its URL's `?v=` hash changes with it, so X and others fetch the new card.
-
-Deploying makes things public. The user has asked for releases to go all the way through, so deploy as
-part of a release; for site changes outside a release, ask first.
+The README's "Getting it" section says no release is published yet. With the first release, replace that sentence
+with the download link (`https://github.com/<AC_RELEASE_REPO>/releases/latest`) and commit it. After that it needs no
+change per release.
 
 ## 7. Report
 
-Tell the user, briefly: the version and headline, what's in it (from the notes), any landing-page claims changed, the smoke result
-(N/N), that it's live (release URL, appcast, and the site for upstream), how to get it (Check for Updates…), anything not
-verified (real trackpad/mouse input, notarization), and what they need to try by hand.
+Tell the user, briefly: the version and headline, what's in it (from the notes), the smoke result (N/N), that it's
+live (release URL, appcast), how to get it (Check for Updates…), anything not verified (real trackpad/mouse input,
+notarization), and what they need to try by hand.

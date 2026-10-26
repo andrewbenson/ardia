@@ -241,32 +241,30 @@ enum Scenarios {
   static let folder = ProcessInfo.processInfo.environment["SCENARIO_DIR"].map { URL(fileURLWithPath: $0) }
     ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "Scenarios")
 
-  static func load() throws -> [JSONValue] {
-    let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil).filter { $0.lastPathComponent.hasSuffix(".json.deflate") }
-    return try files.sorted { $0.lastPathComponent < $1.lastPathComponent }.flatMap { url -> [JSONValue] in
-      let data = try (Data(contentsOf: url) as NSData).decompressed(using: .zlib) as Data
-      return try JSONValue.parse(data)["cases"]?.array ?? []
-    }
+  static func load(_ name: String) throws -> [JSONValue] {
+    let url = folder.appending(path: "\(name).json.deflate")
+    let data = try (Data(contentsOf: url) as NSData).decompressed(using: .zlib) as Data
+    return try JSONValue.parse(data)["cases"]?.array ?? []
+  }
+
+  static func firstDifference(_ expected: [JSONValue], _ got: [JSONValue]) -> (at: Int, ts: String, swift: String)? {
+    let firstDiff = (0..<min(expected.count, got.count)).first { expected[$0].text() != got[$0].text() }
+    guard let at = firstDiff ?? (expected.count != got.count ? min(expected.count, got.count) : nil) else { return nil }
+    return (at, at < expected.count ? expected[at].text() : "nothing", at < got.count ? got[at].text() : "nothing")
   }
 }
 
 @Suite struct ScenarioTests {
   @Test func everyScenarioTracesAsTheTypeScriptMergeDoes() async throws {
-    let cases = try Scenarios.load()
+    let cases = try Scenarios.load("scope")
     #expect(!cases.isEmpty)
     var bad = 0
     for item in cases {
-      let expected = item["trace"]?.array ?? []
       let got = try await runScenario(item["script"] ?? .null)
       let name = item["script"]?["name"]?.string ?? "?"
-      let firstDiff = (0..<min(expected.count, got.count)).first { expected[$0].text() != got[$0].text() }
-      if let at = firstDiff ?? (expected.count != got.count ? min(expected.count, got.count) : nil) {
+      if let diff = Scenarios.firstDifference(item["trace"]?.array ?? [], got) {
         bad += 1
-        if bad <= 5 {
-          let e = at < expected.count ? expected[at].text() : "nothing"
-          let g = at < got.count ? got[at].text() : "nothing"
-          Issue.record("\(name): entry \(at) differs\n  ts:    \(e.prefix(900))\n  swift: \(g.prefix(900))")
-        }
+        if bad <= 5 { Issue.record("\(name): entry \(diff.at) differs\n  ts:    \(diff.ts.prefix(900))\n  swift: \(diff.swift.prefix(900))") }
       }
     }
     #expect(bad == 0, "\(bad) of \(cases.count) scenarios differ")

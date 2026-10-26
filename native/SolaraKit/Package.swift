@@ -29,7 +29,7 @@ let package = Package(
     .target(name: "SolaraSync", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
     .target(name: "SolaraImport", dependencies: ["SolaraModel"]),
     .target(name: "SolaraEngine", dependencies: ["SolaraStore", "SolaraOmnibox"]),
-    .target(name: "SolaraUI", dependencies: ["SolaraModel"]),
+    .target(name: "SolaraUI", dependencies: ["SolaraModel", "SolaraOmnibox"]),
     .target(name: "SolaraSignposts"),
     .executableTarget(name: "SolaraStoreCLI", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore", "SolaraSync"]),
     .testTarget(name: "SolaraModelTests", dependencies: ["SolaraModel"]),

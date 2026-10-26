@@ -9,6 +9,7 @@ import { defaultEngine, ENGINE_NAMES, RECOMMENDED_ENGINE, siteOf } from "../../.
 import { Favicon, IconButton } from "../../primitives";
 import { Button, Group, PopUp, Row, SectionHeader, Sheet, TextField, Toggle } from "../controls";
 import { closeSettingsSheet, showSettingsSheet } from "../sheet";
+import { PRODUCT } from "../../../lib/productName";
 
 const ENGINE_OPTIONS: { value: PageEngine; title: string }[] = [
   { value: "chromium", title: ENGINE_NAMES.chromium },
@@ -61,10 +62,10 @@ export function EnginesPane() {
 }
 
 const PASSKEY_STATUS: Record<Exclude<PasskeyAccessStatus, "entitlementRequired">, string> = {
-  deviceNotConfigured: "Passkeys aren't set up on this Mac. Set up iCloud Keychain or another passkey app in System Settings, then reopen Ardia.",
-  notDetermined: "Allow Ardia to use the passkeys saved on this Mac, from the Passwords app and other passkey apps, in WebKit and Chromium pages.",
+  deviceNotConfigured: `Passkeys aren't set up on this Mac. Set up iCloud Keychain or another passkey app in System Settings, then reopen ${PRODUCT}.`,
+  notDetermined: `Allow ${PRODUCT} to use the passkeys saved on this Mac, from the Passwords app and other passkey apps, in WebKit and Chromium pages.`,
   authorized: "Websites can use the passkeys saved on this Mac, in WebKit and Chromium pages.",
-  denied: "Off. Turn Ardia on in System Settings › Privacy & Security › Passkeys Access for Web Browsers.",
+  denied: `Off. Turn ${PRODUCT} on in System Settings › Privacy & Security › Passkeys Access for Web Browsers.`,
 };
 
 function PasskeysRow() {

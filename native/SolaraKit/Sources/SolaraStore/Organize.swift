@@ -307,9 +307,13 @@ extension Session {
     let nested = nestedSnapshot(s, g)
     let entry = ClosedGroup(
       id: newId("cg"),
-      group: ClosedGroupHead(id: g.id, name: groupLabel(s, g), icon: g.icon, color: g.color, pinned: g.pinned, parentId: g.parentId),
+      group: {
+        var head = ClosedGroupHead(id: g.id, name: groupLabel(s, g), icon: g.icon, color: g.color, pinned: g.pinned, parentId: g.parentId)
+        head.absent = g.absent.intersection(lookKeys)
+        return head
+      }(),
       tabs: g.tabIds.map { snapshotTab(s.tabs[$0]!) }, tabIds: g.tabIds.map { pendingRestore(s.tabs[$0]!) ?? $0 },
-      nested: nested.isEmpty ? nil : nested, windowId: w.id, index: w.tabIds.jsIndexOf(g.tabIds[0]), closedAt: now)
+      nested: nested.isEmpty ? nil : nested, windowId: w.id, index: w.tabIds.jsIndexOf(g.tabIds.first), closedAt: now)
     let recordable = !w.incognito && entry.tabs.contains { !$0.url.isEmpty }
     var next = showAboveGroup(s, closeQuietly(s, g.tabIds), g)
     if !recordable { return next }
@@ -324,9 +328,11 @@ extension Session {
   func nestedSnapshot(_ s: BrowserState, _ g: TabGroup) -> [NestedGroupSnapshot] {
     Groups.descendantIds(s.groups, g.id).map { id in
       let c = s.groups[id]!
-      return NestedGroupSnapshot(
+      var snap = NestedGroupSnapshot(
         id: id, name: c.name, icon: c.icon, color: c.color, collapsed: c.collapsed, parentId: c.parentId ?? "",
         tabIndexes: c.tabIds.map { g.tabIds.jsIndexOf($0) }.filter { $0 >= 0 })
+      snap.absent = c.absent.intersection(lookKeys)
+      return snap
     }
   }
 
@@ -343,6 +349,7 @@ extension Session {
       var group = TabGroup(
         id: id, windowId: root.windowId, profileId: root.profileId, name: n.name, icon: n.icon, color: n.color, collapsed: n.collapsed,
         pinned: root.pinned, tabIds: tabIds, createdAt: now)
+      group.setLook(icon: n.icon, color: n.color, absent: n.absent)
       group.parentId = parentId
       groups[id] = group
     }
@@ -455,8 +462,7 @@ extension Session {
     let (grouped, groupId) = withGroup(next, ids, o)
     next = grouped
     if !groupId.isEmpty, var g = next.groups[groupId] {
-      g.icon = entry.group.icon
-      g.color = entry.group.color
+      g.setLook(icon: entry.group.icon, color: entry.group.color, absent: entry.group.absent)
       next.groups[groupId] = g
       next = rebuildNested(next, groupId, entry.group.id, ids, entry.nested)
       if let index, entry.group.pinned, parent == nil { next = atSavedIndex(next, windowId, next.groups[groupId]!.tabIds, index) }
@@ -690,7 +696,7 @@ extension Session {
       }
     } else if let parent {
       let kept = groups[parent.id]!.tabIds.filter { rest.contains($0) }
-      at = kept.isEmpty ? min(w.tabIds.jsIndexOf(g.tabIds[0]), rest.count) : rest.jsIndexOf(kept.last!) + 1
+      at = kept.isEmpty ? min(w.tabIds.jsIndexOf(g.tabIds.first), rest.count) : rest.jsIndexOf(kept.last!) + 1
     } else if pinned {
       let pinnedGroup = Set(groups.values.filter { x in x.pinned && !moving.contains(x.tabIds.first ?? "") }.flatMap(\.tabIds))
       at = 0

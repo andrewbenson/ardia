@@ -91,6 +91,10 @@ public extension Array where Element: Equatable {
     firstIndex(of: element) ?? -1
   }
 
+  func jsIndexOf(_ element: Element?) -> Int {
+    element.flatMap { firstIndex(of: $0) } ?? -1
+  }
+
   func jsLastIndexOf(_ element: Element) -> Int {
     lastIndex(of: element) ?? -1
   }

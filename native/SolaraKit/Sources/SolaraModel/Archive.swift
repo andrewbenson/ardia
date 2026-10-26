@@ -1,3 +1,5 @@
+public let lookKeys: Set<String> = ["icon", "color"]
+
 public struct TabSnapshot: JSONConvertible {
   public var url: String
   public var title: String
@@ -31,6 +33,14 @@ public struct TabSnapshot: JSONConvertible {
   }
 
   public var hasPinnedUrlKey: Bool { !absent.contains("pinnedUrl") }
+
+  public var undefined: Set<String> = []
+
+  public mutating func inheritAbsent(_ keys: Set<String>) {
+    let inherited = keys.intersection(["favicon", "customTitle", "customIcon", "pinnedUrl"])
+    absent.formUnion(inherited)
+    undefined.formUnion(inherited)
+  }
 
   static let keys: Set<String> = [
     "url", "title", "favicon", "pinned", "muted", "zoom", "customTitle", "customIcon", "profileId", "pinnedUrl", "pinnedAsRow", "tileFolder",
@@ -82,8 +92,9 @@ public struct TabSnapshot: JSONConvertible {
 public struct ClosedGroupInfo: JSONConvertible {
   public var id: String
   public var name: String
-  public var icon: String?
-  public var color: String?
+  public var icon: String? { didSet { absent.remove("icon") } }
+  public var color: String? { didSet { absent.remove("color") } }
+  public var absent: Set<String> = []
   public var pinned: Bool?
   public var extra: JSONObject = [:]
 
@@ -101,6 +112,7 @@ public struct ClosedGroupInfo: JSONConvertible {
     name = f.string("name")
     icon = f.optionalString("icon")
     color = f.optionalString("color")
+    absent = f.absent(["icon", "color"])
     pinned = f.optionalBool("pinned")
     extra = f.extra
   }
@@ -109,8 +121,8 @@ public struct ClosedGroupInfo: JSONConvertible {
     var e = Encoder(extra: extra)
     e.set("id", id)
     e.set("name", name)
-    e.nullable("icon", icon)
-    e.nullable("color", color)
+    e.nullable("icon", icon, absent: absent)
+    e.nullable("color", color, absent: absent)
     e.optional("pinned", pinned)
     return e.object
   }
@@ -209,8 +221,9 @@ public struct ClosedWindowGroup: JSONConvertible {
   public var id: String
   public var profileId: String
   public var name: String
-  public var icon: String?
-  public var color: String?
+  public var icon: String? { didSet { absent.remove("icon") } }
+  public var color: String? { didSet { absent.remove("color") } }
+  public var absent: Set<String> = []
   public var collapsed: Bool
   public var pinned: Bool
   public var createdAt: Double
@@ -235,6 +248,7 @@ public struct ClosedWindowGroup: JSONConvertible {
     pinKey = g.pinKey
     parentId = g.parentId
     extra = g.extra
+    absent = g.absent.intersection(lookKeys)
     self.tabIndexes = tabIndexes
   }
 
@@ -245,6 +259,7 @@ public struct ClosedWindowGroup: JSONConvertible {
     name = f.string("name")
     icon = f.optionalString("icon")
     color = f.optionalString("color")
+    absent = f.absent(["icon", "color"])
     collapsed = f.bool("collapsed")
     pinned = f.bool("pinned")
     createdAt = f.number("createdAt")
@@ -261,8 +276,8 @@ public struct ClosedWindowGroup: JSONConvertible {
     e.set("id", id)
     e.set("profileId", profileId)
     e.set("name", name)
-    e.nullable("icon", icon)
-    e.nullable("color", color)
+    e.nullable("icon", icon, absent: absent)
+    e.nullable("color", color, absent: absent)
     e.set("collapsed", collapsed)
     e.set("pinned", pinned)
     e.set("createdAt", createdAt)
@@ -285,6 +300,7 @@ public struct ClosedWindow: JSONConvertible {
   public var closedAt: Double
   public var extra: JSONObject = [:]
   public var windowExtra: JSONObject = [:]
+  public var absent: Set<String> = []
 
   public init(id: String, profileId: String, sidebarOpen: Bool, frame: [Double]?, tabs: [ClosedWindowTab], groups: [ClosedWindowGroup], closedAt: Double) {
     self.id = id
@@ -304,6 +320,7 @@ public struct ClosedWindow: JSONConvertible {
     sidebarOpen = w.bool("sidebarOpen")
     frame = w.optionalNumbers("frame")
     windowExtra = w.extra
+    absent = w.absent(["frame"])
     tabs = try f.models("tabs")
     groups = try f.models("groups")
     closedAt = f.number("closedAt")
@@ -314,7 +331,7 @@ public struct ClosedWindow: JSONConvertible {
     var w = Encoder(extra: windowExtra)
     w.set("profileId", profileId)
     w.set("sidebarOpen", sidebarOpen)
-    w.nullable("frame", frame)
+    if !absent.contains("frame") { w.nullable("frame", frame) }
     var e = Encoder(extra: extra)
     e.set("kind", "window")
     e.set("id", id)
@@ -358,8 +375,9 @@ public struct ParkedTab: JSONConvertible {
 public struct ParkedGroup: JSONConvertible {
   public var id: String
   public var name: String
-  public var icon: String?
-  public var color: String?
+  public var icon: String? { didSet { absent.remove("icon") } }
+  public var color: String? { didSet { absent.remove("color") } }
+  public var absent: Set<String> = []
   public var collapsed: Bool
   public var parentId: String?
   public var extra: JSONObject = [:]
@@ -379,6 +397,7 @@ public struct ParkedGroup: JSONConvertible {
     name = f.string("name")
     icon = f.optionalString("icon")
     color = f.optionalString("color")
+    absent = f.absent(["icon", "color"])
     collapsed = f.bool("collapsed")
     parentId = f.optionalString("parentId")
     extra = f.extra
@@ -388,8 +407,8 @@ public struct ParkedGroup: JSONConvertible {
     var e = Encoder(extra: extra)
     e.set("id", id)
     e.set("name", name)
-    e.nullable("icon", icon)
-    e.nullable("color", color)
+    e.nullable("icon", icon, absent: absent)
+    e.nullable("color", color, absent: absent)
     e.set("collapsed", collapsed)
     e.optional("parentId", parentId)
     return e.object
@@ -459,8 +478,9 @@ public struct ParkedPins: JSONConvertible {
 public struct NestedGroupSnapshot: JSONConvertible {
   public var id: String
   public var name: String
-  public var icon: String?
-  public var color: String?
+  public var icon: String? { didSet { absent.remove("icon") } }
+  public var color: String? { didSet { absent.remove("color") } }
+  public var absent: Set<String> = []
   public var collapsed: Bool
   public var parentId: String
   public var tabIndexes: [Int]
@@ -481,6 +501,7 @@ public struct NestedGroupSnapshot: JSONConvertible {
     name = f.string("name")
     icon = f.optionalString("icon")
     color = f.optionalString("color")
+    absent = f.absent(["icon", "color"])
     collapsed = f.bool("collapsed")
     parentId = f.string("parentId")
     tabIndexes = f.numbers("tabIndexes").map { Int($0) }
@@ -490,8 +511,8 @@ public struct NestedGroupSnapshot: JSONConvertible {
     var e = Encoder()
     e.set("id", id)
     e.set("name", name)
-    e.nullable("icon", icon)
-    e.nullable("color", color)
+    e.nullable("icon", icon, absent: absent)
+    e.nullable("color", color, absent: absent)
     e.set("collapsed", collapsed)
     e.set("parentId", parentId)
     e.set("tabIndexes", tabIndexes.map(Double.init))
@@ -502,8 +523,9 @@ public struct NestedGroupSnapshot: JSONConvertible {
 public struct ClosedGroupHead: JSONConvertible {
   public var id: String
   public var name: String
-  public var icon: String?
-  public var color: String?
+  public var icon: String? { didSet { absent.remove("icon") } }
+  public var color: String? { didSet { absent.remove("color") } }
+  public var absent: Set<String> = []
   public var pinned: Bool
   public var parentId: String?
   public var extra: JSONObject = [:]
@@ -523,6 +545,7 @@ public struct ClosedGroupHead: JSONConvertible {
     name = f.string("name")
     icon = f.optionalString("icon")
     color = f.optionalString("color")
+    absent = f.absent(["icon", "color"])
     pinned = f.bool("pinned")
     parentId = f.optionalString("parentId")
     extra = f.extra
@@ -532,8 +555,8 @@ public struct ClosedGroupHead: JSONConvertible {
     var e = Encoder(extra: extra)
     e.set("id", id)
     e.set("name", name)
-    e.nullable("icon", icon)
-    e.nullable("color", color)
+    e.nullable("icon", icon, absent: absent)
+    e.nullable("color", color, absent: absent)
     e.set("pinned", pinned)
     e.optional("parentId", parentId)
     return e.object

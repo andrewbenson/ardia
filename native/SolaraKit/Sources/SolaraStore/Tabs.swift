@@ -75,7 +75,7 @@ extension Session {
         nextTab.pageIn = holder.id
         nextTab.url = holder.url
         nextTab.title = holder.title
-        nextTab.favicon = holder.favicon
+        nextTab.takeFavicon(from: holder)
         nextTab.muted = holder.muted
       }
     } else if lazy {
@@ -444,7 +444,7 @@ extension Session {
     var t = tab
     t.unloaded = nil
     t.wakeAdoptId = nil
-    t.openerId = base.tabs[id]!.openerId
+    t.takeOpener(from: base.tabs[id]!)
     t.navigation = navigation
     t.url = tab.url.isEmpty ? url : tab.url
     if let engine { t.engine = engine }

@@ -185,7 +185,7 @@ extension Session {
       }
       if a.pinned != b.pinned || a.pinnedUrl != b.pinnedUrl || a.pinnedAsRow != b.pinnedAsRow || a.tileFolder != b.tileFolder
         || a.customTitle != b.customTitle || a.customIcon != b.customIcon || a.profileId != b.profileId || a.windowId != b.windowId
-        || a.pinKey != b.pinKey
+        || a.pinKey != b.pinKey || a.absenceDiffers(from: b, in: ["pinnedUrl", "customTitle", "customIcon"])
       {
         return true
       }
@@ -273,6 +273,8 @@ extension Session {
     if tile && src.pinnedAsRow != true, let folder = src.tileFolder { patch.tileFolder = .some(folder) }
     patch.customTitle = .some(src.customTitle)
     patch.customIcon = .some(src.customIcon)
+    patch.undefined.formUnion(src.absent.intersection(["customTitle", "customIcon"]))
+    if atSource && src.absent.contains("favicon") { patch.undefined.insert("favicon") }
     patch.muted = src.muted
     patch.zoom = src.zoom
     var tab = makeTab(windowId, src.profileId, url, patch)
@@ -313,13 +315,12 @@ extension Session {
       t.pinned = tile
       t.pinnedAsRow = tile && src.pinnedAsRow == true ? true : nil
       t.tileFolder = tile && src.pinnedAsRow != true ? src.tileFolder : nil
-      t.customTitle = src.customTitle
-      t.customIcon = src.customIcon
+      t.takeCustomLook(from: src)
       t.pinnedUrl = truthy(src.pinnedUrl) ? src.pinnedUrl : (tile && !src.url.isEmpty ? src.url : nil)
       if tile && !hasPage(original) && !samePage(original.url, homeOf(src)) {
         t.url = homeOf(src)
         t.title = src.title
-        t.favicon = src.favicon
+        t.takeFavicon(from: src)
       }
       tabs[t.id] = t
       return t.id
@@ -357,8 +358,7 @@ extension Session {
           createdAt: now)
       keyField(&g, key)
       g.name = src.name
-      g.icon = src.icon
-      g.color = src.color
+      g.setLook(icon: src.icon, color: src.color, absent: src.absent)
       g.pinned = true
       g.tabIds = within[key]!
       groups[id] = Groups.withParent(g, entry.parent.flatMap { groupIdOf[$0] })

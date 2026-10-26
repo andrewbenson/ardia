@@ -102,7 +102,7 @@ extension Session {
     }
     guard let container, !(container.pinned && container.parentId == nil) else { return .none }
     let parent = container.parentId.flatMap { s.groups[$0] }
-    let lastMember = container.tabIds.last!
+    let lastMember = container.tabIds.last
     let after = w.tabIds.jsSliced(w.tabIds.jsIndexOf(lastMember) + 1).first { id in
       !container.tabIds.contains(id) && (parent == nil || parent!.tabIds.contains(id))
     }

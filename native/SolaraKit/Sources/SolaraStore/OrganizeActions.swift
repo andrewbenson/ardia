@@ -138,7 +138,7 @@ extension Session {
     guard let p = s.groups[parentId], let w = s.windows[p.windowId] else { return "" }
     var o = NewTabOptions()
     o.profileId = p.profileId
-    o.index = w.tabIds.jsIndexOf(p.tabIds.last!) + 1
+    o.index = w.tabIds.jsIndexOf(p.tabIds.last) + 1
     let (next, tabId) = withNewTab(s, w.id, o)
     var group = TabGroup(
       id: newId("g"), windowId: w.id, profileId: p.profileId, name: "", icon: nil, color: nil, collapsed: false, pinned: p.pinned, tabIds: [tabId],
@@ -236,7 +236,7 @@ extension Session {
     var s = state
     guard let g = s.groups[groupId], let w = s.windows[g.windowId] else { return "" }
     let original = s
-    let after = w.tabIds.jsIndexOf(g.tabIds.last!) + 1
+    let after = w.tabIds.jsIndexOf(g.tabIds.last) + 1
     let entries = g.tabIds.enumerated().map { i, id -> SnapshotEntry in
       var snap = snapshotTab(s.tabs[id]!)
       snap.pinned = false
@@ -251,8 +251,7 @@ extension Session {
     s = grouped
     if !groupId2.isEmpty {
       var made = s.groups[groupId2]!
-      made.icon = g.icon
-      made.color = g.color
+      made.setLook(icon: g.icon, color: g.color, absent: g.absent)
       s.groups[groupId2] = made
       s = rebuildNested(s, groupId2, g.id, ids, nestedSnapshot(original, g))
     }
@@ -265,7 +264,7 @@ extension Session {
     guard let g = s.groups[groupId], let w = s.windows[g.windowId] else { return "" }
     var o = NewTabOptions()
     o.profileId = g.profileId
-    o.index = w.tabIds.jsIndexOf(g.tabIds.last!) + 1
+    o.index = w.tabIds.jsIndexOf(g.tabIds.last) + 1
     let (next, id) = withNewTab(s, w.id, o)
     var groups = next.groups
     var grown = g

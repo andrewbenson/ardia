@@ -15,7 +15,7 @@ func swapWindow(_ w: BrowserWindow, _ a: String, _ b: String) -> BrowserWindow {
 func showFields(of holder: Tab, on t: inout Tab) {
   t.url = holder.url
   t.title = holder.title
-  t.favicon = holder.favicon
+  t.takeFavicon(from: holder)
   t.muted = holder.muted
 }
 

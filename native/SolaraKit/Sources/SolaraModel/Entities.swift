@@ -529,6 +529,41 @@ public struct Tab: JSONConvertible, @unchecked Sendable {
 
   public var absent: Set<String> { box.value.absent }
 
+  public mutating func markAbsent(_ keys: Set<String>) {
+    if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+    box.value.markAbsent(keys)
+  }
+
+  public mutating func takeCustomLook(from src: Tab) {
+    customTitle = src.customTitle
+    customIcon = src.customIcon
+    markAbsent(src.absent.intersection(["customTitle", "customIcon"]))
+  }
+
+  public mutating func takeFavicon(from src: Tab) {
+    favicon = src.favicon
+    markAbsent(src.absent.intersection(["favicon"]))
+  }
+
+  public mutating func takeOpener(from src: Tab) {
+    openerId = src.openerId
+    markAbsent(src.absent.intersection(["openerId"]))
+  }
+
+  public mutating func overlay(_ object: JSONObject) {
+    guard object.keys.contains(where: TabFields.keys.contains) else {
+      for (key, value) in object { extra[key] = value }
+      return
+    }
+    var merged = json
+    for (key, value) in object { merged[key] = value }
+    if let tab = try? Tab(json: merged) { self = tab }
+  }
+
+  public func absenceDiffers(from other: Tab, in keys: Set<String>) -> Bool {
+    absent.intersection(keys) != other.absent.intersection(keys)
+  }
+
   public var json: JSONObject { box.value.json }
 
   public static func == (a: Tab, b: Tab) -> Bool { a.box === b.box || a.box.value == b.box.value }
@@ -579,6 +614,10 @@ public struct TabFields: Sendable, Equatable {
     openerId = nil
     createdAt = now
     lastActiveAt = now
+  }
+
+  public mutating func markAbsent(_ keys: Set<String>) {
+    absent.formUnion(keys.intersection(["favicon", "customTitle", "customIcon", "pinnedUrl", "openerId", "navigation"]))
   }
 
   public var isPinnedRow: Bool { pinned && pinnedAsRow == true }
@@ -790,6 +829,11 @@ public struct TabGroup: JSONConvertible, @unchecked Sendable {
 
   public var json: JSONObject { box.value.json }
 
+  public mutating func setLook(icon: String?, color: String?, absent look: Set<String>) {
+    if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+    box.value.setLook(icon: icon, color: color, absent: look)
+  }
+
   public static func == (a: TabGroup, b: TabGroup) -> Bool { a.box === b.box || a.box.value == b.box.value }
 }
 
@@ -827,6 +871,12 @@ public struct TabGroupFields: Sendable, Equatable {
   }
 
   public var pinKeyOrId: String { pinKey ?? id }
+
+  public mutating func setLook(icon: String?, color: String?, absent look: Set<String>) {
+    self.icon = icon
+    self.color = color
+    absent.formUnion(look.intersection(["icon", "color"]))
+  }
 
   static let keys: Set<String> = [
     "id", "windowId", "profileId", "name", "icon", "color", "collapsed", "pinned", "tabIds", "createdAt", "autoUngroup", "pinnedOpenerId",

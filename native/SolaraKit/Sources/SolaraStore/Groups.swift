@@ -266,7 +266,9 @@ public enum Groups {
   }
 
   public static func closedGroupInfo(_ g: TabGroup) -> ClosedGroupInfo {
-    ClosedGroupInfo(id: g.id, name: g.name, icon: g.icon, color: g.color, pinned: g.pinned ? true : nil)
+    var info = ClosedGroupInfo(id: g.id, name: g.name, icon: g.icon, color: g.color, pinned: g.pinned ? true : nil)
+    info.absent = g.absent.intersection(lookKeys)
+    return info
   }
 
   public static func settleNesting(_ s: BrowserState) -> (groups: Table<TabGroup>, windows: Table<BrowserWindow>)? {
@@ -325,6 +327,7 @@ extension Session {
       var g = TabGroup(
         id: id, windowId: windowId, profileId: profileId, name: info.name, icon: info.icon, color: info.color, collapsed: false,
         pinned: info.pinned == true, tabIds: tabIds, createdAt: now)
+      g.setLook(icon: info.icon, color: info.color, absent: info.absent)
       g.parentId = parentId
       next[id] = g
       made[info.id] = id

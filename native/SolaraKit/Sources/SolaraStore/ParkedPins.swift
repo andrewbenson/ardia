@@ -67,7 +67,9 @@ extension Session {
           for (i, x) in chain.enumerated() {
             if groups.contains(where: { $0.id == x.pinKeyOrId }) { continue }
             let parent = i > 0 ? chain[i - 1] : nil
-            groups.append(ParkedGroup(id: x.pinKeyOrId, name: x.name, icon: x.icon, color: x.color, collapsed: x.collapsed, parentId: parent?.pinKeyOrId))
+            var parked = ParkedGroup(id: x.pinKeyOrId, name: x.name, icon: x.icon, color: x.color, collapsed: x.collapsed, parentId: parent?.pinKeyOrId)
+            parked.absent = x.absent.intersection(lookKeys)
+            groups.append(parked)
           }
           rest.append(parked(t, history ? atPin(s, t, profileId) : atPin(BrowserState(), t, profileId), groupId: g.pinKeyOrId))
         }
@@ -142,6 +144,7 @@ extension Session {
       var group = TabGroup(
         id: id, windowId: windowId, profileId: profileId, name: g.name, icon: g.icon, color: g.color, collapsed: g.collapsed, pinned: true,
         tabIds: tabIds, createdAt: now)
+      group.setLook(icon: g.icon, color: g.color, absent: g.absent)
       if id != g.id { group.pinKey = g.id }
       for (key, value) in g.extra { group.extra[key] = value }
       groups[id] = group

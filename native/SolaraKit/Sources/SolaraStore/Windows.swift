@@ -130,8 +130,9 @@ extension Session {
       }
       let groups = s.groups.values.filter { g in g.windowId == id && !g.pinned && (!sharesTabs(s) || g.tabIds.contains { tabIds.contains($0) }) }
         .map { ClosedWindowGroup(group: $0, tabIndexes: $0.tabIds.map { tabIds.jsIndexOf($0) }) }
-      let entry = ClosedWindow(
+      var entry = ClosedWindow(
         id: newId("cw"), profileId: w.profileId, sidebarOpen: w.sidebarOpen, frame: w.frame, tabs: entryTabs, groups: groups, closedAt: now)
+      entry.absent = w.absent.intersection(["frame"])
       closedWindows = Array((closedWindows + [entry]).suffix(maxClosedWindows))
     }
     var next = removeTabs(s, w.tabIds, record: small)
@@ -439,6 +440,7 @@ extension Session {
       var group = TabGroup(
         id: g.id, windowId: id, profileId: g.profileId, name: g.name, icon: g.icon, color: g.color, collapsed: g.collapsed, pinned: g.pinned,
         tabIds: members, createdAt: g.createdAt)
+      group.setLook(icon: g.icon, color: g.color, absent: g.absent)
       group.autoUngroup = g.autoUngroup
       group.pinnedOpenerId = g.pinnedOpenerId
       group.pinKey = g.pinKey

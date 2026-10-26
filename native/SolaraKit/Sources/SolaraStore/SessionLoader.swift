@@ -36,7 +36,8 @@ extension Session {
         let tabs = w.tabIds.compactMap { tabsById[$0] }.filter { !pinSource.inPinnedContainer($0.id) }.map {
           ClosedWindowTab(snapshot: snapshotTab($0), active: active.contains($0.id), tabId: nil)
         }
-        let entry = ClosedWindow(id: newId("cw"), profileId: w.profileId, sidebarOpen: w.sidebarOpen, frame: w.frame, tabs: tabs, groups: [], closedAt: now)
+        var entry = ClosedWindow(id: newId("cw"), profileId: w.profileId, sidebarOpen: w.sidebarOpen, frame: w.frame, tabs: tabs, groups: [], closedAt: now)
+        entry.absent = w.absent.intersection(["frame"])
         if tabs.contains(where: { !$0.snapshot.url.isEmpty }) { closed.append(entry) }
       }
       data.closedWindows = Array(closed.suffix(10))

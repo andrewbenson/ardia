@@ -39,7 +39,7 @@ extension Session {
       guard let a = s.tabs[id], let b = prev.tabs[id] else { return true }
       if a.pinned != b.pinned || a.profileId != b.profileId || a.windowId != b.windowId || a.pinKey != b.pinKey || a.customTitle != b.customTitle
         || a.customIcon != b.customIcon || a.liveItem != b.liveItem || a.pageIn != b.pageIn || hasPage(a) != hasPage(b)
-        || a.url.isEmpty != b.url.isEmpty
+        || a.url.isEmpty != b.url.isEmpty || a.absenceDiffers(from: b, in: ["customTitle", "customIcon"])
       {
         return true
       }
@@ -167,15 +167,14 @@ extension Session {
       used.insert(t.id)
       var u = t
       keyField(&u, key)
-      u.customTitle = src.customTitle
-      u.customIcon = src.customIcon
+      u.takeCustomLook(from: src)
       if !hasOwnOrSharedPage(t) {
         u.url = src.url
         u.title = src.title
-        u.favicon = src.favicon
+        u.takeFavicon(from: src)
       }
       if u.pinKey != t.pinKey || u.customTitle != t.customTitle || u.customIcon != t.customIcon || u.url != t.url || u.title != t.title
-        || u.favicon != t.favicon
+        || u.favicon != t.favicon || u.absenceDiffers(from: t, in: ["customTitle", "customIcon", "favicon"])
       {
         tabs[t.id] = u
       }
@@ -229,8 +228,7 @@ extension Session {
       }
       keyField(&base, key)
       base.name = src.name
-      base.icon = src.icon
-      base.color = src.color
+      base.setLook(icon: src.icon, color: src.color, absent: src.absent)
       base.pinned = false
       base.tabIds = members + outside
       groups[id] = Groups.withParent(base, entry.parent.flatMap { groupIdOf[$0] })
@@ -305,7 +303,7 @@ extension Session {
       var t = tabs[c.id]!
       t.url = holder.url
       t.title = holder.title
-      t.favicon = holder.favicon
+      t.takeFavicon(from: holder)
       t.muted = holder.muted
       t.pageIn = holder.id
       tabs[c.id] = t

@@ -119,20 +119,22 @@ public struct TabPatch: Sendable {
   public var tileFolder: TileFolder??
   public var engine: String??
   public var extra: JSONObject = [:]
+  public var undefined: Set<String> = []
 
   public init() {}
 
   public init(_ snap: TabSnapshot) {
     url = snap.url
     title = snap.title
-    if !snap.absent.contains("favicon") { favicon = .some(snap.favicon) }
+    if !snap.absent.contains("favicon") || snap.undefined.contains("favicon") { favicon = .some(snap.favicon) }
     pinned = snap.pinned
     muted = snap.muted
     zoom = snap.zoom
-    if !snap.absent.contains("customTitle") { customTitle = .some(snap.customTitle) }
-    if !snap.absent.contains("customIcon") { customIcon = .some(snap.customIcon) }
+    if !snap.absent.contains("customTitle") || snap.undefined.contains("customTitle") { customTitle = .some(snap.customTitle) }
+    if !snap.absent.contains("customIcon") || snap.undefined.contains("customIcon") { customIcon = .some(snap.customIcon) }
     profileId = snap.profileId
-    if snap.hasPinnedUrlKey { pinnedUrl = .some(snap.pinnedUrl) }
+    if snap.hasPinnedUrlKey || snap.undefined.contains("pinnedUrl") { pinnedUrl = .some(snap.pinnedUrl) }
+    undefined = snap.undefined
     if let row = snap.pinnedAsRow { pinnedAsRow = .some(row) }
     if let folder = snap.tileFolder { tileFolder = .some(folder) }
     if let engine = snap.engine { self.engine = .some(engine) }
@@ -153,7 +155,8 @@ public struct TabPatch: Sendable {
     if let pinnedAsRow { tab.pinnedAsRow = pinnedAsRow }
     if let tileFolder { tab.tileFolder = tileFolder }
     if let engine { tab.engine = engine }
-    for (key, value) in extra { tab.extra[key] = value }
+    tab.overlay(extra)
+    if !undefined.isEmpty { tab.markAbsent(undefined) }
   }
 }
 
@@ -183,6 +186,7 @@ public func snapshotTab(_ t: Tab) -> TabSnapshot {
   var snap = TabSnapshot(
     url: t.url, title: t.title, favicon: t.favicon, pinned: t.pinned, muted: t.muted, zoom: t.zoom, customTitle: t.customTitle,
     customIcon: t.customIcon, profileId: t.profileId, pinnedUrl: t.pinnedUrl)
+  snap.inheritAbsent(t.absent)
   if t.isPinnedRow { snap.pinnedAsRow = true }
   if let folder = t.tileFolder, t.pinSection == .tile { snap.tileFolder = folder }
   if let engine = t.engine, !engine.isEmpty { snap.engine = engine }

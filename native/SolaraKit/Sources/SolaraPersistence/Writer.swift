@@ -33,9 +33,10 @@ public final class PersistenceWriter: Sendable {
   let subscription: Mutex<Int?> = Mutex(nil)
   let clock: @Sendable () -> Double
   let trouble: @Sendable (String) -> Void
+  let scope: PersistenceScope
 
   public init(
-    store: Store, database: SolaraDatabase, folder: DataFolder, persisted: PersistedState,
+    store: Store, database: SolaraDatabase, folder: DataFolder, persisted: PersistedState, scope: PersistenceScope = .everything,
     clock: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 },
     trouble: @escaping @Sendable (String) -> Void = { _ in }
   ) {
@@ -44,6 +45,7 @@ public final class PersistenceWriter: Sendable {
     self.folder = folder
     self.clock = clock
     self.trouble = trouble
+    self.scope = scope
     pending = Mutex(
       Pending(rows: true, rowsScheduled: true, written: persisted.workspace ?? WorkspaceRows(), settings: persisted.settings, downloads: persisted.downloads))
     let id = store.subscribe { [weak self] commit in self?.note(commit) }
@@ -87,14 +89,14 @@ public final class PersistenceWriter: Sendable {
     }
     guard dirty else { return }
     let (rev, state) = store.snapshot
-    let rows = WorkspaceRows(store.sessionDocument(of: state))
+    let rows = scope == .everything ? WorkspaceRows(store.sessionDocument(of: state)) : WorkspaceRows()
     let settings = state.settings.values
     let downloads = state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }
     let (previous, previousSettings, previousDownloads) = pending.withLock { ($0.written, $0.settings, $0.downloads) }
     if rows == previous && settings == previousSettings && downloads == previousDownloads { return }
     do {
       try database.pool.write { db in
-        try Rows.writeWorkspace(db, rows, previous: previous)
+        if scope == .everything { try Rows.writeWorkspace(db, rows, previous: previous) }
         if settings != previousSettings { try Rows.writeSettings(db, settings) }
         if downloads != previousDownloads { try Rows.writeDownloads(db, downloads) }
         try Rows.setMeta(db, "rev", String(rev))
@@ -126,12 +128,12 @@ public final class PersistenceWriter: Sendable {
     guard dirty else { return }
     let (rev, state) = store.snapshot
     let marker: JSONValue = ["rev": JSONValue(rev), "at": JSONValue(clock().rounded())]
-    let document = store.sessionDocument(of: state)
-    let session = document.json()
+    let document = scope == .everything ? store.sessionDocument(of: state) : nil
+    let session = document?.json()
     let downloads = ShadowExport.downloadsDocument(state)
     let (lastSession, lastDownloads) = pending.withLock { ($0.exportedSession, $0.exportedDownloads) }
     do {
-      if session != lastSession {
+      if let document, let session, session != lastSession {
         try Importer.writeDurably(Data(document.json(marker: marker).text().utf8), to: folder.session)
         pending.withLock { $0.exportedSession = session }
       }

@@ -179,10 +179,20 @@ public enum Importer {
   }
 
   @discardableResult
-  public static func importFolder(_ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext) throws
-    -> ImportResult
-  {
+  public static func settingsAndDownloads(of state: BrowserState) -> BrowserState {
+    var only = BrowserState(settings: state.settings, downloads: state.downloads)
+    only.caches = state.caches
+    return only
+  }
+
+  public static func importFolder(
+    _ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope = .everything
+  ) throws -> ImportResult {
     var result = read(folder, carrying: carried, context: context)
+    if scope == .settingsAndDownloads {
+      result.state = settingsAndDownloads(of: result.state)
+      result.persisted.workspace = nil
+    }
     if let refusal = result.refusal {
       log(result.notes + ["refused the import: \(refusal)"], to: folder, now: now)
       throw ImportRefused(reason: refusal)

@@ -35,6 +35,11 @@ public struct LaunchReport: Sendable, Equatable {
   public var notes: [String] = []
 }
 
+public enum PersistenceScope: Sendable, Equatable {
+  case settingsAndDownloads
+  case everything
+}
+
 public struct Launch: Sendable {
   public let database: SolaraDatabase
   public let state: BrowserState
@@ -49,7 +54,9 @@ public enum Launcher {
   public static let markerKey = "nativeExport"
   public static let keptAsideCopies = 3
 
-  public static func open(_ folder: DataFolder, appVersion: String, now: Date = Date(), context: LoadContext) throws -> Launch {
+  public static func open(
+    _ folder: DataFolder, appVersion: String, now: Date = Date(), context: LoadContext, scope: PersistenceScope = .everything
+  ) throws -> Launch {
     let fm = FileManager.default
     try fm.createDirectory(at: folder.url, withIntermediateDirectories: true)
     try preserveOriginals(folder)
@@ -80,7 +87,7 @@ public enum Launcher {
             importReason = reason
             movedAside.append(try moveAside(folder.database, label: "superseded", now: now))
           } else {
-            return try fromDatabase(database, folder: folder, now: now, context: context)
+            return try fromDatabase(database, folder: folder, now: now, context: context, scope: scope)
           }
         } catch let refused as ImportRefused {
           try? database.close()
@@ -93,7 +100,7 @@ public enum Launcher {
       }
     }
 
-    let imported = try Importer.importFolder(folder, carrying: carried, appVersion: appVersion, now: now, context: context)
+    let imported = try Importer.importFolder(folder, carrying: carried, appVersion: appVersion, now: now, context: context, scope: scope)
     let database = try SolaraDatabase(url: folder.database)
     var report = LaunchReport(source: .imported(reason: importReason ?? "first launch on the native store"))
     report.movedAside = movedAside
@@ -101,8 +108,19 @@ public enum Launcher {
     return Launch(database: database, state: imported.state, memory: imported.memory, persisted: imported.persisted, report: report)
   }
 
-  static func fromDatabase(_ database: SolaraDatabase, folder: DataFolder, now: Date, context: LoadContext) throws -> Launch {
+  static func fromDatabase(_ database: SolaraDatabase, folder: DataFolder, now: Date, context: LoadContext, scope: PersistenceScope) throws -> Launch {
     let persisted = try database.load()
+    if scope == .settingsAndDownloads {
+      let loader = context.session()
+      let session: JSONValue = ["version": 2, "settings": persisted.settings.map(JSONValue.object) ?? .null]
+      let loaded = DecodeLog.collecting { loader.loadSession(session, downloads: persisted.downloadsJSON) }
+      var report = LaunchReport(source: .database)
+      report.notes = persisted.notes + loaded.1
+      Importer.log(report.notes, to: folder, now: now)
+      var baseline = persisted
+      baseline.workspace = nil
+      return Launch(database: database, state: Importer.settingsAndDownloads(of: loaded.0), memory: loader.memory, persisted: baseline, report: report)
+    }
     guard let stored = persisted.workspace else {
       var result = Importer.read(folder, carrying: nil, settings: persisted.settings, downloads: persisted.downloads, context: context)
       if let refusal = result.refusal {

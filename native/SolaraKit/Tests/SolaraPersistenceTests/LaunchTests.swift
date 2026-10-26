@@ -455,4 +455,36 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     print("quit flush of \(store.state.tabs.count) tabs took \(Int(seconds * 1000)) ms")
     #expect(seconds < 0.5)
   }
+
+  @Test func phaseOneAOwnsOnlySettingsAndDownloadsAndNeverWritesSessionJSON() throws {
+    let folder = try scratchFolder()
+    try copyFixture("downloads-and-staging", into: folder)
+    let session = contents(folder.session)
+    let launch = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .settingsAndDownloads)
+    #expect(launch.state.tabs.isEmpty)
+    #expect(launch.state.windows.isEmpty)
+    #expect(launch.state.downloads.count == 2)
+    #expect(try launch.database.meta("workspace") == nil)
+    let store = store(for: launch)
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, scope: .settingsAndDownloads, clock: { 42 })
+    try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    try store.dispatch(Command("upsertDownload", [["id": "fresh", "state": "complete", "profile": ""]]))
+    #expect(writer.flush(timeout: 5))
+    #expect(contents(folder.session) == session)
+    let shadow = try JSONValue.parse(contents(folder.downloads) ?? Data())
+    #expect(shadow["nativeExport"] != nil)
+    #expect(shadow["downloads"]?.array?.count == 3)
+    try launch.database.close()
+    let again = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .settingsAndDownloads)
+    #expect(again.report.source == .database)
+    #expect(again.state.settings["appearance"] == "dark")
+    #expect(again.state.downloads.count == 3)
+    #expect(again.state.tabs.isEmpty)
+    try again.database.close()
+    let phaseOneB = try open(folder)
+    guard case .imported(let reason) = phaseOneB.report.source else { Issue.record("expected the workspace import"); return }
+    #expect(reason.contains("workspace"))
+    #expect(phaseOneB.state.settings["appearance"] == "dark")
+    #expect(!phaseOneB.state.tabs.isEmpty)
+  }
 }

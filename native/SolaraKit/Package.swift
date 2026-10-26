@@ -15,6 +15,7 @@ let package = Package(
     .library(name: "SolaraEngine", targets: ["SolaraEngine"]),
     .library(name: "SolaraUI", targets: ["SolaraUI"]),
     .library(name: "SolaraSignposts", targets: ["SolaraSignposts"]),
+    .library(name: "SolaraLive", targets: ["SolaraLive"]),
     .executable(name: "solara-store", targets: ["SolaraStoreCLI"]),
   ],
   dependencies: [
@@ -29,8 +30,9 @@ let package = Package(
     .target(name: "SolaraSync", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
     .target(name: "SolaraImport", dependencies: ["SolaraModel"]),
     .target(name: "SolaraEngine", dependencies: ["SolaraStore", "SolaraOmnibox"]),
-    .target(name: "SolaraUI", dependencies: ["SolaraModel", "SolaraOmnibox"]),
+    .target(name: "SolaraUI", dependencies: ["SolaraModel", "SolaraOmnibox", "SolaraLive"]),
     .target(name: "SolaraSignposts"),
+    .target(name: "SolaraLive", dependencies: ["SolaraModel"]),
     .executableTarget(name: "SolaraStoreCLI", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore", "SolaraSync"]),
     .testTarget(name: "SolaraModelTests", dependencies: ["SolaraModel"]),
     .testTarget(name: "SolaraStoreTests", dependencies: ["SolaraModel", "SolaraStore"], exclude: ["Cases"]),
@@ -41,6 +43,7 @@ let package = Package(
     .testTarget(name: "SolaraUITests", dependencies: ["SolaraUI"]),
     .testTarget(name: "SolaraSignpostsTests", dependencies: ["SolaraSignposts"]),
     .testTarget(name: "SolaraSyncTests", dependencies: ["SolaraModel", "SolaraSync"], exclude: ["Scenarios"]),
+    .testTarget(name: "SolaraLiveTests", dependencies: ["SolaraLive"], resources: [.copy("Fixtures")]),
   ],
   swiftLanguageModes: [.v6]
 )

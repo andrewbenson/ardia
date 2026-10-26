@@ -319,3 +319,21 @@ struct HeroBarModelTests {
     #expect(model.placeholder == "Search privately or enter address")
   }
 }
+
+struct NewTabThemeTests {
+  @Test func everyGeneratedTokenParses() {
+    for table in [NewTabThemeTokens.dark, NewTabThemeTokens.light] {
+      for key in NewTabThemeTokens.keys {
+        #expect(table[key].flatMap { CSSColor($0) } != nil, "\(key): \(table[key] ?? "missing")")
+      }
+    }
+  }
+
+  @Test func tokensFromJSWinOverTheDefaults() {
+    let fallback = NewTabTheme(dark: true, tokens: [:])
+    #expect(fallback.ntpBarSolid == CSSColor(NewTabThemeTokens.dark["ntpBarSolid"]!))
+    let themed = NewTabTheme(dark: true, tokens: ["ntpBarSolid": "#112233", "goButton": "not a color"])
+    #expect(themed.ntpBarSolid == CSSColor("#112233"))
+    #expect(themed.goButton == fallback.goButton)
+  }
+}

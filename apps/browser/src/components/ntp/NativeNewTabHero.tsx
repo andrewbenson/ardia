@@ -35,17 +35,13 @@ addNativeSettingsHandlers({
   },
 });
 
-const THEME_KEYS = [
-  "textPrimary", "textSecondary", "textTertiary", "placeholder", "selection", "chipBorder", "chipText", "rowHover", "rowSelected",
-  "commandBarSelected", "commandBarHover", "goButton", "goButtonText", "goButtonIdle", "ntpBarSolid", "ntpBarBorder", "toolbarHover", "toolbarPressed",
-] as const;
 const PUBLISH_DELAY_MS = 50;
 
 export type HeroLayout = { height: number; headingHeight: number };
 
 function themeTokens(theme: Theme): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const key of THEME_KEYS) out[key] = String(theme[key]);
+  for (const [key, value] of Object.entries(theme)) if (typeof value === "string") out[key] = value;
   return out;
 }
 

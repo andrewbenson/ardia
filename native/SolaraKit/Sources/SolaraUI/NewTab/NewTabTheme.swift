@@ -22,32 +22,30 @@ public struct NewTabTheme: Equatable, Sendable {
   public var toolbarHover: CSSColor
   public var toolbarPressed: CSSColor
 
-  public static let keys = [
-    "textPrimary", "textSecondary", "textTertiary", "placeholder", "selection", "chipBorder", "chipText", "rowHover", "rowSelected",
-    "commandBarSelected", "commandBarHover", "goButton", "goButtonText", "goButtonIdle", "ntpBarSolid", "ntpBarBorder", "toolbarHover", "toolbarPressed",
-  ]
+  public static let keys = NewTabThemeTokens.keys
 
   public init(dark: Bool, tokens: [String: String]) {
-    func c(_ key: String, _ fallback: String) -> CSSColor { CSSColor(tokens[key] ?? fallback) ?? CSSColor(fallback)! }
+    let defaults = dark ? NewTabThemeTokens.dark : NewTabThemeTokens.light
+    func c(_ key: String) -> CSSColor { tokens[key].flatMap { CSSColor($0) } ?? CSSColor(defaults[key]!)! }
     self.dark = dark
-    textPrimary = c("textPrimary", dark ? "#FFFFFF" : "#000000")
-    textSecondary = c("textSecondary", dark ? "#FFFFFF80" : "#00000080")
-    textTertiary = c("textTertiary", dark ? "#FFFFFF59" : "#00000059")
-    placeholder = c("placeholder", dark ? "#FFFFFF87" : "#00000066")
-    selection = c("selection", dark ? "rgba(120,125,134,0.7)" : "rgba(120,125,134,0.4)")
-    chipBorder = c("chipBorder", dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)")
-    chipText = c("chipText", dark ? "#FFFFFF99" : "#00000099")
-    rowHover = c("rowHover", dark ? "rgba(255,255,255,0.07)" : "rgba(15,24,44,0.05)")
-    rowSelected = c("rowSelected", dark ? "rgba(255,255,255,0.22)" : "rgba(15,24,44,0.08)")
-    commandBarSelected = c("commandBarSelected", dark ? "rgba(255,255,255,0.145)" : "rgba(15,24,44,0.08)")
-    commandBarHover = c("commandBarHover", dark ? "rgba(120,125,134,0.32)" : "rgba(15,24,44,0.05)")
-    goButton = c("goButton", dark ? "#DCCBD8" : "#0F182C")
-    goButtonText = c("goButtonText", dark ? "#1A1418" : "#FFFFFF")
-    goButtonIdle = c("goButtonIdle", dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)")
-    ntpBarSolid = c("ntpBarSolid", dark ? "#2D2D2D" : "#FEFFFF")
-    ntpBarBorder = c("ntpBarBorder", dark ? "rgba(120,125,134,0.32)" : "rgba(0,0,0,0.07)")
-    toolbarHover = c("toolbarHover", dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)")
-    toolbarPressed = c("toolbarPressed", dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.1)")
+    textPrimary = c("textPrimary")
+    textSecondary = c("textSecondary")
+    textTertiary = c("textTertiary")
+    placeholder = c("placeholder")
+    selection = c("selection")
+    chipBorder = c("chipBorder")
+    chipText = c("chipText")
+    rowHover = c("rowHover")
+    rowSelected = c("rowSelected")
+    commandBarSelected = c("commandBarSelected")
+    commandBarHover = c("commandBarHover")
+    goButton = c("goButton")
+    goButtonText = c("goButtonText")
+    goButtonIdle = c("goButtonIdle")
+    ntpBarSolid = c("ntpBarSolid")
+    ntpBarBorder = c("ntpBarBorder")
+    toolbarHover = c("toolbarHover")
+    toolbarPressed = c("toolbarPressed")
   }
 
   public static let fallbackDark = NewTabTheme(dark: true, tokens: [:])

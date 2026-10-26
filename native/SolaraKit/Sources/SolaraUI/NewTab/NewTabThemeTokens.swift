@@ -1,0 +1,45 @@
+enum NewTabThemeTokens {
+  static let keys = ["textPrimary", "textSecondary", "textTertiary", "placeholder", "selection", "chipBorder", "chipText", "rowHover", "rowSelected", "commandBarSelected", "commandBarHover", "goButton", "goButtonText", "goButtonIdle", "ntpBarSolid", "ntpBarBorder", "toolbarHover", "toolbarPressed"]
+
+  static let dark: [String: String] = [
+    "textPrimary": "#FFFFFF",
+    "textSecondary": "#FFFFFF80",
+    "textTertiary": "#FFFFFF59",
+    "placeholder": "#FFFFFF87",
+    "selection": "rgba(120,125,134,0.7)",
+    "chipBorder": "rgba(255,255,255,0.15)",
+    "chipText": "#FFFFFF99",
+    "rowHover": "rgba(255,255,255,0.07)",
+    "rowSelected": "rgba(255,255,255,0.22)",
+    "commandBarSelected": "rgba(255,255,255,0.145)",
+    "commandBarHover": "rgba(120,125,134,0.32)",
+    "goButton": "#DCCBD8",
+    "goButtonText": "#1A1418",
+    "goButtonIdle": "rgba(255,255,255,0.08)",
+    "ntpBarSolid": "#2D2D2D",
+    "ntpBarBorder": "rgba(120,125,134,0.32)",
+    "toolbarHover": "rgba(255,255,255,0.1)",
+    "toolbarPressed": "rgba(255,255,255,0.18)",
+  ]
+
+  static let light: [String: String] = [
+    "textPrimary": "#000000",
+    "textSecondary": "#00000080",
+    "textTertiary": "#00000059",
+    "placeholder": "#00000066",
+    "selection": "rgba(120,125,134,0.4)",
+    "chipBorder": "rgba(0,0,0,0.12)",
+    "chipText": "#00000099",
+    "rowHover": "rgba(15,24,44,0.05)",
+    "rowSelected": "rgba(15,24,44,0.08)",
+    "commandBarSelected": "rgba(15,24,44,0.08)",
+    "commandBarHover": "rgba(15,24,44,0.05)",
+    "goButton": "#0F182C",
+    "goButtonText": "#FFFFFF",
+    "goButtonIdle": "rgba(0,0,0,0.06)",
+    "ntpBarSolid": "#FEFFFF",
+    "ntpBarBorder": "rgba(0,0,0,0.07)",
+    "toolbarHover": "rgba(0,0,0,0.06)",
+    "toolbarPressed": "rgba(0,0,0,0.1)",
+  ]
+}

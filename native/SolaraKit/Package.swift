@@ -14,6 +14,7 @@ let package = Package(
     .library(name: "SolaraImport", targets: ["SolaraImport"]),
     .library(name: "SolaraEngine", targets: ["SolaraEngine"]),
     .library(name: "SolaraUI", targets: ["SolaraUI"]),
+    .library(name: "SolaraSignposts", targets: ["SolaraSignposts"]),
     .executable(name: "solara-store", targets: ["SolaraStoreCLI"]),
   ],
   dependencies: [
@@ -28,12 +29,17 @@ let package = Package(
     .target(name: "SolaraSync", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
     .target(name: "SolaraImport", dependencies: ["SolaraModel"]),
     .target(name: "SolaraEngine", dependencies: ["SolaraStore", "SolaraOmnibox"]),
-    .target(name: "SolaraUI", dependencies: ["SolaraEngine", "SolaraStore", "SolaraOmnibox", "SolaraSync", "SolaraImport"]),
+    .target(name: "SolaraUI", dependencies: ["SolaraModel"]),
+    .target(name: "SolaraSignposts"),
     .executableTarget(name: "SolaraStoreCLI", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore"]),
     .testTarget(name: "SolaraModelTests", dependencies: ["SolaraModel"]),
     .testTarget(name: "SolaraStoreTests", dependencies: ["SolaraModel", "SolaraStore"], exclude: ["Cases"]),
     .testTarget(name: "SolaraPersistenceTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
     .testTarget(name: "SolaraBridgeCoreTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore"]),
+    .testTarget(name: "SolaraOmniboxTests", dependencies: ["SolaraOmnibox", "SolaraModel"], exclude: ["Fixtures"]),
+    .testTarget(name: "SolaraImportTests", dependencies: ["SolaraImport"], exclude: ["Fixtures"]),
+    .testTarget(name: "SolaraUITests", dependencies: ["SolaraUI"]),
+    .testTarget(name: "SolaraSignpostsTests", dependencies: ["SolaraSignposts"]),
   ],
   swiftLanguageModes: [.v6]
 )

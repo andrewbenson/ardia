@@ -5,6 +5,7 @@ import { deflateRawSync } from "node:zlib";
 import { registerHooks } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { encodeArgs } from "../../../../packages/store/src/encode.ts";
 
 const HELP = `usage: node scripts/native/replay.mjs [--phase 1a|1b] [--out <dir>] [--cap <cases per test, 0 for all>] [--plain] [test files...]
 
@@ -125,14 +126,8 @@ function outsideStore(stack) {
   return false;
 }
 
-function bridgeArgs(args, patches = false) {
-  const out = args.map((arg) => {
-    if (!arg || typeof arg !== "object" || Array.isArray(arg) || !patches) return plain(arg);
-    const unset = Object.keys(arg).filter((k) => arg[k] === undefined);
-    const value = plain(arg);
-    return unset.length ? { ...value, $unset: unset } : value;
-  });
-  return { args: out };
+function bridgeArgs(name, args) {
+  return { args: encodeArgs(name, args) };
 }
 
 const PRESENT_UNDEFINED = ["favicon", "customTitle", "customIcon", "pinnedUrl", "openerId", "icon", "color"];
@@ -646,7 +641,7 @@ async function phases(name) {
           const { history: _h, bookmarks: _b, ...data } = callArgs[0] ?? {};
           callArgs = [data];
         }
-        const { args } = bridgeArgs(callArgs, ["updateTab", "navigated", "updateProfile", "updateGroup"].includes(name));
+        const { args } = bridgeArgs(name, callArgs);
         const lossy = (name === "updateSettings" && undefinedKeyIn(callArgs[0])) || (name === "hydrate" && undefinedKeyIn(callArgs[0]?.settings));
         return { name, args, ...(lossy ? { lossy } : {}) };
       },

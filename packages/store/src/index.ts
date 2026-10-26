@@ -1,5 +1,7 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 
+export { encodeArgs, encodeCommand, PATCH_COMMANDS } from "./encode";
+
 type StoreStatus = { active: true } | { active: false; reason: string; handedOff?: boolean };
 
 type NativeStoreModule = {

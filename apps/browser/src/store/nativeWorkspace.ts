@@ -169,17 +169,20 @@ export const onStoreEffect = (type: string, handler: (effect: StoreEffect) => vo
   return () => effectHandlers.delete(type);
 };
 
-export function workspaceFromSnapshot(s: BrowserState, data: Record<string, unknown>): Partial<BrowserState> {
+const keptFor = <T>(local: Record<string, T>, ids: Record<string, unknown>) => Object.fromEntries(Object.entries(local).filter(([id]) => id in ids));
+
+export function workspaceFromSnapshot(s: BrowserState, data: Record<string, unknown>, { keepLocal = false } = {}): Partial<BrowserState> {
   const next: Record<string, unknown> = {};
   for (const name of [...TABLES, "peeks", "parkedPins", "pinChoices", "pinSync", ...LISTS, ...KEYED]) if (name in data) next[name] = data[name];
   if (data.settings) next.settings = data.settings;
   if (data.ui) next.ui = { ...s.ui, ...(data.ui as object) };
   const tabs = (next.tabs ?? {}) as BrowserState["tabs"];
-  next.live = Object.fromEntries(Object.keys(tabs).map((id) => [id, IDLE_LIVE]));
-  next.windowUi = {};
-  next.find = {};
-  next.selection = {};
-  next.selectionAnchors = {};
+  const windows = (next.windows ?? {}) as BrowserState["windows"];
+  next.live = Object.fromEntries(Object.keys(tabs).map((id) => [id, (keepLocal && s.live[id]) || IDLE_LIVE]));
+  next.windowUi = keepLocal ? keptFor(s.windowUi, windows) : {};
+  next.find = keepLocal ? keptFor(s.find, tabs) : {};
+  next.selection = keepLocal ? Object.fromEntries(Object.entries(keptFor(s.selection, windows)).map(([w, ids]) => [w, ids.filter((id) => id in tabs)])) : {};
+  next.selectionAnchors = keepLocal ? keptFor(s.selectionAnchors, windows) : {};
   let bookmarks = s.bookmarks;
   for (const id of (next.profileOrder ?? []) as string[]) bookmarks = ensureRoots(bookmarks, id)[0];
   next.bookmarks = bookmarks;

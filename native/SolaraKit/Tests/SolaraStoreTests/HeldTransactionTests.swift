@@ -30,6 +30,23 @@ import Testing
     #expect(revs == revs.sorted())
     #expect(held.state.stateJSON.canonicalText == batched.state.stateJSON.canonicalText)
   }
+
+  @Test func aTransactionLeftOpenIsClosedByCommandOrByTime() throws {
+    final class Clock: @unchecked Sendable { var now: Double = 1_000 }
+    let clock = Clock()
+    let store = Store(memory: StoreMemory(ids: IdSource(launch: "held")), checksInvariants: true, clock: { clock.now })
+    try store.dispatch(Command("createWindow", [["url": "https://a.example/"]]))
+    try store.dispatch(Command("beginTransaction"))
+    try store.dispatch(Command("closeTransactions"))
+    let window = store.state.windowOrder[0]
+    try store.dispatch(Command("beginTransaction"))
+    clock.now += Store.heldTransactionLimit + 1
+    try store.dispatch(Command("newTab", [.string(window), ["url": "https://b.example/"]]))
+    let batched = try seeded()
+    try batched.dispatch(Command("newTab", [.string(batched.state.windowOrder[0]), ["url": "https://b.example/"]]))
+    #expect(store.state.windows[window]!.tabIds.count == batched.state.windows[batched.state.windowOrder[0]]!.tabIds.count)
+    try store.dispatch(Command("endTransaction"))
+  }
 }
 
 extension JSMap where Value == JSONValue {

@@ -32,7 +32,10 @@ public final class Store: Sendable {
     var ring: [Patch] = []
     var ringStart = 0
     var held: Session? = nil
+    var heldSince: Double = 0
   }
+
+  public static let heldTransactionLimit: Double = 10_000
 
   struct Delivery {
     var queue: [Commit] = []
@@ -116,11 +119,13 @@ public final class Store: Sendable {
       let session: Session
       if let held = core.held {
         held.resume(state: core.state, memory: core.memory, now: now)
+        if now - core.heldSince > Store.heldTransactionLimit { held.closeTransactions() }
         session = held
       } else {
         session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
       }
       try body(session)
+      if session.depth > 0 && core.held == nil { core.heldSince = now }
       core.held = session.depth > 0 ? session : nil
       if checksInvariants && core.held == nil {
         try Invariants.check(session.state)

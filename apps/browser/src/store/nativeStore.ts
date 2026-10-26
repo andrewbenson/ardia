@@ -95,7 +95,7 @@ function applyPatch(patch: StorePatch) {
 
 function applySnapshot(data: Record<string, unknown>) {
   const s = replica!.getState();
-  const next = ownsWorkspace ? workspaceFromSnapshot(s, data) : settingsAndDownloads(s, { rev: 0, settings: data.settings ? { set: data.settings as Record<string, unknown> } : undefined, downloads: data.downloads as unknown[] | undefined });
+  const next = ownsWorkspace ? workspaceFromSnapshot(s, data, { keepLocal: true }) : settingsAndDownloads(s, { rev: 0, settings: data.settings ? { set: data.settings as Record<string, unknown> } : undefined, downloads: data.downloads as unknown[] | undefined });
   withApplier(() => replica!.setState(next));
 }
 
@@ -201,8 +201,10 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
   if (!active) return;
   replica = store;
   stopListening?.();
-  if (ownsWorkspace) wrapActions(store);
-  else wrapProfileSettingsWriters(store);
+  if (ownsWorkspace) {
+    nativeWrite({ name: "closeTransactions", args: [] });
+    wrapActions(store);
+  } else wrapProfileSettingsWriters(store);
   const stopCommits = onForeignCommit((commit) => {
     if (commit.rev === appliedRev + 1) {
       appliedRev = commit.rev;

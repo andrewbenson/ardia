@@ -95,6 +95,12 @@ public final class Session {
     depth += 1
   }
 
+  public func closeTransactions() {
+    guard depth > 0 else { return }
+    depth = 0
+    hear()
+  }
+
   public func endTransaction() {
     guard depth > 0 else { return }
     depth -= 1

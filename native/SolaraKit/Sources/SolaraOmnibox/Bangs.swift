@@ -1,4 +1,5 @@
 import Foundation
+import SolaraModel
 import Synchronization
 
 public struct Bang: Sendable, Equatable {
@@ -94,10 +95,12 @@ func stripLooseJson(_ text: Units) -> Units {
   return Array(parts.joined())
 }
 
-public func parseLooseJson(_ text: String) throws -> ParsedJSON {
+func parseLooseParsedJSON(_ text: String) throws -> ParsedJSON {
   var parser = JSONParser(stripLooseJson(text.units))
   return try parser.parseDocument()
 }
+
+public func parseLooseJson(_ text: String) throws -> SolaraModel.JSONValue { try parseLooseParsedJSON(text).model }
 
 public func isValidBangTemplate(_ template: String) -> Bool { isValidBangTemplate(template.units) }
 
@@ -162,7 +165,7 @@ private func expandTemplate(_ stored: Units) -> Units {
 }
 
 public func slimBangs(_ json: String) -> String? {
-  guard let list = try? parseLooseJson(json), case .array(let entries) = list else { return nil }
+  guard let list = try? parseLooseParsedJSON(json), case .array(let entries) = list else { return nil }
   var seen = Set<Units>()
   var lines: [Units] = []
   for entry in entries {

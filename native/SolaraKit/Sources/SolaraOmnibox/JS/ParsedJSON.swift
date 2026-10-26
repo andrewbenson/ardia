@@ -1,6 +1,7 @@
 import Foundation
+import SolaraModel
 
-public enum ParsedJSON: Sendable, Equatable {
+enum ParsedJSON: Sendable, Equatable {
   case null
   case bool(Bool)
   case number(Double)
@@ -8,7 +9,7 @@ public enum ParsedJSON: Sendable, Equatable {
   case array([ParsedJSON])
   case object([(key: String, value: ParsedJSON)])
 
-  public static func == (a: ParsedJSON, b: ParsedJSON) -> Bool {
+  static func == (a: ParsedJSON, b: ParsedJSON) -> Bool {
     switch (a, b) {
     case (.null, .null): true
     case (.bool(let x), .bool(let y)): x == y
@@ -20,27 +21,27 @@ public enum ParsedJSON: Sendable, Equatable {
     }
   }
 
-  public subscript(key: String) -> ParsedJSON? {
+  subscript(key: String) -> ParsedJSON? {
     guard case .object(let pairs) = self else { return nil }
     return pairs.first { $0.key.sameUnits(key) }?.value
   }
 
-  public subscript(index: Int) -> ParsedJSON? {
+  subscript(index: Int) -> ParsedJSON? {
     guard case .array(let items) = self, index >= 0, index < items.count else { return nil }
     return items[index]
   }
 
-  public var string: String? {
+  var string: String? {
     if case .string(let s) = self { return s }
     return nil
   }
 
-  public var array: [ParsedJSON]? {
+  var array: [ParsedJSON]? {
     if case .array(let a) = self { return a }
     return nil
   }
 
-  public var isObject: Bool {
+  var isObject: Bool {
     if case .object = self { return true }
     return false
   }
@@ -66,17 +67,17 @@ public enum ParsedJSON: Sendable, Equatable {
     }
   }
 
-  public init(parsing text: String) throws {
+  init(parsing text: String) throws {
     var parser = JSONParser(text.units)
     self = try parser.parseDocument()
   }
 
-  public init(parsing data: Data) throws {
+  init(parsing data: Data) throws {
     try self.init(parsing: String(decoding: data, as: UTF8.self))
   }
 }
 
-public struct JSONSyntaxError: Error, Sendable {}
+struct JSONSyntaxError: Error, Sendable {}
 
 struct JSONParser {
   let text: Units
@@ -251,5 +252,29 @@ struct JSONParser {
       while i < text.count && Unit.isDigit(text[i]) { i += 1 }
     }
     return JS.number(String(units: text[start..<i]))
+  }
+}
+
+extension ParsedJSON {
+  init(_ value: SolaraModel.JSONValue) {
+    switch value {
+    case .null: self = .null
+    case .bool(let b): self = .bool(b)
+    case .number(let n): self = .number(n)
+    case .string(let s): self = .string(s)
+    case .array(let items): self = .array(items.map(ParsedJSON.init))
+    case .object(let map): self = .object(map.keys.map { ($0, ParsedJSON(map[$0]!)) })
+    }
+  }
+
+  var model: SolaraModel.JSONValue {
+    switch self {
+    case .null: .null
+    case .bool(let b): .bool(b)
+    case .number(let n): .number(n)
+    case .string(let s): .string(s)
+    case .array(let items): .array(items.map(\.model))
+    case .object(let pairs): .object(JSONObject(pairs.map { ($0.key, $0.value.model) }))
+    }
   }
 }

@@ -112,9 +112,9 @@ private struct OneBang: BangTable {
   }
 
   @Test func heliumsFileFormatCommentsTrailingCommasAndSlashesInsideStrings() throws {
-    let a = try parseLooseJson("// head\n[\n {\"u\": \"https://a//b\", /* c */ \"ts\": [\"x\",],},\n // tail\n]\n")
+    let a = ParsedJSON(try parseLooseJson("// head\n[\n {\"u\": \"https://a//b\", /* c */ \"ts\": [\"x\",],},\n // tail\n]\n"))
     #expect(a == .array([.object([("u", .string("https://a//b")), ("ts", .array([.string("x")]))])]))
-    let b = try parseLooseJson(#"["a\\", "b,]", "c\"//"]"#)
+    let b = ParsedJSON(try parseLooseJson(#"["a\\", "b,]", "c\"//"]"#))
     #expect(b == .array([.string("a\\"), .string("b,]"), .string("c\"//")]))
   }
 

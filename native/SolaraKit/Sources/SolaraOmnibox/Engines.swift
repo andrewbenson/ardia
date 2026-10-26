@@ -1,4 +1,5 @@
 import Foundation
+import SolaraModel
 
 public struct SearchEngineExtension: Sendable, Equatable {
   public var id: String
@@ -144,7 +145,11 @@ private func withoutPlaceholders(_ url: String) -> String {
   return out.string
 }
 
-public func extensionEnginesFromChrome(profile: String, list: ParsedJSON?) -> [ExtensionSearchEngine] {
+public func extensionEnginesFromChrome(profile: String, list: SolaraModel.JSONValue?) -> [ExtensionSearchEngine] {
+  extensionEnginesFromChrome(profile: profile, list: list.map(ParsedJSON.init))
+}
+
+func extensionEnginesFromChrome(profile: String, list: ParsedJSON?) -> [ExtensionSearchEngine] {
   var groups: [ParsedJSON] = []
   switch list {
   case .object(let pairs)?: groups = pairs.map(\.value)
@@ -217,7 +222,9 @@ func engineHost(_ url: Units) -> Units {
   return hostOf(replaced)
 }
 
-public func parseSuggestions(_ body: ParsedJSON?) -> [String] {
+public func parseSuggestions(_ body: SolaraModel.JSONValue?) -> [String] { parseSuggestions(body.map(ParsedJSON.init)) }
+
+func parseSuggestions(_ body: ParsedJSON?) -> [String] {
   guard case .array(let outer)? = body, outer.count > 1, case .array(let items) = outer[1] else { return [] }
   return items.compactMap { item in
     guard case .string(let s) = item else { return nil }

@@ -613,6 +613,16 @@ Sync must stay wire-compatible: a Mac on a native build syncs with one still on 
     `adapters.test.mjs`, run as golden replays;
   - a cross-implementation test: a TS device and a Swift device sharing one folder.
 
+### 4.6 Wiring checklist
+
+Things the code that wires a native module into the app must do. Each one fails silently if it's left out.
+
+| Module | At | Do |
+|---|---|---|
+| `SolaraOmnibox` | Launch, before the first URL is parsed or shown | Call `setAppScheme(productName)` (or `AppScheme.set(productName:)`) with the product identity, the same name `setAppScheme` gets in JS today. Until then `appUrlOrigin`, `toAppUrl`, `fixupUrl` and `urlForDisplay` use upstream's `ardia://`. |
+| `SolaraOmnibox` | Remote suggestions, Chrome's engine list | Parse the raw JSON text with `SolaraModel.JSONValue.parse`, which keeps JS key order. A `JSONSerialization` dictionary loses it, and `extensionEnginesFromChrome` keeps the first engine per extension in that order. |
+| `SolaraSignposts` | Each surface's endpoint | Call `SolaraSignposts.emit` at "selection shown", "suggestions shown", "core ready" and "New Tab painted", and `count` per store commit, Core Animation commit, layout pass and view update. In the RN era these are the `perfProbe` sites, through a native call. The baseline's `acmark.m` reads them, so a metric keeps its endpoint when its surface moves. |
+
 ---
 
 ## 5. The plan

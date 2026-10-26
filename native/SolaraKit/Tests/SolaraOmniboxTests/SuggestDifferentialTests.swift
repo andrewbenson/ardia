@@ -40,7 +40,7 @@ private func finiteOrNull(_ v: ParsedJSON) -> ParsedJSON {
     var m = Mismatches()
     for c in f["loose"]!.items {
       let text = c[0]!.str
-      let parsed = try? parseLooseJson(text)
+      let parsed = (try? parseLooseJson(text)).map(ParsedJSON.init)
       m.check("parseLooseJson ok \(describe(c[0]))", .bool(parsed != nil), c[1])
       if let parsed, c[1]!.bool {
         let got = finiteOrNull(parsed)

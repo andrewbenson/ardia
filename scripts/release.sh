@@ -499,8 +499,7 @@ fi
 case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac
 source_line="This build's source, with the engine's patches and build scripts: https://github.com/$repo/tree/v$version (LICENSE and NOTICE there cover the licenses)."
 engine_repo="$repo"
-[ -n "$engine_pack" ] || engine_repo="${ARDIACORE_PREBUILT_REPO:-$(sed -n 's/^repo=\${ARDIACORE_PREBUILT_REPO:-\(.*\)}$/\1/p' "$ardiacore/scripts/fetch-engine.sh")}"
-[ -n "$engine_repo" ] || die "can't read the prebuilt engines' repository from packages/ardiacore/scripts/fetch-engine.sh"
+[ -n "$engine_pack" ] || engine_repo="${ARDIACORE_PREBUILT_REPO:-$repo}"
 [ -n "$helium_engine" ] && [ -n "$engine_release" ] && source_line="$source_line The engine's Helium and uBlock sources as built, and where Chromium's is: https://github.com/$engine_repo/releases/download/$engine_tag/$(basename "$engine_source")"
 {
   notes_body

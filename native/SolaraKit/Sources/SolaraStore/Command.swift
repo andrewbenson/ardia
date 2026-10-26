@@ -42,7 +42,7 @@ public struct Command: Sendable, Equatable {
     "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate", "tidyPins", "untidyPins",
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
     "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "nextId", "nextNavigation",
-    "beginFromSync", "endFromSync", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent",
+    "beginFromSync", "endFromSync", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
   ]
 }
 
@@ -306,6 +306,13 @@ extension Session {
     case "stripTransaction": stripTransaction(StripTransaction(json: a[0] ?? .null))
     case "projectStrips": projectStrips()
     case "stripCommandSent": stripCommandSent(a.int(0), a.int(1))
+    case "applyState":
+      var next = state
+      for (key, value) in a.object(0) { try next.applySlice(key, value) }
+      let remote = a[1]?["fromSync"]?.truthy ?? false
+      if remote { memory.fromSyncDepth += 1 }
+      defer { if remote { memory.fromSyncDepth -= 1 } }
+      set(next)
     case "beginFromSync": memory.fromSyncDepth += 1
     case "endFromSync": memory.fromSyncDepth = max(0, memory.fromSyncDepth - 1)
     default:

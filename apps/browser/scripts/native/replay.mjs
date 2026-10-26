@@ -351,7 +351,7 @@ async function record(file) {
     }
     return patch;
   };
-  globalThis.__replayCommand = (name, args, run) => {
+  globalThis.__replayCommand = (name, args, run, bridged = false) => {
     if (depth > 0 || !current || batch || !spec.engineCommands) return run();
     const before = useBrowser.getState();
     const now = stubNow();
@@ -381,7 +381,7 @@ async function record(file) {
         now,
         memory: memoryBefore,
         before: spec.before(before, model),
-        command: { name, args: plain(args) },
+        command: { name, args: bridged ? args : plain(args) },
         after: spec.project(after, model),
         config,
         web,
@@ -434,8 +434,25 @@ async function record(file) {
     if (threw) throw threw;
   };
   const rawSetState = useBrowser.setState;
+  const SLICES = new Set(["profiles", "profileOrder", "orphanedProfileData", "windows", "windowOrder", "tabs", "groups", "splits", "peeks", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs", "privateCleanedTabs", "privateSiteMutes", "parkedPins", "pinChoices", "pinSync", "downloads", "settings", "ui"]);
+  const portedLater = (stack) => {
+    const frame = stack.split("\n").slice(2).find((f) => f.includes("/src/"));
+    return !!frame && /\/src\/(sync|components\/import|components\/onboarding)\//.test(frame) && !frame.includes(".test.mjs");
+  };
   useBrowser.setState = (partial, replace) => {
-    if (depth > 0 && current && outsideStore(new Error().stack ?? "")) foreign = true;
+    const stack = new Error().stack ?? "";
+    if (depth > 0 && current && outsideStore(stack)) foreign = true;
+    if (depth === 0 && current && !batch && spec.applyState && !replace && portedLater(stack)) {
+      const value = typeof partial === "function" ? partial(useBrowser.getState()) : partial;
+      const slices = Object.keys(value ?? {}).filter((k) => SLICES.has(k));
+      if (slices.length) {
+        const fromSync = (globalThis.__replayOrderChoices?.read() ?? 0) > 0;
+        const projected = {};
+        for (const k of slices) projected[k] = k === "ui" ? plain({ focusedWindowId: value.ui.focusedWindowId, focusOrder: value.ui.focusOrder, lastProfileId: value.ui.lastProfileId }) : plain(value[k]);
+        return globalThis.__replayCommand("applyState", [projected, { fromSync }], () => rawSetState(value, replace), true);
+      }
+      return rawSetState(value, replace);
+    }
     rawSetState(partial, replace);
     const rewrap = wrap(useBrowser.getState());
     if (Object.keys(rewrap).length) rawSetState(rewrap);
@@ -585,6 +602,7 @@ async function phases(name) {
       deltas: true,
       batches: true,
       engineCommands: true,
+      applyState: true,
       commands: [
         "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
         "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",

@@ -13,55 +13,76 @@ extension BrowserState {
 
   public init(stateJSON json: JSONObject) throws {
     self.init()
-    profiles = try Self.table(json["profiles"])
-    profileOrder = json["profileOrder"]?.array?.compactMap(\.string) ?? []
-    orphanedProfileData = json["orphanedProfileData"]?.array?.compactMap(\.string) ?? []
-    windows = try Self.table(json["windows"])
-    windowOrder = json["windowOrder"]?.array?.compactMap(\.string) ?? []
-    tabs = try Self.table(json["tabs"])
-    groups = try Self.table(json["groups"])
-    splits = try Self.table(json["splits"])
-    peeks = try Self.table(json["peeks"])
-    closedTabs = try Self.list(json["closedTabs"])
-    closedWindows = try Self.list(json["closedWindows"])
-    closedGroups = try Self.list(json["closedGroups"])
-    deletedGroups = try Self.list(json["deletedGroups"])
-    cleanedTabs = try Self.list(json["cleanedTabs"])
-    var privateCleaned = JSMap<[ClosedTab]>()
-    for (key, value) in json["privateCleanedTabs"]?.object ?? [:] { privateCleaned[key] = try Self.list(value) }
-    privateCleanedTabs = privateCleaned
-    var mutes = JSMap<JSMap<Bool>>()
-    for (key, value) in json["privateSiteMutes"]?.object ?? [:] {
-      var mine = JSMap<Bool>()
-      for (host, muted) in value.object ?? [:] { if let b = muted.bool { mine[host] = b } }
-      mutes[key] = mine
+    for key in Self.sliceKeys { try applySlice(key, json[key]) }
+    try applySlice("caches", json["caches"])
+  }
+
+  public static let sliceKeys = [
+    "profiles", "profileOrder", "orphanedProfileData", "windows", "windowOrder", "tabs", "groups", "splits", "peeks", "closedTabs", "closedWindows",
+    "closedGroups", "deletedGroups", "cleanedTabs", "privateCleanedTabs", "privateSiteMutes", "parkedPins", "pinChoices", "pinSync", "downloads",
+    "settings", "ui",
+  ]
+
+  public mutating func applySlice(_ key: String, _ value: JSONValue?) throws {
+    switch key {
+    case "profiles": profiles = try Self.table(value)
+    case "profileOrder": profileOrder = value?.array?.compactMap(\.string) ?? []
+    case "orphanedProfileData": orphanedProfileData = value?.array?.compactMap(\.string) ?? []
+    case "windows": windows = try Self.table(value)
+    case "windowOrder": windowOrder = value?.array?.compactMap(\.string) ?? []
+    case "tabs": tabs = try Self.table(value)
+    case "groups": groups = try Self.table(value)
+    case "splits": splits = try Self.table(value)
+    case "peeks": peeks = try Self.table(value)
+    case "closedTabs": closedTabs = try Self.list(value)
+    case "closedWindows": closedWindows = try Self.list(value)
+    case "closedGroups": closedGroups = try Self.list(value)
+    case "deletedGroups": deletedGroups = try Self.list(value)
+    case "cleanedTabs": cleanedTabs = try Self.list(value)
+    case "privateCleanedTabs":
+      var privateCleaned = JSMap<[ClosedTab]>()
+      for (k, v) in value?.object ?? [:] { privateCleaned[k] = try Self.list(v) }
+      privateCleanedTabs = privateCleaned
+    case "privateSiteMutes":
+      var mutes = JSMap<JSMap<Bool>>()
+      for (k, v) in value?.object ?? [:] {
+        var mine = JSMap<Bool>()
+        for (host, muted) in v.object ?? [:] { if let b = muted.bool { mine[host] = b } }
+        mutes[k] = mine
+      }
+      privateSiteMutes = mutes
+    case "parkedPins": parkedPins = try Self.table(value)
+    case "pinChoices":
+      var choices = JSMap<JSMap<Double>>()
+      for (k, v) in value?.object ?? [:] {
+        var mine = JSMap<Double>()
+        for (key, n) in v.object ?? [:] { if let d = n.number { mine[key] = d } }
+        choices[k] = mine
+      }
+      pinChoices = Table(choices)
+    case "pinSync":
+      var sync = JSMap<JSMap<JSONValue>>()
+      for (k, v) in value?.object ?? [:] { sync[k] = v.object ?? [:] }
+      pinSync = Table(sync)
+    case "downloads": downloads = (value?.array ?? []).compactMap { $0.object.map(Download.init) }
+    case "settings": settings = Settings(values: value?.object ?? Settings.defaults.values)
+    case "ui":
+      let ui = value?.object ?? [:]
+      self.ui = FocusState(
+        focusedWindowId: ui["focusedWindowId"]?.string, focusOrder: ui["focusOrder"]?.array?.compactMap(\.string) ?? [],
+        lastProfileId: ui["lastProfileId"]?.string)
+    case "caches":
+      let caches = value?.object ?? [:]
+      var hints = JSMap<[HistoryHint]>()
+      for (profileId, list) in caches["historyHints"]?.object ?? [:] {
+        hints[profileId] = (list.array ?? []).map { HistoryHint(url: $0["url"]?.string ?? "", title: $0["title"]?.string ?? "", favicon: $0["favicon"]?.string) }
+      }
+      self.caches.historyHints = hints
+      self.caches.playingAudio = Set(caches["playingAudio"]?.array?.compactMap(\.string) ?? [])
+      self.caches.launchBackdrop = caches["launchBackdrop"] ?? .null
+    default:
+      throw CommandError("unknown slice \(key)")
     }
-    privateSiteMutes = mutes
-    parkedPins = try Self.table(json["parkedPins"])
-    var choices = JSMap<JSMap<Double>>()
-    for (key, value) in json["pinChoices"]?.object ?? [:] {
-      var mine = JSMap<Double>()
-      for (k, n) in value.object ?? [:] { if let d = n.number { mine[k] = d } }
-      choices[key] = mine
-    }
-    pinChoices = Table(choices)
-    var sync = JSMap<JSMap<JSONValue>>()
-    for (key, value) in json["pinSync"]?.object ?? [:] { sync[key] = value.object ?? [:] }
-    pinSync = Table(sync)
-    downloads = (json["downloads"]?.array ?? []).compactMap { $0.object.map(Download.init) }
-    settings = Settings(values: json["settings"]?.object ?? Settings.defaults.values)
-    let ui = json["ui"]?.object ?? [:]
-    self.ui = FocusState(
-      focusedWindowId: ui["focusedWindowId"]?.string, focusOrder: ui["focusOrder"]?.array?.compactMap(\.string) ?? [],
-      lastProfileId: ui["lastProfileId"]?.string)
-    let caches = json["caches"]?.object ?? [:]
-    var hints = JSMap<[HistoryHint]>()
-    for (profileId, list) in caches["historyHints"]?.object ?? [:] {
-      hints[profileId] = (list.array ?? []).map { HistoryHint(url: $0["url"]?.string ?? "", title: $0["title"]?.string ?? "", favicon: $0["favicon"]?.string) }
-    }
-    self.caches.historyHints = hints
-    self.caches.playingAudio = Set(caches["playingAudio"]?.array?.compactMap(\.string) ?? [])
-    self.caches.launchBackdrop = caches["launchBackdrop"] ?? .null
   }
 
   public var stateJSON: JSONObject {

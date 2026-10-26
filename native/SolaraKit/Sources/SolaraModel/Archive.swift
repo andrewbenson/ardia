@@ -239,7 +239,7 @@ public struct ClosedWindowGroup: JSONConvertible {
   }
 
   public init(json: JSONObject) throws {
-    let f = Fields(json, known: TabGroup.keys.union(["tabIndexes"]))
+    let f = Fields(json, known: TabGroupFields.keys.union(["tabIndexes"]))
     id = f.string("id")
     profileId = f.string("profileId")
     name = f.string("name")

@@ -75,40 +75,66 @@ public struct ChangeSet: Sendable, Equatable {
   public var settings: Bool { !settingsChanged.isEmpty || !settingsRemoved.isEmpty }
 }
 
-struct TablePatch: Sendable, Equatable {
-  var upsert: [JSONValue]
+struct TablePatch: @unchecked Sendable {
+  var upsert: [any JSONConvertible]
+  var ids: [String]
   var remove: [String]
   var order: [String]?
+  let encode: @Sendable (String, any JSONConvertible) -> JSONValue
 
-  init?<V>(_ change: TableChange, _ table: Table<V>, encode: (String, V) -> JSONValue) {
+  init?<V: JSONConvertible>(_ change: TableChange, _ table: Table<V>, encode: @escaping @Sendable (String, V) -> JSONValue) {
     if change.isEmpty { return nil }
-    upsert = change.upserted.compactMap { id in table[id].map { encode(id, $0) } }
+    var values: [any JSONConvertible] = []
+    var ids: [String] = []
+    for id in change.upserted { if let value = table[id] { values.append(value); ids.append(id) } }
+    upsert = values
+    self.ids = ids
     remove = change.removed
     order = change.reordered ? table.keys : nil
+    self.encode = { id, value in encode(id, value as! V) }
   }
 
   var json: JSONValue {
-    var out: JSONObject = ["upsert": .array(upsert), "remove": JSONValue(remove)]
+    var out: JSONObject = ["upsert": .array(zip(ids, upsert).map { encode($0, $1) }), "remove": JSONValue(remove)]
     if let order { out["order"] = JSONValue(order) }
     return .object(out)
   }
 }
 
-public struct Patch: Sendable, Equatable {
+enum ListValue: @unchecked Sendable {
+  case strings([String])
+  case closedTabs([ClosedTab])
+  case closedWindows([ClosedWindow])
+  case closedGroups([ClosedGroup])
+  case privateCleaned(JSMap<[ClosedTab]>)
+  case privateMutes(JSMap<JSMap<Bool>>)
+  case downloads([Download])
+  case focus(FocusState)
+
+  var json: JSONValue {
+    switch self {
+    case .strings(let v): JSONValue(v)
+    case .closedTabs(let v): .array(v.map(\.jsonValue))
+    case .closedWindows(let v): .array(v.map(\.jsonValue))
+    case .closedGroups(let v): .array(v.map(\.jsonValue))
+    case .privateCleaned(let v): .object(v.mapValues { .array($0.map(\.jsonValue)) })
+    case .privateMutes(let v): .object(v.mapValues { .object($0.mapValues(JSONValue.bool)) })
+    case .downloads(let v): .array(v.map { .object($0.json) })
+    case .focus(let ui): ["focusedWindowId": JSONValue(ui.focusedWindowId), "focusOrder": JSONValue(ui.focusOrder), "lastProfileId": JSONValue(ui.lastProfileId)]
+    }
+  }
+}
+
+public struct Patch: @unchecked Sendable {
   public let rev: Int
   var tables: [(String, TablePatch)] = []
-  var values: JSONObject = [:]
+  var lists: [(String, ListValue)] = []
   public var settings: JSONObject? = nil
   public var settingsRemoved: [String] = []
 
-  public static func == (a: Patch, b: Patch) -> Bool {
-    a.rev == b.rev && a.tables.map(\.0) == b.tables.map(\.0) && a.tables.map(\.1) == b.tables.map(\.1) && a.values == b.values
-      && a.settings == b.settings && a.settingsRemoved == b.settingsRemoved
-  }
-
   public init(rev: Int, changes: ChangeSet, state s: BrowserState) {
     self.rev = rev
-    func add<V>(_ name: String, _ change: TableChange, _ table: Table<V>, _ encode: (String, V) -> JSONValue) {
+    func add<V: JSONConvertible>(_ name: String, _ change: TableChange, _ table: Table<V>, _ encode: @escaping @Sendable (String, V) -> JSONValue) {
       if let patch = TablePatch(change, table, encode: encode) { tables.append((name, patch)) }
     }
     add("profiles", changes.profiles, s.profiles) { _, v in v.jsonValue }
@@ -126,25 +152,28 @@ public struct Patch: Sendable, Equatable {
       o["profileId"] = .string(id)
       return .object(o)
     }
-    add("pinChoices", changes.pinChoices, s.pinChoices) { id, v in ["profileId": .string(id), "table": .object(v.mapValues(JSONValue.number))] }
-    add("pinSync", changes.pinSync, s.pinSync) { id, v in ["profileId": .string(id), "table": .object(v)] }
+    if !changes.pinChoices.isEmpty,
+      let patch = TablePatch(changes.pinChoices, Table(s.pinChoices.map.mapValues(PinTableValue.choices)), encode: { id, v in v.json(id) })
+    {
+      tables.append(("pinChoices", patch))
+    }
+    if !changes.pinSync.isEmpty, let patch = TablePatch(changes.pinSync, Table(s.pinSync.map.mapValues(PinTableValue.sync)), encode: { id, v in v.json(id) }) {
+      tables.append(("pinSync", patch))
+    }
     for name in changes.lists.sorted() {
       switch name {
-      case "profileOrder": values[name] = JSONValue(s.profileOrder)
-      case "orphanedProfileData": values[name] = JSONValue(s.orphanedProfileData)
-      case "windowOrder": values[name] = JSONValue(s.windowOrder)
-      case "closedTabs": values[name] = .array(s.closedTabs.map(\.jsonValue))
-      case "closedWindows": values[name] = .array(s.closedWindows.map(\.jsonValue))
-      case "closedGroups": values[name] = .array(s.closedGroups.map(\.jsonValue))
-      case "deletedGroups": values[name] = .array(s.deletedGroups.map(\.jsonValue))
-      case "cleanedTabs": values[name] = .array(s.cleanedTabs.map(\.jsonValue))
-      case "privateCleanedTabs": values[name] = .object(s.privateCleanedTabs.mapValues { .array($0.map(\.jsonValue)) })
-      case "privateSiteMutes": values[name] = .object(s.privateSiteMutes.mapValues { .object($0.mapValues(JSONValue.bool)) })
-      case "downloads": values[name] = .array(s.downloads.map { .object($0.json) })
-      case "ui":
-        values[name] = [
-          "focusedWindowId": JSONValue(s.ui.focusedWindowId), "focusOrder": JSONValue(s.ui.focusOrder), "lastProfileId": JSONValue(s.ui.lastProfileId),
-        ]
+      case "profileOrder": lists.append((name, .strings(s.profileOrder)))
+      case "orphanedProfileData": lists.append((name, .strings(s.orphanedProfileData)))
+      case "windowOrder": lists.append((name, .strings(s.windowOrder)))
+      case "closedTabs": lists.append((name, .closedTabs(s.closedTabs)))
+      case "closedWindows": lists.append((name, .closedWindows(s.closedWindows)))
+      case "closedGroups": lists.append((name, .closedGroups(s.closedGroups)))
+      case "deletedGroups": lists.append((name, .closedGroups(s.deletedGroups)))
+      case "cleanedTabs": lists.append((name, .closedTabs(s.cleanedTabs)))
+      case "privateCleanedTabs": lists.append((name, .privateCleaned(s.privateCleanedTabs)))
+      case "privateSiteMutes": lists.append((name, .privateMutes(s.privateSiteMutes)))
+      case "downloads": lists.append((name, .downloads(s.downloads)))
+      case "ui": lists.append((name, .focus(s.ui)))
       default: break
       }
     }
@@ -152,12 +181,15 @@ public struct Patch: Sendable, Equatable {
     settingsRemoved = changes.settingsRemoved
   }
 
-  public var downloads: [Download]? { values["downloads"]?.array?.compactMap { $0.object.map(Download.init) } }
+  public var downloads: [Download]? {
+    for (name, value) in lists where name == "downloads" { if case .downloads(let d) = value { return d } }
+    return nil
+  }
 
   public var json: JSONValue {
     var out: JSONObject = ["rev": JSONValue(rev)]
     for (name, table) in tables { out[name] = table.json }
-    for (name, value) in values { out[name] = value }
+    for (name, value) in lists { out[name] = value.json }
     if settings != nil || !settingsRemoved.isEmpty {
       var entry = JSONObject()
       if let settings { entry["set"] = .object(settings) }
@@ -166,4 +198,20 @@ public struct Patch: Sendable, Equatable {
     }
     return .object(out)
   }
+}
+
+enum PinTableValue: JSONConvertible {
+  case choices(JSMap<Double>)
+  case sync(JSMap<JSONValue>)
+
+  init(json: JSONObject) throws { self = .sync(json) }
+
+  var json: JSONObject {
+    switch self {
+    case .choices(let v): v.mapValues(JSONValue.number)
+    case .sync(let v): v
+    }
+  }
+
+  func json(_ profileId: String) -> JSONValue { ["profileId": .string(profileId), "table": .object(json)] }
 }

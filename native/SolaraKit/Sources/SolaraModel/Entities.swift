@@ -47,7 +47,139 @@ public struct Profile: JSONConvertible {
   }
 }
 
-public struct BrowserWindow: JSONConvertible {
+public struct BrowserWindow: JSONConvertible, @unchecked Sendable {
+  var box: Box<BrowserWindowFields>
+
+  public init(id: String, profileId: String, incognito: Bool, frame: [Double]?, createdAt: Double) {
+    box = Box(BrowserWindowFields(id: id, profileId: profileId, incognito: incognito, frame: frame, createdAt: createdAt))
+  }
+
+  public init(json: JSONObject) throws {
+    box = Box(try BrowserWindowFields(json: json))
+  }
+
+  public var fields: BrowserWindowFields {
+    get { box.value }
+    set {
+      if isKnownUniquelyReferenced(&box) { box.value = newValue } else { box = Box(newValue) }
+    }
+  }
+
+  public var id: String {
+    get { box.value.id }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.id = newValue
+    }
+  }
+  public var profileId: String {
+    get { box.value.profileId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.profileId = newValue
+    }
+  }
+  public var incognito: Bool {
+    get { box.value.incognito }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.incognito = newValue
+    }
+  }
+  public var tabIds: [String] {
+    get { box.value.tabIds }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.tabIds = newValue
+    }
+  }
+  public var activeTabIds: JSMap<String> {
+    get { box.value.activeTabIds }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.activeTabIds = newValue
+    }
+  }
+  public var sidebarOpen: Bool {
+    get { box.value.sidebarOpen }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.sidebarOpen = newValue
+    }
+  }
+  public var tabLayout: String? {
+    get { box.value.tabLayout }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.tabLayout = newValue
+    }
+  }
+  public var frame: [Double]? {
+    get { box.value.frame }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.frame = newValue
+    }
+  }
+  public var fullScreen: Double? {
+    get { box.value.fullScreen }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.fullScreen = newValue
+    }
+  }
+  public var createdAt: Double {
+    get { box.value.createdAt }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.createdAt = newValue
+    }
+  }
+  public var kind: String? {
+    get { box.value.kind }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.kind = newValue
+    }
+  }
+  public var linkPointer: [Double]? {
+    get { box.value.linkPointer }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.linkPointer = newValue
+    }
+  }
+  public var originalProfileId: String? {
+    get { box.value.originalProfileId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.originalProfileId = newValue
+    }
+  }
+  public var chromeWindow: String? {
+    get { box.value.chromeWindow }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.chromeWindow = newValue
+    }
+  }
+  public var extra: JSONObject {
+    get { box.value.extra }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.extra = newValue
+    }
+  }
+  public var absent: Set<String> { box.value.absent }
+  public var isSmall: Bool { box.value.isSmall }
+  public var persistedJSON: JSONObject { box.value.persistedJSON }
+
+  public var json: JSONObject { box.value.json }
+
+  public static func == (a: BrowserWindow, b: BrowserWindow) -> Bool { a.box === b.box || a.box.value == b.box.value }
+}
+
+public struct BrowserWindowFields: Sendable, Equatable {
   public var id: String
   public var profileId: String
   public var incognito: Bool
@@ -185,7 +317,224 @@ public struct TileFolder: JSONConvertible {
   }
 }
 
-public struct Tab: JSONConvertible {
+final class Box<Value: Sendable>: @unchecked Sendable {
+  var value: Value
+  init(_ value: Value) { self.value = value }
+}
+
+public struct Tab: JSONConvertible, @unchecked Sendable {
+  var box: Box<TabFields>
+
+  public init(id: String, windowId: String, profileId: String, url: String, now: Double) {
+    box = Box(TabFields(id: id, windowId: windowId, profileId: profileId, url: url, now: now))
+  }
+
+  public init(json: JSONObject) throws {
+    box = Box(try TabFields(json: json))
+  }
+
+  public var fields: TabFields {
+    get { box.value }
+    set {
+      if isKnownUniquelyReferenced(&box) { box.value = newValue } else { box = Box(newValue) }
+    }
+  }
+
+  public var id: String {
+    get { box.value.id }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.id = newValue
+    }
+  }
+  public var windowId: String {
+    get { box.value.windowId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.windowId = newValue
+    }
+  }
+  public var profileId: String {
+    get { box.value.profileId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.profileId = newValue
+    }
+  }
+  public var url: String {
+    get { box.value.url }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.url = newValue
+    }
+  }
+  public var title: String {
+    get { box.value.title }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.title = newValue
+    }
+  }
+  public var favicon: String? {
+    get { box.value.favicon }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.favicon = newValue
+    }
+  }
+  public var pinned: Bool {
+    get { box.value.pinned }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinned = newValue
+    }
+  }
+  public var muted: Bool {
+    get { box.value.muted }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.muted = newValue
+    }
+  }
+  public var zoom: Double {
+    get { box.value.zoom }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.zoom = newValue
+    }
+  }
+  public var customTitle: String? {
+    get { box.value.customTitle }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.customTitle = newValue
+    }
+  }
+  public var customIcon: String? {
+    get { box.value.customIcon }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.customIcon = newValue
+    }
+  }
+  public var pinnedUrl: String? {
+    get { box.value.pinnedUrl }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinnedUrl = newValue
+    }
+  }
+  public var pinnedAsRow: Bool? {
+    get { box.value.pinnedAsRow }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinnedAsRow = newValue
+    }
+  }
+  public var tileFolder: TileFolder? {
+    get { box.value.tileFolder }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.tileFolder = newValue
+    }
+  }
+  public var navigation: Navigation? {
+    get { box.value.navigation }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.navigation = newValue
+    }
+  }
+  public var adoptId: String? {
+    get { box.value.adoptId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.adoptId = newValue
+    }
+  }
+  public var openerId: String? {
+    get { box.value.openerId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.openerId = newValue
+    }
+  }
+  public var wakeAdoptId: String? {
+    get { box.value.wakeAdoptId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.wakeAdoptId = newValue
+    }
+  }
+  public var liveItem: JSONValue? {
+    get { box.value.liveItem }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.liveItem = newValue
+    }
+  }
+  public var unloaded: Bool? {
+    get { box.value.unloaded }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.unloaded = newValue
+    }
+  }
+  public var pinKey: String? {
+    get { box.value.pinKey }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinKey = newValue
+    }
+  }
+  public var pageIn: String? {
+    get { box.value.pageIn }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pageIn = newValue
+    }
+  }
+  public var engine: String? {
+    get { box.value.engine }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.engine = newValue
+    }
+  }
+  public var createdAt: Double {
+    get { box.value.createdAt }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.createdAt = newValue
+    }
+  }
+  public var lastActiveAt: Double {
+    get { box.value.lastActiveAt }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.lastActiveAt = newValue
+    }
+  }
+  public var isPinnedRow: Bool { box.value.isPinnedRow }
+  public var pinSection: PinSection { box.value.pinSection }
+  public var pinKeyOrId: String { box.value.pinKeyOrId }
+
+  public var extra: JSONObject {
+    get { box.value.extra }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.extra = newValue
+    }
+  }
+
+  public var absent: Set<String> { box.value.absent }
+
+  public var json: JSONObject { box.value.json }
+
+  public static func == (a: Tab, b: Tab) -> Bool { a.box === b.box || a.box.value == b.box.value }
+}
+
+public struct TabFields: Sendable, Equatable {
   public var id: String
   public var windowId: String
   public var profileId: String
@@ -308,7 +657,143 @@ public enum PinSection: Sendable, Equatable {
   case tile, row, none
 }
 
-public struct TabGroup: JSONConvertible {
+public struct TabGroup: JSONConvertible, @unchecked Sendable {
+  var box: Box<TabGroupFields>
+
+  public init(id: String, windowId: String, profileId: String, name: String, icon: String?, color: String?, collapsed: Bool, pinned: Bool,
+    tabIds: [String], createdAt: Double)
+  {
+    box = Box(
+      TabGroupFields(
+        id: id, windowId: windowId, profileId: profileId, name: name, icon: icon, color: color, collapsed: collapsed, pinned: pinned, tabIds: tabIds,
+        createdAt: createdAt))
+  }
+
+  public init(json: JSONObject) throws {
+    box = Box(try TabGroupFields(json: json))
+  }
+
+  public var fields: TabGroupFields {
+    get { box.value }
+    set {
+      if isKnownUniquelyReferenced(&box) { box.value = newValue } else { box = Box(newValue) }
+    }
+  }
+
+  public var id: String {
+    get { box.value.id }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.id = newValue
+    }
+  }
+  public var windowId: String {
+    get { box.value.windowId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.windowId = newValue
+    }
+  }
+  public var profileId: String {
+    get { box.value.profileId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.profileId = newValue
+    }
+  }
+  public var name: String {
+    get { box.value.name }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.name = newValue
+    }
+  }
+  public var icon: String? {
+    get { box.value.icon }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.icon = newValue
+    }
+  }
+  public var color: String? {
+    get { box.value.color }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.color = newValue
+    }
+  }
+  public var collapsed: Bool {
+    get { box.value.collapsed }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.collapsed = newValue
+    }
+  }
+  public var pinned: Bool {
+    get { box.value.pinned }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinned = newValue
+    }
+  }
+  public var tabIds: [String] {
+    get { box.value.tabIds }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.tabIds = newValue
+    }
+  }
+  public var createdAt: Double {
+    get { box.value.createdAt }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.createdAt = newValue
+    }
+  }
+  public var autoUngroup: Bool? {
+    get { box.value.autoUngroup }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.autoUngroup = newValue
+    }
+  }
+  public var pinnedOpenerId: String? {
+    get { box.value.pinnedOpenerId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinnedOpenerId = newValue
+    }
+  }
+  public var pinKey: String? {
+    get { box.value.pinKey }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.pinKey = newValue
+    }
+  }
+  public var parentId: String? {
+    get { box.value.parentId }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.parentId = newValue
+    }
+  }
+  public var extra: JSONObject {
+    get { box.value.extra }
+    set {
+      if !isKnownUniquelyReferenced(&box) { box = Box(box.value) }
+      box.value.extra = newValue
+    }
+  }
+  public var absent: Set<String> { box.value.absent }
+  public var pinKeyOrId: String { box.value.pinKeyOrId }
+
+  public var json: JSONObject { box.value.json }
+
+  public static func == (a: TabGroup, b: TabGroup) -> Bool { a.box === b.box || a.box.value == b.box.value }
+}
+
+public struct TabGroupFields: Sendable, Equatable {
   public var id: String
   public var windowId: String
   public var profileId: String

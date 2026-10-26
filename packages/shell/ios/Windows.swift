@@ -3,6 +3,7 @@ import AppKit
 public enum WindowHost {
   public static var makeWindow: (() -> NSWindow)?
   public static var makeContentView: ((_ windowId: String) -> NSView)?
+  nonisolated(unsafe) public static var makeAuxController: ((_ windowId: String, _ kind: String) -> NSViewController?)?
 }
 
 final class WindowManager: NSObject, NSWindowDelegate {
@@ -417,8 +418,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.isReleasedWhenClosed = false
     window.minSize = settings ? NSSize(width: 720, height: 480) : size
     window.tabbingMode = .disallowed
-    let controller = NSViewController()
-    let root = makeContentView(id)
+    let native = WindowHost.makeAuxController?(id, kind)
+    let controller = native ?? NSViewController()
+    let root = native?.view ?? makeContentView(id)
     controller.view = root
     controller.view.frame = NSRect(origin: .zero, size: size)
     window.contentViewController = controller
@@ -428,7 +430,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     windows[id] = window
     if !window.setFrameUsingName("Ardia\(kind.capitalized)") { window.center() }
     window.setFrameAutosaveName("Ardia\(kind.capitalized)")
-    keepContentSizedAcrossReloads(id: id, root: root)
+    if native == nil { keepContentSizedAcrossReloads(id: id, root: root) }
     relayoutRoot(window)
     window.makeKeyAndOrderFront(nil)
   }

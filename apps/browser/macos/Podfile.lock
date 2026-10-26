@@ -4,6 +4,11 @@ PODS:
   - ArdiaImport (0.0.0):
     - ArdiaCore
     - ExpoModulesCore
+  - ArdiaSettings (0.0.0):
+    - ArdiaCore
+    - ArdiaShell
+    - ArdiaStore
+    - ExpoModulesCore
   - ArdiaShaders (0.0.0):
     - ExpoModulesCore
   - ArdiaShell (0.0.0):
@@ -2318,6 +2323,7 @@ PODS:
 DEPENDENCIES:
   - ArdiaCore (from `../../../packages/ardiacore/ios`)
   - ArdiaImport (from `../../../packages/import/ios`)
+  - ArdiaSettings (from `../../../packages/settings/ios`)
   - ArdiaShaders (from `../../../packages/shaders/ios`)
   - ArdiaShell (from `../../../packages/shell/ios`)
   - ArdiaStore (from `../../../packages/store/ios`)
@@ -2413,6 +2419,8 @@ EXTERNAL SOURCES:
     :path: "../../../packages/ardiacore/ios"
   ArdiaImport:
     :path: "../../../packages/import/ios"
+  ArdiaSettings:
+    :path: "../../../packages/settings/ios"
   ArdiaShaders:
     :path: "../../../packages/shaders/ios"
   ArdiaShell:
@@ -2582,6 +2590,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   ArdiaCore: 5238364a8669034510574dbc9d447700b1407ba2
   ArdiaImport: 535f03b8bdc5866eb05d6d177597e9583bfe7d47
+  ArdiaSettings: 350f2ff65ce91a52b9fe36d998862dd719d6828f
   ArdiaShaders: d8dc0512dec3ed9d4af792579b320249ef035924
   ArdiaShell: 4de45ace9c0e11ff56d51c81cf9ec9a2fd6bac7c
   ArdiaStore: 2243036434998a6828cd026f377b2456b0fc14a2
@@ -2667,6 +2676,6 @@ SPEC CHECKSUMS:
   Sparkle: b8c9cf4ced217ffc708a1ca5f988a7ba877658db
   Yoga: a88f30ac6f89fded00f9840e7d043315e5ab4fe0
 
-PODFILE CHECKSUM: 6a6292ccb2c752706e80a7bbcd19c55c243438ad
+PODFILE CHECKSUM: 3ef55c253a5efbe66903cc2d8e96345f57bec33e
 
 COCOAPODS: 1.17.0

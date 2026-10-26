@@ -1,4 +1,5 @@
 import { openWindow } from "@ardia/shell";
+import { nativeSettingsAvailable, navigateNativeSettings } from "@ardia/settings";
 import { create } from "zustand";
 
 export const SETTINGS_WINDOW_ID = "settings";
@@ -67,7 +68,9 @@ export const useSettingsNav = create<Nav>((set, get) => ({
 }));
 
 export function openSettings(pane?: SettingsPane, profileId?: string | null) {
-  if (pane) useSettingsNav.getState().go(pane, profileId ?? null);
+  if (nativeSettingsAvailable()) {
+    if (pane) void navigateNativeSettings(pane, profileId ?? null);
+  } else if (pane) useSettingsNav.getState().go(pane, profileId ?? null);
   void openWindow(SETTINGS_WINDOW_ID, { kind: "settings", title: "Settings" });
 }
 

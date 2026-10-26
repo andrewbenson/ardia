@@ -33,12 +33,12 @@ final class FakeSearchEngineServices: SearchEngineServices {
 
   func engineList() -> SearchEngineList { SearchEngineList(engines: engines, selectedId: selectedId, controlling: controlling) }
   func setSearchEngine(_ id: String) { selectedId = id }
-  func addCustomEngine(_ input: SearchEngineInput) -> String? {
+  func addCustomEngine(_ input: SearchEngineInput) async -> String? {
     if !input.url.contains("%s") { return "The URL needs %s where the search terms go." }
     engines.append(SearchEngineItem(id: "c\(engines.count)", name: input.name, keyword: input.keyword, url: input.url, host: "example.com", custom: true))
     return nil
   }
-  func updateCustomEngine(_ id: String, _ input: SearchEngineInput) -> String? { nil }
+  func updateCustomEngine(_ id: String, _ input: SearchEngineInput) async -> String? { nil }
   func removeCustomEngine(_ id: String) { engines.removeAll { $0.id == id } }
   func manageExtensions(profile: String) {}
   func disableExtension(profile: String, extensionId: String) async { disabled.append(extensionId) }

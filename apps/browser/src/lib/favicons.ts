@@ -382,6 +382,30 @@ export function useFavicon(url: string, src?: string | null, profileId?: string)
   return key ? { profileId: key.slice(0, split), uri: key.slice(split + 1) } : null;
 }
 
+export function faviconUri(url: string, profileId?: string, waitMs = 3000): Promise<string | null> {
+  const found = resolveFavicon(url, null, profileId);
+  if (found || !url) return Promise.resolve(found?.uri ?? null);
+  return new Promise((resolve) => {
+    let settled = false;
+    let stop = () => {};
+    const finish = (uri: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      stop();
+      resolve(uri);
+    };
+    const timer = setTimeout(() => finish(null), waitMs);
+    const unsubscribe = useFavicons.subscribe(() => {
+      const next = resolveFavicon(url, null, profileId);
+      if (next) finish(next.uri);
+    });
+    stop = watch({ url, src: null, profileId });
+    if (settled) stop();
+  });
+}
+
 const theming = new Set<string>();
 
 export function useFaviconTheme(url: string, src?: string | null, profileId?: string): IconTheme | null | undefined {

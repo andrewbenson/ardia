@@ -1,4 +1,5 @@
 import type { View } from "react-native";
+import { focusNativeSettingsSearch, nativeSettingsAvailable } from "@ardia/settings";
 import { create } from "zustand";
 import { setting } from "./settingsIndex";
 import { useSettingsNav } from "./windows";
@@ -16,7 +17,7 @@ export const useSettingsSearch = create<SearchUi>(() => ({ query: "", selected: 
 
 export const setSettingsQuery = (query: string) => useSettingsSearch.setState({ query });
 
-export const focusSettingsSearch = () => useSettingsSearch.setState({ focusRequest: Date.now() });
+export const focusSettingsSearch = () => (nativeSettingsAvailable() ? void focusNativeSettingsSearch() : useSettingsSearch.setState({ focusRequest: Date.now() }));
 
 export function revealSetting(id: string) {
   const nav = useSettingsNav.getState();

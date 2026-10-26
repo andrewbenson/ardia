@@ -17,6 +17,7 @@
     "@ardia/shell": "workspace:*",
     "@ardia/ardiacore": "workspace:*",
     "@ardia/import": "workspace:*",
+    "@ardia/settings": "workspace:*",
     "@ardia/store": "workspace:*",
     "@ardia/sync": "workspace:*",
     "expo": "~54.0.37",

@@ -60,8 +60,8 @@ public struct SearchEngineInput: Hashable, Sendable {
 public protocol SearchEngineServices: AnyObject {
   func engineList() -> SearchEngineList
   func setSearchEngine(_ id: String)
-  func addCustomEngine(_ input: SearchEngineInput) -> String?
-  func updateCustomEngine(_ id: String, _ input: SearchEngineInput) -> String?
+  func addCustomEngine(_ input: SearchEngineInput) async -> String?
+  func updateCustomEngine(_ id: String, _ input: SearchEngineInput) async -> String?
   func removeCustomEngine(_ id: String)
   func manageExtensions(profile: String)
   func disableExtension(profile: String, extensionId: String) async
@@ -260,12 +260,14 @@ struct EngineSheet: View {
 
   private func save() {
     let input = SearchEngineInput(name: name, keyword: keyword, url: url)
-    let result = engine.map { model.services.updateCustomEngine($0.id, input) } ?? model.services.addCustomEngine(input)
-    if let result {
-      error = result
-      return
+    Task {
+      let result = if let engine { await model.services.updateCustomEngine(engine.id, input) } else { await model.services.addCustomEngine(input) }
+      if let result {
+        error = result
+        return
+      }
+      close()
     }
-    close()
   }
 }
 

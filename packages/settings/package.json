@@ -1,0 +1,15 @@
+{
+  "name": "@ardia/settings",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The native Settings window (SolaraUI) and the calls it makes into JS",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}

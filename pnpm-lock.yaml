@@ -31,6 +31,9 @@ importers:
       '@ardia/import':
         specifier: workspace:*
         version: link:../../packages/import
+      '@ardia/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@ardia/shaders':
         specifier: workspace:*
         version: link:../../packages/shaders
@@ -103,6 +106,8 @@ importers:
         version: 24.13.6
 
   packages/import: {}
+
+  packages/settings: {}
 
   packages/shaders: {}
 

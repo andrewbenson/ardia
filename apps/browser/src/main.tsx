@@ -23,6 +23,7 @@ import { setStoreBatching, useBrowser } from "./store/browser";
 import { installErrorReporting, startTelemetry } from "./telemetry";
 import { launchCommitted } from "./telemetry/journeys";
 import { markFirstWindow } from "./telemetry/track";
+import { startNativeSettings } from "./components/settings/nativeSettings";
 
 probeStore("browser", useBrowser);
 installErrorReporting();
@@ -39,6 +40,7 @@ startSync();
 startTelemetry();
 startKillSwitches();
 startCliControl();
+afterFirstWindow(startNativeSettings);
 afterFirstWindow(startUserScripts);
 startMemoryTrim();
 if (__DEV__ || perfProbeEnabled) require("./lib/devHarness").startDevHarness();

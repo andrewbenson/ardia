@@ -32,6 +32,7 @@ globalThis.acTestNativeModules = {
         } else if (name === "applyState") {
           const patch = {};
           if (args[0].downloads) patch.downloads = native.downloads = args[0].downloads;
+          if (args[0].profiles) native.profiles = args[0].profiles;
           if (args[0].settings) {
             native.settings = args[0].settings;
             patch.settings = { set: args[0].settings };
@@ -113,6 +114,13 @@ test("a write outside the applier is forwarded to the native store, not lost", (
   assert.equal(sent[0]?.name, "applyState");
   assert.equal(native.settings.searchEngine, "kagi");
   assert.ok(warnings.some((w) => w.includes("outside the native store's applier")));
+});
+
+test("JS-owned profiles are mirrored into the native store for native Settings", () => {
+  assert.deepEqual(Object.keys(native.profiles ?? {}), Object.keys(S().profiles));
+  S().createProfile({ name: "Work" });
+  assert.equal(Object.keys(native.profiles).length, Object.keys(S().profiles).length);
+  assert.ok(Object.values(native.profiles).some((p) => p.name === "Work"));
 });
 
 test("persist.ts marks session.json and leaves downloads.json to the native store", () => {

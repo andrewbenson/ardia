@@ -12,10 +12,11 @@ import type { Download } from "@ardia/ardiacore";
 import type { Settings } from "./settings";
 
 type OwnedSlices = { settings: Settings; downloads: Download[] };
+type ReplicaState = OwnedSlices & { profiles: Record<string, unknown>; profileOrder: string[] };
 type Replica = {
-  getState(): OwnedSlices;
+  getState(): ReplicaState;
   setState(partial: Partial<OwnedSlices>): void;
-  subscribe(listener: (s: OwnedSlices, prev: OwnedSlices) => void): () => void;
+  subscribe(listener: (s: ReplicaState, prev: ReplicaState) => void): () => void;
 };
 
 let active = false;
@@ -104,6 +105,11 @@ export function attachReplica(store: Replica) {
       applyResponse(nativeCatchUp(appliedRev));
     }
   });
+  const sendProfiles = (s: ReplicaState) => nativeWrite({ name: "applyState", args: [{ profiles: s.profiles, profileOrder: s.profileOrder }] });
+  sendProfiles(store.getState());
+  const stopProfiles = store.subscribe((s, prev) => {
+    if (s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder) sendProfiles(s);
+  });
   const stopGuard = store.subscribe((s, prev) => {
     if (applying) return;
     const changed: Partial<OwnedSlices> = {};
@@ -119,6 +125,7 @@ export function attachReplica(store: Replica) {
   });
   stopListening = () => {
     stopCommits();
+    stopProfiles();
     stopGuard();
   };
 }

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ACCopyright</key>
+	<string>$(AC_COPYRIGHT)</string>
+	<key>ACUpstreamCredit</key>
+	<string>$(AC_UPSTREAM_CREDIT)</string>
 	<key>ACFeedbackEmail</key>
 	<string></string>
 	<key>ACFeedbackURL</key>

@@ -113,7 +113,22 @@ public final class AppUpdater: NSObject {
     return "\(version[..<range.lowerBound]) Nightly \(number)"
   }
 
-  static var aboutNotice: String { "© 2026 Mantra Patel. \(Bundle.main.productName) is free software under the GNU General Public License v3, with ABSOLUTELY NO WARRANTY. Its source is at the link below. It's built on Chromium and uBlock Origin, each under its own license." }
+  static var aboutNotice: String {
+    let holder = infoString("ACCopyright") ?? "© 2026 Mantra Patel"
+    let upstream = infoString("ACUpstreamCredit").map { " \($0)." } ?? ""
+    return "\(holder).\(upstream) \(Bundle.main.productName) is free software under the GNU General Public License v3, with ABSOLUTELY NO WARRANTY. Its source is at the link below. It's built on Chromium and uBlock Origin, each under its own license."
+  }
+
+  static var chromiumVersion: String? {
+    guard let frameworks = Bundle.main.privateFrameworksURL,
+          let engine = Bundle(url: frameworks.appendingPathComponent("Chromium Framework.framework")) else { return nil }
+    return engine.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+  }
+
+  private static func infoString(_ key: String) -> String? {
+    let value = (Bundle.main.object(forInfoDictionaryKey: key) as? String ?? "").trimmingCharacters(in: .whitespaces)
+    return value.isEmpty || value.hasPrefix("$(") ? nil : value
+  }
 
   @objc public func showAbout(_ sender: Any?) {
     NSApp.orderFrontStandardAboutPanel(options: [.applicationVersion: Self.displayVersion, .credits: Self.aboutCredits])
@@ -128,13 +143,14 @@ public final class AppUpdater: NSObject {
       .foregroundColor: NSColor.secondaryLabelColor,
       .paragraphStyle: centered,
     ]
-    guard let repository = releaseRepository else { return NSAttributedString(string: aboutNotice, attributes: plain) }
+    let engineLine = chromiumVersion.map { "Chromium \($0)\n\n" } ?? ""
+    guard let repository = releaseRepository else { return NSAttributedString(string: engineLine + aboutNotice, attributes: plain) }
     let links = [
       ("Source code", "\(repository)/tree/v\(version)"),
       ("License", "\(repository)/blob/v\(version)/LICENSE"),
       ("Credits", "\(repository)/blob/v\(version)/NOTICE"),
     ]
-    let credits = NSMutableAttributedString(string: "\(aboutNotice)\n\n", attributes: plain)
+    let credits = NSMutableAttributedString(string: "\(engineLine)\(aboutNotice)\n\n", attributes: plain)
     for (index, (title, url)) in links.enumerated() {
       if index > 0 { credits.append(NSAttributedString(string: "  ·  ", attributes: plain)) }
       var linked = plain

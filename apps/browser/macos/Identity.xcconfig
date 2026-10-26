@@ -9,5 +9,7 @@ AC_NOTES_URL = https:/$()/ardia.dev/release-notes
 AC_TELEMETRY_URL = https:/$()/ardia.dev/otel/v1/logs
 AC_SWITCHES_URL = https:/$()/ardia.dev/switches.json
 AC_APP_ICON = AppIcon
+AC_COPYRIGHT = © 2026 Mantra Patel
+AC_UPSTREAM_CREDIT =
 
 #include? "Fork.xcconfig"

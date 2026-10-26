@@ -1,0 +1,138 @@
+import AppKit
+import ExpoModulesCore
+
+public class HostedModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("SolaraHosted")
+
+    Function("kinds") { () -> [String] in
+      MainActor.assumeIsolated { HostedViews.kinds }
+    }
+
+    View(SolaraHostedView.self) {
+      Prop("kind") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.kind = v } }
+      Prop("windowId") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.windowId = v } }
+      Prop("active") { (view: SolaraHostedView, v: Bool?) in MainActor.assumeIsolated { view.active = v ?? true } }
+
+      OnViewDidUpdateProps { (view: SolaraHostedView) in MainActor.assumeIsolated { view.propsDidUpdate() } }
+    }
+
+    AsyncFunction("devHost") { (kind: String, windowId: String, on: Bool) -> [String: String] in
+      MainActor.assumeIsolated { DevHost.toggle(kind: kind, windowId: windowId, on: on) }
+    }.runOnQueue(.main)
+  }
+}
+
+@MainActor
+enum DevHost {
+  private static var hosts: [String: DevHostView] = [:]
+  private static let fieldKind = "dev.field"
+
+  static func toggle(kind: String, windowId: String, on: Bool) -> [String: String] {
+    #if DEBUG
+    if kind == fieldKind { registerField() }
+    let window = NSApp.windows.filter { $0.isVisible && $0.contentView != nil }.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+    let before = describe(window?.firstResponder)
+    if on, let content = window?.contentView, hosts[kind] == nil {
+      let host = DevHostView(kind: kind, windowId: windowId)
+      host.frame = content.bounds
+      host.autoresizingMask = [.width, .height]
+      hosts[kind] = host
+      content.addSubview(host)
+    } else if !on, let host = hosts.removeValue(forKey: kind) {
+      host.removeFromSuperview()
+    }
+    return ["before": before, "after": describe(window?.firstResponder), "mounted": String(hosts[kind]?.mountedView != nil), "unmounts": String(unmounts)]
+    #else
+    return [:]
+    #endif
+  }
+
+  private static func describe(_ responder: NSResponder?) -> String {
+    guard let responder else { return "nil" }
+    if let editor = responder as? NSTextView, editor.isFieldEditor, let field = editor.delegate {
+      return "field editor of \(type(of: field))"
+    }
+    return String(describing: type(of: responder))
+  }
+
+  private static func registerField() {
+    HostedViews.register(fieldKind) { _ in
+      let box = NSView()
+      let field = NSTextField(string: "")
+      field.frame = NSRect(x: 20, y: 20, width: 200, height: 24)
+      box.addSubview(field)
+      let probe = DevFieldBox(field: field)
+      return HostedContent(view: probe.adopt(box), onUnmount: { DevHost.unmounts += 1 })
+    }
+  }
+
+  static var unmounts = 0
+}
+
+final class DevFieldBox: NSView {
+  let field: NSTextField
+
+  init(field: NSTextField) {
+    self.field = field
+    super.init(frame: .zero)
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  func adopt(_ box: NSView) -> NSView {
+    box.frame = bounds
+    box.autoresizingMask = [.width, .height]
+    addSubview(box)
+    return self
+  }
+
+  override var acceptsFirstResponder: Bool { true }
+
+  override func becomeFirstResponder() -> Bool {
+    DispatchQueue.main.async { [field] in field.window?.makeFirstResponder(field) }
+    return true
+  }
+}
+
+final class DevHostView: NSView {
+  let kind: String
+  let windowId: String
+  private var mount: HostedMount?
+
+  init(kind: String, windowId: String) {
+    self.kind = kind
+    self.windowId = windowId
+    super.init(frame: .zero)
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  override var isFlipped: Bool { true }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    guard mount == nil, let window, let content = HostedViews.make(kind, windowId: windowId) else { return }
+    mount = HostedMount(content: content, in: self, window: window)
+  }
+
+  override func viewWillMove(toWindow newWindow: NSWindow?) {
+    if newWindow == nil {
+      let current = mount
+      mount = nil
+      current?.end()
+    }
+    super.viewWillMove(toWindow: newWindow)
+  }
+
+  override func keyUp(with event: NSEvent) {}
+
+  override func flagsChanged(with event: NSEvent) {}
+
+  var mountedView: NSView? { mount?.content.view }
+}

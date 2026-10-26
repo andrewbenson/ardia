@@ -1,6 +1,6 @@
 {
   "platforms": ["apple"],
   "apple": {
-    "modules": ["SettingsModule", "NewTabModule"]
+    "modules": ["SettingsModule", "NewTabModule", "HostedModule"]
   }
 }

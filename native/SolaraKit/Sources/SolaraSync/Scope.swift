@@ -150,6 +150,7 @@ public struct ScopeOptions {
 
 public struct SyncError: Error, CustomStringConvertible {
   public let description: String
+  public init(description: String) { self.description = description }
 }
 
 public func covered(_ vv: JSMap<Double>, _ origin: Origin) -> Bool { vv[device: origin.device] >= origin.seq }

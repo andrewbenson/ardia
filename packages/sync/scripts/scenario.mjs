@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { closeSync, mkdirSync, mkdtempSync, openSync, readSync, rmSync, writeFileSync, writeSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
@@ -7,14 +9,17 @@ import { canonical } from "../src/canon.ts";
 import { Clock } from "../src/hlc.ts";
 import { compact, emptyScope, restoreJournal, syncScope } from "../src/scope.ts";
 
-const HELP = `usage: node packages/sync/scripts/scenario.mjs [--out <dir>] [--runs <n>] [--steps <n>] [--seed <n>]
+const HELP = `usage: node packages/sync/scripts/scenario.mjs [--out <dir>] [--runs <n>] [--steps <n>] [--seed <n>] [--mixed <solara-store>]
 
 Runs sync scenarios through the TypeScript merge (scope.ts) and writes each one with its trace: every
 payload written, every removal, each sync's result or error, and after each step every device's scope
 state, store, settings and clock. SolaraSyncTests replays the scripts through the Swift merge and must
 produce the same trace byte for byte. Scenarios are the named cases below plus seeded random runs of
 three devices with flaky delivery, clock skew, compaction, relaunches and crashes.
-Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios.`;
+Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios.
+--mixed runs every scenario a second time with device "b" (or the second device) as the Swift merge in
+solara-store sync-device, sharing the folder with the TypeScript devices, and fails unless both runs trace
+the same.`;
 
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
@@ -128,16 +133,113 @@ class Device {
   }
 }
 
-export async function runScenario(script) {
+class SwiftDevice {
+  constructor(id, folder, options, trace, binary) {
+    this.id = id;
+    this.folder = folder;
+    this.trace = trace;
+    this.onRead = null;
+    this.failWrite = null;
+    this.dir = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), "sync-device-"));
+    const requests = join(this.dir, "requests");
+    const responses = join(this.dir, "responses");
+    spawnSync("mkfifo", [requests, responses]);
+    this.child = spawn("sh", ["-c", 'b="$1"; q="$2"; r="$3"; shift 3; exec "$b" "$@" < "$q" > "$r"', "sh", binary, requests, responses, "sync-device", "--id", id, "--options", JSON.stringify(options)], { stdio: ["ignore", "ignore", "inherit"] });
+    this.child.unref();
+    this.writer = openSync(requests, "w");
+    this.reader = openSync(responses, "r");
+    this.pending = "";
+  }
+  send(message) {
+    writeSync(this.writer, JSON.stringify({ ...message, now: this.folder.now }) + "\n");
+  }
+  receive() {
+    const chunk = Buffer.alloc(1 << 16);
+    while (!this.pending.includes("\n")) {
+      const read = readSync(this.reader, chunk, 0, chunk.length, null);
+      if (read === 0) throw new Error("sync-device exited");
+      this.pending += chunk.toString("utf8", 0, read);
+    }
+    const at = this.pending.indexOf("\n");
+    const line = this.pending.slice(0, at);
+    this.pending = this.pending.slice(at + 1);
+    return JSON.parse(line);
+  }
+  local(step) {
+    this.send(step);
+    this.last = this.receive().record;
+  }
+  record() {
+    this.send({ op: "record" });
+    return this.receive().record;
+  }
+  async converse(request, run, scope) {
+    this.send(request);
+    for (;;) {
+      const message = this.receive();
+      if ("done" in message || "failed" in message) return message;
+      if (message.call === "write") {
+        const fail = this.failWrite;
+        this.failWrite = null;
+        if (fail === "before") {
+          this.send({ error: "offline" });
+          continue;
+        }
+        const id = `f${++this.folder.counter}`;
+        this.folder.scope(message.scope).set(id, { payload: message.payload, hiddenFrom: new Set(), partialFor: new Set(), at: this.folder.now });
+        this.trace.push({ write: this.id, id, payload: message.payload });
+        this.send(fail === "after" ? { error: "timed out" } : { id });
+      } else if (message.call === "read") {
+        const listing = { files: [], pending: [], damaged: [], present: [] };
+        for (const [id, e] of this.folder.scope(message.scope)) {
+          listing.present.push(id);
+          if (message.known.includes(id)) continue;
+          if (e.hiddenFrom.has(this.id)) listing.pending.push(id);
+          else if (e.partialFor.has(this.id)) listing.damaged.push({ id, age: 0 });
+          else listing.files.push({ id, payload: e.payload });
+        }
+        const hook = this.onRead ?? [];
+        this.onRead = null;
+        const mine = [];
+        for (const step of hook) {
+          if (step.device === this.id && (step.op === "set" || step.op === "delete")) mine.push(step);
+          else await run(step);
+        }
+        this.send({ listing, then: mine });
+      } else if (message.call === "apply") {
+        this.trace.push({ apply: this.id, prefix: message.prefix, changed: message.changed, visible: message.visible });
+        this.send({});
+      } else if (message.call === "remove") {
+        this.trace.push({ remove: this.id, ids: message.ids });
+        for (const id of message.ids) this.folder.scope(message.scope).delete(id);
+        this.send({});
+      }
+    }
+  }
+  close() {
+    try {
+      closeSync(this.writer);
+      closeSync(this.reader);
+    } catch {}
+    this.child.kill();
+    rmSync(this.dir, { recursive: true, force: true });
+  }
+}
+
+export async function runScenario(script, { swift = null } = {}) {
   const trace = [];
   const folder = new Folder();
   const devices = new Map();
-  for (const [id, options] of Object.entries(script.devices)) devices.set(id, new Device(id, folder, options ?? {}, trace));
+  const ids = Object.keys(script.devices);
+  const swiftId = swift ? (ids.includes("b") ? "b" : ids[1]) : null;
+  for (const [id, options] of Object.entries(script.devices))
+    devices.set(id, id === swiftId ? new SwiftDevice(id, folder, options ?? {}, trace, swift) : new Device(id, folder, options ?? {}, trace));
   const scope = script.scope ?? "s";
   const entry = (file) => folder.scope(scope).get(file);
   const latest = () => [...folder.scope(scope).keys()].at(-1);
   async function run(step) {
     const d = devices.get(step.device);
+    if (d instanceof SwiftDevice) return runSwift(d, step);
     switch (step.op) {
       case "time":
         folder.now = step.now;
@@ -211,9 +313,46 @@ export async function runScenario(script) {
         throw new Error(`unknown step ${step.op}`);
     }
   }
-  for (const step of script.steps) {
-    await run(step);
-    trace.push({ step: step.op, devices: [...devices.values()].map((x) => x.record()) });
+  async function runSwift(d, step) {
+    switch (step.op) {
+      case "onRead":
+        d.onRead = step.steps;
+        return;
+      case "failWrite":
+        d.failWrite = step.when;
+        return;
+      case "hide":
+      case "unhide":
+      case "partial":
+      case "whole": {
+        const e = entry(step.file === "latest" ? latest() : step.file);
+        if (!e) return;
+        const set = step.op === "hide" || step.op === "unhide" ? e.hiddenFrom : e.partialFor;
+        if (step.op === "hide" || step.op === "partial") set.add(step.device);
+        else set.delete(step.device);
+        return;
+      }
+      case "sync": {
+        const reply = await d.converse({ op: "sync", scope }, run, scope);
+        trace.push("done" in reply ? { sync: d.id, result: reply.done } : { sync: d.id, error: reply.failed });
+        return;
+      }
+      case "compact": {
+        const reply = await d.converse({ op: "compact", scope, force: !!step.force }, run, scope);
+        trace.push("done" in reply ? { compact: d.id, result: reply.done } : { compact: d.id, error: reply.failed });
+        return;
+      }
+      default:
+        d.local(step);
+    }
+  }
+  try {
+    for (const step of script.steps) {
+      await run(step);
+      trace.push({ step: step.op, devices: [...devices.values()].map((x) => x.record()) });
+    }
+  } finally {
+    for (const d of devices.values()) if (d instanceof SwiftDevice) d.close();
   }
   return trace;
 }
@@ -385,7 +524,25 @@ export const namedScripts = () => {
   ];
 };
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] === fileURLToPath(import.meta.url) && option("--mixed", null)) {
+  const binary = resolve(option("--mixed", null));
+  const scripts = [...namedScripts(), ...Array.from({ length: runs }, (_, i) => randomScript(firstSeed + i, stepsPerRun))];
+  let bad = 0;
+  let entries = 0;
+  for (const script of scripts) {
+    const expected = (await runScenario(script)).map((e) => JSON.stringify(e));
+    const got = (await runScenario(script, { swift: binary })).map((e) => JSON.stringify(e));
+    entries += got.length;
+    const at = expected.findIndex((e, i) => e !== got[i]);
+    if (at >= 0 || expected.length !== got.length) {
+      bad++;
+      const i = at >= 0 ? at : Math.min(expected.length, got.length);
+      if (bad <= 5) console.log(`${script.name}: entry ${i} differs\n  ts only: ${String(expected[i]).slice(0, 600)}\n  mixed:   ${String(got[i]).slice(0, 600)}`);
+    }
+  }
+  console.log(`${scripts.length - bad} of ${scripts.length} mixed runs trace as the TypeScript-only run (${entries} entries)`);
+  process.exit(bad ? 1 : 0);
+} else if (process.argv[1] === fileURLToPath(import.meta.url)) {
   mkdirSync(out, { recursive: true });
   const scripts = [...namedScripts(), ...Array.from({ length: runs }, (_, i) => randomScript(firstSeed + i, stepsPerRun))];
   const cases = [];

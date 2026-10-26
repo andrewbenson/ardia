@@ -8,6 +8,7 @@ let usage = """
   usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>] [--via-db]
          solara-store import <data folder> [--now <ms>]
          solara-store launch <data folder> [--scope 1a|1b]
+         solara-store sync-device --id <device> [--options <json>]
          solara-store serve [--launch <id launch>] [--hand-off immediately] [--data <data folder> --now <ms>]
 
   session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (Importer.read:
@@ -20,7 +21,8 @@ let usage = """
   bridge, one JSON request per line on stdin ({op: snapshot | dispatch | catchUp, commands, sinceRev, now}) and
   one response per line on stdout, so the JS replica can be tested against the real Swift store. With --data it
   opens that folder through the app's launcher and writer in the everything scope, and {op: flush} writes the rows
-  and the shadow files.
+  and the shadow files. sync-device is one device of packages/sync/scripts/scenario.mjs --mixed: it runs the
+  Swift merge for the steps the driver sends, calling back to it for the folder.
 
   """
 
@@ -139,6 +141,10 @@ case "serve":
     }
     fflush(stdout)
   }
+case "sync-device":
+  let device = ChannelDevice(id: option("--id") ?? "swift", options: (option("--options").flatMap { try? JSONValue.parse($0) })?.object ?? [:])
+  setvbuf(stdout, nil, _IOFBF, 1 << 20)
+  await device.serve()
 case "launch":
   guard let dir = arguments.first else { exit(2) }
   let scope: PersistenceScope = option("--scope") == "1a" ? .settingsAndDownloads : .everything

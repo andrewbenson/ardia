@@ -172,7 +172,6 @@ struct SyncPhraseSheet: View {
   @State private var text = ""
   @State private var busy = false
   @State private var error: String?
-  @FocusState private var focused: Bool
 
   var body: some View {
     let count = SyncPhrase.countWords(text)
@@ -181,11 +180,7 @@ struct SyncPhraseSheet: View {
       SyncSheetTitle("Connect with Recovery Phrase")
       SyncSheetBody("Enter your 24-word recovery phrase to sync with another device.")
       ZStack(alignment: .topLeading) {
-        TextEditor(text: Binding(get: { text }, set: { text = $0; error = nil }))
-          .font(.system(size: 13, design: .monospaced))
-          .scrollContentBackground(.hidden)
-          .autocorrectionDisabled()
-          .focused($focused)
+        SyncPhraseEditor(text: Binding(get: { text }, set: { text = $0; error = nil }))
         if text.isEmpty {
           Text("Enter your 24-word recovery phrase")
             .font(.system(size: 13, design: .monospaced))
@@ -234,7 +229,6 @@ struct SyncPhraseSheet: View {
         .keyboardShortcut(.defaultAction)
         .disabled(busy || count != SyncPhrase.wordCount || folder == nil)
     }
-    .onAppear { focused = true }
     .onDisappear { text = "" }
   }
 
@@ -245,6 +239,55 @@ struct SyncPhraseSheet: View {
     let message = await model.submitPhrase(text)
     busy = false
     error = message
+  }
+}
+
+struct SyncPhraseEditor: NSViewRepresentable {
+  @Binding var text: String
+
+  final class Coordinator: NSObject, NSTextViewDelegate {
+    var text: Binding<String>
+
+    init(text: Binding<String>) { self.text = text }
+
+    func textDidChange(_ notification: Notification) {
+      guard let view = notification.object as? NSTextView else { return }
+      text.wrappedValue = view.string
+    }
+  }
+
+  func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+  func makeNSView(context: Context) -> NSScrollView {
+    let scroll = NSTextView.scrollableTextView()
+    scroll.drawsBackground = false
+    scroll.hasVerticalScroller = false
+    guard let view = scroll.documentView as? NSTextView else { return scroll }
+    view.delegate = context.coordinator
+    view.drawsBackground = false
+    view.isRichText = false
+    view.allowsUndo = true
+    view.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+    view.textContainerInset = .zero
+    view.textContainer?.lineFragmentPadding = 5
+    view.isContinuousSpellCheckingEnabled = false
+    view.isGrammarCheckingEnabled = false
+    view.isAutomaticSpellingCorrectionEnabled = false
+    view.isAutomaticTextReplacementEnabled = false
+    view.isAutomaticTextCompletionEnabled = false
+    view.isAutomaticQuoteSubstitutionEnabled = false
+    view.isAutomaticDashSubstitutionEnabled = false
+    view.isAutomaticLinkDetectionEnabled = false
+    view.isAutomaticDataDetectionEnabled = false
+    view.string = text
+    DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
+    return scroll
+  }
+
+  func updateNSView(_ scroll: NSScrollView, context: Context) {
+    context.coordinator.text = $text
+    guard let view = scroll.documentView as? NSTextView, view.string != text else { return }
+    view.string = text
   }
 }
 

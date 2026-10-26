@@ -38,6 +38,8 @@ public struct LaunchReport: Sendable, Equatable {
 public enum PersistenceScope: Sendable, Equatable {
   case settingsAndDownloads
   case everything
+
+  public var markerName: String { self == .everything ? "everything" : "settingsAndDownloads" }
 }
 
 public struct Launch: Sendable {
@@ -146,20 +148,30 @@ public enum Launcher {
       baseline.workspace = nil
       return Launch(database: database, state: Importer.settingsAndDownloads(of: loaded.0), memory: loader.memory, persisted: baseline, report: report)
     }
-    guard let stored = persisted.workspace else {
+    let sessionHash = folder.read(folder.session).map(sha256)
+    let importedFrom = try database.meta("workspace_source_sha256")
+    let staleWorkspace = persisted.workspace != nil && markerScope(folder).map { $0 != PersistenceScope.everything.markerName } == true
+      && sessionHash != importedFrom
+    guard let stored = persisted.workspace, !staleWorkspace else {
       var result = Importer.read(folder, carrying: nil, settings: persisted.settings, downloads: persisted.downloads, context: context)
       if let refusal = result.refusal {
         Importer.log(result.notes + ["refused the workspace import: \(refusal)"], to: folder, now: now)
         throw ImportRefused(reason: refusal)
       }
       result.meta["workspace_imported_at"] = String(Int64(now.timeIntervalSince1970 * 1000))
+      if let sessionHash { result.meta["workspace_source_sha256"] = sessionHash }
       let rows = result.persisted.workspace!
       try database.pool.write { db in
+        if staleWorkspace { try Rows.clearWorkspace(db) }
         try Rows.writeWorkspace(db, rows, previous: nil)
         for (key, value) in result.meta.sorted(by: { $0.key < $1.key }) { try Rows.setMeta(db, key, value) }
       }
       Importer.log(persisted.notes + result.notes, to: folder, now: now)
-      var report = LaunchReport(source: .imported(reason: "the workspace moved from session.json into solara.sqlite"))
+      var report = LaunchReport(
+        source: .imported(
+          reason: staleWorkspace
+            ? "session.json was written in the settings-and-downloads scope, so its workspace replaces the database's"
+            : "the workspace moved from session.json into solara.sqlite"))
       report.notes = persisted.notes + result.notes
       var baseline = persisted
       baseline.workspace = rows
@@ -210,6 +222,11 @@ public enum Launcher {
         for file in [name, name + "-wal", name + "-shm"] { try? fm.removeItem(at: folder.url.appending(path: file)) }
       }
     }
+  }
+
+  static func markerScope(_ folder: DataFolder) -> String? {
+    guard let data = folder.read(folder.session), let marker = (try? JSONValue.parse(data))?[markerKey]?.object else { return nil }
+    return marker["scope"]?.string ?? PersistenceScope.settingsAndDownloads.markerName
   }
 
   static func marker(in data: Data?) -> Bool? {

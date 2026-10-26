@@ -148,7 +148,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     try write(legacySession, to: folder.session)
     let first = try open(folder)
     try first.database.close()
-    try write(#"{"version":2,"settings":{"searchEngine":"ecosia"},"nativeExport":{"rev":3,"at":1}}"#, to: folder.session)
+    try write(#"{"version":2,"settings":{"searchEngine":"ecosia"},"nativeExport":{"rev":3,"at":1,"scope":"everything"}}"#, to: folder.session)
     let second = try open(folder)
     #expect(second.report.source == .database)
     #expect(second.state.settings["searchEngine"] == "duckduckgo")
@@ -640,5 +640,44 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
       try write(session, to: folder.session)
       #expect(throws: ImportRefused.self) { try open(folder) }
     }
+  }
+
+  @Test func aSettingsAndDownloadsRunBetweenTwoFullRunsKeepsItsWorkspaceChanges() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    let full = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .everything)
+    let fullStore = store(for: full)
+    let writer = PersistenceWriter(store: fullStore, database: full.database, folder: folder, persisted: full.persisted, scope: .everything, clock: { 42 })
+    try fullStore.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    #expect(writer.flush(timeout: 5))
+    try full.database.close()
+    let narrow = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .settingsAndDownloads)
+    try narrow.database.close()
+    var session = try JSONValue.parse(contents(folder.session) ?? Data()).object!
+    var tabs = session["tabs"]!.array!
+    var added = tabs[0].object!
+    added["id"] = "added-in-1a"
+    added["url"] = "https://added-in-1a.example/"
+    tabs.append(.object(added))
+    session["tabs"] = .array(tabs)
+    var windows = session["windows"]!.array!
+    var window = windows[0].object!
+    window["tabIds"] = .array(window["tabIds"]!.array! + ["added-in-1a"])
+    added["windowId"] = window["id"]!
+    tabs[tabs.count - 1] = .object(added)
+    session["tabs"] = .array(tabs)
+    windows[0] = .object(window)
+    session["windows"] = .array(windows)
+    session["nativeExport"] = ["rev": 3, "at": 1, "scope": "settingsAndDownloads"]
+    try write(JSONValue.object(session).text(), to: folder.session)
+    let again = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .everything)
+    guard case .imported(let reason) = again.report.source else { Issue.record("expected the workspace re-import"); return }
+    #expect(reason.contains("settings-and-downloads"))
+    #expect(again.state.tabs["added-in-1a"] != nil)
+    #expect(again.state.settings["appearance"] == "dark")
+    try again.database.close()
+    let steady = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .everything)
+    #expect(steady.report.source == .database)
+    #expect(steady.state.tabs["added-in-1a"] != nil)
   }
 }

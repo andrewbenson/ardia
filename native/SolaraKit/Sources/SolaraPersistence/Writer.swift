@@ -131,7 +131,7 @@ public final class PersistenceWriter: Sendable {
     }
     guard dirty else { return }
     let (rev, state) = store.snapshot
-    let marker: JSONValue = ["rev": JSONValue(rev), "at": JSONValue(clock().rounded())]
+    let marker: JSONValue = ["rev": JSONValue(rev), "at": JSONValue(clock().rounded()), "scope": .string(scope.markerName)]
     let document = scope == .everything ? store.sessionDocument(of: state) : nil
     let session = document?.json()
     let downloads = ShadowExport.downloadsDocument(state)

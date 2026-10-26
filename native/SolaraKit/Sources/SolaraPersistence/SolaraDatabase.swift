@@ -242,6 +242,12 @@ enum Rows {
     }
   }
 
+  static func clearWorkspace(_ db: Database) throws {
+    for table in ["tab", "tab_group", "split", "\"window\"", "profile", "pin_table", "archive", "workspace"] {
+      try db.execute(sql: "DELETE FROM \(table)")
+    }
+  }
+
   static func writeDocuments(_ db: Database, _ documents: JSMap<String>) throws {
     for (name, value) in documents {
       try db.execute(

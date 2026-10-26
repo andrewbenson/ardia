@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 
-type StoreStatus = { active: true } | { active: false; reason: string };
+type StoreStatus = { active: true } | { active: false; reason: string; handedOff?: boolean };
 
 type NativeStoreModule = {
   status(): StoreStatus;

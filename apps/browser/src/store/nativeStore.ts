@@ -20,17 +20,20 @@ type Replica = {
 };
 
 let active = false;
+let handedOff = false;
 let appliedRev = 0;
 let applying = 0;
 let replica: Replica | null = null;
 let stopListening: (() => void) | null = null;
 
 export const nativeStoreActive = () => active;
+export const dataFolderHandedOff = () => handedOff;
 export const nativeStoreRev = () => appliedRev;
 
 export function startNativeStore(): { active: boolean; reason?: string } {
   const status = nativeStoreStatus();
   active = status.active;
+  handedOff = !status.active && status.handedOff === true;
   return status.active ? { active: true } : { active: false, reason: status.reason };
 }
 

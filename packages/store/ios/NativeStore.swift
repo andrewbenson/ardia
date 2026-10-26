@@ -26,6 +26,8 @@ public final class NativeStore: Sendable {
 
   nonisolated(unsafe) public private(set) static var shared: NativeStore?
   nonisolated(unsafe) public private(set) static var unavailableReason: String?
+  nonisolated(unsafe) public private(set) static var handedOff = false
+  nonisolated(unsafe) static var folderLock: FolderLock?
 
   let bridge: StoreBridge
   let writer: PersistenceWriter
@@ -56,12 +58,24 @@ public final class NativeStore: Sendable {
   @discardableResult
   public static func launchAtStartup() -> Bool {
     _ = setAppScheme(productName())
-    if ProcessInfo.processInfo.environment["ARDIA_NATIVE_STORE"] == "0" {
-      unavailableReason = "ARDIA_NATIVE_STORE=0"
-      return false
-    }
     guard let folder = dataFolder() else {
       unavailableReason = "no data folder"
+      return false
+    }
+    do {
+      guard let lock = try FolderLock.acquire(DataFolder(url: folder)) else {
+        handedOff = true
+        let holder = FolderLock.holder(DataFolder(url: folder)).map { " (pid \($0))" } ?? ""
+        unavailableReason = "another instance\(holder) is using this data folder"
+        NSLog("[store] %@; starting neither store", unavailableReason ?? "")
+        return false
+      }
+      folderLock = lock
+    } catch {
+      NSLog("[store] couldn't lock the data folder: %@", "\(error)")
+    }
+    if ProcessInfo.processInfo.environment["ARDIA_NATIVE_STORE"] == "0" {
+      unavailableReason = "ARDIA_NATIVE_STORE=0"
       return false
     }
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"

@@ -14,7 +14,16 @@ import { startBookmarks } from "./bookmarks";
 import { startHistory } from "./history";
 import { startProfileDataCleanup } from "./profileData";
 import { flushNativeStore } from "@ardia/store";
-import { adoptRepairs, attachReplica, nativeOwnedSnapshot, nativeStoreActive, nativeStoreRev, startNativeStore, withApplier } from "../store/nativeStore";
+import {
+  adoptRepairs,
+  attachReplica,
+  dataFolderHandedOff,
+  nativeOwnedSnapshot,
+  nativeStoreActive,
+  nativeStoreRev,
+  startNativeStore,
+  withApplier,
+} from "../store/nativeStore";
 
 const SAVE_DELAY_MS = 800;
 const VERSION = 2;
@@ -223,6 +232,11 @@ export function resumePersistence() {
 
 export function startPersistence() {
   startNativeStore();
+  if (dataFolderHandedOff()) {
+    frozen = true;
+    console.warn("Another instance is using this data folder; this one saves nothing.");
+    return () => {};
+  }
   const owned = nativeOwnedSnapshot();
   const data = loadSession({ downloads: !owned }) ?? {};
   if (owned) {

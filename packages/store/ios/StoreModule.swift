@@ -12,7 +12,7 @@ public class StoreModule: Module {
 
     Function("status") { () -> [String: Any] in
       if NativeStore.shared != nil { return ["active": true] }
-      return ["active": false, "reason": NativeStore.unavailableReason ?? "not launched"]
+      return ["active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff]
     }
 
     Function("snapshot") { () -> String? in

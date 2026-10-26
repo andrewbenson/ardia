@@ -363,6 +363,11 @@ public struct LiveConfig: Codable, Sendable, Equatable {
   public var confluenceSite: String
   public var confluenceEmail: String
   public var googleClientId: String
+  public var extra: [String: LiveAnyJSON] = [:]
+
+  enum CodingKeys: String, CodingKey, CaseIterable {
+    case githubClientId, bitbucketUser, confluenceSite, confluenceEmail, googleClientId
+  }
 
   public static let defaults = LiveConfig(githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "")
 
@@ -382,6 +387,17 @@ public struct LiveConfig: Codable, Sendable, Equatable {
     confluenceSite = (try? c.decodeIfPresent(String.self, forKey: .confluenceSite)) ?? d.confluenceSite
     confluenceEmail = (try? c.decodeIfPresent(String.self, forKey: .confluenceEmail)) ?? d.confluenceEmail
     googleClientId = (try? c.decodeIfPresent(String.self, forKey: .googleClientId)) ?? d.googleClientId
+    extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue))
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    try UnknownKeys.write(extra, to: encoder)
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(githubClientId, forKey: .githubClientId)
+    try c.encode(bitbucketUser, forKey: .bitbucketUser)
+    try c.encode(confluenceSite, forKey: .confluenceSite)
+    try c.encode(confluenceEmail, forKey: .confluenceEmail)
+    try c.encode(googleClientId, forKey: .googleClientId)
   }
 }
 
@@ -396,6 +412,11 @@ public struct CalendarSettings: Codable, Sendable, Equatable {
   public var showTimeToNext: Bool
   public var hiddenCalendarIds: [String]
   public var prompted: Bool
+  public var extra: [String: LiveAnyJSON] = [:]
+
+  enum CodingKeys: String, CodingKey, CaseIterable {
+    case alertLead, alertCondition, showPreview, showTimeToNext, hiddenCalendarIds, prompted
+  }
 
   public static let defaults = CalendarSettings(
     alertLead: "1", alertCondition: .always, showPreview: true, showTimeToNext: true, hiddenCalendarIds: [], prompted: false)
@@ -418,6 +439,18 @@ public struct CalendarSettings: Codable, Sendable, Equatable {
     showTimeToNext = (try? c.decodeIfPresent(Bool.self, forKey: .showTimeToNext)) ?? d.showTimeToNext
     hiddenCalendarIds = (try? c.decodeIfPresent([String].self, forKey: .hiddenCalendarIds)) ?? d.hiddenCalendarIds
     prompted = (try? c.decodeIfPresent(Bool.self, forKey: .prompted)) ?? d.prompted
+    extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue))
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    try UnknownKeys.write(extra, to: encoder)
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(alertLead, forKey: .alertLead)
+    try c.encode(alertCondition, forKey: .alertCondition)
+    try c.encode(showPreview, forKey: .showPreview)
+    try c.encode(showTimeToNext, forKey: .showTimeToNext)
+    try c.encode(hiddenCalendarIds, forKey: .hiddenCalendarIds)
+    try c.encode(prompted, forKey: .prompted)
   }
 }
 

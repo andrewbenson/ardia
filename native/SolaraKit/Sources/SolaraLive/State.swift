@@ -113,10 +113,11 @@ public struct LiveState: Codable, Sendable, Equatable {
   public var calendar: CalendarSettings = .defaults
   public var meetingGroups: [String: MeetingGroup] = [:]
   public var dismissedAlerts: [String] = []
+  public var extra: [String: LiveAnyJSON] = [:]
 
   public init() {}
 
-  enum CodingKeys: String, CodingKey {
+  enum CodingKeys: String, CodingKey, CaseIterable {
     case folders, folderOrder, items, known, unread, hidden, completed, completing, status, expandedStacks, showAll, accounts, config,
       calendar, meetingGroups, dismissedAlerts
   }
@@ -151,9 +152,11 @@ public struct LiveState: Codable, Sendable, Equatable {
     calendar = field(.calendar, .defaults)
     meetingGroups = map(.meetingGroups)
     dismissedAlerts = (try? c.decodeIfPresent(LossyList<String>.self, forKey: .dismissedAlerts))?.values ?? []
+    extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue))
   }
 
   public func encode(to encoder: Encoder) throws {
+    try UnknownKeys.write(extra, to: encoder)
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(folders, forKey: .folders)
     try c.encode(folderOrder, forKey: .folderOrder)

@@ -1,10 +1,10 @@
 # Releasing
 
 Releases are GitHub releases of the identity's repo (`AC_RELEASE_REPO`: `andrewbenson/solara` for Solara,
-`mantrakp04/ardia` upstream), tagged `v<version>`, on two channels: **stable** (`0.2.37`, a full
-release) and **nightly** (`0.2.37-nightly.1`, a GitHub prerelease: one fix, shipped the day it's made; "Channels" below).
-Since the Release workflow (`.github/workflows/release.yml`, "CI releases" below) a release is built and published in
-GitHub Actions. Each has these assets:
+`mantrakp04/ardia` upstream), tagged `v<version>`, on two channels: **stable** (`0.1.2`, a full
+release) and **nightly** (`0.1.3-nightly.1`, a GitHub prerelease: one fix, shipped the day it's made; "Channels" below).
+Solara builds and publishes from a Mac with `scripts/release.sh` and the release skill's `publish.sh`; upstream also has
+a GitHub Actions workflow ("CI releases" below), which Solara doesn't carry. Each release has these assets:
 
 - `Ardia-<version>.dmg`: what people download (the app and an `/Applications` link, in a window with the
   site's poster behind them: `scripts/dmg`, where `render.sh` redraws the picture and `layout.sh` the layout).
@@ -47,12 +47,14 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   `Info.plist`, which `release.sh --channel nightly` sets to `nightly` (the build setting `AC_UPDATE_CHANNEL`). It's
   written at the first launch, so a nightly copy stays on Nightly after it updates to a stable build. Switching to
   Stable never downgrades: Sparkle only offers a higher build number, so the copy waits for the next stable.
-- **Versions.** Sparkle compares `sparkle:version`, the build number (`CURRENT_PROJECT_VERSION`), which goes up by one
-  every release on either channel; the version string is only shown. A nightly is `<next stable>-nightly.<n>`, so
-  0.2.36 (44) < 0.2.37-nightly.1 (45) < 0.2.37-nightly.2 (46) < 0.2.37 (47). Sparkle's comparator can't order the
+- **Versions.** Solara's versions start at 0.1.0 and each stable bumps the patch: 0.1.0, 0.1.1, 0.1.2. Sparkle
+  compares `sparkle:version`, the build number (`CURRENT_PROJECT_VERSION`), which goes up by one every release on either
+  channel and is never reset: Solara's continue from Ardia's (80 at the fork; the owner's own Solara is build 78), so every
+  copy already installed sees the first release as newer. The version string is only shown. A nightly is
+  `<next stable>-nightly.<n>`, so 0.1.0 (81) < 0.1.1-nightly.1 (82) < 0.1.1-nightly.2 (83) < 0.1.1 (84). Sparkle's comparator can't order the
   strings themselves (it reads `0.2.37-nightly.1` and `0.2.37-nightly.2` as equal), which is why it never sees them.
   `release.sh` refuses a build number that isn't above every build already in the feed, nightly or stable. About Solara
-  and Settings show a nightly as "0.2.37 Nightly 1".
+  and Settings show a nightly as "0.1.1 Nightly 1".
 - **The feed.** It stays where every shipped build reads it (upstream's URLs here; Solara's `AC_FEED_URL` is the GitHub
   URL itself): `https://ardia.dev/appcast.xml` redirects to
   `releases/latest/download/appcast.xml`, and GitHub's "latest" skips prereleases, so it's always the newest stable
@@ -118,12 +120,10 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 1. Bump `MARKETING_VERSION` (the version) and `CURRENT_PROJECT_VERSION` (the build number, which Sparkle
    compares: it must go up every release) in both configurations of the `Ardia-macOS` target in
    `apps/browser/macos/Ardia.xcodeproj`. The helpers and the Dock tile plug-in take the same values.
-2. Write `docs/release-notes/<version>.md` from `git log v<previous>..HEAD` (`docs/release-notes/README.md`)
-   and check it on the site: `pnpm -C apps/site build && pnpm -C apps/site preview`, then
-   `http://localhost:4321/release-notes#<version>`.
-3. Commit both ("Release <version>" or "Nightly <version>"), push, and dispatch the Release workflow ("CI releases"
-   below), which runs the rest. Or run it here: `scripts/release.sh <version>` (`--channel nightly` for a
-   nightly). It stops right away if the notes file is missing or lacks its `date` and
+2. Write `docs/release-notes/<version>.md` from `git log v<previous>..HEAD` (`docs/release-notes/README.md`; for the
+   first release, "The first release" below).
+3. Commit both ("Release <version>" or "Nightly <version>") and run `scripts/release.sh <version>` (`--channel nightly`
+   for a nightly). It stops right away if the notes file is missing or lacks its `date` and
    `headline`, if the tree under `apps/browser`, `packages`, `engine` or `scripts/dmg` has uncommitted changes, or if the engine
    framework is older than the tree's ArdiaCore sources or the Chromium tree differs from `engine/ardiacore`
    (`apply.sh --check`), if the version doesn't fit the channel or the notes' `channel`, if it can't read the published
@@ -297,6 +297,23 @@ Still upstream's in a fork:
   `LegacyName.successorBundleId`, upstream's own. A fork never moves, copies or regroups another app's data.
 - **First install.** A new bundle id is a new app to macOS: its own data folder and defaults, fresh keychain and privacy
   (TCC) prompts, and a fresh Developer ID profile. Nothing carries over from upstream Ardia.
+## The first release
+
+Solara's first release is a stable one, 0.1.0: the feed lives on the latest stable release
+(`releases/latest/download/appcast.xml`), so there's nothing for a nightly to join until it exists, and `publish.sh`
+refuses a nightly while the repo has no stable release. With no `v*` tag yet:
+
+- **Notes** come from every commit Solara made since the fork, not from a tag:
+  `git log --no-merges main --not upstream/main -- apps/browser packages engine` (upstream's own commits reach Solara
+  through merges and aren't listed one by one).
+- **The feed** has nothing to build on: `APPCAST_BASE=none scripts/release.sh 0.1.0` starts a new one, and `publish.sh`
+  sees no release yet and publishes this one's appcast as the feed.
+- **The smoke test** has no earlier export: `smoke.sh 0.1.0 none` skips the update test, carryover and the
+  same-identity checks, and runs every launch check.
+- **The perf gate** has no earlier stable to time against. The perf ratchet runs as always (its ceilings are absolute);
+  native-bench and js-bench run once on 0.1.0 alone and their numbers go in `docs/perf/0.1.0-baseline.md`, which the
+  next stable is gated against together with 0.1.0's own export.
+
 ## CI releases
 
 Upstream only: `release.yml` and `deploy.yml` run only in `mantrakp04/ardia` (their jobs check

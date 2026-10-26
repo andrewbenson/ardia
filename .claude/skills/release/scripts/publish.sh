@@ -66,16 +66,25 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/ac-publish.XXXXXX")"
 trap 'release_lock; rm -rf "$work"' EXIT
 trap 'exit 130' INT TERM HUP
 take_lock "$version"
-stable_tag="$(gh release view -R "$repo" --json tagName -q .tagName)"
-[[ "$stable_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "the latest release is $stable_tag, not a stable one: the feed lives on the latest stable release"
-published="$(gh release view "$stable_tag" -R "$repo" --json assets -q '.assets[].name')"
+stable_tag="$(gh release view -R "$repo" --json tagName -q .tagName 2>/dev/null || true)"
+if [ -z "$stable_tag" ]; then
+  [ -z "$(gh release list -R "$repo" --limit 1 --json tagName -q '.[].tagName')" ] \
+    || die "couldn't read $repo's latest release"
+  [ "$channel" = stable ] \
+    || die "$repo has no release yet: the first one is a stable release, since the feed lives on the latest stable release"
+  echo "note: $repo has no release yet: $version is the first, and its appcast starts the feed"
+  published=""
+else
+  [[ "$stable_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "the latest release is $stable_tag, not a stable one: the feed lives on the latest stable release"
+  published="$(gh release view "$stable_tag" -R "$repo" --json assets -q '.assets[].name')"
+fi
 
 if grep -qx appcast.xml <<<"$published"; then
   mkdir -p "$work/live"
   gh release download "$stable_tag" -R "$repo" -p appcast.xml -D "$work/live"
   source="$work/live/appcast.xml"
 else
-  echo "note: $stable_tag has no appcast.xml yet: $version starts it"
+  echo "note: ${stable_tag:-no release} has no appcast.xml yet: $version starts it"
   source=none
 fi
 merge_dist="$dist"
@@ -101,7 +110,7 @@ if others and mine[0] <= max(others):
     sys.exit(f"error: {version} is build {mine[0]}, but the published feed already has build {max(others)}: a stale build would sit below it (and a stable would move latest backward); bump CURRENT_PROJECT_VERSION and rebuild")
 print(f"PASS  {version} (build {mine[0]}) is above every other build in {path.rsplit('/', 1)[-1]} ({max(others) if others else 'none'})")
 PY
-if [ "$channel" = stable ]; then
+if [ "$channel" = stable ] && [ -n "$stable_tag" ]; then
   latest_version="${stable_tag#v}"
   [ "$version" != "$latest_version" ] && [ "$(printf '%s\n%s\n' "$latest_version" "$version" | sort -V | tail -1)" = "$version" ] \
     || die "$version isn't above the latest stable release ($latest_version): publishing it as latest would move every download and feed backward"

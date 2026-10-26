@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version="${1:?usage: smoke.sh <version> <previous-version> [--rc]}"
-previous="${2:?usage: smoke.sh <version> <previous-version> [--rc]}"
+version="${1:?usage: smoke.sh <version> <previous-version|none> [--rc]}"
+previous="${2:?usage: smoke.sh <version> <previous-version|none> [--rc]}"
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 here="$(cd "$(dirname "$0")" && pwd)"
 if [ "${3:-}" = --rc ]; then dist="$root/dist/$version-rc"; else dist="$root/dist/$version"; fi
@@ -76,6 +76,8 @@ if [ -d "$old" ]; then
   fi
   [ "$(info "$app" CFBundleVersion)" -gt "$(info "$old" CFBundleVersion)" ] && ok=1 || ok=0
   check "build number above $previous's" $ok "$(info "$old" CFBundleVersion) → $(info "$app" CFBundleVersion)"
+elif [ "$previous" = none ]; then
+  echo "SKIP  the first release: no earlier export to compare with or update from"
 else
   check "$previous's export to compare with" 0 "no $old"
 fi

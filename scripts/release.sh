@@ -33,7 +33,7 @@ done
 [ "$rc" = 1 ] && [ -n "$phased" ] && { echo "error: a candidate is never published, so --phased doesn't apply to --rc" >&2; exit 1; }
 if [ "$channel" = nightly ]; then
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]+$ ]] \
-    || { echo "error: a nightly's version is <next stable>-nightly.<n>, like 0.2.37-nightly.1 (got $version)" >&2; exit 1; }
+    || { echo "error: a nightly's version is <next stable>-nightly.<n>, like 0.1.1-nightly.1 (got $version)" >&2; exit 1; }
 else
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
     || { echo "error: a stable version is <major>.<minor>.<patch> (got $version; nightlies take --channel nightly)" >&2; exit 1; }

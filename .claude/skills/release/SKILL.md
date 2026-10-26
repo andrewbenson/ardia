@@ -14,11 +14,16 @@ Solara releases from this Mac: `scripts/release.sh`, then `publish.sh`, to `andr
 `AC_RELEASE_REPO` in `apps/browser/macos/Fork.xcconfig`). It has no site, no Homebrew tap and no telemetry, so the
 scripts skip the steps that only run in upstream Ardia's repo.
 
+Versions start at 0.1.0 and each stable bumps the patch (0.1.0, 0.1.1, 0.1.2…); a nightly is a prerelease of the next
+patch (`0.1.1-nightly.1`). The build number (`CURRENT_PROJECT_VERSION`) goes up by one every release and is never reset:
+it continues from Ardia's (80 at the fork), above every Solara already installed. Ardia's own 0.1.x and 0.2.x versions
+named below (regressions the smoke test guards) are upstream's history, not Solara releases.
+
 There are two channels (`docs/releasing.md` › Channels):
 
-- **Nightly** (`0.2.37-nightly.1`): fast iteration, one fix at a time. Only the focused checks for what changed run;
+- **Nightly** (`0.1.3-nightly.1`): fast iteration, one fix at a time. Only the focused checks for what changed run;
   no perf ratchet, no perf gate. It's a GitHub prerelease, so `releases/latest` keeps pointing at stable.
-- **Stable** (`0.2.37`): everything below, about 1.5 h with the smoke test, the update test, the ratchet and the
+- **Stable** (`0.1.2`): everything below, about 1.5 h with the smoke test, the update test, the ratchet and the
   perf gate. Its perf is compared with the previous **stable** release, never a nightly.
 
 When the owner asks for a nightly, or a fix is ready and nobody said stable, run the nightly loop.
@@ -34,11 +39,12 @@ For each fix:
    test, a smoke.mjs check), not the full suite.
 5. **Build and release it as a nightly**:
    ```bash
-   prev="$(git describe --tags --abbrev=0 --match 'v*')"                          # the previous release, either channel
-   stable="$(git describe --tags --abbrev=0 --match 'v*' --exclude '*-nightly*')"  # the previous stable
+   prev="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null)"                          # the previous release, either channel
+   stable="$(git describe --tags --abbrev=0 --match 'v*' --exclude '*-nightly*' 2>/dev/null)"  # the previous stable
    ```
    - Version: `<next stable>-nightly.<n>`, where the next stable is `$stable` with the patch bumped and `<n>` counts up
      from 1 since `$stable` (`git tag -l "v<next stable>-nightly.*"`). The build number goes up by one, as always.
+     With no stable yet (`$stable` empty), there's no nightly: cut the first release, 0.1.0 (step 0).
    - Notes: `docs/release-notes/<version>.md` with `channel: nightly` in the frontmatter, the headline and one to three
      bullets (`docs/release-notes/README.md` › Nightlies). Source: `git log $prev..HEAD -- apps/browser packages engine`.
    - Bump and build: step 3 below, with `scripts/release.sh <version> --channel nightly`.
@@ -73,6 +79,20 @@ everything since the previous stable, nightlies included.
   edit would ship. Check `git status` first (below).
 - **Commits** go to `main`.
 
+## 0. The first release
+
+With no `v*` tag (`git describe --tags --match 'v*'` finds nothing), the release is Solara's first: stable 0.1.0
+(`MARKETING_VERSION` is already 0.1.0; still bump the build number). Follow the steps below with these differences
+(`docs/releasing.md` › The first release):
+
+- Notes: from every commit Solara made since the fork, `git log --no-merges --format='%h %s%n%b' main --not upstream/main
+  -- apps/browser packages engine`, written for people meeting Solara for the first time.
+- Build: `APPCAST_BASE=none scripts/release.sh 0.1.0` (there's no published feed to build on).
+- Smoke test: `smoke.sh 0.1.0 none` (no earlier export: the update, carryover and same-identity checks are skipped).
+- Perf: run the ratchet as usual. There's no previous stable to gate against, so run native-bench and js-bench on
+  0.1.0 alone and record them in `docs/perf/0.1.0-baseline.md`; keep `dist/0.1.0/export` as the next stable's control.
+- Publish: `publish.sh` sees no release in the repo and publishes 0.1.0's appcast as the feed.
+
 ## 1. Check the tree
 
 ```bash
@@ -86,7 +106,7 @@ someone else's work in progress. Untracked files under `output/` don't affect th
 
 For a stable release `<previous>` is the last stable tag (`git describe --tags --abbrev=0 --match 'v*' --exclude
 '*-nightly*'`); nightlies in between don't count, for the notes range, the smoke test or the perf gate. The next version
-bumps the patch (0.1.5 → 0.1.6) unless the user says otherwise.
+bumps the patch (0.1.5 → 0.1.6) unless the user says otherwise. With no stable tag yet, it's the first release (step 0).
 
 ## 2. Write the notes
 
@@ -134,7 +154,7 @@ git commit -m "Release <version>"
 scripts/release.sh <version>     # ~15–25 min with notarization; run it in the background and wait
 ```
 
-For a nightly, set `MARKETING_VERSION` to `<version>` (`0.2.37-nightly.1`) the same way, commit as "Nightly <version>",
+For a nightly, set `MARKETING_VERSION` to `<version>` (`0.1.1-nightly.1`) the same way, commit as "Nightly <version>",
 and run `scripts/release.sh <version> --channel nightly`.
 
 `CURRENT_PROJECT_VERSION` is the build number Sparkle compares — it must go up every release, nightlies included
@@ -176,9 +196,9 @@ and a session whose window was left on its second profile, and checks, over CDP 
   sat behind it), and the window restores as the Work profile's Chrome window, alone on screen, its pages
   in the Work context;
 - a passkey dialog comes in front, directly over the visible window it belongs to, and closes when the
-  page navigates (the 0.1.2–0.1.4 regressions);
-- the autofill dropdown accepts a suggestion (0.1.3), the offline page is Where's the lamb?, chrome://version;
-- right-click shows the native context menu (0.1.5);
+  page navigates (Ardia's 0.1.2–0.1.4 regressions);
+- the autofill dropdown accepts a suggestion (Ardia 0.1.3), the offline page is Where's the lamb?, chrome://version;
+- right-click shows the native context menu (Ardia 0.1.5);
 - with Chrome's last-used profile left at Work (as quitting with Work's window in front does), Personal's pages
   still run in Personal's profile (0.2.19 and earlier ran them in Work's);
 - a page that stops responding is reported (Chrome's hang monitor reaches the app; 0.2.20 attached a DevTools client to
@@ -186,7 +206,7 @@ and a session whose window was left on its second profile, and checks, over CDP 
 - quitting the way ⌘Q and Sparkle's update do (the quit Apple event, sent to this instance's pid only) exits
   within 15 s with status 0 and no crash report (0.2.6 and 0.2.7 crashed on every quit, so every update
   ended in "<product> quit unexpectedly");
-- the bundle's signature is still valid after running (0.1.0 wrote into its own bundle);
+- the bundle's signature is still valid after running (Ardia 0.1.0 wrote into its own bundle);
 - the feed in the build's Info.plist (`SUFeedURL`: GitHub's `releases/latest/download/appcast.xml`) answers with an
   appcast (`.claude/skills/release/scripts/feed.sh --before-publish`).
 

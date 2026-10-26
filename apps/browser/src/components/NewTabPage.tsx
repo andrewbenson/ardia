@@ -4,10 +4,13 @@ import { Surface } from "@ardia/shell";
 import { AccessibilityInfo, Animated, StyleSheet, View } from "react-native";
 import { PRODUCT } from "../lib/productName";
 import { hex, layout, useTheme } from "../lib/theme";
+import { useBrowser } from "../store/browser";
 import { useWindowId } from "../store/hooks";
 import { useCardAnchors } from "./layout/windowLayout";
 import { springParams } from "./layout/swipeMotion";
 import { NewTabExtras } from "./ntp";
+import { IncognitoHeading } from "./ntp/IncognitoHeading";
+import { DIA_OFFSET, MARK_ABOVE_BAR, newTabBarTop } from "./ntp/newTabLayout";
 import { useOnboarding } from "./onboarding/state";
 import { Omnibox } from "./Omnibox";
 
@@ -38,7 +41,6 @@ const SOLARA_MARKS = {
 const FORK_MARKS: Record<string, typeof MARKS> = { Solara: SOLARA_MARKS };
 const PRODUCT_MARKS = FORK_MARKS[PRODUCT] ?? MARKS;
 const MARK_SIZE = 100;
-const MARK_ABOVE_BAR = 84.1;
 const SUN_DELAY = 250;
 const MARK_LAYERS = [
   { name: "sun", hidden: 56, delay: SUN_DELAY, spring: springParams(0.56, 0.9) },
@@ -47,7 +49,6 @@ const MARK_LAYERS = [
 ] as const;
 const SUN_DRIFT = 6;
 const SUN_DRIFT_SPRING = springParams(0.6, 1);
-const DIA_OFFSET = 1;
 
 type Size = { width: number; height: number };
 let lastSize: { card: Size; size: Size } | null = null;
@@ -69,6 +70,7 @@ export function barWidth(viewWidth: number) {
 export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
+  const incognito = useBrowser((s) => !!s.windows[windowId]?.incognito);
   const onboarding = useOnboarding((s) => s.windowId === windowId);
   const card = useCardAnchors((s) => s[windowId]);
   const [size, setSizeState] = useState<Size | null>(() => (lastSize && (!card || sameSize(lastSize.card, card)) ? lastSize.size : null));
@@ -77,6 +79,8 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
     if (size && card) lastSize = { card: { width: card.width, height: card.height }, size };
   }, [size, card?.width, card?.height]);
   const [panelHeight, setPanelHeight] = useState(BAR_HEIGHT);
+  const [headingHeight, setHeadingHeight] = useState(0);
+  const heading = !onboarding && incognito;
   const [playIntro] = useState(() => !introPlayed.has(tabId));
   const [rise] = useState(() => {
     const intro = playIntro && !reduceMotion;
@@ -103,7 +107,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
   const width = barWidth(size.width);
   const x = Math.max(size.width / 2 - width / 2, 14) + DIA_OFFSET;
   const under = toolbar ? 0 : layout.toolbarHeight;
-  const top = Math.max((size.height - under) / 2 - 158, 100) + 38 + DIA_OFFSET + under;
+  const top = newTabBarTop(size.height, under, heading ? headingHeight : 0);
 
   const bar = { x, y: top, width, height: panelHeight };
 
@@ -119,6 +123,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
           halo={bar}
         />
       )}
+      {heading && <IncognitoHeading left={x} barTop={top} width={width} onHeight={setHeadingHeight} />}
       <View
         pointerEvents="none"
         style={{

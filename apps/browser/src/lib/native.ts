@@ -4,6 +4,7 @@ import {
   claimFocus,
   closeWindow,
   isDarkAppearance,
+  menuShortcuts,
   onAppEvent,
   onCommand,
   onOpenURLs,
@@ -13,6 +14,7 @@ import {
   restoreFullScreen,
   setAppearance,
   setMenuStateParts,
+  setThinScrollBars,
   setTrafficLightsCenter,
   setWindowTitle,
   windowIds,
@@ -22,7 +24,7 @@ import {
 import { Appearance } from "react-native";
 import { folderChildren, isBookmarked } from "../store/bookmarks";
 import { useBrowser, type BrowserState } from "../store/browser";
-import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle } from "../store/model";
+import { activeTab, bookmarkProfileId, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle } from "../store/model";
 import { canSwitchEngine, tabEngine } from "../store/engines";
 import { setLastTabKeepsWindow } from "../store/newTabBar";
 import { peekTabId } from "../store/peek";
@@ -34,11 +36,13 @@ import { openingLightsCenter } from "../components/layout/windowLayout";
 import { isInternalTab } from "../components/pages/urls";
 import { sidebarMenuState } from "../components/sidebar/commands";
 import { openWindow as createWindow } from "./actions";
-import { windowOpens } from "./windowOpenOrder";
+import { createWindowSync, type WindowPort } from "./windowSync";
 import { openExternalUrls } from "../components/littleArdia/actions";
-import { LITTLE_ARDIA_DISABLED_COMMANDS } from "../components/littleArdia/menu";
 import { SMALL_LIGHTS_CENTER } from "../components/littleArdia/SmallChrome";
 import { runCommand } from "./commands";
+import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, WINDOW_COMMANDS } from "./commandCatalog";
+import { setMenuBarShortcuts } from "./commandShortcuts";
+import { finishAnimatedCloses } from "./closeAnimated";
 import { setFocusSenders } from "./focusClaims";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "./focusHandoff";
 import { flushPersistence, resumePersistence } from "./persist";
@@ -50,6 +54,19 @@ import { canToggleDeveloperModeFor, tabInDeveloperMode } from "../components/sit
 
 let quitting = false;
 export const isQuitting = () => quitting;
+
+export const shellWindowPort: WindowPort = {
+  open(id, options, lightsCenter) {
+    void setTrafficLightsCenter(id, lightsCenter);
+    void openWindow(id, options);
+  },
+  close: (id) => void closeWindow(id),
+  setTitle: (id, title) => void setWindowTitle(id, title),
+  windowIds,
+  restoreFullScreen: (ids, focus) => void restoreFullScreen(ids, focus),
+  onEvent: (listener) => void onWindowEvent(listener),
+  releaseProfile: (profile) => void releaseProfile(profile),
+};
 
 export function startNativeSync() {
   const store = useBrowser;
@@ -66,6 +83,7 @@ export function startNativeSync() {
 
   store.getState().setAppDark(Appearance.getColorScheme() === "dark");
   void setAppearance(store.getState().settings.appearance);
+  void setThinScrollBars(store.getState().settings.pageScrollBars === "thin");
   void isDarkAppearance().then((dark) => store.getState().setAppDark(dark));
 
   onAppEvent((e) => {
@@ -75,6 +93,7 @@ export function startNativeSync() {
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {
       quitting = true;
+      finishAnimatedCloses();
       flushPersistence({ final: true });
       void replyToTerminate(true);
     }
@@ -84,61 +103,17 @@ export function startNativeSync() {
     }
   });
 
-  onWindowEvent((e) => {
-    const s = store.getState();
-    if (e.type === "focus") s.setFocusedWindow(e.id);
-    if (e.type === "frame") s.setWindowFrame(e.id, e.frame);
-    if (e.type === "fullScreen" && !quitting) s.setWindowFullScreen(e.id, e.on);
-    if (e.type === "close") {
-      if (quitting) return;
-      open.delete(e.id);
-      s.closeWindow(e.id);
-      releaseIfIncognito(e.id, s);
-    }
+  const windows = createWindowSync({
+    port: shellWindowPort,
+    getState: store.getState,
+    isQuitting,
+    lightsCenter: (s, id) => (s.windows[id]?.kind === "small" ? SMALL_LIGHTS_CENTER : openingLightsCenter(s, id)),
+    isUtilityWindow: isUtilityWindowId,
   });
-
-  const open = new Set<string>();
-  const titles = new Map<string, string>();
-
-  const releaseIfIncognito = (id: string, s: BrowserState) => {
-    const w = s.windows[id];
-    if (w?.incognito) void releaseProfile(engineProfile(w.profileId));
-  };
-
-  const syncWindows = (s: BrowserState, prev?: BrowserState) => {
-    const opens = windowOpens(s, s.windowOrder.filter((id) => !open.has(id)), !prev);
-    for (const { id, focus, behind } of opens) {
-      const w = s.windows[id]!;
-      open.add(id);
-      titles.set(id, windowTitle(s, id));
-      const profile = engineProfile(w.profileId);
-      const claim = w.kind === "small" ? s.tabs[w.tabIds[0] ?? ""]?.adoptId : undefined;
-      const small = w.kind === "small"
-        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}) }
-        : {};
-      const made = w.chromeWindow ? { chromeWindow: w.chromeWindow } : {};
-      void setTrafficLightsCenter(id, w.kind === "small" ? SMALL_LIGHTS_CENTER : openingLightsCenter(s, id));
-      void openWindow(id, { frame: w.frame, incognito: w.incognito, title: titles.get(id), focus, profile, ...(behind ? { behind } : {}), ...small, ...made });
-    }
-    for (const id of [...open]) {
-      if (s.windows[id]) continue;
-      open.delete(id);
-      titles.delete(id);
-      void closeWindow(id);
-      const was = prev?.windows[id];
-      if (was?.incognito) void releaseProfile(engineProfile(was.profileId));
-    }
-    if (prev && s.tabs === prev.tabs && s.windows === prev.windows && s.profiles === prev.profiles) return;
-    for (const id of open) {
-      const title = windowTitle(s, id);
-      if (titles.get(id) !== title) {
-        titles.set(id, title);
-        void setWindowTitle(id, title);
-      }
-    }
-  };
+  windows.listen();
 
   let lastMenu = "";
+  let lastMenuItems = "";
   let lastBookmarkMenus: unknown[] = [];
   let menuTimer: ReturnType<typeof setTimeout> | undefined;
   const syncMenu = () => {
@@ -151,55 +126,29 @@ export function startNativeSync() {
     if (json === lastMenu && !bookmarksChanged) return;
     lastMenu = json;
     lastBookmarkMenus = bookmarkMenus;
-    void setMenuStateParts(state, bookmarksChanged);
+    const sent = setMenuStateParts(state, bookmarksChanged);
+    const menuItems = JSON.stringify([state.profiles.map((p) => p.id), (state.extensions ?? []).map((e) => e.id)]);
+    if (menuItems === lastMenuItems) return void sent;
+    lastMenuItems = menuItems;
+    void sent.then(menuShortcuts).then(setMenuBarShortcuts, () => {});
   };
 
-  syncWindows(store.getState());
+  windows.sync(store.getState());
   syncMenu();
-  restoreFullScreenWindows(store.getState());
+  windows.restoreFullScreen(store.getState());
   store.subscribe((s, prev) => {
-    syncWindows(s, prev);
+    windows.sync(s, prev);
     menuTimer ??= setTimeout(syncMenu, 120);
   });
   store.subscribe((s, prev) => {
     if (s.settings.appearance !== prev.settings.appearance) void setAppearance(s.settings.appearance);
+    if (s.settings.pageScrollBars !== prev.settings.pageScrollBars) void setThinScrollBars(s.settings.pageScrollBars === "thin");
   });
   useExtensions.subscribe((e, prev) => {
     if (e.lists !== prev.lists) menuTimer ??= setTimeout(syncMenu, 120);
   });
-  void windowIds().then((ids) => {
-    const s = store.getState();
-    for (const id of ids) {
-      if (!s.windows[id]) {
-        if (!isUtilityWindowId(id)) void closeWindow(id);
-        continue;
-      }
-      const title = windowTitle(s, id);
-      titles.set(id, title);
-      void setWindowTitle(id, title);
-    }
-  });
+  void windows.sweep();
 }
-
-function restoreFullScreenWindows(s: BrowserState) {
-  const stamp = (id: string) => s.windows[id]?.fullScreen ?? 0;
-  const ids = s.windowOrder.filter((id) => stamp(id) > 0).sort((a, b) => stamp(a) - stamp(b));
-  if (ids.length) void restoreFullScreen(ids, s.ui.focusedWindowId);
-}
-
-const PAGE_COMMANDS = [
-  "reload", "forceReload", "zoomIn", "zoomOut", "zoomReset", "print", "devTools", "toggleDevTools", "findInPage", "findNext",
-  "findPrevious", "useSelectionForFind", "copyUrl", "copyUrlAsMarkdown", "bookmarkPage", "addBookmarkToFolder", "toggleMute",
-  "findAndReplace", "jumpToSelection", "viewSource", "javaScriptConsole", "inspectElements", "savePage", "emailPageLocation",
-  "printWithSystemDialog", "stop", "caretBrowsing", "share",
-];
-const INTERNAL_PAGE_COMMANDS = ["copyUrl", "copyUrlAsMarkdown", "bookmarkPage", "addBookmarkToFolder"];
-const WINDOW_COMMANDS = [
-  ...PAGE_COMMANDS, "focusCommandBar", "closeTab", "closeAllTabs", "back", "forward", "nextTab", "previousTab", "togglePin",
-  "duplicateTab", "moveTabToProfile", "moveTabToWindow", "toggleSidebar", "downloads", "mergeAllWindows", "switchProfile",
-  "nextProfile", "previousProfile", "openBookmark", "selectTab", "selectLastTab", "moveTabDown", "moveTabUp", "closeTabGroup",
-  "openProfileMenu",
-];
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -253,10 +202,10 @@ export function menuState(s: BrowserState): MenuState {
   const disabled: string[] = [];
   if (!tab || !splitOf(s, tab.id)) disabled.push("focusNextPane", "focusPreviousPane");
   if (w && (w.tabLayout ?? s.settings.tabLayout) === "top") disabled.push("toggleAddressBar");
-  if (!w) disabled.push(...WINDOW_COMMANDS, "toggleTabLayout", "openSplitPane");
+  if (!w) disabled.push(...WINDOW_COMMANDS);
   else {
     if (!page?.url) disabled.push(...PAGE_COMMANDS);
-    else if (isInternalTab(page)) disabled.push(...PAGE_COMMANDS.filter((c) => !INTERNAL_PAGE_COMMANDS.includes(c)));
+    else if (isInternalTab(page)) disabled.push(...PAGE_COMMANDS_OFF_INTERNAL_PAGES);
     if (!page || !canGoBack(page.id, live ?? IDLE_LIVE)) disabled.push("back");
     if (!page || !canGoForward(page.id, live ?? IDLE_LIVE)) disabled.push("forward");
     if (!live?.isLoading) disabled.push("stop");

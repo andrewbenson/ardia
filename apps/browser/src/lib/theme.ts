@@ -2,8 +2,9 @@ import type { AreaLightPalette } from "@ardia/shaders";
 import { createContext, createElement, useContext, type ReactNode } from "react";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { PageProfileContext, WindowContext } from "../store/hooks";
+import type { SelectedTabGlow } from "../store/settings";
 import type { Profile, ProfileColor, ProfileTheme } from "../store/types";
-import { opaqueThemeTint, PRESET_BACKDROP, readableDark, resolveTheme, rgbToHsl, themeAccent, themeBackdrop, themeDark, themePalette, type ThemeBackdropProps } from "./profileTheme";
+import { opaqueThemeTint, PRESET_BACKDROP, resolveTheme, requestedDarkFor, rgbToHsl, shownLook, themeAccent, themeBackdrop, themePalette, type LookSource, type ThemeBackdropProps } from "./profileTheme";
 import { backdropTint, opaqueTint, tintForHue, type BackdropTint } from "./windowTint";
 
 export type Theme = typeof dark & {
@@ -209,15 +210,13 @@ export function nearestPreset(hexColor: string): ProfileColor {
 
 const customCache = new WeakMap<ProfileTheme, Map<string, Theme>>();
 
-function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean, followApp: boolean): Theme {
-  const requested = followApp ? appDark : themeDark(custom, appDark);
-  const key = `${color}:${requested ? "dark" : "light"}${followApp ? ":app" : ""}`;
+function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean, source: LookSource): Theme {
+  const key = `${color}:${requestedDarkFor(custom, appDark, source) ? "dark" : "light"}:${source}`;
   let byKey = customCache.get(custom);
   if (!byKey) customCache.set(custom, (byKey = new Map()));
   let theme = byKey.get(key);
   if (!theme) {
-    const look = resolveTheme(custom, requested);
-    const dark = followApp ? requested : readableDark(look, requested);
+    const { look, dark, requestedDark } = shownLook(custom, appDark, source);
     const preset = themeFor(`${color}:${dark ? "dark" : "light"}`);
     const accent = themeAccent(look);
     const palette = themePalette(look);
@@ -227,7 +226,7 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
       backdrop: {
         ...backdropTint(accent, false),
         ...themeBackdrop(look, dark),
-        ...(dark === requested ? {} : { themeAppearance: dark ? ("dark" as const) : ("light" as const) }),
+        ...(dark !== requestedDark ? { themeAppearance: dark ? ("dark" as const) : ("light" as const) } : source === "own" ? {} : { themeAppearance: "auto" as const }),
       },
       windowTint: opaqueThemeTint(look, dark),
       powerUpColor: accent,
@@ -239,9 +238,13 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
   return theme;
 }
 
-export function profileTheme(profile: Pick<Profile, "color" | "theme"> | undefined, appDark: boolean, followApp = false): Theme {
+export function spaceLookSource(settings: Pick<BrowserState["settings"], "spacesFollowAppearance">): LookSource {
+  return settings.spacesFollowAppearance ? "app" : "own";
+}
+
+export function profileTheme(profile: Pick<Profile, "color" | "theme"> | undefined, appDark: boolean, source: LookSource = "own"): Theme {
   const color = profile?.color ?? "plum";
-  if (profile?.theme) return customTheme(profile.theme, color, appDark, followApp);
+  if (profile?.theme) return customTheme(profile.theme, color, appDark, source);
   return themeFor(`${color}:${appDark ? "dark" : "light"}`);
 }
 
@@ -253,7 +256,7 @@ export function profileAccent(profile: Pick<Profile, "color" | "theme"> | undefi
 function themeOf(s: BrowserState, windowId: string | null, page: string | null): Theme {
   const w = s.windows[windowId ?? s.ui.focusedWindowId ?? ""];
   if (w?.incognito) return themeFor("incognito");
-  return profileTheme(s.profiles[page ?? w?.profileId ?? s.settings.defaultProfileId], s.ui.appDark, !windowId);
+  return profileTheme(s.profiles[page ?? w?.profileId ?? s.settings.defaultProfileId], s.ui.appDark, windowId ? spaceLookSource(s.settings) : "utility");
 }
 
 const ThemeContext = createContext<Theme | null>(null);
@@ -270,6 +273,18 @@ export function useTheme(): Theme {
   if (scoped) return scoped;
   if (__DEV__) console.warn("useTheme outside a ThemeScope");
   return themeOf(useBrowser.getState(), null, null);
+}
+
+const SELECTED_TAB_GLOW: Record<SelectedTabGlow, { opacity: number; radius: number }> = {
+  full: { opacity: 1, radius: 1 },
+  soft: { opacity: 0.45, radius: 0.6 },
+  off: { opacity: 0, radius: 1 },
+};
+
+export function useSelectedTabGlow() {
+  const theme = useTheme();
+  const level = useBrowser((s) => SELECTED_TAB_GLOW[s.settings.selectedTabGlow] ?? SELECTED_TAB_GLOW.full);
+  return { shadowColor: hex(theme.tabSelectedShadow), shadowOpacity: level.opacity, shadowRadius: theme.tabSelectedShadowRadius * level.radius };
 }
 
 export const layout = {

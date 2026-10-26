@@ -1,12 +1,12 @@
 import type { BrowserState } from "./browser";
 import { changedIds } from "./changes";
 import { inPinnedContainer, isIncognitoProfile, wake } from "./model";
+import { hasPage, needsPage } from "./pageSession";
 import { mirrored, pinKeyOf } from "./pinMirror";
 import { splitOf } from "./splits";
 import { sharedListTab } from "./tabShare";
 import type { BrowserWindow, Tab, TabGroup, TabLive } from "./types";
 
-const hasPage = (t: Tab) => !!t.navigation || !!t.adoptId;
 
 export const shareKeyOf = (t: Pick<Tab, "profileId" | "id" | "pinKey">) => `${t.profileId}\u0001${pinKeyOf(t)}`;
 
@@ -55,7 +55,7 @@ function livePageKeysOf(tabs: BrowserState["tabs"]): Set<string> {
 
 export function isPageUnloaded(s: BrowserState, id: string): boolean {
   const t = s.tabs[id];
-  if (!t?.url || hasPage(t) || t.pageIn) return false;
+  if (!t || !needsPage(t)) return false;
   return !livePageKeysOf(s.tabs).has(shareKeyOf(t)) || !holderOf(s, id);
 }
 

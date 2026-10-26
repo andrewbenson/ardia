@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
 globalThis.__DEV__ = false;
-const { docs } = await import("../test-native-stub.mjs");
+const { docs } = await import("../test-native/index.ts");
 const ks = await import("./killSwitches.ts");
 
 let calls = [];

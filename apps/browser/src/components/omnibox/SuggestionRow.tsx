@@ -45,6 +45,8 @@ function labels(s: Suggestion): [string, string | null] {
   }
 }
 
+export const SUGGESTION_TEXT_SIZE = 14;
+
 export type RowActions = {
   choose(s: Suggestion): void;
   remove(url: string): void;
@@ -121,7 +123,7 @@ const SuggestionRow = memo(
             }}
           >
             <SuggestionIcon suggestion={s} />
-            <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 14, color: theme.textPrimary }}>
+            <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: SUGGESTION_TEXT_SIZE, color: theme.textPrimary }}>
               {title}
               {accessory ? (
                 <Text style={{ color: theme.textSecondary }}>

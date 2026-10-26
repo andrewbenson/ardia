@@ -1,3 +1,4 @@
+import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
 import { claimFocusTag, findFocus } from "../lib/focusClaims";
 import { Surface, Symbol } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
@@ -27,6 +28,8 @@ const FIND_KEYS = [
 ];
 
 function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
+  const previousHint = useShortcutHint("findPrevious");
+  const nextHint = useShortcutHint("findNext");
   const theme = useTheme();
   const input = useRef<TextInput>(null);
   const appear = useRef(new Animated.Value(0)).current;
@@ -125,8 +128,8 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
               <Text style={{ fontSize: 12, color: theme.textSecondary, fontVariant: ["tabular-nums"] }}>{find.count}</Text>
             </View>
           ) : null}
-          <IconButton icon="chevron.up" size={12} box={26} radius={6} disabled={!find.count} onPress={() => run(true)} tooltip="Previous (⇧⌘G)" />
-          <IconButton icon="chevron.down" size={12} box={26} radius={6} disabled={!find.count} onPress={() => run(false)} tooltip="Next (⌘G)" />
+          <IconButton icon="chevron.up" size={12} box={26} radius={6} disabled={!find.count} onPress={() => run(true)} tooltip={withShortcut("Previous", previousHint)} />
+          <IconButton icon="chevron.down" size={12} box={26} radius={6} disabled={!find.count} onPress={() => run(false)} tooltip={withShortcut("Next", nextHint)} />
           <View style={{ width: 1, height: 18, marginHorizontal: 3, backgroundColor: separator }} />
           <IconButton icon="xmark" size={11} box={26} radius={6} onPress={close} tooltip="Done (Esc)" />
         </View>

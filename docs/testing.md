@@ -12,9 +12,16 @@ of its time in `swift test`'s first build. Each package also runs its own:
 | `packages/ardiacore` | `pnpm --filter @ardia/ardiacore test` (`tests/pip-zoom.test.cc`, compiled with `clang++`) | 1 program |
 | `extras/raycast-ardia` | `node --test extras/raycast-ardia/src/scripts.test.ts` | 6 |
 
-`apps/browser` runs its TypeScript under plain Node: `src/test-loader.mjs` maps `@ardia/shell`,
-`@ardia/ardiacore` and `expo-modules-core` to `src/test-native-stub.mjs`. One file:
-`node --no-warnings --import ./src/test-loader.mjs --test src/store/tabs.test.mjs` (from `apps/browser`).
+`apps/browser` runs its TypeScript under plain Node, with the real `@ardia/shell` and `@ardia/ardiacore` code:
+`src/test-loader.mjs` swaps only the native side. `expo-modules-core` becomes `src/test-native/expo.ts`, which hands
+each package the fake of every native module it asks for (`src/test-native/shell.ts`, `src/test-native/ardiacore.ts`),
+and `react-native` a few inert views; the packages' `.tsx` files are transpiled with TypeScript on the way in (cached in
+`node_modules/.cache/ardia-test-tsx`). The native surface is listed once per package, in `src/nativeModules.ts`
+(`ShellNativeModules`, `ArdiaCoreNativeModules`), and the packages can only ask for modules listed there. Each fake is
+typed against that list, so `pnpm -C apps/browser typecheck` fails when a native method is added, removed or changed
+and the fake isn't. Tests drive the fakes through `src/test-native/index.ts` (`docs`, `chromeVisit`, `windows`,
+`engineEvent`, …). One file: `node --no-warnings --import ./src/test-loader.mjs --test src/store/tabs.test.mjs` (from
+`apps/browser`).
 
 End-to-end checks need a built app and are run by hand. Each runs hidden instances through `scripts/lib/instance.mjs`
 and prints one line per check (PASS/FAIL, ms), a failure's first lines, then a summary with the path of the log that

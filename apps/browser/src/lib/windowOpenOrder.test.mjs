@@ -38,7 +38,7 @@ test("after launch: only the windows asked for, the focused one last so it comes
 });
 
 test("switched off (focusedWindowFirst): a launch opens them as before, the focused one last", async () => {
-  const { docs } = await import("../test-native-stub.mjs");
+  const { docs } = await import("../test-native/index.ts");
   const ks = await import("./killSwitches.ts");
   docs.set("switches-cache.json", JSON.stringify({ version: 1, switches: { focusedWindowFirst: false } }));
   ks.reloadSwitches();

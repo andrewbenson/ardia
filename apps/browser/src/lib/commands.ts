@@ -9,7 +9,7 @@ import {
 } from "@ardia/shell";
 import { markdownLink } from "@ardia/core";
 import { useBrowser } from "../store/browser";
-import { activeTabId, bookmarkProfileId, isPinnedRow, pinSection, resolveWindowId } from "../store/model";
+import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId } from "../store/model";
 import {
   closeGroup,
   closeTab,
@@ -37,6 +37,7 @@ import { webviews } from "./webviews";
 import { togglePageEngine } from "./engines";
 import { goBack, goForward } from "../components/layout/history";
 import { openSplitPane } from "../components/layout/splitActions";
+import { LITTLE_ARDIA_PAGE_COMMANDS } from "./commandCatalog";
 import { runSidebarCommand } from "../components/sidebar/commands";
 import { numberedTabs } from "../components/sidebar/entries";
 import { openExtensionFromMenu } from "../components/extensions/bridge";
@@ -264,12 +265,8 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       if (arg === "tile") return isPinnedRow(tab) ? s.pinTabs([tab.id], true, false) : undefined;
       return s.togglePin(tab.id);
     case "moveTabDown":
-    case "moveTabUp": {
-      if (!tab) return;
-      const section = s.windows[windowId]!.tabIds.filter((id) => s.tabs[id]?.profileId === tab.profileId && pinSection(s.tabs[id]) === pinSection(tab));
-      const at = section.indexOf(tab.id) + (command === "moveTabDown" ? 1 : -1);
-      return at >= 0 && at < section.length ? s.moveTab(tab.id, at) : undefined;
-    }
+    case "moveTabUp":
+      return tab ? s.moveTabBy(tab.id, command === "moveTabDown" ? 1 : -1) : undefined;
     case "closeTabGroup": {
       const group = groupOf(s, tabId);
       return group ? void closeGroup(group.id) : undefined;
@@ -327,14 +324,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       return void createProfile(windowId).then((id) => id && switchProfile(windowId, id));
   }
 }
-
-const LITTLE_ARDIA_PAGE_COMMANDS = new Set<string>([
-  "print", "printWithSystemDialog", "savePage", "caretBrowsing", "emailPageLocation", "stop", "share", "copyUrl",
-  "copyUrlAsMarkdown", "findInPage", "findAndReplace", "jumpToSelection", "useSelectionForFind", "findNext", "findPrevious",
-  "reload", "forceReload", "zoomIn", "zoomOut", "zoomReset", "devTools", "toggleDevTools", "inspectElements",
-  "javaScriptConsole", "viewSource", "back", "forward", "bookmarkPage", "addBookmarkToFolder", "openBookmark", "toggleMute",
-  "cast", "openExtension", "addExtension", "autofill", "reopenClosedTab", "restoreClosed", "downloads",
-]);
 
 function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
   const s = useBrowser.getState();

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-await import("../test-native-stub.mjs");
+await import("../test-native/index.ts");
 const { runsJavaScript } = await import("./scriptUrls.ts");
 const { DEFAULT_SETTINGS } = await import("../store/settings.ts");
 

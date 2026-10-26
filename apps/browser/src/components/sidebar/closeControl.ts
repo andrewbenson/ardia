@@ -1,33 +1,32 @@
 import { closeGroup } from "../../lib/actions";
+import { shortcutHint, withShortcut } from "../../lib/commandShortcuts";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { rootOf } from "../../store/groups";
-import { inPinnedContainer } from "../../store/model";
-import { isClosedPin } from "../../store/organize";
-import { holderOf } from "../../store/pinShare";
+import { closeIntent, closeKind, openPages } from "../../store/tabs";
 import { middleClickTab } from "./menus";
 
 export type CloseControl = { icon: "xmark" | "minus"; tooltip: string };
 
-const CLOSE_TAB: CloseControl = { icon: "xmark", tooltip: "Close Tab (⌘W)" };
-const UNLOAD_TAB: CloseControl = { icon: "minus", tooltip: "Unload Tab (⌘W)" };
 const REMOVE_PIN: CloseControl = { icon: "xmark", tooltip: "Remove Pinned Tab" };
 const CLOSE_GROUP: CloseControl = { icon: "xmark", tooltip: "Close Group" };
 const UNLOAD_GROUP: CloseControl = { icon: "minus", tooltip: "Unload Tabs" };
 
+const CLOSE_KEY_CONTROLS = { close: { icon: "xmark", title: "Close Tab" }, unload: { icon: "minus", title: "Unload Tab" } } as const;
+const keyedControls = new Map<string, CloseControl>();
+
+function closeKeyControl({ icon, title }: { icon: CloseControl["icon"]; title: string }, s: BrowserState): CloseControl {
+  const tooltip = withShortcut(title, shortcutHint("closeTab", s));
+  let control = keyedControls.get(tooltip);
+  if (!control) keyedControls.set(tooltip, (control = { icon, tooltip }));
+  return control;
+}
+
 export function tabCloseControl(s: BrowserState, tabId: string): CloseControl {
-  if (!inPinnedContainer(s, tabId)) return CLOSE_TAB;
-  return isClosedPin(s, tabId) ? REMOVE_PIN : UNLOAD_TAB;
+  const kind = closeKind(s, tabId);
+  return kind === "removePin" ? REMOVE_PIN : closeKeyControl(CLOSE_KEY_CONTROLS[kind], s);
 }
 
 export const useTabCloseControl = (tabId: string) => useBrowser((s) => tabCloseControl(s, tabId));
-
-function openPages(s: BrowserState, tabId: string): string[] {
-  const t = s.tabs[tabId];
-  if (!t) return [];
-  if (t.navigation || t.adoptId || t.pageIn) return [tabId];
-  const holder = holderOf(s, tabId);
-  return holder ? [tabId, holder.id] : [];
-}
 
 const openMembers = (s: BrowserState, groupId: string) => (s.groups[groupId]?.tabIds ?? []).flatMap((id) => openPages(s, id));
 
@@ -48,7 +47,7 @@ export function pressGroupClose(groupId: string) {
 
 export function pressTabClose(tabId: string) {
   const s = useBrowser.getState();
-  const pages = tabCloseControl(s, tabId) === UNLOAD_TAB ? openPages(s, tabId) : [];
-  if (pages.length > 1) s.closeTabs(pages);
+  const intent = closeIntent(s, tabId);
+  if (intent.kind === "unload") s.closeTabs(intent.ids);
   else middleClickTab(tabId);
 }

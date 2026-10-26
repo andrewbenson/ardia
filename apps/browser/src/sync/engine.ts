@@ -18,7 +18,6 @@ import {
 } from "@ardia/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
-import { fromLegacy } from "../legacy";
 import { engineProfile, isIncognitoProfile } from "../store/model";
 import { DEFAULT_PROFILE_ID } from "../store/settings";
 import type { Profile } from "../store/types";
@@ -28,14 +27,12 @@ import {
   deviceTabsAdapter,
   historyAdapter,
   historyExpired,
+  inTodaysNames,
   passwordsAdapter,
-  pinnedAdapter,
-  pinnedOrderAdapter,
-  pinnedRowsAdapter,
   profilesAdapter,
   settingsAdapter,
+  settingsToReapply,
   sharedDataAdapter,
-  tileFoldersAdapter,
   type DeviceRecord,
   type DeviceTabs,
   type ProfileRecord,
@@ -46,6 +43,7 @@ import {
   themeFromRecord,
   type ShareRecord,
 } from "./adapters";
+import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
 
 type DataType = "bookmarks" | "history" | "tabs" | "pinned" | "passwords" | "extensions" | "settings";
@@ -259,12 +257,6 @@ function publishUi(patch: Partial<SyncUi> = {}) {
 
 export const deviceName = () => SyncNative?.deviceName() ?? "This Mac";
 
-const inTodaysNames = (adapter: Adapter): Adapter => ({
-  ...adapter,
-  apply: (visible, changed, base, records) =>
-    adapter.apply(new Map([...visible].map(([key, value]) => [key, fromLegacy(value)])), changed, (key) => fromLegacy(base(key)), records),
-});
-
 function appAdapters(retiring: boolean): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceAdapter(id, deviceName, true)];
@@ -287,8 +279,7 @@ function profileAdapters(profileId: string, retiring: boolean): Adapter[] {
   let passwords = passwordAdapters.get(profileId);
   if (!passwords) passwordAdapters.set(profileId, (passwords = passwordsAdapter(profileId, () => forcePasswords)));
   return [
-    ...(t.pinned ? [tileFoldersAdapter(profileId)] : []),
-    ...(t.pinned ? [pinnedRowsAdapter(profileId), pinnedOrderAdapter(profileId), inTodaysNames(pinnedAdapter(profileId))] : []),
+    ...(t.pinned ? pinnedAreaAdapters(profileId) : []),
     ...(t.bookmarks && ownsData ? [inTodaysNames(bookmarksAdapter(profileId))] : []),
     ...(t.history && ownsData ? [inTodaysNames(historyAdapter(profileId))] : []),
     inTodaysNames(deviceTabsAdapter(profileId, id, deviceName, !t.tabs)),
@@ -342,6 +333,7 @@ async function runCycle({ retiring = false } = {}) {
     const device = doc.deviceId;
     const app = (doc.scopes[APP_SCOPE] ??= { ...emptyScope(), awaitRemote: doc.joining });
     settleAppliedThemes(app);
+    if (doc.types.settings && !retiring) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
     await syncScope({
       scope: APP_SCOPE,
       state: app,

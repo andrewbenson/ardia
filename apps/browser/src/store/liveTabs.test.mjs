@@ -9,7 +9,6 @@ class FakeChrome {
   outbox = [];
   commands = [];
   sent = 0;
-  lastCommand = 0;
   lastGroup = 0;
   nextBrowser = 1;
   listen(listener) {
@@ -19,11 +18,9 @@ class FakeChrome {
   snapshot() {
     return Promise.resolve({ rev: this.rev, cmd: null, strips: [...this.strips.keys()].map((id) => this.state(id)) });
   }
-  command(command) {
+  command(command, id) {
     this.sent++;
-    const id = ++this.lastCommand;
     this.commands.push({ id, command });
-    return id;
   }
   state(id) {
     const s = this.strips.get(id);
@@ -388,6 +385,18 @@ test("an extension's tab groups reach the sidebar, and the sidebar's groups reac
   S().updateGroup(mine, { name: "Renamed" });
   await settle(win);
   assert.equal(chrome.strips.get(win.strip).groups.get(token).title, "Renamed");
+  S().updateGroup(mine, { color: "none" });
+  await settle(win);
+  assert.equal(chrome.strips.get(win.strip).groups.get(token).color, "grey");
+  assert.equal(S().groups[mine].color, "none");
+  chrome.retitle(token, "From Chrome");
+  await settle(win);
+  assert.equal(S().groups[mine].name, "From Chrome");
+  assert.equal(S().groups[mine].color, "none");
+  S().updateGroup(mine, { color: "magenta" });
+  await settle(win);
+  assert.equal(chrome.strips.get(win.strip).groups.get(token).color, "grey");
+  assert.equal(S().groups[mine].color, "magenta");
 });
 
 test("an extension that closes the shown tab and shows another in one go is obeyed", async () => {

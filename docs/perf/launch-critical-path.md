@@ -234,21 +234,33 @@ handoff makes no second window.
 - **Picture.** It's captured at quit only: after the final session save has been flushed, and only when the visible
   tab is the saved active tab. The capture draws the RN content view, not the RN root, whose `windowBackgroundColor`
   fill would hide the backdrop. During the render it hides the backdrop and vibrancy views and drops filters, because
-  `renderInContext` skips them. Liquid glass (`NSGlassEffectView`, which it draws opaque white) is drawn as a stand-in
-  layer: the glass tint over a white veil of 0.128 in dark (measured against the real glass) and 0.3 in light (an
+  `renderInContext` skips them. Liquid glass (`NSGlassEffectView`, which it draws opaque white) is left out of the
+  picture and recorded instead (frame, corner radius, tint, style, appearance, opacity); the early window puts live
+  glass views there, under the picture, so the tiles and the address field are real glass from the first frame (issue
+  #317: the flat stand-ins turned into glass when RN drew). A glass view that is clipped or hidden still gets the old
+  stand-in layer: its tint over a white veil of 0.128 in dark (measured against the real glass) and 0.3 in light (an
   estimate). A masked layer is drawn offscreen with its mask applied and put back as a stand-in, so the address bar's
   fade and the active tile's rim look as they do live. A layer that only casts a shadow from its shadow path, which
   `renderInContext` leaves out, gets that shadow drawn by hand (blur twice its radius), so the active tile keeps its lift. At launch the picture is decoded into vm_allocate'd pages off
   the main thread. A capture or write that fails deletes the old picture.
-- **Handoff.** While the picture is up, the claimed window's RN root has no fill, so RN's content draws over the
-  picture as it commits instead of the root's opaque fill hiding it (the blank 30-270 ms window of 0.2.39). The
-  picture and backdrop go once RN's own full-size backdrop is in the tree, 50 ms later, or 1.5 s after RN's content
-  appears at the latest; the root's fill comes back with them. If RN's backdrop is gone again by then (a JS reload), the
+- **Handoff.** While the picture is up, the claimed window's RN root has no fill and is transparent (alpha 0), so the
+  picture alone shows until RN has settled: RN's first frames (favicons still decoding, glass not yet drawn) never
+  reach the screen (issue #317). The picture and backdrop go once RN's own full-size backdrop is in the tree, 50 ms
+  later, or 1.5 s after RN's content appears at the latest; the root's fill and opacity come back in the same
+  transaction. If RN's backdrop is gone again by then (a JS reload), the
   picture stays and the wait starts over.
 - **Lifetime.** The claim drops the cover 5 s later, or 2 s after RN's content appears. An unclaimed window holding
   its page stays claimable past 15 s; one without a page is closed. The user can close it before the claim, and JS then
   gets the same `close` event a normal close sends. Clearing history and turning session restore off erase the
   pictures, whatever the switch says.
+- **Launch look** (issue #317). At quit JS also writes `launch-look.json` (`lib/launchLook.ts`): each saved tab's last
+  page colour and the favicons, with their icon themes, that the session's tabs showed (240 icons at most). They are
+  seeded before the first render, so RN's first frame has the tiles' icons, their tint and the address bar's colour
+  instead of letter fallbacks and a white bar. A restored tab keeps its saved colour until its page reports one, leaves
+  that page, or has finished loading for 1.5 s without one. Clearing history erases the file with the pictures.
+- **Without the early window** (a login-item launch, a second profile, no saved hint), the first window now waits,
+  transparent, for its RN content (at most 0.6 s) like any other new window, instead of showing the root's flat fill
+  first.
 - **Measured** (v10, interleaved, n=4, medians, on vs off): window 329 vs 385 ms, FCP 398 vs 439, navigation start 267
   vs 317. Every frame shows either the picture or the real UI, and the first frame's sidebar is the real UI's colour.
 - **Memory.** About +2.5 MB of live objects in the browser process 40 s after launch (Chrome memory-infra, n=2 each):

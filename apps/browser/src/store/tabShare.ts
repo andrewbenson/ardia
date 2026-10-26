@@ -2,13 +2,13 @@ import type { BrowserState } from "./browser";
 import { changedIds } from "./changes";
 import { orderSections, syncGroupOrder, withParent } from "./groups";
 import { IDLE_LIVE, inPinnedContainer, newId, pinnedFirst } from "./model";
+import { hasOwnOrSharedPage, hasPage } from "./pageSession";
 import { chainOf, copyOf, hasDuplicates, keyField, mirrored, pinKeyOf, profilesOf, sectionOf, signature, treeOrder, union } from "./pinMirror";
 import { removeTabs, withNewTab } from "./tabs";
 import type { Tab, TabGroup } from "./types";
 
 type Section = ReturnType<typeof sectionOf>;
 
-const hasPage = (t: Tab) => !!t.navigation || !!t.adoptId;
 const familyKey = (t: Pick<Tab, "profileId" | "id" | "pinKey">) => `${t.profileId}\u0001${pinKeyOf(t)}`;
 
 export const sharesTabs = (s: Pick<BrowserState, "settings">) => !!s.settings?.shareTabsAcrossWindows;
@@ -133,7 +133,7 @@ function conformList(input: BrowserState, windowId: string, profileId: string, s
     }
     used.add(t.id);
     const patch: Partial<Tab> = { ...keyField(t.id, key), customTitle: src.customTitle, customIcon: src.customIcon };
-    if (!hasPage(t) && !t.pageIn) Object.assign(patch, { url: src.url, title: src.title, favicon: src.favicon });
+    if (!hasOwnOrSharedPage(t)) Object.assign(patch, { url: src.url, title: src.title, favicon: src.favicon });
     if ((Object.keys(patch) as (keyof Tab)[]).some((k) => t[k] !== patch[k])) tabs[t.id] = { ...t, ...patch };
     return t.id;
   };
@@ -222,7 +222,7 @@ function linkCopies(s: BrowserState, byProfile: Map<string, string[]>): BrowserS
         if (hasPage(tab) && !tab.pageIn) {
           const was = holders.get(familyKey(tab));
           if (!was || tab.lastActiveAt > was.lastActiveAt) holders.set(familyKey(tab), tab);
-        } else if (!hasPage(tab) && !tab.pageIn) copies.push(tab);
+        } else if (!hasOwnOrSharedPage(tab)) copies.push(tab);
       }
     }
   }

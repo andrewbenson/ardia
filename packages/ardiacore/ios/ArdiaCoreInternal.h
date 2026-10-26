@@ -41,6 +41,8 @@ bool IsReservedBinding(NSString *key, NSString *unshiftedKey, NSEventModifierFla
 NSUInteger PopupWindowCount();
 bool AskPermissionInPopupWindow(ArdiaCoreTab *tab, NSDictionary *request);
 void DropPopupWindowPermission(NSString *requestId);
+void NotePasswordPromptSource(ArdiaCoreWebView *view, ArdiaCoreTab *_Nullable source);
+ArdiaCoreTab *_Nullable PasswordPromptTab(ArdiaCoreWebView *view, ArdiaCoreTab *_Nullable own);
 
 }
 

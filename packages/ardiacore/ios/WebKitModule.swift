@@ -42,11 +42,19 @@ public class WebKitModule: Module {
     AsyncFunction("deleteProfileData") { (profile: String, promise: Promise) in
       WebKitHub.shared.deleteProfileData(profile) { promise.resolve($0) }
     }.runOnQueue(.main)
+    AsyncFunction("cookieStoreKey") { (profile: String) in WebKitHub.shared.storeKey(profile) }.runOnQueue(.main)
+    AsyncFunction("importCookies") { (profile: String, storeKey: String, cookies: [[String: Any]], promise: Promise) in
+      WebKitHub.shared.importCookies(cookies, profile: profile, storeKey: storeKey) { promise.resolve($0) }
+    }.runOnQueue(.main)
     AsyncFunction("info") { () -> [String: Any] in
       [
         "safariVersion": WebKitHub.safariVersion, "userAgentSuffix": "Version/\(WebKitHub.safariVersion) Safari/605.1.15",
         "passkeys": WebKitHub.passkeysEntitled,
       ]
+    }.runOnQueue(.main)
+    AsyncFunction("passkeyAccess") { () -> [String: Any] in WebKitPasskeys.access() }.runOnQueue(.main)
+    AsyncFunction("requestPasskeyAccess") { (promise: Promise) in
+      WebKitPasskeys.requestAccess { promise.resolve($0) }
     }.runOnQueue(.main)
 
     View(WebKitTabView.self) {
@@ -104,6 +112,7 @@ public class WebKitModule: Module {
       AsyncFunction("exitPictureInPicture") { (view: WebKitTabView) in view.tab.setPictureInPicture(false) { _ in } }.runOnQueue(.main)
 
       AsyncFunction("getSecurityInfo") { (view: WebKitTabView) in view.tab.securityInfo() }.runOnQueue(.main)
+      AsyncFunction("pageCookies") { (view: WebKitTabView, urls: [String]) -> [[String: Any]] in [] }.runOnQueue(.main)
       AsyncFunction("openBlockedPopup") { (view: WebKitTabView, id: String, always: Bool?) in }.runOnQueue(.main)
       AsyncFunction("clearSiteData") { (view: WebKitTabView, promise: Promise) in
         view.tab.clearSiteData { promise.resolve($0) }

@@ -72,6 +72,11 @@ export function useToolbarMotion({
   if (tall.doc !== doc || (!enabled && tall.on)) tall = { on: false, doc };
   if (enabled && collapsed && !tall.on) tall = { on: true, doc };
   if (tall !== tallState) setTall(tall);
+  const latest = useRef({ collapsed, doc });
+  latest.current = { collapsed, doc };
+  const fitShownPage = () => {
+    if (!latest.current.collapsed) setTall({ on: false, doc: latest.current.doc });
+  };
 
   const values = useRef<{ page: Animated.Value; laid: Animated.Value; bar: Animated.Value; fade: Animated.Value }>(null as never);
   const initial = useRef({ page: collapsed ? 1 : 0, bar: hidden ? 1 : 0 }).current;
@@ -107,7 +112,11 @@ export function useToolbarMotion({
         v.page.setValue(to);
         v.bar.setValue(barTo);
         glide(v.fade, barTo, !collapsed).start();
-      } else Animated.parallel([glide(v.page, to, !collapsed), glide(v.bar, barTo, !collapsed), glide(v.fade, barTo, !collapsed)]).start();
+        if (!collapsed) fitShownPage();
+      } else
+        Animated.parallel([glide(v.page, to, !collapsed), glide(v.bar, barTo, !collapsed), glide(v.fade, barTo, !collapsed)]).start(
+          ({ finished }) => finished && !collapsed && fitShownPage(),
+        );
     } else if (!hidden) {
       v.bar.setValue(0);
       v.fade.setValue(0);

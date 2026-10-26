@@ -53,22 +53,28 @@ test("setting on: the bar adds nothing; closing it again leaves everything as it
   assert.equal(S().closedTabs.length, before.closed);
 });
 
-test("a pick makes one selected unpinned tab at the top of the list, outside the selected tab's group", () => {
-  reset("commandBar");
-  const { w, ids: [a, b] } = windowWith("a", "b");
-  S().pinTabs([a], true);
-  S().activate(b);
-  S().groupTabs([b], { pinned: false });
-  toggleNewTabBar(w);
-  openFromNewTabBar(w, panel(w).newTab, "https://picked.com/");
-  openFromNewTabBar(w, { kind: "list" }, "https://twice.com/");
-  const picked = model.activeTabId(S(), w);
-  assert.equal(urlOf(picked), "https://picked.com/");
-  assert.deepEqual(list(w), ["https://picked.com/", "https://b.com/"], "one tab, at the top");
-  assert.equal(S().tabs[picked].pinned, false);
-  assert.equal(Object.values(S().groups).some((g) => g.tabIds.includes(picked)), false);
-  assert.equal(panel(w).open, false);
-});
+for (const [newTabPosition, expected] of [
+  ["bottom", ["https://b.com/", "https://c.com/", "https://picked.com/"]],
+  ["top", ["https://picked.com/", "https://b.com/", "https://c.com/"]],
+]) {
+  test(`a pick makes one selected unpinned tab where new tabs go (${newTabPosition}), outside the selected tab's group`, () => {
+    reset("commandBar");
+    const { w, ids: [a, b] } = windowWith("a", "b", "c");
+    S().updateSettings({ newTabPosition });
+    S().pinTabs([a], true);
+    S().activate(b);
+    S().groupTabs([b], { pinned: false });
+    toggleNewTabBar(w);
+    openFromNewTabBar(w, panel(w).newTab, "https://picked.com/");
+    openFromNewTabBar(w, { kind: "list" }, "https://twice.com/");
+    const picked = model.activeTabId(S(), w);
+    assert.equal(urlOf(picked), "https://picked.com/");
+    assert.deepEqual(list(w), expected, "one tab, placed as Add new tabs says");
+    assert.equal(S().tabs[picked].pinned, false);
+    assert.equal(Object.values(S().groups).some((g) => g.tabIds.includes(picked)), false);
+    assert.equal(panel(w).open, false);
+  });
+}
 
 test("⌥⌘T in a group: the pick goes into the group", () => {
   reset("commandBar");

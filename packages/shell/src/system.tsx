@@ -1,6 +1,7 @@
-import { requireNativeModule, requireNativeViewManager, requireOptionalNativeModule } from "expo-modules-core";
+import { requireNativeViewManager } from "expo-modules-core";
 import { forwardRef, type Ref } from "react";
 import { NativeModules, View, type ViewProps } from "react-native";
+import { nativeModule, optionalNativeModule } from "./nativeModules";
 
 export type MenuShortcut = {
   id: string;
@@ -18,7 +19,7 @@ export type ShortcutModifier = "control" | "option" | "shift" | "command" | "fun
 
 type LaunchAtLoginStatus = "enabled" | "requiresApproval" | "notRegistered" | "notFound";
 
-const System = requireNativeModule<{
+export type SystemNative = {
   backgroundInstance?: boolean;
   isDefaultBrowser(): Promise<boolean>;
   setAsDefaultBrowser(): Promise<boolean>;
@@ -34,7 +35,10 @@ const System = requireNativeModule<{
   menuShortcuts(): Promise<MenuShortcut[]>;
   recordShortcut(): Promise<{ key: string; modifiers: ShortcutModifier[] } | null>;
   cancelRecording(): Promise<void>;
-}>("ArdiaSystem");
+  setThinScrollBars?(thin: boolean): Promise<void>;
+};
+
+const System = nativeModule("ArdiaSystem");
 
 export const backgroundInstance = System.backgroundInstance === true;
 export const isDefaultBrowser = () => System.isDefaultBrowser();
@@ -52,6 +56,7 @@ export const hapticTick = () => System.hapticTick();
 export const menuShortcuts = () => System.menuShortcuts();
 export const recordShortcut = () => System.recordShortcut();
 export const cancelShortcutRecording = () => System.cancelRecording();
+export const setThinScrollBars = (thin: boolean) => System.setThinScrollBars?.(thin) ?? Promise.resolve();
 
 export type MiddleClickEvent = { shiftKey: boolean; altKey: boolean; metaKey: boolean };
 
@@ -94,9 +99,11 @@ type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; onMagnify?: (e: {
 
 const magnifyBuilt = !!NativeModules.NativeUnimoduleProxy?.viewManagersMetadata?.ArdiaMagnifyArea;
 const NativeMagnifyArea = magnifyBuilt ? requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea") : null;
-const MagnifyModule = requireOptionalNativeModule<{
+export type MagnifyAreaNative = {
   devMagnify(windowId: string, x: number, y: number, steps: MagnifyUpdate[]): Promise<{ claimed?: boolean[]; hit?: string; error?: string }>;
-}>("ArdiaMagnifyArea");
+};
+
+const MagnifyModule = optionalNativeModule("ArdiaMagnifyArea");
 
 export function MagnifyArea({ onMagnify, enabled = true, ...props }: MagnifyAreaProps) {
   if (!NativeMagnifyArea) return <View {...props} />;
@@ -125,10 +132,12 @@ export const FileDropArea = forwardRef<View, FileDropAreaProps>(function FileDro
 export type DevDragAction = "move" | "drop" | "cancel" | "end";
 export type DevDragPayload = { files?: string[]; urls?: string[]; publicURLs?: string[]; text?: string; fileDrag?: boolean };
 
-const FileDrop = requireOptionalNativeModule<{
+export type FileDropNative = {
   devDrag(windowId: string, action: DevDragAction, x: number, y: number, payload: DevDragPayload | null): Promise<string>;
   devLastFileDrag(): Promise<string[]>;
-}>("ArdiaFileDrop");
+};
+
+const FileDrop = optionalNativeModule("ArdiaFileDrop");
 
 export const devFileDrag = {
   drag: (windowId: string, action: DevDragAction, x: number, y: number, payload?: DevDragPayload) =>

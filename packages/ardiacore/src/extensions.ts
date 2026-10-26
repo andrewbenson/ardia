@@ -1,6 +1,7 @@
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import type { EventSubscription } from "expo-modules-core";
 import { ChromeUI } from "./chromeUI";
 import { engineCall, onEngineEvent } from "./engine";
+import { nativeModule } from "./nativeModules";
 
 export type SiteAccess = "ON_ALL_SITES" | "ON_SPECIFIC_SITES" | "ON_CLICK";
 
@@ -96,7 +97,7 @@ export type ExtensionInstallPrompt = {
 
 type Result<T> = T | { error: string };
 
-type NativeExtensions = {
+export type NativeExtensions = {
   addListener(name: "onChanged", listener: (e: ExtensionsChange) => void): EventSubscription;
   addListener(name: "onTabs", listener: (e: TabsRequest) => void): EventSubscription;
   addListener(name: "onInstallPrompt", listener: (e: ExtensionInstallPrompt) => void): EventSubscription;
@@ -112,7 +113,7 @@ type NativeExtensions = {
   chooseFolder(): Promise<string | null>;
 };
 
-const Native = requireNativeModule<NativeExtensions>("ArdiaExtensions");
+const Native = nativeModule("ArdiaExtensions");
 
 if (__DEV__) (globalThis as { acExtensions?: unknown }).acExtensions = Native;
 

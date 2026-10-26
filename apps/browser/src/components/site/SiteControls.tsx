@@ -21,7 +21,7 @@ import { webviews } from "../../lib/webviews";
 import { useBrowser } from "../../store/browser";
 import { useSettings, useTab } from "../../store/hooks";
 import { engineProfile, isIncognitoProfile, tabLabel } from "../../store/model";
-import { defaultEngine, ENGINE_NAMES, ENGINE_SYMBOLS, otherEngine, ruleFor, tabEngine } from "../../store/engines";
+import { builtInEngine, ENGINE_NAMES, ENGINE_SYMBOLS, otherEngine, recommendedEngineFor, ruleFor, tabEngine } from "../../store/engines";
 import { openPageIn, togglePageEngine } from "../../lib/engines";
 import { Favicon } from "../primitives";
 import { PANEL, PanelHeader, Popover, PopoverRow, PopoverSeparator, PopoverValue, Toggle, usePopoverPresence } from "../layout/controls";
@@ -122,7 +122,9 @@ function SiteControlsPanel({
   const permissionList = webkitPage ? PERMISSIONS.filter((p) => WEBKIT_SITE_SETTINGS.includes(p.type)) : PERMISSIONS;
   const readSettings = webkitPage ? getWebKitSiteSettings : getSiteSettings;
   const engineRule = useBrowser((s) => ruleFor(s, url));
-  const defaultEngineName = useBrowser((s) => ENGINE_NAMES[defaultEngine(s)]);
+  const recommendedEngine = useBrowser((s) => recommendedEngineFor(s, url));
+  const streamingSite = useBrowser((s) => !!builtInEngine(s, url));
+  const recommendedTitle = streamingSite ? `Recommended (${ENGINE_NAMES[recommendedEngine]})` : `Default (${ENGINE_NAMES[recommendedEngine]})`;
 
   useEffect(() => {
     if (!origin) return;
@@ -187,17 +189,17 @@ function SiteControlsPanel({
     void toggleCastPicker(tab.windowId);
   };
   const privatePage = isIncognitoProfile(tab.profileId);
-  const opensIn = privatePage ? ENGINE_NAMES[pageEngine] : engineRule ? ENGINE_NAMES[engineRule] : `Default (${defaultEngineName})`;
+  const opensIn = privatePage ? ENGINE_NAMES[pageEngine] : engineRule ? ENGINE_NAMES[engineRule] : recommendedTitle;
   const pickEngine = async () => {
     const checked = (engine: "chromium" | "webkit") => (privatePage ? pageEngine === engine : engineRule === engine);
     const choice = await showMenu([
-      ...(privatePage ? [] : [{ id: "default", title: `Default (${defaultEngineName})`, checked: !engineRule }, { separator: true as const }]),
+      ...(privatePage ? [] : [{ id: "default", title: recommendedTitle, checked: !engineRule }, { separator: true as const }]),
       { id: "chromium", title: ENGINE_NAMES.chromium, checked: checked("chromium") },
       { id: "webkit", title: ENGINE_NAMES.webkit, checked: checked("webkit") },
     ]);
     if (!choice) return;
     close();
-    if (choice === "default") void openPageIn(tabId, defaultEngine(useBrowser.getState()), { rule: null });
+    if (choice === "default") void openPageIn(tabId, recommendedEngine, { rule: null });
     else {
       const engine = choice === "webkit" ? "webkit" : "chromium";
       void openPageIn(tabId, engine, { rule: engine });

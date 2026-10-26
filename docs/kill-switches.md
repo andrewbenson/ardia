@@ -65,6 +65,14 @@ Read once at launch from the environment, for a bench or a bisect; each falls ba
 | `ARDIA_SYSTEM_FONTS=on` | expo-constants lists every font family at launch (`patches/expo-constants@18.0.14.patch`) |
 | `ARDIA_EARLY_NAVIGATE=off` | a navigation is sent to the engine by its view's effect after React re-renders, not by the store action (`lib/earlyNavigate.ts`) |
 
+## Developer flags (off by default, debug builds only)
+
+Read through `launchEnvironment`, so a release build never sees them. A prototype lives here until the owner decides.
+
+| Variable | On means |
+|---|---|
+| `ARDIA_WEBKIT_SIGN_IN=on` | moving a Chromium page to WebKit first copies the cookies that page's own address gets (HttpOnly included, partitioned ones left out) into the profile's WebKit store, so a cookie sign-in (Netflix, Spotify…) comes along; at most 1.5 s, then the move goes ahead either way (`lib/engineSignIn.ts`, `WebKitCookieImport.swift`) |
+
 ## Staged rollout
 
 A release can also reach people in steps: `scripts/release.sh <version> --phased <seconds>` and the release skill's step 5b.

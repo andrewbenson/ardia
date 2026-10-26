@@ -6,7 +6,7 @@ const { downloadVisibleIn, downloadsIn } = await import("./ui.ts");
 const { lastActiveProfile, privateWindowProfile } = await import("./small.ts");
 const { flushPersistence, startPersistence } = await import("../lib/persist.ts");
 const { extensionProfile } = await import("../components/extensions/store.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };

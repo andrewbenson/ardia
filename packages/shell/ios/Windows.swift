@@ -57,6 +57,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     var chromeWindow: String?
     var claim: String?
     var pointer: NSPoint?
+    var animated: Bool
   }
   private var pendingOpens: [String: PendingOpen] = [:]
   private var pendingOrder: [String] = []
@@ -66,7 +67,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   func open(
     id: String, frame: [Double]?, incognito: Bool, title: String, focus: Bool, kind: String = "browser", profile: String? = nil,
-    size: [Double]? = nil, behind: String? = nil, chromeWindow: String? = nil, claim: String? = nil, pointer: NSPoint? = nil
+    size: [Double]? = nil, behind: String? = nil, chromeWindow: String? = nil, claim: String? = nil, pointer: NSPoint? = nil,
+    animated: Bool = false
   ) {
     if let existing = windows[id] {
       if focus { existing.makeKeyAndOrderFront(nil) }
@@ -76,7 +78,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       if pendingOpens[id] == nil { pendingOrder.append(id) }
       pendingOpens[id] = PendingOpen(
         frame: frame, incognito: incognito, title: title, kind: kind, profile: profile, size: size, behind: behind, chromeWindow: chromeWindow,
-        claim: claim, pointer: pointer)
+        claim: claim, pointer: pointer, animated: animated)
       DispatchQueue.main.asyncAfter(deadline: .now() + Self.behindTimeout) { [weak self] in self?.openPending(behind: behind) }
       return
     }
@@ -96,7 +98,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       if incognito { chromeWindow.appearance = NSAppearance(named: .darkAqua) }
       let root = makeContentView(id)
       ChromeWindows.embed(root, in: chromeWindow)
-      if small, !chromeWindow.isVisible { entrances[id] = frame == nil }
+      if small || animated, !chromeWindow.isVisible { entrances[id] = !small || frame == nil }
       holdUntilContent(chromeWindow, id: id, root: root)
       noteFirstContent(id: id, root: root)
       keepContentSizedAcrossReloads(id: id, root: root)
@@ -234,7 +236,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   private var exits: [String: [() -> Void]] = [:]
 
   private func holdUntilContent(_ window: NSWindow, id: String, root: NSView) {
-    guard !window.isVisible, entrances[id] != nil || windows.values.contains(where: { $0.isVisible && isBrowserWindow($0) }) else { return }
+    guard !window.isVisible else { return }
     window.alphaValue = 0
     unrevealed[id] = []
     var observer: NSObjectProtocol?
@@ -243,7 +245,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       observer = nil
       guard let self, let waiting = self.unrevealed.removeValue(forKey: id) else { return }
       if let window, let scales = self.entrances.removeValue(forKey: id) {
-        LittleWindowMotion.enter(window, scales: scales)
+        WindowMotion.enter(window, style: self.motionStyle(id), scales: scales)
       } else {
         window?.alphaValue = 1
       }
@@ -279,7 +281,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       contentShown.insert(behind)
       open(
         id: id, frame: o.frame, incognito: o.incognito, title: o.title, focus: false, kind: o.kind, profile: o.profile, size: o.size,
-        behind: behind, chromeWindow: o.chromeWindow, claim: o.claim, pointer: o.pointer)
+        behind: behind, chromeWindow: o.chromeWindow, claim: o.claim, pointer: o.pointer, animated: o.animated)
     }
   }
 
@@ -470,8 +472,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   func animateClose(id: String, after replacement: String?, done: @escaping () -> Void) {
     if exits[id] != nil { return exits[id]!.append(done) }
-    guard smallIds.contains(id), let window = windows[id], window.isVisible, unrevealed[id] == nil else { return done() }
+    guard let window = windows[id], isBrowserWindow(window), window.isVisible, !window.isMiniaturized, !window.styleMask.contains(.fullScreen),
+      unrevealed[id] == nil
+    else { return done() }
     exits[id] = [done]
+    if replacement == nil, window.isKeyWindow { nextKeyWindow(after: window)?.makeKey() }
     if keyOnReveal === window { keyOnReveal = nil }
     if typeAhead?.window === window { endTypeAhead(send: false) }
     let finish: () -> Void = { [weak self] in
@@ -480,13 +485,19 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
     if let replacement, replacement != id, windows[replacement] != nil {
       return whenRevealed(replacement) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + LittleWindowMotion.entranceDuration) { [weak window] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + WindowMotion.Style.little.entranceDuration) { [weak window] in
           window?.orderOut(nil)
           finish()
         }
       }
     }
-    LittleWindowMotion.exit(window, then: finish)
+    WindowMotion.exit(window, style: motionStyle(id), then: finish)
+  }
+
+  private func motionStyle(_ id: String) -> WindowMotion.Style { smallIds.contains(id) ? .little : .main }
+
+  private func nextKeyWindow(after closing: NSWindow) -> NSWindow? {
+    NSApp.orderedWindows.first { $0 !== closing && $0.isVisible && !$0.isMiniaturized && $0.canBecomeKey && isBrowserWindow($0) && exits[id(of: $0) ?? ""] == nil }
   }
 
   func close(id: String) {
@@ -764,14 +775,18 @@ final class WindowManager: NSObject, NSWindowDelegate {
   }
 }
 
-enum LittleWindowMotion {
-  static let entranceDuration: CFTimeInterval = 0.2
-  private static let exitDuration: CFTimeInterval = 0.15
-  private static let entranceScale: CGFloat = 0.97
-  private static let exitScale: CGFloat = 0.985
+enum WindowMotion {
+  struct Style {
+    let entranceDuration: CFTimeInterval
+    let exitDuration: CFTimeInterval
+    let entranceScale: CGFloat
+    let exitScale: CGFloat
+    static let little = Style(entranceDuration: 0.2, exitDuration: 0.15, entranceScale: 0.97, exitScale: 0.985)
+    static let main = Style(entranceDuration: 0.25, exitDuration: 0.18, entranceScale: 0.98, exitScale: 0.99)
+  }
   private static let settleAfter: TimeInterval = 0.5
-  private static let entranceKey = "ardia.little.entrance"
-  private static let exitKey = "ardia.little.exit"
+  private static let entranceKey = "ardia.window.entrance"
+  private static let exitKey = "ardia.window.exit"
   private static let curve = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
 
   private final class Look {
@@ -823,7 +838,7 @@ enum LittleWindowMotion {
     return group
   }
 
-  static func enter(_ window: NSWindow, scales scaling: Bool) {
+  static func enter(_ window: NSWindow, style: Style, scales scaling: Bool) {
     guard window.isVisible, let view = frameView(of: window), let layer = view.layer else {
       window.alphaValue = 1
       return
@@ -835,7 +850,7 @@ enum LittleWindowMotion {
     var parts: [CAAnimation] = [fade]
     if scaling, scales {
       let grow = CABasicAnimation(keyPath: "transform")
-      grow.fromValue = NSValue(caTransform3D: scaled(layer, by: entranceScale))
+      grow.fromValue = NSValue(caTransform3D: scaled(layer, by: style.entranceScale))
       grow.toValue = NSValue(caTransform3D: layer.transform)
       parts.append(grow)
     }
@@ -848,14 +863,14 @@ enum LittleWindowMotion {
     CATransaction.setDisableActions(true)
     CATransaction.setCompletionBlock(settle)
     view.alphaValue = 1
-    layer.add(group(parts, duration: entranceDuration), forKey: entranceKey)
+    layer.add(group(parts, duration: style.entranceDuration), forKey: entranceKey)
     CATransaction.commit()
     CATransaction.flush()
     window.alphaValue = 1
     DispatchQueue.main.asyncAfter(deadline: .now() + settleAfter, execute: settle)
   }
 
-  static func exit(_ window: NSWindow, then done: @escaping () -> Void) {
+  static func exit(_ window: NSWindow, style: Style, then done: @escaping () -> Void) {
     guard window.isVisible, window.alphaValue > 0, let view = frameView(of: window), let layer = view.layer else { return done() }
     let shown = layer.presentation() ?? layer
     let fromTransform = shown.transform
@@ -869,7 +884,7 @@ enum LittleWindowMotion {
     if scales {
       let shrink = CABasicAnimation(keyPath: "transform")
       shrink.fromValue = NSValue(caTransform3D: fromTransform)
-      shrink.toValue = NSValue(caTransform3D: scaled(layer, by: exitScale))
+      shrink.toValue = NSValue(caTransform3D: scaled(layer, by: style.exitScale))
       parts.append(shrink)
     }
     var finished = false
@@ -889,7 +904,7 @@ enum LittleWindowMotion {
     CATransaction.setDisableActions(true)
     CATransaction.setCompletionBlock(finish)
     view.alphaValue = 0
-    layer.add(group(parts, duration: exitDuration), forKey: exitKey)
+    layer.add(group(parts, duration: style.exitDuration), forKey: exitKey)
     CATransaction.commit()
     DispatchQueue.main.asyncAfter(deadline: .now() + settleAfter, execute: finish)
   }

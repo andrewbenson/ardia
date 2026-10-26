@@ -282,10 +282,16 @@ sign() {
   done
   die "couldn't sign ${*: -1}"
 }
+grants_browser_passkeys() {
+  security cms -D -i "$1" 2>/dev/null \
+    | plutil -extract 'Entitlements.com\.apple\.developer\.web-browser\.public-key-credential' raw -o - - 2>/dev/null | grep -qx true
+}
 if [ -n "$provisioning_profile" ]; then
-  echo "==> Export (Developer ID, $(basename "$provisioning_profile"))"
+  app_entitlements="$macos/Ardia-macOS/Ardia.entitlements"
+  grants_browser_passkeys "$provisioning_profile" && app_entitlements="$macos/Ardia-macOS/Ardia-ICloudPasskeys.entitlements"
+  echo "==> Export (Developer ID, $(basename "$provisioning_profile"), $(basename "$app_entitlements"))"
   "$root/scripts/lib/export-developer-id.sh" "$archive/Products/Applications/Ardia.app" "$app" "$provisioning_profile" \
-    "$macos/Ardia-macOS/Ardia.entitlements" "$identity" "$bundle_id" > "$dist/export.log" 2>&1 || { cat "$dist/export.log" >&2; exit 1; }
+    "$app_entitlements" "$identity" "$bundle_id" > "$dist/export.log" 2>&1 || { cat "$dist/export.log" >&2; exit 1; }
 else
   echo "==> Export (Developer ID)"
   export_options="$dist/ExportOptions-DeveloperID.plist"
@@ -377,7 +383,11 @@ app_ents="$(entitlements "$app")"
 for group in webauthn unexportable-keys secure-payment-confirmation; do
   [[ "$app_ents" == *"$team_id.$bundle_id.$group"* ]] || die "the app lacks the keychain group …$group"
 done
-[[ "$app_ents" != *web-browser.public-key-credential* ]] || die "the app is signed with com.apple.developer.web-browser.public-key-credential"
+if grants_browser_passkeys "$app/Contents/embedded.provisionprofile"; then
+  [[ "$app_ents" == *web-browser.public-key-credential* ]] || die "the profile grants browser passkeys but the app isn't signed with them"
+else
+  [[ "$app_ents" != *web-browser.public-key-credential* ]] || die "the app is signed with com.apple.developer.web-browser.public-key-credential, which its profile doesn't grant"
+fi
 for helper in "$fwv"/Helpers/*"Renderer).app" "$fwv"/Helpers/*"GPU).app"; do
   [[ "$(entitlements "$helper")" == *cs.allow-jit* ]] || die "$(basename "$helper") lost allow-jit"
 done

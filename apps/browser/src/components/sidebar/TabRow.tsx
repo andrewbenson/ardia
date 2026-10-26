@@ -2,7 +2,7 @@ import { ActivitySpinner, ContextMenuArea, FadeLabel, MouseArea, Surface, Symbol
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent } from "react-native";
 import { toggleMute } from "../../lib/actions";
-import { hex, layout, useTheme } from "../../lib/theme";
+import { hex, layout, useSelectedTabGlow, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useIsActiveTab, usePageProfileId, useTab, useWindowId } from "../../store/hooks";
 import { HoverSlot } from "../HoverSlot";
@@ -24,13 +24,13 @@ import { TabBadges } from "../media/TabBadges";
 import { useSidebarTokens } from "./tokens";
 import { useTabDeveloperMode } from "../site/developerMode";
 import { DeveloperRowBorder, developerSubtitle } from "./developerRow";
+import { useShortcutHint, withShortcut } from "../../lib/commandShortcuts";
 
 export const clickMods = (e: GestureResponderEvent) => {
   const n = e.nativeEvent as unknown as { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean };
   return { metaKey: !!n.metaKey, shiftKey: !!n.shiftKey, altKey: !!n.altKey };
 };
 
-const useSelection = (windowId: string) => () => useBrowser.getState().selection[windowId] ?? [];
 
 export const TabRowItem = memo(function TabRowItem({
   tabId,
@@ -44,8 +44,7 @@ export const TabRowItem = memo(function TabRowItem({
   motion?: EntryMotion | null;
 }) {
   const windowId = useWindowId();
-  const selection = useSelection(windowId);
-  const { wrapper, handle } = useDragItem(`t:${tabId}`, { kind: "row", tabIds: [tabId], section, parentGroup }, selection, motion?.clip);
+  const { wrapper, handle } = useDragItem(`t:${tabId}`, { kind: "row", tabIds: [tabId], section, parentGroup }, motion?.clip);
   const onto = useDropOnto(`t:${tabId}`);
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
@@ -56,6 +55,7 @@ export const TabRowItem = memo(function TabRowItem({
 
 export const TabRow = memo(function TabRow({ tabId, onto = false, shift = null }: { tabId: string; onto?: boolean; shift?: Animated.Value | null }) {
   const theme = useTheme();
+  const glow = useSelectedTabGlow();
   const tokens = useSidebarTokens();
   const windowId = useWindowId();
   const { tab, flags } = useRowState(tabId, windowId);
@@ -69,8 +69,9 @@ export const TabRow = memo(function TabRow({ tabId, onto = false, shift = null }
   const backToPin = useHover();
   const developer = useTabDeveloperMode(tabId);
   const closeControl = useTabCloseControl(tabId);
+  const backToPinHint = useShortcutHint("returnToPinnedUrl");
   if (!tab) return null;
-  const resettable = isPinnedRow(tab) && awayFromPin(tab);
+  const resettable = (isPinnedRow(tab) || !tab.pinned) && awayFromPin(tab);
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tabTitle(tab);
   const fill = active ? theme.tabSelected : selected ? tokens.multiSelected : hovered ? theme.tabHover : "rgba(0,0,0,0)";
@@ -106,15 +107,15 @@ export const TabRow = memo(function TabRow({ tabId, onto = false, shift = null }
                     borderWidth={border}
                     borderColor={selected && !active ? hex(tokens.multiSelectedStroke) : undefined}
                     borderColors={active ? theme.tabSelectedBorder.map(hex) : undefined}
-                    shadowColor={active ? hex(theme.tabSelectedShadow) : undefined}
-                    shadowOpacity={active ? 1 : 0}
-                    shadowRadius={theme.tabSelectedShadowRadius}
+                    shadowColor={active ? glow.shadowColor : undefined}
+                    shadowOpacity={active ? glow.shadowOpacity : 0}
+                    shadowRadius={glow.shadowRadius}
                     shadowOffset={[0, 0.5]}
                     style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: 9 - border, paddingRight: 6 - border }}
                   >
                     {resettable ? (
                       <View {...backToPin.hoverProps}>
-                        <Pressable onPress={() => useBrowser.getState().returnToPinnedUrl(tab.id)} tooltip="Back to Pinned URL (⌘↩)">
+                        <Pressable onPress={() => useBrowser.getState().returnToPinnedUrl(tab.id)} tooltip={withShortcut("Back to Pinned URL", backToPinHint)}>
                           {resetting ? (
                             <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
                               <Symbol name="arrow.uturn.backward" size={11} weight="semibold" color={active ? theme.tabSelectedText : theme.textTab} style={{ width: 16, height: 16 }} />
@@ -233,8 +234,9 @@ export const SplitRowItem = memo(function SplitRowItem({
 }) {
   const windowId = useWindowId();
   const tabIds = useBrowser((s) => splitRowPanes(s, s.splits[splitId]).join(",")).split(",").filter(Boolean);
-  const { wrapper, handle } = useDragItem(`s:${splitId}`, { kind: "split", tabIds, section, parentGroup }, undefined, motion?.clip);
+  const { wrapper, handle } = useDragItem(`s:${splitId}`, { kind: "split", tabIds, section, parentGroup }, motion?.clip);
   const theme = useTheme();
+  const glow = useSelectedTabGlow();
   const profileId = usePageProfileId();
   const active = useBrowser((s) => tabIds.includes(s.windows[windowId]?.activeTabIds[profileId] ?? ""));
   const { hovered, hoverProps } = useRowHover(windowId, null);
@@ -248,9 +250,9 @@ export const SplitRowItem = memo(function SplitRowItem({
           cornerRadius={10}
           borderWidth={active ? 1 : 0}
           borderColors={active ? theme.tabSelectedBorder.map(hex) : undefined}
-          shadowColor={active ? hex(theme.tabSelectedShadow) : undefined}
-          shadowOpacity={active ? 1 : 0}
-          shadowRadius={theme.tabSelectedShadowRadius}
+          shadowColor={active ? glow.shadowColor : undefined}
+          shadowOpacity={active ? glow.shadowOpacity : 0}
+          shadowRadius={glow.shadowRadius}
           shadowOffset={[0, 0.5]}
           style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingHorizontal: active ? 2 : 3 }}
         >

@@ -4,10 +4,11 @@ import { pageToProfile } from "../components/layout/profilePager";
 import { profileNames, requestCreateProfile, type CreateProfilePreset } from "../components/profiles/CreateProfile";
 import { useBrowser, type CreateWindowOptions } from "../store/browser";
 import { rootOf } from "../store/groups";
-import { engineProfile, isIncognitoProfile, plural, resolveWindowId } from "../store/model";
+import { closesWindow, engineProfile, isIncognitoProfile, plural, resolveWindowId } from "../store/model";
 import { groupLabel } from "../store/organize";
-import { windowClosingWithTab } from "../store/newTabBar";
+import { leavesEmptyWindow, windowClosingWithTab } from "../store/newTabBar";
 import { engineIdOf, sharingProfiles } from "../store/profiles";
+import { closeWindowAnimated } from "./closeAnimated";
 import { applyHeldReports } from "./nativeEvents";
 import { webviews } from "./webviews";
 import { closeWindowDialog } from "./closeWindowDialog";
@@ -32,13 +33,25 @@ export function switchToTab(tabId: string) {
 
 export async function closeTab(tabId: string) {
   const s = store();
+  const tab = s.tabs[tabId];
+  const w = tab && s.windows[tab.windowId];
+  if (!tab || !w) return;
+  const last = closesWindow(s, tabId) && !leavesEmptyWindow(s, tabId);
   const windowId = windowClosingWithTab(s, tabId);
   if (windowId && s.settings.warnBeforeClosingWindow) {
     const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(windowId), suppression: "Don’t ask me again", windowId });
     if (suppressed) store().updateSettings({ warnBeforeClosingWindow: false });
     if (!confirmed) return;
     applyHeldReports();
+  } else if (last && s.settings.warnBeforeClosingLastTab && !w.incognito) {
+    const { confirmed, suppressed } = await confirm({ ...closeWindowDialog(w.id), suppression: "Don’t ask me again", windowId: w.id });
+    if (suppressed) store().updateSettings({ warnBeforeClosingLastTab: false });
+    if (!confirmed) return;
+    applyHeldReports();
   }
+  const now = store();
+  const closesItsWindow = now.tabs[tabId]?.windowId === w.id && now.peeks[w.id]?.tabId !== tabId && closesWindow(now, tabId) && !leavesEmptyWindow(now, tabId);
+  if (last && closesItsWindow) return closeWindowAnimated(w.id);
   store().closeTab(tabId);
 }
 

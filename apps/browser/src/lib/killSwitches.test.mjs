@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-const { appInfo, docs } = await import("../test-native-stub.mjs");
+const { appInfo, docs } = await import("../test-native/index.ts");
 const ks = await import("./killSwitches.ts");
 
 const names = Object.keys(ks.SWITCHES);

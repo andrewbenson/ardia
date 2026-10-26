@@ -150,7 +150,7 @@ const PinnedTile = memo(function PinnedTile({ tabId, width, sliding, x, y }: { t
   const selected = useBrowser((s) => (s.selection[windowId] ?? []).includes(tabId));
   const playing = useTabLive(tabId, (l) => l.playingAudio);
   const { hovered, hoverProps } = useRowHover(windowId, { kind: "tab", id: tabId });
-  const { wrapper, handle, dragging } = useDragItem(`t:${tabId}`, { kind: "tile", tabIds: [tabId], section: "tiles" }, () => useBrowser.getState().selection[windowId] ?? []);
+  const { wrapper, handle, dragging } = useDragItem(`t:${tabId}`, { kind: "tile", tabIds: [tabId], section: "tiles" });
   const target = useFolderTarget(`t:${tabId}`);
   const position = useSlotPosition(x, y, width, sliding, dragging);
   if (!tab) return null;

@@ -3,51 +3,16 @@ import { copyText, prompt } from "@ardia/shell";
 import { updateFolder } from "../../live/store";
 import { useBrowser } from "../../store/browser";
 import { ancestorIds } from "../../store/groups";
-import { activeTabId, bookmarkProfileId, pinSection, tabLayoutOf, viewTabIds } from "../../store/model";
+import { activeTabId, bookmarkProfileId, inPinnedContainer, pinSection, tabLayoutOf, viewTabIds } from "../../store/model";
+import type { ClickMods } from "../../store/drops";
 import { groupLabel, groupOf, selectedTabIds } from "../../store/organize";
 import type { Tab } from "../../store/types";
 import { measureRow, setSidebarUi, sidebarUi, type Target } from "./state";
 
 const store = () => useBrowser.getState();
 
-const anchors = new Map<string, string>();
-
-export function clickTab(windowId: string, tabId: string, mods: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean } = {}) {
-  const s = store();
-  if (mods.altKey && mods.shiftKey && !mods.metaKey && s.settings.optShiftClickOpensInGroup) return openInCurrentGroup(windowId, tabId);
-  const view = viewTabIds(s, windowId);
-  const active = activeTabId(s, windowId);
-  const current = s.selection[windowId] ?? [];
-  if (mods.metaKey) {
-    const base = current.length ? current : active ? [active] : [];
-    const next = base.includes(tabId) ? base.filter((id) => id !== tabId) : [...base, tabId];
-    anchors.set(windowId, tabId);
-    return s.setSelection(windowId, next.length > 1 ? next : []);
-  }
-  if (mods.shiftKey) {
-    const from = view.indexOf(anchors.get(windowId) ?? active ?? tabId);
-    const to = view.indexOf(tabId);
-    if (from >= 0 && to >= 0) {
-      const [a, b] = from < to ? [from, to] : [to, from];
-      return s.setSelection(windowId, view.slice(a, b + 1));
-    }
-  }
-  anchors.set(windowId, tabId);
-  s.setSelection(windowId, []);
-  s.activate(tabId);
-}
-
-function openInCurrentGroup(windowId: string, tabId: string) {
-  const s = store();
-  const active = activeTabId(s, windowId);
-  if (active && active !== tabId && !s.tabs[tabId]?.pinned && !s.tabs[active]?.pinned) {
-    const group = groupOf(s, active);
-    if (group) s.addTabsToGroup(group.id, [tabId]);
-    else s.groupTabs([active, tabId]);
-  }
-  anchors.set(windowId, tabId);
-  store().setSelection(windowId, []);
-  store().activate(tabId);
+export function clickTab(windowId: string, tabId: string, mods: ClickMods = {}) {
+  store().clickTab(windowId, tabId, mods);
 }
 
 export async function startRename(windowId: string, target: Target) {
@@ -148,7 +113,7 @@ export async function bookmarkTabs(windowId: string, ids: string[], folder: stri
 
 export async function editPinnedPage(windowId: string, tabId: string) {
   const tab = store().tabs[tabId];
-  if (!tab?.pinned) return;
+  if (!tab || !inPinnedContainer(store(), tabId)) return;
   const url = await prompt({
     title: "Edit Pinned Page",
     value: tab.pinnedUrl ?? tab.url,

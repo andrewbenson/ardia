@@ -3,7 +3,8 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "rea
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { focus, switchToTab } from "../lib/actions";
-import { noteFavicon } from "../lib/favicons";
+import { adoptIconPage, dropOutlivedFavicon, noteFavicon, noteIconPage } from "../lib/favicons";
+import { restoredThemeColor } from "../lib/launchLook";
 import { noteChromeTab } from "../lib/cliControl";
 import { takeStartedNavigation } from "../lib/earlyNavigate";
 import { isQuitting } from "../lib/native";
@@ -13,7 +14,7 @@ import { startChromeTabs } from "../lib/chromeTabs";
 import { handOff, takeHandOff, wantsPage } from "../lib/tabPages";
 import { noteDiscarded, noteGone, noteReady } from "../lib/tabLifecycle";
 import { usePrewarm } from "../lib/preload";
-import { clearEngineOffer, noteWebKitPage, offerWebKit, persistEngine } from "../lib/engines";
+import { clearEngineOffer, followSiteChoice, noteWebKitPage, offerWebKit, persistEngine } from "../lib/engines";
 import { tabEngine } from "../store/engines";
 import { EngineOfferPrompt } from "./site/EnginePrompt";
 import { noteIssued, webviewRef, webviews } from "../lib/webviews";
@@ -22,6 +23,7 @@ import { setPageProgress } from "../store/pageProgress";
 import { shallowEqual, useProfilesValue, useStoreWhile, useTabValue } from "../store/tabWatch";
 import { useActiveTabId, useWindowId } from "../store/hooks";
 import { activeTabId, engineProfile, isIncognitoProfile, navigationTo, wake } from "../store/model";
+import { needsPage } from "../store/pageSession";
 import { removeTabs } from "../store/tabs";
 import { splitOf } from "../store/splits";
 import type { SplitView, Tab } from "../store/types";
@@ -142,7 +144,7 @@ export function ContentCard() {
     const s = useBrowser.getState();
     for (const id of Object.keys(panes)) {
       const t = s.tabs[id];
-      if (!t?.url || t.navigation || t.adoptId || t.pageIn) continue;
+      if (!t || !needsPage(t)) continue;
       const holder = holderOf(s, id);
       s.updateTab(id, holder ? { pageIn: holder.id, unloaded: undefined } : wake(t));
     }
@@ -625,6 +627,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
         if (tab()?.muted) void webviews.get(tabId)?.setMuted(true);
       }}
       onNavigationChange={({ url: reported, title, canGoBack, canGoForward, isLoading, themeColor, themeColorSource, initialDocumentAccessed, committedInitial, committedUrl }) => {
+        adoptIconPage(tabId);
         const url = initialDocumentAccessed && committedInitial ? "about:blank" : reported;
         const untouched = committedInitial === undefined ? reported === "" && !(tab()?.openerId && adoptId) : committedInitial && !initialDocumentAccessed;
         const target = pending.current ?? (lastPage.current === null ? (tab()?.navigation?.url ?? null) : null);
@@ -637,18 +640,20 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
           store().updateLive(tabId, { isLoading: true });
           return;
         }
+        const shownTheme = restoredThemeColor(tabId, url, themeColor, isLoading);
         pending.current = null;
         const kept = pageOf(tabId).newTabShown;
         if (kept) {
           if (url === kept.url) {
             patchPage(tabId, { newTabShown: { ...kept, title } });
-            store().updateLive(tabId, { isLoading, canGoBack, canGoForward, themeColor });
+            store().updateLive(tabId, { isLoading, canGoBack, canGoForward, themeColor: shownTheme });
             return;
           }
           patchPage(tabId, { newTabShown: null });
         }
         if (fromNewTab.current && url && !isBlank(url)) patchPage(tabId, { backToNewTab: true });
-        store().navigated(tabId, { url, title }, { isLoading, canGoBack, canGoForward, themeColor });
+        store().navigated(tabId, { url, title }, { isLoading, canGoBack, canGoForward, themeColor: shownTheme });
+        dropOutlivedFavicon(tabId, url, isLoading);
         if (engine === "webkit") noteWebKitPage(tabId, { url, title, isLoading, committedUrl: committedUrl ?? "" });
         if (lastPage.current !== null && pageKey(url) !== lastPage.current) {
           if (pageOf(tabId).externalApp && hostOf(url) !== hostOf(lastPage.current)) answerExternalApp(tabId, false);
@@ -658,6 +663,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
           clearEngineOffer(tabId);
           patchPage(tabId, { popups: [], passwordPrompt: null, crashed: null, status: "" });
           revealToolbar(tabId);
+          if (peekOf === undefined) followSiteChoice(tabId, engine, url, lastPage.current);
         }
         lastPage.current = pageKey(url);
         patchPage(tabId, { themeColorSource: themeColorSource ?? null });
@@ -686,6 +692,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       onFindResult={({ count, active }) => store().setFind(tabId, { count, active })}
       onFavicon={(favicon) => {
         if (!favicon || !tab()) return;
+        noteIconPage(tabId);
         store().faviconChanged(tabId, favicon);
         noteFavicon(tabId, favicon);
       }}

@@ -93,10 +93,12 @@ async function detect(tabId: string) {
 
 type Batch = { passages: Passage[]; more: boolean; gone: boolean; done: number; total: number };
 
-async function translatePassages(source: string, target: string, passages: Passage[]): Promise<[number, string][]> {
+type Translated = [number, string | null];
+
+async function translatePassages(source: string, target: string, passages: Passage[]): Promise<Translated[]> {
   const texts = passages.map(([, pieces]) => pieces.map(([, text]) => text));
   const whole = await translation!.translateBlocks(source, target, texts);
-  const out: [number, string][] = [];
+  const out: Translated[] = [];
   const loose: [number, string][] = [];
   passages.forEach(([, pieces], i) => {
     const parts = whole[i];
@@ -105,7 +107,7 @@ async function translatePassages(source: string, target: string, passages: Passa
   });
   if (loose.length) {
     const texts = await translation!.translate(source, target, loose.map(([, text]) => text));
-    loose.forEach(([id], i) => out.push([id, texts[i] ?? ""]));
+    loose.forEach(([id], i) => out.push([id, texts[i] ?? null]));
   }
   return out;
 }
@@ -123,7 +125,14 @@ async function drain(tabId: string, token: string, onProgress?: (done: number, t
       .filter((p): p is Passage => Array.isArray(p) && Array.isArray(p[1]))
       .map(([id, pieces]): Passage => [id, pieces.filter((x) => Array.isArray(x) && typeof x[1] === "string").slice(0, 40)]);
     if (passages.length) {
-      const results = await translatePassages(source, target, passages);
+      let results: Translated[];
+      try {
+        results = await translatePassages(source, target, passages);
+      } catch (error) {
+        const untranslated: Translated[] = passages.flatMap(([, pieces]) => pieces.map(([id]): Translated => [id, null]));
+        await web.evaluate(translatorCall("apply", untranslated)).catch(() => {});
+        throw error;
+      }
       if (stateOf(tabId).token !== token) return false;
       await web.evaluate(translatorCall("apply", results));
     }

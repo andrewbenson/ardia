@@ -1,4 +1,5 @@
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import type { EventSubscription } from "expo-modules-core";
+import { nativeModule } from "./nativeModules";
 
 export type UpdaterState =
   | { available: false }
@@ -110,7 +111,7 @@ export type ScriptCommand = { id: string } & (
   | { command: "focusProfile"; profileId: string }
 );
 
-type AppModule = {
+export type AppModule = {
   addListener(name: "onNotificationResponse", listener: (e: NotificationResponse) => void): EventSubscription;
   addListener(name: "onScriptCommand", listener: (e: ScriptCommand) => void): EventSubscription;
   updaterState(): Promise<UpdaterState>;
@@ -157,7 +158,7 @@ type AppModule = {
 };
 
 
-const App = requireNativeModule<AppModule>("ArdiaApp");
+const App = nativeModule("ArdiaApp");
 
 export const updaterState = () => App.updaterState();
 export const checkForUpdates = () => App.checkForUpdates();

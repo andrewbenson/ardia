@@ -63,7 +63,8 @@ export function parkWindowPins(parked: Record<string, ParkedPins>, w: BrowserWin
           const parent = chain[i - 1];
           groups.push({ id: pinKeyOf(x), name: x.name, icon: x.icon, color: x.color, collapsed: x.collapsed, ...(parent ? { parentId: pinKeyOf(parent) } : {}) });
         });
-        rest.push({ ...snapshotTab(t), ...pending(t, false), id: pinKeyOf(t), groupId: pinKeyOf(g) });
+        const back = atPin(t, s.history[profileId] ?? []);
+        rest.push({ ...snapshotTab(t), ...back, ...pending(t, !!back.url), id: pinKeyOf(t), groupId: pinKeyOf(g) });
       }
     }
     const isTile = (p: ParkedPins["tabs"][number]) => !p.groupId && !p.pinnedAsRow;
@@ -95,7 +96,7 @@ export function adoptParkedPins(s: BrowserState, windowId: string, profileId: st
     const home = homeOf(snap);
     if (!groupId && !splitPanes.has(id) && homes.some((h) => samePage(h, home))) continue;
     const tab: Tab = {
-      ...makeTab(windowId, profileId, snap.url, { ...snap, profileId, pinned: !groupId, pinnedUrl: groupId ? null : home || null }),
+      ...makeTab(windowId, profileId, snap.url, { ...snap, profileId, pinned: !groupId, pinnedUrl: home || null }),
       ...(tabs[id] ? { id: newId("tab"), pinKey: id } : { id }),
       navigation: null,
       unloaded: true,

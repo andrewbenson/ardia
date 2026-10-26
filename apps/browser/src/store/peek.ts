@@ -3,6 +3,7 @@ import type { BrowserState } from "./browser";
 import { activeTabId, IDLE_LIVE, makeTab, navigationTo, pinnedFirst, without } from "./model";
 import { forgetOpeners, insertionIndex } from "./openers";
 import { groupWithOpener } from "./organize";
+import { hasNavigatedPage } from "./pageSession";
 import { isSmall } from "./small";
 import { activated, apply, removeTabs } from "./tabs";
 
@@ -92,7 +93,7 @@ export const createPeekSlice: StateCreator<BrowserState, [], [], PeekSlice> = (s
     if (!peek || !tab || !s.windows[windowId]) return undefined;
     s = { ...s, peeks: without(s.peeks, [windowId]) };
     if (activate) s = forgetOpeners(s, windowId);
-    const loaded = !!tab.url && !!tab.navigation;
+    const loaded = hasNavigatedPage(tab);
     const moved = { ...tab, openerId: s.tabs[peek.sourceId] ? peek.sourceId : null, navigation: loaded ? navigationTo(tab.url) : tab.navigation, lastActiveAt: Date.now() };
     const tabs = { ...s.tabs, [tab.id]: moved };
     const w = s.windows[windowId]!;

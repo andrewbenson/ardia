@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -29,6 +30,8 @@
 #include "ardia/core/ac_browser.h"
 #import "ardia/core/ardiacore_internal.h"
 #include "ui/events/event_constants.h"
+#include "ui/base/page_transition_types.h"
+#include "ui/base/window_open_disposition.h"
 
 namespace ardiacore {
 
@@ -193,6 +196,12 @@ class ACContextMenu : public RenderViewContextMenuMacCocoa {
   }
 
   void ExecuteCommand(int command_id, int event_flags) override {
+    if (command_id == IDC_CONTENT_CONTEXT_OPENLINKSPLITVIEW && TabOf(source_web_contents_)) {
+      OpenURLWithExtraHeaders(params_.link_url, params_.frame_url, params_.frame_origin,
+                              WindowOpenDisposition::NEW_SPLIT_VIEW, ui::PAGE_TRANSITION_LINK,
+                              std::string(), true, base::DoNothing());
+      return;
+    }
     const size_t index = command_id - kHostFirst;
     if (command_id < kHostFirst || command_id > kHostLast ||
         index >= host_items_.size()) {

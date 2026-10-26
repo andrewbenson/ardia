@@ -5,7 +5,7 @@ const model = await import("./model.ts");
 const organize = await import("./organize.ts");
 const { sidebarEntries, numberedTabs } = await import("../components/sidebar/entries.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const reset = () => S().hydrate({});

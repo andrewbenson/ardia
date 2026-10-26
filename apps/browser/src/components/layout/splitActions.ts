@@ -1,6 +1,7 @@
 import { showMenu, type MenuItem } from "@ardia/shell";
 import { create } from "zustand";
 import { closeTab } from "../../lib/actions";
+import { menuShortcut } from "../../lib/commandShortcuts";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
 import { MAX_SPLIT_PANES, slotsOf, splitOf, type OpenPaneOptions, type SplitSide } from "../../store/splits";
@@ -53,11 +54,9 @@ export function openLinkInSplit(sourceTabId: string, url: string, adoptId?: stri
   if (!source) return;
   const split = splitOf(s, sourceTabId);
   const next = split?.tabIds[split.tabIds.indexOf(sourceTabId) + 1];
-  if (split && (next || split.tabIds.length >= MAX_SPLIT_PANES)) {
-    const target = next ?? split.tabIds.at(-1)!;
-    if (target !== sourceTabId) return s.navigate(target, url);
-  }
-  openSplitPane(source.windowId, { anchorTabId: sourceTabId, url, side: "right", background: true, adoptId });
+  const target = split && (next || split.tabIds.length >= MAX_SPLIT_PANES) ? (next ?? split.tabIds.at(-1)) : undefined;
+  const inPlaceOf = target !== sourceTabId ? target : undefined;
+  openSplitPane(source.windowId, { anchorTabId: sourceTabId, url, side: "right", background: true, adoptId, inPlaceOf });
 }
 
 export function dropTabIntoSplit(tabId: string, targetTabId: string, side: SplitSide) {
@@ -80,7 +79,7 @@ export async function showSplitMenu(tabId: string) {
   const full = split.tabIds.length >= MAX_SPLIT_PANES;
   const stacked = slotsOf(split).some((slot) => slot.length === 2 && slot.includes(tabId));
   const items: MenuItem[] = [
-    { id: "add", title: horizontal ? "Add Vertical Split View" : "Add Horizontal Split View", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, key: "=", modifiers: ["control", "shift"] },
+    { id: "add", title: horizontal ? "Add Vertical Split View" : "Add Horizontal Split View", symbol: horizontal ? "rectangle.split.2x1" : "rectangle.split.1x2", enabled: !full, ...menuShortcut("openSplitPane") },
     { id: "bottom", title: horizontal ? "Add Bottom Split" : "Add Right Split", symbol: horizontal ? "rectangle.bottomhalf.inset.filled" : "rectangle.righthalf.inset.filled", enabled: !full && !stacked },
     { separator: true },
     { id: "left", title: horizontal ? "Move Pane Left" : "Move Pane Up", symbol: "rectangle.lefthalf.inset.filled.arrow.left", enabled: index > 0 },

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { docs, removedStagings, stagingRemovals } from "@ardia/shell";
+import { docs, removedStagings, stagingRemovals } from "../test-native/index.ts";
 import { loadSession } from "./persist.ts";
 
 const paused = {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appInfo } from "@ardia/shell";
+const { appInfo } = await import("../test-native/index.ts");
 
 appInfo.appName = "Solara";
 appInfo.telemetryURL = "https://stats.example.com/otel/v1/logs";

@@ -4,7 +4,6 @@ import { splitOf } from "./splits";
 import type { Tab } from "./types";
 
 export const NEW_TAB_BAR_POLICY = {
-  pickGoesToTopOfList: true,
   closeTabKeyOnlyDismissesBar: true,
   dismissOnWindowDeactivation: true,
   showOnceOverNewEmptyWindow: true,

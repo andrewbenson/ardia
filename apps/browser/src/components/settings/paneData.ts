@@ -13,6 +13,7 @@ import {
   WIDEVINE_COMPONENT_ID,
 } from "@ardia/ardiacore";
 import { appIcons, currentAppIcon, isDefaultBrowser, launchAtLoginStatus, menuShortcuts, updaterState, type UpdaterState } from "@ardia/shell";
+import { setMenuBarShortcuts } from "../../lib/commandShortcuts";
 import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
 import { folderInfo } from "../../sync/engine";
@@ -42,7 +43,12 @@ export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
 );
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
 export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
-export const shortcutItems = resource("menuShortcuts", () => menuShortcuts().catch(() => []));
+export const shortcutItems = resource("menuShortcuts", () =>
+  menuShortcuts().then(
+    (items) => (setMenuBarShortcuts(items), items),
+    () => [],
+  ),
+);
 export const engineVersion = resource("engineInfo", () => engineInfo().catch(() => null));
 export const widevine = resource("widevine", () =>
   listComponents().then(

@@ -183,10 +183,105 @@ void InstallTrafficLightsOrigin(Class frameClass) {
   if (!class_addMethod(frameClass, sel, ours, method_getTypeEncoding(method))) method_setImplementation(method, ours);
 }
 
+const void *kSharingIndicatorTuckedKey = &kSharingIndicatorTuckedKey;
+
+void KeepSharingIndicatorInWindow(NSView *frameView, CGFloat dx) {
+  const SEL sel = NSSelectorFromString(@"sharingIndicator");
+  NSView *indicator = [frameView respondsToSelector:sel] ? ((NSView * (*)(id, SEL))objc_msgSend)(frameView, sel) : nil;
+  if (![indicator isKindOfClass:NSView.class]) return;
+  if (indicator.layer && (dx != 0 || indicator.layer.affineTransform.tx != 0))
+    indicator.layer.affineTransform = CGAffineTransformMakeTranslation(dx, 0);
+  const NSRect shown = NSOffsetRect([indicator convertRect:indicator.bounds toView:frameView], dx, 0);
+  const BOOL outside = !NSContainsRect(frameView.bounds, shown);
+  if (outside == (objc_getAssociatedObject(indicator, kSharingIndicatorTuckedKey) != nil)) return;
+  objc_setAssociatedObject(indicator, kSharingIndicatorTuckedKey, outside ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  indicator.hidden = outside;
+}
+
+void InstallSharingIndicatorBounds(Class frameClass) {
+  static NSMutableSet<Class> *installed = [NSMutableSet set];
+  if (!frameClass || [installed containsObject:frameClass]) return;
+  [installed addObject:frameClass];
+  const SEL sel = NSSelectorFromString(@"_positionSharingIndicator");
+  Method method = class_getInstanceMethod(frameClass, sel);
+  if (!method) return;
+  const IMP standard = method_getImplementation(method);
+  const IMP ours = imp_implementationWithBlock(^(NSView *frameView) {
+    ((void (*)(id, SEL))standard)(frameView, sel);
+    NSButton *close = [frameView.window standardWindowButton:NSWindowCloseButton];
+    KeepSharingIndicatorInWindow(frameView, close.layer ? close.layer.affineTransform.tx : 0);
+  });
+  if (!class_addMethod(frameClass, sel, ours, method_getTypeEncoding(method))) method_setImplementation(method, ours);
+}
+
+const void *kSharingWindowPlacedKey = &kSharingWindowPlacedKey;
+const void *kSharingWindowShiftKey = &kSharingWindowShiftKey;
+const void *kSharingWindowTuckedKey = &kSharingWindowTuckedKey;
+
+void TuckSharingWindow(NSWindow *pill, BOOL outside) {
+  NSDictionary *tucked = objc_getAssociatedObject(pill, kSharingWindowTuckedKey);
+  if (outside) {
+    if (!tucked)
+      objc_setAssociatedObject(pill, kSharingWindowTuckedKey, @{@"alpha" : @(pill.alphaValue), @"ignores" : @(pill.ignoresMouseEvents)},
+                               OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    pill.alphaValue = 0;
+    pill.ignoresMouseEvents = YES;
+    return;
+  }
+  if (!tucked) return;
+  objc_setAssociatedObject(pill, kSharingWindowTuckedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  pill.alphaValue = [tucked[@"alpha"] doubleValue];
+  pill.ignoresMouseEvents = [tucked[@"ignores"] boolValue];
+}
+
+void KeepSharingWindowOnHost(NSWindow *pill) {
+  const SEL hostSel = NSSelectorFromString(@"hostWindow");
+  NSWindow *host = [pill respondsToSelector:hostSel] ? ((NSWindow * (*)(id, SEL))objc_msgSend)(pill, hostSel) : nil;
+  NSPoint origin = pill.frame.origin;
+  NSValue *placed = objc_getAssociatedObject(pill, kSharingWindowPlacedKey);
+  if (placed && NSEqualPoints(origin, placed.pointValue))
+    origin.x -= [objc_getAssociatedObject(pill, kSharingWindowShiftKey) doubleValue];
+  const BOOL follows = [host isKindOfClass:NSWindow.class] && objc_getAssociatedObject(host, kInsetLightsKey) &&
+                       !(host.styleMask & NSWindowStyleMaskFullScreen);
+  NSButton *close = follows ? [host standardWindowButton:NSWindowCloseButton] : nil;
+  const CGFloat dx = close.layer ? close.layer.affineTransform.tx : 0;
+  const NSPoint target = NSMakePoint(origin.x + dx, origin.y);
+  if (!NSEqualPoints(target, pill.frame.origin)) [pill setFrameOrigin:target];
+  objc_setAssociatedObject(pill, kSharingWindowPlacedKey, [NSValue valueWithPoint:target], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  objc_setAssociatedObject(pill, kSharingWindowShiftKey, @(dx), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  TuckSharingWindow(pill, follows && !NSContainsRect(host.frame, pill.frame));
+}
+
+void InstallSharingWindowBounds() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    Class pillClass = NSClassFromString(@"NSLocalWindowSharingWindow");
+    const SEL sel = NSSelectorFromString(@"_syncToWindowControls");
+    Method method = pillClass ? class_getInstanceMethod(pillClass, sel) : nullptr;
+    if (!method) return;
+    const IMP standard = method_getImplementation(method);
+    const IMP ours = imp_implementationWithBlock(^(NSWindow *pill) {
+      ((void (*)(id, SEL))standard)(pill, sel);
+      KeepSharingWindowOnHost(pill);
+    });
+    if (!class_addMethod(pillClass, sel, ours, method_getTypeEncoding(method))) method_setImplementation(method, ours);
+  });
+}
+
+void SyncSharingWindows(NSWindow *window) {
+  Class pillClass = NSClassFromString(@"NSLocalWindowSharingWindow");
+  const SEL sel = NSSelectorFromString(@"_syncToWindowControls");
+  for (NSWindow *child in window.childWindows)
+    if ([child isKindOfClass:pillClass] && [child respondsToSelector:sel]) ((void (*)(id, SEL))objc_msgSend)(child, sel);
+}
+
 void RetileTrafficLights(NSWindow *window) {
   NSView *frameView = window.contentView.superview;
-  const SEL sel = NSSelectorFromString(@"_updateButtonPositions");
-  if ([frameView respondsToSelector:sel]) ((void (*)(id, SEL))objc_msgSend)(frameView, sel);
+  for (NSString *name in @[ @"_updateButtonPositions", @"_positionSharingIndicator" ]) {
+    const SEL sel = NSSelectorFromString(name);
+    if ([frameView respondsToSelector:sel]) ((void (*)(id, SEL))objc_msgSend)(frameView, sel);
+  }
+  SyncSharingWindows(window);
 }
 
 const void *kLightsShownKey = &kLightsShownKey;
@@ -204,10 +299,12 @@ NSPoint LightsCenter(NSValue *center, NSSize size) {
   return center ? center.pointValue : NSMakePoint(kTrafficLightInsetX + size.width / 2, kTrafficLightTop + size.height / 2);
 }
 
-void TranslateTrafficLights(NSArray<NSButton *> *buttons, CGFloat dx) {
+void TranslateTrafficLights(NSWindow *window, CGFloat dx) {
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
-  for (NSButton *button in buttons) button.layer.affineTransform = CGAffineTransformMakeTranslation(dx, 0);
+  for (NSButton *button in TrafficLightButtons(window)) button.layer.affineTransform = CGAffineTransformMakeTranslation(dx, 0);
+  KeepSharingIndicatorInWindow(window.contentView.superview, dx);
+  SyncSharingWindows(window);
   [CATransaction commit];
 }
 
@@ -218,7 +315,7 @@ void SettleTrafficLights(NSWindow *window) {
   objc_setAssociatedObject(window, kLightsCenterKey, shown == NSNull.null ? nil : shown, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
-  TranslateTrafficLights(TrafficLightButtons(window), 0);
+  TranslateTrafficLights(window, 0);
   RetileTrafficLights(window);
   [CATransaction commit];
 }
@@ -232,7 +329,7 @@ bool MoveTrafficLights(NSWindow *window, NSValue *center) {
   const NSSize size = buttons[0].frame.size;
   const NSPoint laidOut = LightsCenter(objc_getAssociatedObject(window, kLightsCenterKey), size), to = LightsCenter(center, size);
   if (to.y != laidOut.y) return false;
-  TranslateTrafficLights(buttons, to.x - laidOut.x);
+  TranslateTrafficLights(window, to.x - laidOut.x);
   if (to.x == laidOut.x) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -252,6 +349,8 @@ bool MoveTrafficLights(NSWindow *window, NSValue *center) {
 void InsetTrafficLights(NSWindow *window) {
   objc_setAssociatedObject(window, kInsetLightsKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   InstallTrafficLightsOrigin(object_getClass(window.contentView.superview));
+  InstallSharingIndicatorBounds(object_getClass(window.contentView.superview));
+  InstallSharingWindowBounds();
   RetileTrafficLights(window);
   LogTrafficLightsOf(window);
 }
@@ -1483,7 +1582,9 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
 }
 
 - (void)window:(ArdiaCoreWindow *)window passwordPrompt:(NSDictionary<NSString *, id> *)prompt forTab:(ArdiaCoreTab *)tab {
-  [[self viewFor:tab] emit:@"passwordPrompt" payload:prompt];
+  ArdiaCoreWebView *view = [self viewFor:tab];
+  if (view) ardiacore_host::NotePasswordPromptSource(view, nil);
+  [view emit:@"passwordPrompt" payload:prompt];
 }
 
 - (void)window:(ArdiaCoreWindow *)window autofillPrompt:(NSDictionary<NSString *, id> *)prompt forTab:(ArdiaCoreTab *)tab {
@@ -1532,11 +1633,51 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
 - (BOOL)dropPermission:(NSString *)requestId;
 @end
 
+@interface ArdiaCorePopupOriginStrip : NSView
+- (void)showURL:(NSString *)url security:(NSString *)level;
+@end
+
 namespace {
+
+constexpr CGFloat kPopupOriginStripHeight = 28;
 
 NSMutableSet<ArdiaCorePopupWindow *> *PopupWindows() {
   static NSMutableSet *windows = [NSMutableSet set];
   return windows;
+}
+
+NSMapTable<ArdiaCoreWebView *, NSPointerArray *> *PasswordPromptSources() {
+  static NSMapTable *sources = [NSMapTable weakToStrongObjectsMapTable];
+  return sources;
+}
+
+NSString *HostAndPort(NSURLComponents *parts) {
+  NSString *host = parts.encodedHost.lowercaseString ?: @"";
+  return parts.port ? [NSString stringWithFormat:@"%@:%@", host, parts.port] : host;
+}
+
+NSString *PopupOriginText(NSString *url) {
+  if (!url.length) return @"about:blank";
+  NSURLComponents *parts = [NSURLComponents componentsWithString:url];
+  NSString *scheme = parts.scheme.lowercaseString;
+  if (!scheme.length) {
+    const NSRange colon = [url rangeOfString:@":"];
+    return colon.location == NSNotFound ? url : [url substringToIndex:colon.location + 1];
+  }
+  if ([scheme isEqualToString:@"blob"] || [scheme isEqualToString:@"filesystem"]) {
+    NSURLComponents *inner = [NSURLComponents componentsWithString:parts.percentEncodedPath ?: @""];
+    NSString *origin = inner.scheme.length && inner.encodedHost.length
+                           ? [NSString stringWithFormat:@"%@://%@", inner.scheme.lowercaseString, HostAndPort(inner)]
+                           : @"";
+    return [NSString stringWithFormat:@"%@:%@", scheme, origin];
+  }
+  if (parts.encodedHost.length) {
+    NSString *hostAndPort = HostAndPort(parts);
+    return [scheme isEqualToString:@"https"] ? hostAndPort : [NSString stringWithFormat:@"%@://%@", scheme, hostAndPort];
+  }
+  if ([scheme isEqualToString:@"about"]) return [@"about:" stringByAppendingString:parts.path ?: @""];
+  if ([scheme isEqualToString:@"file"]) return [@"file://" stringByAppendingString:parts.path ?: @""];
+  return [scheme stringByAppendingString:@":"];
 }
 
 NSString *HostOf(NSString *url) {
@@ -1609,10 +1750,76 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 
 }
 
+@implementation ArdiaCorePopupOriginStrip {
+  NSImageView *_glyph;
+  NSTextField *_origin;
+}
+
+- (instancetype)initWithFrame:(NSRect)frame {
+  if (!(self = [super initWithFrame:frame])) return nil;
+  _glyph = [[NSImageView alloc] initWithFrame:NSZeroRect];
+  _glyph.symbolConfiguration = [NSImageSymbolConfiguration configurationWithPointSize:11 weight:NSFontWeightMedium];
+  _origin = [NSTextField labelWithString:@""];
+  _origin.font = [NSFont systemFontOfSize:12];
+  _origin.textColor = NSColor.labelColor;
+  _origin.lineBreakMode = NSLineBreakByTruncatingHead;
+  [self addSubview:_glyph];
+  [self addSubview:_origin];
+  [self setFrameSize:frame.size];
+  return self;
+}
+
+- (BOOL)isOpaque {
+  return YES;
+}
+
+- (BOOL)mouseDownCanMoveWindow {
+  return YES;
+}
+
+- (void)setFrameSize:(NSSize)size {
+  [super setFrameSize:size];
+  const CGFloat inset = 10, glyph = 16, gap = 5;
+  const CGFloat text = ceil(_origin.intrinsicContentSize.height);
+  _glyph.frame = NSMakeRect(inset, floor((size.height - glyph) / 2), glyph, glyph);
+  const CGFloat left = inset + glyph + gap;
+  _origin.frame = NSMakeRect(left, floor((size.height - text) / 2), MAX(size.width - left - inset, 0), text);
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  [NSColor.windowBackgroundColor setFill];
+  NSRectFill(dirtyRect);
+  [NSColor.separatorColor setFill];
+  NSRectFillUsingOperation(NSMakeRect(0, 0, NSWidth(self.bounds), 1 / MAX(self.window.backingScaleFactor, 1)),
+                           NSCompositingOperationSourceOver);
+}
+
+- (void)showURL:(NSString *)url security:(NSString *)level {
+  _origin.stringValue = PopupOriginText(url);
+  NSString *scheme = [NSURLComponents componentsWithString:url].scheme.lowercaseString;
+  if (!level) level = [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"ws"] ? @"insecure" : @"none";
+  const bool secureScheme = [scheme isEqualToString:@"https"] || [scheme isEqualToString:@"wss"];
+  NSString *symbol = @"info.circle", *description = secureScheme ? @"Connection security unknown" : @"Local or internal page";
+  NSColor *tint = NSColor.secondaryLabelColor;
+  if ([level isEqualToString:@"secure"]) {
+    symbol = @"lock.fill";
+    description = @"Connection is secure";
+  } else if ([level isEqualToString:@"insecure"] || [level isEqualToString:@"mixed"] || [level isEqualToString:@"certificateError"]) {
+    symbol = @"lock.open.trianglebadge.exclamationmark.fill";
+    description = @"Connection is not secure";
+    if ([level isEqualToString:@"certificateError"]) tint = [NSColor colorWithSRGBRed:1 green:0x5F / 255.0 blue:0x57 / 255.0 alpha:1];
+  }
+  _glyph.image = [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:description];
+  _glyph.contentTintColor = tint;
+}
+
+@end
+
 @implementation ArdiaCorePopupWindow {
   ArdiaCoreWindow *_coreWindow;
   ArdiaCoreTab *_tab;
   __weak ArdiaCoreWebView *_opener;
+  ArdiaCorePopupOriginStrip *_strip;
   id _closeObserver;
   BOOL _adopting;
   NSMutableArray<NSDictionary *> *_permissionQueue;
@@ -1683,7 +1890,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   _permissionQueue = [NSMutableArray array];
   NSDictionary<NSString *, NSNumber *> *features = tab.popupFeatures ?: @{};
   const NSSize size = NSMakeSize(MAX(features[@"width"] ? features[@"width"].doubleValue : 500, 200),
-                                 MAX(features[@"height"] ? features[@"height"].doubleValue : 600, 150));
+                                 MAX(features[@"height"] ? features[@"height"].doubleValue : 600, 150) + kPopupOriginStripHeight);
   _coreWindow = [[ArdiaCoreWindow alloc] initWithContentRect:NSMakeRect(0, 0, size.width, size.height)];
   NSWindow *window = _coreWindow.window;
   if (!window) return nil;
@@ -1707,7 +1914,10 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   NSWindow *window = _coreWindow.window;
   NSWindow *parent = _opener.window;
   NSScreen *screen = parent.screen ?: NSScreen.mainScreen;
+  const NSRect visible = screen.visibleFrame;
   NSRect frame = window.frame;
+  if (!NSIsEmptyRect(visible))
+    frame.size = NSMakeSize(MIN(NSWidth(frame), NSWidth(visible)), MIN(NSHeight(frame), NSHeight(visible)));
   if (features[@"x"] || features[@"y"]) {
     const NSRect primary = NSScreen.screens.firstObject.frame;
     const NSRect content = [window contentRectForFrameRect:frame];
@@ -1718,9 +1928,8 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
     frame.origin = NSMakePoint(NSMidX(parent.frame) - NSWidth(frame) / 2, NSMaxY(parent.frame) - NSHeight(frame) - 60);
   } else {
     [window center];
-    frame = window.frame;
+    frame.origin = window.frame.origin;
   }
-  const NSRect visible = screen.visibleFrame;
   frame.origin.x = MAX(NSMinX(visible), MIN(NSMinX(frame), NSMaxX(visible) - NSWidth(frame)));
   frame.origin.y = MAX(NSMinY(visible), MIN(NSMinY(frame), NSMaxY(visible) - NSHeight(frame)));
   [window setFrame:frame display:NO];
@@ -1733,22 +1942,33 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   _adopting = NO;
   if (ArdiaCoreProfile *profile = _tab.profile) _coreWindow.activeProfile = profile;
   _tab.delegate = self;
-  NSView *page = _tab.view;
+  NSView *page = _tab.view, *host = _coreWindow.hostView;
   [page removeFromSuperview];
-  page.frame = _coreWindow.hostView.bounds;
+  const NSRect bounds = host.bounds;
+  const CGFloat pageHeight = MAX(NSHeight(bounds) - kPopupOriginStripHeight, 0);
+  const BOOL flipped = host.isFlipped;
+  page.frame = NSMakeRect(0, flipped ? kPopupOriginStripHeight : 0, NSWidth(bounds), pageHeight);
   page.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-  [_coreWindow.hostView addSubview:page];
+  [host addSubview:page];
+  _strip = [[ArdiaCorePopupOriginStrip alloc]
+      initWithFrame:NSMakeRect(0, flipped ? 0 : pageHeight, NSWidth(bounds), kPopupOriginStripHeight)];
+  _strip.autoresizingMask = NSViewWidthSizable | (flipped ? NSViewMaxYMargin : NSViewMinYMargin);
+  [host addSubview:_strip positioned:NSWindowAbove relativeTo:page];
   [self updateTitle];
+  [self updateOrigin];
   if (ardiacore_host::Background()) [_coreWindow showInactive];
   else [_coreWindow.window makeKeyAndOrderFront:nil];
   [_tab focus];
 }
 
 - (void)updateTitle {
-  NSString *url = _tab.url ?: @"", *host = HostOf(url), *title = _tab.title;
-  NSWindow *window = _coreWindow.window;
-  window.title = title.length && ![title isEqualToString:url] ? title : host;
-  window.subtitle = [window.title isEqualToString:host] ? @"" : host;
+  NSString *url = _tab.url ?: @"", *title = _tab.title;
+  _coreWindow.window.title = title.length && ![title isEqualToString:url] ? title : PopupOriginText(url);
+}
+
+- (void)updateOrigin {
+  id level = [_tab respondsToSelector:@selector(securityInfo)] ? _tab.securityInfo[@"level"] : nil;
+  [_strip showURL:_tab.url ?: @"" security:[level isKindOfClass:NSString.class] ? level : nil];
 }
 
 - (void)windowWillClose {
@@ -1770,6 +1990,11 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 
 - (void)tabDidChangeURL:(ArdiaCoreTab *)tab {
   [self updateTitle];
+  [self updateOrigin];
+}
+
+- (void)tabDidChangeSecurity:(ArdiaCoreTab *)tab {
+  [self updateOrigin];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab requestsActivation:(NSString *)reason {
@@ -1787,6 +2012,17 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   ArdiaCoreWebView *view = _opener ?: [ArdiaCoreWindowController hostingViewForProfile:tab.profile];
   if (view) [view openedTab:tab adoptId:[ArdiaCoreTabs offerTab:tab] disposition:ardiacore_host::AppDisposition(disposition)];
   else [tab closeNow];
+}
+
+- (void)window:(ArdiaCoreWindow *)window passwordPrompt:(NSDictionary<NSString *, id> *)prompt forTab:(ArdiaCoreTab *)tab {
+  ArdiaCoreWebView *opener = _opener;
+  if (tab != _tab) return;
+  if (!opener) {
+    NSLog(@"[ardiacore] dropped a popup's password prompt: its opener is gone");
+    return;
+  }
+  ardiacore_host::NotePasswordPromptSource(opener, tab);
+  [opener emit:@"passwordPrompt" payload:prompt];
 }
 
 - (void)window:(ArdiaCoreWindow *)window didRemoveTab:(ArdiaCoreTab *)tab {
@@ -1845,6 +2081,24 @@ bool AskPermissionInPopupWindow(ArdiaCoreTab *tab, NSDictionary *request) {
 void DropPopupWindowPermission(NSString *requestId) {
   for (ArdiaCorePopupWindow *popup in PopupWindows().allObjects)
     if ([popup dropPermission:requestId]) return;
+}
+
+void NotePasswordPromptSource(ArdiaCoreWebView *view, ArdiaCoreTab *source) {
+  if (!source) {
+    [PasswordPromptSources() removeObjectForKey:view];
+    return;
+  }
+  NSPointerArray *route = [NSPointerArray weakObjectsPointerArray];
+  [route addPointer:(__bridge void *)source];
+  [PasswordPromptSources() setObject:route forKey:view];
+}
+
+ArdiaCoreTab *PasswordPromptTab(ArdiaCoreWebView *view, ArdiaCoreTab *own) {
+  NSPointerArray *route = [PasswordPromptSources() objectForKey:view];
+  if (!route) return own;
+  [PasswordPromptSources() removeObjectForKey:view];
+  ArdiaCoreTab *source = (__bridge ArdiaCoreTab *)[route pointerAtIndex:0];
+  return source.closed ? nil : source;
 }
 
 void ActToggleFullScreen(NSWindow *window) {
@@ -1939,7 +2193,7 @@ NSView *ACWindowRootView(NSWindow *window) {
   if (objc_getAssociatedObject(window, kLightsShownKey)) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    TranslateTrafficLights(TrafficLightButtons(window), 0);
+    TranslateTrafficLights(window, 0);
   }
   NSValue *current = objc_getAssociatedObject(window, kLightsCenterKey);
   if (current == center || [current isEqual:center]) return;

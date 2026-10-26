@@ -1,4 +1,5 @@
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import type { EventSubscription } from "expo-modules-core";
+import { nativeModule } from "./nativeModules";
 
 export type DeviceChooser = {
   id: number;
@@ -46,7 +47,7 @@ export type CastRoute = { id: string; sink: string; description: string; source:
 export type SidePanelRequest = { browserId: number; extensionId: string; open: boolean };
 export type ActionPopupRequest = { browserId: number; extensionId: string };
 
-type NativeChromeUI = {
+export type NativeChromeUI = {
   addListener(name: "onDeviceChooser", listener: (e: DeviceChooser) => void): EventSubscription;
   addListener(name: "onCastDialog", listener: (e: CastDialog) => void): EventSubscription;
   addListener(name: "onCastRoutes", listener: (e: { profile: string; routes: CastRoute[] }) => void): EventSubscription;
@@ -79,7 +80,7 @@ type NativeActionState = {
   icon: string;
 };
 
-export const ChromeUI = requireNativeModule<NativeChromeUI>("ArdiaChromeUI");
+export const ChromeUI = nativeModule("ArdiaChromeUI");
 
 if (__DEV__) (globalThis as { acChromeUI?: unknown }).acChromeUI = ChromeUI;
 

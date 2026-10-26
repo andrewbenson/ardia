@@ -6,6 +6,7 @@
 #import "ArdiaCoreServices.h"
 #import "ArdiaCoreNavigationDownloads.h"
 #import "ArdiaCoreStartup.h"
+#import "ArdiaCoreTabParking.h"
 #import "ArdiaCoreWebView.h"
 #import "ArdiaCoreWebViewInternal.h"
 
@@ -245,7 +246,7 @@ static void StartLaunchTab() {
   NSString *key = hint[@"id"], *url = hint[@"url"], *profile = hint[@"profile"];
   if (![key isKindOfClass:NSString.class] || ![url isKindOfClass:NSString.class] || ![profile isKindOfClass:NSString.class]) return;
   [ArdiaCoreWebView startLaunchTab:key url:url profile:profile];
-  if (ArdiaCoreTab *tab = ArdiaCoreWebView.launchTab) [ArdiaCoreEarlyWindow attachPage:tab key:key];
+  if (ArdiaCoreTab *tab = ArdiaCoreTabParking.launchTab) [ArdiaCoreEarlyWindow attachPage:tab key:key];
 }
 
 static bool gLaunchedHidden;
@@ -295,7 +296,7 @@ static void TryEarlyWindow() {
     [ArdiaCoreWebView startLaunchTab:key url:url profile:profile];
     if (!shown) return;
   }
-  if (ArdiaCoreTab *tab = ArdiaCoreWebView.launchTab) [ArdiaCoreEarlyWindow attachPage:tab key:key];
+  if (ArdiaCoreTab *tab = ArdiaCoreTabParking.launchTab) [ArdiaCoreEarlyWindow attachPage:tab key:key];
 }
 
 static NSArray<NSNumber *> *LittleArdiaFrame(id size) {
@@ -349,8 +350,8 @@ static void TryEarlyLittleWindow() {
   if (!frame) return;
   NSString *url = link.absoluteString;
   [ArdiaCoreWebView startLinkTabs:@[ url ] profile:profile];
-  ArdiaCoreTab *tab = ArdiaCoreWebView.firstLinkTab;
-  NSString *mark = tab ? [ArdiaCoreWebView linkMarkForTab:tab] : nil;
+  ArdiaCoreTab *tab = ArdiaCoreTabParking.firstLinkTab;
+  NSString *mark = tab ? [ArdiaCoreTabParking linkMarkForTab:tab] : nil;
   NSString *focused = [session[@"focusedWindowId"] isKindOfClass:NSString.class] ? session[@"focusedWindowId"] : nil;
   if (mark) [ArdiaCoreEarlyWindow showLittleWindowForLink:tab mark:mark url:url frame:frame profile:profile backdrop:backdrop like:focused];
 }

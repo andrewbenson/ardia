@@ -1,11 +1,13 @@
-import { ContextMenuArea, FadeLabel, raiseView, setTrafficLightsCenter, Surface, Symbol, WindowDragRegion } from "@ardia/shell";
+import { ContextMenuArea, DockSelection, FadeLabel, raiseView, setTrafficLightsCenter, Surface, Symbol, WindowDragRegion } from "@ardia/shell";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, findNodeHandle, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { create } from "zustand";
 import { toggleMute } from "../../lib/actions";
 import { hex, layout, ThemeScope, useTheme } from "../../lib/theme";
+import { useTileTheme } from "../../lib/tileTheme";
+import { liquidGlass } from "../glass";
 import { useBrowser } from "../../store/browser";
-import { PageProfileContext, useIsActiveTab, usePageProfileId, useTab, useTabLive, useWindowId, useWindowProfileId } from "../../store/hooks";
+import { PageProfileContext, useIsActiveTab, usePageProfileId, useSettings, useTab, useTabLive, useWindowId, useWindowProfileId } from "../../store/hooks";
 import { ProfileIndicator, useProfileIndicatorWidth } from "../ProfileIndicator";
 import { HoverSlot } from "../HoverSlot";
 import { IconButton, useHover } from "../primitives";
@@ -14,9 +16,10 @@ import { clickTab } from "../sidebar/actions";
 import { pressGroupClose, pressTabClose, useGroupCloseControl, useTabCloseControl } from "../sidebar/closeControl";
 import { openGroupMenu, openTabMenu } from "../sidebar/menus";
 import { groupLabel } from "../../store/organize";
+import { firstStaying, movingTabIds, resolveDrop, slotDrop, type DropSpot } from "../../store/drops";
 import { hasOwnGroupIcon, SYMBOL_PREFIX, TabIcon } from "../sidebar/TabIcon";
 import { TabBadges } from "../media/TabBadges";
-import { GROUP_COLORS, NEUTRAL_GROUP_SWATCH, useSidebarTokens, withAlpha } from "../sidebar/tokens";
+import { groupTint, NEUTRAL_GROUP_SWATCH, useSidebarTokens, withAlpha } from "../sidebar/tokens";
 import { modifiersOf } from "./controls";
 import { usePageStyle, usePagerPages } from "./profilePager";
 import { ProfileSwipeArea } from "./ProfileSwipe";
@@ -31,6 +34,7 @@ import { usePeek } from "./usePeek";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import {
   aimDrop,
+  dockCellOf,
   dragGeometry,
   dragRange,
   dropIndex,
@@ -41,7 +45,7 @@ import {
   leaveIndex,
   MEMBERS_INSET,
   memberInteractive,
-  moveIndex,
+  revealOffset,
   stripEntries,
   stripTabWidth,
   TAIL_EXPANDED,
@@ -281,6 +285,35 @@ function StripPage({ profileId, slot, pageWidth, current, resting }: { profileId
   const dockGeometry = useMemo(() => dragGeometry(dockIds.map((id) => ({ tabIds: dockTabs(id), width: PINNED_CELL })), PINNED_SPACING), [entries.filter((e) => e.startsWith("pinned:") || e.startsWith("tilefolder:")).join()]);
   const strip: Strip = { top, targets, chip, grow, dock: dockIds.length ? { ids: dockIds, left: -(dockWidth(dockIds.length) + DOCK_GAP), geometry: dockGeometry } : null };
   const incoming = useIncomingTab(windowId, current, top);
+  const scroll = useRef<ScrollView>(null);
+  const scrolled = useRef(0);
+  const spanOf = (tabId: string): [number, number] | null => {
+    const cell = dockCellOf(dockIds, dockTabs, tabId);
+    if (cell >= 0) return [flare + (dockGeometry.lefts[cell] ?? 0), PINNED_CELL];
+    const i = top.slots.findIndex((slot) => slot.tabIds.includes(tabId));
+    if (i < 0) return null;
+    const left = flare + (dockIds.length ? dockWidth(dockIds.length) + DOCK_GAP : 0) + top.lefts[i]!;
+    const group = parsed.find((e): e is GroupEntry => e.kind === "group" && e.members.some((m) => holds(m, tabId)));
+    if (!group) return [left, top.slots[i]!.width];
+    const at = group.members.findIndex((m) => holds(m, tabId));
+    const widths = group.members.map(memberWidth);
+    const { offsets } = groupLayout(chipOf(group.id) ?? 0, widths, GAP, !group.collapsed, at);
+    return [left + (chipOf(group.id) ?? 0) + MEMBERS_INSET + (group.collapsed ? 0 : offsets[at]!), widths[at]!];
+  };
+  const latestSpan = useRef(spanOf);
+  latestSpan.current = spanOf;
+  const revealed = useRef(activeId);
+  useEffect(() => {
+    if (revealed.current === activeId) return;
+    revealed.current = activeId;
+    if (!current || !activeId || useTabDrag.getState().tabIds.length) return;
+    const frame = requestAnimationFrame(() => {
+      const span = latestSpan.current(activeId);
+      const x = span && revealOffset(span[0], span[1], scrolled.current, pageWidth + flare * 2, flare + GAP);
+      if (x !== null) scroll.current?.scrollTo({ x, animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeId, current]);
   let slotIndex = 0;
   const gap = (i: number) => (incoming.active ? <IncomingGap key={`gap${i}`} open={incoming.at === i} width={chip} origin={i === 0 ? incoming.origin : undefined} /> : null);
 
@@ -293,8 +326,11 @@ function StripPage({ profileId, slot, pageWidth, current, resting }: { profileId
         <ThemeScope>
           <DockContext.Provider value={strip}>
             <ScrollView
+              ref={scroll}
               horizontal
               showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e) => void (scrolled.current = e.nativeEvent.contentOffset.x)}
               style={{ flex: 1 }}
               contentContainerStyle={{ alignItems: "flex-start", gap: GAP, paddingLeft: flare, paddingRight: flare }}
             >
@@ -441,7 +477,7 @@ function pinOut(strip: () => Strip | null, from: number): Cross {
         dx: target - (s.dock.left + s.dock.geometry.lefts[from]!),
         commit: () => {
           settleStrip(s);
-          useBrowser.getState().placeTabs(ids, { pinned: false, beforeId: s.top.slots[k]?.tabIds[0] ?? null });
+          dropAt(ids, { zone: "list", beforeId: s.top.slots[k]?.tabIds[0] ?? null });
         },
       };
     },
@@ -484,7 +520,7 @@ function tabIn(strip: () => Strip | null, from: number, width: number): Cross {
         dx: target - (s.top.lefts[from]! + grab - PINNED_CELL / 2),
         commit: () => {
           settleStrip(s);
-          useBrowser.getState().placeTabs(ids, { pinned: true, beforeId: s.dock!.geometry.slots[j]?.tabIds[0] ?? null });
+          dropAt(ids, { zone: "pins", beforeId: s.dock!.geometry.slots[j]?.tabIds[0] ?? null });
         },
       };
     },
@@ -717,42 +753,16 @@ function useStripDrag(item: StripDrag) {
 
 function reorder(ids: string[], { geometry, from, pinned, groupId }: StripDrag, to: number): boolean {
   const s = useBrowser.getState();
-  const tab = s.tabs[ids[0] ?? ""];
-  const w = tab && s.windows[tab.windowId];
-  if (!tab || !w) return false;
-  if (ids.length === 1) {
-    const section = w.tabIds.filter((id) => s.tabs[id]?.profileId === tab.profileId && !!s.tabs[id]?.pinned === pinned);
-    const index = moveIndex(section, tab.id, geometry.slots, from, to);
-    if (index === null) return false;
-    s.moveTab(tab.id, index);
-    return true;
-  }
-  if (to === from) return false;
-  const others = geometry.slots.filter((_, i) => i !== from);
-  let beforeId = others.slice(to).flatMap((slot) => slot.tabIds).find((id) => !ids.includes(id)) ?? null;
-  if (!beforeId) {
-    const last = w.tabIds.indexOf(others.at(-1)?.tabIds.at(-1) ?? "");
-    beforeId = last < 0 ? null : (w.tabIds.slice(last + 1).find((id) => !ids.includes(id)) ?? null);
-  }
-  s.placeTabs(ids, { pinned, beforeId, groupId });
-  return true;
+  return s.dropTabs(ids, slotDrop(s, ids, geometry.slots, from, to, { pinned, groupId }));
 }
 
-function dropOnto(target: DropTarget, ids: string[]): boolean {
+function dropAt(ids: string[], spot: DropSpot): boolean {
   const s = useBrowser.getState();
-  if (target.kind === "tab") return !!s.groupOnto(ids, target.id);
-  const before = s.groups[target.id]?.tabIds;
-  s.placeTabs(ids, { pinned: false, groupId: target.id });
-  return useBrowser.getState().groups[target.id]?.tabIds !== before;
+  return s.dropTabs(ids, resolveDrop(s, { kind: "tab" }, spot));
 }
 
-function withSelection(tabId: string): string[] {
-  const s = useBrowser.getState();
-  const tab = s.tabs[tabId];
-  const selection = tab ? (s.selection[tab.windowId] ?? []) : [];
-  if (selection.length < 2 || !selection.includes(tabId)) return [tabId];
-  return s.windows[tab!.windowId]!.tabIds.filter((id) => selection.includes(id) && !!s.tabs[id]?.pinned === tab!.pinned);
-}
+const dropOnto = (target: DropTarget, ids: string[]) =>
+  dropAt(ids, target.kind === "tab" ? { zone: "onto", targetId: target.id } : { zone: "group", groupId: target.id, beforeId: null });
 
 type GroupOut = { top: DragGeometry; slot: number; chip: number; expanded: boolean; left: number };
 
@@ -787,7 +797,7 @@ function DraggableChip({
       : undefined;
   const drag = useStripDrag({
     tabId,
-    ids: () => withSelection(tabId),
+    ids: () => movingTabIds(useBrowser.getState(), tabId),
     pinned: false,
     groupId: group,
     geometry,
@@ -801,8 +811,7 @@ function DraggableChip({
       if (!member) return false;
       const at = leaveIndex(member.top, member.slot, member.chip, member.expanded, member.left + dx, width);
       if (at === null) return false;
-      const beforeId = member.top.slots.slice(at).flatMap((slot) => slot.tabIds).find((id) => !ids.includes(id)) ?? null;
-      useBrowser.getState().placeTabs(ids, { pinned: false, beforeId, groupId: null });
+      dropAt(ids, { zone: "list", beforeId: firstStaying(member.top.slots.slice(at), ids) });
       return true;
     },
   });
@@ -1057,27 +1066,44 @@ function PinnedDock({ tabIds }: { tabIds: string[] }) {
   );
 }
 
+const PINNED_FACE_INSET = 2;
+const PINNED_FACE_RADIUS = 8;
+const PINNED_RING_STROKE = 2;
+
 function PinnedFace({ tabId, active, hovered, pressed }: { tabId: string; active: boolean; hovered: boolean; pressed: boolean }) {
   const theme = useTheme();
   const tab = useTab(tabId);
+  const tileTheme = useTileTheme(tab?.url ?? "", tab?.favicon, tab?.customIcon, tab?.profileId ?? "");
+  const iconRing = useSettings((s) => s.pinnedTabIconRing);
   if (!tab) return null;
+  const ring = active && liquidGlass && iconRing && tileTheme ? tileTheme : null;
+  const template = ring?.theme.kind === "template" ? ring.theme : null;
+  const face = { position: "absolute", left: PINNED_FACE_INSET, right: PINNED_FACE_INSET, top: PINNED_FACE_INSET, bottom: PINNED_FACE_INSET } as const;
   return (
     <View style={{ width: PINNED_CELL, height: ITEM_HEIGHT - 1, alignItems: "center", justifyContent: "center" }}>
-      {(active || hovered || pressed) && (
+      {ring ? (
+        <DockSelection
+          image={ring.image}
+          emoji={ring.emoji}
+          theme={ring.theme.kind}
+          fill={template?.fill}
+          stroke={template?.stroke}
+          cornerRadius={PINNED_FACE_RADIUS}
+          strokeWidth={PINNED_RING_STROKE}
+          dark={theme.dark}
+          style={face}
+        />
+      ) : (active || hovered || pressed) && (
         <View
           style={{
-            position: "absolute",
-            left: 2,
-            right: 2,
-            top: 2,
-            bottom: 2,
-            borderRadius: 8,
+            ...face,
+            borderRadius: PINNED_FACE_RADIUS,
             backgroundColor: pressed ? theme.tabPressed : active ? theme.pinnedSelectedFill : theme.tabHover,
           }}
         />
       )}
       <View pointerEvents="none">
-        <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />
+        {template ? <View style={{ width: 16, height: 16 }} /> : <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} />}
         <TabBadges tabId={tab.id} pip={false} />
       </View>
     </View>
@@ -1098,7 +1124,7 @@ function PinnedCell({ tabId, geometry, from }: { tabId: string; geometry: DragGe
   const range: [number, number] | undefined = dock ? [-geometry.lefts[from]!, end - dock.left - geometry.lefts[from]! - PINNED_CELL] : undefined;
   const drag = useStripDrag({
     tabId,
-    ids: () => withSelection(tabId),
+    ids: () => movingTabIds(useBrowser.getState(), tabId),
     pinned: true,
     groupId: null,
     geometry,
@@ -1241,13 +1267,15 @@ function StripGroup({
       if (to === from) return true;
       const others = geometry.slots.filter((_, i) => i !== from);
       const s = useBrowser.getState();
-      s.moveGroup(entry.id, { pinned: !!s.groups[entry.id]?.pinned, beforeId: others[to]?.tabIds[0] ?? null });
+      const beforeId = others[to]?.tabIds[0] ?? null;
+      s.dropTabs([], resolveDrop(s, { kind: "group", groupId: entry.id }, { zone: s.groups[entry.id]?.pinned ? "pinnedRows" : "list", beforeId }));
       return true;
     },
   });
   const tail = useMemo(() => Animated.add(size, -(TAIL_EXPANDED - 2.25)), []);
   if (!group) return null;
-  const tint = group.color ? GROUP_COLORS[group.color].hex : null;
+  const tint = groupTint(group.color);
+  const bare = group.color === "none";
   const divider = theme.dark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)";
   const tuck = () => {
     const s = useBrowser.getState();
@@ -1269,8 +1297,8 @@ function StripGroup({
           height: ITEM_HEIGHT,
           borderRadius: TAB_RADIUS,
           borderWidth: 0.5,
-          borderColor: theme.pinnedRestingStroke,
-          backgroundColor: tint ? withAlpha(tint, hovered ? 0.24 : 0.18) : hovered ? tokens.groupHeaderHover : tokens.groupFill,
+          borderColor: bare ? "transparent" : theme.pinnedRestingStroke,
+          backgroundColor: tint ? withAlpha(tint, hovered ? 0.24 : 0.18) : hovered ? tokens.groupHeaderHover : bare ? "transparent" : tokens.groupFill,
         }}
       />
       {onto && <OntoRing width={size} />}
@@ -1313,7 +1341,7 @@ function StripGroup({
           >
             <StripGroupIcon icon={group.icon} tint={tint} />
             <Text numberOfLines={1} style={{ marginLeft: 12.5, maxWidth: 120, fontSize: 12, fontWeight: "600", color: tint ?? (shown >= 0 ? theme.tabSelectedText : theme.textTab) }}>
-              {group.name || `${group.tabIds.length} Tabs`}
+              {group.name || `${group.tabIds.length} ${group.tabIds.length === 1 ? "Tab" : "Tabs"}`}
             </Text>
           </Pressable>
         </ContextMenuArea>
@@ -1402,7 +1430,8 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
   const label = useBrowser((s) => (s.groups[groupId] ? groupLabel(s, s.groups[groupId]!) : ""));
   const { hovered, hoverProps } = useHover();
   if (!group) return null;
-  const tint = group.color ? GROUP_COLORS[group.color].hex : null;
+  const tint = groupTint(group.color);
+  const bare = group.color === "none";
   const ink = tint ?? (holding ? theme.tabSelectedText : theme.textTab);
   return (
     <View
@@ -1424,8 +1453,8 @@ function FolderChip({ groupId, holding }: { groupId: string; holding: boolean })
                 paddingRight: 6,
                 borderRadius: FOLDER_RADIUS,
                 borderWidth: 0.5,
-                borderColor: theme.pinnedRestingStroke,
-                backgroundColor: pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : tokens.groupFill,
+                borderColor: bare ? "transparent" : theme.pinnedRestingStroke,
+                backgroundColor: pressed ? theme.tabPressed : tint ? withAlpha(tint, hovered ? 0.3 : 0.22) : hovered ? tokens.groupHeaderHover : bare ? "transparent" : tokens.groupFill,
               }}
             >
               <StripGroupIcon icon={group.icon} tint={tint} />

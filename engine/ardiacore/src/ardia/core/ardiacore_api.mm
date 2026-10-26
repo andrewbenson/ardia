@@ -64,6 +64,7 @@
 #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/unload_controller.h"
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "content/public/browser/media_session.h"
@@ -2419,7 +2420,11 @@ TabSharingInfoBarDelegate* TabSharingDelegateFor(content::WebContents* contents,
 }
 
 - (BOOL)closed {
-  return !_contents;
+  if (!_contents) {
+    return YES;
+  }
+  ardiacore::TabBridge* bridge = ardiacore::TabBridge::FromWebContents(_contents);
+  return bridge && bridge->closing_after_unload();
 }
 
 - (NSView*)view {
@@ -2582,18 +2587,21 @@ TabSharingInfoBarDelegate* TabSharingDelegateFor(content::WebContents* contents,
   if (!browser) {
     return;
   }
-  ardiacore::TabBridge::GetOrCreate(_contents)->set_closed_by_host();
-  TabStripModel* model = browser->GetTabStripModel();
-  const int index = model->GetIndexOfWebContents(_contents);
-  if (index == TabStripModel::kNoTab) {
+  ardiacore::TabBridge* bridge = ardiacore::TabBridge::GetOrCreate(_contents);
+  if (bridge->closing_after_unload() ||
+      browser->GetTabStripModel()->GetIndexOfWebContents(_contents) ==
+          TabStripModel::kNoTab) {
     return;
   }
-  content::NavigationEntry* committed = _contents->GetController().GetLastCommittedEntry();
-  if (!Profile::FromBrowserContext(_contents->GetBrowserContext())->IsOffTheRecord() &&
-      committed && !committed->IsInitialEntry() && !ardiacore::OnlyShowedBlank(_contents)) {
-    model->delegate()->CreateHistoricalTab(_contents);
+  bridge->set_closed_by_host();
+  if (!browser_shutdown::HasShutdownStarted() &&
+      _contents->NeedToFireBeforeUnloadOrUnloadEvents()) {
+    bridge->CloseAfterUnloadHandlers(
+        browser_shutdown::IsTryingToQuit() ||
+        UnloadController::From(browser)->is_attempting_to_close_browser());
+    return;
   }
-  model->DetachAndDeleteWebContentsAt(index);
+  ardiacore::DeleteTabClosedByHost(_contents);
 }
 
 - (void)close {

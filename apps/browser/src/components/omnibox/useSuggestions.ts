@@ -12,6 +12,7 @@ import {
 } from "@ardia/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bookmarksByUrl } from "../../store/bookmarks";
+import { useMenuBarRevision } from "../../lib/commandShortcuts";
 import { useBrowser } from "../../store/browser";
 import { bookmarkProfileId } from "../../store/model";
 import { defaultSearchEngine, searchEngines } from "../../store/settings";
@@ -101,6 +102,8 @@ export function useSuggestions({
   const preference = useBrowser((s) => s.settings.commandBarPreference);
   const suggestionsOn = useBrowser((s) => s.settings.searchSuggestions);
   const extensions = useBarExtensions(windowId);
+  const shortcuts = useBrowser((s) => s.settings.shortcuts);
+  const menuBar = useMenuBarRevision();
 
   const tabs = useMemo(() => Object.values(allTabs).filter((t) => t.profileId === profileId), [allTabs, profileId]);
   const bookmarkRows = useMemo(() => profileBookmarks(bookmarks, bookmarkProfile), [bookmarks, bookmarkProfile]);
@@ -153,5 +156,5 @@ export function useSuggestions({
       preventInline,
       bangs,
     });
-  }, [active, text, query, source, engine, preference, remoteList, windowId, extensions, currentTabId, currentUrl, scope, preventInline, bangs]);
+  }, [active, text, query, source, engine, preference, remoteList, windowId, extensions, shortcuts, menuBar, currentTabId, currentUrl, scope, preventInline, bangs]);
 }

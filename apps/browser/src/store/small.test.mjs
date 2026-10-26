@@ -3,7 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("./browser.ts");
 const { lastActiveProfile, mainWindowFor } = await import("./small.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };

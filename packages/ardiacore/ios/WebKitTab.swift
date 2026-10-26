@@ -13,6 +13,23 @@ final class ArdiaWKWebView: WKWebView {
   var nowPlayingFrame: String?
   var captureOrigins: [String: Set<String>] = [:]
 
+  override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+    super.init(frame: frame, configuration: configuration)
+    if WebKitHub.silenced { mutePageAudio() }
+  }
+
+  required init?(coder: NSCoder) {
+    super.init(coder: coder)
+  }
+
+  private func mutePageAudio() {
+    let setPageMuted = NSSelectorFromString("_setPageMuted:")
+    guard responds(to: setPageMuted) else { return NSLog("[webkit] page audio can't be muted in background mode") }
+    typealias SetPageMuted = @convention(c) (AnyObject, Selector, UInt) -> Void
+    let audioMuted: UInt = 1
+    unsafeBitCast(method(for: setPageMuted), to: SetPageMuted.self)(self, setPageMuted, audioMuted)
+  }
+
   func stopCapture(_ kind: String) {
     if kind == "camera" { setCameraCaptureState(.none, completionHandler: nil) }
     if kind == "microphone" { setMicrophoneCaptureState(.none, completionHandler: nil) }

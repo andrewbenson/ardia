@@ -63,6 +63,8 @@ let noScreen = null;
 const screenLocked = () =>
   /<key>CGSSessionScreenIsLocked<\/key>\s*<true\/>/.test(spawnSync("ioreg", ["-n", "Root", "-d1", "-a"], { encoding: "utf8", timeout: 5000 }).stdout ?? "");
 
+const ENTRANCE_FRAMES = 20;
+
 async function record(seconds, during) {
   const file = join(data, `frames-${Date.now()}.jsonl`);
   const child = spawn(recorder, [String(app.pid), String(seconds), file], { stdio: ["ignore", "pipe", "pipe"] });
@@ -241,12 +243,15 @@ try {
       const crops = frames.map((f) => crop(f, r));
       const first = crops.findIndex((c, i) => i > 0 && diff(c, crops[0]) > 4);
       assert.ok(first > 0, "the window never showed");
-      const off = diff(crops[first], crops.at(-1));
-      if (off >= 6) {
-        rep.log(`frame ${first} of ${crops.length} first differs (${diff(crops[first], crops[0]).toFixed(1)} from the one before the window); then ${crops.slice(first, first + 8).map((c) => diff(c, crops.at(-1)).toFixed(1)).join(", ")} from the settled one`);
-        dump("new-window", [crops[0], ...crops.slice(Math.max(1, first - 2), first + 8), crops.at(-1)], r);
+      const entrance = crops.slice(first, first + ENTRANCE_FRAMES).map((c) => diff(c, crops.at(-1)));
+      const settled = entrance.findIndex((d) => d < 1);
+      const backwards = entrance.findIndex((d, i) => i > 0 && d > entrance[i - 1] + 1.5);
+      if (settled < 0 || backwards > 0) {
+        rep.log(`frame ${first} of ${crops.length} first differs (${diff(crops[first], crops[0]).toFixed(1)} from the one before the window); then ${entrance.map((d) => d.toFixed(1)).join(", ")} from the settled one`);
+        dump("new-window", [crops[0], ...crops.slice(Math.max(1, first - 2), first + ENTRANCE_FRAMES), crops.at(-1)], r);
       }
-      assert.ok(off < 6, `first frame ${off.toFixed(1)} levels from the settled window`);
+      assert.ok(settled >= 0, `still ${entrance.at(-1)?.toFixed(1)} levels from the settled window ${ENTRANCE_FRAMES} frames after it showed`);
+      assert.ok(backwards < 0, `frame ${backwards} of the entrance moved away from the settled window (a blank or half-drawn frame)`);
     } finally {
       await closeWindowsBut(ids);
     }

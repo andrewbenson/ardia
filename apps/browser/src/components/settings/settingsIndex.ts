@@ -147,6 +147,11 @@ const ROWS: Record<SettingsPane, Section[]> = {
           description: "Where ⌘T and + New Tab put the new tab. Next to the current tab, it joins that tab's group (from a pinned tab, it goes first in the list), and closing it brings you back. Links open next to their page either way.",
           keywords: ["new tab position", "next to current tab", "after current tab", "beside", "right of", "below", "adjacent", "end", "left", "top", "bottom", "order", "cmd t"],
         },
+        newTabButtonPosition: {
+          title: "New Tab button",
+          description: "Where + New Tab sits in the sidebar, whatever Add new tabs says. At the top it stays above your tabs and scrolls with them; at the bottom it follows your last tab and stays at the sidebar's bottom edge once the tabs fill it.",
+          keywords: ["new tab button", "plus", "+", "top", "bottom", "sticky", "docked", "position"],
+        },
         shareTabsAcrossWindows: {
           title: "Share tabs across windows",
           description: "Every window of a profile lists the same tabs, as in Arc. A tab is live in one window at a time: selecting it in another brings it there, and the first window shows it greyed until you click it. Each window keeps its own selected tab.",
@@ -217,7 +222,14 @@ const ROWS: Record<SettingsPane, Section[]> = {
   appearance: [
     {
       section: "Appearance Theme",
-      rows: { theme: { title: "Appearance Theme", description: "Also in View › Appearance. Incognito windows are always dark.", keywords: ["dark mode", "light mode", "automatic", "night", "system"] } },
+      rows: {
+        theme: { title: "Appearance Theme", description: "Also in View › Appearance. Incognito windows are always dark.", keywords: ["dark mode", "light mode", "automatic", "night", "system"] },
+        spacesFollowAppearance: {
+          title: "Profile themes follow this appearance",
+          description: "Every profile goes light or dark with this choice, even when its theme (like one imported from an Arc space) says Light. In dark mode a light theme's colours are darkened so white text reads.",
+          keywords: ["space", "profile theme", "arc theme", "follow system"],
+        },
+      },
     },
     {
       section: "Address Bar",
@@ -227,6 +239,26 @@ const ROWS: Record<SettingsPane, Section[]> = {
           title: "⌘L opens the command bar",
           description: "In the centre, ⌘L and a click on the address show it over the middle of the page, as in Arc.",
           keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar"],
+        },
+      },
+    },
+    {
+      section: "Selected Tab",
+      rows: {
+        selectedTabGlow: {
+          title: "Glow around the selected tab",
+          description: "The soft light around the selected tab in the sidebar. Full is Dia's.",
+          keywords: ["glow", "shadow", "halo", "highlight", "selected tab", "active tab"],
+        },
+      },
+    },
+    {
+      section: "Scroll Bars",
+      rows: {
+        pageScrollBars: {
+          title: "Scroll bars",
+          description: "Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse.",
+          keywords: ["scrollbar", "scroll bar", "overlay", "thin", "mouse", "trackpad"],
         },
       },
     },
@@ -400,6 +432,11 @@ const ROWS: Record<SettingsPane, Section[]> = {
           description: "Chromium runs extensions and the ad blocker. Sites that need protected video can still open in WebKit.",
           keywords: ["reset", "recommended", "chromium"],
         },
+        protectedVideo: {
+          title: "Open streaming sites in WebKit",
+          description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Spotify and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
+          keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "fairplay", "widevine", "streaming"],
+        },
       },
     },
     {
@@ -428,7 +465,7 @@ const ROWS: Record<SettingsPane, Section[]> = {
         passkeys: {
           title: "Passkeys",
           description: `WebKit pages can't use passkeys until Apple grants ${APP} its browser passkey entitlement. Sign in with a passkey in Chromium meanwhile.`,
-          keywords: ["passkey", "webauthn", "icloud keychain", "security key"],
+          keywords: ["passkey", "webauthn", "icloud keychain", "passwords app", "security key"],
         },
       },
     },

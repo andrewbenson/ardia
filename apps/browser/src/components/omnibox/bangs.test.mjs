@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { bangDocument } from "../../../../../packages/core/src/bangs.ts";
 import * as bundledList from "../../../../../packages/core/src/bangList.ts";
-import { bangListServer, docs, heldSaves } from "../../test-native-stub.mjs";
+import { bangListServer, docs, heldSaves } from "../../test-native/index.ts";
 
 globalThis.require = (id) => {
   assert.equal(id, "@ardia/core/src/bangList.ts");

@@ -31,6 +31,7 @@ export type OpenPaneOptions = {
   side?: SplitSide;
   background?: boolean;
   adoptId?: string;
+  inPlaceOf?: string;
 };
 export type OpenPaneResult = { ok: true; tabId: string; splitId: string } | { ok: false; reason: "max" | "invalid" };
 
@@ -157,6 +158,16 @@ function gather(s: BrowserState, anchorId: string, members: string[]): BrowserSt
   return { ...s, windows: { ...s.windows, [w.id]: window }, groups: syncGroupOrder(groups, window) };
 }
 
+function placedAfterSplit(s: BrowserState, split: SplitView, tabId: string): BrowserState {
+  const w = s.windows[split.windowId];
+  if (!w || s.tabs[tabId]?.pinned) return s;
+  const tabIds = w.tabIds.filter((id) => id !== tabId);
+  const last = Math.max(...split.tabIds.map((id) => tabIds.indexOf(id)));
+  tabIds.splice(last + 1, 0, tabId);
+  const window: BrowserWindow = { ...w, tabIds };
+  return { ...s, windows: { ...s.windows, [w.id]: window }, groups: syncGroupOrder(s.groups, window) };
+}
+
 function withPane(existing: SplitView | undefined, anchorId: string, tabId: string, side: SplitSide, windowId: string): SplitView | null {
   const horizontal = side === "left" || side === "right";
   const before = side === "left" || side === "top";
@@ -204,7 +215,8 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
     const anchor = anchorId ? s.tabs[anchorId] : undefined;
     if (!w || !anchor || anchor.windowId !== windowId) return { ok: false, reason: "invalid" };
     const existing = Object.values(s.splits).find((v) => v.tabIds.includes(anchor.id));
-    if (existing && existing.tabIds.length >= MAX_SPLIT_PANES) return { ok: false, reason: "max" };
+    const replaced = o.inPlaceOf && o.inPlaceOf !== anchor.id && existing?.tabIds.includes(o.inPlaceOf) ? o.inPlaceOf : undefined;
+    if (existing && existing.tabIds.length >= MAX_SPLIT_PANES && !replaced) return { ok: false, reason: "max" };
 
     let tabId = o.tabId;
     if (tabId) {
@@ -215,6 +227,14 @@ export const createSplitsSlice: StateCreator<BrowserState, [], [], SplitsSlice> 
       [s, tabId] = withNewTab(s, windowId, { url: o.url, adoptId: o.url ? o.adoptId : undefined, profileId: anchor.profileId, openerId: o.url ? anchor.id : undefined, background: true });
     }
     const current = existing && s.splits[existing.id];
+    if (replaced && current) {
+      const split = { ...current, tabIds: current.tabIds.map((id) => (id === replaced ? tabId : id)) };
+      s = gather(s, anchor.id, split.tabIds);
+      s = placedAfterSplit({ ...s, splits: { ...s.splits, [split.id]: split } }, split, replaced);
+      if (!o.background) s = apply(s, activated(s, tabId));
+      set(s);
+      return { ok: true, tabId, splitId: split.id };
+    }
     const split = withPane(current, anchor.id, tabId, o.side ?? "right", windowId);
     if (!split) return { ok: false, reason: "max" };
     s = gather({ ...s, splits: { ...s.splits, [split.id]: split } }, anchor.id, split.tabIds);

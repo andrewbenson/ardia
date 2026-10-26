@@ -28,6 +28,7 @@ import { endUrlEdit, startUrlEdit, useTabDeveloperMode, useToolbarSiteColor, use
 import { DeveloperUrlInput } from "./site/DeveloperUrlInput";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
+import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
 const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
@@ -59,6 +60,7 @@ export function Toolbar({
   bare?: boolean;
 }) {
   const theme = useTheme();
+  const sidebarHint = useShortcutHint("toggleSidebar");
   const tab = useToolbarTab(tabId);
   const isLoading = useTabLive(tabId, (l) => l.isLoading);
   const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
@@ -100,7 +102,7 @@ export function Toolbar({
             icon="sidebar.left"
             size={GLYPH}
             onPress={() => useBrowser.getState().toggleSidebar(windowId)}
-            tooltip="Auto-Hide Tabs (⌘S)"
+            tooltip={withShortcut("Auto-Hide Tabs", sidebarHint)}
           />
         )}
         <HistoryButton style={at.back} tabId={tab.id} windowId={tab.windowId} direction={-1} disabled={!history.back} palette={palette} onFocus={focus} />
@@ -162,6 +164,7 @@ export const ReloadButton = memo(function ReloadButton({
         void showDeveloperReloadMenu(tab.id);
       }
     : undefined;
+  const reloadHint = useShortcutHint("reload");
   return (
     <ToolbarButton
       style={style}
@@ -179,7 +182,7 @@ export const ReloadButton = memo(function ReloadButton({
       }}
       onLongPress={openMenu}
       onContextMenu={openMenu}
-      tooltip={loading ? "Stop Loading This Page" : developer ? "Refresh (⌘R) · Right-Click for Reload Options" : "Refresh (⌘R)"}
+      tooltip={loading ? "Stop Loading This Page" : developer ? `${withShortcut("Refresh", reloadHint)} · Right-Click for Reload Options` : withShortcut("Refresh", reloadHint)}
     />
   );
 });
@@ -231,6 +234,7 @@ export const HistoryButton = memo(function HistoryButton({
   hit?: ButtonHit;
   onFocus: () => void;
 }) {
+  const historyHint = useShortcutHint(direction < 0 ? "back" : "forward");
   const openMenu = () => {
     onFocus();
     const open = useHistoryMenu.getState().menu;
@@ -256,7 +260,7 @@ export const HistoryButton = memo(function HistoryButton({
         onPress={onPress}
         onLongPress={openMenu}
         onContextMenu={openMenu}
-        tooltip={direction < 0 ? "Go Back (⌘[)" : "Go Forward (⌘])"}
+        tooltip={withShortcut(direction < 0 ? "Go Back" : "Go Forward", historyHint)}
       />
     </MouseArea>
   );
@@ -287,6 +291,8 @@ export const UrlField = memo(function UrlField({
   useEffect(() => {
     if (!developer) endUrlEdit(tab.id);
   }, [developer, tab.id]);
+  const bookmarkHint = useShortcutHint("bookmarkPage");
+  const splitHint = useShortcutHint("openSplitPane");
   const bookmarked = useIsBookmarked(tab.url);
   const pageInsecure = usePage(tab.id, insecureLevel);
   const insecure = developer && pageInsecure === "insecure" && isLoopbackUrl(tab.url) ? null : pageInsecure;
@@ -374,7 +380,7 @@ export const UrlField = memo(function UrlField({
       </ContextMenuArea>
       <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 3 }}>
         <View pointerEvents={hovered ? "auto" : "none"} style={{ flexDirection: "row", alignItems: "center", opacity: hovered ? 1 : 0 }}>
-          <ToolbarButton palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} size={13} box={24} radius={6} onPress={toggleBookmark} tooltip={bookmarked ? "Remove Bookmark" : "Bookmark This Page (⌥⇧⌘D)"} />
+          <ToolbarButton palette={palette} icon={bookmarked ? "bookmark.fill" : "bookmark"} size={13} box={24} radius={6} onPress={toggleBookmark} tooltip={bookmarked ? "Remove Bookmark" : withShortcut("Bookmark This Page", bookmarkHint)} />
           {!inSplit && !sidebar && (
             <ToolbarButton
               palette={palette}
@@ -383,7 +389,7 @@ export const UrlField = memo(function UrlField({
               box={24}
               radius={6}
               onPress={() => openSplitPane(windowId, { anchorTabId: tab.id })}
-              tooltip="Open Split View (⌃⇧=)"
+              tooltip={withShortcut("Open Split View", splitHint)}
             />
           )}
           <ToolbarButton palette={palette} icon="slider.horizontal.3" size={13} box={24} radius={6} onPress={toggleSiteControls} active={popover === "siteControls"} tooltip="Site Controls" />

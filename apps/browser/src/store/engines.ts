@@ -29,7 +29,38 @@ export function ruleFor(s: Pick<BrowserState, "settings">, url: string | undefin
   return site ? s.settings.websiteEngines?.[site] : undefined;
 }
 
-export const engineForUrl = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => ruleFor(s, url) ?? defaultEngine(s);
+export const PROTECTED_VIDEO_SITES: readonly string[] = [
+  "netflix.com",
+  "disneyplus.com",
+  "max.com",
+  "hbomax.com",
+  "primevideo.com",
+  "hulu.com",
+  "tv.apple.com",
+  "music.apple.com",
+  "open.spotify.com",
+  "peacocktv.com",
+  "paramountplus.com",
+  "crunchyroll.com",
+  "hotstar.com",
+  "jiohotstar.com",
+];
+
+export function protectedVideoSite(url: string | undefined | null): boolean {
+  const site = siteOf(url);
+  if (!site?.startsWith("https://")) return false;
+  const host = new URL(site).hostname;
+  return PROTECTED_VIDEO_SITES.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+export const builtInEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined =>
+  s.settings.protectedVideoInWebKit === true && protectedVideoSite(url) ? "webkit" : undefined;
+
+export const chosenEngine = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine | undefined => ruleFor(s, url) ?? builtInEngine(s, url);
+
+export const recommendedEngineFor = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => builtInEngine(s, url) ?? defaultEngine(s);
+
+export const engineForUrl = (s: Pick<BrowserState, "settings">, url: string | undefined | null): PageEngine => chosenEngine(s, url) ?? defaultEngine(s);
 
 const fromAdoption = (s: EngineState, t: Tab, depth: number): PageEngine | undefined => {
   const id = t.adoptId;
@@ -60,8 +91,8 @@ export function tabEngine(s: EngineState, tabId: string): PageEngine {
 
 export function typedNavigationEngine(s: EngineState, tab: Tab, url: string): PageEngine {
   if (chromiumOnly(url)) return "chromium";
-  const rule = ruleFor(s, url);
-  if (rule) return rule;
+  const chosen = chosenEngine(s, url);
+  if (chosen) return chosen;
   return tab.url || tab.navigation ? tabEngine(s, tab.id) : defaultEngine(s);
 }
 

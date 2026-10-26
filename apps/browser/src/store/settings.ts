@@ -34,6 +34,7 @@ export type Settings = {
   tabLayout: "sidebar" | "top";
   hideToolbarWhileScrolling: boolean;
   newTabPosition: "top" | "bottom" | "nextToCurrent";
+  newTabButtonPosition: "top" | "bottom";
   newTabOpens: "page" | "commandBar";
   warnBeforeClosingLastTab: boolean;
   undoReopensClosedTab: boolean;
@@ -58,6 +59,8 @@ export type Settings = {
   showClearButton: boolean;
   balancedTopApps: boolean;
   pinnedTabIconRing: boolean;
+  selectedTabGlow: SelectedTabGlow;
+  pageScrollBars: "system" | "thin";
   fadeUnloadedTabs: boolean;
   warnBeforeClosingTabGroup: boolean;
   batterySaverWhen: BatterySaverWhen;
@@ -72,6 +75,7 @@ export type Settings = {
   appearance: "auto" | "light" | "dark";
   addressBar: "toolbar" | "sidebar";
   commandBarPlacement: "field" | "centred";
+  spacesFollowAppearance: boolean;
 
   defaultProfileId: string;
 
@@ -82,11 +86,14 @@ export type Settings = {
 
   pageEngine: PageEngine;
   websiteEngines: Record<string, PageEngine>;
+  protectedVideoInWebKit: boolean;
 
   chosen?: string[];
   inferred?: string[];
   migrations?: string[];
 };
+
+export type SelectedTabGlow = "full" | "soft" | "off";
 
 export type PeekModifier = "alt" | "shift" | "off";
 export const PEEK_MODIFIERS: readonly PeekModifier[] = ["alt", "shift", "off"];
@@ -121,6 +128,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tabLayout: "sidebar",
   hideToolbarWhileScrolling: false,
   newTabPosition: "bottom",
+  newTabButtonPosition: "bottom",
   newTabOpens: "page",
   warnBeforeClosingLastTab: true,
   undoReopensClosedTab: false,
@@ -145,6 +153,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showClearButton: true,
   balancedTopApps: false,
   pinnedTabIconRing: false,
+  selectedTabGlow: "full",
+  pageScrollBars: "system",
   fadeUnloadedTabs: false,
   warnBeforeClosingTabGroup: true,
   batterySaverWhen: "lowBattery",
@@ -157,6 +167,7 @@ export const DEFAULT_SETTINGS: Settings = {
   appearance: "auto",
   addressBar: "toolbar",
   commandBarPlacement: "field",
+  spacesFollowAppearance: true,
   defaultProfileId: DEFAULT_PROFILE_ID,
   shortcuts: {},
   openLinksInLittleArdia: true,
@@ -164,6 +175,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pageEngine: "chromium",
   websiteEngines: {},
   migrations: [TOOLBAR_STAYS_ON_SCROLL],
+  protectedVideoInWebKit: true,
 };
 
 const NO_CUSTOM_ENGINES: CustomSearchEngine[] = [];
@@ -214,7 +226,7 @@ export function choose(settings: Settings, patch: Partial<Settings>): Settings {
 type SavedSettings = Partial<Settings> & { batterySaver?: unknown };
 
 export function migrateSavedSettings(saved: SavedSettings | undefined): Partial<Settings> | undefined {
-  return saved && keepToolbarOnScroll(migrateBatterySaver(saved));
+  return saved && withNewTabButtonPosition(keepToolbarOnScroll(withoutBatterySaver(saved)));
 }
 
 function keepToolbarOnScroll(saved: Partial<Settings>): Partial<Settings> {
@@ -222,7 +234,18 @@ function keepToolbarOnScroll(saved: Partial<Settings>): Partial<Settings> {
   return { ...saved, hideToolbarWhileScrolling: false, migrations: [...(saved.migrations ?? []), TOOLBAR_STAYS_ON_SCROLL] };
 }
 
-function migrateBatterySaver(saved: SavedSettings): Partial<Settings> {
+function withNewTabButtonPosition(saved: Partial<Settings>): Partial<Settings> {
+  if (saved.newTabButtonPosition !== undefined || saved.newTabPosition !== "top") return saved;
+  const alongside = (keys: string[]) => (keys.includes("newTabPosition") ? [...new Set([...keys, "newTabButtonPosition"])] : keys);
+  return {
+    ...saved,
+    newTabButtonPosition: "top",
+    ...(saved.chosen ? { chosen: alongside(saved.chosen) } : {}),
+    ...(saved.inferred ? { inferred: alongside(saved.inferred) } : {}),
+  };
+}
+
+function withoutBatterySaver(saved: SavedSettings): Partial<Settings> {
   if (!("batterySaver" in saved)) return saved;
   const { batterySaver, ...rest } = saved;
   const explicit = batterySaver === false || (batterySaver === true && !!rest.chosen?.includes("batterySaver") && !rest.inferred?.includes("batterySaver"));

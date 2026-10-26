@@ -10,13 +10,13 @@ import {
   MAX_THEME_STOPS,
   PAD_LIGHTNESS,
   padColor,
-  readableDark,
+  requestedDarkFor,
   resolveTheme,
+  shownLook,
   startingTheme,
   stopLightness,
   THEME_TEXTURES,
   themeAccent,
-  themeDark,
   themeGrainAlpha,
   themeLayerAlpha,
   themeUnderColor,
@@ -25,8 +25,9 @@ import {
   withoutStop,
   withStopAt,
   withStopLightness,
+  type ShownLook,
 } from "../../lib/profileTheme";
-import { PROFILE_COLORS, useTheme } from "../../lib/theme";
+import { PROFILE_COLORS, spaceLookSource, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { choosePresetColor, setProfileTheme } from "../../lib/profileThemeActions";
 import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../store/types";
@@ -78,6 +79,7 @@ export function ThemeSection({ profileId }: { profileId: string }) {
   const profile = useBrowser((s) => s.profiles[profileId]);
   const live = useLiveTheme(profileId, profile?.theme);
   const appDark = useBrowser((s) => s.ui.appDark);
+  const source = useBrowser((s) => spaceLookSource(s.settings));
   const editing = !!profile && !!live.theme;
   useEffect(() => {
     if (!editing) return;
@@ -86,7 +88,8 @@ export function ThemeSection({ profileId }: { profileId: string }) {
   }, [editing]);
   if (!profile) return null;
   const stored = live.theme;
-  const custom = stored?.dark ? resolveTheme(stored, themeDark(stored, appDark)) : stored;
+  const editsDark = !!stored && requestedDarkFor(stored, appDark, source);
+  const custom = stored?.dark ? resolveTheme(stored, editsDark) : stored;
   const choosePreset = (color: ProfileColor) => choosePresetColor(profileId, color);
   const chooseCustom = () => {
     if (!custom) live.change(startingTheme(PROFILE_COLORS[profile.color]?.swatch ?? PROFILE_COLORS.plum.swatch), true);
@@ -103,7 +106,7 @@ export function ThemeSection({ profileId }: { profileId: string }) {
           title="Colour"
           description={
             stored?.dark
-              ? `Separate light and dark looks. Editing keeps the ${themeDark(stored, appDark) ? "dark" : "light"} one.`
+              ? `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`
               : custom
                 ? "Custom gradient"
                 : PROFILE_COLORS[profile.color]?.name
@@ -124,7 +127,7 @@ export function ThemeSection({ profileId }: { profileId: string }) {
             </Pressable>
           </View>
         </Row>
-        {custom ? <ThemeEditor theme={custom} onChange={live.change} /> : null}
+        {custom && stored ? <ThemeEditor theme={custom} shown={shownLook(stored, appDark, source)} followsApp={source === "app"} onChange={live.change} /> : null}
       </Group>
     </>
   );
@@ -159,14 +162,21 @@ function CustomSwatch({ theme }: { theme: ProfileTheme | null }) {
   );
 }
 
-function ThemeEditor({ theme, onChange }: { theme: ProfileTheme; onChange: (next: ProfileTheme, settle?: boolean) => void }) {
+function ThemeEditor({
+  theme,
+  shown,
+  followsApp,
+  onChange,
+}: {
+  theme: ProfileTheme;
+  shown: ShownLook;
+  followsApp: boolean;
+  onChange: (next: ProfileTheme, settle?: boolean) => void;
+}) {
   const ui = useTheme();
   const colors = useFormColors();
-  const appDark = useBrowser((s) => s.ui.appDark);
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, theme.stops.length - 1);
-  const requestedDark = themeDark(theme, appDark);
-  const shownDark = readableDark(theme, requestedDark);
   return (
     <View style={{ padding: 12, flexDirection: "row", gap: 18 }}>
       <View style={{ gap: 8 }}>
@@ -199,7 +209,7 @@ function ThemeEditor({ theme, onChange }: { theme: ProfileTheme; onChange: (next
         </View>
       </View>
       <View style={{ flex: 1, gap: 11 }}>
-        <Preview theme={theme} />
+        <Preview shown={shown} />
         <Slider label="Intensity" value={theme.intensity} onChange={(v, settle) => onChange({ ...theme, intensity: v }, settle)} />
         <Slider
           label="Pass-through blur"
@@ -220,27 +230,33 @@ function ThemeEditor({ theme, onChange }: { theme: ProfileTheme; onChange: (next
         </View>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <Text style={{ width: LABEL + 10, fontSize: 12, color: ui.textPrimary }}>Appearance</Text>
-          <View style={{ flexDirection: "row", borderRadius: 6, backgroundColor: colors.control, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.controlBorder, padding: 1 }}>
-            {MODES.map((m) => (
-              <Pressable key={m.value} tooltip={m.title} onPress={() => onChange({ ...theme, mode: m.value }, true)}>
-                <View
-                  style={{
-                    width: 30,
-                    height: 20,
-                    borderRadius: 5,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: theme.mode === m.value ? colors.accent : undefined,
-                  }}
-                >
-                  <Symbol name={m.symbol} size={11} color={theme.mode === m.value ? "#FFFFFF" : ui.icon} style={{ width: 14, height: 14 }} />
-                </View>
-              </Pressable>
-            ))}
-          </View>
-          {shownDark !== requestedDark ? (
+          {followsApp ? (
+            <Text numberOfLines={2} style={{ flex: 1, fontSize: 11, color: ui.textSecondary }}>
+              Follows Settings › Appearance
+            </Text>
+          ) : (
+            <View style={{ flexDirection: "row", borderRadius: 6, backgroundColor: colors.control, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: colors.controlBorder, padding: 1 }}>
+              {MODES.map((m) => (
+                <Pressable key={m.value} tooltip={m.title} onPress={() => onChange({ ...theme, mode: m.value }, true)}>
+                  <View
+                    style={{
+                      width: 30,
+                      height: 20,
+                      borderRadius: 5,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: theme.mode === m.value ? colors.accent : undefined,
+                    }}
+                  >
+                    <Symbol name={m.symbol} size={11} color={theme.mode === m.value ? "#FFFFFF" : ui.icon} style={{ width: 14, height: 14 }} />
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {shown.dark !== shown.requestedDark ? (
             <Text numberOfLines={2} style={{ flex: 1, marginLeft: 8, fontSize: 11, color: ui.textSecondary }}>
-              Kept {shownDark ? "dark" : "light"} so text stays readable
+              Kept {shown.dark ? "dark" : "light"} so text stays readable
             </Text>
           ) : null}
         </View>
@@ -298,9 +314,8 @@ function DirectionDial({ angle, onChange }: { angle: number; onChange: (angle: n
   );
 }
 
-function Preview({ theme }: { theme: ProfileTheme }) {
-  const appDark = useBrowser((s) => s.ui.appDark);
-  const dark = readableDark(theme, themeDark(theme, appDark));
+function Preview({ shown }: { shown: ShownLook }) {
+  const { look: theme, dark } = shown;
   return (
     <View style={{ height: 58, borderRadius: 9, overflow: "hidden", backgroundColor: themeUnderColor(theme, dark) }}>
       <ThemeSwatch colors={flatColors(theme)} angle={lookAngle(theme)} style={[StyleSheet.absoluteFill, { opacity: themeLayerAlpha(theme) }]} />

@@ -3,7 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("./browser.ts");
 const { bookmarkUuidFor } = await import("./bookmarks.ts");
 const { migrateBookmarksFile, reloadBookmarks, startBookmarks } = await import("../lib/bookmarks.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const settle = () => new Promise((r) => setTimeout(r, 0));

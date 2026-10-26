@@ -34,7 +34,7 @@ globalThis.acTestNativeModules = {
   },
 };
 
-const shell = await import("@ardia/shell");
+const shell = await import("../test-native/index.ts");
 const { useBrowser } = await import("../store/browser.ts");
 const { sharingProfiles } = await import("../store/profiles.ts");
 const S = () => useBrowser.getState();

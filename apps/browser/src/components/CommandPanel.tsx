@@ -66,7 +66,7 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
     return (
       <Grow from={null} frame={centredFrame(card)} openHeight={PANEL_OPEN_HEIGHT} radius={PANEL_RADIUS} surface={surface(PANEL_RADIUS)}>
         <OutsidePressArea onOutsidePress={onCancel}>
-          <Omnibox key={activeId} variant="panel" tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
+          <Omnibox key={activeId} variant="panel" floating tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
         </OutsidePressArea>
       </Grow>
     );
@@ -134,7 +134,7 @@ function CentredBar({ windowId, tabId, target, card }: { windowId: string; tabId
       surface={panelSurface(theme, PANEL_RADIUS)}
     >
       <OutsidePressArea onOutsidePress={onCancel}>
-        <Omnibox key={`newTab:${target.kind}`} variant="panel" tabId={tabId} opensTab={target} onCancel={onCancel} onDone={onDone} />
+        <Omnibox key={`newTab:${target.kind}`} variant="panel" floating tabId={tabId} opensTab={target} onCancel={onCancel} onDone={onDone} />
       </OutsidePressArea>
     </Grow>
   );

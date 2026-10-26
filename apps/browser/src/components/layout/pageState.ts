@@ -1,4 +1,4 @@
-import type { AutofillPrompt, BlockedPopup, CrashInfo, ExternalAppRequest, MediaAccess, NavigationState, PasswordPrompt, PermissionRequest, SecurityInfo } from "@ardia/ardiacore";
+import type { AutofillPrompt, BlockedPopup, CrashInfo, ExternalAppRequest, MediaAccess, NavigationState, PageEngine, PasswordPrompt, PermissionRequest, SecurityInfo } from "@ardia/ardiacore";
 import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
@@ -21,7 +21,9 @@ export type PageState = {
   mediaAccess: MediaAccess | null;
   wasNewTab: boolean;
   backToNewTab: boolean;
+  engineBack: { engine: PageEngine; url: string } | null;
   newTabShown: { url: string; title: string; favicon: string | null } | null;
+  iconPage: string | null;
 };
 
 const IDLE_PAGE: PageState = {
@@ -40,7 +42,9 @@ const IDLE_PAGE: PageState = {
   mediaAccess: null,
   wasNewTab: false,
   backToNewTab: false,
+  engineBack: null,
   newTabShown: null,
+  iconPage: null,
 };
 
 type Store = {

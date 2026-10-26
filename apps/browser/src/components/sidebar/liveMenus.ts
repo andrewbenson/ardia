@@ -1,6 +1,7 @@
 import { cleanUrl, markdownLink } from "@ardia/core";
 import { copyText, prompt, showMenu, type MenuItem } from "@ardia/shell";
 import { closeTab } from "../../lib/actions";
+import { menuShortcut } from "../../lib/commandShortcuts";
 import { calendarConnected, connectCalendar, setCalendarHidden, useCalendar } from "../../live/calendar";
 import { deleteLiveFolder, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, statusText } from "../../live/engine";
 import { ALERT_LEADS } from "../../live/meetings";
@@ -116,11 +117,11 @@ export async function openLiveItemMenu(windowId: string, folderId: string, item:
     { id: "open", title: tabId ? "Show Tab" : "Open", symbol: "arrow.up.forward.square" },
     { id: "background", title: "Open in Background", enabled: !tabId },
     sep,
-    { id: "copy", title: "Copy Link", symbol: "link", key: "c", modifiers: ["shift", "command"] },
+    { id: "copy", title: "Copy Link", symbol: "link", ...menuShortcut("copyUrl") },
     { id: "copyMd", title: "Copy Link as Markdown", symbol: "text.badge.checkmark" },
     { id: "unread", title: unread ? "Mark as Read" : "Mark as Unread", symbol: unread ? "circle" : "circle.fill" },
     ...(item.pr ? [{ id: "hide", title: "Hide Until Refresh", symbol: "eye.slash" }] : []),
-    ...(tabId ? [sep, { id: "close", title: "Close Tab", symbol: "xmark", key: "w", modifiers: ["command" as const] }] : []),
+    ...(tabId ? [sep, { id: "close", title: "Close Tab", symbol: "xmark", ...menuShortcut("closeTab") }] : []),
   ]);
   if (choice === "open") openLiveItem(windowId, folderId, item);
   else if (choice === "background") openLiveItem(windowId, folderId, item, { background: true });

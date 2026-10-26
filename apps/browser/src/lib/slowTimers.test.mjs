@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-await import("../test-native-stub.mjs");
+await import("../test-native/index.ts");
 const { everySlowly, reschedule, slowTimersForTests } = await import("./slowTimers.ts");
 
 const B = 1_000_000_020_000;

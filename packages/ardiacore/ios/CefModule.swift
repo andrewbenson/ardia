@@ -291,6 +291,9 @@ public class CefModule: Module {
       AsyncFunction("getSecurityInfo") { (view: CefWebView, promise: Promise) in
         view.browser.securityInfo { promise.resolve($0) }
       }.runOnQueue(.main)
+      AsyncFunction("pageCookies") { (view: CefWebView, urls: [String], promise: Promise) in
+        view.browser.pageCookies(urls) { promise.resolve($0 ?? []) }
+      }.runOnQueue(.main)
       AsyncFunction("openBlockedPopup") { (view: CefWebView, id: String, always: Bool?) in
         view.browser.openBlockedPopup(id, always: always ?? false)
       }.runOnQueue(.main)

@@ -5,7 +5,7 @@ import { mount } from "../test-hooks.mjs";
 
 globalThis.__DEV__ = false;
 
-const native = new URL("../test-native-stub.mjs", import.meta.url).href;
+const native = import.meta.resolve("@ardia/ardiacore");
 const stub = `export * from ${JSON.stringify(native)};
 export const faviconsFor = (profile, pages) => globalThis.faviconsForTest(profile, pages);
 export const storeFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve({ stored: true }));`;
@@ -16,7 +16,7 @@ registerHooks({
     return next(specifier, context);
   },
 });
-const { adoptFavicons, resolveFavicon, useFavicon } = await import("./favicons.ts");
+const { adoptFavicons, adoptIconPage, dropOutlivedFavicon, faviconOutlived, noteIconPage, resolveFavicon, useFavicon } = await import("./favicons.ts");
 const { useBrowser } = await import("../store/browser.ts");
 const { engineProfile } = await import("../store/model.ts");
 
@@ -45,4 +45,49 @@ test("an empty lookup that started before an import doesn't wipe the imported ic
     row.unmount();
     delete globalThis.faviconsForTest;
   }
+});
+
+test("a tab's icon outlives its page only once the tab has left the icon's site", () => {
+  const netflix = "https://www.netflix.com/browse";
+  assert.equal(faviconOutlived(netflix, "http://localhost:4321/"), true);
+  assert.equal(faviconOutlived(netflix, "file:///Users/me/page.html"), true);
+  assert.equal(faviconOutlived(netflix, "about:blank"), true);
+  assert.equal(faviconOutlived(netflix, "https://www.netflix.com/title/80057281"), false);
+  assert.equal(faviconOutlived(netflix, "https://WWW.netflix.com/browse#row"), false);
+  assert.equal(faviconOutlived("http://localhost:4321/", "http://localhost:5173/"), true);
+  assert.equal(faviconOutlived(null, "http://localhost:4321/"), false);
+  assert.equal(faviconOutlived(netflix, ""), false);
+});
+
+test("an icon remembers its page across an engine switch, so the new engine's view still drops it on another site", () => {
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  const netflix = "https://www.netflix.com/browse";
+  const local = "http://localhost:4321/";
+  const windowId = S().createWindow({ url: netflix });
+  const tabId = S().windows[windowId].tabIds[0];
+  S().updateTab(tabId, { url: netflix });
+  adoptIconPage(tabId);
+  S().updateTab(tabId, { favicon: "https://assets.nflxext.com/favicon.ico" });
+  noteIconPage(tabId);
+  S().navigated(tabId, { url: local, title: "" }, { isLoading: true });
+  dropOutlivedFavicon(tabId, local, true);
+  assert.equal(S().tabs[tabId].favicon, "https://assets.nflxext.com/favicon.ico");
+  adoptIconPage(tabId);
+  S().navigated(tabId, { url: local, title: "Local" }, { isLoading: false });
+  dropOutlivedFavicon(tabId, local, false);
+  assert.equal(S().tabs[tabId].favicon, null);
+});
+
+test("an icon stays when the tab finishes loading another page on the icon's site", () => {
+  const S = () => useBrowser.getState();
+  S().hydrate({});
+  const page = "https://www.netflix.com/browse";
+  const windowId = S().createWindow({ url: page });
+  const tabId = S().windows[windowId].tabIds[0];
+  S().updateTab(tabId, { url: page, favicon: "https://assets.nflxext.com/favicon.ico" });
+  noteIconPage(tabId);
+  S().navigated(tabId, { url: "https://www.netflix.com/title/1", title: "" }, { isLoading: false });
+  dropOutlivedFavicon(tabId, "https://www.netflix.com/title/1", false);
+  assert.equal(S().tabs[tabId].favicon, "https://assets.nflxext.com/favicon.ico");
 });

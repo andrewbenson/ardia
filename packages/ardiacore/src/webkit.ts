@@ -1,11 +1,26 @@
-import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
+import type { EventSubscription } from "expo-modules-core";
 import type { BrowsingDataType, Download, PermissionRequest, PermissionResult } from "./module";
 import type { SiteSettings, SiteSettingType, SiteSettingValue } from "./siteSettings";
 import type { ExternalAppAllowance } from "./externalApps";
+import { optionalNativeModule } from "./nativeModules";
 
 export type PageEngine = "chromium" | "webkit";
 
-type WebKitNative = {
+export type PageCookie = {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  expires: number;
+  session: boolean;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite?: "Strict" | "Lax" | "None";
+  partitionKey?: unknown;
+  partitionKeyOpaque?: boolean;
+};
+
+export type WebKitNative = {
   addListener(name: "onDownload", listener: (d: Download) => void): EventSubscription;
   addListener(name: "onPermission", listener: (p: PermissionRequest) => void): EventSubscription;
   addListener(name: "onPermissionDismissed", listener: (p: { id: string }) => void): EventSubscription;
@@ -22,10 +37,19 @@ type WebKitNative = {
   resolveExternalApp(id: string, open: boolean, remember: boolean): Promise<void>;
   clearBrowsingData(profile: string, types: BrowsingDataType[], since: number | null): Promise<void>;
   deleteProfileData(profile: string): Promise<boolean>;
+  cookieStoreKey(profile: string): Promise<string>;
+  importCookies(profile: string, storeKey: string, cookies: PageCookie[]): Promise<number>;
   info(): Promise<{ safariVersion: string; userAgentSuffix: string; passkeys: boolean }>;
+  passkeyAccess(): Promise<PasskeyAccess>;
+  requestPasskeyAccess(): Promise<PasskeyAccess>;
 };
 
-export const WebKit = requireOptionalNativeModule<WebKitNative>("ArdiaWebKit");
+export type PasskeyAccessStatus = "entitlementRequired" | "deviceNotConfigured" | "notDetermined" | "authorized" | "denied";
+export type PasskeyAccess = { entitled: boolean; status: PasskeyAccessStatus };
+
+const NO_PASSKEY_ACCESS: PasskeyAccess = { entitled: false, status: "entitlementRequired" };
+
+export const WebKit = optionalNativeModule("ArdiaWebKit");
 
 const NO_SUBSCRIPTION: EventSubscription = { remove() {} };
 
@@ -55,3 +79,10 @@ export const getWebKitSiteSettings = async (profile: string, origin: string): Pr
 export const setWebKitSiteSetting = (profile: string, origin: string, type: SiteSettingType, value: SiteSettingValue) =>
   WebKit?.setSitePermission(profile, origin, type, value) ?? Promise.resolve();
 export const webKitInfo = () => WebKit?.info() ?? Promise.resolve(null);
+export const webKitCookieStoreKey = (profile: string) => WebKit?.cookieStoreKey(profile) ?? Promise.resolve(null);
+export const importWebKitCookies = (profile: string, storeKey: string, cookies: PageCookie[]) =>
+  WebKit?.importCookies(profile, storeKey, cookies) ?? Promise.resolve(0);
+const askPasskeys = (call: (native: WebKitNative) => Promise<PasskeyAccess>): Promise<PasskeyAccess> =>
+  WebKit && typeof WebKit.passkeyAccess === "function" ? call(WebKit).catch(() => NO_PASSKEY_ACCESS) : Promise.resolve(NO_PASSKEY_ACCESS);
+export const getPasskeyAccess = () => askPasskeys((native) => native.passkeyAccess());
+export const requestPasskeyAccess = () => askPasskeys((native) => native.requestPasskeyAccess());

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { docs } from "../test-native-stub.mjs";
+import { docs } from "../test-native/index.ts";
 
 const savedBeforeOptions = { id: "old", profileId: "p", kind: "pullRequests", name: "PRs", icon: null, collapsed: false, sources: [], filters: { authored: true, reviewRequests: true }, createdAt: 0 };
 docs.set("live.json", JSON.stringify({ folders: { old: savedBeforeOptions }, folderOrder: ["old"] }));

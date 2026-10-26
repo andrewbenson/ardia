@@ -12,7 +12,8 @@ modules before using them — this is a summary from the agent that built it.
   profile share a session (`privateSession(profileId)`, the regular engine name), another profile's never. Downloads
   carry `offTheRecord` and their regular profile (`downloadSession`, store/ui.ts); a session's go with its last window.
 - `tabs` (persisted) vs `live` (loading/progress/back-forward/audio/theme colour; never persisted).
-- `groups`: `{ windowId, profileId, name, icon, color, collapsed, pinned, tabIds }` (members contiguous).
+- `groups`: `{ windowId, profileId, name, icon, color, collapsed, pinned, tabIds }` (members contiguous). `color` is
+  `null` for Neutral, `"none"` for a transparent group, or one of Chrome's nine group colours.
 - `splits` (store/splits.ts): `{ windowId, tabIds (2–3, pane order), orientation, sizes, stack? }` — `stack` = two panes sharing a slot the other way (Add Bottom Split). Members are contiguous in `window.tabIds`; the window's active tab is the focused pane. A split is one sidebar row (`splitRowPanes`): its panes are all unpinned, or all pinned rows; `placing`, `withGroup`, `createGroup`, `addTabsToGroup` and `removeTabsFromGroup` take every pane of a row they're given one of (`withSplitRows`), pinned panes are always rows, and a pinned split is mirrored to the profile's windows (pinMirror) and parked with them (`ParkedPins.splits`). `window.tabLayout` ("sidebar" | "top", unset = Settings).
 - `history[profileId]`: a view of Chrome's history (HistoryService), one entry per URL, not saved; `historyReady[profileId]`
   once it has been read (lib/history.ts). `bookmarks`: `{ nodes, roots[profileId]: { bar, other } }`.
@@ -49,26 +50,34 @@ modules before using them — this is a summary from the agent that built it.
   in `lastActiveProfile(s)` unless `profileId` says otherwise; never private.
   `newTab` into it goes to `mainWindowFor(s, profileId)`; `resolveWindowId(s, null)` never picks it; closing it records a
   `ClosedTab` with `small: true` that reopens in a new Little Solara; it isn't saved with the session.
-- Tabs: `newTab(windowId, { url, background, adoptId, openerId, profileId, pinned, index })`, `closeTab`,
-  `closeTabs`, `activate`, `navigate`, `updateTab(id, patch, live?)` (the live patch lands in the same store update), `updateLive`,
-  `togglePin`, `moveTab`, `duplicateTab`. The engine's page reports go through `navigated(id, { url, title }, live)` and
+- Tabs: `newTab(windowId, { url, background, adoptId, openerId, profileId, pinned, index })`, `closeTabs(ids, { lastClosesWindow })`
+  and `closeTab(id)` (the same path with `lastClosesWindow`, for ⌘W and ✕), `activate`, `navigate`, `updateTab(id, patch, live?)` (the live patch lands in the same store update), `updateLive`,
+  `togglePin`, `moveTab`, `moveTabBy(id, ±1)` (both within the tab's pin section), `duplicateTab`. The engine's page reports go through `navigated(id, { url, title }, live)` and
   `faviconChanged(id, favicon)`. Chrome records the visit (HistoryService) and keeps the icon (FaviconService) itself.
   Closing a pinned tab only unloads it (`unloadPinnedTabs`, like Dia): the tile stays with `unloaded: true`, back at its
   pinned URL and without a web view until selected; the window selects its last-used regular tab, else the loaded
   pinned tab it showed last, else a New Tab page, and ⇧⌘T restores the page into the tile. Closing the last tab closes
   the window, unloaded pinned tiles aside (`closesWindow`), so holding ⌘W ends there instead of waking them. Unpin
   removes a pinned tab. A tab of a pinned group (Dia's pinned container, `inPinnedContainer`) unloads the same way, on
-  the page it showed, and stays in its group.
+  the page it showed, and stays in its group. Both close calls run one rule set (`closingTabs`): a Peek tab ends the Peek,
+  pinned tabs unload, and a window whose shown tabs all go gets a New Tab, or closes when `lastClosesWindow` is set
+  and the New Tab bar policy doesn't keep it (`leavesEmptyWindow`). `closeIntent(s, tabId)` says what ✕ does
+  (close, unload with the pages it shares, or remove a closed pinned row); the last-tab confirmation stays in
+  lib/actions.ts.
   `duplicateTab` and Reopen Closed Tab set `adoptId` to `clone:<tab id>` / `restore:<tab id>` (`ClosedTab.tabId`):
   the engine copies or restores that tab's back/forward list, else the tab loads its URL.
 - Groups: `createGroup`, `addTabsToGroup`, …
 - Splits: `createSplit`, `openSplitPane(windowId, { tabId | url, anchorTabId, side, background })`, `replaceSplitPane`, `removeTabFromSplit`, `separateSplit`, `flipSplit`, `toggleSplitOrientation`, `movePane`, `focusPane`, `updateSplit`; `toggleTabLayout`. UI entry points with Dia's feedback (max-panes toast, menus): components/layout/splitActions.ts (`openSplitPane`, `openNewTabInSplit`, `openInSplit`, `openLinkInSplit`, `showSplitMenu`). Drag a tab onto the page to split: components/layout/tabDrag.ts.
-- Sidebar organisation (store/organize.ts): `selection[windowId]` (⌘/⇧-click multi-select), `placeTabs(ids, { pinned, row, beforeId, groupId, last })`
-  (drag and drop; `last` puts a row with no `beforeId` after the pinned groups too), `pinTabs(ids, pinned, row?)` (a pinned tab is a Top Apps tile, or a pinned row above the tabs when
+- Sidebar organisation (store/organize.ts): `selection[windowId]` with its ⇧-click anchor `selectionAnchors[windowId]`, both set by
+  `clickTab(windowId, tabId, mods)` (plain, ⌘ and ⇧ clicks, ⌥⇧ into the shown tab's group), `placeTabs(ids, { pinned, row, beforeId, groupId, last })`
+  (`last` puts a row with no `beforeId` after the pinned groups too). Drag and drop in the sidebar and the top strip
+  goes through store/drops.ts: a view turns the pointer into a `DropSpot` (zone plus the tab it lands before),
+  `resolveDrop(s, source, spot)` gives the `Drop` (or refuses it), `dropTabs(ids, drop)` applies it, `movingTabIds` is
+  the set that moves together, and `slotDrop` turns a strip slot index into an anchor. `pinTabs(ids, pinned, row?)` (a pinned tab is a Top Apps tile, or a pinned row above the tabs when
   `tab.pinnedAsRow`; windows order tiles, then pinned rows and pinned groups in one interleaved order, then the rest; `row` omitted keeps a pinned
   tab's kind and pins a new one as a tile). A live folder sits in that pinned order by `LiveFolder.after`, the anchor key
   (`t:` or `g:` plus the pin key) of the row or group just above it, or `null` for the top (components/sidebar/pinnedOrder.ts);
-  when its anchor goes it moves under the item that was above the anchor. Also pinned base URLs (`tab.pinnedUrl`, `returnToPinnedUrl` ⌘↩, `setPinnedUrl`), `setSiteMuted` (Mute Site,
+  when its anchor goes it moves under the item that was above the anchor. Also pinned base URLs (`tab.pinnedUrl`, `returnToPinnedUrl` ⌘↩, `setPinnedUrl`; set on tiles, pinned rows and tabs in pinned groups alike, and cleared when a tab leaves every pinned place, by the `settlePinHomes` listener in store/pinHomes.ts), `setSiteMuted` (Mute Site,
   `settings.mutedSites`; a private window's mutes stay in `privateSiteMutes[windowId]`, in memory), `groupTabs` (pinned by default, like Dia), `moveGroup`, `duplicateGroup`, `newTabInGroup`,
   `closeGroup` → `closedGroups` (History › Recently Closed Groups; `restoreClosed` takes their ids), `moveGroupToBookmarksBar`,
   `cleanUpTabs` → `cleanedTabs` / `restoreCleaned(entryId?, windowId?)` (a private window's go to `privateCleanedTabs[windowId]`,
@@ -203,7 +212,7 @@ ordered transaction that names its cause. There are no echo windows, timers or "
 - After every store change and transaction, `stripPlan` gives what the store wants each strip to be (the store's
   tabs in it in window order, pinned first; the shown profile's active tab) and the app sends the command that
   closes the gap: `activate` first, then `arrange`, then `group` (a Chrome group for a store group that has none,
-  missing members, title, color and collapsed, as Dia's engine mirrors it; Chrome's model keeps the active tab when
+  missing members, title, color (Neutral and `"none"` go as grey, and Chrome's grey back keeps them) and collapsed, as Dia's engine mirrors it; Chrome's model keeps the active tab when
   its group collapses);
   one command per strip at a time; no `activate` while Chrome's active tab has no key (a tab Chrome made in front,
   before the app adopts it: its activation is Chrome's, above); the same command isn't sent

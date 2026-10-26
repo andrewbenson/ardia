@@ -5,7 +5,7 @@ import { useBrowser } from "../../../store/browser";
 import { tabLayoutOf } from "../../../store/model";
 import type { Settings } from "../../../store/settings";
 import { useHover } from "../../primitives";
-import { Group, PopUp, Row, SectionHeader, useFormColors } from "../controls";
+import { Group, PopUp, Row, SectionHeader, Toggle, useFormColors } from "../controls";
 import { APP_ICON_SIZE, appIconChoices } from "../paneData";
 import { store, useResource } from "../resources";
 
@@ -17,6 +17,7 @@ const MODES: { value: Settings["appearance"]; title: string; description: string
 
 export function AppearancePane() {
   const appearance = useBrowser((s) => s.settings.appearance);
+  const spacesFollow = useBrowser((s) => s.settings.spacesFollowAppearance);
   const choose = (mode: Settings["appearance"]) => {
     useBrowser.getState().updateSettings({ appearance: mode });
     void setAppearance(mode);
@@ -29,7 +30,14 @@ export function AppearancePane() {
           <ModeChoice key={m.value} mode={m.value} title={m.title} description={m.description} selected={appearance === m.value} onPress={() => choose(m.value)} />
         ))}
       </View>
+      <Group style={{ marginTop: 14 }}>
+        <Row anchor="appearance.spacesFollowAppearance">
+          <Toggle value={spacesFollow} onChange={(v) => useBrowser.getState().updateSettings({ spacesFollowAppearance: v })} />
+        </Row>
+      </Group>
       <AddressBarPicker />
+      <SelectedTabGlowPicker />
+      <ScrollBarsPicker />
       <AppIconPicker />
     </View>
   );
@@ -64,6 +72,51 @@ function AddressBarPicker() {
             ]}
             onChange={(v) => useBrowser.getState().updateSettings({ commandBarPlacement: v })}
             minWidth={160}
+          />
+        </Row>
+      </Group>
+    </>
+  );
+}
+
+function SelectedTabGlowPicker() {
+  const glow = useBrowser((s) => s.settings.selectedTabGlow);
+  return (
+    <>
+      <SectionHeader title="Selected Tab" />
+      <Group>
+        <Row anchor="appearance.selectedTabGlow">
+          <PopUp
+            value={glow}
+            options={[
+              { value: "full", title: "Full" },
+              { value: "soft", title: "Soft" },
+              { value: "off", title: "Off" },
+            ]}
+            onChange={(v) => useBrowser.getState().updateSettings({ selectedTabGlow: v })}
+            minWidth={120}
+          />
+        </Row>
+      </Group>
+    </>
+  );
+}
+
+function ScrollBarsPicker() {
+  const scrollBars = useBrowser((s) => s.settings.pageScrollBars);
+  return (
+    <>
+      <SectionHeader title="Scroll Bars" />
+      <Group>
+        <Row anchor="appearance.pageScrollBars">
+          <PopUp
+            value={scrollBars}
+            options={[
+              { value: "system", title: "Follow macOS" },
+              { value: "thin", title: "Thin" },
+            ]}
+            onChange={(v) => useBrowser.getState().updateSettings({ pageScrollBars: v })}
+            minWidth={140}
           />
         </Row>
       </Group>

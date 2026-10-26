@@ -1,11 +1,13 @@
-import { requireNativeModule, requireNativeViewManager, requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
+import { requireNativeViewManager, type EventSubscription } from "expo-modules-core";
 import type { ViewProps } from "react-native";
+import { nativeModule, optionalNativeModule } from "./nativeModules";
 
 export * from "./system";
 export * from "./app";
 export * from "./live";
 export * from "./cli";
 export * from "./userScripts";
+export type { ShellNativeModules, ShellOptionalNativeModules } from "./nativeModules";
 
 export type BrowserCommand =
   | "newTab"
@@ -179,6 +181,7 @@ export type OpenWindowOptions = {
   behind?: string;
   chromeWindow?: string;
   pointer?: [number, number];
+  animated?: boolean;
 };
 
 export type MenuEntry = { id: string; title: string; current?: boolean };
@@ -223,7 +226,7 @@ export type PromptOptions = {
   windowId?: string;
 };
 
-const Shell = requireNativeModule<{
+export type ShellNative = {
   addListener<K extends keyof ShellEvents>(name: K, listener: ShellEvents[K]): EventSubscription;
   showMenu(items: MenuItem[]): Promise<string | null>;
   copyText(text: string): void;
@@ -267,7 +270,9 @@ const Shell = requireNativeModule<{
   replyToTerminate(ok: boolean): Promise<void>;
   confirm(options: ConfirmOptions): Promise<{ confirmed: boolean; suppressed: boolean }>;
   prompt(options: PromptOptions): Promise<string | null>;
-}>("ArdiaShell");
+};
+
+const Shell = nativeModule("ArdiaShell");
 
 export const readDocument = (name: string) => Shell.readDocument(name);
 export const writeDocument = (name: string, contents: string) => Shell.writeDocument(name, contents);
@@ -455,7 +460,9 @@ export type GlassEffectProps = ViewProps & {
   dark?: boolean;
 };
 
-const GlassEffectModule = requireNativeModule<{ isLiquidGlass(): boolean }>("ArdiaGlassEffect");
+export type GlassEffectNative = { isLiquidGlass(): boolean };
+
+const GlassEffectModule = nativeModule("ArdiaGlassEffect");
 
 export const isLiquidGlass = (): boolean => GlassEffectModule.isLiquidGlass();
 
@@ -483,7 +490,9 @@ type NativePopoverBubbleProps = Omit<PopoverBubbleProps, "shadowOpacity" | "shad
   bubbleShadowOffsetY?: number;
 };
 
-export const popoverBubbleAvailable = !!requireOptionalNativeModule<{ isAvailable(): boolean }>("ArdiaPopoverBubble")?.isAvailable();
+export type PopoverBubbleNative = { isAvailable(): boolean };
+
+export const popoverBubbleAvailable = !!optionalNativeModule("ArdiaPopoverBubble")?.isAvailable();
 
 const NativePopoverBubble = popoverBubbleAvailable ? requireNativeViewManager<NativePopoverBubbleProps>("ArdiaPopoverBubble") : null;
 
@@ -494,9 +503,11 @@ export function PopoverBubble({ shadowOpacity, shadowRadius, shadowOffsetY, ...p
 
 export type IconTheme = { kind: "blur" } | { kind: "template"; fill: string; stroke?: string };
 
-const DockSelectionModule = requireNativeModule<{
+export type DockSelectionNative = {
   iconTheme(uri: string | null, emoji: string | null): Promise<IconTheme | null>;
-}>("ArdiaDockSelection");
+};
+
+const DockSelectionModule = nativeModule("ArdiaDockSelection");
 
 export const iconTheme = (source: { uri: string } | { emoji: string }): Promise<IconTheme | null> =>
   DockSelectionModule.iconTheme("uri" in source ? source.uri : null, "emoji" in source ? source.emoji : null);
@@ -516,16 +527,18 @@ export type DockSelectionProps = ViewProps & {
 
 export const DockSelection = requireNativeViewManager<DockSelectionProps>("ArdiaDockSelection");
 
-const InlineCompletionModule = requireNativeModule<{
+export type InlineCompletionNative = {
   complete(tag: number, typed: string, completion: string): Promise<InlineWrite>;
-}>("ArdiaInlineCompletion");
+};
+
+const InlineCompletionModule = nativeModule("ArdiaInlineCompletion");
 
 export type InlineWrite = 0 | 1 | 2;
 
 export const completeInline = (tag: number, typed: string, completion: string) =>
   InlineCompletionModule.complete(tag, typed, completion);
 
-type TranslationModule = {
+export type TranslationModule = {
   readonly available: boolean;
   userLanguages(): string[];
   languageName(identifier: string): string;
@@ -533,9 +546,9 @@ type TranslationModule = {
   status(source: string, target: string): Promise<"installed" | "supported" | "unsupported">;
   supportedLanguages(): Promise<string[]>;
   prepare(source: string, target: string): Promise<void>;
-  translate(source: string, target: string, texts: string[]): Promise<string[]>;
+  translate(source: string, target: string, texts: string[]): Promise<(string | null)[]>;
   translateBlocks(source: string, target: string, blocks: string[][]): Promise<(string[] | null)[]>;
 };
-const TranslationNative = requireNativeModule<TranslationModule>("ArdiaTranslate");
+const TranslationNative = nativeModule("ArdiaTranslate");
 
 export const translation: Omit<TranslationModule, "available"> | null = TranslationNative.available ? TranslationNative : null;

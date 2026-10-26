@@ -5,7 +5,7 @@ globalThis.__DEV__ = false;
 const { useBrowser } = await import("../store/browser.ts");
 const { reloadHistory, startHistory } = await import("./history.ts");
 const { firstWindowCommitted } = await import("./afterFirstWindow.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const tick = () => new Promise((r) => setTimeout(r, 0));

@@ -3,6 +3,7 @@
 #import "ACChromeWindow.h"
 #import "ArdiaCoreEngineBridge.h"
 #import "ArdiaCoreInternal.h"
+#import "ArdiaCoreTabParking.h"
 #import "ArdiaCoreWebView.h"
 #import "ArdiaCoreWebViewInternal.h"
 
@@ -323,6 +324,68 @@ CALayer *GlassStandIn(NSView *glass) {
   return standIn;
 }
 
+CGFloat ShownAlpha(NSView *view, NSView *root) {
+  CGFloat alpha = 1;
+  for (NSView *v = view; v && v != root.superview; v = v.superview) alpha *= v.alphaValue;
+  return alpha;
+}
+
+NSDictionary *GlassRecord(NSView *glass, NSView *root, NSView *host) {
+  const CGFloat alpha = ShownAlpha(glass, root);
+  if (glass.isHiddenOrHasHiddenAncestor || alpha < 0.01 || !NSEqualRects(glass.visibleRect, glass.bounds)) return nil;
+  const NSRect rect = [glass convertRect:glass.bounds toView:host];
+  if (!NSContainsRect(host.bounds, rect)) return nil;
+  NSString *appearance = [glass.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameDarkAqua, NSAppearanceNameAqua ]];
+  NSMutableDictionary *record = [@{
+    @"frame" : @[ @(NSMinX(rect)), @(NSMinY(rect)), @(NSWidth(rect)), @(NSHeight(rect)) ],
+    @"radius" : @([GlassValue(glass, @"cornerRadius") doubleValue]),
+    @"style" : @([GlassValue(glass, @"style") integerValue]),
+    @"alpha" : @(alpha),
+    @"appearance" : appearance ?: NSAppearanceNameAqua,
+  } mutableCopy];
+  id tintValue = GlassValue(glass, @"tintColor");
+  if (NSColor *tint = [tintValue isKindOfClass:NSColor.class] ? [tintValue colorUsingColorSpace:NSColorSpace.sRGBColorSpace] : nil)
+    record[@"tint"] = @[ @(tint.redComponent), @(tint.greenComponent), @(tint.blueComponent), @(tint.alphaComponent) ];
+  return record;
+}
+
+BOOL ReadNumbers(id list, NSUInteger count, CGFloat *out) {
+  if (![list isKindOfClass:NSArray.class] || [list count] != count) return NO;
+  for (NSUInteger i = 0; i < count; i++) {
+    if (![list[i] isKindOfClass:NSNumber.class] || !std::isfinite([list[i] doubleValue])) return NO;
+    out[i] = [list[i] doubleValue];
+  }
+  return YES;
+}
+
+void SetGlassValue(NSView *glass, NSString *key, id value) {
+  NSString *setter = [NSString stringWithFormat:@"set%@%@:", [key substringToIndex:1].uppercaseString, [key substringFromIndex:1]];
+  if (value && [glass respondsToSelector:NSSelectorFromString(setter)]) [glass setValue:value forKey:key];
+}
+
+BOOL AddLiveGlass(NSArray *records, NSView *host, NSView *parent) {
+  Class glassClass = GlassClass();
+  if (!glassClass || ![records isKindOfClass:NSArray.class] || !records.count || !parent) return NO;
+  NSView *layer = [[NSView alloc] initWithFrame:parent.bounds];
+  layer.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  [parent addSubview:layer];
+  for (NSDictionary *record in records) {
+    CGFloat frame[4], tint[4];
+    if (![record isKindOfClass:NSDictionary.class] || !ReadNumbers(record[@"frame"], 4, frame)) {
+      [layer removeFromSuperview];
+      return NO;
+    }
+    NSView *glass = [[glassClass alloc] initWithFrame:[layer convertRect:NSMakeRect(frame[0], frame[1], frame[2], frame[3]) fromView:host]];
+    SetGlassValue(glass, @"cornerRadius", [record[@"radius"] isKindOfClass:NSNumber.class] ? record[@"radius"] : nil);
+    SetGlassValue(glass, @"style", [record[@"style"] isKindOfClass:NSNumber.class] ? record[@"style"] : nil);
+    if (ReadNumbers(record[@"tint"], 4, tint)) SetGlassValue(glass, @"tintColor", [NSColor colorWithSRGBRed:tint[0] green:tint[1] blue:tint[2] alpha:tint[3]]);
+    if ([record[@"appearance"] isKindOfClass:NSString.class]) glass.appearance = [NSAppearance appearanceNamed:record[@"appearance"]];
+    if ([record[@"alpha"] isKindOfClass:NSNumber.class]) glass.alphaValue = MIN(MAX([record[@"alpha"] doubleValue], 0), 1);
+    [layer addSubview:glass];
+  }
+  return YES;
+}
+
 CGContextRef MakeBitmap(size_t w, size_t h) {
   CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
   CGContextRef context = CGBitmapContextCreate(nullptr, w, h, 8, 0, space, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
@@ -425,8 +488,9 @@ CALayer *StandIn(CALayer *layer, CGFloat scale) {
   return standIn;
 }
 
-BOOL CapturePicture(ArdiaCoreWindowController *controller, NSString *windowId, NSDictionary *layout) {
+BOOL CapturePicture(ArdiaCoreWindowController *controller, NSString *windowId, NSMutableDictionary *layout) {
   NSWindow *window = controller.coreWindow.window;
+  NSView *host = controller.coreWindow.hostView;
   NSView *root = controller.root;
   CALayer *layer = root.layer;
   NSArray<NSNumber *> *page = layout[@"page"];
@@ -489,8 +553,11 @@ BOOL CapturePicture(ArdiaCoreWindowController *controller, NSString *windowId, N
   [CATransaction setDisableActions:YES];
   for (CALayer *backdrop in backdrops) backdrop.hidden = YES;
   NSMutableArray<CALayer *> *standIns = [NSMutableArray array];
-  for (NSView *glass in glasses)
-    if (CALayer *standIn = GlassStandIn(glass)) [standIns addObject:standIn];
+  NSMutableArray<NSDictionary *> *liveGlass = [NSMutableArray array];
+  for (NSView *glass in glasses) {
+    if (NSDictionary *record = host ? GlassRecord(glass, root, host) : nil) [liveGlass addObject:record];
+    else if (CALayer *standIn = GlassStandIn(glass)) [standIns addObject:standIn];
+  }
   for (CALayer *glass in glassLayers) glass.hidden = YES;
   for (CALayer *fill in fills) fill.backgroundColor = nil;
   for (CALayer *each in effected) {
@@ -536,6 +603,7 @@ BOOL CapturePicture(ArdiaCoreWindowController *controller, NSString *windowId, N
     written = png && [png writeToFile:path atomically:YES];
     CGImageRelease(image);
   });
+  if (written && liveGlass.count) layout[@"glass"] = liveGlass;
   return written;
 }
 
@@ -655,6 +723,7 @@ void RecordLayouts(NSDictionary *session, BOOL wait) {
       else DropPictureFile(windowId);
     } else if ([gLayouts[windowId][@"pictureContent"] isKindOfClass:NSString.class]) {
       layout[@"pictureContent"] = gLayouts[windowId][@"pictureContent"];
+      if (id glass = gLayouts[windowId][@"glass"]) layout[@"glass"] = glass;
     }
     gLayouts[windowId] = layout;
   }
@@ -929,6 +998,7 @@ void ClearRootFill(ACEarlyShown *s, NSView *root) {
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
   [root setValue:nil forKey:@"backgroundColor"];
+  if (s.picture) root.alphaValue = 0;
   [CATransaction commit];
 }
 
@@ -937,7 +1007,10 @@ void ReleasePictures(NSView *picture, NSView *backdrop, NSView *root, NSColor *f
   [CATransaction setDisableActions:YES];
   RemovePicture(picture);
   [backdrop removeFromSuperview];
-  if (root) [root setValue:fill forKey:@"backgroundColor"];
+  if (root) {
+    [root setValue:fill forKey:@"backgroundColor"];
+    root.alphaValue = 1;
+  }
   [CATransaction commit];
 }
 
@@ -1181,7 +1254,8 @@ CGImageRef TakePrefetched(NSString *windowId) {
   dispatch_async(Writer(), ^{
     NSFileManager *fm = NSFileManager.defaultManager;
     for (NSString *name in [fm contentsOfDirectoryAtPath:directory error:nil])
-      if (([name hasPrefix:@"launch-picture-"] && [name hasSuffix:@".png"]) || [name isEqualToString:@"launch-layout.json"])
+      if (([name hasPrefix:@"launch-picture-"] && [name hasSuffix:@".png"]) || [name isEqualToString:@"launch-layout.json"] ||
+          [name isEqualToString:@"launch-look.json"])
         [fm removeItemAtPath:[directory stringByAppendingPathComponent:name] error:nil];
   });
 }
@@ -1247,7 +1321,7 @@ CGImageRef TakePrefetched(NSString *windowId) {
   NSArray *size = layout[@"size"];
   const BOOL sameSize = [size isKindOfClass:NSArray.class] && size.count == 2 && fabs([size[0] doubleValue] - NSWidth(window.frame)) < 0.5 &&
                         fabs([size[1] doubleValue] - NSHeight(window.frame)) < 0.5;
-  if (picture && sameSize && gPictureCurrent) {
+  if (picture && sameSize && gPictureCurrent && (!layout[@"glass"] || AddLiveGlass(layout[@"glass"], host, backdropView))) {
     NSView *view = [[NSView alloc] initWithFrame:host.bounds];
     view.wantsLayer = YES;
     view.layer.contents = (__bridge id)picture;
@@ -1267,11 +1341,11 @@ CGImageRef TakePrefetched(NSString *windowId) {
                                                                    if (!closing.claimed) {
                                                                      [Dismissed() addObject:closing.appWindow];
                                                                      ArdiaCoreTab *page = closing.tab;
-                                                                     if (page && page == ArdiaCoreWebView.launchTab)
-                                                                       [ArdiaCoreWebView claimLaunchTab:@"" url:@"" profile:@""];
+                                                                     if (page && page == ArdiaCoreTabParking.launchTab)
+                                                                       [ArdiaCoreTabParking claimLaunchTab:@"" url:@"" profile:@""];
                                                                      else if (page && closing.expectedURL) {
                                                                        [Dismissed() addObject:closing.key];
-                                                                       [ArdiaCoreWebView dismissLinkTab:page];
+                                                                       [ArdiaCoreTabParking dismissLinkTab:page];
                                                                      }
                                                                      else if (page)
                                                                        [ArdiaCoreWebView releaseTransfer:closing.key];
@@ -1401,6 +1475,7 @@ CGImageRef TakePrefetched(NSString *windowId) {
   if (!root || !s) return;
   if (s.rootFillCleared && s.root != root) {
     [s.root setValue:s.rootFill forKey:@"backgroundColor"];
+    s.root.alphaValue = 1;
     s.rootFillCleared = NO;
     s.rootFill = nil;
   }

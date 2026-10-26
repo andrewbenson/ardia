@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-const { appInfo } = await import("../test-native-stub.mjs");
+const { appInfo } = await import("../test-native/index.ts");
 const client = await import("./client.ts");
 globalThis.fetch = async () => ({ status: 200 });
 

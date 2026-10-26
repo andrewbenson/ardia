@@ -148,6 +148,29 @@ export function resolveTheme(theme: ProfileTheme, dark: boolean): ProfileTheme {
   return { ...light, ...darkLook };
 }
 
+export const DARKENED_LOOK_KEEP = 0.4;
+
+export function darkenedLook(theme: ProfileTheme, keep = DARKENED_LOOK_KEEP): ProfileTheme {
+  return { ...theme, stops: theme.stops.map((s) => ({ ...s, color: { ...s.color, r: s.color.r * keep, g: s.color.g * keep, b: s.color.b * keep } })) };
+}
+
+export type LookSource = "own" | "app" | "utility";
+
+export type ShownLook = { look: ProfileTheme; requestedDark: boolean; dark: boolean };
+
+export function requestedDarkFor(theme: ProfileTheme, appDark: boolean, source: LookSource): boolean {
+  return source === "own" ? themeDark(theme, appDark) : appDark;
+}
+
+export function shownLook(theme: ProfileTheme, appDark: boolean, source: LookSource): ShownLook {
+  const requestedDark = requestedDarkFor(theme, appDark, source);
+  const resolved = resolveTheme(theme, requestedDark);
+  const lightOnly = theme.mode !== "dark" && !theme.dark;
+  const look = source !== "own" && requestedDark && lightOnly && !readableDark(resolved, true) ? darkenedLook(resolved) : resolved;
+  const dark = source === "utility" ? requestedDark : readableDark(look, requestedDark);
+  return { look, requestedDark, dark };
+}
+
 export function arcLayerAlpha(intensity: number): number {
   return 0.2 + 0.55 * clamp01(intensity);
 }

@@ -5,7 +5,7 @@ import { mount } from "../test-hooks.mjs";
 
 globalThis.__DEV__ = false;
 
-const ardiacore = new URL("../test-native-stub.mjs", import.meta.url).href;
+const ardiacore = import.meta.resolve("@ardia/ardiacore");
 const stubs = {
   "@ardia/ardiacore": `export * from ${JSON.stringify(ardiacore)};
     export const listTasks = async () => [];
@@ -34,7 +34,7 @@ const { usePage, usePages, patchPage } = await import("../components/layout/page
 const { useFavicons, useFavicon, useFaviconTheme, useAppearanceDark, pageKey } = await import("../lib/favicons.ts");
 const { engineProfile } = await import("./model.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const setup = () => {

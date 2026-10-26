@@ -97,6 +97,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)exitPictureInPicture;
 
 - (void)securityInfo:(void (^)(NSDictionary<NSString *, id> *info))completion NS_SWIFT_NAME(securityInfo(_:));
+- (void)pageCookies:(NSArray<NSString *> *)urls
+         completion:(void (^)(NSArray<NSDictionary<NSString *, id> *> *_Nullable cookies))completion
+    NS_SWIFT_NAME(pageCookies(_:completion:));
 - (void)openBlockedPopup:(NSString *)popupId always:(BOOL)always NS_SWIFT_NAME(openBlockedPopup(_:always:));
 - (void)clearSiteData:(void (^)(NSDictionary<NSString *, id> *result))completion NS_SWIFT_NAME(clearSiteData(_:));
 

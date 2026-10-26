@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { FadeLabel } from "@ardia/shell";
 import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { useShortcutHint, withShortcut } from "../../lib/commandShortcuts";
 import { layout, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useActiveTabId, useTabLive, useWindowId } from "../../store/hooks";
@@ -26,6 +27,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
   const tab = useToolbarTab(useActiveTabId());
   const palette = toolbarPalette(useTheme(), null);
   const toggle = useBrowser((s) => s.settings.showSidebarButton !== false);
+  const sidebarHint = useShortcutHint("toggleSidebar");
   const { buttons, step } = navButtonsFitting(width, BUTTON, toggle);
   const shown = tab ? buttons : [];
   const last = width - EDGE - BUTTON / 2;
@@ -44,7 +46,7 @@ export function SidebarHeaderTools({ width }: { width: number }) {
           icon="sidebar.left"
           size={GLYPH}
           onPress={() => useBrowser.getState().toggleSidebar(windowId)}
-          tooltip="Auto-Hide Tabs (⌘S)"
+          tooltip={withShortcut("Auto-Hide Tabs", sidebarHint)}
         />
       )}
       {tab ? <NavigationButtons tab={tab} palette={palette} buttons={shown} slots={at.slice(toggle ? 1 : 0).map(place)} /> : null}

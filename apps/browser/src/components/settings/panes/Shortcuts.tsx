@@ -10,44 +10,18 @@ import { Anchor, Button, Group, PopUp, Row, SearchField, SectionHeader, Toggle, 
 import { shortcutItems } from "../paneData";
 import { useResource } from "../resources";
 import { PRODUCT } from "../../../lib/productName";
+import { resolvedShortcuts, useMenuBarRevision } from "../../../lib/commandShortcuts";
+import { formatShortcut, sameShortcut, type Shortcut } from "../../../lib/shortcuts";
 
-type Combo = { key: string; modifiers: string[] };
 type Filter = "all" | "customized" | "conflicts";
 
-const MOD_ORDER = ["control", "option", "shift", "command", "function"];
-const MOD_GLYPH: Record<string, string> = { control: "⌃", option: "⌥", shift: "⇧", command: "⌘", function: "🌐" };
-const KEY_NAMES: Record<string, string> = {
-  "\t": "⇥",
-  "\r": "↩",
-  "\u0003": "⌤",
-  "\u0008": "⌫",
-  "\u007f": "⌫",
-  "": "⌦",
-  "\u001b": "⎋",
-  " ": "Space",
-  "": "↑",
-  "": "↓",
-  "": "←",
-  "": "→",
-  "": "↖",
-  "": "↘",
-  "": "⇞",
-  "": "⇟",
-};
-
-function formatShortcut({ key, modifiers }: Combo): string {
-  if (!key) return "";
-  const mods = MOD_ORDER.filter((m) => modifiers.includes(m)).map((m) => MOD_GLYPH[m]).join("");
-  const code = key.charCodeAt(0);
-  const name = KEY_NAMES[key] ?? (code >= 0xf704 && code <= 0xf717 ? `F${code - 0xf703}` : key.toUpperCase());
-  return mods + name;
-}
-
-const comboId = (c: Combo) => (c.key ? `${[...c.modifiers].sort().join("+")}+${c.key.toLowerCase()}` : "");
+const NO_SHORTCUT: Shortcut = { key: "", modifiers: [] };
 
 export function ShortcutsPane() {
   const theme = useTheme();
   const overrides = useBrowser((s) => s.settings.shortcuts);
+  const profileOrder = useBrowser((s) => s.profileOrder);
+  const menuBar = useMenuBarRevision();
   const undoReopensClosedTab = useBrowser((s) => s.settings.undoReopensClosedTab);
   const [loaded] = useResource(shortcutItems);
   const items = loaded ?? null;
@@ -57,29 +31,12 @@ export function ShortcutsPane() {
 
   useEffect(() => () => void cancelShortcutRecording(), []);
 
-  const effective = (item: MenuShortcut): Combo => {
-    const o = overrides[item.id];
-    return o ? { key: o[0] ?? "", modifiers: o.slice(1) } : { key: item.defaultKey, modifiers: item.defaultModifiers };
-  };
+  const resolved = useMemo(() => resolvedShortcuts({ settings: { shortcuts: overrides }, profileOrder }), [items, overrides, profileOrder, menuBar]);
+  const byId = useMemo(() => new Map((items ?? []).map((item) => [item.id, item])), [items]);
+  const effective = (item: MenuShortcut): Shortcut => resolved.bindings.get(item.id)?.[0] ?? NO_SHORTCUT;
+  const conflictsOf = (item: MenuShortcut) => resolved.conflictsOf(item.id).flatMap((id) => byId.get(id) ?? []);
 
-  const combosOf = useMemo(() => {
-    const taken = new Set(Object.values(overrides).map((o) => comboId({ key: o[0] ?? "", modifiers: o.slice(1) })));
-    return (item: MenuShortcut) => {
-      const aliases = overrides[item.id] ? [] : (item.aliases ?? []).map((a) => comboId({ key: a[0] ?? "", modifiers: a.slice(1) }));
-      return [...new Set([comboId(effective(item)), ...aliases.filter((id) => !taken.has(id))])].filter(Boolean);
-    };
-  }, [overrides]);
-
-  const conflicts = useMemo(() => {
-    const byCombo = new Map<string, MenuShortcut[]>();
-    for (const item of items ?? []) for (const id of combosOf(item)) byCombo.set(id, [...(byCombo.get(id) ?? []), item]);
-    return byCombo;
-  }, [items, combosOf]);
-  const conflictsOf = (item: MenuShortcut) => [
-    ...new Set(combosOf(item).flatMap((id) => conflicts.get(id) ?? []).filter((x) => x.id !== item.id)),
-  ];
-
-  const setShortcut = (id: string, combo: Combo | null) => {
+  const setShortcut = (id: string, combo: Shortcut | null) => {
     const next = { ...useBrowser.getState().settings.shortcuts };
     if (combo) next[id] = [combo.key, ...combo.modifiers];
     else delete next[id];
@@ -91,7 +48,7 @@ export function ShortcutsPane() {
     const combo = await recordShortcut();
     setRecording(null);
     if (!combo) return;
-    const isDefault = combo.key === item.defaultKey && comboId(combo) === comboId({ key: item.defaultKey, modifiers: item.defaultModifiers });
+    const isDefault = sameShortcut(combo, { key: item.defaultKey, modifiers: item.defaultModifiers });
     setShortcut(item.id, isDefault ? null : combo);
   };
 
@@ -190,7 +147,7 @@ function ShortcutField({
   onRecord,
   onClear,
 }: {
-  combo: Combo;
+  combo: Shortcut;
   remappable: boolean;
   recording: boolean;
   onRecord: () => void;

@@ -295,6 +295,9 @@ final class ArcGradientLayer: CALayer {
 
 final class GrainLayer: CALayer {
   static let side = 128
+  static let arcDarkening: [String: (gain: Float, floor: Float)] = [
+    "grain": (0.211, 0), "sand": (0.937, 0.132), "denim": (0.226, 0.068), "tweed": (0.23, 0.261),
+  ]
   private static var patterns: [String: CGColor] = [:]
 
   var texture = "grain" { didSet { if texture != oldValue { backgroundColor = Self.pattern(texture) } } }
@@ -362,8 +365,9 @@ final class GrainLayer: CALayer {
         alpha[i] = u * u
       }
     }
+    let match = arcDarkening[texture] ?? arcDarkening["grain"]!
     var bytes = [UInt8](repeating: 0, count: n * n * 4)
-    for i in 0..<(n * n) { bytes[i * 4 + 3] = UInt8(min(255, alpha[i] * 255)) }
+    for i in 0..<(n * n) { bytes[i * 4 + 3] = UInt8(min(255, max(0, match.floor + match.gain * alpha[i]) * 255)) }
     guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
     return CGImage(width: n, height: n, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: n * 4,
                    space: CGColorSpace(name: CGColorSpace.sRGB)!,

@@ -1,6 +1,7 @@
 import { Symbol, showMenu, type MenuItem } from "@ardia/shell";
 import { Pressable, Text, View } from "react-native";
 import { createProfile, openWindow, switchProfile } from "../lib/actions";
+import { menuCommandAlternate, menuShortcut } from "../lib/commandShortcuts";
 import { profileAccent, profileNameColor, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
 import { useIsIncognito, useProfiles, useWindowId, useWindowProfile } from "../store/hooks";
@@ -81,15 +82,14 @@ export async function openProfileMenu(windowId: string) {
   const s = useBrowser.getState();
   const current = s.windows[windowId]?.profileId;
   const items: MenuItem[] = [
-    ...s.profileOrder.flatMap((id, i): MenuItem[] => {
+    ...s.profileOrder.flatMap((id): MenuItem[] => {
       const profile = s.profiles[id]!;
       const swatch = profileAccent(profile);
-      const key = i < 9 ? { key: String(i + 1) } : {};
-      const modifiers: ("control" | "command")[] = i < 9 ? ["control"] : [];
-      return [
-        { id: `switch:${id}`, title: profile.name, checked: id === current, swatch, ...key, modifiers },
-        { id: `window:${id}`, title: `${profile.name} ↗`, alternate: true, swatch, ...key, modifiers: [...modifiers, "command"] },
-      ];
+      const shortcut = menuShortcut(`switchProfile:${id}`, s);
+      const alternate = menuCommandAlternate(`switchProfile:${id}`, s);
+      const switchItem: MenuItem = { id: `switch:${id}`, title: profile.name, checked: id === current, swatch, ...shortcut, modifiers: shortcut.modifiers ?? [] };
+      if (!alternate) return [switchItem];
+      return [switchItem, { id: `window:${id}`, title: `${profile.name} ↗`, alternate: true, swatch, ...alternate }];
     }),
     { separator: true },
     { id: "new", title: "New Profile", symbol: "plus" },

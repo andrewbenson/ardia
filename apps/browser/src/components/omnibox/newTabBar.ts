@@ -1,7 +1,7 @@
 import { onAppEvent, onWindowEvent } from "@ardia/shell";
 import { webviews } from "../../lib/webviews";
 import { useBrowser, type BrowserState } from "../../store/browser";
-import { activeTabId, inPinnedContainer } from "../../store/model";
+import { activeTabId } from "../../store/model";
 import { isEmptyCardTab, NEW_TAB_BAR_POLICY, newTabOpensBar } from "../../store/newTabBar";
 import { isSmall } from "../../store/small";
 import type { NewTabTarget } from "../../store/types";
@@ -44,13 +44,6 @@ export function closeNewTabBar(windowId: string) {
   if (active && store().tabs[active]?.url) void webviews.get(active)?.focus();
 }
 
-function topOfList(s: BrowserState, windowId: string): number | undefined {
-  const w = s.windows[windowId];
-  if (!w || !NEW_TAB_BAR_POLICY.pickGoesToTopOfList) return undefined;
-  const first = w.tabIds.findIndex((id) => s.tabs[id]?.profileId === w.profileId && !inPinnedContainer(s, id));
-  return first >= 0 ? first : w.tabIds.length;
-}
-
 export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: string) {
   const s = store();
   if (!url || !s.windows[windowId] || !s.windowUi[windowId]?.panel.newTab) return;
@@ -64,7 +57,7 @@ export function openFromNewTabBar(windowId: string, target: NewTabTarget, url: s
     store().navigate(id, url);
     return store().activate(id);
   }
-  store().newTab(windowId, { url, index: topOfList(store(), windowId), newTabCommand: true });
+  store().newTab(windowId, { url, newTabCommand: true });
 }
 
 const launchTabs = new Set<string>();

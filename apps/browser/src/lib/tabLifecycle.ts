@@ -9,6 +9,7 @@ import { openSettings } from "../components/settings/windows";
 import { useBrowser, type BrowserState } from "../store/browser";
 import type { BatterySaverWhen } from "../store/settings";
 import { activeTabId, engineProfile, isIncognitoProfile, wake } from "../store/model";
+import { restoredLazily } from "../store/pageSession";
 import { peekTabId } from "../store/peek";
 import { holderOf } from "../store/pinShare";
 import { splitOf } from "../store/splits";
@@ -338,7 +339,7 @@ export function reloadRecentTabs(sys: SystemState) {
   const shown = shownTabIds(s);
   const since = Date.now() - 24 * 60 * 60_000;
   const ids = Object.values(s.tabs)
-    .filter((t) => t.url && !t.navigation && !t.adoptId && !t.unloaded && !t.pageIn && !shown.has(t.id) && !isInternalTab(t) && t.lastActiveAt >= since)
+    .filter((t) => restoredLazily(t) && !shown.has(t.id) && !isInternalTab(t) && t.lastActiveAt >= since)
     .filter((t) => s.windows[t.windowId]?.profileId === t.profileId)
     .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
     .slice(0, count)
@@ -347,7 +348,7 @@ export function reloadRecentTabs(sys: SystemState) {
     setTimeout(() => {
       const now = store();
       const t = now.tabs[id];
-      if (t?.url && !t.navigation && !t.adoptId && !t.unloaded && !t.pageIn && !holderOf(now, id)) now.updateTab(id, wake(t));
+      if (t && restoredLazily(t) && !holderOf(now, id)) now.updateTab(id, wake(t));
     }, 2000 * (i + 1)),
   );
   return ids;

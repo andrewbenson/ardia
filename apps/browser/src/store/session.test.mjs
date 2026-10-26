@@ -5,7 +5,7 @@ const model = await import("./model.ts");
 const { migrateHistoryFile, reloadHistory, startHistory } = await import("../lib/history.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");
 const { firstWindowCommitted } = await import("../lib/afterFirstWindow.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const reset = () => S().hydrate({});

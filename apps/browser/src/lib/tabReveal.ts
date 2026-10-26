@@ -4,6 +4,7 @@ import { pageOf } from "../components/layout/pageState";
 import { useToolbarAutoHide } from "../components/layout/toolbarAutoHide";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { activeTabId } from "../store/model";
+import { hasPage } from "../store/pageSession";
 import { splitOf } from "../store/splits";
 import type { Tab } from "../store/types";
 
@@ -12,7 +13,7 @@ const OFFERED = /^(tab|ardiacore):/;
 
 export type Switch = { tabId: string; offered?: string; over: string } | { tabId: null; over: string };
 
-const hasPage = (t: Tab | undefined): t is Tab => !!t && !!(t.navigation || t.adoptId) && WEB_PAGE.test(t.url);
+const hasWebPage = (t: Tab | undefined): t is Tab => !!t && hasPage(t) && WEB_PAGE.test(t.url);
 
 function plainPage(tabId: string): boolean {
   const page = pageOf(tabId);
@@ -27,9 +28,9 @@ function revealFor(s: BrowserState, prev: BrowserState, windowId: string, next: 
   if (Object.keys(useMedia.getState().tabShares).length) return null;
   const tab = s.tabs[next];
   const had = prev.tabs[next];
-  if (!hasPage(tab) || tab.windowId !== windowId) return null;
-  if (hasPage(had)) return had.windowId === windowId && was.tabIds.includes(next) ? { tabId: next, over: before } : null;
-  if (!had && tab.adoptId && OFFERED.test(tab.adoptId) && hasPage(prev.tabs[before]) && !useToolbarAutoHide.getState().scrolledDown[before])
+  if (!hasWebPage(tab) || tab.windowId !== windowId) return null;
+  if (hasWebPage(had)) return had.windowId === windowId && was.tabIds.includes(next) ? { tabId: next, over: before } : null;
+  if (!had && tab.adoptId && OFFERED.test(tab.adoptId) && hasWebPage(prev.tabs[before]) && !useToolbarAutoHide.getState().scrolledDown[before])
     return { tabId: next, offered: tab.adoptId, over: before };
   return null;
 }

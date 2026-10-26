@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-await import("../../test-native-stub.mjs");
+await import("../../test-native/index.ts");
 const { extensionActionChange } = await import("../../../../../packages/ardiacore/src/extensions.ts");
 
 test("an action event keeps the engine profile name the bridge already resolved", () => {

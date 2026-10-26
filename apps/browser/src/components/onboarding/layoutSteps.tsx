@@ -141,7 +141,7 @@ export function LayoutStep() {
   );
 }
 
-const TABS_KEYS = ["newTabOpens", "newTabPosition", "cleanUpInactiveTabsAfterHours", "restoreSession", "shareTabsAcrossWindows"] as const;
+const TABS_KEYS = ["newTabOpens", "newTabPosition", "newTabButtonPosition", "cleanUpInactiveTabsAfterHours", "restoreSession", "shareTabsAcrossWindows"] as const;
 const TABS_MORE = ["balancedTopApps", "peekModifier", "undoReopensClosedTab", "cmdClickCreatesTabGroup"] as const;
 
 const NEW_TAB_CHOICES: ChoiceOption<Settings["newTabOpens"]>[] = [
@@ -190,11 +190,11 @@ export function TabsStep() {
         id={id}
         title="Where do new tabs go?"
         subtitle="Where a tab lands when you open it."
-        patch={{ newTabPosition: values.newTabPosition }}
+        patch={{ newTabPosition: values.newTabPosition, newTabButtonPosition: values.newTabButtonPosition }}
         picked={[]}
         preview={preview}
       >
-        <ChoiceList options={options} value={values.newTabPosition} onChange={(newTabPosition) => change({ newTabPosition })} mock={focus} />
+        <ChoiceList options={options} value={values.newTabPosition} onChange={(newTabPosition) => change({ newTabPosition, newTabButtonPosition: newTabPosition === "top" ? "top" : "bottom" })} mock={focus} />
       </Page>
     );
   }

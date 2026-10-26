@@ -50,6 +50,11 @@ const NEW_TABS_ACROSS: { value: Settings["newTabPosition"]; title: string }[] = 
   { value: "nextToCurrent", title: "Next to the current tab" },
 ];
 
+const NEW_TAB_BUTTON: { value: Settings["newTabButtonPosition"]; title: string }[] = [
+  { value: "bottom", title: "At the bottom" },
+  { value: "top", title: "At the top" },
+];
+
 const CLEAN_UP = [
   { value: "12", title: "12 hours" },
   { value: "24", title: "24 hours" },
@@ -79,7 +84,7 @@ export function TabsPane() {
         {!top && toggle("showSidebarButton", "tabs.showSidebarButton")}
         {!top && toggle("showClearButton", "tabs.showClearButton")}
         {!top && toggle("balancedTopApps", "tabs.balancedTopApps")}
-        {!top && liquidGlass && toggle("pinnedTabIconRing", "tabs.pinnedTabIconRing")}
+        {liquidGlass && toggle("pinnedTabIconRing", "tabs.pinnedTabIconRing")}
         {toggle("fadeUnloadedTabs", "tabs.fadeUnloadedTabs")}
       </Group>
 
@@ -99,6 +104,11 @@ export function TabsPane() {
         <Row anchor="tabs.newTabPosition">
           <PopUp value={settings.newTabPosition} options={top ? NEW_TABS_ACROSS : NEW_TABS_DOWN} onChange={(newTabPosition) => update({ newTabPosition })} minWidth={190} />
         </Row>
+        {!top && (
+          <Row anchor="tabs.newTabButtonPosition">
+            <PopUp value={settings.newTabButtonPosition} options={NEW_TAB_BUTTON} onChange={(newTabButtonPosition) => update({ newTabButtonPosition })} minWidth={190} />
+          </Row>
+        )}
         {toggle("shareTabsAcrossWindows", "tabs.shareTabsAcrossWindows")}
         {toggle("tabReorderHaptics", "tabs.tabReorderHaptics")}
         {toggle("extendWebsiteColor", "tabs.extendWebsiteColor")}

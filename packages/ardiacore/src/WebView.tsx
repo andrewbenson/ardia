@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useRef } from "react";
 import { findNodeHandle, type NativeSyntheticEvent, type ViewProps } from "react-native";
 import type { ExternalAppRequest } from "./externalApps";
 import type { FaviconImage } from "./favicons";
-import type { PageEngine } from "./webkit";
+import type { PageCookie, PageEngine } from "./webkit";
 
 export type NavigationState = {
   url: string;
@@ -226,6 +226,7 @@ export type WebViewHandle = {
   exitPictureInPicture(): Promise<void>;
 
   getSecurityInfo(): Promise<SecurityInfo | null>;
+  pageCookies(urls: string[]): Promise<PageCookie[]>;
   openBlockedPopup(id: string, always?: boolean): Promise<void>;
   clearSiteData(): Promise<{ cookies: number | false; storage: boolean }>;
 
@@ -396,6 +397,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       takeControlPress: (press) => call(false, (n) => n.takeControlPress(press.clickAt, press.control)),
       exitPictureInPicture: () => call(undefined, (n) => n.exitPictureInPicture()),
       getSecurityInfo: () => call(null, (n) => n.getSecurityInfo()),
+      pageCookies: (urls) => call<PageCookie[]>([], (n) => n.pageCookies(urls)),
       openBlockedPopup: (id, always) => call(undefined, (n) => n.openBlockedPopup(id, always)),
       clearSiteData: () => call({ cookies: false, storage: false }, (n) => n.clearSiteData()),
       resolvePasswordPrompt: (answer, edits) =>

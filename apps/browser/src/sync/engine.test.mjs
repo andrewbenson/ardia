@@ -35,7 +35,7 @@ globalThis.acTestNativeModules = {
   },
 };
 
-const shell = await import("@ardia/shell");
+const shell = await import("../test-native/index.ts");
 const { useBrowser } = await import("../store/browser.ts");
 const S = () => useBrowser.getState();
 const reset = () => (S().hydrate({}), useBrowser.setState({ bookmarksReady: { default: true } }));

@@ -6,7 +6,7 @@ const dm = await import("./dockMotion.ts");
 const { toolbarGeometry } = await import("./geometry.ts");
 const { useBrowser } = await import("../../store/browser.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../../lib/persist.ts");
-const stub = await import("../../test-native-stub.mjs");
+const stub = await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 

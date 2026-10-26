@@ -50,14 +50,9 @@ public class TranslateModule: Module {
       return await TranslationSessions.translateBlocks(source: source, target: target, blocks)
     }
 
-    AsyncFunction("translate") { (source: String, target: String, texts: [String]) async throws -> [String] in
+    AsyncFunction("translate") { (source: String, target: String, texts: [String]) async throws -> [String?] in
       guard #available(macOS 26.0, *) else { throw TranslateError.unavailable }
-      let requests = texts.enumerated().map { TranslationSession.Request(sourceText: $0.element, clientIdentifier: String($0.offset)) }
-      var out = texts
-      for response in try await TranslationSessions.translations(source: source, target: target, requests) {
-        if let i = response.clientIdentifier.flatMap(Int.init), out.indices.contains(i) { out[i] = response.targetText }
-      }
-      return out
+      return try await TranslationSessions.translate(source: source, target: target, texts)
     }
   }
 }
@@ -71,6 +66,10 @@ extension TranslateModule {
       text += run
     }
     return text
+  }
+
+  static func isUnchanged(_ parts: [String], from pieces: [String]) -> Bool {
+    parts.joined().filter { !$0.isWhitespace } == pieces.joined().filter { !$0.isWhitespace }
   }
 
   static func parts(of translated: AttributedString, over pieces: [String]) -> [String]? {
@@ -99,6 +98,7 @@ extension TranslateModule {
 @MainActor
 enum TranslationSessions {
   private static var sessions: [String: TranslationSession] = [:]
+  private static var lowLatencyPairs: Set<String> = []
   private static var tail: Task<Void, Never>?
   private static var uses = 0
   private static let idleSeconds = 60.0
@@ -112,8 +112,17 @@ enum TranslationSessions {
   private static var memo: [PassageKey: [String]] = [:]
   private static let memoLimit = 5000
 
-  static func translations(source: String, target: String, _ requests: [TranslationSession.Request]) async throws -> [TranslationSession.Response] {
-    try await run(source: source, target: target) { try await $0.translations(from: requests) }
+  static func translations(source: String, target: String, standard: Bool = false, _ requests: [TranslationSession.Request]) async throws -> [TranslationSession.Response] {
+    try await run(source: source, target: target, standard: standard) { try await $0.translations(from: requests) }
+  }
+
+  static func translate(source: String, target: String, _ texts: [String]) async throws -> [String?] {
+    let requests = texts.enumerated().map { TranslationSession.Request(sourceText: $0.element, clientIdentifier: String($0.offset)) }
+    var out: [String?] = texts.map { _ in nil }
+    for response in try await translations(source: source, target: target, requests) {
+      if let i = response.clientIdentifier.flatMap(Int.init), out.indices.contains(i) { out[i] = response.targetText }
+    }
+    return out
   }
 
   @available(macOS 26.4, *)
@@ -125,40 +134,61 @@ enum TranslationSessions {
     for (key, pieces) in zip(keys, blocks) where asked.insert(key).inserted {
       if let known = memo[key] { found[key] = known } else { pending.append((key, pieces)) }
     }
-    let single = pending.filter { $0.pieces.count == 1 }
-    if !single.isEmpty {
-      let requests = single.enumerated().map { TranslationSession.Request(sourceText: $0.element.pieces[0], clientIdentifier: String($0.offset)) }
-      for response in (try? await translations(source: source, target: target, requests)) ?? [] {
-        guard let i = response.clientIdentifier.flatMap(Int.init), single.indices.contains(i) else { continue }
-        found[single[i].key] = [response.targetText]
-      }
+    await translatePassages(source: source, target: target, standard: false, pending, into: &found)
+    let unchanged = pending.filter { passage in
+      guard let parts = found[passage.key] else { return true }
+      return TranslateModule.isUnchanged(parts, from: passage.pieces)
     }
-    for (key, pieces) in pending where found[key] == nil {
-      let text = TranslateModule.linkedPieces(pieces)
-      guard let translated = try? await run(source: source, target: target, { try await $0.translate(text).attributedTargetText }),
-        let parts = TranslateModule.parts(of: translated, over: pieces)
-      else { continue }
-      found[key] = parts
+    if !unchanged.isEmpty, lowLatencyPairs.contains(pairKey(source, target)),
+      await LanguageAvailability().status(from: Locale.Language(identifier: source), to: Locale.Language(identifier: target)) == .installed
+    {
+      await translatePassages(source: source, target: target, standard: true, unchanged, into: &found)
     }
-    for (key, _) in pending { if let parts = found[key] { remember(key, parts) } }
+    for (key, pieces) in pending {
+      if let parts = found[key], !TranslateModule.isUnchanged(parts, from: pieces) { remember(key, parts) }
+    }
     return keys.map { found[$0] }
   }
+
+  @available(macOS 26.4, *)
+  private static func translatePassages(source: String, target: String, standard: Bool, _ passages: [(key: PassageKey, pieces: [String])], into found: inout [PassageKey: [String]]) async {
+    var answered = Set<PassageKey>()
+    let single = passages.filter { $0.pieces.count == 1 }
+    if !single.isEmpty {
+      let requests = single.enumerated().map { TranslationSession.Request(sourceText: $0.element.pieces[0], clientIdentifier: String($0.offset)) }
+      for response in (try? await translations(source: source, target: target, standard: standard, requests)) ?? [] {
+        guard let i = response.clientIdentifier.flatMap(Int.init), single.indices.contains(i) else { continue }
+        let parts = [response.targetText]
+        if found[single[i].key] == nil || !TranslateModule.isUnchanged(parts, from: single[i].pieces) { found[single[i].key] = parts }
+        answered.insert(single[i].key)
+      }
+    }
+    for (key, pieces) in passages where !answered.contains(key) {
+      let text = TranslateModule.linkedPieces(pieces)
+      guard let translated = try? await run(source: source, target: target, standard: standard, { try await $0.translate(text).attributedTargetText }),
+        let parts = TranslateModule.parts(of: translated, over: pieces)
+      else { continue }
+      if found[key] == nil || !TranslateModule.isUnchanged(parts, from: pieces) { found[key] = parts }
+    }
+  }
+
+  private static func pairKey(_ source: String, _ target: String) -> String { "\(source)>\(target)" }
 
   private static func remember(_ key: PassageKey, _ parts: [String]) {
     if memo.count >= memoLimit { memo.removeAll() }
     memo[key] = parts
   }
 
-  private static func run<T: Sendable>(source: String, target: String, _ work: @escaping @MainActor (TranslationSession) async throws -> T) async throws -> T {
+  private static func run<T: Sendable>(source: String, target: String, standard: Bool = false, _ work: @escaping @MainActor (TranslationSession) async throws -> T) async throws -> T {
     let previous = tail
     let task = Task { @MainActor () async throws -> T in
       await previous?.value
-      let key = "\(source)>\(target)"
+      let key = standard ? "\(pairKey(source, target))>standard" : pairKey(source, target)
       let session: TranslationSession
       if let cached = sessions[key] {
         session = cached
       } else {
-        session = await make(source: source, target: target)
+        session = await make(source: source, target: target, standard: standard)
         sessions[key] = session
       }
       do {
@@ -182,11 +212,14 @@ enum TranslationSessions {
     }
   }
 
-  private static func make(source: String, target: String) async -> TranslationSession {
+  private static func make(source: String, target: String, standard: Bool) async -> TranslationSession {
     let from = Locale.Language(identifier: source), to = Locale.Language(identifier: target)
+    if standard { return TranslationSession(installedSource: from, target: to) }
     if #available(macOS 26.4, *), await LanguageAvailability(preferredStrategy: .lowLatency).status(from: from, to: to) == .installed {
+      lowLatencyPairs.insert(pairKey(source, target))
       return TranslationSession(installedSource: from, target: to, preferredStrategy: .lowLatency)
     }
+    lowLatencyPairs.remove(pairKey(source, target))
     return TranslationSession(installedSource: from, target: to)
   }
 }

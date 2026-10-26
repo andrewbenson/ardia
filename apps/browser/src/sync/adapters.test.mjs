@@ -4,7 +4,9 @@ const { useBrowser } = await import("../store/browser.ts");
 const model = await import("../store/model.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
 const adapters = await import("./adapters.ts");
-const stub = await import("../test-native-stub.mjs");
+const pinnedArea = await import("./pinned.ts");
+const stub = await import("../test-native/index.ts");
+const ardiacore = await import("@ardia/ardiacore");
 
 const S = () => useBrowser.getState();
 
@@ -31,10 +33,11 @@ class Folder {
 }
 
 class Device {
-  constructor(id, folder, { legacy = false } = {}) {
+  constructor(id, folder, { legacy = false, settings } = {}) {
     this.id = id;
     this.folder = folder;
     this.legacy = legacy;
+    this.settings = settings;
     S().hydrate({});
     useBrowser.setState({ historyReady: { default: true }, bookmarksReady: { default: true } });
     this.browser = S();
@@ -66,12 +69,13 @@ class Device {
         options,
       });
     try {
-      const app = await run("app", [adapters.settingsAdapter]);
+      if (!this.settings) this.scopes.app.unapplied = [...new Set([...this.scopes.app.unapplied, ...adapters.settingsToReapply(this.scopes.app.records)])];
+      const app = await run("app", [this.settings ?? adapters.settingsAdapter]);
       const p = await run(
         profileId === "default" ? "p" : `p:${profileId}`,
         [
-          ...(this.legacy ? [] : [adapters.pinnedRowsAdapter(profileId), adapters.pinnedOrderAdapter(profileId)]),
-          adapters.pinnedAdapter(profileId),
+          ...(this.legacy ? [] : [pinnedArea.pinnedRowsAdapter(profileId), pinnedArea.pinnedOrderAdapter(profileId)]),
+          pinnedArea.pinnedAdapter(profileId),
           adapters.bookmarksAdapter(profileId),
           adapters.historyAdapter(profileId),
           adapters.deviceTabsAdapter(profileId, this.id, () => `${this.id}'s MacBook Pro`),
@@ -535,7 +539,7 @@ test("a deletion from another Mac applied after a pin removal here takes the rem
   S().closeTab(tab);
   const removed = S().removeClosedPin(tab);
   assert.ok(removed);
-  adapters.pinnedAdapter("default").apply(new Map(), new Set([`pin:t:${pinKey}`, `pin:g:${group}`]), () => undefined, { known: () => true, now: Date.now(), horizon: 0, joined: true });
+  pinnedArea.pinnedAdapter("default").apply(new Map(), new Set([`pin:t:${pinKey}`, `pin:g:${group}`]), () => undefined, { known: () => true, now: Date.now(), horizon: 0, joined: true });
   S().undoClearTabs(removed);
   assert.equal(Object.values(S().groups).some((g) => g.name === "Team"), false, "Undo does nothing");
 });
@@ -960,8 +964,8 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  const save = (d, origin, user, password) => d.with(() => stub.savePassword("", origin, user, password));
-  const remove = (d, origin, user) => d.with(() => stub.deletePassword("", origin, user));
+  const save = (d, origin, user, password) => d.with(() => ardiacore.savePassword("", origin, user, password));
+  const remove = (d, origin, user) => d.with(() => ardiacore.deletePassword("", origin, user));
   const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.url} ${l.username}=${l.password}`).sort();
   await save(a, "https://bank.example", "alice", "hunter2");
   await save(a, "https://mail.example", "alice", "m41l");
@@ -983,7 +987,7 @@ test("history: two Macs settle on the union of their visits in Chrome, publish n
   for (const d of [a, b]) stub.historyDbs.delete(d.id);
   const readChrome = async (d) => {
     stub.current.device = d.id;
-    const entries = await stub.queryHistory("");
+    const entries = await ardiacore.queryHistory("");
     d.with(() =>
       useBrowser.setState({
         history: { default: entries.map((e) => ({ ...e, favicon: null, lastVisit: e.visitTimes.at(-1) })) },
@@ -1749,7 +1753,7 @@ test("only evidence that the anchor left the rows after the order record ends th
   const orderKey = `pord:g:${group}`;
   const decide = (records) => {
     const base = (k) => (k === orderKey ? { a: "x" } : undefined);
-    const extraction = adapters.pinnedOrderAdapter("default").extract(base, () => false, Date.now(), (k) => k in records, (k) => records[k]?.v, (k) => records[k]?.h);
+    const extraction = pinnedArea.pinnedOrderAdapter("default").extract(base, () => false, Date.now(), (k) => k in records, (k) => records[k]?.v, (k) => records[k]?.h);
     return extraction.values.get(orderKey);
   };
   const order = { v: { a: "x" }, h: "0mvlhz4qh.0005.devA" };
@@ -1877,6 +1881,37 @@ test("a snapshot dropping the anchor in the cycle a newer order record arrives d
   const group = S().groupTabs([S().newTab(w, { url: "https://member.example/", background: true })], { pinned: true, name: "Group" });
   const orderKey = `pord:g:${group}`;
   const records = { [orderKey]: { v: { a: "x" }, h: "0mvlhz4qh.0009.devB" } };
-  const extraction = adapters.pinnedOrderAdapter("default").extract((k) => (k === orderKey ? { a: "x" } : undefined), () => false, Date.now(), (k) => k in records, (k) => records[k]?.v, (k) => records[k]?.h);
+  const extraction = pinnedArea.pinnedOrderAdapter("default").extract((k) => (k === orderKey ? { a: "x" } : undefined), () => false, Date.now(), (k) => k in records, (k) => records[k]?.v, (k) => records[k]?.h);
   assert.deepEqual(extraction.values.get(orderKey), { a: "x" }, "the group keeps waiting for its row");
+});
+
+const settingsWithout = (names) => ({
+  ...adapters.settingsAdapter,
+  extract: (...args) => {
+    const extraction = adapters.settingsAdapter.extract(...args);
+    const values = new Map([...extraction.values].filter(([k]) => !names.includes(k.slice(4))));
+    return { values, ignore: (key) => !values.has(key) };
+  },
+  apply: (visible, changed, base, records) => adapters.settingsAdapter.apply(visible, new Set([...changed].filter((k) => !names.includes(k.slice(4)))), base, records),
+});
+
+test("settings received while this Mac ran a version that didn't sync them take effect once it does, and its own choices stay", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder, { settings: settingsWithout(["selectedTabGlow", "pageScrollBars"]) });
+  for (const d of [a, b]) d.with(() => S().createWindow({ url: `https://${d.id}.example/` }));
+  await syncAll([a, b]);
+  b.with(() => S().updateSettings({ pageScrollBars: "system" }));
+  a.with(() => S().updateSettings({ selectedTabGlow: "off", pageScrollBars: "thin" }));
+  await syncAll([a, b]);
+  assert.equal(b.with(() => S().settings.selectedTabGlow), "full", "the older version leaves it alone");
+  assert.ok("set:selectedTabGlow" in b.scopes.app.base && !b.scopes.app.unapplied.includes("set:selectedTabGlow"), "and counts it as applied");
+
+  b.settings = undefined;
+  await syncAll([b, a]);
+  assert.equal(b.with(() => S().settings.selectedTabGlow), "off", "the synced value takes effect after the upgrade");
+  assert.ok(!b.with(() => S().settings.chosen?.includes("selectedTabGlow")), "as a synced value, not a choice made here");
+  assert.equal(b.with(() => S().settings.pageScrollBars), "system", "a value chosen here stays");
+  assert.equal(a.with(() => S().settings.pageScrollBars), "system", "and goes out as the newer edit");
+  assert.equal((await b.sync()).published, 0, "settled");
 });

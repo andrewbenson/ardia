@@ -5,9 +5,9 @@ import { switchOn } from "../lib/killSwitches";
 import { live } from "../live/store";
 import { everySlowly } from "../lib/slowTimers";
 import { layout, ThemeScope, useTheme } from "../lib/theme";
-import { useBrowser } from "../store/browser";
+import { useBrowser, type BrowserState } from "../store/browser";
 import { PageProfileContext, useSettings, useWindowId, useWindowProfileId } from "../store/hooks";
-import { activeTabId } from "../store/model";
+import { activeTabId, isIncognitoProfile } from "../store/model";
 import { downloadsIn } from "../store/ui";
 import { ancestorIds } from "../store/groups";
 import { cleanedTabsFor, cleanUpCandidates, groupOf } from "../store/organize";
@@ -47,6 +47,7 @@ import { closeFolderPanel } from "./sidebar/tileFolderUi";
 import { useSidebarTokens } from "./sidebar/tokens";
 import { toggleNewTabBar } from "./omnibox/newTabBar";
 import { PRODUCT } from "../lib/productName";
+import { INCOGNITO_ICON } from "./ntp/IncognitoHeading";
 
 const GLOW_ROOM = 24;
 const ROW_PITCH = layout.rowHeight + layout.rowGap;
@@ -62,7 +63,7 @@ export function Sidebar({ width }: { width: number }) {
   const [available, setAvailable] = useState(0);
   const listHeights = useRef(new Map<string, number>());
   const [, setDockChanges] = useState(0);
-  const newTabAtTop = useSettings((s) => s.newTabPosition === "top");
+  const newTabAtTop = useSettings((s) => s.newTabButtonPosition === "top");
   const dockedPage = (profileId: string) => !newTabAtTop && available > 0 && (listHeights.current.get(profileId) ?? 0) + ROW_PITCH + 12 > available;
   const onListHeight = (profileId: string, height: number) => {
     const before = dockedPage(profileId);
@@ -74,7 +75,6 @@ export function Sidebar({ width }: { width: number }) {
   const geometry = useRef<SidebarGeometry>({ viewport: 0, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, room: 0, pad: 0, tilesFixed: true });
   const addressBar = useAddressBarInSidebar();
   const header = addressBar ? SIDEBAR_HEADER_WITH_FIELD : layout.sidebarHeader;
-  const glowRoom = addressBar ? 0 : GLOW_ROOM;
   const hasDownloads = useBrowser((s) => downloadsIn(s, windowId).length > 0);
   const dots = useProfileDotsShown();
   const footerDownloads = addressBar && hasDownloads;
@@ -98,7 +98,7 @@ export function Sidebar({ width }: { width: number }) {
               position: "absolute",
               left: 0,
               right: 0,
-              top: header - glowRoom,
+              top: header - GLOW_ROOM,
               bottom: footer,
               overflow: paging ? "hidden" : "visible",
             }}
@@ -113,8 +113,7 @@ export function Sidebar({ width }: { width: number }) {
                 current={page.id === current}
                 resting={!!page.resting}
                 docked={dockedPage(page.id)}
-                glowRoom={glowRoom}
-                height={available}
+                height={Math.max(0, available - (addressBar ? GLOW_ROOM : 0))}
                 rows={page.id === current ? undefined : Math.ceil(available / ROW_PITCH) + 1}
                 geometry={page.id === current ? geometry : undefined}
                 onListHeight={onListHeight}
@@ -182,7 +181,6 @@ type PageProps = {
   current: boolean;
   resting: boolean;
   docked: boolean;
-  glowRoom: number;
   height: number;
   rows: number | undefined;
   geometry: RefObject<SidebarGeometry> | undefined;
@@ -191,7 +189,7 @@ type PageProps = {
   onScrollY: (y: number) => void;
 };
 
-function SidebarPage({ profileId, slot, width, current, resting, docked, glowRoom, height, rows, geometry, onListHeight, onScrollView, onScrollY }: PageProps) {
+function SidebarPage({ profileId, slot, width, current, resting, docked, height, rows, geometry, onListHeight, onScrollView, onScrollY }: PageProps) {
   const windowId = useWindowId();
   const topGap = listTopGap(useAddressBarInSidebar());
   const pageStyle = usePageStyle(windowId, slot, width);
@@ -218,10 +216,9 @@ function SidebarPage({ profileId, slot, width, current, resting, docked, glowRoo
   const capped = dockFixed && dragging && gridHeight(previewed) > dockRoom;
   const fixedTiles = dockFixed ? tiles : NONE;
   const scrolledTiles = dockFixed ? NONE : tiles;
-  const room = fixedTiles.length ? 0 : glowRoom;
-  const pad = room + SCROLL_EDGE.inset;
+  const pad = GLOW_ROOM + SCROLL_EDGE.inset;
   if (geometry) {
-    geometry.current.room = room;
+    geometry.current.room = GLOW_ROOM;
     geometry.current.pad = pad;
     geometry.current.tilesFixed = dockFixed;
   }
@@ -238,7 +235,7 @@ function SidebarPage({ profileId, slot, width, current, resting, docked, glowRoo
       },
     }),
   );
-  const edge = useMemo(() => scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, room], extrapolate: "clamp" }), [scrollY, room]);
+  const edge = useMemo(() => scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, GLOW_ROOM], extrapolate: "clamp" }), [scrollY]);
   const fixed = useRef<{ height: number; list: number | null }>({ height: 0, list: null });
   const report = () => {
     if (!resting && fixed.current.list !== null) onListHeight(profileId, fixed.current.height + fixed.current.list + playerHeight);
@@ -265,14 +262,14 @@ function SidebarPage({ profileId, slot, width, current, resting, docked, glowRoo
             <PageContent>
               {(controller) => (
                 <TilesPlacement controller={controller} fixed={dockFixed} room={dockRoom}>
-                  <View onLayout={onFixedLayout} style={{ paddingTop: glowRoom }}>
+                  <View onLayout={onFixedLayout} style={{ paddingTop: GLOW_ROOM, zIndex: fixedTiles.length ? 1 : 0 }}>
                     <View style={[{ paddingHorizontal: layout.sidebarInset }, capped ? { maxHeight: topGap + dockRoom, overflow: "hidden" } : null]}>
                       {dockFixed ? <PinnedGrid tabs={fixedTiles} innerWidth={innerWidth} /> : null}
                     </View>
                     <View style={{ height: fixedTiles.length ? SCROLL_EDGE.gap : topGap - SCROLL_EDGE.inset - SCROLL_EDGE.line }} />
                     <ScrollEdgeLine opacity={scrollEdge.opacity} />
                   </View>
-                  <Animated.View style={{ flex: 1, marginTop: -room, overflow: "hidden", transform: [{ translateY: edge }] }}>
+                  <Animated.View style={{ flex: 1, marginTop: -GLOW_ROOM, overflow: "hidden", transform: [{ translateY: edge }] }}>
                     <Animated.View style={{ flex: 1, transform: [{ translateY: Animated.multiply(edge, -1) }] }}>
                       <Animated.ScrollView
                         ref={current ? onScrollView : undefined}
@@ -370,16 +367,17 @@ function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, 
   const divided = clearable || tidy;
   const pinned = usePinnedSequence(windowId, profileId, offScreen);
   const pinnedSection = pinned.length > 0;
-  const newTabsAtTop = useSettings((s) => s.newTabPosition === "top");
+  const newTabButtonAtTop = useSettings((s) => s.newTabButtonPosition === "top");
   const animated = current && !offScreen;
   const motion = useListMotion(windowId, profileId, all, captured, animated);
   const scope = useMemo(() => ({ enabled: animated, slideBelow: motion.slideBelow }), [animated, motion.slideBelow]);
-  if (geometry) geometry.current.newTabAtTop = newTabsAtTop && inlineNewTab;
+  if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
       <View
         onLayout={(e) => onListHeight(e.nativeEvent.layout.height + SCROLL_EDGE.inset - (inlineNewTab ? ROW_PITCH : 0))}
       >
+        {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
         {tiles.length ? <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush /> : null}
         <View
           ref={(v) => {
@@ -401,7 +399,7 @@ function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, 
           onLayout={geometry ? (e) => void (geometry.current.regions.list = e.nativeEvent.layout.y) : undefined}
           style={{ marginTop: pinnedSection && !divided ? 7 : 0, gap: layout.rowGap }}
         >
-          {newTabsAtTop && inlineNewTab ? <NewTabRow windowId={windowId} /> : null}
+          {newTabButtonAtTop && inlineNewTab ? <NewTabRow windowId={windowId} /> : null}
           {motion.fading
             ? motion.slots(list).map((slot) =>
                 "ghost" in slot ? (
@@ -413,7 +411,7 @@ function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, 
             : list.map((entry) => <ListEntry key={entry} entry={entry} motion={motion.motion(entry)} />)}
           {pending ? <View style={{ height: pending }} /> : null}
           <Tail id="tail:list" section="list" />
-          {!newTabsAtTop && inlineNewTab ? <NewTabRow windowId={windowId} shift={motion.tail} clip={motion.tailClip} /> : null}
+          {!newTabButtonAtTop && inlineNewTab ? <NewTabRow windowId={windowId} shift={motion.tail} clip={motion.tailClip} /> : null}
         </View>
         {current ? <CleanUpUpsell windowId={windowId} shift={motion.tail} /> : null}
       </View>
@@ -452,6 +450,9 @@ const Tail = memo(function Tail({ id, section }: { id: string; section: "list" |
   const { wrapper } = useDragItem(id, { kind: "tail", tabIds: [], section });
   return <Animated.View ref={wrapper.ref} style={wrapper.style} />;
 });
+
+const closedAway = (s: BrowserState, prev: BrowserState, tabId: string | undefined) =>
+  !!tabId && (!s.tabs[tabId] || (!!s.tabs[tabId]!.unloaded && !prev.tabs[tabId]?.unloaded));
 
 type SidebarGeometry = { viewport: number; regions: Record<Section, number>; newTabAtTop: boolean; room: number; pad: number; tilesFixed: boolean; laidOut?: () => void };
 
@@ -498,7 +499,8 @@ function useRevealTabs(windowId: string, scroll: RefObject<ScrollView | null>, s
     const unsubscribe = useBrowser.subscribe((s, prev) => {
       if (s.windows === prev.windows && s.tabs === prev.tabs) return;
       const active = activeTabId(s, windowId);
-      if (active && active !== activeTabId(prev, windowId)) switched = active;
+      const previous = activeTabId(prev, windowId);
+      if (active && active !== previous && !closedAway(s, prev, previous)) switched = active;
       const w = s.windows[windowId];
       const before = prev.windows[windowId];
       if (w && before && w.tabIds !== before.tabIds) {
@@ -521,6 +523,17 @@ const NEW_TAB_LABEL_X = 30;
 const CLEANED_HINT_RIGHT = 30;
 const CLEANED_HINT_GAP = 8;
 const MEASURE_OFFSCREEN = { position: "absolute", width: 1000, height: 0, overflow: "hidden", opacity: 0 } as const;
+
+function IncognitoBadge() {
+  const theme = useTheme();
+  if (!useAddressBarInSidebar()) return null;
+  return (
+    <View style={{ height: 30, marginBottom: 4, paddingHorizontal: 9, flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 8, backgroundColor: theme.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }}>
+      <Symbol name={INCOGNITO_ICON} size={13} weight="semibold" color={theme.textPrimary} style={{ width: 18, height: 16 }} />
+      <Text style={{ fontSize: 12.5, fontWeight: "600", color: theme.textPrimary }}>Incognito</Text>
+    </View>
+  );
+}
 
 const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip = null }: { windowId: string; shift?: Animated.Value | null; clip?: ClipSource | null }) {
   const theme = useTheme();

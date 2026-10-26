@@ -4,11 +4,12 @@ import { useBrowser } from "../store/browser";
 import { changedIds } from "../store/changes";
 import { earlyLaunchTabOn, launchTab } from "../store/launchTab";
 import { engineProfile } from "../store/model";
+import { hasPage } from "../store/pageSession";
 import { tabEngine } from "../store/engines";
 import type { Tab } from "../store/types";
 import { issuedSeq, webviews } from "./webviews";
 
-export const wantsPage = (t: Tab | undefined): t is Tab => !!t && !!(t.navigation || t.adoptId) && !isInternalTab(t);
+export const wantsPage = (t: Tab | undefined): t is Tab => !!t && hasPage(t) && !isInternalTab(t);
 
 const handedOff = new Map<string, string>();
 

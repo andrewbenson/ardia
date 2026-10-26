@@ -1,4 +1,5 @@
 import type { BrowserState } from "./browser";
+import { isWindowClosing } from "./closingWindows";
 import { engineProfile } from "./model";
 import type { BrowserWindow } from "./types";
 
@@ -7,7 +8,7 @@ export const isSmallWindow = (w: BrowserWindow | undefined): boolean => w?.kind 
 export const isSmall = (s: Pick<BrowserState, "windows">, windowId?: string | null): boolean =>
   !!windowId && s.windows[windowId]?.kind === "small";
 
-const isMain = (w: BrowserWindow | undefined): w is BrowserWindow => !!w && !w.incognito && w.kind !== "small";
+const isMain = (w: BrowserWindow | undefined): w is BrowserWindow => !!w && !w.incognito && w.kind !== "small" && !isWindowClosing(w.id);
 
 export function mainWindowFor(s: BrowserState, profileId?: string): string | undefined {
   const order = [...new Set([...s.ui.focusOrder, ...s.windowOrder])].filter((id) => isMain(s.windows[id]));

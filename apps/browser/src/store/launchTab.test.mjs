@@ -5,7 +5,7 @@ globalThis.__DEV__ = false;
 const { useBrowser } = await import("./browser.ts");
 const { launchTab } = await import("./launchTab.ts");
 const { loadSession, flushPersistence, startPersistence } = await import("../lib/persist.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 startPersistence();

@@ -19,6 +19,7 @@ import {
   without,
 } from "./model";
 import { nextPinChoice, placeChoiceKey, restoringGroup } from "./organize";
+import { hasLoadedPage, hasPage } from "./pageSession";
 import { adoptParkedPins, parkWindowPins } from "./parkedPins";
 import { settleMovedPins } from "./pinMirror";
 import { holderOf, returnSharedPages, swapPinPage } from "./pinShare";
@@ -99,8 +100,9 @@ export function moveTabsInto(s: BrowserState, ids: string[], targetId: string): 
   const tabs = { ...next.tabs };
   const live = { ...next.live };
   const activeTabIds = { ...w.activeTabIds };
-  for (const { adoptId, ...t } of moving) {
-    const loaded = !!t.url && (!!t.navigation || !!adoptId);
+  for (const tab of moving) {
+    const { adoptId: _adopted, ...t } = tab;
+    const loaded = hasLoadedPage(tab);
     tabs[t.id] = { ...t, windowId: targetId, navigation: loaded ? navigationTo(t.url) : null };
     live[t.id] = IDLE_LIVE;
     activeTabIds[t.profileId] ??= t.id;
@@ -176,7 +178,7 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
         kind: "window",
         id: newId("cw"),
         window: { profileId: w.profileId, sidebarOpen: w.sidebarOpen, frame: w.frame },
-        tabs: tabs.map((t) => ({ ...snapshotTab(t), active: active.has(t.id), ...(t.url && (t.navigation || t.adoptId) ? { tabId: t.id } : pendingRestore(t) ? { tabId: pendingRestore(t) } : {}) })),
+        tabs: tabs.map((t) => ({ ...snapshotTab(t), active: active.has(t.id), ...(hasLoadedPage(t) ? { tabId: t.id } : pendingRestore(t) ? { tabId: pendingRestore(t) } : {}) })),
         groups: Object.values(s.groups)
           .filter((g) => g.windowId === id && !g.pinned && (!sharesTabs(s) || g.tabIds.some((t) => tabIds.includes(t))))
           .map(({ tabIds: members, windowId: _, ...g }) => ({ ...g, tabIndexes: members.map((t) => tabIds.indexOf(t)) })),
@@ -265,7 +267,7 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     if (!tab || !w || w.incognito || !s.profiles[profileId] || tab.profileId === profileId) return;
     let next = removeTabs(s, [tabId], false);
     const base = next.windows[w.id] ?? { ...w, tabIds: [], activeTabIds: {} };
-    const loaded = !!tab.url && (!!tab.navigation || !!tab.adoptId);
+    const loaded = hasLoadedPage(tab);
     const { adoptId: _, wakeAdoptId: _w, ...rest } = tab;
     const moved: Tab = { ...rest, profileId, navigation: loaded ? navigationTo(tab.url) : null, lastActiveAt: Date.now() };
     const movedKey = moved.pinKey ?? moved.id;
@@ -387,10 +389,10 @@ function restoreTab(s: BrowserState, entry: ClosedTab, requested?: string | null
     })[0];
   }
   const tile = entry.pinnedTile && entry.tabId ? s.tabs[entry.tabId] : undefined;
-  const swapped = tile && !tile.navigation && !tile.adoptId && holderOf(s, tile.id) ? swapPinPage({ ...s, closedTabs }, tile.id) : null;
+  const swapped = tile && !hasPage(tile) && holderOf(s, tile.id) ? swapPinPage({ ...s, closedTabs }, tile.id) : null;
   if (swapped) return apply(swapped.state, activated(swapped.state, swapped.holderId));
   if (tile) {
-    const unloaded = !tile.navigation && !tile.adoptId;
+    const unloaded = !hasPage(tile);
     const tabs = unloaded
       ? { ...s.tabs, [tile.id]: { ...tile, url: entry.tab.url, title: entry.tab.title, favicon: entry.tab.favicon, muted: entry.tab.muted, adoptId: restoreId(entry.restoreFrom ?? tile.id) } }
       : s.tabs;

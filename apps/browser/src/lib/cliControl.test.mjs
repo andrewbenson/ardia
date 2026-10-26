@@ -20,7 +20,8 @@ const { useBrowser } = await import("../store/browser.ts");
 const cli = await import("./cliControl.ts");
 const settle = () => new Promise((r) => setImmediate(r));
 const setOn = (on) => useBrowser.getState().updateSettings({ cliControl: on });
-const emit = (status) => globalThis.acTestCliEvents.forEach((l) => l(status));
+const { engineEvent } = await import("../test-native/index.ts");
+const emit = (status) => engineEvent("cliControl", status);
 
 cli.startCliControl();
 await settle();
@@ -108,7 +109,7 @@ test("a page parked behind New Tab or an Ardia page is not what the user is look
 });
 
 test("the command is the app's name in lowercase, so a fork ships its own", async () => {
-  const { appInfo } = await import("@ardia/shell");
+  const { appInfo } = await import("../test-native/index.ts");
   assert.equal(cli.cliProduct(), "Ardia");
   assert.equal(cli.cliCommand(), "ardia");
   appInfo.appName = "Solara";

@@ -2,6 +2,7 @@ import { cancelDownload, pauseDownload, resumeDownload, type Download } from "@a
 import { ContextMenuArea, copyText, fileExists, fileIcon, MouseArea, moveToTrash, openFile, PopoverBubble, popoverBubbleAvailable, revealFile, showMenu, Surface, Symbol, VisualEffect, type MenuItem } from "@ardia/shell";
 import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
 import { hex, layout, useTheme } from "../lib/theme";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../store/browser";
@@ -160,6 +161,7 @@ async function locateDownloadsButton(windowId: string, origin: Rect): Promise<Re
 
 export function DownloadsButton({ windowId }: { windowId: string }) {
   const open = useBrowser((s) => !!s.windowUi[windowId]?.downloadsOpen);
+  const hint = useShortcutHint("downloads");
   const view = useRef<View>(null);
   useEffect(() => {
     const node = view.current;
@@ -180,7 +182,7 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
         box={SIDEBAR_FOOTER_DOWNLOADS.size}
         radius={10}
         active={open}
-        tooltip={open ? undefined : "Downloads (⇧⌘J)"}
+        tooltip={open ? undefined : withShortcut("Downloads", hint)}
         onPress={() => {
           const s = useBrowser.getState();
           s.setDownloadsOpen(windowId, !s.windowUi[windowId]?.downloadsOpen);

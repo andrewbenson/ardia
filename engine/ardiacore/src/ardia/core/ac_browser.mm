@@ -29,6 +29,7 @@
 #include "chrome/browser/ui/views/interaction/browser_elements_views_impl.h"
 #include "chrome/browser/ui/passwords/passwords_model_delegate.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
 #include "components/favicon/content/content_favicon_driver.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "components/find_in_page/find_notification_details.h"
@@ -659,6 +660,27 @@ void CloseBlankTabsBeforeWindowCloses(Browser* browser) {
   }
 }
 
+void DeleteTabClosedByHost(content::WebContents* contents) {
+  BrowserWindowInterface* browser =
+      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(contents);
+  if (!browser) {
+    return;
+  }
+  TabStripModel* model = browser->GetTabStripModel();
+  const int index = model->GetIndexOfWebContents(contents);
+  if (index == TabStripModel::kNoTab) {
+    return;
+  }
+  content::NavigationEntry* committed =
+      contents->GetController().GetLastCommittedEntry();
+  if (!Profile::FromBrowserContext(contents->GetBrowserContext())
+           ->IsOffTheRecord() &&
+      committed && !committed->IsInitialEntry() && !OnlyShowedBlank(contents)) {
+    model->delegate()->CreateHistoricalTab(contents);
+  }
+  model->DetachAndDeleteWebContentsAt(index);
+}
+
 void WindowHost::ActiveTabChanged(Browser* browser,
                                   content::WebContents* contents) {
   if (!contents) {
@@ -959,7 +981,8 @@ bool IsWindowDisposition(WindowOpenDisposition d) {
 bool IsNewTabDisposition(WindowOpenDisposition d) {
   return IsWindowDisposition(d) ||
          d == WindowOpenDisposition::NEW_FOREGROUND_TAB ||
-         d == WindowOpenDisposition::NEW_BACKGROUND_TAB;
+         d == WindowOpenDisposition::NEW_BACKGROUND_TAB ||
+         d == WindowOpenDisposition::NEW_SPLIT_VIEW;
 }
 }
 
@@ -989,6 +1012,8 @@ content::WebContents* ACWebContentsDelegate::OpenURLFromTab(
                                                    std::move(open));
   if (IsWindowDisposition(params.disposition)) {
     tab_params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
+  } else if (params.disposition == WindowOpenDisposition::NEW_SPLIT_VIEW) {
+    tab_params.disposition = WindowOpenDisposition::NEW_BACKGROUND_TAB;
   }
   return BrowserWebContentsDelegate::OpenURLFromTab(
       source, tab_params, std::move(navigation_handle_callback));
@@ -1082,6 +1107,20 @@ void ACWebContentsDelegate::RendererResponsive(
     content::WebContents* source,
     content::RenderWidgetHost* render_widget_host) {
   TabBridge::GetOrCreate(source)->SetResponsive(render_widget_host);
+}
+
+void ACWebContentsDelegate::CloseContents(content::WebContents* source) {
+  TabBridge* bridge = source ? TabBridge::FromWebContents(source) : nullptr;
+  if (!bridge || !bridge->closing_after_unload()) {
+    BrowserWebContentsDelegate::CloseContents(source);
+    return;
+  }
+  BrowserWindowInterface* browser =
+      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(source);
+  if (!browser || !UnloadController::From(browser)->CanCloseContents(source)) {
+    return;
+  }
+  DeleteTabClosedByHost(source);
 }
 
 namespace {
@@ -1202,10 +1241,57 @@ std::optional<WindowOpenDisposition> TabBridge::TakeOpenDisposition() {
   return d;
 }
 
-void TabBridge::BeforeUnloadFired(bool proceed) {
-  if (!proceed) {
-    closed_by_host_ = false;
+constexpr base::TimeDelta kCloseStepDeadline = base::Seconds(2);
+
+void TabBridge::CloseAfterUnloadHandlers(bool window_closing) {
+  closing_after_unload_ = true;
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&TabBridge::EnforceCloseDeadline,
+                     weak_factory_.GetWeakPtr(), false),
+      kCloseStepDeadline);
+  if (window_closing) {
+    StartUnload();
+    return;
   }
+  web_contents()->DispatchBeforeUnload(true);
+}
+
+void TabBridge::StartUnload() {
+  if (unload_started_) {
+    return;
+  }
+  unload_started_ = true;
+  web_contents()->ClosePage();
+}
+
+void TabBridge::EnforceCloseDeadline(bool unload_given) {
+  if (unload_given) {
+    DeleteTabClosedByHost(web_contents());
+    return;
+  }
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&TabBridge::EnforceCloseDeadline,
+                     weak_factory_.GetWeakPtr(), true),
+      kCloseStepDeadline);
+  StartUnload();
+}
+
+void TabBridge::BeforeUnloadFired(bool proceed) {
+  if (proceed) {
+    if (closing_after_unload_) {
+      unload_started_ = true;
+    }
+    return;
+  }
+  if (closing_after_unload_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&TabBridge::StartUnload,
+                                  weak_factory_.GetWeakPtr()));
+    return;
+  }
+  closed_by_host_ = false;
 }
 
 void TabBridge::ReportWillClose() {

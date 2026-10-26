@@ -4,7 +4,7 @@ const { useBrowser } = await import("../../store/browser.ts");
 const { sidebarEntries } = await import("./entries.ts");
 const { entriesHeight, entriesWithin, entryHeight, firstPaintEntries, rowSpan, startsOffScreen, FIRST_PAINT_HEIGHT } = await import("./geometry.ts");
 const { groupEntries } = await import("./entries.ts");
-await import("../../test-native-stub.mjs");
+await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const profile = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };

@@ -1,4 +1,4 @@
-import { requireNativeModule, type EventSubscription } from "expo-modules-core";
+import type { EventSubscription } from "expo-modules-core";
 import type { ContentBlockerState, ContentBlockerStats } from "./contentBlocker";
 import type { DisplayMediaSource } from "./WebView";
 import type { ExternalAppAllowance } from "./externalApps";
@@ -8,6 +8,7 @@ import type { PasswordExportStatus, SavedPassword } from "./passwords";
 import type { TabStripCommand, TabStripTransaction } from "./tabStrip";
 import type { AddressInput, CardInput, SavedAddress, SavedCard } from "./autofill";
 import type { ClearSiteDataResult, SiteSettingType, SiteSettingValue, SiteSettings } from "./siteSettings";
+import { nativeModule } from "./nativeModules";
 
 export type Result<T> = T | { error: string };
 
@@ -19,7 +20,7 @@ export function valueOr<T extends object, F>(result: Result<T>, fallback: F): T 
   return result as T;
 }
 
-export const Cef = requireNativeModule<{
+export type CefNative = {
   addListener(name: "onDownload", listener: (d: Download) => void): EventSubscription;
   addListener(name: "onPermission", listener: (p: PermissionRequest) => void): EventSubscription;
   addListener(name: "onPermissionDismissed", listener: (p: { id: string }) => void): EventSubscription;
@@ -113,4 +114,6 @@ export const Cef = requireNativeModule<{
   saveCard(profile: string, card: CardInput, number: string | null): Promise<Result<{ id: string }>>;
   deleteAutofillEntry(profile: string, id: string): Promise<Result<{ ok: true }>>;
   revealCardNumber(profile: string, id: string): Promise<Result<{ number?: string | null }>>;
-}>("ArdiaCEF");
+};
+
+export const Cef = nativeModule("ArdiaCEF");

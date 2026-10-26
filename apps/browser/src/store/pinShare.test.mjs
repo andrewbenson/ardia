@@ -4,7 +4,7 @@ const { useBrowser } = await import("./browser.ts");
 const model = await import("./model.ts");
 const { setPinHandoff } = await import("./tabs.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const reset = () => S().hydrate({});

@@ -7,7 +7,7 @@ const { chromeChanged } = await import("../store/liveTabs.ts");
 const { patchPage } = await import("../components/layout/pageState.ts");
 const { useMedia } = await import("../components/media/state.ts");
 const { startTabReveal } = await import("./tabReveal.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 startTabReveal();

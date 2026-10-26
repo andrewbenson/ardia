@@ -5,14 +5,15 @@ const INSTALL = String.raw`
 const KEY = Symbol.for("ardia.translator");
 if (!window[KEY]) {
   const SKIP = "script,style,noscript,template,code,pre,kbd,samp,var,textarea,input,select,option,svg,math,iframe,[contenteditable]:not([contenteditable=false]),[translate=no],.notranslate";
-  // What makes a passage: the text of one of these, minus the ones nested in it.
   const BLOCK = "p,li,dd,dt,td,th,caption,figcaption,blockquote,h1,h2,h3,h4,h5,h6,summary,legend,label,button,div,section,article,aside,header,footer,main,nav,form,fieldset,details,dialog,body";
   const LETTER = /\p{L}/u;
   const MAX_WATCHED = 20000;
-  const MAX_TEXT = 2000;
+  const MAX_TEXT = 20000;
   const MAX_PIECES = 40;
-  // Text within this distance of the viewport counts as on screen.
+  const MAX_RETRIES = 2;
   const MARGIN = 300;
+  const ENDS_IN_SPACE = /\s$/;
+  const STARTS_WITH_SPACE = /^\s/;
   const skipCache = new WeakMap();
   const skipped = (el) => {
     if (!el) return true;
@@ -37,7 +38,7 @@ if (!window[KEY]) {
     byId: new Map(),
     queue: [],
     queued: new Set(),
-    // Passages waiting to come near the viewport, and those that have.
+    retries: new WeakMap(),
     watched: new WeakSet(),
     shown: new WeakSet(),
     watchedCount: 0,
@@ -54,7 +55,6 @@ if (!window[KEY]) {
       this.queued.add(block);
       this.queue.push(block);
     },
-    // Passages with text under 'node': queued now if on screen, else when they get there.
     track(node) {
       const blocks = new Set();
       if (node.nodeType === 3) {
@@ -80,12 +80,27 @@ if (!window[KEY]) {
         }
       }
     },
-    // A passage's text nodes that aren't translated yet (nested passages are their own).
     pieces(block) {
       const out = [];
-      const w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-      for (let n = w.nextNode(); n; n = w.nextNode()) if (eligible(n) && !this.records.has(n) && blockOf(n.parentElement) === block) out.push(n);
+      const w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+      let separated = false;
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        if (n.nodeType === 1) {
+          if (n.tagName === "BR") separated = true;
+        } else if (eligible(n) && !this.records.has(n) && blockOf(n.parentElement) === block) {
+          const previous = out[out.length - 1];
+          const gap = !!previous && separated && !ENDS_IN_SPACE.test(previous.node.nodeValue) && !STARTS_WITH_SPACE.test(n.nodeValue);
+          out.push({ node: n, gap });
+          separated = false;
+        } else if (n.nodeValue.length) separated = true;
+      }
       return out;
+    },
+    release(node) {
+      this.records.delete(node);
+      const tries = (this.retries.get(node) || 0) + 1;
+      this.retries.set(node, tries);
+      if (tries <= MAX_RETRIES && node.isConnected) this.track(node);
     },
     start(token) {
       if (this.active) return this.token === token;
@@ -105,7 +120,7 @@ if (!window[KEY]) {
         for (const m of mutations) {
           if (m.type === "characterData") {
             const rec = this.records.get(m.target);
-            if (rec && m.target.nodeValue === rec.applied) continue; // our own write
+            if (rec && m.target.nodeValue === rec.applied) continue;
             if (rec) this.records.delete(m.target);
             this.track(m.target);
           } else for (const n of m.addedNodes) this.track(n);
@@ -114,7 +129,6 @@ if (!window[KEY]) {
       this.observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
       return true;
     },
-    // Only for the translation that started here: a new document isn't translated behind your back.
     next(token, max, maxChars) {
       if (!this.active || this.token !== token) return { passages: [], more: false, gone: true, done: 0, total: 0 };
       const passages = [];
@@ -126,11 +140,15 @@ if (!window[KEY]) {
         const nodes = this.pieces(block);
         for (let i = 0; i < nodes.length; i += MAX_PIECES) {
           const pieces = [];
-          for (const node of nodes.slice(i, i + MAX_PIECES)) {
+          let previous = null;
+          for (const { node, gap } of nodes.slice(i, i + MAX_PIECES)) {
             const id = ++this.seq;
+            const spaced = gap && previous !== null;
+            if (spaced) previous.gapAfter = true;
+            previous = { orig: node.nodeValue, applied: null, gapBefore: spaced, gapAfter: false };
             this.byId.set(id, node);
-            this.records.set(node, { orig: node.nodeValue, applied: null });
-            pieces.push([id, node.nodeValue]);
+            this.records.set(node, previous);
+            pieces.push([id, spaced ? " " + node.nodeValue : node.nodeValue]);
             chars += node.nodeValue.length;
           }
           passages.push([++this.seq, pieces]);
@@ -144,13 +162,15 @@ if (!window[KEY]) {
         const node = this.byId.get(id);
         this.byId.delete(id);
         const rec = node && this.records.get(node);
-        if (!rec || !node.isConnected || node.nodeValue !== rec.orig || typeof text !== "string") continue;
-        // The original's spacing at either end, else the translation's (which spaces pieces apart
-        // where the source language had no spaces).
+        if (!rec || rec.applied !== null || !node.isConnected || node.nodeValue !== rec.orig) continue;
+        if (typeof text !== "string") {
+          this.release(node);
+          continue;
+        }
         const [, textLead, body, textTrail] = text.match(/^(\s*)([\s\S]*?)(\s*)$/);
         const origLead = rec.orig.match(/^\s*/)[0];
         const origTrail = rec.orig.match(/\s*$/)[0];
-        rec.applied = (origLead || textLead) + body + (origTrail || textTrail);
+        rec.applied = (origLead || (rec.gapBefore ? "" : textLead)) + body + (origTrail || (rec.gapAfter ? "" : textTrail));
         node.nodeValue = rec.applied;
       }
       return true;
@@ -165,6 +185,7 @@ if (!window[KEY]) {
       this.queued = new Set();
       this.watched = new WeakSet();
       this.shown = new WeakSet();
+      this.retries = new WeakMap();
       this.watchedCount = this.done = 0;
       for (const [node, rec] of this.records) if (rec.applied !== null && node.nodeValue === rec.applied) node.nodeValue = rec.orig;
       this.records.clear();

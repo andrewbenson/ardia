@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 globalThis.__DEV__ = false;
 
-const ardiacore = new URL("../test-native-stub.mjs", import.meta.url).href;
+const ardiacore = import.meta.resolve("@ardia/ardiacore");
 const stubs = {
   "@ardia/ardiacore": `export * from ${JSON.stringify(ardiacore)};
     export const listTasks = async () => [];

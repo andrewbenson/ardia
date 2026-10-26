@@ -7,7 +7,7 @@ const { stripPlan } = await import("./liveTabs.ts");
 const { viewTabIds } = await import("./model.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");
 const { SYNCED_SETTINGS } = await import("../sync/adapters.ts");
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };

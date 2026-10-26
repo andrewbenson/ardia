@@ -4,6 +4,7 @@ import { useBrowser, type BrowserState, type HydrateData } from "../store/browse
 import { inPinnedContainer, isIncognitoProfile, newId, privateSession, snapshotTab } from "../store/model";
 import { earlyLaunchTabOn, launchTab, linkProfile, type LaunchTab } from "../store/launchTab";
 import { launchBackdrop, type LaunchBackdrop } from "./launchBackdrop";
+import { restoreLaunchLook, saveLaunchLook } from "./launchLook";
 import { parkWindowPins } from "../store/parkedPins";
 import { isPeekTab } from "../store/peek";
 import type { BrowserWindow, ClosedTab, Tab } from "../store/types";
@@ -197,6 +198,7 @@ let frozen = false;
 
 export function flushPersistence({ final = false } = {}) {
   flush();
+  if (final && !frozen) saveLaunchLook(useBrowser.getState());
   if (final) frozen = true;
 }
 
@@ -207,6 +209,7 @@ export function resumePersistence() {
 
 export function startPersistence() {
   useBrowser.getState().hydrate(loadSession() ?? {});
+  restoreLaunchLook();
 
   const lastSources = new Map<string, unknown[]>();
   const lastJson = new Map<string, string>();

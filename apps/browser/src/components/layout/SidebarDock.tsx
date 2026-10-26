@@ -1,5 +1,5 @@
 import { onWindowEvent, setTrafficLightsCenter, Surface, watchLeftEdge, WindowDragRegion } from "@ardia/shell";
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { switchOn } from "../../lib/killSwitches";
@@ -15,6 +15,7 @@ import {
   ARC_HIDE_MS,
   ARC_LIGHTS_CENTER,
   devPeeks,
+  dockMoving,
   DOCK_SPRING,
   LIGHTS_CENTER,
   lightsCenter,
@@ -25,6 +26,7 @@ import {
   setDockMoving,
   setPeekShown,
   springConfig,
+  TOP_STRIP_LIGHTS_CENTER,
   useDockMotion,
 } from "./dockMotion";
 import { useTabDrag } from "./tabDrag";
@@ -41,10 +43,11 @@ const SPRING = springConfig(DOCK_SPRING);
 const STRIP_WIDTH = 8;
 const HOLD_SLACK = 24;
 
-function useSidebarDock(open: boolean, animate: boolean, arc: boolean): Animated.Value {
+function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: Animated.Value; away: boolean } {
   const windowId = useWindowId();
   const dock = useRef(new Animated.Value(open ? 1 : 0)).current;
   const was = useRef(open);
+  const [away, setAway] = useState(!open);
   useEffect(() => {
     if (was.current === open) return;
     was.current = open;
@@ -52,14 +55,17 @@ function useSidebarDock(open: boolean, animate: boolean, arc: boolean): Animated
       dock.stopAnimation();
       dock.setValue(open ? 1 : 0);
       setDockMoving(windowId, false);
+      setAway(!open);
       return;
     }
     if (arc && open && peekShown(windowId)) {
       dock.stopAnimation();
       dock.setValue(1);
       setDockMoving(windowId, false);
+      setAway(false);
       return;
     }
+    if (open) setAway(false);
     setDockMoving(windowId, true);
     (arc && !open
       ? Animated.timing(dock, { toValue: 0, duration: ARC_HIDE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false })
@@ -70,10 +76,28 @@ function useSidebarDock(open: boolean, animate: boolean, arc: boolean): Animated
           restSpeedThreshold: 0.01,
           useNativeDriver: false,
         })
-    ).start(({ finished }) => finished && setDockMoving(windowId, false));
+    ).start(({ finished }) => {
+      if (!finished) return;
+      setDockMoving(windowId, false);
+      if (!open) setAway(true);
+    });
   }, [open]);
   useEffect(() => () => setDockMoving(windowId, false), []);
-  return dock;
+  return { dock, away };
+}
+
+function useTopStripLights(windowId: string, dock: Animated.Value, on: boolean, travel: number, open: boolean) {
+  useEffect(() => {
+    if (!on) return;
+    const place = (value: number) => {
+      if (!dockMoving(windowId)) return;
+      const up = Math.round(travel * (1 - value) * 2) / 2;
+      void setTrafficLightsCenter(windowId, [TOP_STRIP_LIGHTS_CENTER[0], TOP_STRIP_LIGHTS_CENTER[1] - up]);
+    };
+    place((dock as unknown as { __getValue(): number }).__getValue());
+    const sub = dock.addListener(({ value }) => place(value));
+    return () => dock.removeListener(sub);
+  }, [windowId, dock, on, travel, open]);
 }
 
 type Inset = { top: number; right: number; bottom: number; left: number };
@@ -82,11 +106,13 @@ export function DockedLayout({
   fullscreen,
   topTabs,
   inset,
+  topStrip,
   children,
 }: {
   fullscreen: boolean;
   topTabs: boolean;
   inset: Inset;
+  topStrip?: { strip: ReactNode; peek: ReactNode };
   children: ReactNode;
 }) {
   const windowId = useWindowId();
@@ -103,7 +129,7 @@ export function DockedLayout({
   const width = useSidebarUi((u) => u.dragWidth[windowId]) ?? savedWidth;
   const arc = addressBar && !topTabs && switchOn("sidebarSlide");
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : LIGHTS_CENTER;
-  const dock = useSidebarDock(open, !topTabs && !fullscreen, arc);
+  const { dock, away } = useSidebarDock(open, !fullscreen, arc);
   const left = useMemo(
     () =>
       dock.interpolate({
@@ -112,6 +138,11 @@ export function DockedLayout({
       }),
     [dock, width, inset.left],
   );
+  const top = useMemo(() => dock.interpolate({ inputRange: [0, 1], outputRange: [layout.cardTop, inset.top] }), [dock, inset.top]);
+  const stripY = useMemo(() => dock.interpolate({ inputRange: [0, 1], outputRange: [-inset.top, 0] }), [dock, inset.top]);
+  const stripShown = topTabs && (open || !away);
+  const moving = useDockMotion((m) => !!m.moving[windowId]);
+  useTopStripLights(windowId, dock, topTabs && !fullscreen, inset.top, open);
   return (
     <>
       <Animated.View
@@ -121,7 +152,7 @@ export function DockedLayout({
             : {
                 flex: 1,
                 flexDirection: "row",
-                paddingTop: inset.top,
+                paddingTop: topTabs ? top : inset.top,
                 paddingRight: inset.right,
                 paddingBottom: inset.bottom,
                 paddingLeft: topTabs ? inset.left : left,
@@ -131,6 +162,16 @@ export function DockedLayout({
         {!fullscreen && <WindowDragRegion style={StyleSheet.absoluteFill} />}
         {children}
       </Animated.View>
+      {topStrip &&
+        stripShown && (
+          <Animated.View
+            pointerEvents={fullscreen || moving ? "none" : "auto"}
+            style={[{ position: "absolute", left: 0, right: 0 }, fullscreen ? { bottom: "100%" } : { top: 0, transform: [{ translateY: stripY }] }]}
+          >
+            {topStrip.strip}
+          </Animated.View>
+        )}
+      {topStrip && topTabs && !stripShown && topStrip.peek}
       {!topTabs && <SidebarDock dock={dock} open={open} width={width} fullscreen={fullscreen} arc={arc} lights={lights} />}
     </>
   );

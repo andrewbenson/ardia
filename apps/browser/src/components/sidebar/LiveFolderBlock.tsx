@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "reac
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { closeTab } from "../../lib/actions";
-import { hex, layout, useTheme } from "../../lib/theme";
+import { hex, layout, useSelectedTabGlow, useTheme } from "../../lib/theme";
 import { COMPLETION_MS, errorText, manualRefresh, openLiveItem, statusText } from "../../live/engine";
 import { prBadge } from "../../live/github";
 import { folderRows, liveTabPlace, type FolderRow } from "../../live/rows";
@@ -26,6 +26,7 @@ import { openLiveFolderMenu, openLiveItemMenu, openLiveStackMenu } from "./liveM
 import { registerRow } from "./state";
 import { TabIcon } from "./TabIcon";
 import { useSidebarTokens } from "./tokens";
+import { useShortcutHint, withShortcut } from "../../lib/commandShortcuts";
 
 const PAD = GROUP_PAD;
 const EMPTY: LiveItem[] = [];
@@ -301,6 +302,8 @@ function StackRow({ folderId, windowId, stack }: { folderId: string; windowId: s
 function LiveItemRow({ folderId, item, windowId, inStack = false }: { folderId: string; item: LiveItem; windowId: string; inStack?: boolean }) {
   const indent = inStack ? 10 : 0;
   const theme = useTheme();
+  const closeHint = useShortcutHint("closeTab");
+  const glow = useSelectedTabGlow();
   const colors = useLiveColors();
   const key = liveRowKey(folderId, item.id);
   const profileId = usePageProfileId();
@@ -341,9 +344,9 @@ function LiveItemRow({ folderId, item, windowId, inStack = false }: { folderId: 
                 cornerRadius={10}
                 borderWidth={active ? 1 : 0}
                 borderColors={active ? theme.tabSelectedBorder.map(hex) : undefined}
-                shadowColor={active ? hex(theme.tabSelectedShadow) : undefined}
-                shadowOpacity={active ? 1 : 0}
-                shadowRadius={theme.tabSelectedShadowRadius}
+                shadowColor={active ? glow.shadowColor : undefined}
+                shadowOpacity={active ? glow.shadowOpacity : 0}
+                shadowRadius={glow.shadowRadius}
                 shadowOffset={[0, 0.5]}
                 style={{ height: layout.rowHeight, flexDirection: "row", alignItems: "center", paddingLeft: 9 + indent, paddingRight: 6 }}
               >
@@ -361,7 +364,7 @@ function LiveItemRow({ folderId, item, windowId, inStack = false }: { folderId: 
                   hovered={hovered && !!tabId && !completion}
                   width={22}
                   idleWidth={0}
-                  hover={<IconButton icon="xmark" size={10} weight="semibold" box={22} radius={6} onPress={() => tabId && void closeTab(tabId)} tooltip="Close Tab (⌘W)" />}
+                  hover={<IconButton icon="xmark" size={10} weight="semibold" box={22} radius={6} onPress={() => tabId && void closeTab(tabId)} tooltip={withShortcut("Close Tab", closeHint)} />}
                 >
                   <Trailing item={item} completion={completion} colors={colors} />
                 </HoverSlot>

@@ -55,17 +55,11 @@ export function runSidebarCommand(command: BrowserCommand, arg: string | null, w
   return false;
 }
 
-const SIDEBAR_WINDOW_COMMANDS = [
-  "newTabInGroup", "newGroupWithTabs", "cleanUpTabs", "searchTabs", "renameTab", "changeTabIcon", "returnToPinnedUrl", "tabSwitcher",
-  "togglePinnedRow",
-];
-
 export function sidebarMenuState(s: BrowserState, windowId: string | undefined) {
   const disabled: string[] = [];
   const titles: Record<string, string> = {};
   const tab = windowId ? s.tabs[activeTabId(s, windowId) ?? ""] : undefined;
-  if (!windowId) disabled.push(...SIDEBAR_WINDOW_COMMANDS);
-  else {
+  if (windowId) {
     if (!tab || !awayFromPin(tab)) disabled.push("returnToPinnedUrl");
     titles.togglePinnedRow = movePinnedTitle(s, tab);
     const selected = selectedTabIds(s, windowId).filter((id) => pinSection(s.tabs[id]) !== "tile");

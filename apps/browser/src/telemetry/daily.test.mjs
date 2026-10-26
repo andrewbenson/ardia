@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-const stub = await import("../test-native-stub.mjs");
+const stub = await import("../test-native/index.ts");
 Object.assign(stub.appInfo, { appVersion: "0.3.0", osVersion: "26.1", arch: "arm64", isolatedInstance: false });
 const daily = await import("./daily.ts");
 const { appInfo } = await import("./client.ts");

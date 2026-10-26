@@ -680,4 +680,26 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(steady.report.source == .database)
     #expect(steady.state.tabs["added-in-1a"] != nil)
   }
+
+  @Test func aFirstFullImportFromAOneAMarkedSessionIsNotRepeated() throws {
+    let folder = try scratchFolder()
+    var session = try JSONValue.parse(Data(contentsOf: fixtures.appending(path: "broken-splits/session.json"))).object!
+    session["nativeExport"] = ["rev": 2, "at": 1, "scope": "settingsAndDownloads"]
+    try write(JSONValue.object(session).text(), to: folder.session)
+    try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .everything).database.close()
+    let again = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: .everything)
+    #expect(again.report.source == .database)
+  }
+
+  @Test func aWorkspaceReimportKeepsACopyOfTheDatabaseFirst() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    try open(folder).database.close()
+    var session = try JSONValue.parse(contents(folder.session) ?? Data()).object!
+    session["nativeExport"] = ["rev": 9, "at": 1, "scope": "settingsAndDownloads"]
+    try write(JSONValue.object(session).text(), to: folder.session)
+    let again = try open(folder)
+    #expect(names(in: folder).contains { $0.hasPrefix("solara.sqlite.pre-reimport-") })
+    try again.database.close()
+  }
 }

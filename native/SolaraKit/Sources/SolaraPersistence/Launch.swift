@@ -161,6 +161,11 @@ public enum Launcher {
       result.meta["workspace_imported_at"] = String(Int64(now.timeIntervalSince1970 * 1000))
       if let sessionHash { result.meta["workspace_source_sha256"] = sessionHash }
       let rows = result.persisted.workspace!
+      if staleWorkspace {
+        let name = uniqueAsideName(folder.database, label: "pre-reimport", now: now)
+        try database.pool.backup(to: DatabaseQueue(path: folder.url.appending(path: name).path))
+        Importer.log(["kept the database as it was before the workspace re-import: \(name)"], to: folder, now: now)
+      }
       try database.pool.write { db in
         if staleWorkspace { try Rows.clearWorkspace(db) }
         try Rows.writeWorkspace(db, rows, previous: nil)
@@ -263,6 +268,17 @@ public enum Launcher {
       if fm.fileExists(atPath: side.path) { try fm.moveItem(at: side, to: URL(fileURLWithPath: target.path + suffix)) }
     }
     try fm.moveItem(at: url, to: target)
+    return name
+  }
+
+  static func uniqueAsideName(_ url: URL, label: String, now: Date) -> String {
+    let stamp = ISO8601DateFormatter.string(from: now, timeZone: .gmt, formatOptions: [.withFullDate, .withTime])
+    var name = "\(url.lastPathComponent).\(label)-\(stamp)"
+    var serial = 1
+    while FileManager.default.fileExists(atPath: url.deletingLastPathComponent().appending(path: name).path) {
+      serial += 1
+      name = "\(url.lastPathComponent).\(label)-\(stamp)-\(serial)"
+    }
     return name
   }
 

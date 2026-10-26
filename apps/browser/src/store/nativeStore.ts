@@ -58,6 +58,14 @@ export function nativeOwnedSnapshot(): Partial<OwnedSlices> | null {
   return { settings: data.settings, downloads: data.downloads };
 }
 
+export function standDown() {
+  stopListening?.();
+  stopListening = null;
+  replica = null;
+  active = false;
+  ownsWorkspace = false;
+}
+
 export function hydrateFromNative(store: Replica): boolean {
   if (!nativeOwnsWorkspace()) return false;
   const snapshot = nativeSnapshot();

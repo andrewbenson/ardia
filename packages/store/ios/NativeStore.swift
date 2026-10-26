@@ -68,11 +68,10 @@ public final class NativeStore: Sendable {
 
   static func waitForHolder(_ folder: URL) throws -> FolderLock? {
     let data = DataFolder(url: folder)
-    let holder = FolderLock.holder(data)
     let deadline = Date().addingTimeInterval(handOffWait)
     while Date() < deadline {
       if let lock = try FolderLock.acquire(data) { return lock }
-      if let holder, chromeSingletonPid(folder) == holder {
+      if let holder = FolderLock.holder(data), chromeSingletonPid(folder) == holder {
         handedOff = true
         unavailableReason = "another instance (pid \(holder)) is using this data folder"
         NSLog("[store] %@; handing this launch to it", unavailableReason ?? "")
@@ -81,7 +80,7 @@ public final class NativeStore: Sendable {
       usleep(100_000)
     }
     NSLog("[store] the instance holding this data folder never became the browser; quitting")
-    if let holder { NSRunningApplication(processIdentifier: holder)?.activate() }
+    if let holder = FolderLock.holder(data) { NSRunningApplication(processIdentifier: holder)?.activate() }
     exit(0)
   }
 

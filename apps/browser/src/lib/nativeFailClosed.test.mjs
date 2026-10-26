@@ -15,6 +15,7 @@ globalThis.acTestNativeModules = {
 const { docs } = await import("../test-native/index.ts");
 const { useBrowser } = await import("../store/browser.ts");
 const { flushPersistence, startPersistence } = await import("./persist.ts");
+const { nativeOwnsWorkspace, nativeStoreActive } = await import("../store/nativeStore.ts");
 
 test("when the native store owns the workspace but returns none, nothing is saved and the failure is reported", () => {
   const session = JSON.stringify({ version: 2, settings: { searchEngine: "bing" }, windows: [], tabs: [] });
@@ -33,4 +34,6 @@ test("when the native store owns the workspace but returns none, nothing is save
   assert.equal(docs.get("session.json"), session);
   assert.equal(docs.has("downloads.json"), false);
   assert.ok(errors.some((e) => e.includes("saves nothing")));
+  assert.equal(nativeOwnsWorkspace(), false, "the tab strip and every other writer stop feeding the native store");
+  assert.equal(nativeStoreActive(), false);
 });

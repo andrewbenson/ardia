@@ -217,6 +217,8 @@ public enum Importer {
     if scope == .settingsAndDownloads {
       result.state = settingsAndDownloads(of: result.state)
       result.persisted.workspace = nil
+    } else if let source = result.meta["source_session_sha256"] {
+      result.meta["workspace_source_sha256"] = source
     }
     if let refusal = result.refusal {
       log(result.notes + ["refused the import: \(refusal)"], to: folder, now: now)

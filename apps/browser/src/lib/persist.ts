@@ -23,6 +23,7 @@ import {
   nativeOwnsWorkspace,
   nativeStoreActive,
   nativeStoreRev,
+  standDown,
   startNativeStore,
   withApplier,
 } from "../store/nativeStore";
@@ -330,6 +331,7 @@ export function startPersistence() {
 
 function failClosed() {
   frozen = true;
+  standDown();
   const message = "The native store opened but returned no workspace, so this window saves nothing. Quit and relaunch; your data is unchanged.";
   console.error(message);
   try {

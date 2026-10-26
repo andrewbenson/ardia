@@ -29,4 +29,47 @@ struct OnboardingSnapshotTests {
       try await Self.render(PreviewGalleryPage(page: .mocks(index)), "gallery-mocks-\(index)")
     }
   }
+
+  static func page(_ model: OnboardingModel, _ name: String) async throws {
+    try await render(
+      OnboardingOverlayView(model: model, windowId: "w1").environment(\.onboardingIntroClock, 2.9),
+      "step-\(name)"
+    )
+  }
+
+  @Test(.enabled(if: Snapshot.directory != nil))
+  func rendersEveryStep() async throws {
+    let (model, services, _, _) = OnboardingFixture.make()
+    services.visits = [OnboardingHistoryVisit(url: "https://github.com/", visits: 8), OnboardingHistoryVisit(url: "https://www.figma.com/", visits: 4)]
+    model.start()
+    try await Self.page(model, "00-intro")
+    model.go(.source)
+    await model.loadSources()
+    try await Self.page(model, "01-source-empty")
+    model.chooseSource(.arc)
+    try await Self.page(model, "01-source-arc")
+    for step in [OnboardingStep.layout, .tabs, .look, .searchPrivacy] {
+      model.go(step)
+      await model.enter(step)
+      for (sub, question) in model.questions(for: step).enumerated() {
+        model.go(step, sub: sub)
+        if question == .tidy { model.choose(.tidy, "tidy") }
+        if question == .crash { model.setExtras { $0.share = true } }
+        try await Self.page(model, "\(step.rawValue)-\(sub)-\(question.rawValue)")
+      }
+    }
+    model.go(.pins)
+    try await Self.page(model, "pins")
+    model.go(.home)
+    await model.loadSystem()
+    try await Self.page(model, "home-0-default")
+    model.go(.home, sub: 1)
+    try await Self.page(model, "home-1-links")
+    for question in [OnboardingQuestion.source, .tabs, .cmdl, .newTab, .color, .appearance, .engine, .pins] {
+      model.confirm(question, patch: [:], picked: model.picked(for: question))
+    }
+    model.go(.outro)
+    try await Self.page(model, "outro")
+  }
 }
+

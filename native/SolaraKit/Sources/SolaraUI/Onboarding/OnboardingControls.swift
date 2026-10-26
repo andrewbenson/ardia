@@ -179,7 +179,7 @@ struct OnboardingSecondaryButton: View {
         .padding(.horizontal, 18)
         .frame(height: 36)
         .background(Capsule().fill(filled ? (hovered ? colors.buttonHover : colors.button) : hovered ? colors.outlinedHover : .clear))
-        .overlay { if !filled { Capsule().strokeBorder(colors.noThanksBorder, lineWidth: 1) } }
+        .overlay { if !filled { CapsuleRing().fill(colors.noThanksBorder, style: FillStyle(eoFill: true)) } }
         .scaleEffect(pressed ? 0.98 : 1)
         .contentShape(Capsule())
     }
@@ -472,5 +472,16 @@ struct OnboardingTileFrame<Content: View>: View {
       }
       .scaleEffect(pressed ? 0.96 : 1)
       .contentShape(Rectangle())
+  }
+}
+
+struct CapsuleRing: Shape {
+  var width: CGFloat = 1
+
+  func path(in rect: CGRect) -> Path {
+    var path = Path(roundedRect: rect, cornerRadius: min(rect.width, rect.height) / 2)
+    let inner = rect.insetBy(dx: width, dy: width)
+    path.addPath(Path(roundedRect: inner, cornerRadius: min(inner.width, inner.height) / 2))
+    return path
   }
 }

@@ -556,7 +556,7 @@ function render() {
   const v = state.meta.version ?? "?";
   md.push(`# Native move: baseline ${v}`, "");
   md.push(`Measured by \`apps/browser/scripts/perf/native-baseline.mjs\` (plan: [baseline.md](baseline.md)) on \`${state.meta.app ?? "?"}\`${state.meta.control ? `, interleaved with \`${state.meta.control}\`` : ""}.`, "");
-  const dark = PHASES.filter((n) => P[n]?.before?.display?.locked || P[n]?.before?.display?.asleep);
+  const dark = PHASES.filter((n) => !["js", "prepare", "suggest"].includes(n) && (P[n]?.before?.display?.locked || P[n]?.before?.display?.asleep));
   const skipped = PHASES.filter((n) => P[n]?.skipped && !P[n]?.result);
   if (dark.length) md.push(`**Run with the screen locked or the display asleep:** ${dark.join(", ")}. macOS gives windows no display-link frames then and pages paint about once a second, so in those phases only rows that don't wait on a frame or a paint stand (launch → window shown and → JS running, memory, idle CPU and wakeups, compute); the paint and frame rows are left for the unlocked rerun.`, "");
   if (skipped.length) md.push(`**Left for a run with the display awake and unlocked:** ${skipped.join(", ")}.`, "");
@@ -573,7 +573,7 @@ function render() {
   for (const name of PHASES) {
     const p = P[name];
     if (!p) continue;
-    md.push(`| ${name} | ${p.before?.at?.slice(0, 16).replace("T", " ") ?? "–"} | ${p.before?.load.join("/") ?? "–"} → ${p.after?.load.join("/") ?? "–"} | ${p.before?.display?.locked ? "locked" : p.before?.display?.asleep ? "asleep" : "awake"} | ${p.inputSecs ?? "–"} | ${p.minutes ? p.minutes.toFixed(0) : "–"} |`);
+    md.push(`| ${name} | ${p.before?.at?.slice(0, 16).replace("T", " ") ?? "–"} | ${p.before?.load.join("/") ?? "–"} → ${p.after?.load.join("/") ?? "–"} | ${!p.before ? `left out (${p.skipped ?? "not run"})` : p.before.display?.locked ? "locked" : p.before.display?.asleep ? "asleep" : "awake"} | ${p.inputSecs ?? "–"} | ${p.minutes ? p.minutes.toFixed(0) : "–"} |`);
   }
   md.push("");
 

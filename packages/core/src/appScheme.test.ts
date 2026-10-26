@@ -54,3 +54,12 @@ test("a fork routes its own pages from either scheme", () => {
   assert.deepEqual(appUrlRoute("solara://version"), { kind: "engine", url: "chrome://version" });
   assert.equal(appUrlRoute("chrome://version"), null);
 });
+
+test("an app or about: URL whose fragment has a line break still parses", () => {
+  setAppScheme("Solara");
+  assert.equal(urlForDisplay("ardia://x#a\nb"), "solara://x#a\nb");
+  assert.equal(appUrlOrigin("about:flags#a\nb"), "solara://flags");
+  assert.deepEqual(breadcrumb("solara://settings/sync#a\u2028b", "Settings"), { host: "solara://settings", trail: ["Settings"] });
+  assert.deepEqual(appUrlRoute("ardia://settings/sync#a\nb"), { kind: "settings", section: "sync" });
+  assert.equal(displayUrl("chrome://version/#a\rb"), "solara://version#a\rb");
+});

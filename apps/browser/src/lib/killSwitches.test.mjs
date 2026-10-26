@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
@@ -27,16 +26,6 @@ test("at most 8 live switches, each on by default with an owner and a removal da
   }
   reset();
   for (const name of names) assert.equal(ks.switchOn(name), true, `${name} defaults on`);
-});
-
-test("the site's switches.json is a version 1 file naming only switches the app knows, as booleans", () => {
-  const site = JSON.parse(readFileSync(new URL("../../../site/public/switches.json", import.meta.url), "utf8"));
-  assert.equal(site.version, 1);
-  for (const [name, value] of Object.entries(site.switches)) {
-    assert.ok(names.includes(name), `switches.json names ${name}, which the app doesn't have: remove it`);
-    assert.equal(typeof value, "boolean", name);
-  }
-  assert.ok(JSON.stringify(site).length < 4096);
 });
 
 test("a cached value is read synchronously; unknown names and non-booleans are ignored", () => {

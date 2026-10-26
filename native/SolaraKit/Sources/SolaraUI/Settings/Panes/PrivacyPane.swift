@@ -131,7 +131,6 @@ public protocol PrivacyServices: AnyObject {
   func removeExternalAppAllowance(profile: String, origin: String, scheme: String) async
   func zoomLevels(profile: String) async -> [String: Double]
   func setZoom(profile: String, host: String, zoom: Double) async
-  func favicon(url: String, profile: String) async -> NSImage?
 }
 
 struct BlockerCategory: Identifiable {
@@ -174,7 +173,6 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
   var origins: [String: [String]] = [:]
   var appLinks: [String: [ExternalAppAllowance]] = [:]
   var zoom: [String: [String: Double]] = [:]
-  var favicons: [String: NSImage] = [:]
   var sitePermissionsProfileId: String
   var appLinksProfileId: String
   var zoomProfileId: String
@@ -300,12 +298,6 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
     sharing = diagnostics?.sharing ?? on
   }
 
-  func favicon(_ url: String, profile: String) async {
-    let key = "\(profile) \(url)"
-    if favicons[key] != nil { return }
-    if let image = await services.favicon(url: url, profile: profile) { favicons[key] = image }
-  }
-
   static func withoutScheme(_ origin: String) -> String {
     origin.replacingOccurrences(of: "^https?://", with: "", options: .regularExpression)
   }
@@ -371,7 +363,7 @@ struct PrivacyPane: View {
     .sheet(item: $model.sheet) { sheet in
       switch sheet {
       case .filterLists: FilterListsSheet(model: model)
-      case .site(let site): SiteSheet(model: site, favicons: model)
+      case .site(let site): SiteSheet(model: site)
       case .whatsSent: WhatsSentSheet(copy: DiagnosticsCopy(appName: app, services: model.diagnostics)) { model.sheet = nil }
       }
     }
@@ -410,7 +402,7 @@ struct AllowedHostsSection: View {
       SettingsSection("Sites without blocking", description: "Turned off from a site's controls. Blocking applies to subdomains too.") {
         ForEach(hosts, id: \.self) { host in
           PrivacyIconRow(title: host) {
-            PrivacyFavicon(url: "https://\(host)", profile: model.defaultEngineProfile, model: model)
+            SettingsFavicon(url: "https://\(host)", profile: model.defaultEngineProfile)
           } control: {
             Button("Block Again") { Task { await model.blockAgain(host) } }
           }
@@ -451,7 +443,7 @@ struct SitePermissionsSection: View {
           ForEach(origins, id: \.self) { origin in
             Button { model.openSite(origin) } label: {
               PrivacyIconRow(title: PrivacyPaneModel.withoutScheme(origin)) {
-                PrivacyFavicon(url: origin, profile: profile, model: model)
+                SettingsFavicon(url: origin, profile: profile)
               } control: {
                 Image(systemName: "chevron.right")
                   .font(.system(size: 11, weight: .semibold))
@@ -493,7 +485,7 @@ struct AppLinksSection: View {
               if let icon = PrivacyImages.dataURI(allowance.icon) {
                 Image(nsImage: icon).resizable().frame(width: 20, height: 20)
               } else {
-                PrivacyFavicon(url: allowance.origin, profile: profile, model: model)
+                SettingsFavicon(url: allowance.origin, profile: profile)
               }
             } control: {
               Button("Remove") { Task { await model.removeAppLink(allowance) } }
@@ -523,7 +515,7 @@ struct ZoomLevelsSection: View {
       } content: {
         ForEach(hosts, id: \.self) { host in
           PrivacyIconRow(title: host, description: PrivacyPaneModel.zoomText(levels[host] ?? 1)) {
-            PrivacyFavicon(url: "https://\(host)", profile: profile, model: model)
+            SettingsFavicon(url: "https://\(host)", profile: profile)
           } control: {
             Button("Reset") { Task { await model.resetZoom(host) } }
           }

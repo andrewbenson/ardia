@@ -79,10 +79,6 @@ final class FakePasswordsServices: PasswordsServices {
   func importPasswordsCSV(path: String) async throws -> [ImportedCredential] { try csv.get() }
   var inApplicationsFolder: Bool? { applicationsFolder }
   func copy(_ text: String) { copied.append(text) }
-  func favicon(url: String, profile: String) async -> NSImage? {
-    guard url.contains("github") else { return nil }
-    return NSImage(systemSymbolName: "chevron.left.forwardslash.chevron.right", accessibilityDescription: nil)
-  }
 }
 
 final class TestClock: @unchecked Sendable {
@@ -256,9 +252,9 @@ struct PasswordsPaneTests {
     #expect(PasswordsText.maskedPassword("abc", revealed: false) == "•••")
     #expect(PasswordsText.maskedPassword("correct-horse-battery-staple", revealed: false) == String(repeating: "•", count: 12))
     #expect(PasswordsText.maskedPassword("abc", revealed: true) == "abc")
-    #expect(PasswordsFavicon.initial("https://www.github.com", label: "github.com") == "G")
-    #expect(PasswordsFavicon.initial("http://192.168.1.1", label: "192.168.1.1") == nil)
-    #expect(PasswordsFavicon.initial("android://x@com.example", label: "x") == nil)
+    #expect(SettingsFavicon.hostInitial("https://www.github.com") == "G")
+    #expect(SettingsFavicon.hostInitial("http://192.168.1.1") == nil)
+    #expect(SettingsFavicon.hostInitial("android://x@com.example") == nil)
     let moved = PasswordsText.managerAppsNote(appName: "Solara", inApplicationsFolder: false)
     #expect(moved.contains("move Solara to your Applications folder"))
     let added = PasswordsText.managerAppsNote(appName: "Solara", inApplicationsFolder: nil)

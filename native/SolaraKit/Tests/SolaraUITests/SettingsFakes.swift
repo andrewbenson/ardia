@@ -62,7 +62,6 @@ final class FakeAboutServices: AboutServices {
     appVersion: "0.3.0",
     build: "412",
     chromiumVersion: "156.0.8078.47",
-    engine: "ArdiaCore",
     osVersion: "27.0.1 (26A434)",
     architecture: "Apple silicon (arm64)",
     copyright: "© 2026 Andrew Benson.",
@@ -97,6 +96,7 @@ enum SettingsFixture {
   static func context(liquidGlass: Bool = false) -> (SettingsContext, FakeSettingsStore) {
     let store = FakeSettingsStore()
     let context = SettingsContext(appName: "Solara", liquidGlass: liquidGlass, store: store)
+    context.favicons = SettingsFavicons { _, _ in nil }
     context.panes[.general] = GeneralPaneModel(services: FakeGeneralServices(), store: store)
     context.panes[.tabs] = TabsPaneModel(store: store)
     context.panes[.appearance] = AppearancePaneModel(services: FakeAppearanceServices(), store: store)

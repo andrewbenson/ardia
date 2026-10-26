@@ -112,15 +112,6 @@ final class FakePrivacyServices: PrivacyServices {
     calls.append("zoom \(profile) \(host) \(level)")
     if level == 1 { zoom[profile]?[host] = nil }
   }
-
-  func favicon(url: String, profile: String) async -> NSImage? {
-    guard url.contains("github") else { return nil }
-    return NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in
-      NSColor.systemPurple.setFill()
-      NSBezierPath(ovalIn: rect).fill()
-      return true
-    }
-  }
 }
 
 @MainActor
@@ -372,9 +363,9 @@ struct PrivacyPaneTests {
   }
 
   @Test func imageHelpers() {
-    #expect(PrivacyImages.hostInitial("https://www.github.com/x") == "G")
-    #expect(PrivacyImages.hostInitial("http://127.0.0.1:8080") == "")
-    #expect(PrivacyImages.hostInitial("about:blank") == "")
+    #expect(SettingsFavicon.hostInitial("https://www.github.com/x") == "G")
+    #expect(SettingsFavicon.hostInitial("http://127.0.0.1:8080") == nil)
+    #expect(SettingsFavicon.hostInitial("about:blank") == nil)
     let png = NSImage(size: NSSize(width: 2, height: 2), flipped: false) { _ in true }
     let data = try! #require(png.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) })
     #expect(PrivacyImages.dataURI("data:image/png;base64,\(data.base64EncodedString())") != nil)
@@ -446,7 +437,7 @@ struct PrivacyPaneTests {
     for dark in [false, true] {
       let scheme = dark ? "dark" : "light"
       try await Snapshot.render(FilterListsSheet(model: model).environment(\.settingsContext, context), size: NSSize(width: 500, height: 560), dark: dark, to: directory.appendingPathComponent("privacy-filterLists-\(scheme).png"))
-      try await Snapshot.render(SiteSheet(model: site, favicons: model).environment(\.settingsContext, context), size: NSSize(width: 460, height: 520), dark: dark, to: directory.appendingPathComponent("privacy-site-\(scheme).png"))
+      try await Snapshot.render(SiteSheet(model: site).environment(\.settingsContext, context), size: NSSize(width: 460, height: 520), dark: dark, to: directory.appendingPathComponent("privacy-site-\(scheme).png"))
       try await Snapshot.render(WhatsSentSheet(copy: copy) {}.environment(\.settingsContext, context), size: NSSize(width: 500, height: 580), dark: dark, to: directory.appendingPathComponent("privacy-whatsSent-\(scheme).png"))
     }
   }

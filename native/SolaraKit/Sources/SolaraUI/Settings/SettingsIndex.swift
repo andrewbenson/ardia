@@ -502,7 +502,7 @@ public struct SettingsIndex: Sendable {
       .about: [
         Section(section: app, rows: [
           Row(key: "version", title: "\(app) version", keywords: ["version", "build", "about", "bug report", "channel"]),
-          Row(key: "chromium", title: "Chromium", keywords: ["chromium", "engine", "version", "chrome", "ardiacore"]),
+          Row(key: "chromium", title: "Chromium", keywords: ["chromium", "engine", "version", "chrome"]),
           Row(key: "macOS", title: "macOS", keywords: ["os", "system", "version", "architecture", "apple silicon", "intel"]),
           Row(key: "copy", title: "Copy version information", description: "For bug reports.", keywords: ["copy", "bug report", "version", "support"]),
         ]),

@@ -25,7 +25,7 @@ struct PasswordDetailSheet: View {
     let host = services.hostLabel(saved.origin)
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 10) {
-        PasswordsFavicon(services: services, url: saved.origin, profile: profile, size: 22)
+        SettingsFavicon(url: saved.origin, profile: profile, size: 22)
         Text(host)
           .font(.system(size: 15, weight: .semibold))
           .frame(maxWidth: .infinity, alignment: .leading)

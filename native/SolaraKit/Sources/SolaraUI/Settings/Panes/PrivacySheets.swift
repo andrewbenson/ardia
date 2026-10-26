@@ -90,48 +90,6 @@ enum PrivacyImages {
     return data.flatMap(NSImage.init(data:))
   }
 
-  static func hostInitial(_ url: String) -> String {
-    guard let match = url.range(of: "^(?:https?|ftp)://(?:[^@/?#]*@)?([^/?#:]+)", options: [.regularExpression, .caseInsensitive]) else { return "" }
-    let host = url[match].replacingOccurrences(of: "^(?:https?|ftp)://(?:[^@/?#]*@)?", with: "", options: [.regularExpression, .caseInsensitive])
-    if host.range(of: "^[\\d.]+$|^\\[", options: .regularExpression) != nil { return "" }
-    let name = host.replacingOccurrences(of: "^www\\.", with: "", options: .regularExpression)
-    return name.first.map { String($0).uppercased() } ?? ""
-  }
-}
-
-struct PrivacyFavicon: View {
-  let url: String
-  let profile: String
-  let model: PrivacyPaneModel
-  var size: CGFloat = 16
-
-  var body: some View {
-    Group {
-      if let image = model.favicons["\(profile) \(url)"] {
-        Image(nsImage: image)
-          .resizable()
-          .interpolation(.high)
-          .clipShape(RoundedRectangle(cornerRadius: size > 18 ? 4 : 3))
-      } else {
-        let initial = PrivacyImages.hostInitial(url)
-        if initial.isEmpty {
-          Image(systemName: "globe").font(.system(size: size - 3)).foregroundStyle(.secondary)
-        } else {
-          let tile = (size * 14 / 16).rounded()
-          RoundedRectangle(cornerRadius: tile * 0.32, style: .continuous)
-            .fill(Color.primary.opacity(0.13))
-            .frame(width: tile, height: tile)
-            .overlay {
-              Text(initial)
-                .font(.system(size: (tile * 0.64).rounded(), weight: .semibold))
-                .foregroundStyle(.secondary)
-            }
-        }
-      }
-    }
-    .frame(width: size, height: size)
-    .task(id: "\(profile) \(url)") { await model.favicon(url, profile: profile) }
-  }
 }
 
 struct PrivacyIconRow<Icon: View, Control: View>: View {
@@ -249,12 +207,11 @@ struct FilterListsSheet: View {
 struct SiteSheet: View {
   @Environment(\.dismiss) private var dismiss
   let model: PrivacySiteModel
-  let favicons: PrivacyPaneModel
 
   var body: some View {
     VStack(spacing: 0) {
       HStack(spacing: 10) {
-        PrivacyFavicon(url: model.origin, profile: model.profile, model: favicons, size: 20)
+        SettingsFavicon(url: model.origin, profile: model.profile, size: 20)
         Text(PrivacyPaneModel.withoutScheme(model.origin))
           .font(.headline)
           .frame(maxWidth: .infinity, alignment: .leading)

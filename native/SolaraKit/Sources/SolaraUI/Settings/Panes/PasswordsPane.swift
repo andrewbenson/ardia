@@ -62,7 +62,6 @@ public protocol PasswordsServices: AnyObject {
   func importPasswordsCSV(path: String) async throws -> [ImportedCredential]
   var inApplicationsFolder: Bool? { get }
   func copy(_ text: String)
-  func favicon(url: String, profile: String) async -> NSImage?
   func hostLabel(_ url: String) -> String
   func searchText(_ fields: [String]) -> String
 }
@@ -378,7 +377,7 @@ struct PasswordsSavedSections: View {
       } else {
         ForEach(shown) { saved in
           PasswordsLinkRow(title: model.services.hostLabel(saved.origin), description: saved.username.isEmpty ? "(no username)" : saved.username) {
-            PasswordsFavicon(services: model.services, url: saved.origin, profile: profile)
+            SettingsFavicon(url: saved.origin, profile: profile)
           } action: {
             sheet = .password(saved)
           }
@@ -392,7 +391,7 @@ struct PasswordsSavedSections: View {
             Button("Remove") { Task { await model.allowSaving(origin, profile: profile) } }
           } label: {
             HStack(spacing: 12) {
-              PasswordsFavicon(services: model.services, url: origin, profile: profile)
+              SettingsFavicon(url: origin, profile: profile)
               Text(model.services.hostLabel(origin))
             }
           }
@@ -447,48 +446,6 @@ struct PasswordsLinkRow<Icon: View>: View {
   }
 }
 
-struct PasswordsFavicon: View {
-  let services: PasswordsServices
-  let url: String
-  let profile: String
-  var size: CGFloat = 16
-  @State private var image: NSImage?
-  @Environment(\.colorScheme) private var colorScheme
-
-  var body: some View {
-    Group {
-      if let image {
-        Image(nsImage: image)
-          .resizable()
-          .interpolation(.high)
-          .clipShape(RoundedRectangle(cornerRadius: size > 18 ? 4 : 3))
-      } else if let initial = Self.initial(url, label: services.hostLabel(url)) {
-        let tile = (size * 14 / 16).rounded()
-        RoundedRectangle(cornerRadius: tile * 0.32, style: .continuous)
-          .fill(colorScheme == .dark ? Color(red: 247 / 255, green: 245 / 255, blue: 1).opacity(0.2) : Color.black.opacity(0.13))
-          .frame(width: tile, height: tile)
-          .overlay {
-            Text(initial)
-              .font(.system(size: (tile * 0.64).rounded(), weight: .semibold))
-              .foregroundStyle(.secondary)
-          }
-      } else {
-        Image(systemName: "globe")
-          .font(.system(size: size - 3))
-          .foregroundStyle(.secondary)
-      }
-    }
-    .frame(width: size, height: size)
-    .task(id: url) { image = await services.favicon(url: url, profile: profile) }
-  }
-
-  static func initial(_ url: String, label: String) -> String? {
-    guard let match = url.firstMatch(of: /^(?i:https?|ftp):\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/) else { return nil }
-    let host = String(match.1)
-    guard host.wholeMatch(of: /[\d.]+/) == nil, !host.hasPrefix("[") else { return nil }
-    return label.first.map { String($0).uppercased() }
-  }
-}
 
 struct PasswordsSearchField: NSViewRepresentable {
   @Binding var text: String

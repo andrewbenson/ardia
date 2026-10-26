@@ -87,6 +87,14 @@ final class FakeAdvancedServices: AdvancedServices {
   var systemInfo: AdvancedSystemInfo { AdvancedSystemInfo(releaseRepo: "andrewbenson/solara", appVersion: "0.3.0") }
 }
 
+final class ObservedFlag: @unchecked Sendable {
+  private let lock = NSLock()
+  private var value = false
+
+  var raised: Bool { lock.withLock { value } }
+  func raise() { lock.withLock { value = true } }
+}
+
 @MainActor
 struct SimplePanesTests {
   @Test func linkKeysNormalizeAndExplainTheClash() {
@@ -175,7 +183,7 @@ struct SimplePanesTests {
     let model = AboutPaneModel(services: services)
     await model.prepare(SettingsPlace(pane: .about))
     model.copy(app: "Solara")
-    #expect(services.copiedText == "Solara 0.3.0 (412), Stable\nChromium 156.0.8078.47\nEngine ArdiaCore\nmacOS 27.0.1 (26A434), Apple silicon (arm64)")
+    #expect(services.copiedText == "Solara 0.3.0 (412), Stable\nChromium 156.0.8078.47\nmacOS 27.0.1 (26A434), Apple silicon (arm64)")
     services.updater?.channel = "nightly"
     await model.refreshUpdater()
     #expect(AboutPaneModel.versionLine(services.aboutInfo, channel: model.channel) == "0.3.0 (412), Nightly")
@@ -209,6 +217,21 @@ struct SimplePanesTests {
     #expect(info.upstreamCredit == nil)
     #expect(!info.osVersion.isEmpty)
     try? FileManager.default.removeItem(at: root)
+  }
+
+  @Test func renamingAProfileRetitlesItsDetailsPane() {
+    let (context, store) = SettingsFixture.context()
+    context.navigation.go(.profiles, profileId: "work")
+    #expect(context.title(for: context.navigation.place) == "Work")
+    let notified = ObservedFlag()
+    withObservationTracking {
+      _ = context.title(for: context.navigation.place)
+    } onChange: {
+      notified.raise()
+    }
+    store.profiles[1] = SettingsProfile(id: "work", name: "Office", engineProfile: "work")
+    #expect(notified.raised)
+    #expect(context.title(for: context.navigation.place) == "Office")
   }
 
   @Test(.enabled(if: Snapshot.directory != nil))

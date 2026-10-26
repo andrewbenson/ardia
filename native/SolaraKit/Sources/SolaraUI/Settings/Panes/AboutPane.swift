@@ -31,18 +31,16 @@ public struct AboutInfo: Equatable, Sendable {
   public var appVersion: String
   public var build: String
   public var chromiumVersion: String?
-  public var engine: String?
   public var osVersion: String
   public var architecture: String
   public var copyright: String?
   public var upstreamCredit: String?
   public var releaseRepo: String?
 
-  public init(appVersion: String, build: String, chromiumVersion: String?, engine: String?, osVersion: String, architecture: String, copyright: String?, upstreamCredit: String?, releaseRepo: String?) {
+  public init(appVersion: String, build: String, chromiumVersion: String?, osVersion: String, architecture: String, copyright: String?, upstreamCredit: String?, releaseRepo: String?) {
     self.appVersion = appVersion
     self.build = build
     self.chromiumVersion = chromiumVersion
-    self.engine = engine
     self.osVersion = osVersion
     self.architecture = architecture
     self.copyright = copyright
@@ -50,13 +48,12 @@ public struct AboutInfo: Equatable, Sendable {
     self.releaseRepo = releaseRepo
   }
 
-  public static func read(app bundle: Bundle = .main, engine: String? = nil, releaseRepo: String? = nil) -> AboutInfo {
+  public static func read(app bundle: Bundle = .main, releaseRepo: String? = nil) -> AboutInfo {
     let engineBundle = bundle.privateFrameworksURL.flatMap { Bundle(url: $0.appendingPathComponent("Chromium Framework.framework")) }
     return AboutInfo(
       appVersion: infoString(bundle, "CFBundleShortVersionString") ?? "",
       build: infoString(bundle, "CFBundleVersion") ?? "",
       chromiumVersion: engineBundle.flatMap { infoString($0, "CFBundleShortVersionString") },
-      engine: engine,
       osVersion: osVersion(),
       architecture: architecture(),
       copyright: infoString(bundle, "ACCopyright"),
@@ -156,7 +153,6 @@ public final class AboutPaneModel: SettingsPaneProvider {
   static func report(_ info: AboutInfo, app: String, channel: String?) -> String {
     var lines = ["\(app) \(versionLine(info, channel: channel))"]
     if let chromium = info.chromiumVersion { lines.append("Chromium \(chromium)") }
-    if let engine = info.engine { lines.append("Engine \(engine)") }
     lines.append("macOS \(osLine(info))")
     return lines.joined(separator: "\n")
   }
@@ -186,7 +182,7 @@ struct AboutPane: View {
             .foregroundStyle(.secondary)
             .textSelection(.enabled)
         }
-        SettingRow("about.chromium", description: info.engine.map(RowDescription.text) ?? .none) {
+        SettingRow("about.chromium", description: RowDescription.none) {
           Text(info.chromiumVersion ?? "…")
             .foregroundStyle(.secondary)
             .textSelection(.enabled)

@@ -154,6 +154,12 @@ function wrapActions(store: Replica) {
       return response?.result ?? undefined;
     };
   }
+  const hydrate = s.hydrate as (data: object) => void;
+  wrapped.hydrate = (data: object) => {
+    withApplier(() => hydrate(data));
+    nativeWrite(encodeCommand("hydrate", [data]));
+    resync(store, [...OWNED_KEYS, "ui"]);
+  };
   withApplier(() => store.setState(wrapped as Partial<BrowserState>));
 }
 

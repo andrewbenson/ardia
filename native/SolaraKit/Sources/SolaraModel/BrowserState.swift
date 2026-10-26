@@ -26,6 +26,7 @@ public struct JSCaches: Sendable, Equatable {
   public var historyHints: JSMap<[HistoryHint]> = JSMap()
   public var playingAudio: Set<String> = []
   public var launchBackdrop: JSONValue = .null
+  public var earlyLaunchTab: Bool? = nil
 
   public init() {}
 }

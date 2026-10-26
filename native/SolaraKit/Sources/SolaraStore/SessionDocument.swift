@@ -76,7 +76,7 @@ extension Session {
       for (profileId, value) in table where publicProfile(profileId) { out[profileId] = encode(value) }
       return out
     }
-    let early = config.earlyLaunchTab
+    let early = s.caches.earlyLaunchTab ?? config.earlyLaunchTab
     return SessionDocument(
       profiles: s.profiles.map.mapValues(\.jsonValue), profileOrder: s.profileOrder, orphanedProfileData: s.orphanedProfileData,
       settings: s.settings.json, windows: windows, windowOrder: s.windowOrder.filter { windows[$0] != nil }, focusedWindowId: focusedWindowId,

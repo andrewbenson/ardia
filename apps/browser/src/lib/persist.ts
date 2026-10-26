@@ -60,7 +60,7 @@ const DOCS: Doc[] = [
     sources: (s) => [s.profiles, s.profileOrder, s.orphanedProfileData, s.windows, s.windowOrder, s.tabs, s.groups, s.splits, s.closedTabs, s.closedWindows, s.parkedPins, s.pinChoices, s.pinSync, s.settings, s.ui.focusedWindowId, s.ui.lastProfileId, s.ui.appDark, s.closedGroups, s.deletedGroups, s.cleanedTabs],
     json: serialized((s) => {
       const document = sessionDocument(s);
-      return nativeStoreActive() ? { ...document, nativeExport: { rev: nativeStoreRev(), at: Date.now() } } : document;
+      return nativeStoreActive() ? { ...document, nativeExport: { rev: nativeStoreRev(), at: Date.now(), scope: "settingsAndDownloads" } } : document;
     }),
   },
 ];
@@ -107,6 +107,7 @@ function nativeCaches(s: BrowserState): StoreCommand[] {
     args: [profileId, list.map((h) => ({ url: h.url, title: h.title, favicon: h.favicon }))],
   }));
   return [
+    { name: "setEarlyLaunchTab", args: [earlyLaunchTabOn()] },
     { name: "setPlayingAudio", args: [playing] },
     ...hints,
     { name: "setLaunchBackdrop", args: [earlyLaunchTabOn() ? (launchBackdrop(s, focusedForLaunch(s)) ?? null) : null] },
@@ -238,7 +239,7 @@ let frozen = false;
 
 export function flushPersistence({ final = false } = {}) {
   flush();
-  if (final) flushNativeStore();
+  if (final || nativeOwnsWorkspace()) flushNativeStore();
   if (final && !frozen) saveLaunchLook(useBrowser.getState());
   if (final) frozen = true;
 }
@@ -255,7 +256,8 @@ export function startPersistence() {
     console.warn("Another instance is using this data folder; this one saves nothing.");
     return () => {};
   }
-  if (nativeOwnsWorkspace() && hydrateFromNative(useBrowser)) {
+  if (nativeOwnsWorkspace()) {
+    if (!hydrateFromNative(useBrowser)) return failClosed();
     attachReplica(useBrowser, nativeCaches);
     restoreLaunchLook();
     cleanStaging(useBrowser.getState().downloads);
@@ -324,6 +326,16 @@ export function startPersistence() {
     stopServices();
     stopSession();
   };
+}
+
+function failClosed() {
+  frozen = true;
+  const message = "The native store opened but returned no workspace, so this window saves nothing. Quit and relaunch; your data is unchanged.";
+  console.error(message);
+  try {
+    (require("react-native") as typeof import("react-native")).Alert?.alert?.("Your tabs couldn't load", message);
+  } catch {}
+  return () => {};
 }
 
 function startDerivedServices({ forgetsIncognito }: { forgetsIncognito: boolean }) {

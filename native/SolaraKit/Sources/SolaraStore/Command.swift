@@ -41,7 +41,7 @@ public struct Command: Sendable, Equatable {
     "flipSplit", "toggleSplitOrientation", "movePane", "focusPane", "toggleTabLayout", "openPeek", "closePeek", "peekToTab", "updateSettings",
     "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate", "tidyPins", "untidyPins",
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
-    "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "nextId", "nextNavigation",
+    "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "setEarlyLaunchTab", "nextId", "nextNavigation",
     "beginFromSync", "endFromSync", "beginTransaction", "endTransaction", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
   ]
 }
@@ -298,6 +298,8 @@ extension Session {
       state = next
     case "setPlayingAudio":
       state.caches.playingAudio = Set(a.strings(0))
+    case "setEarlyLaunchTab":
+      state.caches.earlyLaunchTab = a.bool(0)
     case "setLaunchBackdrop":
       state.caches.launchBackdrop = a.raw(0) ?? .null
     case "nextId": result = .string(newId(try a.requireString(0)))

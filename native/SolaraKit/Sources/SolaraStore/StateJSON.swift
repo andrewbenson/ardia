@@ -80,6 +80,7 @@ extension BrowserState {
       self.caches.historyHints = hints
       self.caches.playingAudio = Set(caches["playingAudio"]?.array?.compactMap(\.string) ?? [])
       self.caches.launchBackdrop = caches["launchBackdrop"] ?? .null
+      self.caches.earlyLaunchTab = caches["earlyLaunchTab"]?.bool
     default:
       throw CommandError("unknown slice \(key)")
     }

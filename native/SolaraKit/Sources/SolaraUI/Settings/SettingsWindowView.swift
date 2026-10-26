@@ -57,6 +57,7 @@ struct SettingsSidebar: View {
         List(selection: Binding(get: { context.navigation.pane }, set: { pane in if let pane { context.goToPane(pane) } })) {
           ForEach(SettingsPane.allCases) { pane in
             Label(pane.title, systemImage: pane.symbol)
+              .listItemTint(.monochrome)
               .tag(pane)
           }
         }
@@ -243,7 +244,7 @@ struct WindowChromeTrimmer: NSViewRepresentable {
 
     func trim() {
       guard let toolbar = window?.toolbar else { return }
-      for (index, item) in toolbar.items.enumerated().reversed() where item.itemIdentifier == .toggleSidebar {
+      for (index, item) in toolbar.items.enumerated().reversed() where item.itemIdentifier == .toggleSidebar || item.itemIdentifier.rawValue.localizedCaseInsensitiveContains("toggleSidebar") || item.itemIdentifier.rawValue.localizedCaseInsensitiveContains("sidebarToggle") {
         toolbar.removeItem(at: index)
       }
     }

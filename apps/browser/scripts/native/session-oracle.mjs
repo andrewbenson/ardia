@@ -8,8 +8,9 @@ const HELP = `usage: node scripts/native/session-oracle.mjs <data folder> [--now
 
 Loads <data folder>/session.json and downloads.json the way the app does today
 (persist.ts loadSession, then the store's hydrate) and prints what persist.ts
-would write back: {"memory": {launch, counter, now}, "launchBackdrop", "session",
-"downloads"}, as canonical JSON (keys sorted). The Swift importer
+would write back: {"memory": {launch, counter, now}, "memoryAfter", "launchBackdrop",
+"session", "sessionText", "downloads", "downloadsText"}, as canonical JSON (keys sorted;
+the two texts keep persist.ts's own key order). The Swift importer
 (solara-store session-oracle) given the same memory must print the same bytes.
 The folder is only read.`;
 
@@ -80,11 +81,18 @@ const canonical = (value) =>
           .join(",")}}`
       : JSON.stringify(value);
 
+const after = globalThis.__oracleModel.read();
+const sessionText = sessionDoc.json(s);
+const downloadsText = downloadsDoc.json(s);
 process.stdout.write(
   canonical({
     memory,
+    memoryAfter: { counter: after.counter, navSeq: after.navSeq },
     launchBackdrop: launchBackdrop(s, focused) ?? null,
-    session: JSON.parse(sessionDoc.json(s)),
-    downloads: JSON.parse(downloadsDoc.json(s)),
+    launchBackdropText: JSON.stringify(launchBackdrop(s, focused) ?? null),
+    session: JSON.parse(sessionText),
+    sessionText,
+    downloads: JSON.parse(downloadsText),
+    downloadsText,
   }) + "\n",
 );

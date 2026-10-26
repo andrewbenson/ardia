@@ -4,12 +4,13 @@ import SolaraPersistence
 import SolaraStore
 
 let usage = """
-  usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>]
+  usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>] [--via-db]
          solara-store import <data folder> [--now <ms>]
 
-  session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (loadSession and
-  hydrate) and prints what the shadow export would write, as canonical JSON, in the same shape as
-  apps/browser/scripts/native/session-oracle.mjs. import reads a data folder the way the first native launch does and
+  session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (Importer.read:
+  loadSession and hydrate) and prints what the shadow export would write, as canonical JSON plus the documents'
+  own text, in the same shape as apps/browser/scripts/native/session-oracle.mjs. --via-db also writes the import
+  into a scratch solara.sqlite and loads it back before printing. import reads a data folder the way the first native launch does and
   prints the counts and notes it would record. Both only read the folder.
 
   """
@@ -20,6 +21,25 @@ var arguments = Array(CommandLine.arguments.dropFirst())
   let value = arguments[at + 1]
   arguments.removeSubrange(at...(at + 1))
   return value
+}
+
+@MainActor func flag(_ name: String) -> Bool {
+  guard let at = arguments.firstIndex(of: name) else { return false }
+  arguments.remove(at: at)
+  return true
+}
+
+func roundTripThroughDatabase(_ result: ImportResult, memory: StoreMemory, now: Double) throws -> BrowserState {
+  let scratch = FileManager.default.temporaryDirectory.appending(path: "solara-oracle-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: scratch) }
+  let url = scratch.appending(path: "solara.sqlite")
+  try SolaraDatabase.create(at: url, writing: result.persisted, meta: result.meta)
+  let database = try SolaraDatabase(url: url)
+  defer { try? database.close() }
+  let persisted = try database.load()
+  let loader = Session(state: BrowserState(), memory: memory, env: PlainWebAddressing(), config: StoreConfig(), now: now)
+  return loader.loadSession(persisted.sessionJSON(), downloads: persisted.downloadsJSON)
 }
 
 guard let verb = arguments.first else {
@@ -35,28 +55,37 @@ case "session-oracle":
   let counter = Int(option("--counter") ?? "0") ?? 0
   let navSeq = Int(option("--nav-seq") ?? "0") ?? 0
   let backdrop = option("--launch-backdrop").flatMap { try? JSONValue.parse($0) } ?? .null
+  let viaDatabase = flag("--via-db")
   guard let dir = arguments.first else {
     FileHandle.standardError.write(Data(usage.utf8))
     exit(2)
   }
-  let folder = URL(fileURLWithPath: dir)
-  func read(_ name: String) -> JSONValue? {
-    guard let data = try? Data(contentsOf: folder.appending(path: name)) else { return nil }
-    return try? JSONValue.parse(data)
-  }
+  let folder = DataFolder(url: URL(fileURLWithPath: dir))
   var memory = StoreMemory(ids: IdSource(launch: launch, counter: counter))
   memory.navSeq = navSeq
-  var base = BrowserState()
-  base.caches.launchBackdrop = backdrop
-  let session = Session(state: base, memory: memory, env: PlainWebAddressing(), config: StoreConfig(), now: now)
-  var state = session.loadSession(read("session.json"), downloads: read("downloads.json"))
+  let result = Importer.read(folder, carrying: nil, context: LoadContext(memory: memory, now: now))
+  var state = result.state
+  if viaDatabase {
+    do {
+      state = try roundTripThroughDatabase(result, memory: result.memory, now: now)
+    } catch {
+      FileHandle.standardError.write(Data("the database round trip failed: \(error)\n".utf8))
+      exit(1)
+    }
+  }
   state.caches.launchBackdrop = backdrop
-  let document = session.sessionDocument(state)
+  let loader = Session(state: state, memory: result.memory, env: PlainWebAddressing(), config: StoreConfig(), now: now)
+  let document = loader.sessionDocument(state)
+  let downloads = ShadowExport.downloadsDocument(state)
   let output: JSONValue = [
     "memory": ["launch": .string(launch), "counter": JSONValue(counter), "navSeq": JSONValue(navSeq), "now": .number(now)],
+    "memoryAfter": ["counter": JSONValue(result.memory.ids.counter), "navSeq": JSONValue(result.memory.navSeq)],
     "launchBackdrop": backdrop,
+    "launchBackdropText": .string(backdrop.text()),
     "session": document.json(),
-    "downloads": ["version": 2, "downloads": .array(state.downloads.filter { !$0.isPrivate }.map { .object($0.persisted().json) })],
+    "sessionText": .string(document.json().text()),
+    "downloads": downloads,
+    "downloadsText": .string(downloads.text()),
   ]
   print(output.canonical)
 case "import":

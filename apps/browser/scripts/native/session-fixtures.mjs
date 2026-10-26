@@ -224,20 +224,93 @@ const fixtures = {
     windowOrder: ["w1"],
     tabs: [tab("a", "w1", { profileId: "incognito:w1@default" })],
   }),
-  "no-session-file": null,
+  "unparseable-session": null,
+  "no-session-file": { __downloadsOnly: true },
+  "lone-surrogate": {
+    ...session({ windows: [win("w1", ["a"])], windowOrder: ["w1"], focusedWindowId: "w1", tabs: [tab("a", "w1", { title: "half \ud83d of a face" })] }),
+    __oracle: { wellFormed: "a Swift String cannot hold a lone surrogate, so the importer writes U+FFFD where JS keeps \\ud83d" },
+  },
+  "big-numbers": session({
+    windows: [win("w1", ["a"], { frame: [1e21, 1.5e-7, -0, 123456789012345680000] })],
+    windowOrder: ["w1"],
+    tabs: [tab("a", "w1", { zoom: 1e-7, createdAt: 9007199254740993 })],
+  }),
 };
+
+const richBase = () =>
+  session({
+    profiles: { default: profile("default", "Personal", { color: "plum", createdAt: 0 }), work: profile("work", "Work", { createdAt: 2 }) },
+    profileOrder: ["default", "work"],
+    settings: { searchEngine: "duckduckgo", appearance: "dark", chosen: ["searchEngine", "appearance"], inferred: [] },
+    windows: [win("w1", ["a", "b", "p"])],
+    windowOrder: ["w1"],
+    focusedWindowId: "w1",
+    tabs: [tab("a", "w1"), tab("b", "w1"), tab("p", "w1", { pinned: true, pinnedUrl: "https://example.com/p" })],
+    splits: [{ id: "s", windowId: "w1", tabIds: ["a", "b"], orientation: "horizontal", sizes: [0.5, 0.5] }],
+    closedTabs: [{ kind: "tab", id: "ct", tab: { url: "https://c/", title: "C", favicon: null, pinned: false, muted: false, zoom: 1, customTitle: null, customIcon: null, profileId: "default" }, windowId: "w1", index: 0, group: null, closedAt: recent }],
+    closedWindows: [{ kind: "window", id: "cw", window: { profileId: "default", sidebarOpen: true, frame: null }, tabs: [{ url: "https://w/", title: "W", favicon: null, pinned: false, muted: false, zoom: 1, customTitle: null, customIcon: null, profileId: "default", active: true, tabId: null }], groups: [], closedAt: recent }],
+    closedGroups: [{ kind: "group", id: "cg", group: { id: "g", name: "G", icon: null, color: "red", pinned: false }, tabs: [{ url: "https://g/", title: "", favicon: null, pinned: false, muted: false, zoom: 1, customTitle: null, customIcon: null, profileId: "default" }], windowId: "w1", index: 0, closedAt: recent }],
+    __downloads: { version: 2, downloads: [{ id: "d1", url: "https://e/1", filename: "1", path: "/tmp/1", state: "complete", paused: false, received: 2, total: 2, speed: 0, mimeType: "" }] },
+  });
+const wrongShapes = {
+  "tab-tilefolder-string": (d) => (d.tabs[2].tileFolder = "legacy"),
+  "tab-navigation-string": (d) => (d.tabs[0].navigation = "x"),
+  "split-stack-number": (d) => (d.splits[0].stack = 0),
+  "closed-tab-snapshot-string": (d) => (d.closedTabs[0].tab = "x"),
+  "closed-tab-group-string": (d) => (d.closedTabs[0].group = "x"),
+  "closed-tab-parents-strings": (d) => (d.closedTabs[0].parents = ["x"]),
+  "closed-window-tab-number": (d) => d.closedWindows[0].tabs.push(5),
+  "closed-window-group-string": (d) => (d.closedWindows[0].groups = ["x"]),
+  "closed-group-head-string": (d) => (d.closedGroups[0].group = "x"),
+  "closed-group-tab-string": (d) => d.closedGroups[0].tabs.push("x"),
+  "closed-group-nested-string": (d) => (d.closedGroups[0].nested = ["x"]),
+  "parked-pins-tab-string": (d) => (d.parkedPins = { default: { tabs: ["x"], groups: [] } }),
+  "profile-string": (d) => (d.profiles.work = "x"),
+  "window-null": (d) => d.windows.push(null),
+  "tab-number": (d) => d.tabs.push(5),
+  "closed-tabs-null": (d) => {
+    d.closedTabs = [null];
+    d.__oracle = { jsFails: "persist.ts throws on a null closed tab; Swift drops it and keeps the rest" };
+  },
+};
+const jsThrows = "the JS store throws on this value while hydrating or saving; Swift drops it and keeps the rest";
+const normalized = "Swift drops or resets this unreadable value where JS carries it along; the windows, tabs, settings and downloads must still match";
+const expectations = {
+  "closed-group-tab-string": { jsFails: jsThrows },
+  "closed-tab-snapshot-string": { jsFails: jsThrows },
+  "closed-window-tab-number": { jsFails: jsThrows },
+  "window-null": { jsFails: jsThrows },
+  "closed-group-head-string": { normalizes: normalized },
+  "closed-group-nested-string": { normalizes: normalized },
+  "closed-tab-parents-strings": { normalizes: normalized },
+  "closed-window-group-string": { normalizes: normalized },
+  "parked-pins-tab-string": { normalizes: normalized },
+  "profile-string": { normalizes: normalized },
+};
+for (const [name, mutate] of Object.entries(wrongShapes)) {
+  const doc = richBase();
+  mutate(doc);
+  if (expectations[name]) doc.__oracle = expectations[name];
+  fixtures[`wrong-shape-${name}`] = doc;
+}
 
 for (const [name, value] of Object.entries(fixtures)) {
   const dir = join(out, name);
   mkdirSync(dir, { recursive: true });
+  for (const file of ["session.json", "downloads.json", "oracle.json"]) rmSync(join(dir, file), { force: true });
   if (value === null) {
     writeFileSync(join(dir, "downloads.json"), JSON.stringify({ version: 2, downloads: [] }));
     writeFileSync(join(dir, "session.json"), "not json at all");
     continue;
   }
-  const { __downloads, ...doc } = value;
+  if (value.__downloadsOnly) {
+    writeFileSync(join(dir, "downloads.json"), JSON.stringify({ version: 2, downloads: [] }));
+    continue;
+  }
+  const { __downloads, __oracle, ...doc } = value;
   writeFileSync(join(dir, "session.json"), JSON.stringify(doc));
   if (__downloads) writeFileSync(join(dir, "downloads.json"), JSON.stringify(__downloads));
+  if (__oracle) writeFileSync(join(dir, "oracle.json"), JSON.stringify(__oracle));
 }
 const seedDir = join(out, "perf-seed");
 writeSeed(seedDir, "http://127.0.0.1:47817", "");

@@ -1,0 +1,1 @@
+{"wellFormed":"a Swift String cannot hold a lone surrogate, so the importer writes U+FFFD where JS keeps \\ud83d"}

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import SwiftUI
 import Testing
+import SolaraLive
 @testable import SolaraUI
 
 @MainActor
@@ -10,26 +11,26 @@ final class FakeLiveFoldersServices: LiveFoldersServices {
 
   var state = LiveFoldersState(
     folders: [
-      LiveFolder(
+      LiveFolderSummary(
         id: "lf-1", profileId: "default", kind: .pullRequests, name: "Pull Requests", sources: [.github, .bitbucket],
         groupStacks: true, showCompleted: false,
         status: LiveFolderStatus(state: .idle, lastFetch: now.addingTimeInterval(-4 * 60), error: nil), hiddenCount: 2
       ),
-      LiveFolder(
+      LiveFolderSummary(
         id: "lf-2", profileId: "work", kind: .documents, name: "Docs", sources: [.notion, .gdrive],
         groupStacks: true, showCompleted: true,
         status: LiveFolderStatus(state: .error, lastFetch: nil, error: LiveFolderError(kind: .signedOut, source: .notion)), hiddenCount: 0
       ),
-      LiveFolder(
+      LiveFolderSummary(
         id: "lf-3", profileId: "work", kind: .pullRequests, name: "Team PRs", sources: [.github],
         groupStacks: false, showCompleted: true, status: nil, hiddenCount: 0
       ),
     ],
     accounts: [
-      .github: LiveAccount(login: "octocat", name: "Mona Lisa"),
-      .notion: LiveAccount(login: "Acme", name: "Acme"),
+      .github: LiveAccount(login: "octocat", name: "Mona Lisa", avatar: nil, connectedAt: 0),
+      .notion: LiveAccount(login: "Acme", name: "Acme", avatar: nil, connectedAt: 0),
     ],
-    config: LiveConfig(githubClientId: "Iv1.abc", bitbucketUser: "me@example.com", confluenceSite: "https://acme.atlassian.net")
+    config: LiveConfig(githubClientId: "Iv1.abc", bitbucketUser: "me@example.com", confluenceSite: "https://acme.atlassian.net", confluenceEmail: "", googleClientId: "")
   )
   var calls: [String] = []
   var failConnect: String?
@@ -89,8 +90,8 @@ struct LiveFoldersPaneTests {
 
   @Test func statusTextFollowsTheEngine() {
     let now = FakeLiveFoldersServices.now
-    func folder(_ status: LiveFolderStatus?, hidden: Int = 0) -> LiveFolder {
-      LiveFolder(id: "f", profileId: "default", kind: .pullRequests, name: "PRs", sources: [.github], groupStacks: true, showCompleted: true, status: status, hiddenCount: hidden)
+    func folder(_ status: LiveFolderStatus?, hidden: Int = 0) -> LiveFolderSummary {
+      LiveFolderSummary(id: "f", profileId: "default", kind: .pullRequests, name: "PRs", sources: [.github], groupStacks: true, showCompleted: true, status: status, hiddenCount: hidden)
     }
     #expect(LiveFoldersText.statusText(folder(nil), now: now) == "Loading…")
     #expect(LiveFoldersText.statusText(folder(LiveFolderStatus(state: .initializing, lastFetch: nil, error: nil)), now: now) == "Loading…")
@@ -112,13 +113,13 @@ struct LiveFoldersPaneTests {
   }
 
   @Test func connectedAsShowsLoginOnlyForGithubAndDrive() {
-    #expect(LiveFoldersText.connectedAs(.github, LiveAccount(login: "octocat", name: "Mona")) == "Mona (octocat)")
-    #expect(LiveFoldersText.connectedAs(.gdrive, LiveAccount(login: "me@x.com", name: "Me")) == "Me (me@x.com)")
-    #expect(LiveFoldersText.connectedAs(.bitbucket, LiveAccount(login: "123", name: "Me")) == "Me")
-    #expect(LiveFoldersText.connectedAs(.notion, LiveAccount(login: "Acme", name: "Acme")) == "Acme")
-    #expect(LiveFoldersText.connectedAs(.github, LiveAccount(login: "octocat", name: nil)) == "octocat")
+    #expect(LiveFoldersText.connectedAs(.github, LiveAccount(login: "octocat", name: "Mona", avatar: nil, connectedAt: 0)) == "Mona (octocat)")
+    #expect(LiveFoldersText.connectedAs(.gdrive, LiveAccount(login: "me@x.com", name: "Me", avatar: nil, connectedAt: 0)) == "Me (me@x.com)")
+    #expect(LiveFoldersText.connectedAs(.bitbucket, LiveAccount(login: "123", name: "Me", avatar: nil, connectedAt: 0)) == "Me")
+    #expect(LiveFoldersText.connectedAs(.notion, LiveAccount(login: "Acme", name: "Acme", avatar: nil, connectedAt: 0)) == "Acme")
+    #expect(LiveFoldersText.connectedAs(.github, LiveAccount(login: "octocat", name: nil, avatar: nil, connectedAt: 0)) == "octocat")
     #expect(LiveFoldersText.sourceDescription(.confluence, nil) == "Pages you created, edited or watch.")
-    #expect(LiveFoldersText.sourceDescription(.github, LiveAccount(login: "octocat", name: nil)) == "Connected as octocat")
+    #expect(LiveFoldersText.sourceDescription(.github, LiveAccount(login: "octocat", name: nil, avatar: nil, connectedAt: 0)) == "Connected as octocat")
   }
 
   @Test func folderDescriptionNamesProfileSourcesAndStatus() async {

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SolaraLive
 import SolaraUI
 
 @MainActor
@@ -106,7 +107,7 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
     var accounts: [LiveSourceId: LiveAccount] = [:]
     for (key, raw) in dict.dict("accounts") ?? [:] {
       guard let source = LiveSourceId(rawValue: key), let account = raw as? [String: Any], let login = account.string("login") else { continue }
-      accounts[source] = LiveAccount(login: login, name: account.string("name"))
+      accounts[source] = LiveAccount(login: login, name: account.string("name"), avatar: account.string("avatar"), connectedAt: account.double("connectedAt") ?? 0)
     }
     let config = dict.dict("config") ?? [:]
     return LiveFoldersState(
@@ -123,9 +124,9 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
     )
   }
 
-  static func folder(_ dict: [String: Any]) -> LiveFolder? {
+  static func folder(_ dict: [String: Any]) -> LiveFolderSummary? {
     guard let id = dict.string("id"), let kind = dict.string("kind").flatMap(LiveFolderKind.init(rawValue:)) else { return nil }
-    return LiveFolder(
+    return LiveFolderSummary(
       id: id,
       profileId: dict.string("profileId") ?? "",
       kind: kind,

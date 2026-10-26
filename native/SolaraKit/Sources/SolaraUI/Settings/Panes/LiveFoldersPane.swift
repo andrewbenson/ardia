@@ -1,14 +1,9 @@
 import AppKit
 import Observation
+import SolaraLive
 import SwiftUI
 
-public enum LiveSourceId: String, CaseIterable, Sendable, Identifiable {
-  case github
-  case bitbucket
-  case notion
-  case confluence
-  case gdrive
-
+extension LiveSourceId: Identifiable {
   public var id: String { rawValue }
 
   public var name: String {
@@ -52,30 +47,6 @@ public enum LiveSourceId: String, CaseIterable, Sendable, Identifiable {
   }
 }
 
-public enum LiveFolderKind: String, Sendable {
-  case pullRequests
-  case documents
-}
-
-public struct LiveAccount: Sendable, Equatable {
-  public var login: String
-  public var name: String?
-
-  public init(login: String, name: String?) {
-    self.login = login
-    self.name = name
-  }
-}
-
-public enum LiveErrorKind: String, Sendable {
-  case signedOut
-  case sso
-  case rateLimited
-  case network
-  case notConfigured
-  case other
-}
-
 public struct LiveFolderError: Sendable, Equatable {
   public var kind: LiveErrorKind
   public var source: LiveSourceId
@@ -105,7 +76,7 @@ public struct LiveFolderStatus: Sendable, Equatable {
   }
 }
 
-public struct LiveFolder: Sendable, Equatable, Identifiable {
+public struct LiveFolderSummary: Sendable, Equatable, Identifiable {
   public var id: String
   public var profileId: String
   public var kind: LiveFolderKind
@@ -129,29 +100,13 @@ public struct LiveFolder: Sendable, Equatable, Identifiable {
   }
 }
 
-public struct LiveConfig: Sendable, Equatable {
-  public var githubClientId: String
-  public var bitbucketUser: String
-  public var confluenceSite: String
-  public var confluenceEmail: String
-  public var googleClientId: String
-
-  public init(githubClientId: String = "", bitbucketUser: String = "", confluenceSite: String = "", confluenceEmail: String = "", googleClientId: String = "") {
-    self.githubClientId = githubClientId
-    self.bitbucketUser = bitbucketUser
-    self.confluenceSite = confluenceSite
-    self.confluenceEmail = confluenceEmail
-    self.googleClientId = googleClientId
-  }
-}
-
 public struct LiveFoldersState: Sendable, Equatable {
-  public var folders: [LiveFolder]
+  public var folders: [LiveFolderSummary]
   public var accounts: [LiveSourceId: LiveAccount]
   public var config: LiveConfig
   public var mocked: Bool
 
-  public init(folders: [LiveFolder], accounts: [LiveSourceId: LiveAccount], config: LiveConfig, mocked: Bool = false) {
+  public init(folders: [LiveFolderSummary], accounts: [LiveSourceId: LiveAccount], config: LiveConfig, mocked: Bool = false) {
     self.folders = folders
     self.accounts = accounts
     self.config = config
@@ -214,7 +169,7 @@ enum LiveFoldersText {
     return "Connected as \(connectedAs(source, account))"
   }
 
-  static func statusText(_ folder: LiveFolder, now: Date) -> String {
+  static func statusText(_ folder: LiveFolderSummary, now: Date) -> String {
     let fetch = fetchText(folder.status, now: now)
     return folder.hiddenCount > 0 ? "\(fetch) · \(folder.hiddenCount) hidden until you refresh" : fetch
   }
@@ -242,7 +197,7 @@ enum LiveFoldersText {
     }
   }
 
-  static func folderDescription(_ folder: LiveFolder, profileName: String, now: Date) -> String {
+  static func folderDescription(_ folder: LiveFolderSummary, profileName: String, now: Date) -> String {
     "\(profileName) · \(folder.sources.map(\.name).joined(separator: ", ")) · \(statusText(folder, now: now))"
   }
 }
@@ -290,31 +245,31 @@ public final class LiveFoldersPaneModel: SettingsPaneProvider {
     }
   }
 
-  var folders: [LiveFolder] { state?.folders ?? [] }
+  var folders: [LiveFolderSummary] { state?.folders ?? [] }
 
   var anchoredOptionsFolderId: String? { folders.first { $0.kind == .pullRequests }?.id }
 
   func account(_ source: LiveSourceId) -> LiveAccount? { state?.accounts[source] }
 
-  func profileName(_ folder: LiveFolder) -> String {
+  func profileName(_ folder: LiveFolderSummary) -> String {
     store.profiles.first { $0.id == folder.profileId }?.name ?? "Profile"
   }
 
-  func setGroupStacks(_ folder: LiveFolder, _ on: Bool) {
+  func setGroupStacks(_ folder: LiveFolderSummary, _ on: Bool) {
     patchFolder(folder.id) { $0.groupStacks = on }
     services.updateFolder(folder.id, groupStacks: on, showCompleted: nil)
   }
 
-  func setShowCompleted(_ folder: LiveFolder, _ on: Bool) {
+  func setShowCompleted(_ folder: LiveFolderSummary, _ on: Bool) {
     patchFolder(folder.id) { $0.showCompleted = on }
     services.updateFolder(folder.id, groupStacks: nil, showCompleted: on)
   }
 
-  func refresh(_ folder: LiveFolder) {
+  func refresh(_ folder: LiveFolderSummary) {
     Task { await services.refreshFolder(folder.id) }
   }
 
-  func delete(_ folder: LiveFolder) {
+  func delete(_ folder: LiveFolderSummary) {
     state?.folders.removeAll { $0.id == folder.id }
     services.deleteFolder(folder.id)
   }
@@ -324,7 +279,7 @@ public final class LiveFoldersPaneModel: SettingsPaneProvider {
     Task { await services.disconnect(source) }
   }
 
-  private func patchFolder(_ id: String, _ change: (inout LiveFolder) -> Void) {
+  private func patchFolder(_ id: String, _ change: (inout LiveFolderSummary) -> Void) {
     guard let index = state?.folders.firstIndex(where: { $0.id == id }) else { return }
     change(&state!.folders[index])
   }
@@ -376,7 +331,7 @@ struct LiveFoldersPane: View {
 struct LiveFoldersFolderSection: View {
   @Environment(\.settingsContext) private var context
   let model: LiveFoldersPaneModel
-  let folder: LiveFolder
+  let folder: LiveFolderSummary
   let anchored: Bool
 
   var body: some View {

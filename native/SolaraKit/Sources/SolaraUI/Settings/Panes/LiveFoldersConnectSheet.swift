@@ -1,3 +1,4 @@
+import SolaraLive
 import SwiftUI
 
 @MainActor
@@ -57,7 +58,7 @@ struct LiveFoldersConnectSheet: View {
 
   @ViewBuilder
   private var content: some View {
-    let config = model.state?.config ?? LiveConfig()
+    let config = model.state?.config ?? LiveConfig.defaults
     switch source {
     case .github: LiveFoldersGithubConnect(model: model, runner: runner, appName: appName, clientId: config.githubClientId)
     case .bitbucket: LiveFoldersBitbucketConnect(model: model, runner: runner, user: config.bitbucketUser)

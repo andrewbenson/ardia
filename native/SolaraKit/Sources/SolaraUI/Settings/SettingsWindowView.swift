@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct SettingsWindowView: View {
@@ -19,6 +20,7 @@ public struct SettingsWindowView: View {
       SettingsDetail(context: context)
     }
     .toolbar(removing: .sidebarToggle)
+    .background(WindowChromeTrimmer())
     .environment(\.settingsContext, context)
     .onAppear { context.syncShown() }
     .onChange(of: context.navigation.place) { _, place in
@@ -225,5 +227,31 @@ struct SettingsDetail: View {
       }
       context.search.flashSetting(id)
     }
+  }
+}
+
+struct WindowChromeTrimmer: NSViewRepresentable {
+  final class Probe: NSView {
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      trim()
+      DispatchQueue.main.async { [weak self] in
+        self?.trim()
+        if self?.window?.firstResponder is NSText { self?.window?.makeFirstResponder(nil) }
+      }
+    }
+
+    func trim() {
+      guard let toolbar = window?.toolbar else { return }
+      for (index, item) in toolbar.items.enumerated().reversed() where item.itemIdentifier == .toggleSidebar {
+        toolbar.removeItem(at: index)
+      }
+    }
+  }
+
+  func makeNSView(context: Context) -> Probe { Probe() }
+
+  func updateNSView(_ view: Probe, context: Context) {
+    DispatchQueue.main.async { view.trim() }
   }
 }

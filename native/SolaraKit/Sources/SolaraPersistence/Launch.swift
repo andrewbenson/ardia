@@ -70,7 +70,7 @@ public enum Launcher {
   static func everHadDatabase(_ folder: DataFolder) -> Bool {
     let base = folder.database.lastPathComponent
     let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.url.path)) ?? []
-    return names.contains { $0 == base || ($0.hasPrefix(base + ".") && $0 != folder.importing.lastPathComponent) }
+    return names.contains { $0 == base || ($0.hasPrefix(base + ".") && !$0.hasPrefix(folder.importing.lastPathComponent)) }
   }
 
   static func openUnpruned(_ folder: DataFolder, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope) throws -> Launch {
@@ -111,6 +111,9 @@ public enum Launcher {
           try? database.close()
           throw refused
         } catch let error as DatabaseError where !unreadableCodes.contains(error.resultCode) {
+          try? database.close()
+          throw error
+        } catch let error where !(error is DatabaseError || error is ModelDecodeError || error is JSONParseError) {
           try? database.close()
           throw error
         } catch {
@@ -254,7 +257,7 @@ public enum Launcher {
       serial += 1
       name = "\(url.lastPathComponent).\(label)-\(stamp)-\(serial)"
     }
-    try FileManager.default.copyItem(at: url, to: url.deletingLastPathComponent().appending(path: name))
+    try Importer.copyDurably(url, to: url.deletingLastPathComponent().appending(path: name))
     return name
   }
 

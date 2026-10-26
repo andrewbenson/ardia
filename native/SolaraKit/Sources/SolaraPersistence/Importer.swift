@@ -75,6 +75,20 @@ public enum Importer {
     return out
   }
 
+  static func unreadableContainers(_ session: JSONValue?) -> String? {
+    let windows = session?["windows"]
+    let listedWindows = windows?.array ?? windows?.object?.values ?? []
+    let badWindows = listedWindows.filter { $0.object == nil || $0["tabIds"]?.array == nil }.count
+    if badWindows > 0 {
+      let held = session?["tabs"]?.array?.count ?? session?["tabs"]?.object?.count ?? 0
+      return "session.json lists \(badWindows) unreadable window\(badWindows == 1 ? "" : "s") among \(held) tabs"
+    }
+    let profiles = session?["profiles"]?.object?.values ?? session?["profiles"]?.array ?? []
+    let badProfiles = profiles.filter { $0.object == nil }.count
+    if badProfiles > 0 { return "session.json lists \(badProfiles) unreadable profile\(badProfiles == 1 ? "" : "s")" }
+    return nil
+  }
+
   static func refusal(before: [String: Int], readable: [String: Int]) -> String? {
     let lost = checkedCounts.filter { key in
       let had = before[key] ?? 0
@@ -172,6 +186,7 @@ public enum Importer {
     if refusal == nil, let settings = session?["settings"], !settings.isNull, settings.object == nil {
       refusal = "session.json's settings aren't an object"
     }
+    if refusal == nil { refusal = unreadableContainers(session) }
     if refusal == nil {
       refusal = Self.refusal(before: before, readable: readableCounts(session))
     }
@@ -253,6 +268,12 @@ public enum Importer {
     defer { close(fd) }
     if fcntl(fd, F_BARRIERFSYNC) == 0 { return }
     guard Darwin.fsync(fd) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+  }
+
+  static func copyDurably(_ source: URL, to target: URL) throws {
+    try FileManager.default.copyItem(at: source, to: target)
+    try fullSync(target)
+    try fullSync(target.deletingLastPathComponent())
   }
 
   static func writeDurably(_ data: Data, to url: URL) throws {

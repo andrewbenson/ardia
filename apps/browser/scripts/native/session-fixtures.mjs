@@ -287,6 +287,36 @@ const expectations = {
   "parked-pins-tab-string": { normalizes: normalized },
   "profile-string": { normalizes: normalized },
 };
+const bigSession = () => {
+  const big = Array.from({ length: 300 }, (_, i) => `big${i}`);
+  return session({
+    windows: [win("w-big", big), win("w-small", ["solo"])],
+    windowOrder: ["w-big", "w-small"],
+    focusedWindowId: "w-big",
+    tabs: [...big.map((id) => tab(id, "w-big")), tab("solo", "w-small")],
+  });
+};
+const jsCantLoad = "the JS store throws on this file; the native import refuses it, so the app stays on the JS store";
+const lostWindows = {
+  "refuse-main-window-null": (d) => (d.windows[0] = null),
+  "refuse-main-window-string": (d) => (d.windows[0] = "w-big"),
+  "refuse-main-window-tabids-string": (d) => (d.windows[0].tabIds = "big0"),
+};
+for (const [name, mutate] of Object.entries(lostWindows)) {
+  const doc = bigSession();
+  mutate(doc);
+  fixtures[name] = { ...doc, __oracle: { jsFails: jsCantLoad } };
+}
+{
+  const doc = bigSession();
+  delete doc.windows;
+  fixtures["windows-key-missing"] = doc;
+  const missing = bigSession();
+  missing.tabs = missing.tabs.map((t) => ({ ...t, profileId: "gone" }));
+  missing.windows = missing.windows.map((w) => ({ ...w, profileId: "gone", activeTabIds: { gone: w.tabIds[0] } }));
+  fixtures["profile-missing-all-tabs-elsewhere"] = missing;
+}
+
 const wrongScalars = {
   "title-absent": (d) => delete d.tabs[0].title,
   "title-null": (d) => (d.tabs[0].title = null),

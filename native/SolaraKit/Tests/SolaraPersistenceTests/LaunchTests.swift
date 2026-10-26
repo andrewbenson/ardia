@@ -35,7 +35,10 @@ func store(for launch: Launch) -> Store {
 
 func document(_ state: BrowserState) -> String { Store(state: state).sessionDocument().json().canonical }
 
-let refusedFixtures: Set<String> = ["unparseable-session", "wrong-version"]
+let refusedFixtures: Set<String> = [
+  "unparseable-session", "wrong-version", "wrong-shape-window-null", "wrong-shape-profile-string", "refuse-main-window-null", "refuse-main-window-string",
+  "refuse-main-window-tabids-string",
+]
 
 func contents(_ url: URL) -> Data? { try? Data(contentsOf: url) }
 
@@ -224,15 +227,16 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
   }
 
   @Test func aWrongShapedValueCostsOnlyThatValue() throws {
-    let wrong = try FileManager.default.contentsOfDirectory(atPath: fixtures.path).filter { $0.hasPrefix("wrong-shape-") }.sorted()
-    #expect(wrong.count >= 15)
+    let refused: Set<String> = ["wrong-shape-window-null", "wrong-shape-profile-string"]
+    let wrong = try FileManager.default.contentsOfDirectory(atPath: fixtures.path).filter { $0.hasPrefix("wrong-shape-") && !refused.contains($0) }.sorted()
+    #expect(wrong.count >= 14)
     for name in wrong {
       let folder = try scratchFolder()
       try copyFixture(name, into: folder)
       let launch = try open(folder)
       #expect(launch.state.windows.count == 1, "\(name)")
       #expect(launch.state.tabs.count == 3, "\(name)")
-      #expect(launch.state.profiles.count == (name == "wrong-shape-profile-string" ? 1 : 2), "\(name)")
+      #expect(launch.state.profiles.count == 2, "\(name)")
       #expect(launch.state.settings["searchEngine"] == "duckduckgo", "\(name)")
       #expect(launch.state.settings["appearance"] == "dark", "\(name)")
       #expect(launch.state.downloads.count == 1, "\(name)")
@@ -582,5 +586,51 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     try copyFixture("wrong-shape-closed-window-tab-number", into: folder)
     let launch = try open(folder)
     #expect(launch.state.closedWindows.isEmpty)
+  }
+
+  @Test func onlyOneProcessHoldsTheDataFolder() throws {
+    let folder = try scratchFolder()
+    var first = try FolderLock.acquire(folder)
+    #expect(first != nil)
+    #expect(FolderLock.holder(folder) == getpid())
+    let path = folder.url.appending(path: FolderLock.fileName).path
+    let other = Process()
+    other.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+    other.arguments = ["-I", "-c", "import fcntl,sys\nf=open(sys.argv[1],'a')\ntry:\n fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)\nexcept OSError:\n sys.exit(3)\nsys.exit(0)", path]
+    try other.run()
+    other.waitUntilExit()
+    #expect(other.terminationStatus == 3)
+    first = nil
+    #expect(try FolderLock.acquire(folder) != nil)
+  }
+
+  @Test func unreadableWindowsOrProfilesRefuseTheImport() throws {
+    for name in ["refuse-main-window-null", "refuse-main-window-string", "refuse-main-window-tabids-string", "wrong-shape-window-null", "wrong-shape-profile-string"] {
+      let folder = try scratchFolder()
+      try copyFixture(name, into: folder)
+      #expect(throws: ImportRefused.self, "\(name)") { try open(folder) }
+      #expect(!FileManager.default.fileExists(atPath: folder.database.path), "\(name)")
+    }
+  }
+
+  @Test func aPermissionErrorFailsTheLaunchAndKeepsTheDatabase() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    try open(folder).database.close()
+    try write(#"{"version":2,"settings":{"searchEngine":"brave"}}"#, to: folder.session)
+    try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: folder.url.path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.url.path) }
+    #expect(throws: (any Error).self) { try open(folder) }
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.url.path)
+    #expect(FileManager.default.fileExists(atPath: folder.database.path))
+    #expect(!names(in: folder).contains { $0.hasPrefix("solara.sqlite.unreadable-") })
+  }
+
+  @Test func aNumericFlagReadsAsJSWouldAndIsWrittenBackAsIs() throws {
+    let folder = try scratchFolder()
+    try copyFixture("scalar-sidebar-number", into: folder)
+    let launch = try open(folder)
+    #expect(launch.state.windows.values.first?.sidebarOpen == true)
+    #expect(document(launch.state).contains(#""sidebarOpen":1"#))
   }
 }

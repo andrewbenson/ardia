@@ -6,12 +6,15 @@ import SolaraStore
 let usage = """
   usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>] [--via-db]
          solara-store import <data folder> [--now <ms>]
+         solara-store launch <data folder> [--scope 1a|1b]
 
   session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (Importer.read:
   loadSession and hydrate) and prints what the shadow export would write, as canonical JSON plus the documents'
   own text, in the same shape as apps/browser/scripts/native/session-oracle.mjs. --via-db also writes the import
   into a scratch solara.sqlite and loads it back before printing. import reads a data folder the way the first native launch does and
-  prints the counts and notes it would record. Both only read the folder.
+  prints the counts and notes it would record. Both only read the folder. launch runs the app's launcher on the
+  folder (it writes solara.sqlite and the .pre-native copies there, so give it a scratch copy) and prints the
+  source, the recorded counts, the loaded state's counts and the notes.
 
   """
 
@@ -88,6 +91,28 @@ case "session-oracle":
     "downloadsText": .string(downloads.text()),
   ]
   print(output.canonical)
+case "launch":
+  guard let dir = arguments.first else { exit(2) }
+  let scope: PersistenceScope = option("--scope") == "1a" ? .settingsAndDownloads : .everything
+  let folder = DataFolder(url: URL(fileURLWithPath: dir))
+  do {
+    let launch = try Launcher.open(folder, appVersion: "cli", context: LoadContext(memory: StoreMemory(ids: IdSource(launch: "cli")), now: Date().timeIntervalSince1970 * 1000), scope: scope)
+    var meta = JSONObject()
+    for key in ["workspace", "source_session_sha256"] + ["profiles", "windows", "tabs", "groups", "splits", "closedTabs", "closedWindows", "closedGroups", "deletedGroups", "cleanedTabs", "parkedPins"].flatMap({ ["count_\($0)_before", "count_\($0)_after"] }) + ["count_settings", "count_downloads"] {
+      if let value = try launch.database.meta(key) { meta[key] = .string(value) }
+    }
+    let source: String
+    switch launch.report.source {
+    case .database: source = "database"
+    case .imported(let reason): source = "imported: \(reason)"
+    }
+    let state: JSONValue = ["windows": JSONValue(launch.state.windows.count), "tabs": JSONValue(launch.state.tabs.count), "groups": JSONValue(launch.state.groups.count), "profiles": JSONValue(launch.state.profiles.count)]
+    print(JSONValue.object(["source": .string(source), "meta": .object(meta), "state": state, "notes": JSONValue(launch.report.notes), "movedAside": JSONValue(launch.report.movedAside)]).text())
+    try launch.database.close()
+  } catch {
+    print(JSONValue.object(["error": .string("\(error)")]).text())
+    exit(1)
+  }
 case "import":
   guard let dir = arguments.first else { exit(2) }
   let now = Double(option("--now") ?? "0") ?? 0

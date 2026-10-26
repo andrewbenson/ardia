@@ -99,12 +99,14 @@ public struct Fields {
 
   public func bool(_ key: String) -> Bool {
     if let value = object[key]?.bool { return value }
-    return coerce(key, to: false, as: false)
+    let truthy = object[key]?.truthy ?? false
+    return coerce(key, to: truthy, as: .bool(truthy))
   }
 
   public func optionalBool(_ key: String) -> Bool? {
     let (value, wrong) = wrongType(key, \.bool)
-    return wrong ? coerce(key, to: nil, as: .null) : value
+    guard wrong, let raw = object[key] else { return value }
+    return coerce(key, to: raw.truthy, as: .bool(raw.truthy))
   }
 
   public func number(_ key: String, default fallback: Double = 0) -> Double {

@@ -8,7 +8,7 @@ let usage = """
   usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>] [--via-db]
          solara-store import <data folder> [--now <ms>]
          solara-store launch <data folder> [--scope 1a|1b]
-         solara-store serve [--launch <id launch>] [--hand-off immediately]
+         solara-store serve [--launch <id launch>] [--hand-off immediately] [--data <data folder> --now <ms>]
 
   session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (Importer.read:
   loadSession and hydrate) and prints what the shadow export would write, as canonical JSON plus the documents'
@@ -18,7 +18,9 @@ let usage = """
   folder (it writes solara.sqlite and the .pre-native copies there, so give it a scratch copy) and prints the
   source, the recorded counts, the loaded state's counts and the notes. serve runs one in-memory store behind the
   bridge, one JSON request per line on stdin ({op: snapshot | dispatch | catchUp, commands, sinceRev, now}) and
-  one response per line on stdout, so the JS replica can be tested against the real Swift store.
+  one response per line on stdout, so the JS replica can be tested against the real Swift store. With --data it
+  opens that folder through the app's launcher and writer in the everything scope, and {op: flush} writes the rows
+  and the shadow files.
 
   """
 
@@ -100,7 +102,24 @@ case "serve":
   let clock = Clock()
   var config = StoreConfig()
   config.handOffPinsImmediately = option("--hand-off") == "immediately"
-  let store = Store(memory: StoreMemory(ids: IdSource(launch: option("--launch") ?? "serve")), config: config, checksInvariants: false, clock: { clock.now })
+  let launchId = option("--launch") ?? "serve"
+  clock.now = Double(option("--now") ?? "0") ?? 0
+  let store: Store
+  var writer: PersistenceWriter? = nil
+  if let dir = option("--data") {
+    let folder = DataFolder(url: URL(fileURLWithPath: dir))
+    let context = LoadContext(env: OmniboxAddressing(), config: config, memory: StoreMemory(ids: IdSource(launch: launchId)), now: clock.now)
+    do {
+      let launch = try Launcher.open(folder, appVersion: "serve", now: Date(timeIntervalSince1970: clock.now / 1000), context: context, scope: .everything)
+      store = Store(state: launch.state, memory: launch.memory, env: OmniboxAddressing(), config: config, checksInvariants: false, clock: { clock.now })
+      writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, scope: .everything, clock: { clock.now })
+    } catch {
+      print(JSONValue.object(["error": .string("\(error)")]).text())
+      exit(1)
+    }
+  } else {
+    store = Store(memory: StoreMemory(ids: IdSource(launch: launchId)), env: OmniboxAddressing(), config: config, checksInvariants: false, clock: { clock.now })
+  }
   let bridge = StoreBridge(store: store)
   setvbuf(stdout, nil, _IOFBF, 1 << 20)
   while let line = readLine(strippingNewline: true) {
@@ -115,6 +134,7 @@ case "serve":
     case "snapshot": print(bridge.snapshotJSON())
     case "dispatch": print(bridge.dispatch(request["commands"]?.text() ?? "[]", sinceRev: sinceRev))
     case "catchUp": print(JSONValue.object(bridge.catchUp(sinceRev: sinceRev)).text())
+    case "flush": print(JSONValue.object(["flushed": .bool(writer?.flush(timeout: 10) ?? false)]).text())
     default: print(#"{"error":"unknown op"}"#)
     }
     fflush(stdout)

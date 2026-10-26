@@ -6,21 +6,6 @@ internal import SolaraOmnibox
 internal import SolaraPersistence
 internal import SolaraStore
 
-struct OmniboxAddressing: WebAddressing {
-  func resolveInput(_ input: String, searchUrlPrefix: String) -> String {
-    SolaraOmnibox.resolveInput(input, search: searchUrlPrefix)
-  }
-
-  func searchUrlPrefix(_ settings: Settings) -> String {
-    SolaraOmnibox.searchUrlPrefix(settings)
-  }
-
-  func parseURL(_ url: String) -> ParsedURL? {
-    guard let parsed = WhatwgURL(url) else { return nil }
-    return ParsedURL(protocol: parsed.protocol, host: parsed.host, hostname: parsed.hostname)
-  }
-}
-
 public final class NativeStore: Sendable {
   nonisolated(unsafe) public private(set) static var ownsWorkspace = false
 

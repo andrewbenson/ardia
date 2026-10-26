@@ -24,7 +24,7 @@ let package = Package(
     .target(name: "SolaraModel"),
     .target(name: "SolaraStore", dependencies: ["SolaraModel"]),
     .target(name: "SolaraPersistence", dependencies: ["SolaraModel", "SolaraStore", .product(name: "GRDB", package: "GRDB.swift")]),
-    .target(name: "SolaraBridgeCore", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
+    .target(name: "SolaraBridgeCore", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraOmnibox"]),
     .target(name: "SolaraOmnibox", dependencies: ["SolaraModel"]),
     .target(name: "SolaraSync", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
     .target(name: "SolaraImport", dependencies: ["SolaraModel"]),

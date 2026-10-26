@@ -5,11 +5,12 @@ import SolaraStore
 
 let usage = """
   usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>]
-         solara-store import-settings <data folder>
+         solara-store import <data folder> [--now <ms>]
 
   session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (loadSession and
   hydrate) and prints what the shadow export would write, as canonical JSON, in the same shape as
-  apps/browser/scripts/native/session-oracle.mjs. The folder is only read.
+  apps/browser/scripts/native/session-oracle.mjs. import reads a data folder the way the first native launch does and
+  prints the counts and notes it would record. Both only read the folder.
 
   """
 
@@ -58,11 +59,12 @@ case "session-oracle":
     "downloads": ["version": 2, "downloads": .array(state.downloads.filter { !$0.isPrivate }.map { .object($0.persisted().json) })],
   ]
   print(output.canonical)
-case "import-settings":
+case "import":
   guard let dir = arguments.first else { exit(2) }
-  let result = Importer.read(DataFolder(url: URL(fileURLWithPath: dir)), carrying: nil)
-  let state = Launcher.hydrated(result.persisted)
-  print(JSONValue.object(["settings": state.settings.json]).canonical)
+  let now = Double(option("--now") ?? "0") ?? 0
+  let result = Importer.read(
+    DataFolder(url: URL(fileURLWithPath: dir)), carrying: nil, context: LoadContext(memory: StoreMemory(ids: IdSource(launch: "cli")), now: now))
+  print(JSONValue.object(["meta": .object(JSONObject(result.meta.sorted { $0.key < $1.key }.map { ($0.key, JSONValue.string($0.value)) })), "notes": JSONValue(result.notes)]).text())
 default:
   FileHandle.standardError.write(Data("unknown command \(verb)\n\(usage)".utf8))
   exit(2)

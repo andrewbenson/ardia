@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import GRDB
 import SolaraModel
+import SolaraStore
 
 public struct DataFolder: Sendable {
   public let url: URL
@@ -35,13 +36,15 @@ public struct LaunchReport: Sendable, Equatable {
 public struct Launch: Sendable {
   public let database: SolaraDatabase
   public let state: BrowserState
+  public let memory: StoreMemory
+  public let rows: WorkspaceRows
   public let report: LaunchReport
 }
 
 public enum Launcher {
   public static let markerKey = "nativeExport"
 
-  public static func open(_ folder: DataFolder, appVersion: String, now: Date = Date()) throws -> Launch {
+  public static func open(_ folder: DataFolder, appVersion: String, now: Date = Date(), context: LoadContext) throws -> Launch {
     let fm = FileManager.default
     try fm.createDirectory(at: folder.url, withIntermediateDirectories: true)
     var movedAside: [String] = []
@@ -69,23 +72,34 @@ public enum Launcher {
           importReason = reason
           movedAside.append(try moveAside(folder.database, label: "superseded", now: now))
         } else {
-          return Launch(database: database, state: hydrated(try database.load()), report: LaunchReport(source: .database))
+          let persisted = try database.load()
+          guard persisted.workspace != nil else {
+            var result = Importer.read(folder, carrying: nil, settings: persisted.settings, context: context)
+            result.meta["workspace_imported_at"] = String(Int64(now.timeIntervalSince1970 * 1000))
+            let rows = result.persisted.workspace!
+            try database.pool.write { db in
+              try Rows.writeWorkspace(db, rows, previous: nil)
+              for (key, value) in result.meta.sorted(by: { $0.key < $1.key }) { try Rows.setMeta(db, key, value) }
+            }
+            Importer.log(result.notes, to: folder, now: now)
+            var report = LaunchReport(source: .imported(reason: "the workspace moved from session.json into solara.sqlite"))
+            report.notes = result.notes
+            return Launch(database: database, state: result.state, memory: result.memory, rows: rows, report: report)
+          }
+          let loader = context.session()
+          let state = loader.loadSession(persisted.sessionJSON(), downloads: persisted.downloadsJSON)
+          return Launch(
+            database: database, state: state, memory: loader.memory, rows: persisted.workspace!, report: LaunchReport(source: .database))
         }
       }
     }
 
-    let imported = try Importer.importFolder(folder, carrying: carried, appVersion: appVersion, now: now)
+    let imported = try Importer.importFolder(folder, carrying: carried, appVersion: appVersion, now: now, context: context)
     let database = try SolaraDatabase(url: folder.database)
     var report = LaunchReport(source: .imported(reason: importReason ?? "first launch on the native store"))
     report.movedAside = movedAside
     report.notes = imported.notes
-    return Launch(database: database, state: hydrated(try database.load()), report: report)
-  }
-
-  public static func hydrated(_ persisted: PersistedState) -> BrowserState {
-    let settings = Settings.hydrated(from: persisted.settings.map(JSONValue.object))
-    let downloads = persisted.downloads.filter { !$0.isPrivate }.enumerated().map { $0.element.persisted().loaded(at: $0.offset) }
-    return BrowserState(settings: settings, downloads: downloads)
+    return Launch(database: database, state: imported.state, memory: imported.memory, rows: imported.persisted.workspace!, report: report)
   }
 
   static func marker(in data: Data?) -> Bool? {

@@ -148,6 +148,9 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     new derived data compiles everything (a few minutes), and a copy of someone else's does too (its paths differ).
     A JS-only change needs no build: it says so and stops (`--force` builds). A new engine framework is staged
     under the chromium lock: `--release` your chromium take first, or it uses your take (`--as`).
+    It signs with the identity's team when this Mac has a macOS development profile for the bundle id, and ad hoc
+    (`macos/AdHoc.xcconfig`: no entitlements, no hardened runtime, so no iCloud passkeys or keychain groups)
+    when it doesn't, saying so in one line; switching between the two rebuilds.
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.

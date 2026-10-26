@@ -17,6 +17,8 @@
 #   "JS-only: Metro reloads it; no build needed" and exits 0. Pass --force to build anyway.
 # - Prints the errors (a failed build script with its last 30 lines), the warnings count, the result, the time and
 #   the .app path. The full log: <derived data>/build-app.log.
+# - Signs with the identity's team when a macOS development profile for its bundle id is installed, else ad hoc
+#   (macos/AdHoc.xcconfig), and says so.
 # Builds into different derived data run in parallel (scripts/agent/locked --help). Run it with run_in_background.
 # Exits 0 when built (or nothing to build), 1 when the build failed, 75 when a lock stayed busy.
 set -uo pipefail
@@ -54,6 +56,39 @@ dd="$app_dir/build-$name"
 log="$dd/build-app.log"
 . "$repo/scripts/identity.sh"
 app="$dd/Build/Products/$config/$(ac_identity FULL_PRODUCT_NAME)"
+
+has_development_profile() {
+  python3 -I - "$1" "$2" <<'PY'
+import glob, os, plistlib, subprocess, sys
+from datetime import datetime, timezone
+team, bundle = sys.argv[1:3]
+folders = ["~/Library/Developer/Xcode/UserData/Provisioning Profiles", "~/Library/MobileDevice/Provisioning Profiles"]
+for path in sorted(p for folder in folders for p in glob.glob(os.path.join(os.path.expanduser(folder), "*.provisionprofile"))):
+    try:
+        profile = plistlib.loads(subprocess.run(["security", "cms", "-D", "-i", path], capture_output=True, check=True).stdout)
+    except (subprocess.CalledProcessError, ValueError):
+        continue
+    entitlements = profile.get("Entitlements", {})
+    app_id = entitlements.get("com.apple.application-identifier") or entitlements.get("application-identifier") or ""
+    expires = profile.get("ExpirationDate")
+    if team not in profile.get("TeamIdentifier", []) or "OSX" not in profile.get("Platform", []):
+        continue
+    if expires and expires.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        continue
+    if not entitlements.get("com.apple.security.get-task-allow") and not profile.get("ProvisionedDevices"):
+        continue
+    if app_id == f"{team}.{bundle}" or (app_id.endswith("*") and f"{team}.{bundle}".startswith(app_id[:-1])):
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+signing=()
+team_id=$(ac_identity AC_TEAM_ID)
+bundle_id=$(ac_identity AC_BUNDLE_ID)
+if ! has_development_profile "$team_id" "$bundle_id"; then
+  signing=(-xcconfig macos/AdHoc.xcconfig)
+  echo "build-app: no macOS development profile for $team_id.$bundle_id on this Mac; signing ad hoc (macos/AdHoc.xcconfig)"
+fi
 stamp_file="$dd/.ac-native-stamp-$config"
 
 native_stamp() {
@@ -83,6 +118,7 @@ print(h.hexdigest())
 }
 
 stamp=$(native_stamp) || { echo "build-app: couldn't hash the native files" >&2; exit 1; }
+stamp+=" signing:${signing[*]:-team}"
 if [[ -z "$force" && $config == Debug && -d "$app" && -f "$stamp_file" && "$(cat "$stamp_file")" == "$stamp" ]]; then
   echo "JS-only: Metro reloads it; no build needed (no native file changed since $app was built; --force builds anyway)"
   exit 0
@@ -96,7 +132,7 @@ echo "build-app: $config into ${dd#"$repo"/} (log: ${log#"$repo"/})"
   cd "$app_dir" &&
     "$repo/scripts/agent/locked" xcodebuild --wait "$wait" --as "$name" -- \
       xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$dd" \
-      -destination 'platform=macOS,arch=arm64' -configuration "$config" -hideShellScriptEnvironment build
+      -destination 'platform=macOS,arch=arm64' -configuration "$config" ${signing[@]+"${signing[@]}"} -hideShellScriptEnvironment build
 ) >"$log" 2>&1
 status=$?
 elapsed=$(($(date +%s) - start))

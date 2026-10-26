@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { deflateRawSync } from "node:zlib";
 import { registerHooks } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const HELP = `usage: node scripts/native/replay.mjs [--phase 1a|1b] [--out <dir>] [test files...]
+const HELP = `usage: node scripts/native/replay.mjs [--phase 1a|1b] [--out <dir>] [--cap <cases per test, 0 for all>] [--plain] [test files...]
 
 Runs the store's *.test.mjs files through the real JS store, recording every call of a command
 the Swift core owns in that phase as a case: the state before, the command, the state after,
@@ -29,11 +30,12 @@ const option = (name, fallback) => {
   return value;
 };
 const phase = option("--phase", "1a");
+const cap = Number(option("--cap", "400"));
+const plainOutput = args.includes("--plain");
+if (plainOutput) args.splice(args.indexOf("--plain"), 1);
 const out = resolve(option("--out", defaultOut));
 const child = option("--child", null);
 
-if (child) await record(child);
-else orchestrate();
 
 function orchestrate() {
   const files = args.length
@@ -45,7 +47,7 @@ function orchestrate() {
   let cases = 0;
   let failed = 0;
   for (const file of files.sort()) {
-    const run = spawnSync(process.execPath, ["--no-warnings", fileURLToPath(import.meta.url), "--child", file, "--phase", phase, "--out", out], {
+    const run = spawnSync(process.execPath, ["--no-warnings", "--max-old-space-size=8192", fileURLToPath(import.meta.url), "--child", file, "--phase", phase, "--out", out, "--cap", String(cap), ...(plainOutput ? ["--plain"] : [])], {
       cwd: app,
       encoding: "utf8",
       maxBuffer: 1 << 28,
@@ -65,6 +67,66 @@ function orchestrate() {
   process.exit(failed ? 1 : 0);
 }
 
+const INSTRUMENT = [
+  ["/src/store/model.ts", "globalThis.__replayModel = { read: () => ({ launch, counter, navSeq }) };"],
+  ["/src/store/organize.ts", "globalThis.__replayOrganize = { read: () => ({ lastPinChoice, remotePinDeletions: Object.fromEntries(remotePinDeletions) }) };"],
+  ["/src/store/ui.ts", "globalThis.__replayUi = { read: () => [...endedPrivateDownloads].sort() };"],
+  ["/src/store/closingWindows.ts", "globalThis.__replayClosing = { read: () => [...closing].sort() };"],
+  ["/src/store/newTabBar.ts", "globalThis.__replayNewTabBar = { read: () => lastTabKeepsWindow };"],
+  ["/src/store/tabs.ts", "const __replayDefaultHandoff = pinHandoff; const __replayDefaultOpener = openOutsideTab; globalThis.__replayTabs = { immediateHandoff: () => pinHandoff === __replayDefaultHandoff, defaultOpener: () => openOutsideTab === __replayDefaultOpener };", [
+    ['import { resolveInput } from "@ardia/core";', 'import { resolveInput as __resolveInput } from "@ardia/core";\nconst resolveInput = (input, prefix) => { const out = __resolveInput(input, prefix); globalThis.__replayCalls?.resolve.push([input, prefix, out]); return out; };'],
+    ['import { searchUrlPrefix } from "./settings";', 'import { searchUrlPrefix as __searchUrlPrefix } from "./settings";\nconst searchUrlPrefix = (settings) => { const out = __searchUrlPrefix(settings); if (globalThis.__replayCalls) globalThis.__replayCalls.prefix = out; return out; };'],
+  ]],
+  ["/src/store/pinOrderChoices.ts", "globalThis.__replayOrderChoices = { read: () => remote };"],
+  ["/src/store/browser.ts", "", [["export const storeTransaction = transactions.transaction;", "export const storeTransaction = (run) => (globalThis.__replayTransaction ? globalThis.__replayTransaction(run, transactions.transaction) : transactions.transaction(run));"]]],
+  ["/src/lib/persist.ts", "", [["export function startPersistence() {", "export function startPersistence() {\n  globalThis.__replayPersistStarted = true;"]]],
+];
+
+function readMemory() {
+  const model = globalThis.__replayModel?.read() ?? {};
+  const organize = globalThis.__replayOrganize?.read() ?? {};
+  return {
+    launch: model.launch,
+    counter: model.counter,
+    navSeq: model.navSeq,
+    lastPinChoice: organize.lastPinChoice ?? 0,
+    remotePinDeletions: organize.remotePinDeletions ?? {},
+    endedPrivateDownloads: globalThis.__replayUi?.read() ?? [],
+    closingWindows: globalThis.__replayClosing?.read() ?? [],
+    lastTabKeepsWindow: globalThis.__replayNewTabBar?.read() ?? false,
+    fromSyncDepth: globalThis.__replayOrderChoices?.read() ?? 0,
+  };
+}
+
+function readConfig() {
+  const listeners = ["forgetClosedPrivateWindows", "settleNesting", "livePinTable", "settlePeeks", "mirror"];
+  if (globalThis.__replayOrderChoices) listeners.push("noteOrderChoices");
+  if (globalThis.__replayPersistStarted) listeners.push("forgetClosedIncognito");
+  return { handOffPinsImmediately: globalThis.__replayTabs?.immediateHandoff() ?? true, listeners };
+}
+
+function outsideStore(stack) {
+  const frames = stack.split("\n").slice(2);
+  for (const frame of frames) {
+    if (frame.includes("replay.mjs")) return false;
+    if (((frame.includes("/src/store/") || frame.includes("/src/lib/persist.ts")) && !frame.includes(".test.mjs")) || frame.includes("node_modules") || frame.includes("node:") || !frame.includes("/")) continue;
+    return true;
+  }
+  return false;
+}
+
+function bridgeArgs(args, patches = false) {
+  const out = args.map((arg) => {
+    if (!arg || typeof arg !== "object" || Array.isArray(arg) || !patches) return plain(arg);
+    const unset = Object.keys(arg).filter((k) => arg[k] === undefined);
+    const value = plain(arg);
+    return unset.length ? { ...value, $unset: unset } : value;
+  });
+  return { args: out };
+}
+
+const undefinedKeyIn = (object) => !!object && typeof object === "object" && Object.values(object).some((v) => v === undefined);
+
 function mulberry32(seed) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -78,6 +140,42 @@ function hasUndefinedKey(value, seen = new Set()) {
   if (!value || typeof value !== "object" || seen.has(value)) return false;
   seen.add(value);
   return Object.entries(value).some(([, v]) => v === undefined || hasUndefinedKey(v, seen));
+}
+
+const TABLE_KEYS = new Set(["profiles", "windows", "tabs", "groups", "splits", "peeks", "parkedPins", "pinChoices", "pinSync", "privateCleanedTabs", "privateSiteMutes"]);
+
+function stateDelta(from, to) {
+  const out = {};
+  for (const key of new Set([...Object.keys(from), ...Object.keys(to)])) {
+    const a = from[key];
+    const b = to[key];
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    if (TABLE_KEYS.has(key) && a && b && typeof a === "object" && typeof b === "object") {
+      const set = {};
+      const remove = [];
+      for (const id of Object.keys(b)) if (JSON.stringify(a[id]) !== JSON.stringify(b[id])) set[id] = b[id];
+      for (const id of Object.keys(a)) if (!(id in b)) remove.push(id);
+      const order = Object.keys(b);
+      const naive = [...Object.keys(a).filter((id) => id in b), ...Object.keys(b).filter((id) => !(id in a))];
+      out[key] = { $table: { set, remove, ...(order.join("\u0000") !== naive.join("\u0000") ? { order } : {}) } };
+    } else {
+      out[key] = b === undefined ? { $absent: true } : b;
+    }
+  }
+  return out;
+}
+
+function encodeDeltas(cases) {
+  let last = null;
+  let lastTest = null;
+  return cases.map((c) => {
+    const { before, after, ...rest } = c;
+    const chained = lastTest === c.test && last;
+    const encoded = { ...rest, ...(chained ? { beforeDelta: stateDelta(last, before) } : { before }), afterDelta: stateDelta(before, after) };
+    last = after;
+    lastTest = c.test;
+    return encoded;
+  });
 }
 
 function plain(value) {
@@ -113,9 +211,31 @@ async function record(file) {
     },
   });
   await import(pathToFileURL(join(app, "src/test-loader.mjs")).href);
+  registerHooks({
+    load(url, context, next) {
+      const loaded = next(url, context);
+      const rule = INSTRUMENT.find(([suffix]) => url.endsWith(suffix));
+      if (!rule || loaded.source == null) return loaded;
+      let source = typeof loaded.source === "string" ? loaded.source : new TextDecoder().decode(loaded.source);
+      for (const [from, to] of rule[2] ?? []) source = source.replace(from, to);
+      return { ...loaded, source: `${source}\n${rule[1]}\n` };
+    },
+  });
   await import(pathToFileURL(file).href);
 
   const spec = await phases(phase);
+  const RealURL = globalThis.URL;
+  globalThis.URL = class extends RealURL {
+    constructor(input, base) {
+      try {
+        super(input, base);
+        if (globalThis.__replayCalls && base === undefined) globalThis.__replayCalls.urls[String(input)] = { protocol: this.protocol, host: this.host, hostname: this.hostname };
+      } catch (error) {
+        if (globalThis.__replayCalls && base === undefined) globalThis.__replayCalls.urls[String(input)] = null;
+        throw error;
+      }
+    }
+  };
   const { useBrowser } = await import(pathToFileURL(join(app, "src/store/browser.ts")).href);
   const model = await import(pathToFileURL(join(app, "src/store/model.ts")).href);
   const probe = () => {
@@ -126,6 +246,8 @@ async function record(file) {
   let cases = [];
   let current = null;
   let depth = 0;
+  let foreign = false;
+  let batch = null;
   const memory = { endedPrivateDownloads: new Set() };
   const WRAPPED = Symbol("replay");
 
@@ -135,6 +257,16 @@ async function record(file) {
       const original = state[name];
       if (typeof original !== "function" || original[WRAPPED]) continue;
       const wrapped = function (...callArgs) {
+        if (depth > 0 && current && outsideStore(new Error().stack ?? "")) foreign = true;
+        if (batch && depth === 0) {
+          batch.push(spec.command(name, callArgs, useBrowser.getState(), model));
+          depth++;
+          try {
+            return original.apply(this, callArgs);
+          } finally {
+            depth--;
+          }
+        }
         if (depth > 0 || !current) {
           depth++;
           try {
@@ -148,9 +280,12 @@ async function record(file) {
         const now = testNow ? testNow() : stubNow();
         frozen = now;
         if (testNow) Date.now = () => now;
-        const ids = probe();
+        const ids = spec.probes ? probe() : null;
+        const memoryBefore = spec.probes ? { endedPrivateDownloads: [...memory.endedPrivateDownloads].sort() } : readMemory();
+        const config = readConfig();
         const command = spec.command(name, callArgs, before, model);
-        const memoryBefore = { endedPrivateDownloads: [...memory.endedPrivateDownloads].sort() };
+        foreign = false;
+        globalThis.__replayCalls = { urls: {}, resolve: [], prefix: null };
         depth++;
         let result;
         let threw = null;
@@ -164,18 +299,25 @@ async function record(file) {
           if (testNow) Date.now = testNow;
         }
         const after = useBrowser.getState();
+        const calls = globalThis.__replayCalls;
+        globalThis.__replayCalls = null;
         spec.noteMemory?.(name, callArgs, before, after, memory, model);
         if (command && !threw) {
+          const lossyArgs = command.lossy;
+          delete command.lossy;
           cases.push({
             test: current,
             now,
-            ids,
+            ...(ids ? { ids } : {}),
             memory: memoryBefore,
-            before: spec.project(before, model),
+            before: (spec.before ?? spec.project)(before, model),
             command,
             after: spec.project(after, model),
-            ...(hasUndefinedKey(callArgs) ? { lossy: "an argument has a key set to undefined, which JSON cannot carry" } : {}),
-            ...(result !== undefined && spec.recordsResult ? { result: plain(result) } : {}),
+            ...(spec.probes && hasUndefinedKey(callArgs) ? { lossy: "an argument has a key set to undefined, which JSON cannot carry" } : {}),
+            ...(lossyArgs ? { lossy: "an argument has a nested key set to undefined, which JSON cannot carry" } : {}),
+            ...(foreign ? { foreign: "code outside the store changed state during this command" } : {}),
+            ...(spec.probes ? {} : { config, web: calls }),
+            ...(result !== undefined && spec.recordsResult && (!spec.returning || spec.returning.has(name)) ? { result: plain(result) } : {}),
             ...(spec.extra ? spec.extra(name, callArgs, before, after, model) : {}),
           });
         }
@@ -187,8 +329,49 @@ async function record(file) {
     }
     return patch;
   };
+  globalThis.__replayTransaction = (run, real) => {
+    if (depth > 0 || !current || batch || !spec.batches) return real(run);
+    const before = useBrowser.getState();
+    const now = stubNow();
+    frozen = now;
+    const memoryBefore = readMemory();
+    const config = readConfig();
+    foreign = false;
+    globalThis.__replayCalls = { urls: {}, resolve: [], prefix: null };
+    batch = [];
+    let threw = null;
+    try {
+      real(run);
+    } catch (error) {
+      threw = error;
+    }
+    const commands = batch;
+    batch = null;
+    frozen = null;
+    const calls = globalThis.__replayCalls;
+    globalThis.__replayCalls = null;
+    const after = useBrowser.getState();
+    if (!threw && commands.length) {
+      const lossy = commands.some((c) => c.lossy);
+      for (const c of commands) delete c.lossy;
+      cases.push({
+        test: current,
+        now,
+        memory: memoryBefore,
+        before: spec.before(before, model),
+        command: { name: "$batch", commands },
+        after: spec.project(after, model),
+        config,
+        web: calls,
+        ...(lossy ? { lossy: "an argument has a nested key set to undefined, which JSON cannot carry" } : {}),
+        ...(foreign ? { foreign: "code outside the store changed state during this command" } : {}),
+      });
+    }
+    if (threw) throw threw;
+  };
   const rawSetState = useBrowser.setState;
   useBrowser.setState = (partial, replace) => {
+    if (depth > 0 && current && outsideStore(new Error().stack ?? "")) foreign = true;
     rawSetState(partial, replace);
     const rewrap = wrap(useBrowser.getState());
     if (Object.keys(rewrap).length) rawSetState(rewrap);
@@ -210,21 +393,72 @@ async function record(file) {
     }
     current = null;
   }
-  const seen = new Set();
+  if (spec.timeless) {
+    const seen = new Set();
+    cases = cases.filter((c) => {
+      const { test: _t, now: _n, ids: _i, ...rest } = c;
+      const key = JSON.stringify(rest);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  const perTest = new Map();
+  for (const c of cases) perTest.set(c.test, (perTest.get(c.test) ?? 0) + 1);
+  const huge = new Set(cases.filter((c) => Object.keys(c.before?.tabs ?? {}).length > 1000).map((c) => c.test));
+  const seenPerTest = new Map();
   cases = cases.filter((c) => {
-    const { test: _t, now: _n, ids: _i, ...rest } = c;
-    const key = JSON.stringify(spec.timeless ? rest : { ...rest, now: c.now, ids: c.ids });
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    const total = perTest.get(c.test);
+    const n = seenPerTest.get(c.test) ?? 0;
+    seenPerTest.set(c.test, n + 1);
+    const limit = huge.has(c.test) ? Math.min(cap || 10, 10) : cap;
+    return !limit || total <= limit || n % Math.ceil(total / limit) === 0;
   });
+  if (spec.deltas) cases = encodeDeltas(cases);
   mkdirSync(out, { recursive: true });
   const name = relative(join(app, "src"), file).replace(/\.test\.mjs$/, "").replaceAll("/", "__");
   const target = join(out, `${phase}__${name}.json`);
-  if (cases.length) writeFileSync(target, JSON.stringify({ phase, file: relative(app, file), cases }) + "\n");
+  const document = JSON.stringify({ phase, file: relative(app, file), cases }) + "\n";
+  if (cases.length && spec.deltas && !plainOutput) writeFileSync(`${target}.deflate`, deflateRawSync(Buffer.from(document), { level: 9 }));
+  else if (cases.length) writeFileSync(target, document);
   else if (existsSync(target)) writeFileSync(target, JSON.stringify({ phase, file: relative(app, file), cases: [] }) + "\n");
+  else if (existsSync(`${target}.deflate`)) writeFileSync(`${target}.deflate`, deflateRawSync(Buffer.from(JSON.stringify({ phase, file: relative(app, file), cases: [] }))));
   console.log(`recorded ${cases.length} cases${failures ? `, ${failures} tests failed under replay` : ""}`);
   process.exit(0);
+}
+
+function projectState(s) {
+  return plain({
+    profiles: s.profiles,
+    profileOrder: s.profileOrder,
+    orphanedProfileData: s.orphanedProfileData,
+    windows: s.windows,
+    windowOrder: s.windowOrder,
+    tabs: s.tabs,
+    groups: s.groups,
+    splits: s.splits,
+    peeks: s.peeks,
+    closedTabs: s.closedTabs,
+    closedWindows: s.closedWindows,
+    closedGroups: s.closedGroups,
+    deletedGroups: s.deletedGroups,
+    cleanedTabs: s.cleanedTabs,
+    privateCleanedTabs: s.privateCleanedTabs,
+    privateSiteMutes: s.privateSiteMutes,
+    parkedPins: s.parkedPins,
+    pinChoices: s.pinChoices,
+    pinSync: s.pinSync,
+    downloads: s.downloads,
+    settings: s.settings,
+    ui: { focusedWindowId: s.ui.focusedWindowId, focusOrder: s.ui.focusOrder, lastProfileId: s.ui.lastProfileId },
+  });
+}
+
+function projectCaches(s) {
+  return plain({
+    historyHints: Object.fromEntries(Object.entries(s.history ?? {}).map(([p, list]) => [p, list.map((h) => ({ url: h.url, title: h.title, favicon: h.favicon }))])),
+    playingAudio: Object.keys(s.live ?? {}).filter((id) => s.live[id]?.playingAudio),
+  });
 }
 
 async function phases(name) {
@@ -234,6 +468,7 @@ async function phases(name) {
   const specs = {
     "1a": {
       timeless: true,
+      probes: true,
       commands: ["updateSettings", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate"],
       project: (s) => ({ settings: plain(s.settings), downloads: plain(s.downloads) }),
       command(name, callArgs, s, model) {
@@ -282,7 +517,45 @@ async function phases(name) {
         }
       },
     },
+    "1b": {
+      deltas: true,
+      batches: true,
+      commands: [
+        "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
+        "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
+        "switchProfile", "moveTabsToWindow", "moveTabToProfile", "mergeAllWindows", "reopenClosed", "reopenClosedTab", "reopenClosedWindow",
+        "restoreClosed", "createProfile", "updateProfile", "deleteProfile", "reorderProfiles", "setDefaultProfile", "profileDataDeleted",
+        "createGroup", "updateGroup", "addTabsToGroup", "removeTabsFromGroup", "ungroup", "newNestedGroup", "closeGroup", "deleteGroup",
+        "placeTabs", "dropTabs", "pinTabs", "returnToPinnedUrl", "setPinnedUrl", "setMuted", "setSiteMuted", "groupTabs", "groupOnto", "moveGroup",
+        "duplicateGroup", "newTabInGroup", "moveGroupToBookmarksBar", "cleanUpTabs", "restoreCleaned", "clearUnpinnedTabs", "undoClearTabs",
+        "removeClosedPin", "closeAbandonedNewTabs", "createSplit", "openSplitPane", "replaceSplitPane", "removeTabFromSplit", "separateSplit",
+        "updateSplit", "flipSplit", "toggleSplitOrientation", "movePane", "focusPane", "toggleTabLayout", "openPeek", "closePeek", "peekToTab",
+        "updateSettings", "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate",
+      ],
+      recordsResult: true,
+      returning: new Set([
+        "newTab", "duplicateTab", "createWindow", "moveTabsToWindow", "createProfile", "createGroup", "newNestedGroup", "dropTabs", "groupTabs", "groupOnto",
+        "duplicateGroup", "newTabInGroup", "cleanUpTabs", "clearUnpinnedTabs", "removeClosedPin", "createSplit", "openSplitPane", "openPeek", "peekToTab",
+      ]),
+      project: (s) => projectState(s),
+      before: (s) => ({ ...projectState(s), caches: projectCaches(s) }),
+      command(name, callArgs) {
+        if (name === "moveGroupToBookmarksBar") return { name: "closeGroup", args: [callArgs[0]] };
+        if (name === "updateTab" || name === "navigated") callArgs = callArgs.slice(0, 2);
+        if (name === "hydrate") {
+          const { history: _h, bookmarks: _b, ...data } = callArgs[0] ?? {};
+          callArgs = [data];
+        }
+        const { args } = bridgeArgs(callArgs, ["updateTab", "navigated", "updateProfile", "updateGroup"].includes(name));
+        const lossy = (name === "updateSettings" && undefinedKeyIn(callArgs[0])) || (name === "hydrate" && undefinedKeyIn(callArgs[0]?.settings));
+        return { name, args, ...(lossy ? { lossy } : {}) };
+      },
+      extra: () => (globalThis.__replayTabs && !globalThis.__replayTabs.defaultOpener() ? { precheck: "an app URL opener is installed, which JS checks before dispatch" } : {}),
+    },
   };
   if (!specs[name]) throw new Error(`unknown phase ${name}`);
   return specs[name];
 }
+
+if (child) await record(child);
+else orchestrate();

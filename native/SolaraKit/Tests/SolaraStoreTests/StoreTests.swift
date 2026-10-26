@@ -4,8 +4,14 @@ import SolaraStore
 import Testing
 
 func makeStore(_ state: BrowserState = BrowserState(settings: Settings.hydrated(from: nil))) -> Store {
-  Store(state: state, ids: IdSource(launch: "test"), checksInvariants: true, clock: { 1_000 })
+  Store(state: state, memory: StoreMemory(ids: IdSource(launch: "test")), checksInvariants: true, clock: { 1_000 })
 }
+
+func settingsCommand(_ patch: JSONObject, fromSync: Bool = false) -> Command {
+  Command("updateSettings", [.object(patch), ["fromSync": .bool(fromSync)]])
+}
+
+func upsert(_ d: Download) -> Command { Command("upsertDownload", [.object(d.json)]) }
 
 func download(_ id: String, _ state: String = "complete", profile: String? = nil) -> Download {
   var json: JSONObject = ["id": .string(id), "state": .string(state)]
@@ -16,56 +22,30 @@ func download(_ id: String, _ state: String = "complete", profile: String? = nil
 @Suite struct StoreTests {
   @Test func updateSettingsCommitsOnceWithAPatchOfTheChangedKeys() throws {
     let store = makeStore()
-    let commit = try store.dispatch(.updateSettings(patch: ["appearance": "dark"], fromSync: false))
+    let commit = try store.dispatch(settingsCommand(["appearance": "dark"]))
     #expect(commit.rev == 1)
     #expect(commit.durable)
     #expect(commit.changes.settingsChanged == ["appearance", "chosen"])
     #expect(commit.patch.json == ["rev": 1, "settings": ["set": ["appearance": "dark", "chosen": ["appearance"]]]])
-    let same = try store.dispatch(.updateSettings(patch: ["appearance": "dark"], fromSync: false))
+    let same = try store.dispatch(settingsCommand(["appearance": "dark"]))
     #expect(same.rev == 1)
     #expect(same.changes.isEmpty)
   }
 
-  @Test func downloadsUpsertCapAndOpenThePopoverOnlyWhenNew() throws {
+  @Test func downloadsUpsertInPlaceAndCapAtAHundred() throws {
     let store = makeStore()
-    let first = try store.dispatch(.upsertDownload(download("a", "downloading"), privateSession: nil, focusedWindowShowing: "w1"))
-    #expect(first.effects == [.openDownloads(windowId: "w1")])
-    let update = try store.dispatch(.upsertDownload(download("a"), privateSession: nil, focusedWindowShowing: "w1"))
-    #expect(update.effects == [])
+    try store.dispatch(upsert(download("a", "downloading")))
+    try store.dispatch(upsert(download("a")))
     #expect(store.state.downloads.map(\.state) == ["complete"])
-    for i in 0..<120 { try store.dispatch(.upsertDownload(download("d\(i)"), privateSession: nil, focusedWindowShowing: nil)) }
+    for i in 0..<120 { try store.dispatch(upsert(download("d\(i)"))) }
     #expect(store.state.downloads.count == Download.maxKept)
     #expect(store.state.downloads.first?.id == "d119")
-  }
-
-  @Test func aPrivateDownloadFromAnEndedSessionIsDroppedForGood() throws {
-    let store = makeStore()
-    let closed = try store.dispatch(.upsertDownload(download("p", profile: "incognito:w@default"), privateSession: PrivateDownloadSession(open: false), focusedWindowShowing: nil))
-    #expect(closed.changes.isEmpty)
-    #expect(store.memory.endedPrivateDownloads == ["p"])
-    try store.dispatch(.upsertDownload(download("p", profile: "incognito:w@default"), privateSession: PrivateDownloadSession(open: true), focusedWindowShowing: nil))
-    #expect(store.state.downloads.isEmpty)
-    try store.dispatch(.upsertDownload(download("q", profile: "incognito:w@default"), privateSession: PrivateDownloadSession(open: true), focusedWindowShowing: nil))
-    try store.dispatch(.forgetDownloads(ids: ["q"], privateSession: true))
-    try store.dispatch(.upsertDownload(download("q", profile: "incognito:w@default"), privateSession: PrivateDownloadSession(open: true), focusedWindowShowing: nil))
-    #expect(store.state.downloads.isEmpty)
-  }
-
-  @Test func clearKeepsRunningDownloadsAndOnesNotVisible() throws {
-    let store = makeStore()
-    for d in [download("a", "downloading"), download("b"), download("c")] {
-      try store.dispatch(.upsertDownload(d, privateSession: nil, focusedWindowShowing: nil))
-    }
-    try store.dispatch(.clearDownloads(visibleIds: ["a", "b"]))
-    #expect(store.state.downloads.map(\.id) == ["c", "a"])
-    try store.dispatch(.clearDownloads(visibleIds: nil))
-    #expect(store.state.downloads.map(\.id) == ["a"])
   }
 
   @Test func patchesSinceARevAndAGapBeyondTheRing() throws {
     let store = makeStore()
     for i in 0..<(Store.ringSize + 10) {
-      try store.dispatch(.updateSettings(patch: ["sidebarWidth": .number(Double(200 + i))], fromSync: true))
+      try store.dispatch(settingsCommand(["sidebarWidth": .number(Double(200 + i))], fromSync: true))
     }
     #expect(store.rev == Store.ringSize + 10)
     #expect(store.patches(since: store.rev)?.isEmpty == true)
@@ -81,7 +61,7 @@ func download(_ id: String, _ state: String = "complete", profile: String? = nil
     store.subscribe { seen.append($0.rev) }
     await withTaskGroup(of: Void.self) { group in
       for i in 0..<200 {
-        group.addTask { _ = try? store.dispatch(.updateSettings(patch: ["sidebarWidth": .number(Double(i))], fromSync: true)) }
+        group.addTask { _ = try? store.dispatch(settingsCommand(["sidebarWidth": .number(Double(i))], fromSync: true)) }
       }
     }
     #expect(seen.values == Array(seen.values.sorted()))
@@ -90,7 +70,7 @@ func download(_ id: String, _ state: String = "complete", profile: String? = nil
 
   @Test func aFailingCommandLeavesTheStateUntouched() throws {
     #expect(throws: CommandError.self) { try Command(json: ["name": "nope"]) }
-    #expect(throws: CommandError.self) { try Command(json: ["name": "updateSettings", "args": [1]]) }
+    #expect(throws: CommandError.self) { try makeStore().dispatch(Command("closeTab", [])) }
   }
 }
 

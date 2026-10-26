@@ -10,7 +10,7 @@ public final class StoreBridge: Sendable {
   }
 
   public static func data(_ state: BrowserState) -> JSONValue {
-    ["settings": state.settings.json, "downloads": .array(state.downloads.map { .object($0.json) })]
+    .object(state.stateJSON)
   }
 
   public func snapshot() -> JSONValue {

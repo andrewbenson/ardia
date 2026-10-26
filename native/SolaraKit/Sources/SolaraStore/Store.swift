@@ -22,29 +22,12 @@ public struct Commit: Sendable {
   public let state: BrowserState
 }
 
-public struct StoreMemory: Sendable, Equatable {
-  public var endedPrivateDownloads: Set<String> = []
-  public init() {}
-}
-
-public struct Transaction {
-  public var state: BrowserState
-  public var memory: StoreMemory
-  public var ids: IdSource
-  public let now: Double
-  public var effects: [Effect] = []
-  public var result: JSONValue? = nil
-
-  public mutating func newId(_ prefix: String) -> String { ids.next(prefix) }
-}
-
 public final class Store: Sendable {
   public static let ringSize = 1024
 
   struct Core: ~Copyable {
     var state: BrowserState
     var memory: StoreMemory
-    var ids: IdSource
     var rev: Int
     var ring: [Patch] = []
     var ringStart = 0
@@ -62,19 +45,25 @@ public final class Store: Sendable {
   private let listeners = Mutex<[(id: Int, listener: Listener)]>([])
   private let nextListener = Atomic<Int>(0)
   private let clock: @Sendable () -> Double
+  public let env: WebAddressing
+  public let config: StoreConfig
   public let checksInvariants: Bool
 
   public init(
     state: BrowserState = BrowserState(),
-    memory: StoreMemory = StoreMemory(),
-    ids: IdSource? = nil,
+    memory: StoreMemory? = nil,
     rev: Int = 0,
+    env: WebAddressing = PlainWebAddressing(),
+    config: StoreConfig = StoreConfig(),
     checksInvariants: Bool = Store.debugBuild,
-    clock: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 }
+    clock: @escaping @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
   ) {
     self.clock = clock
+    self.env = env
+    self.config = config
     self.checksInvariants = checksInvariants
-    core = Mutex(Core(state: state, memory: memory, ids: ids ?? IdSource.random(now: clock()), rev: rev))
+    let memory = memory ?? StoreMemory(ids: IdSource.random(now: clock()))
+    core = Mutex(Core(state: state, memory: memory, rev: rev))
   }
 
   public static var debugBuild: Bool {
@@ -88,7 +77,6 @@ public final class Store: Sendable {
   public var rev: Int { core.withLock { $0.rev } }
   public var state: BrowserState { core.withLock { $0.state } }
   public var snapshot: (rev: Int, state: BrowserState) { core.withLock { ($0.rev, $0.state) } }
-  public var ids: IdSource { core.withLock { $0.ids } }
   public var memory: StoreMemory { core.withLock { $0.memory } }
 
   @discardableResult
@@ -98,18 +86,33 @@ public final class Store: Sendable {
 
   @discardableResult
   public func dispatch(_ commands: [Command], origin: Origin = .native) throws -> Commit {
+    try transact(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable)) { session in
+      if commands.count == 1 {
+        try session.apply(commands[0])
+      } else {
+        try session.transaction {
+          for command in commands {
+            session.now = clock()
+            try session.apply(command)
+          }
+        }
+      }
+    }
+  }
+
+  @discardableResult
+  public func transact(commands: [Command] = [], origin: Origin = .native, durable: Bool = false, _ body: (Session) throws -> Void) throws -> Commit {
     let now = clock()
     let commit: Commit = try core.withLock { core in
-      var tx = Transaction(state: core.state, memory: core.memory, ids: core.ids, now: now)
-      for command in commands { try Reducer.apply(command, to: &tx) }
-      try Settle.run(&tx)
-      if checksInvariants { try Invariants.check(tx.state) }
-      let changes = ChangeSet(from: core.state, to: tx.state)
+      let session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
+      try body(session)
+      if checksInvariants { try Invariants.check(session.state) }
+      let changes = ChangeSet(from: core.state, to: session.state)
       let changed = !changes.isEmpty
       let rev = changed ? core.rev + 1 : core.rev
-      let patch = Patch(rev: rev, changes: changes, state: tx.state)
+      let patch = Patch(rev: rev, changes: changes, state: session.state)
       if changed {
-        core.state = tx.state
+        core.state = session.state
         core.rev = rev
         if core.ring.count < Store.ringSize {
           core.ring.append(patch)
@@ -118,12 +121,13 @@ public final class Store: Sendable {
           core.ringStart = (core.ringStart + 1) % Store.ringSize
         }
       }
-      core.memory = tx.memory
-      core.ids = tx.ids
+      core.memory = session.memory
+      var seen = Set<Effect>()
+      let effects = session.effects.filter { seen.insert($0).inserted }
       let commit = Commit(
-        rev: rev, origin: origin, commands: commands, changes: changes, patch: patch, effects: tx.effects,
-        result: tx.result, durable: commands.contains(where: \.isDurable), state: core.state)
-      if changed || !tx.effects.isEmpty { delivery.withLock { $0.queue.append(commit) } }
+        rev: rev, origin: origin, commands: commands, changes: changes, patch: patch, effects: effects, result: session.result, durable: durable,
+        state: core.state)
+      if changed || !effects.isEmpty { delivery.withLock { $0.queue.append(commit) } }
       return commit
     }
     drain()
@@ -165,6 +169,19 @@ public final class Store: Sendable {
       return delivery.queue.removeFirst()
     }) {
       for (_, listener) in listeners.withLock({ $0 }) { listener(commit) }
+    }
+  }
+}
+
+public struct InvariantViolation: Error, CustomStringConvertible {
+  public let description: String
+}
+
+public enum Invariants {
+  public static func check(_ state: BrowserState) throws {
+    var seen = Set<String>()
+    for download in state.downloads where !seen.insert(download.id).inserted {
+      throw InvariantViolation(description: "download \(download.id) is listed twice")
     }
   }
 }

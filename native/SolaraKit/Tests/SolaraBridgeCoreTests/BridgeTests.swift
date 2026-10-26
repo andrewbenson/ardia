@@ -6,7 +6,7 @@ import Testing
 
 @Suite struct BridgeTests {
   func bridge() -> StoreBridge {
-    StoreBridge(store: Store(state: BrowserState(settings: Settings.hydrated(from: nil)), ids: IdSource(launch: "t"), checksInvariants: true, clock: { 1 }))
+    StoreBridge(store: Store(state: BrowserState(settings: Settings.hydrated(from: nil)), memory: StoreMemory(ids: IdSource(launch: "t")), checksInvariants: true, clock: { 1 }))
   }
 
   @Test func dispatchReturnsEveryPatchSinceTheCallersRevIncludingItsOwn() throws {
@@ -20,10 +20,11 @@ import Testing
 
   @Test func aBatchIsOneCommitAndEffectsComeBack() throws {
     let bridge = bridge()
-    let response = try JSONValue.parse(bridge.dispatch(#"[{"name":"upsertDownload","args":[{"id":"a","state":"complete"},{"focusedWindowShowing":"w"}]},{"name":"upsertDownload","args":[{"id":"b","state":"complete"}]}]"#, sinceRev: 0))
+    let response = try JSONValue.parse(bridge.dispatch(#"[{"name":"createWindow","args":[{}]},{"name":"upsertDownload","args":[{"id":"a","state":"complete","profile":""}]},{"name":"upsertDownload","args":[{"id":"b","state":"complete"}]}]"#, sinceRev: 0))
     #expect(response["rev"] == 1)
-    #expect(response["effects"] == [["type": "openDownloads", "windowId": "w"]])
+    #expect(response["effects"]?.array?.contains { $0["type"] == "openDownloads" } == true)
     #expect(response["patches"]?.array?.first?["downloads"]?.array?.count == 2)
+    #expect(response["patches"]?.array?.first?["windows"]?["upsert"]?.array?.count == 1)
   }
 
   @Test func errorsComeBackWithTheCatchUp() throws {
@@ -49,7 +50,7 @@ import Testing
     let events = Events()
     bridge.observeForeignCommits { events.append($0) }
     _ = bridge.dispatch(#"{"name":"updateSettings","args":[{"appearance":"dark"}]}"#, sinceRev: 0)
-    try bridge.store.dispatch(.updateSettings(patch: ["appearance": "light"], fromSync: true), origin: .sync)
+    try bridge.store.dispatch(Command("updateSettings", [["appearance": "light"], ["fromSync": true]]), origin: .sync)
     #expect(events.values.count == 1)
     #expect(try JSONValue.parse(events.values[0])["rev"] == 2)
   }

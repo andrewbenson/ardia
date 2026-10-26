@@ -31,7 +31,7 @@ let package = Package(
     .target(name: "SolaraUI", dependencies: ["SolaraEngine", "SolaraStore", "SolaraOmnibox", "SolaraSync", "SolaraImport"]),
     .executableTarget(name: "SolaraStoreCLI", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore"]),
     .testTarget(name: "SolaraModelTests", dependencies: ["SolaraModel"]),
-    .testTarget(name: "SolaraStoreTests", dependencies: ["SolaraModel", "SolaraStore"], resources: [.copy("Cases")]),
+    .testTarget(name: "SolaraStoreTests", dependencies: ["SolaraModel", "SolaraStore"], exclude: ["Cases"]),
     .testTarget(name: "SolaraPersistenceTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence"]),
     .testTarget(name: "SolaraBridgeCoreTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore"]),
   ],

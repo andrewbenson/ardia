@@ -42,7 +42,7 @@ public struct Command: Sendable, Equatable {
     "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate", "tidyPins", "untidyPins",
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
     "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "nextId", "nextNavigation",
-    "beginFromSync", "endFromSync",
+    "beginFromSync", "endFromSync", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent",
   ]
 }
 
@@ -302,6 +302,10 @@ extension Session {
       state.caches.launchBackdrop = a.raw(0) ?? .null
     case "nextId": result = .string(newId(try a.requireString(0)))
     case "nextNavigation": result = navigationTo(try a.requireString(0), userInitiated: a.bool(1)).jsonValue
+    case "stripSnapshot": stripSnapshot(a[0] ?? .null)
+    case "stripTransaction": stripTransaction(StripTransaction(json: a[0] ?? .null))
+    case "projectStrips": projectStrips()
+    case "stripCommandSent": stripCommandSent(a.int(0), a.int(1))
     case "beginFromSync": memory.fromSyncDepth += 1
     case "endFromSync": memory.fromSyncDepth = max(0, memory.fromSyncDepth - 1)
     default:

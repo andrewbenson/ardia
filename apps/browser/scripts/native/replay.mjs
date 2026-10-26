@@ -79,6 +79,11 @@ const INSTRUMENT = [
   ]],
   ["/src/store/pinOrderChoices.ts", "globalThis.__replayOrderChoices = { read: () => remote };"],
   ["/src/store/browser.ts", "", [["export const storeTransaction = transactions.transaction;", "export const storeTransaction = (run) => (globalThis.__replayTransaction ? globalThis.__replayTransaction(run, transactions.transaction) : transactions.transaction(run));"]]],
+  ["/src/lib/chromeTabs.ts", "globalThis.__replayChromeTabs = { read: () => ({ strips: [...mirror.values()], lastRev, seen: [...seen], inflight: Object.fromEntries(inflight), groups: Object.fromEntries(groups), tried: Object.fromEntries(tried), changedAt: Object.fromEntries(changedAt), madeInFront: Object.fromEntries(madeInFront) }) };\nconst sendTabStripCommand = (command) => { const cmd = __sendTabStripCommand(command); globalThis.__replayCalls?.sent?.push([command, cmd]); return cmd; };\nfunction receive(tx) { return globalThis.__replayCommand ? globalThis.__replayCommand(\"stripTransaction\", [tx], () => __replayReceiveImpl(tx)) : __replayReceiveImpl(tx); }\nfunction project(s) { return globalThis.__replayCommand ? globalThis.__replayCommand(\"projectStrips\", [], () => __replayProjectImpl(s)) : __replayProjectImpl(s); }", [
+    ["  sendTabStripCommand,\n", "  sendTabStripCommand as __sendTabStripCommand,\n"],
+    ["function receive(tx: TabStripTransaction) {", "function __replayReceiveImpl(tx: TabStripTransaction) {"],
+    ["function project(s: BrowserState) {", "function __replayProjectImpl(s: BrowserState) {"],
+  ]],
   ["/src/lib/persist.ts", "", [["export function startPersistence() {", "export function startPersistence() {\n  globalThis.__replayPersistStarted = true;"]]],
 ];
 
@@ -95,6 +100,7 @@ function readMemory() {
     closingWindows: globalThis.__replayClosing?.read() ?? [],
     lastTabKeepsWindow: globalThis.__replayNewTabBar?.read() ?? false,
     fromSyncDepth: globalThis.__replayOrderChoices?.read() ?? 0,
+    ...(globalThis.__replayChromeTabs ? { chromeTabs: plain(globalThis.__replayChromeTabs.read()) } : {}),
   };
 }
 
@@ -109,7 +115,7 @@ function outsideStore(stack) {
   const frames = stack.split("\n").slice(2);
   for (const frame of frames) {
     if (frame.includes("replay.mjs")) return false;
-    if (((frame.includes("/src/store/") || frame.includes("/src/lib/persist.ts")) && !frame.includes(".test.mjs")) || frame.includes("node_modules") || frame.includes("node:") || !frame.includes("/")) continue;
+    if (((frame.includes("/src/store/") || frame.includes("/src/lib/persist.ts") || frame.includes("/src/lib/chromeTabs.ts")) && !frame.includes(".test.mjs")) || frame.includes("node_modules") || frame.includes("node:") || !frame.includes("/")) continue;
     return true;
   }
   return false;
@@ -329,6 +335,48 @@ async function record(file) {
     }
     return patch;
   };
+  globalThis.__replayCommand = (name, args, run) => {
+    if (depth > 0 || !current || batch || !spec.engineCommands) return run();
+    const before = useBrowser.getState();
+    const now = stubNow();
+    frozen = now;
+    const memoryBefore = readMemory();
+    const config = readConfig();
+    foreign = false;
+    globalThis.__replayCalls = { urls: {}, resolve: [], prefix: null, sent: [] };
+    depth++;
+    let threw = null;
+    let result;
+    try {
+      result = run();
+    } catch (error) {
+      threw = error;
+    } finally {
+      depth--;
+      frozen = null;
+    }
+    const calls = globalThis.__replayCalls;
+    globalThis.__replayCalls = null;
+    const after = useBrowser.getState();
+    if (!threw) {
+      const { sent, ...web } = calls;
+      cases.push({
+        test: current,
+        now,
+        memory: memoryBefore,
+        before: spec.before(before, model),
+        command: { name, args: plain(args) },
+        after: spec.project(after, model),
+        config,
+        web,
+        sent,
+        memoryAfter: { chromeTabs: plain(globalThis.__replayChromeTabs?.read() ?? null) },
+        ...(foreign ? { foreign: "code outside the store changed state during this command" } : {}),
+      });
+    }
+    if (threw) throw threw;
+    return result;
+  };
   globalThis.__replayTransaction = (run, real) => {
     if (depth > 0 || !current || batch || !spec.batches) return real(run);
     const before = useBrowser.getState();
@@ -520,6 +568,7 @@ async function phases(name) {
     "1b": {
       deltas: true,
       batches: true,
+      engineCommands: true,
       commands: [
         "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
         "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",

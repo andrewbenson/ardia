@@ -93,5 +93,6 @@ extension StoreMemory {
     closingWindows = Set(json["closingWindows"]?.array?.compactMap(\.string) ?? [])
     lastTabKeepsWindow = json["lastTabKeepsWindow"]?.truthy ?? false
     fromSyncDepth = json["fromSyncDepth"]?.int ?? 0
+    chromeTabs = ChromeTabsMemory(json: json["chromeTabs"])
   }
 }

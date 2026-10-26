@@ -139,7 +139,25 @@ func replayOnce(_ json: JSONValue) throws -> (JSONValue, JSONValue?, [String]) {
   let command = json["command"]!
   let commands = command["name"] == "$batch" ? try (command["commands"]?.array ?? []).map(Command.init(json:)) : [try Command(json: command)]
   let commit = try store.dispatch(commands, origin: .bridge)
-  return (.object(store.state.stateJSON), commit.result, web.missed.withLock { $0 })
+  var problems = web.missed.withLock { $0 }
+  if let sent = json["sent"]?.array {
+    let emitted = commit.effects.compactMap { effect -> (Int, JSONValue)? in
+      if case .stripCommand(let strip, let command) = effect { return (strip, command) }
+      return nil
+    }
+    if emitted.count != sent.count {
+      problems.append("sent \(emitted.count) strip commands, js sent \(sent.count): \(emitted.map { $0.1.text() }) vs \(sent.map { $0.text() })")
+    }
+    for (i, (strip, emittedCommand)) in emitted.enumerated() where i < sent.count {
+      let recorded = sent[i].array ?? []
+      if emittedCommand.canonical != recorded.first?.canonical { problems.append("strip command \(i): \(emittedCommand.text()) vs \(recorded.first?.text() ?? "")") }
+      try store.dispatch(Command("stripCommandSent", [JSONValue(strip), recorded.count > 1 ? recorded[1] : .null]), origin: .bridge)
+    }
+  }
+  if let expected = json["memoryAfter"]?["chromeTabs"], !expected.isNull {
+    if let d = firstDifference(store.memory.chromeTabs.json, expected, path: "memory.chromeTabs") { problems.append(d) }
+  }
+  return (.object(store.state.stateJSON), commit.result, problems)
 }
 
 @Suite struct Phase1bReplay {
@@ -169,7 +187,7 @@ func replayOnce(_ json: JSONValue) throws -> (JSONValue, JSONValue?, [String]) {
           let got = result ?? .null
           if got.canonical != expected.canonical { problem = "result: swift \(got.text().prefix(300)) vs js \(expected.text().prefix(300))" }
         }
-        if problem == nil, !missed.isEmpty { problem = "web lookups missed: \(missed.prefix(3))" }
+        if problem == nil, !missed.isEmpty { problem = missed.prefix(3).joined(separator: "; ") }
         if let problem {
           failed[name, default: 0] += 1
           if reports.count < 40 { reports.append("\(replay.testDescription)\n    \(problem)") }

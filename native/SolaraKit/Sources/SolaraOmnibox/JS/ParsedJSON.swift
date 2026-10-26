@@ -1,14 +1,14 @@
 import Foundation
 
-public enum JSONValue: Sendable, Equatable {
+public enum ParsedJSON: Sendable, Equatable {
   case null
   case bool(Bool)
   case number(Double)
   case string(String)
-  case array([JSONValue])
-  case object([(key: String, value: JSONValue)])
+  case array([ParsedJSON])
+  case object([(key: String, value: ParsedJSON)])
 
-  public static func == (a: JSONValue, b: JSONValue) -> Bool {
+  public static func == (a: ParsedJSON, b: ParsedJSON) -> Bool {
     switch (a, b) {
     case (.null, .null): true
     case (.bool(let x), .bool(let y)): x == y
@@ -20,12 +20,12 @@ public enum JSONValue: Sendable, Equatable {
     }
   }
 
-  public subscript(key: String) -> JSONValue? {
+  public subscript(key: String) -> ParsedJSON? {
     guard case .object(let pairs) = self else { return nil }
     return pairs.first { $0.key.sameUnits(key) }?.value
   }
 
-  public subscript(index: Int) -> JSONValue? {
+  public subscript(index: Int) -> ParsedJSON? {
     guard case .array(let items) = self, index >= 0, index < items.count else { return nil }
     return items[index]
   }
@@ -35,7 +35,7 @@ public enum JSONValue: Sendable, Equatable {
     return nil
   }
 
-  public var array: [JSONValue]? {
+  public var array: [ParsedJSON]? {
     if case .array(let a) = self { return a }
     return nil
   }
@@ -82,10 +82,10 @@ public enum JSONValue: Sendable, Equatable {
     case let b as Bool: self = .bool(b)
     case let n as NSNumber: self = .number(n.doubleValue)
     case let s as String: self = .string(s)
-    case let a as [Any?]: self = .array(a.map(JSONValue.init))
-    case let a as [Any]: self = .array(a.map { JSONValue($0) })
-    case let pairs as KeyValuePairs<String, Any?>: self = .object(pairs.map { ($0.key, JSONValue($0.value)) })
-    case let d as [String: Any]: self = .object(d.keys.sorted().map { ($0, JSONValue(d[$0])) })
+    case let a as [Any?]: self = .array(a.map(ParsedJSON.init))
+    case let a as [Any]: self = .array(a.map { ParsedJSON($0) })
+    case let pairs as KeyValuePairs<String, Any?>: self = .object(pairs.map { ($0.key, ParsedJSON($0.value)) })
+    case let d as [String: Any]: self = .object(d.keys.sorted().map { ($0, ParsedJSON(d[$0])) })
     default: self = .null
     }
   }
@@ -99,7 +99,7 @@ struct JSONParser {
 
   init(_ text: Units) { self.text = text }
 
-  mutating func parseDocument() throws -> JSONValue {
+  mutating func parseDocument() throws -> ParsedJSON {
     skipSpace()
     let value = try parseValue()
     skipSpace()
@@ -118,7 +118,7 @@ struct JSONParser {
     return true
   }
 
-  mutating func parseValue() throws -> JSONValue {
+  mutating func parseValue() throws -> ParsedJSON {
     guard i < text.count else { throw JSONSyntaxError() }
     switch text[i] {
     case 0x7b: return try parseObject()
@@ -132,9 +132,9 @@ struct JSONParser {
     throw JSONSyntaxError()
   }
 
-  mutating func parseObject() throws -> JSONValue {
+  mutating func parseObject() throws -> ParsedJSON {
     i += 1
-    var pairs: [(key: String, value: JSONValue)] = []
+    var pairs: [(key: String, value: ParsedJSON)] = []
     var index: [Units: Int] = [:]
     skipSpace()
     if i < text.count && text[i] == 0x7d {
@@ -177,15 +177,15 @@ struct JSONParser {
     return UInt32(n)
   }
 
-  private func orderedLikeJS(_ pairs: [(key: String, value: JSONValue)]) -> [(key: String, value: JSONValue)] {
+  private func orderedLikeJS(_ pairs: [(key: String, value: ParsedJSON)]) -> [(key: String, value: ParsedJSON)] {
     let numeric = pairs.compactMap { pair in arrayIndex(pair.key).map { ($0, pair) } }.sorted { $0.0 < $1.0 }.map(\.1)
     if numeric.isEmpty { return pairs }
     return numeric + pairs.filter { arrayIndex($0.key) == nil }
   }
 
-  mutating func parseArray() throws -> JSONValue {
+  mutating func parseArray() throws -> ParsedJSON {
     i += 1
-    var items: [JSONValue] = []
+    var items: [ParsedJSON] = []
     skipSpace()
     if i < text.count && text[i] == 0x5d {
       i += 1

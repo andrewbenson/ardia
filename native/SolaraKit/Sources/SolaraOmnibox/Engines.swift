@@ -144,8 +144,8 @@ private func withoutPlaceholders(_ url: String) -> String {
   return out.string
 }
 
-public func extensionEnginesFromChrome(profile: String, list: JSONValue?) -> [ExtensionSearchEngine] {
-  var groups: [JSONValue] = []
+public func extensionEnginesFromChrome(profile: String, list: ParsedJSON?) -> [ExtensionSearchEngine] {
+  var groups: [ParsedJSON] = []
   switch list {
   case .object(let pairs)?: groups = pairs.map(\.value)
   case .array(let items)?: groups = items
@@ -217,7 +217,7 @@ func engineHost(_ url: Units) -> Units {
   return hostOf(replaced)
 }
 
-public func parseSuggestions(_ body: JSONValue?) -> [String] {
+public func parseSuggestions(_ body: ParsedJSON?) -> [String] {
   guard case .array(let outer)? = body, outer.count > 1, case .array(let items) = outer[1] else { return [] }
   return items.compactMap { item in
     guard case .string(let s) = item else { return nil }

@@ -113,7 +113,7 @@ public func matchActions<T: ActionCandidate>(_ query: String, _ actions: [T], li
   matchPrepared(query, actions, actions.map { PreparedAction(title: $0.title, keywords: $0.keywords) }, limit: limit)
 }
 
-public final class ActionIndex<T: ActionCandidate>: @unchecked Sendable {
+public final class ActionIndex<T: ActionCandidate>: Sendable {
   public let actions: [T]
   let prepared: [PreparedAction]
 

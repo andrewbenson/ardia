@@ -8,7 +8,7 @@ import Testing
   func keystrokeCost() throws {
     let path = ProcessInfo.processInfo.environment["SOLARA_OMNIBOX_BENCH"]!
     let rounds = Int(ProcessInfo.processInfo.environment["SOLARA_OMNIBOX_BENCH_ROUNDS"] ?? "") ?? 300
-    let seed = try JSONValue(parsing: Data(contentsOf: URL(fileURLWithPath: path)))
+    let seed = try ParsedJSON(parsing: Data(contentsOf: URL(fileURLWithPath: path)))
     let now = seed["now"]!.double
     let history = seed["history"]!.items.map { HistoryRow(url: $0["url"]!.str, title: $0["title"]!.str, favicon: $0["favicon"]!.optionalString, visits: $0["visits"]!.double, lastVisit: $0["lastVisit"]!.double) }
     let tabs = seed["tabs"]!.items.map { TabRow(id: $0["id"]!.str, url: $0["url"]!.str, title: $0["title"]!.str, favicon: $0["favicon"]!.optionalString) }

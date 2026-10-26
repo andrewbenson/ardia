@@ -3,7 +3,7 @@ import Testing
 
 @testable import SolaraOmnibox
 
-private func finiteOrNull(_ v: JSONValue) -> JSONValue {
+private func finiteOrNull(_ v: ParsedJSON) -> ParsedJSON {
   switch v {
   case .number(let n): n.isFinite ? .number(n == 0 ? 0 : n) : .null
   case .array(let items): .array(items.map(finiteOrNull))
@@ -95,9 +95,9 @@ private struct FixtureAction: ActionCandidate {
       for q in run["queries"]!.items {
         let query = q[0]!.str
         let limit = q[1]!.int
-        let got = JSONValue.array(matchActions(query, actions, limit: limit).map { .array([.string($0.action.id), .number($0.score), .bool($0.exact)]) })
+        let got = ParsedJSON.array(matchActions(query, actions, limit: limit).map { .array([.string($0.action.id), .number($0.score), .bool($0.exact)]) })
         m.check("matchActions \(describe(q[0])) limit \(limit)", got, q[2])
-        let prepared = JSONValue.array(index.match(query, limit: limit).map { .array([.string($0.action.id), .number($0.score), .bool($0.exact)]) })
+        let prepared = ParsedJSON.array(index.match(query, limit: limit).map { .array([.string($0.action.id), .number($0.score), .bool($0.exact)]) })
         m.check("ActionIndex \(describe(q[0]))", prepared, q[2])
         if let title = q[4]?.string { m.check("fuzzyScore \(describe(q[0])) \(title)", .number(fuzzyScore(query, title)), q[3]) }
       }
@@ -146,17 +146,17 @@ private struct FixtureAction: ActionCandidate {
   }
 }
 
-private func json(_ e: SearchEngine) -> JSONValue {
+private func json(_ e: SearchEngine) -> ParsedJSON {
   obj([
-    "id": .string(e.id), "name": .string(e.name), "keyword": .string(e.keyword), "url": .string(e.url), "suggestUrl": e.suggestUrl.map(JSONValue.string),
+    "id": .string(e.id), "name": .string(e.name), "keyword": .string(e.keyword), "url": .string(e.url), "suggestUrl": e.suggestUrl.map(ParsedJSON.string),
     "custom": e.custom ? .bool(true) : nil, "extension": e.extension.map { obj(["id": .string($0.id), "name": .string($0.name)]) },
   ])
 }
 
-private func json(_ e: ExtensionSearchEngine) -> JSONValue {
+private func json(_ e: ExtensionSearchEngine) -> ParsedJSON {
   obj([
     "profile": .string(e.profile), "extensionId": .string(e.extensionId), "extensionName": .string(e.extensionName), "name": .string(e.name),
-    "keyword": .string(e.keyword), "url": .string(e.url), "suggestUrl": e.suggestUrl.map(JSONValue.string), "isDefault": .bool(e.isDefault),
+    "keyword": .string(e.keyword), "url": .string(e.url), "suggestUrl": e.suggestUrl.map(ParsedJSON.string), "isDefault": .bool(e.isDefault),
   ])
 }
 
@@ -184,10 +184,10 @@ private func json(_ e: ExtensionSearchEngine) -> JSONValue {
       m.check("make \(describe(c[0]))", obj(["id": .string(made.id), "name": .string(made.name), "keyword": .string(made.keyword), "url": .string(made.url)]), c[3])
     }
     for c in f["chrome"]!.items {
-      let list = try JSONValue(parsing: c[0]!.str)
+      let list = try ParsedJSON(parsing: c[0]!.str)
       m.check("chrome \(c[0]!.str.prefix(60))", .array(extensionEnginesFromChrome(profile: "prof", list: list).map(json)), c[1])
     }
-    for c in f["parsed"]!.items { m.check("parseSuggestions \(c[0]!.str)", .array(parseSuggestions(try JSONValue(parsing: c[0]!.str)).map(JSONValue.string)), c[1]) }
+    for c in f["parsed"]!.items { m.check("parseSuggestions \(c[0]!.str)", .array(parseSuggestions(try ParsedJSON(parsing: c[0]!.str)).map(ParsedJSON.string)), c[1]) }
     for c in f["requests"]!.items {
       let e = engineById(builtInEngines, c[0]!.str)
       m.check("suggestRequestUrl \(e.id) \(describe(c[1]))", js(suggestRequestUrl(e, c[1]!.str)), c[2])
@@ -218,7 +218,7 @@ private func json(_ e: ExtensionSearchEngine) -> JSONValue {
       let s = c[2]!
       let state = SiteSearchKeyState(typed: s["typed"]!.str, completion: s["completion"]!.str, scope: scope(s["scope"]!), offered: scope(s["offered"]!), scopeFrom: s["scopeFrom"]!.str)
       let got = siteSearchKey(c[0]!.str, SiteSearchKeyModifiers(shiftKey: mods["shiftKey"]!.bool, altKey: mods["altKey"]!.bool, metaKey: mods["metaKey"]!.bool, ctrlKey: mods["ctrlKey"]!.bool), state)
-      let encoded: JSONValue
+      let encoded: ParsedJSON
       switch got {
       case .enter(let scope, let from)?: encoded = obj(["kind": .string("enter"), "scope": json(scope), "from": .string(from)])
       case .leave(let text)?: encoded = obj(["kind": .string("leave"), "text": .string(text)])
@@ -232,12 +232,12 @@ private func json(_ e: ExtensionSearchEngine) -> JSONValue {
   }
 }
 
-private func json(_ f: TextFragment?) -> JSONValue {
+private func json(_ f: TextFragment?) -> ParsedJSON {
   guard let f else { return .null }
-  return obj(["prefix": f.prefix.map(JSONValue.string), "start": .string(f.start), "end": f.end.map(JSONValue.string), "suffix": f.suffix.map(JSONValue.string)])
+  return obj(["prefix": f.prefix.map(ParsedJSON.string), "start": .string(f.start), "end": f.end.map(ParsedJSON.string), "suffix": f.suffix.map(ParsedJSON.string)])
 }
 
-private func fragment(_ v: JSONValue) -> TextFragment {
+private func fragment(_ v: ParsedJSON) -> TextFragment {
   TextFragment(prefix: v["prefix"]?.string, start: v["start"]!.str, end: v["end"]?.string, suffix: v["suffix"]?.string)
 }
 

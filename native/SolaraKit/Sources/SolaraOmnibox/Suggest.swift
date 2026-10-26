@@ -543,7 +543,7 @@ private func stripScheme(_ query: Units) -> Units {
   return Array(query[length...])
 }
 
-public final class SuggestionIndex: @unchecked Sendable {
+public final class SuggestionIndex {
   private let history: [HistoryRow]
   private let bookmarks: [BookmarkRow]
   private var baseList: [Candidate] = []

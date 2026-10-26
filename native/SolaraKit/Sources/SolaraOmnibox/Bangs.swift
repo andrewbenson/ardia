@@ -94,7 +94,7 @@ func stripLooseJson(_ text: Units) -> Units {
   return Array(parts.joined())
 }
 
-public func parseLooseJson(_ text: String) throws -> JSONValue {
+public func parseLooseJson(_ text: String) throws -> ParsedJSON {
   var parser = JSONParser(stripLooseJson(text.units))
   return try parser.parseDocument()
 }

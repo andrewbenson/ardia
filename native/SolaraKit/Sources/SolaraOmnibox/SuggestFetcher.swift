@@ -83,7 +83,7 @@ public final class SuggestFetcher: Sendable {
       let suggestions: [String]
       do {
         let response = try await fetch(url)
-        suggestions = response.ok ? ((try? JSONValue(parsing: response.body)).map(parseSuggestions) ?? []) : []
+        suggestions = response.ok ? ((try? ParsedJSON(parsing: response.body)).map(parseSuggestions) ?? []) : []
       } catch {
         return
       }

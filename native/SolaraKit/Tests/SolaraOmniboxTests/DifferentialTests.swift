@@ -51,7 +51,7 @@ private func bits(_ hex: String) -> Double { Double(bitPattern: UInt64(hex, radi
   }
 }
 
-private func json(_ p: PasteAction?) -> JSONValue {
+private func json(_ p: PasteAction?) -> ParsedJSON {
   switch p {
   case .go(let url)?: obj(["kind": .string("go"), "url": .string(url)])
   case .search(let query)?: obj(["kind": .string("search"), "query": .string(query)])
@@ -59,7 +59,7 @@ private func json(_ p: PasteAction?) -> JSONValue {
   }
 }
 
-private func json(_ r: AppUrlRoute?) -> JSONValue {
+private func json(_ r: AppUrlRoute?) -> ParsedJSON {
   switch r {
   case .page(let page)?: obj(["kind": .string("page"), "page": .string(page.rawValue)])
   case .settings(let section)?: obj(["kind": .string("settings"), "section": js(section)])
@@ -80,7 +80,7 @@ private func json(_ r: AppUrlRoute?) -> JSONValue {
         let input = c["input"]!.str
         let title = c["title"]!.str
         let label = "\(pass) \(describe(.string(input)))"
-        func check(_ name: String, _ got: @autoclosure () -> JSONValue) {
+        func check(_ name: String, _ got: @autoclosure () -> ParsedJSON) {
           guard let want = c[name] else { return }
           if let error = want["throws"] {
             threw += 1
@@ -98,7 +98,7 @@ private func json(_ r: AppUrlRoute?) -> JSONValue {
         check("urlForDisplay", .string(urlForDisplay(input)))
         check("displayUrl", .string(displayUrl(input)))
         let crumb = breadcrumb(input, title: title)
-        check("breadcrumb", obj(["host": .string(crumb.host), "trail": .array(crumb.trail.map(JSONValue.string))]))
+        check("breadcrumb", obj(["host": .string(crumb.host), "trail": .array(crumb.trail.map(ParsedJSON.string))]))
         check("cleanUrl", .string(cleanUrl(input)))
         check("markdownLink", .string(markdownLink(title: title, url: input)))
         check("appUrlOrigin", js(appUrlOrigin(input)))

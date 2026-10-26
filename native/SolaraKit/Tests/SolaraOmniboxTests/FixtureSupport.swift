@@ -11,13 +11,13 @@ enum Fixture {
     return URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures").appendingPathComponent(name)
   }
 
-  static func load(_ name: String) throws -> JSONValue {
-    try JSONValue(parsing: Data(contentsOf: url(name)))
+  static func load(_ name: String) throws -> ParsedJSON {
+    try ParsedJSON(parsing: Data(contentsOf: url(name)))
   }
 }
 
-extension JSONValue {
-  var items: [JSONValue] { array ?? [] }
+extension ParsedJSON {
+  var items: [ParsedJSON] { array ?? [] }
   var str: String { string ?? "" }
   var isNull: Bool { self == .null }
 
@@ -41,25 +41,25 @@ extension JSONValue {
   var optionalString: String? { isNull ? nil : string }
 }
 
-func js(_ s: String?) -> JSONValue { s.map(JSONValue.string) ?? .null }
-func js(_ b: Bool) -> JSONValue { .bool(b) }
-func js(_ x: Double) -> JSONValue {
+func js(_ s: String?) -> ParsedJSON { s.map(ParsedJSON.string) ?? .null }
+func js(_ b: Bool) -> ParsedJSON { .bool(b) }
+func js(_ x: Double) -> ParsedJSON {
   if x.isNaN { return .string("NaN") }
   if x.isInfinite { return .string(x < 0 ? "-Infinity" : "Infinity") }
   if x == 0 && x.sign == .minus { return .string("-0") }
   return .number(x)
 }
-func js(_ list: [JSONValue]) -> JSONValue { .array(list) }
-func obj(_ pairs: KeyValuePairs<String, JSONValue?>) -> JSONValue {
+func js(_ list: [ParsedJSON]) -> ParsedJSON { .array(list) }
+func obj(_ pairs: KeyValuePairs<String, ParsedJSON?>) -> ParsedJSON {
   .object(pairs.compactMap { pair in pair.value.map { (pair.key, $0) } })
 }
 
-func json(_ s: Suggestion) -> JSONValue {
+func json(_ s: Suggestion) -> ParsedJSON {
   switch s {
   case .page(let url, let title, let favicon, let tabId, let bookmarked, let visited):
     return obj([
       "kind": .string("page"), "url": .string(url), "title": .string(title), "favicon": js(favicon),
-      "tabId": tabId.map(JSONValue.string), "bookmarked": bookmarked ? .bool(true) : nil, "visited": visited ? .bool(true) : nil,
+      "tabId": tabId.map(ParsedJSON.string), "bookmarked": bookmarked ? .bool(true) : nil, "visited": visited ? .bool(true) : nil,
     ])
   case .search(let query, let url, let engine, let suggested, let bang):
     return obj([
@@ -69,7 +69,7 @@ func json(_ s: Suggestion) -> JSONValue {
   case .calc(let expression, let value, let url):
     return obj(["kind": .string("calc"), "expression": .string(expression), "value": .string(value), "url": .string(url)])
   case .action(let id, let title, let icon, let hint):
-    return obj(["kind": .string("action"), "id": .string(id), "title": .string(title), "icon": icon.map(JSONValue.string), "hint": hint.map(JSONValue.string)])
+    return obj(["kind": .string("action"), "id": .string(id), "title": .string(title), "icon": icon.map(ParsedJSON.string), "hint": hint.map(ParsedJSON.string)])
   case .create(let id, let title, let url, let site):
     return obj(["kind": .string("create"), "id": .string(id), "title": .string(title), "url": .string(url), "site": .string(site)])
   case .extension(let id, let title, let icon, let open):
@@ -77,31 +77,31 @@ func json(_ s: Suggestion) -> JSONValue {
   }
 }
 
-func json(_ r: SuggestionResult) -> JSONValue {
+func json(_ r: SuggestionResult) -> ParsedJSON {
   obj(["items": .array(r.items.map(json)), "completion": .string(r.completion)])
 }
 
-func json(_ b: Bang?) -> JSONValue {
+func json(_ b: Bang?) -> ParsedJSON {
   guard let b else { return .null }
   return obj(["trigger": .string(b.trigger), "name": .string(b.name), "template": .string(b.template), "home": .string(b.home)])
 }
 
-func json(_ m: BangMatch?) -> JSONValue {
+func json(_ m: BangMatch?) -> ParsedJSON {
   guard let m else { return .null }
   return obj(["bang": json(m.bang), "query": .string(m.query), "url": .string(m.url)])
 }
 
-func json(_ s: SearchScope?) -> JSONValue {
+func json(_ s: SearchScope?) -> ParsedJSON {
   guard let s else { return .null }
-  return obj(["kind": .string(s.kind.rawValue), "name": .string(s.name), "host": .string(s.host), "url": .string(s.url), "engineId": s.engineId.map(JSONValue.string)])
+  return obj(["kind": .string(s.kind.rawValue), "name": .string(s.name), "host": .string(s.host), "url": .string(s.url), "engineId": s.engineId.map(ParsedJSON.string)])
 }
 
-func scope(_ v: JSONValue) -> SearchScope? {
+func scope(_ v: ParsedJSON) -> SearchScope? {
   guard v.isObject else { return nil }
   return SearchScope(kind: SearchScopeKind(rawValue: v["kind"]!.str)!, name: v["name"]!.str, host: v["host"]!.str, url: v["url"]!.str, engineId: v["engineId"]?.string)
 }
 
-func same(_ a: JSONValue?, _ b: JSONValue?) -> Bool {
+func same(_ a: ParsedJSON?, _ b: ParsedJSON?) -> Bool {
   switch (a ?? .null, b ?? .null) {
   case (.object(let x), .object(let y)):
     guard x.count == y.count else { return false }
@@ -119,7 +119,7 @@ func same(_ a: JSONValue?, _ b: JSONValue?) -> Bool {
   }
 }
 
-func describe(_ v: JSONValue?) -> String {
+func describe(_ v: ParsedJSON?) -> String {
   guard let v else { return "undefined" }
   switch v {
   case .null: return "null"
@@ -136,14 +136,14 @@ struct Mismatches {
   var compared = 0
   var lines: [String] = []
 
-  mutating func check(_ label: @autoclosure () -> String, _ got: JSONValue?, _ want: JSONValue?) {
+  mutating func check(_ label: @autoclosure () -> String, _ got: ParsedJSON?, _ want: ParsedJSON?) {
     compared += 1
     if same(got, want) { return }
     total += 1
     if lines.count < 25 { lines.append("\(label())\n    got:  \(describe(got))\n    want: \(describe(want))") }
   }
 
-  mutating func check(_ label: @autoclosure () -> String, _ got: String?, _ want: JSONValue?) {
+  mutating func check(_ label: @autoclosure () -> String, _ got: String?, _ want: ParsedJSON?) {
     check(label(), js(got), want)
   }
 

@@ -1522,7 +1522,7 @@ let installWindowMoveFallback: Void = {
 }()
 
 enum WindowMove {
-  static let replacesNativeDrag = ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0))
+  static let replacesNativeDrag = ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 0))
   private static var following = false
   private static let staleAfter: TimeInterval = 0.012
 

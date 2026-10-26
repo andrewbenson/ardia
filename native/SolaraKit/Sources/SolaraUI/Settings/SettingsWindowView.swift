@@ -13,7 +13,7 @@ public struct SettingsWindowView: View {
   public var body: some View {
     NavigationSplitView {
       SettingsSidebar(context: context)
-        .navigationSplitViewColumnWidth(Self.sidebarWidth)
+        .navigationSplitViewColumnWidth(min: Self.sidebarWidth, ideal: Self.sidebarWidth, max: Self.sidebarWidth)
     } detail: {
       SettingsDetail(context: context)
     }

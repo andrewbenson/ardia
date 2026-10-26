@@ -14,7 +14,6 @@ public struct SettingsForm<Content: View>: View {
 }
 
 public struct SettingsSection<Content: View, Action: View>: View {
-  @Environment(\.settingsContext) private var context
   let title: String?
   let description: String?
   let anchor: String?
@@ -33,21 +32,40 @@ public struct SettingsSection<Content: View, Action: View>: View {
     Section {
       content
     } header: {
-      SettingsAnchor(anchor) {
-        HStack(alignment: .bottom) {
-          VStack(alignment: .leading, spacing: 3) {
-            Text(resolvedTitle)
-            if let description {
-              Text(description)
-                .font(.callout)
-                .fontWeight(.regular)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
+      SettingsSectionHeader(title, description: description, anchor: anchor) { action }
+    }
+  }
+}
+
+public struct SettingsSectionHeader<Action: View>: View {
+  @Environment(\.settingsContext) private var context
+  let title: String?
+  let description: String?
+  let anchor: String?
+  let action: Action
+
+  public init(_ title: String? = nil, description: String? = nil, anchor: String? = nil, @ViewBuilder action: () -> Action) {
+    self.title = title
+    self.description = description
+    self.anchor = anchor
+    self.action = action()
+  }
+
+  public var body: some View {
+    SettingsAnchor(anchor) {
+      HStack(alignment: .bottom) {
+        VStack(alignment: .leading, spacing: 3) {
+          Text(resolvedTitle)
+          if let description {
+            Text(description)
+              .font(.callout)
+              .fontWeight(.regular)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
           }
-          Spacer(minLength: 8)
-          action
         }
+        Spacer(minLength: 8)
+        action
       }
     }
   }
@@ -56,6 +74,12 @@ public struct SettingsSection<Content: View, Action: View>: View {
     if let title { return title }
     if let anchor, let entry = context?.index.entry(anchor) { return entry.section }
     return ""
+  }
+}
+
+public extension SettingsSectionHeader where Action == EmptyView {
+  init(_ title: String? = nil, description: String? = nil, anchor: String? = nil) {
+    self.init(title, description: description, anchor: anchor) { EmptyView() }
   }
 }
 

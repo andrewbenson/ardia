@@ -78,6 +78,11 @@ enum SettingsFixture {
     let store = FakeSettingsStore()
     let context = SettingsContext(appName: "Solara", liquidGlass: liquidGlass, store: store)
     context.panes[.general] = GeneralPaneModel(services: FakeGeneralServices(), store: store)
+    context.panes[.tabs] = TabsPaneModel(store: store)
+    context.panes[.appearance] = AppearancePaneModel(services: FakeAppearanceServices(), store: store)
+    context.panes[.search] = SearchEnginePaneModel(services: FakeSearchEngineServices(), store: store)
+    context.panes[.engines] = EnginesPaneModel(services: FakeEnginesServices(store: store), store: store)
+    context.panes[.advanced] = AdvancedPaneModel(services: FakeAdvancedServices(), store: store)
     context.profileForPane = { pane, current in pane == .extensions ? (current.pane == .extensions ? current.profileId : nil) ?? "default" : nil }
     return (context, store)
   }

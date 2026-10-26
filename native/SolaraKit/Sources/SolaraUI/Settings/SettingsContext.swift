@@ -23,6 +23,7 @@ public final class SettingsContext {
   @ObservationIgnored public var panes: [SettingsPane: SettingsPaneProvider] = [:]
   @ObservationIgnored public var profileForPane: (SettingsPane, SettingsPlace) -> String? = { _, _ in nil }
   @ObservationIgnored public var onPaneChange: (SettingsPane) -> Void = { _ in }
+  @ObservationIgnored public var favicons: SettingsFavicons?
   @ObservationIgnored public var anchorFrames: [String: CGRect] = [:]
   @ObservationIgnored public var viewport: CGRect = .zero
   public private(set) var shown: SettingsPlace?

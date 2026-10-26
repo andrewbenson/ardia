@@ -60,7 +60,7 @@ native surface that polls.
      mode (M4, M6, M9);
    - `native-bench --only memory,newwindow` with the window-count variant (M8).
 3. Release the lock and run `suggest-hermes.mjs` (M3 compute) under its own lock.
-4. M5 only with `--drag` and a visible window (§7, item 8 in [architecture.md](architecture.md)). Otherwise its rows
+4. M5 only with `--drag` and a visible window (§7, item 9 in [architecture.md](architecture.md)). Otherwise its rows
    print "needs owner run".
 5. Write `<out>/baseline.json` and render `docs/native/baseline-<version>.md`: one table per metric, with the machine
    state (load averages, display rate, idle-input seconds) at the top.

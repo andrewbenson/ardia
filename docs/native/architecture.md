@@ -314,7 +314,7 @@ tests, and on import.
 
 Why a lock rather than `@MainActor` for the store:
 - During the bridge phase, JS must read its own writes synchronously. `const id = newTab(…)` followed by reads of the
-  new state is common across 33 `useBrowser.setState` sites and the 114 actions.
+  new state is common across 29 `useBrowser.setState` sites and the 114 actions.
 - A synchronous hop from the JS thread to main (`DispatchQueue.main.sync`) would stall on Chrome's tasks and risks
   deadlock.
 - An uncontended unfair lock costs about 20 ns. After phase 6 every caller is on main and the lock is never contended,
@@ -346,7 +346,8 @@ How each kind of UI reads them:
 - **AppKit** (sidebar, toolbar, tab rows) uses a small `observe { }` helper over `withObservationTracking` that
   re-arms after each change and coalesces to one `needsLayout` / `needsDisplay` per run-loop turn. A row observes its
   own `TabModel`, so a title change re-lays out one row. This is the native counterpart of today's narrow zustand
-  selectors. (On macOS 26 AppKit tracks Observation in layout itself; §7 asks about the deployment target.)
+  selectors. (Newer AppKit may track Observation in layout by itself. That is from memory and unverified here; check
+  it before it weighs on §7's deployment-target question.)
 
 ### 2.6 Engine events in, commands out
 
@@ -368,6 +369,12 @@ Chrome (UI thread = main)
   `store/liveTabs.ts`) is a reducer. `stripPlan` and the "one command per strip at a time, never resend unchanged"
   rule (a port of `lib/chromeTabs.ts`) live in `EngineClient` and run after each commit. The fake-engine tests in
   `liveTabs.test.mjs` become golden-replay cases (§5.2).
+- **Event order across sources.** Strip transactions and WebView events (`onOpenWindow` with a `tab:` adoption,
+  navigation) must be applied in the order Chrome emitted them, which `lib/nativeEvents.ts` keeps today. While WebView
+  events still reach the store through JS (phases 1b–4), strip transactions do too: JS forwards each one as a
+  `stripTransaction` command, and Swift's `chromeChanged` and `stripPlan` run on it. Only in phase 5, when
+  `TabViewPool` is the WebView delegate, does `EngineClient` subscribe to `ArdiaCoreTabStrip` directly, so both
+  sources arrive on main in emission order.
 - **Omnibox.**
   - `SuggestionEngine` (actor) keeps an in-memory index built from `ac_history_query` plus `history.changed`,
     `ac_bookmarks_tree`, open tabs (from commits), search engines (settings plus `ac_search_engines`), and the bang
@@ -432,7 +439,8 @@ CREATE TABLE document (name TEXT PRIMARY KEY, value TEXT NOT NULL);
 **Crash safety.**
 - WAL plus a single transaction per flush: a crash loses at most the last 250 ms, never half a flush. Today the loss
   window is 800 ms.
-- `willTerminate` flushes synchronously with a 500 ms deadline (`DocumentStore`'s pattern).
+- `willTerminate` flushes synchronously with a 500 ms deadline (`DocumentStore`'s pattern): the rows first, then the
+  shadow `session.json` (§3.4), so the next launch's early window shows the right tab.
 - At launch, `PRAGMA quick_check` runs (sub-ms at this size). If it fails, the file moves to
   `solara.sqlite.corrupt-<date>` and the app re-imports from the shadow `session.json` (§3.4).
 
@@ -451,7 +459,7 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 
 | Data | Action |
 |---|---|
-| `session.json` v2 (profiles, settings, windows, tabs, groups, splits, closed / cleaned / deleted items, parked pins, `pinChoices`, `pinSync`, focus, last profile) | Imported into `solara.sqlite` once. |
+| `session.json` v2 (profiles, settings, windows, tabs, groups, splits, closed / cleaned / deleted items, parked pins, `pinChoices`, `pinSync`, focus, last profile) | Imported into `solara.sqlite` once, in phase 1b, when Swift owns everything in the file. |
 | `downloads.json` | Imported (`download`). |
 | `sync.json`, `sync-state.nns`, `sync-journal.nns`, Keychain `Ardia Sync Key` | **Untouched.** The sync engine keeps reading them in every phase. Only the record source changes (§4.5). |
 | `live.json` | Imported into `document` when Live Folders port (phase 2). |
@@ -461,6 +469,9 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 
 ### 3.2 The one-time import
 
+- **When.** Phase 1a imports only `settings` (through the port of `migrateSavedSettings`) and `downloads.json`. Phase
+  1b imports the rest of `session.json`. In 1a, `persist.ts` (still the writer of `session.json`) adds the same
+  `nativeExport` marker as the later shadow export, so the downgrade check in §3.4 works from the first nightly.
 - **Where.** `main.swift`, right after `LegacyMigration.runAtLaunch()` and before `ArdiaCoreHost.run`. That is before
   Chrome starts, before any window, and with nothing touching `NSApp`. Same slot, same style and same test approach
   (an executable tool plus XCTest fixtures, like `packages/sync/tools/legacy-migration`).
@@ -490,17 +501,21 @@ Swift importer, run through its CLI on the same file, prints the same canonical 
 ### 3.4 Versioning and rollback
 
 - **Shadow export.** The persistence writer keeps writing a v2 `session.json` (debounced 2 s, off main), exactly
-  what `persist.ts` writes today. It does this from the import until phase 6 ships plus two stable releases. That
+  what `persist.ts` writes today, plus one extra key, `"nativeExport": {"rev": …, "at": …}`. That includes
+  `launchTab`, `launchBackdrop` and `linkProfile`, so `store/launchTab.ts` and `lib/launchBackdrop.ts` are ported
+  with the exporter. It does this from the import until phase 6 ships plus two stable releases. That
   keeps three things working:
   1. `ArdiaCoreHost.mm`'s early-window read (`launchTab`, `launchBackdrop`, `linkProfile`), unchanged until the
      window shell goes native;
   2. **rollback**: installing an older build (or one from the other channel) finds a current `session.json` and runs
      on it as today;
   3. upstream's `LegacyMigration` expectations.
-- **Downgrade, then upgrade.** `meta.last_export_sha` records the hash of the last shadow export. At launch, if
-  `session.json`'s hash differs, an older build has written to it since. The database moves aside
-  (`solara.sqlite.superseded-<date>`) and the importer runs again on `session.json`. Newer-only fields kept in
-  `setting` / `document` are merged back by key.
+- **Downgrade, then upgrade.** An older (JS-store) build ignores unknown keys and drops `nativeExport` when it
+  rewrites the file. So at launch, a `session.json` **without** the marker means an older build wrote it since our
+  last export. The database moves aside (`solara.sqlite.superseded-<date>`) and the importer runs again on
+  `session.json`. Newer-only fields kept in `setting` / `document` are merged back by key. A marker whose `rev` is
+  behind the database's is normal (a crash before the next export) and changes nothing, so an ordinary crash never
+  triggers a re-import. This needs no atomicity across the two files.
 - **Schema downgrade.** An older build with a newer `solara.sqlite` sees migrations it doesn't know, refuses the
   database, and imports the shadow `session.json`. Nothing is lost, because the shadow is always current.
 - **Kill switch.** For the first nightly, `ARDIA_NATIVE_STORE=0` (environment, Debug and nightly only) makes the app
@@ -517,8 +532,13 @@ them for the RN surfaces still in use.
 
 | Phase | Swift owns | JS still owns (not persisted, or not yet ported) |
 |---|---|---|
-| 1a | settings, profiles, downloads, persistence, import | everything else |
-| 1b | + the whole workspace (windows, tabs, groups, splits, pins, parked, closed/cleaned/deleted items, pin tables, focus) and the tab-strip reconciliation (`liveTabs` / `chromeTabs`) | `live`, `find`, `windowUi`, `selection` / anchors, Peek UI, the history and bookmark views, the sync engine (writing through commands) |
+| 1a | settings and downloads (`downloads.json` → `solara.sqlite`) | everything else. `persist.ts` stays the single writer of `session.json`, reading `settings` from the replica. |
+| 1b | + profiles and the whole workspace (windows, tabs, groups, splits, pins, parked, closed/cleaned/deleted items, pin tables, focus), the `session.json` import and shadow export, and the tab-strip reconciliation (`liveTabs` / `chromeTabs`, fed by JS-forwarded transactions until phase 5) | `live`, `find`, `windowUi`, `selection` / anchors, Peek UI, the history and bookmark views, the sync engine (writing through commands) |
+
+Why profiles wait for 1b: `deleteProfile` and `createProfile({ shareWith })` change windows, tabs, parked pins and
+`orphanedProfileData` in one action, so splitting profiles from the workspace would make one action span two writers.
+And `session.json` holds settings, profiles and the workspace together, so it has one writer at every step: JS until
+1b, Swift (as the shadow export) from 1b on.
 
 ### 4.2 The bridge API
 
@@ -529,6 +549,9 @@ them for the RN surfaces still in use.
 | `snapshot()`, sync | JS | `{rev, data: HydrateData}`, the shape `hydrate` already takes, which replaces `loadSession()`. |
 | `dispatch(commandJSON, sinceRev)`, sync | JS, takes the store lock | `{rev, patches}`: **every** patch after `sinceRev`, its own included. |
 | event `onStoreCommit {rev, patch}` | delivered on JS | Commits JS didn't originate (engine, sync, native UI). |
+
+Patch JSON is encoded after the store lock is released, from the commit's `ChangeSet` and the state snapshot it
+produced, so no thread holds the lock while encoding.
 
 **Ordering and read-your-writes** work like the tab strip's `rev` contract. JS tracks the last `rev` it applied.
 `dispatch` returns everything since then, so JS applies in order and sees its own write before `dispatch` returns. An
@@ -551,7 +574,7 @@ All of these become commands, or move into the Swift transaction, in the sub-pha
 | `lib/history.ts`, `lib/bookmarks.ts`, `lib/bookmarkGroups.ts`, `lib/launchLook.ts` | Their own JS-owned slices stay JS until their surface ports; the bookmark-to-group action becomes a command |
 | `components/import/apply.ts`, `onboarding/state.ts`, `littleArdia/actions.ts`, `sidebar/tidyPinsUi.ts`, `sidebar/tileFolderUi.ts`, `store/pinOrderChoices.ts` | Commands |
 
-That covers 33 `setState` sites in 15 files. A Debug-build guard wraps `setState`: writing a Swift-owned key outside
+That covers 29 `setState` sites in 14 files (test fixtures excluded). A Debug-build guard wraps `setState`: writing a Swift-owned key outside
 the patch applier throws, with the call site, so a missed writer fails the first test that hits it.
 
 ### 4.4 Native ↔ RN hosting
@@ -600,15 +623,17 @@ metrics (§6) are re-run.
 | Phase | Scope | Ships at the end | Measures | Size |
 |---|---|---|---|---|
 | **0. Baseline** | [baseline.md](baseline.md): the new probes (stall histogram, drag pacing, per-window memory, signposts) and one full run on the last RN stable | `docs/native/baseline-<version>.md` | Everything in §6 | about 800 (probes, orchestrator) |
-| **1a. Core: settings, profiles, persistence** | SwiftPM package; Model / Store / Persistence; importer + oracle; shadow export; RN bridge; JS settings and profile actions → `dispatch` | Same UI, `solara.sqlite` source of truth for settings, profiles and downloads | Launch (J1) not worse; save cost moves off the JS thread | 5–6k |
-| **1b. Core: workspace** | All 114 actions; settle pipeline; `chromeChanged` / `stripPlan` in Swift; the hidden writers removed; golden replay of the store tests | Same UI on the Swift store | J1, J3, the ratchet's exact counts (must not rise); store dispatch p99 < 1 ms on the seed | 10–12k |
+| **1a. Core: settings, downloads** | SwiftPM package; Model / Store / Persistence (settings, downloads); RN bridge; JS settings actions → `dispatch`; `persist.ts` keeps writing `session.json` from the replica | Same UI, `solara.sqlite` source of truth for settings and downloads | Launch (J1) not worse; bridge round trip per `updateSettings` | 4–5k |
+| **1b. Core: profiles + workspace** | All 114 actions; settle pipeline; `chromeChanged` / `stripPlan` in Swift (transactions forwarded by JS); the hidden writers removed; `session.json` importer + oracle; shadow export with `launchTab` / `launchBackdrop`; golden replay of the store tests | Same UI on the Swift store; `persist.ts` deleted | J1, J3, the ratchet's exact counts (must not rise); store dispatch p99 < 1 ms on the seed; save cost off the JS thread | 11–13k |
 | **2. Settings, onboarding, utility windows** | Native Settings window (15 panes + sub-surfaces, below); Live engine port (`live/` → Swift, for Live Folders and Calendar); onboarding (5k TS); Import window | Native Settings; RN panes hosted until each ports; then no RN in utility windows | Settings open-to-content, pane switch, typing in search; memory with Settings open | 9–11k |
 | **3. New Tab + internal pages** | New Tab (`NewTabPage.tsx`, `ntp/`, the sun hero, shader backdrop), `ardia://history`, `bookmarks`, `downloads` pages | Native New Tab hosted in the RN window | ⌘T → typeable, ⌘T → painted | 3–4k |
 | **4. Toolbar + omnibox** | `SolaraOmnibox` (port of `packages/core`, property tests against the frozen reference); toolbar, URL field, command bar, Developer Mode, find bar, downloads popover, site prompts, extension toolbar and overlays | Native toolbar and omnibox in the RN window | Keystroke → suggestions, compute per key, ⌘L, J4 | 8–10k |
 | **5. Sidebar + window shell + sync port** | Sidebar (rows, tiles, groups, splits, Live Folders, DnD, list motion, swipes), top tab strip, content card, splits, Peek, media/PiP controls, Little Solara, `TabViewPool`; drag via `ServerWindowDrag`; sync merge to Swift | Browser windows with no RN; the early window reads the store | Tab switch, hover frames, drag pacing, stalls, memory per window, launch | 15–18k |
 | **6. Removal** | Delete RN, Expo, Hermes, Metro, pnpm app build, `SolaraRNBridge`, `NATIVE_API_VERSION`, the JS ratchet; ArdiaCore from pod to SwiftPM / Xcode target; plain Xcode project; stop the shadow `session.json` two stable releases later | An app with no JS runtime | Launch (no Hermes), memory, binary size | −70k TS |
 
-Phase 2 depends only on 1a, so it can start while 1b is in progress.
+Phase 2 can start after 1a, while 1b is in progress. Its Profiles pane (fourth in the port order, §5.4) waits for
+1b. Numbering: the brief calls Settings "phase 1's surface". Here phase 1 is the core with no surface, and Settings
+is phase 2, the first surface.
 
 ### 5.2 Parity method: golden replay
 
@@ -713,7 +738,7 @@ Each has a recommendation.
 2. **The main thread stays Chrome's.** Native won't remove stalls Chrome causes.
    → The baseline's stall attribution (§6) splits main-thread time between Chrome, RN and app before we promise a
    number. The target is per interaction: no app work over 1 ms on main.
-3. **Two writers creep back during the bridge** (33 `setState` sites, sync adapters, listeners).
+3. **Two writers creep back during the bridge** (29 `setState` sites, sync adapters, listeners).
    → The Debug guard (§4.3) plus the ratchet's exact counts.
 4. **Upstream store fixes stop merging** once 1b lands, since the Swift core replaces `store/*.ts`.
    → The upstream-merge agent lists upstream changes to `store/`, `lib/chromeTabs.ts` and `packages/core` as port
@@ -723,26 +748,30 @@ Each has a recommendation.
 6. **Rollback depends on the shadow `session.json`.**
    → Keep it until phase 6 plus two stable releases. It costs one 21 KB write every 2 s at most, off main.
    *Open question: is that window long enough?*
-7. **Mixed RN / native focus and key handling** (hosted views in phases 2–4).
+7. **Event order between strip transactions and WebView events** while the views are still RN's.
+   → JS forwards transactions as commands until phase 5 (§2.6). The `liveTabs.test.mjs` replay cases include
+   adoption-then-transaction orderings.
+8. **Mixed RN / native focus and key handling** (hosted views in phases 2–4).
    → A focus case per hosted kind in `shortcuts-test.mjs`. Native key equivalents go first through `Menus.swift`,
    as today.
-8. **Drag pacing can't be measured hidden.** Real HID drags need a visible, unoccluded window, and posting in-process
+9. **Drag pacing can't be measured hidden.** Real HID drags need a visible, unoccluded window, and posting in-process
    skips the window server path that matters.
    → *Open question:* may we schedule a 10-minute run with the owner away from the Mac but the screen unlocked, with
    the instance visible? Otherwise the drag row stays "needs owner run".
-9. **Deployment target.** The app targets macOS 14. Observation works there, but AppKit's automatic observation
-   tracking, `Mutex` and current SwiftUI APIs need macOS 15 or 26.
-   → *Open question:* raise the minimum to macOS 26 for the native app? Recommendation: yes. Solara has no users to
-   migrate yet, and it cuts the helper code in §2.5 and the Liquid Glass fallbacks.
-10. **Where the package lives.**
+10. **Deployment target.** The app targets macOS 14. Observation works there; `Mutex` needs macOS 15, and newer
+   SwiftUI APIs and (unverified, to check first) AppKit's own Observation tracking need later releases.
+   → *Open question:* raise the minimum for the native app? Recommendation: yes, to the newest macOS whose APIs we
+   confirm we use, since Solara has no users to migrate yet. It removes the Liquid Glass fallbacks
+   (`liquidGlassOnly` rows) and possibly the helper in §2.5.
+11. **Where the package lives.**
     → Recommendation: `native/SolaraKit`, outside `packages/` (Expo's workspace), so phase 6 deletes `packages/*`
     except ArdiaCore without moving the core. *Open question if the owner prefers `packages/solara-core`.*
-11. **Hermes-side services nobody sees.** `main.tsx` starts: translate, user scripts, CLI control, memory trim, tab
+12. **Hermes-side services nobody sees.** `main.tsx` starts: translate, user scripts, CLI control, memory trim, tab
     lifecycle, app integration (AppleScript), kill switches, telemetry.
     → Each gets a row in phase 6's checklist. Kill switches and telemetry are off in Solara (empty URLs): delete
     them rather than port them.
-12. **GRDB as a dependency.**
+13. **GRDB as a dependency.**
     → Pin the exact version and checksum in `Package.resolved`, and add it to the supply-chain review. Owner's choice
     already; noted only for the pin.
-13. **Size of onboarding** (5k lines, demos).
+14. **Size of onboarding** (5k lines, demos).
     → Port it last in phase 2. It reuses the Metal views as they are.

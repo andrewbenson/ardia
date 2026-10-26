@@ -1,7 +1,7 @@
 import { PowerUp } from "@ardia/shaders";
 import { useEffect, useState } from "react";
 import { Surface } from "@ardia/shell";
-import { AccessibilityInfo, Animated, StyleSheet, View } from "react-native";
+import { AccessibilityInfo, Animated, PixelRatio, StyleSheet, View } from "react-native";
 import { PRODUCT } from "../lib/productName";
 import { hex, layout, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
@@ -110,6 +110,7 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
   const top = newTabBarTop(size.height, under, heading ? headingHeight : 0);
 
   const bar = { x, y: top, width, height: panelHeight };
+  const markTop = PixelRatio.roundToNearestPixel(top - MARK_ABOVE_BAR);
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setSize(e.nativeEvent.layout)}>
@@ -128,10 +129,10 @@ export function NewTabPage({ tabId, toolbar = true }: { tabId: string; toolbar?:
         pointerEvents="none"
         style={{
           position: "absolute",
-          left: size.width / 2 + DIA_OFFSET - MARK_SIZE / 2,
-          top: top - MARK_ABOVE_BAR,
+          left: PixelRatio.roundToNearestPixel(size.width / 2 + DIA_OFFSET - MARK_SIZE / 2),
+          top: markTop,
           width: MARK_SIZE,
-          height: MARK_ABOVE_BAR,
+          height: top - markTop,
           overflow: "hidden",
         }}
       >

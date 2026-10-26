@@ -169,8 +169,14 @@ static void ParkLaunchLinks(NSArray<NSURL *> *links, NSString *dir, NSDictionary
   [ArdiaCoreWebView startLinkTabs:urls profile:linkProfile];
 }
 
+static bool OutsideLinksForwarded() {
+  static const bool forwarded = [NSProcessInfo.processInfo.environment[@"ARDIA_BACKGROUND"] isEqualToString:@"1"] &&
+                                ![NSProcessInfo.processInfo.environment[@"ARDIA_ACCEPT_EXTERNAL_URLS"] isEqualToString:@"1"];
+  return forwarded;
+}
+
 static void LinksArrived(NSArray<NSURL *> *urls) {
-  if (gLinksHandled || !urls.count) return;
+  if (gLinksHandled || !urls.count || OutsideLinksForwarded()) return;
   gLinksHandled = true;
   if (!gJSStarted) {
     gLaunchLinks = [urls copy];
@@ -331,7 +337,7 @@ static bool gEarlyLittleTried;
 static void TryEarlyLittleWindow() {
   if (gEarlyLittleTried || !gStarted || gJSStarted || gBootstrap.urls.count != 1) return;
   gEarlyLittleTried = true;
-  if (EarlyLittleWindowOff() || ArdiaCoreEarlyWindow.switchedOff) return;
+  if (EarlyLittleWindowOff() || ArdiaCoreEarlyWindow.switchedOff || OutsideLinksForwarded()) return;
   NSURL *link = gBootstrap.urls.firstObject;
   NSString *scheme = link.scheme.lowercaseString;
   if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return;

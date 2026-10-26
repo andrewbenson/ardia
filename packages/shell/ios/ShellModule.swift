@@ -22,60 +22,55 @@ public enum OpenURLInbox {
 }
 
 enum OutsideURLs {
-  static let forwarded: Bool = {
-    let env = ProcessInfo.processInfo.environment
-    return env["ARDIA_BACKGROUND"] == "1" && env["ARDIA_ACCEPT_EXTERNAL_URLS"] != "1"
-  }()
+  static let forwarded = OutsideURLRoute.forwards(ProcessInfo.processInfo.environment)
 
   static func forward(_ urls: [URL]) {
-    guard !urls.isEmpty else { return }
-    guard let (app, running) = destination(for: urls) else {
-      NSLog("\(Bundle.main.productName): no other copy to hand \(urls.count) outside link(s) to; opening them here")
+    guard let first = urls.first else { return }
+    guard case let .forward(path, newInstance) = route(for: first) else {
+      NSLog("\(Bundle.main.productName): no other copy or browser to hand \(urls.count) outside link(s) to; opening them here")
       return OpenURLInbox.receive(urls)
     }
+    let app = URL(fileURLWithPath: path)
     let configuration = NSWorkspace.OpenConfiguration()
-    configuration.createsNewApplicationInstance = !running
-    NSLog("\(Bundle.main.productName): a background instance hands \(urls.count) outside link(s) to \(app.path)")
+    configuration.createsNewApplicationInstance = newInstance
+    NSLog("\(Bundle.main.productName): a background instance hands \(urls.count) outside link(s) to \(path)")
     NSWorkspace.shared.open(urls, withApplicationAt: app, configuration: configuration) { _, error in
       guard let error else { return }
-      NSLog("\(Bundle.main.productName): couldn't hand outside links to \(app.path) (\(error.localizedDescription)); opening them here")
+      NSLog("\(Bundle.main.productName): couldn't hand outside links to \(path) (\(error.localizedDescription)); opening them here")
       DispatchQueue.main.async { OpenURLInbox.receive(urls) }
     }
   }
 
-  static func destination(for urls: [URL]) -> (URL, Bool)? {
-    let own = canonical(Bundle.main.bundleURL)
-    let isOwn = { (url: URL?) in url.map(canonical) == own }
-    let bundleId = Bundle.main.bundleIdentifier ?? ""
-    let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).first {
-      $0.processIdentifier != getpid() && !isOwn($0.bundleURL) && !isBackground($0.processIdentifier)
+  static func route(for url: URL) -> OutsideURLRoute {
+    let bundleId = Bundle.main.bundleIdentifier
+    let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleId ?? "").compactMap { app -> OutsideURLCandidate? in
+      guard app.processIdentifier != getpid(), let url = app.bundleURL else { return nil }
+      return OutsideURLCandidate(path: canonical(url), bundleId: app.bundleIdentifier, testInstance: isTestInstance(app.processIdentifier))
     }
-    if let url = running?.bundleURL { return (url, true) }
-    if let handler = NSWorkspace.shared.urlForApplication(toOpen: urls[0]), !isOwn(handler),
-      Bundle(url: handler)?.bundleIdentifier != bundleId || installed(handler) {
-      return (handler, false)
+    let handler = NSWorkspace.shared.urlForApplication(toOpen: url).map {
+      OutsideURLCandidate(path: canonical($0), bundleId: Bundle(url: $0)?.bundleIdentifier)
     }
-    if let copy = NSWorkspace.shared.urlsForApplications(withBundleIdentifier: bundleId).first(where: { !isOwn($0) && installed($0) }) {
-      return (copy, false)
-    }
-    return nil
+    let installed = NSWorkspace.shared.urlsForApplications(withBundleIdentifier: bundleId ?? "").filter(isInstalled).map(canonical)
+    return OutsideURLRoute.choose(
+      environment: ProcessInfo.processInfo.environment, ownPath: canonical(Bundle.main.bundleURL), ownBundleId: bundleId,
+      running: running, defaultHandler: handler, installed: installed)
   }
 
-  static func canonical(_ url: URL) -> URL { url.resolvingSymlinksInPath().standardizedFileURL }
+  static func canonical(_ url: URL) -> String { url.resolvingSymlinksInPath().standardizedFileURL.path }
 
-  static func installed(_ app: URL) -> Bool {
-    let folder = canonical(app).deletingLastPathComponent().path
-    return folder == "/Applications" || folder == canonical(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")).path
+  static func isInstalled(_ app: URL) -> Bool {
+    let folder = URL(fileURLWithPath: canonical(app)).deletingLastPathComponent().path
+    return folder == "/Applications" || folder == canonical(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications"))
   }
 
-  static func isBackground(_ pid: pid_t) -> Bool {
+  static func isTestInstance(_ pid: pid_t) -> Bool {
     var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
     var size = 0
     guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return true }
     var buffer = [UInt8](repeating: 0, count: size)
     guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return true }
-    let marker = Array("ARDIA_BACKGROUND=1".utf8)
-    return buffer[MemoryLayout<Int32>.size..<size].split(separator: 0).contains { Array($0) == marker }
+    let background = Array("ARDIA_BACKGROUND=1".utf8), dataDir = Array("ARDIA_DATA_DIR=".utf8)
+    return buffer[MemoryLayout<Int32>.size..<size].split(separator: 0).contains { Array($0) == background || $0.starts(with: dataDir) }
   }
 }
 

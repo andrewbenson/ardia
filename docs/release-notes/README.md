@@ -4,10 +4,8 @@ One Markdown file per version: `docs/release-notes/<version>.md`, where `<versio
 `MARKETING_VERSION` exactly (`0.1.4.md`). Write it before running `scripts/release.sh`, which refuses
 to build without it. The same file ends up in three places:
 
-- **The notes page**, `AC_NOTES_URL`: for Solara its GitHub releases page; for upstream the website,
-  `https://ardia.dev/release-notes#<version>` (`apps/site/src/pages/release-notes.astro`), newest first. The app opens
-  it in a new tab the first time it launches after an update, and from Help › Release Notes. Upstream's page only
-  shows a version once the site is rebuilt and deployed.
+- **The notes page**, `AC_NOTES_URL`: Solara's GitHub releases page, newest first. The app opens it in a new tab
+  the first time it launches after an update, and from Help › Release Notes.
 - **The GitHub release**: `release.sh` writes `dist/<version>/release-notes.md` (the body, then the standard
   Install section, a link to the page, and a Source section linking this version's tag) for
   `gh release create --notes-file`. Don't write a Source line in the notes file: `release.sh` adds it to every release
@@ -52,18 +50,15 @@ Body:
   affects. Items in Smaller are a single sentence without bold.
 - `## Faster` carries one table, only when the release is measurably faster than the previous one: the rows that
   moved in the release's perf gate (columns old version, new version, change; plain-language row names), then one
-  sentence on what moved most. The site renders it as a table that scrolls inside its own box on a phone; GitHub and
-  Sparkle render it as Markdown.
-- Nothing else: no images, no other tables, no nested lists, no links unless the item is about a page. The site
-  numbers the items and puts the section names in the margin.
+  sentence on what moved most. GitHub and Sparkle render it as Markdown.
+- Nothing else: no images, no other tables, no nested lists, no links unless the item is about a page.
 
 ## Nightlies
 
 A nightly's file is `docs/release-notes/<next stable>-nightly.<n>.md` (`0.2.37-nightly.1.md`) and carries a third
 frontmatter key, `channel: nightly`; `release.sh --channel nightly` refuses notes without it, and a stable release
 refuses notes with it. Keep it short: the headline and the one to three bullets for what the nightly fixed, in
-`## Fixed` or `## New`, written exactly like a stable item. No `## Faster` (nightlies aren't perf-gated). The site
-lists nightlies only in its "Nightlies too" view, tagged Nightly; `#<version>` links open that view. When the next
+`## Fixed` or `## New`, written exactly like a stable item. No `## Faster` (nightlies aren't perf-gated). When the next
 stable ships, its notes cover everything since the previous stable, nightlies included, written fresh for people who
 never ran a nightly.
 
@@ -112,17 +107,17 @@ user's expense.
 - Name menus by their path (Solara › Check for Updates…, System Settings › Privacy & Security), shortcuts
   with symbols (⌘T, ⇧⌘T), settings by their label in quotes.
 - Say which versions a regression affected when it matters ("In 0.1.0 and 0.1.1, …").
-- "Like Dia" / "as in Dia" is fine where the feature copies Dia's behaviour.
+- "Like Dia" / "as in Dia" is fine where the feature copies Dia's behavior.
 - Don't write: "exciting", "we're thrilled", "various", "improvements", "bug fixes and performance
   improvements", "under the hood", emoji, exclamation marks.
-- Straight quotes and apostrophes in the file are fine; the site curls them.
+- Straight quotes and apostrophes in the file are fine.
 
 ## From `git log` to a notes file
 
 1. `git log --format='%h %s%n%b' v<previous>..HEAD`. The commit bodies explain the user-visible effect.
 2. Keep commits that change what someone using the app sees or can do: `apps/browser`, `packages/*`, the
-   engine (`packages/cef/patches`), `Info.plist`. Drop the site (`apps/site`), the videos
-   (`apps/videos`), docs, tests, refactors, and "Release x.y.z" version bumps.
+   engine (`engine/`), `Info.plist`. Drop docs, tests, refactors, merges of upstream Ardia that changed nothing
+   visible, and "Release x.y.z" version bumps.
 3. Merge commits that are one change for the user into one item. Split a commit that fixes two visible
    things into two items.
 4. Sort each section by how many people it affects; crashes and data loss first.
@@ -130,5 +125,4 @@ user's expense.
    `Co-authored-by:` who isn't the owner or Claude, end its item with `Thanks, [@handle](<PR url>).` (their
    GitHub handle, linking the PR). One credit per item, even when several commits fed it.
 6. Pick the headline from the top item.
-7. Check it renders: `pnpm -C apps/site build`, then `pnpm -C apps/site preview` and open
-   `http://localhost:4321/release-notes#<version>`.
+7. Check it renders: once published, read the GitHub release body.

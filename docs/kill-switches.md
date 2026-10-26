@@ -1,8 +1,9 @@
 # Kill switches
 
 A speed change people can feel ships behind a switch, so a release that turns out slow or broken on some Macs can be
-backed out without another build. `apps/browser/src/lib/killSwitches.ts` is the registry; `apps/site/public/switches.json`
-(served at `https://ardia.dev/switches.json`) says which are off.
+backed out without another build. `apps/browser/src/lib/killSwitches.ts` is the registry; the file at
+`AC_SWITCHES_URL` says which are off. Solara has no switch file (its `AC_SWITCHES_URL` is empty), so it never fetches
+one and every switch stays on; upstream Ardia serves its file at `https://ardia.dev/switches.json`.
 
 ## Rules
 
@@ -21,8 +22,8 @@ backed out without another build. `apps/browser/src/lib/killSwitches.ts` is the 
 ```
 
 Only names the app knows and booleans count; anything else is ignored. Leaving a switch out means on (the cache follows
-the file, not the first answer). Editing the file is a site deploy (`pnpm -C apps/site run deploy`: an owner-approved
-public action like any other).
+the file, not the first answer). Publishing the file is an owner-approved
+public action like any other.
 
 ## The request
 

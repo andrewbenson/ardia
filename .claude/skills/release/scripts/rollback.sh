@@ -32,7 +32,7 @@ mkdir -p "$work/home" "$work/pages"
 for page in page1 page2 page3 work; do
   printf '<!doctype html><title>Rollback %s</title><h1>%s</h1>\n' "$page" "$page" > "$work/pages/$page.html"
 done
-cp -R "$root/spikes/ardiacore-host/fixtures/ext" "$work/extension"
+cp -R "$root/packages/ardiacore/scripts/fixtures/ext" "$work/extension"
 for p in "$cdp" "$pages_port"; do
   nc -z -G 2 127.0.0.1 "$p" 2>/dev/null && { echo "error: port $p is taken (ROLLBACK_CDP_PORT, ROLLBACK_PAGES_PORT)" >&2; exit 1; }
 done

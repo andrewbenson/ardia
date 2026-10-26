@@ -23,11 +23,11 @@ Legend: **✅** done · **🧪** built, but the deciding test needs the user pre
 
 | ✅ done | 🧪 needs the user | 🟡 partial | ❌ missing | ⛔ blocked | ⏸ deferred (AI) | — n/a |
 |---|---|---|---|---|---|---|
-| 230 | 1 | 2 | 0 | 1 | 59 | 14 |
+| 229 | 1 | 3 | 0 | 1 | 59 | 14 |
 
-Of the 234 rows that count (not ⏸ or —), 230 are done (98 %), 231 with the one 🧪 row (Cast). The two 🟡 rows are
-passkeys (iCloud Keychain waits on Apple) and the Dia sidebar import (profiles, open and pinned tabs come through
-Dia's AppleScript; custom names, colours, spaces and folders don't). Keyboard shortcuts: every Dia and Chrome
+Of the 234 rows that count (not ⏸ or —), 229 are done (98 %), 230 with the one 🧪 row (Cast). The three 🟡 rows are
+passkeys (iCloud Keychain waits on Apple), the Dia sidebar import (profiles, open and pinned tabs come through
+Dia's AppleScript; custom names, colours, spaces and folders don't) and Raycast (the dictionary is there, the extension isn't). Keyboard shortcuts: every Dia and Chrome
 shortcut is bound (Dia's where they clash) except Chat (⏸) and a few for Chrome's own hidden UI. Menus: all ten exist and match.
 
 The summary before this recount (304 rows, 207 ✅, 9 🟡, 7 ⛔) didn't match its tables, which held 307 rows: 211 ✅,
@@ -143,7 +143,7 @@ string doesn't matter. Afterwards: `kill %1` for the server, quit the app, `rm -
    scan the QR code with your phone's camera. Pass: the phone connects and saves the passkey; Authenticate with the
    phone succeeds.
 8. **Remove-extension sheet** (W2). ⌘, › Extensions › Load unpacked…, pick
-   `~/Documents/ardia/spikes/ardiacore-host/fixtures/ext`, confirm Add. Then Remove on its row. Pass: a sheet
+   `packages/ardiacore/scripts/fixtures/ext` in this repo, confirm Add. Then Remove on its row. Pass: a sheet
    attached to the Settings window, "Remove “ac component test”?" with Cancel and a red Remove; Cancel keeps it,
    Remove takes it off the list. If you have a store extension installed, "Remove from Solara" on its store
    page must show the same sheet on the browser window.
@@ -175,16 +175,7 @@ string doesn't matter. Afterwards: `kill %1` for the server, quit the app, `rm -
     the PiP. Drag the window mostly off the right edge of the screen and let go. Pass: it slides in, leaving a 28 pt
     strip with a chevron; clicking the strip brings it back; the same on the left edge; dragging it onto a second
     display doesn't stash it.
-14. **Raycast** (§23, needs Raycast). `cd ~/Documents/ardia/extras/raycast-ardia && npm install && npm run dev`. The extension still drives upstream Ardia (`com.ardia.browser`), not Solara.
-    In Raycast, run "Search Tabs" (Ardia). Pass: macOS asks once whether Raycast may control Ardia; the
-    list shows your tabs with favicons and hosts; typing filters; ↵ switches to the tab and brings Ardia
-    forward; ⌃X closes a tab. Run "Search Profiles": "Current" marks the front window's profile; ↵ shows
-    another in the front window (in a new window when the front one is incognito); ⌘↵ opens it in a new
-    window. Run "New Tab" with `ardia.dev`, then with `hay wain`: the first opens the site, the second
-    searches with your engine, both in the front window. Run "New Window" empty, then with the start of a
-    profile's name, and "New Incognito Window": each opens the window it says and brings Solara forward. A
-    start two profiles share (`wo` for Work and Work Archive) opens nothing and names both; an unknown name
-    opens nothing and lists your profiles.
+14. **Raycast** (§23): no extension in Solara yet (the row's Gap). Skip.
 15. **Sync over iCloud Drive** (§13, §20, §22; needs two Macs signed in to the same iCloud account with iCloud Drive
     on, each running this build without `ARDIA_DATA_DIR`, so they use the real Keychain and iCloud Drive). On Mac
     1: ⌘, › Sync › Turn On Sync. Pass: the Recovery Kit sheet; Save… writes "Solara Recovery Kit.pdf" with the 24
@@ -633,7 +624,7 @@ Chrome's password manager and autofill fill pages themselves; our Settings panes
 | DevTools ⌥⌘I / F12 | ✓ | ✅ | Docked on the right by default (Chrome's dock-side menu, remembered per profile), device toolbar (⇧⌘M in DevTools) docked and undocked. ⌥⌘I, context-menu Inspect; F12 is Chrome's DevTools toggle (opens them, closes docked ones, and closes the undocked window it's pressed in). The undocked window is titled like Dia's, "Developer Tools - <url>", and opens where the profile's DevTools window was last left (Chrome's own record, 640 × 640 the first time); View › Developer › View Source ⌥⌘U (`view-source:` tab), Inspect Elements ⌥⌘C and JavaScript Console ⌥⌘J, run as Chrome's own commands (⌥⌘I / ⌥⌘J close docked DevTools) |
 | Task Manager | ✓ | ✅ | Chrome's own Task Manager window, as Dia's (its Window menu item opens "the chrome task manager"): Window › Task Manager → `ac_task_manager_open` → `chrome::OpenTaskManager` with the last active Browser, so its tab is selected; tabs & extensions / browser / all tasks, search, End Task. A top-level window: it outlives the window that opened it and opens with none |
 | AppleScript dictionary (windows, tabs, profiles, execute JS) | ✓ | ✅ | Ardia.sdef; execute runs through the renderer's `ac-eval`, which works on Chrome tabs. Like Chrome and Dia, `execute` is off until View › Developer › Allow JavaScript from Apple Events is checked (`settings.allowJavaScriptFromAppleEvents`, default off; one switch for every profile, where Chrome's and Dia's pref is per profile); until then it fails with Chrome's error 12, "Executing JavaScript through AppleScript is turned off…" |
-| Raycast extension support (via AppleScript) | ✓ | ✅ | `extras/raycast-ardia`: Search Tabs lists every window's tabs and switches to one (also Copy URL, Close Tab), through the AppleScript dictionary. Like Dia's extension it also has Search Profiles (shows a profile in the front window, or ⌘↵ in a new one), New Tab (a URL or a search, resolved by the command bar's `resolveInput`), New Window (the default profile, or the one named) and New Incognito Window (2026-10-24; `npm test` checks their scripts, not yet run against an instance). Verified (2026-09-26) with `osascript` from another process against a hidden instance, as Raycast's `runAppleScript` sends them (20 checks): the extension's list, focus, activate and close scripts, and the dictionary (count, make new tab and window, URL get and set, go back / forward, execute with a promise, reload, tab properties, active tab index, profiles, close). Found and fixed: `make new window with properties {URL:…}` failed (-1700). Its `npm test` passes. Left for a person: installing it in Raycast and its first-run consent prompt (checklist step 14) |
+| Raycast extension support (via AppleScript) | ✓ | 🟡 | The AppleScript dictionary Raycast drives is in the app (tabs, windows, profiles; verified with `osascript` 2026-09-26). The extension was upstream Ardia's `extras/raycast-ardia`, which targets `com.ardia.browser`; it left Solara on 2026-10-26 with upstream's other tooling. A Solara one is that extension with `BUNDLE_ID` set to `com.hill.solara`, its names and icon changed, and a run in Raycast: `git show 994a9b93:extras/raycast-ardia/src/scripts.ts` |
 | Record Performance Issue, Copy Diagnostics | ✓ | ✅ | engine trace saved to Downloads |
 
 ## 24. System integration

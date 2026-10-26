@@ -103,7 +103,7 @@ new tab's bar, Enter, and ⌘L, an address, Enter. The `$`-context properties ar
 
 ## Queries (ClickHouse)
 
-Run with `node scripts/telemetry-sql.mjs "<SQL>"` against `telemetry.events` (see `docs/growth.md`, Telemetry).
+These run against upstream Ardia's `telemetry.events`; Solara sends no telemetry (its `AC_TELEMETRY_URL` is empty), so it has no field data.
 `properties` is a `Map(String, String)`: numbers go through `toFloat64OrNull`, booleans are `'true'`/`'false'`.
 Production only; versions sort numerically. J1 has one value per launch, so its percentiles are exact:
 

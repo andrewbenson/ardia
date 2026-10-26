@@ -1,9 +1,0 @@
-node_modules
-out
-.DS_Store
-public/footage
-public/music
-.capture
-public/fonts
-public/brand
-scripts/capture/sites/*/img

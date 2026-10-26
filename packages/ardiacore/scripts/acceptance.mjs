@@ -512,7 +512,7 @@ const closeFromPage = (target) => cdp(target, "Runtime.evaluate", { expression: 
 const cef = (call) => evalApp(`return globalThis.expo.modules.ArdiaCEF.${call}`);
 const exts = (call) => evalApp(`return globalThis.expo.modules.ArdiaExtensions.${call}`);
 const extPath = join(scratch, "fixture-ext");
-cpSync(resolve(new URL(".", import.meta.url).pathname, "../../../spikes/ardiacore-host/fixtures/ext"), extPath, { recursive: true });
+cpSync(resolve(new URL(".", import.meta.url).pathname, "fixtures/ext"), extPath, { recursive: true });
 const extPopupPath = join(scratch, "fixture-ext-popup");
 function writePopupExtension({ welcome = false } = {}) {
   rmSync(extPopupPath, { recursive: true, force: true });

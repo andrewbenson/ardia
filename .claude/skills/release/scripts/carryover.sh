@@ -32,7 +32,7 @@ mkdir -p "$work/home" "$work/pages"
 for page in page1 page2 work; do
   printf '<!doctype html><title>Carryover %s</title><h1>%s</h1><form><input name="username" autocomplete="username"><input type="password" autocomplete="current-password"></form>\n' "$page" "$page" > "$work/pages/$page.html"
 done
-cp -R "$root/spikes/ardiacore-host/fixtures/ext" "$work/extension"
+cp -R "$root/packages/ardiacore/scripts/fixtures/ext" "$work/extension"
 if nc -z -G 2 127.0.0.1 "$pages_port" 2>/dev/null; then
   echo "error: port $pages_port is taken (CARRYOVER_PAGES_PORT)" >&2
   exit 1

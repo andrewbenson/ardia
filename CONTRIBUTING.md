@@ -1,20 +1,20 @@
 # Contributing to Solara
 
-Solara is a macOS browser with Dia's polish and Arc's sidebar, running on Chrome's own framework (Chromium 154). Hill
+Solara is a macOS browser with Dia's polish and Arc's sidebar, running on Chrome's own framework (Chromium 156) built from source. Hill
 Technologies ships it, with a lot of help from coding agents. It's built on Ardia (mantrakp04/ardia, Apache-2.0), whose
 upstream lives at https://github.com/mantrakp04/ardia. Pull requests are welcome. This page is what the owner keeps
 asking for, written down so you don't have to learn it from a review.
 
 ## What we will and won't take
 
-Solara copies Dia's look and behaviour on purpose, and uses Arc's layout for the sidebar. A change that makes it
+Solara copies Dia's look and behavior on purpose, and uses Arc's layout for the sidebar. A change that makes it
 behave more like Dia is almost always welcome. A change that restyles it to taste is not, unless the owner asked.
 
 Out of scope:
 
 - **AI features.** The owner decided against them. Dia's AI rows in `docs/dia-feature-parity.md` stay ⏸.
 - **Accounts or sign-in of our own.** Sync goes through the user's iCloud Drive and nothing else.
-- **Telemetry that carries browsing data.** Crash reports are opt-in and never include sites or searches.
+- **Telemetry.** Solara sends no usage data and no crash reports.
 
 `docs/dia-feature-parity.md` is the checklist of what's done and what isn't. Pick from there if you want something
 to do, and update its row in the same PR.
@@ -30,11 +30,10 @@ pnpm dev      # Metro, leave it running
 pnpm macos    # builds the Debug app and opens it
 ```
 
-You don't need to build Chromium. When there's no Chromium tree at `~/chromium-build`, the app's build downloads the
-prebuilt engine that matches your checkout's `engine/` folder
-(`packages/ardiacore/scripts/fetch-engine.sh`). That only works while `engine/` is unchanged from a commit on `main`.
-If you change the engine you need your own Chromium build: `docs/engine-build.md` has the whole thing, and a first
-build takes about five hours.
+The app links a Chromium framework you build yourself: `docs/engine-build.md` has the whole thing, and a first build
+takes about five hours. Without a Chromium tree at `~/chromium-build`, the app's build falls back to a prebuilt engine
+from upstream Ardia's releases (`packages/ardiacore/scripts/fetch-engine.sh`), which only exists while `engine/`
+matches a tree Ardia published.
 
 `pnpm macos` runs the app on its own data folder, `~/Library/Application Support/Ardia Dev`, so it never touches the
 Solara you browse with. Keep it that way. A Debug build refuses to start without `ARDIA_DATA_DIR`, and every test
@@ -57,8 +56,7 @@ Where things live:
 | `packages/core` | Omnibox parsing and suggestions, pure TypeScript with tests |
 | `packages/import`, `packages/sync`, `packages/shaders` | Importing from other browsers, iCloud sync, Metal views |
 | `engine/` | Our patches to Chromium and our Chrome-side code |
-| `apps/site` | upstream Ardia's site, ardia.dev (Astro) |
-| `infra/<service>` | Deploy setups, one folder per service |
+| `apps/cli` | The command-line tool, shipped with each release |
 
 `docs/agent-brief.md` explains the architecture in depth. It's written for agents and is just as useful to people.
 
@@ -67,11 +65,11 @@ Where things live:
 ### It matches Dia, measured
 
 "Looks close" isn't a match. Compare against a Dia capture of the same state with the same crop, and give the
-numbers: sizes, spacing, colours, and for motion, timing in frames. Record both browsers and step through at 30 fps.
+numbers: sizes, spacing, colors, and for motion, timing in frames. Record both browsers and step through at 30 fps.
 A bug fixed at 24 fps has come back more than once because the glitch lived between frames. `docs/dia-spec.md` holds
 the values already measured from Dia.
 
-Parity covers behaviour too. Most bugs the owner reports are UX that any browser user expects without thinking:
+Parity covers behavior too. Most bugs the owner reports are UX that any browser user expects without thinking:
 
 - Dismissing something never pauses playback, opens a window, or drags you to another tab. Closing the mini player
   must not bring the browser forward.
@@ -91,7 +89,7 @@ Parity covers behaviour too. Most bugs the owner reports are UX that any browser
 ### It lets Chrome do the work
 
 Solara is real Chromium. Before writing our own version of something, check whether Chrome already does it and we're
-getting in the way. "Shouldn't Chrome's default behaviour just work here?" is the first question the owner asks about
+getting in the way. "Shouldn't Chrome's default behavior just work here?" is the first question the owner asks about
 a bug, and the answer is often yes. When a fix needs a hook in Chrome's code, keep it the smallest hook that works.
 
 ### It's simple
@@ -116,7 +114,7 @@ to follow real wall-clock time doesn't count as proof.
 - Read the surrounding code first and match its naming and idioms. New features go in new files where that makes
   sense.
 - Read `docs/store-api.md` before you touch app state.
-- Skills live only in the root `.claude/skills`. Deploy setups live only in `infra/<service>`.
+- Skills live only in the root `.claude/skills`.
 - Patched npm dependencies live in `patches/`, listed in `pnpm-workspace.yaml`. `docs/agent-brief.md` explains how
   to change one.
 - When JS starts needing native code older builds lack, bump `NATIVE_API_VERSION` in `apps/browser/src/nativeApi.tsx`
@@ -140,8 +138,8 @@ The end-to-end checks (shortcuts, tab dragging, profile swipes, windowing, sync,
 need a built app and run hidden instances. `docs/testing.md` lists each one with what it guards. When you fix a
 regression, add its case to the matching check so it can't come back quietly.
 
-Never read a real browser profile in a test, Solara's included. Build fixtures. Screenshots for the site, the README or
-a PR use neutral pages, never someone's feed or personal data.
+Never read a real browser profile in a test, Solara's included. Build fixtures. Screenshots for the README or a PR use
+neutral pages, never someone's feed or personal data.
 
 ## Engine changes
 
@@ -168,9 +166,8 @@ The fastest bug to fix is one with a screen recording. Include:
 
 ## Pull requests
 
-- **Issue first.** Every PR closes an issue. Open one (or find the existing one) describing the bug or the request
-  before you open the PR, then put `Closes #<issue>` in the PR description. A PR with no linked issue fails the
-  "Linked issue" check and won't be reviewed. Several PRs can point at the same issue.
+- **Issue first.** Open an issue (or find the existing one) describing the bug or the request before you open the
+  PR, then put `Closes #<issue>` in the PR description.
 - One change per PR. Describe it the way a user would notice it ("dragging a tab onto another groups them"), then
   how you checked it.
 - For anything visible, attach a recording or before-and-after captures, ideally next to Dia's.
@@ -181,15 +178,15 @@ The fastest bug to fix is one with a screen recording. Include:
   happens you stay on it as a `Co-authored-by:` trailer, and the release notes item ends with "Thanks, @you" linked
   to your PR.
 
-Releases, the site deploy and anything posted publicly are the owner's job. Don't bump versions or touch the appcast
+Releases and anything posted publicly are the owner's job. Don't bump versions or touch the appcast
 in a PR.
 
 ## Writing
 
-Copy in the app, on the site and in release notes is short, plain and a little funny. Internet slang is fine.
+Copy in the app and in release notes is short, plain and a little funny. Internet slang is fine.
 Corporate-cute lines aren't. "Sign-up not included" got cut for being cringe, and so did the "no account" and
 "no sign-up" tags and the price badge. Say what the thing does with a number or a mechanism. Release notes
-follow `docs/release-notes/README.md`. The site has to look right on a phone.
+follow `docs/release-notes/README.md`.
 
 ## Working with a coding agent
 

@@ -4,228 +4,64 @@
 
 <h1 align="center">Solara</h1>
 
-<p align="center">
-  Arc’s sidebar and Dia’s polish on real Chromium.<br>
-  Free and open source. Ads and trackers stay out.
-</p>
+<p align="center">A Mac browser with Arc's sidebar and Dia's polish, on Chromium built from source.</p>
 
-<h3 align="center">
-  <a href="https://github.com/andrewbenson/solara/releases">Download Solara for Mac</a>
-</h3>
+Solara is a macOS browser from Hill Technologies. Every window and tab is Chrome's own, from an engine we build
+ourselves, so sites, extensions and DevTools behave the way they do in Chrome. Around it sits a native shell that
+copies Dia's look and behavior, measured against Dia, with Arc's sidebar for tabs.
 
-<p align="center">
-  macOS 14 Sonoma or later · Apple Silicon<br>
-  Nightlies are the prereleases on the same page, with every fix the day it’s made.<br>
-  Solara is built on <a href="https://github.com/mantrakp04/ardia">Ardia</a> (Apache-2.0), whose upstream lives at
-  <a href="https://github.com/mantrakp04/ardia">mantrakp04/ardia</a> and <a href="https://ardia.dev">ardia.dev</a>.
-</p>
+- **No account.** Nothing to sign up for. Sync, if you turn it on, goes through a folder in your own iCloud Drive,
+  end-to-end encrypted.
+- **No AI features.** On purpose.
+- **No telemetry.** Solara sends no usage data and no crash reports. Google's background services are compiled out
+  of the engine, and uBlock Origin is built in.
+- **Chrome extensions** install from the Chrome Web Store.
+- **Moves in for you:** bookmarks, history, passwords, cookies and tabs from Chrome, Safari, Firefox, Arc, Dia and
+  more.
 
-<p align="center">
-  <img src="apps/site/src/assets/shots/window.webp" alt="The browser window in light mode: pinned tiles and tabs in the sidebar, and Wikipedia’s article on The Hay Wain open on the right.">
-</p>
+It needs macOS 14 Sonoma or later on Apple Silicon.
 
-## Lose the toolbar.
+## Solara and Ardia
 
-Move the address bar into the sidebar and the page runs all the way to the top of the window.
+Solara is a fork of [Ardia](https://github.com/mantrakp04/ardia) by Mantra Patel, which did the hard part: the engine
+build, the shell and most of the features. Solara has its own name, icon, signing and update feed, drops Ardia's site,
+telemetry and project tooling, and keeps going its own way while merging Ardia's changes now and then. Thanks to
+everyone who built Ardia.
 
-<img src="apps/site/src/assets/shots/address-sidebar.webp" alt="The browser with the address bar in the sidebar under the traffic lights and Wikipedia running to the top of the window.">
+## Getting it
 
-## Two pages, one window.
+No release is published yet. Once there is one, the DMG will be on
+[this repo's releases](https://github.com/andrewbenson/solara/releases), and Solara will update itself from there with
+[Sparkle](https://sparkle-project.org): it checks the appcast on the latest release, installs updates quietly, and
+shows what changed. Settings › General picks the channel: Stable, or Nightly for prereleases with fixes as soon as
+they land.
 
-Drag a tab onto the page. Up to three panes, side by side or stacked.
+## Building from source
 
-<img src="apps/site/src/assets/shots/split.webp" alt="Split view: MDN on the left, Wikipedia on the right, both in one window.">
+You need an Apple Silicon Mac with Xcode, CocoaPods, Node 22 and pnpm 11.
 
-## Refuses to leave the picture.
-
-Switch tabs mid-video and it floats along in the corner. Go back to its tab and it slips back into the page.
-
-<img src="apps/site/src/assets/shots/pip.webp" alt="Wikipedia’s article about Big Buck Bunny, while the film keeps playing in a small floating window at the bottom right.">
-
-## Your extensions come along.
-
-The Chrome Web Store just works, its button says Add to Solara, and Sync takes them to your other Macs.
-
-<img src="apps/site/src/assets/shots/extensions.webp" alt="Dark Reader’s page on the Chrome Web Store, open in the browser, with its Add button.">
-
-## Ads and trackers stay out.
-
-The full uBlock Origin is built in, cookie banners included. Google’s pings are compiled out. Solara sends no
-crash reports or telemetry at all.
-
-## Also in there
-
-- **Work stays at work.** Each profile keeps its own logins, history, extensions and colour. Swipe the sidebar to switch.
-- **Little Solara.** ⌥⌘N opens a small window with one page and no sidebar.
-- **Groups on contact.** Drop a tab on a tab and they’re a group, named for you.
-- **Moves in for you.** Bookmarks, history, passwords and logins from Chrome, Safari, Firefox, Arc, Dia and five more. Arc’s spaces, pinned tabs and themes too.
-- **Paints like Arc.** Gradient themes per profile: up to three colours, some grain, some blur.
-- **Syncs through your iCloud.** End-to-end encrypted, in a folder in your own iCloud Drive. No server of ours in the middle.
-- **Command bar.** ⌘L finds tabs, history and bookmarks, does your sums, and knows doc.new and 16 friends.
-- **Tidies up.** ⌥⌘K sweeps the tabs you haven’t touched into Recently Cleaned.
-- **Clean links.** Copy a link and the tracking junk stays behind.
-- **Naps when you do.** Background tabs past your latest five freeze, and sleep after half an hour.
-- **Sits still.** Idles under half a percent of CPU with a tab open.
-- **Updates itself.** Quietly, then shows you what changed.
-
-## It’s actually Chromium.
-
-Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions and DevTools behave like they do in Chrome.
-
-| Part | Details | Status |
-| --- | --- | --- |
-| Engine | Chromium 156, on Chrome’s own framework. | ✓ Yes |
-| De-Googled | Google’s background services stripped out. | ✓ Yes |
-| H.264 and AAC | The codecs Chromium leaves out. | ✓ Yes |
-| DevTools | Docked, with device mode. Like Chrome. | ✓ Yes |
-| Sync | End-to-end encrypted, through your own iCloud Drive. | ✓ Yes |
-| Translate | On your Mac. Nothing leaves it. | ✓ macOS 26 |
-| Passkeys | Not yet: upstream's prebuilt engine asks for upstream's keychain groups. | ✗ Not yet |
-| Widevine | Google hasn’t signed off. So no Netflix. | ✗ Not yet |
-| Intel Macs | Apple Silicon only. | ✗ No |
-
-<h3 align="center">
-  <a href="https://github.com/andrewbenson/solara/releases">Download Solara</a>
-</h3>
-
-<p align="center">
-  It’s one drag into Applications.<br>
-  Not on a Mac? Watch › Custom › Releases up top and GitHub tells you when it is.
-</p>
-
----
-
-# Build it yourself
-
-A macOS browser that looks and feels like [Dia](https://diabrowser.com): Chrome's own framework from our
-patched Chromium with our layer on top (ArdiaCore), an Expo + React Native macOS shell, and Metal shaders
-reconstructed from Dia's own New Tab effects.
-
-```
-apps/
-  browser/            Expo + react-native-macos app (UI in src/, Xcode project in macos/)
-packages/
-  ardiacore/             The engine: Chromium 156's framework with our layer (Chrome tabs hosted in our views), JS API in src/
-  shell/              Native menu bar + shortcuts → JS, windows, SF Symbols, native primitives
-  shaders/            Metal: New Tab effects + grained OKLab window backdrop
-  import/             Import from other browsers (bookmarks, history, passwords, Arc spaces)
-  core/               Pure TS: omnibox input → URL, suggestions, Dia-style breadcrumbs (tested)
-```
-
-
-## Run it
-
-Requires Xcode 26+, CocoaPods, Node 22.13+ (pinned in `.nvmrc`), pnpm 11.
-
-```bash
+```sh
 pnpm install
-```
-
-The engine (Chrome's framework, built from our patched Chromium) comes prebuilt: with no local engine build, the app's
-build downloads the one matching your checkout's `engine/` (about 110 MB, once; Apple Silicon only) and checks it
-against `packages/ardiacore/prebuilt-engines.tsv`. Every upstream Ardia release whose engine changed publishes one, on
-`mantrakp04/ardia`. If `main`'s engine is newer than the last of those, work from a release tag (`v0.2.30`, say), or run
-`packages/ardiacore/scripts/fetch-engine.sh --nearest` to build against the newest prebuilt anyway. Passkeys, device-bound
-session keys and secure payment confirmation need the engine's own team ID, so they fail in Solara until it builds its
-own engine (`docs/releasing.md` › "Still upstream's in a fork").
-
-To change the engine itself (anything under `engine/`), build it from source: Chrome's framework from our patched
-Chromium tree in `~/chromium-build` (Chromium 156.0.8078.47 with the patch series in `engine/patches`;
-`docs/engine-build.md` › "Rebuilding", then `engine/chromium/apply.sh`,
-`engine/ardiacore/apply.sh` and `autoninja -C out/Release_GN_arm64 chrome_framework`; the first build takes about 2
-hours). The app's build stages it from there when it exists.
-
-```bash
 pnpm pods
+pnpm dev      # Metro, leave it running
+pnpm macos    # builds the Debug app and opens it on its own data folder
 ```
 
-In one terminal, start Metro:
+The app links a Chromium framework. With a Chromium tree at `~/chromium-build`, the build uses the framework you built
+there; [docs/engine-build.md](docs/engine-build.md) covers building it (a first build takes about five hours).
+Without one, it falls back to a prebuilt engine from upstream Ardia's releases
+(`packages/ardiacore/scripts/fetch-engine.sh`), which only exists while `engine/` matches a tree Ardia published, so
+plan on building the engine yourself. Releases are built, signed and notarized by `scripts/release.sh`
+([docs/releasing.md](docs/releasing.md)).
 
-```bash
-pnpm dev
-```
-
-In another, build and launch the Debug app (on its own data, `~/Library/Application Support/Ardia Dev`, or
-`ARDIA_DATA_DIR`):
-
-```bash
-pnpm macos
-```
-
-Other tasks: `pnpm typecheck`, `pnpm test`, `pnpm shaders:check` (compiles the embedded Metal offline),
-`pnpm build` (Release `.app` with a Hermes bytecode bundle in `apps/browser/build/`).
-Signed releases (DMG, Sparkle zip and appcast): `scripts/release.sh <version>`, see `docs/releasing.md`.
-
-Shortcuts: ⌘T new tab, ⌘L command bar, ⌘W close, ⇧⌘T reopen, ⌘S sidebar, ⌘[ / ⌘] back/forward,
-⌘R reload, ⌘1–⌘9 select tab, ⌃Tab cycle.
-
-## How Dia's New Tab light works
-
-Dia 1.50 turns this light off along with its rebrand (a painted mark, a single-colour power-up band
-and a halo around the bar; `docs/dia-spec.md` › "1.50 Sunglow"), and so does Solara. The
-reconstruction left the tree with it: `git show f2c0e251:packages/shaders/ios/AreaLightView.swift`.
-
-These findings come from disassembling the Metal libraries in `Dia.app` (v1.49.1) with
-`xcrun metal-objdump`. `BoostBrowser_PowerUp.bundle/default.metallib` contains
-`breathingAreaLightFragment`, which the Swift class `NewTabPage.NewTabAreaLightView` hosts. The
-reconstruction was `AreaLightView.swift` (above).
-
-- **The command bar is a light source.** Dia models the bar as a rounded-rectangle area light floating
-  `lift` points above the page. Each pixel receives the closed-form irradiance of that rectangle: the
-  solid-angle formula, one `atan` term per corner, times 1/2π. Rounded corners subtract (1 − π/4) of
-  each corner square. The result is a physically correct penumbra: a higher lift gives a softer, wider
-  glow.
-- **Falloff** is reshaped from inverse-square to `(h/d)^falloff`, where `d` is the distance to the
-  emitter's rounded-rect surface rather than to its centre.
-- **Colour** is Dia's brand spectrum (`ProgressBarColor2…7` in its asset catalog):
-  blue `#0358F7`, steel `#5092C7`, lavender `#E1E1FE`, yellow `#FFD400`, orange `#FA3D1D` and magenta
-  `#FD02F5`. It is laid out as a wrapping, slightly diagonal gradient that scrolls every 20 s. IQ's 2D
-  simplex noise warps the gradient under the bar, and the warp fades out into the penumbra.
-- **Dark mode** treats the light as HDR emission and applies the Hable/Uncharted-2 filmic tonemap
-  (white point 11.2), with alpha set to Rec.709 luminance. **Light mode** keeps the flat palette
-  colour and uses the irradiance as opacity.
-- **Finishing:** alpha fades over the top 50 pt and bottom 200 pt of the view, and ±3/255 triangular
-  dither (Dave Hoskins' `hash12`) prevents banding in the long soft falloff.
-- **Animation:** the shader itself only scrolls the colours. The lift-off intro and the slow
-  "breathing" come from the CPU, which animates `lift` and `intensity`. Those curves live in Dia's
-  Swift code, so the ones here (quartic ease-out over 1.1 s, ±7% intensity on a 5.5 s sine) are my
-  approximation.
-
-The **window backdrop** comes from `ARC_WindowThemeUI.bundle`
-(`gradientFragment` + `renderFragment`). Gradient stops are stored and mixed in **OKLab**, then
-converted to linear sRGB and gamma-encoded in the shader. A tiled grain texture is then
-multiply-blended on top. `WindowBackdropView` does the same with procedural grain.
-
-Only math and colour values are reused. No Dia images, fonts or binaries are copied into this repo.
-
-## Architecture notes
-
-- **Why Expo SDK 54:** `react-native-macos` tops out at 0.81, which pairs with Expo SDK 54 (whose
-  `ExpoAppDelegate` / `ExpoReactNativeFactory` have macOS code paths).
-- **Legacy architecture.** react-native-macos 0.81's Fabric support is experimental, so the app runs on
-  the legacy architecture. One consequence: Expo's legacy view-manager adapter instantiates a module's
-  *first* view class for every view it declares, so each native view has its own module.
-- **Metro, not `expo start`.** Metro runs through the react-native-macos CLI. `metro.config.js`
-  redirects `react-native` → `react-native-macos` for `platform=macos`, because defining our own
-  `resolveRequest` replaces the redirect the CLI would install.
-- **No Reanimated.** It has no macOS build for 0.81; animations use RN's `Animated`.
-- **Monorepo paths.** pnpm is set to `nodeLinker: hoisted` because CocoaPods and Metro resolve
-  `react-native-macos` by path. The Podfile rewrites `REACT_NATIVE_PATH` to the hoisted location and
-  raises every pod's deployment target to 14.0, since Xcode 26+ rejects the 11.0 some Expo pods declare.
-- **Native subviews** are sized in `setFrameSize`, not `layout()`. RN macOS assigns frames directly and
-  never autoresizes subviews.
-- **Shaders** are Metal source embedded in Swift and compiled at runtime (once per class, cached). This
-  keeps the pods free of a metallib build phase.
-
-## Status
-
-Feature parity with Dia (everything but its AI) is tracked row by row in
-[docs/dia-feature-parity.md](docs/dia-feature-parity.md); Solara's releases and their notes are at
-[github.com/andrewbenson/solara/releases](https://github.com/andrewbenson/solara/releases).
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how changes are made, and [docs/agent-brief.md](docs/agent-brief.md) how
+the pieces fit together.
 
 ## License
 
-Solara as distributed is licensed under the [GNU General Public License v3](LICENSE), because its engine is built
-with GPL-3.0 patches. Its own source files, Ardia's and Solara's, are under the [Apache License 2.0](LICENSE.Apache-2.0). It builds on
-Chromium, carries a few of the Chromium Embedded Framework's patches to Chromium (BSD-3-Clause), and bundles uBlock
-Origin, each under its own license; see [NOTICE](NOTICE). Every release links its source.
+Solara as distributed, the app together with its engine, is licensed under the
+[GNU General Public License v3](LICENSE), because the engine is built with Helium's patches, which are GPL-3.0. Its
+own source files, Ardia's and Solara's, are under the [Apache License 2.0](LICENSE.Apache-2.0). It also builds on
+Chromium (BSD-3-Clause and others), ungoogled-chromium and a few Chromium Embedded Framework patches (BSD-3-Clause),
+and bundles uBlock Origin (GPL-3.0) and Sparkle (MIT), each under its own license. [NOTICE](NOTICE) has the full list
+and where each release's corresponding source is.

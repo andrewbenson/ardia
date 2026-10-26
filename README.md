@@ -6,7 +6,7 @@
 
 <p align="center">A Mac browser with Arc's sidebar and Dia's polish, on Chromium built from source.</p>
 
-Solara is a macOS browser from Hill Technologies. Every window and tab is Chrome's own, from an engine we build
+Solara is a macOS browser by Andrew Benson. Every window and tab is Chrome's own, from an engine we build
 ourselves, so sites, extensions and DevTools behave the way they do in Chrome. Around it sits a native shell that
 copies Dia's look and behavior, measured against Dia, with Arc's sidebar for tabs.
 

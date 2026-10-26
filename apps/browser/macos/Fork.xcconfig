@@ -9,5 +9,5 @@ AC_NOTES_URL = https:/$()/github.com/andrewbenson/solara/releases
 AC_TELEMETRY_URL =
 AC_SWITCHES_URL =
 AC_APP_ICON = SolaraIcon
-AC_COPYRIGHT = © 2026 Hill Technologies
-AC_UPSTREAM_CREDIT = Built on Ardia, © 2026 Mantra Patel
+AC_COPYRIGHT = © 2026 Andrew Benson
+AC_UPSTREAM_CREDIT =

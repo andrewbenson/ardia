@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Solara is a macOS browser from Hill Technologies: Arc's sidebar and Dia's polish on Chrome's own framework, built from
+Solara is a macOS browser by Andrew Benson: Arc's sidebar and Dia's polish on Chrome's own framework, built from
 source (Chromium 156 with Helium's patches and ours), with no account, no AI features and no telemetry. It is a fork
 of [Ardia](https://github.com/mantrakp04/ardia) (Apache-2.0, the `upstream` remote); this repo is
 `andrewbenson/solara`. Solara keeps diverging from Ardia but still merges it now and then

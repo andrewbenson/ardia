@@ -44,9 +44,9 @@ export const liveHandlers: Record<string, SettingsHandler> = {
   "liveFolders.setGithubClientId": (clientId: string) => updateConfig({ githubClientId: clientId.trim() }),
   "liveFolders.startGithubDeviceFlow": async (clientId: string) => {
     const flow = await startGithubDeviceFlow(clientId.trim());
-    flow.done.catch(() => {});
     const id = `gh-${++deviceFlowCounter}`;
     deviceFlows.set(id, flow);
+    flow.done.finally(() => deviceFlows.delete(id)).catch(() => {});
     return { id, userCode: flow.userCode, verificationUri: flow.verificationUri };
   },
   "liveFolders.finishGithubDeviceFlow": async (id: string) => {

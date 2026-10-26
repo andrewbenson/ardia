@@ -127,7 +127,9 @@
 //   new window → first paint / first frame  newWindow   the window's page's FCP / first rAF
 //   ⌘T → …, keystroke → suggestions         journeyRun  newtabkey: acperf postkeys (CGEventPostToPid into this pid) → the app's field timing
 //                                                        (journeys.ts + ArdiaCoreFieldTiming.mm; sharing on in the bench's data folder,
-//                                                        every non-local fetch answered by bench-offline.js so nothing is uploaded)
+//                                                        every non-local fetch answered by bench-offline.js so nothing is uploaded; the
+//                                                        guard that checks this posts to bench-guard.invalid, a name that never
+//                                                        resolves, so it can't reach a server even if the guard is missing)
 //   Enter → engine asked / started / committed / first contentful paint
 //                                           journeyRun  navigate: the same, from a real Enter; also the page's own FCP over CDP
 // Also printed: "Hidden tabs" (throttleRun), the browser process after each churn round, main-thread sample summaries.
@@ -884,9 +886,9 @@ async function journeyRun(side, i, parts) {
     await app.launch();
     await app.pageState("id=seed", 30_000, (s) => s.fcp);
     await sleep(6000);
-    r.guard = await app.run(`return fetch("https://ardia.dev/otel/v1/logs", { method: "POST", body: "{}" }).then((res) => {
+    r.guard = await app.run(`return fetch("https://bench-guard.invalid/otel/v1/logs", { method: "POST", body: "{}" }).then((res) => res.headers.get("x-bench-blocked"), () => "unreachable").then((blocked) => {
       const j = ac.journeys();
-      return { blocked: res.headers.get("x-bench-blocked"), on: j.on, native: j.native, sharing: ac.telemetry().saved.sharing };
+      return { blocked, on: j.on, native: j.native, sharing: ac.telemetry().saved.sharing };
     });`);
     if (r.guard.blocked !== "1") throw new FatalError("bench-offline.js isn't guarding fetch: refusing to run with sharing on");
     if (!r.guard.on || !r.guard.native) throw new Error(`field timing isn't on in the app: ${JSON.stringify(r.guard)}`);

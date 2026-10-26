@@ -7,17 +7,19 @@
 //     --label <name>          the app's name in the results (default: native-bench's, the folder two levels up)
 //     --control <app>         a previous stable, interleaved run by run with --app in every phase that supports it
 //     --control-label <name>  the control's name (default as --label)
-//     --js-commit <sha>       the commit the builds' JS came from (required unless --bundle). native-bench drives an app
-//                             through its own bundle, bench-entry.js: the app's index.js plus the command channel,
-//                             which the build's embedded main.jsbundle doesn't have. So the bench bundle is built from
-//                             the tree, and prepare first checks that every input of the app's bundle (apps/browser's
-//                             index.js, src, babel, metro and package files, packages/*'s JS, pnpm-lock.yaml) is the
-//                             same in the tree as at <sha>, committed and clean. tab-actions runs each build's embedded
-//                             main.jsbundle itself
-//     --bundle <file>         a bench bundle built elsewhere from the builds' JS (instead of --js-commit)
+//     --js-commit <sha>       the commit the build's JS came from (required unless --bundle). native-bench drives an app
+//                             through its own bundle, bench-entry.js: the app's index.js plus the command channel, which
+//                             the embedded main.jsbundle doesn't have. The js phase exports <sha> with `git archive` into
+//                             <out>/js/<sha> (never the working tree), installs its packages offline under the pod lock,
+//                             builds the app's production bundle there and compares it with the build's embedded
+//                             main.jsbundle (bytes, else the sets of strings), then builds the bench bundle from the same
+//                             export. tab-actions runs each build's embedded main.jsbundle itself
+//     --control-js-commit <sha> the same for --control
+//     --bundle <file>         a bench bundle built elsewhere from the build's JS (instead of --js-commit)
 //     --control-bundle <file> the control's bench bundle, when its NATIVE_API_VERSION differs
 //     --version <v>           the version in the report's name (default: the app's CFBundleShortVersionString)
 //     --only <a,b>            phases (default: all but drag), in this order:
+//                               js          the bench bundles from each build's commit (see --js-commit); not timed
 //                               prepare     signed copies with the bench bundle (native-bench --only prepare)
 //                               launch      M7 warm: 8 launches, one tab then the seed
 //                               coldlaunch  M7 cold: 6 launches from fresh APFS clones, one tab then the seed
@@ -70,6 +72,7 @@ const { values: opt } = parseArgs({
     "locked-ok": { type: "boolean" },
     bundle: { type: "string" },
     "js-commit": { type: "string" },
+    "control-js-commit": { type: "string" },
     "control-bundle": { type: "string" },
     version: { type: "string" },
     only: { type: "string" },
@@ -90,7 +93,7 @@ if (opt.help) {
   process.exit(0);
 }
 
-const PHASES = ["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
+const PHASES = ["js", "prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
 const NEEDS_DISPLAY = new Set(["journeys", "tabactions", "frames", "framecounts", "drag"]);
 const LOCKED = new Set(["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
 const out = resolve(opt.out);
@@ -135,6 +138,37 @@ const save = () => writeFileSync(stateFile, JSON.stringify(state, null, 1));
 function machine() {
   const disp = JSON.parse(acperf("display").out || "{}");
   return { load: loadavg().map((x) => Math.round(x * 10) / 10), display: disp, at: new Date().toISOString() };
+}
+
+class ConnectionWatch {
+  constructor() {
+    this.seen = new Map();
+    this.samples = 0;
+    this.ardia = new Set();
+    for (const type of ["A", "AAAA"]) {
+      const r = spawnSync("dig", ["+short", type, "ardia.dev"], { encoding: "utf8", timeout: 5000 });
+      for (const ip of (r.stdout ?? "").split("\n").map((l) => l.trim()).filter((l) => /^[\d.:a-f]+$/i.test(l))) this.ardia.add(ip);
+    }
+    this.timer = setInterval(() => this.sample(), 2000);
+  }
+  sample() {
+    const ps = spawnSync("ps", ["-ax", "-o", "pid=", "-o", "command="], { encoding: "utf8", maxBuffer: 64 << 20 });
+    const pids = (ps.stdout ?? "").split("\n").map((l) => /^\s*(\d+)\s+(.*)$/.exec(l)).filter((m) => m && m[2].includes(out)).map((m) => m[1]);
+    if (!pids.length) return;
+    this.samples++;
+    const r = spawnSync("lsof", ["-nP", "-a", "-i", "-p", pids.join(",")], { encoding: "utf8", maxBuffer: 64 << 20, timeout: 10_000 });
+    for (const line of (r.stdout ?? "").split("\n").slice(1)) {
+      const remote = /->(\S+)/.exec(line)?.[1];
+      if (!remote || /^(127\.0\.0\.1|\[::1\]|localhost)[:\]]/.test(remote)) continue;
+      const ip = remote.replace(/^\[/, "").replace(/\]?:\d+$/, "");
+      this.seen.set(remote, { count: (this.seen.get(remote)?.count ?? 0) + 1, ardia: this.ardia.has(ip) });
+    }
+  }
+  stop() {
+    clearInterval(this.timer);
+    const remotes = [...this.seen].map(([remote, v]) => ({ remote, ...v }));
+    return { samples: this.samples, ardiaAddresses: [...this.ardia], toArdia: remotes.filter((r) => r.ardia).length, remotes };
+  }
 }
 
 class InputWatch {
@@ -210,28 +244,65 @@ async function bench(phase, args, extra = {}) {
   const results = benchResults(dir);
   const errors = Object.entries(results).flatMap(([label, r]) => (r.errors ?? []).map((e) => `${label} run ${e.run}: ${e.error}`));
   if (failure && !Object.keys(results).length) throw failure;
+  const kept = Object.values(results).reduce((n, r) => n + ["launch", "session", "windows", "memslope", "journeys", "frames"].reduce((k, key) => k + (r[key]?.length ?? 0), 0), 0);
+  if (!kept) throw new Error(`${phase}: every run failed (${errors.join("; ").slice(0, 400) || failure?.message})`);
   if (failure || errors.length) partial.push(`${phase}: ${errors.length ? errors.join("; ") : failure.message}`.slice(0, 600));
   return results;
 }
 let partial = [];
 
 const phases = {
-  async prepare() {
-    if (!opt.bundle) {
-      if (!opt["js-commit"]) throw new Error("prepare needs --js-commit <the builds' commit> (or --bundle): the bench bundle must carry the builds' own JS");
-      const inputs = ["apps/browser/index.js", "apps/browser/src", "apps/browser/app.json", "apps/browser/babel.config.js", "apps/browser/metro.config.js",
-        "apps/browser/package.json", "apps/browser/react-native.config.js", "apps/browser/assets", "pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "patches",
-        ":(glob)packages/*/src/**", ":(glob)packages/*/index.ts",
-        ":(glob)packages/*/package.json", ":(glob)packages/*/expo-module.config.json"];
-      const changed = execFileSync("git", ["diff", "--name-only", opt["js-commit"], "--", ...inputs], { cwd: repoRoot, encoding: "utf8" }).trim();
-      const dirty = execFileSync("git", ["status", "--porcelain", "--", ...inputs], { cwd: repoRoot, encoding: "utf8" }).trim();
-      if (changed || dirty) throw new Error(`the tree's app JS differs from ${opt["js-commit"]}, so a bench bundle built now wouldn't be the builds' JS:\n${changed}\n${dirty}`);
+  async js() {
+    const sides = [[opt.app, opt["js-commit"], opt.bundle, "app"], ...(opt.control ? [[opt.control, opt["control-js-commit"], opt["control-bundle"], "control"]] : [])];
+    const made = {};
+    for (const [app, sha, given, role] of sides) {
+      if (given) {
+        made[role] = { bundle: resolve(given), commit: null, check: "given with --bundle; not checked" };
+        continue;
+      }
+      if (!sha) throw new Error(`the ${role} needs --${role === "app" ? "" : "control-"}js-commit <the commit its JS came from> (or a bundle)`);
+      const commit = execFileSync("git", ["rev-parse", "--verify", `${sha}^{commit}`], { cwd: repoRoot, encoding: "utf8" }).trim();
+      const dir = join(out, "js", commit.slice(0, 12));
+      if (!existsSync(join(dir, "node_modules"))) {
+        rmSync(dir, { recursive: true, force: true });
+        mkdirSync(dir, { recursive: true });
+        execFileSync("sh", ["-c", `git -C '${repoRoot}' archive --format=tar ${commit} | tar -x -C '${dir}'`]);
+        await run(join(repoRoot, "scripts/agent/locked"), ["pod", "--wait", "500", "--", "pnpm", "install", "--offline", "--frozen-lockfile", "--ignore-scripts"], { cwd: dir });
+      }
+      const appDir = join(dir, "apps/browser");
+      const hermesc = join(repoRoot, "apps/browser/macos/Pods/hermes-engine/destroot/bin/hermesc");
+      const bundle = async (entry, name) => {
+        const js = join(dir, `${name}.js`), hbc = join(dir, `${name}.jsbundle`);
+        await run(node, [join(dir, "node_modules/react-native-macos/scripts/bundle.js"), "bundle", "--entry-file", entry, "--platform", "macos", "--dev", "false",
+          "--reset-cache", "--minify", "false", "--bundle-output", js, "--assets-dest", join(dir, `${name}-assets`),
+          "--config-cmd", `'${node}' '${join(dir, "node_modules/react-native-macos/cli.js")}' config`], { cwd: appDir });
+        execFileSync(hermesc, ["-emit-binary", "-max-diagnostic-width=80", "-O", "-out", hbc, js], { stdio: "inherit" });
+        return hbc;
+      };
+      const appBundle = await bundle("index.js", "app");
+      const embedded = join(resolve(app), "Contents/Resources/main.jsbundle");
+      const same = readFileSync(appBundle).equals(readFileSync(embedded));
+      const stringsOf = (f) => new Set(execFileSync("strings", ["-n", "10", f], { encoding: "utf8", maxBuffer: 256 << 20 }).split("\n"));
+      const a = stringsOf(appBundle), b = stringsOf(embedded);
+      const onlyExport = [...a].filter((x) => !b.has(x)), onlyBuild = [...b].filter((x) => !a.has(x));
+      const check = { bytesEqual: same, strings: a.size, onlyInExport: onlyExport.length, onlyInBuild: onlyBuild.length, sampleOnlyInExport: onlyExport.slice(0, 5), sampleOnlyInBuild: onlyBuild.slice(0, 5) };
+      log(`js ${role} ${commit.slice(0, 8)}: ${same ? "byte-identical to the build's main.jsbundle" : `${onlyExport.length} strings only in the export, ${onlyBuild.length} only in the build`}`);
+      if (!same && (onlyExport.length > 20 || onlyBuild.length > 20))
+        throw new Error(`the ${role}'s JS at ${commit.slice(0, 8)} isn't what ${app} embeds (${onlyExport.length} strings only in the export, ${onlyBuild.length} only in the build, e.g. ${JSON.stringify(onlyBuild.slice(0, 3))})`);
+      made[role] = { bundle: await bundle("scripts/perf/bench-entry.js", "bench"), commit, check };
     }
+    state.meta.bundles = made;
+    return made;
+  },
+  async prepare() {
+    const bundles = state.meta.bundles ?? {};
+    if (!bundles.app) throw new Error("no bench bundle: run the js phase first");
+    if (opt.control && !bundles.control) throw new Error("no bench bundle for the control: run the js phase first");
     const dir = join(out, "prepare");
     const said = await run(node, [nb, "--out", dir, "--app", resolve(opt.app), "--only", "prepare", "--port", String(port),
       ...(opt.label ? ["--label", opt.label] : []), ...(opt["control-label"] ? ["--control-label", opt["control-label"]] : []),
-      ...(opt.bundle ? ["--bundle", resolve(opt.bundle)] : []),
-      ...(opt.control ? ["--control", resolve(opt.control), ...(opt["control-bundle"] ? ["--control-bundle", resolve(opt["control-bundle"])] : [])] : [])]);
+      "--bundle", bundles.app.bundle,
+      ...(opt.control ? ["--control", resolve(opt.control), "--control-bundle", bundles.control.bundle] : [])]);
     const apps = [...said.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
     if (!apps.length) throw new Error("native-bench prepare named no copies");
     state.meta.prepared = { app: apps[0], control: apps[1] ?? null };
@@ -240,7 +311,7 @@ const phases = {
       const ok = (r.launch ?? []).some((x) => Number.isFinite(x.js));
       if (!ok || r.errors?.length) throw new Error(`preflight on ${label} failed (a native API skew answers every command with an error): ${JSON.stringify(r.errors ?? r.launch).slice(0, 400)}`);
     }
-    return { copies: apps, jsCommit: opt["js-commit"] ?? null, bundle: opt.bundle ?? null };
+    return { copies: apps, bundles };
   },
   async launch() {
     return {
@@ -281,7 +352,10 @@ const phases = {
       writeFileSync(windows, JSON.stringify((results[label].frames ?? []).flatMap((r) => Object.entries(r.stalls ?? {}).flatMap(([scenario, ws]) => ws.map((w) => [scenario, w.from, w.to])))));
       const original = originalOf(label);
       const dsym = original && dsymOf(original);
-      if (original && !dsym) log(`stall-samples ${label}: no dSYM for ${original}, so React Native frames inside the executable count as the app's`);
+      if (!dsym) {
+        log(`stall-samples ${label}: NO dSYM for ${original ?? label}; React Native frames inside the executable will count as the app's`);
+        partial.push(`framecounts: no dSYM for ${label}, so its attribution can't tell React Native from the app`);
+      }
       await run(node, [join(here, "stall-samples.mjs"), ...(opt.symbols ? ["--symbols", opt.symbols] : []), ...(dsym ? ["--app-dsym", dsym] : []),
         "--windows", windows, "--json", json, join(out, "framecounts", label)]).catch((e) => log(`stall-samples ${label}: ${e.message}`));
       if (existsSync(json)) attribution[label] = { symbolized: !!dsym, rows: JSON.parse(readFileSync(json, "utf8")) };
@@ -439,6 +513,8 @@ function render() {
   if (lost.length) md.push(`**Phases that failed or lost runs (their rows hold fewer samples):** ${lost.map((n) => `${n} (${(P[n].partial ?? [P[n].error]).join("; ").slice(0, 300)})`).join("; ")}.`, "");
   md.push("Where this run departs from [baseline.md](baseline.md): the one-tab and seed launches run as two interleaved series (app and control interleaved within each), not interleaved with each other; acsample.c samples only in the framecounts runs, so the frames runs' timing carries no sampling cost.", "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
+  const c = state.meta.connections;
+  if (c) md.push(`**Network:** the instances' sockets were listed every 2 s (${c.samples} samples, \`lsof\`): ${c.toArdia ? `**${c.toArdia} remote endpoint(s) at ardia.dev's addresses**` : "none to ardia.dev's addresses"} (${c.ardiaAddresses.join(", ") || "ardia.dev didn't resolve"}); every remote endpoint seen: ${c.remotes.length ? c.remotes.map((r) => `${r.remote} ×${r.count}`).join(", ") : "none"}.`, "");
   md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");
   for (const name of PHASES) {
     const p = P[name];
@@ -622,6 +698,7 @@ const dark = disp.asleep || disp.locked;
 if (dark && !opt["locked-ok"]) fail(`the display is ${disp.asleep ? "asleep" : "locked"}: macOS gives no display-link frames then; wake and unlock it first, or pass --locked-ok to run only what doesn't need them`);
 
 const caffeinate = spawn("caffeinate", ["-d", "-w", String(process.pid)], { stdio: "ignore" });
+const connections = new ConnectionWatch();
 let held = false;
 const release = () => {
   if (held) spawnSync(join(repoRoot, "scripts/agent/locked"), ["perflab", "--release", opt.who]);
@@ -675,6 +752,8 @@ try {
     save();
   }
 } finally {
+  state.meta.connections = connections.stop();
+  save();
   release();
   caffeinate.kill();
   spawnSync(join(repoRoot, "scripts/agent/unregister-builds"), { stdio: "inherit" });

@@ -1,6 +1,6 @@
 import { displayUrl, type Suggestion } from "@ardia/core";
 import { NativeNewTab, newTabSources, type NativeNewTabHandle, type NewTabMenuChoice } from "@ardia/settings";
-import { pickFiles, showMenu, startDictation } from "@ardia/shell";
+import { pickFiles, readDocument, showMenu, startDictation } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { findNodeHandle, Image, StyleSheet } from "react-native";
 import { claimFocusTag, heroBarFocus } from "../../lib/focusClaims";
@@ -23,6 +23,7 @@ import { bundledSiteIcon } from "../../lib/siteIcons";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 
 const FAVICON_WAIT_MS = 3000;
+const benchOffline = readDocument("bench-offline") !== null;
 
 addNativeSettingsHandlers({
   "newTab.favicon": async (url: string, profileId: string | null, dark: boolean) => {
@@ -238,6 +239,7 @@ export function NativeNewTabHero({
       theme={themeProps}
       marks={marks}
       driven={__DEV__ || perfProbeEnabled}
+      offline={benchOffline}
       onDriverState={(e) => (driverState.current = JSON.parse(e.nativeEvent.json) as Record<string, unknown>)}
       onOpen={(e) => openFromBar(e.nativeEvent.url, tabId, e.nativeEvent.disposition)}
       onSwitch={(e) => switchFromBar(e.nativeEvent.tabId, e.nativeEvent.url, tabId, e.nativeEvent.disposition)}

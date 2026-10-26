@@ -454,7 +454,8 @@ for (const busy of [0, 120]) {
       const postedAt = await postKeys([keyPress(key, code), keyPress("v", 9, gap)]);
       await sleep(900);
       const inPage = await pageField("f.value");
-      const inDestination = await fieldInAx(pasted);
+      const inHero = name === "⌘T" && await ac(`return String(ac.omnibox.get("w1:hero")?.state().value ?? "").includes(${JSON.stringify(pasted)});`);
+      const inDestination = inHero || (await fieldInAx(pasted));
       const held = postedAt[1] - postedAt[0];
       check(`${label} ⌘V pastes into the new field, not the page`, inDestination && !String(inPage).includes(pasted) && held >= gap - 1 && held < gap + 30,
         `page "${inPage}", destination ${inDestination}, keys ${held.toFixed(1)} ms apart`);

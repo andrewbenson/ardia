@@ -55,6 +55,7 @@ public class NewTabModule: Module {
       Prop("under") { (view: NativeNewTabView, v: Double?) in MainActor.assumeIsolated { view.hero.under = v ?? 0 } }
       Prop("dark") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.dark = v ?? false } }
       Prop("theme") { (view: NativeNewTabView, v: [String: String]?) in MainActor.assumeIsolated { view.themeTokens = v ?? [:] } }
+      Prop("offline") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.hero.fetcher = v == true ? nil : NewTabNetwork.fetcher } }
       Prop("driven") { (view: NativeNewTabView, v: Bool?) in MainActor.assumeIsolated { view.driven = v ?? false } }
       Prop("marks") { (view: NativeNewTabView, v: [String: String]?) in MainActor.assumeIsolated { view.marks = v ?? [:] } }
 

@@ -22,6 +22,7 @@ export type NativeNewTabProps = ViewProps & {
   theme: Record<string, string>;
   marks: { sun: string; back: string; front: string };
   driven?: boolean;
+  offline?: boolean;
   onDriverState?(e: Event<{ json: string }>): void;
   onOpen?(e: Event<{ url: string; disposition: NewTabDisposition }>): void;
   onSwitch?(e: Event<{ tabId: string; url: string; disposition: NewTabDisposition }>): void;

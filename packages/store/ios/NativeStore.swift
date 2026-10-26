@@ -10,7 +10,7 @@ public final class NativeStore: Sendable {
   nonisolated(unsafe) public private(set) static var ownsWorkspace = false
 
   static var scope: PersistenceScope {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SCOPE"] == "everything" ? .everything : .settingsAndDownloads
+    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SCOPE"] == "settingsAndDownloads" ? .settingsAndDownloads : .everything
   }
 
   static func config(_ folder: URL) -> StoreConfig {

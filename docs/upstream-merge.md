@@ -26,6 +26,7 @@ modify/delete conflict. **Keep it deleted:** `git rm -r <path>`, then go on.
 | `extras/raycast-ardia` | The Raycast extension; it drives `com.ardia.browser`, not Solara |
 | `spikes/` | The ArdiaCore spike; its test extension moved to `packages/ardiacore/scripts/fixtures/ext` |
 | `CLA.md`, `.github/workflows/{cla,linked-issue,deploy}.yml`, `.github/pull_request_template.md` | Upstream's contribution and deploy process |
+| `.github/workflows/release.yml`, `.github/release/` | Upstream's CI release (gated to `mantrakp04/ardia`, upstream's secrets); Solara releases from a Mac |
 | `.claude/skills/stats`, `.claude/skills/elevenlabs`, `.claude/launch.json` | Upstream's telemetry report, the videos' voiceover, the site preview |
 | `scripts/{stats,telemetry-env,telemetry-sql,replay,update-checks}.mjs` | Queries against upstream's telemetry |
 | `docs/growth.md` | Upstream's growth and telemetry notes |

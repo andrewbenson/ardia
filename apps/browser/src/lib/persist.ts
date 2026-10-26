@@ -18,12 +18,15 @@ import {
   adoptRepairs,
   attachReplica,
   dataFolderHandedOff,
+  hydrateFromNative,
   nativeOwnedSnapshot,
+  nativeOwnsWorkspace,
   nativeStoreActive,
   nativeStoreRev,
   startNativeStore,
   withApplier,
 } from "../store/nativeStore";
+import type { StoreCommand } from "@ardia/store";
 
 const SAVE_DELAY_MS = 800;
 const VERSION = 2;
@@ -93,7 +96,22 @@ const sessionDocument = (s: BrowserState) => {
   };
 };
 
-const docsToWrite = () => (nativeStoreActive() ? DOCS.filter((d) => d.name !== "downloads.json") : DOCS);
+const docsToWrite = () => (nativeOwnsWorkspace() ? [] : nativeStoreActive() ? DOCS.filter((d) => d.name !== "downloads.json") : DOCS);
+
+const focusedForLaunch = (s: BrowserState) => s.ui.focusOrder.find((id) => s.windows[id] && !s.windows[id].incognito && s.windows[id].kind !== "small") ?? null;
+
+function nativeCaches(s: BrowserState): StoreCommand[] {
+  const playing = Object.keys(s.live).filter((id) => s.live[id]?.playingAudio);
+  const hints = Object.entries(s.history ?? {}).map(([profileId, list]) => ({
+    name: "setHistoryHints",
+    args: [profileId, list.map((h) => ({ url: h.url, title: h.title, favicon: h.favicon }))],
+  }));
+  return [
+    { name: "setPlayingAudio", args: [playing] },
+    ...hints,
+    { name: "setLaunchBackdrop", args: [earlyLaunchTabOn() ? (launchBackdrop(s, focusedForLaunch(s)) ?? null) : null] },
+  ];
+}
 
 function read<T>(name: string): T | null {
   try {
@@ -237,6 +255,12 @@ export function startPersistence() {
     console.warn("Another instance is using this data folder; this one saves nothing.");
     return () => {};
   }
+  if (nativeOwnsWorkspace() && hydrateFromNative(useBrowser)) {
+    attachReplica(useBrowser, nativeCaches);
+    restoreLaunchLook();
+    cleanStaging(useBrowser.getState().downloads);
+    return startDerivedServices({ forgetsIncognito: false });
+  }
   const owned = nativeOwnedSnapshot();
   const data = loadSession({ downloads: !owned }) ?? {};
   if (owned) {
@@ -294,20 +318,30 @@ export function startPersistence() {
     check(useBrowser.getState());
     save();
   };
+  const stopServices = startDerivedServices({ forgetsIncognito: true });
+  const stopSession = useBrowser.subscribe((s) => check(s));
+  return () => {
+    stopServices();
+    stopSession();
+  };
+}
+
+function startDerivedServices({ forgetsIncognito }: { forgetsIncognito: boolean }) {
   const stopFavicons = startFavicons();
   const stopHistory = startHistory();
   const stopBookmarks = startBookmarks();
   const stopProfileData = startProfileDataCleanup();
-  const stopSession = useBrowser.subscribe((s, prev) => {
-    check(s);
-    if (s.windows !== prev.windows) forgetClosedIncognito(s, prev);
-  });
+  const stopIncognito = forgetsIncognito
+    ? useBrowser.subscribe((s, prev) => {
+        if (s.windows !== prev.windows) forgetClosedIncognito(s, prev);
+      })
+    : () => {};
   return () => {
     stopFavicons();
     stopHistory();
     stopBookmarks();
     stopProfileData();
-    stopSession();
+    stopIncognito();
   };
 }
 

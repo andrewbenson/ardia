@@ -3,6 +3,7 @@ import { isIncognitoProfile } from "./model";
 import { nextPinChoice, orderChoiceKey } from "./organize";
 import { anchorsOf, pinnedAreaKeys } from "./pinnedArea";
 import type { TabGroup } from "./types";
+import { nativeOwnsWorkspace } from "./nativeStore";
 
 let remote = 0;
 
@@ -38,7 +39,7 @@ function groupsReordered(s: BrowserState, prev: BrowserState): boolean {
 }
 
 export function noteOrderChoices(s: BrowserState, prev: BrowserState) {
-  if (remote) return;
+  if (remote || nativeOwnsWorkspace()) return;
   if (!groupsReordered(s, prev) && Object.values(s.windows).every((w) => w.tabIds === prev.windows[w.id]?.tabIds)) return;
   const homesBefore = homes(prev);
   let pinChoices = s.pinChoices;

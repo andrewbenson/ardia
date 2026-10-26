@@ -15,6 +15,7 @@ import { createProfilesSlice, DEFAULT_PROFILE, engineIdOf, type ProfilesSlice } 
 import { createSettingsSlice, DEFAULT_SETTINGS, migrateSavedSettings, type SettingsSlice } from "./settings";
 import { createSplitsSlice, sanitizeSplits, type SplitsSlice } from "./splits";
 import { activated, apply, createTabsSlice, type TabsSlice } from "./tabs";
+import { nativeOwnsWorkspace, nativeTransaction } from "./nativeStore";
 import { transactional } from "./transaction";
 import type { BrowserWindow, Tab } from "./types";
 import { createUiSlice, type UiSlice } from "./ui";
@@ -80,7 +81,7 @@ const pageMoved = (s: BrowserState, prev: BrowserState) => {
   return false;
 };
 const transactions = transactional<BrowserState>(pageMoved);
-export const storeTransaction = transactions.transaction;
+export const storeTransaction = (run: () => void) => (nativeOwnsWorkspace() ? nativeTransaction(run) : transactions.transaction(run));
 
 export const useBrowser = create<BrowserState>()(transactions.middleware(batched((...a) => ({
   ...createProfilesSlice(...a),
@@ -193,17 +194,20 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
 }))));
 
 useBrowser.subscribe((s, prev) => {
+  if (nativeOwnsWorkspace()) return;
   const patch = s.windows !== prev.windows && forgetClosedPrivateWindows(s);
   if (patch) useBrowser.setState(patch);
 });
 
 useBrowser.subscribe((s, prev) => {
+  if (nativeOwnsWorkspace()) return;
   if (s.groups === prev.groups && Object.values(s.windows).every((w) => w.tabIds === prev.windows[w.id]?.tabIds)) return;
   const settled = settleNesting(s);
   if (settled) useBrowser.setState(settled);
 });
 
 useBrowser.subscribe((s, prev) => {
+  if (nativeOwnsWorkspace()) return;
   if (s.pinChoices === prev.pinChoices && s.pinSync === prev.pinSync && s.tabs === prev.tabs && s.groups === prev.groups && s.parkedPins === prev.parkedPins && s.profiles === prev.profiles) return;
   const pinChoices = livePinTable(s.pinChoices, s);
   const pinSync = livePinTable(s.pinSync, s);
@@ -211,13 +215,14 @@ useBrowser.subscribe((s, prev) => {
 });
 
 useBrowser.subscribe((s, prev) => {
+  if (nativeOwnsWorkspace()) return;
   const next = settlePeeks(s, prev);
   if (next) useBrowser.setState(next);
 });
 
 let mirroring = 0;
 useBrowser.subscribe((s, prev) => {
-  if (mirroring > 3) return;
+  if (nativeOwnsWorkspace() || mirroring > 3) return;
   const homes = settlePinHomes(s, prev);
   const start = homes ? { ...s, ...homes } : s;
   const unshared = unshareTabs(start, prev) ?? pagesIntoSplits(start, prev) ?? (homes ? start : null);

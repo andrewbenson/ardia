@@ -11,7 +11,7 @@ public class StoreModule: Module {
     Events("onStoreCommit")
 
     Function("status") { () -> [String: Any] in
-      if NativeStore.shared != nil { return ["active": true] }
+      if NativeStore.shared != nil { return ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads"] }
       return ["active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff]
     }
 

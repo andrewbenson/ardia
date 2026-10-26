@@ -22,7 +22,25 @@ struct OmniboxAddressing: WebAddressing {
 }
 
 public final class NativeStore: Sendable {
-  static let scope = PersistenceScope.settingsAndDownloads
+  nonisolated(unsafe) public private(set) static var ownsWorkspace = false
+
+  static var scope: PersistenceScope {
+    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SCOPE"] == "everything" ? .everything : .settingsAndDownloads
+  }
+
+  static func config(_ folder: URL) -> StoreConfig {
+    var config = StoreConfig()
+    config.handOffPinsImmediately = false
+    config.earlyLaunchTab = earlyLaunchTabSwitch(folder)
+    return config
+  }
+
+  static func earlyLaunchTabSwitch(_ folder: URL) -> Bool {
+    guard let data = try? Data(contentsOf: folder.appending(path: "switches-cache.json")),
+      let switches = (try? JSONValue.parse(data))?["switches"]?.object
+    else { return true }
+    return switches["launchTab"] != .bool(false)
+  }
 
   nonisolated(unsafe) public private(set) static var shared: NativeStore?
   nonisolated(unsafe) public private(set) static var unavailableReason: String?
@@ -83,15 +101,20 @@ public final class NativeStore: Sendable {
     let clock: @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
     let memory = StoreMemory(ids: IdSource.random(now: clock()))
     let addressing = OmniboxAddressing()
-    let context = LoadContext(env: addressing, memory: memory, now: clock())
+    let storeConfig = Self.config(folder)
+    let activeScope = Self.scope
+    let context = LoadContext(env: addressing, config: storeConfig, memory: memory, now: clock())
     do {
-      let launch = try Launcher.open(DataFolder(url: folder), appVersion: version, now: now, context: context, scope: scope)
+      let launch = try Launcher.open(DataFolder(url: folder), appVersion: version, now: now, context: context, scope: activeScope)
       for note in launch.report.notes { NSLog("[store] %@", note) }
-      let store = Store(state: launch.state, memory: launch.memory, env: addressing, clock: clock)
+      let store = Store(state: launch.state, memory: launch.memory, env: addressing, config: storeConfig, clock: clock)
+      ownsWorkspace = activeScope == .everything
       let writer = PersistenceWriter(
-        store: store, database: launch.database, folder: DataFolder(url: folder), persisted: launch.persisted, scope: scope,
+        store: store, database: launch.database, folder: DataFolder(url: folder), persisted: launch.persisted, scope: activeScope,
         trouble: { message in NSLog("[store] %@", message) })
       shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch)
+      NativeSettingsHandle.active = true
+      DispatchQueue.main.async { MainActor.assumeIsolated { NativeSettingsHandle.resolve = { NativeStore.settingsModel } } }
       NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
         _ = NativeStore.shared?.writer.flush(timeout: 0.5)
       }

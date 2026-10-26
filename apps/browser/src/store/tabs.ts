@@ -47,6 +47,7 @@ export type NewTabOptions = {
 };
 
 let pinHandoff: (tabId: string, commit: () => void) => void = (_, commit) => commit();
+export const runPinHandoff = (tabId: string, commit: () => void) => pinHandoff(tabId, commit);
 export const setPinHandoff = (handoff: typeof pinHandoff) => {
   pinHandoff = handoff;
 };

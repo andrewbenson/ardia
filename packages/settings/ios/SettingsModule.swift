@@ -19,6 +19,17 @@ public class SettingsModule: Module {
       MainActor.assumeIsolated { NativeSettingsWindow.navigate(pane: pane, profileId: profileId, detail: detail) }
     }.runOnQueue(.main)
 
+    AsyncFunction("devImport") { (action: String, argument: String?, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in
+          let result = await NativeImportWindow.drive(action, argument)
+          nonisolated(unsafe) let sendable = result
+          reply.resolve(sendable)
+        }
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("focusSearch") {
       MainActor.assumeIsolated { NativeSettingsWindow.focusSearch() }
     }.runOnQueue(.main)

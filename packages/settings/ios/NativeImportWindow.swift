@@ -15,7 +15,33 @@ enum NativeImportWindow {
   static func makeController() -> NSViewController? {
     guard enabled else { return nil }
     let model = ImportModel(services: ImportAdapter(), appName: Bundle.main.productName)
+    current = model
     return ImportHostingController(model: model)
+  }
+
+  static weak var current: ImportModel?
+
+  nonisolated static var drivable: Bool { ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" }
+
+  static func drive(_ action: String, _ argument: String?) async -> [String: Any] {
+    guard drivable, let model = current else { return ["error": "no native import window"] }
+    switch action {
+    case "select":
+      guard let browser = model.browsers.first(where: { $0.id == argument }) else { return ["error": "no browser \(argument ?? "")"] }
+      model.choose(browser)
+    case "next": await model.next()
+    case "unlock": await model.unlock()
+    default: break
+    }
+    return [
+      "step": model.step.rawValue,
+      "browsers": model.browsers.map(\.id),
+      "kinds": model.kinds.map(\.rawValue).sorted(),
+      "counts": ["cookies": model.counts.cookies, "addresses": model.counts.addresses, "cards": model.counts.cards, "bookmarks": model.counts.bookmarks, "history": model.counts.history, "passwords": model.counts.passwords],
+      "failures": model.failures.map { ImportModel.failureLine($0) },
+      "notes": model.notes,
+      "error": model.error as Any,
+    ]
   }
 }
 

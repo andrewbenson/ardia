@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeSeed } from "../perf/seed.mjs";
@@ -239,5 +239,7 @@ for (const [name, value] of Object.entries(fixtures)) {
   writeFileSync(join(dir, "session.json"), JSON.stringify(doc));
   if (__downloads) writeFileSync(join(dir, "downloads.json"), JSON.stringify(__downloads));
 }
-writeSeed(join(out, "perf-seed"), "http://127.0.0.1:47817", "");
+const seedDir = join(out, "perf-seed");
+writeSeed(seedDir, "http://127.0.0.1:47817", "");
+for (const name of readdirSync(seedDir)) if (name !== "session.json" && name !== "downloads.json") rmSync(join(seedDir, name), { recursive: true });
 console.log(`wrote ${Object.keys(fixtures).length + 1} fixtures to ${out}`);

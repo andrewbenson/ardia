@@ -61,7 +61,7 @@ let app = null;
 async function launch() {
   app = await launchInstance(APP, {
     data: DATA,
-    env: { ARDIA_IMPORT_SOURCE_DIR: `${HOME}/Library/Application Support`, ARDIA_IMPORT_TEST_SECRET: SECRET },
+    env: { ARDIA_IMPORT_SOURCE_DIR: `${HOME}/Library/Application Support`, ARDIA_IMPORT_TEST_SECRET: SECRET, ARDIA_NATIVE_IMPORT: "0" },
     ready: { timeout: 90_000, test: "return ac.store.getState().windowOrder.length > 0" },
   });
   note("pid", app.pid, "cdp", app.port, "log", app.log);

@@ -26,6 +26,7 @@ import { openInternalPage } from "../pages/urls";
 import { hasDeveloperModeChanges, resetDeveloperModeSites } from "../site/developerMode";
 import { autofillHandlers } from "./native/autofill";
 import { extensionsHandlers, publishExtensions } from "./native/extensions";
+import { importHandlers, publishImport } from "./native/import";
 import { liveHandlers, publishLive } from "./native/live";
 import { passwordsHandlers, publishPasswords } from "./native/passwords";
 import { privacyHandlers, publishPrivacy } from "./native/privacy";
@@ -151,6 +152,7 @@ export function startNativeSettings(): boolean {
     profilesHandlers,
     syncHandlers,
     liveHandlers,
+    importHandlers,
   );
   serveNativeSettings(handlers);
   const publishSettings = (settings: Settings) => {
@@ -173,6 +175,6 @@ export function startNativeSettings(): boolean {
     if (s.ui.focusedWindowId !== prev.ui.focusedWindowId || s.windows !== prev.windows) publishFocus();
   });
   useCli.subscribe(() => publishSettingsTopic("advanced.cli", cliTopic()));
-  for (const publish of [publishPrivacy, publishPasswords, publishExtensions, publishProfiles, publishSync, publishLive, ...publishers]) publish();
+  for (const publish of [publishPrivacy, publishPasswords, publishExtensions, publishProfiles, publishSync, publishLive, publishImport, ...publishers]) publish();
   return true;
 }

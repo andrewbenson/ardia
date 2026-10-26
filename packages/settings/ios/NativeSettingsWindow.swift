@@ -40,6 +40,7 @@ enum NativeSettingsWindow {
 
   static func install() {
     WindowHost.makeAuxController = { id, kind in
+      if kind == NativeImportWindow.kind { return NativeImportWindow.makeController() }
       guard kind == "settings", enabled, let context = makeContext() else { return nil }
       let controller = NSHostingController(rootView: SettingsWindowView(context: context))
       controller.sceneBridgingOptions = [.toolbars]

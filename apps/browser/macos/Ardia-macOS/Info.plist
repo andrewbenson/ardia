@@ -107,7 +107,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Websites may ask to use your camera.</string>
 	<key>NSDockTilePlugIn</key>
-	<string>ArdiaDockTile.plugin</string>
+	<string>DockTile.plugin</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>$(AC_PRODUCT_NAME) finds Cast devices on your network so you can cast tabs to them.</string>
 	<key>NSLocationUsageDescription</key>

@@ -52,7 +52,8 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 app_dir="$repo/apps/browser"
 dd="$app_dir/build-$name"
 log="$dd/build-app.log"
-app="$dd/Build/Products/$config/Ardia.app"
+. "$repo/scripts/identity.sh"
+app="$dd/Build/Products/$config/$(ac_identity FULL_PRODUCT_NAME)"
 stamp_file="$dd/.ac-native-stamp-$config"
 
 native_stamp() {

@@ -37,8 +37,9 @@ elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 else
   die "$version is neither a stable (<major>.<minor>.<patch>) nor a nightly (<next stable>-nightly.<n>) version"
 fi
-dmg="$dist/Ardia-$version.dmg"
-zip="$dist/Ardia-$version.zip"
+dmg="$dist/$product-$version.dmg"
+zip="$dist/$product-$version.zip"
+nightly_dmg="$product-Nightly.dmg"
 feed="$dist/appcast.xml"
 cli="$dist/ardia-cli-$version-macos-arm64.tar.gz"
 
@@ -125,12 +126,12 @@ fi
 run gh release create "v$version" -R "$repo" "${release_flags[@]}" --verify-tag --title "$product $version" \
   --notes-file "$dist/release-notes.md" "${assets[@]}"
 if [ "$channel" = nightly ]; then
-  nightly_notes="The newest nightly of $product, always as Ardia-Nightly.dmg ($nightly_url/Ardia-Nightly.dmg). Now $version: its notes and source are at https://github.com/$repo/releases/tag/v$version. Every nightly's notes: $notes_page"
+  nightly_notes="The newest nightly of $product, always as $nightly_dmg ($nightly_url/$nightly_dmg). Now $version: its notes and source are at https://github.com/$repo/releases/tag/v$version. Every nightly's notes: $notes_page"
   if ! gh release view nightly -R "$repo" >/dev/null 2>&1; then
     run gh release create nightly -R "$repo" --prerelease --latest=false --title "$product Nightly" --notes "$nightly_notes"
   fi
-  cp -c "$dmg" "$work/Ardia-Nightly.dmg"
-  run gh release upload nightly -R "$repo" --clobber "$work/Ardia-Nightly.dmg"
+  cp -c "$dmg" "$work/$nightly_dmg"
+  run gh release upload nightly -R "$repo" --clobber "$work/$nightly_dmg"
   run gh release edit nightly -R "$repo" --notes "$nightly_notes"
   run gh release upload "$stable_tag" -R "$repo" --clobber "$feed"
 fi
@@ -152,13 +153,13 @@ for url in "${feeds[@]}"; do
     || { echo "FAIL  $url lists $version"; status=1; }
 done
 if [ "$channel" = nightly ]; then
-  url="$nightly_url/Ardia-Nightly.dmg"
+  url="$nightly_url/$nightly_dmg"
   size="$(curl -fsSLI --max-time 30 "$url" | awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }')"
   [ "$size" = "$(stat -f %z "$dmg")" ] && echo "PASS  $url is $version's DMG" \
     || { echo "FAIL  $url is $version's DMG (size $size, expected $(stat -f %z "$dmg"))"; status=1; }
   if [ "$upstream" = 1 ]; then
     to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' https://ardia.dev/nightly || true)"
-    [ "$to" = "$nightly_url/Ardia-Nightly.dmg" ] && echo "PASS  https://ardia.dev/nightly leads there" \
+    [ "$to" = "$nightly_url/$nightly_dmg" ] && echo "PASS  https://ardia.dev/nightly leads there" \
       || { echo "FAIL  https://ardia.dev/nightly leads there (goes to ${to:-nothing}: deploy the site, infra/site/nginx.conf)"; status=1; }
   fi
 fi

@@ -53,8 +53,8 @@ For each fix:
      All of it must pass, as for stable.
    - Publish: `git tag v<version> && git push origin main v<version>`, then
      `.claude/skills/release/scripts/publish.sh <version>` (a prerelease with the DMG, zip, appcast and CLI tarball; the
-     merged feed onto the latest stable release; `Ardia-Nightly.dmg` on the `nightly` release; it checks them;
-     the asset keeps its `Ardia-` name, like every release asset). With a new engine, commit `prebuilt-engine.tsv`'s
+     merged feed onto the latest stable release; `<Product>-Nightly.dmg` (`Solara-Nightly.dmg`) on the `nightly` release; it checks them;
+     every release asset is named for the identity's product). With a new engine, commit `prebuilt-engine.tsv`'s
      line as in step 5.
    - Report in two lines: the version, the fix, the smoke result.
 
@@ -141,7 +141,7 @@ git add packages/ardiacore/scripts/ubo.sh && git commit -m "Content blocker: uBl
 It checks the zip against GitHub's SHA-256 digest and the manifest's version, rewrites the pin in
 `packages/ardiacore/scripts/ubo.sh` and installs it into `packages/ardiacore/vendor/ubo`. Verify after release.sh
 that the export carries it: `python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])'
-dist/<version>/export/Ardia.app/Contents/Resources/Extensions/ublock/manifest.json` prints the
+dist/<version>/export/Solara.app/Contents/Resources/Extensions/ublock/manifest.json` prints the
 pinned `UBO_VERSION` followed by ubo.sh's patch level as a fourth part (`1.75.0.8`: uBO refreshes its cached
 scriptlets when that version changes, so our patches reach existing profiles), and the smoke test's "uBlock blocks an ad script" check passes. An error means
 the release is odd (no digest, a version mismatch): keep the old pin and say so in the report.
@@ -186,7 +186,7 @@ First it checks the update from `<previous>` (its export in `dist/<previous>/exp
   session ones, localStorage, passwords, bookmarks, history, an address, a site permission, zoom, an extension),
   opens in this build started without `ARDIA_DATA_DIR` (test copies in a fake home; never the real data).
 
-Then it launches `dist/<version>/export/Ardia.app` hidden with a data dir that says `<previous>` ran last,
+Then it launches `dist/<version>/export/Solara.app` hidden with a data dir that says `<previous>` ran last,
 and a session whose window was left on its second profile, and checks, over CDP and the window list:
 
 - the engine and chrome://version are the Chromium version `engine/patches/build/env.sh` names, and the after-update release-notes tab opened exactly once;
@@ -227,7 +227,7 @@ Check the candidate's counts against the ceilings before publishing (about two m
 are counts, not timings):
 
 ```bash
-node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<version>-rc/export/Ardia.app   # dist/<version>/export without an rc
+node apps/browser/scripts/perf/ratchet.mjs run --own --app dist/<version>-rc/export/Solara.app   # dist/<version>/export without an rc
 ```
 
 `--own` runs the app's own `main.jsbundle`, so it checks what ships. It must print `ratchet: ok`. It runs the launch,
@@ -241,8 +241,8 @@ the lowered ceilings, and say which counts dropped. The wall-clock gate is a sep
 ### 4c. Perf gate: the RC against the previous stable release (stable only)
 
 Every stable release is timed against the previous stable one before it publishes (never against a nightly: the
-control is `dist/<previous stable>/export/Ardia.app`), and ships only when every row is the same or
-better (`docs/perf/README.md` › Gating a release: native-bench with `--control dist/<previous>/export/Ardia.app`,
+control is `dist/<previous stable>/export/Solara.app`), and ships only when every row is the same or
+better (`docs/perf/README.md` › Gating a release: native-bench with `--control dist/<previous>/export/Solara.app`,
 interleaved, launch x6+ and session x2, then js-bench alternating the two apps). It runs alone on a quiet Mac, holding
 the perflab lock, after the smoke test and the ratchet. Call a row a regression only when the ranges separate.
 Afterwards read `scripts/agent/cpu-cap`'s log (`cpu-cap.log`): a pause of the bench or its instances during the run

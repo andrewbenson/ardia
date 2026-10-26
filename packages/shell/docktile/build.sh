@@ -2,7 +2,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-name="ArdiaDockTile"
+name="DockTile"
 bundle_id="${PRODUCT_BUNDLE_IDENTIFIER:-com.ardia.browser}.DockTilePlugIn"
 plugin="$TARGET_BUILD_DIR/${PLUGINS_FOLDER_PATH:-$CONTENTS_FOLDER_PATH/PlugIns}/$name.plugin"
 work="${DERIVED_FILE_DIR:-$here/build}/docktile"

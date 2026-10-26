@@ -82,11 +82,11 @@ public final class AppUpdater: NSObject {
       let busy = channelChangePending || updater.sessionInProgress
       idleSince = busy ? nil : idleSince ?? Date()
       if let idleSince, Date().timeIntervalSince(idleSince) >= Self.quitWaitAfterIdle {
-        NSLog("Ardia: a staged nightly is still in Sparkle's cache with nothing left to drop it; quitting")
+        NSLog("\(Bundle.main.productName): a staged nightly is still in Sparkle's cache with nothing left to drop it; quitting")
         return quit()
       }
       if Date() >= deadline {
-        NSLog("Ardia: Sparkle didn't drop the staged nightly within \(Int(Self.quitWaitLimit)) s; quitting, and it may install")
+        NSLog("\(Bundle.main.productName): Sparkle didn't drop the staged nightly within \(Int(Self.quitWaitLimit)) s; quitting, and it may install")
         return quit()
       }
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { settle() }
@@ -202,7 +202,7 @@ public final class AppUpdater: NSObject {
     do {
       try updater.start()
     } catch {
-      NSLog("Ardia: couldn't start the updater: \(error.localizedDescription)")
+      NSLog("\(Bundle.main.productName): couldn't start the updater: \(error.localizedDescription)")
     }
     sessionObservation = updater.observe(\.sessionInProgress, options: [.new]) { [weak self] _, change in
       guard change.newValue == false else { return }
@@ -216,7 +216,7 @@ public final class AppUpdater: NSObject {
     #if canImport(Sparkle)
     guard isConfigured else {
       if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" {
-        return NSLog("Ardia: update checks are off in this instance")
+        return NSLog("\(Bundle.main.productName): update checks are off in this instance")
       }
       return showNotSetUp()
     }
@@ -295,11 +295,11 @@ extension AppUpdater: SPUUpdaterDelegate {
   }
 
   public func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
-    NSLog("Ardia: update found: \(item.displayVersionString) (build \(item.versionString)\(item.channel.map { ", \($0)" } ?? "")) on the \(channel) channel")
+    NSLog("\(Bundle.main.productName): update found: \(item.displayVersionString) (build \(item.versionString)\(item.channel.map { ", \($0)" } ?? "")) on the \(channel) channel")
   }
 
   public func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
-    NSLog("Ardia: no update on the \(channel) channel")
+    NSLog("\(Bundle.main.productName): no update on the \(channel) channel")
   }
 
   public func feedParameters(for updater: SPUUpdater, sendingSystemProfile sendingProfile: Bool) -> [[String: String]] {
@@ -359,20 +359,20 @@ enum UpdatePrewarm {
       task.terminationHandler = { ended in
         DispatchQueue.main.async {
           if running == ended.processIdentifier { running = 0 }
-          NSLog("Ardia: prewarmed update \(version) in \(Int(Date().timeIntervalSince(began) * 1000)) ms (status \(ended.terminationStatus))")
+          NSLog("\(Bundle.main.productName): prewarmed update \(version) in \(Int(Date().timeIntervalSince(began) * 1000)) ms (status \(ended.terminationStatus))")
         }
       }
       do {
         try task.run()
       } catch {
-        return NSLog("Ardia: couldn't prewarm update \(version): \(error.localizedDescription)")
+        return NSLog("\(Bundle.main.productName): couldn't prewarm update \(version): \(error.localizedDescription)")
       }
       let pid = task.processIdentifier
       DispatchQueue.main.async {
         if task.isRunning { running = pid }
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
           guard running == pid, task.isRunning else { return }
-          NSLog("Ardia: update prewarm still running after \(Int(timeout)) s; stopping it")
+          NSLog("\(Bundle.main.productName): update prewarm still running after \(Int(timeout)) s; stopping it")
           stop()
         }
       }
@@ -476,7 +476,7 @@ final class ChannelUserDriver: NSObject, SPUUserDriver {
   }
 
   private func drop(_ item: SUAppcastItem, answering reply: (SPUUserUpdateChoice) -> Void) {
-    NSLog("Ardia: dropping update \(item.displayVersionString) (build \(item.versionString)): its channel isn't this copy's any more")
+    NSLog("\(Bundle.main.productName): dropping update \(item.displayVersionString) (build \(item.versionString)): its channel isn't this copy's any more")
     UpdatePrewarm.stop()
     SkippedUpdateDefaults.unchanged { reply(.skip) }
   }

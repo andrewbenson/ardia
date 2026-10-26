@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { attach, sleep } from "../../../../scripts/lib/instance.mjs";
 
 const [version, windowsTool, pages] = process.argv.slice(2);
+const product = process.env.SMOKE_PRODUCT;
 const instance = attach(process.env.SMOKE_DATA);
 const { port, pid } = instance;
 const quietly = (session, method, params = {}) => session.send(method, params, { timeout: 2 ** 31 - 1 }).catch(() => ({}));
@@ -177,7 +178,7 @@ adSteps.push(await adsOnPage());
 check("allowing ads on a site, then not, applies on the next load", adSteps.join(" → ") === "blocked → loaded → blocked", adSteps.join(" → "));
 
 await go("chrome://version");
-check("chrome://version", (await evaluate("document.body.innerText")).includes(`Ardia\t${chromiumVersion} (Official Build)`));
+check("chrome://version", (await evaluate("document.body.innerText")).includes(`${product}\t${chromiumVersion} (Official Build)`));
 
 await send("Network.enable");
 await send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
@@ -349,8 +350,8 @@ try {
 } catch (error) {
   console.log(`note: ${error.message}`);
 }
-check("a link from another app (a GURL Apple Event) opens in Little Ardia", !!linked && linkedPage,
-  linked ? `${linked}${linkedPage ? "" : ", but no page loaded"}` : "no Little Ardia within 10 s");
+check(`a link from another app (a GURL Apple Event) opens in Little ${product}`, !!linked && linkedPage,
+  linked ? `${linked}${linkedPage ? "" : ", but no page loaded"}` : `no Little ${product} within 10 s`);
 
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);

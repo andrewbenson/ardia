@@ -6,7 +6,7 @@ shift
 before=0
 if [ "${1:-}" = "--before-publish" ]; then before=1; shift; fi
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-app="${1:-$root/dist/$version/export/Ardia.app}"
+app="${1:-$(ls -d "$root/dist/$version/export"/*.app 2>/dev/null | head -1 || true)}"
 
 feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")"
 case "$feed" in

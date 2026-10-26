@@ -187,7 +187,7 @@ enum DocumentStore {
     lock.unlock()
     for waiter in waiters { waiter(failure) }
     guard let failure else { return }
-    NSLog("Ardia: saving \(key) failed (try \(attempt + 1)): \(failure.localizedDescription)")
+    NSLog("\(Bundle.main.productName): saving \(key) failed (try \(attempt + 1)): \(failure.localizedDescription)")
     let delay = min(60.0, 2.0 * pow(2.0, Double(min(attempt, 5))))
     queue.asyncAfter(deadline: .now() + delay) { land(key, generation, attempt: attempt + 1) }
   }

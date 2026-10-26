@@ -49,7 +49,9 @@ bundle_id="$(ac_identity AC_BUNDLE_ID)"
 repo="$(ac_identity AC_RELEASE_REPO)"
 notes_page="$(ac_identity AC_NOTES_URL)"
 public_ed_key="$(ac_identity AC_PUBLIC_ED_KEY)"
-for setting in product_name team_id bundle_id repo notes_page public_ed_key; do
+app_name="$(ac_identity FULL_PRODUCT_NAME)"
+executable="$(ac_identity EXECUTABLE_NAME)"
+for setting in product_name team_id bundle_id repo notes_page public_ed_key app_name executable; do
   [ -n "${!setting}" ] || { echo "error: the app's identity has no $setting (apps/browser/macos/Identity.xcconfig, Fork.xcconfig)" >&2; exit 1; }
 done
 case "$public_ed_key" in
@@ -96,9 +98,9 @@ if [ "$rc" = 1 ]; then dist="$root/dist/$version-rc"; else dist="$root/dist/$ver
 [ "$rc" = 1 ] && [ -n "${RC_DIST:-}" ] && dist="$(cd "$root" && mkdir -p "$RC_DIST" && cd "$RC_DIST" && pwd)"
 build="${RELEASE_BUILD_DIR:-$app_dir/build-release}"
 archive="$dist/Ardia.xcarchive"
-app="$dist/export/Ardia.app"
-zip="$dist/Ardia-$version.zip"
-dmg="$dist/Ardia-$version.dmg"
+app="$dist/export/$app_name"
+zip="$dist/$product_name-$version.zip"
+dmg="$dist/$product_name-$version.dmg"
 chromium_src="${CHROMIUM_SRC:-$HOME/chromium-build/chromium_git/chromium/src}"
 framework_src="${ARDIACORE_FRAMEWORK:-$chromium_src/out/Release_GN_arm64/Chromium Framework.framework}"
 framework_engine="${ARDIACORE_FRAMEWORK_ENGINE:-}"
@@ -109,24 +111,24 @@ if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   archive="$build_input/Ardia.xcarchive"
 fi
 if [ "$phase" = sign ] || [ "$phase" = check ]; then
-  framework_src="$archive/Products/Applications/Ardia.app/Contents/Frameworks/Chromium Framework.framework"
+  framework_src="$archive/Products/Applications/$app_name/Contents/Frameworks/Chromium Framework.framework"
   [ "$phase" = check ] || [ -d "$archive" ] || die "no $archive: run --phase build first"
 fi
 
 launch_check() {
   echo "==> Launch check"
   check_data="$(mktemp -d "${TMPDIR:-/tmp}/ac-release.XXXXXX")"
-  before="$(pgrep -f "^$app/Contents/MacOS/Ardia" | sort || true)"
+  before="$(pgrep -f "^$app/Contents/MacOS/$executable" | sort || true)"
   check_port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
   open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR="$check_data" --env ARDIA_REMOTE_DEBUGGING_PORT="$check_port" "$app"
   ubo_ok=0
   node "$root/scripts/lib/ubo-ready.mjs" "$check_port" 90 && ubo_ok=1
   sleep 5
   pid=""
-  for p in $(pgrep -f "^$app/Contents/MacOS/Ardia\$" || true); do
+  for p in $(pgrep -f "^$app/Contents/MacOS/$executable\$" || true); do
     ps -E -ww -o command= -p "$p" 2>/dev/null | grep -qF "ARDIA_DATA_DIR=$check_data" && { pid="$p"; break; }
   done
-  [ -n "$pid" ] || pid="$(comm -13 <(echo "$before") <(pgrep -f "^$app/Contents/MacOS/Ardia" | sort || true) | head -1)"
+  [ -n "$pid" ] || pid="$(comm -13 <(echo "$before") <(pgrep -f "^$app/Contents/MacOS/$executable" | sort || true) | head -1)"
   [ -n "$pid" ] || die "the app didn't start (or quit)"
   kill -TERM "$pid"
   for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
@@ -290,7 +292,7 @@ if [ -n "$provisioning_profile" ]; then
   app_entitlements="$macos/Ardia-macOS/Ardia.entitlements"
   grants_browser_passkeys "$provisioning_profile" && app_entitlements="$macos/Ardia-macOS/Ardia-ICloudPasskeys.entitlements"
   echo "==> Export (Developer ID, $(basename "$provisioning_profile"), $(basename "$app_entitlements"))"
-  "$root/scripts/lib/export-developer-id.sh" "$archive/Products/Applications/Ardia.app" "$app" "$provisioning_profile" \
+  "$root/scripts/lib/export-developer-id.sh" "$archive/Products/Applications/$app_name" "$app" "$provisioning_profile" \
     "$app_entitlements" "$identity" "$bundle_id" > "$dist/export.log" 2>&1 || { cat "$dist/export.log" >&2; exit 1; }
 else
   echo "==> Export (Developer ID)"
@@ -307,7 +309,7 @@ else
     sleep 10
   done
 fi
-[ "$(lipo -archs "$app/Contents/MacOS/Ardia")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/Ardia"), not arm64"
+[ "$(lipo -archs "$app/Contents/MacOS/$executable")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/$executable"), not arm64"
 
 if [ "$phase" = all ]; then
   build_cli
@@ -354,14 +356,14 @@ sign --preserve-metadata=entitlements,requirements,flags,runtime "$app"
 
 echo "==> Verify"
 codesign --verify --deep --strict "$app"
-[ -d "$archive/dSYMs/Ardia.app.dSYM" ] || die "the archive has no Ardia.app.dSYM"
+[ -d "$archive/dSYMs/$app_name.dSYM" ] || die "the archive has no $app_name.dSYM"
 entitlements() { codesign -d --entitlements - --xml "$1" 2>/dev/null; }
 info() { plutil -extract "$1" raw "$app/Contents/Info.plist" 2>/dev/null; }
 [ "$(info CFBundleIdentifier)" = "$bundle_id" ] || die "bundle id is $(info CFBundleIdentifier), not $bundle_id"
 [ "$(info CFBundleName)" = "$product_name" ] || die "CFBundleName is $(info CFBundleName), not $product_name"
 [ "$(info CFBundleDisplayName)" = "$product_name" ] || die "CFBundleDisplayName is $(info CFBundleDisplayName), not $product_name"
 [ "$(info SUPublicEDKey)" = "$public_ed_key" ] || die "SUPublicEDKey is $(info SUPublicEDKey), not $public_ed_key"
-[ "$(info CFBundleExecutable)" = Ardia ] || die "executable is $(info CFBundleExecutable)"
+[ "$(info CFBundleExecutable)" = "$executable" ] || die "executable is $(info CFBundleExecutable), not $executable"
 [ "$(info CFBundleShortVersionString)" = "$version" ] || die "CFBundleShortVersionString is $(info CFBundleShortVersionString)"
 [ "$(info CFBundleVersion)" = "$release_build" ] || die "CFBundleVersion is $(info CFBundleVersion), not $release_build"
 [ "$(info ACUpdateChannel)" = "$channel" ] || die "ACUpdateChannel is '$(info ACUpdateChannel)', not $channel"
@@ -370,7 +372,7 @@ for key in SUFeedURL SUPublicEDKey NSDockTilePlugIn NSCameraUsageDescription NSM
   [ -n "$(info "$key")" ] || die "Info.plist has no $key"
 done
 [ -d "$app/Contents/Frameworks/Sparkle.framework" ] || die "no Sparkle.framework"
-[ -d "$app/Contents/PlugIns/ArdiaDockTile.plugin" ] || die "no dock tile plug-in"
+[ -d "$app/Contents/PlugIns/$(info NSDockTilePlugIn)" ] || die "no dock tile plug-in"
 [ -f "$app/Contents/embedded.provisionprofile" ] || die "no Developer ID provisioning profile (keychain groups need it)"
 [ -f "$app/Contents/Resources/Extensions/ublock/manifest.json" ] || die "no uBlock Origin in the app"
 for file in "$root"/LICENSE* "$root/NOTICE"; do
@@ -521,7 +523,7 @@ echo "==> Appcast"
 updates="$dist/updates"
 mkdir -p "$updates"
 cp "$zip" "$updates/"
-{ printf '**%s**\n\n' "$headline"; notes_body; } > "$updates/Ardia-$version.md"
+{ printf '**%s**\n\n' "$headline"; notes_body; } > "$updates/$(basename "$zip" .zip).md"
 [ -s "$base_feed" ] && cp "$base_feed" "$updates/appcast.xml"
 if [ -n "$sparkle_key_file" ]; then
   key="$sparkle_key_file"

@@ -6,12 +6,15 @@ previous="${2:?usage: smoke.sh <version> <previous-version|none> [--rc]}"
 root="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 here="$(cd "$(dirname "$0")" && pwd)"
 if [ "${3:-}" = --rc ]; then dist="$root/dist/$version-rc"; else dist="$root/dist/$version"; fi
-app="${SMOKE_APP:-$dist/export/Ardia.app}"
-old="$(ls -d "$root/dist/$previous/export"/*.app 2>/dev/null | head -1)"
-old="${old:-$root/dist/$previous/export/Ardia.app}"
+app="${SMOKE_APP:-$(ls -d "$dist/export"/*.app 2>/dev/null | head -1 || true)}"
+app="${app:-$dist/export/Solara.app}"
+old="$(ls -d "$root/dist/$previous/export"/*.app 2>/dev/null | head -1 || true)"
+old="${old:-$root/dist/$previous/export/Solara.app}"
 port="${SMOKE_CDP_PORT:-9398}"
 pages_port="${SMOKE_PAGES_PORT:-8798}"
 [ -d "$app" ] || { echo "error: no $app (run scripts/release.sh $version first)" >&2; exit 1; }
+product="$(plutil -extract CFBundleName raw "$app/Contents/Info.plist")"
+executable="$(plutil -extract CFBundleExecutable raw "$app/Contents/Info.plist")"
 case "$(cd "$app" && pwd -P)" in /Applications/*) echo "error: never an installed app ($app)" >&2; exit 1 ;; esac
 for p in "$port" "$pages_port"; do
   if nc -z -G 2 127.0.0.1 "$p" 2>/dev/null; then
@@ -81,8 +84,8 @@ elif [ "$previous" = none ]; then
 else
   check "$previous's export to compare with" 0 "no $old"
 fi
-zip="$dist/Ardia-$version.zip"
-dmg="$dist/Ardia-$version.dmg"
+zip="$dist/$product-$version.zip"
+dmg="$dist/$product-$version.dmg"
 if [ -z "${SMOKE_APP:-}" ]; then
   for f in "$zip" "$dmg" "$dist/appcast.xml"; do [ -f "$f" ] || check "the release has $(basename "$f")" 0; done
   if [ -f "$zip" ] && [ -f "$dist/appcast.xml" ]; then
@@ -159,7 +162,7 @@ sleep 8
 
 locked="$("$work/windows" --locked)"
 [ "$locked" = 1 ] && echo "note: the screen is locked; checks of window order and closing are skipped (they need an unlocked screen)"
-SMOKE_LOCKED="$locked" SMOKE_DATA="$work/data" SMOKE_KEYS="$work/keys" SMOKE_GURL="$work/gurl" node "$here/smoke.mjs" "$version" "$work/windows" "$pages" || status=1
+SMOKE_PRODUCT="$product" SMOKE_LOCKED="$locked" SMOKE_DATA="$work/data" SMOKE_KEYS="$work/keys" SMOKE_GURL="$work/gurl" node "$here/smoke.mjs" "$version" "$work/windows" "$pages" || status=1
 
 children="$(ps -axo ppid=,pid=,comm= | awk -v p="$pid" '$1 == p { $1 = ""; $2 = ""; sub(/^ +/, ""); print }')"
 foreign="$(printf '%s\n' "$children" | grep -v "^$fw/Chromium Framework.framework/" | grep -v '^$' || true)"
@@ -184,7 +187,7 @@ else
     sleep 1
     exited="$(grep -o ">:$pid\] termination reported by launchd ([0-9, ]*)" "$work/exit.log" | head -1 | sed 's/.*launchd //' || true)"
     report="$(find ~/Library/Logs/DiagnosticReports ~/Library/Logs/DiagnosticReports/Retired -maxdepth 1 \
-      -name 'Ardia-*.ips' -newer "$work/quit-marker" -exec grep -l "\"pid\" : $pid," {} + 2>/dev/null | head -1 || true)"
+      -name "$executable-*.ips" -newer "$work/quit-marker" -exec grep -l "\"pid\" : $pid," {} + 2>/dev/null | head -1 || true)"
     [ -n "$report" ] && break
     [ "$exited" = "(0, 0, 0)" ] && break
   done

@@ -79,7 +79,7 @@ public enum ShellScripting {
 
   static func perform(_ body: [String: Any], transform: @escaping ([String: Any]) -> Any? = { _ in nil }) -> Any? {
     #if DEBUG
-    if !Thread.isMainThread { NSLog("Ardia: an Apple event is being handled off the main thread") }
+    if !Thread.isMainThread { NSLog("\(Bundle.main.productName): an Apple event is being handled off the main thread") }
     #endif
     guard let send else {
       NSScriptCommand.current()?.setError("\(Bundle.main.productName) isn't ready yet.")
@@ -99,7 +99,7 @@ public enum ShellScripting {
       if refused { command?.refuseJavaScriptFromAppleEvents() }
       let value = error == nil && !refused ? transform(answer) : nil
       if let failure = ACTryCatch({ command?.resumeExecution(withResult: value) }) {
-        NSLog("Ardia: AppleScript reply failed: \(failure)")
+        NSLog("\(Bundle.main.productName): AppleScript reply failed: \(failure)")
       }
     }
     var request = body

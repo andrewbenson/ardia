@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 import SolaraModel
-import SolaraPersistence
+@testable import SolaraPersistence
 import SolaraStore
 import Testing
 
@@ -35,6 +35,12 @@ func store(for launch: Launch) -> Store {
 
 func document(_ state: BrowserState) -> String { Store(state: state).sessionDocument().json().canonical }
 
+let refusedFixtures: Set<String> = ["unparseable-session", "wrong-version"]
+
+func contents(_ url: URL) -> Data? { try? Data(contentsOf: url) }
+
+func names(in folder: DataFolder) -> [String] { ((try? FileManager.default.contentsOfDirectory(atPath: folder.url.path)) ?? []).sorted() }
+
 let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"searchEngine":"duckduckgo","batterySaver":false,"futureKey":{"a":1}},"windows":[],"windowOrder":[],"focusedWindowId":null,"tabs":[],"groups":[],"splits":[],"closedTabs":[],"closedWindows":[]}"#
 
 @Suite struct LaunchTests {
@@ -55,7 +61,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
   }
 
   @Test func theDatabaseLoadsTheSameWorkspaceAsTheSessionItCameFrom() throws {
-    for name in try FileManager.default.contentsOfDirectory(atPath: fixtures.path).sorted() where !name.hasPrefix(".") {
+    for name in try FileManager.default.contentsOfDirectory(atPath: fixtures.path).sorted() where !name.hasPrefix(".") && !refusedFixtures.contains(name) {
       let folder = try scratchFolder()
       try copyFixture(name, into: folder)
       let first = try open(folder)
@@ -72,7 +78,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     try copyFixture("broken-splits", into: folder)
     let launch = try open(folder)
     let store = store(for: launch)
-    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, rows: launch.rows, clock: { 42 })
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
     let window = store.state.windowOrder[0]
     try store.dispatch(Command("newTab", [.string(window), ["url": "https://new.example/"]]))
     try store.dispatch(Command("createGroup", [JSONValue(Array(store.state.windows[window]!.tabIds.suffix(2))), ["name": "G"]]))
@@ -101,7 +107,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     try copyFixture("perf-seed", into: folder)
     let launch = try open(folder)
     let store = store(for: launch)
-    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, rows: launch.rows, clock: { 42 })
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
     let window = store.state.windowOrder[0]
     let tabs = store.state.windows[window]!.tabIds
     try store.dispatch(Command("closeTabs", [JSONValue(Array(tabs.prefix(3)))]))
@@ -121,7 +127,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     try write(legacySession, to: folder.session)
     let first = try open(folder)
     let store = store(for: first)
-    let writer = PersistenceWriter(store: store, database: first.database, folder: folder, rows: first.rows)
+    let writer = PersistenceWriter(store: store, database: first.database, folder: folder, persisted: first.persisted)
     try store.dispatch(Command("updateSettings", [["onlyNative": true, "searchEngine": "bing"]]))
     #expect(writer.flush(timeout: 5))
     try first.database.close()
@@ -197,7 +203,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let launch = try open(folder)
     #expect(launch.state.downloads.map(\.id) == ["saved-0", "saved-1"])
     let store = store(for: launch)
-    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, rows: launch.rows, clock: { 42 })
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
     try store.dispatch(Command("upsertDownload", [["id": "fresh", "state": "downloading", "profile": ""]]))
     #expect(writer.flush(timeout: 5))
     let shadow = try JSONValue.parse(Data(contentsOf: folder.downloads))
@@ -210,10 +216,243 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let folder = try scratchFolder()
     let launch = try open(folder)
     let store = store(for: launch)
-    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, rows: launch.rows)
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted)
     try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
     try await Task.sleep(for: .milliseconds(150))
     #expect(writer.flushCount == 1)
     #expect(try launch.database.load().settings?["appearance"] == "dark")
+  }
+
+  @Test func aWrongShapedValueCostsOnlyThatValue() throws {
+    let wrong = try FileManager.default.contentsOfDirectory(atPath: fixtures.path).filter { $0.hasPrefix("wrong-shape-") }.sorted()
+    #expect(wrong.count >= 15)
+    for name in wrong {
+      let folder = try scratchFolder()
+      try copyFixture(name, into: folder)
+      let launch = try open(folder)
+      #expect(launch.state.windows.count == 1, "\(name)")
+      #expect(launch.state.tabs.count == 3, "\(name)")
+      #expect(launch.state.profiles.count == (name == "wrong-shape-profile-string" ? 1 : 2), "\(name)")
+      #expect(launch.state.settings["searchEngine"] == "duckduckgo", "\(name)")
+      #expect(launch.state.settings["appearance"] == "dark", "\(name)")
+      #expect(launch.state.downloads.count == 1, "\(name)")
+      #expect(!launch.report.notes.isEmpty, "\(name)")
+      try launch.database.close()
+    }
+  }
+
+  @Test func anUnreadableNestedValueIsKeptAsWritten() throws {
+    let folder = try scratchFolder()
+    try copyFixture("wrong-shape-tab-tilefolder-string", into: folder)
+    let launch = try open(folder)
+    #expect(launch.state.tabs["p"]?.extra["tileFolder"] == "legacy")
+    #expect(document(launch.state).contains(#""tileFolder":"legacy""#))
+    try launch.database.close()
+    let again = try open(folder)
+    #expect(again.report.source == .database)
+    #expect(again.state.tabs["p"]?.extra["tileFolder"] == "legacy")
+  }
+
+  @Test func aLaunchThatChangesNothingWritesNoShadowAndKeepsTheOriginals() throws {
+    let folder = try scratchFolder()
+    try copyFixture("wrong-shape-closed-tabs-null", into: folder)
+    let session = contents(folder.session)
+    let downloads = contents(folder.downloads)
+    let launch = try open(folder)
+    let store = store(for: launch)
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
+    #expect(writer.flush(timeout: 5))
+    #expect(contents(folder.session) == session)
+    #expect(contents(folder.downloads) == downloads)
+    #expect(contents(folder.preNativeSession) == session)
+    #expect(contents(folder.preNativeDownloads) == downloads)
+    try store.dispatch(Command("updateSettings", [["appearance": "light"]]))
+    #expect(writer.flush(timeout: 5))
+    #expect(contents(folder.session) != session)
+    try launch.database.close()
+    let again = try open(folder)
+    #expect(again.report.source == .database)
+    #expect(contents(folder.preNativeSession) == session)
+    #expect(contents(folder.preNativeDownloads) == downloads)
+  }
+
+  @Test func theOriginalsComeBackWhenSessionJSONIsGone() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    let first = try open(folder)
+    let tabs = first.state.tabs.count
+    try first.database.close()
+    try FileManager.default.removeItem(at: folder.database)
+    try FileManager.default.removeItem(at: folder.session)
+    let second = try open(folder)
+    #expect(second.state.tabs.count == tabs)
+  }
+
+  @Test func anUnreadableSessionIsRefusedAndNothingIsCreated() throws {
+    let folder = try scratchFolder()
+    try copyFixture("unparseable-session", into: folder)
+    #expect(throws: ImportRefused.self) { try open(folder) }
+    #expect(!FileManager.default.fileExists(atPath: folder.database.path))
+    #expect(String(decoding: contents(folder.importLog) ?? Data(), as: UTF8.self).contains("refused"))
+  }
+
+  @Test func losingMostWindowsIsRefused() throws {
+    let folder = try scratchFolder()
+    let session = #"{"version":2,"windows":[null,null,null,{"id":"w1","profileId":"default","incognito":false,"tabIds":["a"],"activeTabIds":{"default":"a"},"sidebarOpen":true,"createdAt":1}],"tabs":[{"id":"a","windowId":"w1","profileId":"default","url":"https://a/","title":"","pinned":false,"muted":false,"zoom":1,"createdAt":1,"lastActiveAt":1}]}"#
+    try write(session, to: folder.session)
+    #expect(throws: ImportRefused.self) { try open(folder) }
+  }
+
+  @Test func anOrphanedWALIsMovedAsideBeforeTheImportLandsOnItsPath() throws {
+    let folder = try scratchFolder()
+    var config = Configuration()
+    config.prepareDatabase { db in
+      try db.execute(sql: "PRAGMA journal_mode = WAL")
+      try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
+    }
+    let old = try DatabaseQueue(path: folder.database.path, configuration: config)
+    try old.write { db in
+      try db.execute(sql: "CREATE TABLE setting (key TEXT PRIMARY KEY, value TEXT)")
+      for i in 0..<200 { try db.execute(sql: "INSERT INTO setting VALUES (?, ?)", arguments: ["old\(i)", String(repeating: "x", count: 500)]) }
+    }
+    let wal = try Data(contentsOf: URL(fileURLWithPath: folder.database.path + "-wal"))
+    #expect(wal.count > 0)
+    try old.close()
+    for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: folder.database.path + suffix) }
+    try wal.write(to: URL(fileURLWithPath: folder.database.path + "-wal"))
+    try write(legacySession, to: folder.session)
+    let launch = try open(folder)
+    #expect(launch.state.settings["searchEngine"] == "duckduckgo")
+    #expect(try launch.database.meta("workspace") == "1")
+    let oldRows = try launch.database.pool.read { db in try Int.fetchOne(db, sql: "SELECT count(*) FROM setting WHERE key LIKE 'old%'") }
+    #expect(oldRows == 0)
+    #expect(names(in: folder).contains { $0.hasPrefix("solara.sqlite-wal.orphan-") })
+  }
+
+  @Test func movingADatabaseAsideTakesItsSidecarsAlong() throws {
+    let folder = try scratchFolder()
+    try write("main", to: folder.database)
+    try write("wal", to: URL(fileURLWithPath: folder.database.path + "-wal"))
+    try write("shm", to: URL(fileURLWithPath: folder.database.path + "-shm"))
+    let name = try Launcher.moveAside(folder.database, label: "corrupt", now: now)
+    #expect(names(in: folder) == [name, name + "-shm", name + "-wal"].sorted())
+  }
+
+  @Test func anUnreadableSettingRowIsSkippedNotFatal() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    let first = try open(folder)
+    let broken = try first.database.pool.write { db -> String in
+      let key = try String.fetchOne(db, sql: "SELECT key FROM setting WHERE key != 'searchEngine' ORDER BY position LIMIT 1")!
+      try db.execute(sql: "UPDATE setting SET value = '{' WHERE key = ?", arguments: [key])
+      return key
+    }
+    try first.database.close()
+    let second = try open(folder)
+    #expect(second.report.source == .database)
+    #expect(second.state.settings["searchEngine"] == "duckduckgo")
+    #expect(second.report.notes.contains("skipped unreadable setting \(broken)"))
+  }
+
+  @Test func aDatabaseThatCannotBeLoadedIsMovedAsideAndReimported() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    let first = try open(folder)
+    try first.database.pool.write { db in
+      try db.execute(sql: "PRAGMA foreign_keys = OFF")
+      try db.execute(sql: "DROP TABLE download")
+    }
+    try first.database.close()
+    let second = try open(folder)
+    guard case .imported(let reason) = second.report.source else { Issue.record("expected a re-import"); return }
+    #expect(reason.contains("could not be read"))
+    #expect(second.report.movedAside.first?.contains("unreadable") == true)
+    #expect(second.state.settings["searchEngine"] == "duckduckgo")
+  }
+
+  @Test func theWriterStartsFromWhatIsOnDiskNotFromTheStore() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    let launch = try open(folder)
+    let store = store(for: launch)
+    try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    try store.dispatch(Command("upsertDownload", [["id": "early", "state": "complete", "profile": ""]]))
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
+    #expect(writer.flush(timeout: 5))
+    let stored = try launch.database.load()
+    #expect(stored.settings?["appearance"] == "dark")
+    #expect(stored.downloads.map(\.id) == ["early"])
+  }
+
+  @Test func aSupersededReimportCarriesTheDocuments() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    let first = try open(folder)
+    try first.database.pool.write { db in try db.execute(sql: "INSERT INTO document (name, value) VALUES ('onboarding', '{\"done\":true}')") }
+    try first.database.close()
+    try write(#"{"version":2,"settings":{"searchEngine":"ecosia"}}"#, to: folder.session)
+    let second = try open(folder)
+    guard case .imported = second.report.source else { Issue.record("expected a re-import"); return }
+    #expect(try second.database.load().documents["onboarding"] == #"{"done":true}"#)
+  }
+
+  @Test func onlyTheLastFewMovedAsideCopiesAreKept() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    for day in 1...6 {
+      let name = "solara.sqlite.superseded-2026-10-0\(day)T000000"
+      try write("x", to: folder.url.appending(path: name))
+      try write("x", to: folder.url.appending(path: name + "-wal"))
+    }
+    let launch = try open(folder)
+    try launch.database.close()
+    let kept = names(in: folder).filter { $0.hasPrefix("solara.sqlite.superseded-") }
+    #expect(kept == ["04", "05", "06"].flatMap { ["solara.sqlite.superseded-2026-10-\($0)T000000", "solara.sqlite.superseded-2026-10-\($0)T000000-wal"] }.sorted())
+    #expect(FileManager.default.fileExists(atPath: folder.preNativeSession.path))
+  }
+
+  @Test func aPhaseOneADatabaseKeepsItsOwnDownloads() throws {
+    let folder = try scratchFolder()
+    try copyFixture("downloads-and-staging", into: folder)
+    let first = try open(folder)
+    try first.database.pool.write { db in
+      try db.execute(sql: "DELETE FROM meta WHERE key = 'workspace'")
+      try db.execute(sql: "DELETE FROM download")
+      try db.execute(sql: #"INSERT INTO download (id, position, payload) VALUES ('only-in-db', 0, '{"id":"only-in-db","url":"https://only-in-db/","state":"complete","profile":""}')"#)
+    }
+    try first.database.close()
+    let second = try open(folder)
+    #expect(second.state.downloads.map { $0.json["url"] } == ["https://only-in-db/"])
+  }
+
+  @Test func unknownFieldsAndAbsentKeysSurviveTheDatabase() throws {
+    let folder = try scratchFolder()
+    try copyFixture("absent-and-unknown-fields", into: folder)
+    try open(folder).database.close()
+    let again = try open(folder)
+    #expect(again.report.source == .database)
+    let doc = try JSONValue.parse(document(again.state))
+    let tab = doc["tabs"]?.array?.first { $0["id"] == "a" }?.object
+    #expect(tab?.contains("customIcon") == false)
+    #expect(tab?.contains("openerId") == false)
+    #expect(doc["windows"]?.array?.first?["extraWindowKey"] == true)
+  }
+
+  @Test func theQuitFlushFitsItsDeadlineOnALargeSession() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    let launch = try open(folder)
+    let store = store(for: launch)
+    try store.dispatch(Command("createWindow", [[:]]))
+    let window = store.state.windowOrder[0]
+    for i in 0..<2000 { try store.dispatch(Command("newTab", [.string(window), ["url": .string("https://site\(i % 50).example/\(i)"), "background": true]])) }
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
+    #expect(writer.flush(timeout: 30))
+    try store.dispatch(Command("updateTab", [.string(store.state.windows[window]!.tabIds[5]), ["title": "changed"]]))
+    let started = Date()
+    #expect(writer.flush(timeout: 30))
+    let seconds = Date().timeIntervalSince(started)
+    print("quit flush of \(store.state.tabs.count) tabs took \(Int(seconds * 1000)) ms")
+    #expect(seconds < 0.5)
   }
 }

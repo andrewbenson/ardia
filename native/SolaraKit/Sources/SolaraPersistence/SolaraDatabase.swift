@@ -16,7 +16,9 @@ public final class SolaraDatabase: Sendable {
     var config = Configuration()
     config.foreignKeysEnabled = true
     config.prepareDatabase { db in
-      try db.execute(sql: "PRAGMA synchronous = NORMAL")
+      try db.execute(sql: "PRAGMA synchronous = FULL")
+      try db.execute(sql: "PRAGMA fullfsync = ON")
+      try db.execute(sql: "PRAGMA checkpoint_fullfsync = ON")
     }
     return config
   }
@@ -56,6 +58,7 @@ public final class SolaraDatabase: Sendable {
       for (key, value) in meta.sorted(by: { $0.key < $1.key }) { try Rows.setMeta(db, key, value) }
       try Rows.writeSettings(db, persisted.settings)
       try Rows.writeDownloads(db, persisted.downloads)
+      try Rows.writeDocuments(db, persisted.documents)
       if let rows = persisted.workspace { try Rows.writeWorkspace(db, rows, previous: nil) }
     }
     try queue.close()
@@ -66,11 +69,15 @@ public struct PersistedState: Sendable, Equatable {
   public var settings: JSONObject?
   public var downloads: [Download]
   public var workspace: WorkspaceRows?
+  public var documents: JSMap<String>
+  public var notes: [String]
 
-  public init(settings: JSONObject?, downloads: [Download], workspace: WorkspaceRows? = nil) {
+  public init(settings: JSONObject?, downloads: [Download], workspace: WorkspaceRows? = nil, documents: JSMap<String> = JSMap(), notes: [String] = []) {
     self.settings = settings
     self.downloads = downloads
     self.workspace = workspace
+    self.documents = documents
+    self.notes = notes
   }
 
   public func sessionJSON() -> JSONValue? {
@@ -163,6 +170,24 @@ public struct WorkspaceRows: Sendable, Equatable {
 
   func parsed(_ text: String?) -> JSONValue { text.flatMap { try? JSONValue.parse($0) } ?? .null }
 
+  public func readable() -> (rows: WorkspaceRows, unreadable: [String]) {
+    var out = self
+    var unreadable: [String] = []
+    for (name, keyed) in tables {
+      let bad = keyed.ids.filter { parsed(keyed.payloads[$0]).object == nil }
+      if bad.isEmpty { continue }
+      var kept = keyed
+      kept.ids = keyed.ids.filter { !bad.contains($0) }
+      for id in bad {
+        kept.payloads.removeValue(forKey: id)
+        kept.columns.removeValue(forKey: id)
+        unreadable.append("\(name) \(id)")
+      }
+      out.tables[name] = kept
+    }
+    return (out, unreadable)
+  }
+
   public func document() -> JSONObject {
     func object(_ name: String) -> JSONValue {
       let rows = tables[name] ?? KeyedRows()
@@ -196,6 +221,13 @@ enum Rows {
     let statement = try db.makeStatement(sql: "INSERT INTO setting (key, position, value) VALUES (?, ?, ?)")
     for (position, key) in settings.keys.enumerated() {
       try statement.execute(arguments: [key, position, settings[key]!.text()])
+    }
+  }
+
+  static func writeDocuments(_ db: Database, _ documents: JSMap<String>) throws {
+    for (name, value) in documents {
+      try db.execute(
+        sql: "INSERT INTO document (name, value) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value", arguments: [name, value])
     }
   }
 
@@ -264,15 +296,24 @@ enum Rows {
   }
 
   static func load(_ db: Database) throws -> PersistedState {
+    var notes: [String] = []
     var settings = JSONObject()
     let settingRows = try Row.fetchAll(db, sql: "SELECT key, value FROM setting ORDER BY position")
     for row in settingRows {
       let key: String = row["key"]
       let text: String = row["value"]
-      settings[key] = try JSONValue.parse(text)
+      if let value = try? JSONValue.parse(text) { settings[key] = value } else { notes.append("skipped unreadable setting \(key)") }
     }
     let downloadRows = try String.fetchAll(db, sql: "SELECT payload FROM download ORDER BY position")
-    let downloads = try downloadRows.compactMap { try JSONValue.parse($0).object.map(Download.init) }
+    var downloads: [Download] = []
+    for (position, text) in downloadRows.enumerated() {
+      if let object = (try? JSONValue.parse(text))?.object { downloads.append(Download(json: object)) } else { notes.append("skipped unreadable download \(position)") }
+    }
+    var documents = JSMap<String>()
+    for row in try Row.fetchAll(db, sql: "SELECT name, value FROM document ORDER BY name") {
+      let name: String = row["name"]
+      documents[name] = row["value"]
+    }
     let imported = try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'workspace'") == "1"
     var workspace: WorkspaceRows? = nil
     if imported {
@@ -312,6 +353,6 @@ enum Rows {
       }
       workspace = rows
     }
-    return PersistedState(settings: settingRows.isEmpty ? nil : settings, downloads: downloads, workspace: workspace)
+    return PersistedState(settings: settingRows.isEmpty ? nil : settings, downloads: downloads, workspace: workspace, documents: documents, notes: notes)
   }
 }

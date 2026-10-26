@@ -8,6 +8,12 @@ public struct ImportResult: Sendable {
   public var persisted: PersistedState
   public var meta: [String: String]
   public var notes: [String]
+  public var refusal: String?
+}
+
+public struct ImportRefused: Error, CustomStringConvertible {
+  public let reason: String
+  public var description: String { "the native store refused to import: \(reason)" }
 }
 
 public struct LoadContext: Sendable {
@@ -29,6 +35,10 @@ public struct LoadContext: Sendable {
 }
 
 public enum Importer {
+  static func keepLaunchBackdrop(_ state: inout BrowserState, from session: JSONValue?) {
+    if let stored = session?["launchBackdrop"], state.caches.launchBackdrop.isNull { state.caches.launchBackdrop = stored }
+  }
+
   static func counts(_ session: JSONValue?) -> [String: Int] {
     let object = session?.object ?? [:]
     func count(_ key: String) -> Int { object[key]?.array?.count ?? object[key]?.object?.count ?? 0 }
@@ -53,11 +63,37 @@ public enum Importer {
     return value.object?.keys ?? []
   }
 
-  public static func read(_ folder: DataFolder, carrying carried: PersistedState?, settings owned: JSONObject? = nil, context: LoadContext) -> ImportResult {
+  static let checkedCounts = ["profiles", "windows", "tabs"]
+
+  static func readableCounts(_ session: JSONValue?) -> [String: Int] {
+    var out: [String: Int] = [:]
+    for key in checkedCounts {
+      let value = session?[key]
+      let items = value?.array ?? value?.object?.values ?? []
+      out[key] = items.filter { $0.object != nil }.count
+    }
+    return out
+  }
+
+  static func refusal(before: [String: Int], readable: [String: Int]) -> String? {
+    let lost = checkedCounts.filter { key in
+      let had = before[key] ?? 0
+      return had > 0 && (readable[key] ?? 0) * 2 < had
+    }
+    if lost.isEmpty { return nil }
+    return "session.json holds far fewer readable " + lost.map { "\($0) (\(readable[$0] ?? 0) of \(before[$0] ?? 0))" }.joined(separator: ", ")
+      + " than it lists"
+  }
+
+  public static func read(
+    _ folder: DataFolder, carrying carried: PersistedState?, settings owned: JSONObject? = nil, downloads ownedDownloads: [Download]? = nil,
+    context: LoadContext
+  ) -> ImportResult {
     var notes: [String] = []
+    var refusal: String? = nil
     var meta: [String: String] = ["imported_from": "session.json"]
-    let sessionData = folder.read(folder.session)
-    let downloadsData = folder.read(folder.downloads)
+    let sessionData = folder.read(folder.session) ?? folder.read(folder.preNativeSession)
+    let downloadsData = folder.read(folder.downloads) ?? folder.read(folder.preNativeDownloads)
     var session: JSONValue? = nil
     if let sessionData {
       meta["source_session_sha256"] = Launcher.sha256(sessionData)
@@ -68,9 +104,11 @@ public enum Importer {
         if parsed["version"] == .number(2) {
           session = parsed
         } else {
+          refusal = "session.json has version \(meta["source_session_version"]!)"
           notes.append("session.json has version \(meta["source_session_version"]!), so it was not read")
         }
       } catch {
+        refusal = "session.json could not be parsed"
         notes.append("session.json could not be parsed: \(error)")
       }
     } else {
@@ -90,7 +128,9 @@ public enum Importer {
       session = .object(object)
     }
     var downloads: JSONValue? = nil
-    if let downloadsData {
+    if let ownedDownloads {
+      downloads = ["version": 2, "downloads": .array(ownedDownloads.map { .object($0.json) })]
+    } else if let downloadsData {
       meta["source_downloads_sha256"] = Launcher.sha256(downloadsData)
       meta["source_downloads_size"] = String(downloadsData.count)
       do {
@@ -103,7 +143,10 @@ public enum Importer {
       }
     }
     let loader = context.session()
-    var state = loader.loadSession(session, downloads: downloads)
+    let loaded = DecodeLog.collecting { loader.loadSession(session, downloads: downloads) }
+    var state = loaded.0
+    notes += loaded.1
+    keepLaunchBackdrop(&state, from: session)
     if session == nil, let owned { state.settings = Settings.hydrated(from: .object(owned)) }
     let doc = loader.sessionDocument(state)
     let before = counts(session)
@@ -124,11 +167,15 @@ public enum Importer {
       let dropped = OrderedSet(ids(session, key).filter { !kept.contains($0) }).elements
       if !dropped.isEmpty { notes.append("loading dropped \(dropped.count) \(key): \(dropped.joined(separator: ", "))") }
     }
+    if refusal == nil {
+      refusal = Self.refusal(before: before, readable: readableCounts(session))
+    }
     meta["count_settings"] = String(state.settings.values.count)
     meta["count_downloads"] = String(state.downloads.count)
     let persisted = PersistedState(
-      settings: state.settings.values, downloads: state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }, workspace: WorkspaceRows(doc))
-    return ImportResult(state: state, memory: loader.memory, persisted: persisted, meta: meta, notes: notes)
+      settings: state.settings.values, downloads: state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }, workspace: WorkspaceRows(doc),
+      documents: carried?.documents ?? JSMap())
+    return ImportResult(state: state, memory: loader.memory, persisted: persisted, meta: meta, notes: notes, refusal: refusal)
   }
 
   @discardableResult
@@ -136,6 +183,10 @@ public enum Importer {
     -> ImportResult
   {
     var result = read(folder, carrying: carried, context: context)
+    if let refusal = result.refusal {
+      log(result.notes + ["refused the import: \(refusal)"], to: folder, now: now)
+      throw ImportRefused(reason: refusal)
+    }
     result.meta["app_version"] = appVersion
     result.meta["imported_at"] = String(Int64(now.timeIntervalSince1970 * 1000))
     let fm = FileManager.default
@@ -144,11 +195,17 @@ public enum Importer {
       if fm.fileExists(atPath: path) { try fm.removeItem(atPath: path) }
     }
     try SolaraDatabase.create(at: folder.importing, writing: result.persisted, meta: result.meta)
-    try fsync(folder.importing)
+    try fullSync(folder.importing)
+    if !fm.fileExists(atPath: folder.database.path) {
+      for suffix in ["-wal", "-shm"] where fm.fileExists(atPath: folder.database.path + suffix) {
+        let name = try Launcher.moveAside(URL(fileURLWithPath: folder.database.path + suffix), label: "orphan", now: now)
+        result.notes.append("moved an orphaned \(suffix) aside to \(name)")
+      }
+    }
     guard rename(folder.importing.path, folder.database.path) == 0 else {
       throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: folder.database.path])
     }
-    try fsync(folder.url)
+    try fullSync(folder.url)
     log(result.notes, to: folder, now: now)
     return result
   }
@@ -166,10 +223,19 @@ public enum Importer {
     }
   }
 
-  static func fsync(_ url: URL) throws {
+  static func fullSync(_ url: URL) throws {
     let fd = open(url.path, O_RDONLY)
-    guard fd >= 0 else { throw CocoaError(.fileReadNoPermission, userInfo: [NSFilePathErrorKey: url.path]) }
+    guard fd >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
     defer { close(fd) }
-    _ = Darwin.fsync(fd)
+    if fcntl(fd, F_FULLFSYNC) == 0 { return }
+    guard Darwin.fsync(fd) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+  }
+
+  static func writeDurably(_ data: Data, to url: URL) throws {
+    let temporary = url.deletingLastPathComponent().appending(path: ".\(url.lastPathComponent).writing")
+    try data.write(to: temporary)
+    try fullSync(temporary)
+    guard rename(temporary.path, url.path) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    try fullSync(url.deletingLastPathComponent())
   }
 }

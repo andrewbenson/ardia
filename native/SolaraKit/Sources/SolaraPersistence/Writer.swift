@@ -6,6 +6,9 @@ import Synchronization
 public final class PersistenceWriter: Sendable {
   public static let rowDelay: TimeInterval = 0.25
   public static let shadowDelay: TimeInterval = 2
+  public static let retryDelays: [TimeInterval] = [1, 5, 30]
+  public static let keptErrors = 20
+  public static let troubleAfter = 3
 
   struct Pending {
     var rows = false
@@ -16,8 +19,9 @@ public final class PersistenceWriter: Sendable {
     var written: WorkspaceRows
     var settings: JSONObject?
     var downloads: [Download]
-    var exportedSession: String?
-    var exportedDownloads: String?
+    var exportedSession: JSONValue?
+    var exportedDownloads: JSONValue?
+    var failedInARow = 0
   }
 
   let store: Store
@@ -28,19 +32,23 @@ public final class PersistenceWriter: Sendable {
   let failures = Mutex<[String]>([])
   let subscription: Mutex<Int?> = Mutex(nil)
   let clock: @Sendable () -> Double
+  let trouble: @Sendable (String) -> Void
 
   public init(
-    store: Store, database: SolaraDatabase, folder: DataFolder, rows: WorkspaceRows, clock: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 }
+    store: Store, database: SolaraDatabase, folder: DataFolder, persisted: PersistedState,
+    clock: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 },
+    trouble: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.store = store
     self.database = database
     self.folder = folder
     self.clock = clock
-    let state = store.state
+    self.trouble = trouble
     pending = Mutex(
-      Pending(written: rows, settings: state.settings.values, downloads: state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }))
+      Pending(rows: true, rowsScheduled: true, written: persisted.workspace ?? WorkspaceRows(), settings: persisted.settings, downloads: persisted.downloads))
     let id = store.subscribe { [weak self] commit in self?.note(commit) }
     subscription.withLock { $0 = id }
+    queue.asyncAfter(deadline: .now() + Self.rowDelay) { self.flushRows() }
   }
 
   deinit {
@@ -83,6 +91,7 @@ public final class PersistenceWriter: Sendable {
     let settings = state.settings.values
     let downloads = state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }
     let (previous, previousSettings, previousDownloads) = pending.withLock { ($0.written, $0.settings, $0.downloads) }
+    if rows == previous && settings == previousSettings && downloads == previousDownloads { return }
     do {
       try database.pool.write { db in
         try Rows.writeWorkspace(db, rows, previous: previous)
@@ -96,9 +105,13 @@ public final class PersistenceWriter: Sendable {
         $0.downloads = downloads
         $0.flushes += 1
       }
+      succeeded()
     } catch {
-      pending.withLock { $0.rows = true }
-      failures.withLock { $0.append("rows: \(error)") }
+      pending.withLock {
+        $0.rows = true
+        $0.rowsScheduled = true
+      }
+      failed("rows: \(error)") { self.flushRows() }
     }
   }
 
@@ -113,28 +126,45 @@ public final class PersistenceWriter: Sendable {
     guard dirty else { return }
     let (rev, state) = store.snapshot
     let marker: JSONValue = ["rev": JSONValue(rev), "at": JSONValue(clock().rounded())]
-    let session = store.sessionDocument(of: state).json(marker: marker).text()
-    let downloads = String(decoding: ShadowExport.downloadsJSON(state, marker: marker), as: UTF8.self)
+    let document = store.sessionDocument(of: state)
+    let session = document.json()
+    let downloads = ShadowExport.downloadsDocument(state)
     let (lastSession, lastDownloads) = pending.withLock { ($0.exportedSession, $0.exportedDownloads) }
     do {
-      if Self.withoutMarker(session) != lastSession.map(Self.withoutMarker) {
-        try Data(session.utf8).write(to: folder.session, options: .atomic)
+      if session != lastSession {
+        try Importer.writeDurably(Data(document.json(marker: marker).text().utf8), to: folder.session)
         pending.withLock { $0.exportedSession = session }
       }
-      if Self.withoutMarker(downloads) != lastDownloads.map(Self.withoutMarker) {
-        try Data(downloads.utf8).write(to: folder.downloads, options: .atomic)
+      if downloads != lastDownloads {
+        try Importer.writeDurably(ShadowExport.downloadsJSON(state, marker: marker), to: folder.downloads)
         pending.withLock { $0.exportedDownloads = downloads }
       }
+      succeeded()
     } catch {
-      pending.withLock { $0.shadow = true }
-      failures.withLock { $0.append("shadow export: \(error)") }
+      pending.withLock {
+        $0.shadow = true
+        $0.shadowScheduled = true
+      }
+      failed("shadow export: \(error)") { self.writeShadow() }
     }
   }
 
-  static func withoutMarker(_ text: String) -> String {
-    guard var object = try? JSONValue.parse(text).object else { return text }
-    object.removeValue(forKey: Launcher.markerKey)
-    return JSONValue.object(object).text()
+  func succeeded() {
+    pending.withLock { $0.failedInARow = 0 }
+  }
+
+  func failed(_ message: String, retry: @escaping @Sendable () -> Void) {
+    failures.withLock {
+      $0.append(message)
+      if $0.count > Self.keptErrors { $0.removeFirst($0.count - Self.keptErrors) }
+    }
+    let attempt = pending.withLock { p -> Int in
+      p.failedInARow += 1
+      return p.failedInARow
+    }
+    if attempt >= Self.troubleAfter { trouble("persistence has failed \(attempt) times in a row; last: \(message)") }
+    let delay = Self.retryDelays[min(attempt - 1, Self.retryDelays.count - 1)]
+    queue.asyncAfter(deadline: .now() + delay, execute: retry)
   }
 
   public func markShadowDirty() {
@@ -145,10 +175,7 @@ public final class PersistenceWriter: Sendable {
   public func flush(timeout: TimeInterval = 0.5) -> Bool {
     let done = DispatchSemaphore(value: 0)
     queue.async {
-      self.pending.withLock {
-        $0.rows = true
-        $0.shadow = $0.shadow || $0.exportedSession == nil
-      }
+      self.pending.withLock { $0.rows = true }
       self.flushRows()
       self.writeShadow()
       done.signal()
@@ -158,9 +185,14 @@ public final class PersistenceWriter: Sendable {
 }
 
 public enum ShadowExport {
-  public static func downloadsJSON(_ state: BrowserState, marker: JSONValue) -> Data {
+  public static func downloadsDocument(_ state: BrowserState) -> JSONValue {
     let downloads = state.downloads.filter { !$0.isPrivate }.map { JSONValue.object($0.persisted().json) }
-    let document: JSONValue = ["version": 2, "downloads": .array(downloads), "nativeExport": marker]
-    return Data(document.text().utf8)
+    return ["version": 2, "downloads": .array(downloads)]
+  }
+
+  public static func downloadsJSON(_ state: BrowserState, marker: JSONValue) -> Data {
+    var document = downloadsDocument(state).object ?? [:]
+    document[Launcher.markerKey] = marker
+    return Data(JSONValue.object(document).text().utf8)
   }
 }

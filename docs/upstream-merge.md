@@ -22,6 +22,7 @@ modify/delete conflict. **Keep it deleted:** `git rm -r <path>`, then go on.
 | `apps/site` | ardia.dev (Astro) |
 | `apps/dashboard` | Upstream's stats dashboard |
 | `apps/videos` | Remotion launch videos |
+| `apps/demo` | The web demo of the app on ardia.dev (react-native-web, Vite); its packages leave `pnpm-lock.yaml` with it, so after a conflict there run `pnpm install --lockfile-only` |
 | `infra/site`, `infra/dashboard`, `infra/telemetry`, `infra/hexclave-cli` | Upstream's deploys, telemetry collector and ClickHouse |
 | `spikes/` | The ArdiaCore spike; its test extension moved to `packages/ardiacore/scripts/fixtures/ext` |
 | `CLA.md`, `.github/workflows/{cla,linked-issue,deploy}.yml`, `.github/pull_request_template.md` | Upstream's contribution and deploy process |

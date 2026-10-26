@@ -12,7 +12,8 @@ struct ReplayCase: Sendable, CustomTestStringConvertible {
 }
 
 enum ReplayCases {
-  static let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "Cases")
+  static let folder = ProcessInfo.processInfo.environment["REPLAY_DIR"].map { URL(fileURLWithPath: $0) }
+    ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "Cases")
 
   static func load(phase: String, only: String? = ProcessInfo.processInfo.environment["REPLAY_ONLY"]) -> [ReplayCase] {
     guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return [] }

@@ -135,6 +135,21 @@ function bridgeArgs(args, patches = false) {
   return { args: out };
 }
 
+const PRESENT_UNDEFINED = ["favicon", "customTitle", "customIcon", "pinnedUrl", "openerId", "icon", "color"];
+const presentUndefined = (o) => !!o && typeof o === "object" && PRESENT_UNDEFINED.some((k) => k in o && o[k] === undefined);
+function undefinedInState(s) {
+  const snapshots = [
+    ...Object.values(s.tabs ?? {}),
+    ...Object.values(s.groups ?? {}),
+    ...(s.closedTabs ?? []).flatMap((c) => [c.tab, c.group, ...(c.parents ?? [])]),
+    ...(s.cleanedTabs ?? []).flatMap((c) => [c.tab, c.group, ...(c.parents ?? [])]),
+    ...(s.closedWindows ?? []).flatMap((c) => [...c.tabs, ...c.groups]),
+    ...[...(s.closedGroups ?? []), ...(s.deletedGroups ?? [])].flatMap((c) => [...c.tabs, c.group, ...(c.nested ?? [])]),
+    ...Object.values(s.parkedPins ?? {}).flatMap((p) => [...p.tabs, ...p.groups]),
+  ];
+  return snapshots.some(presentUndefined);
+}
+
 const undefinedKeyIn = (object) => !!object && typeof object === "object" && Object.values(object).some((v) => v === undefined);
 
 function mulberry32(seed) {
@@ -337,6 +352,7 @@ async function record(file) {
             after: spec.project(after, model),
             ...(spec.probes && hasUndefinedKey(callArgs) ? { lossy: "an argument has a key set to undefined, which JSON cannot carry" } : {}),
             ...(lossyArgs ? { lossy: "an argument has a nested key set to undefined, which JSON cannot carry" } : {}),
+            ...(!spec.probes && undefinedInState(before) ? { lossy: "the state before holds a key set to undefined, which JSON cannot carry" } : {}),
             ...(foreign ? { foreign: "code outside the store changed state during this command" } : {}),
             ...(spec.probes ? {} : { config, web: calls }),
             ...(result !== undefined && spec.recordsResult && (!spec.returning || spec.returning.has(name)) ? { result: plain(result) } : {}),
@@ -497,7 +513,8 @@ async function record(file) {
   });
   if (spec.deltas) cases = encodeDeltas(cases);
   mkdirSync(out, { recursive: true });
-  const name = relative(join(app, "src"), file).replace(/\.test\.mjs$/, "").replaceAll("/", "__");
+  const inSrc = !relative(join(app, "src"), file).startsWith("..");
+  const name = (inSrc ? relative(join(app, "src"), file) : relative(join(app, "scripts"), file)).replace(/\.test\.mjs$/, "").replaceAll("/", "__");
   const target = join(out, `${phase}__${name}.json`);
   const document = JSON.stringify({ phase, file: relative(app, file), cases }) + "\n";
   if (cases.length && spec.deltas && !plainOutput) writeFileSync(`${target}.deflate`, deflateRawSync(Buffer.from(document), { level: 9 }));

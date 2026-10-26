@@ -17,6 +17,7 @@ public struct SettingsWindowView: View {
     } detail: {
       SettingsDetail(context: context)
     }
+    .toolbar(removing: .sidebarToggle)
     .environment(\.settingsContext, context)
     .onAppear { context.syncShown() }
     .onChange(of: context.navigation.place) { _, place in
@@ -166,7 +167,6 @@ struct SettingsDetail: View {
         DispatchQueue.main.async { lastKey = shown }
       }
     }
-    .navigationTitle(context.shown.map(context.title(for:)) ?? "")
     .toolbar {
       ToolbarItemGroup(placement: .navigation) {
         Button { navigation.goBack() } label: { Image(systemName: "chevron.left") }
@@ -176,6 +176,12 @@ struct SettingsDetail: View {
           .disabled(!navigation.canGoForward)
           .help("Forward")
       }
+      ToolbarItem(placement: .navigation) {
+        Text(context.shown.map(context.title(for:)) ?? "")
+          .font(.system(size: 15, weight: .semibold))
+          .padding(.leading, 8)
+      }
+      .sharedBackgroundVisibility(.hidden)
     }
   }
 

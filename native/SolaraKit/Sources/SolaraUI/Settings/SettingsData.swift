@@ -1,20 +1,6 @@
 import Foundation
+import SolaraModel
 import SwiftUI
-
-public enum SettingValue: Hashable, Sendable {
-  case null
-  case bool(Bool)
-  case number(Double)
-  case string(String)
-  case array([SettingValue])
-  case object([String: SettingValue])
-
-  public var bool: Bool? { if case .bool(let v) = self { v } else { nil } }
-  public var string: String? { if case .string(let v) = self { v } else { nil } }
-  public var number: Double? { if case .number(let v) = self { v } else { nil } }
-  public var object: [String: SettingValue]? { if case .object(let v) = self { v } else { nil } }
-  public var array: [SettingValue]? { if case .array(let v) = self { v } else { nil } }
-}
 
 public struct SettingsProfile: Hashable, Sendable, Identifiable {
   public let id: String
@@ -30,8 +16,8 @@ public struct SettingsProfile: Hashable, Sendable, Identifiable {
 
 @MainActor
 public protocol SettingsStoreSource: AnyObject {
-  func settingValue(_ key: String) -> SettingValue?
-  func updateSettings(_ patch: [String: SettingValue])
+  func settingValue(_ key: String) -> JSONValue?
+  func updateSettings(_ patch: JSONObject)
   var profiles: [SettingsProfile] { get }
   var topTabLayout: Bool { get }
   func chooseTabLayout(_ layout: String)

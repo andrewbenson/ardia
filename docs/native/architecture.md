@@ -179,27 +179,38 @@ SolaraModel        value types, ids, invariants                      (Foundation
        ├─ SolaraOmnibox      packages/core port: parse, fix-up, suggest, bangs, calculator, IDN
        ├─ SolaraSync         ArdiaSyncCore (moved as-is) + the merge (port of packages/sync/src) + adapters
        ├─ SolaraImport       packages/import/ios/Core (already plain Swift with a Package.swift), moved
-       └─ SolaraTelemetry    PostHog capture client: events, $exception, journeys J1–J4, sanitizing, opt-in
+       ├─ SolaraBridgeCore   the bridge's logic in plain Swift (snapshot, dispatch, catch-up, foreign commits), tested without Expo
+       └─ SolaraTelemetry    deferred by the owner: no target until telemetry is decided
+SolaraSignposts      the fixed perf endpoints and counters of docs/native/baseline.md (Foundation + os)
 SolaraEngine (macOS)  typed Swift over ArdiaCoreEngineBridge, ArdiaCoreServices, ArdiaCoreTabStrip,
                       ArdiaCoreWebView, ArdiaCoreHost; EngineClient, TabViewPool, LiveTabs
 SolaraUI (macOS)      AppKit + SwiftUI surfaces: SettingsUI, OnboardingUI, NewTabUI, ToolbarUI, SidebarUI, WindowShell
-SolaraRNBridge        Expo module exposing the store to JS (deleted in phase 6)
+SolaraRNBridge        Expo module over SolaraBridgeCore exposing the store to JS (deleted in phase 6)
 App target            main.swift, AppDelegate (Chrome-hosted), menus (Menus.swift moves here)
 ```
 
+All targets build for macOS 26 and iOS 26, the owner's minimum.
+
 | Target | Depends on | Platforms |
 |---|---|---|
-| SolaraModel | — | macOS 14+, iOS 17+ |
+| SolaraModel | — | macOS 26+, iOS 26+ |
 | SolaraStore | Model | macOS, iOS |
 | SolaraPersistence | Model, Store, GRDB (exact version pinned) | macOS, iOS |
 | SolaraOmnibox | Model | macOS, iOS |
 | SolaraSync | Model, Store, Persistence | macOS, iOS |
 | SolaraImport | Model | macOS (it reads other Mac browsers) |
-| SolaraTelemetry | Model, Persistence (opt-in state, queue in `document`) | macOS, iOS |
+| SolaraBridgeCore | Model, Store, Persistence | macOS, iOS |
+| SolaraSignposts | — | macOS, iOS |
+| SolaraTelemetry | deferred; no target | — |
 | SolaraEngine | Store, Omnibox; ArdiaCore headers (pod until phase 6) | macOS |
-| SolaraUI | Engine, Store, Omnibox, Sync, Import; `ArdiaShaders` (Metal views, unchanged) | macOS |
+| SolaraUI | Model for now; Engine, Store, Omnibox, Sync, Import and `ArdiaShaders` as its surfaces need them | macOS |
 
 Reasons:
+- `SolaraStore` doesn't import `SolaraOmnibox`. The few reducers that parse URLs (`navigate`'s same-page check,
+  `typedNavigationEngine`, `resolveInput` for new tabs) go through an injected `WebAddressing`. The app injects
+  Omnibox's `WhatwgURL` and `resolveInput`; tests and the golden replay inject the URL results JS recorded.
+- `SolaraBridgeCore` holds everything the Expo module does except the Expo glue, so the bridge's ordering and
+  catch-up rules are unit-tested in the package.
 - `SolaraEngine` is the only place that knows Chrome. On iOS a WebKit engine target can implement the same command
   and event types. The app already runs a second page engine per tab (`tab.engine`, `WebKitTab.swift`), so the
   boundary has a real second user.
@@ -388,46 +399,54 @@ Chrome (UI thread = main)
 ### 2.7 Persistence: GRDB
 
 The database is one file, `solara.sqlite`, in the data folder (`ARDIA_DATA_DIR` is honored), opened as a GRDB
-`DatabasePool` in WAL mode with `synchronous = NORMAL` and `foreign_keys = ON`.
+`DatabasePool` in WAL mode with `synchronous = FULL`, `fullfsync = ON`, `checkpoint_fullfsync = ON` and
+`foreign_keys = ON`, so a durable commit survives power loss, not only an app crash. Writes are off main and
+debounced, so the extra fsyncs cost nothing the user waits on.
 
 ```sql
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE profile (id TEXT PRIMARY KEY, position INTEGER NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL,
-  icon TEXT, created_at INTEGER NOT NULL, data_id TEXT, theme TEXT);
-CREATE TABLE setting (key TEXT PRIMARY KEY, value TEXT NOT NULL, chosen INTEGER NOT NULL DEFAULT 0,
-  inferred INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE window (id TEXT PRIMARY KEY, position INTEGER NOT NULL, profile_id TEXT NOT NULL,
-  sidebar_open INTEGER NOT NULL, tab_layout TEXT, frame TEXT, full_screen INTEGER, created_at INTEGER NOT NULL,
-  link_pointer TEXT, original_profile_id TEXT);
-CREATE TABLE window_active_tab (window_id TEXT NOT NULL REFERENCES window ON DELETE CASCADE,
-  profile_id TEXT NOT NULL, tab_id TEXT NOT NULL, PRIMARY KEY (window_id, profile_id));
-CREATE TABLE tab (id TEXT PRIMARY KEY, window_id TEXT NOT NULL REFERENCES window ON DELETE CASCADE,
-  position INTEGER NOT NULL, profile_id TEXT NOT NULL, url TEXT NOT NULL, title TEXT NOT NULL, favicon TEXT,
-  pinned INTEGER NOT NULL, pinned_as_row INTEGER NOT NULL DEFAULT 0, pinned_url TEXT, pin_key TEXT,
-  tile_folder TEXT, muted INTEGER NOT NULL, zoom REAL NOT NULL, custom_title TEXT, custom_icon TEXT,
-  opener_id TEXT, wake_adopt_id TEXT, live_item TEXT, unloaded INTEGER NOT NULL DEFAULT 0, engine TEXT,
-  created_at INTEGER NOT NULL, last_active_at INTEGER NOT NULL);
-CREATE INDEX tab_by_window ON tab (window_id, position);
-CREATE TABLE tab_group (id TEXT PRIMARY KEY, window_id TEXT NOT NULL REFERENCES window ON DELETE CASCADE,
-  profile_id TEXT NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT, collapsed INTEGER NOT NULL,
-  pinned INTEGER NOT NULL, created_at INTEGER NOT NULL, auto_ungroup INTEGER, pinned_opener_id TEXT,
-  pin_key TEXT, parent_id TEXT);
-CREATE TABLE group_member (group_id TEXT NOT NULL REFERENCES tab_group ON DELETE CASCADE,
-  position INTEGER NOT NULL, tab_id TEXT NOT NULL, PRIMARY KEY (group_id, position));
-CREATE TABLE split (id TEXT PRIMARY KEY, window_id TEXT NOT NULL REFERENCES window ON DELETE CASCADE,
-  orientation TEXT NOT NULL, sizes TEXT NOT NULL, stack TEXT);
-CREATE TABLE split_pane (split_id TEXT NOT NULL REFERENCES split ON DELETE CASCADE, position INTEGER NOT NULL,
-  tab_id TEXT NOT NULL, PRIMARY KEY (split_id, position));
-CREATE TABLE profile_pins (profile_id TEXT PRIMARY KEY, parked TEXT, choices TEXT, sync TEXT);
-CREATE TABLE archive (id TEXT PRIMARY KEY, kind TEXT NOT NULL, closed_at INTEGER NOT NULL, payload TEXT NOT NULL);
-CREATE TABLE download (id TEXT PRIMARY KEY, position INTEGER NOT NULL, payload TEXT NOT NULL);
+CREATE TABLE setting (key TEXT PRIMARY KEY, position INTEGER NOT NULL, value TEXT NOT NULL);
+CREATE TABLE download (id TEXT NOT NULL, position INTEGER PRIMARY KEY, payload TEXT NOT NULL);
 CREATE TABLE document (name TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE profile (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, payload TEXT NOT NULL);
+CREATE TABLE "window" (id TEXT PRIMARY KEY, seq INTEGER NOT NULL, profile_id TEXT NOT NULL, payload TEXT NOT NULL);
+CREATE TABLE tab (id TEXT PRIMARY KEY, seq INTEGER NOT NULL,
+  window_id TEXT NOT NULL REFERENCES "window"(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED,
+  profile_id TEXT NOT NULL, position INTEGER NOT NULL, payload TEXT NOT NULL);
+CREATE INDEX tab_by_window ON tab (window_id, position);
+CREATE TABLE tab_group (id TEXT PRIMARY KEY, seq INTEGER NOT NULL,
+  window_id TEXT NOT NULL REFERENCES "window"(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED, payload TEXT NOT NULL);
+CREATE TABLE split (id TEXT PRIMARY KEY, seq INTEGER NOT NULL,
+  window_id TEXT NOT NULL REFERENCES "window"(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED, payload TEXT NOT NULL);
+CREATE TABLE pin_table (kind TEXT NOT NULL, profile_id TEXT NOT NULL, seq INTEGER NOT NULL, payload TEXT NOT NULL,
+  PRIMARY KEY (kind, profile_id));
+CREATE TABLE archive (kind TEXT NOT NULL, position INTEGER NOT NULL, id TEXT NOT NULL, closed_at REAL NOT NULL,
+  payload TEXT NOT NULL, PRIMARY KEY (kind, position));
+CREATE TABLE workspace (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 ```
 
-**Hot entities get columns; cold ones get JSON.**
-- Windows, tabs, groups and splits change on every interaction and get real columns.
+**As built: payload rows with key columns.** The first draft of this section gave every tab and window field a
+column. The build instead stores each entity as one row holding its `session.json` JSON (`payload`), plus the
+columns the database itself needs: the id, `seq` (the order the file had), the foreign keys with their cascades, and
+`position` for the tab index. Reasons:
+- The import is lossless by construction. Unknown fields, absent-versus-null keys, numbers and a value this build
+  can't read survive the round trip byte for byte, which the oracle checks through the database (§3.3).
+- The shadow export and the import are copies, not translations, so the oracle has one code path to cover.
+- A write still touches only the changed rows: the writer diffs rows by payload, and a move only rewrites `seq`.
+- Columns for querying (`url`, `title`) can be added by a migration when a query needs them.
+
+`setting` is one row per key, in the order the settings object had. `chosen` and `inferred` stay keys inside the
+settings, as `settings.ts` keeps them, rather than columns.
+
+**Unreadable rows.** A row whose payload doesn't parse, or a nested value of the wrong shape, costs only itself. A
+nested value Swift can't decode (a string where an object belongs) is kept exactly as written and exported again
+unchanged. An entity that isn't an object at all is dropped from the loaded state but its row stays in the database
+untouched. An unreadable setting or download row is skipped. Each case is listed in `import.log`. A load error SQLite
+itself raises is handled like corruption: the file moves aside and the importer runs on the shadow (§3.4).
+
+**Archives and documents.**
 - Closed, cleaned and deleted items (`archive.kind`), parked pins and pin tables are written rarely and read as
-  wholes, so they stay JSON in the exact shape `session.json` uses. That makes the export a copy, not a translation.
+  wholes, so an archive kind is rewritten whole when it changes.
 - `document` takes the small JSON documents (onboarding, Live state, CLI) as their owners port.
 
 **Write strategy.**
@@ -442,9 +461,17 @@ CREATE TABLE document (name TEXT PRIMARY KEY, value TEXT NOT NULL);
 - WAL plus a single transaction per flush: a crash loses at most the last 250 ms, never half a flush. Today the loss
   window is 800 ms.
 - `willTerminate` flushes synchronously with a 500 ms deadline (`DocumentStore`'s pattern): the rows first, then the
-  shadow `session.json` (§3.4), so the next launch's early window shows the right tab.
+  shadow `session.json` (§3.4), so the next launch's early window shows the right tab. A flush with nothing changed
+  writes nothing.
 - At launch, `PRAGMA quick_check` runs (sub-ms at this size). If it fails, the file moves to
   `solara.sqlite.corrupt-<date>` and the app re-imports from the shadow `session.json` (§3.4).
+- Moving a database aside moves its `-wal` and `-shm` first, then the main file, so a crash in between can never
+  leave an old WAL next to a new database. An import that finds a `-wal` or `-shm` with no `solara.sqlite` moves
+  them aside (`.orphan-<date>`) before it renames the new file into place; SQLite would otherwise replay the old
+  WAL into it.
+- A failed flush or shadow write retries after 1 s, 5 s, then every 30 s. After three failures in a row the writer
+  reports the error through its `trouble` callback, which the app logs and surfaces; only the last 20 errors are
+  kept.
 
 **Versioning.** A GRDB `DatabaseMigrator` applies named, forward-only migrations, and `meta.schema` records them. A
 build that finds migrations it doesn't know (a downgrade) doesn't open the database: it falls back to the shadow
@@ -481,8 +508,19 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 - **What.** `SessionV2Importer` is a straight port of `loadSession()` + `migrateSavedSettings` + `hydrate`'s
   repairs (§1.4), including the `restoreSession === false` branch. It produces a `BrowserState`, runs
   `SolaraModel.check`, and writes it to `solara.sqlite.importing`.
-- **Atomic.** The import writes the temporary file, `fsync`s it, then renames it to `solara.sqlite`. A crash
-  mid-import leaves no database, so the next launch imports again. The source files are never modified.
+- **Atomic.** The import writes the temporary file, syncs it with `F_FULLFSYNC`, then renames it to
+  `solara.sqlite` and syncs the folder. A crash mid-import leaves no database, so the next launch imports again.
+- **The originals are kept.** Before anything else, the first native launch copies `session.json` and
+  `downloads.json` to `session.json.pre-native` and `downloads.json.pre-native` (synced, then renamed into place).
+  Those copies are never overwritten or pruned. If `session.json` is ever missing, the importer reads the
+  `.pre-native` copy instead. The source files themselves are left alone until the first change the user makes
+  (§3.4).
+- **Per entity, and refused when it would lose much.** Each profile, window, tab, group, split and archive entry is
+  decoded on its own. A bad one is dropped and listed in `import.log`, never the whole file. The import is refused,
+  and the app runs on the JS store and `session.json` as today, when `session.json` exists but can't be parsed or
+  has another version, or when fewer than half of the profiles, windows or tabs it lists are readable at all (the
+  JS loader's own repairs, such as dropping tabs whose window is gone, don't count: JS makes them too). A refusal writes nothing but
+  `import.log`, so the next launch tries again.
 - **Recorded.** `meta` holds `imported_from = session.json`, its version, the SHA-256 and size of the source, the
   app version, the import time, and the counts per entity before and after repair.
 - **Checked.** Counts are logged. Anything repair dropped is listed in `import.log` in the data folder, so a
@@ -498,15 +536,29 @@ Swift importer, run through its CLI on the same file, prints the same canonical 
   `apps/browser/scripts/perf/seed.mjs`.
 - The owner's real `session.json` is copied into a scratch dir (never committed) and run through both before the
   phase ships.
+- `oracle-check.mjs` compares each folder twice: straight from the files, and through a scratch `solara.sqlite`
+  (`--via-db`: import, write the rows, load them back). Both sides print the document's own text next to the
+  canonical form, so key order is compared too, and `memoryAfter` (the id counter after loading). Swift goes through
+  `Importer.read`, the path the app uses. No folders at all is a failure, not "0 of 0 identical".
+- `session-fixtures.mjs` writes a wrong-shape fixture for every nested value the importer decodes (a string where a
+  tile folder, navigation, split stack, closed-tab snapshot or group head belongs, a number in a list of tabs, a
+  null window), plus a missing `session.json` and an unparseable one.
+- Two differences are expected and declared in the fixture's `oracle.json`. A null closed tab makes `persist.ts`
+  throw, so JS can't load the file; Swift drops that entry and loads the rest. And a Swift `String` can't hold a
+  lone UTF-16 surrogate (`"\ud83d"`), so the importer writes U+FFFD where JS keeps it; the oracle compares that
+  fixture after the same replacement. Only text the page supplied, such as a title cut mid-emoji, can contain one.
 - In the app, the first launch after the import compares the importer's counts with what JS hydrates from the
   bridge snapshot, and logs any difference.
 
 ### 3.4 Versioning and rollback
 
 - **Shadow export.** The persistence writer keeps writing a v2 `session.json` (debounced 2 s, off main), exactly
-  what `persist.ts` writes today, plus one extra key, `"nativeExport": {"rev": …, "at": …}`. That includes
-  `launchTab`, `launchBackdrop` and `linkProfile`, so `store/launchTab.ts` and `lib/launchBackdrop.ts` are ported
-  with the exporter. It does this from the import until phase 6 ships plus two stable releases. That
+  what `persist.ts` writes today, plus one extra key, `"nativeExport": {"rev": …, "at": …}`. Each write goes to a
+  temporary file, is synced with `F_FULLFSYNC`, and is renamed into place. Nothing is written until the state
+  changes, so a launch that changes nothing leaves the user's files as they were. It includes `launchTab` and
+  `linkProfile`, ported with the exporter (`store/launchTab.ts`). `launchBackdrop` stays computed in JS until the
+  theme code ports in phase 5: JS sends it to the store as a cached value (`setLaunchBackdrop`), and until it does,
+  the store keeps the value the loaded document had. It does this from the import until phase 6 ships plus two stable releases. That
   keeps three things working:
   1. `ArdiaCoreHost.mm`'s early-window read (`launchTab`, `launchBackdrop`, `linkProfile`), unchanged until the
      window shell goes native;
@@ -516,11 +568,14 @@ Swift importer, run through its CLI on the same file, prints the same canonical 
 - **Downgrade, then upgrade.** An older (JS-store) build ignores unknown keys and drops `nativeExport` when it
   rewrites the file. So at launch, a `session.json` **without** the marker means an older build wrote it since our
   last export. The database moves aside (`solara.sqlite.superseded-<date>`) and the importer runs again on
-  `session.json`. Newer-only fields kept in `setting` / `document` are merged back by key. A marker whose `rev` is
+  `session.json`. Newer-only fields kept in `setting` are merged back by key, and every `document` row is carried
+over. A marker whose `rev` is
   behind the database's is normal (a crash before the next export) and changes nothing, so an ordinary crash never
   triggers a re-import. This needs no atomicity across the two files.
 - **Schema downgrade.** An older build with a newer `solara.sqlite` sees migrations it doesn't know, refuses the
   database, and imports the shadow `session.json`. Nothing is lost, because the shadow is always current.
+- **Moved-aside copies.** Each label (`corrupt`, `newer`, `superseded`, `unreadable`, `orphan`) keeps its newest
+  three copies; older ones are deleted at launch. The `.pre-native` originals are never pruned.
 - **Kill switch.** For the first nightly, `ARDIA_NATIVE_STORE=0` (environment, Debug and nightly only) makes the app
   run on the JS store and `session.json` as today. Remove it once the phase ships stable.
 
@@ -535,7 +590,7 @@ them for the RN surfaces still in use.
 
 | Phase | Swift owns | JS still owns (not persisted, or not yet ported) |
 |---|---|---|
-| 1a | settings and downloads (`downloads.json` → `solara.sqlite`) | everything else. `persist.ts` stays the single writer of `session.json`, reading `settings` from the replica. |
+| 1a | settings and downloads (`downloads.json` → `solara.sqlite`) | everything else. `persist.ts` stays the single writer of `session.json`, reading `settings` from the replica. JS still owns profiles and windows, so it sends each download's profile and private-session context with the download command, and it dispatches the `defaultProfileId` repair (pointing the setting at a profile that exists) after hydrating profiles. Both move into Swift with profiles in 1b. |
 | 1b | + profiles and the whole workspace (windows, tabs, groups, splits, pins, parked, closed/cleaned/deleted items, pin tables, focus), the `session.json` import and shadow export, and the tab-strip reconciliation (`liveTabs` / `chromeTabs`, fed by JS-forwarded transactions until phase 5) | `live`, `find`, `windowUi`, `selection` / anchors, Peek UI, the history and bookmark views, the sync engine (writing through commands) |
 
 Why profiles wait for 1b: `deleteProfile` and `createProfile({ shareWith })` change windows, tabs, parked pins and
@@ -621,6 +676,11 @@ Things the code that wires a native module into the app must do. Each one fails 
 |---|---|---|
 | `SolaraOmnibox` | Launch, before the first URL is parsed or shown | Call `setAppScheme(productName)` (or `AppScheme.set(productName:)`) with the product identity, the same name `setAppScheme` gets in JS today. Until then `appUrlOrigin`, `toAppUrl`, `fixupUrl` and `urlForDisplay` use upstream's `ardia://`. |
 | `SolaraOmnibox` | Remote suggestions, Chrome's engine list | Parse the raw JSON text with `SolaraModel.JSONValue.parse`, which keeps JS key order. A `JSONSerialization` dictionary loses it, and `extensionEnginesFromChrome` keeps the first engine per extension in that order. |
+| `SolaraPersistence` | Launch | Call `Launcher.open` in `main.swift` before Chrome starts. If it throws `ImportRefused` (or anything else), run on the JS store and `session.json` as today, as `ARDIA_NATIVE_STORE=0` does, and log the reason; never start the native store on a partial import. |
+| `SolaraPersistence` | The writer | Build `PersistenceWriter` from `Launch.persisted`, never from the store's state, so a launch-time repair committed before the writer exists still reaches the database. Wire its `trouble` callback to the log and an error report. Call `flush` from `willTerminate`. |
+| `persist.ts` | Phase 1a | Keep writing `session.json`, with `"nativeExport": {"rev", "at"}` added, and stop writing `downloads.json` (the native writer's shadow does). Without the marker, every launch would take a re-import as if an older build had run. |
+| `persist.ts` | Phase 1b | With the native store on, never write `session.json` or `downloads.json`. The shadow export owns both, and a JS write would look like a downgrade and re-import at every launch. |
+| `SolaraStore` | Store creation | Inject a `WebAddressing` built on `SolaraOmnibox` (`WhatwgURL`, `resolveInput` with `searchUrlPrefix(settings)`). The default `PlainWebAddressing` is for tests and parses only simple URLs. |
 | `SolaraSignposts` | Each surface's endpoint | Call `SolaraSignposts.emit` at "selection shown", "suggestions shown", "core ready" and "New Tab painted", and `count` per store commit, Core Animation commit, layout pass and view update. In the RN era these are the `perfProbe` sites, through a native call. The baseline's `acmark.m` reads them, so a metric keeps its endpoint when its surface moves. |
 
 ---

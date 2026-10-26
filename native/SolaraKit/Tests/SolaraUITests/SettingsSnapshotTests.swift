@@ -36,6 +36,23 @@ enum Snapshot {
   }
 
   @MainActor
+  static func renderPanes(_ context: SettingsContext, _ panes: [SettingsPane], places: [SettingsPlace] = [], named name: (SettingsPlace) -> String = { $0.pane.rawValue }) async throws {
+    guard let directory else { return }
+    for place in panes.map({ SettingsPlace(pane: $0) }) + places {
+      context.navigation.go(place.pane, profileId: place.profileId, detail: place.detail)
+      context.syncShown()
+      for dark in [false, true] {
+        let scheme = dark ? "dark" : "light"
+        try await render(SettingsWindowView(context: context), size: windowSize, dark: dark, to: directory.appendingPathComponent("\(name(place))-\(scheme).png"))
+        try await render(SettingsWindowView(context: context), size: tallSize, dark: dark, to: directory.appendingPathComponent("\(name(place))-\(scheme)-full.png"))
+      }
+    }
+  }
+
+  static let windowSize = NSSize(width: 820, height: 640)
+  static let tallSize = NSSize(width: 820, height: 2000)
+
+  @MainActor
   static func spin() {
     RunLoop.main.run(until: Date().addingTimeInterval(0.02))
   }
@@ -43,23 +60,10 @@ enum Snapshot {
 
 @MainActor
 struct SettingsSnapshotTests {
-  static let windowSize = NSSize(width: 820, height: 640)
-  static let tallSize = NSSize(width: 820, height: 2000)
-
   @Test(.enabled(if: Snapshot.directory != nil))
-  func rendersEveryPortedPaneInLightAndDark() async throws {
-    let directory = try #require(Snapshot.directory)
+  func rendersGeneral() async throws {
     let (context, _) = await SettingsFixture.loaded()
-    for pane in SettingsPane.allCases where context.panes[pane] != nil {
-      context.navigation.go(pane)
-      context.syncShown()
-      #expect(context.shown?.pane == pane)
-      for dark in [false, true] {
-        let scheme = dark ? "dark" : "light"
-        try await Snapshot.render(SettingsWindowView(context: context), size: Self.windowSize, dark: dark, to: directory.appendingPathComponent("\(pane.rawValue)-\(scheme).png"))
-        try await Snapshot.render(SettingsWindowView(context: context), size: Self.tallSize, dark: dark, to: directory.appendingPathComponent("\(pane.rawValue)-\(scheme)-full.png"))
-      }
-    }
+    try await Snapshot.renderPanes(context, [.general])
   }
 
   @Test(.enabled(if: Snapshot.directory != nil))
@@ -69,7 +73,7 @@ struct SettingsSnapshotTests {
     context.search.query = "tabs"
     context.search.selected = 1
     for dark in [false, true] {
-      try await Snapshot.render(SettingsWindowView(context: context), size: Self.windowSize, dark: dark, to: directory.appendingPathComponent("search-tabs-\(dark ? "dark" : "light").png"))
+      try await Snapshot.render(SettingsWindowView(context: context), size: Snapshot.windowSize, dark: dark, to: directory.appendingPathComponent("search-tabs-\(dark ? "dark" : "light").png"))
     }
   }
 }

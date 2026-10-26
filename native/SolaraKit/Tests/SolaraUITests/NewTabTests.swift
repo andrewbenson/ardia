@@ -337,3 +337,26 @@ struct NewTabThemeTests {
     #expect(themed.goButton == fallback.goButton)
   }
 }
+
+@MainActor
+struct NewTabHistoryPatchTests {
+  func row(_ url: String, _ at: Double) -> HistoryRow { HistoryRow(url: url, title: url, favicon: nil, visits: 1, lastVisit: at) }
+
+  @Test func aPatchOnTheRightBaseApplies() {
+    let sources = NewTabSources()
+    sources.setHistory([row("a", 3), row("b", 2), row("c", 1)], profileId: "p", rev: 1)
+    let patch = NewTabSources.HistoryPatch(removed: ["b"], inserts: [(0, row("b", 4)), (3, row("d", 0))])
+    #expect(sources.patchHistory(patch, profileId: "p", base: 1, rev: 2))
+    #expect(sources.history("p").map(\.url) == ["b", "a", "c", "d"])
+  }
+
+  @Test func aPatchOnAnotherBaseIsRefused() {
+    let sources = NewTabSources()
+    sources.setHistory([row("a", 1)], profileId: "p", rev: 5)
+    let patch = NewTabSources.HistoryPatch(removed: [], inserts: [(0, row("z", 2))])
+    #expect(!sources.patchHistory(patch, profileId: "p", base: 4, rev: 6))
+    #expect(!sources.patchHistory(patch, profileId: "q", base: 5, rev: 6))
+    #expect(!sources.patchHistory(NewTabSources.HistoryPatch(removed: [], inserts: [(9, row("z", 2))]), profileId: "p", base: 5, rev: 6))
+    #expect(sources.history("p").map(\.url) == ["a"])
+  }
+}

@@ -18,6 +18,8 @@ import { openFromBar, switchFromBar, type Disposition } from "../omnibox/open";
 import { clipboardPasteAction, pasteMenuItem, pasteTarget } from "../omnibox/paste";
 import { runBarAction, runBarExtension } from "../omnibox/runBar";
 import { profileBookmarks } from "../omnibox/useSuggestions";
+import type { HistoryEntry } from "../../store/types";
+import { historyPatch } from "./historyPatch";
 import { faviconUri } from "../../lib/favicons";
 import { bundledSiteIcon } from "../../lib/siteIcons";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
@@ -56,6 +58,29 @@ function debounced(run: () => void) {
   };
 }
 
+type HistoryRowJSON = { url: string; title: string; favicon: string | null; visits: number; lastVisit: number };
+
+const historyRow = (h: HistoryEntry): HistoryRowJSON => ({ url: h.url, title: h.title, favicon: h.favicon ?? null, visits: h.visits, lastVisit: h.lastVisit });
+const publishedHistory = new Map<string, { list: HistoryEntry[]; rev: number }>();
+let historyRev = 0;
+let historyQueue = Promise.resolve();
+
+function publishProfileHistory(profileId: string) {
+  historyQueue = historyQueue.then(async () => {
+    const list = useBrowser.getState().history[profileId] ?? [];
+    const last = publishedHistory.get(profileId);
+    if (last?.list === list) return;
+    const rev = ++historyRev;
+    const patch = last ? historyPatch(last.list, list) : null;
+    const patched =
+      !!last &&
+      !!patch &&
+      (await newTabSources.patchHistory(profileId, last.rev, rev, { removed: patch.removed, inserts: patch.inserts.map(([i, h]) => [i, historyRow(h)]) }));
+    if (!patched) await newTabSources.setHistory(profileId, rev, list.map(historyRow));
+    publishedHistory.set(profileId, { list, rev });
+  });
+}
+
 function usePublishSources(windowId: string, profileId: string) {
   const extensions = useBarExtensions(windowId);
   useEffect(() => {
@@ -75,13 +100,7 @@ function usePublishSources(windowId: string, profileId: string) {
         .map((t) => ({ id: t.id, url: t.url, title: t.title, favicon: t.favicon ?? null }));
       void newTabSources.setTabs(profileId, rows);
     });
-    const publishHistory = debounced(() => {
-      const list = useBrowser.getState().history[profileId] ?? [];
-      void newTabSources.setHistory(
-        profileId,
-        list.map((h) => ({ url: h.url, title: h.title, favicon: h.favicon ?? null, visits: h.visits, lastVisit: h.lastVisit })),
-      );
-    });
+    const publishHistory = debounced(() => publishProfileHistory(profileId));
     const publishBookmarks = debounced(() => {
       const s = useBrowser.getState();
       void newTabSources.setBookmarks(profileId, profileBookmarks(s.bookmarks, bookmarkProfileId(s, s.windows[windowId])));

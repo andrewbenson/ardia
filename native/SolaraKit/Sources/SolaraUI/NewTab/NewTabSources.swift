@@ -15,6 +15,21 @@ public final class NewTabSources {
     var index = SuggestionIndex(history: [], bookmarks: [])
     var historyHosts: [String] = []
     var hosts: [String]?
+    var historyRev: Int?
+  }
+
+  public struct HistoryPatch: Sendable, Equatable {
+    public var removed: [String]
+    public var inserts: [(index: Int, row: HistoryRow)]
+
+    public init(removed: [String], inserts: [(index: Int, row: HistoryRow)]) {
+      self.removed = removed
+      self.inserts = inserts
+    }
+
+    public static func == (a: HistoryPatch, b: HistoryPatch) -> Bool {
+      a.removed == b.removed && a.inserts.elementsEqual(b.inserts) { $0.index == $1.index && $0.row == $1.row }
+    }
   }
 
   public private(set) var revision = 0
@@ -33,9 +48,10 @@ public final class NewTabSources {
     revision += 1
   }
 
-  public func setHistory(_ history: [HistoryRow], profileId: String) {
+  public func setHistory(_ history: [HistoryRow], profileId: String, rev: Int? = nil) {
     var p = profiles[profileId] ?? Profile()
     p.history = history
+    p.historyRev = rev
     var seen = Set<String>()
     var hosts: [String] = []
     for h in history {
@@ -49,6 +65,21 @@ public final class NewTabSources {
     warm(profileId)
     revision += 1
   }
+
+  @discardableResult
+  public func patchHistory(_ patch: HistoryPatch, profileId: String, base: Int, rev: Int) -> Bool {
+    guard let p = profiles[profileId], p.historyRev == base else { return false }
+    let gone = Set(patch.removed)
+    var next = gone.isEmpty ? p.history : p.history.filter { !gone.contains($0.url) }
+    for (index, row) in patch.inserts {
+      guard index >= 0, index <= next.count else { return false }
+      next.insert(row, at: index)
+    }
+    setHistory(next, profileId: profileId, rev: rev)
+    return true
+  }
+
+  func history(_ profileId: String) -> [HistoryRow] { profiles[profileId]?.history ?? [] }
 
   public func setBookmarks(_ bookmarks: [BookmarkRow], profileId: String) {
     var p = profiles[profileId] ?? Profile()

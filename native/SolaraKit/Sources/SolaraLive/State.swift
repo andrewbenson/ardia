@@ -172,6 +172,22 @@ public struct LiveState: Codable, Sendable, Equatable {
     try LiveJSON.text(self)
   }
 
+  public func replicaJSON() throws -> String {
+    try LiveJSON.text(Replica(state: self))
+  }
+
+  struct Replica: Encodable {
+    let state: LiveState
+
+    func encode(to encoder: Encoder) throws {
+      try state.encode(to: encoder)
+      var c = encoder.container(keyedBy: CodingKeys.self)
+      try c.encode(state.completing, forKey: .completing)
+      try c.encode(state.status, forKey: .status)
+      try c.encode(state.showAll, forKey: .showAll)
+    }
+  }
+
   var persistedPart: PersistedPart {
     PersistedPart(
       folders: folders, folderOrder: folderOrder, items: items, known: known, unread: unread, hidden: hidden, completed: completed,

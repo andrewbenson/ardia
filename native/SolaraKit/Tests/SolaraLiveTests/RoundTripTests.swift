@@ -107,3 +107,26 @@ import Testing
     #expect(rig.engine.describe(.gdrive, Odd()) == FolderError(kind: .other, message: "odd", source: .gdrive))
   }
 }
+
+@Suite struct ReplicaTests {
+  @Test func theReplicaCarriesSessionStateThePersistedDocumentLeavesOut() async throws {
+    let rig = Rig()
+    let id = await rig.engine.createFolder(profileId: "p", kind: .documents, sources: [])
+    await rig.engine.setShowAll("\(id):documents", true)
+    let state = await rig.engine.state
+    let replica = jsonObject(Data(try state.replicaJSON().utf8))
+    let persisted = jsonObject(Data(try state.persistedJSON().utf8))
+    #expect(Set(replica.keys) == Set(persisted.keys).union(["completing", "status", "showAll"]))
+    #expect((replica["status"] as? [String: Any])?[id] != nil)
+    #expect(persisted["status"] == nil)
+  }
+
+  @Test func pinningACalendarOffersAlertsOnce() async {
+    let rig = Rig()
+    #expect(await rig.engine.offerAlertsForPinnedTab(url: "https://example.com") == false)
+    #expect(await rig.engine.offerAlertsForPinnedTab(url: "https://calendar.google.com/") == true)
+    #expect(await rig.engine.offerAlertsForPinnedTab(url: "https://calendar.google.com/") == false)
+    await rig.engine.answerAlertOffer(confirmed: false)
+    #expect(await rig.engine.state.calendar.alertLead == "never")
+  }
+}

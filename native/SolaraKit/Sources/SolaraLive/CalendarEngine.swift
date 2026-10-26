@@ -114,4 +114,18 @@ extension LiveEngine {
     }
     await checkAlerts()
   }
+
+  public func offerAlertsForPinnedTab(url: String) -> Bool {
+    guard Meetings.isCalendarUrl(url), !state.calendar.prompted else { return false }
+    updateCalendarSettings(CalendarSettingsPatch(prompted: true))
+    return true
+  }
+
+  public func answerAlertOffer(confirmed: Bool) async {
+    if confirmed {
+      _ = await connectCalendar()
+    } else {
+      updateCalendarSettings(CalendarSettingsPatch(alertLead: "never"))
+    }
+  }
 }

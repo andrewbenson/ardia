@@ -1,4 +1,5 @@
 import Foundation
+import SolaraBridgeCore
 import SolaraModel
 import SolaraPersistence
 import SolaraStore
@@ -7,6 +8,7 @@ let usage = """
   usage: solara-store session-oracle <data folder> --now <ms> --launch <id launch> [--counter <n>] [--nav-seq <n>] [--launch-backdrop <json>] [--via-db]
          solara-store import <data folder> [--now <ms>]
          solara-store launch <data folder> [--scope 1a|1b]
+         solara-store serve [--launch <id launch>] [--hand-off immediately]
 
   session-oracle loads <data folder>/session.json and downloads.json through the Swift importer (Importer.read:
   loadSession and hydrate) and prints what the shadow export would write, as canonical JSON plus the documents'
@@ -14,7 +16,9 @@ let usage = """
   into a scratch solara.sqlite and loads it back before printing. import reads a data folder the way the first native launch does and
   prints the counts and notes it would record. Both only read the folder. launch runs the app's launcher on the
   folder (it writes solara.sqlite and the .pre-native copies there, so give it a scratch copy) and prints the
-  source, the recorded counts, the loaded state's counts and the notes.
+  source, the recorded counts, the loaded state's counts and the notes. serve runs one in-memory store behind the
+  bridge, one JSON request per line on stdin ({op: snapshot | dispatch | catchUp, commands, sinceRev, now}) and
+  one response per line on stdout, so the JS replica can be tested against the real Swift store.
 
   """
 
@@ -91,6 +95,30 @@ case "session-oracle":
     "downloadsText": .string(downloads.text()),
   ]
   print(output.canonical)
+case "serve":
+  final class Clock: @unchecked Sendable { var now: Double = 0 }
+  let clock = Clock()
+  var config = StoreConfig()
+  config.handOffPinsImmediately = option("--hand-off") == "immediately"
+  let store = Store(memory: StoreMemory(ids: IdSource(launch: option("--launch") ?? "serve")), config: config, checksInvariants: false, clock: { clock.now })
+  let bridge = StoreBridge(store: store)
+  setvbuf(stdout, nil, _IOFBF, 1 << 20)
+  while let line = readLine(strippingNewline: true) {
+    guard let request = try? JSONValue.parse(line) else {
+      print(#"{"error":"bad request"}"#)
+      fflush(stdout)
+      continue
+    }
+    clock.now = request["now"]?.number ?? clock.now
+    let sinceRev = request["sinceRev"]?.int ?? 0
+    switch request["op"]?.string {
+    case "snapshot": print(bridge.snapshotJSON())
+    case "dispatch": print(bridge.dispatch(request["commands"]?.text() ?? "[]", sinceRev: sinceRev))
+    case "catchUp": print(JSONValue.object(bridge.catchUp(sinceRev: sinceRev)).text())
+    default: print(#"{"error":"unknown op"}"#)
+    }
+    fflush(stdout)
+  }
 case "launch":
   guard let dir = arguments.first else { exit(2) }
   let scope: PersistenceScope = option("--scope") == "1a" ? .settingsAndDownloads : .everything

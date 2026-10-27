@@ -404,8 +404,8 @@ live entry is never applied over, in any adapter (D11).
 - **Twins.** The sync key's Keychain item is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`,
   but it is saved without `kSecUseDataProtectionKeychain` (SyncKeyStore.swift:16-21, 41). So it
   lives in the file-based login keychain, and Migration Assistant and disk clones carry it.
-  docs/sync.md's "this device only" is therefore wrong today. Changing the item's keychain class
-  would change the key's lifetime, so that's the owner's decision and isn't part of this design.
+  The owner approved moving the item to the data-protection keychain (2026-10-27); that's step 13,
+  after this redesign ships, so the redesign doesn't rely on it.
   - Instead, `deviceId` is saved with the Mac's `IOPlatformUUID`. At load, a different
     `IOPlatformUUID` means a copied Mac. It mints a new `deviceId` (a new identity for its `dev:`
     record and tabs) and a new chain. The original keeps both.
@@ -542,7 +542,8 @@ rely on the date: detection is by ledger and stamping by the sync clock.
   refuses to start without it (ac_main_delegate.cc:410). The ledger would read such a cleanup as
   deletions, so the dependency is pinned by a test that checks both lines (FR6).
 - **Keychain class.** Twins are handled by `IOPlatformUUID`; the item still copies with the Mac.
-  Whether to move it to the data-protection keychain is the owner's decision.
+  The owner approved moving it to the data-protection keychain (2026-10-27), after this redesign
+  ships: step 13.
 - **The mass-change prompt** waits on the user. Until they answer, the held keys aren't published,
   and the folder's values aren't applied over them.
 
@@ -933,6 +934,18 @@ nightlies start earliest. Nothing of the old guard is removed until what replace
 **Step 12. Small independent fixes,** anytime after step 0:
 - the HLC counter carry (D9b);
 - the tie-by-key fix (seeds 43, 212, 390, 398), with the strict oracle's rules restored.
+
+**Step 13. The sync key moves to the data-protection keychain** (owner's decision, 2026-10-27),
+after the redesign has shipped, not during it.
+- `SyncKeyStore` saves "Solara Sync Key" with `kSecUseDataProtectionKeychain`, so the item is
+  truly this device's only and no longer copies with Migration Assistant or a disk clone.
+- **One-time migration:** read the old login-keychain item, write the new one, read the new one
+  back and check it matches, and only then delete the old one.
+- **Fallback:** if the key can't be read or moved, sync shows "not syncing" and asks for the
+  recovery phrase. It never mints a new chain or a new key on its own.
+- **Ad hoc signing:** owner builds are ad hoc signed, so the data-protection keychain is checked
+  to work there (entitlements and access group) before the step lands.
+- An independent review before and after the change.
 
 Each step's commit message lists the `todo` marks it removed. A step that can't turn its tests
 green without touching a later step's files is split again, not merged ahead of its order.

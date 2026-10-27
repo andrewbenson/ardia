@@ -87,8 +87,9 @@ reset by email, because there's no one to email.
   synchronizable).
   - Despite "ThisDeviceOnly", the item is saved without `kSecUseDataProtectionKeychain`, so it lives
     in the file-based login keychain. Migration Assistant and disk clones copy it, and a copied Mac
-    keeps both the key and the device id. Whether to move the item is the owner's decision
-    (docs/sync-redesign.md § Twins).
+    keeps both the key and the device id. The owner approved moving the item to the
+    data-protection keychain, so it's truly this device's only (2026-10-27). The move is scheduled
+    after the sync redesign ships (docs/sync-redesign.md § Implementation plan, step 13).
   - Test instances (`ARDIA_DATA_DIR`) keep it in a 0600 file in their data folder instead,
     as Chrome's mock keychain does for them.
   - A Debug build can't read an item an earlier build saved (no prompt, by design). Sync then

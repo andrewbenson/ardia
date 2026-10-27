@@ -409,7 +409,7 @@ const tlsSpki = createHash("sha256").update(new X509Certificate(tlsCert).publicK
 
 let exe, stdout, pid, child, launchedAt, exited = null;
 let instance = null;
-process.env.ARDIA_CHROMIUM_SWITCHES = `--ardia-test-media-route-provider --disable-media-route-providers-for-test --ardia-test-bluetooth-chooser ${process.env.ARDIA_CHROMIUM_SWITCHES ?? ""}`.trim();
+process.env.ARDIA_CHROMIUM_SWITCHES = `--force-color-profile=srgb --ardia-test-media-route-provider --disable-media-route-providers-for-test --ardia-test-bluetooth-chooser ${process.env.ARDIA_CHROMIUM_SWITCHES ?? ""}`.trim();
 process.env.ARDIA_CHROMIUM_SWITCHES += ` --host-resolver-rules=${["ib.adnxs.com", "securepubads.g.doubleclick.net", "pagead2.googlesyndication.com", "adpage.test"]
   .map((host) => `MAP ${host} 127.0.0.1:${server.address().port}`).concat([`one.${siteDataDomain}`, `two.${siteDataDomain}`, ...siteDataSecureHosts].map((host) => `MAP ${host} 127.0.0.1:${tlsServer.address().port}`)).join(", ")}`;
 process.env.ARDIA_CHROMIUM_SWITCHES += ` --apps-gallery-update-url=${base}/webstore/crx`;

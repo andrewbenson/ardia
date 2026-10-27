@@ -47,8 +47,9 @@ try {
     store.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null });
     engine.openLiveItem("w1", folder, items[1], { background: true });
     engine.openLiveItem("w1", folder, items[2], { background: true });
-    ac.store.setState((st) => ({ downloads: [{ id: "d1", url: "https://example.com/report.pdf", filename: "report.pdf", path: ${JSON.stringify(file)},
-      state: "finished", paused: false, received: 9, total: 9, speed: 0, mimeType: "application/pdf" }, ...st.downloads] }));
+    s.upsertDownload({ id: "d1", url: "https://example.com/report.pdf", filename: "report.pdf", path: ${JSON.stringify(file)},
+      state: "finished", paused: false, received: 9, total: 9, speed: 0, mimeType: "application/pdf" });
+    s.setDownloadsOpen("w1", false);
     return true;
   `);
   await sleep(1500);

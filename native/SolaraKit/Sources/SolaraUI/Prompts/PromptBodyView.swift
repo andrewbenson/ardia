@@ -319,7 +319,7 @@ public final class PromptBodyView: NSView {
       }
       b.refresh()
       let h = f.intrinsicContentSize.height
-      f.frame = CGRect(x: 12 - 2, y: (28 - h) / 2, width: tw + 4, height: h)
+      f.frame = CGRect(x: 12 - 2, y: (28 - h) / 2 - 0.5, width: tw + 4, height: h)
       b.addSubview(f)
       let id = spec.id
       b.onPress = { [weak self] in self?.onEvent(.button(id)) }

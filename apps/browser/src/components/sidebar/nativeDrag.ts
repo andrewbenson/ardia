@@ -134,11 +134,14 @@ export function installNativeDragProbe(
   if (!__DEV__ || !native) return;
   void native.startProbe(windowId);
   const read = (): Probe | null => {
+    let probe: Probe | null = null;
     try {
-      return JSON.parse(native.probe(windowId)) as Probe | null;
+      probe = JSON.parse(native.probe(windowId)) as Probe | null;
     } catch {
-      return null;
+      probe = null;
     }
+    if (!probe) void native.startProbe(windowId);
+    return probe;
   };
   const view = (pick: (p: Probe) => Frame | undefined): ViewLike => ({
     measureInWindow(cb) {

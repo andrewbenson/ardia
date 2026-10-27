@@ -73,7 +73,8 @@ try {
         const toolbars = wt.fibers("Toolbar").map((f) => ({ tabId: f.memoizedProps.tabId, bare: !!f.memoizedProps.bare, pane: wt.inPane(f) }));
         const auto = wt.fibers("AutoHideToolbar").map((f) => ({ tabId: f.memoizedProps.tabId, mode: f.memoizedProps.mode, pane: wt.inPane(f) }));
         const backdrops = [...wt.fibers("AutoHideBackdrop"), ...wt.fibers("ToolbarBackdrop")].map((f) => ({ tabId: f.memoizedProps.tabId, pane: wt.inPane(f) }));
-        const hosts = wt.fibers("UrlField").map((f) => f.memoizedProps.tab?.url);
+        const native = acPerf.findFibers("NativeToolbarView", 500).map((f) => { try { return JSON.parse(f.memoizedProps?.state ?? "null"); } catch { return null; } }).filter((n) => n?.url?.host);
+        const hosts = [...wt.fibers("UrlField").map((f) => f.memoizedProps.tab?.url), ...native.map((n) => ac.store.getState().tabs[n.tabId]?.url)];
         const w = ac.store.getState().windows.w1;
         return { active: w.activeTabIds[w.profileId], toolbars, auto, backdrops, hosts };
       },

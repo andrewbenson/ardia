@@ -254,6 +254,7 @@ export async function launch(app, dataDir, port) {
   const env = appEnv(app, {
     ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: dataDir, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}),
+    ...(process.env.ARDIA_NATIVE_OMNIBOX ? { ARDIA_NATIVE_OMNIBOX: process.env.ARDIA_NATIVE_OMNIBOX } : {}),
   });
   execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), app]);
   for (let i = 0; i < 200; i++) {

@@ -67,6 +67,7 @@ try {
     globalThis.audit = {
       frames: (n) => new Promise((r) => { let k = n || 2; const step = () => (k-- > 0 ? requestAnimationFrame(step) : r()); step(); }),
       props: (name, tabId) => acPerf.findFibers(name, 500).filter((f) => !tabId || f.memoizedProps?.tabId === tabId || f.memoizedProps?.tab?.id === tabId).map((f) => ({ props: f.memoizedProps, rendered: !!f.child })),
+      native: (tabId) => acPerf.findFibers("NativeToolbarView", 500).map((f) => { try { return JSON.parse(f.memoizedProps?.state ?? "null"); } catch { return null; } }).filter((n) => n && n.tabId === tabId),
       until: (test, ms) => new Promise((r) => { const end = Date.now() + (ms || 15000); const poll = () => (test() ? r(true) : Date.now() > end ? r(false) : setTimeout(poll, 50)); poll(); }),
     };
     return true;`);
@@ -90,18 +91,19 @@ try {
       ac.pageState.setState((p) => ({ pages: { ...p.pages, b: { ...(p.pages.b || {}), permission: { id: "audit", browserId: 0, origin: "https://example.com", permissions: ["notifications"] } } } }));
       S().updateLive("b", { isLoading: true });
       return audit.frames(3);
-    }).then(() => ({ ok, url: S().tabs.b.url, title: S().tabs.b.title, renderedB: audit.props("UrlField", "b").length }));`, 60_000);
+    }).then(() => ({ ok, url: S().tabs.b.url, title: S().tabs.b.title, renderedB: audit.props("UrlField", "b").length + audit.native("b").length }));`, 60_000);
   check("a hidden tab loads what it's sent to (its own tab's navigation)", hiddenChanges.ok, `${hiddenChanges.url} "${hiddenChanges.title}"`);
   check("nothing of B's toolbar renders while it's hidden", hiddenChanges.renderedB === 0);
 
   const shown = await ac(`${S}
     S().activate("b");
+    const t = (f) => { try { return f(); } catch (e) { return "ERR " + e.message; } };
     return audit.frames(3).then(() => ({
-      url: audit.props("UrlField", "b")[0]?.props.tab.url,
-      zoom: audit.props("ZoomIndicator", "b")[0]?.props.zoom,
-      loading: audit.props("ReloadButton", "b")[0]?.props.loading,
-      find: audit.props("FindBar", "b")[0]?.rendered,
-      prompt: audit.props("PermissionPrompt", "b")[0]?.rendered,
+      url: t(() => audit.props("UrlField", "b")[0]?.props.tab.url ?? audit.native("b").map((n) => n.url && n.url.host + n.url.hoverTrail)[0]),
+      zoom: t(() => audit.props("ZoomIndicator", "b")[0]?.props.zoom ?? audit.native("b").map((n) => { const z = (n.url?.trailing ?? []).find((t) => t.id === "zoom"); return z ? Number(z.tooltip.match(/([0-9]+)%/)[1]) / 100 : 1; })[0]),
+      loading: t(() => audit.props("ReloadButton", "b")[0]?.props.loading ?? audit.native("b").map((n) => (n.left ?? []).find((b) => b.id === "reload")?.icon === "xmark")[0]),
+      find: t(() => audit.props("FindBar", "b")[0]?.rendered),
+      prompt: t(() => audit.props("PermissionPrompt", "b")[0]?.rendered),
     }));`);
   check("shown: the URL it loaded while hidden", typeof shown.url === "string" && shown.url.includes("HiddenLoad"), shown.url);
   check("shown: its zoom", shown.zoom === 1.5, String(shown.zoom));

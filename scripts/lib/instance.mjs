@@ -22,7 +22,8 @@ export function parsePort(value) {
   return n;
 }
 const pidList = (text) => [...new Set(text.split(/\s+/).filter(Boolean).map(Number))].filter((n) => Number.isInteger(n) && n > 0);
-export const commandIsBinary = (command, binary) => command === binary || command.startsWith(`${binary} `);
+const folded = (path) => path.normalize("NFC").toLowerCase();
+export const commandIsBinary = (command, binary) => folded(command) === folded(binary) || folded(command).startsWith(`${folded(binary)} `);
 export function listenerPids(port) {
   const r = spawnSync("lsof", ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8", timeout: 5000 });
   if (r.error || r.status > 1) throw new Error(`lsof failed for port ${port}: ${r.error ?? r.stderr}`);
@@ -51,7 +52,7 @@ export function ownedCandidate(listeners, before, commandOf, binary) {
   if (!commandIsBinary(command, binary)) throw new Error(`port listener ${pid} is not ${binary}: ${command}`);
   return pid;
 }
-export const realPath = (path) => { try { return realpathSync(path); } catch { return path; } };
+export const realPath = (path) => { try { return realpathSync.native(path); } catch { return path; } };
 export function spawnedPids(binary, before, port, dataDirs) {
   const r = spawnSync("ps", ["-ww", "-ax", "-o", "pid=", "-o", "ppid=", "-o", "command="], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 });
   if (r.status !== 0) return [];
@@ -61,7 +62,7 @@ export function spawnedPids(binary, before, port, dataDirs) {
   try { listening = listenerPids(port); } catch {}
   return rows.filter((row) => commandIsBinary(row.command, binary) && !before.has(row.pid)).map((row) => row.pid)
     .filter((pid) => listening.includes(pid) ||
-      rows.some((child) => child.ppid === pid && dataDirs.some((dir) => child.command.includes(`--user-data-dir=${dir}`))));
+      rows.some((child) => child.ppid === pid && dataDirs.some((dir) => folded(child.command).includes(`--user-data-dir=${folded(dir)}`))));
 }
 async function killSpawned(pids) {
   for (const pid of pids) try { process.kill(pid, "SIGTERM"); } catch {}

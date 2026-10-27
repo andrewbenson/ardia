@@ -2,7 +2,7 @@ import AppKit
 
 public enum WindowHost {
   public static var makeWindow: (() -> NSWindow)?
-  public static var makeContentView: ((_ windowId: String) -> NSView)?
+  nonisolated(unsafe) public static var makeContentView: ((_ windowId: String) -> NSView)?
   nonisolated(unsafe) public static var makeAuxController: ((_ windowId: String, _ kind: String) -> NSViewController?)?
 }
 

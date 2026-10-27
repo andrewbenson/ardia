@@ -1,0 +1,252 @@
+import AppKit
+import Foundation
+import SolaraModel
+import Testing
+@testable import SolaraUI
+
+struct WindowShellMotionTests {
+  let dia: [(Double, Double)] = [
+    (0.0337, 0.303), (0.0629, 0.616), (0.0837, 0.805), (0.1212, 0.968), (0.1379, 1.011), (0.1629, 1.011), (0.1837, 1.003),
+    (0.0263, 0.246), (0.0596, 0.524), (0.0805, 0.8), (0.1055, 0.951), (0.1305, 1.008), (0.1555, 1.011), (0.1805, 1.003),
+    (0.0324, 0.316), (0.0657, 0.586), (0.0949, 0.846), (0.1032, 0.973), (0.1365, 1.011), (0.1532, 1.011), (0.1782, 1.005),
+  ]
+
+  @Test func springFollowsDiasMeasuredMotion() {
+    let rms = (dia.reduce(0) { $0 + pow(DockMotion.springAt($1.0) - $1.1, 2) } / Double(dia.count)).squareRoot()
+    #expect(rms < 0.04)
+    #expect(DockMotion.springAt(0.1) > 0.88)
+    let peak = (0..<60).map { DockMotion.springAt(Double($0) / 120) }.max()!
+    #expect(peak > 1.005 && peak < 1.03)
+    #expect(abs(DockMotion.springAt(0.3) - 1) < 0.003)
+  }
+
+  @Test func reactNativesSpringParametersAreTheSameSpring() {
+    let spring = ShellSpring.dock
+    let omega = spring.stiffness.squareRoot()
+    #expect(abs(omega - 2 * .pi / 0.215) < 1e-9)
+    #expect(abs(spring.dampingCoefficient / (2 * omega) - 0.79) < 1e-9)
+  }
+
+  @Test func springRunMatchesTheAnalyticCurveAndRestsOnReactNativesFrame() {
+    let run = SpringRun(from: 0, to: 1)
+    for t in stride(from: 0.0, through: 0.3, by: 0.01) {
+      #expect(abs(run.sample(t).value - DockMotion.springAt(t)) < 1e-9)
+    }
+    #expect(framesToRest(SpringRun(from: 0, to: 1), hz: 60) == 20)
+    #expect(framesToRest(SpringRun(from: 1, to: 0), hz: 60) == 20)
+    #expect(framesToRest(SpringRun(from: 0, to: 1), hz: 120) == 40)
+    #expect(SpringRun(from: 0, to: 1).sample(1).value == 1)
+  }
+
+  @Test func aSpringStartedWithVelocityKeepsIt() {
+    let first = SpringRun(from: 0, to: 1)
+    let mid = first.sample(0.05)
+    let back = SpringRun(from: mid.value, to: 0, initialVelocity: mid.velocity)
+    let step = back.sample(1.0 / 120).value
+    #expect(step > mid.value, "still moving the way it was going on the first frame")
+    #expect(back.sample(2).value == 0)
+  }
+
+  @Test func arcsHideIsAHundredMillisecondEaseOut() {
+    let hide = TimedRun(from: 1, to: 0, duration: DockMotion.arcHideMs / 1000, ease: .outCubic)
+    #expect(hide.sample(0).value == 1)
+    #expect(abs(hide.sample(0.05).value - (1 - DockMotion.easeOutCubic(0.5))) < 1e-12)
+    #expect(hide.sample(0.1).done)
+    #expect(DockMotion.easeInOutCubic(0) == 0)
+    #expect(DockMotion.easeInOutCubic(0.5) == 0.5)
+    #expect(DockMotion.easeInOutCubic(1) == 1)
+    let peak = (0..<60).map { DockMotion.springAt(Double($0) / 120, .arcPeek) }.max()!
+    #expect(peak > 1.01 && peak < 1.03)
+  }
+
+  @Test func trafficLightsGoWithTheSidebar() {
+    #expect(DockMotion.lightsCenter(offset: 0) == nil)
+    #expect(DockMotion.lightsCenter(offset: 0.2) == nil)
+    #expect(DockMotion.lightsCenter(offset: 95) == CGPoint(x: 25 - 95, y: 27))
+    let p = ShellMetrics.peekOrigin
+    #expect(DockMotion.lightsCenter(offset: -p.x, down: p.y) == CGPoint(x: 25 + p.x, y: 27 + p.y))
+    for width in [160.0, 190, 400] {
+      #expect(DockMotion.lightsCenter(offset: width)!.x + 46 + 7 < 0)
+    }
+    let arc = ShellMetrics.arcLightsCenter
+    #expect(arc == CGPoint(x: 25, y: 24))
+    #expect(DockMotion.lightsCenter(offset: 0, base: arc) == CGPoint(x: 25, y: 24))
+    #expect(DockMotion.lightsCenter(offset: 95, base: arc) == CGPoint(x: 25 - 95, y: 24))
+  }
+
+  @Test func cardLeftRunsFromTheInsetToTheSidebarsWidth() {
+    #expect(DockMotion.cardLeft(dock: 1, width: 190, inset: 7) == 190)
+    #expect(DockMotion.cardLeft(dock: 0, width: 190, inset: 7) == 7)
+    #expect(DockMotion.cardLeft(dock: 0.5, width: 190, inset: 7) == 98.5)
+  }
+
+  @Test func peekPanelCoversTheCardsRoundedCorners() {
+    let p = ShellMetrics.peekOrigin
+    let height: CGFloat = 860
+    let panel = (left: p.x, top: p.y, bottom: height - ShellMetrics.peekBottom, r: ShellMetrics.peekRadius)
+    let card = (left: ShellMetrics.cardInset, top: ShellMetrics.cardTop, bottom: height - ShellMetrics.cardInset, r: ShellMetrics.cardRadius)
+    #expect(panel.left <= card.left && panel.top <= card.top && panel.bottom >= card.bottom)
+    let corners = [
+      ((panel.left + panel.r, panel.top + panel.r), (card.left + card.r, card.top + card.r)),
+      ((panel.left + panel.r, panel.bottom - panel.r), (card.left + card.r, card.bottom - card.r)),
+    ]
+    for ((ax, ay), (bx, by)) in corners {
+      #expect(hypot(ax - bx, ay - by) + card.r <= panel.r - 0.5)
+    }
+  }
+
+  func framesToRest(_ run: SpringRun, hz: Double) -> Int {
+    var n = 0
+    while !run.sample(Double(n) / hz).done { n += 1 }
+    return n
+  }
+}
+
+struct WindowShellGeometryTests {
+  @Test func toolbarButtonsDontMoveWithTheSidebar() {
+    let g = ToolbarGeometry.of(sidebarButton: true)
+    #expect([g.sidebarButton, g.back, g.forward, g.reload] == [21, 56, 92, 127])
+    #expect(g.urlLeft == 145)
+    let bare = ToolbarGeometry.of(sidebarButton: false)
+    #expect([bare.back, bare.forward, bare.reload, bare.urlLeft] == [21, 57, 92, 110])
+    #expect(ToolbarGeometry.none.urlLeft == 8)
+  }
+
+  @Test func twoPanesSplitTheWidthLessTheGap() {
+    let split = SplitView(id: "s", windowId: "w", tabIds: ["a", "b"], orientation: "horizontal", sizes: [0.5, 0.5])
+    let g = ShellGeometry.split(split, width: 1001, height: 700)
+    #expect(g.panes["a"] == CGRect(x: 0, y: 0, width: 497, height: 700))
+    #expect(g.panes["b"] == CGRect(x: 504, y: 0, width: 497, height: 700))
+    #expect(g.dividers == [SplitDivider(kind: .root(index: 0), rect: CGRect(x: 497, y: 0, width: 7, height: 700), vertical: true)])
+  }
+
+  @Test func aStackedSlotCutsItsOwnAxis() {
+    let split = SplitView(
+      id: "s", windowId: "w", tabIds: ["a", "b", "c"], orientation: "horizontal", sizes: [0.4, 0.6], stack: SplitStack(index: 1, sizes: [0.25, 0.75]))
+    let g = ShellGeometry.split(split, width: 1007, height: 607)
+    #expect(g.panes["a"] == CGRect(x: 0, y: 0, width: 400, height: 607))
+    #expect(g.panes["b"] == CGRect(x: 407, y: 0, width: 600, height: 150))
+    #expect(g.panes["c"] == CGRect(x: 407, y: 157, width: 600, height: 450))
+    #expect(g.dividers.count == 2)
+    #expect(g.dividers[0] == SplitDivider(kind: .root(index: 0), rect: CGRect(x: 400, y: 0, width: 7, height: 607), vertical: true))
+    #expect(g.dividers[1] == SplitDivider(kind: .stack, rect: CGRect(x: 407, y: 150, width: 600, height: 7), vertical: false))
+  }
+
+  @Test func verticalSplitsStackTopToBottomAndMismatchedSizesShareEvenly() {
+    let split = SplitView(id: "s", windowId: "w", tabIds: ["a", "b", "c"], orientation: "vertical", sizes: [1])
+    let g = ShellGeometry.split(split, width: 800, height: 614)
+    #expect(g.panes["a"] == CGRect(x: 0, y: 0, width: 800, height: 200))
+    #expect(g.panes["b"] == CGRect(x: 0, y: 207, width: 800, height: 200))
+    #expect(g.panes["c"] == CGRect(x: 0, y: 414, width: 800, height: 200))
+    #expect(g.dividers.map(\.vertical) == [false, false])
+  }
+
+  @Test func resizeKeepsBothPanesAtLeastTheMinimum() {
+    let total = 1007.0
+    let grown = ShellGeometry.resize([0.5, 0.5], 0, delta: 100, total: total)
+    #expect(abs(grown[0] - 0.6) < 1e-12 && abs(grown[1] - 0.4) < 1e-12)
+    let clamped = ShellGeometry.resize([0.5, 0.5], 0, delta: 10_000, total: total)
+    #expect(abs(clamped[1] * 1000 - 220) < 1e-9)
+    let small = ShellGeometry.resize([0.1, 0.9], 0, delta: -50, total: total)
+    #expect(abs(small[0] - 0.1) < 1e-12, "a pane already under the minimum holds its size")
+  }
+
+  @Test func dockedCardRunsFromTheInsetToTheSidebar() {
+    let size = CGSize(width: 1360, height: 860)
+    let open = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 1))
+    #expect(open.card == CGRect(x: 190, y: 6, width: 1163, height: 847))
+    #expect(open.sidebar == CGRect(x: 0, y: 0, width: 190, height: 860))
+    #expect(open.sidebarShift == 0)
+    #expect(open.lights == nil)
+    let closed = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 0, away: true))
+    #expect(closed.card == CGRect(x: 7, y: 6, width: 1346, height: 847))
+    #expect(closed.sidebar?.minX == -10_000)
+    #expect(closed.lights == CGPoint(x: 25 - 190, y: 27))
+    let half = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 0.5, sidebarWidth: 240))
+    #expect(half.card.minX == 123.5)
+    #expect(half.sidebarShift == -120)
+    #expect(half.lights == CGPoint(x: 25 - 120, y: 27))
+  }
+
+  @Test func theAddressBarInTheSidebarRaisesTheLights() {
+    let size = CGSize(width: 1360, height: 860)
+    #expect(DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 1, addressBarInSidebar: true)).lights == CGPoint(x: 25, y: 24))
+  }
+
+  @Test func thePeekPanelSlidesInFromPastTheEdge() {
+    let size = CGSize(width: 1360, height: 860)
+    let out = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 0, peeking: true, peekSlide: 1))
+    #expect(out.sidebar == CGRect(x: 5, y: 5, width: 190, height: 850))
+    #expect(out.sidebarShift == 0)
+    #expect(out.lights == CGPoint(x: 30, y: 32))
+    let start = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 0, peeking: true, peekSlide: 0))
+    #expect(abs(start.sidebarShift + 202) < 1e-9, "\(start.sidebarShift + 202)")
+    #expect(out.card == CGRect(x: 7, y: 6, width: 1346, height: 847), "the card stays put under the peek")
+  }
+
+  @Test func topTabsInsetTheCardUnderTheStrip() {
+    let size = CGSize(width: 1200, height: 800)
+    let open = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 1, topTabs: true))
+    #expect(open.card == CGRect(x: 6, y: 42, width: 1188, height: 752))
+    #expect(open.topStrip == CGRect(x: 0, y: 0, width: 1200, height: 42))
+    #expect(open.sidebar == nil)
+    let hidden = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 0, topTabs: true))
+    #expect(hidden.card.minY == 6)
+    #expect(hidden.topStrip?.minY == -42)
+  }
+
+  @Test func fullscreenGivesTheCardTheWholeWindow() {
+    let size = CGSize(width: 1200, height: 800)
+    let f = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 1, fullscreen: true))
+    #expect(f.card == CGRect(origin: .zero, size: size))
+    #expect(f.sidebar == nil)
+  }
+}
+
+@MainActor
+struct WindowShellViewTests {
+  @Test func slotsStackInOrderWhateverOrderTheyMountIn() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    let react = NSView(), backdrop = NSView(), sidebar = NSView(), overlay = NSView()
+    shell.mount(.react, react)
+    shell.mount(.overlay, overlay)
+    shell.mount(.backdrop, backdrop)
+    shell.mount(.sidebar, sidebar)
+    #expect(shell.subviews == [backdrop, react, sidebar, overlay])
+    #expect(react.frame == shell.bounds)
+    #expect(backdrop.frame == shell.bounds)
+    #expect(sidebar.frame == CGRect(x: 0, y: 0, width: 190, height: 700))
+    let replacement = NSView()
+    shell.mount(.backdrop, replacement)
+    #expect(shell.subviews.first === replacement)
+    #expect(backdrop.superview == nil)
+    shell.mount(.sidebar, nil)
+    #expect(sidebar.superview == nil)
+  }
+
+  @Test func framesFollowTheDockAndReportOnlyChanges() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    var reported: [CGRect] = []
+    shell.onFrames = { reported.append($0.card) }
+    let card = NSView()
+    shell.mount(.card, card)
+    shell.update { $0.dock = 0 }
+    shell.update { $0.dock = 0 }
+    #expect(card.frame == CGRect(x: 7, y: 6, width: 986, height: 687))
+    #expect(reported == [CGRect(x: 7, y: 6, width: 986, height: 687)])
+    shell.setFrameSize(NSSize(width: 1100, height: 700))
+    #expect(card.frame.width == 1086)
+    #expect(reported.count == 2)
+  }
+
+  @Test func theShellItselfTakesNoClicks() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+    #expect(shell.hitTest(NSPoint(x: 10, y: 10)) == nil)
+    let react = NSView()
+    shell.mount(.react, react)
+    #expect(shell.hitTest(NSPoint(x: 10, y: 10)) === react)
+  }
+}

@@ -60,3 +60,4 @@ export * from "./findBar";
 export * from "./downloads";
 export * from "./prompt";
 export * from "./sitePanel";
+export * from "./windowShell";

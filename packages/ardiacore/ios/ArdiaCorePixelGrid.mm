@@ -13,7 +13,11 @@
 namespace {
 
 BOOL HostsReact(NSWindow *window) {
-  return [ACWindowRootView(window) isKindOfClass:RCTRootView.class];
+  NSView *root = ACWindowRootView(window);
+  if ([root isKindOfClass:RCTRootView.class]) return YES;
+  for (NSView *sub in root.subviews)
+    if ([sub isKindOfClass:RCTRootView.class]) return YES;
+  return NO;
 }
 
 CGFloat CoarsestReactWindowScale() {

@@ -1,4 +1,3 @@
-import { WindowBackdrop } from "@ardia/shaders";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { CommandPanel } from "./components/CommandPanel";
@@ -18,6 +17,7 @@ import { TOP_CARD_INSET, TOP_STRIP_HEIGHT, TopStripPeek, TopTabStrip } from "./c
 import { useTabLayout } from "./components/layout/windowLayout";
 import { WindowProfile } from "./components/layout/WindowProfile";
 import { DockedLayout } from "./components/layout/SidebarDock";
+import { ShellBackdrop, useWindowShell } from "./components/layout/ShellBackdrop";
 import { LittleArdiaWindow } from "./components/littleArdia/LittleArdiaWindow";
 import { SidebarOverlays } from "./components/sidebar/Overlays";
 import { layout, ThemeScope, useTheme } from "./lib/theme";
@@ -52,6 +52,7 @@ function BrowserWindow() {
   const topTabs = useTabLayout() === "top";
   const fullscreen = !!useFullscreenTab(windowId);
   const [width, setWidth] = useState(0);
+  const shell = useWindowShell();
   const card = (
     <>
       <ContentCard />
@@ -61,7 +62,7 @@ function BrowserWindow() {
 
   return (
     <View style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
+      <ShellBackdrop shell={shell} />
       <WindowProfile />
       <ProfileTint />
       <DockedLayout

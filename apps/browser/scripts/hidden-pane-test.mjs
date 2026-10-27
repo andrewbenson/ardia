@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -52,6 +53,16 @@ writeFileSync(
 writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
 writeFileSync(join(data, "perf-probe"), "");
 
+const unfinished = new Set();
+const stillLoading = createServer((req, res) => {
+  const name = req.url.slice(1);
+  res.writeHead(200, { "content-type": "text/html" });
+  res.write(`<!doctype html><title>${name}</title><p>${name}-findme</p>`);
+  unfinished.add(res);
+});
+await new Promise((r) => stillLoading.listen(0, "127.0.0.1", r));
+const loadingPage = (name) => `http://127.0.0.1:${stillLoading.address().port}/${name}`;
+
 const { pid } = await launch(app, data, Number(flags.port ?? 9795));
 const ac = (body, ms) => evaluate(data, pid, body, ms);
 const results = [];
@@ -81,15 +92,14 @@ try {
   check("tab B's pane stays mounted while hidden", loaded.b && loaded.shown === "a", JSON.stringify(loaded));
 
   const hiddenChanges = await ac(`${S}
-    const url = ${JSON.stringify(page("HiddenLoad"))};
+    const url = ${JSON.stringify(loadingPage("HiddenLoad"))};
     S().updateTab("b", { navigation: { url, seq: Date.now() } });
     let ok = false;
-    return audit.until(() => S().tabs.b.title === "HiddenLoad").then((loadedIt) => {
+    return audit.until(() => S().tabs.b.title === "HiddenLoad" && S().live.b?.isLoading).then((loadedIt) => {
       ok = loadedIt;
       S().updateTab("b", { zoom: 1.5 });
       S().setFind("b", { open: true, query: "findme" });
       ac.pageState.setState((p) => ({ pages: { ...p.pages, b: { ...(p.pages.b || {}), permission: { id: "audit", browserId: 0, origin: "https://example.com", permissions: ["notifications"] } } } }));
-      S().updateLive("b", { isLoading: true });
       return audit.frames(3);
     }).then(() => ({ ok, url: S().tabs.b.url, title: S().tabs.b.title, renderedB: audit.props("UrlField", "b").length + audit.native("b").length }));`, 60_000);
   check("a hidden tab loads what it's sent to (its own tab's navigation)", hiddenChanges.ok, `${hiddenChanges.url} "${hiddenChanges.title}"`);
@@ -125,5 +135,7 @@ try {
   for (const [step, want, have] of panes) check(`mounted panes after ${step}`, want === have, `want ${want} have ${have}`);
 } finally {
   await quit(pid);
+  for (const res of unfinished) res.destroy();
+  stillLoading.close();
 }
 process.exit(results.every(Boolean) ? 0 : 1);

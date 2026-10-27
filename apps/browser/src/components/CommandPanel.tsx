@@ -1,5 +1,5 @@
 import { OutsidePressArea, Surface } from "@ardia/shell";
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, View, type LayoutChangeEvent } from "react-native";
 import { hex, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
@@ -10,6 +10,7 @@ import { usePage } from "./layout/pageState";
 import { dismissHover, setRowsCovered } from "./sidebar/hover";
 import { commandBarCentred, useCardAnchors, useUrlAnchors } from "./layout/windowLayout";
 import { barWidth } from "./NewTabPage";
+import { markPanelFrame } from "../telemetry/journeys";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
 import { breadcrumb } from "@ardia/core";
@@ -182,9 +183,11 @@ function Grow({
     const measured = e.nativeEvent.layout.height;
     if (height === null && measured >= (from?.height ?? 0)) setHeight(measured);
   };
+  useLayoutEffect(() => markPanelFrame("mount"), []);
   useEffect(() => {
     if (!from || height === null) return;
-    Animated.timing(progress, { toValue: 1, duration: GROW_MS, easing: GROW_EASING, useNativeDriver: true }).start();
+    markPanelFrame("growStart");
+    Animated.timing(progress, { toValue: 1, duration: GROW_MS, easing: GROW_EASING, useNativeDriver: true }).start(({ finished }) => finished && markPanelFrame("growEnd"));
   }, [height === null]);
 
   const box = start.current;

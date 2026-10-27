@@ -315,6 +315,14 @@ export function journeySuggestions(tabId: string) {
   frame(tabId, "suggest");
 }
 
+const panelMarks: [string, number][] = [];
+export const panelFrameMarks = () => panelMarks.splice(0);
+export function markPanelFrame(kind: "mount" | "growStart" | "growEnd") {
+  panelMarks.push([kind, Date.now()]);
+  if (panelMarks.length > 64) panelMarks.shift();
+  if (kind === "mount") native?.markFrame("panel", kind);
+}
+
 export function journeyBarKeyShown(windowId: string) {
   if (on) native?.markPresented?.(`bar:${windowId}`, "keyShown");
 }

@@ -32,6 +32,7 @@ export function startDevHarness() {
   const ac = {
     store: useBrowser, actions, runCommand, webviews, shell, omnibox: omniboxDrivers, pages: pagesDrivers,
     pageState: usePages,
+    panelFrameMarks: () => require("../telemetry/journeys").panelFrameMarks() as [string, number][],
     openSettings,
     favicons,
     get checkIn(): typeof import("./defaultBrowserCheckIn") {

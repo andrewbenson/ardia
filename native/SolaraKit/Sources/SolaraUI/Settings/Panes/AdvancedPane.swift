@@ -70,8 +70,11 @@ public final class AdvancedPaneModel: SettingsPaneProvider {
   public func isLoaded(_ place: SettingsPlace) -> Bool { chromium != nil && widevine != nil }
 
   public func prepare(_ place: SettingsPlace) async {
-    chromium = .some(await services.chromiumVersion())
-    widevine = .some(await services.widevineVersion())
+    let services = services
+    let chromium = Task { await services.chromiumVersion() }
+    let widevine = Task { await services.widevineVersion() }
+    self.chromium = .some(await chromium.value)
+    self.widevine = .some(await widevine.value)
   }
 
   public func view(_ place: SettingsPlace) -> AnyView { AnyView(AdvancedPane(model: self)) }

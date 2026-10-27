@@ -204,10 +204,14 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
 
   public func prepare(_ place: SettingsPlace) async {
     let profile = defaultEngineProfile
-    await reloadBlocker()
-    await loadOrigins(profile)
-    await loadAppLinks(profile)
-    await loadZoom(profile)
+    let blocker = Task { await reloadBlocker() }
+    let origins = Task { await loadOrigins(profile) }
+    let appLinks = Task { await loadAppLinks(profile) }
+    let zoom = Task { await loadZoom(profile) }
+    await blocker.value
+    await origins.value
+    await appLinks.value
+    await zoom.value
     sharing = diagnostics?.sharing ?? false
   }
 

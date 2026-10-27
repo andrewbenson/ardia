@@ -57,9 +57,13 @@ public final class GeneralPaneModel: SettingsPaneProvider {
 
   public func prepare(_ place: SettingsPlace) async {
     let profile = store.engineProfile(store.string("defaultProfileId"))
-    loginStatus = await services.loginItemStatus()
-    isDefault = await services.isDefaultBrowser()
-    downloads[profile] = .some(await services.downloadSettings(profile: profile))
+    let services = services
+    let login = Task { await services.loginItemStatus() }
+    let isDefault = Task { await services.isDefaultBrowser() }
+    let downloads = Task { await services.downloadSettings(profile: profile) }
+    loginStatus = await login.value
+    self.isDefault = await isDefault.value
+    self.downloads[profile] = .some(await downloads.value)
   }
 
   public func view(_ place: SettingsPlace) -> AnyView {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { deflateRawSync } from "node:zlib";
 import { registerHooks } from "node:module";
@@ -7,12 +8,19 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { encodeArgs } from "../../../../packages/store/src/encode.ts";
 
-const HELP = `usage: node scripts/native/replay.mjs [--phase 1a|1b] [--out <dir>] [--cap <cases per test, 0 for all>] [--plain] [test files...]
+const HELP = `usage: node scripts/native/replay.mjs [--phase 1a|1b|adapters] [--out <dir>] [--cap <cases per test, 0 for all>] [--plain] [test files...]
 
 Runs the store's *.test.mjs files through the real JS store, recording every call of a command
 the Swift core owns in that phase as a case: the state before, the command, the state after,
 the clock and the id counter. SolaraStoreTests replays each case through the Swift core and
-diffs canonical JSON. Each test file runs in its own process, as node --test runs them.`;
+diffs canonical JSON. Each test file runs in its own process, as node --test runs them.
+
+--phase adapters records the sync adapters of src/sync/adapters.ts and pinned.ts instead: each
+extract and apply call with the state before, the adapter's arguments, every lookup it made
+(base, known, queued, remote, stamp) and its answer, the values it extracted in order, the
+answers ignore and republish gave the merge, what apply was given, the store commands it issued,
+its result and the state after. Default out for it: native/SolaraKit/Tests/SolaraSyncTests/Adapters.
+SolaraSyncTests replays each call through the Swift adapter.`;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = resolve(here, "../..");
@@ -34,7 +42,7 @@ const phase = option("--phase", "1a");
 const cap = Number(option("--cap", "400"));
 const plainOutput = args.includes("--plain");
 if (plainOutput) args.splice(args.indexOf("--plain"), 1);
-const out = resolve(option("--out", defaultOut));
+const out = resolve(option("--out", phase === "adapters" ? resolve(app, "../../native/SolaraKit/Tests/SolaraSyncTests/Adapters") : defaultOut));
 const child = option("--child", null);
 const harvest = option("--harvest", null);
 
@@ -42,7 +50,7 @@ const harvest = option("--harvest", null);
 function orchestrate() {
   const files = args.length
     ? args.map((f) => resolve(f))
-    : ["src/store", "src/lib", "src/sync"].flatMap((dir) =>
+    : (phase === "adapters" ? ["src/sync"] : ["src/store", "src/lib", "src/sync"]).flatMap((dir) =>
         readdirSync(join(app, dir)).filter((f) => f.endsWith(".test.mjs")).map((f) => join(app, dir, f)),
       );
   mkdirSync(out, { recursive: true });
@@ -91,6 +99,35 @@ const INSTRUMENT = [
     ["    writeDocument(name, json);", "    writeDocument(name, json);\n    globalThis.__replayHarvest?.(name, json);"],
   ]],
 ];
+
+const RECORDED_ADAPTERS = new Map([
+  ["settingsAdapter", []],
+  ["profilesAdapter", ["read"]],
+  ["profileThemesAdapter", ["read", "themeRecords", "callback"]],
+  ["sharedDataAdapter", ["read"]],
+  ["deviceAdapter", ["plain", "read", "plain"]],
+  ["deviceTabsAdapter", ["plain", "plain", "read", "plain"]],
+  ["developerModeAdapter", ["plain"]],
+  ["pinnedAdapter", ["plain"]],
+  ["pinnedOrderAdapter", ["plain"]],
+  ["pinnedRowsAdapter", ["plain"]],
+  ["groupLooksAdapter", ["plain"]],
+  ["pinnedHomesAdapter", ["plain"]],
+  ["tileFoldersAdapter", ["plain"]],
+]);
+
+function instrumentAdapters(source) {
+  const appended = [];
+  source = source.replace(/^export function (\w+Adapter)\(/gm, (_, name) => {
+    appended.push(`export function ${name}(...args) { return globalThis.__replayAdapter("${name}", args, (given) => __replay_${name}(...given)); }`);
+    return `function __replay_${name}(`;
+  });
+  source = source.replace(/^export const (\w+Adapter): Adapter = /gm, (_, name) => {
+    appended.push(`export const ${name} = globalThis.__replayLazyAdapter("${name}", __replay_${name});`);
+    return `const __replay_${name}: Adapter = `;
+  });
+  return `${source}\n${appended.join("\n")}\n`;
+}
 
 function readMemory() {
   const model = globalThis.__replayModel?.read() ?? {};
@@ -231,9 +268,20 @@ async function record(file) {
     },
   });
   await import(pathToFileURL(join(app, "src/test-loader.mjs")).href);
+  let adapterHook = null;
+  globalThis.__replayAdapter = (name, args, build) => (adapterHook ? adapterHook(name, args, build) : build(args));
+  globalThis.__replayLazyAdapter = (name, raw) => {
+    let wrapped = null;
+    const live = () => (wrapped ??= adapterHook ? adapterHook(name, [], () => raw) : null) ?? raw;
+    return { ...raw, extract: (...given) => live().extract(...given), apply: (...given) => live().apply(...given) };
+  };
   registerHooks({
     load(url, context, next) {
       const loaded = next(url, context);
+      if (phase === "adapters" && (url.endsWith("/src/sync/adapters.ts") || url.endsWith("/src/sync/pinned.ts")) && loaded.source != null) {
+        const text = typeof loaded.source === "string" ? loaded.source : new TextDecoder().decode(loaded.source);
+        return { ...loaded, source: instrumentAdapters(text) };
+      }
       const rule = INSTRUMENT.find(([suffix]) => url.endsWith(suffix));
       if (!rule || loaded.source == null) return loaded;
       let source = typeof loaded.source === "string" ? loaded.source : new TextDecoder().decode(loaded.source);
@@ -282,6 +330,7 @@ async function record(file) {
   let batch = null;
   const memory = { endedPrivateDownloads: new Set() };
   const WRAPPED = Symbol("replay");
+  let adapterCall = null;
 
   const wrap = (state) => {
     const patch = {};
@@ -289,6 +338,22 @@ async function record(file) {
       const original = state[name];
       if (typeof original !== "function" || original[WRAPPED]) continue;
       const wrapped = function (...callArgs) {
+        if (spec.adapters) {
+          const into = batch ?? adapterCall?.commands;
+          if (into && depth === 0) {
+            const command = spec.command(name, callArgs, useBrowser.getState(), model);
+            if (command?.lossy) adapterCall.lossy = command.lossy;
+            if (adapterCall && hasUndefinedKey(callArgs)) adapterCall.lossy = "a command argument has a key set to undefined, which JSON cannot carry";
+            if (command) delete command.lossy;
+            into.push(command);
+          }
+          depth++;
+          try {
+            return original.apply(this, callArgs);
+          } finally {
+            depth--;
+          }
+        }
         if (depth > 0 && current && outsideStore(new Error().stack ?? "")) foreign = true;
         if (batch && depth === 0) {
           batch.push(spec.command(name, callArgs, useBrowser.getState(), model));
@@ -363,6 +428,15 @@ async function record(file) {
     return patch;
   };
   globalThis.__replayCommand = (name, args, run, bridged = false) => {
+    if (spec.adapters) {
+      if (adapterCall && depth === 0 && !batch) adapterCall.commands.push({ name, args: bridged ? args : plain(args) });
+      depth++;
+      try {
+        return run();
+      } finally {
+        depth--;
+      }
+    }
     if (depth > 0 || !current || batch || !spec.engineCommands) return run();
     const before = useBrowser.getState();
     const now = stubNow();
@@ -405,6 +479,17 @@ async function record(file) {
     return result;
   };
   globalThis.__replayTransaction = (run, real) => {
+    if (spec.adapters) {
+      if (!adapterCall || depth > 0 || batch) return real(run);
+      batch = [];
+      try {
+        return real(run);
+      } finally {
+        const commands = batch;
+        batch = null;
+        if (commands.length) adapterCall.commands.push({ name: "$batch", commands });
+      }
+    }
     if (depth > 0 || !current || batch || !spec.batches) return real(run);
     const before = useBrowser.getState();
     const now = stubNow();
@@ -469,6 +554,152 @@ async function record(file) {
     if (Object.keys(rewrap).length) rawSetState(rewrap);
   };
   rawSetState(wrap(useBrowser.getState()));
+
+  const settle = (value, then, fail) => {
+    if (value && typeof value.then === "function") return value.then((v) => (then(v), v), (error) => (fail(), Promise.reject(error)));
+    then(value);
+    return value;
+  };
+  const seenCalls = new Set();
+  const keptPerTest = new Map();
+  if (spec.adapters) {
+    adapterHook = (name, args, build) => {
+      const kinds = RECORDED_ADAPTERS.get(name);
+      if (!kinds) return build(args);
+      let callbacks = null;
+      const given = args.map((a, i) => (kinds[i] === "callback" && typeof a === "function" ? (...x) => (callbacks?.push(plain(x)), a(...x)) : a));
+      const adapter = build(given);
+      const describe = () =>
+        args.map((a, i) => {
+          const kind = kinds[i] ?? "plain";
+          if (kind === "read") return { read: plain(a()) };
+          if (kind === "themeRecords") {
+            const records = a();
+            return { read: records ? plain(Object.fromEntries(Object.entries(records).filter(([k]) => k.startsWith("pth:")))) : null };
+          }
+          if (kind === "callback") return { callback: typeof a === "function" };
+          return plain(a);
+        });
+      const begin = (kind) => {
+        const testNow = Date.now === stubNow ? null : Date.now;
+        const now = testNow ? testNow() : stubNow();
+        frozen = now;
+        const c = {
+          test: current,
+          now,
+          memory: readMemory(),
+          config: readConfig(),
+          adapter: { name, args: describe() },
+          call: kind,
+          before: spec.before(useBrowser.getState(), model),
+          lookups: [],
+          commands: [],
+          callbacks: [],
+        };
+        c.restore = () => {
+          frozen = null;
+          if (testNow) Date.now = testNow;
+        };
+        if (testNow) Date.now = () => now;
+        globalThis.__replayCalls = { urls: {}, resolve: [], prefix: null, sent: [] };
+        adapterCall = c;
+        callbacks = c.callbacks;
+        return c;
+      };
+      const end = (c, ok) => {
+        c.restore();
+        delete c.restore;
+        const { sent: _sent, ...web } = globalThis.__replayCalls ?? {};
+        c.web = web;
+        globalThis.__replayCalls = null;
+        adapterCall = null;
+        callbacks = null;
+        c.after = spec.project(useBrowser.getState(), model);
+        c.memoryAfter = readMemory();
+        if (!ok || !c.test) return;
+        const { test: _t, now: _n, ...rest } = c;
+        const digest = createHash("sha1").update(JSON.stringify(rest)).digest("hex");
+        if (seenCalls.has(digest)) return;
+        seenCalls.add(digest);
+        const n = keptPerTest.get(c.test) ?? 0;
+        keptPerTest.set(c.test, n + 1);
+        if (cap && n >= cap && n % 8 !== 0) return;
+        cases.push(c);
+      };
+      const logged = (c, kind, fn) =>
+        typeof fn === "function"
+          ? (key) => {
+              const answer = fn(key);
+              c.lookups.push(answer === undefined ? [kind, key] : [kind, key, plain(answer)]);
+              return answer;
+            }
+          : fn;
+      return {
+        ...adapter,
+        extract: (base, queued, at, known, remote, stamp) => {
+          const c = begin("extract");
+          c.at = at ?? null;
+          let result;
+          try {
+            result = adapter.extract(logged(c, "base", base), logged(c, "queued", queued), at, logged(c, "known", known), logged(c, "remote", remote), logged(c, "stamp", stamp));
+          } catch (error) {
+            end(c, false);
+            throw error;
+          }
+          const asked = (kind, fn) => (typeof fn === "function" ? (key) => {
+            const answer = fn(key);
+            c.asked.push([kind, key, answer]);
+            return answer;
+          } : fn);
+          const wrapExtraction = (r) => {
+            if (!r) return r;
+            return {
+              ...r,
+              ignore: asked("ignore", r.ignore),
+              republish: asked("republish", r.republish),
+              published: typeof r.published === "function" ? (keys) => {
+                c.published = [...keys];
+                return r.published(keys);
+              } : r.published,
+            };
+          };
+          let shown = null;
+          const outcome = settle(
+            result,
+            (r) => {
+              c.values = r ? [...r.values].map(([k, v]) => (v === undefined ? [k] : [k, plain(v)])) : null;
+              c.asked = [];
+              end(c, true);
+              shown = wrapExtraction(r);
+            },
+            () => end(c, false),
+          );
+          return outcome && typeof outcome.then === "function" ? outcome.then(() => shown) : shown;
+        },
+        apply: (visible, changed, base, records) => {
+          const c = begin("apply");
+          c.visible = [...visible].map(([k, v]) => [k, plain(v)]);
+          c.changed = [...changed];
+          c.records = records ? { now: records.now, horizon: records.horizon, joined: !!records.joined } : null;
+          let result;
+          try {
+            result = adapter.apply(visible, changed, logged(c, "base", base), records ? { ...records, known: logged(c, "recordKnown", records.known) } : records);
+          } catch (error) {
+            end(c, false);
+            throw error;
+          }
+          return settle(
+            result,
+            (r) => {
+              c.result = r === undefined ? null : plain(r);
+              end(c, true);
+            },
+            () => end(c, false),
+          );
+        },
+      };
+    };
+  }
 
   let failures = 0;
   for (const t of tests) {
@@ -648,6 +879,7 @@ async function phases(name) {
       extra: () => (globalThis.__replayTabs && !globalThis.__replayTabs.defaultOpener() ? { precheck: "an app URL opener is installed, which JS checks before dispatch" } : {}),
     },
   };
+  specs.adapters = { ...specs["1b"], adapters: true, batches: false, engineCommands: false };
   if (!specs[name]) throw new Error(`unknown phase ${name}`);
   return specs[name];
 }

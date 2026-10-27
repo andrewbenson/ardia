@@ -44,7 +44,7 @@ let package = Package(
     .testTarget(name: "SolaraImportTests", dependencies: ["SolaraImport"], exclude: ["Fixtures"]),
     .testTarget(name: "SolaraUITests", dependencies: ["SolaraUI"]),
     .testTarget(name: "SolaraSignpostsTests", dependencies: ["SolaraSignposts"]),
-    .testTarget(name: "SolaraSyncTests", dependencies: ["SolaraModel", "SolaraSync"], exclude: ["Scenarios"]),
+    .testTarget(name: "SolaraSyncTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraSync"], exclude: ["Scenarios", "Adapters"]),
     .testTarget(name: "SolaraSyncCoreTests", dependencies: ["SolaraSyncCore"]),
     .testTarget(name: "SolaraLiveTests", dependencies: ["SolaraLive"], resources: [.copy("Fixtures")]),
   ],

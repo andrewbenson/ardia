@@ -112,6 +112,18 @@ public struct ExtractContext {
   public let known: (String) -> Bool
   public let remote: (String) -> JSONValue?
   public let stamp: (String) -> HLC?
+
+  public init(
+    base: @escaping (String) -> JSONValue?, queued: @escaping (String) -> Bool, now: Double, known: @escaping (String) -> Bool,
+    remote: @escaping (String) -> JSONValue?, stamp: @escaping (String) -> HLC?
+  ) {
+    self.base = base
+    self.queued = queued
+    self.now = now
+    self.known = known
+    self.remote = remote
+    self.stamp = stamp
+  }
 }
 
 public struct ApplyRecords {
@@ -119,6 +131,13 @@ public struct ApplyRecords {
   public let now: Double
   public let horizon: Double
   public let joined: Bool
+
+  public init(known: @escaping (String) -> Bool, now: Double, horizon: Double, joined: Bool) {
+    self.known = known
+    self.now = now
+    self.horizon = horizon
+    self.joined = joined
+  }
 }
 
 public protocol SyncAdapter: AnyObject {

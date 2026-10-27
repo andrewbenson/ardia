@@ -96,7 +96,8 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
   sync key already is (ac_bookmarks.cc:327-329): inside the push itself, or as a meta-only call
   after a read or a publish. Chrome's Bookmarks file holds the tree and its marks from one write. The bar node is used because this Chromium's codec doesn't persist the invisible root's
   meta info; it encodes only the three permanent folders, each with its own (bookmark_codec.cc:56-77,
-  204-206). Extensions can't read or write meta info.
+  204-206), and `SetNodeMetaInfo` refuses the root outright (bookmark_model.cc:792). Extensions
+  can't read or write meta info.
 
 - **Journal check at load.**
   - `sync-edits.json` unreadable, or its `g` below the gen doc's or below the `g` the store's docs
@@ -207,10 +208,23 @@ the tree, and so does the echo of sync's pushes.
   - A failed push's intent therefore can't stay live: step 4 runs anyway, and step 5 clears it
     (I3-failed-push).
   - **During a session**, a fetched node equal to a live intent's value isn't journaled.
-  - **Failed pushes back off.** Today a push Chrome refuses sets `needRead`, whose replay pushes the
-    same ops again, with no delay (lib/bookmarks.ts:256-257, 267, 275-284). I3-failed-push counts
-    381 refused calls in about a second while one value stays refused. The new bridge retries a
-    refused push with a growing delay, capped at a minute.
+  - **Failed pushes back off** (shipped in 308bfb4f, ahead of the redesign). A push Chrome refused
+    used to set `needRead`, whose replay pushed the same ops again with no delay; I3-failed-push
+    counted 381 to 626 refused calls a second. Now the first failure re-reads at once, as before,
+    and later ones wait 1.5 s, doubling to a minute, until a push succeeds.
+- **Marks can't loop** (read, mark, change event, read). Three things stop it, any one enough:
+  - Chrome sends no notification for a meta-info write that changes nothing: `SetNodeMetaInfo`
+    returns before its observers when the value is the same (bookmark_model.cc:795-797).
+  - ArdiaCore's watcher doesn't forward meta-info changes at all. It overrides only node, move,
+    reorder and removal events, not `BookmarkMetaInfoChanged` (ac_bookmarks.cc:120-150;
+    bookmark_model_observer.h:105). It also drops every event while `ac_bookmarks_apply` runs
+    (ac_bookmarks.cc:153, 406, 428), and a mark is only ever written inside that call.
+  - The bridge marks only on a step, and a read is a step only when the fetched tree differs from
+    the shadow. A meta-only change doesn't alter any node's value, so a read it caused would write
+    nothing.
+  - MARK-settles counts the bridge's apply and tree calls after one extension edit, then requires
+    none in the next 200 ms. When the new bridge lands, the Chrome fake also emits a change event
+    for every apply, meta-only ones included, so the test proves the third guard alone settles.
 - **At launch, Chrome's `G_c` is compared with the cache's `G`.**
   - **Equal:** the cache is current. Intents still on disk are stale (their push never reached
     Chrome's file) and are dropped. The first read's diff is journaled like any other, so an
@@ -692,6 +706,9 @@ Re-check (rollback audit, § Rollback audit):
 - **I3-failed-push:** every push carrying one value is refused (Chrome never takes it), B renames
   again, then an extension sets the node to the refused value: the extension's value reaches B. A
   guard (no intents today). It also records today's unbounded retry.
+- **MARK-settles:** one extension edit costs a bounded number of apply and tree calls, then none for
+  200 ms. A guard today (no marks); the new bridge must keep it green with the fake emitting a change
+  event per apply.
 - **AUDIT-pw-docs-user-edit:** after the two-write rollback, a password the user changes once the
   app is back up is published. Green on HEAD; a guard for the rebuild's "after both write times"
   rule.

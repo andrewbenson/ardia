@@ -1,6 +1,7 @@
 # Sync redesign: the edit journal and publishing chains
 
-Status: proposal, revised after design review (findings D1–D11, against 9f61ca29). It replaces
+Status: proposal, revised after the design review (D1–D11, against 9f61ca29) and the re-review
+(ten items, against b916ad7c). It replaces
 the load guard described in docs/sync.md (§ After a load) as of 095f633c. Four reviews and the
 convergence oracle kept finding new holes in that guard because it decides "changed here" by
 comparing snapshots of the store (notes and baselines). Those snapshots are taken at the wrong time,
@@ -25,7 +26,8 @@ The current guard guesses which differences are real edits, and every guess has 
    difference with no entry is never published: the folder's value is applied over it, and apply
    never touches a key that has a live entry (any adapter, `adoptRemoteOnJoin` ones included). The
    one exception is a journal proven lost (§ 1, Durability). Then differences are published as a
-   union, at the oldest plausible stamp, and the folder never wins over them.
+   union bounded by the last time this Mac was in step with the folder. Device observations
+   (`tabs:` of this device, pin titles and favicons) aren't edits; they're published by diff.
 2. **A seq is used once per chain.** This Mac publishes under a chain id. When a load can't prove
    that its state knows every seq the chain has used, it mints a new chain before writing anything.
 3. **Every hold has an age limit**, counted from when the file was first seen and kept with the file
@@ -38,126 +40,163 @@ monotonic clock. It can't collide with a batch already written.
 
 ## 1. The local edit journal
 
-**Entry.** `(scope, key) → { v: value | null, h: HLC }`, holding the latest edit to that key. A
-deletion is `v: null`. Entries are keyed by scope as well as key, so a key can't be published into
-the wrong profile.
-- When a profile retires (Stop Syncing for it, or the profile is deleted), its entries are dropped.
-  Re-adding a profile with the same sync id then can't publish old deletions (D10).
+**Entry.** `(profile, key) → { v: value | null, h: HLC }`, holding the latest user edit to that key.
+A deletion is `v: null`.
 
-**Where it lives.** In the store's persisted data (the local store, not `sync-state.nns`), so
-losing or rolling back the sync state never touches it.
+**Which profiles.** The journal records a profile's edits whether sync is on or off, so a rename
+made while sync was off keeps its time on a rejoin (D10).
+- Turning one profile's sync off retires it. Its entries are dropped, and nothing is journaled for
+  it while it stays off.
+- Turning it back on is a join of that profile: union seeding, as below. Deletions made while it
+  was off aren't published, so those items come back. That's the price of dropping the entries
+  (re-review D10a).
 
-**Durability (D4).**
-- **Write-through for user edits.** The journal is its own small document, written synchronously
-  with each user edit. It does not go through `persist.ts`'s 800 ms debounce. A crash right after an
-  edit keeps its entry.
-- **Generation.** Every journal write increments a generation, stored twice: in the journal and in
-  a separate one-line document. On load, a journal that is unreadable, missing, or older than the
-  stored generation is lost.
-- **On a lost journal**, every type whose store was edited since the last confirmed publish runs as
-  a union. Local differences are published at the oldest plausible stamp: `Clock.at(time of the
-  journal's last durable write)`, older than anything made after it. Local items the folder lacks
-  are never deleted. That is the old union-on-join behaviour, and nothing is lost to folder-wins.
-  Two generation documents that disagree in a way that can't happen count as lost.
+**What's journaled: user commands only** (re-review 9). These are the store commands a user
+action runs: settings, profiles, bookmarks, pins, groups, a history delete, and imports.
+- Device observations stay outside the journal and are published by diff, as today: `tabs:<this
+  device>`, and a pin's page title and favicon. No observation writes the journal, so a navigation
+  never does synchronous IO.
+- Observation keys are owned by this device or carry only display fields, so a diff can't send
+  another Mac's choice back.
 
-**How it's written.** A store middleware, wrapping `set`, writes entries for every mutation not
-tagged `fromSync` or `restore`. A new command can't forget it.
-- **Value diff.** Entities are compared by value, not identity (D5): bookmark nodes, settings,
-  profiles, pins, groups and history entries are compared in their extracted form. Each changed
-  entity maps to its sync key through the same functions the adapters use, moved to a shared module
-  so the adapter and the journal can't disagree.
-- **Tags.**
-  - Sync applies run under `fromSync`. Settings and pins already do; bookmarks, history and profiles
-    get the same flag.
-  - The launch hydrate runs under `restore`.
-- **NativeStore** (D11). When it owns the workspace, the journal is kept on the Swift side, which
-  sees each command and its per-key `fromSync` flag. Replica revs that reach JS carry the set of keys
-  they changed, with a tag per key, so JS never journals a sync key a rev touched.
-- **One clock** (D9). Stamps come from the sync clock (`doc.clock`, the same `Clock` the scopes
-  use), never from a second clock with the same device suffix. Two clocks could mint the same HLC
-  for different values, and `mergeRecord` keeps the first one to arrive (scope.ts:143). The journal
-  saves its newest `h`, and on load the clock observes it.
+**Where it lives.** Two documents in Solara's data folder, outside `sync-state.nns`:
+- `sync-edits.json`: the entries.
+- `sync-edits.gen`: one line holding a generation and the last in-step time (below).
 
-**Bookmarks: Chrome's model is the source** (D5). User edits made inside Chrome (the extension
-`chrome.bookmarks` API, Chrome's importers) arrive only when `lib/bookmarks.ts` re-reads the
-tree. So does the echo of sync's own pushes.
-- At extract level, each read journals `diff(fetched tree, shadow)` per node, by value. The shadow is
-  the tree the store last held for that profile.
-- The diff is taken before `readTree` replays pending store edits over Chrome's tree
-  (lib/bookmarks.ts:249-251). A concurrent extension edit therefore isn't hidden. A node that
-  differs between fetched and shadow is journaled and wins over the replay.
-- Echo filter: a pushed-values table (`node → value sync last pushed`). A fetched node equal to its
-  pushed value isn't journaled. Entries clear after the next successful read, so they can't
-  suppress a later real edit.
-- The first read at launch with no shadow (the cache is debounced by 2 s, so it can be behind) is
-  tagged `restore`. It sets the shadow and journals nothing.
+**Durability** (D4, re-review 4).
+- Write-through: a user command writes `sync-edits.json` synchronously, then `sync-edits.gen` with
+  the generation incremented. The journal is always written first, so a crash between the two leaves
+  a journal newer than the gen doc, which is fine. The reverse order would be a lost journal.
+- On load, a journal that is unreadable, missing, or holds a generation older than `sync-edits.gen`
+  is lost.
+- **Last in-step time.** The end of the last cycle in which a pull completed with nothing unapplied,
+  for every synced type. It is saved in `sync-edits.gen` after each such cycle.
+- **Fallback on a lost journal: a union bounded by the last in-step time `T`.**
+  - A local value that differs from its record is published at `Clock.at(T)`, but only where the
+    record's `h` is older than `T`. Where the record is newer, the folder's value is applied: another
+    Mac changed it after this Mac last agreed with the folder.
+  - A local item the folder lacks is kept and published at `Clock.at(T)`, unless the key has a
+    tombstone. A tombstone is a deletion, so the item is removed.
+  - Renames and deletions made elsewhere after `T` win. Edits here between `T` and the loss either
+    survive at `T` or lose to a newer change elsewhere; nothing is deleted.
 
-**Passwords: Chrome's Login Data is the source** (D1–D3).
-- **Ledger.** `pwLedger: key → { p: digest of the password, modified }`, kept in Solara's data
-  folder beside the journal. It records each login as last published or applied by sync, with
-  Chrome's `date_password_modified` read back after the write.
-- **Detection by ledger only.** On each read:
-  - a key not in the ledger is a local addition;
-  - a ledger key missing locally is a local deletion;
-  - a key whose digest differs from the ledger's is a local edit.
+**How it's written.** The store's command layer writes entries for commands not tagged
+`fromSync`:
+- Each command's changed entities are compared by value with what they were before, in their
+  extracted form. Each changed entity maps to its sync key through the key functions the adapters
+  use, moved to a shared module so they can't disagree.
+- Sync applies run under `fromSync`. Settings and pins already do; bookmarks, history and profiles
+  get the flag.
+- **Ordering in applies** (re-review 6). A history apply does its `fromSync` store update before it
+  calls `addHistoryVisits` and `deleteHistoryUrls` (adapters.ts:438-439, today it's after). The
+  engine's echo then finds the store already matching, and nothing is journaled.
+- **NativeStore** (D11). When it owns the workspace, the journal lives on the Swift side, which sees
+  each command and its per-key `fromSync` flag. Replica revs that reach JS carry a tag per changed
+  key.
+- **One clock** (D9): stamps come from the sync clock.
 
-  The raw modified date is never compared or used as a stamp. A username-only rename
-  (saved_passwords_presenter.cc:870) shows up as a deletion of the old key and an addition of the
-  new one, whatever its date.
-- **Stamp.** After the pull, the clock observes the key's record `h`, and the stamp is
-  `max(Clock.at(min(modified, now)), successor of record h)`. That is newer than everything this Mac
-  has seen of the key. A remote clock ahead by an hour can't make a real change here "not newer".
-- **Deletions versus newer edits elsewhere.** A deletion is published only when the key's record
-  `h` is still the one the ledger saw. If the record changed since, by another Mac's edit, the
-  edit wins: the login is applied back and the deletion is dropped. So a deletion noticed days
-  later (passwords were unreadable) never beats a newer edit made elsewhere.
-- **Ledger identity.** The ledger stores an identity for its Login Data file: the file's inode and
-  creation time, plus a random id the ledger writes into its own side file. On a mismatch (Login
-  Data replaced, razed, or restored without its ledger), the passwords type rebuilds, and nothing in
-  it is claimed as an edit. The ledger is re-seeded with the keys whose local value equals their
-  record. Keys that differ take the folder's value. Keys the folder lacks are kept locally and get
-  added to the journal at the oldest plausible stamp.
-- **Mass-drop refusal.** A read that drops more than half the ledger's keys, and more than 5, is
-  taken as an unreadable read: nothing is published or applied from it, and the Sync pane says
-  passwords couldn't be read. Two such reads in a row a day apart, with Chrome's own count agreeing,
-  are accepted as real.
-- **Apply uses the ledger** (D3). `passwordsAdapter.apply` (adapters.ts:521) checks the ledger, not
-  base. It skips a login only if the ledger says it was changed here. With base lost, a differing
-  login is therefore applied, and published only if it's an edit by the ledger.
-- **Upgrade.** The ledger is seeded from keys equal to their record. A login that differs is neither
-  claimed nor overwritten until its record next changes; it then takes the folder's value. It is
-  not republished as new.
+**History** (re-review 6).
+- Visits are append-only, carry their own times, and are published by the history adapter as today.
+- A history delete the user makes is journaled.
+- Two removals are not deletions and must never be journaled or published:
+  - the store's 5,000-entry cap (store/history.ts:53, lib/history.ts `setView`);
+  - Chrome's 90-day expiry. ArdiaCore passes `DeletionInfo::is_from_expiration()` through, and
+    expired URLs go to the adapter's ignore rule (adapters.ts:397-401), which already ignores entries
+    older than the window or below the floor.
+
+**Bookmarks: Chrome's model is the source** (D5, re-review 5). User edits made inside Chrome (the
+extension `chrome.bookmarks` API, Chrome's importers) arrive only when `lib/bookmarks.ts` re-reads
+the tree, and so does the echo of sync's pushes.
+- **The shadow** is Chrome's tree as last read or pushed (`state.shadow`, lib/bookmarks.ts:252,
+  256, 266), not the store's tree.
+- Each read journals `diff(fetched, shadow)` per node, by value. The diff is taken before `readTree`
+  replays pending store edits over the fetched tree (:249-251), so a concurrent extension edit is
+  journaled and isn't hidden.
+- **Echo filter.** A pushed-values table records `node → value sync last pushed`. A fetched node
+  equal to its pushed value isn't journaled. Entries clear after the next successful read.
+- **The first read at launch** is journaled like any other, so an extension edit made before it
+  isn't lost. To keep the diff truthful, the shadow cache is saved synchronously after each apply
+  and push. Today it's debounced by 2 s, so a quit could leave it stale.
+
+**Passwords: Chrome's Login Data is the source** (D1–D3, re-review 1–3).
+- **Ledger.** `pwLedger`, kept in Solara's data folder:
+  - `key → { digests: the last 4 digests seen for this key, newest first; h: the record's h when
+    last published or applied; modified }`, where `modified` is `date_password_modified` read back
+    after sync's write;
+  - plus a ledger generation.
+- **Login Data generation.** Whenever the ledger changes, its generation is also written into Login
+  Data's own `meta` table, through a new ArdiaCore call (`ac_passwords_mark`). Each read compares
+  the two.
+  - A mismatch means Login Data was restored, replaced or razed under the ledger. The inode and
+    creation time can't see an in-place restore (`cp`, `rsync --inplace`); the meta row can.
+  - On a mismatch the passwords type rebuilds. Nothing is claimed as an edit, and each key is
+    judged against the folder: equal is re-seeded; different takes the folder's value; missing
+    locally is applied from the folder. Nothing is published as deleted.
+- **Detection by ledger**, on each read:
+  - **Addition:** a key not in the ledger.
+  - **Deletion:** a ledger key missing locally.
+  - **Edit:** a key whose digest isn't the ledger's newest. If the digest matches an older one of
+    the last 4, it's a rollback signal (an older copy of Login Data), not an edit. The key is
+    treated like a mismatch for that key alone and takes the folder's value.
+- **Conflicts are decided by value** (re-review 3). For a deletion or an edit:
+  - **No conflict** when the record's current digest equals the ledger's newest, meaning nothing
+    elsewhere changed it since this Mac last agreed. The change is stamped
+    `max(Clock.at(min(modified, now)), successor of the record's h)`. For a deletion, `modified` is
+    the time of the read that noticed it.
+  - **Conflict** when the record's digest differs. An edit is then stamped `Clock.at(modified)` (its
+    real time) and merged by last writer wins against the record. A password changed here on day 1
+    while unreadable loses to B's change on day 2.
+  - **A conflicting deletion is dropped**: the login is applied back from the folder. A deletion
+    goes out only over the value it removed. Another Mac republishing that same value (same digest,
+    new `h`) is not a conflict, and the deletion still goes out.
+- **Mass changes** (re-review 2). A read is judged per key.
+  - The first time a read drops or edits more than half the ledger's keys (and more than 5),
+    those keys are held, not published.
+  - The Sync pane asks: "N passwords were removed or changed on this Mac. Remove or change them on
+    your other Macs too, or restore them here?" The default is restore. Restore applies the folder's
+    values; confirm publishes the held changes.
+  - Keys under the threshold are published as usual. There's no "couldn't be read" message for this
+    case.
+- **Apply uses the ledger** (D3). `passwordsAdapter.apply` (adapters.ts:521) skips a login only
+  while the ledger says it has an unpublished change here, never because of base.
+- **Upgrade** (re-review 3).
+  - A login equal to its record is seeded into the ledger.
+  - A login that differs is claimed as an edit only if its `date_password_modified` is later than the
+    record's wall time, from `h`; it's stamped `Clock.at(modified)`. Otherwise it takes the folder's
+    value.
+  - A login with no record is an addition.
 
 **Extensions** already record intents (`host.intents()`). Those become their journal entries.
 
-**History.** Visits are append-only and carry their own times. A history delete is a store command
-and is journaled.
+**Clearing an entry.** An entry is cleared when the op carrying exactly its `(key, h)` has been
+written to the folder. A newer edit replaces the entry, so the clear leaves it alone. A crash between
+the write and the clear re-sends the same op, which changes nothing.
 
-**Clearing an entry.** An entry is cleared when the op carrying exactly its `(scope, key, h)` has been
-written to the folder (`flush` succeeded). A newer edit replaces the entry, so a clear for the older
-stamp leaves it alone. A crash between write and clear re-sends the same op, which changes nothing.
+**Publishing.** For each entry of an adapter's prefix, `publishAdapter` publishes `{k, h: entry.h,
+v: current value or null}`. If the record already has `h >= entry.h`, the entry is stale and is
+cleared. Observation keys (above) are still published by diff.
+- **Bookmark positions** (D6, re-review 10) come from the records first and fall back to base, so a
+  lost base never renumbers.
 
-**Publishing.** `publishAdapter` no longer finds edits by diffing against base. For each entry of
-the adapter's prefix, it publishes `{k, h: entry.h, v: current value or null}`:
-- If the record already has `h >= entry.h`, the entry is stale and is cleared.
-- Bookmark positions are computed against the records wherever base lacks a sibling (D6). Today they
-  come from base (adapters.ts:283-288), so a lost base renumbers everything.
+**Applying.** Every key with a difference and no live entry takes the folder's value. A key with a
+live entry is never applied over, in any adapter (D11).
+- **Bookmarks apply** (D7, re-review 10) rebuilds the tree from what's visible. It keeps a local
+  node that isn't visible only when the node's key isn't in the **ever-seen set**: the keys this
+  Mac's bookmark records have ever held, kept per profile beside the journal, outside the sync
+  state.
+- So after a state loss, a bookmark deleted elsewhere is removed even when compaction has collected
+  its tombstone (45 days), and a new local bookmark nobody has seen yet is kept.
 
-**Applying.** Every key with a difference and no live entry is applied with the folder's value.
-- A key with a live entry is never applied over (D11), in every adapter, `adoptRemoteOnJoin`
-  included (scope.ts:209).
-- **Bookmarks apply rebuilds the tree from what's visible** (D7), so a partial replica removes the
-  rest (B70). It now keeps a local node that isn't visible only when that node's key was never in
-  this Mac's records and the node's origin isn't covered by the vv (a local item not yet published).
-  Any other invisible node is a deletion (a tombstone, or one collected by a snapshot, scope.ts:164-169)
-  and is removed. So a Mac returning after 45 days still drops bookmarks deleted meanwhile.
-
-**Joining and first sync.**
-- When sync is turned on, or a profile or type is first linked, every existing local item gets an
-  entry stamped `Clock.at(editedAt)` where the item has one (history, bookmark `addedAt`), otherwise
-  the turn-on time. Passwords seed the ledger as above. That keeps today's union on join.
-- On a rejoin after Stop Syncing (D10), an existing entry newer than that stamp is kept, so an edit
-  made while sync was off keeps its time.
+**Joining and first sync** (re-review 8).
+- When sync is turned on, or a profile or type is first linked, existing local items get entries
+  stamped `Clock.at(editedAt)` where an item has one, else the turn-on time. On a rejoin, an
+  existing newer entry is kept (D10).
+- **Except the `adoptRemoteOnJoin` adapters** (`set:`, `prof:`, `pth:`, `share:`, `devmode:`): they
+  get no seeded entries, so a joining Mac adopts the synced settings and profile names instead of
+  overwriting everyone's with its own. A user command run during the join is journaled as an edit
+  like any other.
+- Passwords seed the ledger: an equal login is seeded; a differing one takes the folder's value; a
+  login the folder lacks is an addition.
 
 ## 2. Publishing chains
 
@@ -168,9 +207,16 @@ the adapter's prefix, it publishes `{k, h: entry.h, v: current value or null}`:
   - the sealed state loaded, and its batch journal is readable;
   - after the first pull, `vv[chain]` doesn't exceed the state's seq, and no snapshot's vv does;
   - the first pull lists no file unknown to the state as pending or damaged;
-  - the phrase wasn't just re-entered, and the ThisDeviceOnly key was present at unlock (D8). A
-    Migration Assistant copy keeps `deviceId` (engine.ts:1025) and its state, but not the
-    this-device-only Keychain item. It therefore always mints a chain, so twins never share one.
+  - the phrase wasn't just re-entered, and this is the Mac that `deviceId` was minted on (D8,
+    re-review 7).
+- **Twins.** The sync key's Keychain item is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`,
+  but it is saved without `kSecUseDataProtectionKeychain` (SyncKeyStore.swift:16-21, 41). So it
+  lives in the file-based login keychain, and Migration Assistant and disk clones carry it.
+  docs/sync.md's "this device only" is therefore wrong today. Changing the item's keychain class
+  would change the key's lifetime, so that's the owner's decision and isn't part of this design.
+  - Instead, `deviceId` is saved with the Mac's `IOPlatformUUID`. At load, a different
+    `IOPlatformUUID` means a copied Mac. It mints a new `deviceId` (a new identity for its `dev:`
+    record and tabs) and a new chain. The original keeps both.
 - Otherwise a new chain is minted before the first write. Re-sends (the batch journal, an older
   build's revived batches) keep their ops and stamps and get new seqs under the new chain.
 - **A healthy Mac never waits.** It publishes in its first cycle, under its old chain if the checks
@@ -216,11 +262,12 @@ One hold remains: a rebuilding type doesn't apply while its pull is incomplete.
 - **Per record, last writer wins.** Two Macs editing different fields of one record (a bookmark's
   title on one, its folder on the other) keep only the later record whole.
 - **A password rename** is published as the old key's deletion plus a new key. If another Mac
-  changes the old login's password meanwhile, that edit beats the deletion (§ 1, Passwords). Both
+  changes the old login's password meanwhile, the deletion conflicts by value and is dropped. Both
   logins then survive, the renamed one and the changed one. Nothing is lost, and the user sees two
   entries.
-- **A long-offline Mac's edit** has its edit-time stamp, so it loses to a later edit elsewhere.
-  Passwords are the exception: a detected password change is stamped newer than its current record.
+- **A long-offline Mac's edit** has its edit-time stamp, so it loses to a later edit elsewhere. A
+  password change that conflicts with a change elsewhere is decided by its real modified time too.
+  A non-conflicting one is stamped after the record it replaces.
 
 ## Migration
 
@@ -228,7 +275,10 @@ One hold remains: a rebuilding type doesn't apply while its pull is incomplete.
   weren't published before the upgrade are taken as stale. That includes edits made during an
   old-format rebuild (B-old). It's a one-time window of a few seconds, since an old build publishes
   within 3 s of an edit.
-- **Password ledger at upgrade.** Seeded from keys equal to their record (§ 1).
+- **Password ledger at upgrade.**
+  - Seeded from keys equal to their record.
+  - A differing login is claimed only if Chrome modified it after the record's time (§ 1).
+  - Login Data's `meta` generation is written on the first ledger write.
 - `doc.rebuilding`, `rebuildBaseline`, `rebuild.noted` and `heldOutbox` are read and then dropped.
 - **Older builds.** sync.json's `v` is bumped, so older builds (from 5b76b1f6 on) leave it alone, as
   in B35. Builds before 5b76b1f6 can't be guarded. Downgrading past it is unsupported.
@@ -257,27 +307,29 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 
 ## Checked: store paths that bypass or echo through the journal
 
-The middleware wraps `set`, so every JS store change passes through it, including the direct
-`useBrowser.setState` calls in 13 non-test files. The risk is changes that aren't edits and carry no
-tag.
-
 | Path | Handling |
 | --- | --- |
-| Launch hydrate (`browser.ts hydrate`) | `restore` tag |
-| Bookmarks re-read from Chrome's model (`lib/bookmarks.ts`), including extension and importer edits | value diff against the shadow, before the replay; pushed-values echo filter; first read at launch is `restore` |
+| Launch hydrate (`browser.ts hydrate`) | not a command, so not journaled |
+| Bookmarks re-read from Chrome's model (`lib/bookmarks.ts`), including extension and importer edits | diff of fetched against Chrome's last-read-or-pushed tree, before the replay; pushed-values echo filter; first read journaled like any other, with the shadow saved synchronously |
+| History view (`lib/history.ts setView`): cap eviction and Chrome's 90-day expiry | not journaled; the adapter's ignore rule; `is_from_expiration` passed through |
+| History apply echo | `fromSync` update before the engine calls |
 | NativeStore replica revs | per-key tags; journal on the Swift side |
-| Imports (`components/import/apply.ts`) | store commands are journaled; passwords go through the ledger |
-| Engine events on pins (page title `ti`, favicon) | journaled: this device's observation, published today too |
+| Imports (`components/import/apply.ts`) | commands are journaled; passwords through the ledger |
+| `tabs:` of this device, pin page title and favicon | observations: published by diff, never journaled |
 | `bookmarksReady`, `historyReady` and other flags | no sync key, ignored |
 
 ## Holes I still see
 
-- **A missed path.** A native mutation reaching the store with neither a tag nor a value change in a
-  synced field. The value diff makes this hard to miss, but each native path above gets a test.
-- **Ledger identity.** An inode and creation time can survive some restores (restoring Login Data
-  in place). The side-file id covers a restore that brings back an older ledger. A restore of both
-  together is consistent anyway.
-- **Mass-drop refusal** delays a real bulk delete by a day.
+- **A missed command path.** A user edit that bypasses the command layer is never published. Each
+  native path above gets a test.
+- **Login Data `meta` writes.** They depend on Chrome tolerating a foreign meta row and on our
+  ArdiaCore call running with Chrome's DB open. The design needs that confirmed in the engine before
+  it's built. If it can't be done, the fallback is a digest of every login, kept in the ledger and
+  compared on each read: any difference across many keys at once is treated like a mismatch.
+- **Keychain class.** Twins are handled by `IOPlatformUUID`; the item still copies with the Mac.
+  Whether to move it to the data-protection keychain is the owner's decision.
+- **The mass-change prompt** waits on the user. Until they answer, the held keys aren't published,
+  and the folder's values aren't applied over them.
 
 ## Repros mapped to the design
 
@@ -329,49 +381,43 @@ tag.
 
 ## Test plan
 
-Every repro above becomes a failing-first test in engineRecovery. Each review finding gets its
-own:
-- **D1:** a username-only rename after an older tombstone of the new key keeps the login. A change
-  here while another Mac's clock runs an hour ahead still wins.
-- **D2:**
-  - Login Data replaced: a rebuild, and no mass deletion.
-  - A read dropping most keys is refused.
-  - A deletion noticed after a newer remote edit loses to the edit.
-  - Upgrade doesn't republish every login.
-- **D3:** with base lost, a differing login is applied, and the passwords type settles.
-- **D4:**
-  - A crash 100 ms after an edit keeps its entry.
-  - A rolled-back journal document is detected by generation and falls back to union, and a
-    bookmark the folder never had isn't deleted.
-- **D5:**
-  - Adopting an unchanged tree journals nothing.
-  - The first read at launch is `restore`.
-  - An extension edit concurrent with a pending store edit is journaled.
-  - A pushed value stops filtering after the next read.
+Every repro above becomes a failing-first test in engineRecovery, and so does each finding. The
+scratch suite is /private/tmp/redesign-tests/ (`run.sh`).
+- **D1:** a username-only rename survives an older tombstone of the new key, and a change here wins
+  over a clock running an hour ahead.
+- **D2:** Login Data losing most logins doesn't delete them everywhere.
+- **D3:** with base lost, a differing login is applied and the type settles.
+- **D4:** an edit just before a crash is published.
 - **D6:** a lost base doesn't renumber positions.
-- **D7:**
-  - A partial replica doesn't wipe local bookmarks.
-  - A Mac back after 45 days drops collected deletions.
-- **D8:** a copied Mac (same `deviceId`, no Keychain item) mints a chain.
-- **D9:**
-  - One clock: no two values with the same `h`.
-  - The counter carry: the review's overflow repro.
-- **D10:**
-  - Re-adding a profile with the same sync id publishes no old deletions.
-  - A rejoin keeps a newer entry.
-- **D11:**
-  - A NativeStore rev tagged per key.
-  - Apply skips live entries, `adoptRemoteOnJoin` included.
-- **Journal basics:**
-  - every store command journals;
-  - `fromSync` and `restore` don't;
-  - an entry clears only on its own `(scope, key, h)`.
-- **Chains:**
-  - each mint condition;
-  - re-sends under a new chain;
-  - older-build readers refused by `v`.
-- **Oracle:**
-  - edit stamps become edit times;
-  - the `sentAt` and `unsent` relaxations are tightened back;
-  - new ops for a journal document rolled back, Login Data replaced, a twin Mac, and a profile
-    re-added.
+- **D7:** a partial replica doesn't wipe bookmarks.
+- **D8:** a copied Mac never reuses a seq.
+- **D9:** the counter carry.
+- **D10:** a rename made while sync was off wins on rejoin, and a profile re-added publishes no
+  deletion made while it was off.
+- **D11:** a setting changed while joining stands.
+
+Re-review items:
+- **RR1:**
+  - Login Data restored in place (same inode, older content) reverts nothing anywhere.
+  - A login changed back to an earlier digest is a rollback signal, not an edit.
+- **RR2:**
+  - A mass change holds only the keys over the threshold, edits counted too.
+  - The prompt's default restores them.
+  - No "couldn't be read" message appears.
+- **RR3:**
+  - Another Mac republishing the same value doesn't undo a deletion here.
+  - A password changed here while unreadable on day 1 loses to B's change on day 2.
+  - At upgrade, a login Chrome modified after its record is claimed, and an older one isn't.
+- **RR4:** after a lost journal, a rename and a deletion made elsewhere after the last in-step time
+  both win.
+- **RR5:** an extension edit made before the first read at launch is published.
+- **RR6:**
+  - The 5,000-entry cap and Chrome's 90-day expiry publish no deletion.
+  - A history apply's echo journals nothing.
+- **RR7:** a copied Mac, with the Keychain item copied too, gets a new `deviceId` and chain from
+  `IOPlatformUUID`.
+- **RR8:** a joining Mac adopts the synced settings and profile names, and doesn't overwrite them.
+- **RR9:** a navigation writes nothing to the journal.
+- **RR10:**
+  - Positions come from records, with base as the fallback.
+  - The ever-seen set removes a bookmark whose tombstone was collected.

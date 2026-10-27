@@ -85,6 +85,10 @@ reset by email, because there's no one to email.
 - Where the entropy is kept: the login Keychain, as a generic password (`Solara Sync Key`,
   account = this device's sync id, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, not
   synchronizable).
+  - Despite "ThisDeviceOnly", the item is saved without `kSecUseDataProtectionKeychain`, so it lives
+    in the file-based login keychain. Migration Assistant and disk clones copy it, and a copied Mac
+    keeps both the key and the device id. Whether to move the item is the owner's decision
+    (docs/sync-redesign.md § Twins).
   - Test instances (`ARDIA_DATA_DIR`) keep it in a 0600 file in their data folder instead,
     as Chrome's mock keychain does for them.
   - A Debug build can't read an item an earlier build saved (no prompt, by design). Sync then

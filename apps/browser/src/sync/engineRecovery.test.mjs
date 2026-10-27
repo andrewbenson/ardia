@@ -1249,3 +1249,117 @@ test("B59: a rebuilding state that falls back to before it took the folder's val
   assert.deepEqual(other.store.get("set:appearance"), { v: "system" });
   assert.equal(S().settings.appearance, "system");
 });
+
+function appMacWithState(prefix) {
+  const store = new Map();
+  const state = sync.emptyScope();
+  state.joined = true;
+  const clock = new sync.Clock("appMac");
+  const adapter = {
+    prefix,
+    extract: () => ({ values: new Map(store) }),
+    apply: (visible, changed) => {
+      for (const k of changed) visible.has(k) ? store.set(k, visible.get(k)) : store.delete(k);
+    },
+  };
+  return {
+    store,
+    state,
+    sync: () => sync.syncScope({ scope: "app", state, transport: rawTransport, adapters: [adapter], clock, device: "appMac" }),
+    compact: () => sync.compact(state, rawTransport, "app", "appMac", Date.now(), { pruneGrace: 0 }, true),
+  };
+}
+
+test("B60: a rolled-back state that finds its own newer batches in the folder rebuilds, so it doesn't resend a setting another Mac replaced and compacted away", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const other = appMacWithState("set:");
+  await other.sync();
+  const backup = new Map(shell.docs);
+  S().updateSettings({ appearance: "light" });
+  await engine.syncNow();
+  await settle();
+  await other.sync();
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" }, "control: B took this Mac's choice");
+  other.store.set("set:appearance", { v: "dark" });
+  await other.sync();
+  await other.compact();
+  const lightStillInFolder = files().some(({ scope, file }) => scope === "app" && JSON.stringify(file).includes('"light"'));
+  assert.equal(lightStillInFolder, false, "control: compaction left no file carrying light");
+  shell.docs.clear();
+  for (const [name, contents] of backup) shell.docs.set(name, contents);
+  const again = await launch();
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assertNoSeqReused();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "dark" }, `B's newer choice survives this Mac's rollback (B now has ${JSON.stringify(other.store.get("set:appearance"))})`);
+  assert.equal(S().settings.appearance, "dark");
+});
+
+test("B61: a setting changed after the loss while settings sync was off is published when settings sync is turned on, not replaced by the folder's older value", async () => {
+  reset();
+  const engine = await onAndSynced();
+  S().updateSettings({ appearance: "dark" });
+  await engine.syncNow();
+  await settle();
+  engine.setTypeSynced("settings", false);
+  await engine.syncNow();
+  await settle();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const again = await launch();
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  S().updateSettings({ appearance: "light" });
+  for (let i = 0; i < 2; i++) await again.syncNow();
+  await settle();
+  again.setTypeSynced("settings", true);
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  const other = appMac("set:");
+  await other.sync();
+  assert.equal(S().settings.appearance, "light", "the choice made after the loss stands on this Mac");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" }, "and is published");
+});
+
+async function rebuiltOverRename(profileOf, corrupt) {
+  reset();
+  const engine = await launch();
+  engine.startSync();
+  const work = S().createProfile({ name: "Work", shareWith: "default" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [work]: true } });
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  for (let i = 0; i < 2; i++) await engine.syncNow();
+  await settle();
+  const id = profileOf(work);
+  const syncId = engine.useSync.getState().profiles[id].syncId;
+  const key = `prof:${syncId}`;
+  const other = appMac("prof:");
+  await other.sync();
+  assert.ok(other.store.has(key), "control: the profile record is in the folder");
+  other.store.set(key, { ...other.store.get(key), n: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  assert.equal(S().profiles[id].name, "Renamed on B", "control: this Mac took B's rename");
+  other.store.set(key, { ...other.store.get(key), n: "Renamed again on B" });
+  await other.sync();
+  corrupt();
+  const again = await launch();
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.equal(other.store.get(key)?.n, "Renamed again on B", `B's newer rename survives this Mac's rebuild (B has ${other.store.get(key)?.n}, this Mac ${S().profiles[id].name})`);
+  assert.equal(S().profiles[id].name, "Renamed again on B");
+}
+
+test("B62: a rebuild doesn't republish the stale name of a profile that shares another profile's data over another Mac's newer rename", () =>
+  rebuiltOverRename((work) => work, () => shell.docs.set("sync-state.nns", "not-sealed-by-this-key")));

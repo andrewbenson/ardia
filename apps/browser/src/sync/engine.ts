@@ -361,12 +361,12 @@ function publishUi(patch: Partial<SyncUi> = {}) {
 
 export const deviceName = () => SyncNative?.deviceName() ?? "This Mac";
 
-function appAdapters(retiring: boolean): Adapter[] {
+function appAdapters(retiring: boolean, everyType = false): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceAdapter(id, deviceName, true)];
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
   return [
-    ...(doc.types.settings ? [inTodaysNames(settingsAdapter)] : []),
+    ...(doc.types.settings || everyType ? [inTodaysNames(settingsAdapter)] : []),
     sharedDataAdapter(() => doc.profiles),
     profilesAdapter(enabledLinks),
     profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, themeAdopted),
@@ -374,12 +374,12 @@ function appAdapters(retiring: boolean): Adapter[] {
   ];
 }
 
-function profileAdapters(profileId: string, retiring: boolean): Adapter[] {
+function profileAdapters(profileId: string, retiring: boolean, everyType = false): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceTabsAdapter(profileId, id, deviceName, true)];
   const s = useBrowser.getState();
   const ownsData = !s.profiles[profileId]?.dataId;
-  const t = doc.types;
+  const t = everyType ? (Object.fromEntries(Object.keys(doc.types).map((type) => [type, true])) as typeof doc.types) : doc.types;
   let passwords = passwordAdapters.get(profileId);
   if (!passwords) passwordAdapters.set(profileId, (passwords = passwordsAdapter(profileId, () => cycleForcesPasswords)));
   return [
@@ -537,7 +537,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
       const listing = await transport.read(name, known);
       pulled = true;
       downloading = listing.pending.length > 0;
-      for (const file of listing.files) noteDelivered(delivered, file.payload, (key) => state.records[key]?.h);
+      if (adapters.some((a) => unlooked(a.prefix) || rebuilding(a.prefix))) for (const file of listing.files) noteDelivered(delivered, file.payload, (key) => state.records[key]?.h);
       return listing;
     },
   };
@@ -547,7 +547,9 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     if (checked) return;
     checked = true;
     if (!fresh) return;
+    const had = state.seq;
     state.seq = Math.max(state.seq, state.vv[device] ?? 0, ...(state.extra[device] ?? []));
+    if (state.seq > had) state.rebuild ??= openRebuild();
     resendHeld(state, device);
     resendRevival(scope, state, device);
   };
@@ -699,7 +701,7 @@ function guardedExtraction(scope: string, prefix: string, state: Guarded, extrac
     const record = state.records[key];
     return !!record && record.v !== null && choice(record.v) === choice(value);
   };
-  const changedHere = (key: string, value: unknown) => kept.get(key) !== choice(value);
+  const changedHere = (key: string, value: unknown) => kept.has(key) && kept.get(key) !== choice(value);
   const publishes = (key: string, value: unknown) => {
     if (!known(key)) return !downloading;
     if (!rebuilding) return edited(key, value) || !fromFolder(key, value);
@@ -766,13 +768,22 @@ function resendRevival(scope: string, state: ScopeState, device: string) {
 }
 
 async function noteWhatThisMacHas(only?: string) {
+  if (!loaded) return;
   if (only === undefined) baselines = new Map();
   for (const [scope, profileId] of [[APP_SCOPE, null] as const, ...Object.entries(doc.profiles).map(([id, link]) => [`p:${link.syncId}`, id] as const)]) {
-    const adapters = profileId === null ? appAdapters(false) : profileAdapters(profileId, false);
+    const adapters = profileId === null ? appAdapters(false, true) : profileAdapters(profileId, false, true);
+    const state = doc.scopes[scope];
     for (const adapter of adapters) {
-      if ((only !== undefined && adapter.prefix !== only) || baselineOf(scope, adapter.prefix)) continue;
+      if (adapter.prefix === "pw:" || adapter.prefix === "ext:" || (only !== undefined && adapter.prefix !== only) || baselineOf(scope, adapter.prefix)) continue;
       try {
-        const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined);
+        const extraction = await adapter.extract(
+          (key) => (state?.base[key] === undefined ? undefined : (JSON.parse(state.base[key]!) as unknown)),
+          () => false,
+          Date.now(),
+          (key) => !!state && key in state.records,
+          (key) => state?.records[key]?.v,
+          (key) => state?.records[key]?.h,
+        );
         if (extraction) noteBaseline(scope, adapter.prefix, extraction);
       } catch (error) {
         console.warn(`[sync] ${adapter.prefix} wasn't ready to note what this Mac had`, error);
@@ -1008,6 +1019,7 @@ async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: 
   try {
     if (!(await loadState(unlocking)) || unlocking !== generation) return { error: "interrupted" };
     loaded = true;
+    await noteWhatThisMacHas();
     keepNotes();
     if (rebuildingAny()) save();
   } catch (error) {
@@ -1155,7 +1167,6 @@ export function startSync() {
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
     loaded = false;
-    void noteWhatThisMacHas();
     const unlocking = ++generation;
     loading = SyncNative.unlock(doc.deviceId)
       .then(async (ok) => {
@@ -1163,8 +1174,10 @@ export function startSync() {
         if (!ok) return showLocked();
         if (!(await loadState(unlocking)) || unlocking !== generation) return;
         loaded = true;
+        await noteWhatThisMacHas();
+        if (unlocking !== generation) return;
         keepNotes();
-    if (rebuildingAny()) save();
+        if (rebuildingAny()) save();
         settleAppliedThemes(doc.scopes[APP_SCOPE]);
         publishUi();
         scheduleSync(500);

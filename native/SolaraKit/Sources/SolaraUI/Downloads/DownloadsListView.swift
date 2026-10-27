@@ -316,7 +316,7 @@ final class DownloadRowView: HoverFillView, NSDraggingSource {
       CATransaction.commit()
       y += 3 + 2
     }
-    status.frame = CGRect(x: textLeft - 2, y: y, width: width + 4, height: 14)
+    status.frame = CGRect(x: textLeft - 2, y: y + 0.5, width: width + 4, height: 14)
   }
 }
 
@@ -464,7 +464,7 @@ public final class DownloadsListView: NSView {
     let ts = title.intrinsicContentSize
     let cw = clear.width
     clear.frame = CGRect(x: w - (DownloadsMetrics.inset - DownloadsMetrics.textButtonPad) - cw - DownloadsMetrics.clearNudge, y: y + 0.5, width: cw, height: 22)
-    title.frame = CGRect(x: DownloadsMetrics.inset - 2, y: y + (DownloadsMetrics.header - ts.height) / 2 - 0.5, width: max(ts.width, clear.frame.minX - DownloadsMetrics.inset + 2), height: ts.height)
+    title.frame = CGRect(x: DownloadsMetrics.inset - 2, y: y + (DownloadsMetrics.header - ts.height) / 2, width: max(ts.width, clear.frame.minX - DownloadsMetrics.inset + 2), height: ts.height)
     y += DownloadsMetrics.header
     if state.rows.isEmpty {
       let es = empty.intrinsicContentSize
@@ -488,7 +488,7 @@ public final class DownloadsListView: NSView {
     y += 1 / scale + DownloadsMetrics.separatorGap
     footer.frame = CGRect(x: DownloadsMetrics.rowInset, y: y, width: w - 2 * DownloadsMetrics.rowInset, height: DownloadsMetrics.rowHeight)
     y += DownloadsMetrics.rowHeight + DownloadsMetrics.padBottom
-    if y != reported {
+    if bounds.width > 0, y != reported {
       reported = y
       onHeight(y)
     }

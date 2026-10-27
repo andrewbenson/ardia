@@ -21,13 +21,14 @@ function publishThemes() {
 }
 
 export function useNativeSplitChrome(windowId: string, shell: boolean, theme: Theme, fullscreenTab: string | null, peek: boolean) {
-  const { dark, accent, textPrimary, textSecondary, icon, toolbarHover, toolbarPressed, urlPill } = theme;
+  const { dark, accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder } = theme;
   useEffect(() => {
     if (!shell) return;
     startToasts();
-    themes[windowId] = { theme: { dark, accent, textPrimary, textSecondary, icon, toolbarHover, toolbarPressed, urlPill }, fullscreenTab, covered: peek };
+    const tokens = { accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder };
+    themes[windowId] = { theme: { dark, ...tokens }, fullscreenTab, covered: peek };
     publishThemes();
-  }, [shell, windowId, dark, accent, textPrimary, textSecondary, icon, toolbarHover, toolbarPressed, urlPill, fullscreenTab, peek]);
+  }, [shell, windowId, dark, accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder, fullscreenTab, peek]);
   useEffect(
     () => () => {
       if (!shell) return;

@@ -110,3 +110,24 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     TabSlots.shared.remove(.pane("w1", "b"), container: other)
   }
 }
+
+@Suite struct SplitEmptyStateTests {
+  @Test func suggestsRecentTabsOutsideTheSplitInTheSameProfile() throws {
+    let text = #"""
+      {"windows": {"w1": {"id": "w1", "profileId": "p", "tabIds": ["a", "b", "c", "d", "e", "f"], "activeTabIds": {"p": "a"}}},
+       "windowOrder": ["w1"],
+       "tabs": {"a": {"id": "a", "windowId": "w1", "profileId": "p", "url": "", "title": ""},
+                "b": {"id": "b", "windowId": "w1", "profileId": "p", "url": "https://b.example/", "title": "B", "lastActiveAt": 9},
+                "c": {"id": "c", "windowId": "w1", "profileId": "p", "url": "https://www.c.example/x", "title": "C page", "lastActiveAt": 5},
+                "d": {"id": "d", "windowId": "w1", "profileId": "q", "url": "https://d.example/", "title": "D", "lastActiveAt": 7},
+                "e": {"id": "e", "windowId": "w1", "profileId": "p", "url": "https://e.example/", "title": "E", "lastActiveAt": 8},
+                "f": {"id": "f", "windowId": "w1", "profileId": "p", "url": "", "title": "", "lastActiveAt": 10}},
+       "splits": {"s1": {"id": "s1", "windowId": "w1", "tabIds": ["a", "b"], "orientation": "horizontal", "sizes": [0.5, 0.5]}}}
+      """#
+    let state = try BrowserState(stateJSON: try JSONValue.parse(text).object ?? [:])
+    let list = SplitEmptyState.suggestions(state, tabId: "a")
+    #expect(list.map(\.tabId) == ["e", "c"])
+    #expect(list.last?.label == "c.example")
+    #expect(list.last?.detail == "C page")
+  }
+}

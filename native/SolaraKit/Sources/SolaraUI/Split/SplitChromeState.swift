@@ -9,6 +9,7 @@ public struct SplitChromeTheme: Equatable, @unchecked Sendable {
   public var toolbarHover: NSColor
   public var toolbarPressed: NSColor
   public var urlPill: NSColor
+  public var tokens: [String: String] = [:]
 
   public static let fallback = SplitChromeTheme(
     dark: false, accent: .controlAccentColor, textPrimary: .labelColor, textSecondary: .secondaryLabelColor, icon: .secondaryLabelColor,
@@ -35,6 +36,11 @@ public struct SplitChromeTheme: Equatable, @unchecked Sendable {
       dark: o["dark"] as? Bool ?? false, accent: color("accent", base.accent), textPrimary: color("textPrimary", base.textPrimary),
       textSecondary: color("textSecondary", base.textSecondary), icon: color("icon", base.icon), toolbarHover: color("toolbarHover", base.toolbarHover),
       toolbarPressed: color("toolbarPressed", base.toolbarPressed), urlPill: color("urlPill", base.urlPill))
+    tokens = o.compactMapValues { $0 as? String }
+  }
+
+  public func color(_ key: String, dark darkValue: String, light lightValue: String) -> NSColor {
+    tokens[key].flatMap { CSSColor($0)?.ns } ?? CSSColor(dark ? darkValue : lightValue)?.ns ?? .labelColor
   }
 }
 

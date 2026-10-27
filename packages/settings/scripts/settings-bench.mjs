@@ -7,6 +7,8 @@
 //   open → content   the JS call that opens Settings on General → General's view laid out and its frame committed
 //   pane switch      the JS call that shows a pane → that pane laid out and committed, over 6 panes, twice each
 //   memory           the app's physical footprint with one browser window, then with Settings open on General
+//   Each launch idles 8 s first, as a user would before opening Settings; native-unwarmed turns off the pre-built
+//   view (ARDIA_SETTINGS_PREWARM=0) to show what the pre-build saves.
 //
 //   <Solara.app>   a Release build (JS bundled) under apps/browser/build-*; it runs hidden on scratch data
 //   --runs N       launches per variant (default 6)
@@ -29,13 +31,15 @@ if (!app || !scratch || app.startsWith("/Applications/")) {
 const PANES = ["tabs", "appearance", "privacy", "search", "advanced", "engines"];
 const VARIANTS = [
   { name: "native", env: {} },
+  { name: "native-unwarmed", env: { ARDIA_SETTINGS_PREWARM: "0" } },
   { name: "rn", env: { ARDIA_NATIVE_SETTINGS: "0" } },
 ];
+const SETTLE_MS = 8000;
 
 const inApp = (inst, body) => inst.eval(body);
 
 const timingsCall = (variant) =>
-  variant === "native"
+  variant.startsWith("native")
     ? "return globalThis.expo.modules.SolaraSettings.devTimings().then((t) => JSON.parse(t))"
     : "return globalThis.acSettingsTimings ? globalThis.acSettingsTimings() : []";
 
@@ -68,7 +72,7 @@ async function oneRun(variant, run) {
   const result = { variant: variant.name, run, panes: {} };
   const seen = [];
   try {
-    await sleep(3000);
+    await sleep(SETTLE_MS);
     result.memoryBefore = footprint(inst.pid);
     const opened = await inApp(inst, `const t = Date.now(); ac.openSettings("general"); return t;`);
     const general = await waitFor(inst, variant.name, "general", opened, seen);

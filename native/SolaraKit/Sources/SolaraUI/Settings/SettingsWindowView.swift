@@ -54,16 +54,81 @@ struct SettingsSidebar: View {
       if search.isSearching {
         SettingsSearchResults(context: context)
       } else {
-        List(selection: Binding(get: { context.navigation.pane }, set: { pane in if let pane { context.goToPane(pane) } })) {
-          ForEach(SettingsPane.allCases) { pane in
-            Label(pane.title, systemImage: pane.symbol)
-              .listItemTint(.monochrome)
-              .tag(pane)
-          }
-        }
-        .listStyle(.sidebar)
+        SettingsPaneList(context: context)
       }
     }
+  }
+}
+
+struct SettingsPaneList: View {
+  static let rowHeight: CGFloat = 32
+  static let highlightHeight: CGFloat = 30
+
+  @Environment(\.colorScheme) private var scheme
+  @FocusState private var focused: Bool
+  let context: SettingsContext
+
+  var body: some View {
+    let selected = context.navigation.pane
+    ScrollView(.vertical) {
+      LazyVStack(spacing: 0) {
+        ForEach(SettingsPane.allCases) { pane in
+          SettingsPaneRow(pane: pane, selected: pane == selected, scheme: scheme)
+            .onTapGesture { context.goToPane(pane) }
+        }
+      }
+      .padding(.horizontal, 10)
+      .padding(.bottom, 12)
+    }
+    .scrollIndicators(.automatic)
+    .focusable()
+    .focusEffectDisabled()
+    .focused($focused)
+    .onKeyPress(.downArrow) { step(1) }
+    .onKeyPress(.upArrow) { step(-1) }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Settings")
+  }
+
+  private func step(_ offset: Int) -> SwiftUI.KeyPress.Result {
+    let panes = SettingsPane.allCases
+    guard let index = panes.firstIndex(of: context.navigation.pane) else { return .ignored }
+    let next = min(max(index + offset, 0), panes.count - 1)
+    if next != index { context.goToPane(panes[next]) }
+    return .handled
+  }
+}
+
+struct SettingsPaneRow: View {
+  let pane: SettingsPane
+  let selected: Bool
+  let scheme: ColorScheme
+
+  var body: some View {
+    HStack(spacing: 5) {
+      Image(systemName: pane.symbol)
+        .font(.system(size: 17))
+        .foregroundStyle(scheme == .dark ? Color(red: 152 / 255, green: 153 / 255, blue: 159 / 255) : Color(red: 139 / 255, green: 139 / 255, blue: 144 / 255))
+        .frame(width: 24, height: 22)
+      Text(pane.title)
+        .font(.system(size: 13, weight: selected ? .semibold : .regular))
+        .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+        .lineLimit(1)
+      Spacer(minLength: 0)
+    }
+    .padding(.leading, 7)
+    .frame(height: SettingsPaneList.highlightHeight)
+    .background {
+      if selected {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(scheme == .dark ? Color.white.opacity(0.13) : Color.black.opacity(0.09))
+      }
+    }
+    .frame(height: SettingsPaneList.rowHeight)
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(pane.title)
+    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
   }
 }
 

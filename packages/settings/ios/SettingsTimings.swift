@@ -1,5 +1,4 @@
 import Foundation
-import QuartzCore
 
 @MainActor
 enum SettingsTimings {
@@ -9,11 +8,9 @@ enum SettingsTimings {
   static func paneAppeared(_ pane: String) {
     guard recording else { return }
     let appeared = now
-    CATransaction.begin()
-    CATransaction.setCompletionBlock {
+    DispatchQueue.main.async {
       MainActor.assumeIsolated { marks.append(["pane": pane, "appeared": appeared, "committed": now]) }
     }
-    CATransaction.commit()
   }
 
   static func takeJSON() -> String {

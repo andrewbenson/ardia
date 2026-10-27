@@ -40,13 +40,24 @@ enum NativeSettingsWindow {
 
   static func install() {
     NativeOnboarding.register()
+    SettingsPrewarm.schedule()
     WindowHost.makeAuxController = { id, kind in
       if kind == NativeImportWindow.kind { return NativeImportWindow.makeController() }
-      guard kind == "settings", enabled, let context = makeContext() else { return nil }
-      let controller = NSHostingController(rootView: SettingsWindowView(context: context))
-      controller.sceneBridgingOptions = [.toolbars]
-      return controller
+      guard kind == "settings" else { return nil }
+      return controller()
     }
+  }
+
+  private static var built: NSHostingController<SettingsWindowView>?
+  static var isBuilt: Bool { built != nil }
+
+  static func controller() -> NSHostingController<SettingsWindowView>? {
+    if let built { return built }
+    guard enabled, let context = makeContext() else { return nil }
+    let made = NSHostingController(rootView: SettingsWindowView(context: context))
+    made.sceneBridgingOptions = [.toolbars]
+    built = made
+    return made
   }
 
   static func makeContext() -> SettingsContext? {
@@ -60,8 +71,8 @@ enum NativeSettingsWindow {
       if current.pane == .extensions, let profile = current.profileId { return profile }
       return SettingsJS.shared.latestValue("extensions.defaultProfile") as? String
     }
-    made.onPaneChange = { pane in SettingsJS.shared.fire("settings.paneShown", pane.rawValue) }
-    made.onPaneAppear = { place in SettingsTimings.paneAppeared(place.pane.rawValue) }
+    made.onPaneChange = { pane in if !SettingsPrewarm.warming { SettingsJS.shared.fire("settings.paneShown", pane.rawValue) } }
+    made.onPaneAppear = { place in if !SettingsPrewarm.warming { SettingsTimings.paneAppeared(place.pane.rawValue) } }
     SettingsAdapters.register(made, store: store)
     context = made
     return made

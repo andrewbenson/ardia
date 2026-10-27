@@ -629,11 +629,14 @@ public final class SidebarDragController {
     }
     for s in sources {
       guard s.kind != .tile, let f = s.frame, s !== item, item.map({ !s.apart($0) }) ?? true else { continue }
-      let closed = f.height + (s.parentGroup != nil ? 0 : Self.rowGap)
+      let acrossSections = item.map { Self.pinnedArea(s.section) != Self.pinnedArea($0.section) } ?? false
+      let closed = f.height + (s.parentGroup != nil || acrossSections ? 0 : Self.rowGap)
       if f.minY < top { dy -= closed } else if f.minY < bottom { dh -= closed }
     }
     return (dy, dh)
   }
+
+  private static func pinnedArea(_ section: DragSection) -> Bool { section == .pinnedRows || section == .pinnedGroups }
 
   private var pinning: Bool { SidebarDrop.pins(drop) }
   private var rowPinning: Bool { SidebarDrop.rowPins(drop) }

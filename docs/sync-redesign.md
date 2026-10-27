@@ -134,8 +134,9 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
     ledger's `t` is the newer, so an old login carried back by the restore isn't either.
   - **What `t` is** (second re-check 1).
     - Sync's write to Login Data is applied, then `date_password_modified` is read back for every
-      login the write covers. `t` is the wall time taken after that read-back, so it's at or after
-      every date the write produced.
+      login the write covers. `t = max(now, the newest date read back)`, taken after that read-back.
+      The max guards against the wall clock stepping back (an NTP correction) between Chrome's
+      write and `t`: `t` is still at or after every date the write produced.
     - An apply whose read-back never confirms every covered login (the 5 s settle runs out) writes
       no row and no ledger. Its keys stay unapplied and are offered again next cycle.
     - Dates compare at millisecond precision with a strict "later than": a login is claimed only if
@@ -266,8 +267,8 @@ the tree, and so does the echo of sync's pushes.
   - So an extension setting a node back to an old pushed value (case b) is journaled like any other
     edit: its intent's tag is at or below `G` and was pruned.
 - **A launch diff keeps an existing stamp** (second re-check 4). A node whose launch value equals a live
-  journal entry's `v`, or equals its record where the record's origin is this Mac's (already
-  published), isn't given a launch-time stamp: the live entry stays as it is, and a published value
+  journal entry's `v`, or equals its record where the record's origin is any chain of this device
+  (already published), isn't given a launch-time stamp: the live entry stays as it is, and a published value
   needs no entry. The case: a crash after a read step wrote its entries but before Chrome saved its
   mark. The launch re-reads the same edit, and a fresh stamp would put it over a newer edit made
   elsewhere since.
@@ -566,23 +567,36 @@ shell.docs stays current.
 | ever-seen, store-backed types | lives in the store's docs with the items, same write | rolls back with the items: an item sync applied after the backup is absent from both | not involved | same write as the items | D7a, RR10 |
 | store docs (items, `g`) | older values with no entry take the folder's value; an entry publishes its own `v`, not the store's | as the journal row | not involved | entries carry `v` | guard-review3 r1, r1b; D4a/b |
 | `sync-state.nns` | own seqs or a snapshot above its seq: new chain. Publishing reads the journal, not base, so a lost base claims nothing | as the journal row | not involved | I2's checks | revsync4 R-rollback, R-rollback-outbox; guard-review r1, E; seed 35309; D8, RR7 |
-| `sync.json` (sync on, types, per-profile links and opt-outs, device id, clock, joining) | today, a real loss path: a profile created after the backup has no link, so `linkProfiles` mints a new sync id (engine.ts:880) and the profile is published twice; a type or profile turned off after the backup quietly resumes, passwords included | consistent with the store, but a type turned off after the backup still resumes for Chrome-backed data | not involved | each profile's sync id and its "kept out of sync" flag live on the profile in the store's docs; every opt-out is also written beside the data it governs (below); a type or profile syncs only when sync.json **and** its anchor say on | AUDIT-syncjson-profile, -type-off, -profile-off (red on HEAD), SPEC-opt-out |
+| `sync.json` (sync on, types, per-profile links and opt-outs, device id, clock, joining) | today, a real loss path: a profile created after the backup has no link, so `linkProfiles` mints a new sync id (engine.ts:880) and the profile is published twice; a type or profile turned off after the backup quietly resumes, passwords included | consistent with the store, but a type turned off after the backup still resumes for Chrome-backed data | not involved | each profile's sync id and its "kept out of sync" flag live on the profile in the store's docs; every opt-out is also written beside the data it governs (below); each toggle has a monotonic counter in both copies and the higher counter wins; a missing anchor is no decision; a new sync id is minted only when neither copy has one | AUDIT-syncjson-profile, -type-off, -profile-off (red on HEAD), SPEC-opt-out |
 | `sync-journal.nns` (batches not yet confirmed in the folder) | older batches come back and are re-sent with their own ops and stamps, under new seqs of the current chain, so they lose to anything newer; batches missing from it still have their journal entries, which are cleared only once their op is in the folder, so they're published again | as alone | not involved | rule: re-sends keep stamps, never seqs; entries outlive batches | guard-review r1, E; seed 35309; D4a/b |
 | extension intents (`sync-extensions.json` today) | folded into `sync-edits.json`: each intent is a journal entry with its stamp, so it rolls back with the journal and is caught by the journal row. Chrome's own queue is in memory and cleared on read (ac_extensions_sync.cc:295), so the file is the only record | as the journal | an extension restored by a Chrome profile restore differs from its record with no entry: the folder's value applies | the journal row | needs the journal |
-| `pinChoices`, `pinSync` (store) | `pinChoices` is a per-pin queue of the user's choices waiting to publish (pinned.ts:494-500): folded into the journal as entries and removed from the store. `pinSync` notes a group sync applied so extraction can hold it for a while (pinned.ts:104-112, 424): dropped, since only journaled choices publish | as the journal | not involved | the journal row | FR5 |
+| `pinChoices`, `pinSync` (store) | `pinChoices` is a per-pin queue of the user's choices waiting to publish (pinned.ts:494-500): folded into the journal as entries and removed from the store. `pinSync` notes a pin whose record names a group this Mac hasn't received (pinned.ts:207-222, 313-319, 424): the pin shows standalone, and extraction keeps publishing the record's group for up to the 90-day horizon, then republishes the pin standalone (pinned.ts:110, 210). Dropped, since only journaled choices publish: the standalone display is an apply, not a command, so it's never published. The record keeps naming the group for good, and the Macs differ only in display (this Mac shows the pin standalone until the group arrives). The 90-day standalone republish goes away with it | as the journal | not involved | the journal row | FR5 |
 | History (Chrome) | — | visits are unions with their own times; a republished visit set adds nothing new; a revived delete entry loses to the visit records after it | visits missing after a restore are never published as deleted (deletions are journaled commands only); the folder's visits are applied back | rule: no inferred deletions | AUDIT-history-restore; RR6 |
 
-**Where each opt-out is anchored** (second re-check 5). Turning a type or a profile off writes the flag in
-sync.json and beside the data it governs, in the same write as that data:
+**Where each opt-out is anchored** (second re-check 5, revised by the third). Each toggle (sync on,
+each type, each profile's "kept out of sync") carries a monotonic counter, bumped on every change.
+The toggle and its counter are written to sync.json and beside the data the toggle governs, in the
+same write as that data:
 - store-backed types and the per-profile flag: the store's docs (the settings doc, the profile);
 - passwords: Login Data's `meta` row gains `solara_sync_off`;
 - bookmarks: the bar node's meta info gains `solara_sync_off`;
 - history: History's own `meta` table (`sql::MetaTable`, as for Login Data) gains `solara_sync_off`,
   through a new ArdiaCore call;
 - extensions: the profile's Chrome prefs.
-A type or profile syncs only when both say on. A rollback of either can therefore only turn sync off,
-never on; turning it back on is the user's to do again. The whole-sync switch follows the same rule,
-with its anchor in the settings doc.
+- **The effective state is the copy with the higher counter.** A rollback of either copy carries a
+  lower counter and loses, in both directions: a sync.json rolled back to "on" doesn't resume a
+  type turned off since, and one rolled back to "off" doesn't stop sync silently.
+- **A missing anchor is no decision.** A settings doc that was reset (persist.ts reads it as null),
+  or a Chrome profile not loaded yet, defers to sync.json. A missing anchor never means off.
+- **An anchor is rewritten when it lags.** A type re-enabled while one Chrome profile is unloaded
+  leaves that profile's anchor at the older counter; when the profile loads, the higher counter in
+  sync.json wins and the anchor is brought up to it.
+- **When the two copies disagree** after that resolution (equal counters, different values), the
+  Sync pane says so and asks, and the type stays off until answered.
+- **The anchor fields never sync.** They're kept out of `SYNCED_SETTINGS` and out of `prof:`
+  records, so one Mac's toggle counters never reach another.
+- **Sync ids.** Each profile's sync id is kept on the profile and in sync.json. A new one is minted
+  only when neither has one, so a rolled-back sync.json takes the profile's id instead of minting.
 
 Residuals the audit leaves, from this Mac's own clock or Chrome's lack of edit times:
 - **Passwords, clock set back:** a user's change after Solara's last write can carry a
@@ -765,7 +779,12 @@ Re-check (rollback audit, § Rollback audit):
   - **AUDIT-syncjson-profile, -type-off, -profile-off:** sync.json rolled back alone. A profile
     linked after the backup isn't published twice; a type or profile turned off after the backup
     stays off. All three red on HEAD; the controls with sync.json current are green.
-  - **SPEC-opt-out:** sync needs both sync.json and the anchor on.
+  - **SPEC-opt-out:** the higher counter wins in both directions; a missing anchor is no decision.
+  - **SPEC-opt-out-settings-reset:** a reset settings doc (no anchor) keeps sync on.
+  - **SPEC-opt-out-unloaded-profile:** a type re-enabled while one profile is unloaded is on for
+    that profile once it loads, and its anchor is rewritten.
+  - **SPEC-t-clock-step-back:** the wall clock stepping back during an apply still gives a `t` at or
+    after every date the apply produced, so the applied values aren't claimed.
 - **MARK-settles:** one extension edit costs a bounded number of apply and tree calls, then none for
   200 ms. A guard today (no marks); the new bridge must keep it green with the fake emitting a change
   event per apply.
@@ -885,8 +904,10 @@ nightlies start earliest. Nothing of the old guard is removed until what replace
 **Step 10. sync.json anchors** (§ Rollback audit, opt-outs).
 - Each profile's sync id and kept-out flag on the profile; opt-outs written beside their data
   (Login Data and the bar node through steps 2 and 9, History's meta table through a new
-  ArdiaCore call, extension prefs); sync only when both say on.
-- Green: AUDIT-syncjson-profile, -type-off, -profile-off, SPEC-opt-out.
+  ArdiaCore call, extension prefs); toggle counters, the higher one wins, a missing anchor is no
+  decision, a disagreement shown in the Sync pane.
+- Green: AUDIT-syncjson-profile, -type-off, -profile-off, the SPEC-opt-out tests ported, and engine
+  versions of the settings-reset and unloaded-profile cases.
 
 **Step 11. The old guard goes, and the format bump** (§ What's removed, § Migration).
 - Remove the launch and load notes, baselines, the delivered map, the fresh download wait and the

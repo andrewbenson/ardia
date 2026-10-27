@@ -3,12 +3,16 @@ import SwiftUI
 
 final class HeroTextField: NSTextField {
   weak var model: HeroBarModel?
+  var onSelectionChange: () -> Void = {}
+  private weak var observedEditor: NSTextView?
+  nonisolated(unsafe) private var selectionObserver: NSObjectProtocol?
   var selectionColor: NSColor = .selectedTextBackgroundColor { didSet { styleEditor() } }
 
   override func becomeFirstResponder() -> Bool {
     let became = super.becomeFirstResponder()
     if became {
       styleEditor()
+      observeEditor()
       model?.didFocus()
     }
     return became
@@ -21,6 +25,22 @@ final class HeroTextField: NSTextField {
       return model.key(HeroKey(.enter, shift: flags.contains(.shift), alt: flags.contains(.option), meta: flags.contains(.command), ctrl: flags.contains(.control)))
     }
     return super.performKeyEquivalent(with: event)
+  }
+
+  deinit {
+    if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+  }
+
+  func observeEditor() {
+    guard let editor = currentEditor() as? NSTextView, editor !== observedEditor || selectionObserver == nil else { return }
+    if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+    observedEditor = editor
+    selectionObserver = NotificationCenter.default.addObserver(forName: NSTextView.didChangeSelectionNotification, object: editor, queue: nil) { [weak self, weak editor] _ in
+      MainActor.assumeIsolated {
+        guard let self, editor?.delegate === self else { return }
+        self.onSelectionChange()
+      }
+    }
   }
 
   func styleEditor() {
@@ -137,13 +157,14 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
 
   func controlTextDidChange(_ obj: Notification) {
     guard !applying, let field else { return }
+    field.observeEditor()
     let after = fieldSelection
     let edit = before.map { EditContext(before: $0, after: after) }
     before = nil
     model.textChanged(field.stringValue, edit: edit)
   }
 
-  func textViewDidChangeSelection(_ notification: Notification) {
+  func selectionDidChange() {
     guard !applying, field?.currentEditor() != nil else { return }
     model.selectionChanged(fieldSelection)
   }
@@ -217,6 +238,7 @@ struct HeroFieldView: NSViewRepresentable {
     field.setContentHuggingPriority(.defaultLow, for: .horizontal)
     field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     context.coordinator.field = field
+    field.onSelectionChange = { [weak coordinator = context.coordinator] in coordinator?.selectionDidChange() }
     model.field = context.coordinator
     field.stringValue = model.value
     style(field)

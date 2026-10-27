@@ -742,13 +742,16 @@ try {
   await check("file drop: a finished download dragged from the Downloads popover opens in the tab list", async () => {
     await run(`st().upsertDownload({ id: "dl-drop", url: "https://example.com/downloaded.pdf", filename: "downloaded.pdf", path: ${JSON.stringify(download)}, state: "finished", paused: false, received: 10, total: 10, speed: 0, mimeType: "application/pdf" });
       st().setDownloadsOpen("w1", true); return settle(900);`);
-    const spot = await run(`return win("w1").then((n) => { const pts = []; for (let y = 30; y < 420; y += 6) for (let x = 20; x < 700; x += 12) pts.push([x, y]);
-      return Promise.all(pts.map(([x, y]) => C.devWindow(n, "hit:" + x + "," + y).then((h) => (/FileDragView/.test(h) ? [x, y] : null)))).then((hits) => hits.filter(Boolean)); });`);
-    assert.ok(spot.length, "a download row in the popover");
-    const [sx, sy] = spot[Math.floor(spot.length / 2)];
-    const dragged = await run(`return act("w1", "drag:${sx},${sy};${sx + 8},${sy + 6};${sx + 60},${sy + 160}").then(() => settle(900)).then(() => ac.shell.devFileDrag.lastFileDrag());`);
-    assert.deepEqual(dragged, [download], "the row starts a file drag");
-    await run(`st().setDownloadsOpen("w1", false); return settle(600);`);
+    try {
+      const spot = await run(`return win("w1").then((n) => { const pts = []; for (let y = 30; y < 420; y += 6) for (let x = 20; x < 700; x += 12) pts.push([x, y]);
+        return Promise.all(pts.map(([x, y]) => C.devWindow(n, "hit:" + x + "," + y).then((h) => (/FileDragView|DownloadRowView/.test(h) ? [x, y] : null)))).then((hits) => hits.filter(Boolean)); });`);
+      assert.ok(spot.length, "a download row in the popover");
+      const [sx, sy] = spot[Math.floor(spot.length / 2)];
+      const dragged = await run(`return act("w1", "drag:${sx},${sy};${sx + 8},${sy + 6};${sx + 60},${sy + 160}").then(() => settle(900)).then(() => Promise.all([ac.shell.devFileDrag.lastFileDrag(), globalThis.expo.modules.SolaraDownloads?.devLastFileDrag?.() ?? []])).then(([rn, native]) => [...rn, ...native]);`);
+      assert.deepEqual(dragged, [download], "the row starts a file drag");
+    } finally {
+      await run(`st().setDownloadsOpen("w1", false); return settle(600);`);
+    }
     const rows = await listRows();
     const b = rows[1];
     const x = Math.round(b.x + b.w / 2);

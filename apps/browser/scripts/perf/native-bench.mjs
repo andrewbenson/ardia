@@ -28,6 +28,9 @@
 //                                          with the same --only.
 //                               newtabkey  J2: a real ⌘T key event into the app → its command bar committed, on screen and
 //                                          typeable; a keystroke → its suggestions on screen (one instance per run)
+//                               panelkey   a page's command bar (⌘L), then "github" typed a real key at a time: each key → the
+//                                          display frame that shows it (field and rows; ACFieldMarkAtPresent after the
+//                                          commit), the same mark for the RN and the native bar. Same instance as newtabkey.
 //                               navigate   J4: a real Enter in the command bar with a local test page's URL → the engine
 //                                          asked to load, navigation started, committed, first contentful paint; from a new
 //                                          tab's bar (⌘T) and from a page's panel (⌘L). Same instance as newtabkey.
@@ -46,6 +49,9 @@
 //                               churn      leak check: open and close 10 tabs 5 times
 //                               sample     main-thread `sample`s, idle and while switching and scrolling
 //                               prepare    prepare the app copies and exit (see --prepared)
+//     --candidate-env K=V     repeatable: extra environment for the candidate's instances only
+//     --control-env K=V       repeatable: extra environment for the control's instances only; with the same app as
+//                             --app and --control, this compares two switches of one build
 //     --env K=V               repeatable: extra environment for every instance (DYLD_INSERT_LIBRARIES is appended to
 //                             the marker library). Instances stay muted; don't pass ARDIA_ALLOW_AUDIO.
 //     --frames-n <n>          repetitions of each interaction per run in frames (default 8; framecounts uses at most 3)
@@ -171,6 +177,8 @@ const { values: opt } = parseArgs({
     "control-label": { type: "string" },
     prepared: { type: "boolean" },
     env: { type: "string", multiple: true, default: [] },
+    "candidate-env": { type: "string", multiple: true, default: [] },
+    "control-env": { type: "string", multiple: true, default: [] },
     seed: { type: "string" },
     "fresh-copy": { type: "boolean" },
     "trace-startup": { type: "string" },
@@ -461,7 +469,7 @@ class Instance {
     const exe = join(realpathSync(this.app), "Contents/MacOS", execFileSync("defaults", ["read", join(this.app, "Contents/Info.plist"), "CFBundleExecutable"], { encoding: "utf8" }).trim());
     const main = `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`;
     if (spawnSync("pgrep", ["-f", main]).status === 0) throw new Error("a bench instance is still running");
-    const extra = [...opt.env, ...this.env].filter((e) => !e.startsWith("DYLD_INSERT_LIBRARIES="));
+    const extra = [...opt.env, ...this.side.env, ...this.env].filter((e) => !e.startsWith("DYLD_INSERT_LIBRARIES="));
     writeSwitches(this.dataDir, extra.find((e) => e.startsWith("ARDIA_SWITCHES="))?.slice(19));
     const dyld = [markerLibrary(), ...(this.frames ? [framesLibrary(toolDir, here)] : []), ...opt.env.filter((e) => e.startsWith("DYLD_INSERT_LIBRARIES=")).map((e) => e.slice(22))].join(":");
     this.t0 = Date.now();
@@ -837,6 +845,30 @@ async function newTabKey(app, i, k) {
   };
 }
 
+async function panelKeys(app, w) {
+  let open = false;
+  for (let attempt = 0; attempt < 2 && !open; attempt++) {
+    if (!(await postSeen(app, "cmd+l"))) continue;
+    for (const end = Date.now() + 2500; !open && Date.now() < end; await sleep(60)) open = await app.run(`return !!ac.store.getState().windowUi[${JSON.stringify(w)}]?.panel.open;`);
+  }
+  if (!open) return [{ lost: "no panel" }];
+  await sleep(900);
+  const out = [];
+  for (const ch of "github") {
+    const key = await postSeen(app, `text:${ch}`);
+    if (!key) {
+      out.push({ lost: `key ${ch} never arrived` });
+      continue;
+    }
+    const done = await waitFor(app, (st) => markOf(st, `bar:${w}`, "keyShown", key.at) >= 0, 3000, 40);
+    out.push(done ? { key: ch, shown: markOf(done, `bar:${w}`, "keyShown", key.at) - key.at, delivery: delivery(app, key.at) } : { lost: `key ${ch} never shown` });
+    await sleep(250);
+  }
+  await postSeen(app, "esc");
+  await sleep(600);
+  return out;
+}
+
 async function navigateByEnter(app, side, id, from) {
   const url = `127.0.0.1:${server.address().port}/static?id=${id}`;
   let tab = null;
@@ -889,7 +921,7 @@ async function journeyRun(side, i, parts) {
   const n = +opt["journey-n"];
   const app = new Instance(side, dir);
   app.env.push("AC_BENCH_KEYLOG=1");
-  const r = { j2: [], j4new: [], j4page: [], lost: { j2: [], j4new: [], j4page: [] }, guard: null, load: [Math.round(loadavg()[0])] };
+  const r = { j2: [], panel: [], j4new: [], j4page: [], lost: { j2: [], panel: [], j4new: [], j4page: [] }, guard: null, load: [Math.round(loadavg()[0])] };
   const note = async (kind, x, k) => {
     if (!x.lost) return void r[kind].push(x);
     r.lost[kind].push(x.lost);
@@ -916,6 +948,15 @@ async function journeyRun(side, i, parts) {
         await sleep(1000);
       }
       log(`${side.tag}journeys ${i} j2:`, JSON.stringify(r.j2.map((x) => Math.round(x.typeable))));
+    }
+    if (parts.has("panelkey")) {
+      const w = await app.run(`const s = ac.store.getState(); const w = ${WINDOW}; s.newTab(w, { url: "data:text/html,<title>Bench</title><h1>bench</h1>" }); return w;`);
+      await sleep(2500);
+      for (let k = 0; k < n; k++) {
+        for (const x of await panelKeys(app, w)) await note("panel", x, k);
+        await sleep(1000);
+      }
+      log(`${side.tag}journeys ${i} panel:`, JSON.stringify(r.panel.map((x) => Math.round(x.shown))));
     }
     if (parts.has("navigate")) {
       for (let k = 0; k < n; k++) {
@@ -1256,7 +1297,7 @@ const fail = (message) => {
   process.exit(64);
 };
 if (!opt.app) fail("usage: native-bench.mjs --app <Solara.app> [--control <app>] [--out dir] [--only phases] … (--help)");
-const JOURNEY_PHASES = ["newtabkey", "navigate"];
+const JOURNEY_PHASES = ["newtabkey", "panelkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
 const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "memslope", "throttle", "churn", "sample", "prepare"];
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));
@@ -1267,7 +1308,7 @@ if (opt["fresh-copy"] && ![...only].every((p) => p === "launch" || p === "prepar
 if (opt["trace-startup"] && ![...only].every((p) => p === "launch")) fail("--trace-startup works with --only launch");
 if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || p === "memslope" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with --only launch, newtabkey, navigate, frames, framecounts and memslope (the other phases measure a one-tab session)");
 if (!(+opt["mem-windows"] >= 1)) fail(`--mem-windows wants a count, got "${opt["mem-windows"]}"`);
-for (const e of opt.env) if (!/^[A-Za-z_]\w*=/.test(e)) fail(`--env wants K=V, got "${e}"`);
+for (const e of [...opt.env, ...opt["candidate-env"], ...opt["control-env"]]) if (!/^[A-Za-z_]\w*=/.test(e)) fail(`--env wants K=V, got "${e}"`);
 if (!(+opt.hold >= 0)) fail(`--hold wants seconds, got "${opt.hold}"`);
 if (opt.control && opt.compare) log("--compare is ignored with --control: the control is the before column");
 
@@ -1276,6 +1317,7 @@ function makeSide(app, label, role) {
   const dir = join(opt.out, label);
   mkdirSync(dir, { recursive: true });
   return { role, label, tag: "", src: resolve(app), dir, template: join(dir, "template"), app: null, bundle: null,
+    env: role === "control" ? opt["control-env"] : opt["candidate-env"],
     results: { meta: {}, launch: [], session: [], windows: [], memslope: [], journeys: [], frames: [], throttle: [], sample: [] } };
 }
 const candidate = makeSide(opt.app, opt.label ?? labelOf(opt.app), "candidate");

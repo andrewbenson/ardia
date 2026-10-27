@@ -27,6 +27,7 @@ std::atomic<int> gLastInputKind{0};
 os_unfair_lock gLock = OS_UNFAIR_LOCK_INIT;
 NSMutableArray<NSArray *> *gMarks;
 id gInputMonitor;
+id gPresentObserver;
 
 double EventTime(NSEvent *event) {
   return ACFieldNow() - (NSProcessInfo.processInfo.systemUptime - event.timestamp) * 1000;
@@ -45,6 +46,15 @@ void SetEnabled(bool enabled) {
     } else if (!enabled && gInputMonitor) {
       [NSEvent removeMonitor:gInputMonitor];
       gInputMonitor = nil;
+    }
+    if (enabled && !gPresentObserver) {
+      gPresentObserver = [NSNotificationCenter.defaultCenter addObserverForName:@"ACFieldMarkAtPresent" object:nil queue:nil usingBlock:^(NSNotification *note) {
+        NSArray *mark = [note.object isKindOfClass:NSArray.class] ? note.object : nil;
+        if (mark.count == 2) ACFieldMarkAtPresent(mark[0], mark[1]);
+      }];
+    } else if (!enabled && gPresentObserver) {
+      [NSNotificationCenter.defaultCenter removeObserver:gPresentObserver];
+      gPresentObserver = nil;
     }
     ArdiaCoreWebViewsSetFieldTiming(gEnabled);
   });
@@ -87,6 +97,42 @@ void ACFieldMarkAtCommit(NSString *key, NSString *kind) {
     ACFieldMark(k, kind, ACFieldNow());
 }
 
+@interface ACPresentedMark : NSObject
+@property(nonatomic, copy) NSString *key;
+@property(nonatomic, copy) NSString *kind;
+@property(nonatomic, strong, nullable) CADisplayLink *link;
+@end
+
+@implementation ACPresentedMark
+
+- (void)tick:(CADisplayLink *)link {
+  ACFieldMark(self.key, self.kind, ACFieldNow() + (link.targetTimestamp - CACurrentMediaTime()) * 1000);
+  [link invalidate];
+  self.link = nil;
+}
+
+@end
+
+void ACFieldMarkAtPresent(NSString *key, NSString *kind) {
+  if (!gEnabled || !key.length) return;
+  NSString *k = [key copy], *what = [kind copy];
+  void (^arm)(void) = ^{
+    NSWindow *window = NSApp.keyWindow ?: NSApp.mainWindow;
+    for (NSWindow *candidate in NSApp.orderedWindows)
+      if (!window && candidate.isVisible && candidate.contentView) window = candidate;
+    if (!window.contentView) return ACFieldMark(k, what, ACFieldNow());
+    ACPresentedMark *mark = [ACPresentedMark new];
+    mark.key = k;
+    mark.kind = what;
+    mark.link = [window.contentView displayLinkWithTarget:mark selector:@selector(tick:)];
+    [mark.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+  };
+  if ([CATransaction respondsToSelector:@selector(addCommitHandler:forPhase:)])
+    [CATransaction addCommitHandler:^{ dispatch_async(dispatch_get_main_queue(), arm); } forPhase:kPostCommit];
+  else
+    arm();
+}
+
 @interface ACFieldTimingModule : NSObject <RCTBridgeModule, RCTInvalidating>
 @end
 
@@ -119,6 +165,14 @@ RCT_EXPORT_METHOD(markFrame : (NSString *)key kind : (NSString *)kind) {
   NSString *k = [key copy], *what = [kind copy];
   [_bridge.uiManager addUIBlock:^(__unused RCTUIManager *manager, __unused NSDictionary *registry) {
     ACFieldMarkAtCommit(k, what);
+  }];
+}
+
+RCT_EXPORT_METHOD(markPresented : (NSString *)key kind : (NSString *)kind) {
+  if (!gEnabled) return;
+  NSString *k = [key copy], *what = [kind copy];
+  [_bridge.uiManager addUIBlock:^(__unused RCTUIManager *manager, __unused NSDictionary *registry) {
+    ACFieldMarkAtPresent(k, what);
   }];
 }
 

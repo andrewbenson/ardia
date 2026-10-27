@@ -3,7 +3,7 @@ import { ContextMenuArea, Symbol, copyText, pickFiles, showMenu, startDictation 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { findNodeHandle, Pressable, Text, TextInput, View } from "react-native";
 import { useTheme } from "../lib/theme";
-import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../telemetry/journeys";
+import { journeyBarCommitted, journeyBarFocused, journeyBarKeyShown, journeyKeystroke, journeyNavigate, journeySuggestions } from "../telemetry/journeys";
 import { sampleOmniboxLatency, trackSuggestionChosen } from "../telemetry/track";
 import { useBrowser } from "../store/browser";
 import { useWindowId, useWindowProfileId } from "../store/hooks";
@@ -342,6 +342,7 @@ export function Omnibox({
     if (keyAt.current) {
       sampleOmniboxLatency(Date.now() - keyAt.current);
       keyAt.current = 0;
+      journeyBarKeyShown(windowId);
     }
   });
 

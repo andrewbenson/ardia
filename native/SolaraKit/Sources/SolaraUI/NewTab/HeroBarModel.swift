@@ -43,6 +43,7 @@ public struct HeroBarEvents {
   public var contextMenu: (_ hasSelection: Bool, _ hasValue: Bool) -> Void = { _, _ in }
   public var journey: (HeroJourney) -> Void = { _ in }
   public var latency: (Double) -> Void = { _ in }
+  public var keyShown: () -> Void = {}
   public var changed: () -> Void = {}
   public var done: (BarDismissal?) -> Void = { _ in }
   public var cancel: () -> Void = {}
@@ -560,6 +561,7 @@ public final class HeroBarModel {
     if !items.isEmpty { events.journey(.suggestions) }
     if let keyAt {
       self.keyAt = nil
+      events.keyShown()
       HeroBarModel.afterNextCommit { [events] in
         let elapsed = ContinuousClock.now - keyAt
         events.latency(Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15)

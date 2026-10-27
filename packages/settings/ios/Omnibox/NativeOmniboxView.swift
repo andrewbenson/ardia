@@ -80,6 +80,10 @@ final class NativeOmniboxView: ExpoView {
     e.contextMenu = { [weak self] hasSelection, hasValue in self?.onContextMenu(["hasSelection": hasSelection, "hasValue": hasValue]) }
     e.journey = { [weak self] mark in self?.onJourney(["mark": mark.rawValue]) }
     e.latency = { [weak self] ms in self?.onLatency(["ms": ms]) }
+    e.keyShown = { [weak self] in
+      guard let self else { return }
+      FieldTimingMarks.atPresent("bar:\(self.windowId)", "keyShown")
+    }
     e.done = { [weak self] reason in self?.onDone(["reason": reason?.rawValue ?? NSNull()]) }
     e.cancel = { [weak self] in self?.onCancel([:]) }
     e.siteControls = { [weak self] in self?.onSiteControls([:]) }
@@ -107,5 +111,11 @@ final class NativeOmniboxView: ExpoView {
     let frame = convert(bounds, to: nil)
     let height = window.contentView?.bounds.height ?? 0
     return ["x": frame.minX, "y": height - frame.maxY, "width": frame.width, "height": frame.height]
+  }
+}
+
+enum FieldTimingMarks {
+  static func atPresent(_ key: String, _ kind: String) {
+    NotificationCenter.default.post(name: Notification.Name("ACFieldMarkAtPresent"), object: [key, kind] as NSArray)
   }
 }

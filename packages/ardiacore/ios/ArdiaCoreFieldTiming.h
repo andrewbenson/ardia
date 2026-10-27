@@ -11,6 +11,7 @@ double ACFieldNow(void);
 void ACFieldMark(NSString *_Nullable key, NSString *kind, double at);
 void ACFieldMarkNow(NSString *_Nullable key, NSString *kind);
 void ACFieldMarkAtCommit(NSString *_Nullable key, NSString *kind);
+void ACFieldMarkAtPresent(NSString *_Nullable key, NSString *kind);
 void ArdiaCoreWebViewsSetFieldTiming(BOOL on);
 
 #ifdef __cplusplus

@@ -7,6 +7,7 @@ import { jsStartedAt } from "./jsStart";
 type NativeTiming = {
   setEnabled(on: boolean): void;
   markFrame(key: string, kind: string): void;
+  markPresented?(key: string, kind: string): void;
   lastInput(): [at: number, kind: number];
   drain(): [key: string, kind: string, at: number][];
 };
@@ -312,6 +313,10 @@ export function journeySuggestions(tabId: string) {
   if (!p || p.keyAt === undefined || p.suggested !== undefined) return;
   p.suggested = Date.now();
   frame(tabId, "suggest");
+}
+
+export function journeyBarKeyShown(windowId: string) {
+  if (on) native?.markPresented?.(`bar:${windowId}`, "keyShown");
 }
 
 export function journeyNavigate(tabId: string) {

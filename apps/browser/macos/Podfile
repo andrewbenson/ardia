@@ -103,6 +103,14 @@ ac_parallel_post_integrate = lambda do |installer|
   end
 end
 
+ac_new_object = lambda do |project, klass|
+  uuid = project.generate_uuid
+  uuid = project.generate_uuid while project.objects_by_uuid.key?(uuid)
+  object = klass.new(project, uuid)
+  object.initialize_defaults
+  object
+end
+
 ac_solara_kit = lambda do |installer|
   project = installer.pods_project
   target = project.targets.find { |t| t.name == 'ArdiaStore' }
@@ -111,13 +119,13 @@ ac_solara_kit = lambda do |installer|
   local = Xcodeproj::Project::Object::XCLocalSwiftPackageReference
   package = project.root_object.package_references.find { |p| p.is_a?(local) && p.relative_path == kit }
   unless package
-    package = project.new(local)
+    package = ac_new_object.call(project, local)
     package.relative_path = kit
     project.root_object.package_references << package
   end
   %w[SolaraBridgeCore SolaraLive SolaraModel SolaraOmnibox SolaraPersistence SolaraStore SolaraUI].each do |name|
     next if target.package_product_dependencies.any? { |d| d.product_name == name }
-    dependency = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+    dependency = ac_new_object.call(project, Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
     dependency.package = package
     dependency.product_name = name
     target.package_product_dependencies << dependency

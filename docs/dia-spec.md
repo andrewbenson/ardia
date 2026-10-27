@@ -318,6 +318,26 @@ corner**, the corner nearest the row.
   (120 Hz, a hidden instance): opacity within 0.007 of Dia's curve over its 12 frames, scale within 0.001 of the spring
   (peak 1.0022 at 180 ms, settled by 340 ms); the fade out takes 12 frames.
 
+### Selected tab off screen, and the docked New Tab row (owner's 2x clips, 2026-10-26, dark)
+
+Measured from `Clip 2026-10-26 at 23.55.41@2x.png` (pill shown), `23.57.28` (selected tab in view, no pill) and
+`23.57.40` (list scrolled to its end).
+- Pill: shown while the selected tab's row is scrolled out of the list. **51 × 28 pt**, fully round (radius 14). A
+  0.5 pt outer edge (black ≈ 0.8), then a 1 pt inner rim (white ≈ 0.12 over the fill), fill a near-black at ≈ 0.68
+  over the sidebar (#161D21 on Dia's #2E4856).
+- Inside: the tab's 16 pt favicon, left edge 11 pt in, vertically centred; then `arrow.down` (↑ when the tab is above)
+  at 9 pt regular (13 × 18 px at 2x, stem ≈ 0.8 pt), white ≈ 0.67, centred 37 pt from the pill's left edge.
+- Position: centred across the sidebar (centre 155.5 pt in a 310.5 pt sidebar), its bottom **6 pt** above the line
+  over the docked New Tab row. It sits over the rows.
+- Docked New Tab: while the list overflows, "+ New Tab" sits at the bottom with a **0.5 pt** line over it (white ≈ 0.1,
+  #465D69 on #2E4856), 3 pt above the row. Scrolled to the end (`23.57.40`) the row follows the last row with no line,
+  as when the list is short.
+- Not seen in a clip: what a click on the pill does, its fade, and whether the line shows with a docked row scrolled
+  to its end. Ours: a click scrolls the selected tab into view (0.25 s ease-in-out, as when a tab is selected), the
+  pill fades in and out over 0.1 s on the hover card's curve, and the line shows only while rows are hidden under it,
+  as the top edge line does (all unverified against Dia). Light mode: white fill, black edge, unverified.
+- Ours: `native/SolaraKit/Sources/SolaraUI/Sidebar/SidebarActivePill.swift` (native sidebar only).
+
 ### Tab hover card (owner's 2x clip, 2026-10-26, dark)
 
 Measured from `Clip 2026-10-26 at 23.59.10@2x.png`, a sidebar tab with a two-line title.

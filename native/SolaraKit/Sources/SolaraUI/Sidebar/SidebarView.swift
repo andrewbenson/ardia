@@ -18,6 +18,10 @@ public final class SidebarView: NSView {
   private let boxes = SidebarLayer()
   private let rows = SidebarLayer()
   private let dock = SidebarLayer()
+  private let dockLine = CALayer()
+  private let pill = SidebarActivePill()
+  private var pillShown = false
+  private var dockLineShown = false
   private var views: [String: NSView] = [:]
   private var hoveredKey: String?
   private var hoveredGroup: String?
@@ -54,6 +58,13 @@ public final class SidebarView: NSView {
     addSubview(clip)
     addSubview(fixed)
     addSubview(dock)
+    dock.wantsLayer = true
+    dockLine.actions = SurfaceLayer.noActions
+    dockLine.opacity = 0
+    dock.layer?.addSublayer(dockLine)
+    pill.alphaValue = 0
+    pill.onPress = { [weak self] in self?.revealActive() }
+    addSubview(pill)
     NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     DevPointer.observe(self, #selector(devPointer(_:)))
   }
@@ -89,13 +100,20 @@ public final class SidebarView: NSView {
     return tab.unloaded == true && before.tabs[tabId]?.unloaded != true
   }
 
-  private func reveal(_ tabId: String, _ context: SidebarContext) {
+  private func scrollItem(_ tabId: String, _ context: SidebarContext) -> SidebarItem? {
     let shown = pageLayout.items.filter { $0.region == .scroll }
-    let item =
-      shown.first { $0.kind == .tab(tabId) }
+    return shown.first { $0.kind == .tab(tabId) }
       ?? shown.first { if case .split(let id) = $0.kind { context.query.holdsTab("s:\(id)", tabId) } else { false } }
       ?? shown.last { if case .groupHeader(let id) = $0.kind { context.query.holdsTab("g:\(id)", tabId) } else { false } }
-    guard let item else { return }
+  }
+
+  private func revealActive() {
+    guard let context, let active = context.activeId else { return }
+    reveal(active, context)
+  }
+
+  private func reveal(_ tabId: String, _ context: SidebarContext) {
+    guard let item = scrollItem(tabId, context) else { return }
     let viewport = scroll.frame.height
     let top = scroll.contentView.bounds.minY
     let y = item.frame.minY
@@ -204,6 +222,15 @@ public final class SidebarView: NSView {
     boxes.frame = NSRect(x: inset, y: 0, width: width - inset * 2, height: docHeight)
     rows.frame = boxes.frame
     dock.frame = bounds
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    dockLine.frame = CGRect(x: 0, y: layout.scrollBottom, width: width, height: 0.5)
+    dockLine.backgroundColor = context.palette.scrollEdge.cgColor
+    CATransaction.commit()
+    let pillSize = SidebarActivePill.size
+    pill.frame = NSRect(
+      x: ((width - pillSize.width) / 2).rounded(), y: layout.scrollBottom - SidebarActivePill.gapAboveDock - pillSize.height,
+      width: pillSize.width, height: pillSize.height)
 
     var seen = Set<String>()
     for item in layout.items {
@@ -233,6 +260,7 @@ public final class SidebarView: NSView {
     }
     if let hoveredKey, !seen.contains(hoveredKey) { self.hoveredKey = nil }
     syncEdge()
+    syncPill()
   }
 
   private func groupId(_ kind: SidebarItemKind) -> String? {
@@ -255,22 +283,46 @@ public final class SidebarView: NSView {
 
   @objc private func scrolled() {
     syncEdge()
+    syncPill()
     syncPointer()
+  }
+
+  private func syncPill() {
+    let top = scroll.contentView.bounds.minY
+    let viewport = scroll.frame.height
+    dockLine.frame.origin.y = pageLayout.scrollBottom
+    fade(dockLine, shown: pageLayout.docked && top + viewport < document.frame.height - 0.5, was: &dockLineShown)
+    var shown = false
+    if let context, let active = context.activeId, let tab = context.state.tabs[active], let item = scrollItem(active, context),
+      viewport > 0, item.frame.maxY <= top || item.frame.minY >= top + viewport
+    {
+      shown = true
+      pill.set(context.iconSpec(tab), title: context.title(tab), up: item.frame.maxY <= top, palette: context.palette, favicons: favicons)
+    }
+    guard shown != pillShown else { return }
+    pillShown = shown
+    NSAnimationContext.runAnimationGroup { motion in
+      motion.duration = 0.1
+      motion.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
+      pill.animator().alphaValue = shown ? 1 : 0
+    }
+  }
+
+  private func fade(_ line: CALayer, shown: Bool, was: inout Bool) {
+    guard shown != was else { return }
+    was = shown
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = line.presentation()?.opacity ?? line.opacity
+    fade.toValue = shown ? 1 : 0
+    fade.duration = 0.1
+    fade.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
+    line.opacity = shown ? 1 : 0
+    line.add(fade, forKey: "edge")
   }
 
   private func syncEdge() {
     let y = scroll.contentView.bounds.origin.y
-    let shown = y > 0
-    if shown != edgeShown {
-      edgeShown = shown
-      let fade = CABasicAnimation(keyPath: "opacity")
-      fade.fromValue = edgeLine.presentation()?.opacity ?? edgeLine.opacity
-      fade.toValue = shown ? 1 : 0
-      fade.duration = 0.1
-      fade.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
-      edgeLine.opacity = shown ? 1 : 0
-      edgeLine.add(fade, forKey: "edge")
-    }
+    fade(edgeLine, shown: y > 0, was: &edgeShown)
     let shift = min(max(y, 0), 1) * SidebarMetrics.glowRoom
     if shift != clipShift {
       clipShift = shift
@@ -312,6 +364,7 @@ public final class SidebarView: NSView {
   }
 
   private func rowAt(_ windowPoint: NSPoint) -> SidebarRowView? {
+    if pillShown, pill.bounds.contains(pill.convert(windowPoint, from: nil)) { return nil }
     for container in [dock, fixed, rows] {
       if container === rows, !clip.bounds.contains(clip.convert(windowPoint, from: nil)) { continue }
       for case let row as SidebarRowView in container.subviews.reversed() where !row.isHidden {

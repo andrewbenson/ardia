@@ -149,6 +149,8 @@ let locked = false;
 let loaded = true;
 let stopping = false;
 let turningOn = false;
+let enteringPhrase = false;
+let forceRequests = 0;
 const passwordAdapters = new Map<string, Adapter>();
 const extensionAdapters = new Map<string, ExtensionsAdapter>();
 
@@ -205,6 +207,12 @@ async function loadState() {
   }
   journalOnDisk = Object.keys(journal).length > 0;
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
+  for (const link of Object.values(doc.profiles)) {
+    const scope = `p:${link.syncId}`;
+    if (doc.retired?.[scope] === undefined) continue;
+    delete doc.retired[scope];
+    if (!Object.keys(doc.retired).length) delete doc.retired;
+  }
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
     if (doc.retired?.[scope] !== undefined) continue;
     const mine = (journal[scope] ?? []).filter((f) => f.device === doc.deviceId);
@@ -256,6 +264,7 @@ function save() {
     return;
   }
   const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, s.seq]));
+  const sealedDoc = doc;
   sealing = (async () => {
     let landed = false;
     try {
@@ -263,7 +272,7 @@ function save() {
       if (sealed) {
         await saveDocument(STATE, sealed);
         savedState = state;
-        pruneJournal(seqs);
+        if (doc === sealedDoc) pruneJournal(seqs);
         landed = true;
       }
     } catch (error) {
@@ -342,6 +351,7 @@ function scheduleSync(delay = AFTER_EDIT_MS) {
 
 export async function syncNow() {
   forcePasswords = true;
+  forceRequests++;
   await runCycle();
 }
 
@@ -354,7 +364,7 @@ async function runCycle({ retiring = false } = {}) {
   }
   running = true;
   cycleForcesPasswords = forcePasswords;
-  forcePasswords = false;
+  const forcedBy = forceRequests;
   const cycleDoc = doc;
   let clock: Clock | null = null;
   clearTimeout(timer);
@@ -413,6 +423,7 @@ async function runCycle({ retiring = false } = {}) {
     doc.clock = clock.last;
     doc.lastSyncedAt = Date.now();
     if (app.joined) doc.joining = false;
+    if (forceRequests === forcedBy) forcePasswords = false;
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
     console.warn("[sync] cycle failed", error);
@@ -440,7 +451,7 @@ function freshScope(scope: string, extra: Partial<ScopeState> = {}): ScopeState 
   const { [scope]: _gone, ...rest } = doc.retired!;
   if (Object.keys(rest).length) doc.retired = rest;
   else delete doc.retired;
-  return { ...emptyScope(), ...extra, seq, vv: doc.deviceId ? { [doc.deviceId]: seq } : {} };
+  return { ...emptyScope(), ...extra, seq };
 }
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -624,15 +635,13 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
   const native = SyncNative;
   if (!native) return { error: "unavailable" };
   if (doc.enabled && doc.deviceId && locked) {
-    const result = await native.enterPhrase(doc.deviceId, text, doc.folder ?? folder);
-    if ("ok" in result) {
-      locked = false;
-      await loadState();
-      loaded = true;
-      publishUi({ status: "starting", error: null });
-      scheduleSync(0);
+    if (enteringPhrase) return { error: "unavailable" };
+    enteringPhrase = true;
+    try {
+      return await unlockWithPhrase(native, folder, text);
+    } finally {
+      enteringPhrase = false;
     }
-    return result;
   }
   if (doc.enabled || turningOn) return { error: "unavailable" };
   turningOn = true;
@@ -644,6 +653,31 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
   } finally {
     turningOn = false;
   }
+}
+
+async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: string, text: string): Promise<PhraseResult> {
+  const result = await native.enterPhrase(doc.deviceId!, text, doc.folder ?? folder);
+  if (!("ok" in result)) return result;
+  try {
+    await loadState();
+  } catch (error) {
+    showLocked(error);
+    return { error: "keychain" };
+  }
+  locked = false;
+  loaded = true;
+  publishUi({ status: "starting", error: null });
+  scheduleSync(0);
+  return result;
+}
+
+const LOCKED_MESSAGE = "Enter your recovery phrase to keep syncing on this Mac.";
+
+function showLocked(error?: unknown) {
+  locked = true;
+  loaded = false;
+  if (error) console.warn("[sync] couldn't open the saved sync state", error);
+  publishUi({ status: "locked", error: LOCKED_MESSAGE });
 }
 
 export async function stopSync({ deleteData = false } = {}) {
@@ -679,6 +713,8 @@ async function turnOff(native: NonNullable<typeof SyncNative>, deleteData: boole
   passwordAdapters.clear();
   extensionAdapters.clear();
   clearJournal();
+  savedState = "";
+  writeDocument(STATE, "");
   save();
   publishUi({ status: "off", error: null });
 }
@@ -765,17 +801,16 @@ export function startSync() {
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
     loaded = false;
-    void SyncNative.unlock(doc.deviceId).then(async (ok) => {
-      if (!ok) {
-        locked = true;
-        return publishUi({ status: "locked", error: "Enter your recovery phrase to keep syncing on this Mac." });
-      }
-      await loadState();
-      loaded = true;
-      settleAppliedThemes(doc.scopes[APP_SCOPE]);
-      publishUi();
-      scheduleSync(500);
-    }).catch((error) => publishUi({ status: "stalled", error: errorText(error) }));
+    void SyncNative.unlock(doc.deviceId)
+      .then(async (ok) => {
+        if (!ok) return showLocked();
+        await loadState();
+        loaded = true;
+        settleAppliedThemes(doc.scopes[APP_SCOPE]);
+        publishUi();
+        scheduleSync(500);
+      })
+      .catch((error) => showLocked(error));
   }
   useBrowser.subscribe((s, prev) => {
     if (!doc.enabled || running) return;

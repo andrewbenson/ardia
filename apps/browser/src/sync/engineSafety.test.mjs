@@ -31,7 +31,11 @@ globalThis.acTestNativeModules = {
       fake.locked = false;
       return true;
     },
-    enterPhrase: async () => ((fake.locked = false), { ok: true }),
+    enterPhrase: async () => {
+      if (fake.phraseGate) await fake.phraseGate;
+      fake.locked = false;
+      return { ok: true };
+    },
     createChain: async () => {},
     unlock: async () => {
       if (fake.unlockGate) await fake.unlockGate;
@@ -41,7 +45,7 @@ globalThis.acTestNativeModules = {
     forget: async () => {
       if (fake.forgetGate) await fake.forgetGate;
     },
-    chainStatus: async () => (guard(), "ok"),
+    chainStatus: async () => (guard(), fake.chain ?? "ok"),
     write: async (_folder, scope, payload) => {
       guard();
       if (fake.failWrite?.(scope, JSON.parse(payload))) throw new Error("offline");
@@ -59,12 +63,17 @@ globalThis.acTestNativeModules = {
     remove: async (_folder, _scope, list) => list.forEach((id) => folder.delete(id)),
     deleteChain: async () => folder.clear(),
     sealLocal: async (text) => (fake.seals++, guard(), `sealed:${text}`),
-    openLocal: async (sealed) => (guard(), sealed.startsWith("sealed:") ? sealed.slice(7) : null),
+    openLocal: async (sealed) => {
+      guard();
+      if (fake.openFails) throw new Error("couldn't open");
+      return sealed.startsWith("sealed:") ? sealed.slice(7) : null;
+    },
     readPasswords: async () => (fake.passwordReads++, []),
   },
 };
 
 const shell = await import("../test-native/index.ts");
+const sync = await import("@ardia/sync");
 const { useBrowser } = await import("../store/browser.ts");
 const S = () => useBrowser.getState();
 const settle = async (n = 30) => {
@@ -82,7 +91,7 @@ function reset() {
   shell.heldSaves.fail = false;
   shell.heldSaves.only = null;
   shell.heldSaves.queue.length = 0;
-  Object.assign(fake, { locked: false, unlockGate: null, unlockResult: true, failWrite: null, readGate: null, forgetGate: null, phraseGate: null, passwordReads: 0, seals: 0 });
+  Object.assign(fake, { locked: false, unlockGate: null, unlockResult: true, failWrite: null, readGate: null, forgetGate: null, phraseGate: null, openFails: false, chain: "ok", passwordReads: 0, seals: 0 });
 }
 
 const files = () => [...folder.values()].map((f) => ({ scope: f.scope, file: JSON.parse(f.payload), payload: f.payload }));
@@ -362,4 +371,183 @@ test("B12: a journal entry from another device or without changes doesn't keep t
   await engine.syncNow();
   await settle();
   assert.equal(journaled, true, "the batch is in the journal before it goes out");
+});
+
+const rawTransport = {
+  write: async (scope, payload) => {
+    const id = `f${++ids}`;
+    folder.set(id, { scope, payload });
+    return id;
+  },
+  read: async (scope, known) => {
+    const here = [...folder].filter(([, f]) => f.scope === scope);
+    return { files: here.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
+  },
+  remove: async (_scope, list) => list.forEach((id) => folder.delete(id)),
+};
+
+function otherMac(scope) {
+  const store = new Map();
+  const state = sync.emptyScope();
+  state.joined = true;
+  const clock = new sync.Clock("otherMac");
+  const adapter = {
+    prefix: "bm:",
+    extract: () => ({ values: new Map(store) }),
+    apply: (visible, changed) => {
+      for (const k of changed) visible.has(k) ? store.set(k, visible.get(k)) : store.delete(k);
+    },
+  };
+  return { store, sync: () => sync.syncScope({ scope, state, transport: rawTransport, adapters: [adapter], clock, device: "otherMac" }) };
+}
+
+const titles = (profileId) => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url" && S().bookmarks.roots[profileId] && n.title).map((n) => n.title);
+
+test("B13: a profile deleted and added back gets this Mac's own bookmarks back, and compacting doesn't take them from the other Macs", async () => {
+  reset();
+  const engine = await launch();
+  engine.startSync();
+  const work = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [work]: true } });
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await engine.syncNow();
+  S().addBookmark({ profileId: work, url: "https://work.example/", title: "Work" });
+  await engine.syncNow();
+  await settle();
+  const syncId = engine.useSync.getState().profiles[work].syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  other.store.set("bm:fromB", { k: "u", p: "bar", t: "From B", u: "https://b.example/", a: 1, pos: "m" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  S().deleteProfile(work);
+  await engine.syncNow();
+  await engine.syncNow();
+  await settle();
+  const back = engine.addRemoteProfile(syncId);
+  assert.ok(back, "the profile can be added back");
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [back]: true } });
+  await engine.syncNow();
+  await engine.syncNow();
+  await settle();
+  const here = Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title);
+  assert.ok(here.includes("Work"), `this Mac gets its own bookmark back: ${here}`);
+  assert.ok(here.includes("From B"), "and the other Mac's");
+  for (let i = 0; i < 42; i++) {
+    S().addBookmark({ profileId: back, url: `https://more${i}.example/`, title: `More ${i}` });
+    await engine.syncNow();
+  }
+  await settle();
+  assert.ok(files().some(({ scope, file }) => scope === `p:${syncId}` && file.kind === "snapshot"), "this Mac compacted the scope");
+  await other.sync();
+  const there = [...other.store.values()].map((v) => v.t);
+  assert.ok(there.includes("Work"), "the other Mac still has this Mac's bookmark after this Mac compacts");
+  assertNoSeqReused();
+});
+
+test("B14: a load that fails at startup or after the phrase leaves the phrase able to recover, and two phrase entries at once load once", async () => {
+  reset();
+  await onAndSynced();
+  const device = JSON.parse(shell.docs.get("sync.json")).deviceId;
+  fake.openFails = true;
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "locked", "a state that can't be opened asks for the phrase");
+  await engine.enterRecoveryPhrase("/sync", "words").catch(() => null);
+  await settle();
+  assert.equal(engine.useSync.getState().status, "locked", "and still does after a phrase that couldn't load it");
+  fake.openFails = false;
+  let release;
+  fake.phraseGate = new Promise((resolve) => (release = resolve));
+  const first = engine.enterRecoveryPhrase("/sync", "words");
+  const second = engine.enterRecoveryPhrase("/sync", "words");
+  await settle();
+  release();
+  const results = [await first, await second];
+  fake.phraseGate = null;
+  assert.equal(results.filter((r) => "ok" in r).length, 1, `one entry loads: ${JSON.stringify(results)}`);
+  await engine.syncNow();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).deviceId, device, "the same device recovers");
+  assertNoSeqReused();
+});
+
+test("B15: Sync Now whose cycle goes offline still forces the password read when the folder is back", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const timers = [];
+  globalThis.setTimeout = (fn, delay) => (timers.push({ fn, delay }), timers.length);
+  fake.chain = "unavailable";
+  await engine.syncNow();
+  await settle();
+  fake.chain = "ok";
+  const reads = fake.passwordReads;
+  const next = timers.filter((t) => t.delay === 15_000).pop();
+  timers.length = 0;
+  next?.fn();
+  await settle();
+  globalThis.setTimeout = () => 0;
+  assert.ok(next, "the offline cycle scheduled the next one");
+  assert.ok(fake.passwordReads > reads, "which reads the passwords Sync Now asked for");
+});
+
+test("B16: a seal from before sync was turned off and on again doesn't prune the new device's journal", async () => {
+  reset();
+  const engine = await onAndSynced();
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  shell.heldSaves.on = true;
+  shell.heldSaves.only = "sync-state.nns";
+  await engine.syncNow();
+  await settle();
+  const oldSeal = shell.heldSaves.queue.shift();
+  assert.ok(oldSeal, "the old device's state save is in flight");
+  shell.heldSaves.queue.length = 0;
+  await engine.stopSync();
+  await settle();
+  shell.heldSaves.queue.length = 0;
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  S().addBookmark({ profileId: "default", url: "https://three.example/", title: "Three" });
+  await engine.syncNow();
+  await settle();
+  const fresh = JSON.parse(shell.docs.get("sync.json")).deviceId;
+  oldSeal();
+  await settle();
+  const journal = shell.docs.get("sync-journal.nns");
+  const kept = journal ? JSON.parse(journal.slice(7)).journal?.app ?? [] : [];
+  assert.ok(kept.some((f) => f.device === fresh), "the new device's batches stay journaled until its own state lands");
+});
+
+test("B17: a retired scope that a linked profile uses again, after an older build ran, is loaded like any other", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const saved = JSON.parse(shell.docs.get("sync.json"));
+  const [profileId, link] = Object.entries(saved.profiles)[0];
+  const scope = `p:${link.syncId}`;
+  shell.docs.set("sync.json", JSON.stringify({ ...saved, retired: { [scope]: 1 } }));
+  void profileId;
+  const again = await launch();
+  again.startSync();
+  await settle();
+  S().addBookmark({ profileId: "default", url: "https://after.example/", title: "After" });
+  await again.syncNow();
+  await settle();
+  assertNoSeqReused();
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).retired?.[scope], undefined, "the live scope isn't retired any more");
+});
+
+test("B18: stopping while locked clears the sealed state it can no longer open", async () => {
+  reset();
+  await onAndSynced();
+  fake.locked = true;
+  fake.unlockResult = false;
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "locked");
+  await engine.stopSync();
+  await settle();
+  assert.equal(shell.docs.get("sync-state.nns") ?? "", "");
 });

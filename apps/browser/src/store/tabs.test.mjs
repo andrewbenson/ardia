@@ -246,6 +246,7 @@ test("clean up closes duplicates and stale tabs into Recently Cleaned, and resto
   S().pinTabs([d], true);
   const old = Date.now() - 13 * 3600_000;
   S().updateTab(b, { lastActiveAt: old });
+  S().updateTab(c, { lastActiveAt: Date.now() - 2 * 3600_000 });
   S().updateTab(d, { lastActiveAt: old });
   S().activate(a);
   assert.deepEqual(organize.cleanUpCandidates(S(), w), [b, c]);
@@ -256,6 +257,55 @@ test("clean up closes duplicates and stale tabs into Recently Cleaned, and resto
   assert.equal(S().cleanedTabs.length, 0);
   assert.equal(view(w).length, 5);
   assert.ok(S().tabs[e]);
+});
+
+const HOUR = 3600_000;
+const duplicated = () => {
+  const [w, ...ids] = setup("p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7");
+  const copies = ids.map((id) => S().duplicateTab(id));
+  S().activate(ids[0]);
+  return [w, ids, copies];
+};
+
+test("clean up leaves tabs duplicated a moment ago alone", () => {
+  reset();
+  const [w] = duplicated();
+  assert.equal(model.viewTabIds(S(), w).length, 16);
+  assert.deepEqual(organize.cleanUpCandidates(S(), w), []);
+  assert.equal(S().cleanUpTabs(w), 0);
+});
+
+test("clean up offers a duplicate once it has been idle for an hour", () => {
+  reset();
+  const [w, ids] = duplicated();
+  const later = Date.now() + 2 * HOUR;
+  const out = organize.cleanUpCandidates(S(), w, undefined, later);
+  assert.equal(out.length, 8);
+  assert.ok(!out.includes(ids[0]), "the active tab is kept");
+  const pages = out.map((id) => S().tabs[id].url).sort();
+  assert.deepEqual(pages, ids.map((id) => S().tabs[id].url).sort(), "one copy of each page");
+});
+
+test("clean up still offers a grouped duplicate idle past the hour", () => {
+  reset();
+  const [w, a, b] = setup("a", "b");
+  const copy = S().duplicateTab(b);
+  S().createGroup([copy], { name: "G" });
+  S().activate(a);
+  S().updateTab(copy, { lastActiveAt: Date.now() - 2 * HOUR });
+  assert.deepEqual(organize.cleanUpCandidates(S(), w), [copy]);
+  S().updateTab(copy, { lastActiveAt: Date.now() - 30 * 60_000 });
+  assert.deepEqual(organize.cleanUpCandidates(S(), w), []);
+  assert.deepEqual(organize.cleanUpCandidates(S(), w, 20 * 60_000), [copy], "a shorter setting shortens the wait");
+});
+
+test("clean up offers a tab that is no duplicate only after 12 hours", () => {
+  reset();
+  const [w, , b] = setup("a", "b");
+  S().updateTab(b, { lastActiveAt: Date.now() - 11 * HOUR });
+  assert.deepEqual(organize.cleanUpCandidates(S(), w), []);
+  S().updateTab(b, { lastActiveAt: Date.now() - 13 * HOUR });
+  assert.deepEqual(organize.cleanUpCandidates(S(), w), [b]);
 });
 
 test("a reopened group's and cleaned tabs' tabs take their back/forward lists back", () => {

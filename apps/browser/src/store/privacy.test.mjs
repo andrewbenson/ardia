@@ -47,6 +47,7 @@ test("cleaning up a private window keeps its tabs in memory, out of session.json
   const { w, ids: [, stale, dupe] } = privateWindowWith("https://secret.example/a", "https://secret.example/old", "https://secret.example/a");
   S().activate(model.viewTabIds(S(), w)[0]);
   S().updateTab(stale, { lastActiveAt: OLD() });
+  S().updateTab(dupe, { lastActiveAt: Date.now() - 2 * HOUR });
   assert.equal(S().cleanUpTabs(w), 2);
   assert.ok(!S().tabs[stale] && !S().tabs[dupe]);
 
@@ -66,6 +67,7 @@ test("cleaning up a private window keeps its tabs in memory, out of session.json
   assert.equal(model.viewTabIds(S(), w).length, 3);
   assert.ok(model.viewTabIds(S(), w).every((id) => model.isIncognitoProfile(S().tabs[id].profileId)));
 
+  S().activate(model.viewTabIds(S(), w)[0]);
   S().updateTab(model.viewTabIds(S(), w)[1], { lastActiveAt: OLD() });
   S().cleanUpTabs(w);
   assert.equal(cleanedTabsFor(S(), w).length, 1);

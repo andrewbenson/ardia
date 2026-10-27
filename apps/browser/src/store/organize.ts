@@ -148,6 +148,7 @@ export function clearedTabIds(s: BrowserState, windowId: string): string[] {
 }
 
 const CLEAN_UP_AFTER_MS = 12 * 60 * 60 * 1000;
+const DUPLICATE_IDLE_FOR_MS = 60 * 60 * 1000;
 const MAX_CLEANED = 100;
 const MAX_CLOSED_GROUPS = 20;
 const PURGED_AFTER_MS = 7 * 86_400_000;
@@ -555,6 +556,7 @@ export function cleanUpCandidates(s: BrowserState, windowId: string, inactiveFor
   const inSplit = new Set(Object.values(s.splits).flatMap((v) => v.tabIds));
   const keep = (t: Tab) => t.id === active || inPinnedContainer(s, t.id) || s.live[t.id]?.playingAudio;
   const used = sharedLastUsed(s);
+  const duplicateIdleFor = Math.min(inactiveForMs, DUPLICATE_IDLE_FOR_MS);
   const out = new Set<string>();
   const byPage = new Map<string, Tab[]>();
   for (const id of view) {
@@ -566,7 +568,7 @@ export function cleanUpCandidates(s: BrowserState, windowId: string, inactiveFor
   for (const same of byPage.values()) {
     if (same.length < 2) continue;
     const keeper = same.find((t) => t.pinned) ?? same.find((t) => t.id === active) ?? [...same].sort((a, b) => lastUsedOf(used, b) - lastUsedOf(used, a))[0]!;
-    for (const t of same) if (t !== keeper && !keep(t) && !inSplit.has(t.id)) out.add(t.id);
+    for (const t of same) if (t !== keeper && !keep(t) && !inSplit.has(t.id) && now - lastUsedOf(used, t) >= duplicateIdleFor) out.add(t.id);
   }
   for (const id of view) {
     const t = s.tabs[id]!;

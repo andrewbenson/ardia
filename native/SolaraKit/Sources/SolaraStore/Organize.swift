@@ -38,6 +38,7 @@ func placeChoiceKey(_ key: String) -> String { "place:\(key)" }
 func orderChoiceKey(_ key: String) -> String { "order:\(key)" }
 
 let cleanUpAfterMs: Double = 12 * 60 * 60 * 1000
+let duplicateIdleForMs: Double = 60 * 60 * 1000
 let maxCleaned = 100
 let maxClosedGroups = 20
 let purgedAfterMs: Double = 7 * 86_400_000
@@ -478,6 +479,7 @@ extension Session {
     let inSplit = Set(s.splits.values.flatMap(\.tabIds))
     func keep(_ t: Tab) -> Bool { t.id == active || s.inPinnedContainer(t.id) || s.caches.playingAudio.contains(t.id) }
     let used = sharedLastUsed(s)
+    let duplicateIdleFor = min(inactiveForMs, duplicateIdleForMs)
     var out = Set<String>()
     var byPage = OrderedDict<String, [Tab]>()
     for id in view {
@@ -488,7 +490,7 @@ extension Session {
     for same in byPage.values {
       if same.count < 2 { continue }
       let keeper = same.first { $0.pinned } ?? same.first { $0.id == active } ?? same.stableSorted { lastUsedOf(used, $0) > lastUsedOf(used, $1) }[0]
-      for t in same where t.id != keeper.id && !keep(t) && !inSplit.contains(t.id) { out.insert(t.id) }
+      for t in same where t.id != keeper.id && !keep(t) && !inSplit.contains(t.id) && now - lastUsedOf(used, t) >= duplicateIdleFor { out.insert(t.id) }
     }
     for id in view {
       let t = s.tabs[id]!

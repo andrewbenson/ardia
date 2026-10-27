@@ -138,7 +138,7 @@ function hostInitial(url: string): string {
 }
 
 const FORK_NEW_TAB_MARKS: Record<string, number> = { Solara: require("../../assets/solara/new-tab-mark.png") };
-const NEW_TAB_MARK: number = FORK_NEW_TAB_MARKS[PRODUCT] ?? require("../../assets/new-tab-mark.png");
+export const NEW_TAB_MARK: number = FORK_NEW_TAB_MARKS[PRODUCT] ?? require("../../assets/new-tab-mark.png");
 
 export function NewTabIcon({ size = 16 }: { size?: number }) {
   const theme = useTheme();

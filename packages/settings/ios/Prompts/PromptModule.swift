@@ -110,6 +110,8 @@ final class NativePanelView: ExpoView {
   private var json = ""
   private var applied = ""
   private var zoom: ZoomPanelView?
+  private var history: HistoryPanelView?
+  private var markUri: String?
 
   override var isFlipped: Bool { true }
 
@@ -133,8 +135,43 @@ final class NativePanelView: ExpoView {
         }
       }
       body.update(state)
+    case "history":
+      guard let state = try? JSONDecoder().decode(HistoryPanelState.self, from: data) else { return }
+      let body = history ?? make { HistoryPanelView(frame: .zero) }
+      if history == nil {
+        body.favicons.loader = { request in try await NativeSidebar.favicon(request) }
+        body.onHeight = { [weak self] h in self?.onPanelHeight(["height": h]) }
+      }
+      history = body
+      body.onEvent = { [weak self] e in
+        switch e {
+        case .open(let index, let click):
+          self?.onPanelEvent(["kind": "open", "index": index, "metaKey": click.meta, "shiftKey": click.shift, "altKey": click.alt, "middle": click.middle])
+        case .fullHistory: self?.onPanelEvent(["kind": "fullHistory"])
+        }
+      }
+      loadMark((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["newTabMark"] as? String, into: body)
+      body.update(state)
     default:
       break
+    }
+  }
+
+  private func loadMark(_ uri: String?, into body: HistoryPanelView) {
+    guard let uri, uri != markUri else { return }
+    markUri = uri
+    if let image = SettingsAdapters.image(uri) {
+      image.isTemplate = true
+      body.favicons.newTabMark = image
+      return body.rebuildIcons()
+    }
+    guard let url = URL(string: uri) else { return }
+    Task { @MainActor [weak body] in
+      let image = await Task.detached { (try? Data(contentsOf: url)).flatMap(NSImage.init(data:)) }.value
+      guard let body, let image else { return }
+      image.isTemplate = true
+      body.favicons.newTabMark = image
+      body.rebuildIcons()
     }
   }
 

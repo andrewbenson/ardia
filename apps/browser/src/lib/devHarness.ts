@@ -33,6 +33,9 @@ export function startDevHarness() {
     store: useBrowser, actions, runCommand, webviews, shell, omnibox: omniboxDrivers, pages: pagesDrivers,
     pageState: usePages,
     panelFrameMarks: () => require("../telemetry/journeys").panelFrameMarks() as [string, number][],
+    get historyMenu(): typeof import("../components/layout/history") {
+      return require("../components/layout/history");
+    },
     openSettings,
     favicons,
     get checkIn(): typeof import("./defaultBrowserCheckIn") {

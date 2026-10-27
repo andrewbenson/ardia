@@ -1,64 +1,102 @@
 import Foundation
 
-public struct TabSlotKey: Hashable, Sendable, Comparable {
-  public var windowId: String
-  public var tabId: String
+public enum TabSlotKey: Hashable, Sendable {
+  case card(String)
+  case pane(String, String)
+  case peek(String)
+  case popup(String)
 
-  public init(windowId: String, tabId: String) {
-    self.windowId = windowId
-    self.tabId = tabId
+  public var windowId: String {
+    switch self {
+    case .card(let w), .pane(let w, _), .peek(let w), .popup(let w): return w
+    }
   }
-
-  public static func < (a: TabSlotKey, b: TabSlotKey) -> Bool { (a.windowId, a.tabId) < (b.windowId, b.tabId) }
 }
 
 public enum TabViewPlace: Equatable, Sendable {
   case slot(TabSlotKey)
-  case parked
+  case hidden(String)
 }
 
 public struct TabViewWanted: Equatable, Sendable {
+  public enum Shown: Equatable, Sendable {
+    case card
+    case pane
+    case peek
+    case none
+  }
+
   public var tabId: String
   public var windowId: String
+  public var shown: Shown
   public var warm: Bool
+  public var frozen: Bool
 
-  public init(tabId: String, windowId: String, warm: Bool = false) {
+  public init(tabId: String, windowId: String, shown: Shown, warm: Bool = false, frozen: Bool = false) {
     self.tabId = tabId
     self.windowId = windowId
+    self.shown = shown
     self.warm = warm
+    self.frozen = frozen
   }
 }
 
 public enum TabViewOp: Equatable, Sendable {
   case drop(String)
-  case park(String)
-  case create(String)
-  case attach(String, TabSlotKey)
+  case create(String, String)
+  case attach(String, TabSlotKey, adopt: Bool)
+  case hide(String, String, adopt: Bool)
   case visible(String, Bool)
 }
 
 public enum TabViewPlan {
+  static func slot(for w: TabViewWanted, in slots: Set<TabSlotKey>) -> TabSlotKey? {
+    let candidates: [TabSlotKey]
+    switch w.shown {
+    case .peek: candidates = [.peek(w.windowId), .pane(w.windowId, w.tabId), .card(w.windowId)]
+    case .pane: candidates = [.pane(w.windowId, w.tabId), .card(w.windowId)]
+    case .card: candidates = [.card(w.windowId)]
+    case .none: candidates = []
+    }
+    return candidates.first { slots.contains($0) }
+  }
+
+  static func windowOf(_ place: TabViewPlace) -> String {
+    switch place {
+    case .slot(let key): return key.windowId
+    case .hidden(let w): return w
+    }
+  }
+
   public static func plan(wanted: [TabViewWanted], slots: Set<TabSlotKey>, current: [String: TabViewPlace], visible: [String: Bool]) -> [TabViewOp] {
     var ops: [TabViewOp] = []
-    let wantedById = Dictionary(wanted.map { ($0.tabId, $0) }, uniquingKeysWith: { first, _ in first })
-    for tabId in current.keys.sorted() where wantedById[tabId] == nil { ops.append(.drop(tabId)) }
-    var target: [String: TabViewPlace] = [:]
-    for w in wantedById.values {
-      let key = TabSlotKey(windowId: w.windowId, tabId: w.tabId)
-      target[w.tabId] = slots.contains(key) ? .slot(key) : .parked
+    let byId = Dictionary(wanted.map { ($0.tabId, $0) }, uniquingKeysWith: { first, _ in first })
+    for tabId in current.keys.sorted() where byId[tabId] == nil { ops.append(.drop(tabId)) }
+    var claimed: Set<TabSlotKey> = []
+    var targets: [(TabViewWanted, TabViewPlace)] = []
+    for w in byId.values.sorted(by: { $0.tabId < $1.tabId }) {
+      if let key = slot(for: w, in: slots), !claimed.contains(key) {
+        claimed.insert(key)
+        targets.append((w, .slot(key)))
+      } else {
+        targets.append((w, .hidden(w.windowId)))
+      }
     }
-    let ids = target.keys.sorted()
-    for tabId in ids where target[tabId] == .parked && current[tabId] != .parked {
-      ops.append(current[tabId] == nil ? .create(tabId) : .park(tabId))
+    for (w, place) in targets where current[w.tabId] == nil { ops.append(.create(w.tabId, w.windowId)) }
+    for (w, place) in targets {
+      guard case .hidden(let window) = place else { continue }
+      let now = current[w.tabId] ?? .hidden(w.windowId)
+      if now != place { ops.append(.hide(w.tabId, window, adopt: windowOf(now) != window)) }
     }
-    for tabId in ids {
-      guard case .slot(let key) = target[tabId], current[tabId] != target[tabId] else { continue }
-      if current[tabId] == nil { ops.append(.create(tabId)) }
-      ops.append(.attach(tabId, key))
+    for (w, place) in targets {
+      guard case .slot(let key) = place else { continue }
+      let now = current[w.tabId] ?? .hidden(w.windowId)
+      if now != place { ops.append(.attach(w.tabId, key, adopt: windowOf(now) != key.windowId)) }
     }
-    for tabId in ids {
-      let shown = target[tabId] != .parked || wantedById[tabId]?.warm == true
-      if visible[tabId] != shown { ops.append(.visible(tabId, shown)) }
+    for (w, place) in targets where !w.frozen {
+      let shown: Bool
+      if case .slot = place { shown = true } else { shown = w.warm }
+      if visible[w.tabId] != shown { ops.append(.visible(w.tabId, shown)) }
     }
     return ops
   }
@@ -67,10 +105,12 @@ public enum TabViewPlan {
     var places = current, shown = visible
     for op in ops {
       switch op {
-      case .drop(let id): places[id] = nil; shown[id] = nil
-      case .park(let id): places[id] = .parked
-      case .create(let id): places[id] = .parked
-      case .attach(let id, let key): places[id] = .slot(key)
+      case .drop(let id):
+        places[id] = nil
+        shown[id] = nil
+      case .create(let id, let w): places[id] = .hidden(w)
+      case .attach(let id, let key, _): places[id] = .slot(key)
+      case .hide(let id, let w, _): places[id] = .hidden(w)
       case .visible(let id, let on): shown[id] = on
       }
     }

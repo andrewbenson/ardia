@@ -10,7 +10,13 @@ import SolaraUI
 @MainActor
 enum NativeWindowShell {
   private static var installed = false
-  private static var shells: [String: ShellHost] = [:]
+  private static var storeListener: Int?
+  private static let lifetimes: ShellLifetimes<ShellHost> = {
+    let lifetimes = ShellLifetimes<ShellHost> { $0.stop() }
+    lifetimes.onIds = { ids in activeIds.withLock { $0 = ids } }
+    return lifetimes
+  }()
+  private static let commits = ShellStoreCommits()
   nonisolated private static let activeIds = Mutex<Set<String>>([])
 
   nonisolated static var enabled: Bool {
@@ -21,23 +27,22 @@ enum NativeWindowShell {
     guard enabled, !installed, let make = WindowHost.makeContentView else { return }
     installed = true
     NativeSplitChrome.start()
+    if let store = NativeStoreHandle.store {
+      let sink = commits
+      storeListener = store.subscribe { commit in sink.receive(Set(commit.state.windows.keys)) }
+    }
     WindowHost.makeContentView = { windowId in
       guard isBrowserWindow(windowId) else { return make(windowId) }
       activeIds.withLock { _ = $0.insert(windowId) }
       let host = ShellHost(windowId: windowId, root: make(windowId))
-      shells[windowId] = host
-      host.shell.onDetach = { [weak host] in
-        DispatchQueue.main.async {
-          MainActor.assumeIsolated {
-            guard let host, host.shell.superview == nil, shells[windowId] === host else { return }
-            shells[windowId] = nil
-            host.stop()
-            activeIds.withLock { _ = $0.remove(windowId) }
-          }
-        }
-      }
+      lifetimes.adopt(windowId, host)
+      host.onClose = { [weak host] in lifetimes.end(windowId, ifHost: host) }
       return host.shell
     }
+  }
+
+  static func windowsChanged(_ live: Set<String>) {
+    lifetimes.prune(keeping: live)
   }
 
   static func isBrowserWindow(_ windowId: String) -> Bool {
@@ -45,7 +50,7 @@ enum NativeWindowShell {
     return window.kind == nil || window.kind == "browser"
   }
 
-  static func host(_ windowId: String) -> ShellHost? { shells[windowId] }
+  static func host(_ windowId: String) -> ShellHost? { lifetimes.host(windowId) }
 
   nonisolated static func active(_ windowId: String) -> Bool { activeIds.withLock { $0.contains(windowId) } }
 
@@ -65,6 +70,8 @@ final class ShellHost {
   private var backdropJSON: String?
   private var observers: [NSObjectProtocol] = []
   private var contentSizer: NSObjectProtocol?
+  private var closing: NSObjectProtocol?
+  var onClose: (() -> Void)?
 
   init(windowId: String, root: NSView) {
     shell = WindowShellView(windowId: windowId)
@@ -81,11 +88,25 @@ final class ShellHost {
         }
       })
     keepContentSized()
+    shell.onWindow = { [weak self] window in self?.watchClose(of: window) }
+  }
+
+  private func watchClose(of window: NSWindow?) {
+    if let closing { NotificationCenter.default.removeObserver(closing) }
+    closing = nil
+    guard let window else { return }
+    closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.onClose?() }
+    }
   }
 
   func stop() {
     for observer in observers { NotificationCenter.default.removeObserver(observer) }
     observers = []
+    if let closing { NotificationCenter.default.removeObserver(closing) }
+    closing = nil
+    onClose = nil
+    shell.onWindow = nil
     if let contentSizer { NotificationCenter.default.removeObserver(contentSizer) }
     contentSizer = nil
   }
@@ -129,6 +150,36 @@ final class ShellHost {
       "backdrop": backdropJSON ?? NSNull(),
       "split": NativeSplitChrome.sample(shell.windowId) ?? NSNull(),
     ]
+  }
+}
+
+final class ShellStoreCommits: @unchecked Sendable {
+  private let lock = NSLock()
+  private var latest: Set<String>?
+  private var scheduled = false
+
+  func receive(_ ids: Set<String>) {
+    if Thread.isMainThread {
+      lock.withLock { latest = nil }
+      MainActor.assumeIsolated { NativeWindowShell.windowsChanged(ids) }
+      return
+    }
+    let schedule = lock.withLock { () -> Bool in
+      latest = ids
+      if scheduled { return false }
+      scheduled = true
+      return true
+    }
+    guard schedule else { return }
+    DispatchQueue.main.async { [self] in
+      let ids = lock.withLock { () -> Set<String>? in
+        scheduled = false
+        defer { latest = nil }
+        return latest
+      }
+      guard let ids else { return }
+      MainActor.assumeIsolated { NativeWindowShell.windowsChanged(ids) }
+    }
   }
 }
 

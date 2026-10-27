@@ -216,7 +216,7 @@ struct WindowShellViewTests {
     shell.mount(.overlay, overlay)
     shell.mount(.backdrop, backdrop)
     shell.mount(.sidebar, sidebar)
-    #expect(shell.subviews == [backdrop, react, sidebar, overlay])
+    #expect(shell.subviews == [backdrop, react, shell.card, sidebar, overlay])
     #expect(react.frame == shell.bounds)
     #expect(backdrop.frame == shell.bounds)
     #expect(sidebar.frame == CGRect(x: 0, y: 0, width: 190, height: 700))
@@ -233,8 +233,7 @@ struct WindowShellViewTests {
     shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
     var reported: [CGRect] = []
     shell.onFrames = { reported.append($0.card) }
-    let card = NSView()
-    shell.mount(.card, card)
+    let card = shell.card
     shell.update { $0.dock = 0 }
     shell.update { $0.dock = 0 }
     #expect(card.frame == CGRect(x: 7, y: 6, width: 986, height: 687))
@@ -262,6 +261,111 @@ struct WindowShellViewTests {
     let react = NSView()
     shell.mount(.react, react)
     #expect(shell.hitTest(NSPoint(x: 10, y: 10)) === react)
+  }
+}
+
+@MainActor
+struct WindowShellMountTests {
+  @Test func aViewThatMovedAwayIsNotPulledOutOfItsNewParent() {
+    let shell = WindowShellView(windowId: "w")
+    let other = NSView()
+    let moving = NSView()
+    shell.mount(.peek, moving)
+    other.addSubview(moving)
+    shell.mount(.peek, NSView())
+    #expect(moving.superview === other)
+  }
+
+  @Test func aViewMountedInASecondSlotLeavesTheFirst() {
+    let shell = WindowShellView(windowId: "w")
+    let view = NSView()
+    shell.mount(.peek, view)
+    shell.mount(.overlay, view)
+    #expect(shell.view(in: .peek) == nil)
+    #expect(shell.slot(of: view) == .overlay)
+    shell.mount(.peek, NSView())
+    #expect(view.superview === shell)
+  }
+
+  @Test func theCardIsAShellOwnedContainer() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    #expect(shell.view(in: .card) === shell.card)
+    #expect(shell.card.frame == CGRect(x: 190, y: 6, width: 803, height: 687))
+    #expect(shell.card.isFlipped)
+    #expect(shell.hitTest(NSPoint(x: 400, y: 300)) == nil)
+    let page = NSView(frame: shell.card.bounds)
+    shell.card.addSubview(page)
+    #expect(shell.hitTest(NSPoint(x: 400, y: 300)) === page)
+  }
+
+  @Test func aForeignOverlayAddedByTheEngineStaysOnTop() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    shell.mount(.react, NSView())
+    let pip = NSView(frame: shell.bounds)
+    shell.addSubview(pip)
+    let sidebar = NSView()
+    shell.mount(.sidebar, sidebar)
+    shell.mount(.splitChrome, NSView())
+    #expect(shell.subviews.last === pip)
+    #expect(shell.subviews.firstIndex(of: sidebar)! < shell.subviews.firstIndex(of: pip)!)
+  }
+
+  @Test func theWindowIsReportedWhenTheShellMovesInAndOut() {
+    let shell = WindowShellView(windowId: "w")
+    var seen: [Bool] = []
+    shell.onWindow = { seen.append($0 != nil) }
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: true)
+    window.isReleasedWhenClosed = false
+    window.contentView?.addSubview(shell)
+    shell.removeFromSuperview()
+    #expect(seen == [true, false])
+  }
+}
+
+@MainActor
+struct ShellLifetimesTests {
+  final class Host {
+    var stops = 0
+  }
+
+  @Test func rebuildingAnIdStopsTheOldHost() {
+    let lifetimes = ShellLifetimes<Host> { $0.stops += 1 }
+    let first = Host(), second = Host()
+    lifetimes.adopt("w", first)
+    lifetimes.adopt("w", second)
+    #expect(first.stops == 1)
+    #expect(second.stops == 0)
+    #expect(lifetimes.host("w") === second)
+  }
+
+  @Test func endingWithAStaleHostLeavesTheNewOne() {
+    let lifetimes = ShellLifetimes<Host> { $0.stops += 1 }
+    let first = Host(), second = Host()
+    lifetimes.adopt("w", first)
+    lifetimes.adopt("w", second)
+    lifetimes.end("w", ifHost: first)
+    #expect(lifetimes.host("w") === second)
+    lifetimes.end("w", ifHost: second)
+    #expect(lifetimes.host("w") == nil)
+    #expect(second.stops == 1)
+  }
+
+  @Test func aShellThatNeverReachedAWindowEndsWhenTheStoreDropsIt() {
+    var reported: [Set<String>] = []
+    let lifetimes = ShellLifetimes<Host> { $0.stops += 1 }
+    lifetimes.onIds = { reported.append($0) }
+    let kept = Host(), orphan = Host()
+    lifetimes.adopt("a", kept)
+    lifetimes.adopt("b", orphan)
+    lifetimes.prune(keeping: ["a", "c"])
+    #expect(orphan.stops == 1)
+    #expect(kept.stops == 0)
+    #expect(lifetimes.ids == ["a"])
+    #expect(reported.last == ["a"])
+    lifetimes.prune(keeping: ["a"])
+    #expect(reported.count == 3)
   }
 }
 

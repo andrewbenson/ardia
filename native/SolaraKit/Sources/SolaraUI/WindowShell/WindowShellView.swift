@@ -18,6 +18,8 @@ public final class WindowShellView: NSView {
   public private(set) var frames: DockedLayoutFrames
   public var onFrames: ((DockedLayoutFrames) -> Void)?
   public var onDetach: (() -> Void)?
+  public var onWindow: ((NSWindow?) -> Void)?
+  public let card = FlippedContainerView()
   private var mounted: [Slot: NSView] = [:]
 
   public override var isFlipped: Bool { true }
@@ -28,6 +30,7 @@ public final class WindowShellView: NSView {
     frames = DockedLayoutFrames.of(input)
     super.init(frame: .zero)
     wantsLayer = true
+    mount(.card, card)
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -46,15 +49,20 @@ public final class WindowShellView: NSView {
   }
 
   public func mount(_ slot: Slot, _ view: NSView?) {
-    if let current = mounted[slot], current === view { return }
-    mounted[slot]?.removeFromSuperview()
+    precondition(slot != .card || view === card, "page views attach inside the card container")
+    if let current = mounted[slot], current === view, current.superview === self { return }
+    if let current = mounted[slot], current.superview === self, current !== view { current.removeFromSuperview() }
+    if let view, let other = mounted.first(where: { $0.key != slot && $0.value === view })?.key { mounted[other] = nil }
     mounted[slot] = view
     guard let view else { return }
     view.autoresizingMask = []
     let above = Slot.allCases.drop { $0 != slot }.dropFirst().lazy.compactMap { self.mounted[$0] }.first { $0.superview === self }
-    if let above { addSubview(view, positioned: .below, relativeTo: above) } else { addSubview(view) }
+    let foreign = subviews.first { subview in subview !== view && !mounted.values.contains { $0 === subview } }
+    if let above = above ?? foreign { addSubview(view, positioned: .below, relativeTo: above) } else { addSubview(view) }
     place(slot, view)
   }
+
+  public func slot(of view: NSView) -> Slot? { mounted.first { $0.value === view }?.key }
 
   public func update(_ change: (inout DockedLayoutInput) -> Void) {
     var next = input
@@ -72,6 +80,11 @@ public final class WindowShellView: NSView {
   public override func layout() {
     super.layout()
     relayout()
+  }
+
+  public override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    onWindow?(window)
   }
 
   public override func viewDidMoveToSuperview() {
@@ -103,5 +116,15 @@ public final class WindowShellView: NSView {
     }
     if view.frame != frame { view.frame = frame }
     view.isHidden = (slot == .sidebar && frames.sidebar == nil) || (slot == .topStrip && frames.topStrip == nil)
+  }
+}
+
+@MainActor
+public final class FlippedContainerView: NSView {
+  public override var isFlipped: Bool { true }
+
+  public override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
   }
 }

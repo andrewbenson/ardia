@@ -49,6 +49,7 @@ __attribute__((constructor)) static void Start(void) {
   }
   [NSNotificationCenter.defaultCenter addObserverForName:@"RCTContentDidAppearNotification" object:nil queue:nil
                                               usingBlock:^(NSNotification *note) {
+    if ([note.object isKindOfClass:NSView.class] && [NSStringFromClass([((NSView *)note.object).superview class]) hasSuffix:@"ShellView"]) return;
     NSInteger window = [note.object isKindOfClass:NSView.class] ? ((NSView *)note.object).window.windowNumber : 0;
     Mark(@"content", window);
     [CATransaction addCommitHandler:^{ Mark(@"committed", window); } forPhase:2];

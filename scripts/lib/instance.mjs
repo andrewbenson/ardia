@@ -332,7 +332,6 @@ export async function launch(app, opts = {}) {
     ...(switches ? { ARDIA_CHROMIUM_SWITCHES: switches } : {}),
     ...(process.env.ARDIA_NATIVE_SIDEBAR ? { ARDIA_NATIVE_SIDEBAR: process.env.ARDIA_NATIVE_SIDEBAR } : {}),
     ...(process.env.ARDIA_NATIVE_MEDIA ? { ARDIA_NATIVE_MEDIA: process.env.ARDIA_NATIVE_MEDIA } : {}),
-    ...(process.env.ARDIA_NATIVE_SHELL ? { ARDIA_NATIVE_SHELL: process.env.ARDIA_NATIVE_SHELL } : {}),
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_"))),
     ...opts.env,
   });

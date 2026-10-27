@@ -26,6 +26,9 @@ import { pressGroupClose, pressTabClose } from "./closeControl";
 import { dismissHover, nativeRowHover } from "./hover";
 import { closeAllTabs, middleClickTab, openGroupMenu, openOverflowMenu, openSidebarMenu, openTabMenu } from "./menus";
 import { useSidebarUi } from "./state";
+import { useSidebarTokens } from "./tokens";
+import { useMedia } from "../media/state";
+import { usePages } from "../layout/pageState";
 import { publishNativeLive, runNativeLive } from "./nativeLive";
 import { tidyPins } from "./tidyPinsUi";
 import { openTileFolderMenu, toggleFolderPanel } from "./tileFolderUi";
@@ -218,6 +221,18 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
   );
 
   const pages = usePageLooks(windowId);
+  const tokens = useSidebarTokens();
+  const pip = useMedia((m) => Object.keys(m.pipOpen).filter((id) => m.pipOpen[id]).sort().join(","));
+  const capture = usePages(
+    useShallow((p) => {
+      const out: Record<string, "screen" | "camera"> = {};
+      for (const id of Object.keys(p.pages)) {
+        const access = p.pages[id]?.mediaAccess;
+        if (access) out[id] = access.screen ? "screen" : "camera";
+      }
+      return out;
+    }),
+  );
 
   const state = useMemo(() => {
     return JSON.stringify({
@@ -244,8 +259,11 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
       developer: split(developer),
       newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
       pages,
+      pip: split(pip),
+      capture,
+      badge: [tokens.badge, tokens.badgeGlyph],
     });
-  }, [pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
+  }, [pip, capture, tokens.badge, tokens.badgeGlyph, pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
 
   return <SolaraHostedView kind="sidebar" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });

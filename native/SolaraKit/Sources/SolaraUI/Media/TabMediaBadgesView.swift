@@ -76,3 +76,26 @@ public final class TabMediaBadgesView: NSView {
     if let shown { set(pip: shown.pip, capture: shown.capture, iconSize: shown.size, badge: shown.badge, badgeGlyph: shown.glyph) }
   }
 }
+
+extension TabMediaBadgesView {
+  @MainActor
+  static func attach(_ view: inout TabMediaBadgesView?, to parent: NSView, flags: SidebarFlags, tabId: String?, host: SidebarHostState, palette: SidebarPalette) {
+    let pip = tabId.map { flags.pip.contains($0) } ?? false
+    let capture = tabId.flatMap { flags.capture[$0] }
+    guard pip || capture != nil else {
+      view?.isHidden = true
+      return
+    }
+    let badges = view ?? {
+      let made = TabMediaBadgesView()
+      parent.addSubview(made)
+      parent.needsLayout = true
+      return made
+    }()
+    view = badges
+    badges.isHidden = false
+    let fill = host.badge?.first.flatMap { CSSColor($0)?.ns } ?? palette.textSecondary
+    let glyph = host.badge.flatMap { $0.count > 1 ? CSSColor($0[1])?.ns : nil } ?? .white
+    badges.set(pip: pip, capture: capture, iconSize: 16, badge: fill, badgeGlyph: glyph)
+  }
+}

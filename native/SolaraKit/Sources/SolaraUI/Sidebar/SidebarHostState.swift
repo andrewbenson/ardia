@@ -41,6 +41,10 @@ public struct SidebarHostState: Decodable, Equatable, Sendable {
   public var newTabMark: String?
   public var developer: [String]
   public var pages: [SidebarPageLook]?
+  public var player: MediaPlayerState?
+  public var pip: [String]?
+  public var capture: [String: TabCapture]?
+  public var badge: [String]?
 
   public init(profileId: String, dark: Bool = true) {
     self.profileId = profileId
@@ -73,6 +77,7 @@ public struct SidebarHostState: Decodable, Equatable, Sendable {
     out.tidy = look.tidy
     out.incognito = look.incognito
     out.pages = nil
+    if look.profileId != profileId { out.player = nil }
     return out
   }
 
@@ -88,6 +93,8 @@ public struct SidebarFlags: Equatable, Sendable {
   public var playing: Set<String> = []
   public var sleeping: Set<String> = []
   public var developer: Set<String> = []
+  public var pip: Set<String> = []
+  public var capture: [String: TabCapture] = [:]
 
   public init() {}
 
@@ -97,6 +104,8 @@ public struct SidebarFlags: Equatable, Sendable {
     playing = Set(state.playing)
     sleeping = Set(state.sleeping)
     developer = Set(state.developer)
+    pip = Set(state.pip ?? [])
+    capture = state.capture ?? [:]
   }
 }
 

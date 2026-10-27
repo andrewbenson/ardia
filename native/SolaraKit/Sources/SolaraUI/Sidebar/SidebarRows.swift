@@ -39,6 +39,7 @@ public enum SidebarAction: Sendable {
   case renamed(kind: String, id: String, text: String?)
   case hover(kind: String?, id: String?)
   case live(action: String, folderId: String, id: String?, meta: Bool)
+  case media(tabId: String, action: MediaAction)
 }
 
 @MainActor
@@ -233,6 +234,7 @@ final class TabRowView: SidebarRowView {
   private let label = FadeLabel(fontSize: 13)
   private var back: SymbolView?
   private var audio: SidebarIconButton?
+  private var badges: TabMediaBadgesView?
   private var closeButton: SidebarIconButton?
   private var spinner: SpinnerView?
   private var subtitle: FadeLabel?
@@ -310,7 +312,8 @@ final class TabRowView: SidebarRowView {
 
   private struct Inputs: Hashable {
     let tab: Tab
-    let active, selected, loading, playing, developer, sleeping, renaming, resettable, faded: Bool
+    let active, selected, loading, playing, developer, sleeping, renaming, resettable, faded, pip: Bool
+    let capture: TabCapture?
     let closeKind: String
     let engine, closeHint: String?
     let palette: Int
@@ -326,6 +329,7 @@ final class TabRowView: SidebarRowView {
       playing: flags.playing.contains(id), developer: flags.developer.contains(id), sleeping: flags.sleeping.contains(id),
       renaming: context.host.renaming == "tab:\(id)", resettable: context.query.awayFromPinnedUrl(id),
       faded: context.state.settings.bool("fadeUnloadedTabs") && context.query.pageUnloaded(id),
+      pip: flags.pip.contains(id), capture: flags.capture[id],
       closeKind: "\(context.query.closeKind(id))", engine: context.host.engines[id], closeHint: context.host.closeHint,
       palette: context.paletteGeneration)
   }
@@ -350,6 +354,8 @@ final class TabRowView: SidebarRowView {
     }
     icon.favicons = context.favicons
     icon.set(context.iconSpec(tab), palette: palette)
+    TabMediaBadgesView.attach(&badges, to: body, flags: context.flags, tabId: id, host: context.host, palette: palette)
+    badges?.frame = icon.frame
     label.text = context.host.renaming == "tab:\(id)" ? "" : context.title(tab)
     if showsAudio {
       let audio = attached(&audio, makeAudio)
@@ -435,6 +441,7 @@ final class TabRowView: SidebarRowView {
     var x: CGFloat = 9
     icon.frame = NSRect(x: x, y: (h - 16) / 2, width: 16, height: 16)
     back?.frame = icon.frame
+    badges?.frame = icon.frame
     x += 16
     if showsAudio {
       x += 6
@@ -1134,6 +1141,7 @@ final class TileView: SidebarRowView {
   private var active = false
   private var selected = false
   private var showsBadge = false
+  private var badges: TabMediaBadgesView?
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -1179,6 +1187,8 @@ final class TileView: SidebarRowView {
       showsBadge = false
     }
     badge.isHidden = !showsBadge
+    TabMediaBadgesView.attach(&badges, to: body, flags: context.flags, tabId: folderId == nil ? tab?.id : nil, host: context.host, palette: palette)
+    badges?.frame = icon.frame
     glass.dark = palette.dark
     repaint()
   }
@@ -1195,6 +1205,7 @@ final class TileView: SidebarRowView {
   override func layoutBody() {
     glass.frame = bounds
     icon.frame = NSRect(x: (bounds.width - 16) / 2, y: (bounds.height - 16) / 2, width: 16, height: 16)
+    badges?.frame = icon.frame
     let size = FolderMosaicView.side
     mosaic.frame = NSRect(x: (bounds.width - size) / 2, y: (bounds.height - size) / 2, width: size, height: size)
     badge.frame = folderId != nil

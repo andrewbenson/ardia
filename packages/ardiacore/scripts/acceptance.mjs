@@ -4020,16 +4020,21 @@ try {
     if (!other) throw new Error("no background tab");
     const t = await pageFor(other.id, `${base}/d`);
     await evalApp(`return ac.webviews.get("${other.id}")?.setFrozen(false)`);
-    await sleep(300);
+    await until("the background page loaded", async () => {
+      const r = await cdp(t, "Runtime.evaluate", { expression: "document.readyState === 'complete' && location.pathname === '/d'", returnByValue: true });
+      return r.result.value === true;
+    }, 10000);
     await cdp(t, "Runtime.evaluate", { expression: "window.__life = []; document.addEventListener('freeze', () => __life.push('freeze')); document.addEventListener('resume', () => __life.push('resume')); true" });
     await evalApp(`return ac.webviews.get("${other.id}")?.setFrozen(true)`);
     await sleep(1500);
     await evalApp(`return ac.webviews.get("${other.id}")?.setFrozen(false)`);
+    let seen = null;
     const life = await until("freeze and resume", async () => {
-      const r = await cdp(t, "Runtime.evaluate", { expression: "JSON.stringify(window.__life)", returnByValue: true });
-      const l = JSON.parse(r.result.value ?? "[]");
+      const r = await cdp(t, "Runtime.evaluate", { expression: "JSON.stringify({ life: window.__life, visibility: document.visibilityState, url: location.href })", returnByValue: true });
+      seen = JSON.parse(r.result.value ?? "{}");
+      const l = seen.life ?? [];
       return l.includes("freeze") && l.includes("resume") ? l : null;
-    }, 8000);
+    }, 8000).catch((e) => { throw new Error(`${e.message}; the page saw ${JSON.stringify(seen)} (tab ${other.id}, target ${t?.url})`); });
     return { life };
   });
 

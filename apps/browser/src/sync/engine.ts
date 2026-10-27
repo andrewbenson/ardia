@@ -555,7 +555,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         if (!extraction || retiring) return extraction;
         ready.add(adapter.prefix);
         if (!fresh && !rebuilding(adapter.prefix)) return extraction;
-        return guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? () => true : fromFolder, rebuilding(adapter.prefix));
+        return guardedExtraction(scope, adapter.prefix, state, extraction, known, fromFolder, rebuilding(adapter.prefix));
       },
       apply: async (visible, changed, base, records) => {
         if (waiting()) return false;
@@ -617,7 +617,11 @@ function keepNotes() {
   for (const [scope, byPrefix] of baselines) {
     const state = doc.scopes[scope] as Guarded | undefined;
     if (!state?.rebuild) continue;
-    for (const [prefix, kept] of byPrefix) if (!state.rebuild.settled?.includes(prefix)) notedFor(state, prefix, kept);
+    for (const [prefix, kept] of byPrefix) {
+      if (state.rebuild.settled?.includes(prefix)) continue;
+      const noted = notedFor(state, prefix, kept);
+      for (const [key, value] of kept) noted[key] ??= digest(value);
+    }
   }
 }
 
@@ -679,24 +683,36 @@ function guardedExtraction(scope: string, prefix: string, state: Guarded, extrac
   const noted = rebuilding ? notedFor(state, prefix, kept) : null;
   const downloading = rebuilding && stillDownloading(state);
   const edited = (key: string, value: unknown) => (noted ? noted[key] !== digest(choice(value)) : kept.get(key) !== choice(value));
-  const values = new Map([...extraction.values].filter(([key, value]) => (known(key) ? edited(key, value) || !fromFolder(key, value) : !downloading)));
-  const deleted = new Set([...(noted ? Object.keys(noted) : kept.keys())].filter((key) => key.startsWith(prefix) && !extraction.values.has(key) && !extraction.ignore?.(key) && known(key)));
+  const recorded = (key: string, value: unknown) => {
+    const record = state.records[key];
+    return !!record && record.v !== null && choice(record.v) === choice(value);
+  };
+  const publishes = (key: string, value: unknown) => {
+    if (!known(key)) return !downloading;
+    if (!rebuilding) return edited(key, value) || !fromFolder(key, value);
+    return edited(key, value) && !fromFolder(key, value) && !recorded(key, value);
+  };
+  const values = new Map([...extraction.values].filter(([key, value]) => publishes(key, value)));
+  const gone = [...(noted ? Object.keys(noted) : kept.keys())].filter((key) => key.startsWith(prefix) && !extraction.values.has(key) && !extraction.ignore?.(key) && known(key));
+  const deleted = new Set(gone.filter((key) => !rebuilding || !fromFolder(key, null)));
+  const settledHere = rebuilding ? [...extraction.values].filter(([key, value]) => known(key) && !values.has(key) && edited(key, value)) : [];
   for (const key of deleted) {
     const record = state.records[key];
     if (record && record.v !== null && state.base[key] === undefined) state.base[key] = canonical(record.v);
   }
-  const backToBase = new Set([...values].filter(([key, value]) => edited(key, value) && state.base[key] === canonical(value)).map(([key]) => key));
-  for (const [key, value] of values) {
+  const backToBase = new Set(rebuilding ? [] : [...values].filter(([key, value]) => edited(key, value) && state.base[key] === canonical(value)).map(([key]) => key));
+  for (const [key, value] of [...values, ...settledHere]) {
     kept.set(key, choice(value));
     if (noted) noted[key] = digest(choice(value));
   }
-  for (const key of deleted) {
+  for (const key of gone) {
     kept.delete(key);
     if (noted) delete noted[key];
   }
+  const deferred = (key: string) => rebuilding || fromFolder(key, extraction.values.get(key) ?? null);
   return {
     values,
-    ignore: (key) => (extraction.ignore?.(key) ?? false) || (!values.has(key) && !deleted.has(key) && fromFolder(key, extraction.values.get(key) ?? null)),
+    ignore: (key) => (extraction.ignore?.(key) ?? false) || (!values.has(key) && !deleted.has(key) && deferred(key)),
     republish: (key) => backToBase.has(key) || (extraction.republish?.(key) ?? false),
     published: extraction.published,
   };

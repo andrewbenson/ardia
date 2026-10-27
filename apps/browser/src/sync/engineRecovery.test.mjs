@@ -1079,3 +1079,66 @@ test("B53: a rolled-back state whose newer remote batches are still downloading 
 test("B53-control: same with every batch downloaded (B41)", async () => {
   assert.equal(await rolledBackWithRemoteBatchesDownloading(false), "Renamed again on B");
 });
+
+test("B54: a rebuilding Mac whose state falls back to before it sent an edit doesn't send that edit again over a newer one from another Mac", async () => {
+  reset();
+  await onAndSynced();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const rebuilt = await launch();
+  rebuilt.startSync();
+  await settle();
+  const beforeTheEdit = new Map(shell.docs);
+  await rebuilt.syncNow();
+  await settle();
+  S().updateSettings({ appearance: "light" });
+  await rebuilt.syncNow();
+  await settle();
+  const other = appMac("set:");
+  await other.sync();
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" }, "control: the edit went out");
+  other.store.set("set:appearance", { v: "dark" });
+  await other.sync();
+  shell.docs.clear();
+  for (const [name, contents] of beforeTheEdit) shell.docs.set(name, contents);
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.deepEqual(other.store.get("set:appearance"), { v: "dark" });
+  assert.equal(S().settings.appearance, "dark");
+});
+
+test("B55: a rebuilding Mac whose state falls back to before it took a bookmark still publishes the user's later deletion of it", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const rebuilt = await launch();
+  rebuilt.startSync();
+  await settle();
+  const beforeTaking = new Map(shell.docs);
+  await rebuilt.syncNow();
+  await settle();
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  other.store.set("bm:taken", { k: "u", p: "bar", t: "Taken", u: "https://taken.example/", a: 1, pos: "z" });
+  await other.sync();
+  await rebuilt.syncNow();
+  await settle();
+  assert.ok(titles().includes("Taken"), "control: this Mac took the bookmark");
+  shell.docs.clear();
+  for (const [name, contents] of beforeTaking) shell.docs.set(name, contents);
+  const again = await launch();
+  again.startSync();
+  await settle();
+  const taken = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "Taken");
+  S().removeBookmark(taken.id);
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.ok(!titles().includes("Taken"), "the deletion stands here");
+  assert.ok(!other.store.has("bm:taken"), "and reaches the other Mac");
+});

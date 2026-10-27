@@ -80,6 +80,7 @@ test("a crash after a batch lands: after the restart it's sent again as it was, 
 
 test("a batch is published only once the journal holding it is on disk", async () => {
   reset();
+  shell.docs.clear();
   const engine = await import("./engine.ts?held");
   engine.startSync();
   assert.ok("ok" in (await engine.turnOnSync("/sync")));

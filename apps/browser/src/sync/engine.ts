@@ -78,6 +78,7 @@ type SyncDoc = {
   setupAt: number | null;
   joining: boolean;
   seqs?: Record<string, number>;
+  retired?: Record<string, number>;
 };
 
 const DOC = "sync.json";
@@ -143,6 +144,11 @@ let running = false;
 let again = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let forcePasswords = false;
+let cycleForcesPasswords = false;
+let locked = false;
+let loaded = true;
+let stopping = false;
+let turningOn = false;
 const passwordAdapters = new Map<string, Adapter>();
 const extensionAdapters = new Map<string, ExtensionsAdapter>();
 
@@ -178,6 +184,7 @@ async function loadState() {
   journalOnDisk = Object.keys(journal).length > 0;
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
+    if (doc.retired?.[scope] !== undefined) continue;
     const mine = (journal[scope] ?? []).filter((f) => f.device === doc.deviceId);
     restoreJournal((scopes[scope] ??= emptyScope()), mine, clock, doc.seqs?.[scope]);
   }
@@ -213,11 +220,12 @@ let sealing: Promise<void> | null = null;
 
 function save() {
   const { scopes, ...meta } = doc;
-  const json = JSON.stringify({ ...meta, seqs: Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)])) });
+  const json = JSON.stringify(loaded ? { ...meta, seqs: Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)])) } : meta);
   if (json !== savedJson) {
     savedJson = json;
     writeDocument(DOC, json);
   }
+  if (!loaded) return;
   const state = doc.enabled ? JSON.stringify(scopes) : "";
   if (state === savedState || sealing) return;
   if (!state) {
@@ -227,19 +235,21 @@ function save() {
   }
   const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, s.seq]));
   sealing = (async () => {
+    let landed = false;
     try {
       const sealed = await SyncNative?.sealLocal(state);
       if (sealed) {
         await saveDocument(STATE, sealed);
         savedState = state;
         pruneJournal(seqs);
+        landed = true;
       }
     } catch (error) {
       console.warn("[sync] couldn't save the sync state", error);
     } finally {
       sealing = null;
     }
-    if (doc.enabled && JSON.stringify(doc.scopes) !== savedState) save();
+    if (doc.enabled ? landed && JSON.stringify(doc.scopes) !== savedState : savedState !== "") save();
   })();
 }
 
@@ -277,7 +287,7 @@ function profileAdapters(profileId: string, retiring: boolean): Adapter[] {
   const ownsData = !s.profiles[profileId]?.dataId;
   const t = doc.types;
   let passwords = passwordAdapters.get(profileId);
-  if (!passwords) passwordAdapters.set(profileId, (passwords = passwordsAdapter(profileId, () => forcePasswords)));
+  if (!passwords) passwordAdapters.set(profileId, (passwords = passwordsAdapter(profileId, () => cycleForcesPasswords)));
   return [
     ...(t.pinned ? pinnedAreaAdapters(profileId) : []),
     ...(t.bookmarks && ownsData ? [inTodaysNames(bookmarksAdapter(profileId))] : []),
@@ -315,12 +325,16 @@ export async function syncNow() {
 
 async function runCycle({ retiring = false } = {}) {
   const native = SyncNative;
-  if (!native || !doc.enabled || !doc.folder || !doc.deviceId) return;
+  if (!native || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
   if (running) {
     again = true;
     return;
   }
   running = true;
+  cycleForcesPasswords = forcePasswords;
+  forcePasswords = false;
+  const cycleDoc = doc;
+  let clock: Clock | null = null;
   clearTimeout(timer);
   const slow = setTimeout(() => useSync.getState().status === "updated" && publishUi({ status: "updating" }), 1000);
   try {
@@ -329,7 +343,7 @@ async function runCycle({ retiring = false } = {}) {
     if (status === "unavailable") return publishUi({ status: "offline", error: null });
     if (status === "missing") return await resetFromElsewhere();
     const transport = folderTransport(native, doc.folder);
-    const clock = new Clock(doc.deviceId, doc.clock);
+    clock = new Clock(doc.deviceId, doc.clock);
     const device = doc.deviceId;
     const app = (doc.scopes[APP_SCOPE] ??= { ...emptyScope(), awaitRemote: doc.joining });
     settleAppliedThemes(app);
@@ -352,7 +366,7 @@ async function runCycle({ retiring = false } = {}) {
       const retire = retiring || !!link.retire || !exists;
       if (!retire && !link.enabled) continue;
       const scope = `p:${link.syncId}`;
-      const state = (doc.scopes[scope] ??= emptyScope());
+      const state = (doc.scopes[scope] ??= freshScope(scope));
       await syncScope({
         scope,
         state,
@@ -367,7 +381,9 @@ async function runCycle({ retiring = false } = {}) {
       if (retire) {
         delete link.retire;
         if (!exists) {
+          doc.retired = { ...doc.retired, [scope]: state.seq };
           delete doc.scopes[scope];
+          delete journal[scope];
           delete doc.profiles[profileId];
         }
       }
@@ -375,7 +391,6 @@ async function runCycle({ retiring = false } = {}) {
     doc.clock = clock.last;
     doc.lastSyncedAt = Date.now();
     if (app.joined) doc.joining = false;
-    forcePasswords = false;
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
     console.warn("[sync] cycle failed", error);
@@ -383,6 +398,8 @@ async function runCycle({ retiring = false } = {}) {
   } finally {
     clearTimeout(slow);
     running = false;
+    cycleForcesPasswords = false;
+    if (clock && doc === cycleDoc) doc.clock = clock.last;
     save();
     if (doc.enabled) {
       if (again) {
@@ -393,6 +410,15 @@ async function runCycle({ retiring = false } = {}) {
       }
     }
   }
+}
+
+function freshScope(scope: string, extra: Partial<ScopeState> = {}): ScopeState {
+  const seq = doc.retired?.[scope];
+  if (seq === undefined) return { ...emptyScope(), ...extra };
+  const { [scope]: _gone, ...rest } = doc.retired!;
+  if (Object.keys(rest).length) doc.retired = rest;
+  else delete doc.retired;
+  return { ...emptyScope(), ...extra, seq, vv: doc.deviceId ? { [doc.deviceId]: seq } : {} };
 }
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -464,7 +490,7 @@ function linkProfiles(app: ScopeState) {
     doc.profiles[id] = { syncId, enabled: true };
     taken.add(syncId);
     if (match) {
-      doc.scopes[`p:${syncId}`] = { ...emptyScope(), awaitRemote: true };
+      doc.scopes[`p:${syncId}`] = freshScope(`p:${syncId}`, { awaitRemote: true });
       pairTheme(app, id, doc.profiles[id]!);
     }
   }
@@ -474,6 +500,8 @@ function linkProfiles(app: ScopeState) {
 async function resetFromElsewhere() {
   await SyncNative?.forget(doc.deviceId!);
   doc = { ...emptyDoc(), folder: doc.folder, types: doc.types };
+  passwordAdapters.clear();
+  extensionAdapters.clear();
   clearJournal();
   save();
   publishUi({ status: "reset", error: "This device is out of sync. Sync may have been reset from another device." });
@@ -537,6 +565,8 @@ export async function chooseSyncFolder(): Promise<string | null> {
 
 function begin(folder: string, deviceId: string, joining: boolean) {
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
+  locked = false;
+  loaded = true;
   clearJournal();
   save();
   publishUi({ status: "starting", error: null });
@@ -546,6 +576,16 @@ function begin(folder: string, deviceId: string, joining: boolean) {
 export async function turnOnSync(folder: string): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative;
   if (!native) return { error: "Sync isn’t available in this build." };
+  if (doc.enabled || turningOn) return { error: "Sync is already on." };
+  turningOn = true;
+  try {
+    return await turnOn(native, folder);
+  } finally {
+    turningOn = false;
+  }
+}
+
+async function turnOn(native: NonNullable<typeof SyncNative>, folder: string): Promise<{ ok: true } | { error: string }> {
   const deviceId = native.newDeviceId();
   try {
     if (!(await native.createPhrase(deviceId))) return { error: "Couldn’t save the sync key in your Keychain." };
@@ -561,28 +601,45 @@ export async function turnOnSync(folder: string): Promise<{ ok: true } | { error
 export async function enterRecoveryPhrase(folder: string, text: string): Promise<PhraseResult | { error: "unavailable" }> {
   const native = SyncNative;
   if (!native) return { error: "unavailable" };
-  if (doc.enabled && doc.deviceId && useSync.getState().status === "locked") {
+  if (doc.enabled && doc.deviceId && locked) {
     const result = await native.enterPhrase(doc.deviceId, text, doc.folder ?? folder);
     if ("ok" in result) {
+      locked = false;
       await loadState();
+      loaded = true;
       publishUi({ status: "starting", error: null });
       scheduleSync(0);
     }
     return result;
   }
-  const deviceId = native.newDeviceId();
-  const result = await native.enterPhrase(deviceId, text, folder);
-  if ("ok" in result) begin(folder, deviceId, true);
-  return result;
+  if (doc.enabled || turningOn) return { error: "unavailable" };
+  turningOn = true;
+  try {
+    const deviceId = native.newDeviceId();
+    const result = await native.enterPhrase(deviceId, text, folder);
+    if ("ok" in result) begin(folder, deviceId, true);
+    return result;
+  } finally {
+    turningOn = false;
+  }
 }
 
 export async function stopSync({ deleteData = false } = {}) {
   const native = SyncNative;
-  if (!native || !doc.enabled) return;
+  if (!native || !doc.enabled || stopping) return;
+  stopping = true;
+  try {
+    await turnOff(native, deleteData);
+  } finally {
+    stopping = false;
+  }
+}
+
+async function turnOff(native: NonNullable<typeof SyncNative>, deleteData: boolean) {
   clearTimeout(timer);
   while (running) await new Promise((r) => setTimeout(r, 100));
   try {
-    if (useSync.getState().status !== "locked") await runCycle({ retiring: true });
+    if (!locked) await runCycle({ retiring: true });
   } catch {}
   clearTimeout(timer);
   const folder = doc.folder;
@@ -595,6 +652,8 @@ export async function stopSync({ deleteData = false } = {}) {
   }
   if (doc.deviceId) await native.forget(doc.deviceId);
   doc = { ...emptyDoc(), folder, types: doc.types };
+  locked = false;
+  loaded = true;
   passwordAdapters.clear();
   extensionAdapters.clear();
   clearJournal();
@@ -673,7 +732,7 @@ function addLinkedProfile(syncId: string, record: ProfileRecord, shareWith: stri
     if (theme) useBrowser.getState().updateProfile(id, theme);
     doc.profiles[id]!.themeAdopting = true;
   }
-  doc.scopes[`p:${syncId}`] = { ...emptyScope(), awaitRemote: true };
+  doc.scopes[`p:${syncId}`] = freshScope(`p:${syncId}`, { awaitRemote: true });
   return id;
 }
 
@@ -683,13 +742,18 @@ export function startSync() {
   publishUi({ status: doc.enabled ? "starting" : "off" });
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
+    loaded = false;
     void SyncNative.unlock(doc.deviceId).then(async (ok) => {
-      if (!ok) return publishUi({ status: "locked", error: "Enter your recovery phrase to keep syncing on this Mac." });
+      if (!ok) {
+        locked = true;
+        return publishUi({ status: "locked", error: "Enter your recovery phrase to keep syncing on this Mac." });
+      }
       await loadState();
+      loaded = true;
       settleAppliedThemes(doc.scopes[APP_SCOPE]);
       publishUi();
       scheduleSync(500);
-    });
+    }).catch((error) => publishUi({ status: "stalled", error: errorText(error) }));
   }
   useBrowser.subscribe((s, prev) => {
     if (!doc.enabled || running) return;

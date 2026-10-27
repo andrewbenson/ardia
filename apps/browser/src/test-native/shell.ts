@@ -25,7 +25,7 @@ type UserScriptsHost = {
 const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
-export const heldSaves = { on: false, queue: [] as (() => void)[] };
+export const heldSaves = { on: false, fail: false, only: null as string | null, queue: [] as (() => void)[] };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
 export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", switchesURL: "https://ardia.dev/switches.json", telemetryURL: "https://ardia.dev/otel/v1/logs" };
 export const environment = new Map<string, string>();
@@ -54,9 +54,10 @@ const shell: Modules["ArdiaShell"] = {
   readDocument: (name) => docs.get(name) ?? null,
   writeDocument: (name, contents) => void docs.set(name, contents),
   saveDocument: (name, contents) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
+      if (heldSaves.fail) return reject(new Error("disk full"));
       const land = () => (docs.set(name, contents), resolve());
-      if (heldSaves.on) heldSaves.queue.push(land);
+      if (heldSaves.on && (!heldSaves.only || heldSaves.only === name)) heldSaves.queue.push(land);
       else land();
     }),
   removeDocument: (name) => void docs.delete(name),

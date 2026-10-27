@@ -7,24 +7,58 @@ public enum ChromiumSecrets {
   }
 
   public static func logins(profile: URL, key: Data, cancellation: Cancellation = .init()) throws -> Outcome<Credential> {
+    let read = try loginsForSync(profile: profile, key: key, cancellation: cancellation)
+    return Outcome(items: read.logins.map(\.credential), undecryptable: read.undecryptable)
+  }
+
+  public struct SyncLogin: Sendable {
+    public var credential: Credential
+    public var modified: Int64?
+  }
+
+  public struct SyncRead: Sendable {
+    public var logins: [SyncLogin]
+    public var undecryptable: Int
+    public var mark: String?
+  }
+
+  public static func loginsForSync(profile: URL, key: Data, cancellation: Cancellation = .init()) throws -> SyncRead {
     let files = ["Login Data", "Login Data For Account"].map { profile.appendingPathComponent($0) }
       .filter { FileManager.default.fileExists(atPath: $0.path) }
     guard !files.isEmpty else { throw ImportError.notFound("No saved passwords in this profile") }
-    var items: [Credential] = []
+    var logins: [SyncLogin] = []
     var seen = Set<String>()
     var bad = 0
+    var mark: String?
     for file in files {
-      let r = try logins(database: file, key: key, cancellation: cancellation)
+      let db = try SQLiteSnapshot(copying: file)
+      let r = try rows(db, key: key, cancellation: cancellation)
       bad += r.undecryptable
-      for c in r.items where seen.insert("\(c.realm ?? c.url)\u{0}\(c.username)").inserted { items.append(c) }
+      for l in r.items where seen.insert("\(l.credential.realm ?? l.credential.url)\u{0}\(l.credential.username)").inserted { logins.append(l) }
+      if file.lastPathComponent == "Login Data", db.tableExists("meta") {
+        try db.query("SELECT value FROM meta WHERE key = ?", [.text("solara_sync_ledger")]) { row in
+          mark = row.text("value")
+          return false
+        }
+      }
     }
-    return Outcome(items: items, undecryptable: bad)
+    return SyncRead(logins: logins, undecryptable: bad, mark: mark)
   }
 
   public static func logins(database: URL, key: Data, cancellation: Cancellation = .init()) throws -> Outcome<Credential> {
-    let db = try SQLiteSnapshot(copying: database)
+    let r = try rows(SQLiteSnapshot(copying: database), key: key, cancellation: cancellation)
+    return Outcome(items: r.items.map(\.credential), undecryptable: r.undecryptable)
+  }
+
+  static func unixMillis(webKitMicros micros: Int64) -> Int64? {
+    guard micros > 0 else { return nil }
+    let unix = micros - 11_644_473_600_000_000
+    return unix >= 0 ? unix / 1000 : (unix - 999) / 1000
+  }
+
+  static func rows(_ db: SQLiteSnapshot, key: Data, cancellation: Cancellation) throws -> Outcome<SyncLogin> {
     guard db.tableExists("logins") else { throw ImportError.unreadable("Login Data has no logins table") }
-    var items: [Credential] = []
+    var items: [SyncLogin] = []
     var bad = 0
     try db.query("SELECT * FROM logins") { row in
       if items.count % 128 == 0 { try cancellation.check() }
@@ -37,14 +71,17 @@ public enum ChromiumSecrets {
       guard !password.isEmpty else { return true }
       let origin = row.text("origin_url") ?? ""
       let realm = row.text("signon_realm")
-      items.append(Credential(
-        url: origin.isEmpty ? (realm ?? "") : origin,
-        username: row.text("username_value") ?? "",
-        password: password,
-        realm: realm,
-        created: row.int("date_created").flatMap(Time.fromWebKit),
-        lastUsed: row.int("date_last_used").flatMap(Time.fromWebKit),
-        timesUsed: row.int("times_used").map(Int.init)
+      items.append(SyncLogin(
+        credential: Credential(
+          url: origin.isEmpty ? (realm ?? "") : origin,
+          username: row.text("username_value") ?? "",
+          password: password,
+          realm: realm,
+          created: row.int("date_created").flatMap(Time.fromWebKit),
+          lastUsed: row.int("date_last_used").flatMap(Time.fromWebKit),
+          timesUsed: row.int("times_used").map(Int.init)
+        ),
+        modified: row.int("date_password_modified").flatMap { unixMillis(webKitMicros: $0) }
       ))
       return true
     }

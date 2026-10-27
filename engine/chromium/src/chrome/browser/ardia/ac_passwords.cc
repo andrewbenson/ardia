@@ -21,12 +21,14 @@
 #include "base/timer/timer.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate_factory.h"
+#include "chrome/browser/password_manager/factories/profile_password_store_factory.h"
 #include "chrome/browser/ardia/ac_reauth.h"
 #include "chrome/browser/ardia/ac_sensitive_args.h"
 #include "chrome/common/extensions/api/passwords_private.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/password_manager/core/browser/export/export_progress_status.h"
 #include "components/password_manager/core/browser/export/password_manager_exporter.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 #include "components/password_manager/core/common/password_manager_constants.h"
@@ -586,4 +588,33 @@ AC_ENGINE_CALL(ac_passwords_export) {
                     path));
           },
           path));
+}
+
+AC_ENGINE_CALL(ac_passwords_mark) {
+  Call call(profile_dir, args_json, reply, context);
+  if (!call) {
+    return;
+  }
+  const std::string key = call.String("key");
+  const std::string value = call.String("value");
+  if (!base::StartsWith(key, "solara_") || value.empty()) {
+    return call.TakeReply().Error("a solara_ key and a value required");
+  }
+  scoped_refptr<password_manager::PasswordStoreInterface> store =
+      ProfilePasswordStoreFactory::GetForProfile(
+          call.profile(), ServiceAccessType::EXPLICIT_ACCESS);
+  if (!store) {
+    return call.TakeReply().Error("no password store");
+  }
+  store->SetArdiaSyncMarkAsync(
+      key, value,
+      base::BindOnce(
+          [](scoped_refptr<password_manager::PasswordStoreInterface>,
+             Reply reply, bool marked) {
+            if (!marked) {
+              return reply.Error("couldn't write Login Data's mark");
+            }
+            reply.Ok();
+          },
+          store, call.TakeReply()));
 }

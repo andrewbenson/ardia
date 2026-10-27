@@ -185,6 +185,29 @@ public class SyncModule: Module {
       NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path, isDirectory: true)])
     }.runOnQueue(.main)
 
+    AsyncFunction("readPasswordsWithMark") { (engineProfile: String) -> [String: Any]? in
+      do {
+        let key = ChromiumCrypto.deriveKey(secret: try Self.safeStorageSecret())
+        let read = try ChromiumSecrets.loginsForSync(profile: Self.profileDirectory(engineProfile), key: key)
+        if read.undecryptable > 0 {
+          NSLog("[sync] \(read.undecryptable) saved passwords didn't decrypt; not syncing passwords now")
+          return nil
+        }
+        let logins: [[String: Any]] = read.logins.map { l in
+          let c = l.credential
+          var login: [String: Any] = ["origin": c.realm ?? c.url, "url": c.url, "username": c.username, "password": c.password, "created": c.created ?? 0]
+          if let modified = l.modified { login["modified"] = modified }
+          return login
+        }
+        return ["logins": logins, "mark": read.mark ?? NSNull()]
+      } catch ImportError.notFound(_) {
+        return ["logins": [] as [[String: Any]], "mark": NSNull()]
+      } catch {
+        NSLog("[sync] reading passwords: \(error)")
+        return nil
+      }
+    }.runOnQueue(Self.work)
+
     AsyncFunction("readPasswords") { (engineProfile: String) -> [[String: Any]]? in
       do {
         let key = ChromiumCrypto.deriveKey(secret: try Self.safeStorageSecret())

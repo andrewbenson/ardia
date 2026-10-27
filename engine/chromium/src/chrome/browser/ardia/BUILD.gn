@@ -77,6 +77,7 @@ source_set("ardia") {
     "//chrome/browser/extensions",
     "//chrome/browser/extensions/api/passwords_private",
     "//chrome/browser/lifetime",
+    "//chrome/browser/password_manager/factories",
     "//chrome/browser/performance_manager/public/user_tuning",
     "//chrome/browser/picture_in_picture",
     "//chrome/browser/profiles:profile",

@@ -21,7 +21,8 @@ export type PhraseResult =
   | { error: "keychain" }
   | { error: "interrupted" };
 
-export type SavedLogin = { origin: string; url: string; username: string; password: string; created: number };
+export type SavedLogin = { origin: string; url: string; username: string; password: string; created: number; modified?: number };
+export type MarkedLogins = { logins: SavedLogin[]; mark: string | null };
 
 type SyncNative = {
   folderInfo(path: string | null): Promise<FolderInfo>;
@@ -49,6 +50,7 @@ type SyncNative = {
   copyRecoveryPhrase(): Promise<void>;
   revealFolder(path: string): Promise<void>;
   readPasswords(engineProfile: string): Promise<SavedLogin[] | null>;
+  readPasswordsWithMark?(engineProfile: string): Promise<MarkedLogins | null>;
 };
 
 export const SyncNative = requireOptionalNativeModule<SyncNative>("ArdiaSync");

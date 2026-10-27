@@ -212,9 +212,48 @@ function classify(fiber: Fiber, before: Fiber) {
   }
 }
 
+type CommitHook = { onCommitFiberRoot: (id: number, root: { current: Fiber }, ...rest: unknown[]) => unknown };
+
+function committed(root: { current: Fiber }) {
+  const t = now();
+  firstCommit ||= Date.now();
+  roots.add(root);
+  stats.commits++;
+  bump(stats.commitTasks, task ?? "other");
+  if (stats.commitTimes.length < 5000) {
+    stats.commitTimes.push(t);
+    stats.commitTaskLog.push(task ?? "other");
+  }
+  const mountsBefore = firstCommitMounts ? null : { ...stats.mounts };
+  try {
+    walk(root.current);
+  } catch {}
+  if (mountsBefore) {
+    firstCommitMounts = {};
+    for (const key in stats.mounts) if (stats.mounts[key]! > (mountsBefore[key] ?? 0)) firstCommitMounts[key] = stats.mounts[key]! - (mountsBefore[key] ?? 0);
+  }
+  stats.commitMs += root.current.actualDuration ?? 0;
+  stats.walkMs += now() - t;
+  if (layoutProbe) {
+    try {
+      (require("./layoutWatch") as typeof import("./layoutWatch")).layoutCommitted(layoutEditAt);
+    } catch {}
+  }
+}
+
 function installReactHook() {
+  const global = globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: CommitHook };
+  const devTools = global.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  if (devTools) {
+    const forward = devTools.onCommitFiberRoot;
+    devTools.onCommitFiberRoot = function (this: unknown, id, root, ...rest) {
+      committed(root);
+      return forward.call(this, id, root, ...rest);
+    };
+    return;
+  }
   let ids = 0;
-  (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: unknown }).__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+  global.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
     supportsFiber: true,
     isDisabled: false,
     renderers: new Map(),
@@ -223,33 +262,8 @@ function installReactHook() {
     onScheduleFiberRoot() {},
     onCommitFiberUnmount() {},
     onPostCommitFiberRoot() {},
-    onCommitFiberRoot(_id: number, root: { current: Fiber }) {
-      const t = now();
-      firstCommit ||= Date.now();
-      roots.add(root);
-      stats.commits++;
-      bump(stats.commitTasks, task ?? "other");
-      if (stats.commitTimes.length < 5000) {
-        stats.commitTimes.push(t);
-        stats.commitTaskLog.push(task ?? "other");
-      }
-      const mountsBefore = firstCommitMounts ? null : { ...stats.mounts };
-      try {
-        walk(root.current);
-      } catch {}
-      if (mountsBefore) {
-        firstCommitMounts = {};
-        for (const key in stats.mounts) if (stats.mounts[key]! > (mountsBefore[key] ?? 0)) firstCommitMounts[key] = stats.mounts[key]! - (mountsBefore[key] ?? 0);
-      }
-      stats.commitMs += root.current.actualDuration ?? 0;
-      stats.walkMs += now() - t;
-      if (layoutProbe) {
-        try {
-          (require("./layoutWatch") as typeof import("./layoutWatch")).layoutCommitted(layoutEditAt);
-        } catch {}
-      }
-    },
-  };
+    onCommitFiberRoot: (_id: number, root: { current: Fiber }) => committed(root),
+  } as CommitHook;
 }
 
 let traceTimers = false;

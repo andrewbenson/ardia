@@ -157,6 +157,7 @@ struct SettingsDetail: View {
       Group {
         if let shown = context.shown {
           paneView(shown)
+            .onAppear { context.onPaneAppear(shown) }
             .id(shown)
         } else {
           Color.clear

@@ -61,6 +61,7 @@ enum NativeSettingsWindow {
       return SettingsJS.shared.latestValue("extensions.defaultProfile") as? String
     }
     made.onPaneChange = { pane in SettingsJS.shared.fire("settings.paneShown", pane.rawValue) }
+    made.onPaneAppear = { place in SettingsTimings.paneAppeared(place.pane.rawValue) }
     SettingsAdapters.register(made, store: store)
     context = made
     return made

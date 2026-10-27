@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { trackSettingsSection } from "../../telemetry/track";
+import { perfProbeEnabled } from "../../lib/perfProbe";
 import { IconButton, useHover } from "../primitives";
 import { useFormColors } from "./controls";
 import { preparePane, usePaneLoaded } from "./paneData";
@@ -139,7 +140,13 @@ export function SettingsWindow() {
           onScroll={(e) => void (scrollTop.current = e.nativeEvent.contentOffset.y)}
           onLayout={(e) => void (viewport.current = e.nativeEvent.layout.height)}
           contentContainerStyle={{ alignItems: "center", paddingBottom: 40 }}>
-          <View key={key} ref={content} collapsable={false} style={{ width: "100%", maxWidth: 600, paddingHorizontal: 24 }}>
+          <View
+            key={key}
+            ref={content}
+            collapsable={false}
+            onLayout={perfProbeEnabled && shown ? () => markPaneShown(shown.pane) : undefined}
+            style={{ width: "100%", maxWidth: 600, paddingHorizontal: 24 }}
+          >
             {shown ? <Pane {...shown} /> : null}
           </View>
         </ScrollView>
@@ -147,6 +154,14 @@ export function SettingsWindow() {
       {sheet}
     </View>
   );
+}
+
+const paneTimings: { pane: string; appeared: number; committed: number }[] = [];
+if (perfProbeEnabled) (globalThis as { acSettingsTimings?: unknown }).acSettingsTimings = () => paneTimings.splice(0);
+
+function markPaneShown(pane: string) {
+  const appeared = Date.now();
+  requestAnimationFrame(() => paneTimings.push({ pane, appeared, committed: Date.now() }));
 }
 
 function Pane({ pane, profileId, detail }: SettingsPlace): ReactNode {

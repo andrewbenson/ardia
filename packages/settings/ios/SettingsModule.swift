@@ -30,6 +30,10 @@ public class SettingsModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("devTimings") { () -> String in
+      MainActor.assumeIsolated { SettingsTimings.takeJSON() }
+    }.runOnQueue(.main)
+
     AsyncFunction("focusSearch") {
       MainActor.assumeIsolated { NativeSettingsWindow.focusSearch() }
     }.runOnQueue(.main)

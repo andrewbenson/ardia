@@ -9,7 +9,7 @@ public class OmniboxModule: Module {
     Name("SolaraOmniboxBar")
 
     Function("available") { () -> Bool in
-      ProcessInfo.processInfo.environment["ARDIA_NATIVE_OMNIBOX"] == "1" && NativeSettingsHandle.active
+      ProcessInfo.processInfo.environment["ARDIA_NATIVE_OMNIBOX"] != "0" && NativeSettingsHandle.active
     }
 
     Function("prefixWidth") { (prefix: String, text: String) -> Double in

@@ -354,13 +354,14 @@ struct ShellLifetimesTests {
     #expect(second.stops == 1)
   }
 
-  @Test func aShellThatNeverReachedAWindowEndsWhenTheStoreDropsIt() {
+  @Test func aShellEndsWhenTheStoreDropsItsWindow() {
     var reported: [Set<String>] = []
     let lifetimes = ShellLifetimes<Host> { $0.stops += 1 }
     lifetimes.onIds = { reported.append($0) }
     let kept = Host(), orphan = Host()
     lifetimes.adopt("a", kept)
     lifetimes.adopt("b", orphan)
+    lifetimes.prune(keeping: ["a", "b"])
     lifetimes.prune(keeping: ["a", "c"])
     #expect(orphan.stops == 1)
     #expect(kept.stops == 0)
@@ -368,6 +369,29 @@ struct ShellLifetimesTests {
     #expect(reported.last == ["a"])
     lifetimes.prune(keeping: ["a"])
     #expect(reported.count == 3)
+  }
+
+  @Test func aShellBuiltBeforeTheStoreHasItsWindowSurvives() {
+    let lifetimes = ShellLifetimes<Host> { $0.stops += 1 }
+    let early = Host()
+    lifetimes.adopt("new", early)
+    lifetimes.prune(keeping: ["main"])
+    #expect(lifetimes.host("new") === early)
+    lifetimes.prune(keeping: ["main", "new"])
+    lifetimes.prune(keeping: ["main"])
+    #expect(early.stops == 1)
+    #expect(lifetimes.host("new") == nil)
+  }
+
+  @Test func anIdReusedAfterItEndedStartsFresh() {
+    let lifetimes = ShellLifetimes<Host> { $0.stops += 1 }
+    let first = Host(), second = Host()
+    lifetimes.adopt("w", first)
+    lifetimes.prune(keeping: ["w"])
+    lifetimes.end("w")
+    lifetimes.adopt("w", second)
+    lifetimes.prune(keeping: [])
+    #expect(lifetimes.host("w") === second)
   }
 }
 

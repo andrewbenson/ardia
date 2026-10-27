@@ -275,6 +275,7 @@ NSString *PicturePath(NSString *windowId) {
 }
 
 NSView *DrawnContent(NSView *root) {
+  if ([root respondsToSelector:NSSelectorFromString(@"drawsWholeWindow")] && [[root valueForKey:@"drawsWholeWindow"] boolValue]) return root;
   NSMutableArray<NSView *> *pending = [NSMutableArray arrayWithObject:root];
   for (NSUInteger i = 0; i < pending.count && i < 64; i++) {
     NSView *view = pending[i];
@@ -519,7 +520,8 @@ BOOL CapturePicture(ArdiaCoreWindowController *controller, NSString *windowId, N
   const NSRect whole = root.bounds;
   for (NSUInteger i = 0; i < pending.count && i < 4000; i++) {
     NSView *view = pending[i];
-    if ([NSStringFromClass(view.class) hasSuffix:@"WindowBackdropView"] || [view isKindOfClass:NSVisualEffectView.class]) {
+    if ([NSStringFromClass(view.class) hasSuffix:@"WindowBackdropView"] || [NSStringFromClass(view.class) hasSuffix:@"WindowTreatmentView"] ||
+        [view isKindOfClass:NSVisualEffectView.class]) {
       if (view.layer && !view.layer.hidden) [backdrops addObject:view.layer];
       continue;
     }
@@ -1020,7 +1022,7 @@ BOOL Covered(NSView *root) {
   NSMutableArray<NSView *> *pending = [NSMutableArray arrayWithObject:root];
   for (NSUInteger i = 0; i < pending.count && i < 4000; i++) {
     NSView *view = pending[i];
-    if ([NSStringFromClass(view.class) hasSuffix:@"WindowBackdropView"])
+    if ([NSStringFromClass(view.class) hasSuffix:@"WindowBackdropView"] || [NSStringFromClass(view.class) hasSuffix:@"WindowTreatmentView"])
       return !view.isHiddenOrHasHiddenAncestor && view.alphaValue > 0 && NSContainsRect([view convertRect:view.bounds toView:root], whole);
     [pending addObjectsFromArray:view.subviews];
   }

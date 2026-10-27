@@ -3,6 +3,13 @@ import AppKit
 public enum WindowHost {
   public static var makeWindow: (() -> NSWindow)?
   nonisolated(unsafe) public static var makeContentView: ((_ windowId: String) -> NSView)?
+  nonisolated(unsafe) public private(set) static var openingKinds: [String: String] = [:]
+
+  static func makeContent(_ make: (String) -> NSView, id: String, kind: String) -> NSView {
+    openingKinds[id] = kind
+    defer { openingKinds[id] = nil }
+    return make(id)
+  }
   nonisolated(unsafe) public static var makeAuxController: ((_ windowId: String, _ kind: String) -> NSViewController?)?
 }
 
@@ -97,7 +104,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     if small { smallIds.insert(id) }
     if let chromeWindow = ChromeWindows.makeWindow(profile: profile, chromeWindow: small ? nil : chromeWindow, appWindow: small ? claim : id) {
       if incognito { chromeWindow.appearance = NSAppearance(named: .darkAqua) }
-      let root = makeContentView(id)
+      let root = WindowHost.makeContent(makeContentView, id: id, kind: small ? "small" : "browser")
       ChromeWindows.embed(root, in: chromeWindow)
       if small || animated, !chromeWindow.isVisible { entrances[id] = !small || frame == nil }
       holdUntilContent(chromeWindow, id: id, root: root)
@@ -110,7 +117,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
     let window = makeWindow()
     let controller = NSViewController()
-    controller.view = makeContentView(id)
+    controller.view = WindowHost.makeContent(makeContentView, id: id, kind: small ? "small" : "browser")
     controller.view.frame = NSRect(origin: .zero, size: window.contentRect(forFrameRect: window.frame).size)
     window.contentViewController = controller
     window.delegate = self
@@ -420,7 +427,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.tabbingMode = .disallowed
     let native = WindowHost.makeAuxController?(id, kind)
     let controller = native ?? NSViewController()
-    let root = native?.view ?? makeContentView(id)
+    let root = native?.view ?? WindowHost.makeContent(makeContentView, id: id, kind: kind)
     controller.view = root
     controller.view.frame = NSRect(origin: .zero, size: size)
     window.contentViewController = controller

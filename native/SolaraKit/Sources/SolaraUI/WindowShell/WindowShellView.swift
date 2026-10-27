@@ -38,6 +38,7 @@ public final class WindowShellView: NSView {
   public func view(in slot: Slot) -> NSView? { mounted[slot] }
 
   @objc public var backgroundColor: NSColor?
+  @objc public var drawsWholeWindow: Bool { true }
 
   public func mount(_ slot: Slot, _ view: NSView?) {
     precondition(slot != .card || view === card, "page views attach inside the card container")

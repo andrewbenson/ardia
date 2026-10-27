@@ -21,8 +21,10 @@ public final class DockAnimator {
   private var elapsed: Double = 0
   private var last: CFTimeInterval = 0
   private var link: CADisplayLink?
+  private var run = 0
+  private var running = false
 
-  public var moving: Bool { link != nil }
+  public var moving: Bool { running }
 
   public init(value: Double) {
     self.value = value
@@ -30,7 +32,7 @@ public final class DockAnimator {
   }
 
   public func jump(to value: Double) {
-    stopLink()
+    halt()
     self.value = value
     target = value
     velocity = 0
@@ -38,53 +40,79 @@ public final class DockAnimator {
   }
 
   public func animate(to target: Double, curve: Curve = .spring(.dock), in view: NSView) {
-    guard target != self.target || moving else { return }
+    if !running && target == value {
+      self.target = target
+      return
+    }
+    if running && target == self.target && curve == self.curve { return }
+    run += 1
     self.target = target
     self.curve = curve
     start = value
     launchVelocity = velocity
     elapsed = 0
     last = now()
+    running = true
     if link == nil {
-      let made = view.displayLink(target: self, selector: #selector(tick(_:)))
+      let made = view.displayLink(target: DisplayLinkTrampoline(self), selector: #selector(DisplayLinkTrampoline.tick(_:)))
       made.add(to: .main, forMode: .common)
       link = made
     }
   }
 
   public func step(by seconds: Double) {
-    elapsed += min(seconds, DockMotion.maxStep)
+    guard running else { return }
+    let mine = run
     let done: Bool
     switch curve {
     case .spring(let spring):
+      elapsed += min(seconds, DockMotion.maxStep)
       let sample = SpringRun(from: start, to: target, spring: spring, initialVelocity: launchVelocity).sample(elapsed)
       value = sample.value
       velocity = sample.done ? 0 : sample.velocity
       done = sample.done
     case .timed(let duration, let ease):
+      elapsed += seconds
       let sample = TimedRun(from: start, to: target, duration: duration, ease: ease).sample(elapsed)
       value = sample.value
       velocity = 0
       done = sample.done
     }
     onChange?(value)
-    if done {
-      stopLink()
-      onSettle?(value)
-    }
+    guard run == mine, done else { return }
+    halt()
+    onSettle?(value)
   }
 
-  @objc private func tick(_ link: CADisplayLink) {
+  fileprivate func tick() {
     let t = now()
     let dt = t - last
     last = t
     step(by: dt)
   }
 
-  private func stopLink() {
+  private func halt() {
+    running = false
     link?.invalidate()
     link = nil
   }
 
-  public func stop() { stopLink() }
+  public func stop() {
+    halt()
+    velocity = 0
+  }
+}
+
+@MainActor
+private final class DisplayLinkTrampoline: NSObject {
+  weak var animator: DockAnimator?
+
+  init(_ animator: DockAnimator) {
+    self.animator = animator
+  }
+
+  @objc func tick(_ link: CADisplayLink) {
+    guard let animator else { return link.invalidate() }
+    animator.tick()
+  }
 }

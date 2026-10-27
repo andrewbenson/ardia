@@ -23,6 +23,19 @@ export const useClearDataRequest = create<{ windowId: string | null; request(win
   request: (windowId) => set({ windowId }),
 }));
 
+export type ClearRange = Range;
+
+export async function clearDataFor(profileId: string, range: Range, history: boolean, siteData: boolean) {
+  const ms = RANGES.find((r) => r.value === range)?.ms ?? RANGES[0].ms;
+  const since = ms === Infinity ? undefined : Date.now() - ms;
+  if (history) {
+    useBrowser.getState().clearHistory(profileId, since);
+    pruneProfileFavicons(profileId);
+  }
+  const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
+  if (types.length && !isIncognitoProfile(profileId)) await clearBrowsingData(engineProfile(profileId), types, since);
+}
+
 export function ClearDataDialog({ profileId, onClose }: { profileId: string; onClose: () => void }) {
   const theme = useTheme();
   const profileName = useBrowser((s) => profileFor(s, profileId).name);
@@ -34,14 +47,7 @@ export function ClearDataDialog({ profileId, onClose }: { profileId: string; onC
 
   const clear = async () => {
     setBusy(true);
-    const ms = RANGES.find((r) => r.value === range)!.ms;
-    const since = ms === Infinity ? undefined : Date.now() - ms;
-    if (history) {
-      useBrowser.getState().clearHistory(profileId, since);
-      pruneProfileFavicons(profileId);
-    }
-    const types: BrowsingDataType[] = [...(history ? ["history" as const] : []), ...(siteData ? ["siteData" as const, "cache" as const] : [])];
-    if (types.length && !isIncognitoProfile(profileId)) await clearBrowsingData(engineProfile(profileId), types, since);
+    await clearDataFor(profileId, range, history, siteData);
     setBusy(false);
     onClose();
   };

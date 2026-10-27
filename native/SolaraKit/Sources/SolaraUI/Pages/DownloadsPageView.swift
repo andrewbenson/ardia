@@ -139,6 +139,7 @@ struct DownloadCard: View {
       PageIconButton(icon: "ellipsis", size: 13, box: 26, radius: 6, tooltip: "More actions") { onEvent(.menu(d.id)) }
       if d.state != "downloading" {
         PageIconButton(icon: "xmark", size: 11, box: 26, radius: 6, tooltip: "Remove from List") { onEvent(.remove(d.id)) }
+          .pageProbe("remove:\(d.id)")
       }
     }
     .padding(15)

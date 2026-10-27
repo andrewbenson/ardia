@@ -8,6 +8,7 @@ import { BookmarksPage } from "./BookmarksPage";
 import { DownloadsPage } from "./DownloadsPage";
 import { HistoryPage } from "./HistoryPage";
 import { NativeDownloadsPage } from "./NativeDownloadsPage";
+import { NativeHistoryPage } from "./NativeHistoryPage";
 import { INTERNAL_PAGES, internalPageOf, internalQuery, tabDestination } from "./urls";
 
 export function InternalPage({ tabId }: { tabId: string }) {
@@ -31,7 +32,7 @@ export function InternalPage({ tabId }: { tabId: string }) {
   if (!page) return null;
   return (
     <View style={StyleSheet.absoluteFill}>
-      {page === "history" && <HistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} />}
+      {page === "history" && (nativePagesAvailable() ? <NativeHistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} /> : <HistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} />)}
       {page === "bookmarks" && <BookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} />}
       {page === "downloads" && (nativePagesAvailable() ? <NativeDownloadsPage tabId={tabId} /> : <DownloadsPage tabId={tabId} />)}
     </View>

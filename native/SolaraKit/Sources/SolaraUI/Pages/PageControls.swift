@@ -130,7 +130,7 @@ struct PageCheckbox: View {
           if on { Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white) }
         }
         .frame(width: 14, height: 14)
-        if let label { Text(label).font(.system(size: 13)).foregroundStyle(theme.textPrimary) }
+        if let label { OnboardingText(label, size: 13, color: theme.textPrimary, lines: 1).fixedSize() }
       }
       .contentShape(Rectangle())
     }

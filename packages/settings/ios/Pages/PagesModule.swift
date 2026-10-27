@@ -16,6 +16,10 @@ public class PagesModule: Module {
       MainActor.assumeIsolated { NativePageView.devState() }
     }.runOnQueue(.main)
 
+    AsyncFunction("devPageHover") { (key: String?) in
+      MainActor.assumeIsolated { NativePageView.devHover(key) }
+    }.runOnQueue(.main)
+
     View(NativePageView.self) {
       Events("onPageEvent")
 
@@ -27,12 +31,27 @@ public class PagesModule: Module {
   }
 }
 
+@MainActor
+enum PageNetwork {
+  static let favicons = PageFavicons(
+    load: { url, favicon, profile in
+      if let favicon, favicon.hasPrefix("data:") || favicon.hasPrefix("file:") || favicon.hasPrefix("/"), let image = SettingsAdapters.image(favicon) { return image }
+      let dark = await MainActor.run { NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
+      guard let uri = await SettingsAdapters.js("newTab.favicon", url, profile, dark) as? String else { return nil }
+      if let image = SettingsAdapters.image(uri) { return image }
+      guard let source = URL(string: uri), source.isFileURL, let data = try? Data(contentsOf: source) else { return nil }
+      return NSImage(data: data)
+    },
+    bundled: { name in NativeSettingsWindow.bundledSiteIcon(name) })
+}
+
 final class NativePageView: ExpoView {
   let onPageEvent = EventDispatcher()
   private var kind = ""
   private var json = ""
   private var host: NSView?
   private let downloads = DownloadsPageModel()
+  private let history = HistoryPageModel()
 
   override var isFlipped: Bool { true }
 
@@ -41,6 +60,7 @@ final class NativePageView: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     downloads.onEvent = { [weak self] event in self?.send(event) }
+    history.onEvent = { [weak self] event in self?.send(event) }
     Self.live.add(self)
     PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
   }
@@ -52,6 +72,11 @@ final class NativePageView: ExpoView {
       case "downloads":
         page["query"] = view.downloads.query
         page["shown"] = view.downloads.shown.map(\.id)
+      case "history":
+        page["query"] = view.history.query
+        page["shown"] = view.history.shown
+        page["selected"] = view.history.selected.sorted()
+        page["clearOpen"] = view.history.clearOpen
       default: break
       }
       page["ax"] = axLines(view.host, depth: 0)
@@ -60,6 +85,10 @@ final class NativePageView: ExpoView {
     }
     guard let data = try? JSONSerialization.data(withJSONObject: ["pages": pages]), let text = String(data: data, encoding: .utf8) else { return "{}" }
     return text
+  }
+
+  static func devHover(_ key: String?) {
+    for view in live.allObjects where view.window != nil { view.history.devHover = key }
   }
 
   private func probeFrames() -> [[String: Any]] {
@@ -84,6 +113,7 @@ final class NativePageView: ExpoView {
     let made: NSView? =
       switch next {
       case "downloads": NSHostingView(rootView: DownloadsPageView(model: downloads))
+      case "history": NSHostingView(rootView: HistoryPageView(model: history, favicons: PageNetwork.favicons))
       default: nil
       }
     guard let made else { return }
@@ -103,6 +133,7 @@ final class NativePageView: ExpoView {
   func focusSearch() {
     switch kind {
     case "downloads": downloads.focusRequest += 1
+    case "history": history.focusRequest += 1
     default: break
     }
   }
@@ -110,6 +141,7 @@ final class NativePageView: ExpoView {
   private func apply() {
     switch kind {
     case "downloads": downloads.apply(json: json)
+    case "history": history.apply(json: json)
     default: break
     }
   }
@@ -128,5 +160,14 @@ final class NativePageView: ExpoView {
       case .clearAll: ("clearAll", nil)
       }
     onPageEvent(["kind": name, "id": id ?? NSNull()])
+  }
+
+  private func send(_ event: HistoryPageEvent) {
+    switch event {
+    case .open(let url, let mode): onPageEvent(["kind": "open", "url": url, "mode": mode.rawValue])
+    case .remove(let urls): onPageEvent(["kind": "remove", "urls": urls])
+    case .deleteSelected(let urls): onPageEvent(["kind": "deleteSelected", "urls": urls])
+    case .clearData(let request): onPageEvent(["kind": "clearData", "range": request.range, "history": request.history, "siteData": request.siteData])
+    }
   }
 }

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // The native internal pages (ARDIA_NATIVE_PAGES=1) in a hidden instance, driven by clicks and keys: Downloads lists
 // the window's downloads, the search field filters them and Escape clears it, ✕ removes one from the list and
-// Clear All keeps only the running ones.
+// Clear All keeps only the running ones. History groups visits by day, search filters, hovering a row shows its
+// checkbox, a click selects and shift-click extends the selection, Cancel clears it, and Clear Browsing Data… opens
+// the dialog, whose Clear Data empties the history and closes it.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -82,7 +84,7 @@ try {
 
   await rep.check("✕ removes a download from the list", async () => {
     const p = await page();
-    await click(p.frames.filter((f) => f.label === "Remove from List")[0]);
+    await click(frameOf(p, "remove:d2"));
     const after = await until(async () => {
       const ids = await app.eval(`return ac.store.getState().downloads.map((d) => d.id).join(",")`);
       return { ok: ids === "d3,d1", ids };
@@ -98,6 +100,89 @@ try {
       return { ok: ids === "d3", ids };
     });
     assert.equal(after.ids, "d3");
+  });
+  const now = Date.now();
+  const sites = ["https://news.example.com/", "https://github.com/solara", "https://en.wikipedia.org/wiki/Sun", "https://apple.example.net/mac"];
+  const history = Array.from({ length: 8 }, (_, i) => ({ url: `${sites[i % 4]}?p=${i}`, title: `Page ${i}`, visits: 1, lastVisit: now - i * 5 * 3600_000 }));
+  await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; s.importHistory(s.windows[w].profileId, ${JSON.stringify(history)}); ac.pages.openInternalPage("history", w); return true`);
+
+  await rep.check("History lists every visit, newest first", async () => {
+    const shown = await until(async () => {
+      const p = await page();
+      return { ok: p?.kind === "history" && p.shown.length === 8, p };
+    });
+    assert.deepEqual(shown.p?.shown, history.map((h) => h.url));
+  });
+
+  await rep.check("typing in the search field filters the history", async () => {
+    const p = await page();
+    await click(frameOf(p, "Search history"));
+    await sleep(200);
+    await dev("type:wikipedia");
+    const filtered = await until(async () => {
+      const now = await page();
+      return { ok: now.query === "wikipedia" && now.shown.length === 2, now };
+    });
+    assert.deepEqual(filtered.now.shown, [history[2].url, history[6].url]);
+    await dev("keys:0:\u001b:53");
+    await until(async () => ({ ok: (await page()).shown.length === 8 }));
+  });
+
+  await rep.check("hovering shows a row's checkbox, click selects, shift-click extends, Cancel clears", async () => {
+    const rowFrame = (p, url) => frameOf(p, `row:${url}`);
+    const ready = await until(async () => {
+      const now = await page();
+      return { ok: !!rowFrame(now, history[1].url) && !!rowFrame(now, history[3].url), now };
+    });
+    assert.ok(ready.ok, `row frames: ${ready.now.frames.map((f) => f.label).join(" | ")}`);
+    let p = ready.now;
+    const first = rowFrame(p, history[1].url);
+    await app.eval(`return globalThis.expo.modules.SolaraPages.devPageHover(${JSON.stringify(history[1].url)})`);
+    const hovered = await until(async () => {
+      const now = await page();
+      return { ok: now.frames.some((f) => f.label === "Select" && Math.abs(f.y + f.height / 2 - (first.y + first.height / 2)) < 4), now };
+    });
+    assert.ok(hovered.ok, "checkbox on hover");
+    const box = hovered.now.frames.find((f) => f.label === "Select" && Math.abs(f.y + f.height / 2 - (first.y + first.height / 2)) < 4);
+    await click(box);
+    await app.eval(`return globalThis.expo.modules.SolaraPages.devPageHover(null)`);
+    const one = await until(async () => {
+      const now = await page();
+      return { ok: now.selected.length === 1, now };
+    });
+    assert.deepEqual(one.now.selected, [history[1].url]);
+    p = one.now;
+    const third = rowFrame(p, history[3].url);
+    await dev(`mouse:down:${third.x + 200},${third.y + third.height / 2},1,${0x20000}`);
+    await dev(`mouse:up:${third.x + 200},${third.y + third.height / 2},1,${0x20000}`);
+    const range = await until(async () => {
+      const now = await page();
+      return { ok: now.selected.length === 3, now };
+    });
+    assert.deepEqual(range.now.selected, [history[1].url, history[2].url, history[3].url].sort());
+    await click(frameOf(range.now, "Cancel"));
+    const none = await until(async () => {
+      const now = await page();
+      return { ok: now.selected.length === 0, now };
+    });
+    assert.equal(none.now.selected.length, 0);
+  });
+
+  await rep.check("Clear Browsing Data… opens the dialog; Clear Data empties the history and closes it", async () => {
+    const p = await page();
+    await click(frameOf(p, "Clear Browsing Data…"));
+    const open = await until(async () => {
+      const now = await page();
+      return { ok: now.clearOpen && !!frameOf(now, "Clear Data"), now };
+    });
+    assert.ok(open.ok, "dialog open");
+    await click(frameOf(open.now, "Clear Data"));
+    const cleared = await until(async () => {
+      const now = await page();
+      return { ok: !now.clearOpen, now };
+    }, 8000);
+    assert.equal(cleared.now.clearOpen, false, "dialog closed");
+    assert.deepEqual(cleared.now.shown, history.slice(1).map((h) => h.url), "the last hour's visit is gone");
   });
 } finally {
   await app?.quit();

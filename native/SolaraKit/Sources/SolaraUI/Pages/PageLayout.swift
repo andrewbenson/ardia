@@ -94,6 +94,8 @@ public enum PageFormat {
     return shown.hasPrefix("www.") ? String(shown.dropFirst(4)) : shown
   }
 
+  static func displayHost(_ host: String) -> String { SolaraOmnibox.displayHost(host) }
+
   public static func queryWords(_ query: String) -> [String] {
     query.lowercased().split(whereSeparator: { $0.isWhitespace }).map(String.init)
   }

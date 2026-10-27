@@ -300,12 +300,14 @@ public class AppModule: Module {
       guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return false }
       guard on else {
         _ = (view as AnyObject).perform(select, with: nil)
+        NotificationCenter.default.post(name: Notification.Name("SolaraDevPointerChanged"), object: nil)
         return true
       }
       guard let window = WindowManager.shared.windows[windowId], let content = window.contentView else { return false }
       let local = NSPoint(x: x, y: content.isFlipped ? y : content.bounds.height - y)
       let screen = window.convertPoint(toScreen: content.convert(local, to: nil))
       _ = (view as AnyObject).perform(select, with: NSValue(point: screen))
+      NotificationCenter.default.post(name: Notification.Name("SolaraDevPointerChanged"), object: NSValue(point: screen))
       return true
       #else
       return false

@@ -97,6 +97,21 @@ class HoverFillView: NSView {
 
   override var isFlipped: Bool { true }
 
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    DevPointer.observe(self, #selector(devPointerChanged(_:)))
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  @objc private func devPointerChanged(_ note: Notification) {
+    let inside = DevPointer.inside(self, note)
+    guard inside != hovered else { return }
+    hovered = inside
+    onHover(inside)
+    refresh()
+  }
+
   override func updateTrackingAreas() {
     super.updateTrackingAreas()
     if let tracking { removeTrackingArea(tracking) }

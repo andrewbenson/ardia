@@ -37,6 +37,12 @@ final class ToolbarUrlFieldView: NSView {
     label.cell?.truncatesLastVisibleLine = true
     label.isSelectable = false
     addSubview(label)
+    DevPointer.observe(self, #selector(devPointerChanged(_:)))
+  }
+
+  @objc private func devPointerChanged(_ note: Notification) {
+    hovered = DevPointer.inside(self, note)
+    applyHover()
   }
 
   required init?(coder: NSCoder) { fatalError() }

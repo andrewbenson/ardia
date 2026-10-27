@@ -28,9 +28,15 @@ final class ToolbarButtonView: NSView {
     image.imageScaling = .scaleNone
     addSubview(image)
     apply()
+    DevPointer.observe(self, #selector(devPointerChanged(_:)))
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  @objc private func devPointerChanged(_ note: Notification) {
+    hovered = DevPointer.inside(self, note)
+    apply()
+  }
 
   var enabled: Bool { state.enabled ?? true }
 

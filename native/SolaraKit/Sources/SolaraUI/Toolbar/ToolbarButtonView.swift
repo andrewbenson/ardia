@@ -8,6 +8,8 @@ final class ToolbarButtonView: NSView {
 
   private let plate = CALayer()
   private let image = NSImageView()
+  private var badge: NSTextField?
+  private var decoded: (uri: String, image: NSImage?)?
   private var hovered = false
   private var pressed = false
   private var longPressTimer: Timer?
@@ -118,13 +120,57 @@ final class ToolbarButtonView: NSView {
     plate.backgroundColor = toolbarColor(background)?.cgColor
     CATransaction.commit()
     let tint = toolbarColor(state.color) ?? toolbarColor(enabled ? palette.icon : palette.iconDisabled) ?? .labelColor
-    let config = NSImage.SymbolConfiguration(pointSize: CGFloat(state.size ?? 15), weight: ToolbarButtonView.weight(state.weight))
-    image.image = NSImage(systemSymbolName: state.icon, accessibilityDescription: state.tooltip)?.withSymbolConfiguration(config)
-    image.contentTintColor = tint
-    image.frame = CGRect(x: (bounds.width - b) / 2, y: (bounds.height - b) / 2, width: b, height: b)
+    if let picture = picture() {
+      let side = CGFloat(state.imageSize ?? 16)
+      image.image = picture
+      image.imageScaling = .scaleProportionallyUpOrDown
+      image.contentTintColor = nil
+      image.alphaValue = state.dimmed == true ? 0.45 : 1
+      image.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
+    } else {
+      let config = NSImage.SymbolConfiguration(pointSize: CGFloat(state.size ?? 15), weight: ToolbarButtonView.weight(state.weight))
+      image.image = NSImage(systemSymbolName: state.icon, accessibilityDescription: state.tooltip)?.withSymbolConfiguration(config)
+      image.imageScaling = .scaleNone
+      image.contentTintColor = tint
+      image.alphaValue = 1
+      image.frame = CGRect(x: (bounds.width - b) / 2, y: (bounds.height - b) / 2, width: b, height: b)
+    }
+    applyBadge()
     toolTip = state.tooltip
     setAccessibilityLabel(state.tooltip)
     setAccessibilityRole(.button)
+  }
+
+  private func picture() -> NSImage? {
+    guard let uri = state.image, !uri.isEmpty else { return nil }
+    if let decoded, decoded.uri == uri { return decoded.image }
+    let made = PromptBodyView.image(uri)
+    decoded = (uri, made)
+    return made
+  }
+
+  private func applyBadge() {
+    guard let spec = state.badge, !spec.text.isEmpty else {
+      badge?.removeFromSuperview()
+      badge = nil
+      return
+    }
+    let field = badge ?? {
+      let f = NSTextField(labelWithString: "")
+      f.wantsLayer = true
+      f.layer?.cornerRadius = 3
+      f.alignment = .center
+      f.isSelectable = false
+      addSubview(f)
+      badge = f
+      return f
+    }()
+    let text = String(spec.text.prefix(4))
+    let font = NSFont.systemFont(ofSize: 8.5, weight: .bold)
+    field.attributedStringValue = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: toolbarColor(spec.textColor) ?? .white])
+    field.layer?.backgroundColor = toolbarColor(spec.color)?.cgColor
+    let w = max(13, ceil(field.attributedStringValue.size().width) + 5)
+    field.frame = CGRect(x: bounds.width - 1 - w, y: bounds.height - 3 - 11, width: w, height: 11)
   }
 
   static func weight(_ name: String?) -> NSFont.Weight {

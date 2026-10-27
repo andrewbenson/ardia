@@ -12,7 +12,7 @@ import { useIsBookmarked, useSettings, useTabLive } from "../store/hooks";
 import { bookmarkProfileId } from "../store/model";
 import { usePageProgress } from "../store/pageProgress";
 import { openModeFor, openUrl } from "./bookmarks/actions";
-import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
+import { useNativeToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { type ToolbarGeometry } from "./layout/geometry";
 import { closeHistoryMenu, goBack, goForward, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu } from "./layout/history";
 import { setPopover, usePage, usePages } from "./layout/pageState";
@@ -86,6 +86,8 @@ export function NativeToolbar({
   const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
   const history = useHistoryAvailability(tabId);
   const extensionsWidth = useToolbarExtensionsWidth(windowId);
+  const extensions = useNativeToolbarExtensions(windowId, tabId);
+  const extensionsJson = JSON.stringify(extensions.buttons);
   useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const bookmarked = useIsBookmarked(tab?.url ?? "");
@@ -202,11 +204,13 @@ export function NativeToolbar({
           ]
         : [],
       rightInset: 8,
+      extensions: JSON.parse(extensionsJson),
+      extensionsRight: inSplit ? 8 + 60 : 8,
       hairline: !!url && !bare,
       progress: isLoading ? progress : null,
       stripes: developer ? stripesUri(palette) : null,
     };
-  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, developer, editing, editRequest, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split]);
+  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, developer, editing, editRequest, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split, extensionsJson]);
   const json = useMemo(() => (state ? JSON.stringify(state) : null), [state]);
 
   if (!tab || !json) return <View style={{ height: layout.toolbarHeight }} />;
@@ -278,6 +282,8 @@ export function NativeToolbar({
         return showSplitMenu(tabId);
       case "closePane":
         return closePane(tabId);
+      default:
+        if (c.id.startsWith("ext")) extensions.onClick(c.id, c.kind === "menu" ? "menu" : "press");
     }
   };
 
@@ -285,10 +291,12 @@ export function NativeToolbar({
     <View style={{ height: layout.toolbarHeight }}>
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       <View ref={view} collapsable={false} style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <NativeToolbarView style={StyleSheet.absoluteFill} state={json} onToolbarClick={(e) => void onClick(e.nativeEvent)} />
-      </View>
-      <View style={[StyleSheet.absoluteFill, { opacity: focused ? 1 : 0.5 }]} pointerEvents="box-none">
-        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={21.2 - 14} right={inSplit ? 8 + 60 : 8} />
+        <NativeToolbarView
+          style={StyleSheet.absoluteFill}
+          state={json}
+          onToolbarClick={(e) => void onClick(e.nativeEvent)}
+          onToolbarAnchors={(e) => extensions.onAnchors(e.nativeEvent.anchors)}
+        />
       </View>
     </View>
   );

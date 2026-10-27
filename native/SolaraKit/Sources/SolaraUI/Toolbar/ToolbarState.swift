@@ -22,9 +22,20 @@ public struct ToolbarGeometryState: Decodable, Equatable, Sendable {
   public var urlRight: Double
 }
 
+public struct ToolbarBadgeState: Decodable, Equatable, Sendable {
+  public var text: String
+  public var color: String
+  public var textColor: String
+}
+
 public struct ToolbarButtonState: Decodable, Equatable, Sendable {
   public var id: String
   public var icon: String
+  public var image: String?
+  public var imageSize: Double?
+  public var dimmed: Bool?
+  public var badge: ToolbarBadgeState?
+  public var anchor: String?
   public var size: Double?
   public var box: Double?
   public var radius: Double?
@@ -68,6 +79,8 @@ public struct ToolbarState: Decodable, Equatable, Sendable {
   public var url: ToolbarUrlState?
   public var right: [ToolbarButtonState]
   public var rightInset: Double
+  public var extensions: [ToolbarButtonState]?
+  public var extensionsRight: Double?
   public var hairline: Bool
   public var progress: Double?
   public var stripes: String?

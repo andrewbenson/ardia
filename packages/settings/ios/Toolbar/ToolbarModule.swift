@@ -13,7 +13,7 @@ public class ToolbarModule: Module {
     }
 
     View(NativeToolbarHostView.self) {
-      Events("onToolbarClick")
+      Events("onToolbarClick", "onToolbarAnchors")
 
       Prop("state") { (view: NativeToolbarHostView, v: String) in MainActor.assumeIsolated { view.setState(v) } }
     }
@@ -22,6 +22,7 @@ public class ToolbarModule: Module {
 
 final class NativeToolbarHostView: ExpoView {
   let onToolbarClick = EventDispatcher()
+  let onToolbarAnchors = EventDispatcher()
   let toolbar = ToolbarView(frame: .zero)
   private var json = ""
 
@@ -34,7 +35,15 @@ final class NativeToolbarHostView: ExpoView {
     toolbar.onClick = { [weak self] click in
       self?.onToolbarClick(["id": click.id, "kind": click.kind.rawValue, "meta": click.meta, "alt": click.alt, "shift": click.shift, "text": click.text ?? NSNull()])
     }
+    toolbar.onAnchors = { [weak self] anchors in
+      self?.onToolbarAnchors(["anchors": anchors.mapValues { [$0.minX, $0.minY, $0.width, $0.height] }])
+    }
     addSubview(toolbar)
+  }
+
+  override func setFrameOrigin(_ newOrigin: NSPoint) {
+    super.setFrameOrigin(newOrigin)
+    toolbar.needsLayout = true
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? {

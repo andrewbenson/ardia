@@ -7,6 +7,7 @@ public final class ToolbarView: NSView {
   static let bandEase = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
 
   public var onClick: (ToolbarClick) -> Void = { _ in }
+  public var onAnchors: ([String: CGRect]) -> Void = { _ in }
   public private(set) var state: ToolbarState?
 
   private let band = CALayer()
@@ -17,6 +18,8 @@ public final class ToolbarView: NSView {
   private let progress = CALayer()
   private var left: [ToolbarButtonView] = []
   private var right: [ToolbarButtonView] = []
+  private var extensions: [ToolbarButtonView] = []
+  private var reportedAnchors: [String: CGRect]?
   private let url = ToolbarUrlFieldView()
   private var bandColor: CGColor?
   private var shownProgress: Double?
@@ -50,6 +53,7 @@ public final class ToolbarView: NSView {
     state = next
     left = sync(left, next.left, next.palette)
     right = sync(right, next.right, next.palette)
+    extensions = sync(extensions, next.extensions ?? [], next.palette)
     if let u = next.url {
       url.isHidden = false
       url.update(u, palette: next.palette)
@@ -197,6 +201,35 @@ public final class ToolbarView: NSView {
       x += 2
     }
     url.frame = CGRect(x: CGFloat(g.urlLeft), y: ToolbarView.buttonTop, width: max(0, bounds.width - CGFloat(g.urlLeft) - CGFloat(g.urlRight)), height: ToolbarUrlFieldView.height)
+    var anchors: [String: CGRect] = [:]
+    if let extensionsRight = state.extensionsRight {
+      var ex = bounds.width - CGFloat(extensionsRight)
+      for b in extensions.reversed() {
+        ex -= b.box
+        b.frame = CGRect(x: px(ex), y: px(21.2 - b.box / 2), width: b.box, height: b.box)
+        if let slot = b.state.anchor { anchors[slot] = windowRect(b.frame) }
+        ex -= 2
+      }
+      if extensions.isEmpty {
+        anchors["*"] = windowRect(CGRect(x: px(ex - 28), y: px(21.2 - 14), width: 28, height: 28))
+      }
+    }
+    if window != nil, anchors != reportedAnchors {
+      reportedAnchors = anchors
+      onAnchors(anchors)
+    }
+  }
+
+  private func windowRect(_ local: CGRect) -> CGRect {
+    guard let root = window?.contentView else { return local }
+    let r = convert(local, to: root)
+    return root.isFlipped ? r : CGRect(x: r.minX, y: root.bounds.height - r.maxY, width: r.width, height: r.height)
+  }
+
+  public override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    reportedAnchors = nil
+    needsLayout = true
   }
 }
 

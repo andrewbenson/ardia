@@ -7,6 +7,7 @@ export type ToolbarClick = { id: string; kind: "press" | "menu" | "middle" | "su
 export type NativeToolbarProps = ViewProps & {
   state: string;
   onToolbarClick?(e: NativeSyntheticEvent<ToolbarClick>): void;
+  onToolbarAnchors?(e: NativeSyntheticEvent<{ anchors: Record<string, [number, number, number, number]> }>): void;
 };
 
 const native = requireOptionalNativeModule<{ available(): boolean }>("SolaraToolbar");

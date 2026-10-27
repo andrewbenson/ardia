@@ -10,6 +10,10 @@
 # --force       build even when no native file changed.
 # --wait SECS   how long to wait for a pod install, or for another build into the same derived data (default 1500).
 #
+# - Runs `pnpm pods` first (under the pod lock) when a source file in packages/*/ios is on disk but not in the Pods
+#   project, or the Pods project lists one that's gone, since Xcode only compiles the files a pod install listed. A
+#   difference the install doesn't change (a file its podspec leaves out) is remembered and not reinstalled for.
+#
 # - Incremental: keep using the same name. A new derived data compiles everything (a few minutes), and so does a copy
 #   of another one (its paths differ, so Xcode rebuilds all 1040 compiles; measured 2026-10-02).
 # - It refuses a Debug build that can't change the app: when no native file differs from the last successful build
@@ -117,6 +121,84 @@ if os.path.exists(binary):
 print(h.hexdigest())
 ' "$repo" "${ARDIACORE_FRAMEWORK:-$HOME/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64/Chromium Framework.framework}"
 }
+
+pod_drift() {
+  python3 -I - "$repo" <<'PY'
+import os, re, subprocess, sys
+repo = sys.argv[1]
+pods = os.path.join(repo, "apps/browser/macos/Pods")
+text = open(os.path.join(pods, "Pods.xcodeproj/project.pbxproj"), errors="replace").read()
+objects = {}
+current = None
+for line in text.split("\n"):
+    m = re.match(r"\t\t([0-9A-F]{14,24}) (?:/\* .*? \*/ )?= \{(.*)$", line)
+    if m and current is None:
+        if m.group(2).endswith("};"):
+            objects[m.group(1)] = m.group(2)
+        else:
+            current, lines = m.group(1), [m.group(2)]
+        continue
+    if current is not None:
+        if line == "\t\t};":
+            objects[current] = "\n".join(lines)
+            current = None
+        else:
+            lines.append(line)
+def field(body, name):
+    m = re.search(r"\b" + name + r" = (\"(?:[^\"\\]|\\.)*\"|[^;]+);", body)
+    return m and m.group(1).strip('"')
+parent = {}
+for oid, body in objects.items():
+    if "isa = PBXGroup" in body or "isa = PBXVariantGroup" in body:
+        m = re.search(r"children = \((.*?)\);", body, re.S)
+        for child in re.findall(r"([0-9A-F]{14,24})", m.group(1) if m else ""):
+            parent[child] = oid
+cache = {}
+def path_of(oid):
+    if oid in cache:
+        return cache[oid]
+    body = objects.get(oid, "")
+    p, tree = field(body, "path"), field(body, "sourceTree")
+    if tree == "SOURCE_ROOT":
+        base = pods
+    elif tree == "<group>" and oid in parent:
+        base = path_of(parent[oid])
+    else:
+        base = pods
+    out = os.path.normpath(os.path.join(base, p)) if p else base
+    cache[oid] = out
+    return out
+exts = (".swift", ".m", ".mm", ".h", ".c", ".cpp", ".metal")
+packages = os.path.join(repo, "packages")
+listed = set()
+for oid, body in objects.items():
+    if "isa = PBXFileReference" in body:
+        full = path_of(oid)
+        if full.startswith(packages + os.sep) and "/ios/" in full and full.endswith(exts):
+            listed.add(os.path.relpath(full, repo))
+files = subprocess.run(["git", "-C", repo, "ls-files", "-co", "--exclude-standard", "--", "packages/*/ios/*"], capture_output=True, text=True).stdout.split("\n")
+present = {f for f in files if f.endswith(exts) and os.path.isfile(os.path.join(repo, f))}
+for f in sorted(present - listed):
+    print("+ " + f)
+for f in sorted(listed - present):
+    print("- " + f)
+PY
+}
+
+mkdir -p "$dd"
+drift_file="$dd/.ac-pod-drift"
+drift=$(pod_drift) || { echo "build-app: couldn't compare the pod sources with the Pods project" >&2; drift=""; }
+if [[ -n "$drift" && "$drift" != "$(cat "$drift_file" 2>/dev/null)" ]]; then
+  echo "build-app: the Pods project is behind packages/*/ios ($(echo "$drift" | wc -l | tr -d ' ') file(s), first: $(echo "$drift" | head -1)); running pnpm pods"
+  if ! (cd "$repo" && scripts/agent/locked pod --wait "$wait" --as "$name" -- pnpm pods) >"$dd/pods.log" 2>&1; then
+    echo "build-app: pnpm pods failed (log: ${dd#"$repo"/}/pods.log)" >&2
+    tail -20 "$dd/pods.log" >&2
+    exit 1
+  fi
+  drift=$(pod_drift) || drift=""
+  [[ -n "$drift" ]] && echo "build-app: still not in the Pods project after pnpm pods: $(echo "$drift" | tr '\n' ' ')"
+fi
+printf '%s' "$drift" >"$drift_file"
 
 stamp=$(native_stamp) || { echo "build-app: couldn't hash the native files" >&2; exit 1; }
 stamp+=" signing:${signing[*]:-team}"

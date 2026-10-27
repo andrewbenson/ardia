@@ -258,6 +258,7 @@ struct SyncPaneModelTests {
     #expect(services.calls.last == "enterRecoveryPhrase \(SyncFixture.iCloudFolder) 24")
     #expect(SyncPhraseResult.mismatch.message?.hasPrefix("This recovery phrase doesn’t match") == true)
     #expect(SyncPhraseResult.wordCount(3).message == "Recovery phrase must be exactly 24 words.")
+    #expect(SyncPhraseResult.interrupted.message == "Sync was turned off or on again while this phrase was checked. Enter it again.")
   }
 
   @Test func stateUpdatesReloadFolderInfoOnlyWhenTheyMatter() async throws {

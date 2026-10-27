@@ -92,6 +92,7 @@ final class SyncAdapter: SyncServices {
     case "mismatch": return .mismatch
     case "noData": return .noData
     case "keychain": return .keychain
+    case "interrupted": return .interrupted
     default: return .unavailable
     }
   }

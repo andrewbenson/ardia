@@ -181,6 +181,7 @@ public enum SyncPhraseResult: Sendable, Equatable {
   case mismatch
   case noData
   case keychain
+  case interrupted
   case unavailable
 
   var message: String? {
@@ -192,6 +193,7 @@ public enum SyncPhraseResult: Sendable, Equatable {
     case .mismatch: "This recovery phrase doesn’t match the synced data in this folder. Check the phrase, or choose the folder your other devices sync to."
     case .noData: "There’s no synced data in this folder yet. Choose the folder your other devices sync to, or wait for it to finish downloading."
     case .keychain: "Couldn’t save the sync key in your Keychain."
+    case .interrupted: "Sync was turned off or on again while this phrase was checked. Enter it again."
     case .unavailable: "Sync isn’t available in this build."
     }
   }

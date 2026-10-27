@@ -105,7 +105,7 @@ public struct TimedRun: Equatable, Sendable {
   }
 
   public func sample(_ t: Double) -> (value: Double, done: Bool) {
-    if t >= duration { return (to, true) }
+    if t >= duration - 1e-9 { return (to, true) }
     let u = max(0, t / duration)
     let eased = ease == .outCubic ? DockMotion.easeOutCubic(u) : DockMotion.easeInOutCubic(u)
     return (from + (to - from) * eased, false)

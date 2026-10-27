@@ -268,3 +268,44 @@ struct WindowShellViewTests {
 final class FilledView: NSView {
   @objc var backgroundColor: NSColor?
 }
+
+@MainActor
+@Suite struct DockAnimatorTests {
+  @Test func springSettlesOnTargetAndReportsSettle() {
+    let animator = DockAnimator(value: 1)
+    var settled: Double?
+    animator.onSettle = { settled = $0 }
+    animator.animate(to: 0, in: NSView())
+    var frames = 0
+    while animator.moving && frames < 200 {
+      animator.step(by: 1.0 / 60)
+      frames += 1
+    }
+    #expect(settled == 0)
+    #expect(animator.value == 0)
+    #expect(frames == 20)
+  }
+
+  @Test func retargetKeepsVelocity() {
+    let animator = DockAnimator(value: 1)
+    animator.animate(to: 0, in: NSView())
+    for _ in 0..<4 { animator.step(by: 1.0 / 60) }
+    let mid = animator.value
+    animator.animate(to: 1, in: NSView())
+    animator.step(by: 1.0 / 60)
+    #expect(animator.value < mid)
+    animator.stop()
+  }
+
+  @Test func timedArcHideIsHundredMilliseconds() {
+    let animator = DockAnimator(value: 1)
+    animator.animate(to: 0, curve: .timed(duration: DockMotion.arcHideMs / 1000, ease: .outCubic), in: NSView())
+    var frames = 0
+    while animator.moving && frames < 100 {
+      animator.step(by: 1.0 / 60)
+      frames += 1
+    }
+    #expect(frames == 6)
+    #expect(animator.value == 0)
+  }
+}

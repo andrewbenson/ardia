@@ -26,13 +26,16 @@ import { pressGroupClose, pressTabClose } from "./closeControl";
 import { dismissHover, nativeRowHover } from "./hover";
 import { closeAllTabs, middleClickTab, openGroupMenu, openOverflowMenu, openSidebarMenu, openTabMenu } from "./menus";
 import { useSidebarUi } from "./state";
+import { publishNativeLive, runNativeLive } from "./nativeLive";
 import { tidyPins } from "./tidyPinsUi";
 import { openTileFolderMenu, toggleFolderPanel } from "./tileFolderUi";
 
 let nativeSidebar: boolean | undefined;
 
 export function nativeSidebarEnabled(): boolean {
-  return (nativeSidebar ??= hostedKinds().includes("sidebar"));
+  nativeSidebar ??= hostedKinds().includes("sidebar");
+  if (nativeSidebar) publishNativeLive();
+  return nativeSidebar;
 }
 
 const NEW_TAB_MARK: number = PRODUCT === "Solara" ? require("../../../assets/solara/new-tab-mark.png") : require("../../../assets/new-tab-mark.png");
@@ -71,9 +74,14 @@ addNativeSettingsHandlers({
     if (icon !== undefined) return Image.resolveAssetSource(icon)?.uri ?? null;
     return faviconUri(url, profileId ?? undefined, FAVICON_WAIT_MS);
   },
-  "sidebar.action": (windowId: string, name: string, id: string, extra: Mods & { kind?: "tab" | "group" | "folder"; split?: boolean; text?: string | null }) => {
+  "sidebar.action": (
+    windowId: string,
+    name: string,
+    id: string,
+    extra: Mods & { kind?: "tab" | "group" | "folder" | "live"; split?: boolean; text?: string | null; action?: string; item?: string | null },
+  ) => {
     const s = useBrowser.getState();
-    if (name === "hover") return nativeRowHover(windowId, extra.kind && id ? { kind: extra.kind as "tab" | "group" | "folder", id } : null);
+    if (name === "hover") return nativeRowHover(windowId, extra.kind && id ? { kind: extra.kind, id } : null);
     dismissHover();
     switch (name) {
       case "clicked":
@@ -122,6 +130,8 @@ addNativeSettingsHandlers({
         return tidyPins(windowId, id || undefined);
       case "clear":
         return closeAllTabs(windowId);
+      case "live":
+        return runNativeLive(windowId, id, extra.action ?? "", extra.item ?? null, !!extra.meta);
       case "renamed": {
         const target = { kind: extra.kind === "group" ? ("group" as const) : ("tab" as const), id };
         return typeof extra.text === "string" ? commitRename(target, extra.text) : endRename(target);

@@ -117,6 +117,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
   }
 
   static let labelPad: CGFloat = 2
+  static let textRise: CGFloat = 0.5
 
   public var height: CGFloat { state?.replace == true ? 40 + 1 + 38 : 40 }
 
@@ -205,7 +206,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
     right -= 26 + 2
     if !noneLabel.isHidden {
       right -= 6
-      right = place(noneLabel, right: right, midY: row / 2) - 2
+      right = place(noneLabel, right: right, midY: row / 2 - FindBarView.textRise) - 2
     } else if !countLabel.isHidden {
       right -= 6
       right = place(countLabel, right: right, midY: row / 2) - 6
@@ -234,7 +235,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
       x2 -= bw + 4
     }
     if !noteLabel.isHidden {
-      x2 = place(noteLabel, right: x2 - 2, midY: top + r2 / 2) - 4
+      x2 = place(noteLabel, right: x2 - 2, midY: top + r2 / 2 - FindBarView.textRise) - 4
     }
     let rh = replaceField.intrinsicContentSize.height
     let rLeft: CGFloat = 11 + 16 + 3 + 4
@@ -242,8 +243,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
   }
 
   private func place(_ label: NSTextField, right: CGFloat, midY: CGFloat) -> CGFloat {
-    let scale = window?.backingScaleFactor ?? 2
-    let width = ceil(label.attributedStringValue.size().width * scale) / scale
+    let width = ceil(label.attributedStringValue.size().width)
     let height = label.intrinsicContentSize.height
     let pad = FindBarView.labelPad
     label.frame = CGRect(x: right - width - pad, y: midY - height / 2, width: width + 2 * pad, height: height)
@@ -304,7 +304,12 @@ final class FindTextButton: NSView {
 
   required init?(coder: NSCoder) { fatalError() }
 
-  var intrinsicWidth: CGFloat { ceil(label.intrinsicContentSize.width) - 4 + 16 }
+  private var textWidth: CGFloat {
+    let scale = window?.backingScaleFactor ?? 2
+    return ceil(label.attributedStringValue.size().width * scale) / scale
+  }
+
+  var intrinsicWidth: CGFloat { textWidth + 16 }
 
   override func updateTrackingAreas() {
     super.updateTrackingAreas()
@@ -333,7 +338,7 @@ final class FindTextButton: NSView {
   override func layout() {
     super.layout()
     let s = label.intrinsicContentSize
-    label.frame = CGRect(x: 8 - 2, y: (bounds.height - s.height) / 2, width: s.width, height: s.height)
+    label.frame = CGRect(x: 8 - FindBarView.labelPad, y: (bounds.height - s.height) / 2 - FindBarView.textRise, width: textWidth + 2 * FindBarView.labelPad, height: s.height)
   }
 
   func apply() {

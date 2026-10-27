@@ -6,7 +6,7 @@ import { useBrowser } from "../store/browser";
 import { useWindowId, useWindowUi } from "../store/hooks";
 import { activeTabId } from "../store/model";
 import { useStoreWhile } from "../store/tabWatch";
-import { usePage } from "./layout/pageState";
+import { pageOf, usePage } from "./layout/pageState";
 import { dismissHover, setRowsCovered } from "./sidebar/hover";
 import { commandBarCentred, useCardAnchors, useUrlAnchors } from "./layout/windowLayout";
 import { barWidth } from "./NewTabPage";
@@ -14,11 +14,13 @@ import { markPanelFrame } from "../telemetry/journeys";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
 import { breadcrumb } from "@ardia/core";
-import { nativeOmniboxAvailable, nativeUrlPrefixWidth } from "@ardia/settings";
+import { nativeOmniboxAvailable, nativeUrlPrefixWidth, showNativePanel } from "@ardia/settings";
 import { Omnibox as ReactOmnibox, PANEL_TEXT_LEFT } from "./Omnibox";
 import { NativeOmniboxBar } from "./omnibox/NativeOmniboxBar";
 import { closePanelToHeroBar, type BarDismissal } from "./omnibox/barState";
 import { insecureLevel, URL_FIELD, urlTextLeft } from "./Toolbar";
+import { peekTabId } from "../store/peek";
+import { useTabDeveloperMode } from "./site/developerMode";
 
 const RIGHT_OF_URL = 40;
 const ABOVE_PANE = 5.5;
@@ -48,7 +50,76 @@ AccessibilityInfo.addEventListener("reduceMotionChanged", (on) => (reduceMotion 
 
 type Box = { left: number; top: number; width: number; height: number };
 
+const windowWidths = new Map<string, number>();
+const panelStyles = new Map<string, { fill: string; border: string; shadowOpacity: number; radius: number }>();
+
 export function CommandPanel({ windowWidth }: { windowWidth: number }) {
+  const windowId = useWindowId();
+  windowWidths.set(windowId, windowWidth);
+  return (
+    <>
+      {nativeOmniboxAvailable() ? <NativePanelHost windowId={windowId} windowWidth={windowWidth} /> : null}
+      <CommandPanelBody windowWidth={windowWidth} />
+    </>
+  );
+}
+
+type PanelGeometry = { left: number; top: number; width: number; from: Box | null };
+
+function toolbarPanelGeometry(anchor: { left: number; top: number; width: number }, insecure: boolean, hasField: boolean, windowWidth: number, text: string, native: boolean): PanelGeometry {
+  const room = (left: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - WINDOW_MARGIN : fallback);
+  const shift = native ? NATIVE_URL_TEXT_SHIFT : { x: 0, y: 0 };
+  const aligned = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT + shift.x);
+  const lead = native ? schemeLead(text) : 0;
+  const left = lead && aligned - lead >= WINDOW_MARGIN ? aligned - lead : aligned;
+  const top = Math.max(0.5, anchor.top - ABOVE_PANE) + shift.y;
+  const covering = anchor.left + anchor.width + RIGHT_OF_URL - left;
+  const width = Math.min(Math.max(covering, MIN_WIDTH), room(left, covering));
+  const from = hasField ? { left: anchor.left, top: anchor.top + URL_FIELD.top, width: anchor.width, height: URL_FIELD.height } : null;
+  return { left, top, width, from };
+}
+
+function nativePanelJson(windowId: string, tabId: string, text: string, open: boolean): string | null {
+  const anchor = useUrlAnchors.getState()[windowId];
+  const tab = useBrowser.getState().tabs[tabId];
+  const style = panelStyles.get(windowId);
+  if (!anchor || anchor.sidebar || !tab?.url || !style) return null;
+  const geometry = toolbarPanelGeometry(anchor, !!insecureLevel(pageOf(tabId)), true, windowWidths.get(windowId) ?? 0, text, true);
+  return JSON.stringify({ open, tabId, text, ...geometry, ...style });
+}
+
+export function showNativePanelNow(windowId: string, text: string) {
+  if (!nativeOmniboxAvailable()) return;
+  const s = useBrowser.getState();
+  const tabId = activeTabId(s, windowId);
+  if (!tabId || commandBarCentred(s, windowId)) return;
+  const json = nativePanelJson(windowId, tabId, text, true);
+  if (json) showNativePanel(windowId, json);
+}
+
+function NativePanelHost({ windowId, windowWidth }: { windowId: string; windowWidth: number }) {
+  const theme = useTheme();
+  const { panel } = useWindowUi();
+  const tabId = useBrowser((s) => activeTabId(s, windowId));
+  const url = useBrowser((s) => (tabId ? (s.tabs[tabId]?.url ?? "") : ""));
+  const insecure = usePage(tabId, (p) => !!insecureLevel(p));
+  const anchor = useUrlAnchors((s) => s[windowId]);
+  const centred = useBrowser((s) => commandBarCentred(s, windowId));
+  const peeking = useBrowser((s) => !!peekTabId(s, windowId));
+  const developer = useTabDeveloperMode(tabId);
+  panelStyles.set(windowId, { fill: theme.panel, border: theme.panelBorder, shadowOpacity: theme.panelShadowOpacity, radius: PANEL_RADIUS });
+  if (!tabId || !url || !anchor || anchor.sidebar) return null;
+  const open = panel.open && !panel.newTab && !centred;
+  const text = open ? panel.initialText : url;
+  const ready = !panel.open && !centred && !peeking && !developer;
+  const geometry = toolbarPanelGeometry(anchor, insecure, true, windowWidth, text, true);
+  const json = JSON.stringify({ open, ready, tabId, text, ...geometry, ...panelStyles.get(windowId) });
+  const onCancel = () => useBrowser.getState().closePanel(windowId);
+  const onDone = (reason?: BarDismissal) => closePanelToHeroBar(windowId, tabId, reason);
+  return <NativeOmniboxBar variant="panel" tabId={tabId} initialText={text} panel={json} idle={!open} onCancel={onCancel} onDone={onDone} />;
+}
+
+function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const { panel } = useWindowUi();
@@ -97,14 +168,8 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
   }
 
   const native = nativeOmniboxAvailable();
-  const shift = native ? NATIVE_URL_TEXT_SHIFT : { x: 0, y: 0 };
-  const aligned = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT + shift.x);
-  const lead = native ? schemeLead(panel.initialText) : 0;
-  const left = lead && aligned - lead >= WINDOW_MARGIN ? aligned - lead : aligned;
-  const top = Math.max(0.5, anchor.top - ABOVE_PANE) + shift.y;
-  const covering = anchor.left + anchor.width + RIGHT_OF_URL - left;
-  const width = Math.min(Math.max(covering, MIN_WIDTH), room(left, covering));
-  const from = hasField ? { left: anchor.left, top: anchor.top + URL_FIELD.top, width: anchor.width, height: URL_FIELD.height } : null;
+  if (native && hasField) return null;
+  const { left, top, width, from } = toolbarPanelGeometry(anchor, insecure, hasField, windowWidth, panel.initialText, native);
   return (
     <Grow from={from} frame={{ left, top, width }} openHeight={PANEL_OPEN_HEIGHT} radius={PANEL_RADIUS} surface={surface(PANEL_RADIUS)}>
       <OutsidePressArea onOutsidePress={onCancel}>

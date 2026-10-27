@@ -37,7 +37,7 @@ export function useOmniboxDriver(id: string, driver: OmniboxDriver) {
   const latest = useRef(driver);
   latest.current = driver;
   useEffect(() => {
-    if (!__DEV__ && !perfProbeEnabled) return;
+    if (!id || (!__DEV__ && !perfProbeEnabled)) return;
     const proxy: OmniboxDriver = {
       type: (text) => latest.current.type(text),
       clear: () => latest.current.clear(),

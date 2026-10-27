@@ -38,6 +38,10 @@ final class NativeOmniboxView: ExpoView {
   var themeTokens: [String: String] = [:]
   var dark = false
   var driven = false
+  var panelJSON = ""
+  private var awaitingOpen = false
+  private var host: OmniboxPanelHostView?
+  nonisolated(unsafe) static var hosts: [String: WeakOmniboxHost] = [:]
 
   override var isFlipped: Bool { true }
 
@@ -53,8 +57,81 @@ final class NativeOmniboxView: ExpoView {
     addSubview(bar)
   }
 
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return host != nil && (hit === self || hit === host) ? nil : hit
+  }
+
+  func setPanel(_ json: String) {
+    panelJSON = json
+    guard !json.isEmpty else { return }
+    if host == nil {
+      bar.removeFromSuperview()
+      let made = OmniboxPanelHostView(bar: bar)
+      made.frame = bounds
+      made.autoresizingMask = [.width, .height]
+      made.onOutside = { [weak self] in self?.onCancel([:]) }
+      made.onHeight = { [weak self] h in self?.onBarLayout(["height": h]) }
+      addSubview(made)
+      host = made
+      NotificationCenter.default.addObserver(self, selector: #selector(commandWillDispatch(_:)), name: Notification.Name("SolaraCommandWillDispatch"), object: nil)
+    }
+  }
+
+  @objc private func commandWillDispatch(_ note: Notification) {
+    MainActor.assumeIsolated {
+      guard note.userInfo?["command"] as? String == "focusCommandBar", let window, note.object as? NSWindow === window,
+        let host, !host.shown, let panel = NativeOmniboxPanel.decode(panelJSON), panel.ready, !panel.tabId.isEmpty
+      else { return }
+      awaitingOpen = true
+      open(panel, in: host)
+      DispatchQueue.main.async {
+        window.displayIfNeeded()
+        CATransaction.flush()
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+        MainActor.assumeIsolated {
+          guard let self, self.awaitingOpen else { return }
+          self.awaitingOpen = false
+          self.host?.hide()
+        }
+      }
+    }
+  }
+
+  func showPanel(_ json: String) {
+    guard let host, let panel = NativeOmniboxPanel.decode(json) else { return }
+    host.style = panel.style
+    if panel.tabId.isEmpty { return host.hide() }
+    if !panel.open {
+      if awaitingOpen { return }
+      host.hide()
+      return host.prepare(panel.placement, identity: identity(of: panel))
+    }
+    awaitingOpen = false
+    open(panel, in: host)
+  }
+
+  private func identity(of panel: NativeOmniboxPanel) -> OmniboxBarIdentity {
+    OmniboxBarIdentity(windowId: windowId, tabId: panel.tabId, profileId: profileId, variant: .panel, opensTab: false, initialText: panel.text)
+  }
+
+  private func open(_ panel: NativeOmniboxPanel, in host: OmniboxPanelHostView) {
+    let next = identity(of: panel)
+    let fresh = !host.shown || host.identity != next
+    host.show(panel.placement, identity: next)
+    guard fresh else { return }
+    if driven { DispatchQueue.main.async { [weak self] in if let self, self.driven { self.onDriverState(["json": self.driverStateJSON()]) } } }
+    FieldTimingMarks.now("panel", "configured")
+    FieldTimingMarks.atPresent("panel", "content")
+  }
+
   func propsDidUpdate() {
     bar.theme = NewTabTheme(dark: dark, tokens: themeTokens)
+    if host != nil {
+      if !windowId.isEmpty { NativeOmniboxView.hosts[windowId] = WeakOmniboxHost(view: self) }
+      return showPanel(panelJSON)
+    }
     if !windowId.isEmpty && !tabId.isEmpty {
       let before = bar.model
       bar.configure(OmniboxBarIdentity(windowId: windowId, tabId: tabId, profileId: profileId, variant: variant, opensTab: opensTab, initialText: initialText))
@@ -126,5 +203,31 @@ enum FieldTimingMarks {
 
   static func atPresent(_ key: String, _ kind: String) {
     NotificationCenter.default.post(name: Notification.Name("ACFieldMarkAtPresent"), object: [key, kind] as NSArray)
+  }
+}
+
+final class WeakOmniboxHost {
+  weak var view: NativeOmniboxView?
+  init(view: NativeOmniboxView) { self.view = view }
+}
+
+struct NativeOmniboxPanel {
+  var open: Bool
+  var ready: Bool
+  var tabId: String
+  var text: String
+  var placement: OmniboxPanelPlacement
+  var style: OmniboxPanelStyle
+
+  static func decode(_ json: String) -> NativeOmniboxPanel? {
+    guard let data = json.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    func num(_ v: Any?) -> CGFloat { CGFloat((v as? NSNumber)?.doubleValue ?? 0) }
+    let from = (o["from"] as? [String: Any]).map { CGRect(x: num($0["left"]), y: num($0["top"]), width: num($0["width"]), height: num($0["height"])) }
+    let style = OmniboxPanelStyle(
+      fill: CSSColor(o["fill"] as? String ?? "#FFFFFF") ?? CSSColor("#FFFFFF")!, border: CSSColor(o["border"] as? String ?? "") ?? CSSColor("rgba(0,0,0,0.1)")!,
+      shadowOpacity: (o["shadowOpacity"] as? NSNumber)?.doubleValue ?? 0.2, radius: num(o["radius"] ?? 17))
+    return NativeOmniboxPanel(
+      open: o["open"] as? Bool ?? false, ready: o["ready"] as? Bool ?? false, tabId: o["tabId"] as? String ?? "", text: o["text"] as? String ?? "",
+      placement: OmniboxPanelPlacement(left: num(o["left"]), top: num(o["top"]), width: num(o["width"]), from: from), style: style)
   }
 }

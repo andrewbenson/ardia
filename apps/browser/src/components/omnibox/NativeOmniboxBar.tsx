@@ -1,6 +1,6 @@
 import { NativeOmnibox, type NativeOmniboxHandle, type NativeOmniboxVariant } from "@ardia/settings";
 import { useMemo, useRef, useState } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { commandBarFocus } from "../../lib/focusClaims";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
@@ -21,8 +21,12 @@ export function NativeOmniboxBar({
   onDone = onCancel,
   opensTab,
   floating = false,
+  panel,
+  idle = false,
 }: {
   variant: NativeOmniboxVariant;
+  panel?: string;
+  idle?: boolean;
   floating?: boolean;
   tabId: string;
   initialText?: string;
@@ -49,13 +53,14 @@ export function NativeOmniboxBar({
     if (opensTab && disposition !== "newWindow") return openFromNewTabBar(windowId, opensTab, url);
     openFromBar(url, tabId, disposition);
   };
-  const { props } = useNativeBar({ ref, windowId, tabId, profileId, driverId: `${windowId}:${variant}`, focusTag: commandBarFocus, go });
+  const { props } = useNativeBar({ ref, windowId, tabId, profileId, driverId: idle ? "" : `${windowId}:${variant}`, focusTag: commandBarFocus, go });
 
   return (
-    <View style={{ height: height ?? undefined }}>
+    <View style={panel === undefined ? { height: height ?? undefined } : StyleSheet.absoluteFill} pointerEvents={panel === undefined ? "auto" : "box-none"}>
       <NativeOmnibox
         ref={ref}
-        style={{ flex: 1, minHeight: height ?? 1 }}
+        panel={panel}
+        style={panel === undefined ? { flex: 1, minHeight: height ?? 1 } : StyleSheet.absoluteFill}
         windowId={windowId}
         tabId={tabId}
         profileId={profileId}

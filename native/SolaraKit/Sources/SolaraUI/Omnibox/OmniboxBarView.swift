@@ -50,8 +50,10 @@ public final class OmniboxBarView: NSView {
 
   required init?(coder: NSCoder) { fatalError() }
 
-  public func configure(_ next: OmniboxBarIdentity) {
-    guard identity != next else { return }
+  public var activatesOnWindow = true
+
+  public func configure(_ next: OmniboxBarIdentity, fresh: Bool = false) {
+    guard identity != next || fresh else { return }
     identity = next
     let made = HeroBarModel(
       windowId: next.windowId, tabId: next.tabId, profileId: next.profileId, incognito: incognito,
@@ -63,7 +65,12 @@ public final class OmniboxBarView: NSView {
     focusedOnce = false
     rebuild()
     watchSources()
-    if window != nil { focusSoon() }
+    if window != nil && activatesOnWindow { focusSoon() }
+  }
+
+  public func activate() {
+    model?.mounted()
+    focusSoon()
   }
 
   public func focusBar() {
@@ -79,7 +86,7 @@ public final class OmniboxBarView: NSView {
 
   public override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
-    guard window != nil else { return }
+    guard window != nil, activatesOnWindow else { return }
     model?.mounted()
     focusSoon()
   }

@@ -12,6 +12,14 @@ public class OmniboxModule: Module {
       ProcessInfo.processInfo.environment["ARDIA_NATIVE_OMNIBOX"] != "0" && NativeSettingsHandle.active
     }
 
+    AsyncFunction("showPanel") { (windowId: String, json: String) in
+      MainActor.assumeIsolated {
+        guard let view = NativeOmniboxView.hosts[windowId]?.view else { return }
+        view.panelJSON = json
+        view.showPanel(json)
+      }
+    }.runOnQueue(.main)
+
     Function("prefixWidth") { (prefix: String, text: String) -> Double in
       URLPrefixWidths.width(prefix: prefix, in: text, size: Double(OmniboxBarMetrics.panelTextSize))
     }
@@ -37,6 +45,7 @@ public class OmniboxModule: Module {
       Prop("theme") { (view: NativeOmniboxView, v: [String: String]?) in MainActor.assumeIsolated { view.themeTokens = v ?? [:] } }
       Prop("offline") { (view: NativeOmniboxView, v: Bool?) in MainActor.assumeIsolated { view.bar.fetcher = v == true ? nil : NewTabNetwork.fetcher } }
       Prop("driven") { (view: NativeOmniboxView, v: Bool?) in MainActor.assumeIsolated { view.driven = v ?? false } }
+      Prop("panel") { (view: NativeOmniboxView, v: String?) in MainActor.assumeIsolated { view.setPanel(v ?? "") } }
 
       OnViewDidUpdateProps { (view: NativeOmniboxView) in MainActor.assumeIsolated { view.propsDidUpdate() } }
 

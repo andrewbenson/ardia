@@ -22,6 +22,7 @@ export type NativeOmniboxProps = ViewProps & {
   theme: Record<string, string>;
   offline?: boolean;
   driven?: boolean;
+  panel?: string;
   onOpen?(e: Event<{ url: string; disposition: NewTabDisposition }>): void;
   onSwitch?(e: Event<{ tabId: string; url: string; disposition: NewTabDisposition }>): void;
   onAction?(e: Event<{ id: string }>): void;
@@ -42,7 +43,11 @@ export type NativeOmniboxProps = ViewProps & {
 
 export type NativeOmniboxHandle = NativeNewTabHandle;
 
-const native = requireOptionalNativeModule<{ available(): boolean; prefixWidth(prefix: string, text: string): number }>("SolaraOmniboxBar");
+const native = requireOptionalNativeModule<{ available(): boolean; prefixWidth(prefix: string, text: string): number; showPanel(windowId: string, json: string): Promise<void> }>("SolaraOmniboxBar");
+
+export function showNativePanel(windowId: string, json: string): void {
+  native?.showPanel(windowId, json).catch(() => {});
+}
 
 export function nativeUrlPrefixWidth(prefix: string, text: string): number {
   try {

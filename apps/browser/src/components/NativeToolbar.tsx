@@ -12,6 +12,7 @@ import { useIsBookmarked, useSettings, useTabLive } from "../store/hooks";
 import { bookmarkProfileId } from "../store/model";
 import { usePageProgress } from "../store/pageProgress";
 import { openModeFor, openUrl } from "./bookmarks/actions";
+import { showNativePanelNow } from "./CommandPanel";
 import { useNativeToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
 import { type ToolbarGeometry } from "./layout/geometry";
 import { closeHistoryMenu, goBack, goForward, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu } from "./layout/history";
@@ -252,6 +253,7 @@ export function NativeToolbar({
       case "url":
         if (c.kind === "menu") return void showUrlBarMenu(tab);
         if (developer) return editing ? undefined : startUrlEdit(tabId);
+        showNativePanelNow(windowId, tab.url);
         return useBrowser.getState().openPanel(windowId, tab.url);
       case "urlEdit":
         if (c.kind === "focus") return claimFocusTag(windowId, urlEditFocus(tabId), () => findNodeHandle(view.current));

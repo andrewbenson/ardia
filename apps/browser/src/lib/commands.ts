@@ -1,3 +1,4 @@
+import { showNativePanelNow } from "../components/CommandPanel";
 import { markPanelFrame } from "../telemetry/journeys";
 import {
   closeWindow as closeNativeWindow,
@@ -163,7 +164,10 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
         expectFocus(windowId, urlEditFocus(page.id));
         return startUrlEdit(page.id);
       }
-      if (page) return s.openPanel(windowId, page.url);
+      if (page) {
+        showNativePanelNow(windowId, page.url);
+        return s.openPanel(windowId, page.url);
+      }
       if (isEmptyCardTab(s, tab) && showNewTabBar(windowId)) return;
       if (tab && addressBarInSidebar(s, windowId) && !commandBarCentred(s, windowId)) return s.openPanel(windowId, "");
       if (!focusHeroBar(windowId, tabId)) return tab ? s.openPanel(windowId, "") : undefined;

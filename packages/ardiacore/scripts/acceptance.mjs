@@ -4019,6 +4019,8 @@ try {
     const other = s.tabs.find((x) => x.id !== first.id && x.id !== s.active && x.url?.startsWith(`${base}/d`));
     if (!other) throw new Error("no background tab");
     const t = await pageFor(other.id, `${base}/d`);
+    await evalApp(`return ac.webviews.get("${other.id}")?.setFrozen(false)`);
+    await sleep(300);
     await cdp(t, "Runtime.evaluate", { expression: "window.__life = []; document.addEventListener('freeze', () => __life.push('freeze')); document.addEventListener('resume', () => __life.push('resume')); true" });
     await evalApp(`return ac.webviews.get("${other.id}")?.setFrozen(true)`);
     await sleep(1500);

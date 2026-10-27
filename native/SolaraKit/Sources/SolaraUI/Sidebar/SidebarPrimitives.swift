@@ -98,31 +98,29 @@ final class SurfaceLayer: CALayer {
   }
 }
 
-final class FadeLabel: NSView {
-  private let field = NSTextField(labelWithString: "")
+final class FadeLabel: NSTextField {
   private let fade = CAGradientLayer()
-  private var fontSize: CGFloat = 13
-  private var weight: NSFont.Weight = .regular
 
-  var text = "" { didSet { if text != oldValue { field.stringValue = text; relayout() } } }
-  var color: NSColor = .labelColor { didSet { if color != oldValue { field.textColor = color } } }
+  var text = "" { didSet { if text != oldValue { stringValue = text; relayout() } } }
+  var color: NSColor = .labelColor { didSet { if color != oldValue { textColor = color } } }
   var fadeWidth: CGFloat = 24 { didSet { relayout() } }
 
   override var isFlipped: Bool { true }
 
   init(fontSize: CGFloat = 13, weight: NSFont.Weight = .regular) {
-    self.fontSize = fontSize
-    self.weight = weight
     super.init(frame: .zero)
+    cell = CenteredLabelCell(textCell: "")
+    isBezeled = false
+    isBordered = false
+    drawsBackground = false
+    isEditable = false
+    isSelectable = false
+    lineBreakMode = .byClipping
+    maximumNumberOfLines = 1
+    cell?.truncatesLastVisibleLine = false
+    font = .monospacedDigitSystemFont(ofSize: fontSize, weight: weight)
+    textColor = color
     wantsLayer = true
-    layer?.masksToBounds = true
-    field.lineBreakMode = .byClipping
-    field.maximumNumberOfLines = 1
-    field.cell?.truncatesLastVisibleLine = false
-    field.isSelectable = false
-    field.font = .monospacedDigitSystemFont(ofSize: fontSize, weight: weight)
-    field.wantsLayer = true
-    addSubview(field)
     fade.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
     fade.startPoint = CGPoint(x: 0, y: 0.5)
     fade.endPoint = CGPoint(x: 1, y: 0.5)
@@ -133,28 +131,37 @@ final class FadeLabel: NSView {
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+  override var acceptsFirstResponder: Bool { false }
+
   override func setFrameSize(_ newSize: NSSize) {
     let changed = newSize != frame.size
     super.setFrameSize(newSize)
     if changed { relayout() }
   }
 
-  var textWidth: CGFloat { field.fittingSize.width }
+  var textWidth: CGFloat { cell?.cellSize.width ?? 0 }
 
   private func relayout() {
-    let fitting = field.fittingSize
-    field.frame = NSRect(x: 0, y: (bounds.height - fitting.height) / 2, width: max(bounds.width, fitting.width), height: fitting.height)
-    guard bounds.width > 0, fitting.width > bounds.width + 0.5 else {
-      field.layer?.mask = nil
+    guard bounds.width > 0, textWidth > bounds.width + 0.5 else {
+      layer?.mask = nil
       return
     }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    fade.frame = CGRect(x: 0, y: 0, width: bounds.width, height: field.frame.height)
+    fade.frame = bounds
     let start = max(0, 1 - fadeWidth / bounds.width)
     fade.locations = [0, NSNumber(value: Double(start)), 1]
-    field.layer?.mask = fade
+    layer?.mask = fade
     CATransaction.commit()
+  }
+}
+
+final class CenteredLabelCell: NSTextFieldCell {
+  override func drawingRect(forBounds rect: NSRect) -> NSRect {
+    let base = super.drawingRect(forBounds: rect)
+    let height = cellSize.height
+    let offset = (rect.height - height) / 2
+    return NSRect(x: base.minX, y: rect.minY + offset + (base.minY - rect.minY), width: max(base.width, cellSize.width), height: height)
   }
 }
 

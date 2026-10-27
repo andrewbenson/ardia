@@ -3,29 +3,29 @@ import SwiftUI
 
 @MainActor
 public final class PageFavicons {
-  private let load: (_ url: String, _ favicon: String?, _ profileId: String) async -> NSImage?
+  private let load: (_ url: String, _ favicon: String?, _ profileId: String, _ dark: Bool) async -> NSImage?
   private let bundledImage: (_ name: String) -> NSImage?
   private var cache: [String: NSImage] = [:]
   private var misses: Set<String> = []
   private var bundledCache: [String: NSImage] = [:]
 
   public init(
-    load: @escaping (_ url: String, _ favicon: String?, _ profileId: String) async -> NSImage?,
+    load: @escaping (_ url: String, _ favicon: String?, _ profileId: String, _ dark: Bool) async -> NSImage?,
     bundled: @escaping (_ name: String) -> NSImage? = { _ in nil }
   ) {
     self.load = load
     bundledImage = bundled
   }
 
-  static func key(_ url: String, _ favicon: String?, _ profileId: String) -> String { "\(profileId)\u{1}\(favicon ?? "")\u{1}\(url)" }
+  static func key(_ url: String, _ favicon: String?, _ profileId: String, dark: Bool) -> String { "\(dark ? 1 : 0)\u{1}\(profileId)\u{1}\(favicon ?? "")\u{1}\(url)" }
 
-  func cached(_ url: String, _ favicon: String?, _ profileId: String) -> NSImage? { cache[Self.key(url, favicon, profileId)] }
+  func cached(_ url: String, _ favicon: String?, _ profileId: String, dark: Bool) -> NSImage? { cache[Self.key(url, favicon, profileId, dark: dark)] }
 
-  func fetch(_ url: String, _ favicon: String?, _ profileId: String) async -> NSImage? {
-    let key = Self.key(url, favicon, profileId)
+  func fetch(_ url: String, _ favicon: String?, _ profileId: String, dark: Bool) async -> NSImage? {
+    let key = Self.key(url, favicon, profileId, dark: dark)
     if let image = cache[key] { return image }
     if misses.contains(key) { return nil }
-    guard let image = await load(url, favicon, profileId) else {
+    guard let image = await load(url, favicon, profileId, dark) else {
       misses.insert(key)
       return nil
     }
@@ -64,7 +64,7 @@ struct PageFavicon: View {
 
   var body: some View {
     Group {
-      if let shown = image ?? favicons?.cached(url, favicon, profileId) ?? favicons?.bundled(url, dark: theme.dark) {
+      if let shown = image ?? favicons?.cached(url, favicon, profileId, dark: theme.dark) ?? favicons?.bundled(url, dark: theme.dark) {
         Image(nsImage: shown)
           .resizable()
           .interpolation(.high)
@@ -84,7 +84,7 @@ struct PageFavicon: View {
       }
     }
     .frame(width: size, height: size)
-    .task(id: PageFavicons.key(url, favicon, profileId)) { image = await favicons?.fetch(url, favicon, profileId) }
+    .task(id: PageFavicons.key(url, favicon, profileId, dark: theme.dark)) { image = await favicons?.fetch(url, favicon, profileId, dark: theme.dark) }
     .accessibilityHidden(true)
   }
 

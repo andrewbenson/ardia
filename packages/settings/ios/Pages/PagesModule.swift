@@ -34,9 +34,8 @@ public class PagesModule: Module {
 @MainActor
 enum PageNetwork {
   static let favicons = PageFavicons(
-    load: { url, favicon, profile in
+    load: { url, favicon, profile, dark in
       if let favicon, favicon.hasPrefix("data:") || favicon.hasPrefix("file:") || favicon.hasPrefix("/"), let image = SettingsAdapters.image(favicon) { return image }
-      let dark = await MainActor.run { NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
       guard let uri = await SettingsAdapters.js("newTab.favicon", url, profile, dark) as? String else { return nil }
       if let image = SettingsAdapters.image(uri) { return image }
       guard let source = URL(string: uri), source.isFileURL, let data = try? Data(contentsOf: source) else { return nil }

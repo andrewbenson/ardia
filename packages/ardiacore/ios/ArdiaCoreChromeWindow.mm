@@ -1657,10 +1657,12 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
 @property(nonatomic, readonly) ArdiaCoreTab *tab;
 - (void)askPermission:(NSDictionary *)request;
 - (BOOL)dropPermission:(NSString *)requestId;
+- (NSDictionary *)originState;
 @end
 
 @interface ArdiaCorePopupOriginStrip : NSView
 - (void)showURL:(NSString *)url security:(NSString *)level;
+- (NSDictionary *)originState;
 @end
 
 namespace {
@@ -1779,6 +1781,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 @implementation ArdiaCorePopupOriginStrip {
   NSImageView *_glyph;
   NSTextField *_origin;
+  NSString *_symbol;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -1797,6 +1800,14 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 
 - (BOOL)isOpaque {
   return YES;
+}
+
+- (NSDictionary *)originState {
+  return @{
+    @"origin" : _origin.stringValue ?: @"",
+    @"symbol" : _symbol ?: @"",
+    @"description" : _glyph.image.accessibilityDescription ?: @"",
+  };
 }
 
 - (BOOL)mouseDownCanMoveWindow {
@@ -1834,6 +1845,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
     description = @"Connection is not secure";
     if ([level isEqualToString:@"dangerous"]) tint = [NSColor colorWithSRGBRed:1 green:0x5F / 255.0 blue:0x57 / 255.0 alpha:1];
   }
+  _symbol = symbol;
   _glyph.image = [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:description];
   _glyph.contentTintColor = tint;
 }
@@ -1991,6 +2003,10 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   _coreWindow.window.title = title.length && ![title isEqualToString:url] ? title : PopupOriginText(url);
 }
 
+- (NSDictionary *)originState {
+  return [_strip originState];
+}
+
 - (void)updateOrigin {
   id level = [_tab respondsToSelector:@selector(securityInfo)] ? _tab.securityInfo[@"chromium"] : nil;
   [_strip showURL:_tab.url ?: @"" security:[level isKindOfClass:NSString.class] ? level : nil];
@@ -2092,6 +2108,12 @@ void OpenPopupWindow(ArdiaCoreTab *tab, ArdiaCoreWebView *opener) {
 
 NSUInteger PopupWindowCount() {
   return PopupWindows().count;
+}
+
+NSArray<NSDictionary *> *PopupOrigins() {
+  NSMutableArray *list = [NSMutableArray array];
+  for (ArdiaCorePopupWindow *popup in PopupWindows()) [list addObject:[popup originState]];
+  return list;
 }
 
 bool AskPermissionInPopupWindow(ArdiaCoreTab *tab, NSDictionary *request) {

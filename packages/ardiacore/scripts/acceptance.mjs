@@ -38,6 +38,7 @@
 import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { networkInterfaces } from "node:os";
 import { createServer as createHttpsServer } from "node:https";
 import { basename, join, resolve } from "node:path";
 import { X509Certificate, createHash, createSign, generateKeyPairSync } from "node:crypto";
@@ -55,7 +56,7 @@ const usesPageA = [
   "restore-after-close", "discard-outcomes", "capture-picture", "unresponsive", "permission-dismissed",
   "save-page", "activate-request", "extension-popup-and-panel", "print-preview",
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
-  "private-windows-create", "extension-installed-bubble", "popup-window", "autofill-save-prompts",
+  "private-windows-create", "extension-installed-bubble", "popup-window", "popup-origin-strip", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "pip-window", "page-focus",
   "fullscreen-tab-switch", "fullscreen-native", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
@@ -2646,6 +2647,36 @@ try {
     if (asTab) throw new Error("the popup became a tab");
     if (size !== "480x360" || !hasOpener) throw new Error(`popup page ${page}`);
     return { size, opener: hasOpener, message };
+  });
+
+  await check("popup-origin-strip", async () => {
+    const lan = Object.values(networkInterfaces()).flat().find((i) => i?.family === "IPv4" && !i.internal)?.address;
+    if (!lan) throw new Error("no non-loopback IPv4 address to serve an http pop-up from");
+    const plain = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<!doctype html><title>strip</title>plain http");
+    });
+    await new Promise((r) => plain.listen(0, lan, r));
+    const url = `http://${lan}:${plain.address().port}/strip-page`;
+    try {
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+      const opener = await pageFor(first.id, `${base}/a`);
+      const popups = async () => (await cef(`engineInfo()`)).popupWindows;
+      const before = await popups();
+      await cdp(opener, "Runtime.evaluate", { expression: `window.open("${url}", "strip", "width=480,height=360"); true`, userGesture: true });
+      const t = await until("the http pop-up's page", () => pageTarget("/strip-page"));
+      let last = null;
+      const strip = await until("the strip marks the http pop-up not secure", async () => {
+        last = (await cef(`engineInfo()`)).popupOrigins.find((o) => o.origin.includes(lan)) ?? null;
+        return last?.symbol === "lock.open.trianglebadge.exclamationmark.fill" ? last : null;
+      }, 10000).catch(() => { throw new Error(`strip ${JSON.stringify(last)}`); });
+      await closeFromPage(t);
+      await until("the pop-up closed", async () => ((await popups()) === before ? true : null), 10000);
+      if (strip.description !== "Connection is not secure") throw new Error(`strip ${JSON.stringify(strip)}`);
+      return strip;
+    } finally {
+      plain.close();
+    }
   });
 
   await check("download", async () => {

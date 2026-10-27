@@ -263,7 +263,8 @@ public final class SitePanelView: NSView {
         v.fill = { hovered, pressed in sitePanelTileFill(dark: dark, pressed: pressed, hovered: hovered) }
         v.refresh()
         let glyph = symbol(tile.icon, size: 15, color: tile.active == true ? theme.accent.ns : theme.icon.ns, box: CGSize(width: 22, height: 22))
-        glyph.frame.origin = CGPoint(x: (v.frame.width - 22) / 2, y: (SitePanelMetrics.actionHeight - 22) / 2)
+        let pixel = 1 / (window?.backingScaleFactor ?? 2)
+        glyph.frame.origin = CGPoint(x: ((x + (tw - 22) / 2) / pixel).rounded() * pixel - v.frame.minX, y: (SitePanelMetrics.actionHeight - 22) / 2)
         v.addSubview(glyph)
         v.toolTip = tile.label
         v.setAccessibilityRole(.button)

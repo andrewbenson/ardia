@@ -9,7 +9,8 @@ import { shownPageId } from "../../store/peek";
 import { useWindowId } from "../../store/hooks";
 import { openFromPage, pageProfileId } from "../layout/openFromPage";
 import { PANEL, PromptButton } from "../layout/controls";
-import { Checkbox } from "../settings/controls";
+import { Checkbox, useFormColors } from "../settings/controls";
+import { nativeToolbarAvailable, NativePanelView, type NativePanelEvent } from "@ardia/settings";
 import {
   cancelInstall,
   closeExtensionPopup,
@@ -180,6 +181,29 @@ function InstallDialog({ request }: { request: InstallRequest }) {
   const title = kind === "re-enable" ? `Turn “${name}” back on?` : kind === "permissions" ? `“${name}” needs new permissions` : `Add “${name}”?`;
   const action = kind === "re-enable" ? "Turn On" : kind === "permissions" ? "Allow" : "Add Extension";
   const busy = request.status === "installing";
+  if (nativeToolbarAvailable()) {
+    return (
+      <Dialog windowId={request.windowId} onDismiss={busy ? undefined : cancelInstall} onSubmit={request.status === "error" ? cancelInstall : () => void confirmInstall()}>
+        <NativeDialogBody
+          kind="extensionInstall"
+          state={JSON.stringify({
+            status: request.status,
+            title,
+            error: request.error ?? null,
+            icon: pkg?.icon ?? null,
+            warnings,
+            loadedFrom: request.source === "unpacked" ? (pkg?.path ?? "") : null,
+            action,
+            dark: !!theme.dark,
+            theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, textTertiary: theme.textTertiary },
+            goButton: theme.goButton,
+            goButtonText: theme.goButtonText,
+          })}
+          onEvent={(e) => (e.kind === "confirm" ? void confirmInstall() : cancelInstall())}
+        />
+      </Dialog>
+    );
+  }
 
   let body;
   if (request.status === "error") {
@@ -242,6 +266,26 @@ function PinDialog({ windowId }: { windowId: string }) {
   const profile = useBrowser((s) => extensionProfile(s, windowId));
   const list = useWindowExtensions(windowId);
   const close = () => useExtensions.setState({ pinDialog: null });
+  const colors = useFormColors();
+  if (nativeToolbarAvailable()) {
+    return (
+      <Dialog windowId={windowId} onDismiss={close} onSubmit={close}>
+        <NativeDialogBody
+          kind="extensionPins"
+          state={JSON.stringify({
+            extensions: list.map((ext) => ({ id: ext.id, name: ext.name, icon: ext.actionIcon || ext.icon || null, pinned: !!ext.pinned })),
+            dark: !!theme.dark,
+            theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, textTertiary: theme.textTertiary, accent: colors.accent },
+            control: colors.control,
+            controlBorder: colors.controlBorder,
+            goButton: theme.goButton,
+            goButtonText: theme.goButtonText,
+          })}
+          onEvent={(e) => (e.kind === "toggle" ? void setPinned(profile, String(e.id), !!e.pinned) : close())}
+        />
+      </Dialog>
+    );
+  }
   return (
     <Dialog windowId={windowId} onDismiss={close} onSubmit={close}>
       <Text style={{ fontSize: 15, fontWeight: "600", color: theme.textPrimary }}>Pin Extensions</Text>
@@ -327,3 +371,12 @@ function Dialog({ windowId, onDismiss, onSubmit, children }: { windowId: string;
 
 const DIALOG_KEYS = [{ key: "Escape" }, { key: "Enter" }, { key: "Tab" }, { key: "Tab", shiftKey: true }];
 const targetTag = (event: object) => (event as { target?: number }).target;
+
+function NativeDialogBody({ kind, state, onEvent }: { kind: string; state: string; onEvent: (e: NativePanelEvent & { id?: unknown; pinned?: unknown }) => void }) {
+  const [height, setHeight] = useState<number | null>(null);
+  return (
+    <View style={{ height: height ?? undefined, minHeight: 1 }}>
+      <NativePanelView kind={kind} style={StyleSheet.absoluteFill} state={state} onPanelEvent={(e) => onEvent(e.nativeEvent)} onPanelHeight={(e) => setHeight(e.nativeEvent.height)} />
+    </View>
+  );
+}

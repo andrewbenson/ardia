@@ -111,6 +111,8 @@ final class NativePanelView: ExpoView {
   private var applied = ""
   private var zoom: ZoomPanelView?
   private var history: HistoryPanelView?
+  private var install: ExtensionInstallView?
+  private var pins: ExtensionPinsView?
   private var markUri: String?
 
   override var isFlipped: Bool { true }
@@ -152,9 +154,33 @@ final class NativePanelView: ExpoView {
       }
       loadMark((try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["newTabMark"] as? String, into: body)
       body.update(state)
+    case "extensionInstall":
+      guard let state = try? JSONDecoder().decode(ExtensionInstallState.self, from: data) else { return }
+      let body = install ?? dialog { ExtensionInstallView(frame: .zero) }
+      install = body
+      body.update(state)
+    case "extensionPins":
+      guard let state = try? JSONDecoder().decode(ExtensionPinsState.self, from: data) else { return }
+      let body = pins ?? dialog { ExtensionPinsView(frame: .zero) }
+      pins = body
+      body.update(state)
     default:
       break
     }
+  }
+
+  private func dialog<Body: ExtensionDialogBody>(_ build: () -> Body) -> Body {
+    let body = make(build)
+    body.onHeight = { [weak self] h in self?.onPanelHeight(["height": h]) }
+    body.onEvent = { [weak self] e in
+      switch e {
+      case .cancel: self?.onPanelEvent(["kind": "cancel"])
+      case .confirm: self?.onPanelEvent(["kind": "confirm"])
+      case .done: self?.onPanelEvent(["kind": "done"])
+      case .toggle(let id, let pinned): self?.onPanelEvent(["kind": "toggle", "id": id, "pinned": pinned])
+      }
+    }
+    return body
   }
 
   private func loadMark(_ uri: String?, into body: HistoryPanelView) {

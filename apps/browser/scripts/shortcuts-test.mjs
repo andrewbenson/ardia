@@ -655,13 +655,18 @@ await resetToPageField("", [0, 0]);
 await clipboard.set("after-escape");
 await post("l", 37);
 await sleep(500);
+const barBeforeEscape = await barValue();
+const responderBeforeEscape = await devWindow("responder");
 await post("\u001b", 53, []);
 await sleep(500);
 const responder = await devWindow("responder");
+const closedByEscape = !(await ac(`return ac.store.getState().windowUi.w1.panel.open;`));
 await post("v", 9);
 await sleep(600);
 const afterEscape = await pageField("f.value");
-check("Escape out of the command bar gives the page its focus back", responder.startsWith("RenderWidgetHostViewCocoa") && afterEscape === "after-escape", `first responder ${responder}, page field "${afterEscape}"`);
+check("Escape out of the command bar gives the page its focus back",
+  barBeforeEscape.includes("?t3") && !responderBeforeEscape.startsWith("RenderWidgetHostViewCocoa") && closedByEscape && responder.startsWith("RenderWidgetHostViewCocoa") && afterEscape === "after-escape",
+  `bar "${barBeforeEscape}" with ${responderBeforeEscape.split(" ")[0]}, closed ${closedByEscape}, first responder ${responder}, page field "${afterEscape}"`);
 await resetToPageField("", [0, 0]);
 
 for (const where of ["the find field", "the page"]) {

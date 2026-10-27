@@ -1,0 +1,107 @@
+import AppKit
+import SolaraModel
+
+@MainActor
+public final class TopStripView: NSView {
+  public let windowId: String
+  public let favicons = SidebarFavicons()
+  public var onAction: (StripAction) -> Void = { _ in }
+
+  private var pages: [String: StripPageView] = [:]
+  private var state: BrowserState?
+  private var host: StripHostState?
+  private var pagerPosition: Double?
+
+  public override var isFlipped: Bool { true }
+
+  public init(windowId: String) {
+    self.windowId = windowId
+    super.init(frame: .zero)
+    wantsLayer = true
+    layer?.masksToBounds = true
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  public override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+
+  public var current: StripPageView? { host.flatMap { pages[$0.profileId] } }
+
+  public func update(state: BrowserState, host: StripHostState) {
+    self.state = state
+    if self.host?.profileId != host.profileId, let pagerPosition, abs(pagerPosition - pagerPosition.rounded()) < 0.001 { self.pagerPosition = nil }
+    self.host = host
+    for id in pages.keys where !order.contains(id) {
+      pages[id]?.removeFromSuperview()
+      pages[id] = nil
+    }
+    place(refresh: true)
+  }
+
+  public func setPagerPosition(_ position: Double) {
+    pagerPosition = position
+    place(refresh: false)
+  }
+
+  public override func setFrameSize(_ newSize: NSSize) {
+    let changed = newSize != frame.size
+    super.setFrameSize(newSize)
+    if changed { place(refresh: true) }
+  }
+
+  private var order: [String] {
+    guard let host else { return [] }
+    guard let looks = host.pages, let state else { return [host.profileId] }
+    let paged = Set(looks.map(\.profileId))
+    let ids = state.profileOrder.filter { paged.contains($0) }
+    return ids.contains(host.profileId) ? ids : [host.profileId]
+  }
+
+  private var position: Double {
+    let ids = order
+    let home = Double(ids.firstIndex(of: host?.profileId ?? "") ?? 0)
+    guard ids.count > 1, let pagerPosition else { return home }
+    return pagerPosition
+  }
+
+  private var flare: CGFloat { host?.floating == true ? 0 : StripMetrics.flare }
+
+  private func place(refresh: Bool) {
+    guard let host, let state, bounds.width > 0 else { return }
+    let ids = order
+    let at = position
+    let pageWidth = host.pageWidth > 0 ? CGFloat(host.pageWidth) : max(0, bounds.width - flare * 2)
+    let width = pageWidth + flare * 2
+    for (slot, id) in ids.enumerated() {
+      let offset = Double(slot) - at
+      let shown = abs(offset) < 1 || ids.count == 1
+      if !shown {
+        pages[id]?.isHidden = true
+        continue
+      }
+      let page = page(id)
+      let frame = NSRect(x: (offset * width).rounded(), y: 0, width: width, height: bounds.height)
+      let resized = page.frame.size != frame.size || page.pageWidth != pageWidth
+      if page.frame != frame { page.frame = frame }
+      page.pageWidth = pageWidth
+      page.isHidden = false
+      if refresh || resized {
+        let look = id == host.profileId ? host : host.pages?.first { $0.profileId == id }.map(host.page) ?? host
+        page.update(state: state, host: look, current: id == host.profileId)
+      }
+    }
+  }
+
+  private func page(_ id: String) -> StripPageView {
+    if let page = pages[id] { return page }
+    let page = StripPageView(windowId: windowId, profileId: id, favicons: favicons)
+    page.onAction = { [weak self] action in self?.onAction(action) }
+    page.isHidden = true
+    pages[id] = page
+    addSubview(page)
+    return page
+  }
+}

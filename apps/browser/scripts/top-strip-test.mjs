@@ -1,0 +1,183 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { inflateSync } from "node:zlib";
+import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
+
+const args = process.argv.slice(2);
+const appArg = args.find((a) => !a.startsWith("--"));
+if (!appArg) {
+  console.error(
+    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with ARDIA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, and the two strips' pixels compared.",
+  );
+  process.exit(2);
+}
+const appPath = resolve(appArg);
+const keep = args.includes("--keep-data");
+const only = args.find((a) => a.startsWith("--only="))?.slice(7);
+const scratch = mkdtempSync(join(tmpdir(), "ac-top-strip-"));
+const rep = reporter(join(scratch, "top-strip-test.log"), { name: "top-strip-test" });
+
+const tab = (id, extra = {}) => ({ id, url: `https://${id}.example/`, title: `Tab ${id}`, lastActiveAt: id === "t1" ? 9 : 1, ...extra });
+const fixture = () =>
+  session({
+    settings: { tabLayout: "top" },
+    windows: [{ id: "w1", activeTabIds: { default: "t1" }, frame: [80, 80, 1600, 800] }],
+    tabs: ["p1", "p2"].map((id) => tab(id, { pinned: true })).concat(["t1", "g1a", "g1b", "g2a", "g2b", "s1a", "s1b", "f0", "fa", "fb"].map((id) => tab(id)), [tab("t2", { muted: true })]),
+    groups: [
+      { id: "g1", windowId: "w1", profileId: "default", name: "Work", icon: null, color: "blue", collapsed: false, pinned: false, tabIds: ["g1a", "g1b"], createdAt: 1 },
+      { id: "g2", windowId: "w1", profileId: "default", name: "", icon: null, color: null, collapsed: true, pinned: false, tabIds: ["g2a", "g2b"], createdAt: 2 },
+      { id: "g3", windowId: "w1", profileId: "default", name: "Reading", icon: "symbol:book", color: "green", collapsed: false, pinned: false, tabIds: ["f0", "fa", "fb"], createdAt: 3 },
+      { id: "g3c", windowId: "w1", profileId: "default", name: "Docs", icon: null, color: null, collapsed: false, pinned: false, parentId: "g3", tabIds: ["fa", "fb"], createdAt: 4 },
+    ],
+    splits: [{ id: "s1", windowId: "w1", tabIds: ["s1a", "s1b"], orientation: "horizontal", sizes: [0.5, 0.5] }],
+  });
+
+const HELPERS = `
+const C = globalThis.expo.modules.ArdiaCEF;
+const st = () => ac.store.getState();
+const win = (id) => C.chromeWindows().then((ws) => { const f = st().windows[id].frame; const w = ws.filter((w) => w.hasRoot).find((w) => { const r = w.frame.match(/[-\\d.]+/g).map(Number); return Math.abs(r[0] - f[0]) < 2 && Math.abs(r[2] - f[2]) < 2; }); return w && w.window; });
+const act = (id, a) => win(id).then((n) => C.devWindow(n, a));
+const runs = (id, y) => win(id).then((n) => { const xs = []; for (let x = 60; x < st().windows[id].frame[2] - 90; x += 0.5) xs.push(x);
+  return Promise.all(xs.map((x) => C.devWindow(n, "hit:" + x + "," + y))).then((hits) => { const out = []; let cur = null;
+    hits.forEach((h, i) => { const on = /ContextMenuArea|ImageView|Symbol|FadeLabel|Strip(TabChip|PinnedCell|GroupHeader|FolderChip|SplitPart|IconButton|NewTabButton)/.test(h);
+      const kind = /^SolaraUI.StripIconButton < NSView < SolaraUI.StripGroupView/.test(h) ? "groupClose" : h.split(/[ :<(]/)[0];
+      if (on && !cur) cur = [xs[i], xs[i], kind]; else if (on) cur[1] = xs[i]; else if (cur) { out.push(cur); cur = null; } });
+    if (cur) out.push(cur); return out; }); });
+const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+`;
+
+function readPng(path) {
+  const buf = readFileSync(path);
+  let width = 0, height = 0, channels = 4;
+  const idat = [];
+  for (let at = 8; at < buf.length; ) {
+    const length = buf.readUInt32BE(at), type = buf.toString("ascii", at + 4, at + 8);
+    if (type === "IHDR") {
+      width = buf.readUInt32BE(at + 8);
+      height = buf.readUInt32BE(at + 12);
+      channels = { 2: 3, 6: 4 }[buf[at + 17]];
+    } else if (type === "IDAT") idat.push(buf.subarray(at + 8, at + 8 + length));
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const data = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const v = raw[y * (stride + 1) + 1 + x];
+      const a = x >= channels ? data[y * stride + x - channels] : 0;
+      const b = y ? data[(y - 1) * stride + x] : 0;
+      const c = x >= channels && y ? data[(y - 1) * stride + x - channels] : 0;
+      const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+      const pred = [0, a, b, (a + b) >> 1, pa <= pb && pa <= pc ? a : pb <= pc ? b : c][filter];
+      data[y * stride + x] = (v + pred) & 255;
+    }
+  }
+  return { width, height, channels, data };
+}
+
+function stripDiff(a, b, top, bottom) {
+  let differ = 0, total = 0, worst = 0;
+  const columns = [];
+  for (let y = top * 2; y < bottom * 2; y++)
+    for (let x = 0; x < Math.min(a.width, b.width); x++) {
+      const i = (y * a.width + x) * a.channels, j = (y * b.width + x) * b.channels;
+      const d = Math.max(Math.abs(a.data[i] - b.data[j]), Math.abs(a.data[i + 1] - b.data[j + 1]), Math.abs(a.data[i + 2] - b.data[j + 2]));
+      total++;
+      if (d > 24) {
+        differ++;
+        columns[x >> 1] = (columns[x >> 1] ?? 0) + 1;
+      }
+      worst = Math.max(worst, d);
+    }
+  const hot = columns.flatMap((n, x) => (n > 4 ? [x] : []));
+  return { share: differ / total, worst, hot: hot.length ? `${hot[0]}..${hot.at(-1)} (${hot.length} columns)` : "" };
+}
+
+async function measure(native) {
+  const data = join(scratch, native ? "native" : "rn", "data");
+  const app = await launch(appPath, { data, session: fixture(), env: native ? { ARDIA_NATIVE_TOP_STRIP: "1" } : {} });
+  const run = (body) => app.eval(`${HELPERS}\n${body}`);
+  try {
+    await sleep(2500);
+    const kinds = await run(`return globalThis.expo.modules.SolaraHosted.kinds();`);
+    assert.equal(kinds.includes("topStrip"), native, `topStrip kind registered: ${kinds}`);
+    const out = { spans: await run(`return runs("w1", 21);`) };
+    if (native) {
+      out.items = JSON.parse(await run(`return globalThis.expo.modules.SolaraTopStrip.items("w1");`));
+      out.keys = await run(`return globalThis.expo.modules.SolaraTopStrip.keys("w1", "default");`);
+    }
+    const png = join(scratch, native ? "native.png" : "rn.png");
+    out.snapshot = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(png)});`)) ? png : null;
+    const t2 = out.spans.filter(([, , k]) => k !== "SolaraUI.StripNewTabButton").at(-1);
+    await run(`return act("w1", "click:${t2[0] + 70},21").then(() => settle(400));`);
+    out.clicked = await run(`return st().windows.w1.activeTabIds.default;`);
+    return { ...out, run, app };
+  } catch (e) {
+    await app.quit();
+    throw e;
+  }
+}
+
+let rn = null;
+let native = null;
+try {
+  if (only !== "native") {
+    rn = await measure(false);
+    rep.log(`rn spans ${JSON.stringify(rn.spans)}`);
+    await rn.app.quit();
+  }
+  if (only !== "rn") {
+    native = await measure(true);
+    rep.log(`native spans ${JSON.stringify(native.spans)}`);
+    rep.log(`native items ${JSON.stringify(native.items)}`);
+  }
+  if (native) {
+    await rep.check("native strip entries are the store's", async () => {
+      assert.deepEqual(native.keys.slice(0, 4), ["pinned:p1", "pinned:p2", "tab:t1:", "group:g1:0"]);
+      assert.ok(native.keys.includes("folder:g3c:fa,fb:g3"), native.keys.join(" "));
+      assert.ok(native.keys.includes("split:s1:s1a,s1b:"), native.keys.join(" "));
+    });
+    await rep.check("a click on a tab selects it", async () => assert.equal(native.clicked, "t2"));
+    await rep.check("a click on a group's chip collapses it", async () => {
+      const g1 = native.items.items.find((i) => i.kind === "groupChip" && i.id === "g1");
+      await native.run(`return act("w1", "click:${g1.windowX + g1.width / 2},21").then(() => settle(500));`);
+      assert.equal(await native.run(`return st().groups.g1.collapsed;`), true);
+      await native.run(`st().updateGroup("g1", { collapsed: false }); return settle(500);`);
+    });
+    await rep.check("hovering moves nothing", async () => {
+      const result = JSON.parse(await native.run(`return globalThis.expo.modules.SolaraTopStrip.hoverShifts("w1");`));
+      assert.ok(result.hovered.length > 5, `hovered ${result.hovered.length}`);
+      assert.deepEqual(result.shifts, []);
+    });
+  }
+  if (rn && native) {
+    await rep.check("every item spans where RN's does, within 0.5 pt", async () => {
+      const show = (s) => s.map(([a, b, k]) => `${a}-${b} ${k}`).join("\n");
+      const pressables = native.spans.filter(([, , k]) => k === "groupClose" || k === "SolaraUI.StripNewTabButton");
+      assert.equal(pressables.length, 3, show(native.spans));
+      const joined = (spans) => spans.reduce((out, s) => (out.length && s[0] - out.at(-1)[1] <= 1 ? (out.at(-1)[1] = s[1], out) : [...out, [...s]]), []);
+      const ours = joined(native.spans.filter((s) => !pressables.includes(s)));
+      const theirs = joined(rn.spans);
+      assert.equal(ours.length, theirs.length, `runs:\nrn\n${show(theirs)}\nnative\n${show(ours)}`);
+      const off = ours.flatMap((s, i) => (Math.abs(s[0] - theirs[i][0]) > 0.5 || Math.abs(s[1] - theirs[i][1]) > 0.5 ? [`#${i} rn ${theirs[i]} native ${s}`] : []));
+      assert.deepEqual(off, []);
+    });
+    await rep.check("a click on a tab selects it on RN too", async () => assert.equal(rn.clicked, "t2"));
+    if (rn.snapshot && native.snapshot) {
+      await rep.check("the strips' pixels match RN's", async () => {
+        const diff = stripDiff(readPng(rn.snapshot), readPng(native.snapshot), 0, 42);
+        rep.log(`pixel diff ${JSON.stringify(diff)}`);
+        assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
+      });
+    }
+  }
+} finally {
+  if (native) await native.app.quit();
+  if (!keep && rep.results.every((r) => r.ok)) rmSync(scratch, { recursive: true, force: true });
+  else rep.say(`kept ${scratch}`);
+}
+process.exit(rep.summary() ? 0 : 1);

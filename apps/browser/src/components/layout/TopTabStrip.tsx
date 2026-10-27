@@ -32,6 +32,7 @@ import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/tileFolders";
 import { usePeek } from "./usePeek";
 import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
+import { NativeTopStrip, nativeTopStripEnabled } from "./NativeTopStrip";
 import {
   aimDrop,
   dockCellOf,
@@ -121,10 +122,12 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
     <FloatingStrip.Provider value={floating}>
       <StripDropArea style={{ height: TOP_STRIP_HEIGHT }}>
         <WindowDragRegion style={StyleSheet.absoluteFill} />
-        <View style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), top: 0, bottom: 0, overflow: "hidden" }}>
-          {pages.map((page) => (
-            <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />
-          ))}
+        <View pointerEvents={!floating && nativeTopStripEnabled() ? "box-none" : "auto"} style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), top: 0, bottom: 0, overflow: "hidden" }}>
+          {!floating && nativeTopStripEnabled() ? (
+            <NativeTopStrip windowId={windowId} profileId={current} floating={false} pageWidth={pageWidth} />
+          ) : (
+            pages.map((page) => <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />)
+          )}
         </View>
         <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
           <ProfileIndicator room={PROFILE_ROOM} />

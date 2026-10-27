@@ -1823,17 +1823,16 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 - (void)showURL:(NSString *)url security:(NSString *)level {
   _origin.stringValue = PopupOriginText(url);
   NSString *scheme = [NSURLComponents componentsWithString:url].scheme.lowercaseString;
-  if (!level) level = [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"ws"] ? @"insecure" : @"none";
   const bool secureScheme = [scheme isEqualToString:@"https"] || [scheme isEqualToString:@"wss"];
   NSString *symbol = @"info.circle", *description = secureScheme ? @"Connection security unknown" : @"Local or internal page";
   NSColor *tint = NSColor.secondaryLabelColor;
   if ([level isEqualToString:@"secure"]) {
     symbol = @"lock.fill";
     description = @"Connection is secure";
-  } else if ([level isEqualToString:@"insecure"] || [level isEqualToString:@"mixed"] || [level isEqualToString:@"certificateError"]) {
+  } else if ([level isEqualToString:@"warning"] || [level isEqualToString:@"dangerous"]) {
     symbol = @"lock.open.trianglebadge.exclamationmark.fill";
     description = @"Connection is not secure";
-    if ([level isEqualToString:@"certificateError"]) tint = [NSColor colorWithSRGBRed:1 green:0x5F / 255.0 blue:0x57 / 255.0 alpha:1];
+    if ([level isEqualToString:@"dangerous"]) tint = [NSColor colorWithSRGBRed:1 green:0x5F / 255.0 blue:0x57 / 255.0 alpha:1];
   }
   _glyph.image = [NSImage imageWithSystemSymbolName:symbol accessibilityDescription:description];
   _glyph.contentTintColor = tint;
@@ -1993,7 +1992,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 }
 
 - (void)updateOrigin {
-  id level = [_tab respondsToSelector:@selector(securityInfo)] ? _tab.securityInfo[@"level"] : nil;
+  id level = [_tab respondsToSelector:@selector(securityInfo)] ? _tab.securityInfo[@"chromium"] : nil;
   [_strip showURL:_tab.url ?: @"" security:[level isKindOfClass:NSString.class] ? level : nil];
 }
 

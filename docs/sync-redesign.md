@@ -898,10 +898,23 @@ nightlies start earliest. Nothing of the old guard is removed until what replace
   `solara_sync_off`) and the tree read returns the bar node's mark; the Chrome fake gains meta
   info and a change event per apply.
 - Bridge: generation steps for pushes and reads, the intents file, the launch rules, the
-  claim-nothing rebuild that keeps live entries, launch diffs keeping stamps. If the interim
-  unsaved-push replay has shipped, this step replaces it.
+  claim-nothing rebuild that keeps live entries, launch diffs keeping stamps. Intents and marks are
+  per Chrome profile.
+- **Lessons from the interim unsaved-push replay** (reviewed and not shipped):
+  - Sync publishes 3 s after an edit (`AFTER_EDIT_MS`), later than Chrome's 2.5 s save. Anything
+    put back at launch must go out with the stamp of the edit that made it, from its journal entry,
+    never a stamp taken at relaunch. Otherwise it beats a newer edit made elsewhere (SYNC-1, SYNC-2).
+  - Node comparisons include the index within the parent. A reorder-only change is still a
+    change (REORDER, LINGER+REORDER).
+  - No age windows or timers decide what's honoured; the generation marks do. A single timer can't
+    age a stream of records (TIMER).
+  - Dropping an intent for a node drops every earlier one for that node, so a deleted bookmark
+    can't come back from an older intent (GAP).
+  - The tests fire the bridge's timers by hand and move `Date.now`, and cover crashes from 0 s to
+    past Chrome's 2.5 s save, not one window.
 - Green: I3, I6a/b, MARK-settles, AUDIT-docs-all, AUDIT-chrome-bookmarks, REBUILD-keeps-entries,
-  LAUNCH-keeps-stamp, D5a, review5 D1.
+  LAUNCH-keeps-stamp, D5a, review5 D1, and from bridge-crash-review.test.mjs SYNC-1 and
+  SYNC-control; its SYNC-2, REORDER, TIMER, LINGER+REORDER and GAP stay green.
 
 **Step 10. sync.json anchors** (§ Rollback audit, opt-outs).
 - Each profile's sync id and kept-out flag on the profile; opt-outs written beside their data

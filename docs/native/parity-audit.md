@@ -41,7 +41,7 @@ deliberate, ask the lead first.
 | 13 | Command panel | Closed with the hosted panel (580bd916) and 66b5dc8a. Same height as RN now (2x snapshot over a grey page, dark: RN rows 1–214, native 2–215), top border row present in both; the whole panel sits 0.5 pt lower, which is the native toolbar text's Dia shift (`NATIVE_URL_TEXT_SHIFT`, see Intentional differences) carried into the panel so the URL stays put. 66b5dc8a fixed the "Open a tab or file" chip's border, which drew a stray vertical stroke off each end (SwiftUI's continuous capsule). Still to check on a real capture: RN's panel shows no shadow in the in-process snapshot while native's does (shadow radius 24, offset 10, as RN asks); Dia's is 0.08 r2 / 0.04 r1 | Was: bottom 217 vs 214 px (383 vs 378 with suggestions); bottom border 58 vs 81 | port-omnibox |
 | 14 | Toolbar, dark page | Intentional (2d1118bb, Dia's host colours; see Intentional differences). Was: host darker than the icons | Host 161, icons 220 | port-omnibox |
 | 15 | Onboarding | No onboarding controls in the accessibility tree; no New Tab field either | | settings-ui, main |
-| 16 | Small layout | Profiles caption style, Shortcuts rows 41 vs 43 pt, section gaps +10 pt; "centre" → "center"; prompt button labels 0.5 pt lower; Site Controls top-row glyphs a hair lighter | | settings-ui, port-omnibox |
+| 16 | Small layout | Profiles caption style, Shortcuts rows 41 vs 43 pt, section gaps +10 pt; "centre" → "center". Closed for port-omnibox: prompt button labels (82664188, 362–386 px as RN) and Site Controls top-row glyphs (0db91fc6, three of four tiles' ink equal to RN's, Cast 225.7 vs 227.2) | | settings-ui |
 
 Matching Dia rather than RN, so not gaps: see Intentional differences above.
 

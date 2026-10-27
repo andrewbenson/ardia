@@ -12,6 +12,14 @@ public class OmniboxModule: Module {
       ProcessInfo.processInfo.environment["ARDIA_NATIVE_OMNIBOX"] == "1" && NativeSettingsHandle.active
     }
 
+    Function("prefixWidth") { (prefix: String, text: String) -> Double in
+      URLPrefixWidths.width(prefix: prefix, in: text, size: Double(OmniboxBarMetrics.panelTextSize))
+    }
+
+    OnCreate {
+      DispatchQueue.global(qos: .utility).async { URLPrefixWidths.warm(size: Double(OmniboxBarMetrics.panelTextSize)) }
+    }
+
     View(NativeOmniboxView.self) {
       Events(NativeOmniboxView.events)
 
@@ -54,7 +62,7 @@ public class OmniboxModule: Module {
 
       AsyncFunction("submit") { (view: NativeOmniboxView) in MainActor.assumeIsolated { view.bar.model?.submit() } }.runOnQueue(.main)
 
-      AsyncFunction("state") { (view: NativeOmniboxView) -> String in MainActor.assumeIsolated { view.driverStateJSON() } }.runOnQueue(.main)
+      AsyncFunction("driverState") { (view: NativeOmniboxView) -> String in MainActor.assumeIsolated { view.driverStateJSON() } }.runOnQueue(.main)
 
       AsyncFunction("measure") { (view: NativeOmniboxView) -> [String: Double] in MainActor.assumeIsolated { view.measure() } }.runOnQueue(.main)
     }

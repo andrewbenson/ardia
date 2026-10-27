@@ -156,7 +156,7 @@ export type NativeBarHandle = {
   key(key: string, mods?: { metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; ctrlKey?: boolean }): Promise<void>;
   select(start: number, end: number): Promise<void>;
   submit(): Promise<void>;
-  state(): Promise<string>;
+  driverState(): Promise<string>;
   measure(): Promise<{ x: number; y: number; width: number; height: number }>;
 };
 
@@ -185,7 +185,7 @@ export function useNativeBar({
   const claim = () => claimFocusTag(windowId, focusTag, () => findNodeHandle(ref.current as never));
 
   const driverState = useRef<Record<string, unknown>>({ items: [] });
-  const refreshState = () => void ref.current?.state().then((s) => (driverState.current = JSON.parse(s) as Record<string, unknown>), () => {});
+  const refreshState = () => void ref.current?.driverState().then((s) => (driverState.current = JSON.parse(s) as Record<string, unknown>), () => {});
   useOmniboxDriver(driverId, {
     type: (text) => void ref.current?.type(text).then(refreshState),
     clear: () => void ref.current?.clear().then(refreshState),

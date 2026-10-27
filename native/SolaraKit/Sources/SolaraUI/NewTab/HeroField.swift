@@ -62,7 +62,40 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
       let end = min(max(selection.end, start), length)
       let range = NSRange(location: start, length: end - start)
       if editor.selectedRange != range { editor.selectedRange = range }
+      if start == 0, end == length, length > 0, let clip = editor.superview as? NSClipView {
+        HeroFieldCoordinator.scrollToStart(clip)
+        watchEditorFrame(editor)
+      }
     }
+  }
+
+  static let fittingTextLeft: CGFloat = 2.5
+  private weak var watchedEditor: NSView?
+
+  private func watchEditorFrame(_ editor: NSText) {
+    guard watchedEditor !== editor else { return }
+    if let old = watchedEditor { NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: old) }
+    watchedEditor = editor
+    editor.postsFrameChangedNotifications = true
+    NotificationCenter.default.addObserver(self, selector: #selector(editorFrameChanged(_:)), name: NSView.frameDidChangeNotification, object: editor)
+  }
+
+  @objc private func editorFrameChanged(_ note: Notification) {
+    guard let editor = note.object as? NSTextView, let clip = editor.superview as? NSClipView else { return }
+    let length = (editor.string as NSString).length
+    if length > 0, editor.selectedRange == NSRange(location: 0, length: length) { return HeroFieldCoordinator.scrollToStart(clip) }
+    let inset = NSSize(width: editor.frame.width > clip.bounds.width ? HeroFieldCoordinator.fittingTextLeft : 0, height: editor.textContainerInset.height)
+    if editor.textContainerInset != inset { editor.textContainerInset = inset }
+  }
+
+  static func scrollToStart(_ clip: NSClipView) {
+    if let editor = clip.documentView as? NSTextView {
+      let overflows = editor.frame.width > clip.bounds.width
+      let inset = NSSize(width: overflows ? fittingTextLeft : 0, height: editor.textContainerInset.height)
+      if editor.textContainerInset != inset { editor.textContainerInset = inset }
+    }
+    let leftmost = clip.constrainBoundsRect(NSRect(origin: NSPoint(x: -10_000, y: clip.bounds.origin.y), size: clip.bounds.size)).origin.x
+    if clip.bounds.origin.x != leftmost { clip.scroll(to: NSPoint(x: leftmost, y: clip.bounds.origin.y)) }
   }
 
   func focusField() {
@@ -168,6 +201,10 @@ struct HeroFieldView: NSViewRepresentable {
 
   func updateNSView(_ field: HeroTextField, context: Context) {
     style(field)
+  }
+
+  func sizeThatFits(_ proposal: ProposedViewSize, nsView field: HeroTextField, context: Context) -> CGSize? {
+    proposal.width.map { CGSize(width: $0, height: field.intrinsicContentSize.height) }
   }
 
   private func style(_ field: HeroTextField) {

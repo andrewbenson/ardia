@@ -12,7 +12,8 @@ import { commandBarCentred, useCardAnchors, useUrlAnchors } from "./layout/windo
 import { barWidth } from "./NewTabPage";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
-import { nativeOmniboxAvailable } from "@ardia/settings";
+import { breadcrumb } from "@ardia/core";
+import { nativeOmniboxAvailable, nativeUrlPrefixWidth } from "@ardia/settings";
 import { Omnibox as ReactOmnibox, PANEL_TEXT_LEFT } from "./Omnibox";
 import { NativeOmniboxBar } from "./omnibox/NativeOmniboxBar";
 import { closePanelToHeroBar, type BarDismissal } from "./omnibox/barState";
@@ -33,6 +34,7 @@ function Omnibox(props: ComponentProps<typeof ReactOmnibox> & { variant: "panel"
   return nativeOmniboxAvailable() ? <NativeOmniboxBar {...props} /> : <ReactOmnibox {...props} />;
 }
 
+const NATIVE_URL_TEXT_SHIFT = { x: 1.5, y: 0.5 };
 const GROW_MS = 130;
 const GROW_EASING = Easing.out(Easing.exp);
 
@@ -93,8 +95,12 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
     );
   }
 
-  const left = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT);
-  const top = Math.max(0.5, anchor.top - ABOVE_PANE);
+  const native = nativeOmniboxAvailable();
+  const shift = native ? NATIVE_URL_TEXT_SHIFT : { x: 0, y: 0 };
+  const aligned = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT + shift.x);
+  const lead = native ? schemeLead(panel.initialText) : 0;
+  const left = lead && aligned - lead >= WINDOW_MARGIN ? aligned - lead : aligned;
+  const top = Math.max(0.5, anchor.top - ABOVE_PANE) + shift.y;
   const covering = anchor.left + anchor.width + RIGHT_OF_URL - left;
   const width = Math.min(Math.max(covering, MIN_WIDTH), room(left, covering));
   const from = hasField ? { left: anchor.left, top: anchor.top + URL_FIELD.top, width: anchor.width, height: URL_FIELD.height } : null;
@@ -105,6 +111,13 @@ export function CommandPanel({ windowWidth }: { windowWidth: number }) {
       </OutsidePressArea>
     </Grow>
   );
+}
+
+function schemeLead(text: string) {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) return 0;
+  const host = breadcrumb(text).host;
+  const at = host ? text.indexOf(host, text.indexOf("://") + 3) : -1;
+  return at > 0 ? nativeUrlPrefixWidth(text.slice(0, at), text) : 0;
 }
 
 function panelSurface(theme: ReturnType<typeof useTheme>, radius: number) {
@@ -166,7 +179,8 @@ function Grow({
   const start = useRef(fade ? null : from);
   const [height, setHeight] = useState<number | null>(null);
   const onLayout = (e: LayoutChangeEvent) => {
-    if (height === null) setHeight(e.nativeEvent.layout.height);
+    const measured = e.nativeEvent.layout.height;
+    if (height === null && measured >= (from?.height ?? 0)) setHeight(measured);
   };
   useEffect(() => {
     if (!from || height === null) return;

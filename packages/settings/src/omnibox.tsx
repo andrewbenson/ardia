@@ -42,7 +42,15 @@ export type NativeOmniboxProps = ViewProps & {
 
 export type NativeOmniboxHandle = NativeNewTabHandle;
 
-const native = requireOptionalNativeModule<{ available(): boolean }>("SolaraOmniboxBar");
+const native = requireOptionalNativeModule<{ available(): boolean; prefixWidth(prefix: string, text: string): number }>("SolaraOmniboxBar");
+
+export function nativeUrlPrefixWidth(prefix: string, text: string): number {
+  try {
+    return native?.prefixWidth(prefix, text) ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
 let availability: boolean | null = null;
 

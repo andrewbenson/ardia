@@ -4,12 +4,18 @@ import Foundation
 enum SettingsTimings {
   static var recording: Bool { ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" }
   private static var marks: [[String: Any]] = []
+  private static var navigated: [String: Double] = [:]
+
+  static func navigating(_ pane: String) {
+    guard recording else { return }
+    navigated[pane] = now
+  }
 
   static func paneAppeared(_ pane: String) {
     guard recording else { return }
     let appeared = now
     DispatchQueue.main.async {
-      MainActor.assumeIsolated { marks.append(["pane": pane, "appeared": appeared, "committed": now]) }
+      MainActor.assumeIsolated { marks.append(["pane": pane, "navigated": navigated[pane] ?? 0, "appeared": appeared, "committed": now]) }
     }
   }
 

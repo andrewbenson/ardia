@@ -85,6 +85,7 @@ enum NativeSettingsWindow {
 
   static func navigate(pane: String?, profileId: String?, detail: String?) {
     guard let context = makeContext(), let pane, let target = SettingsPane(rawValue: pane) else { return }
+    SettingsTimings.navigating(pane)
     context.navigation.go(target, profileId: profileId, detail: detail)
   }
 

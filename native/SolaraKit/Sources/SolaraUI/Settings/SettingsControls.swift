@@ -205,8 +205,6 @@ public struct SettingPicker: View {
 }
 
 public struct SettingsAnchor<Content: View>: View {
-  @Environment(\.settingsContext) private var context
-  @State private var glow = 0.0
   let id: String?
   let content: Content
 
@@ -222,27 +220,41 @@ public struct SettingsAnchor<Content: View>: View {
   public var body: some View {
     if let id {
       content
-        .background {
-          RoundedRectangle(cornerRadius: 6)
-            .fill(Color.accentColor.opacity(0.2))
-            .padding(-4)
-            .opacity(glow)
-            .allowsHitTesting(false)
-        }
+        .background { SettingsAnchorMark(id: id) }
         .id(id)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-          context?.anchorFrames[id] = frame
-        }
-        .task(id: flashSerial) {
-          guard flashSerial != nil else { return }
-          withAnimation(.easeOut(duration: 0.12)) { glow = 1 }
-          try? await Task.sleep(for: Self.flashIn + Self.flashHold)
-          guard !Task.isCancelled else { return }
-          withAnimation(.easeInOut(duration: 0.7)) { glow = 0 }
-        }
     } else {
       content
     }
+  }
+}
+
+struct SettingsAnchorMark: View {
+  @Environment(\.settingsContext) private var context
+  @State private var glow = 0.0
+  let id: String
+
+  var body: some View {
+    let revealing = context?.search.reveal == id
+    let serial = flashSerial
+    RoundedRectangle(cornerRadius: 6)
+      .fill(Color.accentColor.opacity(0.2))
+      .padding(-4)
+      .opacity(glow)
+      .allowsHitTesting(false)
+      .background {
+        if revealing {
+          Color.clear.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+            context?.anchorFrames[id] = frame
+          }
+        }
+      }
+      .task(id: serial) {
+        guard serial != nil else { return }
+        withAnimation(.easeOut(duration: 0.12)) { glow = 1 }
+        try? await Task.sleep(for: SettingsAnchor<EmptyView>.flashIn + SettingsAnchor<EmptyView>.flashHold)
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeInOut(duration: 0.7)) { glow = 0 }
+      }
   }
 
   private var flashSerial: Int? {

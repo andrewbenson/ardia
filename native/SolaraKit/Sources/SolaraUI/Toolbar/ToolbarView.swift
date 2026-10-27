@@ -10,6 +10,8 @@ public final class ToolbarView: NSView {
   public private(set) var state: ToolbarState?
 
   private let band = CALayer()
+  private let stripes = CALayer()
+  private var stripesUri: String?
   private let content = ToolbarContentView()
   private let hairline = CALayer()
   private let progress = CALayer()
@@ -25,6 +27,9 @@ public final class ToolbarView: NSView {
     super.init(frame: frame)
     wantsLayer = true
     layer?.addSublayer(band)
+    stripes.anchorPoint = .zero
+    stripes.contentsGravity = .topLeft
+    layer?.addSublayer(stripes)
     addSubview(content)
     content.addSubview(url)
     url.onClick = { [weak self] click in self?.onClick(click) }
@@ -52,6 +57,7 @@ public final class ToolbarView: NSView {
       url.isHidden = true
     }
     applyBand(next.bare ? nil : toolbarColor(next.palette.background)?.cgColor, animated: previous != nil)
+    applyStripes(next.bare ? nil : next.stripes)
     if previous?.focused != next.focused {
       let to: CGFloat = next.focused ? 1 : 0.5
       if previous == nil {
@@ -109,6 +115,31 @@ public final class ToolbarView: NSView {
     band.add(animation, forKey: "backgroundColor")
   }
 
+  private func applyStripes(_ uri: String?) {
+    guard uri != stripesUri else { return }
+    stripesUri = uri
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    if let uri, let image = ToolbarView.stripesImage(uri) {
+      stripes.contents = image
+      stripes.contentsScale = window?.backingScaleFactor ?? 2
+      stripes.isHidden = false
+    } else {
+      stripes.contents = nil
+      stripes.isHidden = true
+    }
+    CATransaction.commit()
+  }
+
+  static func stripesImage(_ uri: String) -> NSImage? {
+    let url = uri.hasPrefix("/") ? URL(fileURLWithPath: uri) : URL(string: uri)
+    guard let url, let data = try? Data(contentsOf: url), let image = NSImage(data: data) else { return nil }
+    image.size = NSSize(width: 2560, height: 50)
+    return image
+  }
+
+  public var urlEditView: NSView? { url.editorView }
+
   private func applyProgress(_ value: Double?, color: NSColor?) {
     guard let value else {
       progress.isHidden = true
@@ -141,6 +172,8 @@ public final class ToolbarView: NSView {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     band.frame = bounds
+    stripes.frame = CGRect(x: 0, y: 0, width: 2560, height: 50)
+    layer?.masksToBounds = true
     let scale = window?.backingScaleFactor ?? 2
     hairline.frame = CGRect(x: 0, y: bounds.height - 1 / scale, width: bounds.width, height: 1 / scale)
     progress.position = CGPoint(x: 0, y: bounds.height - 1.5)

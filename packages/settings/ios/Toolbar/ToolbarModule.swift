@@ -32,7 +32,7 @@ final class NativeToolbarHostView: ExpoView {
     toolbar.autoresizingMask = [.width, .height]
     toolbar.frame = bounds
     toolbar.onClick = { [weak self] click in
-      self?.onToolbarClick(["id": click.id, "kind": click.kind.rawValue, "meta": click.meta, "alt": click.alt, "shift": click.shift])
+      self?.onToolbarClick(["id": click.id, "kind": click.kind.rawValue, "meta": click.meta, "alt": click.alt, "shift": click.shift, "text": click.text ?? NSNull()])
     }
     addSubview(toolbar)
   }

@@ -20,6 +20,9 @@ final class ToolbarUrlFieldView: NSView {
   private var hovered = false
   private var tracking: NSTrackingArea?
   private var pressedOnText = false
+  private var dividers: [CALayer] = []
+  private var editor: DeveloperUrlField?
+  private var handledEditRequest = 0
 
   override var isFlipped: Bool { true }
   override var mouseDownCanMoveWindow: Bool { false }
@@ -60,9 +63,40 @@ final class ToolbarUrlFieldView: NSView {
     }
     hoverButtons = sync(hoverButtons, next.hoverButtons, nextPalette)
     trailing = sync(trailing, next.trailing, nextPalette)
+    syncEditor(next, nextPalette)
     applyHover()
     needsLayout = true
   }
+
+  private func syncEditor(_ next: ToolbarUrlState, _ palette: ToolbarPaletteState) {
+    guard let dev = next.developer, dev.editing else {
+      editor?.removeFromSuperview()
+      editor = nil
+      return
+    }
+    let field = editor ?? {
+      let made = DeveloperUrlField()
+      made.onFinish = { [weak self] kind, text in self?.onClick(ToolbarClick(id: "urlEdit", kind: kind, text: text)) }
+      made.onFocused = { [weak self] in self?.onClick(ToolbarClick(id: "urlEdit", kind: .focus)) }
+      addSubview(made)
+      editor = made
+      return made
+    }()
+    field.textColor = toolbarColor(palette.text)
+    if dev.request != handledEditRequest {
+      handledEditRequest = dev.request
+      field.stringValue = dev.text
+      field.finished = false
+      DispatchQueue.main.async { [weak field] in
+        guard let field, let window = field.window else { return }
+        window.makeFirstResponder(field)
+        field.currentEditor()?.selectedRange = NSRange(location: 0, length: (field.stringValue as NSString).length)
+        field.onFocused()
+      }
+    }
+  }
+
+  var editorView: NSView? { editor }
 
   private func sync(_ views: [ToolbarButtonView], _ specs: [ToolbarButtonState], _ palette: ToolbarPaletteState) -> [ToolbarButtonView] {
     var out: [ToolbarButtonView] = []
@@ -112,6 +146,13 @@ final class ToolbarUrlFieldView: NSView {
       b.alphaValue = shownHover ? 1 : 0
       b.isHidden = false
     }
+    if let dev = state.developer {
+      label.isHidden = dev.editing
+      label.attributedStringValue = NSAttributedString(
+        string: dev.text, attributes: [.font: NSFont(name: ".AppleSystemUIFontMonospaced-Regular", size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: toolbarColor(palette.text) ?? .labelColor])
+      return
+    }
+    label.isHidden = false
     let trail = shownHover ? state.hoverTrail : state.restTrail
     let text = NSMutableAttributedString(
       string: state.host, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: toolbarColor(palette.text) ?? .labelColor])
@@ -124,6 +165,7 @@ final class ToolbarUrlFieldView: NSView {
   override func hitTest(_ point: NSPoint) -> NSView? {
     let local = convert(point, from: superview)
     guard bounds.contains(local) else { return nil }
+    if let editor, editor.frame.contains(local), let hit = editor.hitTest(convert(local, to: editor.superview)) { return hit }
     for b in hoverButtons + trailing + [lock].compactMap({ $0 }) where b.frame.contains(local) {
       if !shownHover && hoverButtons.contains(where: { $0 === b }) { continue }
       if let hit = b.hitTest(convert(local, to: b.superview)) { return hit }
@@ -160,15 +202,92 @@ final class ToolbarUrlFieldView: NSView {
       x = ToolbarUrlFieldView.textLeft
     }
     var right = bounds.width - 3
+    var usedDividers = 0
+    let scale = window?.backingScaleFactor ?? 2
     for b in (hoverButtons + trailing).reversed() {
+      if b.state.id.hasPrefix("divider") {
+        b.isHidden = true
+        if usedDividers == dividers.count {
+          let l = CALayer()
+          layer?.addSublayer(l)
+          dividers.append(l)
+        }
+        let line = dividers[usedDividers]
+        usedDividers += 1
+        right -= 5
+        let lw = 2 / scale
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        line.isHidden = false
+        line.backgroundColor = toolbarColor(palette?.divider)?.cgColor
+        line.frame = CGRect(x: right - lw, y: (h - 16) / 2, width: lw, height: 16)
+        CATransaction.commit()
+        right -= lw + 5
+        continue
+      }
       let w = b.box
       right -= w
-      b.frame = CGRect(x: right, y: (h - w) / 2, width: w, height: w)
+      b.frame = backingAlignedRect(CGRect(x: right, y: (h - w) / 2, width: w, height: w), options: .alignAllEdgesNearest)
     }
+    for (i, d) in dividers.enumerated() where i >= usedDividers { d.isHidden = true }
     let size = label.intrinsicContentSize
     let textRight = right
+    if let editor {
+      editor.frame = CGRect(x: x - 2 - 2, y: 4 + (h - 30) / 2 + 2, width: max(0, textRight - x + 4), height: 18)
+    }
     label.frame = CGRect(
-      x: x - ToolbarUrlFieldView.labelInset, y: ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded(), width: max(0, textRight - x + ToolbarUrlFieldView.labelInset),
+      x: x - ToolbarUrlFieldView.labelInset, y: state?.developer != nil ? (((h - size.height) / 2 - 0.5) * 2).rounded() / 2 : ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded(), width: max(0, textRight - x + ToolbarUrlFieldView.labelInset),
       height: size.height)
+  }
+}
+
+final class DeveloperUrlField: NSTextField, NSTextFieldDelegate {
+  var onFinish: (ToolbarClick.Kind, String) -> Void = { _, _ in }
+  var onFocused: () -> Void = {}
+  var finished = false
+
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    isBezeled = false
+    isBordered = false
+    drawsBackground = false
+    focusRingType = .none
+    usesSingleLineMode = true
+    cell?.wraps = false
+    cell?.isScrollable = true
+    font = NSFont(name: ".AppleSystemUIFontMonospaced-Regular", size: 11) ?? .monospacedSystemFont(ofSize: 11, weight: .regular)
+    delegate = self
+    isAutomaticTextCompletionEnabled = false
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  override var mouseDownCanMoveWindow: Bool { false }
+
+  func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+    if textView.hasMarkedText() { return false }
+    switch selector {
+    case #selector(NSResponder.cancelOperation(_:)):
+      finish(.cancel)
+      return true
+    case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+      finish(.submit)
+      return true
+    default:
+      return false
+    }
+  }
+
+  func controlTextDidEndEditing(_ obj: Notification) {
+    if !finished {
+      finished = true
+      onFinish(.blur, stringValue)
+    }
+  }
+
+  private func finish(_ kind: ToolbarClick.Kind) {
+    guard !finished else { return }
+    finished = true
+    onFinish(kind, stringValue)
   }
 }

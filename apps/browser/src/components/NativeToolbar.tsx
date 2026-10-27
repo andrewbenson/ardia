@@ -20,12 +20,39 @@ import { closePane, openSplitPane, showSplitMenu } from "./layout/splitActions";
 import { toolbarPalette } from "./layout/toolbarColors";
 import { setToolbarExtensionsWidth } from "./layout/windowLayout";
 import { showUrlBarMenu } from "./omnibox/paste";
-import { useToolbarSiteColor } from "./site/developerMode";
+import { endUrlEdit, startUrlEdit, submitUrlEdit, useTabDeveloperMode, useToolbarSiteColor, useUrlEdit } from "./site/developerMode";
+import { developerReload, showDeveloperReloadMenu } from "./site/DeveloperButtons";
+import { claimFocusTag, urlEditFocus } from "../lib/focusClaims";
+import { findNodeHandle, Image } from "react-native";
+import { useRef } from "react";
 import { showTranslateMenu } from "./site/TranslateControls";
 import { languageName, toggleTranslation, useTranslateState } from "./site/translate";
 import { insecureLevel, urlFieldRight, useToolbarTab } from "./Toolbar";
 
 const isWebUrl = (url: string) => /^https?:/i.test(url);
+
+const LIGHT_STRIPES = require("../../assets/developer-stripes-light.png");
+const DARK_STRIPES = require("../../assets/developer-stripes-dark.png");
+const stripesUri = (palette: { text: string }) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(palette.text);
+  const onDark = !m || 0.2126 * parseInt(m[1]!, 16) + 0.7152 * parseInt(m[2]!, 16) + 0.0722 * parseInt(m[3]!, 16) > 128;
+  return Image.resolveAssetSource(onDark ? LIGHT_STRIPES : DARK_STRIPES)?.uri ?? null;
+};
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const isLoopbackUrl = (url: string) => {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return LOOPBACK_HOSTS.has(host) || host.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+};
+const developerUrl = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)\/$/i, "$1");
+const DEVELOPER_PANELS = [
+  { panel: "console", icon: "terminal", tooltip: "Toggle Console" },
+  { panel: "network", icon: "network", tooltip: "Toggle Network Panel" },
+  { panel: "elements", icon: "scope", tooltip: "Inspect Element" },
+] as const;
 
 function safeDecode(s: string) {
   try {
@@ -62,7 +89,16 @@ export function NativeToolbar({
   useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const bookmarked = useIsBookmarked(tab?.url ?? "");
-  const insecure = usePage(tabId, insecureLevel);
+  const pageInsecure = usePage(tabId, insecureLevel);
+  const developer = useTabDeveloperMode(tabId);
+  const editing = useUrlEdit((u) => u.tabId === tabId);
+  const editRequest = useUrlEdit((u) => u.request);
+  const insecure = developer && pageInsecure === "insecure" && isLoopbackUrl(tab?.url ?? "") ? null : pageInsecure;
+  const view = useRef<View>(null);
+  useEffect(() => () => endUrlEdit(tabId), [tabId]);
+  useEffect(() => {
+    if (!developer) endUrlEdit(tabId);
+  }, [developer, tabId]);
   const popups = usePage(tabId, (p) => p.popups.length);
   const capture = usePage(tabId, (p) => p.mediaAccess);
   const popover = usePages((p) => p.popover[tabId] ?? null);
@@ -99,6 +135,13 @@ export function NativeToolbar({
             tooltip: `This page is using your ${[capture.camera && "camera", capture.microphone && "microphone", capture.screen && "screen"].filter(Boolean).join(" and ")}`,
           }]
         : []),
+      ...(developer
+        ? [
+            { id: "divider-dev-start", icon: "" },
+            ...DEVELOPER_PANELS.map((p) => ({ id: `dev:${p.panel}`, icon: p.icon, ...small, tooltip: p.tooltip })),
+            { id: "divider-dev-end", icon: "" },
+          ]
+        : []),
       ...(translation && (translate.source || translated)
         ? [{
             id: "translate",
@@ -131,11 +174,14 @@ export function NativeToolbar({
           icon: isLoading ? "xmark" : "arrow.clockwise",
           size: 13,
           enabled: !!url,
-          tooltip: isLoading ? "Stop Loading This Page" : withShortcut("Refresh", hints.reload),
+          menu: developer,
+          longPress: developer,
+          tooltip: isLoading ? "Stop Loading This Page" : developer ? `${withShortcut("Refresh", hints.reload)} · Right-Click for Reload Options` : withShortcut("Refresh", hints.reload),
         },
       ],
       url: url
         ? {
+            developer: developer ? { text: developerUrl(url), editing, request: editRequest } : null,
             host,
             restTrail,
             hoverTrail: path,
@@ -158,8 +204,9 @@ export function NativeToolbar({
       rightInset: 8,
       hairline: !!url && !bare,
       progress: isLoading ? progress : null,
+      stripes: developer ? stripesUri(palette) : null,
     };
-  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split]);
+  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, developer, editing, editRequest, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split]);
   const json = useMemo(() => (state ? JSON.stringify(state) : null), [state]);
 
   if (!tab || !json) return <View style={{ height: layout.toolbarHeight }} />;
@@ -189,12 +236,21 @@ export function NativeToolbar({
         return;
       }
       case "reload":
+        if (c.kind === "menu") return void showDeveloperReloadMenu(tabId);
         if (isLoading) return void webviews.get(tabId)?.stopLoading();
         if (m.metaKey) return void useBrowser.getState().newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
+        if (developer && !m.shiftKey) return developerReload(tabId);
         return void withLivePage(tabId, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
       case "url":
         if (c.kind === "menu") return void showUrlBarMenu(tab);
+        if (developer) return editing ? undefined : startUrlEdit(tabId);
         return useBrowser.getState().openPanel(windowId, tab.url);
+      case "urlEdit":
+        if (c.kind === "focus") return claimFocusTag(windowId, urlEditFocus(tabId), () => findNodeHandle(view.current));
+        if (c.kind === "submit") submitUrlEdit(tabId, c.text ?? "");
+        else endUrlEdit(tabId);
+        if (c.kind !== "blur") void webviews.get(tabId)?.focus();
+        return;
       case "lock":
       case "capture":
       case "siteControls":
@@ -214,6 +270,10 @@ export function NativeToolbar({
         return togglePopover(tabId, "zoom");
       case "popups":
         return togglePopover(tabId, "popups");
+      case "dev:console":
+      case "dev:network":
+      case "dev:elements":
+        return void webviews.get(tabId)?.showDevTools(`toggle:${c.id.slice(4)}`);
       case "splitMenu":
         return showSplitMenu(tabId);
       case "closePane":
@@ -224,7 +284,9 @@ export function NativeToolbar({
   return (
     <View style={{ height: layout.toolbarHeight }}>
       <WindowDragRegion style={StyleSheet.absoluteFill} />
-      <NativeToolbarView style={StyleSheet.absoluteFill} state={json} onToolbarClick={(e) => void onClick(e.nativeEvent)} />
+      <View ref={view} collapsable={false} style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <NativeToolbarView style={StyleSheet.absoluteFill} state={json} onToolbarClick={(e) => void onClick(e.nativeEvent)} />
+      </View>
       <View style={[StyleSheet.absoluteFill, { opacity: focused ? 1 : 0.5 }]} pointerEvents="box-none">
         <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={21.2 - 14} right={inSplit ? 8 + 60 : 8} />
       </View>

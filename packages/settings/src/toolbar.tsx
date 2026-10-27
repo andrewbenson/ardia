@@ -2,7 +2,7 @@ import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modu
 import type { ComponentType } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
-export type ToolbarClick = { id: string; kind: "press" | "menu" | "middle"; meta: boolean; alt: boolean; shift: boolean };
+export type ToolbarClick = { id: string; kind: "press" | "menu" | "middle" | "submit" | "cancel" | "blur" | "focus"; meta: boolean; alt: boolean; shift: boolean; text: string | null };
 
 export type NativeToolbarProps = ViewProps & {
   state: string;

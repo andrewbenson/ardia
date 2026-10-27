@@ -39,7 +39,14 @@ public struct ToolbarButtonState: Decodable, Equatable, Sendable {
   public var plain: Bool?
 }
 
+public struct ToolbarDeveloperState: Decodable, Equatable, Sendable {
+  public var text: String
+  public var editing: Bool
+  public var request: Int
+}
+
 public struct ToolbarUrlState: Decodable, Equatable, Sendable {
+  public var developer: ToolbarDeveloperState?
   public var host: String
   public var restTrail: String
   public var hoverTrail: String
@@ -63,6 +70,7 @@ public struct ToolbarState: Decodable, Equatable, Sendable {
   public var rightInset: Double
   public var hairline: Bool
   public var progress: Double?
+  public var stripes: String?
 
   public static func decode(_ json: String) -> ToolbarState? {
     guard let data = json.data(using: .utf8) else { return nil }
@@ -72,18 +80,20 @@ public struct ToolbarState: Decodable, Equatable, Sendable {
 
 public struct ToolbarClick: Sendable, Equatable {
   public enum Kind: String, Sendable {
-    case press, menu, middle
+    case press, menu, middle, submit, cancel, blur, focus
   }
 
   public var id: String
   public var kind: Kind
+  public var text: String?
   public var meta = false
   public var alt = false
   public var shift = false
 
-  public init(id: String, kind: Kind, flags: NSEvent.ModifierFlags = []) {
+  public init(id: String, kind: Kind, flags: NSEvent.ModifierFlags = [], text: String? = nil) {
     self.id = id
     self.kind = kind
+    self.text = text
     meta = flags.contains(.command)
     alt = flags.contains(.option)
     shift = flags.contains(.shift)

@@ -174,6 +174,7 @@ struct OnboardingStepLayout<Content: View, Actions: View, Preview: View>: View {
         preview().reveal(120)
       }
       .clipShape(RoundedRectangle(cornerRadius: 14))
+      .accessibilityHidden(true)
       .padding(.vertical, 12)
       .padding(.trailing, 12)
     }

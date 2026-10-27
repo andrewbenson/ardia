@@ -887,6 +887,24 @@ void WatchTitlebarReveal(NSWindow *window) {
   [window addTitlebarAccessoryViewController:watch];
 }
 
+void RefreshTitlebarReveal(NSWindow *window) {
+  ACTitlebarRevealWatch *watch = objc_getAssociatedObject(window, kTitlebarRevealWatchKey);
+  if (!watch) return;
+  watch.hidden = YES;
+  watch.hidden = NO;
+}
+
+void LogFullScreenTitlebar(NSWindow *window) {
+  ACTitlebarRevealWatch *watch = objc_getAssociatedObject(window, kTitlebarRevealWatchKey);
+  NSWindow *bar = nil;
+  for (NSWindow *child in window.childWindows)
+    if ([NSStringFromClass(child.class) containsString:@"NSToolbarFullScreenWindow"]) bar = child;
+  NSLog(@"[ardiacore-fullscreen] window %ld entered: toolbar window %@ frame %@ visible %d alpha %.2f level %ld frameHidden %d; "
+        @"screen %@; reveal watch %d revealAmount %.2f",
+        (long)window.windowNumber, bar ? @"found" : @"none", bar ? NSStringFromRect(bar.frame) : @"-", bar.isVisible, bar.alphaValue,
+        (long)bar.level, bar.contentView.superview.hidden, NSStringFromRect(window.screen.frame), watch != nil, watch ? watch.revealAmount : -1.0);
+}
+
 void UnwatchTitlebarReveal(NSWindow *window) {
   ACTitlebarRevealWatch *watch = objc_getAssociatedObject(window, kTitlebarRevealWatchKey);
   if (!watch) return;
@@ -909,9 +927,15 @@ void UnwatchTitlebarReveal(NSWindow *window) {
   ACFullScreenLightsWatch *watch = [[ACFullScreenLightsWatch alloc] init];
   watch->_window = window;
   NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+  [center addObserver:watch selector:@selector(willEnter) name:NSWindowWillEnterFullScreenNotification object:window];
   [center addObserver:watch selector:@selector(didEnter) name:NSWindowDidEnterFullScreenNotification object:window];
   [center addObserver:watch selector:@selector(didExit) name:NSWindowDidExitFullScreenNotification object:window];
   objc_setAssociatedObject(window, kFullScreenLightsWatchKey, watch, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (void)willEnter {
+  NSWindow *window = _window;
+  if (window) WatchTitlebarReveal(window);
 }
 
 - (void)didEnter {
@@ -920,7 +944,9 @@ void UnwatchTitlebarReveal(NSWindow *window) {
   ShowFullScreenLights(window, YES);
   HideStandardLights(window, YES);
   WatchTitlebarReveal(window);
+  RefreshTitlebarReveal(window);
   ShowLightsForReveal(window);
+  LogFullScreenTitlebar(window);
 }
 
 - (void)didExit {

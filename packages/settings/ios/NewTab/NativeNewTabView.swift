@@ -76,6 +76,10 @@ final class NativeNewTabView: ExpoView {
     e.contextMenu = { [weak self] hasSelection, hasValue in self?.onContextMenu(["hasSelection": hasSelection, "hasValue": hasValue]) }
     e.journey = { [weak self] mark in self?.onJourney(["mark": mark.rawValue]) }
     e.latency = { [weak self] ms in self?.onLatency(["ms": ms]) }
+    e.keyShown = { [weak self] in
+      guard let self else { return }
+      FieldTimingMarks.atPresent("bar:\(self.windowId)", "keyShown")
+    }
     e.changed = { [weak self] in
       guard let self, self.driven else { return }
       self.onDriverState(["json": self.driverStateJSON()])

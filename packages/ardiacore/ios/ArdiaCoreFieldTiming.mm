@@ -28,6 +28,7 @@ os_unfair_lock gLock = OS_UNFAIR_LOCK_INIT;
 NSMutableArray<NSArray *> *gMarks;
 id gInputMonitor;
 id gPresentObserver;
+__weak NSWindow *gLastInputWindow;
 
 double EventTime(NSEvent *event) {
   return ACFieldNow() - (NSProcessInfo.processInfo.systemUptime - event.timestamp) * 1000;
@@ -40,6 +41,7 @@ void SetEnabled(bool enabled) {
       gInputMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
                                                             handler:^NSEvent *(NSEvent *event) {
         gLastInputAt = EventTime(event);
+        if (event.window) gLastInputWindow = event.window;
         gLastInputKind = event.type == NSEventTypeKeyDown ? 1 : 2;
         return event;
       }];
@@ -106,7 +108,7 @@ void ACFieldMarkAtCommit(NSString *key, NSString *kind) {
 @implementation ACPresentedMark
 
 - (void)tick:(CADisplayLink *)link {
-  ACFieldMark(self.key, self.kind, ACFieldNow() + (link.targetTimestamp - CACurrentMediaTime()) * 1000);
+  ACFieldMark(self.key, [self.kind stringByAppendingString:@"Frame"], ACFieldNow() + (link.targetTimestamp - CACurrentMediaTime()) * 1000);
   [link invalidate];
   self.link = nil;
 }
@@ -117,20 +119,25 @@ void ACFieldMarkAtPresent(NSString *key, NSString *kind) {
   if (!gEnabled || !key.length) return;
   NSString *k = [key copy], *what = [kind copy];
   void (^arm)(void) = ^{
-    NSWindow *window = NSApp.keyWindow ?: NSApp.mainWindow;
-    for (NSWindow *candidate in NSApp.orderedWindows)
-      if (!window && candidate.isVisible && candidate.contentView) window = candidate;
-    if (!window.contentView) return ACFieldMark(k, what, ACFieldNow());
+    NSWindow *window = gLastInputWindow ?: NSApp.keyWindow ?: NSApp.mainWindow;
+    if (!window.contentView) return;
     ACPresentedMark *mark = [ACPresentedMark new];
     mark.key = k;
     mark.kind = what;
     mark.link = [window.contentView displayLinkWithTarget:mark selector:@selector(tick:)];
     [mark.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+      [mark.link invalidate];
+      mark.link = nil;
+    });
   };
   if ([CATransaction respondsToSelector:@selector(addCommitHandler:forPhase:)])
-    [CATransaction addCommitHandler:^{ dispatch_async(dispatch_get_main_queue(), arm); } forPhase:kPostCommit];
+    [CATransaction addCommitHandler:^{
+      ACFieldMark(k, what, ACFieldNow());
+      dispatch_async(dispatch_get_main_queue(), arm);
+    } forPhase:kPostCommit];
   else
-    arm();
+    ACFieldMark(k, what, ACFieldNow());
 }
 
 @interface ACFieldTimingModule : NSObject <RCTBridgeModule, RCTInvalidating>

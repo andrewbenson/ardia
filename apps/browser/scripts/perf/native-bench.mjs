@@ -27,10 +27,9 @@
 //                                          with; the settling waits only the chosen parts need). Compare runs made
 //                                          with the same --only.
 //                               newtabkey  J2: a real ⌘T key event into the app → its command bar committed, on screen and
-//                                          typeable; a keystroke → its suggestions on screen (one instance per run)
-//                               panelkey   a page's command bar (⌘L), then "github" typed a real key at a time: each key → the
-//                                          display frame that shows it (field and rows; ACFieldMarkAtPresent after the
-//                                          commit), the same mark for the RN and the native bar. Same instance as newtabkey.
+//                                          typeable; a keystroke → its suggestions on screen (one instance per run), and →
+//                                          the Core Animation commit (keyShown) and display frame (keyFrame) that show it,
+//                                          marked the same way for the RN and the native bar
 //                               navigate   J4: a real Enter in the command bar with a local test page's URL → the engine
 //                                          asked to load, navigation started, committed, first contentful paint; from a new
 //                                          tab's bar (⌘T) and from a page's panel (⌘L). Same instance as newtabkey.
@@ -822,6 +821,8 @@ async function newTabKey(app, i, k) {
   const key = await postSeen(app, "text:n");
   if (!key) return { lost: "key never arrived", tab: p.key };
   const done = await waitFor(app, (st) => sampled(st, "j2_suggest") > sampled(before, "j2_suggest"), 8000, 120);
+  const barKey = `bar:${await app.run(`return ${WINDOW};`)}`;
+  const shown = done && (await waitFor(app, (st) => markOf(st, barKey, "keyShown", key.at) >= 0, 1500, 60));
   if (!done) {
     const now = await journeyState(app);
     const q = now.pending.find((x) => x.key === p.key);
@@ -836,6 +837,8 @@ async function newTabKey(app, i, k) {
     shown: markOf(done, p.key, "bar", press.at) - press.at,
     typeable: markOf(done, p.key, "typeable", press.at) - press.at,
     suggest: markOf(done, p.key, "suggest", key.at) - key.at,
+    keyShown: shown ? markOf(shown, barKey, "keyShown", key.at) - key.at : NaN,
+    keyFrame: shown ? markOf(shown, barKey, "keyShownFrame", key.at) - key.at : NaN,
     appTypeable: last("j2_typeable"),
     appSuggest: last("j2_suggest"),
     t0Skew: p.t0 - press.at,
@@ -843,30 +846,6 @@ async function newTabKey(app, i, k) {
     suggestDelivery: delivery(app, key.at),
     postGap: press.at - press.posted,
   };
-}
-
-async function panelKeys(app, w) {
-  let open = false;
-  for (let attempt = 0; attempt < 2 && !open; attempt++) {
-    if (!(await postSeen(app, "cmd+l"))) continue;
-    for (const end = Date.now() + 2500; !open && Date.now() < end; await sleep(60)) open = await app.run(`return !!ac.store.getState().windowUi[${JSON.stringify(w)}]?.panel.open;`);
-  }
-  if (!open) return [{ lost: "no panel" }];
-  await sleep(900);
-  const out = [];
-  for (const ch of "github") {
-    const key = await postSeen(app, `text:${ch}`);
-    if (!key) {
-      out.push({ lost: `key ${ch} never arrived` });
-      continue;
-    }
-    const done = await waitFor(app, (st) => markOf(st, `bar:${w}`, "keyShown", key.at) >= 0, 3000, 40);
-    out.push(done ? { key: ch, shown: markOf(done, `bar:${w}`, "keyShown", key.at) - key.at, delivery: delivery(app, key.at) } : { lost: `key ${ch} never shown` });
-    await sleep(250);
-  }
-  await postSeen(app, "esc");
-  await sleep(600);
-  return out;
 }
 
 async function navigateByEnter(app, side, id, from) {
@@ -921,7 +900,7 @@ async function journeyRun(side, i, parts) {
   const n = +opt["journey-n"];
   const app = new Instance(side, dir);
   app.env.push("AC_BENCH_KEYLOG=1");
-  const r = { j2: [], panel: [], j4new: [], j4page: [], lost: { j2: [], panel: [], j4new: [], j4page: [] }, guard: null, load: [Math.round(loadavg()[0])] };
+  const r = { j2: [], j4new: [], j4page: [], lost: { j2: [], j4new: [], j4page: [] }, guard: null, load: [Math.round(loadavg()[0])] };
   const note = async (kind, x, k) => {
     if (!x.lost) return void r[kind].push(x);
     r.lost[kind].push(x.lost);
@@ -948,15 +927,6 @@ async function journeyRun(side, i, parts) {
         await sleep(1000);
       }
       log(`${side.tag}journeys ${i} j2:`, JSON.stringify(r.j2.map((x) => Math.round(x.typeable))));
-    }
-    if (parts.has("panelkey")) {
-      const w = await app.run(`const s = ac.store.getState(); const w = ${WINDOW}; s.newTab(w, { url: "data:text/html,<title>Bench</title><h1>bench</h1>" }); return w;`);
-      await sleep(2500);
-      for (let k = 0; k < n; k++) {
-        for (const x of await panelKeys(app, w)) await note("panel", x, k);
-        await sleep(1000);
-      }
-      log(`${side.tag}journeys ${i} panel:`, JSON.stringify(r.panel.map((x) => Math.round(x.shown))));
     }
     if (parts.has("navigate")) {
       for (let k = 0; k < n; k++) {
@@ -1297,7 +1267,7 @@ const fail = (message) => {
   process.exit(64);
 };
 if (!opt.app) fail("usage: native-bench.mjs --app <Solara.app> [--control <app>] [--out dir] [--only phases] … (--help)");
-const JOURNEY_PHASES = ["newtabkey", "panelkey", "navigate"];
+const JOURNEY_PHASES = ["newtabkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
 const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "memslope", "throttle", "churn", "sample", "prepare"];
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));

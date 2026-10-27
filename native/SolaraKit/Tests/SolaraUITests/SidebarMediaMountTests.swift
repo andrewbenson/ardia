@@ -16,6 +16,20 @@ private func mediaState() throws -> BrowserState {
   return try BrowserState(stateJSON: try JSONValue.parse(text).object ?? [:])
 }
 
+private func listState(_ count: Int) throws -> BrowserState {
+  let ids = (1...count).map { "t\($0)" }
+  let tabs = ids.map { #""\#($0)": {"id": "\#($0)", "windowId": "w1", "profileId": "p", "url": "https://\#($0).example/"}"# }
+  let text = #"{"profileOrder": ["p"], "windows": {"w1": {"id": "w1", "profileId": "p", "tabIds": [\#(ids.map { "\"\($0)\"" }.joined(separator: ","))], "activeTabIds": {"p": "t1"}}}, "windowOrder": ["w1"], "tabs": {\#(tabs.joined(separator: ","))}}"#
+  return try BrowserState(stateJSON: try JSONValue.parse(text).object ?? [:])
+}
+
+private func layout(_ state: BrowserState, height: CGFloat, player: Bool) -> SidebarPageLayout {
+  let query = SidebarQuery(state)
+  var input = SidebarLayoutInput(windowId: "w1", profileId: "p", width: 190, height: height)
+  input.playerHeight = player ? SidebarPlayerView.height + SidebarPlayerView.gap : 0
+  return SidebarLayout(query: query, input: input).layout(query.entries(windowId: "w1", profileId: "p"))
+}
+
 @MainActor
 private func all<View: NSView>(_ type: View.Type, in root: NSView) -> [View] {
   root.subviews.flatMap { ($0 as? View).map { [$0] } ?? [] + all(type, in: $0) }
@@ -51,5 +65,29 @@ private func all<View: NSView>(_ type: View.Type, in root: NSView) -> [View] {
     host.capture = [:]
     pager.update(state: try mediaState(), host: host)
     #expect(all(TabMediaBadgesView.self, in: pager).filter { !$0.isHidden }.isEmpty)
+  }
+
+  @Test func thePlayerSitsEightAboveTheBottomAndTheListEndsAtItsTop() throws {
+    let out = layout(try listState(2), height: 600, player: true)
+    #expect(!out.docked)
+    #expect(out.playerFrame == CGRect(x: 6, y: 518, width: 178, height: 74))
+    #expect(out.scrollBottom == 518)
+    #expect(layout(try listState(2), height: 600, player: false).playerFrame == nil)
+  }
+
+  @Test func aDockedListPutsThePlayerEightBelowTheScrollAndAboveTheNewTabRow() throws {
+    let out = layout(try listState(20), height: 400, player: true)
+    #expect(out.docked)
+    #expect(out.item("newTab")?.frame == CGRect(x: 6, y: 360, width: 178, height: 34))
+    #expect(out.playerFrame == CGRect(x: 6, y: 283, width: 178, height: 74))
+    #expect(out.scrollBottom == 275)
+  }
+
+  @Test func thePlayerCountsTowardsDocking() throws {
+    let rows = 12
+    let without = layout(try listState(rows), height: 600, player: false)
+    let with = layout(try listState(rows), height: 600, player: true)
+    #expect(!without.docked)
+    #expect(with.docked)
   }
 }

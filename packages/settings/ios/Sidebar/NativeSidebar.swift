@@ -30,6 +30,14 @@ enum NativeSidebar {
     }
   }
 
+  static func players(windowId: String) -> [NSView] {
+    func walk(_ view: NSView) -> [NSView] {
+      if view is SidebarPlayerView { return view.isHiddenOrHasHiddenAncestor ? [] : [view] }
+      return view.subviews.flatMap(walk)
+    }
+    return hosts[windowId].map { walk($0.view) } ?? []
+  }
+
   static func rowFrame(windowId: String, key: String) -> [String: Double]? {
     guard let host = hosts[windowId], let page = host.view.current, let window = page.window, let content = window.contentView,
       let frame = page.frameOf(key)

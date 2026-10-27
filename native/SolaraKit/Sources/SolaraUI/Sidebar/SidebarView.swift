@@ -29,6 +29,7 @@ public final class SidebarView: NSView {
   private var edgeShown = false
   private var clipShift: CGFloat = 0
   private var lastSize = NSSize.zero
+  private var player: SidebarPlayerView?
 
   public override var isFlipped: Bool { true }
 
@@ -227,6 +228,7 @@ public final class SidebarView: NSView {
     context.host.clear = context.showClear && !entries.list.isEmpty
     input.divided = context.host.tidy || context.host.clear
     input.incognitoBadge = context.host.addressBar && context.host.incognito
+    input.playerHeight = context.host.player == nil ? 0 : SidebarPlayerView.height + SidebarPlayerView.gap
     let next = SidebarLayout(query: context.query, input: input).layout(entries)
     pageLayout = next
     place(next, context, animated: animated)
@@ -305,7 +307,28 @@ public final class SidebarView: NSView {
     syncEdge()
     syncPill()
     if animated { syncPointer() }
+    placePlayer(layout, context)
     SidebarDragController.placed(self)
+  }
+
+  private func placePlayer(_ layout: SidebarPageLayout, _ context: SidebarContext) {
+    guard let frame = layout.playerFrame, let state = context.host.player else {
+      player?.isHidden = true
+      return
+    }
+    let view = player ?? {
+      let made = SidebarPlayerView()
+      made.onAction = { [weak self] action in
+        guard let tabId = self?.context?.host.player?.tabId else { return }
+        self?.onAction(.media(tabId: tabId, action: action))
+      }
+      addSubview(made, positioned: .below, relativeTo: pill)
+      return made
+    }()
+    player = view
+    view.isHidden = false
+    if view.frame != frame { view.frame = frame }
+    view.update(state)
   }
 
   static let slideDuration: TimeInterval = 0.14

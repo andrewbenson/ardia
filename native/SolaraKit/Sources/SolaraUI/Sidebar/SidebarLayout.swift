@@ -91,6 +91,7 @@ public struct SidebarPageLayout: Equatable, Sendable {
   public var contentHeight: CGFloat = 0
   public var rowsHeight: CGFloat = 0
   public var docked = false
+  public var playerFrame: CGRect?
   public var grid = PinGrid(columns: 1, width: 0)
 
   public func item(_ key: String) -> SidebarItem? { items.first { $0.key == key } }
@@ -132,6 +133,7 @@ public struct SidebarLayoutInput: Sendable {
   public var balanced = false
   public var divided = false
   public var incognitoBadge = false
+  public var playerHeight: CGFloat = 0
   public var live: SidebarLiveBlocks?
 
   public init(windowId: String, profileId: String, width: CGFloat, height: CGFloat) {
@@ -182,7 +184,7 @@ public struct SidebarLayout {
     out.grid = PinGrid.of(count: tiles.count, innerWidth: innerWidth, balanced: input.balanced)
     let gridHeight = tiles.isEmpty ? 0 : PinGrid.height(count: tiles.count, innerWidth: innerWidth, balanced: input.balanced)
     let pageHeight = max(0, input.height - (input.addressBar ? M.glowRoom : 0))
-    let dockRoom = pageHeight > 0 ? pageHeight * M.dockShare - topGap - M.edgeGap - M.edgeLine : .infinity
+    let dockRoom = pageHeight > 0 ? (pageHeight - input.playerHeight) * M.dockShare - topGap - M.edgeGap - M.edgeLine : .infinity
     out.tilesFixed = tiles.isEmpty || gridHeight <= dockRoom
 
     if out.tilesFixed && !tiles.isEmpty {
@@ -218,7 +220,7 @@ public struct SidebarLayout {
 
     let listHeightWithoutNewTab = y + listHeight(entries.list, newTab: false)
     let listForDock = out.fixedHeight + listHeightWithoutNewTab + M.edgeInset
-    out.docked = !input.newTabAtTop && input.height > 0 && listForDock + M.rowPitch + M.dockSlack > input.height
+    out.docked = !input.newTabAtTop && input.height > 0 && listForDock + input.playerHeight + M.rowPitch + M.dockSlack > input.height
     let inlineNewTab = !out.docked
 
     var listItems: [(kind: String, entry: String?)] = []
@@ -246,6 +248,12 @@ public struct SidebarLayout {
       let dockTop = input.height - M.dockedBottom - M.rowHeight
       out.items.append(SidebarItem(kind: .newTab, frame: CGRect(x: M.inset, y: dockTop, width: innerWidth, height: M.rowHeight), region: .dock, groups: [], section: .list))
       out.scrollBottom = dockTop - M.rowGap
+    }
+    if input.playerHeight > 0 {
+      let playerBody = input.playerHeight - SidebarPlayerView.gap
+      let playerTop = out.docked ? out.scrollBottom - playerBody : input.height - input.playerHeight
+      out.playerFrame = CGRect(x: M.inset, y: playerTop, width: innerWidth, height: playerBody)
+      out.scrollBottom = out.docked ? playerTop - SidebarPlayerView.gap : playerTop
     }
     return out
   }

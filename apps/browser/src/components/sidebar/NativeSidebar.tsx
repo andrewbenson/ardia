@@ -27,7 +27,11 @@ import { dismissHover, nativeRowHover } from "./hover";
 import { closeAllTabs, middleClickTab, openGroupMenu, openOverflowMenu, openSidebarMenu, openTabMenu } from "./menus";
 import { useSidebarUi } from "./state";
 import { useSidebarTokens } from "./tokens";
-import { useMedia } from "../media/state";
+import { useMedia, useSession } from "../media/state";
+import { useArtwork } from "../media/artwork";
+import { mediaTheme, playerState } from "../media/nativeMedia";
+import { useSidebarPlayerTab } from "../media/SidebarPlayer";
+import { useTab } from "../../store/hooks";
 import { usePages } from "../layout/pageState";
 import { publishNativeLive, runNativeLive } from "./nativeLive";
 import { tidyPins } from "./tidyPinsUi";
@@ -187,6 +191,17 @@ function usePageLooks(windowId: string) {
   }, [key, profiles, appDark, source, glowSetting, tidy]);
 }
 
+function useNativeSidebarPlayer(windowId: string, profileId: string, theme: Theme, groupFill: string, groupStroke: string) {
+  const tabId = useSidebarPlayerTab(windowId, profileId);
+  const session = useSession(tabId);
+  const tab = useTab(tabId);
+  const artwork = useArtwork(tabId ?? "", session?.artwork);
+  return useMemo(
+    () => (session && tab ? playerState(session, tab, artwork, mediaTheme(theme, { groupFill: hex(groupFill), groupStroke: hex(groupStroke) })) : null),
+    [session, tab, artwork, theme, groupFill, groupStroke],
+  );
+}
+
 export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, addressBar }: { windowId: string; profileId: string; addressBar: boolean }) {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
@@ -222,6 +237,7 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
 
   const pages = usePageLooks(windowId);
   const tokens = useSidebarTokens();
+  const player = useNativeSidebarPlayer(windowId, profileId, theme, tokens.groupFill, tokens.groupStroke);
   const pip = useMedia((m) => Object.keys(m.pipOpen).filter((id) => m.pipOpen[id]).sort().join(","));
   const capture = usePages(
     useShallow((p) => {
@@ -259,11 +275,12 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
       developer: split(developer),
       newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
       pages,
+      player,
       pip: split(pip),
       capture,
       badge: [tokens.badge, tokens.badgeGlyph],
     });
-  }, [pip, capture, tokens.badge, tokens.badgeGlyph, pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
+  }, [player, pip, capture, tokens.badge, tokens.badgeGlyph, pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
 
   return <SolaraHostedView kind="sidebar" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });

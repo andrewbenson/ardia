@@ -5,7 +5,7 @@ import SolaraStore
 @MainActor
 public final class SidebarView: NSView {
   public let windowId: String
-  public let favicons = SidebarFavicons()
+  public let favicons: SidebarFavicons
   public var onAction: (SidebarAction) -> Void = { _ in }
   public private(set) var pageLayout = SidebarPageLayout()
 
@@ -32,8 +32,9 @@ public final class SidebarView: NSView {
 
   public override var isFlipped: Bool { true }
 
-  public init(windowId: String) {
+  public init(windowId: String, favicons: SidebarFavicons = SidebarFavicons()) {
     self.windowId = windowId
+    self.favicons = favicons
     super.init(frame: .zero)
     wantsLayer = true
     edgeLine.actions = SurfaceLayer.noActions
@@ -79,7 +80,7 @@ public final class SidebarView: NSView {
     context = next
     reconcile()
     if let previous { revealChanges(from: previous, to: next) }
-    if moved { NotificationCenter.default.post(name: Self.selectionShown, object: self) }
+    if moved && !isHiddenOrHasHiddenAncestor { NotificationCenter.default.post(name: Self.selectionShown, object: self) }
   }
 
   private func revealChanges(from previous: SidebarContext, to next: SidebarContext) {
@@ -344,14 +345,19 @@ public final class SidebarView: NSView {
   public override func mouseMoved(with event: NSEvent) { point(event.locationInWindow) }
   public override func mouseExited(with event: NSEvent) { setHover(nil, group: nil) }
 
+  public override func viewDidHide() {
+    super.viewDidHide()
+    setHover(nil, group: nil)
+  }
+
   private func syncPointer() {
-    guard let window else { return }
+    guard let window, !isHiddenOrHasHiddenAncestor else { return }
     let at = window.mouseLocationOutsideOfEventStream
     if bounds.contains(convert(at, from: nil)) { point(at) } else { setHover(nil, group: nil) }
   }
 
   @objc private func devPointer(_ note: Notification) {
-    guard let window, let screen = (note.object as? NSValue)?.pointValue else { return }
+    guard let window, !isHiddenOrHasHiddenAncestor, let screen = (note.object as? NSValue)?.pointValue else { return }
     let at = window.convertPoint(fromScreen: screen)
     if DevPointer.inside(self, note) { point(at) } else { setHover(nil, group: nil) }
   }

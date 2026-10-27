@@ -8,13 +8,14 @@ import { bundledSiteIcon } from "../../lib/siteIcons";
 import { shortcutHint } from "../../lib/commandShortcuts";
 import { PRODUCT } from "../../lib/productName";
 import { useLifecycle } from "../../lib/tabLifecycle";
-import { hex, useSelectedTabGlow, useTheme } from "../../lib/theme";
+import { hex, profileTheme, selectedTabGlow, spaceLookSource, useSelectedTabGlow, useTheme, type Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { engineMark, ENGINE_SYMBOLS } from "../../store/engines";
 import { useSettings } from "../../store/hooks";
 import { activeTabId, isIncognitoProfile } from "../../store/model";
 import { cleanedTabsFor } from "../../store/organize";
 import { canTidyPins } from "../../store/tidyPins";
+import { usePagerPages } from "../layout/profilePager";
 import { openNewTabInSplit } from "../layout/splitActions";
 import { isDeveloperMode } from "../../lib/developerMode";
 import { developerModeFor } from "../site/developerMode";
@@ -138,6 +139,41 @@ function liveIds(s: ReturnType<typeof useBrowser.getState>, windowId: string, ke
 
 const split = (ids: string) => (ids ? ids.split(",") : NONE);
 
+function themeTokens(theme: Theme): Record<string, string> {
+  const tokens: Record<string, string> = {};
+  for (const key of THEME_KEYS) tokens[key] = theme[key];
+  tokens.backdropTint = theme.backdrop.tintColor;
+  return tokens;
+}
+
+function usePageLooks(windowId: string) {
+  const { pages, paging } = usePagerPages(windowId);
+  const ids = paging ? pages.map((p) => p.id) : NONE;
+  const profiles = useBrowser((s) => s.profiles);
+  const appDark = useBrowser((s) => s.ui.appDark);
+  const source = useBrowser((s) => spaceLookSource(s.settings));
+  const glowSetting = useBrowser((s) => s.settings.selectedTabGlow);
+  const tidy = useBrowser((s) => ids.filter((id) => canTidyPins(s, windowId, id)).join(","));
+  const key = ids.join(",");
+  return useMemo(() => {
+    if (!key) return null;
+    const tidyIds = new Set(split(tidy));
+    return key.split(",").map((profileId) => {
+      const theme = profileTheme(profiles[profileId], appDark, source);
+      const glow = selectedTabGlow(theme, glowSetting);
+      return {
+        profileId,
+        dark: theme.dark,
+        theme: themeTokens(theme),
+        border: theme.tabSelectedBorder.map(hex),
+        glow: { color: glow.shadowColor, opacity: glow.shadowOpacity, radius: glow.shadowRadius },
+        tidy: tidyIds.has(profileId),
+        incognito: isIncognitoProfile(profileId),
+      };
+    });
+  }, [key, profiles, appDark, source, glowSetting, tidy]);
+}
+
 export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, addressBar }: { windowId: string; profileId: string; addressBar: boolean }) {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
@@ -171,14 +207,13 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
     }),
   );
 
+  const pages = usePageLooks(windowId);
+
   const state = useMemo(() => {
-    const tokens: Record<string, string> = {};
-    for (const key of THEME_KEYS) tokens[key] = theme[key];
-    tokens.backdropTint = theme.backdrop.tintColor;
     return JSON.stringify({
       profileId,
       dark: theme.dark,
-      theme: tokens,
+      theme: themeTokens(theme),
       border: theme.tabSelectedBorder.map(hex),
       glow: { color: glow.shadowColor, opacity: glow.shadowOpacity, radius: glow.shadowRadius },
       selection,
@@ -198,8 +233,9 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
       engines,
       developer: split(developer),
       newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
+      pages,
     });
-  }, [theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
+  }, [pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
 
   return <SolaraHostedView kind="sidebar" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });

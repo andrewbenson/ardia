@@ -158,8 +158,8 @@ final class TabIconView: NSView {
     }
     showFallback(spec)
     requested = request
-    favicons?.load(request) { [weak self] _ in
-      guard let self, self.requested == request else { return }
+    favicons?.load(request) { [weak self] picture in
+      guard let self, picture != nil, self.requested == request else { return }
       self.render()
     }
   }

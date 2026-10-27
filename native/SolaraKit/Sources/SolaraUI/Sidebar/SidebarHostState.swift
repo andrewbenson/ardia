@@ -7,6 +7,16 @@ public struct SidebarGlow: Decodable, Equatable, Sendable {
   public var radius: Double
 }
 
+public struct SidebarPageLook: Decodable, Equatable, Sendable {
+  public var profileId: String
+  public var dark: Bool
+  public var theme: [String: String]
+  public var border: [String]
+  public var glow: SidebarGlow
+  public var tidy: Bool
+  public var incognito: Bool
+}
+
 public struct SidebarHostState: Decodable, Equatable, Sendable {
   public var profileId: String
   public var dark: Bool
@@ -30,6 +40,7 @@ public struct SidebarHostState: Decodable, Equatable, Sendable {
   public var engines: [String: String]
   public var newTabMark: String?
   public var developer: [String]
+  public var pages: [SidebarPageLook]?
 
   public init(profileId: String, dark: Bool = true) {
     self.profileId = profileId
@@ -50,6 +61,19 @@ public struct SidebarHostState: Decodable, Equatable, Sendable {
     cleaned = 0
     engines = [:]
     developer = []
+  }
+
+  public func page(_ look: SidebarPageLook) -> SidebarHostState {
+    var out = self
+    out.profileId = look.profileId
+    out.dark = look.dark
+    out.theme = look.theme
+    out.border = look.border
+    out.glow = look.glow
+    out.tidy = look.tidy
+    out.incognito = look.incognito
+    out.pages = nil
+    return out
   }
 
   public static func decode(_ json: String) -> SidebarHostState? {

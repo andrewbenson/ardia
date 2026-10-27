@@ -1,5 +1,5 @@
 import type { AreaLightPalette } from "@ardia/shaders";
-import { createContext, createElement, useContext, type ReactNode } from "react";
+import { createContext, createElement, useContext, useMemo, type ReactNode } from "react";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { PageProfileContext, WindowContext } from "../store/hooks";
 import type { SelectedTabGlow } from "../store/settings";
@@ -281,10 +281,15 @@ const SELECTED_TAB_GLOW: Record<SelectedTabGlow, { opacity: number; radius: numb
   off: { opacity: 0, radius: 1 },
 };
 
+export function selectedTabGlow(theme: Theme, setting: SelectedTabGlow) {
+  const level = SELECTED_TAB_GLOW[setting] ?? SELECTED_TAB_GLOW.full;
+  return { shadowColor: hex(theme.tabSelectedShadow), shadowOpacity: level.opacity, shadowRadius: theme.tabSelectedShadowRadius * level.radius };
+}
+
 export function useSelectedTabGlow() {
   const theme = useTheme();
-  const level = useBrowser((s) => SELECTED_TAB_GLOW[s.settings.selectedTabGlow] ?? SELECTED_TAB_GLOW.full);
-  return { shadowColor: hex(theme.tabSelectedShadow), shadowOpacity: level.opacity, shadowRadius: theme.tabSelectedShadowRadius * level.radius };
+  const setting = useBrowser((s) => s.settings.selectedTabGlow);
+  return useMemo(() => selectedTabGlow(theme, setting), [theme, setting]);
 }
 
 export const layout = {

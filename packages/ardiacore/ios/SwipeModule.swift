@@ -122,6 +122,7 @@ final class SwipeArea: ExpoView, ACSwipeTarget {
 }
 
 private let pagerActivity = Notification.Name("ArdiaPagerActivity")
+private let pagerPosition = Notification.Name("ArdiaPagerPosition")
 
 private func number(_ value: Any?) -> Double? {
   switch value {
@@ -520,6 +521,7 @@ final class ACPager {
     let area = phase == .tracking ? drag.area : nil
     let all = areas.allObjects
     (area ?? all.first { $0.window != nil } ?? all.first)?.onPagerPosition(["position": position])
+    NotificationCenter.default.post(name: pagerPosition, object: nil, userInfo: ["key": key, "position": position])
   }
 
   private func emitState(_ name: String) {

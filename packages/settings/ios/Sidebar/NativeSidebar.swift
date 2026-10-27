@@ -30,17 +30,23 @@ enum NativeSidebar {
   }
 
   static func rowFrame(windowId: String, key: String) -> [String: Double]? {
-    guard let host = hosts[windowId], let window = host.view.window, let content = window.contentView,
-      let frame = host.view.frameOf(key)
+    guard let host = hosts[windowId], let page = host.view.current, let window = page.window, let content = window.contentView,
+      let frame = page.frameOf(key)
     else { return nil }
-    let inWindow = host.view.convert(frame, to: nil)
+    let inWindow = page.convert(frame, to: nil)
     return ["x": inWindow.minX, "y": content.bounds.height - inWindow.maxY, "width": inWindow.width, "height": inWindow.height]
   }
 
   static func hoverShifts(windowId: String) -> String? {
-    guard let host = hosts[windowId] else { return nil }
-    let result = host.view.hoverShifts()
+    guard let page = hosts[windowId]?.view.current else { return nil }
+    let result = page.hoverShifts()
     let json = try? JSONSerialization.data(withJSONObject: ["hovered": result.hovered, "shifts": result.shifts])
+    return json.flatMap { String(data: $0, encoding: .utf8) }
+  }
+
+  static func pages(windowId: String) -> String? {
+    guard let host = hosts[windowId] else { return nil }
+    let json = try? JSONSerialization.data(withJSONObject: host.view.describePages())
     return json.flatMap { String(data: $0, encoding: .utf8) }
   }
 
@@ -97,19 +103,25 @@ final class SidebarCommits: @unchecked Sendable {
 @MainActor
 final class SidebarHost {
   let windowId: String
-  let view: SidebarView
+  let view: SidebarPagerView
   private var hostState: SidebarHostState?
   private var state: BrowserState?
   private var listener: Int?
   private let commits = SidebarCommits()
   private var markUri: String?
+  private var pagerObserver: NSObjectProtocol?
 
   init(windowId: String) {
     self.windowId = windowId
-    view = SidebarView(windowId: windowId)
+    view = SidebarPagerView(windowId: windowId)
     view.favicons.loader = { request in try await NativeSidebar.favicon(request) }
     view.onAction = { [weak self] action in self?.handle(action) }
     commits.host = self
+    pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) {
+      [weak self] note in
+      guard note.userInfo?["key"] as? String == windowId, let position = note.userInfo?["position"] as? Double else { return }
+      MainActor.assumeIsolated { self?.view.setPagerPosition(position) }
+    }
     if let store = NativeStoreHandle.store {
       state = store.state
       let sink = commits
@@ -120,6 +132,8 @@ final class SidebarHost {
   func stop() {
     if let listener { NativeStoreHandle.store?.unsubscribe(listener) }
     listener = nil
+    if let pagerObserver { NotificationCenter.default.removeObserver(pagerObserver) }
+    pagerObserver = nil
   }
 
   func apply(_ json: String) {

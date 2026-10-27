@@ -19,6 +19,10 @@ public class HostedModule: Module {
       MainActor.assumeIsolated { NativeSidebar.hoverShifts(windowId: windowId) ?? "null" }
     }.runOnQueue(.main)
 
+    AsyncFunction("sidebarPages") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeSidebar.pages(windowId: windowId) ?? "null" }
+    }.runOnQueue(.main)
+
     View(SolaraHostedView.self) {
       Prop("kind") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.kind = v } }
       Prop("windowId") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.windowId = v } }

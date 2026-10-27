@@ -98,10 +98,11 @@ try {
     const [, , w, h] = info.bounds;
     if (!near(info.card, [6, 38, w - 12, h - 44])) throw new Error(`card ${info.card} in ${info.bounds}`);
     if (!near(info.bar, [0, 0, w, 38])) throw new Error(`bar ${info.bar}`);
+    if (info.blankBarHit !== "SolaraUI.LittleSolaraDragStrip") throw new Error(`a click on the bar's blank part reaches ${info.blankBarHit}, not the drag strip`);
     if (info.reactFill !== null) throw new Error(`the RN root keeps its fill over the backdrop and bar: ${info.reactFill}`);
     const bars = await run(`return [fibers("ShellLittleArdiaBar").length, fibers("NativeLittleArdiaBar").length, fibers("RNLittleArdiaBar").length];`);
     if (bars.join() !== "1,0,0") throw new Error(`JS bars (shell, hosted, RN) ${bars}`);
-    return { slots, card: info.card, bounds: info.bounds };
+    return { slots, card: info.card, bounds: info.bounds, blankBarHit: info.blankBarHit };
   });
 
   const fieldRect = async () => {

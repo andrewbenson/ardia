@@ -116,6 +116,12 @@ final class LittleSolaraHost {
     shell.mount(.backdrop, view)
   }
 
+  private func blankBarHit() -> Any {
+    guard let superview = shell.superview else { return NSNull() }
+    let point = superview.convert(NSPoint(x: 60, y: SmallBarMetrics.height / 2), from: shell)
+    return shell.hitTest(point).map { NSStringFromClass(type(of: $0)) } ?? NSNull()
+  }
+
   func describe() -> [String: Any] {
     func rect(_ r: CGRect) -> [Double] { [r.minX, r.minY, r.width, r.height] }
     return [
@@ -123,6 +129,7 @@ final class LittleSolaraHost {
       "bar": rect(shell.barFrame),
       "card": rect(shell.cardFrame),
       "barShown": !shell.bar.isHidden,
+      "blankBarHit": blankBarHit(),
       "reactFill": (root?.value(forKey: "backgroundColor") as? NSColor).map { $0.description } ?? NSNull(),
       "slots": LittleSolaraShellView.Slot.allCases.compactMap { slot in shell.view(in: slot).map { [slot.rawValue, NSStringFromClass(type(of: $0))] } },
       "order": shell.subviews.map { NSStringFromClass(type(of: $0)) },

@@ -109,7 +109,64 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     #expect(TabSlots.shared.container(for: .pane("w1", "b")) === other)
     TabSlots.shared.remove(.pane("w1", "b"), container: other)
   }
+
+  @Test func eachLeafHostsItsOwnToolbarAboveThePage() throws {
+    let view = SplitPanesView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    view.update(state: try splitState())
+    view.setToolbars(["a": paneToolbar("a")])
+    view.layoutSubtreeIfNeeded()
+    let a = try #require(view.toolbar("a"))
+    let b = try #require(view.toolbar("b"))
+    #expect(a.frame == CGRect(x: 0, y: 0, width: 500, height: 41))
+    #expect(!a.isHidden)
+    #expect(a.state?.tabId == "a")
+    #expect(b.isHidden)
+    var clicked: [String] = []
+    view.onToolbarClick = { tabId, click in clicked.append("\(tabId):\(click.id)") }
+    a.onClick(ToolbarClick(id: "closePane", kind: .press))
+    #expect(clicked == ["a:closePane"])
+    view.setFullscreenTab("a")
+    view.layoutSubtreeIfNeeded()
+    #expect(a.isHidden)
+    #expect(view.container("a")?.frame == CGRect(x: 0, y: 0, width: 1007, height: 700))
+    #expect(view.container("a")?.superview?.layer?.cornerRadius == 0)
+    #expect(view.container("a")?.superview?.layer?.backgroundColor == nil)
+  }
+
+  @Test func aNewTabLeafShowsTheEmptyStateOverItsPage() throws {
+    let view = SplitPanesView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    var state = try splitState()
+    state.tabs["b"]?.url = ""
+    view.update(state: state)
+    view.layoutSubtreeIfNeeded()
+    #expect(view.empty("a") == nil)
+    let empty = try #require(view.empty("b"))
+    #expect(empty.frame == view.container("b")?.frame)
+    #expect(empty.superview === view.container("b")?.superview)
+    var replaced: [String] = []
+    view.onReplace = { tabId, other in replaced.append("\(tabId)>\(other)") }
+    empty.onReplace?("a")
+    #expect(replaced == ["b>a"])
+    view.small = true
+    #expect(view.empty("b") == nil)
+    view.small = false
+    state.tabs["b"]?.url = "https://b.example/"
+    view.update(state: state)
+    #expect(view.empty("b") == nil)
+  }
 }
+
+private func paneToolbar(_ tabId: String) -> String {
+  #"""
+    {"tabId": "\#(tabId)", "height": 41, "bare": false, "focused": true, "accent": "#3478F6",
+     "palette": {"text": "#000000", "secondary": "#00000080", "icon": "#000000D4", "iconDisabled": "#0000006E", "hover": "#0000000D", "pressed": "#0000001A", "pill": "#0000000A", "divider": "#0000001A"},
+     "geometry": {"back": 12, "forward": 40, "reload": 68, "urlLeft": 100, "urlRight": 8},
+     "left": [], "url": null, "right": [{"id": "closePane", "icon": "xmark"}], "rightInset": 8, "hairline": false}
+    """#
+}
+
 
 @Suite struct SplitEmptyStateTests {
   @Test func suggestsRecentTabsOutsideTheSplitInTheSameProfile() throws {

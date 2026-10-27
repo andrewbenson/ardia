@@ -61,7 +61,7 @@ public enum PinnedSync {
   static let noBox = "none"
 }
 
-func jsText(_ v: JSONValue?) -> String {
+public func jsText(_ v: JSONValue?) -> String {
   guard let v else { return "undefined" }
   switch v {
   case .null: return "null"
@@ -73,7 +73,7 @@ func jsText(_ v: JSONValue?) -> String {
   }
 }
 
-func jsStrict(_ a: JSONValue?, _ b: JSONValue?) -> Bool {
+public func jsStrict(_ a: JSONValue?, _ b: JSONValue?) -> Bool {
   switch (a, b) {
   case (nil, nil): return true
   case (.some(.null), .some(.null)): return true
@@ -107,11 +107,11 @@ func record(_ pairs: [(String, JSONValue?)]) -> JSONValue {
   return .object(out)
 }
 
-enum JSPrimitive {
+public enum JSPrimitive {
   case undefined, null, bool(Bool), number(Double), string(String)
 }
 
-func jsPrimitive(_ v: JSONValue?) -> JSPrimitive {
+public func jsPrimitive(_ v: JSONValue?) -> JSPrimitive {
   switch v {
   case nil: return .undefined
   case .null: return .null
@@ -160,7 +160,7 @@ func jsStringToNumber(_ text: String) -> Double {
   return Double(String(decoding: units, as: UTF8.self)) ?? .nan
 }
 
-func jsNumber(_ p: JSPrimitive) -> Double {
+public func jsNumber(_ p: JSPrimitive) -> Double {
   switch p {
   case .undefined: return .nan
   case .null: return 0
@@ -170,14 +170,14 @@ func jsNumber(_ p: JSPrimitive) -> Double {
   }
 }
 
-func jsLess(_ a: JSONValue?, _ b: JSONValue?) -> Bool {
+public func jsLess(_ a: JSONValue?, _ b: JSONValue?) -> Bool {
   let x = jsPrimitive(a)
   let y = jsPrimitive(b)
   if case .string(let l) = x, case .string(let r) = y { return jsKeyPrecedes(l, r) }
   return jsNumber(x) < jsNumber(y)
 }
 
-func jsSort<T>(_ input: [T], _ compare: (T, T) -> Double) -> [T] {
+public func jsSort<T>(_ input: [T], _ compare: (T, T) -> Double) -> [T] {
   var a = input
   let n = a.count
   if n < 2 { return a }

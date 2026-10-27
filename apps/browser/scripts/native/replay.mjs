@@ -114,10 +114,26 @@ const RECORDED_ADAPTERS = new Map([
   ["groupLooksAdapter", ["plain"]],
   ["pinnedHomesAdapter", ["plain"]],
   ["tileFoldersAdapter", ["plain"]],
+  ["bookmarksAdapter", ["plain"]],
+  ["historyAdapter", ["plain"]],
+  ["passwordsAdapter", ["plain", "read", "host"]],
 ]);
+const HOSTED_ADAPTERS = new Set(["bookmarksAdapter", "historyAdapter", "passwordsAdapter"]);
+
+const HOST_IMPORT = 'import { addHistoryVisits, deleteHistoryUrls, deletePassword, savePassword } from "@ardia/ardiacore";';
 
 function instrumentAdapters(source) {
   const appended = [];
+  if (source.includes(HOST_IMPORT)) {
+    const natives = ["addHistoryVisits", "deleteHistoryUrls", "deletePassword", "savePassword"];
+    source = source.replace(
+      HOST_IMPORT,
+      `import { ${natives.map((n) => `${n} as __replay_${n}`).join(", ")} } from "@ardia/ardiacore";\n${natives.map((n) => `const ${n} = (...args) => globalThis.__replayHost("${n}", args, () => __replay_${n}(...args));`).join("\n")}`,
+    );
+  }
+  source = source.replace("async (p) => SyncNative?.readPasswords(p)", 'async (p) => globalThis.__replayHost("readLogins", [p], () => SyncNative?.readPasswords(p))');
+  source = source.replace("await new Promise((r) => setTimeout(r, 250));", 'await globalThis.__replayHost("sleep", [250], () => new Promise((r) => setTimeout(r, 250)));');
+  source = source.replace('  return {\n    prefix: "pw:",', '  return {\n    __replayMemory: () => ({ lastRead, quietUntil, created: [...created] }),\n    prefix: "pw:",');
   source = source.replace(/^export function (\w+Adapter)\(/gm, (_, name) => {
     appended.push(`export function ${name}(...args) { return globalThis.__replayAdapter("${name}", args, (given) => __replay_${name}(...given)); }`);
     return `function __replay_${name}(`;
@@ -136,6 +152,7 @@ function wronglyTyped(s) {
   return (
     Object.values(s.tabs ?? {}).some(tabBad) ||
     Object.values(s.groups ?? {}).some(groupBad) ||
+    Object.values(s.parkedPins ?? {}).some((p) => (p?.tabs ?? []).some(tabBad) || (p?.groups ?? []).some(groupBad)) ||
     Object.values(s.profiles ?? {}).some((p) => typeof p.name !== "string" || typeof p.color !== "string" || !textOrNone(p.icon))
   );
 }
@@ -287,6 +304,17 @@ async function record(file) {
   await import(pathToFileURL(join(app, "src/test-loader.mjs")).href);
   let adapterHook = null;
   globalThis.__replayAdapter = (name, args, build) => (adapterHook ? adapterHook(name, args, build) : build(args));
+  let hostLog = null;
+  globalThis.__replayHost = (name, args, run) => {
+    const log = hostLog;
+    if (!log) return run();
+    const entry = { n: name, a: plain(args) };
+    log.push(entry);
+    const answer = run();
+    if (answer && typeof answer.then === "function") return answer.then((v) => (v !== undefined && (entry.r = plain(v)), v));
+    if (answer !== undefined) entry.r = plain(answer);
+    return answer;
+  };
   globalThis.__replayLazyAdapter = (name, raw) => {
     let wrapped = null;
     const live = () => (wrapped ??= adapterHook ? adapterHook(name, [], () => raw) : null) ?? raw;
@@ -587,7 +615,28 @@ async function record(file) {
       const kinds = RECORDED_ADAPTERS.get(name);
       if (!kinds) return build(args);
       let callbacks = null;
-      const given = args.map((a, i) => (kinds[i] === "callback" && typeof a === "function" ? (...x) => (callbacks?.push(plain(x)), a(...x)) : a));
+      const given = args.map((a, i) =>
+        kinds[i] === "callback" && typeof a === "function"
+          ? (...x) => (callbacks?.push(plain(x)), a(...x))
+          : kinds[i] === "host" && typeof a === "function"
+            ? (...x) => globalThis.__replayHost("readLogins", x, () => a(...x))
+            : a,
+      );
+      const hosted = HOSTED_ADAPTERS.has(name);
+      const profileOf = () => (typeof args[0] === "string" ? args[0] : "default");
+      const hostState = () => {
+        const s = useBrowser.getState();
+        const p = profileOf();
+        if (name === "passwordsAdapter") return { engine: model.engineProfile(p) };
+        if (name === "bookmarksAdapter") return plain({ engine: model.engineProfile(p), bookmarks: s.bookmarks, bookmarksReady: !!s.bookmarksReady?.[p] });
+        return plain({
+          engine: model.engineProfile(p),
+          history: s.history?.[p] ?? null,
+          historyReady: !!s.historyReady?.[p],
+          ...(typeof s.historyFloor?.[p] === "number" && Number.isFinite(s.historyFloor[p]) ? { historyFloor: s.historyFloor[p] } : {}),
+        });
+      };
+      let lastExtract = null;
       const adapter = build(given);
       const describe = () =>
         args.map((a, i) => {
@@ -598,6 +647,7 @@ async function record(file) {
             return { read: records ? plain(Object.fromEntries(Object.entries(records).filter(([k]) => k.startsWith("pth:")))) : null };
           }
           if (kind === "callback") return { callback: typeof a === "function" };
+          if (kind === "host") return { host: typeof a === "function" };
           return plain(a);
         });
       const begin = (kind) => {
@@ -615,7 +665,10 @@ async function record(file) {
           lookups: [],
           commands: [],
           callbacks: [],
+          ...(hosted ? { host: hostState(), hostCalls: [] } : {}),
+          ...(adapter.__replayMemory ? { adapterMemory: plain(adapter.__replayMemory()) } : {}),
         };
+        hostLog = c.hostCalls ?? null;
         c.restore = () => {
           frozen = null;
           if (testNow) Date.now = testNow;
@@ -629,6 +682,9 @@ async function record(file) {
       const end = (c, ok) => {
         c.restore();
         delete c.restore;
+        hostLog = null;
+        if (hosted) c.hostAfter = hostState();
+        if (adapter.__replayMemory) c.adapterMemoryAfter = plain(adapter.__replayMemory());
         const { sent: _sent, ...web } = globalThis.__replayCalls ?? {};
         c.web = web;
         globalThis.__replayCalls = null;
@@ -657,6 +713,15 @@ async function record(file) {
           : fn;
       return {
         ...adapter,
+        ...(typeof adapter.editedAt === "function"
+          ? {
+              editedAt: (value) => {
+                const answer = adapter.editedAt(value);
+                lastExtract?.editedAt?.push(answer === undefined ? [plain(value)] : [plain(value), plain(answer)]);
+                return answer;
+              },
+            }
+          : {}),
         extract: (base, queued, at, known, remote, stamp) => {
           const c = begin("extract");
           c.at = at ?? null;
@@ -693,6 +758,8 @@ async function record(file) {
             (r) => {
               c.values = r ? [...r.values].map(([k, v]) => (v === undefined ? [k] : [k, plain(v)])) : null;
               c.asked = [];
+              c.editedAt = [];
+              lastExtract = c;
               end(c, true);
               shown = wrapExtraction(r);
             },

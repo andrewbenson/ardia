@@ -121,7 +121,10 @@ final class Lookups: @unchecked Sendable {
 
 func readArgument(_ args: [JSONValue], _ i: Int) -> JSONValue? { i < args.count ? args[i]["read"] : nil }
 
-func makeAdapter(_ name: String, _ args: [JSONValue], _ store: Store, _ adopted: @escaping (String) -> Void, folders: TileFolderMemory = TileFolderMemory()) -> SyncAdapter? {
+func makeAdapter(
+  _ name: String, _ args: [JSONValue], _ store: Store, _ adopted: @escaping (String) -> Void, folders: TileFolderMemory = TileFolderMemory(),
+  host: ScriptedHost? = nil, now: Double = 0, memory: JSONValue? = nil
+) -> SyncAdapter? {
   let links = { (readArgument(args, 0)?.object).map { JSMap($0.map { ($0.key, $0.value) }) } ?? JSMap() }
   switch name {
   case "settingsAdapter": return SettingsAdapter(store: store)
@@ -145,6 +148,11 @@ func makeAdapter(_ name: String, _ args: [JSONValue], _ store: Store, _ adopted:
   case "groupLooksAdapter": return GroupLooksAdapter(store: store, profileId: args[0].string ?? "")
   case "pinnedHomesAdapter": return PinnedHomesAdapter(store: store, profileId: args[0].string ?? "")
   case "tileFoldersAdapter": return TileFoldersAdapter(store: store, profileId: args[0].string ?? "", folders: folders)
+  case "bookmarksAdapter": return host.map { BookmarksAdapter(host: $0, profileId: args[0].string ?? "") }
+  case "historyAdapter": return host.map { HistoryAdapter(host: $0, profileId: args[0].string ?? "", now: { now }) }
+  case "passwordsAdapter":
+    let forced = readArgument(args, 1)?.truthy ?? false
+    return host.map { PasswordsAdapter(host: $0, profileId: args[0].string ?? "", forced: { forced }, now: { now }, memory: passwordsMemory(memory)) }
   default: return nil
   }
 }
@@ -164,7 +172,11 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
   var held: [String: [String]] = [:]
   for (profileId, ids) in json["memory"]?["tileFolders"]?.object ?? [:] { held[profileId] = ids.array?.compactMap(\.string) ?? [] }
   let folders = TileFolderMemory(held)
-  guard let adapter = makeAdapter(name, json["adapter"]?["args"]?.array ?? [], store, { adopted.append([.string($0)]) }, folders: folders) else { return .some(nil) }
+  let host = json["host"].map { ScriptedHost($0, calls: json["hostCalls"]) }
+  guard
+    let adapter = makeAdapter(
+      name, json["adapter"]?["args"]?.array ?? [], store, { adopted.append([.string($0)]) }, folders: folders, host: host, now: now, memory: json["adapterMemory"])
+  else { return .some(nil) }
   let lookups = Lookups(json["lookups"])
   var problems: [String] = []
   var stateChecked = false
@@ -209,6 +221,12 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
         for (profileId, ids) in recorded { want[profileId] = ids.array?.compactMap(\.string) ?? [] }
         if folders.snapshot != want { problems.append("tile folders: swift \(folders.snapshot) vs js \(want)") }
       }
+      for entry in json["editedAt"]?.array ?? [] {
+        guard let parts = entry.array, let value = parts.first else { continue }
+        let answer = adapter.editedAt(value).map(JSONValue.number) ?? .null
+        let recorded = parts.count > 1 ? parts[1] : .null
+        if answer.text() != recorded.text() && !(answer.number?.isNaN == true && recorded.isNull) { problems.append("editedAt(\(value.text().prefix(120))): swift \(answer.text()) vs js \(recorded.text())") }
+      }
     } else if !(expected?.isNull ?? true) {
       problems.append("extract: swift returned nothing, js returned \(expected!.text().prefix(300))")
     }
@@ -229,6 +247,10 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
   if let d = memoryDifference(store.memory, json["memoryAfter"]) { problems.append("memory after: \(d)") }
   if let callbacks = json["callbacks"], JSONValue.array(adopted) != callbacks { problems.append("adopted: swift \(JSONValue.array(adopted).text()) vs js \(callbacks.text())") }
   if !lookups.missed.isEmpty { problems.append("asked what js didn't: \(lookups.missed.prefix(4).joined(separator: ", "))") }
+  if let host { problems += host.check(json) }
+  if let passwords = adapter as? PasswordsAdapter, let recorded = json["adapterMemoryAfter"], passwordsMemoryJSON(passwords.memory).text() != recorded.text() {
+    problems.append("passwords memory after: swift \(passwordsMemoryJSON(passwords.memory).text().prefix(300)) vs js \(recorded.text().prefix(300))")
+  }
   return .some(problems.isEmpty ? nil : problems.joined(separator: "; "))
 }
 
@@ -270,6 +292,7 @@ func makeAdapterName(_ json: JSONObject) -> Bool {
   [
     "settingsAdapter", "profilesAdapter", "profileThemesAdapter", "sharedDataAdapter", "deviceAdapter", "deviceTabsAdapter", "developerModeAdapter",
     "pinnedAdapter", "pinnedOrderAdapter", "pinnedRowsAdapter", "groupLooksAdapter", "pinnedHomesAdapter", "tileFoldersAdapter",
+    "bookmarksAdapter", "historyAdapter", "passwordsAdapter",
   ].contains(json["adapter"]?["name"]?.string ?? "")
 }
 

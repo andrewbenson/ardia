@@ -412,3 +412,123 @@ async function pinnedPair(run) {
 for (let run = 0; run < Math.max(2, Math.floor(RUNS / 4)); run++) {
   test(`pinned area: two Macs edit pins at random and sync, run ${run}`, () => pinnedPair(run));
 }
+
+const nativeFake = await import("../../src/test-native/index.ts");
+const { bookmarkUuidFor } = await import("../../src/store/bookmarks.ts");
+const HOSTED_BATCH = 5;
+const BOOKMARK_KEYS = ["k1", "k2", "k3", "Ünï", "bar", "other", "a1b2c3d4-0000-4000-8000-000000000000", "folderA", "folderB"];
+const POS = ["a", "b", "b", "c", "m", "z", "", "a0", "\u{1F600}", 5, null];
+
+function bookmarksRun(run) {
+  const k = kit(21000 + run);
+  useBrowser.setState({ bookmarks: { nodes: {}, roots: {} } });
+  S().hydrate({});
+  const s = S();
+  const roots = s.bookmarks.roots.default;
+  const nodes = { ...s.bookmarks.nodes };
+  const ids = [];
+  const folders = [roots.bar, roots.other];
+  for (let i = 0; i < k.pick([0, 2, 6, 12]); i++) {
+    const key = k.pick(BOOKMARK_KEYS);
+    const id = k.chance(0.6) ? bookmarkUuidFor(key) : `id${run}-${i}`;
+    if (nodes[id]) continue;
+    const folder = k.chance(0.3);
+    const parent = k.pick(folders);
+    nodes[id] = folder
+      ? { kind: "folder", id, parentId: parent, title: k.pick(["F", "", "Ünï"]), children: [], addedAt: k.pick([1, 2, 3]), ...(k.chance(0.5) ? { syncKey: key } : {}) }
+      : { kind: "url", id, parentId: parent, title: k.pick(["T", ""]), url: k.pick(["https://a.com/", "https://b.org/x", "file:///f"]), favicon: k.pick([null, "data:x"]), addedAt: k.pick([1, 2, 3]), ...(k.chance(0.5) ? { syncKey: key } : {}) };
+    if (!nodes[parent]?.children?.includes(id)) nodes[parent] = { ...nodes[parent], children: [...nodes[parent].children, id, ...(k.chance(0.1) ? ["missing-child"] : [])] };
+    if (folder) folders.push(id);
+    ids.push(id);
+  }
+  useBrowser.setState({ bookmarks: { ...s.bookmarks, nodes }, bookmarksReady: { default: k.chance(0.9) } });
+  const keyed = ["bar", "other", ...BOOKMARK_KEYS, ...ids];
+  const base = new Map(keyed.filter(() => k.chance(0.4)).map((key) => [`bm:${key}`, { p: k.pick(["bar", "other", ...BOOKMARK_KEYS]), pos: k.pick(["a", "b", "m", "z", "c0"]) }]));
+  const adapter = adapters.bookmarksAdapter("default");
+  try {
+    adapter.extract((key) => base.get(key));
+  } catch {}
+  const visible = new Map(
+    k.some(keyed, 0.5).map((key) => [
+      `bm:${key}`,
+      k.pick([
+        { k: k.pick(["u", "f", "x"]), p: k.pick(["bar", "other", ...BOOKMARK_KEYS, "nowhere"]), t: k.pick(["Title", "", 7]), u: k.pick(["https://n.com/", undefined, null]), a: k.pick([1, 5, undefined]), pos: k.pick(POS) },
+        { k: "f", p: key === "folderA" ? "folderB" : "folderA", t: "loop", a: 1, pos: k.pick(POS) },
+        { k: "u", p: "bar", t: "plain", u: "https://p.com/", a: 2, pos: k.pick(POS) },
+      ]),
+    ]),
+  );
+  try {
+    adapter.apply(visible, new Set(visible.keys()), (key) => base.get(key), { known: () => true, now: 0, horizon: 0, joined: true });
+  } catch {}
+}
+
+const HISTORY_URLS = ["https://a.com/", "http://b.org/x", "file:///tmp/f", "HTTPS://C.com/", "chrome://settings", "about:blank", "https://ü.de/"];
+
+async function historyRun(run) {
+  const k = kit(25000 + run);
+  S().hydrate({});
+  nativeFake.current.device = `fuzz-h-${run}`;
+  const now = Date.now();
+  const day = 86_400_000;
+  const time = () => k.pick([now, now - 1, now - 2 * day, now - 89 * day, now - 91 * day, now + 1, now - 0.5]);
+  const entries = k.some(HISTORY_URLS, 0.6).map((url) => {
+    const visitTimes = Array.from({ length: k.pick([0, 1, 2, 4, 55]) }, (_, i) => (k.chance(0.5) ? time() : now - i * 1000)).sort((a, z) => a - z);
+    return { url, title: k.pick(["", "Page", "Ünï"]), favicon: null, visits: k.pick([1, 2, 9]), lastVisit: visitTimes.at(-1) ?? time(), ...(visitTimes.length ? { visitTimes } : {}) };
+  });
+  useBrowser.setState({ history: { default: entries }, historyReady: { default: k.chance(0.9) }, historyFloor: k.chance(0.3) ? { default: now - k.pick([day, 30 * day]) } : {} });
+  const base = new Map(HISTORY_URLS.filter(() => k.chance(0.4)).map((url) => [`h:${url}`, { t: "Old", n: k.pick([1, 3]), vt: Array.from({ length: k.pick([1, 2]) }, time) }]));
+  const adapter = adapters.historyAdapter("default");
+  const extraction = adapter.extract((key) => base.get(key));
+  for (const url of k.some(HISTORY_URLS, 0.5)) extraction?.ignore?.(`h:${url}`);
+  for (const [, v] of base) adapter.editedAt?.(v);
+  const changed = new Set(k.some(HISTORY_URLS, 0.6).map((url) => `h:${url}`));
+  const visible = new Map(
+    [...changed].filter(() => k.chance(0.7)).map((key) => [key, k.pick([{ t: k.pick(["Remote", ""]), n: k.pick([1, 4, undefined]), vt: Array.from({ length: k.pick([1, 2, 3, 52]) }, (_, i) => (k.chance(0.5) ? time() : now - 500 - i * 1000)) }, { t: "x", n: 1, vt: [] }])]),
+  );
+  await adapter.apply(visible, changed, (key) => base.get(key), { known: () => true, now, horizon: 0, joined: true });
+}
+
+const ORIGINS = ["https://a.com", "https://a.com/", "http://b.org", "https://c.com/path", "ftp://x", "https://sp ace.com", "https://ü.de"];
+
+async function passwordsRun(run) {
+  const k = kit(29000 + run);
+  const device = `fuzz-p-${run}`;
+  nativeFake.current.device = device;
+  const store = new Map();
+  for (let i = 0; i < k.pick([0, 1, 3, 5]); i++) {
+    const origin = k.pick(ORIGINS);
+    const username = k.pick(["me", "", "you", "Ünï"]);
+    store.set(`${origin}\n${username}`, { origin, url: origin, username, password: k.pick(["p1", "p2", ""]), created: k.pick([0, 5, 1700000000000]) });
+  }
+  nativeFake.passwordStores.set(device, store);
+  const adapter = adapters.passwordsAdapter("default", () => k.chance(0.7), nativeFake.readLogins);
+  const extraction = await adapter.extract(() => undefined);
+  for (const [, v] of extraction?.values ?? []) adapter.editedAt?.(v);
+  const keys = [...store.values()].map((l) => `pw:${l.origin.replace(/\/$/, "")}\n${l.username}`);
+  const changed = new Set([...k.some(keys, 0.6), ...(k.chance(0.5) ? ["pw:https://new.com\nme"] : []), ...(k.chance(0.1) ? ["pw:nonewline"] : [])]);
+  const visible = new Map([...changed].filter(() => k.chance(0.7)).map((key) => {
+    const at = key.indexOf("\n");
+    return [key, { o: key.slice(3, at < 0 ? undefined : at), u: at < 0 ? "" : key.slice(at + 1), p: k.pick(["p1", "p3", ""]) }];
+  }));
+  const base = new Map(keys.filter(() => k.chance(0.6)).map((key) => [key, { p: k.pick(["p1", "p2", ""]) }]));
+  const realTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, _ms, ...rest) => realTimeout(fn, 0, ...rest);
+  try {
+    await adapter.apply(visible, changed, (key) => base.get(key), { known: () => true, now: 0, horizon: 0, joined: true });
+  } finally {
+    globalThis.setTimeout = realTimeout;
+  }
+}
+
+for (let batch = 0; batch < Math.ceil(RUNS / HOSTED_BATCH); batch++) {
+  test(`bookmarks over random trees and records, batch ${batch}`, () => {
+    for (let run = batch * HOSTED_BATCH; run < Math.min(RUNS, (batch + 1) * HOSTED_BATCH); run++) bookmarksRun(run);
+  });
+  test(`history over random entries, floors and records, batch ${batch}`, async () => {
+    for (let run = batch * HOSTED_BATCH; run < Math.min(RUNS, (batch + 1) * HOSTED_BATCH); run++) await historyRun(run);
+  });
+  test(`passwords over random logins and records, batch ${batch}`, async () => {
+    for (let run = batch * HOSTED_BATCH; run < Math.min(RUNS, (batch + 1) * HOSTED_BATCH); run++) await passwordsRun(run);
+  });
+}

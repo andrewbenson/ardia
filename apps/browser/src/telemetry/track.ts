@@ -1,5 +1,6 @@
 import { appInfo, capture, isSharing } from "./client";
 import { launchFirstWindow } from "./journeys";
+import { perfProbeEnabled } from "../lib/perfProbe";
 
 export type SuggestionType = "history" | "bookmark" | "tab" | "url" | "search" | "calc" | "action" | "create" | "extension" | "typed";
 
@@ -30,7 +31,11 @@ const MAX_SAMPLES = 500;
 const latency: number[] = [];
 let keystrokes = 0;
 
+const probedLatency: number[] = [];
+if (perfProbeEnabled) (globalThis as { __omniboxLatency?: number[] }).__omniboxLatency = probedLatency;
+
 export function sampleOmniboxLatency(ms: number) {
+  if (perfProbeEnabled && probedLatency.length < 10_000) probedLatency.push(ms);
   if (!isSharing() || ++keystrokes % SAMPLE_EVERY) return;
   if (ms >= 0 && ms < 10_000 && latency.length < MAX_SAMPLES) latency.push(ms);
 }

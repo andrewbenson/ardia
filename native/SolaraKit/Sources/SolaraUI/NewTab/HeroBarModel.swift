@@ -128,6 +128,8 @@ public final class HeroBarModel {
   @ObservationIgnored private var fetching: String?
   @ObservationIgnored private var keyAt: ContinuousClock.Instant?
   @ObservationIgnored private var sourcesSeen = -1
+  @ObservationIgnored private var tabScopeCache: (key: String, scope: SearchScope?)?
+  @ObservationIgnored private var changeAnnounced = false
   @ObservationIgnored public private(set) var editing = false
   @ObservationIgnored private var focusedOnce = false
 
@@ -175,7 +177,11 @@ public final class HeroBarModel {
 
   public var tabScope: SearchScope? {
     guard scope == nil, edited else { return nil }
-    return offeredSiteSearch(typed, shown, scopeSources())
+    let key = "\(typed)\u{1}\(shown)\u{1}\(sourcesSeen)"
+    if let cached = tabScopeCache, cached.key == key { return cached.scope }
+    let found = offeredSiteSearch(typed, shown, scopeSources())
+    tabScopeCache = (key, found)
+    return found
   }
 
   public var placeholder: String {
@@ -554,7 +560,7 @@ public final class HeroBarModel {
     if !items.isEmpty { events.journey(.suggestions) }
     if let keyAt {
       self.keyAt = nil
-      DispatchQueue.main.async { [events] in
+      HeroBarModel.afterNextCommit { [events] in
         let elapsed = ContinuousClock.now - keyAt
         events.latency(Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15)
       }
@@ -593,7 +599,7 @@ public final class HeroBarModel {
     let length = full.utf16.count
     selection = TextSelection(start: min(selection.start, length), end: min(selection.end, length))
     field?.show(value: full, selection: selection)
-    events.changed()
+    announceChange()
   }
 
   private func remoteList(_ query: String) -> [String] {
@@ -680,5 +686,25 @@ extension HeroBarModel {
   static func pageKey(_ url: String) -> String {
     guard let hash = url.firstIndex(of: "#") else { return url }
     return String(url[..<hash])
+  }
+}
+
+extension HeroBarModel {
+  func announceChange() {
+    guard !changeAnnounced else { return }
+    changeAnnounced = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.changeAnnounced = false
+      self.events.changed()
+    }
+  }
+
+  static func afterNextCommit(_ run: @escaping @MainActor () -> Void) {
+    let observer = CFRunLoopObserverCreateWithHandler(nil, CFRunLoopActivity.beforeWaiting.rawValue, false, 2_000_001) { observer, _ in
+      CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes)
+      MainActor.assumeIsolated { run() }
+    }
+    CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
   }
 }

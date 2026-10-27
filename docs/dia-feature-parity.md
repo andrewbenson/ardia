@@ -481,7 +481,7 @@ own sign-ins instead.
 | Bookmark page ⌘D (Solara: ⌥⇧⌘D since 2026-10-24; ⌘D is Move to Pinned, as in Arc) | ✓ | ✅ | save dialog with name + folder tree; "Edit Bookmark…" when already saved |
 | Bookmark all tabs; add to folder; folder‑tree save dialog | ✓ | ✅ | |
 | Bookmarks bar (Always / New Tab only / Never, ⇧⌘B) | ✓ | ✅ | |
-| Bookmark manager (⌥⌘B, `dia://bookmarks`) | ✓ | ✅ | `ardia://bookmarks` (our page), over Chrome's own bookmarks, so extensions' `chrome.bookmarks` sees the same tree (Findings 10) |
+| Bookmark manager (⌥⌘B, `dia://bookmarks`) | ✓ | ✅ | `ardia://bookmarks` (our page), over Chrome's own bookmarks, so extensions' `chrome.bookmarks` sees the same tree (Findings 10) The native page (SwiftUI, `SolaraUI/Pages`) is behind `ARDIA_NATIVE_PAGES=1`, off by default. |
 | Bookmarks menu + Recent Bookmarks | ✓ | ✅ | |
 | ⌘/middle‑click bg, ⌥‑click split, open folder | ✓ | ✅ | |
 | Bookmarks in command bar | ✓ | ✅ | |
@@ -492,9 +492,9 @@ own sign-ins instead.
 | Feature | Dia | Solara | Gap |
 |---|---|---|---|
 | History recorded | ✓ | ✅ | per profile, 5 000 pages, history.json; never for incognito |
-| History page (⌘Y, `dia://history`) | ✓ | ✅ | `ardia://history` (our page, also when Chrome opens chrome://history): by day, search, bulk delete |
+| History page (⌘Y, `dia://history`) | ✓ | ✅ | `ardia://history` (our page, also when Chrome opens chrome://history): by day, search, bulk delete The native page (SwiftUI, `SolaraUI/Pages`) is behind `ARDIA_NATIVE_PAGES=1`, off by default. |
 | History menu | ✓ | ✅ | Show History, Clear Browsing Data, Recently Closed, Recently Closed Groups |
-| Clear browsing data | ✓ | ✅ | our history by visit time and its favicons, plus Chrome's BrowsingDataRemover for the same range: Chrome's history database (what `chrome.history` shows), cookies and every kind of site storage, cached files, live. Form data and passwords stay, as in the dialog's two options |
+| Clear browsing data | ✓ | ✅ | our history by visit time and its favicons, plus Chrome's BrowsingDataRemover for the same range: Chrome's history database (what `chrome.history` shows), cookies and every kind of site storage, cached files, live. Form data and passwords stay, as in the dialog's two options The native page (SwiftUI, `SolaraUI/Pages`) is behind `ARDIA_NATIVE_PAGES=1`, off by default. |
 | Synced devices' tabs | ✓ | ✅ | each device publishes its 30 most recent open tabs per profile (not pinned tabs, which sync as pinned tabs); the others list them in the overflow menu, and a device that stops syncing takes its record away (`docs/sync.md`). Verified with two and three hidden instances (2026-09-26) |
 
 ## 14. Downloads
@@ -508,7 +508,7 @@ own sign-ins instead.
 | "Magnet" animation toward sidebar | ✓ | ✅ | |
 | Drag file out of the panel | ✓ | ✅ | A finished download drags as its file into Finder, other apps, the page, or the tab list (2026-10-21) |
 | Drop files and links onto the tab list | ✓ | ✅ | 2026-10-21, a Discord report. Files (PDF, image, HTML, text…) from Finder, the Downloads panel or any app that drags plain file URLs, and http(s) links from other browsers, apps or dragged text open as new tabs where they're dropped, behind the same drop gap a tab drag opens: between rows, at the top or end, into an open group, onto the pinned tiles (pinned), or into the top strip's incoming gap. Several open in order, the first selected. A .webloc/.url opens its target only if it's http(s); javascript:, data: and file: links from text or URL types never open. The page keeps Chrome's own drop. `FileDropView` (packages/shell System.swift), layout/fileDrop.tsx, sidebar/dnd.tsx external drags; `tab-drag-test.mjs` (12 file-drop cases through AppKit's NSDraggingDestination path with a DEV dragging info). Private windows take drops too. Known gap: drags that only offer file promises (some Mail attachments) aren't accepted. Left for a person: a real drag from Finder and Safari, and the drag image by eye |
-| `dia://downloads` page | ✓ | ✅ | `ardia://downloads` |
+| `dia://downloads` page | ✓ | ✅ | `ardia://downloads`. The native page (SwiftUI, `SolaraUI/Pages`) is behind `ARDIA_NATIVE_PAGES=1`, off by default. |
 | Downloads folder, ask where to save each file | ✓ | ✅ | Settings › General › Downloads (issue #95, 2026-10-24): "Downloads folder" (Change… opens a folder panel) and "Ask where to save each file", per profile as in Chrome (`download.default_directory`, also Save Page As's `savefile.default_directory`, and `download.prompt_for_download`, through `ac_downloads_settings` / `ac_downloads_set_settings`); with several profiles a pop-up picks the profile and "Use for All Profiles" copies both to every other one. Profiles that share data share these too. A folder set by policy can't be changed. New profiles start at Chrome's default, ~/Downloads |
 
 ## 15. Extensions

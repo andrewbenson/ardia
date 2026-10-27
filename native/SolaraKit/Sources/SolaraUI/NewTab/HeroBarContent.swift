@@ -188,16 +188,18 @@ struct SuggestionRowView: View {
   let selected: Bool
   let trailing: String?
   let model: HeroBarModel
+  var pointerMoved = true
 
   var body: some View {
     let (title, accessory) = suggestionLabels(suggestion)
+    let showsHover = hovered && pointerMoved
     let hintText: String? = {
       if let trailing { return trailing }
       if case .action(_, _, _, let hint) = suggestion { return hint }
       return nil
     }()
     let removeUrl = isRemovable(suggestion)
-    let removable = removeUrl != nil && (hovered || selected)
+    let removable = removeUrl != nil && (showsHover || selected)
     Button { model.chooseRow(suggestion) } label: {
       HStack(spacing: 11) {
         SuggestionIconView(suggestion: suggestion)
@@ -221,7 +223,7 @@ struct SuggestionRowView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: 11)
-          .fill(selected ? env.theme.commandBarSelected.color : hovered ? env.theme.commandBarHover.color : .clear)
+          .fill(selected ? env.theme.commandBarSelected.color : showsHover ? env.theme.commandBarHover.color : .clear)
       )
     }
     .buttonStyle(HoverButtonStyle())
@@ -340,6 +342,7 @@ struct GoButtonView: View {
 
 struct HeroBarContent: View {
   @Environment(\.newTab) private var env
+  @State private var pointer = ListPointer()
   let model: HeroBarModel
   var onHeight: (CGFloat) -> Void = { _ in }
 
@@ -357,9 +360,18 @@ struct HeroBarContent: View {
       if !model.listAway && !model.items.isEmpty {
         VStack(spacing: 0) {
           ForEach(Array(model.items.enumerated()), id: \.offset) { i, s in
-            SuggestionRowView(suggestion: s, selected: i == model.selectedIndex, trailing: i == 0 ? model.trailingHint : nil, model: model)
+            SuggestionRowView(
+              suggestion: s, selected: i == model.selectedIndex, trailing: i == 0 ? model.trailingHint : nil, model: model,
+              pointerMoved: pointer.moved)
           }
         }
+        .onContinuousHover(coordinateSpace: .global) { phase in
+          switch phase {
+          case .active(let point): pointer.observe(point)
+          case .ended: pointer.leave()
+          }
+        }
+        .onChange(of: model.items) { pointer.listChanged() }
         .padding(.horizontal, 9)
         .padding(.bottom, 2)
       }
@@ -420,4 +432,31 @@ struct IncognitoHeadingView: View {
 
 extension NSFont {
   var lineHeight: CGFloat { ceil(ascender - descender + leading) }
+}
+
+struct ListPointer {
+  private(set) var moved = false
+  private var resting: CGPoint?
+  private var last: CGPoint?
+
+  mutating func observe(_ point: CGPoint) {
+    defer { last = point }
+    if moved { return }
+    guard let resting else {
+      self.resting = point
+      return
+    }
+    if point != resting { moved = true }
+  }
+
+  mutating func leave() {
+    moved = false
+    resting = nil
+    last = nil
+  }
+
+  mutating func listChanged() {
+    moved = false
+    resting = last
+  }
 }

@@ -3,6 +3,8 @@
 #include <utility>
 
 #include "base/strings/sys_string_conversions.h"
+#include "chrome/browser/ssl/chrome_security_state_util.h"
+#include "components/security_state/core/security_state.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/ssl_status.h"
@@ -117,6 +119,28 @@ NSString* OriginOf(const GURL& url) {
   return NS(origin);
 }
 
+namespace {
+
+NSString* CommittedSecurityLevel(content::WebContents* contents) {
+  content::NavigationController& controller = contents->GetController();
+  if (!controller.GetLastCommittedEntry() ||
+      controller.GetVisibleEntry() != controller.GetLastCommittedEntry()) {
+    return nil;
+  }
+  switch (chrome_security_state::GetSecurityLevel(contents)) {
+    case security_state::SECURE:
+      return @"secure";
+    case security_state::WARNING:
+      return @"warning";
+    case security_state::DANGEROUS:
+      return @"dangerous";
+    default:
+      return @"none";
+  }
+}
+
+}  // namespace
+
 NSDictionary* SecurityInfoFor(content::WebContents* contents) {
   if (!contents) {
     return @{@"level" : @"none"};
@@ -127,6 +151,7 @@ NSDictionary* SecurityInfoFor(content::WebContents* contents) {
     @"url" : NS(url.spec()),
     @"origin" : OriginOf(url) ?: NSNull.null,
   } mutableCopy];
+  info[@"chromium"] = CommittedSecurityLevel(contents);
   if (url.SchemeIs("http") || url.SchemeIs("ws")) {
     info[@"level"] = @"insecure";
     return info;

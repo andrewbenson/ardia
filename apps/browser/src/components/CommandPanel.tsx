@@ -69,8 +69,8 @@ type PanelGeometry = { left: number; top: number; width: number; from: Box | nul
 function toolbarPanelGeometry(anchor: { left: number; top: number; width: number }, insecure: boolean, hasField: boolean, windowWidth: number, text: string, native: boolean): PanelGeometry {
   const room = (left: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - WINDOW_MARGIN : fallback);
   const shift = native ? NATIVE_URL_TEXT_SHIFT : { x: 0, y: 0 };
-  const aligned = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure) - PANEL_TEXT_LEFT + shift.x);
-  const lead = native ? schemeLead(text) : 0;
+  const aligned = Math.max(WINDOW_MARGIN, anchor.left + urlTextLeft(insecure, native) - PANEL_TEXT_LEFT + shift.x);
+  const lead = native && !insecure ? schemeLead(text) : 0;
   const left = lead && aligned - lead >= WINDOW_MARGIN ? aligned - lead : aligned;
   const top = Math.max(0.5, anchor.top - ABOVE_PANE) + shift.y;
   const covering = anchor.left + anchor.width + RIGHT_OF_URL - left;

@@ -1,4 +1,5 @@
 import { breadcrumb } from "@ardia/core";
+import { insecureLevel } from "../Toolbar";
 import { FadeLabel, Symbol } from "@ardia/shell";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
@@ -83,7 +84,7 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
   const theme = useTheme();
   const live = useTabLive(tab.id);
   const progress = usePageProgress(tab.id);
-  const insecure = usePage(tab.id, (p) => !!p.security && (p.security.level === "insecure" || p.security.level === "certificateError"));
+  const insecure = usePage(tab.id, (p) => !!insecureLevel(p));
   const isFile = tab.url.startsWith("file:");
   const host = !tab.url ? "" : isFile ? "File" : breadcrumb(tab.url).host;
   const title = tab.customTitle || tab.title;

@@ -81,6 +81,7 @@ export type SecurityInfo = {
   certificateErrors?: string[];
   mixedContent?: "ran" | "displayed" | null;
   isEV?: boolean;
+  chromium?: "none" | "secure" | "warning" | "dangerous" | null;
 };
 
 export type DownloadNavigation = { url: string; committedUrl: string; skipped: boolean };

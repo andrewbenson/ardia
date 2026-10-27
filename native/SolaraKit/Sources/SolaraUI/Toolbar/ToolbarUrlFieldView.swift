@@ -2,9 +2,8 @@ import AppKit
 
 final class ToolbarUrlFieldView: NSView {
   static let height: CGFloat = 30
-  static let lockLeft: CGFloat = 7
-  static let lockWidth: CGFloat = 18
-  static let lockGap: CGFloat = 3
+  static let badgeLeft: CGFloat = 1
+  static let badgeGap: CGFloat = 5.5
   static let textLeft: CGFloat = 8
   static let labelInset: CGFloat = 2
   static let labelRaise: CGFloat = 1
@@ -15,7 +14,7 @@ final class ToolbarUrlFieldView: NSView {
   private var palette: ToolbarPaletteState?
   private let pill = CALayer()
   private let label = NSTextField(labelWithString: "")
-  private var lock: ToolbarButtonView?
+  private var lock: NotSecureBadgeView?
   private var hoverButtons: [ToolbarButtonView] = []
   private var trailing: [ToolbarButtonView] = []
   private var hovered = false
@@ -53,13 +52,9 @@ final class ToolbarUrlFieldView: NSView {
     state = next
     palette = nextPalette
     guard changed else { return }
-    if let insecure = next.insecure {
-      let spec = ToolbarButtonState(
-        id: "lock", icon: "lock.open.trianglebadge.exclamationmark.fill", size: 12, box: ToolbarUrlFieldView.lockWidth, radius: 0, weight: nil,
-        color: insecure == "certificateError" ? "#FF5F57" : nextPalette.secondary, enabled: true, active: false, tooltip: "Connection is not secure",
-        menu: false, longPress: false, middle: false, plain: true)
-      if let lock { lock.state = spec; lock.palette = nextPalette } else {
-        let made = ToolbarButtonView(state: spec, palette: nextPalette)
+    if next.insecure != nil {
+      if lock == nil {
+        let made = NotSecureBadgeView()
         made.onClick = { [weak self] click in self?.onClick(click) }
         addSubview(made)
         lock = made
@@ -162,10 +157,12 @@ final class ToolbarUrlFieldView: NSView {
     }
     label.isHidden = false
     let trail = shownHover ? state.hoverTrail : state.restTrail
-    let text = NSMutableAttributedString(
-      string: state.host, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: toolbarColor(palette.urlHost ?? palette.text) ?? .labelColor])
+    let notSecure = state.insecure != nil
+    let hostColor = notSecure ? NotSecureBadgeView.red : toolbarColor(palette.urlHost ?? palette.text) ?? .labelColor
+    let pathColor = notSecure ? NotSecureBadgeView.red : toolbarColor(palette.urlPath ?? palette.secondary) ?? .secondaryLabelColor
+    let text = NSMutableAttributedString(string: state.host, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: hostColor])
     if !trail.isEmpty {
-      text.append(NSAttributedString(string: trail, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: toolbarColor(palette.urlPath ?? palette.secondary) ?? .secondaryLabelColor]))
+      text.append(NSAttributedString(string: trail, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: pathColor]))
     }
     label.attributedStringValue = text
   }
@@ -204,8 +201,9 @@ final class ToolbarUrlFieldView: NSView {
     CATransaction.commit()
     var x: CGFloat = 0
     if let lock {
-      lock.frame = CGRect(x: ToolbarUrlFieldView.lockLeft, y: 0, width: ToolbarUrlFieldView.lockWidth, height: h)
-      x = ToolbarUrlFieldView.lockLeft + ToolbarUrlFieldView.lockWidth + ToolbarUrlFieldView.lockGap
+      let size = NotSecureBadgeView.size
+      lock.frame = CGRect(x: ToolbarUrlFieldView.badgeLeft, y: (h - size) / 2, width: size, height: size)
+      x = ToolbarUrlFieldView.badgeLeft + size + ToolbarUrlFieldView.badgeGap
     } else {
       x = ToolbarUrlFieldView.textLeft
     }
@@ -312,5 +310,59 @@ final class DeveloperUrlField: NSTextField, NSTextFieldDelegate {
     guard !finished else { return }
     finished = true
     onFinish(kind, stringValue)
+  }
+}
+
+final class NotSecureBadgeView: NSView {
+  static let size: CGFloat = 28
+  static let radius: CGFloat = 7
+  static let glyphSize: CGFloat = 13
+  static let red = NSColor(srgbRed: 235 / 255, green: 89 / 255, blue: 84 / 255, alpha: 1)
+
+  var onClick: (ToolbarClick) -> Void = { _ in }
+  private let glyph = NSImageView()
+  private var pressed = false
+
+  override var isFlipped: Bool { true }
+  override var mouseDownCanMoveWindow: Bool { false }
+
+  init() {
+    super.init(frame: .zero)
+    wantsLayer = true
+    layer?.backgroundColor = NotSecureBadgeView.red.cgColor
+    layer?.cornerRadius = NotSecureBadgeView.radius
+    layer?.cornerCurve = .continuous
+    toolTip = "Connection is not secure"
+    let config = NSImage.SymbolConfiguration(pointSize: NotSecureBadgeView.glyphSize, weight: .semibold)
+    glyph.image = NSImage(systemSymbolName: "lock.open.fill", accessibilityDescription: "Not secure")?.withSymbolConfiguration(config)
+    glyph.contentTintColor = .white
+    glyph.imageScaling = .scaleNone
+    addSubview(glyph)
+    setAccessibilityRole(.button)
+    setAccessibilityLabel("Connection is not secure")
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  override func layout() {
+    super.layout()
+    glyph.frame = bounds
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    frame.contains(point) ? self : nil
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    pressed = true
+    alphaValue = 0.8
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    let wasPressed = pressed
+    pressed = false
+    alphaValue = 1
+    guard wasPressed, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+    onClick(ToolbarClick(id: "lock", kind: .press, flags: event.modifierFlags))
   }
 }

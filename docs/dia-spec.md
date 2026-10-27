@@ -210,6 +210,23 @@ page (light, active window); behaviour from the binary (`DiaStatusText`, `Status
   script does (`page_script.js`: top header, else body/html background, else `theme-color`, else the default page
   colour), which also keeps a dark Gmail under its white tag dark (#219).
 
+### Not secure (owner's 2× capture, 2026-10-27, Dia dark, http://…neverssl.com/online/)
+
+- **When:** Chromium's own security level decides (`chrome_security_state::GetSecurityLevel`, the one Chrome's location
+  bar uses), read only once the navigation has committed (visible entry = last committed entry; while a load is
+  pending there is no level and nothing red). `WARNING` (http, http with forms, passive mixed content, legacy TLS) and
+  `DANGEROUS` (certificate errors, active mixed content, a page reached by clicking through an interstitial, Safe
+  Browsing) get the red treatment; `SECURE` and `NONE` (https, file:, chrome pages, error pages, and http on localhost,
+  127.0.0.1, [::1] and *.localhost, which Chromium counts as trustworthy) get none. We change only the look.
+- **Badge:** a rounded square **28 × 28 pt**, radius **7** (continuous), fill **(235, 89, 84)** `#EB5954`, 1 pt in from
+  the field's left edge and centred in its 30 pt height; in it a white `lock.open.fill` at 13 pt semibold (Dia's glyph
+  25 × 26 px at 2×, ours 26 × 24), 15 px in from the square's left edge.
+- **URL:** the whole URL in the same red, scheme included (`http://host:port/path/`, trailing slash kept), SF 13
+  regular; its first glyph **8 pt** after the badge (16 px at 2×).
+- Measured in dark only; we use the same red in light. The badge opens Site Controls, as the old lock did. ⌘L keeps
+  the URL where it is: the panel's text starts at the same x (0 px off at 2×, 1 px vertically), with no scheme
+  prepended because it's already shown.
+
 ## URL click → command panel (anchored, no scrim)
 
 - Floating panel over the toolbar, starting ~46pt left of the breadcrumb, ~890 wide, radius ~16,

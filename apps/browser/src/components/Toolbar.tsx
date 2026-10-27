@@ -42,9 +42,13 @@ export const URL_FIELD = { top: 21.2 - 15, height: 30 } as const;
 export const GLYPH = 13;
 export const urlFieldRight = (inSplit: boolean, extensionsWidth: number) => (inSplit ? 12 + 2 * 28 : 12) + extensionsWidth;
 const LOCK = { left: 7, width: 18, gap: 3 } as const;
-export const urlTextLeft = (insecure: boolean) => (insecure ? LOCK.left + LOCK.width + LOCK.gap : 8);
-export const insecureLevel = (p: PageState) =>
-  p.security && (p.security.level === "insecure" || p.security.level === "certificateError") ? p.security.level : null;
+const NATIVE_BADGE = { left: 1, size: 28, gap: 5.5 } as const;
+export const urlTextLeft = (insecure: boolean, native = false) =>
+  !insecure ? 8 : native ? NATIVE_BADGE.left + NATIVE_BADGE.size + NATIVE_BADGE.gap : LOCK.left + LOCK.width + LOCK.gap;
+export const insecureLevel = (p: PageState) => {
+  const level = p.security?.chromium;
+  return level === "warning" || level === "dangerous" ? level : null;
+};
 
 type ToolbarProps = {
   tabId: string;
@@ -296,8 +300,7 @@ export const UrlField = memo(function UrlField({
   const bookmarkHint = useShortcutHint("bookmarkPage");
   const splitHint = useShortcutHint("openSplitPane");
   const bookmarked = useIsBookmarked(tab.url);
-  const pageInsecure = usePage(tab.id, insecureLevel);
-  const insecure = developer && pageInsecure === "insecure" && isLoopbackUrl(tab.url) ? null : pageInsecure;
+  const insecure = usePage(tab.id, insecureLevel);
   const popups = usePage(tab.id, (p) => p.popups.length);
   const capture = usePage(tab.id, (p) => p.mediaAccess);
   const openPanel = (text: string) => {
@@ -346,7 +349,7 @@ export const UrlField = memo(function UrlField({
           <Symbol
             name="lock.open.trianglebadge.exclamationmark.fill"
             size={12}
-            color={insecure === "certificateError" ? "#FF5F57" : palette.secondary}
+            color={insecure === "dangerous" ? "#FF5F57" : palette.secondary}
             style={{ width: LOCK.width, height: 30 }}
           />
         </Pressable>
@@ -434,16 +437,6 @@ function CaptureIndicator({ camera, microphone, screen, onPress }: { camera: boo
 
 const MONOSPACED = ".AppleSystemUIFontMonospaced-Regular";
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
-const isLoopbackUrl = (url: string) => {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return LOOPBACK_HOSTS.has(host) || host.endsWith(".localhost");
-  } catch {
-    return false;
-  }
-};
 
 const developerUrl = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)\/$/i, "$1");
 

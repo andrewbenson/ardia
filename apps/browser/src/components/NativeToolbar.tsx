@@ -43,15 +43,6 @@ const DIA_INK = {
   light: { urlHost: "rgba(0,0,0,0.8)", urlPath: "rgba(0,0,0,0.3)", icon: "rgba(0,0,0,0.83)", iconDisabled: "rgba(0,0,0,0.43)" },
   dark: { urlHost: "rgba(255,255,255,0.55)", urlPath: "rgba(255,255,255,0.2)", icon: "rgba(255,255,255,0.51)", iconDisabled: "rgba(255,255,255,0.24)" },
 };
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const isLoopbackUrl = (url: string) => {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return LOOPBACK_HOSTS.has(host) || host.endsWith(".localhost");
-  } catch {
-    return false;
-  }
-};
 const developerUrl = (url: string) => url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)\/$/i, "$1");
 const DEVELOPER_PANELS = [
   { panel: "console", icon: "terminal", tooltip: "Toggle Console" },
@@ -96,11 +87,10 @@ export function NativeToolbar({
   useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const bookmarked = useIsBookmarked(tab?.url ?? "");
-  const pageInsecure = usePage(tabId, insecureLevel);
+  const insecure = usePage(tabId, insecureLevel);
   const developer = useTabDeveloperMode(tabId);
   const editing = useUrlEdit((u) => u.tabId === tabId);
   const editRequest = useUrlEdit((u) => u.request);
-  const insecure = developer && pageInsecure === "insecure" && isLoopbackUrl(tab?.url ?? "") ? null : pageInsecure;
   const view = useRef<View>(null);
   useEffect(() => () => endUrlEdit(tabId), [tabId]);
   useEffect(() => {
@@ -124,10 +114,12 @@ export function NativeToolbar({
     if (!tab) return null;
     const url = tab.url;
     const isFile = url.startsWith("file:");
-    const host = isFile ? "File" : url ? breadcrumb(url).host : "";
+    const shownHost = isFile ? "File" : url ? breadcrumb(url).host : "";
     const full = isFile ? ` ${safeDecode(url.slice("file://".length))}` : url ? urlForDisplay(url) : "";
-    const path = !isFile && full.startsWith(host) ? full.slice(host.length) : full;
-    const restTrail = showFullUrl ? path.replace(/\/$/, "") : !isWebUrl(url) && tab.title ? ` / ${tab.title}` : "";
+    const path = !isFile && full.startsWith(shownHost) ? full.slice(shownHost.length) : full;
+    const scheme = insecure && shownHost ? url.slice(0, url.indexOf("://") + 3) : "";
+    const host = scheme + shownHost;
+    const restTrail = insecure ? path : showFullUrl ? path.replace(/\/$/, "") : !isWebUrl(url) && tab.title ? ` / ${tab.title}` : "";
     const small = { size: 13, box: 24, radius: 6 };
     const translated = translate.status !== "idle";
     const trailing = [

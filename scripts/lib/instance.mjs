@@ -300,6 +300,8 @@ export async function launch(app, opts = {}) {
   const installed = (path) => /^\/Applications\/[^/]+\.app(\/|$)/.test(path);
   if (installed(app) || (opts.runsFrom && installed(resolve(opts.runsFrom))))
     throw new Error("never an installed app: pass a build (apps/browser/build-*)");
+  if (opts.urls?.length && (opts.env?.ARDIA_ACCEPT_EXTERNAL_URLS ?? "1") !== "1")
+    throw new Error("refusing to hand URLs to a hidden instance without ARDIA_ACCEPT_EXTERNAL_URLS=1: it would forward them to the owner's running app");
   app = realPath(app);
   const data = resolve(opts.data ?? join(process.env.TMPDIR ?? "/tmp", `ac-instance-${process.pid}-${Date.now()}`));
   if (opts.fresh) rmSync(data, { recursive: true, force: true });
@@ -333,6 +335,7 @@ export async function launch(app, opts = {}) {
     ...(process.env.ARDIA_NATIVE_SIDEBAR ? { ARDIA_NATIVE_SIDEBAR: process.env.ARDIA_NATIVE_SIDEBAR } : {}),
     ...(process.env.ARDIA_NATIVE_MEDIA ? { ARDIA_NATIVE_MEDIA: process.env.ARDIA_NATIVE_MEDIA } : {}),
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_"))),
+    ...(opts.urls?.length ? { ARDIA_ACCEPT_EXTERNAL_URLS: "1" } : {}),
     ...opts.env,
   });
   const log = resolve(opts.log ?? join(data, "app.out.log"));

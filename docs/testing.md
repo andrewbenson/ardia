@@ -27,6 +27,10 @@ End-to-end checks need a built app and are run by hand. Each runs hidden instanc
 and prints one line per check (PASS/FAIL, ms), a failure's first lines, then a summary with the path of the log that
 holds the rest.
 
+A URL handed to a hidden instance (`ARDIA_BACKGROUND=1`) is forwarded to the owner's running app, or the default
+browser, unless the instance runs with `ARDIA_ACCEPT_EXTERNAL_URLS=1`. `launch({ urls })` sets it and refuses to
+hand URLs to an instance whose env turns it off; any other way of handing an instance a URL must set it too.
+
 | Check | Run | Guards |
 | --- | --- | --- |
 | Release smoke test | `.claude/skills/release/scripts/smoke.sh` (the `release` skill) | Every release, whole |

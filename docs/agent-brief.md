@@ -156,6 +156,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
   - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Solara.app --data <scratch>/data`
     (hidden: `open -g -n`, `ARDIA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
+    A URL handed to a hidden instance (`open -a <app> <url>`) is forwarded to the owner's running app unless it runs
+    with `ARDIA_ACCEPT_EXTERNAL_URLS=1`; `launch({ urls })` sets it and refuses without it.
     `ac eval|page|quit|status` take that data dir (`--help`); scripts use `scripts/lib/instance.mjs` (`launch`,
     `attach`, `session`, `reporter`), whose pid is the DevTools port's listener, never a process-list diff
     (`ARDIA_DATA_DIR` isolates Chrome's and the app's data; a Debug build refuses to start without one).

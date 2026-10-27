@@ -522,7 +522,7 @@ class Instance {
       if (writable) throw new Error(`${this.name}'s copy is writable: chmod -R a-w it so it can't update itself`);
     }
     if (this.b.guardPrefs) this.prefs = new PrefsGuard(this.info.id).save();
-    const env = this.env();
+    const env = { ...this.env(), ...(url && isArdia(this.name) ? { ARDIA_ACCEPT_EXTERNAL_URLS: "1" } : {}) };
     const argv = ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), "-a", this.app, ...(url ? [url] : []), "--args", ...this.args()];
     this.front = probe("state").front;
     this.t0 = Date.now();

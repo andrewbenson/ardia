@@ -303,8 +303,8 @@ struct AddChipView: View {
       .padding(.trailing, 13)
       .frame(height: 32)
       .fixedSize()
-      .background(Capsule().fill(hovered ? env.theme.rowHover.color : .clear))
-      .overlay(Capsule().strokeBorder(env.theme.chipBorder.color, lineWidth: 1))
+      .background(Capsule(style: .circular).fill(hovered ? env.theme.rowHover.color : .clear))
+      .overlay(Capsule(style: .circular).strokeBorder(env.theme.chipBorder.color, lineWidth: 1))
     }
     .buttonStyle(HoverButtonStyle())
     .onHover { hovered = $0 }
@@ -329,7 +329,7 @@ struct GoButtonView: View {
       .padding(.horizontal, 16)
       .frame(minWidth: 99)
       .frame(height: 32)
-      .background(Capsule().fill(enabled ? env.theme.goButton.color : env.theme.goButtonIdle.color))
+      .background(Capsule(style: .circular).fill(enabled ? env.theme.goButton.color : env.theme.goButtonIdle.color))
       .opacity(enabled && hovered ? 0.9 : 1)
     }
     .buttonStyle(HoverButtonStyle())

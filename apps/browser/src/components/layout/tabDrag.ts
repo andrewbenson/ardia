@@ -52,10 +52,12 @@ type Picture = { chip: () => [number, number, number, number]; grab: [number, nu
 let picture: Picture | null = null;
 let sentShape: DragPreviewShape = "hidden";
 let begun = false;
+let nativeOwned = false;
 
-export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : []): number {
+export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : [], native = false): number {
   if (begun) dragPreview.cancel();
   begun = false;
+  nativeOwned = native;
   picture = null;
   sentShape = "hidden";
   pointer = [-1, -1];
@@ -63,7 +65,7 @@ export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [t
   useTabDrag.setState({ ...IDLE, tabId, tabIds, windowId, x: -1, y: -1 });
   const seq = ++dragSeq;
   liveFrame = null;
-  if (windowId)
+  if (windowId && !native)
     void windowFrame(windowId)
       .then((frame) => {
         if (seq === dragSeq) liveFrame = frame;
@@ -86,6 +88,15 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   if (lifted === false && drag.lifted === false && !outside && !drag.outside) return;
   useTabDrag.setState({ x, y, lifted, outside, overWindow, overPoint, insert });
   syncPreview();
+}
+
+export function updateNativeTabDrag(x: number, y: number, outside: boolean, overWindow: string | null, overPoint: [number, number] | null) {
+  const drag = useTabDrag.getState();
+  if (!drag.tabIds.length || !drag.windowId) return;
+  if (overWindow && overWindow !== drag.overWindow && useBrowser.getState().settings.tabReorderHaptics) hapticTick();
+  const insert = drag.insert?.windowId === overWindow ? drag.insert : null;
+  pointer = [x, y];
+  useTabDrag.setState({ x, y, outside, overWindow, overPoint, insert });
 }
 
 const insertResolvers = new Map<string, (point: [number, number]) => string | null | undefined>();
@@ -111,7 +122,7 @@ function previewShape(d: TabDrag): DragPreviewShape {
 
 function syncPreview() {
   const d = useTabDrag.getState();
-  if (!d.windowId) return;
+  if (!d.windowId || nativeOwned) return;
   const shape = previewShape(d);
   if (shape === "hidden" && sentShape === "hidden") return;
   if (shape !== "hidden" && picture) takePicture(picture, d.windowId);
@@ -130,10 +141,14 @@ export function setDragPicture(drag: number, chip: [number, number, number, numb
 function takePicture({ chip, grab }: Picture, windowId: string) {
   picture = null;
   begun = true;
-  const drag = dragSeq;
-  const { tabId } = useTabDrag.getState();
   const rect = chip();
   dragPreview.begin(windowId, rect, [rect[0] + grab[0], rect[1] + grab[1]]);
+  captureDragPage(windowId);
+}
+
+export function captureDragPage(windowId: string) {
+  const drag = dragSeq;
+  const { tabId } = useTabDrag.getState();
   const s = useBrowser.getState();
   const w = s.windows[windowId];
   const active = w?.activeTabIds[w.profileId];
@@ -211,10 +226,29 @@ export function endTabDrag(): boolean {
   return true;
 }
 
+export function endNativeTabDrag(): { split: boolean; insert: boolean; before: string | null } {
+  const drag = useTabDrag.getState();
+  const { tabId, outside, overWindow, overPoint } = drag;
+  const [x, y] = pointer;
+  const resolveInsert = overWindow && overPoint ? insertResolvers.get(overWindow) : undefined;
+  const insertBefore = resolveInsert ? resolveInsert(overPoint!) : drag.insert?.windowId === overWindow ? drag.insert?.beforeId : undefined;
+  const target = resolveTarget ? resolveTarget(x, y, drag.target, outside) : drag.target;
+  useTabDrag.setState({ ...IDLE, tabIds: [] });
+  dragSeq++;
+  picture = null;
+  nativeOwned = false;
+  if (target && tabId) {
+    dropTabIntoSplit(tabId, target.tabId, target.side);
+    return { split: true, insert: false, before: null };
+  }
+  return { split: false, insert: insertBefore !== undefined, before: insertBefore ?? null };
+}
+
 export function cancelTabDrag() {
   useTabDrag.setState({ ...IDLE, tabIds: [] });
   dragSeq++;
   picture = null;
+  nativeOwned = false;
   if (begun) dragPreview.cancel();
   begun = false;
   sentShape = "hidden";

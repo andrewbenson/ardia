@@ -407,6 +407,48 @@ try {
     }
   });
 
+  const sidebarRows = () => run(`return Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], ids: i.tabIds, x, y, w, h })))));`);
+  const looseRow = () => run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id);
+    for (const v of Object.values(st().splits)) st().separateSplit(v.id);
+    st().newTab("w1", { url: "data:text/html,<title>xo</title>xo", background: true }); st().newTab("w1", { url: "data:text/html,<title>xp</title>xp", background: true });
+    return settle(1500);`).then(sidebarRows).then((rows) => rows.filter((r) => r.ids.length === 1).sort((a, b) => a.y - b.y));
+
+  await check("sidebar: a row dragged out of the window shows its picture there and tears off into a new one", async () => {
+    await run(`st().updateSettings({ tabLayout: "sidebar" }); return settle(1500);`);
+    const rows = await looseRow();
+    const row = rows.at(-1);
+    assert.ok(row && row.w > 0, JSON.stringify(rows));
+    const windows = await run(`return Object.keys(st().windows).length;`);
+    const frame = await run(`return st().windows.w1.frame;`);
+    const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+    const seen = await watch("w1", `${sx},${sy};${sx + 10},${sy + 6};${sx},-40;${sx + 80},-90`, 1400);
+    const outside = seen.filter((p) => p.shape === "card");
+    assert.ok(outside.length, "a card outside the window");
+    assert.ok(outside.some((p) => p.frame[1] + p.frame[3] / 2 > frame[1] + frame[3]), JSON.stringify(outside.at(-1)));
+    assert.ok(seen.some((p) => p.visible && p.frame[2] === frame[2] && p.frame[3] === frame[3]), "grew to the new window");
+    assert.equal(seen.at(-1).visible, false, "gone after the drop");
+    const after = await run(`return Object.keys(st().windows).map(loose);`);
+    assert.equal(after.length, windows + 1, JSON.stringify(after));
+    assert.ok(after.some((ids) => ids.length === 1 && ids[0] === row.id), JSON.stringify({ row, after }));
+  });
+
+  await check("sidebar: a row let go over the page away from a target opens in a window of its own", async () => {
+    const rows = await looseRow();
+    const row = rows.at(-1);
+    assert.ok(row && row.w > 0, JSON.stringify(rows));
+    const windows = await run(`return Object.keys(st().windows).length;`);
+    const splits = await run(`return Object.values(st().splits).map((v) => v.tabIds);`);
+    const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+    const px = Math.round(row.x + row.w + 160);
+    const seen = await watch("w1", `${sx},${sy};${sx + 10},${sy + 6};${px},560;${px},740`, 1400);
+    assert.ok(seen.some((p) => p.shape === "card" && p.frame[2] === 209 && p.frame[3] === 110), `a 209 × 110 card: ${JSON.stringify(seen.at(-1))}`);
+    assert.equal(seen.at(-1).visible, false, "gone after the drop");
+    const after = await run(`return Object.keys(st().windows).map(loose);`);
+    assert.equal(after.length, windows + 1, JSON.stringify(after));
+    assert.ok(after.some((ids) => ids.length === 1 && ids[0] === row.id), JSON.stringify({ row, after }));
+    assert.deepEqual(await run(`return Object.values(st().splits).map((v) => v.tabIds);`), splits);
+  });
+
   await check("sidebar: a row dragged onto the page's left target splits", async () => {
     await run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); st().updateSettings({ tabLayout: "sidebar" }); return settle(1500);`);
     const rows = await run(`const c = globalThis.sidebarDrag; const out = [];

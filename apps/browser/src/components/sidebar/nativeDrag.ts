@@ -3,7 +3,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import { create } from "zustand";
 import type { TabPlacement } from "../../store/organize";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, updateTabDrag, useTabDrag } from "../layout/tabDrag";
+import { beginTabDrag, cancelTabDrag, captureDragPage, endNativeTabDrag, updateNativeTabDrag, useTabDrag } from "../layout/tabDrag";
 import { arrangeLive } from "./pinnedOrder";
 import { closeFolderPanel } from "./tileFolderUi";
 
@@ -39,7 +39,7 @@ export type NativeMarks = {
 };
 
 type DragModule = {
-  tabDrag(outside: boolean, onPage: boolean): Promise<void>;
+  tabDrag(onPage: boolean, insert: boolean): Promise<void>;
   escape(): Promise<void>;
   external(windowId: string, phase: string, x: number, y: number, count: number): Promise<string | null>;
   panel(windowId: string, frameJSON: string | null): Promise<void>;
@@ -57,18 +57,17 @@ export const useNativeDragMarks = create<{
   marks: NativeMarks | null;
 }>()(() => ({ windowId: null, marks: null }));
 
-let seq = 0;
-let pointer: [number, number] = [0, 0];
 let stopWatching: (() => void) | null = null;
 
 function watchTabDrag() {
   stopWatching?.();
   let sent = "";
   stopWatching = useTabDrag.subscribe((d) => {
-    const key = `${d.outside}:${d.onPage}`;
+    const insert = !!d.overWindow && d.insert?.windowId === d.overWindow;
+    const key = `${d.onPage}:${insert}`;
     if (key === sent) return;
     sent = key;
-    void native?.tabDrag(d.outside, d.onPage);
+    void native?.tabDrag(d.onPage, insert);
   });
   void native?.tabDrag(false, false);
 }
@@ -81,21 +80,16 @@ function stopTabDrag() {
 
 addNativeSettingsHandlers({
   "sidebar.drag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
-    seq = beginTabDrag(tabId, tabIds);
+    beginTabDrag(tabId, tabIds, true);
     watchTabDrag();
   },
-  "sidebar.drag.picture": (_windowId: string, w: number, h: number, gx: number, gy: number) => {
-    const [x, y] = pointer;
-    setDragPicture(seq, () => [pointer[0] - gx, pointer[1] - gy, w, h], [x, y]);
-  },
-  "sidebar.drag.move": (_windowId: string, x: number, y: number) => {
-    pointer = [x, y];
-    updateTabDrag(x, y);
-  },
+  "sidebar.drag.capture": (windowId: string) => captureDragPage(windowId),
+  "sidebar.drag.move": (_windowId: string, x: number, y: number, outside: boolean, overWindow: string | null, ox: number, oy: number) =>
+    updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null),
   "sidebar.drag.end": (_windowId: string, commit: boolean) => {
-    const split = commit ? endTabDrag() : (cancelTabDrag(), false);
+    const end = commit ? endNativeTabDrag() : (cancelTabDrag(), { split: false, insert: false, before: null });
     stopTabDrag();
-    return split;
+    return end;
   },
   "sidebar.drag.live": (sequence: string[]) => arrangeLive(sequence),
   "sidebar.drag.escape": (on: boolean) => setDragEscapeCapture(on),

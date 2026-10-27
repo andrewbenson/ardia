@@ -30,6 +30,7 @@ public final class TabDragSession {
   public let sourceWindow: String
   public private(set) var pointer: CGPoint = .zero
   public private(set) var overWindow: String?
+  public private(set) var outside = false
   public private(set) var aim: TabDropAim?
 
   private struct Registered {
@@ -68,6 +69,7 @@ public final class TabDragSession {
   public func move(screenPoint: CGPoint) {
     guard Self.current === self else { return }
     pointer = screenPoint
+    outside = Self.windowOf(sourceWindow).map { !$0.frame.contains(screenPoint) } ?? false
     let window = Self.window(at: screenPoint)
     overWindow = window.map { $0.0 }
     var next: (zone: TabDropZone, aim: TabDropAim)?
@@ -107,6 +109,11 @@ public final class TabDragSession {
   }
 
   public static var windowIdOf: (NSWindow) -> String? = { _ in nil }
+  public static var windowOf: (String) -> NSWindow? = { _ in nil }
+
+  public func point(in windowId: String) -> CGPoint? {
+    Self.windowOf(windowId).map { Self.windowPoint(pointer, in: $0) }
+  }
 
   private static func window(at screenPoint: CGPoint) -> (String, NSWindow)? {
     var number = NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0)

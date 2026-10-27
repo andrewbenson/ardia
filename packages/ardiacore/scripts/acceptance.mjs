@@ -509,7 +509,10 @@ function firstPixel(base64) {
 }
 
 const pageTarget = async (urlPart) => (await targets()).find((t) => t.type === "page" && t.url.includes(urlPart));
-const closeFromPage = (target) => cdp(target, "Runtime.evaluate", { expression: "setTimeout(() => window.close()); true" });
+const closeFromPage = (target) =>
+  cdp(target, "Runtime.evaluate", { expression: "setTimeout(() => window.close()); true" }).catch((e) => {
+    if (!String(e?.message).includes("the target closed before replying")) throw e;
+  });
 const cef = (call) => evalApp(`return globalThis.expo.modules.ArdiaCEF.${call}`);
 const exts = (call) => evalApp(`return globalThis.expo.modules.ArdiaExtensions.${call}`);
 const extPath = join(scratch, "fixture-ext");
@@ -4015,7 +4018,7 @@ try {
     const s = await state();
     const other = s.tabs.find((x) => x.id !== first.id && x.id !== s.active && x.url?.startsWith(`${base}/d`));
     if (!other) throw new Error("no background tab");
-    const t = await pageTarget(`${base}/d`);
+    const t = await pageFor(other.id, `${base}/d`);
     await cdp(t, "Runtime.evaluate", { expression: "window.__life = []; document.addEventListener('freeze', () => __life.push('freeze')); document.addEventListener('resume', () => __life.push('resume')); true" });
     await evalApp(`return ac.webviews.get("${other.id}")?.setFrozen(true)`);
     await sleep(1500);

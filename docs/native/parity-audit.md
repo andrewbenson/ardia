@@ -21,7 +21,7 @@ deliberate, ask the lead first.
 | Command bar | Rows show hover only after the pointer moves, not when the list grows under a still pointer | 00a89525 | Matches Dia |
 | Status bubble | Dia's timings (0.5 s show, 0.5 s hide, 0.1 s fade), its scheme handling and its light and dark colours | 25a3b373, d637be2d | Matches Dia |
 | Developer Mode | URL bar stripes as Dia and Arc draw them (RN drew none on the dark page: bar flat 42, native 42–46) | 92286cb9 | Matches Dia and Arc |
-| Not-secure treatment | Chromium's security level (`WARNING`, `DANGEROUS`) drawn as Dia's red badge and red URL with its scheme; RN keeps its grey lock on the same levels | | Matches Dia |
+| Not-secure treatment | Chromium's security level (`WARNING`, `DANGEROUS`) drawn as Dia's red badge and red URL with its scheme; RN keeps its grey lock on the same levels | 065c15c2 | Matches Dia |
 
 ## Gaps, most noticeable first
 

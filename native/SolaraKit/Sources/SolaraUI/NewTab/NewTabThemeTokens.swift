@@ -1,5 +1,5 @@
 enum NewTabThemeTokens {
-  static let keys = ["textPrimary", "textSecondary", "textTertiary", "placeholder", "selection", "chipBorder", "chipText", "rowHover", "rowSelected", "commandBarSelected", "commandBarHover", "goButton", "goButtonText", "goButtonIdle", "ntpBarSolid", "ntpBarBorder", "toolbarHover", "toolbarPressed", "icon", "iconDisabled"]
+  static let keys = ["textPrimary", "textSecondary", "textTertiary", "placeholder", "selection", "chipBorder", "chipText", "rowHover", "rowSelected", "commandBarSelected", "commandBarHover", "goButton", "goButtonText", "goButtonIdle", "ntpBarSolid", "ntpBarBorder", "toolbarHover", "toolbarPressed", "icon", "iconDisabled", "accent"]
 
   static let dark: [String: String] = [
     "textPrimary": "#FFFFFF",
@@ -22,6 +22,7 @@ enum NewTabThemeTokens {
     "toolbarPressed": "rgba(255,255,255,0.18)",
     "icon": "#F7F5FFC6",
     "iconDisabled": "#F7F5FF4D",
+    "accent": "#4A77D4",
   ]
 
   static let light: [String: String] = [
@@ -45,5 +46,6 @@ enum NewTabThemeTokens {
     "toolbarPressed": "rgba(0,0,0,0.1)",
     "icon": "#000000C6",
     "iconDisabled": "#0000004D",
+    "accent": "#6395FC",
   ]
 }

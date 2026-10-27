@@ -16,6 +16,7 @@ import { HoverSlot } from "./HoverSlot";
 import { anchorInside, DOWNLOADS_PANEL, downloadsPlacement, type DownloadsPlacement, type Rect, type Size } from "./downloadsPlacement";
 import { PANEL, POPOVER_MOTION, PopoverSeparator, usePopoverPresence } from "./layout/controls";
 import { IconButton, useHover } from "./primitives";
+import { nativeToolbarAvailable, NativeDownloadsView, type NativeDownloadsEvent } from "@ardia/settings";
 
 function formatBytes(n: number) {
   if (n < 0) return "";
@@ -247,6 +248,11 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
           }}
         >
           <PanelBackground placement={p} />
+          {nativeToolbarAvailable() ? (
+            <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0 }}>
+              <NativeDownloadsList windowId={windowId} ids={ids} clearable={clearable} listMax={listMax} onClose={() => setOpen(false)} />
+            </View>
+          ) : (
           <View style={{ marginTop: upward ? 0 : arrowRoom, marginBottom: upward ? arrowRoom : 0, paddingTop: PAD_TOP, paddingBottom: PAD_BOTTOM }}>
             <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: PANEL.inset, paddingRight: PANEL.inset - TEXT_BUTTON_PAD, height: HEADER }}>
               <Text style={{ flex: 1, fontSize: PANEL.subtitleSize, fontWeight: "600", letterSpacing: 0.4, color: theme.textSecondary }}>
@@ -282,8 +288,54 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
               }}
             />
           </View>
+          )}
         </Animated.View>
       ) : null}
+    </View>
+  );
+}
+
+function NativeDownloadsList({ windowId, ids, clearable, listMax, onClose }: { windowId: string; ids: string[]; clearable: boolean; listMax: number; onClose: () => void }) {
+  const theme = useTheme();
+  const downloads = useBrowser((s) => s.downloads);
+  const last = useRef(new Map<string, Download>());
+  const rows = ids
+    .map((id) => {
+      const d = downloads.find((x) => x.id === id) ?? last.current.get(id);
+      if (d) last.current.set(id, d);
+      return d;
+    })
+    .filter((d): d is Download => !!d)
+    .map((d) => ({ id: d.id, filename: d.filename, path: d.path, state: d.state, received: d.received, total: d.total, speed: d.speed, paused: !!d.paused }));
+  const [height, setHeight] = useState<number | null>(null);
+  const state = JSON.stringify({
+    rows,
+    clearable,
+    listMax,
+    dark: !!theme.dark,
+    theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, textTertiary: theme.textTertiary, toolbarHover: theme.toolbarHover, toolbarPressed: theme.toolbarPressed, icon: theme.icon, iconDisabled: theme.iconDisabled, rowHover: theme.rowHover, accent: theme.accent },
+  });
+  const onEvent = (e: NativeDownloadsEvent) => {
+    const d = e.id ? useBrowser.getState().downloads.find((x) => x.id === e.id) : undefined;
+    if (e.kind === "clear") {
+      onClose();
+      return useBrowser.getState().clearDownloads(windowId);
+    }
+    if (e.kind === "viewAll") {
+      onClose();
+      return openInternalPage("downloads", windowId);
+    }
+    if (!d) return;
+    if (e.kind === "open") void openFile(d.path);
+    else if (e.kind === "reveal") void revealFile(d.path);
+    else if (e.kind === "pause") void pauseDownload(d.id);
+    else if (e.kind === "resume") void resumeDownload(d.id);
+    else if (e.kind === "cancel") void cancelDownload(d.id);
+    else if (e.kind === "menu") void downloadMenu(d, windowId);
+  };
+  return (
+    <View style={{ height: height ?? undefined, minHeight: 1 }}>
+      <NativeDownloadsView style={StyleSheet.absoluteFill} state={state} onDownloadsEvent={(e) => onEvent(e.nativeEvent)} onDownloadsHeight={(e) => setHeight(e.nativeEvent.height)} />
     </View>
   );
 }

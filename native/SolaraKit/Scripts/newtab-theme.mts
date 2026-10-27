@@ -21,7 +21,7 @@ const source = readFileSync(join(here, "../../../apps/browser/src/lib/theme.ts")
 const keys = [
   "textPrimary", "textSecondary", "textTertiary", "placeholder", "selection", "chipBorder", "chipText", "rowHover", "rowSelected",
   "commandBarSelected", "commandBarHover", "goButton", "goButtonText", "goButtonIdle", "ntpBarSolid", "ntpBarBorder", "toolbarHover",
-  "toolbarPressed", "icon", "iconDisabled",
+  "toolbarPressed", "icon", "iconDisabled", "accent",
 ];
 
 function theme(name: string): Record<string, string> {

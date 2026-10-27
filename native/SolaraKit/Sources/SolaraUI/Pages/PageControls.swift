@@ -79,13 +79,14 @@ struct PageIconButton: View {
   var size: CGFloat = 15
   var box: CGFloat = 30
   var radius: CGFloat = 7
+  var nudge: CGFloat = -0.5
   var tooltip: String?
   let action: () -> Void
   @State private var hovered = false
 
   var body: some View {
     Button(action: action) { EmptyView() }
-      .buttonStyle(PageIconButtonStyle(icon: icon, size: size, box: box, radius: radius, hovered: hovered, theme: theme))
+      .buttonStyle(PageIconButtonStyle(icon: icon, size: size, box: box, radius: radius, nudge: nudge, hovered: hovered, theme: theme))
       .onHover { hovered = $0 }
       .focusEffectDisabled()
       .help(tooltip ?? "")
@@ -99,6 +100,7 @@ private struct PageIconButtonStyle: ButtonStyle {
   let size: CGFloat
   let box: CGFloat
   let radius: CGFloat
+  let nudge: CGFloat
   let hovered: Bool
   let theme: PageTheme
 
@@ -107,7 +109,7 @@ private struct PageIconButtonStyle: ButtonStyle {
     return Image(systemName: icon)
       .font(.system(size: size))
       .foregroundStyle(theme.icon)
-      .offset(y: -0.5)
+      .offset(y: nudge)
       .frame(width: box, height: box)
       .background(RoundedRectangle(cornerRadius: radius, style: .circular).fill(fill))
       .contentShape(Rectangle())

@@ -299,7 +299,7 @@ struct HistoryRowView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .contentShape(Rectangle())
       .gesture(TapGesture().modifiers(.shift).onEnded { click(shift: true, flags: [.shift]) })
-      .onTapGesture { click(shift: false, flags: NSEvent.modifierFlags) }
+      .onTapGesture { click(shift: false, flags: (NSApp.currentEvent?.modifierFlags ?? NSEvent.modifierFlags)) }
       .accessibilityElement(children: .combine)
       .accessibilityAddTraits(.isLink)
       .accessibilityAction(named: selected ? "Deselect" : "Select") { model.toggle(entry.url, shift: false) }

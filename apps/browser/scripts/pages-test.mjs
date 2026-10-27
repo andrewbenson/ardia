@@ -3,7 +3,9 @@
 // the window's downloads, the search field filters them and Escape clears it, ✕ removes one from the list and
 // Clear All keeps only the running ones. History groups visits by day, search filters, hovering a row shows its
 // checkbox, a click selects and shift-click extends the selection, Cancel clears it, and Clear Browsing Data… opens
-// the dialog, whose Clear Data empties the history and closes it.
+// the dialog, whose Clear Data empties the history and closes it. Bookmarks shows the bar's bookmarks, the folder
+// tree opens a folder, search finds across folders, click, ⌘-click and shift-click select, Delete removes with an
+// Undo toast that puts them back, and dragging a row moves it.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -183,6 +185,105 @@ try {
     }, 8000);
     assert.equal(cleared.now.clearOpen, false, "dialog closed");
     assert.deepEqual(cleared.now.shown, history.slice(1).map((h) => h.url), "the last hour's visit is gone");
+  });
+  const seeded = await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; const profileId = s.windows[w].profileId; const bar = s.bookmarks.roots[profileId].bar;
+    const work = s.addBookmarkFolder({ profileId, title: "Work", parentId: bar });
+    const ids = ["alpha", "beta", "gamma", "delta"].map((t) => s.addBookmark({ profileId, url: "https://" + t + ".example.com/", title: t[0].toUpperCase() + t.slice(1), parentId: bar }));
+    const inner = s.addBookmark({ profileId, url: "https://reports.example.org/q4", title: "Q4 Report", parentId: work });
+    ac.pages.openInternalPage("bookmarks", w);
+    return JSON.stringify({ bar, work, ids, inner })`);
+  const marks = JSON.parse(seeded);
+  const barIds = () => app.eval(`const s = ac.store.getState(); return s.bookmarks.nodes[${JSON.stringify(marks.bar)}].children.join(",")`);
+
+  await rep.check("Bookmarks lists the bar's bookmarks and folders", async () => {
+    const shown = await until(async () => {
+      const p = await page();
+      return { ok: p?.kind === "bookmarks" && p.shown.length === 5, p };
+    });
+    assert.deepEqual(shown.p?.shown, [marks.work, ...marks.ids]);
+  });
+
+  await rep.check("the folder tree opens a folder; search finds across folders", async () => {
+    let p = await until(async () => {
+      const now = await page();
+      return { ok: !!frameOf(now, `folder:${marks.work}`), now };
+    });
+    await click(frameOf(p.now, `folder:${marks.work}`));
+    const inWork = await until(async () => {
+      const now = await page();
+      return { ok: now.folder === marks.work, now };
+    });
+    assert.deepEqual(inWork.now.shown, [marks.inner]);
+    await click(frameOf(inWork.now, "Search bookmarks"));
+    await sleep(200);
+    await dev("type:report");
+    const found = await until(async () => {
+      const now = await page();
+      return { ok: now.query === "report", now };
+    });
+    assert.deepEqual(found.now.shown, [marks.inner]);
+    await dev("keys:0:\u001b:53");
+    p = await until(async () => ({ ok: (await page()).query === "", now: await page() }));
+    await click(frameOf(p.now, `folder:${marks.bar}`));
+    await until(async () => ({ ok: (await page()).folder === marks.bar }));
+  });
+
+  await rep.check("click, ⌘-click and shift-click select; Delete removes with an Undo toast that restores", async () => {
+    let p = await until(async () => {
+      const now = await page();
+      return { ok: marks.ids.every((id) => frameOf(now, `bookmark:${id}`)), now };
+    });
+    const at = (id) => { const f = frameOf(p.now, `bookmark:${id}`); return `${f.x + 120},${f.y + f.height / 2}`; };
+    await dev(`click:${at(marks.ids[0])}`);
+    const one = await until(async () => {
+      const now = await page();
+      return { ok: now?.selected.length === 1, now };
+    });
+    assert.deepEqual(one.now?.selected, [marks.ids[0]], `tabs: ${await app.eval("return JSON.stringify(Object.values(ac.store.getState().tabs).map((t) => t.url))")}`);
+    await sleep(600);
+    await dev(`mouse:down:${at(marks.ids[2])},1,${0x100000}`);
+    await dev(`mouse:up:${at(marks.ids[2])},1,${0x100000}`);
+    const two = await until(async () => {
+      const now = await page();
+      return { ok: now.selected.length === 2, now };
+    });
+    assert.deepEqual(two.now.selected, [marks.ids[0], marks.ids[2]]);
+    await sleep(600);
+    await dev(`click:${at(marks.ids[0])}`);
+    await sleep(600);
+    await dev(`mouse:down:${at(marks.ids[3])},1,${0x20000}`);
+    await dev(`mouse:up:${at(marks.ids[3])},1,${0x20000}`);
+    const range = await until(async () => {
+      const now = await page();
+      return { ok: now.selected.length === 4, now };
+    });
+    assert.deepEqual(range.now.selected, marks.ids);
+    await click(frameOf(range.now, "Delete"));
+    const gone = await until(async () => {
+      const now = await page();
+      return { ok: now.undo === 4 && now.shown.length === 1, now };
+    });
+    assert.equal(gone.now.undo, 4, "undo toast");
+    assert.equal(await barIds(), marks.work);
+    const toast = await until(async () => {
+      const now = await page();
+      return { ok: !!frameOf(now, "Undo"), now };
+    });
+    await click(frameOf(toast.now, "Undo"));
+    const back = await until(async () => ({ ok: (await barIds()) === [marks.work, ...marks.ids].join(","), now: await page() }));
+    assert.ok(back.ok, `bar after undo: ${await barIds()}`);
+  });
+
+  await rep.check("dragging a row below another moves it there", async () => {
+    const p = await until(async () => {
+      const now = await page();
+      return { ok: marks.ids.every((id) => frameOf(now, `bookmark:${id}`)), now };
+    });
+    const from = frameOf(p.now, `bookmark:${marks.ids[0]}`);
+    const to = frameOf(p.now, `bookmark:${marks.ids[2]}`);
+    await dev(`drag:${from.x + 120},${from.y + from.height / 2};${to.x + 120},${to.y + to.height * 0.8}`);
+    const moved = await until(async () => ({ ok: (await barIds()) === [marks.work, marks.ids[1], marks.ids[2], marks.ids[0], marks.ids[3]].join(",") }), 4000);
+    assert.ok(moved.ok, `bar after drag: ${await barIds()}`);
   });
 } finally {
   await app?.quit();

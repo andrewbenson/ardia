@@ -52,6 +52,7 @@ final class NativePageView: ExpoView {
   private var host: NSView?
   private let downloads = DownloadsPageModel()
   private let history = HistoryPageModel()
+  private let bookmarks = BookmarksPageModel()
 
   override var isFlipped: Bool { true }
 
@@ -61,6 +62,7 @@ final class NativePageView: ExpoView {
     super.init(appContext: appContext)
     downloads.onEvent = { [weak self] event in self?.send(event) }
     history.onEvent = { [weak self] event in self?.send(event) }
+    bookmarks.onEvent = { [weak self] event in self?.send(event) }
     Self.live.add(self)
     PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
   }
@@ -77,6 +79,12 @@ final class NativePageView: ExpoView {
         page["shown"] = view.history.shown
         page["selected"] = view.history.selected.sorted()
         page["clearOpen"] = view.history.clearOpen
+      case "bookmarks":
+        page["query"] = view.bookmarks.query
+        page["shown"] = view.bookmarks.ids
+        page["selected"] = view.bookmarks.selected
+        page["folder"] = view.bookmarks.folderId ?? NSNull()
+        page["undo"] = view.bookmarks.undoCount ?? NSNull()
       default: break
       }
       page["ax"] = axLines(view.host, depth: 0)
@@ -88,7 +96,10 @@ final class NativePageView: ExpoView {
   }
 
   static func devHover(_ key: String?) {
-    for view in live.allObjects where view.window != nil { view.history.devHover = key }
+    for view in live.allObjects where view.window != nil {
+      view.history.devHover = key
+      view.bookmarks.devHover = key
+    }
   }
 
   private func probeFrames() -> [[String: Any]] {
@@ -114,6 +125,7 @@ final class NativePageView: ExpoView {
       switch next {
       case "downloads": NSHostingView(rootView: DownloadsPageView(model: downloads))
       case "history": NSHostingView(rootView: HistoryPageView(model: history, favicons: PageNetwork.favicons))
+      case "bookmarks": NSHostingView(rootView: BookmarksPageView(model: bookmarks, favicons: PageNetwork.favicons))
       default: nil
       }
     guard let made else { return }
@@ -134,6 +146,7 @@ final class NativePageView: ExpoView {
     switch kind {
     case "downloads": downloads.focusRequest += 1
     case "history": history.focusRequest += 1
+    case "bookmarks": bookmarks.focusRequest += 1
     default: break
     }
   }
@@ -142,6 +155,7 @@ final class NativePageView: ExpoView {
     switch kind {
     case "downloads": downloads.apply(json: json)
     case "history": history.apply(json: json)
+    case "bookmarks": bookmarks.apply(json: json)
     default: break
     }
   }
@@ -168,6 +182,26 @@ final class NativePageView: ExpoView {
     case .remove(let urls): onPageEvent(["kind": "remove", "urls": urls])
     case .deleteSelected(let urls): onPageEvent(["kind": "deleteSelected", "urls": urls])
     case .clearData(let request): onPageEvent(["kind": "clearData", "range": request.range, "history": request.history, "siteData": request.siteData])
+    }
+  }
+
+  private func send(_ event: BookmarksPageEvent) {
+    switch event {
+    case .open(let url, let mode): onPageEvent(["kind": "open", "url": url, "mode": mode.rawValue])
+    case .openAll(let id, let newWindow): onPageEvent(["kind": "openAll", "id": id, "newWindow": newWindow])
+    case .edit(let id): onPageEvent(["kind": "edit", "id": id])
+    case .addGroup(let id): onPageEvent(["kind": "addGroup", "id": id])
+    case .restoreArc(let id): onPageEvent(["kind": "restoreArc", "id": id])
+    case .delete(let ids): onPageEvent(["kind": "delete", "ids": ids])
+    case .undo: onPageEvent(["kind": "undo"])
+    case .move(let ids, let drop, let listed):
+      switch drop {
+      case .into(let folder): onPageEvent(["kind": "move", "ids": ids, "into": folder, "listed": listed])
+      case .at(let parentId, let index): onPageEvent(["kind": "move", "ids": ids, "parentId": parentId, "index": index, "listed": listed])
+      }
+    case .addBookmark(let parent): onPageEvent(["kind": "addBookmark", "parentId": parent ?? NSNull()])
+    case .addFolder(let parent): onPageEvent(["kind": "addFolder", "parentId": parent ?? NSNull()])
+    case .importBookmarks: onPageEvent(["kind": "import"])
     }
   }
 }

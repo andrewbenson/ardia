@@ -7,6 +7,7 @@ import { setPageProgress } from "../../store/pageProgress";
 import { BookmarksPage } from "./BookmarksPage";
 import { DownloadsPage } from "./DownloadsPage";
 import { HistoryPage } from "./HistoryPage";
+import { NativeBookmarksPage } from "./NativeBookmarksPage";
 import { NativeDownloadsPage } from "./NativeDownloadsPage";
 import { NativeHistoryPage } from "./NativeHistoryPage";
 import { INTERNAL_PAGES, internalPageOf, internalQuery, tabDestination } from "./urls";
@@ -33,7 +34,7 @@ export function InternalPage({ tabId }: { tabId: string }) {
   return (
     <View style={StyleSheet.absoluteFill}>
       {page === "history" && (nativePagesAvailable() ? <NativeHistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} /> : <HistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} />)}
-      {page === "bookmarks" && <BookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} />}
+      {page === "bookmarks" && (nativePagesAvailable() ? <NativeBookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} /> : <BookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} />)}
       {page === "downloads" && (nativePagesAvailable() ? <NativeDownloadsPage tabId={tabId} /> : <DownloadsPage tabId={tabId} />)}
     </View>
   );

@@ -356,7 +356,7 @@ struct LiveFoldersFolderSection: View {
     return SettingRow(anchored ? id : nil, title: entry?.title, description: entry.flatMap(\.description).map(RowDescription.text) ?? .none) {
       Toggle("", isOn: isOn)
         .labelsHidden()
-        .toggleStyle(.switch)
+        .toggleStyle(.settingsSwitch)
     }
   }
 }

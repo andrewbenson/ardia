@@ -296,7 +296,7 @@ struct PasswordsPane: View {
             set: { on in Task { await model.setAutofill(on, profile: profile) } }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
         }
         SettingRow("passwords.importPasswords", description: model.importStatus.isEmpty ? nil : model.importStatus) {
           Button("Import CSV…") { Task { await model.importCSV(profile) } }

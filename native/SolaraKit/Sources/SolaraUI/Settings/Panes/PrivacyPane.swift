@@ -386,7 +386,7 @@ struct ContentBlockingSection: View {
             set: { model.requestCategory(category.id, on: $0) }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
           .disabled(model.blocker == nil)
         }
       }

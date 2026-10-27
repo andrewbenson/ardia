@@ -177,15 +177,9 @@ struct ShortcutsPane: View {
           HStack(spacing: 8) {
             ShortcutsSearchField(text: $model.query)
               .frame(maxWidth: .infinity)
-            Picker("", selection: $model.filter) {
-              ForEach(ShortcutFilter.allCases, id: \.self) { filter in
-                Text(filter.title).tag(filter)
-              }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .frame(minWidth: 170)
-            .fixedSize()
+            SettingsPopUp(ShortcutFilter.allCases.map { SettingsPopUpItem($0, $0.title) }, selection: $model.filter)
+              .frame(minWidth: 170)
+              .fixedSize()
             Button("Reset All Shortcuts") { model.resetAll() }
               .disabled(overrides.isEmpty)
           }

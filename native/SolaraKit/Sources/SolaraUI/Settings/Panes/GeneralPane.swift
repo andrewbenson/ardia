@@ -106,7 +106,7 @@ struct GeneralPane: View {
             set: { on in Task { await model.services.setLaunchAtLogin(on); await model.refreshLogin() } }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
         }
         SettingToggle("general.warnBeforeQuitting", key: "warnBeforeQuitting")
         SettingToggle("general.warnBeforeClosingWindow", key: "warnBeforeClosingWindow")
@@ -227,7 +227,7 @@ struct DownloadsSection: View {
           set: { on in Task { await model.applyDownloads(folder: nil, askWhereToSave: on, to: [profile]) } }
         ))
         .labelsHidden()
-        .toggleStyle(.switch)
+        .toggleStyle(.settingsSwitch)
         .disabled(locked)
       }
       if !others.isEmpty {

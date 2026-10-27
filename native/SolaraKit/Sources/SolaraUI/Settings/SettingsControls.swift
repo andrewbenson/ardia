@@ -8,8 +8,7 @@ public struct SettingsForm<Content: View>: View {
   }
 
   public var body: some View {
-    Form { content }
-      .formStyle(.grouped)
+    SettingsLazyForm(content: content)
   }
 }
 
@@ -164,7 +163,7 @@ public struct SettingToggle: View {
       if let store = context?.store {
         Toggle("", isOn: Binding(get: { store.bool(key) != inverted }, set: { store.set(key, $0 != inverted) }))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
       }
     }
   }
@@ -191,16 +190,22 @@ public struct SettingPicker: View {
     _selection = selection
   }
 
+  @Environment(\.settingsFormHeader) private var inHeader
+
   public var body: some View {
-    Picker("", selection: $selection) {
-      ForEach(options, id: \.value) { option in
-        if option.separatorBefore { Divider() }
-        Text(option.title).tag(option.value)
+    if inHeader {
+      Picker("", selection: $selection) {
+        ForEach(options, id: \.value) { option in
+          if option.separatorBefore { Divider() }
+          Text(option.title).tag(option.value)
+        }
       }
+      .labelsHidden()
+      .pickerStyle(.menu)
+      .fixedSize()
+    } else {
+      SettingsPopUp(options, selection: $selection)
     }
-    .labelsHidden()
-    .pickerStyle(.menu)
-    .fixedSize()
   }
 }
 

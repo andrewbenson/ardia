@@ -488,8 +488,7 @@ struct SyncOffSection: View {
                 .disabled(noICloud)
               Button("Enter Recovery Phrase") { model.sheet = .phrase(canChangeFolder: true) }
             }
-            .menuStyle(.button)
-            .fixedSize()
+            .settingsMenu()
             Button("Enter Recovery Phrase…") { model.sheet = .phrase(canChangeFolder: true) }
               .buttonStyle(.borderedProminent)
           } else {
@@ -584,7 +583,7 @@ struct SyncOnSections: View {
           SettingRow(title: profile.badge.name, description: SyncText.sharedDataDescription(profile.sharesDataWith).map(RowDescription.text) ?? RowDescription.none) {
             Toggle("", isOn: Binding(get: { profile.synced ?? false }, set: { model.setProfile(profile.id, $0) }))
               .labelsHidden()
-              .toggleStyle(.switch)
+              .toggleStyle(.settingsSwitch)
               .disabled(profile.synced == nil)
           }
         }
@@ -605,7 +604,7 @@ struct SyncOnSections: View {
         SettingRow(title: type.title, description: type.summary) {
           Toggle("", isOn: Binding(get: { state.types[type] ?? false }, set: { model.setType(type, $0) }))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.settingsSwitch)
         }
       }
     }
@@ -645,8 +644,7 @@ struct SyncAdvancedMenu: View {
       Divider()
       Button("Stop Syncing…", systemImage: "xmark.circle") { model.sheet = .stop }
     }
-    .menuStyle(.button)
-    .fixedSize()
+    .settingsMenu()
   }
 }
 

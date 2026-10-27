@@ -154,7 +154,7 @@ struct AdvancedPane: View {
         SettingRow("advanced.cliControl", description: AdvancedPaneModel.serverNote(on: on, server: services.cliServer)) {
           Toggle("", isOn: store.toggle("cliControl"))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.settingsSwitch)
         }
         let install = services.cliInstall
         SettingsAnchor("advanced.cliInstall") {

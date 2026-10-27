@@ -285,7 +285,7 @@ struct AutofillPane: View {
             set: { on in Task { await model.setEnabled(addresses: on, profile: profile) } }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
           .disabled(enabled == nil)
         }
         SettingRow("autofill.cards") {
@@ -294,7 +294,7 @@ struct AutofillPane: View {
             set: { on in Task { await model.setEnabled(cards: on, profile: profile) } }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
           .disabled(enabled == nil)
         }
       }

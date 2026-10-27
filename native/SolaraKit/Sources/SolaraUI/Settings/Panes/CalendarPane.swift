@@ -202,12 +202,12 @@ struct CalendarPane: View {
         SettingRow("calendar.preview") {
           Toggle("", isOn: Binding(get: { options.showPreview }, set: { model.update(.showPreview($0)) }))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.settingsSwitch)
         }
         SettingRow("calendar.timeToNext") {
           Toggle("", isOn: Binding(get: { options.showTimeToNext }, set: { model.update(.showTimeToNext($0)) }))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.settingsSwitch)
         }
       }
 

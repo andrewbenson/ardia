@@ -369,7 +369,7 @@ struct ExtensionRow: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       Toggle("", isOn: Binding(get: { ext.enabled }, set: setEnabled))
         .labelsHidden()
-        .toggleStyle(.switch)
+        .toggleStyle(.settingsSwitch)
     }
     .contentShape(Rectangle())
     .onTapGesture(perform: open)
@@ -399,7 +399,7 @@ struct ExtensionDetails: View {
           .frame(maxWidth: .infinity, alignment: .leading)
           Toggle("", isOn: Binding(get: { ext.enabled }, set: { on in Task { await model.setEnabled(profile, ext.id, on) } }))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.settingsSwitch)
         }
         if !ext.description.isEmpty {
           Text(ext.description)
@@ -478,7 +478,7 @@ struct ExtensionDetails: View {
   private func switchFor(_ value: Bool, _ set: @escaping @MainActor (Bool) -> Void) -> some View {
     Toggle("", isOn: Binding(get: { value }, set: set))
       .labelsHidden()
-      .toggleStyle(.switch)
+      .toggleStyle(.settingsSwitch)
   }
 }
 

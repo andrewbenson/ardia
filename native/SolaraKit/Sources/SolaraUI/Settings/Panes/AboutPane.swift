@@ -248,7 +248,7 @@ struct UpdatesSection: View {
             }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
           .disabled(!ready)
         }
         SettingRow("about.autoUpdate") {
@@ -260,7 +260,7 @@ struct UpdatesSection: View {
             }
           ))
           .labelsHidden()
-          .toggleStyle(.switch)
+          .toggleStyle(.settingsSwitch)
           .disabled(!ready || !state.automaticChecks)
         }
         if let channel = state.channel {

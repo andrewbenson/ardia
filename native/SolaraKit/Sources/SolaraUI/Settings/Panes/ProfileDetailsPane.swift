@@ -55,7 +55,7 @@ struct ProfileDetailsPane: View {
           Menu("Change…") {
             ProfileIconMenuItems(current: profile.icon) { model.setIcon(profileId, $0) }
           }
-          .fixedSize()
+          .settingsMenu()
         }
       }
 

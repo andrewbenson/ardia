@@ -299,17 +299,6 @@ struct ProfilesPane: View {
   var body: some View {
     SettingsForm {
       Section {
-        EmptyView()
-      } header: {
-        Text("Profiles keep your browsing organized. Each keeps its own history, logins, cookies, and extensions, unless you turn on Share data when you create it: then it uses another profile's, and only the tabs are its own.")
-          .font(.callout)
-          .fontWeight(.regular)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(.bottom, 12)
-      }
-
-      SettingsSection("New windows open with") {
         SettingRow("profiles.defaultProfile") {
           SettingPicker(
             model.profiles.map { SettingOption($0.id, $0.name) },
@@ -317,6 +306,17 @@ struct ProfilesPane: View {
           )
           .frame(minWidth: 160, alignment: .trailing)
         }
+      } header: {
+        VStack(alignment: .leading, spacing: 0) {
+          Text("Profiles keep your browsing organized. Each keeps its own history, logins, cookies, and extensions, unless you turn on Share data when you create it: then it uses another profile's, and only the tabs are its own.")
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, 16)
+          Text("New windows open with")
+            .font(.subheadline)
+        }
+        .fontWeight(.regular)
+        .foregroundStyle(.secondary)
       }
 
       SettingsSection(description: context?.index.entry("profiles.list")?.description, anchor: "profiles.list") {

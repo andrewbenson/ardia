@@ -12,6 +12,7 @@
 //
 //   <Solara.app>   a Release build (JS bundled) under apps/browser/build-*; it runs hidden on scratch data
 //   --runs N       launches per variant (default 6)
+//   --variants a,b only these variants (default native,native-unwarmed,rn)
 // Results go to <scratch dir>/settings-bench.json and a table on stdout. Typing in search needs real key events in a key
 // window, so it isn't measured here.
 import { execFileSync } from "node:child_process";
@@ -22,7 +23,11 @@ import { launch, sleep } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const runsAt = args.indexOf("--runs");
 const RUNS = runsAt >= 0 ? Number(args[runsAt + 1]) : 6;
-const [app, scratch] = args.filter((a, i) => !a.startsWith("--") && i !== runsAt + 1).map((p) => path.resolve(p));
+const variantsAt = args.indexOf("--variants");
+const ONLY = variantsAt >= 0 ? args[variantsAt + 1].split(",") : null;
+const [app, scratch] = args
+  .filter((a, i) => !a.startsWith("--") && i !== runsAt + 1 && i !== variantsAt + 1)
+  .map((p) => path.resolve(p));
 if (!app || !scratch || app.startsWith("/Applications/")) {
   console.log("usage: settings-bench.mjs <Solara.app under apps/browser/build-*> <scratch dir> [--runs N]");
   process.exit(64);
@@ -33,7 +38,7 @@ const VARIANTS = [
   { name: "native", env: {} },
   { name: "native-unwarmed", env: { ARDIA_SETTINGS_PREWARM: "0" } },
   { name: "rn", env: { ARDIA_NATIVE_SETTINGS: "0" } },
-];
+].filter((v) => !ONLY || ONLY.includes(v.name));
 const SETTLE_MS = 8000;
 
 const inApp = (inst, body) => inst.eval(body);
@@ -124,4 +129,13 @@ for (const variant of VARIANTS.map((v) => v.name)) {
   console.log(
     `${variant} | ${f(median(mine.map((r) => r.open?.laidOut)))} ms | ${f(median(mine.map((r) => r.open?.committed)))} ms | ${f(median(switches))} ms, ${f(max)} ms | ${f(median(mine.map((r) => r.memoryWithSettings)))} MB | ${f(median(shares), 1)} MB | ${missing}`,
   );
+}
+
+console.log(`\npane switch by pane (median ms, first visit / second) | ${VARIANTS.map((v) => v.name).join(" | ")}`);
+for (const pane of PANES) {
+  const cells = VARIANTS.map((v) => {
+    const mine = results.filter((r) => r.variant === v.name);
+    return [0, 1].map((round) => f(median(mine.map((r) => r.panes[pane]?.[round])))).join(" / ");
+  });
+  console.log(`${pane} | ${cells.join(" | ")}`);
 }

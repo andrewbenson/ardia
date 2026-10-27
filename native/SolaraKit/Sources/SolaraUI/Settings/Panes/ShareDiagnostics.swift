@@ -108,7 +108,7 @@ struct ShareDiagnosticsSection: View {
         SettingRow("privacy.shareDiagnostics", description: copy.summary) {
           Toggle("", isOn: Binding(get: { model.sharing }, set: { model.setSharing($0) }))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.settingsSwitch)
         }
         Button { model.sheet = .whatsSent } label: {
           SettingRow("privacy.whatsSent") {

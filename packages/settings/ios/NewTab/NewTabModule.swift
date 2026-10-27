@@ -88,7 +88,7 @@ public class NewTabModule: Module {
 
       AsyncFunction("submit") { (view: NativeNewTabView) in MainActor.assumeIsolated { view.hero.model?.submit() } }.runOnQueue(.main)
 
-      AsyncFunction("state") { (view: NativeNewTabView) -> String in
+      AsyncFunction("driverState") { (view: NativeNewTabView) -> String in
         MainActor.assumeIsolated { view.driverStateJSON() }
       }.runOnQueue(.main)
 

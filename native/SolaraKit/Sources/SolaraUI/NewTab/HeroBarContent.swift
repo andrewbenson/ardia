@@ -351,7 +351,7 @@ struct HeroBarContent: View {
       HStack(spacing: 8) {
         leadingIcon.frame(width: 18)
         if let scope = model.scope { ScopeChipView(scope: scope) }
-        HeroFieldView(model: model, theme: env.theme).padding(.leading, 2)
+        HeroFieldView(model: model, theme: env.theme).accessibilityLabel(model.placeholder).padding(.leading, 2)
       }
       .padding(.leading, 18)
       .padding(.trailing, 18)

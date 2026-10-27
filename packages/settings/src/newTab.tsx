@@ -46,7 +46,7 @@ export type NativeNewTabHandle = {
   key(key: string, mods?: { metaKey?: boolean; altKey?: boolean; shiftKey?: boolean; ctrlKey?: boolean }): Promise<void>;
   select(start: number, end: number): Promise<void>;
   submit(): Promise<void>;
-  state(): Promise<string>;
+  driverState(): Promise<string>;
   measure(): Promise<{ x: number; y: number; width: number; height: number }>;
 };
 

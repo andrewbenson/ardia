@@ -305,7 +305,7 @@ struct ThemePreview: View {
       ThemeSwatchLayer(services: services, spec: ThemeSwatchSpec(colors: [], grain: ThemeMath.grainAlpha(look), texture: look.texture))
       VStack(alignment: .leading, spacing: 5) {
         ForEach([1.0, 0.7, 0.85], id: \.self) { width in
-          Capsule()
+          Capsule(style: .circular)
             .fill(dark ? Color.white.opacity(0.35) : Color.black.opacity(0.18))
             .frame(width: 34 * width, height: 4)
         }
@@ -450,7 +450,7 @@ struct ThemeLightnessBar: View {
           }
         }
         .frame(height: 8)
-        .clipShape(Capsule())
+        .clipShape(Capsule(style: .circular))
         Circle()
           .fill(Color(themeRGBA: stop.color))
           .overlay(Circle().strokeBorder(Color.white, lineWidth: 2))
@@ -484,7 +484,7 @@ struct ThemeDirectionDial: View {
         Circle()
           .fill(Color(nsColor: .controlColor))
           .overlay(Circle().strokeBorder(Color.primary.opacity(0.15), lineWidth: 1))
-        Capsule()
+        Capsule(style: .circular)
           .fill(Color.accentColor)
           .frame(width: 2, height: size / 2 - 4)
           .offset(y: -(size / 2 - 4) / 2)

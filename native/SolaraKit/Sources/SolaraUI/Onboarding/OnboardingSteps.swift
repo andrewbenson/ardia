@@ -454,7 +454,7 @@ struct SystemPreview: View {
     .padding(.leading, 12)
     .padding(.trailing, 10)
     .frame(height: 34)
-    .background(Capsule().fill(colors.row))
+    .background(Capsule(style: .circular).fill(colors.row))
     .overlay(CapsuleRing().fill(colors.rowBorder, style: FillStyle(eoFill: true)))
     .opacity(on ? 1 : 0.45)
   }

@@ -148,9 +148,9 @@ struct OnboardingPrimaryButton: View {
       }
       .padding(.horizontal, 20)
       .frame(height: 36)
-      .background(Capsule().fill(hovered && !disabled ? colors.primaryHover : colors.primary).opacity(disabled ? 0.4 : 1))
+      .background(Capsule(style: .circular).fill(hovered && !disabled ? colors.primaryHover : colors.primary).opacity(disabled ? 0.4 : 1))
       .scaleEffect(pressed ? 0.98 : 1)
-      .contentShape(Capsule())
+      .contentShape(Capsule(style: .circular))
     }
     .accessibilityLabel(title)
   }
@@ -169,10 +169,10 @@ struct OnboardingSecondaryButton: View {
         .padding(.horizontal, 18)
         .padding(.horizontal, filled ? 0 : 1)
         .frame(height: 36)
-        .background(Capsule().fill(filled ? (hovered ? colors.buttonHover : colors.button) : hovered ? colors.outlinedHover : .clear))
+        .background(Capsule(style: .circular).fill(filled ? (hovered ? colors.buttonHover : colors.button) : hovered ? colors.outlinedHover : .clear))
         .overlay { if !filled { CapsuleRing().fill(colors.noThanksBorder, style: FillStyle(eoFill: true)) } }
         .scaleEffect(pressed ? 0.98 : 1)
-        .contentShape(Capsule())
+        .contentShape(Capsule(style: .circular))
     }
     .accessibilityLabel(title)
   }
@@ -267,7 +267,7 @@ struct OnboardingTag: View {
     OnboardingText(title, size: 11, weight: 600, color: colors.title)
       .padding(.horizontal, 8)
       .frame(height: 20)
-      .background(Capsule().fill(colors.button))
+      .background(Capsule(style: .circular).fill(colors.button))
   }
 }
 
@@ -479,9 +479,9 @@ struct CapsuleRing: Shape {
   var width: CGFloat = 1
 
   func path(in rect: CGRect) -> Path {
-    var path = Path(roundedRect: rect, cornerRadius: min(rect.width, rect.height) / 2)
+    var path = Path(roundedRect: rect, cornerRadius: min(rect.width, rect.height) / 2, style: .circular)
     let inner = rect.insetBy(dx: width, dy: width)
-    path.addPath(Path(roundedRect: inner, cornerRadius: min(inner.width, inner.height) / 2))
+    path.addPath(Path(roundedRect: inner, cornerRadius: min(inner.width, inner.height) / 2, style: .circular))
     return path
   }
 }

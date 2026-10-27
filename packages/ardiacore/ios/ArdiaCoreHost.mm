@@ -333,33 +333,39 @@ static bool EarlyLittleWindowOff() {
 }
 
 static bool gEarlyLittleTried;
+static NSString *gEarlyLittleOutcome = @"notTried";
+
+static void SkipEarlyLittle(NSString *reason) { gEarlyLittleOutcome = reason; }
 
 static void TryEarlyLittleWindow() {
   if (gEarlyLittleTried || !gStarted || gJSStarted || gBootstrap.urls.count != 1) return;
   gEarlyLittleTried = true;
-  if (EarlyLittleWindowOff() || ArdiaCoreEarlyWindow.switchedOff || OutsideLinksForwarded()) return;
+  if (EarlyLittleWindowOff() || ArdiaCoreEarlyWindow.switchedOff || OutsideLinksForwarded()) return SkipEarlyLittle(@"switchedOff");
   NSURL *link = gBootstrap.urls.firstObject;
   NSString *scheme = link.scheme.lowercaseString;
-  if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return;
+  if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return SkipEarlyLittle(@"scheme");
   NSString *dir = AppDataDirectory();
-  if (gLaunchedHidden || NSApp.isHidden || LaunchTabSwitchedOff(dir) || OnboardingPending(dir)) return;
+  if (gLaunchedHidden || NSApp.isHidden) return SkipEarlyLittle(@"hidden");
+  if (LaunchTabSwitchedOff(dir) || OnboardingPending(dir)) return SkipEarlyLittle(@"launchTabOrOnboarding");
   NSDictionary *session = SavedSession(dir);
   NSDictionary *settings = [session[@"settings"] isKindOfClass:NSDictionary.class] ? session[@"settings"] : @{};
-  if ([settings[@"openLinksInLittleArdia"] isEqual:@NO]) return;
+  if ([settings[@"openLinksInLittleArdia"] isEqual:@NO]) return SkipEarlyLittle(@"setting");
   NSString *profile = [session[@"linkProfile"] isKindOfClass:NSString.class] ? session[@"linkProfile"] : nil;
   NSDictionary *backdrop = [session[@"launchBackdrop"] isKindOfClass:NSDictionary.class] ? session[@"launchBackdrop"] : nil;
   const bool dark = [[NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameDarkAqua, NSAppearanceNameAqua ]]
       isEqualToString:NSAppearanceNameDarkAqua];
-  if (!profile || !backdrop || ![backdrop[@"dark"] isKindOfClass:NSNumber.class] || [backdrop[@"dark"] boolValue] != dark) return;
-  if (!ardiacore_host::LoadedProfile(profile)) return;
+  if (!profile || !backdrop || ![backdrop[@"dark"] isKindOfClass:NSNumber.class] || [backdrop[@"dark"] boolValue] != dark) return SkipEarlyLittle(@"backdrop");
+  if (!ardiacore_host::LoadedProfile(profile)) return SkipEarlyLittle(@"profile");
   NSArray<NSNumber *> *frame = LittleArdiaFrame(settings[@"littleArdiaSize"]);
-  if (!frame) return;
+  if (!frame) return SkipEarlyLittle(@"frame");
   NSString *url = link.absoluteString;
   [ArdiaCoreWebView startLinkTabs:@[ url ] profile:profile];
   ArdiaCoreTab *tab = ArdiaCoreTabParking.firstLinkTab;
   NSString *mark = tab ? [ArdiaCoreTabParking linkMarkForTab:tab] : nil;
   NSString *focused = [session[@"focusedWindowId"] isKindOfClass:NSString.class] ? session[@"focusedWindowId"] : nil;
-  if (mark) [ArdiaCoreEarlyWindow showLittleWindowForLink:tab mark:mark url:url frame:frame profile:profile backdrop:backdrop like:focused];
+  if (!mark) return SkipEarlyLittle(@"tab");
+  [ArdiaCoreEarlyWindow showLittleWindowForLink:tab mark:mark url:url frame:frame profile:profile backdrop:backdrop like:focused];
+  gEarlyLittleOutcome = @"shown";
 }
 
 static void StartEarlyWindow() {
@@ -937,6 +943,9 @@ static void StartEarlyWindow() {
     @"chromeWindows" : @(chromeWindows),
     @"keepAlive" : engine.keepAliveState ?: @"",
     @"lastUsedProfile" : engine.defaultProfile.name ?: @"",
+#if DEBUG
+    @"earlyLinkWindow" : gEarlyLittleOutcome,
+#endif
   };
 }
 

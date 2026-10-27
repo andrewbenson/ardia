@@ -15,7 +15,8 @@ the panel grows from the field box to RN's dropdown frame (left and top of the f
 from the window's right edge at most) with its field taking a click inside the 38 pt bar and a click on the card closing it,
 a click on the bar's blank part leaves the window alone, and Open in Solara (its button natively, ⌘O's command under RN) moves the tab to the main window and closes the small one;
 then a relaunch handed a link, as another app hands it (ARDIA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
-passes outside links on to another copy), opens it in Little Solara and not the main window. --native runs with ARDIA_NATIVE_MEDIA=1, where the window is the native Little Solara shell:
+passes outside links on to another copy), opens it in Little Solara and not the main window, through the early link window
+(the Debug-only engineInfo().earlyLinkWindow says "shown", not the reason it was skipped). --native runs with ARDIA_NATIVE_MEDIA=1, where the window is the native Little Solara shell:
 its backdrop, bar and RN slots in that order and the bar fed from JS.`);
   process.exit(2);
 }
@@ -185,8 +186,10 @@ try {
     if (main.includes(url("c"))) throw new Error(`the link opened in the main window too: ${main}`);
     const active = await run(`return !!M && !!M.littleActive && M.littleActive(${JSON.stringify(id)});`);
     if (active !== native) throw new Error(`littleActive ${active} with the switch ${native ? "on" : "off"}`);
+    const early = await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`);
+    if (early !== "shown") throw new Error(`the early link window's outcome is ${early}, so the JS path opened this window, not the early one`);
     const shell = native ? await until("the shell's bar", `return M.describeLittle(${JSON.stringify(id)}).then(JSON.parse).then((d) => d && d.barShown && d.blankBarHit === "SolaraUI.LittleSolaraDragStrip" ? d : null);`) : null;
-    return { id, tab, slots: shell?.slots.map(([slot]) => slot) };
+    return { id, tab, early, slots: shell?.slots.map(([slot]) => slot) };
   });
 } catch (e) {
   rep.record("run", { error: e });

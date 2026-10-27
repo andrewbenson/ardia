@@ -116,7 +116,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
     return "#" + v.joined()
   }
 
-  static let labelPad: CGFloat = 1.5
+  static let labelPad: CGFloat = 2
 
   public var height: CGFloat { state?.replace == true ? 40 + 1 + 38 : 40 }
 
@@ -204,24 +204,17 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
     up.frame = CGRect(x: right - 26, y: (row - 26) / 2, width: 26, height: 26)
     right -= 26 + 2
     if !noneLabel.isHidden {
-      let s = noneLabel.intrinsicContentSize
       right -= 6
-      noneLabel.frame = CGRect(x: right - s.width, y: (row - s.height) / 2, width: s.width, height: s.height)
-      right -= s.width + 2
+      right = place(noneLabel, right: right, midY: row / 2) - 2
     } else if !countLabel.isHidden {
       right -= 6
-      let c = countLabel.intrinsicContentSize
-      let pad = FindBarView.labelPad
-      countLabel.frame = CGRect(x: right - c.width - pad, y: (row - c.height) / 2, width: c.width, height: c.height)
-      right -= c.width + 6
+      right = place(countLabel, right: right, midY: row / 2) - 6
       CATransaction.begin()
       CATransaction.setDisableActions(true)
       countRule.frame = CGRect(x: right - 1, y: (row - 12) / 2, width: 1, height: 12)
       CATransaction.commit()
       right -= 1 + 6
-      let a = activeLabel.intrinsicContentSize
-      activeLabel.frame = CGRect(x: right - a.width - pad, y: (row - a.height) / 2, width: a.width, height: a.height)
-      right -= a.width + 2
+      right = place(activeLabel, right: right, midY: row / 2) - 2
     }
     let fieldLeft: CGFloat = 11 + 16 + 5 + 2
     let fh = field.intrinsicContentSize.height
@@ -241,13 +234,20 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
       x2 -= bw + 4
     }
     if !noteLabel.isHidden {
-      let s = noteLabel.intrinsicContentSize
-      noteLabel.frame = CGRect(x: x2 - 2 - s.width, y: top + (r2 - s.height) / 2, width: s.width, height: s.height)
-      x2 -= s.width + 2 + 4
+      x2 = place(noteLabel, right: x2 - 2, midY: top + r2 / 2) - 4
     }
     let rh = replaceField.intrinsicContentSize.height
     let rLeft: CGFloat = 11 + 16 + 3 + 4
     replaceField.frame = CGRect(x: rLeft, y: top + (r2 - rh) / 2, width: max(0, x2 - rLeft), height: rh)
+  }
+
+  private func place(_ label: NSTextField, right: CGFloat, midY: CGFloat) -> CGFloat {
+    let scale = window?.backingScaleFactor ?? 2
+    let width = ceil(label.attributedStringValue.size().width * scale) / scale
+    let height = label.intrinsicContentSize.height
+    let pad = FindBarView.labelPad
+    label.frame = CGRect(x: right - width - pad, y: midY - height / 2, width: width + 2 * pad, height: height)
+    return right - width
   }
 
   public func controlTextDidChange(_ obj: Notification) {

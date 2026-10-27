@@ -62,17 +62,27 @@ async function environment(prefix, folderOps) {
   globalThis.__DEV__ = false;
   const pendingTimers = [];
   let timerIds = 0;
+  let calls = null;
   globalThis.setTimeout = (fn, delay = 0, ...rest) => {
     const id = ++timerIds;
     if (delay === 100 || delay === 250) setImmediate(() => fn(...rest));
-    else pendingTimers.push({ id, delay, fn: () => fn(...rest) });
+    else {
+      pendingTimers.push({ id, delay, fn: () => fn(...rest) });
+      calls?.push({ timer: delay });
+    }
     return id;
   };
   globalThis.clearTimeout = (id) => {
     const at = pendingTimers.findIndex((t) => t.id === id);
-    if (at >= 0) pendingTimers.splice(at, 1);
+    if (at < 0) return;
+    calls?.push({ cancel: pendingTimers[at].delay });
+    pendingTimers.splice(at, 1);
   };
-  let calls = null;
+  const heldNatives = new Set();
+  const nativeGates = [];
+  const gate = async (name) => {
+    if (heldNatives.has(name)) await new Promise((resolve) => nativeGates.push(resolve));
+  };
   const modes = { chain: "ok", unlock: true, phrase: true };
   let deviceIds = 0;
   const recordCall = (n, a, r) => calls?.push(r === undefined ? { n, a: plain(a) } : { n, a: plain(a), r: plain(r) });
@@ -88,15 +98,16 @@ async function environment(prefix, folderOps) {
       recordCall("deviceName", [], name);
       return name;
     },
-    createPhrase: async (account) => (recordCall("createPhrase", [account], modes.phrase), modes.phrase),
+    createPhrase: async (account) => (await gate("createPhrase"), recordCall("createPhrase", [account], modes.phrase), modes.phrase),
     enterPhrase: async (account, text, folder) => {
+      await gate("enterPhrase");
       const result = modes.phrase ? { ok: true } : { error: "mismatch" };
       recordCall("enterPhrase", [account, text, folder], result);
       return result;
     },
-    unlock: async (account) => (recordCall("unlock", [account], modes.unlock), modes.unlock),
-    forget: async (account) => void recordCall("forget", [account]),
-    chainStatus: async (folder) => (recordCall("chainStatus", [folder], modes.chain), modes.chain),
+    unlock: async (account) => (await gate("unlock"), recordCall("unlock", [account], modes.unlock), modes.unlock),
+    forget: async (account) => (await gate("forget"), void recordCall("forget", [account])),
+    chainStatus: async (folder) => (await gate("chainStatus"), recordCall("chainStatus", [folder], modes.chain), modes.chain),
     createChain: async (folder) => {
       await folderOps("createChain", []);
       recordCall("createChain", [folder]);
@@ -106,6 +117,7 @@ async function environment(prefix, folderOps) {
       recordCall("deleteChain", [folder]);
     },
     write: async (folder, scope, payload) => {
+      await gate("write");
       const file = JSON.parse(payload);
       const held = shellFake.journalHolds(scope, file);
       const id = await folderOps("write", [scope, payload]);
@@ -113,6 +125,7 @@ async function environment(prefix, folderOps) {
       return id;
     },
     read: async (folder, scope, known) => {
+      await gate("read");
       const listing = await folderOps("read", [scope, known]);
       recordCall("read", [folder, scope, known], listing);
       return listing;
@@ -121,8 +134,8 @@ async function environment(prefix, folderOps) {
       await folderOps("remove", [scope, ids]);
       recordCall("remove", [folder, scope, ids]);
     },
-    sealLocal: async (text) => `sealed:${text}`,
-    openLocal: async (sealed) => (sealed.startsWith("sealed:") ? sealed.slice(7) : null),
+    sealLocal: async (text) => (await gate("sealLocal"), `sealed:${text}`),
+    openLocal: async (sealed) => (await gate("openLocal"), sealed.startsWith("sealed:") ? sealed.slice(7) : null),
     readPasswords: async (profile) => (recordCall("readPasswords", [profile], null), null),
     folderInfo: async () => ({ path: "/sync", defaultPath: "/sync", iCloudAvailable: false, inICloud: false, exists: true, writable: true, hasSyncData: true }),
     chooseFolder: async () => null,
@@ -159,19 +172,60 @@ async function environment(prefix, folderOps) {
     return answer;
   };
   const shell = await import(pathToFileURL(join(app, "src/test-native/index.ts")).href);
-  shellFake.docs = shell.docs;
+  const disk = new Map();
+  const staged = new Map();
+  const landing = [];
+  const retrying = [];
+  const docMode = { hold: false, fail: false };
+  let generation = 0;
+  const stage = (name, contents, done) => {
+    const old = staged.get(name);
+    const mine = ++generation;
+    staged.set(name, { generation: mine, contents, waiters: [...(old?.waiters ?? []), ...(done ? [done] : [])] });
+    landing.push([name, mine]);
+    if (name === "sync.json") calls?.push({ doc: name, contents });
+    else if (process.env.ENGINE_DOC_EVENTS) calls?.push({ staged: name, generation: mine, contents: contents.slice(0, 400), waiter: !!done });
+  };
+  const landOne = ([name, mine]) => {
+    const save = staged.get(name);
+    if (!save || save.generation !== mine) return;
+    const waiters = save.waiters;
+    if (docMode.fail) {
+      save.waiters = [];
+      retrying.push([name, mine]);
+      for (const done of waiters) done(new Error("disk full"));
+      return;
+    }
+    disk.set(name, save.contents);
+    staged.delete(name);
+    if (process.env.ENGINE_DOC_EVENTS) calls?.push({ landed: name, generation: mine, waiters: waiters.length });
+    for (const done of waiters) done(null);
+  };
+  const landAll = () => {
+    if (!docMode.fail) landing.push(...retrying.splice(0));
+    while (landing.length) landOne(landing.shift());
+  };
+  const shellModule = shell.shellNativeModules.ArdiaShell;
+  shellModule.readDocument = (name) => staged.get(name)?.contents ?? disk.get(name) ?? null;
+  shellModule.writeDocument = (name, contents) => stage(name, contents, null);
+  shellModule.saveDocument = (name, contents) => new Promise((resolve, reject) => stage(name, contents, (error) => (error ? reject(error) : resolve())));
+  shellModule.removeDocument = (name) => {
+    staged.delete(name);
+    disk.delete(name);
+  };
   shellFake.journalHolds = (scope, file) => {
     if (file.kind !== "log") return null;
     const holds = (list) => (list ?? []).some((f) => f.device === file.device && f.seq === file.seq);
-    const journal = shell.docs.get("sync-journal.nns");
-    if (journal?.startsWith("sealed:") && holds(JSON.parse(journal.slice(7)).journal?.[scope])) return true;
-    const state = shell.docs.get("sync-state.nns");
-    return !!state?.startsWith("sealed:") && holds(JSON.parse(state.slice(7))[scope]?.journal);
-  };
-  const realSet = shell.docs.set.bind(shell.docs);
-  shell.docs.set = (name, contents) => {
-    if (name === "sync.json") calls?.push({ doc: name, contents });
-    return realSet(name, contents);
+    const opened = (name) => {
+      const text = disk.get(name);
+      if (!text?.startsWith("sealed:")) return null;
+      try {
+        return JSON.parse(text.slice(7));
+      } catch {
+        return null;
+      }
+    };
+    return holds(opened("sync-journal.nns")?.journal?.[scope]) || holds(opened("sync-state.nns")?.[scope]?.journal);
   };
   const { useBrowser } = await import(pathToFileURL(join(app, "src/store/browser.ts")).href);
   const { encodeArgs } = await import(pathToFileURL(join(app, "../../packages/store/src/encode.ts")).href);
@@ -190,7 +244,8 @@ async function environment(prefix, folderOps) {
     globalThis.__engineUnsubscribe = null;
     pendingTimers.splice(0);
     inFlight.splice(0);
-    shell?.heldSaves.queue.splice(0);
+    heldNatives.clear();
+    nativeGates.splice(0);
     engine = await import(`${pathToFileURL(join(app, "src/sync/engine.ts")).href}?${prefix}${++launches}`);
     const ui = globalThis.__engineUi;
     unsubscribe = ui.subscribe((state) => calls?.push({ publish: plain(state) }));
@@ -198,7 +253,10 @@ async function environment(prefix, folderOps) {
   await launch();
 
   const drain = async () => {
-    for (let i = 0; i < 400; i++) await new Promise((r) => setImmediate(r));
+    for (let i = 0; i < 400; i++) {
+      if (!docMode.hold) landAll();
+      await new Promise((r) => setImmediate(r));
+    }
   };
 
   const command = (name, ...callArgs) => {
@@ -253,26 +311,50 @@ async function environment(prefix, folderOps) {
         break;
       }
       case "relaunch":
+        for (const [name, save] of staged) disk.set(name, save.contents);
+        staged.clear();
+        landing.splice(0);
+        retrying.splice(0);
         await launch();
         break;
       case "snapshot":
-        globalThis.__snapshot = new Map(shell.docs);
+        globalThis.__snapshot = new Map(disk);
         break;
       case "crash":
-        if (globalThis.__snapshot) {
-          shell.docs.clear();
-          for (const [k, v] of globalThis.__snapshot) realSet(k, v);
+        staged.clear();
+        landing.splice(0);
+        retrying.splice(0);
+        if (step.snapshot && globalThis.__snapshot) {
+          disk.clear();
+          for (const [k, v] of globalThis.__snapshot) disk.set(k, v);
         }
         await launch();
+        break;
+      case "damage": {
+        const damaged = { drop: null, corrupt: "sealed:{\"app\":", foreign: "sealed-elsewhere:{}", malformed: 'sealed:{"journal":{"app":[{"v":1,"kind":"log","device":"x","seq":1}]}}' }[step.how];
+        staged.delete(step.doc);
+        if (damaged === null) disk.delete(step.doc);
+        else disk.set(step.doc, damaged);
+        break;
+      }
+      case "holdNative":
+        for (const name of step.names) heldNatives.add(name);
+        break;
+      case "releaseNative":
+        heldNatives.clear();
+        for (const release of nativeGates.splice(0)) release();
         break;
       case "mode":
         modes[step.key] = step.value;
         break;
       case "hold":
-        shell.heldSaves.on = step.value;
+        docMode.hold = step.value;
+        break;
+      case "failDocs":
+        docMode.fail = step.value;
         break;
       case "land":
-        for (const land of shell.heldSaves.queue.splice(0)) land();
+        landAll();
         break;
       case "advance":
         now += step.ms;
@@ -325,13 +407,14 @@ async function environment(prefix, folderOps) {
     }
   }
 
-  const snapshotDocs = () =>
+  const sorted = (map) =>
     Object.fromEntries(
-      [...shell.docs]
+      [...map]
         .filter(([name]) => name.startsWith("sync"))
         .sort(([a], [b]) => (a < b ? -1 : 1))
-        .map(([name, contents]) => [name, contents]),
+        .map(([name, value]) => [name, typeof value === "string" ? value : value.contents]),
     );
+  const snapshotDocs = () => ({ disk: sorted(disk), staged: sorted(staged) });
 
   const boundary = () => {
     const s = S();
@@ -343,7 +426,8 @@ async function environment(prefix, folderOps) {
       model: globalThis.__modelMemory.read(),
       tileFolders: globalThis.__pinnedMemory?.read() ?? {},
       timers: pendingTimers.map((t) => t.delay),
-      held: shell.heldSaves.queue.length,
+      held: landing.length + retrying.length,
+      heldNatives: nativeGates.length,
       inFlight: inFlight.length,
     });
   };
@@ -427,7 +511,7 @@ export function randomScript(seed, steps) {
     else if (r < 0.69) push(mac, { op: "adoptTheme", profile: n() });
     else if (r < 0.71) push(mac, { op: "relaunch" }), push(mac, { op: "start" });
     else if (r < 0.73) push(mac, { op: "snapshot" });
-    else if (r < 0.745) push(mac, { op: "crash" }), push(mac, { op: "start" });
+    else if (r < 0.745) push(mac, { op: "crash", snapshot: rand() < 0.4 }), push(mac, { op: "start" });
     else if (r < 0.76) push(mac, { op: "mode", key: "chain", value: pick(["ok", "ok", "unavailable", "missing"]) });
     else if (r < 0.77) push(mac, { op: "mode", key: "unlock", value: rand() < 0.6 });
     else if (r < 0.79) push(mac, { op: "hold", value: rand() < 0.5 });
@@ -435,12 +519,18 @@ export function randomScript(seed, steps) {
     else if (r < 0.83) push(mac, { op: "deleteProfile", profile: n() });
     else if (r < 0.845) push(mac, { op: "stop", deleteData: rand() < 0.3 });
     else if (r < 0.86) push(mac, { op: pick(["turnOn", "join"]), folder: "/sync", phrase: "abandon ability" });
+    else if (r < 0.9) push(mac, { op: "holdNative", names: [pick(["read", "write", "chainStatus", "unlock", "sealLocal", "openLocal", "forget", "createPhrase", "enterPhrase"])] });
+    else if (r < 0.93) push(mac, { op: "releaseNative" });
+    else if (r < 0.945) push(mac, { op: "damage", doc: pick(["sync-state.nns", "sync-journal.nns"]), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    else if (r < 0.955) push(mac, { op: "failDocs", value: rand() < 0.5 });
     else push(mac, { op: "advance", ms: pick([1000, 60_000, 3_600_000, 91 * 86_400_000]) });
   }
   for (const mac of ["local", "other"]) {
     push(mac, { op: "mode", key: "chain", value: "ok" });
     push(mac, { op: "mode", key: "unlock", value: true });
     push(mac, { op: "hold", value: false });
+    push(mac, { op: "failDocs", value: false });
+    push(mac, { op: "releaseNative" });
     push(mac, { op: "land" });
   }
   for (let round = 0; round < 3; round++) for (const mac of ["local", "other"]) push(mac, { op: "syncNow" });
@@ -474,7 +564,7 @@ export const namedScripts = () => [
       { mac: "local", op: "snapshot" },
       { mac: "local", op: "bookmark", profile: 0, url: "https://two.example/", title: "Two" },
       { mac: "local", op: "syncNow" },
-      { mac: "local", op: "crash" },
+      { mac: "local", op: "crash", snapshot: true },
       { mac: "local", op: "start" },
       { mac: "local", op: "bookmark", profile: 0, url: "https://three.example/", title: "Three" },
       { mac: "local", op: "syncNow" },
@@ -552,7 +642,16 @@ function inChild(roleName, message) {
 async function parent() {
   const scripts = [...namedScripts(), ...Array.from({ length: runs }, (_, i) => randomScript(firstSeed + i, stepsPerRun))];
   const cases = [];
-  for (const script of scripts) cases.push((await inChild("local", { script })).trace);
+  let crashed = 0;
+  for (const script of scripts) {
+    try {
+      cases.push((await inChild("local", { script })).trace);
+    } catch (error) {
+      crashed++;
+      console.error(`${script.name}: ${error.message}`);
+    }
+  }
+  if (crashed) console.error(`${crashed} scenarios crashed`);
   mkdirSync(out, { recursive: true });
   const text = JSON.stringify({ cases });
   writeFileSync(join(out, "engine.json.deflate"), deflateRawSync(Buffer.from(text), { level: 9 }));
@@ -590,6 +689,7 @@ async function runScenario(script) {
     }
   };
   const child = fork(fileURLToPath(import.meta.url), ["--role", "other"], { execArgv: ["--no-warnings"], cwd: app, stdio: ["ignore", "ignore", "inherit", "ipc"] });
+  child.once("exit", (code) => code && process.exit(3));
   const waiting = new Map();
   let ids = 0;
   child.on("message", async (message) => {

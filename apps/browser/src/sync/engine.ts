@@ -178,9 +178,31 @@ async function openSealed<T>(name: string, fallback: T): Promise<T> {
   return fallback;
 }
 
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+function readableScope(v: unknown): v is ScopeState {
+  if (!isObject(v)) return false;
+  return (
+    [v.records, v.base, v.vv, v.extra, v.files, v.damaged, v.seen].every(isObject) &&
+    Array.isArray(v.unapplied) &&
+    Array.isArray(v.outbox) &&
+    typeof v.seq === "number" &&
+    (v.journal === undefined || (Array.isArray(v.journal) && v.journal.every(readableBatch)))
+  );
+}
+
+const readableBatch = (f: unknown): f is LogFile => isObject(f) && typeof f.device === "string" && typeof f.seq === "number" && Array.isArray(f.ops);
+
 async function loadState() {
-  const scopes = await openSealed<SyncDoc["scopes"]>(STATE, {});
-  journal = (await openSealed<{ journal?: Journal }>(JOURNAL, {})).journal ?? {};
+  const saved = await openSealed<unknown>(STATE, {});
+  const scopes: SyncDoc["scopes"] = {};
+  for (const [name, scope] of Object.entries(isObject(saved) ? saved : {})) if (readableScope(scope)) scopes[name] = scope;
+  const savedJournal = (await openSealed<{ journal?: unknown }>(JOURNAL, {})).journal;
+  journal = {};
+  for (const [name, list] of Object.entries(isObject(savedJournal) ? savedJournal : {})) {
+    const batches = Array.isArray(list) ? list.filter((f): f is LogFile => readableBatch(f) && f.device === doc.deviceId) : [];
+    if (batches.length) journal[name] = batches;
+  }
   journalOnDisk = Object.keys(journal).length > 0;
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
@@ -194,7 +216,7 @@ async function loadState() {
 
 const persistJournal = (scope: string) => async (batches: LogFile[]) => {
   const list = (journal[scope] ??= []);
-  for (const file of batches) if (!list.some((f) => f.seq === file.seq)) list.push(file);
+  for (const file of batches) if (!list.some((f) => f.device === file.device && f.seq === file.seq)) list.push(file);
   const sealed = await SyncNative!.sealLocal(JSON.stringify({ journal }));
   await saveDocument(JOURNAL, sealed);
   journalOnDisk = true;

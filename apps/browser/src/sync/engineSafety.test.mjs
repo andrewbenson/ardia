@@ -329,3 +329,37 @@ test("B10b: turning on or joining while sync is on keeps the device, and a cycle
   await settle();
   assert.equal(new Set(files().map(({ file }) => file.device)).size, 1);
 });
+
+test("B11: a saved state that parses but isn't scopes doesn't stop sync from starting", async () => {
+  reset();
+  await onAndSynced();
+  shell.docs.set("sync-state.nns", 'sealed:{"journal":{"app":[{"v":1}]},"app":7}');
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  await engine.syncNow();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assertNoSeqReused();
+});
+
+test("B12: a journal entry from another device or without changes doesn't keep this device's batch out of the journal", async () => {
+  reset();
+  await onAndSynced();
+  const synced = JSON.parse(shell.docs.get("sync.json"));
+  shell.docs.set("sync-journal.nns", `sealed:${JSON.stringify({ journal: { app: [{ v: 1, kind: "log", device: "someone", seq: synced.seqs.app + 1, ops: [] }, { v: 1, kind: "log", device: synced.deviceId, seq: 99 }] } })}`);
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  let journaled = null;
+  fake.failWrite = (scope, file) => {
+    if (scope !== "app" || file.kind !== "log") return false;
+    const list = JSON.parse(shell.docs.get("sync-journal.nns").slice(7)).journal?.app ?? [];
+    journaled = list.some((f) => f.device === file.device && f.seq === file.seq && f.ops?.length);
+    return false;
+  };
+  S().updateSettings({ searchEngine: "duckduckgo" });
+  await engine.syncNow();
+  await settle();
+  assert.equal(journaled, true, "the batch is in the journal before it goes out");
+});

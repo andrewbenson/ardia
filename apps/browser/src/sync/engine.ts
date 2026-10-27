@@ -688,7 +688,7 @@ function noteBaseline(scope: string, prefix: string, extraction: Extraction) {
 
 function stillDownloading(state: ScopeState): boolean {
   const now = Date.now();
-  return Object.values(state.pendingSince ?? {}).some((at) => now - at <= DOWNLOAD_GIVE_UP_MS) || Object.keys(state.damaged).length > 0;
+  return Object.values(state.pendingSince ?? {}).some((at) => now - at <= DOWNLOAD_GIVE_UP_MS) || Object.keys(state.damaged).some((id) => !state.files[id]);
 }
 
 function guardedExtraction(scope: string, prefix: string, state: Guarded, extraction: Extraction, known: (key: string) => boolean, fromFolder: (key: string, value: unknown) => boolean, rebuilding: boolean): Extraction {

@@ -1627,3 +1627,25 @@ test("B70: a rebuild that can't read some files yet doesn't apply the bookmarks 
   assert.deepEqual([...other.store.values()].map((v) => v.t).sort(), ["One renamed on B", "Three", "Two"], "no bookmark was deleted in the folder");
   assert.deepEqual(titles(), ["One renamed on B", "Three", "Two"]);
 });
+
+test("B71: a rebuild isn't held up by a damaged entry the saved state kept for a file it has since read", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const scope = sealed[`p:${syncId}`];
+  const known = Object.keys(scope.files)[0];
+  sealed[`p:${syncId}`] = { ...scope, damaged: { [known]: Date.now() }, rebuild: { since: Date.now() } };
+  shell.docs.set("sync-state.nns", `sealed:${JSON.stringify(sealed)}`);
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  const again = await launch();
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  assert.deepEqual(titles(), ["Renamed on B"]);
+});

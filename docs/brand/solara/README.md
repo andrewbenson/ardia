@@ -36,8 +36,8 @@ The fork picks the set with `AC_APP_ICON = SolaraIcon` (`docs/releasing.md` › 
 ## Calm
 
 "Calm" is the same artwork with the horizon taken away: no floor, grid, horizon band or horizon line, only the sun on
-the sky. With nothing in front of it the sun is drawn whole, a striped circle of the same radius centred 28 px below
-the middle (y 540), its gradient spanning the full disc. The stripe gaps keep Classic's heights and sit in the lower
+the sky. With nothing in front of it the sun is drawn whole, a striped circle of the same radius centred on the
+squircle (y 512, so 84 px of sky above and below it), its gradient spanning the full disc. The stripe gaps keep Classic's heights and sit in the lower
 half, with the bars between them thinning toward a small cap at the bottom. The sky, squircle, rim and shadow are
 unchanged. `calm.svg` is the 1024 px master; `calm-128.svg`, `calm-64.svg`, `calm-32.svg` and `calm-16.svg` follow
 the classic small masters (their gap heights and rim widths).

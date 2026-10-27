@@ -8,7 +8,7 @@ final class ToolbarButtonView: NSView {
 
   private let plate = CALayer()
   private let image = NSImageView()
-  private var badge: NSTextField?
+  private var badge: NSView?
   private var decoded: (uri: String, image: NSImage?)?
   private var hovered = false
   private var pressed = false
@@ -164,22 +164,27 @@ final class ToolbarButtonView: NSView {
       badge = nil
       return
     }
-    let field = badge ?? {
-      let f = NSTextField(labelWithString: "")
-      f.wantsLayer = true
-      f.layer?.cornerRadius = 3
-      f.alignment = .center
-      f.isSelectable = false
-      addSubview(f)
-      badge = f
-      return f
+    let chip = badge ?? {
+      let v = NSView()
+      v.wantsLayer = true
+      v.layer?.cornerRadius = 3
+      let label = NSTextField(labelWithString: "")
+      label.isSelectable = false
+      v.addSubview(label)
+      addSubview(v)
+      badge = v
+      return v
     }()
-    let text = String(spec.text.prefix(4))
+    guard let label = chip.subviews.first as? NSTextField else { return }
     let font = NSFont.systemFont(ofSize: 8.5, weight: .bold)
-    field.attributedStringValue = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: toolbarColor(spec.textColor) ?? .white])
-    field.layer?.backgroundColor = toolbarColor(spec.color)?.cgColor
-    let w = max(13, ceil(field.attributedStringValue.size().width) + 5)
-    field.frame = CGRect(x: bounds.width - 1 - w, y: bounds.height - 3 - 11, width: w, height: 11)
+    label.attributedStringValue = NSAttributedString(string: String(spec.text.prefix(4)), attributes: [.font: font, .foregroundColor: toolbarColor(spec.textColor) ?? .white])
+    chip.layer?.backgroundColor = toolbarColor(spec.color)?.cgColor
+    let scale = window?.backingScaleFactor ?? 2
+    let textWidth = label.attributedStringValue.size().width
+    let w = max(13, ceil((textWidth + 5) * scale) / scale)
+    chip.frame = CGRect(x: bounds.width - 1 - w, y: bounds.height - 3 - 11, width: w, height: 11)
+    let h = ceil(label.intrinsicContentSize.height)
+    label.frame = CGRect(x: (w - textWidth) / 2 - 2, y: (11 - h) / 2, width: ceil(textWidth) + 5, height: h)
   }
 
   static func weight(_ name: String?) -> NSFont.Weight {

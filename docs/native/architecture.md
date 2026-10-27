@@ -737,7 +737,7 @@ behaviors, checked where their phase lands:
 | New Tab hero is the sun alone, on whole device pixels | 524f4047, 7104dc4d | 3 (pixel diff with the RN capture) |
 | Developer Mode toolbar: 18 pt stripes falling right, 11 pt URL edited in place on the resting line, no not-secure lock on local hosts, window colors kept, reload chevron, DevTools buttons | be12e868, 1bd64609, 1ca81a98, 65266b4a, d34de431, 2d369f49, a8370ae3 | 4 |
 | Tab titles run to the row's edge unless the row is hovered | 76669d61 | 5 |
-| Tidy and Clear fade in on sidebar hover without shortening the divider; Clear only on hover; divider full width at rest | 25764cfd, 1a8400db, 538bfdd9 | 5 |
+| Tidy and Clear fade in when the divider row is hovered (120 ms in, 160 ms out, ease-out quad) while the line draws back by their width; divider full width at rest | 1a8400db, 538bfdd9, c3791ed3 (`ClearDivider.tsx`) | 5 |
 | A group's box shows only under the pointer | e8ae23fb | 5 |
 | Switching tabs shows the new page at once, with no fade | 719f4787 | 5 |
 | Main windows open and close with Little Solara's motion | 3b1de139 | 5 |

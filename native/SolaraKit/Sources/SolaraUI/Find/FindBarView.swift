@@ -105,6 +105,12 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
       longPress: false, middle: false, plain: false)
   }
 
+  static let rnReplaceRowInk: CGFloat = 0.58
+
+  static func rnReplaceRow(_ color: NSColor) -> NSColor {
+    color.withAlphaComponent(color.alphaComponent * rnReplaceRowInk)
+  }
+
   static func palette(_ t: NewTabTheme) -> ToolbarPaletteState {
     ToolbarPaletteState(
       background: nil, text: hex(t.textPrimary), secondary: hex(t.textSecondary), icon: hex(t.icon), iconDisabled: hex(t.iconDisabled),
@@ -132,7 +138,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
     up.state = FindBarView.button("previous", "chevron.up", 12, tooltip: next.previousTooltip, enabled: hasCount)
     down.state = FindBarView.button("next", "chevron.down", 12, tooltip: next.nextTooltip, enabled: hasCount)
     icon.contentTintColor = theme.textSecondary.ns
-    swapIcon.contentTintColor = theme.textSecondary.ns
+    swapIcon.contentTintColor = FindBarView.rnReplaceRow(theme.textSecondary.ns)
     let separator = next.dark ? CSSColor(red: 1, green: 1, blue: 1, alpha: 0.12) : CSSColor(red: 0, green: 0, blue: 0, alpha: 0.1)
     let error = next.dark ? CSSColor("#FF6B63")! : CSSColor("#C93333")!
     CATransaction.begin()
@@ -144,7 +150,7 @@ public final class FindBarView: NSView, NSTextFieldDelegate {
       (f.currentEditor() as? NSTextView)?.insertionPointColor = theme.textPrimary.ns
     }
     field.placeholderAttributedString = NSAttributedString(string: "Find on Page", attributes: [.foregroundColor: theme.placeholder.ns, .font: NSFont.systemFont(ofSize: 14)])
-    replaceField.placeholderAttributedString = NSAttributedString(string: "Replace", attributes: [.foregroundColor: theme.placeholder.ns, .font: NSFont.systemFont(ofSize: 14)])
+    replaceField.placeholderAttributedString = NSAttributedString(string: "Replace", attributes: [.foregroundColor: FindBarView.rnReplaceRow(theme.placeholder.ns), .font: NSFont.systemFont(ofSize: 14)])
     if field.currentEditor() == nil, field.stringValue != next.query { field.stringValue = next.query }
     let none = next.count == 0 && !next.query.isEmpty
     noneLabel.isHidden = !none

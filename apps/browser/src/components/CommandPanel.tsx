@@ -79,13 +79,31 @@ function toolbarPanelGeometry(anchor: { left: number; top: number; width: number
   return { left, top, width, from };
 }
 
+type UrlAnchor = NonNullable<ReturnType<typeof useUrlAnchors.getState>[string]>;
+
+function dropdownGeometry(anchor: UrlAnchor, windowWidth: number): PanelGeometry {
+  const shown = anchor.left >= 0;
+  const left = shown ? anchor.left : WINDOW_MARGIN;
+  const room = windowWidth > 0 ? windowWidth - left - WINDOW_MARGIN : DROPDOWN_MIN_WIDTH;
+  const width = Math.min(Math.max(DROPDOWN_MIN_WIDTH, anchor.width + DROPDOWN_PAST_FIELD), room);
+  const from = shown && anchor.sidebar ? { left, top: anchor.top, width: anchor.width, height: anchor.sidebar.height } : null;
+  return { left, top: anchor.top, width, from };
+}
+
+const nativeDropdown = (windowId: string) => useBrowser.getState().windows[windowId]?.kind === "small";
+
+function nativePanelGeometry(windowId: string, anchor: UrlAnchor, insecure: boolean, windowWidth: number, text: string) {
+  if (!anchor.sidebar) return toolbarPanelGeometry(anchor, insecure, true, windowWidth, text, true);
+  return nativeDropdown(windowId) ? { ...dropdownGeometry(anchor, windowWidth), radius: DROPDOWN_RADIUS, variant: "sidebar" } : null;
+}
+
 function nativePanelJson(windowId: string, tabId: string, text: string, open: boolean): string | null {
   const anchor = useUrlAnchors.getState()[windowId];
   const tab = useBrowser.getState().tabs[tabId];
   const style = panelStyles.get(windowId);
-  if (!anchor || anchor.sidebar || !tab?.url || !style) return null;
-  const geometry = toolbarPanelGeometry(anchor, !!insecureLevel(pageOf(tabId)), true, windowWidths.get(windowId) ?? 0, text, true);
-  return JSON.stringify({ open, tabId, text, ...geometry, ...style });
+  if (!anchor || !tab?.url || !style) return null;
+  const geometry = nativePanelGeometry(windowId, anchor, !!insecureLevel(pageOf(tabId)), windowWidths.get(windowId) ?? 0, text);
+  return geometry ? JSON.stringify({ open, tabId, text, ...style, ...geometry }) : null;
 }
 
 export function showNativePanelNow(windowId: string, text: string) {
@@ -107,13 +125,14 @@ function NativePanelHost({ windowId, windowWidth }: { windowId: string; windowWi
   const centred = useBrowser((s) => commandBarCentred(s, windowId));
   const peeking = useBrowser((s) => !!peekTabId(s, windowId));
   const developer = useTabDeveloperMode(tabId);
+  const dropdown = useBrowser((s) => s.windows[windowId]?.kind === "small");
   panelStyles.set(windowId, { fill: theme.panel, border: theme.panelBorder, shadowOpacity: theme.panelShadowOpacity, radius: PANEL_RADIUS });
-  if (!tabId || !url || !anchor || anchor.sidebar) return null;
+  if (!tabId || !url || !anchor || (anchor.sidebar && !dropdown)) return null;
   const open = panel.open && !panel.newTab && !centred;
   const text = open ? panel.initialText : url;
   const ready = !panel.open && !centred && !peeking && !developer;
-  const geometry = toolbarPanelGeometry(anchor, insecure, true, windowWidth, text, true);
-  const json = JSON.stringify({ open, ready, tabId, text, ...geometry, ...panelStyles.get(windowId) });
+  const geometry = nativePanelGeometry(windowId, anchor, insecure, windowWidth, text);
+  const json = JSON.stringify({ open, ready, tabId, text, ...panelStyles.get(windowId), ...geometry });
   const onCancel = () => useBrowser.getState().closePanel(windowId);
   const onDone = (reason?: BarDismissal) => closePanelToHeroBar(windowId, tabId, reason);
   return <NativeOmniboxBar variant="panel" tabId={tabId} initialText={text} panel={json} idle={!open} onCancel={onCancel} onDone={onDone} />;
@@ -137,7 +156,6 @@ function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
   if (!panel.open || !activeId) return null;
   if (panel.newTab) return card ? <CentredBar windowId={windowId} tabId={activeId} target={panel.newTab} card={card} /> : null;
 
-  const room = (left: number, fallback: number) => (windowWidth > 0 ? windowWidth - left - WINDOW_MARGIN : fallback);
   const onCancel = () => useBrowser.getState().closePanel(windowId);
   const onDone = (reason?: BarDismissal) => closePanelToHeroBar(windowId, activeId, reason);
   const surface = (radius: number) => panelSurface(theme, radius);
@@ -154,10 +172,8 @@ function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
   if (!anchor) return null;
 
   if (anchor.sidebar) {
-    const shown = anchor.left >= 0;
-    const left = shown ? anchor.left : WINDOW_MARGIN;
-    const width = Math.min(Math.max(DROPDOWN_MIN_WIDTH, anchor.width + DROPDOWN_PAST_FIELD), room(left, DROPDOWN_MIN_WIDTH));
-    const from = shown ? { left, top: anchor.top, width: anchor.width, height: anchor.sidebar.height } : null;
+    if (nativeOmniboxAvailable() && hasField && nativeDropdown(windowId)) return null;
+    const { left, width, from } = dropdownGeometry(anchor, windowWidth);
     return (
       <Grow from={from} frame={{ left, top: anchor.top, width }} openHeight={anchor.sidebar.height} radius={DROPDOWN_RADIUS} surface={surface(DROPDOWN_RADIUS)}>
         <OutsidePressArea onOutsidePress={onCancel}>

@@ -113,7 +113,7 @@ final class NativeOmniboxView: ExpoView {
   }
 
   private func identity(of panel: NativeOmniboxPanel) -> OmniboxBarIdentity {
-    OmniboxBarIdentity(windowId: windowId, tabId: panel.tabId, profileId: profileId, variant: .panel, opensTab: false, initialText: panel.text)
+    OmniboxBarIdentity(windowId: windowId, tabId: panel.tabId, profileId: profileId, variant: panel.variant, opensTab: false, initialText: panel.text)
   }
 
   private func open(_ panel: NativeOmniboxPanel, in host: OmniboxPanelHostView) {
@@ -218,6 +218,7 @@ struct NativeOmniboxPanel {
   var text: String
   var placement: OmniboxPanelPlacement
   var style: OmniboxPanelStyle
+  var variant: BarVariant
 
   static func decode(_ json: String) -> NativeOmniboxPanel? {
     guard let data = json.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
@@ -228,6 +229,7 @@ struct NativeOmniboxPanel {
       shadowOpacity: (o["shadowOpacity"] as? NSNumber)?.doubleValue ?? 0.2, radius: num(o["radius"] ?? 17))
     return NativeOmniboxPanel(
       open: o["open"] as? Bool ?? false, ready: o["ready"] as? Bool ?? false, tabId: o["tabId"] as? String ?? "", text: o["text"] as? String ?? "",
-      placement: OmniboxPanelPlacement(left: num(o["left"]), top: num(o["top"]), width: num(o["width"]), from: from), style: style)
+      placement: OmniboxPanelPlacement(left: num(o["left"]), top: num(o["top"]), width: num(o["width"]), from: from), style: style,
+      variant: (o["variant"] as? String).flatMap(BarVariant.init(rawValue:)) ?? .panel)
   }
 }

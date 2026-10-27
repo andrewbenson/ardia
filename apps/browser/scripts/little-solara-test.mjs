@@ -12,7 +12,8 @@ if (!appArg) {
 Little Solara on a local page: the window opens with its bar and card where SmallChrome puts them (field at 84, 5,
 28 high, the buttons at the right, the card inset 6 below a 38 pt bar), a click on the field opens the command panel,
 the panel grows from the field box to RN's dropdown frame (left and top of the field, max(350, field + 137) wide, 12
-from the window's right edge at most) with its field taking a click inside the 38 pt bar and a click on the card closing it,
+from the window's right edge at most; port-omnibox's native panel draws it, RN's Grow under
+ARDIA_NATIVE_OMNIBOX=0) with its field taking a click inside the 38 pt bar and a click on the card closing it,
 a click on the bar's blank part leaves the window alone, and Open in Solara (its button natively, ⌘O's command under RN) moves the tab to the main window and closes the small one;
 then a relaunch handed a link, as another app hands it (ARDIA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
 passes outside links on to another copy), opens it in Little Solara and not the main window, through the early link window
@@ -21,6 +22,7 @@ its backdrop, bar and RN slots in that order and the bar fed from JS.`);
   process.exit(2);
 }
 const native = args.includes("--native");
+const omnibox = process.env.ARDIA_NATIVE_OMNIBOX !== "0";
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-little-solara-"));
 const data = join(scratch, "data");
@@ -139,7 +141,14 @@ try {
     const field = await fieldRect();
     const id = JSON.stringify(little.id);
     await run(`st().openPanel(${id}, st().tabs[${JSON.stringify(little.tab)}].url); return true;`);
-    const grow = await until("the panel's Grow", `const [g] = acPerf.findFibers("Grow", 5); return g ? { from: g.memoizedProps.from, frame: g.memoizedProps.frame, radius: g.memoizedProps.radius } : null;`, 3000);
+    const grow = await until("the panel", `const [g] = acPerf.findFibers("Grow", 5);
+      if (g) return { renderer: "rn", from: g.memoizedProps.from, frame: g.memoizedProps.frame, radius: g.memoizedProps.radius };
+      const host = acPerf.findFibers("NativePanelHost", 5).find((f) => f.memoizedProps.windowId === ${id});
+      const bar = host && acPerf.findFibers("NativeOmniboxBar", 20).find((f) => { for (let p = f; p; p = p.return) if (p === host) return true; return false; });
+      const panel = bar && bar.memoizedProps.panel && JSON.parse(bar.memoizedProps.panel);
+      return panel && panel.open ? { renderer: "native", from: panel.from, frame: { left: panel.left, top: panel.top, width: panel.width }, radius: panel.radius, variant: panel.variant } : null;`, 3000);
+    if (grow.renderer !== (omnibox ? "native" : "rn")) throw new Error(`the panel is drawn by ${grow.renderer}`);
+    if (omnibox && grow.variant !== "sidebar") throw new Error(`the native panel's variant is ${grow.variant}, RN's dropdown uses the sidebar bar`);
     const width = Math.min(Math.max(350, field[2] + 137), little.width - field[0] - 12);
     const from = grow.from && [grow.from.left, grow.from.top, grow.from.width, grow.from.height];
     if (!near(from, field)) throw new Error(`grows from ${from}, the field is at ${field}`);
@@ -148,7 +157,7 @@ try {
     if (!(await run(`return !!st().windowUi[${id}]?.panel.open;`))) throw new Error("a click on the panel's field inside the bar closed the panel");
     await run(`return click(${id}, ${little.number}, [${Math.round(little.width / 2)}, ${Math.round(little.height - 40)}]).then(() => settle(300)).then(() => true);`);
     if (await run(`return !!st().windowUi[${id}]?.panel.open;`)) throw new Error("a click on the card left the panel open");
-    return { from, frame: grow.frame, radius: grow.radius };
+    return { renderer: grow.renderer, from, frame: grow.frame, radius: grow.radius };
   });
 
   await rep.check("blank-bar-click", async () => {

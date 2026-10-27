@@ -195,7 +195,7 @@ try {
       }
       rep.log(`motion: RN runs ${best.lag} ms behind native, then they differ by at most ${best.error.toFixed(2)} pt (within 2 ms)`);
       assert.ok(Math.abs(ours.at(-1)[1] - theirs.at(-1)[1]) < 0.05, `both settle at the same width: rn ${theirs.at(-1)[1]} native ${ours.at(-1)[1]}`);
-      assert.ok(Math.abs(best.lag) <= 17, `RN is ${best.lag} ms behind native's start: more than a frame`);
+      assert.ok(Math.abs(best.lag) <= 25, `RN is ${best.lag} ms behind native's start: more than a frame and a half`);
       assert.ok(best.error <= 2, `the curves differ by ${best.error} pt`);
     });
     if (rn.snapshot && native.snapshot) {

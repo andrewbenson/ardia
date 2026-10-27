@@ -122,3 +122,24 @@ import Testing
   }
 }
 
+@MainActor @Suite struct PrimitivesPopoverTests {
+  final class SizingBody: NSView {
+    weak var popover: PopoverView?
+    override func setFrameSize(_ newSize: NSSize) {
+      super.setFrameSize(newSize)
+      popover?.set(bodyHeight: 120)
+    }
+  }
+
+  @Test func heightReportedFromInsideLayoutStillApplies() async throws {
+    let body = SizingBody()
+    let popover = PopoverView(body: body)
+    body.popover = popover
+    popover.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
+    popover.set(placement: PopoverPlacement(width: 300, top: 8, right: 8), dark: false)
+    popover.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(50))
+    popover.layoutSubtreeIfNeeded()
+    #expect(popover.cardFrame.height == 121)
+  }
+}

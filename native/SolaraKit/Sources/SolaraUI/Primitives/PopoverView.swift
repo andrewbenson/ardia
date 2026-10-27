@@ -48,6 +48,7 @@ public final class PopoverView: NSView {
   private var closing = false
   private var closeTimer: Timer?
   private var pressedOutside = false
+  private var laying = false
 
   public override var isFlipped: Bool { true }
   public override var acceptsFirstResponder: Bool { body.acceptsFirstResponder }
@@ -105,7 +106,8 @@ public final class PopoverView: NSView {
   public func set(bodyHeight next: CGFloat) {
     guard abs(next - bodyHeight) > 0.25 else { return }
     bodyHeight = next
-    needsLayout = true
+    guard laying else { return needsLayout = true }
+    DispatchQueue.main.async { [weak self] in self?.needsLayout = true }
   }
 
   public var modal: Bool { placement.modal ?? true }
@@ -121,6 +123,8 @@ public final class PopoverView: NSView {
 
   public override func layout() {
     super.layout()
+    laying = true
+    defer { laying = false }
     let width = CGFloat(placement.width)
     let inner = width - 2 * PopoverMetrics.border
     var height = bodyHeight + 2 * PopoverMetrics.border

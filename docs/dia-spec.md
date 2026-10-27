@@ -138,6 +138,10 @@ page (light, active window); behaviour from the binary (`DiaStatusText`, `Status
 - Shadow: black, opacity 0.12, radius 5, offset (0, 0), with a shadow path. Reads #F0 at the edge, back to #FD about
   8 pt out.
 - Container: an `NSStackView`, spacing 6, with an icon slot before the text (empty for links).
+- Dark: nothing in `StatusText` or `DiaStatusText` sets an appearance, a material per appearance or a colour other
+  than `secondaryLabelColor`, so the bubble follows the window's appearance with the same `.popover` material. Its
+  `overlayColor` layer (zPosition 3) is never given a colour. Over a white page in dark mode that material reads mid
+  grey (about #6B with #BC text, 2.8:1) in our copy; no Dia dark capture exists yet to confirm Dia reads the same.
 - States: hidden, pendingPresentation, visible, pendingDismissal, hiding.
   - A link waits 0.5 s before it shows. Another link while waiting restarts the wait; leaving cancels it.
   - Leaving a link waits 0.5 s, then fades out over 0.1 s (`NSAnimationContext`, alpha only, no motion).

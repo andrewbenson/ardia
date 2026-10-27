@@ -11,6 +11,8 @@ public struct ToolbarPaletteState: Decodable, Equatable, Sendable {
   public var pressed: String
   public var pill: String
   public var divider: String
+  public var urlHost: String?
+  public var urlPath: String?
 }
 
 public struct ToolbarGeometryState: Decodable, Equatable, Sendable {

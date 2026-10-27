@@ -8,6 +8,7 @@ final class ToolbarUrlFieldView: NSView {
   static let textLeft: CGFloat = 8
   static let labelInset: CGFloat = 2
   static let labelRaise: CGFloat = 1
+  static let diaTextShift = CGPoint(x: 1.5, y: 0.5)
 
   var onClick: (ToolbarClick) -> Void = { _ in }
   private(set) var state: ToolbarUrlState?
@@ -162,9 +163,9 @@ final class ToolbarUrlFieldView: NSView {
     label.isHidden = false
     let trail = shownHover ? state.hoverTrail : state.restTrail
     let text = NSMutableAttributedString(
-      string: state.host, attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium), .foregroundColor: toolbarColor(palette.text) ?? .labelColor])
+      string: state.host, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: toolbarColor(palette.urlHost ?? palette.text) ?? .labelColor])
     if !trail.isEmpty {
-      text.append(NSAttributedString(string: trail, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: toolbarColor(palette.secondary) ?? .secondaryLabelColor]))
+      text.append(NSAttributedString(string: trail, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: toolbarColor(palette.urlPath ?? palette.secondary) ?? .secondaryLabelColor]))
     }
     label.attributedStringValue = text
   }
@@ -242,8 +243,12 @@ final class ToolbarUrlFieldView: NSView {
     if let editor {
       editor.frame = CGRect(x: x - 2 - 2, y: 4 + (h - 30) / 2 + 2, width: max(0, textRight - x + 4), height: 18)
     }
+    let developer = state?.developer != nil
+    let shift = developer ? .zero : ToolbarUrlFieldView.diaTextShift
     label.frame = CGRect(
-      x: x - ToolbarUrlFieldView.labelInset, y: state?.developer != nil ? (((h - size.height) / 2 - 0.5) * 2).rounded() / 2 : ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded(), width: max(0, textRight - x + ToolbarUrlFieldView.labelInset),
+      x: x - ToolbarUrlFieldView.labelInset + shift.x,
+      y: developer ? (((h - size.height) / 2 - 0.5) * 2).rounded() / 2 : ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded() + shift.y,
+      width: max(0, textRight - x - shift.x + ToolbarUrlFieldView.labelInset),
       height: size.height)
   }
 }

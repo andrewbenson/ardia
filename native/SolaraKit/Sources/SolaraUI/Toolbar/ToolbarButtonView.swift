@@ -55,6 +55,15 @@ final class ToolbarButtonView: NSView {
     apply()
   }
 
+  func recheckHover() {
+    guard hovered, let window else { return }
+    let inside = bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+    if !inside {
+      hovered = false
+      apply()
+    }
+  }
+
   override func mouseExited(with event: NSEvent) {
     hovered = false
     apply()

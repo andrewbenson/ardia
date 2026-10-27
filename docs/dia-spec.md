@@ -161,7 +161,21 @@ page (light, active window); behaviour from the binary (`DiaStatusText`, `Status
   **30.25** pt apart (nine of them), no extensions (puzzle-piece) button; the rest are in the menu bar's Extensions menu.
   A disabled action (React DevTools on x.com) is drawn dimmed, its translucent backdrop square (12, 11, 20) over the
   black toolbar. The binary has an "Overflow extensions button" in `PinnedExtensionsView`, for pinned ones that don't fit.
-- Breadcrumb at x 153: `host` (primary, medium) + ` / ` + the full page title (secondary, 50%).
+- Breadcrumb at x 153: `host` + ` / ` + the full page title (secondary, 50%).
+- **URL text, measured (2026-10-26).** Sources: the owner's 2x crop with Dia over ours on white pages
+  (`Clip 2026-10-26 at 18.08.55@2x.png`, Dia github.com, ours apple.com) and Dia on hill.com dark
+  (`Clip 2026-10-26 at 18.05.49@2x.png`). Raw display pixels at 2x.
+  - Host and path are both SF 13 pt **regular**, not medium. Rendering `github.com` at 13 pt regular reproduces
+    Dia's ink: a 132 px wide box, stems mostly 3 px (2 px runs 60, 3 px runs 126). Medium draws 137 px and
+    mostly 3–4 px stems, which is what ours showed (126 px for `apple.com`, the same as medium there).
+  - Same glyph size: the host's ink spans 25 px tall (ascender to descender) in both, x-height rows 14 px.
+  - Colours. Light: host darkest ink (58, 58, 58), about black at 77–80%. Path (187, 187, 187), black at ~27–30%.
+    Ours had (26, 26, 26) and (138, 138, 138). Dark (bar (19, 20, 20)): host (157–161), white at ~55–59%. Path
+    (73, 76, 75), white at ~20–23%. The host matches the toolbar's icons in both.
+  - Position: the host's ink starts 68 px (34 pt) after the reload glyph's ink, and its x-height top sits 9 px
+    (4.5 pt) below the reload glyph's top. Ours was 65 px and 8 px.
+  - The sidebar toggle has no background at rest.
+  - Ours shows one in the owner's crop, most likely a hover left behind when the click moved the button out from under the pointer.
   The title is not split on `·`, `|` or `—`. **1.50.1: web pages show the host alone**, see "URL bar (1.50.1)".
 - URL hover: the breadcrumb morphs into a pill (white ~8%, radius 8) showing the full URL, with
   the host bright and the path dim. Actions appear on the right: `bookmark`, `rectangle.split.2x1`,

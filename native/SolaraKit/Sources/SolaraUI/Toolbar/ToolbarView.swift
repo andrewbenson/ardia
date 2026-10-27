@@ -179,7 +179,7 @@ public final class ToolbarView: NSView {
     stripes.frame = CGRect(x: 0, y: 0, width: 2560, height: 50)
     layer?.masksToBounds = true
     let scale = window?.backingScaleFactor ?? 2
-    hairline.frame = CGRect(x: 0, y: bounds.height - 1 / scale, width: bounds.width, height: 1 / scale)
+    hairline.frame = CGRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)
     progress.position = CGPoint(x: 0, y: bounds.height - 1.5)
     if let shownProgress { progress.bounds.size.width = bounds.width * max(shownProgress, 0.08) }
     CATransaction.commit()
@@ -201,6 +201,7 @@ public final class ToolbarView: NSView {
       x += 2
     }
     url.frame = CGRect(x: CGFloat(g.urlLeft), y: ToolbarView.buttonTop, width: max(0, bounds.width - CGFloat(g.urlLeft) - CGFloat(g.urlRight)), height: ToolbarUrlFieldView.height)
+    for b in left + right + extensions { b.recheckHover() }
     var anchors: [String: CGRect] = [:]
     if let extensionsRight = state.extensionsRight {
       var ex = bounds.width - CGFloat(extensionsRight)

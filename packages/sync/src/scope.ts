@@ -82,6 +82,8 @@ export type ApplyRecords = {
   joined: boolean;
 };
 
+export type ApplyResult = boolean | void | Set<string>;
+
 export interface Adapter {
   prefix: string;
   extract(
@@ -92,7 +94,7 @@ export interface Adapter {
     remote: (key: string) => unknown,
     stamp: (key: string) => HLC | undefined,
   ): Extraction | null | Promise<Extraction | null>;
-  apply(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): boolean | void | Promise<boolean | void>;
+  apply(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): ApplyResult | Promise<ApplyResult>;
   editedAt?(value: unknown): number | undefined;
   adoptRemoteOnJoin?: boolean;
   publishAfterPull?: boolean;
@@ -106,6 +108,7 @@ export type ScopeOptions = {
   pruneGrace?: number;
   damagedGiveUp?: number;
   persist?: (batches: LogFile[]) => Promise<void>;
+  writtenKeysOnly?: boolean;
 };
 
 const DEFAULTS: Required<Omit<ScopeOptions, "persist">> = {
@@ -115,6 +118,7 @@ const DEFAULTS: Required<Omit<ScopeOptions, "persist">> = {
   compactInterval: 10 * 60_000,
   pruneGrace: 60 * 60_000,
   damagedGiveUp: 86_400_000,
+  writtenKeysOnly: false,
 };
 
 export const covered = (vv: Record<string, number>, [device, seq]: Origin) => (vv[device] ?? 0) >= seq;
@@ -332,25 +336,28 @@ export async function pull(state: ScopeState, transport: Transport, scope: strin
   return changed;
 }
 
-async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number): Promise<boolean> {
+async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, writtenKeysOnly: boolean): Promise<Set<string>> {
   const mine = new Set([...keys].filter((k) => k.startsWith(adapter.prefix)));
-  if (!mine.size) return true;
+  if (!mine.size) return mine;
   const view = visible(state, adapter.prefix);
   const applyAs = (state.applyAs ??= {});
   applyAs[adapter.prefix] ??= state.joined ? "joined" : "joining";
-  let ok: boolean | void = false;
+  let ok: ApplyResult = false;
   try {
     ok = await adapter.apply(view, mine, (key) => parseBase(state.base[key]), { known: (key) => key in state.records, now, horizon, joined: applyAs[adapter.prefix] === "joined" });
   } catch (error) {
     console.warn(`[sync] applying ${adapter.prefix} failed`, error);
   }
-  if (ok === false) return false;
+  if (ok === false) return mine;
   applyAs[adapter.prefix] = "joined";
+  const written = writtenKeysOnly && ok instanceof Set ? ok : mine;
+  const left = new Set<string>();
   for (const key of mine) {
-    if (view.has(key)) state.base[key] = canonical(view.get(key));
+    if (!written.has(key)) left.add(key);
+    else if (view.has(key)) state.base[key] = canonical(view.get(key));
     else delete state.base[key];
   }
-  return true;
+  return left;
 }
 
 export async function compact(state: ScopeState, transport: Transport, scope: string, device: string, now: number, options: ScopeOptions = {}, force = false) {
@@ -410,7 +417,7 @@ export async function syncScope(args: {
     const late = await publishAdapter(state, adapter, clock, device, now());
     published += late.size;
     for (const key of late) keys.delete(key);
-    if (!(await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL)))) unapplied.push(...[...keys].filter((k) => k.startsWith(adapter.prefix)));
+    unapplied.push(...(await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), !!options?.writtenKeysOnly)));
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
   if (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device)) {

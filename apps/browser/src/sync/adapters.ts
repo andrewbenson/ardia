@@ -528,14 +528,17 @@ export function passwordsAdapter(
           ok = (await deletePassword(profile(), origin, username)) && ok;
         }
       }
+      const confirmed = (now: Awaited<ReturnType<typeof read>>, k: string) => !!now && (visible.get(k) as PasswordValue | undefined)?.p === now.get(k)?.p;
+      let latest: Awaited<ReturnType<typeof read>> = null;
       let settled = false;
       for (let i = 0; i < 20 && !settled; i++) {
-        const now = await read();
-        settled = !!now && [...changed].every((k) => (visible.get(k) as PasswordValue | undefined)?.p === now.get(k)?.p);
+        latest = await read();
+        settled = [...changed].every((k) => confirmed(latest, k));
         if (!settled) await new Promise((r) => setTimeout(r, 250));
       }
       if (!settled) quietUntil = Date.now() + 30_000;
-      return ok;
+      if (!ok) return false;
+      return new Set([...changed].filter((k) => confirmed(latest, k)));
     },
   };
 }

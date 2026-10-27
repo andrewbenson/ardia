@@ -48,6 +48,7 @@ import {
 } from "./adapters";
 import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
+import { syncRedesign } from "./redesignSwitch";
 
 type DataType = "bookmarks" | "history" | "tabs" | "pinned" | "passwords" | "extensions" | "settings";
 
@@ -453,7 +454,7 @@ async function runCycle({ retiring = false } = {}) {
       adapters: appGuard.adapters,
       clock,
       device,
-      options: { persist: persistJournal(APP_SCOPE) },
+      options: { persist: persistJournal(APP_SCOPE), writtenKeysOnly: syncRedesign.on },
     });
     appGuard.settle();
     if (app.joined) linkProfiles(app);
@@ -474,7 +475,7 @@ async function runCycle({ retiring = false } = {}) {
         adapters: scopeGuard.adapters,
         clock,
         device,
-        options: { expired: historyExpired, persist: persistJournal(scope) },
+        options: { expired: historyExpired, persist: persistJournal(scope), writtenKeysOnly: syncRedesign.on },
       });
       scopeGuard.settle();
       pending += state.pending;
@@ -581,7 +582,8 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         const ok = await adapter.apply(visible, changed, before ? (key) => base(key) ?? (standIn(key) ? parseKept(before.get(key)) : undefined) : base, records);
         if (!before || ok === false) return ok;
         const noted = rebuilding(adapter.prefix) ? notedFor(state, adapter.prefix, before) : null;
-        for (const key of changed) {
+        const written = syncRedesign.on && ok instanceof Set ? [...changed].filter((key) => ok.has(key)) : changed;
+        for (const key of written) {
           if (visible.has(key)) before.set(key, choice(visible.get(key)));
           else before.delete(key);
           if (!noted) continue;

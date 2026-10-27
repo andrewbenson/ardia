@@ -684,11 +684,14 @@ export function pinnedHomesAdapter(profileId: string): Adapter {
         if (home) incoming.set(keyOf(k), home);
       }
       if (!incoming.size) return true;
+      const keptHere = new Set<string>();
       const wanted = (key: string, current: string | null | undefined) => {
         const home = incoming.get(key);
         if (!home || home === current) return undefined;
         const synced = syncedHomeIn(base, key);
-        return !current || synced === undefined || synced === current ? home : undefined;
+        if (!current || synced === undefined || synced === current) return home;
+        keptHere.add(`${PIN_HOME}${key}`);
+        return undefined;
       };
       const s = store();
       let tabs: Record<string, Tab> | null = null;
@@ -704,14 +707,14 @@ export function pinnedHomesAdapter(profileId: string): Adapter {
         return home ? parkedAt(p, home) : p;
       });
       const parkEdited = !!park && parked!.some((p, i) => p !== park.tabs[i]);
-      if (!tabs && !parkEdited) return true;
-      fromSync(() =>
-        writeState(useBrowser, {
-          ...(tabs ? { tabs } : {}),
-          ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, tabs: parked! } } } : {}),
-        }),
-      );
-      return true;
+      if (tabs || parkEdited)
+        fromSync(() =>
+          writeState(useBrowser, {
+            ...(tabs ? { tabs } : {}),
+            ...(parkEdited ? { parkedPins: { ...s.parkedPins, [profileId]: { ...park!, tabs: parked! } } } : {}),
+          }),
+        );
+      return new Set([...changed].filter((k) => !keptHere.has(k)));
     },
   };
 }

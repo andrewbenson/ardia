@@ -1,0 +1,54 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { fake, folder, shell, S, settle, launch, reset, files, otherMac, useBrowser, onAndSynced } from "./harness.mjs";
+
+test("R-baseline: a rebuild whose baseline is taken before bookmarks are ready republishes every stale bookmark over newer remote edits", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  other.store.set(key, { ...value, t: "Renamed again on B" });
+  await other.sync();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  useBrowser.setState({ bookmarksReady: {} });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  useBrowser.setState({ bookmarksReady: { default: true } });
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.equal(other.store.get(key)?.t, "Renamed again on B", `B's newer rename survives (B now has ${other.store.get(key)?.t})`);
+});
+
+test("R-baseline-control: same with bookmarks ready at load", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  other.store.set(key, { ...value, t: "Renamed again on B" });
+  await other.sync();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(other.store.get(key)?.t, "Renamed again on B");
+});

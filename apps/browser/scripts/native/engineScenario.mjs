@@ -35,7 +35,8 @@ excusing only edits that never reached the folder before their Mac lost its stat
 Mac replaced or reverted before sending, or saved passwords changed while a rebuilding Mac couldn't
 read them yet. No seq may carry two different batches. ORACLE_KEY=<url,
 setting or prof:> prints one key's edits, writes and losses; ORACLE_ENGINE=<file> runs another
-engine.ts; ORACLE_TRACE=1 keeps every step's full trace.`;
+engine.ts; ORACLE_TRACE=1 keeps every step's full trace; ORACLE_STRICT=1 stops counting a position
+repair as a choice.`;
 
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
@@ -54,6 +55,7 @@ const stepsPerRun = Number(option("--steps", "45"));
 const firstSeed = Number(option("--seed", "1"));
 const role = option("--role", "parent");
 const oracleRuns = Number(option("--oracle", "0"));
+const repairsAreChoices = !process.env.ORACLE_STRICT;
 
 const START = 1_793_000_000_000;
 const HIDDEN_AT_MOST_MS = 9 * 60_000;
@@ -1013,11 +1015,11 @@ function oracleVerdict(local, other, reused, history) {
       const repair = earlier.some((before) => before.pos !== op.v.pos && same({ ...before, pos: op.v.pos }, op.v));
       shown.set(op.k, [...earlier, op.v]);
       if (pin) {
-        if (repair) implied.push({ at: w.at, mac: w.mac, kind: "pinned", key: op.v.u, value: true, carrier: op });
+        if (repair && repairsAreChoices) implied.push({ at: w.at, mac: w.mac, kind: "pinned", key: op.v.u, value: true, carrier: op });
         continue;
       }
       const choice = history.edits.some((e) => e.mac === w.mac && e.key === op.v.u && e.kind.startsWith("bm-") && carrier(e) === op);
-      if (repair || choice) implied.push(...wholeRecord(w, op));
+      if ((repair && repairsAreChoices) || choice) implied.push(...wholeRecord(w, op));
     }
   const groups = new Map();
   for (const edit of [...history.edits, ...implied].sort((a, z) => a.at - z.at)) {

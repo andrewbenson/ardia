@@ -673,8 +673,9 @@ Residuals the audit leaves, from this Mac's own clock or Chrome's lack of edit t
 
 ## Test plan
 
-Every repro above becomes a failing-first test in engineRecovery, and so does each finding. The
-scratch suite is /private/tmp/redesign-tests/ (`run.sh`).
+Every repro above is a failing-first test, and so is each finding. The suite is tracked in
+apps/browser/src/sync/redesign/ and runs with `pnpm test`. Each test red on HEAD is marked
+`{ todo: "step N" }` (§ Implementation plan); the oracle seeds run from `oracle-seeds.test.mjs`.
 
 Harness notes:
 - **Bookmarks with the engine** (rr5-bridge-engine.test.mjs) runs the real `lib/bookmarks.ts` over
@@ -806,7 +807,7 @@ C1, D1, P1 and P1b. So are seeds 32144, 40636 and 35309. Each is listed in the t
 with what removes it.
 
 **Tie seeds.** The cited seeds come from a strict oracle, the tracked harness with the two
-"repair counts as a choice" rules removed (`/private/tmp/redesign-tests/engineScenario-strict.mjs`).
+"repair counts as a choice" rules turned off (`ORACLE_STRICT=1` with scripts/native/engineScenario.mjs).
 In its first 400 seeds, 43, 212, 390 and 398 fail on tie repairs. 265 no longer does, since the
 settle phase and hidden-file steps changed what it generates. The tie-by-key fix's commit puts the
 rules back to failures, so these pass on their merits.
@@ -820,8 +821,9 @@ parts come first, the password ledger and journal durability, so their review an
 nightlies start earliest. Nothing of the old guard is removed until what replaces it is in and green.
 
 **Step 0. The redesign suite, tracked.** The scratch suite moves into `apps/browser/src/sync/`:
-- `redesign.test.mjs` (the D, RR, FR, I, AUDIT, REBUILD, LAUNCH and MARK tests), the review
-  repros under `repros/`, the spec tests, and the strict oracle beside `engineScenario.mjs`.
+- `apps/browser/src/sync/redesign/`: the D, RR, FR, I, AUDIT, REBUILD, LAUNCH, MARK and SPEC test
+  files, the review repros under `repros/`, and `oracle-seeds.test.mjs`. The strict oracle is
+  `ORACLE_STRICT=1` on `engineScenario.mjs`, not a copy.
 - Every test that's red on HEAD is marked `{ todo: "step N" }`, naming the step that turns it
   green. `todo` tests run and report but don't fail the suite, so a step can't silently leave its
   own tests red: the step's commit removes its `todo` marks, and a reviewer checks that the

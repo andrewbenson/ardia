@@ -186,7 +186,7 @@ public final class PromptBodyView: NSView {
       close.onPress = { [weak self] in self?.onEvent(.close) }
       addSubview(close)
     }
-    if y != reported {
+    if bounds.width > 0, y != reported {
       reported = y
       onHeight(y)
     }

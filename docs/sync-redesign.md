@@ -108,7 +108,8 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
   - **A lost journal with no gen doc** has no `T` and no `vv(T)`, so there's no union fallback
     (re-check 4). Nothing is published. Every key takes the folder's value, and a local item the
     folder lacks is kept, unpublished, only if its key was never seen. An ever-seen key the folder
-    lacks is removed.
+    lacks is removed. A kept never-seen item stays local and unpublished until the user's next
+    command on it journals it.
 - **Ledger check on each read.** The meta row and the logins are read from the same copy of Login
   Data, one read of the file, so a restore between the two can't mix them.
   - **Row equal to `L@t`:** consistent; detection by ledger, below.
@@ -121,9 +122,12 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
     the user after every write sync made, so it's an edit, stamped `Clock.at(modified)` and merged
     by the conflict rule below. Every other login is judged against the folder, and nothing of it is
     claimed: equal is seeded; different takes the folder's value; missing locally is applied from
-    the folder; a login the folder lacks is kept, unpublished, only if the ledger and the folder
-    have never held its key. Nothing is published as deleted. The ledger is then rewritten at the
-    row's `L + 1`.
+    the folder. A login the folder has neither a record nor a tombstone for is an addition and is
+    published: sync never writes a login without a record, so it can't be a value sync applied.
+    Nothing is published as deleted. The ledger is then rewritten at the row's `L + 1`.
+  - **This departs from "claim nothing"** on purpose. A strictly claim-nothing rebuild would apply
+    the folder's value over a password the user changed after sync's last write and before the
+    rebuild read it. AUDIT-pw-docs-user-edit covers it.
   - Why both times: after a docs rollback the row's `t` is the newer, so a value sync applied after
     the backup (modified at or before that write) isn't claimed. After a Login Data restore the
     ledger's `t` is the newer, so an old login carried back by the restore isn't either.
@@ -188,41 +192,53 @@ the tree, and so does the echo of sync's pushes.
   - The bridge keeps a **shadow generation** `G`, saved with the shadow in `bookmarks-cache.json`,
     and Chrome keeps its own copy, `solara_shadow` on the bar node (above), read back with every
     tree fetch as `G_c`.
-  - **Every shadow write advances `G` and mirrors it into Chrome** (re-check 2 and 3): a push
-    (lib/bookmarks.ts:256, 266) and a read that changes the shadow (:252). For a push the mark is
-    the push's first op. For a read it's a meta-only `applyBookmarkOps` call after the journal
-    entries and the cache are written. A read whose fetched tree equals the shadow writes nothing.
-  - **Every shadow write prunes** the intents tagged `≤ G` from `bookmarks-pushed.json`,
-    synchronously, right after the cache. A clear is never in memory only.
-  - **A push, in order:**
-    1. write an intent per node, `node → { value, tag: G + 1 }`, synchronously;
-    2. call `applyBookmarkOps`, whose first op sets `solara_shadow = G + 1` inside the same grouped
-       change, so Chrome records the generation even when a later op fails part way;
-    3. write the shadow with `G + 1`, synchronously, success or failure (a failed push writes the
+  - **Every shadow write is one generation step, and advances `G`** (re-check 2 and 3): a push
+    (lib/bookmarks.ts:256, 266) and a read that changes the shadow (:252). A read whose fetched tree
+    equals the shadow writes nothing. A step, in order:
+    1. for a read, write the journal entries for its diff;
+    2. write an intent per node the step changes, `node → { value, tag: G + 1 }`, synchronously:
+       the pushed value for a push, the fetched value for a read;
+    3. call `applyBookmarkOps`: for a push its first op sets `solara_shadow = G + 1` inside the same
+       grouped change, so Chrome records the generation even when a later op fails part way; for a
+       read it's a meta-only call that sets just the mark;
+    4. write the shadow with `G + 1`, synchronously, success or failure (a failed push writes the
        tree fetched after it);
-    4. prune the intents tagged `≤ G + 1`.
-    A failed push's intent therefore can't stay live: step 3 runs anyway, and step 4 clears it.
+    5. prune the intents tagged `≤ G + 1`, synchronously. A clear is never in memory only.
+  - A failed push's intent therefore can't stay live: step 4 runs anyway, and step 5 clears it
+    (I3-failed-push).
   - **During a session**, a fetched node equal to a live intent's value isn't journaled.
+  - **Failed pushes back off.** Today a push Chrome refuses sets `needRead`, whose replay pushes the
+    same ops again, with no delay (lib/bookmarks.ts:256-257, 267, 275-284). I3-failed-push counts
+    381 refused calls in about a second while one value stays refused. The new bridge retries a
+    refused push with a growing delay, capped at a minute.
 - **At launch, Chrome's `G_c` is compared with the cache's `G`.**
   - **Equal:** the cache is current. Intents still on disk are stale (their push never reached
     Chrome's file) and are dropped. The first read's diff is journaled like any other, so an
     extension edit made while the app was down isn't lost (RR5).
-  - **`G_c = G + 1`, with intents tagged `G + 1`:** a crash after Chrome took a push and before the
-    shadow write (case a). The diff is taken against the saved shadow with those intents applied, so
-    the push's values aren't journaled; anything else that differs is.
+  - **`G_c = G + 1`, with intents tagged `G + 1`:** a crash after Chrome took the step's mark and
+    before its shadow write (case a). A node equal to either its saved-shadow value or its intent
+    isn't journaled; anything else that differs is. Either value is allowed because a push can fail
+    part way after its mark: the nodes whose ops didn't land still hold their shadow value, and they
+    aren't edits. For a read's step, the intents are the values it already journaled, so they
+    aren't journaled again with newer stamps.
   - **Anything else** (re-check 2): `G_c` above `G` without those intents means the cache rolled
     back, alone or with all of shell.docs, while Chrome's Bookmarks didn't. `G_c` below `G`, or
     missing where the cache has one, means Chrome's Bookmarks rolled back, or its file write was
     lost in a crash. Either way **bookmarks rebuild and claim nothing**: nothing is journaled from
-    this read, every differing node takes the folder's value, and a node the folder lacks is kept,
-    unpublished, only if it carries no `solara_origin` (never seen). The rebuild's first shadow
-    write sets both generations.
+    this read, and every node with a record or tombstone takes the folder's value. A node the
+    folder has neither for:
+    - with a `solara_origin` was seen and has since been collected, so it's removed;
+    - without one was never seen. Sync only creates nodes with their origin in the same call, so
+      it isn't a value sync applied; it's journaled as an addition and published.
+    The rebuild's first shadow write sets both generations.
   - **Upgrade:** no `G_c` and no cache generation, so the first read is a claim-nothing rebuild.
   - So an extension setting a node back to an old pushed value (case b) is journaled like any other
     edit: its intent's tag is at or below `G` and was pruned.
 - **Why a read marks Chrome too.** Without it, a cache rolled back across reads only (no push)
   would still match `G_c`, and its older shadow would re-journal extension edits already published,
-  with new stamps, over a rename made elsewhere since.
+  with new stamps, over a rename made elsewhere since. A crash between a read's step 2 and its step
+  4 is case (a), not a rebuild, so an extension edit made while the app was down is still read and
+  journaled (RR5).
 
 **Passwords: Chrome's Login Data is the source** (D1–D3, re-review 1–3).
 - **Ledger.** `pwLedger`, kept in Solara's data folder:
@@ -511,12 +527,18 @@ shell.docs stays current.
 | `sync-state.nns` | own seqs or a snapshot above its seq: new chain. Publishing reads the journal, not base, so a lost base claims nothing | as the journal row | not involved | I2's checks | revsync4 R-rollback, R-rollback-outbox; guard-review r1, E; seed 35309; D8, RR7 |
 | History (Chrome) | — | visits are unions with their own times; a republished visit set adds nothing new; a revived delete entry loses to the visit records after it | visits missing after a restore are never published as deleted (deletions are journaled commands only); the folder's visits are applied back | rule: no inferred deletions | AUDIT-history-restore; RR6 |
 
-Residuals the audit leaves, both from this Mac's own clock or Chrome's lack of edit times:
-- **Passwords:** if the wall clock is set back, a user's change after Solara's last write can carry
-  a `date_password_modified` before it. A rebuild then takes the folder's value over it.
+Residuals the audit leaves, from this Mac's own clock or Chrome's lack of edit times:
+- **Passwords, clock set back:** a user's change after Solara's last write can carry a
+  `date_password_modified` before it. A rebuild then takes the folder's value over it.
+- **Passwords, username-only rename during a rebuild:** Chrome keeps the old date under the new key
+  (saved_passwords_presenter.cc:870-874). The new key has no record, so it's published as an
+  addition, and the old key, missing locally, is applied back from the folder. The user sees both
+  logins. Nothing is lost.
 - **Bookmarks:** Chrome keeps no modified time for a title or URL, so a claim-nothing rebuild loses
-  an extension or importer edit made after the last mark and not yet read. Reads run on Chrome's
-  change events, so the window is the time from the edit to the next read.
+  an extension or importer edit to an existing node made after the last mark and not yet read. A
+  new node isn't lost: it has no origin, so it's published. Reads run on Chrome's change events, so
+  the window is the time from the edit to the next read, or the time the app was down when Chrome's
+  Bookmarks or shell.docs were restored.
 
 ## Repros mapped to the design
 
@@ -557,7 +579,7 @@ Residuals the audit leaves, both from this Mac's own clock or Chrome's lack of e
 | review5 A3, A3s | rename or setting made during the 10-minute wait, then a relaunch inside it, reverted to B's older value | no wait; the edit is journaled at command time |
 | review5 A1 | one stuck download holds every launch for 10 minutes | no wait |
 | review5 C1 | reused seq, then a peer's compaction, deletes the user's own new bookmark | new chain (no reuse); the bookmarks apply removes a node only on a tombstone or a covered origin |
-| review5 D1 | a type turned on mid-session skips the first look | no first look: the turned-on type is judged by the journal (per-type settle) |
+| review5 D1 | a rolled-back state with bookmarks off at launch republishes R1, taken from B after the backup, over B's R2 once bookmarks are turned on | no first look, and the turned-on type is judged by the journal. The journal alone isn't enough (re-check 2): the restore rolled back `bookmarks-cache.json` too, so R1 would read as an extension edit. Chrome's `solara_shadow` is above the cache's `G`, so bookmarks rebuild and claim nothing, and R2 applies |
 | oracle 40636 | a healthy relaunch takes a coincident password for a rollback | detection by ledger, not by delivered values |
 | oracle 35309 (review5: a stale batch-journal replay flushed before the pull) | seq reused | new chain: the replayed ops keep their stamps under new seqs, and their old stamps lose to anything newer |
 | final review item 6 (a), (b) | pushed-values crash window; stale intent reverts an extension edit | intent before the push, shadow generations, persisted pruning |
@@ -667,8 +689,16 @@ Re-check (rollback audit, § Rollback audit):
   the restored older title isn't sent. Red on HEAD.
 - **AUDIT-history-restore:** Chrome's History missing three of six recent URLs publishes no
   deletion. Red on HEAD.
-- **I3-failed-push:** a refused push, then an extension setting the node to that refused value
-  after a newer rename from B: the extension's value reaches B. A guard (no intents today).
+- **I3-failed-push:** every push carrying one value is refused (Chrome never takes it), B renames
+  again, then an extension sets the node to the refused value: the extension's value reaches B. A
+  guard (no intents today). It also records today's unbounded retry.
+- **AUDIT-pw-docs-user-edit:** after the two-write rollback, a password the user changes once the
+  app is back up is published. Green on HEAD; a guard for the rebuild's "after both write times"
+  rule.
+- **Partial push then crash** (case a with a failed op): the Chrome fake stops at the first failed
+  op, as Chrome does, so the setup is expressible. On HEAD it would only repeat I6a, since there's
+  no mark to make the launch read it as case (a). It's written with the bridge's launch rule, in
+  that commit.
 - **Not expressible on HEAD,** since the journal and gen doc don't exist yet: a gen doc rolled back
   alone, the journal and gen doc rolled back together under a current store, a lost journal with no
   gen doc (re-check 4), and an adapter counting an already-equal key as written (re-check 5). Each

@@ -121,7 +121,12 @@ public final class NativeStore: Sendable {
         trouble: { message in NSLog("[store] %@", message) })
       shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch)
       NativeSettingsHandle.active = true
-      DispatchQueue.main.async { MainActor.assumeIsolated { NativeSettingsHandle.resolve = { NativeStore.settingsModel } } }
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          NativeSettingsHandle.resolve = { NativeStore.settingsModel }
+          NativeStoreHandle.resolve = { NativeStore.shared?.bridge.store }
+        }
+      }
       NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
         _ = NativeStore.shared?.writer.flush(timeout: 0.5)
       }

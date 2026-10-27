@@ -2,7 +2,7 @@
 
 Status: proposal, revised after the design review (D1–D11, against 9f61ca29), the re-review
 (ten items, against b916ad7c), the final review and review5, and the re-check of ef3db5da (the
-rollback audit). It replaces
+rollback audit), and its re-check (b4d491af). It replaces
 the load guard described in docs/sync.md (§ After a load) as of 095f633c. Four reviews and the
 convergence oracle kept finding new holes in that guard because it decides "changed here" by
 comparing snapshots of the store (notes and baselines). Those snapshots are taken at the wrong time,
@@ -132,6 +132,19 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
   - Why both times: after a docs rollback the row's `t` is the newer, so a value sync applied after
     the backup (modified at or before that write) isn't claimed. After a Login Data restore the
     ledger's `t` is the newer, so an old login carried back by the restore isn't either.
+  - **What `t` is** (second re-check 1).
+    - Sync's write to Login Data is applied, then `date_password_modified` is read back for every
+      login the write covers. `t` is the wall time taken after that read-back, so it's at or after
+      every date the write produced.
+    - An apply whose read-back never confirms every covered login (the 5 s settle runs out) writes
+      no row and no ledger. Its keys stay unapplied and are offered again next cycle.
+    - Dates compare at millisecond precision with a strict "later than": a login is claimed only if
+      its date, floored to the millisecond, is later than `max(row t, ledger t)`. A date in the
+      same millisecond as `t` is not later.
+    - Chrome stores the date as microseconds since 1601, about 1.3 × 10^16, past JavaScript's
+      exact integers (2^53). The native read converts it to Unix milliseconds, floored, and never
+      hands JS the raw value. Today's reader passes only `created` (SyncModule.swift:197); it gains
+      `modified`.
   - **The order matters.** The row goes first, so a crash between the two writes leaves a row
     ahead of the ledger, a mismatch, never an old row that would pass.
 
@@ -239,7 +252,11 @@ the tree, and so does the echo of sync's pushes.
     back, alone or with all of shell.docs, while Chrome's Bookmarks didn't. `G_c` below `G`, or
     missing where the cache has one, means Chrome's Bookmarks rolled back, or its file write was
     lost in a crash. Either way **bookmarks rebuild and claim nothing**: nothing is journaled from
-    this read, and every node with a record or tombstone takes the folder's value. A node the
+    this read, and every node with a record or tombstone takes the folder's value, **except a key
+    with a live journal entry, which is never applied over** (second re-check 3). Chrome saves its
+    Bookmarks file on a 2.5 s timer (bookmark_storage.h:40), so after a crash `G_c` below `G` is
+    the common case, and the user's last edits, already journaled, would otherwise be reverted.
+    Their nodes are pushed back to Chrome from the entries. A node the
     folder has neither for:
     - with a `solara_origin` was seen and has since been collected, so it's removed;
     - without one was never seen. Sync only creates nodes with their origin in the same call, so
@@ -248,6 +265,12 @@ the tree, and so does the echo of sync's pushes.
   - **Upgrade:** no `G_c` and no cache generation, so the first read is a claim-nothing rebuild.
   - So an extension setting a node back to an old pushed value (case b) is journaled like any other
     edit: its intent's tag is at or below `G` and was pruned.
+- **A launch diff keeps an existing stamp** (second re-check 4). A node whose launch value equals a live
+  journal entry's `v`, or equals its record where the record's origin is this Mac's (already
+  published), isn't given a launch-time stamp: the live entry stays as it is, and a published value
+  needs no entry. The case: a crash after a read step wrote its entries but before Chrome saved its
+  mark. The launch re-reads the same edit, and a fresh stamp would put it over a newer edit made
+  elsewhere since.
 - **Why a read marks Chrome too.** Without it, a cache rolled back across reads only (no push)
   would still match `G_c`, and its older shadow would re-journal extension edits already published,
   with new stamps, over a rename made elsewhere since. A crash between a read's step 2 and its step
@@ -270,6 +293,10 @@ the tree, and so does the echo of sync's pushes.
   - Any mismatch rebuilds the passwords type under the rule in the ledger check above: only a login
     Chrome stamped after both write times is claimed, everything else is judged against the folder,
     and nothing is published as deleted.
+- **Equal to its record is never an edit** (second re-check 2). A local login whose digest equals its
+  current record's is seeded into the ledger and never published, whether or not the ledger had
+  the key, in a rebuild or not. That covers an apply whose read-back didn't confirm (no row was
+  written, so the next read sees the applied value as new to the ledger).
 - **Detection by ledger**, on each read:
   - **Addition:** a key not in the ledger.
   - **Deletion:** a ledger key missing locally.
@@ -539,7 +566,23 @@ shell.docs stays current.
 | ever-seen, store-backed types | lives in the store's docs with the items, same write | rolls back with the items: an item sync applied after the backup is absent from both | not involved | same write as the items | D7a, RR10 |
 | store docs (items, `g`) | older values with no entry take the folder's value; an entry publishes its own `v`, not the store's | as the journal row | not involved | entries carry `v` | guard-review3 r1, r1b; D4a/b |
 | `sync-state.nns` | own seqs or a snapshot above its seq: new chain. Publishing reads the journal, not base, so a lost base claims nothing | as the journal row | not involved | I2's checks | revsync4 R-rollback, R-rollback-outbox; guard-review r1, E; seed 35309; D8, RR7 |
+| `sync.json` (sync on, types, per-profile links and opt-outs, device id, clock, joining) | today, a real loss path: a profile created after the backup has no link, so `linkProfiles` mints a new sync id (engine.ts:880) and the profile is published twice; a type or profile turned off after the backup quietly resumes, passwords included | consistent with the store, but a type turned off after the backup still resumes for Chrome-backed data | not involved | each profile's sync id and its "kept out of sync" flag live on the profile in the store's docs; every opt-out is also written beside the data it governs (below); a type or profile syncs only when sync.json **and** its anchor say on | AUDIT-syncjson-profile, -type-off, -profile-off (red on HEAD), SPEC-opt-out |
+| `sync-journal.nns` (batches not yet confirmed in the folder) | older batches come back and are re-sent with their own ops and stamps, under new seqs of the current chain, so they lose to anything newer; batches missing from it still have their journal entries, which are cleared only once their op is in the folder, so they're published again | as alone | not involved | rule: re-sends keep stamps, never seqs; entries outlive batches | guard-review r1, E; seed 35309; D4a/b |
+| extension intents (`sync-extensions.json` today) | folded into `sync-edits.json`: each intent is a journal entry with its stamp, so it rolls back with the journal and is caught by the journal row. Chrome's own queue is in memory and cleared on read (ac_extensions_sync.cc:295), so the file is the only record | as the journal | an extension restored by a Chrome profile restore differs from its record with no entry: the folder's value applies | the journal row | needs the journal |
+| `pinChoices`, `pinSync` (store) | `pinChoices` is a per-pin queue of the user's choices waiting to publish (pinned.ts:494-500): folded into the journal as entries and removed from the store. `pinSync` notes a group sync applied so extraction can hold it for a while (pinned.ts:104-112, 424): dropped, since only journaled choices publish | as the journal | not involved | the journal row | FR5 |
 | History (Chrome) | — | visits are unions with their own times; a republished visit set adds nothing new; a revived delete entry loses to the visit records after it | visits missing after a restore are never published as deleted (deletions are journaled commands only); the folder's visits are applied back | rule: no inferred deletions | AUDIT-history-restore; RR6 |
+
+**Where each opt-out is anchored** (second re-check 5). Turning a type or a profile off writes the flag in
+sync.json and beside the data it governs, in the same write as that data:
+- store-backed types and the per-profile flag: the store's docs (the settings doc, the profile);
+- passwords: Login Data's `meta` row gains `solara_sync_off`;
+- bookmarks: the bar node's meta info gains `solara_sync_off`;
+- history: History's own `meta` table (`sql::MetaTable`, as for Login Data) gains `solara_sync_off`,
+  through a new ArdiaCore call;
+- extensions: the profile's Chrome prefs.
+A type or profile syncs only when both say on. A rollback of either can therefore only turn sync off,
+never on; turning it back on is the user's to do again. The whole-sync switch follows the same rule,
+with its anchor in the settings doc.
 
 Residuals the audit leaves, from this Mac's own clock or Chrome's lack of edit times:
 - **Passwords, clock set back:** a user's change after Solara's last write can carry a
@@ -706,6 +749,23 @@ Re-check (rollback audit, § Rollback audit):
 - **I3-failed-push:** every push carrying one value is refused (Chrome never takes it), B renames
   again, then an extension sets the node to the refused value: the extension's value reaches B. A
   guard (no intents today). It also records today's unbounded retry.
+- **Second re-check (of b4d491af):**
+  - **SPEC-t, SPEC-t-unconfirmed, SPEC-t-precision, SPEC-t-sync-write, SPEC-t-bigint**
+    (spec-rules.test.mjs): `t` is at or after every read-back date, an unconfirmed apply writes no
+    row, comparison is strict at millisecond precision, and the raw date doesn't fit a Number. They
+    run against a reference model of the rule; the ledger's commit ports them to its code.
+  - **AUDIT-pw-equal-record:** after a whole-docs rollback, a login equal to its current record
+    isn't published. Green on HEAD; a guard for second re-check 2.
+  - **REBUILD-keeps-entries:** the user renames a bookmark, the push reaches Chrome's model, and a
+    crash comes before Chrome saves its file. After the relaunch the rename reaches B and stays in
+    Chrome. Red on HEAD: the launch read adopts Chrome's older title and the rename is lost. Its
+    control (Chrome's file saved) is green.
+  - **LAUNCH-keeps-stamp:** an extension edit already published, seen again at launch against a
+    stale cache, is not resent and loses to B's newer rename. Green on HEAD; a guard for second re-check 4.
+  - **AUDIT-syncjson-profile, -type-off, -profile-off:** sync.json rolled back alone. A profile
+    linked after the backup isn't published twice; a type or profile turned off after the backup
+    stays off. All three red on HEAD; the controls with sync.json current are green.
+  - **SPEC-opt-out:** sync needs both sync.json and the anchor on.
 - **MARK-settles:** one extension edit costs a bounded number of apply and tree calls, then none for
   200 ms. A guard today (no marks); the new bridge must keep it green with the fake emitting a change
   event per apply.

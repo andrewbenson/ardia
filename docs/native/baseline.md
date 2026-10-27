@@ -74,3 +74,29 @@ Every phase reruns this script with `--control <previous stable>`, interleaved. 
 - phase 1: store dispatch p50/p99 on the seed, bridge patch bytes per action;
 - phase 2: Settings open → content, pane switch, typing in search;
 - phase 4: per-key compute in `SolaraOmnibox` against the Hermes numbers.
+
+## Phase 2 results: Settings
+
+Measured 2026-10-26 with `packages/settings/scripts/settings-bench.mjs --variants native,rn` on a local Release build
+(both windows in the same build, `ARDIA_NATIVE_SETTINGS=0` for RN), interleaved under the perflab lock, 6 launches per
+variant, 6 panes visited twice each. Medians in ms.
+
+| | Native | RN |
+|---|---|---|
+| Open → General committed | 67 | 129 |
+| Pane switch, median (max) | 45 (71) | 49 (79) |
+| Footprint with Settings open | 139 MB | 138 MB |
+
+| Pane, first / second visit | Native | RN |
+|---|---|---|
+| Tabs | 55 / 48 | 71 / 69 |
+| Appearance | 46 / 44 | 48 / 44 |
+| Privacy | 42 / 43 | 44 / 43 |
+| Search | 51 / 46 | 50 / 51 |
+| Advanced | 45 / 42 | 58 / 58 |
+| Engines | 41 / 36 | 41 / 44 |
+
+Before f8c59763 the panes were grouped `Form`s, which build every row on each visit: the pane switch was 78 ms against
+RN's 48. The lazy form (`SettingsLazyForm.swift`) builds only the rows on screen; a pending search reveal builds the
+whole pane for that visit. Open includes the pre-built window (`SettingsPrewarm`, about 13 MB held at rest); without
+it native opens in about 320 ms. Typing in search isn't measured (it needs real key events in a key window).

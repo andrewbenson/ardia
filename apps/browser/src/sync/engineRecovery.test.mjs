@@ -902,3 +902,180 @@ test("B49: after a relaunch, a setting changed back to what this Mac last synced
   assert.equal(S().settings.appearance, "light");
   assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
 });
+
+async function rolledBackWithOwnBatchDownloading(pendingOwn) {
+  let again;
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const older = new Map(shell.docs);
+  const before = new Set(files().map((f) => f.payload));
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  await engine.syncNow();
+  await settle();
+  const mine = files().filter((f) => !before.has(f.payload) && f.scope === `p:${syncId}` && f.file.kind === "log");
+  assert.ok(mine.length > 0, "control: Two went out in its own batch");
+  const hidden = new Set(mine.map((f) => f.payload));
+  const realRead = native.read;
+  if (pendingOwn)
+    native.read = async (...args) => {
+      const listing = await realRead(...args);
+      const stuck = listing.files.filter((f) => hidden.has(f.payload));
+      return { ...listing, files: listing.files.filter((f) => !hidden.has(f.payload)), pending: [...listing.pending, ...stuck.map((f) => f.id)] };
+    };
+  try {
+    shell.docs.clear();
+    for (const [name, contents] of older) shell.docs.set(name, contents);
+    again = await launch();
+    again.startSync();
+    await settle();
+    S().addBookmark({ profileId: "default", url: "https://three.example/", title: "Three" });
+    await again.syncNow();
+    await again.syncNow();
+    await settle();
+  } finally {
+    native.read = realRead;
+  }
+  await again.syncNow();
+  await settle();
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  return { b: [...other.store.values()].map((v) => v.t).sort() };
+}
+
+test("B50: a rolled-back state whose own newer batch is still downloading would reuse that batch's seq; it waits for the download, then B gets Three", async () => {
+  const { b } = await rolledBackWithOwnBatchDownloading(true);
+  assertNoSeqReused();
+  assert.deepEqual(b, ["One", "Three", "Two"], "B converges on this Mac's bookmarks");
+});
+
+test("B50-control: same with this Mac's batch downloaded", async () => {
+  const { b } = await rolledBackWithOwnBatchDownloading(false);
+  assertNoSeqReused();
+  assert.deepEqual(b, ["One", "Three", "Two"]);
+});
+
+test("B51: a deletion made after the loss, while the folder was offline, survives a relaunch before the rebuild could publish it", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  await engine.syncNow();
+  await settle();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  fake.chain = "unavailable";
+  const lost = await launch();
+  lost.startSync();
+  await settle();
+  await lost.syncNow();
+  await settle();
+  assert.equal(lost.useSync.getState().status, "offline", "control: the folder is offline");
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().removeBookmark(one.id);
+  await lost.syncNow();
+  await settle();
+  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  assert.ok(sealed[`p:${syncId}`]?.rebuild, "control: the rebuild marker is sealed before the relaunch");
+  const again = await launch();
+  fake.chain = "ok";
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  const oneKey = bookmarkOps(syncId).find((op) => op.v?.t === "One")?.k;
+  assert.deepEqual(titles(), ["Two"], "the deletion made after the loss stands on this Mac");
+  assert.ok(bookmarkOps(syncId).some((op) => op.k === oneKey && op.v === null), "the deletion made after the loss is published");
+});
+
+test("B52: a rename made after the loss, while the folder was offline, survives a relaunch before the rebuild could publish it", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  fake.chain = "unavailable";
+  const lost = await launch();
+  lost.startSync();
+  await settle();
+  await lost.syncNow();
+  await settle();
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().updateBookmark(one.id, { title: "Renamed after the loss" });
+  await lost.syncNow();
+  await settle();
+  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  assert.ok(sealed[`p:${syncId}`]?.rebuild, "control: the rebuild marker is sealed before the relaunch");
+  const again = await launch();
+  fake.chain = "ok";
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  assert.deepEqual(titles(), ["Renamed after the loss"], "the rename made after the loss stands on this Mac");
+  assert.ok(bookmarkOps(syncId).some((op) => op.v?.t === "Renamed after the loss"), "the rename is published");
+});
+
+test("B52-control: same rename without the relaunch is kept and published", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  fake.chain = "unavailable";
+  const lost = await launch();
+  lost.startSync();
+  await settle();
+  await lost.syncNow();
+  await settle();
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().updateBookmark(one.id, { title: "Renamed after the loss" });
+  fake.chain = "ok";
+  for (let i = 0; i < 3; i++) await lost.syncNow();
+  await settle();
+  assert.deepEqual(titles(), ["Renamed after the loss"]);
+  assert.ok(bookmarkOps(syncId).some((op) => op.v?.t === "Renamed after the loss"));
+});
+
+async function rolledBackWithRemoteBatchesDownloading(pendingRemote) {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const older = new Map(shell.docs);
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  other.store.set(key, { ...value, t: "Renamed again on B" });
+  await other.sync();
+  const fromB = new Set(files().filter((f) => f.file.device === "otherMac").map((f) => f.payload));
+  const realRead = native.read;
+  if (pendingRemote)
+    native.read = async (...args) => {
+      const listing = await realRead(...args);
+      const stuck = listing.files.filter((f) => fromB.has(f.payload));
+      return { ...listing, files: listing.files.filter((f) => !fromB.has(f.payload)), pending: [...listing.pending, ...stuck.map((f) => f.id)] };
+    };
+  try {
+    shell.docs.clear();
+    for (const [name, contents] of older) shell.docs.set(name, contents);
+    const again = await launch();
+    again.startSync();
+    await settle();
+    await again.syncNow();
+    await again.syncNow();
+    await settle();
+  } finally {
+    native.read = realRead;
+  }
+  await other.sync();
+  return other.store.get(key)?.t;
+}
+
+test("B53: a rolled-back state whose newer remote batches are still downloading doesn't republish a value it took from B over B's newer edit", async () => {
+  assert.equal(await rolledBackWithRemoteBatchesDownloading(true), "Renamed again on B");
+});
+
+test("B53-control: same with every batch downloaded (B41)", async () => {
+  assert.equal(await rolledBackWithRemoteBatchesDownloading(false), "Renamed again on B");
+});

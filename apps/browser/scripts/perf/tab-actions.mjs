@@ -34,8 +34,8 @@
 // Counts per action (perf probe): React commits, renders (host wrappers included), store updates; with
 // --side-env <label>:AC_BENCH_COUNT_ADDS=1, the subviews added again (already in place) and added new (reAdds, newAdds).
 
-import { execFileSync, spawnSync } from "node:child_process";
-import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -492,6 +492,7 @@ async function run() {
     const own = flags["side-app"].find((e) => e.startsWith(`${label}=`))?.slice(label.length + 1);
     return { label, bundle: resolve(bundle), env, app: prepare(own ? resolve(own) : app, resolve(bundle), join(out, "apps", label)) };
   });
+  spawn(process.execPath, [fileURLToPath(import.meta.url), "reap", String(process.pid), out], { detached: true, stdio: "ignore" }).unref();
   const server = await serve(+(flags["page-port"] ?? 47917));
   const launches = +(flags.launches ?? 4);
   const actions = flags.actions ? flags.actions.split(",") : ALL;
@@ -523,7 +524,31 @@ function report() {
     }
 }
 
+async function reapWhenGone(runner, out) {
+  while (isRunning(+runner)) await sleep(1000);
+  const diedAt = Date.now();
+  const ac = join(here, "../../../../scripts/agent/ac");
+  for (const name of existsSync(join(out, "data")) ? readdirSync(join(out, "data")) : []) {
+    const data = join(out, "data", name);
+    try {
+      if (JSON.parse(readFileSync(join(data, "instance.json"), "utf8")).launchedAt > diedAt) continue;
+    } catch {
+      continue;
+    }
+    spawnSync(ac, ["quit", data], { stdio: "ignore", timeout: 30000 });
+  }
+}
+function isRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 if (command === "run") await run();
+else if (command === "reap") await reapWhenGone(positional[0], positional[1]);
 else if (command === "report") report();
 else if (command === "fixture") writeFileSync(positional[0], JSON.stringify(fixture(`http://127.0.0.1:${flags["page-port"] ?? 47917}`).session));
 else if (command === "serve") await serve(+(flags["page-port"] ?? 47917));

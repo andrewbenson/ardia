@@ -317,6 +317,7 @@ final class TabRowView: SidebarRowView {
     let closeKind: String
     let engine, closeHint: String?
     let palette: Int
+    let mark: ObjectIdentifier?
 
     func hash(into hasher: inout Hasher) { hasher.combine(tab.id) }
   }
@@ -331,7 +332,7 @@ final class TabRowView: SidebarRowView {
       faded: context.state.settings.bool("fadeUnloadedTabs") && context.query.pageUnloaded(id),
       pip: flags.pip.contains(id), capture: flags.capture[id],
       closeKind: "\(context.query.closeKind(id))", engine: context.host.engines[id], closeHint: context.host.closeHint,
-      palette: context.paletteGeneration)
+      palette: context.paletteGeneration, mark: context.favicons.newTabMark.map(ObjectIdentifier.init))
   }
 
   override func render() {

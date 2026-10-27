@@ -62,7 +62,7 @@ struct TabIconSpec: Equatable {
 }
 
 final class TabIconView: NSView {
-  private var madeImage: NSImageView?
+  private var madeImage: PictureLayer?
   private var madeSymbol: SymbolView?
   private var madeEmoji: NSTextField?
   private var madeInitial: DrawnLetterView?
@@ -72,6 +72,7 @@ final class TabIconView: NSView {
   private var dark = true
   private var palette: SidebarPalette?
   private var requested: SidebarFaviconRequest?
+  private var renderedMark: NSImage?
   weak var favicons: SidebarFavicons?
 
   override var isFlipped: Bool { true }
@@ -94,13 +95,12 @@ final class TabIconView: NSView {
     return made
   }
 
-  private var image: NSImageView {
-    made(&madeImage) {
-      let image = NSImageView()
-      image.imageScaling = .scaleProportionallyUpOrDown
-      image.wantsLayer = true
-      return image
-    }
+  private var image: PictureLayer {
+    if let madeImage { return madeImage }
+    let picture = PictureLayer()
+    layer?.insertSublayer(picture, above: fallback)
+    madeImage = picture
+    return picture
   }
 
   private var symbol: SymbolView { made(&madeSymbol) { SymbolView() } }
@@ -118,7 +118,7 @@ final class TabIconView: NSView {
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
   func set(_ spec: TabIconSpec, palette: SidebarPalette) {
-    let same = spec == self.spec && palette.dark == dark && self.palette != nil
+    let same = spec == self.spec && palette.dark == dark && self.palette != nil && renderedMark === favicons?.newTabMark
     self.spec = spec
     self.palette = palette
     dark = palette.dark
@@ -134,9 +134,11 @@ final class TabIconView: NSView {
 
   private func render() {
     guard let spec, let palette else { return }
+    renderedMark = favicons?.newTabMark
     let size = spec.size
     let box = NSRect(x: 0, y: 0, width: size, height: size)
-    for view in [madeImage, madeSymbol, madeEmoji, madeInitial] as [NSView?] { view?.isHidden = true }
+    for view in [madeSymbol, madeEmoji, madeInitial] as [NSView?] { view?.isHidden = true }
+    madeImage?.isHidden = true
     fallback.isHidden = true
     if let icon = spec.customIcon, icon.hasPrefix("symbol:") {
       let name = String(icon.dropFirst("symbol:".count))
@@ -151,12 +153,7 @@ final class TabIconView: NSView {
       emoji.frame = NSRect(x: (size - fitting.width) / 2, y: (size - fitting.height) / 2, width: fitting.width, height: fitting.height)
       emoji.isHidden = false
     } else if spec.url.isEmpty && (spec.favicon ?? "").isEmpty {
-      image.frame = box
-      image.image = favicons?.newTabMark
-      image.contentTintColor = dark ? .white : .black
-      image.alphaValue = dark ? 0.28 : 0.3
-      image.layer?.cornerRadius = 0
-      image.isHidden = false
+      image.show(favicons?.newTabMark, in: box, tint: dark ? .white : .black, alpha: dark ? 0.28 : 0.3, radius: 0, scale: window?.backingScaleFactor ?? 2)
     } else {
       showFavicon(spec, box: box)
     }
@@ -165,15 +162,10 @@ final class TabIconView: NSView {
 
   private func showFavicon(_ spec: TabIconSpec, box: NSRect) {
     let request = SidebarFaviconRequest(url: spec.url, favicon: spec.favicon, profileId: spec.profileId, dark: dark, direct: spec.direct)
-    image.frame = box
-    image.contentTintColor = nil
-    image.alphaValue = 1
-    image.layer?.cornerRadius = spec.size > 18 ? 4 : 3
-    image.layer?.masksToBounds = true
+    let radius: CGFloat = spec.size > 18 ? 4 : 3
     if let known = favicons?.cached(request) {
       if let picture = known {
-        image.image = picture
-        image.isHidden = false
+        image.show(picture, in: box, tint: nil, alpha: 1, radius: radius, scale: window?.backingScaleFactor ?? 2)
       } else {
         showFallback(spec)
       }
@@ -272,5 +264,51 @@ final class DrawnLetterView: NSView {
     let x = snap((bounds.width - text.size().width) / 2)
     let y = snap((bounds.height - font.capHeight) / 2 - (font.ascender - font.capHeight))
     text.draw(at: NSPoint(x: x, y: y))
+  }
+}
+
+final class PictureLayer: CALayer {
+  private var shown: (image: NSImage, tint: NSColor?, scale: CGFloat)?
+
+  override init() {
+    super.init()
+    actions = SurfaceLayer.noActions
+    contentsGravity = .resizeAspect
+    masksToBounds = true
+    minificationFilter = .trilinear
+  }
+
+  override init(layer: Any) { super.init(layer: layer) }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  func show(_ image: NSImage?, in frame: CGRect, tint: NSColor?, alpha: CGFloat, radius: CGFloat, scale: CGFloat) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    self.frame = frame
+    opacity = Float(alpha)
+    cornerRadius = radius
+    contentsScale = scale
+    if let image {
+      if shown.map({ $0.image !== image || $0.tint != tint || $0.scale != scale }) ?? true {
+        shown = (image, tint, scale)
+        let source = tint.map { Self.tinted(image, $0) } ?? image
+        contents = source.layerContents(forContentsScale: source.recommendedLayerContentsScale(scale))
+      }
+    } else {
+      shown = nil
+      contents = nil
+    }
+    isHidden = false
+    CATransaction.commit()
+  }
+
+  private static func tinted(_ image: NSImage, _ color: NSColor) -> NSImage {
+    NSImage(size: image.size, flipped: false) { rect in
+      image.draw(in: rect)
+      color.set()
+      rect.fill(using: .sourceIn)
+      return true
+    }
   }
 }

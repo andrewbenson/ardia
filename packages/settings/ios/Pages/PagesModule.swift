@@ -52,6 +52,7 @@ final class NativePageView: ExpoView {
   private let downloads = DownloadsPageModel()
   private let history = HistoryPageModel()
   private let bookmarks = BookmarksPageModel()
+  private let bookmarkForm = BookmarkFormModel()
 
   override var isFlipped: Bool { true }
 
@@ -62,6 +63,7 @@ final class NativePageView: ExpoView {
     downloads.onEvent = { [weak self] event in self?.send(event) }
     history.onEvent = { [weak self] event in self?.send(event) }
     bookmarks.onEvent = { [weak self] event in self?.send(event) }
+    bookmarkForm.onEvent = { [weak self] event in self?.send(event) }
     Self.live.add(self)
     PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
   }
@@ -84,6 +86,11 @@ final class NativePageView: ExpoView {
         page["selected"] = view.bookmarks.selected
         page["folder"] = view.bookmarks.folderId ?? NSNull()
         page["undo"] = view.bookmarks.undoCount ?? NSNull()
+      case "bookmarkForm":
+        page["name"] = view.bookmarkForm.name
+        page["url"] = view.bookmarkForm.url
+        page["folder"] = view.bookmarkForm.folderId ?? NSNull()
+        page["valid"] = view.bookmarkForm.valid
       default: break
       }
       page["ax"] = axLines(view.host, depth: 0)
@@ -125,9 +132,11 @@ final class NativePageView: ExpoView {
       case "downloads": NSHostingView(rootView: DownloadsPageView(model: downloads))
       case "history": NSHostingView(rootView: HistoryPageView(model: history, favicons: PageNetwork.favicons))
       case "bookmarks": NSHostingView(rootView: BookmarksPageView(model: bookmarks, favicons: PageNetwork.favicons))
+      case "bookmarkForm": NSHostingView(rootView: BookmarkFormView(model: bookmarkForm))
       default: nil
       }
     guard let made else { return }
+    if next == "bookmarkForm" { (made as? NSHostingView<BookmarkFormView>)?.safeAreaRegions = [] }
     made.frame = bounds
     made.autoresizingMask = [.width, .height]
     addSubview(made)
@@ -155,6 +164,7 @@ final class NativePageView: ExpoView {
     case "downloads": downloads.apply(json: json)
     case "history": history.apply(json: json)
     case "bookmarks": bookmarks.apply(json: json)
+    case "bookmarkForm": bookmarkForm.apply(json: json)
     default: break
     }
   }
@@ -201,6 +211,16 @@ final class NativePageView: ExpoView {
     case .addBookmark(let parent): onPageEvent(["kind": "addBookmark", "parentId": parent ?? NSNull()])
     case .addFolder(let parent): onPageEvent(["kind": "addFolder", "parentId": parent ?? NSNull()])
     case .importBookmarks: onPageEvent(["kind": "import"])
+    }
+  }
+
+  private func send(_ event: BookmarkFormEvent) {
+    switch event {
+    case .done(let name, let folderId): onPageEvent(["kind": "done", "name": name, "folderId": folderId ?? NSNull()])
+    case .remove: onPageEvent(["kind": "remove"])
+    case .cancel: onPageEvent(["kind": "cancel"])
+    case .save(let name, let url, let parentId): onPageEvent(["kind": "save", "name": name, "url": url, "parentId": parentId ?? NSNull()])
+    case .newFolder(let parentId): onPageEvent(["kind": "newFolder", "parentId": parentId ?? NSNull()])
     }
   }
 }

@@ -1,4 +1,5 @@
 import { resolveInput } from "@ardia/core";
+import { nativePagesAvailable } from "@ardia/settings";
 import { Surface } from "@ardia/shell";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -9,12 +10,14 @@ import { searchUrlPrefix } from "../../store/settings";
 import { Button, TextField, useFormColors } from "../settings/controls";
 import { useBookmarkEditor, type EditorState } from "./edit";
 import { FolderTree } from "./FolderTree";
+import { NativeBookmarkEditor } from "./NativeBookmarkForms";
 
 export function EditBookmarkDialog() {
   const windowId = useWindowId();
   const open = useBookmarkEditor((e) => (e.open?.windowId === windowId ? e.open : null));
   if (!open) return null;
-  return <Sheet key={`${open.bookmarkId}:${open.folder}`} state={open} />;
+  const key = `${open.bookmarkId}:${open.folder}`;
+  return nativePagesAvailable() ? <NativeBookmarkEditor key={key} state={open} /> : <Sheet key={key} state={open} />;
 }
 
 function Sheet({ state }: { state: EditorState }) {
@@ -27,21 +30,9 @@ function Sheet({ state }: { state: EditorState }) {
     node?.parentId ?? state.parentId ?? useBrowser.getState().bookmarks.roots[state.profileId]?.bar ?? null,
   );
   const close = () => useBookmarkEditor.getState().set(null);
-  const resolvedUrl = url.trim() ? resolveInput(url, searchUrlPrefix(useBrowser.getState().settings)) : "";
-  const valid = state.folder ? !!title.trim() : !!resolvedUrl;
-
+  const valid = state.folder ? !!title.trim() : !!resolvedBookmarkUrl(url);
   const save = () => {
-    if (!valid) return;
-    const s = useBrowser.getState();
-    if (node) {
-      s.updateBookmark(node.id, state.folder ? { title: title.trim() } : { title: title.trim(), url: resolvedUrl });
-      if (parentId && parentId !== node.parentId) s.moveBookmark(node.id, parentId);
-    } else if (state.folder) {
-      s.addBookmarkFolder({ profileId: state.profileId, title: title.trim(), parentId: parentId ?? undefined, index: state.index });
-    } else {
-      s.addBookmark({ profileId: state.profileId, url: resolvedUrl, title: title.trim() || resolvedUrl, parentId: parentId ?? undefined, index: state.index });
-    }
-    close();
+    if (valid) saveBookmarkEditor(state, title, url, parentId);
   };
 
   const heading = state.folder ? (node ? "Rename Folder" : "New Folder") : node ? "Edit Bookmark" : "Add Bookmark";
@@ -88,6 +79,24 @@ function Sheet({ state }: { state: EditorState }) {
       </Surface>
     </View>
   );
+}
+
+export const resolvedBookmarkUrl = (url: string) => (url.trim() ? resolveInput(url, searchUrlPrefix(useBrowser.getState().settings)) : "");
+
+export function saveBookmarkEditor(state: EditorState, title: string, url: string, parentId: string | null) {
+  const s = useBrowser.getState();
+  const node = s.bookmarks.nodes[state.bookmarkId ?? ""];
+  const resolvedUrl = resolvedBookmarkUrl(url);
+  if (state.folder ? !title.trim() : !resolvedUrl) return;
+  if (node) {
+    s.updateBookmark(node.id, state.folder ? { title: title.trim() } : { title: title.trim(), url: resolvedUrl });
+    if (parentId && parentId !== node.parentId) s.moveBookmark(node.id, parentId);
+  } else if (state.folder) {
+    s.addBookmarkFolder({ profileId: state.profileId, title: title.trim(), parentId: parentId ?? undefined, index: state.index });
+  } else {
+    s.addBookmark({ profileId: state.profileId, url: resolvedUrl, title: title.trim() || resolvedUrl, parentId: parentId ?? undefined, index: state.index });
+  }
+  useBookmarkEditor.getState().set(null);
 }
 
 function Label({ text }: { text: string }) {

@@ -5,7 +5,9 @@
 // checkbox, a click selects and shift-click extends the selection, Cancel clears it, and Clear Browsing Data… opens
 // the dialog, whose Clear Data empties the history and closes it. Bookmarks shows the bar's bookmarks, the folder
 // tree opens a folder, search finds across folders, click, ⌘-click and shift-click select, Delete removes with an
-// Undo toast that puts them back, and dragging a row moves it.
+// Undo toast that puts them back, and dragging a row moves it. The ⌘D popover renames with Return, moves to the
+// folder picked in its tree with Done, saves on Esc and on a click outside, and Remove deletes; the editor won't
+// save without a URL, saves with Return, and Esc or a click outside cancels.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -284,6 +286,88 @@ try {
     await dev(`drag:${from.x + 120},${from.y + from.height / 2};${to.x + 120},${to.y + to.height * 0.8}`);
     const moved = await until(async () => ({ ok: (await barIds()) === [marks.work, marks.ids[1], marks.ids[2], marks.ids[0], marks.ids[3]].join(",") }), 4000);
     assert.ok(moved.ok, `bar after drag: ${await barIds()}`);
+  });
+  const formPage = async () => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages.find((p) => p.kind === "bookmarkForm") ?? null;
+  const bookmarkTitle = (id) => app.eval(`return ac.store.getState().bookmarks.nodes[${JSON.stringify(id)}]?.title ?? null`);
+  const bookmarkParent = (id) => app.eval(`return ac.store.getState().bookmarks.nodes[${JSON.stringify(id)}]?.parentId ?? null`);
+  const openPopover = async (id) => {
+    await app.eval(`const s = ac.store.getState(); ac.pages.bookmarkDialog.getState().set({ kind: "page", windowId: Object.keys(s.windows)[0], bookmarkId: ${JSON.stringify(id)} }); return true`);
+    return until(async () => {
+      const now = await formPage();
+      return { ok: !!now && !!frameOf(now, "Done"), now };
+    });
+  };
+  const dialogOpen = () => app.eval(`return !!ac.pages.bookmarkDialog.getState().open || !!ac.pages.bookmarkEditor.getState().open`);
+  const closed = () => until(async () => ({ ok: !(await dialogOpen()) }));
+
+  await rep.check("the ⌘D popover renames with Return and moves to the picked folder with Done", async () => {
+    const id = marks.ids[1];
+    let shown = await openPopover(id);
+    assert.ok(shown.ok, "popover shown");
+    await dev("type:Beta Renamed");
+    await dev("keys:0:\r:36");
+    assert.ok((await closed()).ok, "closed after Return");
+    assert.equal(await bookmarkTitle(id), "Beta Renamed");
+    shown = await openPopover(id);
+    await click(frameOf(shown.now, `pick:${marks.work}`));
+    await until(async () => ({ ok: (await formPage())?.folder === marks.work }));
+    await click(frameOf((await formPage()), "Done"));
+    assert.ok((await closed()).ok, "closed after Done");
+    assert.equal(await bookmarkParent(id), marks.work);
+  });
+
+  await rep.check("Esc and a click outside the popover save and close it; Remove deletes", async () => {
+    const id = marks.ids[2];
+    await openPopover(id);
+    await dev("type:Gamma Esc");
+    await dev("keys:0:\u001b:53");
+    assert.ok((await closed()).ok, "closed after Esc");
+    assert.equal(await bookmarkTitle(id), "Gamma Esc");
+    await openPopover(id);
+    await dev("type:Gamma Outside");
+    await dev("click:40,700");
+    assert.ok((await closed()).ok, "closed after a click outside");
+    assert.equal(await bookmarkTitle(id), "Gamma Outside");
+    const shown = await openPopover(id);
+    await click(frameOf(shown.now, "Remove"));
+    assert.ok((await closed()).ok, "closed after Remove");
+    assert.equal(await bookmarkTitle(id), null);
+  });
+
+  await rep.check("the editor needs a URL, saves with Return, and Esc or a click outside cancels", async () => {
+    const id = marks.ids[3];
+    const openEditor = async () => {
+      await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; ac.pages.bookmarkEditor.getState().set({ windowId: w, bookmarkId: ${JSON.stringify(id)}, folder: false, profileId: s.windows[w].profileId }); return true`);
+      return until(async () => {
+        const now = await formPage();
+        return { ok: !!now && !!frameOf(now, "URL field"), now };
+      });
+    };
+    let shown = await openEditor();
+    assert.ok(shown.ok, "editor shown");
+    await click(frameOf(shown.now, "URL field"));
+    await dev("keys:1048576:a:0");
+    await dev("type: ");
+    await until(async () => ({ ok: (await formPage())?.valid === false }));
+    assert.equal((await formPage())?.valid, false, "Save off without a URL");
+    await dev("keys:0:\r:36");
+    await sleep(300);
+    assert.equal(await dialogOpen(), true, "Return without a URL keeps it open");
+    await dev("keys:1048576:a:0");
+    await dev("type:delta.example.net");
+    await dev("keys:0:\r:36");
+    assert.ok((await closed()).ok, "closed after Return");
+    assert.equal(await app.eval(`return ac.store.getState().bookmarks.nodes[${JSON.stringify(id)}]?.url`), "https://delta.example.net");
+    shown = await openEditor();
+    await dev("type:Delta Esc");
+    await dev("keys:0:\u001b:53");
+    assert.ok((await closed()).ok, "closed after Esc");
+    assert.notEqual(await bookmarkTitle(id), "Delta Esc");
+    shown = await openEditor();
+    await dev("type:Delta Outside");
+    await dev("click:40,700");
+    assert.ok((await closed()).ok, "closed after a click outside");
+    assert.notEqual(await bookmarkTitle(id), "Delta Outside");
   });
 } finally {
   await app?.quit();

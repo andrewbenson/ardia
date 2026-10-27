@@ -401,3 +401,85 @@ test("B32: an edit made while a lost state is being rebuilt is published, not re
   assert.equal(names.at(-1), "Renamed while rebuilding");
   assert.equal(S().profiles.default.name, "Renamed while rebuilding");
 });
+
+async function retiredAndReadded() {
+  const engine = await launch();
+  engine.startSync();
+  const work = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [work]: true } });
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await engine.syncNow();
+  for (let i = 0; i < 3; i++) {
+    S().addBookmark({ profileId: work, url: `https://w${i}.example/`, title: `W${i}` });
+    await engine.syncNow();
+  }
+  await settle();
+  const syncId = engine.useSync.getState().profiles[work].syncId;
+  const scope = `p:${syncId}`;
+  S().deleteProfile(work);
+  await engine.syncNow();
+  await engine.syncNow();
+  await settle();
+  const saved = JSON.parse(shell.docs.get("sync.json"));
+  const again = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [again]: true } });
+  const older = { v: 1, kind: "log", device: saved.deviceId, seq: 1, at: Date.now(), ops: [{ k: "bm:older", h: "0zzzzzzzz.0000.older", v: { k: "u", p: "bar", t: "Older", u: "https://older.example/", a: 1, pos: "m" } }] };
+  shell.docs.set("sync.json", JSON.stringify({ ...saved, profiles: { ...saved.profiles, [again]: { syncId, enabled: true } }, seqs: { ...saved.seqs, [scope]: 0 } }));
+  shell.docs.set("sync-journal.nns", `sealed:${JSON.stringify({ journal: { [scope]: [older] } })}`);
+  return { scope, floor: saved.retired[scope], deviceId: saved.deviceId };
+}
+
+const olderOut = (scope) => files().filter((f) => f.scope === scope && f.file.kind === "log" && f.file.ops.some((op) => op.k === "bm:older" && op.h === "0zzzzzzzz.0000.older"));
+
+test("B33: a relaunch before the revived scope's batches go out keeps them, even if the journal can't be saved meanwhile", async () => {
+  reset();
+  const { scope, floor } = await retiredAndReadded();
+  shell.heldSaves.fail = true;
+  const first = await launch();
+  first.startSync();
+  await settle();
+  first.setTypeSynced("history", true);
+  await settle();
+  shell.heldSaves.fail = false;
+  const second = await launch();
+  second.startSync();
+  await settle();
+  await second.syncNow();
+  await second.syncNow();
+  await settle();
+  const out = olderOut(scope);
+  assert.ok(out.length && out.every((f) => f.file.seq > floor), "the older build's batch still goes out above the floor");
+  assertNoSeqReused();
+});
+
+test("B34: a revived scope's resent batches never take a seq an older build already wrote to the folder", async () => {
+  reset();
+  const { scope, floor, deviceId } = await retiredAndReadded();
+  folder.set("older-slot", { scope, payload: JSON.stringify({ v: 1, kind: "log", device: deviceId, seq: floor + 1, at: Date.now(), ops: [{ k: "bm:slot", h: "0zzzzzzzz.0001.older", v: { k: "u", p: "bar", t: "Slot", u: "https://slot.example/", a: 1, pos: "n" } }] }) });
+  const next = await launch();
+  next.startSync();
+  await settle();
+  await next.syncNow();
+  await next.syncNow();
+  await settle();
+  assert.ok(olderOut(scope).length, "the older batch goes out");
+  assertNoSeqReused();
+});
+
+test("B35: a sync.json from a newer format is left alone instead of being rebuilt over", async () => {
+  reset();
+  await onAndSynced();
+  const newer = { ...JSON.parse(shell.docs.get("sync.json")), v: 2, future: true };
+  shell.docs.set("sync.json", JSON.stringify(newer));
+  const writes = folder.size;
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  engine.setTypeSynced("history", false);
+  await engine.syncNow();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "unavailable");
+  assert.deepEqual(JSON.parse(shell.docs.get("sync.json")), newer, "sync.json is untouched");
+  assert.equal(folder.size, writes, "nothing is published");
+  assert.ok("error" in (await engine.turnOnSync("/sync")));
+});

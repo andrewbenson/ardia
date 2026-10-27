@@ -148,12 +148,15 @@ let forcePasswords = false;
 let cycleForcesPasswords = false;
 let locked = false;
 let loaded = true;
+let newerFormat = false;
+const NEWER_FORMAT = "This Mac's sync settings were saved by a newer version of Solara. Update Solara to keep syncing.";
 let stopping = false;
 let turningOn = false;
 let phraseEntry: Promise<PhraseResult> | null = null;
 let generation = 0;
 let loading: Promise<void> | null = null;
 let unverified = new Set<string>();
+let revivalBatches = new Map<string, LogFile[]>();
 type Rebuilt = ScopeState & { rebuildBaseline?: Record<string, string> };
 const STOP_WAITS_FOR_LOAD_MS = 3000;
 let forceRequests = 0;
@@ -165,7 +168,8 @@ function load() {
     const json = readDocument(DOC);
     if (json) {
       const saved = JSON.parse(json) as SyncDoc;
-      doc = { ...emptyDoc(), ...saved, types: { ...defaultTypes(), ...saved.types }, scopes: {} };
+      newerFormat = isObject(saved) && saved.v !== 1;
+      if (!newerFormat) doc = { ...emptyDoc(), ...saved, types: { ...defaultTypes(), ...saved.types }, scopes: {} };
     }
     savedJson = json ?? "";
   } catch (error) {
@@ -224,6 +228,7 @@ async function loadState(loading: number): Promise<boolean> {
   }
   journalOnDisk = Object.keys(journal).length > 0;
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
+  revivalBatches = new Map();
   const revived = new Map<string, number>();
   for (const link of Object.values(doc.profiles)) {
     const scope = `p:${link.syncId}`;
@@ -232,34 +237,26 @@ async function loadState(loading: number): Promise<boolean> {
     if (!retired || floor === undefined) continue;
     doc.seqs = { ...doc.seqs, [scope]: Math.max(doc.seqs?.[scope] ?? 0, floor) };
     revived.set(scope, floor);
-    delete retired[scope];
-    if (!Object.keys(retired).length) delete doc.retired;
   }
+  const skipped = (scope: string) => doc.retired?.[scope] !== undefined && !revived.has(scope);
   const expected = new Set([APP_SCOPE, ...Object.values(doc.profiles).map((l) => `p:${l.syncId}`), ...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)]);
   const rebuilding = new Set(doc.rebuilding ?? []);
-  for (const scope of expected) if (doc.retired?.[scope] === undefined && !scopes[scope]) rebuilding.add(scope);
+  for (const scope of expected) if (!skipped(scope) && !scopes[scope]) rebuilding.add(scope);
   if (rebuilding.size) doc.rebuilding = [...rebuilding];
   for (const scope of rebuilding) scopes[scope] ??= emptyScope();
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
-    if (doc.retired?.[scope] !== undefined) continue;
+    if (skipped(scope)) continue;
     const mine = (journal[scope] ?? []).filter((f) => f.device === doc.deviceId);
-    const floor = revived.get(scope);
-    if (floor !== undefined) renumberBelow(mine, floor);
-    restoreJournal((scopes[scope] ??= emptyScope()), mine, clock, doc.seqs?.[scope]);
+    const written = doc.seqs?.[scope] ?? 0;
+    if (revived.has(scope)) revivalBatches.set(scope, mine.filter((f) => f.seq <= written));
+    restoreJournal((scopes[scope] ??= emptyScope()), revived.has(scope) ? mine.filter((f) => f.seq > written) : mine, clock, written);
   }
-  if (revived.size && Object.keys(journal).length) void persistJournal([...revived.keys()][0]!)([]).catch(() => {});
+  for (const scope of revived.keys()) if (!revivalBatches.has(scope)) revivalBatches.set(scope, []);
   for (const scope of Object.values(scopes)) for (const record of Object.values(scope.records)) clock.observe(record.h);
   if (doc.deviceId) doc.clock = clock.last;
   doc.scopes = scopes;
   unverified = new Set([...expected, ...Object.keys(scopes)]);
   return true;
-}
-
-function renumberBelow(batches: LogFile[], floor: number) {
-  const below = batches.filter((f) => f.seq <= floor).sort((a, z) => a.seq - z.seq);
-  let next = Math.max(floor, ...batches.map((f) => f.seq));
-  for (const file of below) file.seq = ++next;
-  batches.sort((a, z) => a.seq - z.seq);
 }
 
 const persistJournal = (scope: string) => async (batches: LogFile[]) => {
@@ -272,6 +269,7 @@ const persistJournal = (scope: string) => async (batches: LogFile[]) => {
 
 function pruneJournal(saved: Record<string, number>) {
   for (const [scope, list] of Object.entries(journal)) {
+    if (revivalBatches.has(scope)) continue;
     const left = list.filter((f) => f.seq > (saved[scope] ?? 0));
     if (left.length) journal[scope] = left;
     else delete journal[scope];
@@ -289,6 +287,7 @@ let savedState = "";
 let sealing: Promise<void> | null = null;
 
 function save() {
+  if (newerFormat) return;
   const { scopes, ...meta } = doc;
   const json = JSON.stringify(loaded ? { ...meta, seqs: Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)])) } : meta);
   if (json !== savedJson) {
@@ -397,7 +396,7 @@ export async function syncNow() {
 
 async function runCycle({ retiring = false } = {}) {
   const native = SyncNative;
-  if (!native || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
+  if (!native || newerFormat || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
   if (running) {
     again = true;
     return;
@@ -497,6 +496,7 @@ function pullingFirst(scope: string, state: ScopeState, device: string, adapters
     publishAfterPull: true,
     extract: async (base, queued, now, known, remote, stamp) => {
       state.seq = Math.max(state.seq, state.vv[device] ?? 0, ...(state.extra[device] ?? []));
+      resendRevival(scope, state, device);
       return adapter.extract(base, queued, now, known, remote, stamp);
     },
   }));
@@ -504,6 +504,26 @@ function pullingFirst(scope: string, state: ScopeState, device: string, adapters
 
 function settleVerified(scope: string, state: ScopeState) {
   if (state.pending === 0 && Object.keys(state.damaged).length === 0) unverified.delete(scope);
+  const held = revivalBatches.get(scope);
+  if (!held || held.length || state.outbox.length || state.journal?.length) return;
+  revivalBatches.delete(scope);
+  if (!doc.retired) return;
+  delete doc.retired[scope];
+  if (!Object.keys(doc.retired).length) delete doc.retired;
+}
+
+function resendRevival(scope: string, state: ScopeState, device: string) {
+  const held = revivalBatches.get(scope);
+  if (!held?.length) return;
+  for (const file of held) {
+    for (const op of file.ops) {
+      const current = state.records[op.k];
+      if (current && current.h >= op.h) continue;
+      state.records[op.k] = { h: op.h, v: op.v, o: [device, state.seq + 1] };
+      state.outbox.push(op);
+    }
+  }
+  held.length = 0;
 }
 
 function rebuildingAware(scope: string, adapters: Adapter[]): Adapter[] {
@@ -707,6 +727,7 @@ export async function chooseSyncFolder(): Promise<string | null> {
 function begin(folder: string, deviceId: string, joining: boolean) {
   generation++;
   unverified = new Set();
+  revivalBatches = new Map();
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
   locked = false;
   loaded = true;
@@ -719,6 +740,7 @@ function begin(folder: string, deviceId: string, joining: boolean) {
 export async function turnOnSync(folder: string): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative;
   if (!native) return { error: "Sync isn’t available in this build." };
+  if (newerFormat) return { error: NEWER_FORMAT };
   if (doc.enabled || turningOn) return { error: "Sync is already on." };
   turningOn = true;
   try {
@@ -753,7 +775,7 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
       phraseEntry = null;
     }
   }
-  if (doc.enabled || turningOn) return { error: "unavailable" };
+  if (newerFormat || doc.enabled || turningOn) return { error: "unavailable" };
   turningOn = true;
   try {
     const deviceId = native.newDeviceId();
@@ -774,6 +796,8 @@ async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: 
     if (!(await loadState(unlocking)) || unlocking !== generation) return { error: "interrupted" };
     await captureRebuildBaselines();
     if (unlocking !== generation) return { error: "interrupted" };
+    loaded = true;
+    if (doc.rebuilding) save();
   } catch (error) {
     if (unlocking === generation) showLocked(error);
     return { error: "keychain" };
@@ -823,6 +847,7 @@ async function turnOff(native: NonNullable<typeof SyncNative>, deleteData: boole
   }
   if (doc.deviceId) await native.forget(doc.deviceId);
   generation++;
+  revivalBatches = new Map();
   doc = { ...emptyDoc(), folder, types: doc.types };
   locked = false;
   loaded = true;
@@ -913,6 +938,7 @@ function addLinkedProfile(syncId: string, record: ProfileRecord, shareWith: stri
 export function startSync() {
   if (!SyncNative) return;
   load();
+  if (newerFormat) return publishUi({ status: "unavailable", error: NEWER_FORMAT });
   publishUi({ status: doc.enabled ? "starting" : "off" });
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
@@ -926,6 +952,7 @@ export function startSync() {
         await captureRebuildBaselines();
         if (unlocking !== generation) return;
         loaded = true;
+        if (doc.rebuilding) save();
         settleAppliedThemes(doc.scopes[APP_SCOPE]);
         publishUi();
         scheduleSync(500);

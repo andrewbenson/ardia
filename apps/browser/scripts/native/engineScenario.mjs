@@ -154,7 +154,7 @@ async function environment(prefix, folderOps) {
           "if (profiles.length && (await globalThis.__traceProbe(profiles[0]!, () => probeExtensionSync(profiles[0]!)))) watchExtensionIntents(profiles);",
         );
         source = source.replace("  useBrowser.subscribe((s, prev) => {", "  globalThis.__engineUnsubscribe = useBrowser.subscribe((s, prev) => {");
-        source += `\nglobalThis.__engineMemory = () => ({ doc, savedJson, savedState, journal, journalOnDisk, forcePasswords, running, again, sealing: !!sealing, passwords: Object.fromEntries([...passwordAdapters].map(([k, a]) => [k, a.__replayMemory?.() ?? null])), extensions: [...extensionAdapters.keys()] });\nglobalThis.__engineUi = useSync;\n`;
+        source += `\nglobalThis.__engineMemory = () => ({ loaded, doc, savedJson, savedState, journal, journalOnDisk, forcePasswords, running, again, sealing: !!sealing, passwords: Object.fromEntries([...passwordAdapters].map(([k, a]) => [k, a.__replayMemory?.() ?? null])), extensions: [...extensionAdapters.keys()] });\nglobalThis.__engineUi = useSync;\n`;
       } else if (url.endsWith("/src/sync/adapters.ts")) {
         source = source.replace('  return {\n    prefix: "pw:",', '  return {\n    __replayMemory: () => ({ lastRead, quietUntil, created: [...created] }),\n    prefix: "pw:",');
       } else if (url.endsWith("/src/store/model.ts")) {
@@ -321,7 +321,8 @@ async function environment(prefix, folderOps) {
         break;
       }
       case "relaunch":
-        for (const [name, save] of staged) disk.set(name, save.contents);
+        if (docMode.fail && globalThis.__engineMemory().doc.rebuilding?.length) for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
+        if (!docMode.fail) for (const [name, save] of staged) disk.set(name, save.contents);
         staged.clear();
         landing.splice(0);
         retrying.splice(0);
@@ -342,6 +343,20 @@ async function environment(prefix, folderOps) {
         await launch();
         break;
       case "damage": {
+        if (step.how === "newer") {
+          const text = staged.get(step.doc)?.contents ?? disk.get(step.doc);
+          if (!text?.startsWith("sealed:")) break;
+          let parsed;
+          try {
+            parsed = JSON.parse(text.slice(7));
+          } catch {
+            break;
+          }
+          for (const scope of Object.values(parsed)) if (scope && typeof scope === "object") delete scope.seen, (scope.newerField = { added: true });
+          staged.delete(step.doc);
+          disk.set(step.doc, `sealed:${JSON.stringify(parsed)}`);
+          break;
+        }
         for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
         const damaged = { drop: null, corrupt: "sealed:{\"app\":", foreign: "sealed-elsewhere:{}", malformed: 'sealed:{"journal":{"app":[{"v":1,"kind":"log","device":"x","seq":1}]}}' }[step.how];
         staged.delete(step.doc);
@@ -480,8 +495,12 @@ async function environment(prefix, folderOps) {
       plain({ state: projectState(S()), model: globalThis.__modelMemory.read(), host: { bookmarks: S().bookmarks, history: S().history, historyReady: S().historyReady, bookmarksReady: S().bookmarksReady } }),
     async step(step) {
       calls = [];
+      const loadedBefore = globalThis.__engineMemory().loaded;
       await runStep(step);
       await drain();
+      const memory = globalThis.__engineMemory();
+      if (memory.loaded && (!loadedBefore || step.op === "start") && memory.doc.rebuilding?.length)
+        for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
       for (const p of [...inFlight]) {
         const settled = await Promise.race([p.then(() => true, () => true), new Promise((r) => setImmediate(() => r(false)))]);
         if (settled) inFlight.splice(inFlight.indexOf(p), 1);
@@ -843,6 +862,7 @@ export function oracleScript(seed, steps) {
     else if (r < 0.56) push(mac, { op: "snapshot" });
     else if (r < 0.6) push(mac, { op: "crash", snapshot: rand() < 0.4 }), push(mac, { op: "start" });
     else if (r < 0.63) push(mac, { op: "damage", doc: pick(["sync-state.nns", "sync-journal.nns"]), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    else if (r < 0.65) push(mac, { op: "damage", doc: "sync-state.nns", how: "newer" }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
     else if (r < 0.68) push(mac, { op: "holdNative", names: [pick(["read", "write", "chainStatus", "unlock", "sealLocal", "openLocal"])] });
     else if (r < 0.72) push(mac, { op: "releaseNative" });
     else if (r < 0.75) push(mac, { op: "hold", value: rand() < 0.5 });

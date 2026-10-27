@@ -1142,3 +1142,24 @@ test("B55: a rebuilding Mac whose state falls back to before it took a bookmark 
   assert.ok(!titles().includes("Taken"), "the deletion stands here");
   assert.ok(!other.store.has("bm:taken"), "and reaches the other Mac");
 });
+
+test("B56: during a rebuild, a setting chosen again with a value it had long ago is published, not taken for one already sent", async () => {
+  reset();
+  const engine = await onAndSynced();
+  S().updateSettings({ appearance: "light" });
+  await engine.syncNow();
+  S().updateSettings({ appearance: "dark" });
+  await engine.syncNow();
+  await settle();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const rebuilt = await launch();
+  rebuilt.startSync();
+  await settle();
+  S().updateSettings({ appearance: "light" });
+  for (let i = 0; i < 3; i++) await rebuilt.syncNow();
+  await settle();
+  const other = appMac("set:");
+  await other.sync();
+  assert.equal(S().settings.appearance, "light");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
+});

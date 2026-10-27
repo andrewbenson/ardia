@@ -16,7 +16,7 @@ const TAIL = "~tail";
 const FRAME_SLACK_MS = 50;
 const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);
 
-type Slide = { value: Animated.Value; from: number; at: number; until: number; landed: boolean };
+type Slide = { value: Animated.Value; from: number; at: number; until: number; landed: boolean; run: number };
 type Ghost = { key: string; anchor: string | null; y: number; snapshot: EntrySnapshot; opacity: Animated.Value; until: number };
 type Snapshot = { state: BrowserState; list: string[] };
 type Move = { key: string; from: number };
@@ -65,6 +65,24 @@ function offsets(s: BrowserState, entries: string[], height: Height, start = 0, 
     y += height(s, entries[i]!) + GAP;
   }
   return { at, end: y };
+}
+
+function settle(slide: Slide) {
+  const run = slide.run;
+  slide.landed = true;
+  slide.value.stopAnimation(() => {
+    if (slide.run === run) slide.value.setValue(0);
+  });
+}
+
+function mergePlans(first: Plan, next: Plan): Plan {
+  const later = new Set(next.moves.map((m) => m.key));
+  return {
+    moves: [...first.moves.filter((m) => !later.has(m.key)), ...next.moves],
+    ghosts: [...first.ghosts, ...next.ghosts],
+    clipped: next.clipped,
+    below: first.below + next.below,
+  };
 }
 
 function sharedPrefix(a: string[], b: string[]): number {
@@ -211,17 +229,17 @@ function useMotion({ devKey, entries, from, planner, height, enabled, native, be
   for (const slide of slides.values()) {
     if (slide.until && now >= slide.until) {
       slide.until = 0;
-      if (!slide.landed) slide.value.setValue(0);
+      if (!slide.landed) settle(slide);
     }
   }
   if (ghosts.current.some((g) => g.until && now >= g.until)) ghosts.current = ghosts.current.filter((g) => !g.until || now < g.until);
 
   const prepare = (plan: Plan, at: number) => {
-    for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, landed: false });
+    for (const m of plan.moves) if (!slides.has(m.key)) slides.set(m.key, { value: new Animated.Value(m.from), from: m.from, at, until: 0, landed: false, run: 0 });
     ghosts.current = [...ghosts.current, ...plan.ghosts];
     clipped.clear();
     for (const key of plan.clipped) clipped.add(key);
-    queued.current = plan;
+    queued.current = queued.current ? mergePlans(queued.current, plan) : plan;
   };
 
   const before = from.pending;
@@ -266,6 +284,14 @@ function useMotion({ devKey, entries, from, planner, height, enabled, native, be
       slide.landed = false;
       const timing = Animated.timing(slide.value, { toValue: 0, duration: slideMs, easing: SLIDE_EASING, useNativeDriver: native });
       const clips = i === 0 && token;
+      const run = ++slide.run;
+      setTimeout(() => {
+        if (slide.run === run && !slide.landed) settle(slide);
+        if (!clips || clipping.current !== token) return;
+        clipping.current = null;
+        clipped.clear();
+        announce();
+      }, slideMs + FRAME_SLACK_MS * 2);
       timing.start(({ finished }) => {
         if (!finished) return;
         slide.landed = true;

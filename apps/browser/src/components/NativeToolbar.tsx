@@ -38,9 +38,9 @@ const stripesUri = (palette: { text: string }) => {
   const onDark = !m || 0.2126 * parseInt(m[1]!, 16) + 0.7152 * parseInt(m[2]!, 16) + 0.0722 * parseInt(m[3]!, 16) > 128;
   return Image.resolveAssetSource(onDark ? LIGHT_STRIPES : DARK_STRIPES)?.uri ?? null;
 };
-const DIA_URL_TEXT = {
-  light: { urlHost: "rgba(0,0,0,0.8)", urlPath: "rgba(0,0,0,0.3)" },
-  dark: { urlHost: "rgba(255,255,255,0.55)", urlPath: "rgba(255,255,255,0.2)" },
+const DIA_INK = {
+  light: { urlHost: "rgba(0,0,0,0.8)", urlPath: "rgba(0,0,0,0.3)", icon: "rgba(0,0,0,0.83)", iconDisabled: "rgba(0,0,0,0.43)" },
+  dark: { urlHost: "rgba(255,255,255,0.55)", urlPath: "rgba(255,255,255,0.2)", icon: "rgba(255,255,255,0.51)", iconDisabled: "rgba(255,255,255,0.24)" },
 };
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const isLoopbackUrl = (url: string) => {
@@ -168,7 +168,7 @@ export function NativeToolbar({
       height: layout.toolbarHeight,
       bare: !!bare,
       focused,
-      palette: { ...palette, ...DIA_URL_TEXT[(palette.background ? /^#FFFFFF/i.test(palette.text) : !!theme.dark) ? "dark" : "light"] },
+      palette: { ...palette, ...DIA_INK[(palette.background ? /^#FFFFFF/i.test(palette.text) : !!theme.dark) ? "dark" : "light"] },
       accent: theme.accent,
       geometry: { ...geometry, urlRight: urlFieldRight(inSplit, extensionsWidth) },
       left: [

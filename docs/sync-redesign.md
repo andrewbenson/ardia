@@ -791,3 +791,112 @@ with what removes it.
 In its first 400 seeds, 43, 212, 390 and 398 fail on tie repairs. 265 no longer does, since the
 settle phase and hidden-file steps changed what it generates. The tie-by-key fix's commit puts the
 rules back to failures, so these pass on their merits.
+
+## Implementation plan
+
+Each step is one commit to main, or a short run of commits that land together. Each lands with its
+tests turning green, and the full suite (`pnpm test`, the engine checks for the engine steps, the
+oracle seeds) never goes backwards: no test that passed before a step fails after it. The riskiest
+parts come first, the password ledger and journal durability, so their review and their soak in
+nightlies start earliest. Nothing of the old guard is removed until what replaces it is in and green.
+
+**Step 0. The redesign suite, tracked.** The scratch suite moves into `apps/browser/src/sync/`:
+- `redesign.test.mjs` (the D, RR, FR, I, AUDIT, REBUILD, LAUNCH and MARK tests), the review
+  repros under `repros/`, the spec tests, and the strict oracle beside `engineScenario.mjs`.
+- Every test that's red on HEAD is marked `{ todo: "step N" }`, naming the step that turns it
+  green. `todo` tests run and report but don't fail the suite, so a step can't silently leave its
+  own tests red: the step's commit removes its `todo` marks, and a reviewer checks that the
+  removed set matches this plan.
+- B-old stays `todo` for good, as the accepted migration window.
+- No product code. Risk: none.
+
+**Step 1. `Adapter.apply` returns the keys it wrote** (§ 1, Applying).
+- Every adapter returns a set; an already-equal key counts as written; `applyAdapter` sets base
+  and clears `unapplied` only for those. The passwords conflict skip and `pgh:` stop returning ok.
+- Green: the P1 apply half (P1 still needs step 3 to be fully green); unit tests per adapter.
+- Small and mechanical, but it touches every adapter, so it goes first and alone.
+
+**Step 2. Login Data's row and the dated read** (engine).
+- An engine patch adds `LoginDatabase` access to `meta_table_` on the store's sequence, exposed as
+  `ac_passwords_mark` (write `L@t`, plus `solara_sync_off`) and a read that returns the row with
+  the logins from one read of the file. Logins gain `modified`, converted natively to Unix
+  milliseconds. Incremental engine build under the chromium lock.
+- Green: FR6 (the `--user-data-dir` pin) stays green; new engine-side tests for the row surviving
+  a reopen, and a missing row on a recreated file.
+- Risk: an engine patch on the password store. It ships dark: nothing reads the row yet.
+
+**Step 3. The password ledger** (§ 1, Passwords; the ledger check; `t`).
+- `sync-pw-ledger.json`, row-then-ledger order, detection by ledger, equal-to-record never an
+  edit, the four-digest rollback rule, conflict by value, the mismatch rebuild claiming only after
+  both times, the mass-change hold and prompt, upgrade seeding.
+- Green: D1–D3, RR1, RR2, RR3a/b/c, FR1, FR2, Q3, Q3-pre, Q3-family, P1, P1b, the AUDIT-pw tests,
+  the SPEC-t tests ported, seeds 32144 and 40636.
+- Risk: the highest in the plan. It decides which passwords go out and which are overwritten.
+  Independent review before and after (AGENTS.md › Second opinion), and a nightly with only this
+  step before step 4 lands on top.
+
+**Step 4. Journal durability** (§ 1, Where it lives, Durability).
+- `sync-edits.json` and `sync-edits.gen`, synchronous write-through in order, the store docs'
+  `g`, lost-journal detection, the vv(T)-bounded fallback, the no-gen rule, the ever-seen keys in
+  the store docs. The journal is written but not yet read for publishing.
+- Green: D4a/b, the journal SPEC tests (gen rolled back alone, journal and gen together, lost with
+  no gen), RR4 and FR3 in their fallback half.
+- Risk: synchronous IO on every user command. The perf ratchet (docs/perf) runs on this step.
+
+**Step 5. The command layer writes the journal** (§ 1, How it's written; What's journaled).
+- `fromSync` on bookmarks, history and profile applies; the shared key module; history's apply
+  order; observations kept out; `pinChoices` folded in and `pinSync` dropped; extension intents
+  folded in (`sync-extensions.json` read once and retired); joining seeds; the NativeStore
+  journal on the Swift side with per-key tags.
+- Green: RR6, RR9, D11a/b/c, FR5, the pin tests rewritten for the journal.
+- Still publishing by diff: this step only fills the journal, so nothing user-visible changes.
+
+**Step 6. Publish from the journal; apply never over an entry** (invariant 1).
+- `publishAdapter` publishes entries (their own `v`), observations by diff, stale entries
+  cleared; every adapter skips keys with live entries; the D10 rules for kept-off profiles and
+  rejoins.
+- Green: R3, A2, A3, A3s, D10a-conflict, D10b, R-baseline, R-rollback, guard-review r2/r3/r4,
+  guard-review3 r1/r1b, seed 25066/B70.
+- The old guard still runs alongside; it now only gates what it held before, so nothing it
+  caught can slip through mid-plan.
+
+**Step 7. Publishing chains and twins** (§ 2).
+- Chain ids, the currency checks, re-sends under new seqs, `IOPlatformUUID` with the device id.
+- Green: R1, R1b, E, E-peer, R-rollback-outbox, review5 C1, D8, RR7, seed 35309.
+- Risk: the folder format is unchanged, but every reader must accept a chain as a device. The
+  update test in the release skill (old stable reading new files) runs on this step.
+
+**Step 8. Holds and per-type settle** (§ 3, § 4).
+- First-seen per file, the 10-minute limit, the D7 bookmarks apply rule with ever-seen origins,
+  per-type rebuild list.
+- Green: A1, A2 (review5), Q1, C1 (guard-review2), C2, D7a/b, RR10, FR4, review5 D1 in its
+  journal half.
+
+**Step 9. The bookmark bridge's generations** (§ 1, Bookmarks).
+- Engine: `ac_bookmarks_apply` gains meta ops (`solara_shadow`, `solara_origin`,
+  `solara_sync_off`) and the tree read returns the bar node's mark; the Chrome fake gains meta
+  info and a change event per apply.
+- Bridge: generation steps for pushes and reads, the intents file, the launch rules, the
+  claim-nothing rebuild that keeps live entries, launch diffs keeping stamps. If the interim
+  unsaved-push replay has shipped, this step replaces it.
+- Green: I3, I6a/b, MARK-settles, AUDIT-docs-all, AUDIT-chrome-bookmarks, REBUILD-keeps-entries,
+  LAUNCH-keeps-stamp, D5a, review5 D1.
+
+**Step 10. sync.json anchors** (§ Rollback audit, opt-outs).
+- Each profile's sync id and kept-out flag on the profile; opt-outs written beside their data
+  (Login Data and the bar node through steps 2 and 9, History's meta table through a new
+  ArdiaCore call, extension prefs); sync only when both say on.
+- Green: AUDIT-syncjson-profile, -type-off, -profile-off, SPEC-opt-out.
+
+**Step 11. The old guard goes, and the format bump** (§ What's removed, § Migration).
+- Remove the launch and load notes, baselines, the delivered map, the fresh download wait and the
+  stand-in base; bump sync.json's `v`; read and drop the old fields.
+- Green: everything above stays green with the guard gone, which is the point of doing it last.
+  B-old stays the one `todo`.
+
+**Step 12. Small independent fixes,** anytime after step 0:
+- the HLC counter carry (D9b);
+- the tie-by-key fix (seeds 43, 212, 390, 398), with the strict oracle's rules restored.
+
+Each step's commit message lists the `todo` marks it removed. A step that can't turn its tests
+green without touching a later step's files is split again, not merged ahead of its order.

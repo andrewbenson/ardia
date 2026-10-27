@@ -9,9 +9,18 @@ enum NativeSplitChrome {
   static let themeTopic = "split.theme"
   static let dragTopic = "split.drag"
   static let toastTopic = "split.toast"
+  static let toolbarTopic = "split.toolbar"
+  nonisolated static var panesEnabled: Bool { NativeWindowShell.enabled && ProcessInfo.processInfo.environment["ARDIA_NATIVE_PAGES_POOL"] == "1" }
 
   private static var started = false
   private static var views: [String: SplitChromeView] = [:]
+  private static var panes: [String: SplitPanesView] = [:]
+  private static var toolbars: [String: [String: String]] = [:]
+  private static let favicons: SidebarFavicons = {
+    let made = SidebarFavicons()
+    made.loader = { request in try await NativeSidebar.favicon(request) }
+    return made
+  }()
   private static var listener: Int?
   private static let commits = SplitChromeCommits()
 
@@ -21,6 +30,7 @@ enum NativeSplitChrome {
     _ = SettingsJS.shared.observe(themeTopic) { value in applyTheme(value) }
     _ = SettingsJS.shared.observe(dragTopic) { value in applyDrag(value) }
     _ = SettingsJS.shared.observe(toastTopic) { value in applyToast(value) }
+    if panesEnabled { _ = SettingsJS.shared.observe(toolbarTopic) { value in applyToolbars(value) } }
     #if DEBUG
     _ = SettingsJS.shared.observe("split.dev") { value in SplitChromeDevRun.start(value, views) }
     #endif
@@ -35,6 +45,37 @@ enum NativeSplitChrome {
     for (id, view) in views {
       if view.superview == nil { views[id] = nil } else { view.update(state: state) }
     }
+    for (id, view) in panes {
+      if view.superview == nil { panes[id] = nil } else { view.update(state: state) }
+    }
+  }
+
+  private static func cardContainer(for window: String) -> NSView? { NativeWindowShell.host(window)?.shell.card }
+
+  private static func panesView(_ windowId: String) -> SplitPanesView? {
+    guard panesEnabled else { return nil }
+    if let view = panes[windowId], view.superview != nil { return view }
+    panes[windowId] = nil
+    guard let card = cardContainer(for: windowId) else { return nil }
+    let view = SplitPanesView(windowId: windowId)
+    view.favicons = favicons
+    view.frame = card.bounds
+    view.autoresizingMask = [.width, .height]
+    view.onToolbarClick = { tabId, click in
+      let payload: [String: Any] = ["id": click.id, "kind": click.kind.rawValue, "meta": click.meta, "alt": click.alt, "shift": click.shift, "text": click.text ?? NSNull()]
+      Task { @MainActor in _ = await SettingsAdapters.js("split.toolbarClick", windowId, tabId, payload) }
+    }
+    view.onToolbarAnchors = { tabId, anchors in
+      let payload = anchors.mapValues { [$0.minX, $0.minY, $0.width, $0.height] }
+      Task { @MainActor in _ = await SettingsAdapters.js("split.toolbarAnchors", windowId, tabId, payload) }
+    }
+    view.onNavigate = { tabId, text in _ = try? NativeStoreHandle.store?.dispatch(Command("navigate", [.string(tabId), .string(text)]), origin: .native) }
+    view.onReplace = { tabId, other in _ = try? NativeStoreHandle.store?.dispatch(Command("replaceSplitPane", [.string(tabId), .string(other)]), origin: .native) }
+    card.addSubview(view)
+    view.setToolbars(toolbars[windowId] ?? [:])
+    if let state = NativeStoreHandle.store?.state { view.update(state: state) }
+    panes[windowId] = view
+    return view
   }
 
   private static func view(_ windowId: String) -> SplitChromeView? {
@@ -65,7 +106,15 @@ enum NativeSplitChrome {
     guard let all = windows(value) else { return }
     for (windowId, entry) in all {
       guard let view = view(windowId) else { continue }
-      view.setChrome(theme: SplitChromeTheme(entry["theme"] as? [String: Any] ?? [:]), fullscreenTab: entry["fullscreenTab"] as? String, covered: entry["covered"] as? Bool ?? false)
+      let theme = SplitChromeTheme(entry["theme"] as? [String: Any] ?? [:])
+      let fullscreenTab = entry["fullscreenTab"] as? String
+      view.setChrome(theme: theme, fullscreenTab: fullscreenTab, covered: entry["covered"] as? Bool ?? false)
+      guard let panes = panesView(windowId) else { continue }
+      panes.theme = theme
+      panes.cardColor = theme.color("card", dark: "rgba(18,18,18,0.5)", light: "rgba(255,255,255,0.7)")
+      panes.toolbarHeight = entry["toolbar"] as? Bool ?? true ? ShellMetrics.toolbarHeight : 0
+      panes.small = entry["small"] as? Bool ?? false
+      panes.setFullscreenTab(fullscreenTab)
     }
   }
 
@@ -83,7 +132,17 @@ enum NativeSplitChrome {
     for (id, view) in views where all[id] == nil { view.setToast(nil) }
   }
 
-  static func sample(_ windowId: String) -> [String: Any]? { views[windowId]?.sample() }
+  private static func applyToolbars(_ value: Any?) {
+    guard let o = value as? [String: Any], o["v"] as? Int == 1, let all = o["windows"] as? [String: [String: String]] else { return }
+    toolbars = all
+    for (windowId, view) in panes { view.setToolbars(all[windowId] ?? [:]) }
+  }
+
+  static func sample(_ windowId: String) -> [String: Any]? {
+    guard var out = views[windowId]?.sample() else { return nil }
+    if let view = panes[windowId], view.window != nil { out["leaves"] = view.sample() }
+    return out
+  }
 }
 
 final class SplitChromeCommits: @unchecked Sendable {

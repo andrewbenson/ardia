@@ -1,11 +1,12 @@
-import { publishSettingsTopic } from "@ardia/settings";
-import { useEffect } from "react";
+import { publishSettingsTopic, windowPagesPoolActive, type ToolbarClick } from "@ardia/settings";
+import { useEffect, type RefObject } from "react";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import type { Theme } from "../../lib/theme";
 import { hideToast, useToasts } from "./splitActions";
 import type { Rect } from "./geometry";
 
 const VERSION = 1;
+export const nativeSplitPanes = windowPagesPoolActive();
 const themes: Record<string, object> = {};
 let themeQueued = false;
 let toastsStarted = false;
@@ -20,15 +21,15 @@ function publishThemes() {
   });
 }
 
-export function useNativeSplitChrome(windowId: string, shell: boolean, theme: Theme, fullscreenTab: string | null, peek: boolean) {
-  const { dark, accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder } = theme;
+export function useNativeSplitChrome(windowId: string, shell: boolean, theme: Theme, fullscreenTab: string | null, peek: boolean, toolbar: boolean, small: boolean) {
+  const { dark, accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder, card } = theme;
   useEffect(() => {
     if (!shell) return;
     startToasts();
-    const tokens = { accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder };
-    themes[windowId] = { theme: { dark, ...tokens }, fullscreenTab, covered: peek };
+    const tokens = { accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder, card };
+    themes[windowId] = { theme: { dark, ...tokens }, fullscreenTab, covered: peek, toolbar, small };
     publishThemes();
-  }, [shell, windowId, dark, accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder, fullscreenTab, peek]);
+  }, [shell, windowId, dark, accent, textPrimary, textSecondary, textTertiary, icon, toolbarHover, toolbarPressed, urlPill, rowHover, rowSelected, placeholder, selection, ntpBarBorder, card, fullscreenTab, peek, toolbar, small]);
   useEffect(
     () => () => {
       if (!shell) return;
@@ -58,7 +59,45 @@ function startToasts() {
   publish(useToasts.getState().toasts);
 }
 
+export type SplitToolbarHandlers = { onClick: (c: ToolbarClick) => Promise<unknown> | unknown; onAnchors: (anchors: Record<string, [number, number, number, number]>) => void };
+
+const toolbars: Record<string, Record<string, string>> = {};
+const toolbarHandlers = new Map<string, RefObject<SplitToolbarHandlers>>();
+let toolbarsQueued = false;
+
+function publishToolbars() {
+  if (toolbarsQueued) return;
+  toolbarsQueued = true;
+  queueMicrotask(() => {
+    toolbarsQueued = false;
+    publishSettingsTopic("split.toolbar", { v: VERSION, windows: toolbars });
+  });
+}
+
+export function feedSplitToolbar(windowId: string, tabId: string, json: string | null, handlers: RefObject<SplitToolbarHandlers>) {
+  toolbarHandlers.set(`${windowId}:${tabId}`, handlers);
+  const panes = (toolbars[windowId] ??= {});
+  if (json === null) delete panes[tabId];
+  else panes[tabId] = json;
+  publishToolbars();
+}
+
+export function dropSplitToolbar(windowId: string, tabId: string) {
+  toolbarHandlers.delete(`${windowId}:${tabId}`);
+  const panes = toolbars[windowId];
+  if (!panes) return;
+  delete panes[tabId];
+  if (Object.keys(panes).length === 0) delete toolbars[windowId];
+  publishToolbars();
+}
+
 addNativeSettingsHandlers({
+  "split.toolbarClick": (windowId: string, tabId: string, click: ToolbarClick) => {
+    void toolbarHandlers.get(`${windowId}:${tabId}`)?.current?.onClick(click);
+  },
+  "split.toolbarAnchors": (windowId: string, tabId: string, anchors: Record<string, [number, number, number, number]>) => {
+    toolbarHandlers.get(`${windowId}:${tabId}`)?.current?.onAnchors(anchors);
+  },
   "split.toast": (windowId: string, id: number, event: string) => {
     if (event === "action") actions.get(`${windowId}:${id}`)?.();
     hideToast(windowId, id);

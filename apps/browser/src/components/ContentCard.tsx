@@ -39,7 +39,8 @@ import { SadTab, StatusBubble } from "./layout/PaneOverlays";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
 import { useWindowShell } from "./layout/ShellBackdrop";
-import { useNativeSplitChrome } from "./layout/nativeSplitChrome";
+import { nativeSplitPanes, useNativeSplitChrome } from "./layout/nativeSplitChrome";
+import { SplitToolbarFeed } from "./layout/NativeSplitToolbars";
 import { pagerFor } from "./layout/profilePager";
 import { openFromPage } from "./layout/openFromPage";
 import { dockMoving, useDockMotion, usePeekEdge } from "./layout/dockMotion";
@@ -96,7 +97,7 @@ export function ContentCard() {
   const peekId = useBrowser((s) => s.peeks[windowId]?.tabId);
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   const shell = useWindowShell();
-  useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId);
+  useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
   }, [fullscreenTab, peekId, peekFullscreen, windowId]);
@@ -295,6 +296,7 @@ export function ContentCard() {
               windowToolbar={windowToolbar}
               popovers={tabId !== popoversOverCard}
               peekShown={!!peekId}
+              nativePane={shell && nativeSplitPanes && !!split?.tabIds.includes(tabId)}
             />
           );
         })}
@@ -304,6 +306,8 @@ export function ContentCard() {
       {size.width > 0 && !split && !fullscreenTab && (
         <FrozenPage windowId={windowId} tabId={activeId} top={(!addressInSidebar && !small && !hideWhileScrolling ? layout.toolbarHeight : 0) + (barMode === "always" && !small && !hideWhileScrolling ? BOOKMARKS_BAR_HEIGHT : 0)} />
       )}
+      {shell && nativeSplitPanes && split && size.width > 0 &&
+        split.tabIds.map((tabId) => <SplitToolbarFeed key={tabId} tabId={tabId} windowId={windowId} geometry={geometryFor(panes[tabId])} focused={tabId === activeId} />)}
       {split && !fullscreenTab && !shell && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {size.width > 0 && popoversOverCard && origin && activeRect && peekEdge !== undefined && (
         <BesidePeekPopovers
@@ -350,6 +354,7 @@ const TabPane = memo(function TabPane({
   windowToolbar,
   popovers,
   peekShown,
+  nativePane,
 }: {
   tabId: string;
   windowId: string;
@@ -371,6 +376,7 @@ const TabPane = memo(function TabPane({
   windowToolbar: boolean;
   popovers: boolean;
   peekShown: boolean;
+  nativePane: boolean;
 }) {
   const theme = useTheme();
   const visible = !!rect;
@@ -412,10 +418,12 @@ const TabPane = memo(function TabPane({
         borderRadius: fullscreen ? 0 : layout.cardRadius,
         overflow: "hidden",
         opacity: covered ? 0 : 1,
-        backgroundColor: visible && !fullscreen ? theme.card : undefined,
+        backgroundColor: visible && !fullscreen && !nativePane ? theme.card : undefined,
       }}
     >
-      {!toolbar || fullscreen || autoLayout ? null : visible && !windowToolbar ? (
+      {!toolbar || fullscreen || autoLayout ? null : nativePane ? (
+        <View style={{ height: layout.toolbarHeight }} />
+      ) : visible && !windowToolbar ? (
         <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />
       ) : visible ? (
         <ToolbarBackdrop tabId={tabId} />
@@ -429,7 +437,7 @@ const TabPane = memo(function TabPane({
           {visible && !fullscreen && <ShareBar tabId={tabId} />}
           <View style={{ flex: 1 }}>
             {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
-            {visible && isNewTab && !small && (inSplit ? <SplitEmptyState tabId={tabId} focused={focused} /> : emptyCard ? <EmptyCard windowId={windowId} tabId={tabId} /> : <NewTabPage key={tabId} tabId={tabId} toolbar={toolbar} />)}
+            {visible && isNewTab && !small && !nativePane && (inSplit ? <SplitEmptyState tabId={tabId} focused={focused} /> : emptyCard ? <EmptyCard windowId={windowId} tabId={tabId} /> : <NewTabPage key={tabId} tabId={tabId} toolbar={toolbar} />)}
             {visible && <InternalPage tabId={tabId} />}
             {visible && (
               <PageOverlays

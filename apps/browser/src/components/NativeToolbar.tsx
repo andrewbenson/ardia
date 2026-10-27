@@ -61,21 +61,37 @@ function safeDecode(s: string) {
 const togglePopover = (tabId: string, name: "siteControls" | "zoom" | "popups") =>
   setPopover(tabId, (usePages.getState().popover[tabId] ?? null) === name ? null : name);
 
-export function NativeToolbar({
-  tabId,
-  geometry,
-  windowId,
-  inSplit,
-  focused,
-  bare,
-}: {
+type NativeToolbarProps = {
   tabId: string;
   geometry: ToolbarGeometry;
   windowId: string;
   inSplit: boolean;
   focused: boolean;
   bare?: boolean;
-}) {
+};
+
+export function NativeToolbar(props: NativeToolbarProps) {
+  const view = useRef<View>(null);
+  const { tab, json, onClick, onAnchors } = useNativeToolbarModel(props, () => findNodeHandle(view.current));
+
+  if (!tab || !json) return <View style={{ height: layout.toolbarHeight }} />;
+
+  return (
+    <View style={{ height: layout.toolbarHeight }}>
+      <WindowDragRegion style={StyleSheet.absoluteFill} />
+      <View ref={view} collapsable={false} style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        <NativeToolbarView
+          style={StyleSheet.absoluteFill}
+          state={json}
+          onToolbarClick={(e) => void onClick(e.nativeEvent)}
+          onToolbarAnchors={(e) => onAnchors(e.nativeEvent.anchors)}
+        />
+      </View>
+    </View>
+  );
+}
+
+export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focused, bare }: NativeToolbarProps, focusHandle: () => number | null) {
   const theme = useTheme();
   const tab = useToolbarTab(tabId);
   const isLoading = useTabLive(tabId, (l) => l.isLoading);
@@ -91,7 +107,6 @@ export function NativeToolbar({
   const developer = useTabDeveloperMode(tabId);
   const editing = useUrlEdit((u) => u.tabId === tabId);
   const editRequest = useUrlEdit((u) => u.request);
-  const view = useRef<View>(null);
   useEffect(() => () => endUrlEdit(tabId), [tabId]);
   useEffect(() => {
     if (!developer) endUrlEdit(tabId);
@@ -210,12 +225,11 @@ export function NativeToolbar({
   }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, developer, editing, editRequest, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split, extensionsJson]);
   const json = useMemo(() => (state ? JSON.stringify(state) : null), [state]);
 
-  if (!tab || !json) return <View style={{ height: layout.toolbarHeight }} />;
-
   const focus = () => {
     if (!focused) useBrowser.getState().activate(tabId);
   };
   const onClick = async (c: ToolbarClick) => {
+    if (!tab) return;
     focus();
     const m = { metaKey: c.meta, altKey: c.alt, shiftKey: c.shift };
     switch (c.id) {
@@ -248,7 +262,7 @@ export function NativeToolbar({
         showNativePanelNow(windowId, tab.url);
         return useBrowser.getState().openPanel(windowId, tab.url);
       case "urlEdit":
-        if (c.kind === "focus") return claimFocusTag(windowId, urlEditFocus(tabId), () => findNodeHandle(view.current));
+        if (c.kind === "focus") return claimFocusTag(windowId, urlEditFocus(tabId), focusHandle);
         if (c.kind === "submit") submitUrlEdit(tabId, c.text ?? "");
         else endUrlEdit(tabId);
         if (c.kind !== "blur") void webviews.get(tabId)?.focus();
@@ -285,17 +299,5 @@ export function NativeToolbar({
     }
   };
 
-  return (
-    <View style={{ height: layout.toolbarHeight }}>
-      <WindowDragRegion style={StyleSheet.absoluteFill} />
-      <View ref={view} collapsable={false} style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        <NativeToolbarView
-          style={StyleSheet.absoluteFill}
-          state={json}
-          onToolbarClick={(e) => void onClick(e.nativeEvent)}
-          onToolbarAnchors={(e) => extensions.onAnchors(e.nativeEvent.anchors)}
-        />
-      </View>
-    </View>
-  );
+  return { tab, json, onClick, onAnchors: extensions.onAnchors };
 }

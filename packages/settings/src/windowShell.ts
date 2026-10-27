@@ -2,6 +2,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 
 type WindowShellModule = {
   active(windowId: string): boolean;
+  pagesPool?(): boolean;
   setBackdrop(windowId: string, json: string): Promise<void>;
   describe(windowId: string): Promise<string>;
 };
@@ -11,6 +12,14 @@ const native = requireOptionalNativeModule<WindowShellModule>("SolaraWindowShell
 export function windowShellActive(windowId: string): boolean {
   try {
     return native?.active(windowId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function windowPagesPoolActive(): boolean {
+  try {
+    return native?.pagesPool?.() ?? false;
   } catch {
     return false;
   }

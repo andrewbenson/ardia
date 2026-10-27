@@ -46,6 +46,7 @@ enum NativeWindowShell {
   }
 
   static func isBrowserWindow(_ windowId: String) -> Bool {
+    if let kind = WindowHost.openingKinds[windowId] { return kind == "browser" }
     guard let window = NativeStoreHandle.store?.state.windows[windowId] else { return false }
     return window.kind == nil || window.kind == "browser"
   }
@@ -190,11 +191,19 @@ public class WindowShellModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraWindowShell")
 
-    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeWindowShell.install() } } }
+    OnCreate {
+      if Thread.isMainThread {
+        MainActor.assumeIsolated { NativeWindowShell.install() }
+      } else {
+        DispatchQueue.main.async { MainActor.assumeIsolated { NativeWindowShell.install() } }
+      }
+    }
 
     Function("active") { (windowId: String) -> Bool in
       NativeWindowShell.enabled && NativeWindowShell.active(windowId)
     }
+
+    Function("pagesPool") { () -> Bool in NativeSplitChrome.panesEnabled }
 
     AsyncFunction("setBackdrop") { (windowId: String, json: String) in
       MainActor.assumeIsolated { NativeWindowShell.setBackdrop(windowId, json) }

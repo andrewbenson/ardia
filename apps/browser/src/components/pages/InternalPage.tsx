@@ -1,3 +1,4 @@
+import { nativePagesAvailable } from "@ardia/settings";
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { useBrowser } from "../../store/browser";
@@ -6,6 +7,7 @@ import { setPageProgress } from "../../store/pageProgress";
 import { BookmarksPage } from "./BookmarksPage";
 import { DownloadsPage } from "./DownloadsPage";
 import { HistoryPage } from "./HistoryPage";
+import { NativeDownloadsPage } from "./NativeDownloadsPage";
 import { INTERNAL_PAGES, internalPageOf, internalQuery, tabDestination } from "./urls";
 
 export function InternalPage({ tabId }: { tabId: string }) {
@@ -31,7 +33,7 @@ export function InternalPage({ tabId }: { tabId: string }) {
     <View style={StyleSheet.absoluteFill}>
       {page === "history" && <HistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} />}
       {page === "bookmarks" && <BookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} />}
-      {page === "downloads" && <DownloadsPage tabId={tabId} />}
+      {page === "downloads" && (nativePagesAvailable() ? <NativeDownloadsPage tabId={tabId} /> : <DownloadsPage tabId={tabId} />)}
     </View>
   );
 }

@@ -11,8 +11,10 @@ struct OnboardingText: View {
   var lines = 0
   var alignment: NSTextAlignment = .left
   var italic = false
+  var strike = false
 
-  init(_ text: String, size: CGFloat, weight: Int = 400, color: Color, lineHeight: CGFloat? = nil, kerning: CGFloat = 0, lines: Int = 0, alignment: NSTextAlignment = .left, italic: Bool = false) {
+  init(_ text: String, size: CGFloat, weight: Int = 400, color: Color, lineHeight: CGFloat? = nil, kerning: CGFloat = 0, lines: Int = 0, alignment: NSTextAlignment = .left, italic: Bool = false, strike: Bool = false) {
+    self.strike = strike
     self.text = text
     self.size = size
     self.weight = weight
@@ -25,7 +27,7 @@ struct OnboardingText: View {
   }
 
   var body: some View {
-    OnboardingTextRepresentable(layout: OnboardingTextLayout(text: text, size: size, weight: weight, color: NSColor(color), lineHeight: lineHeight, kerning: kerning, lines: lines, alignment: alignment, italic: italic))
+    OnboardingTextRepresentable(layout: OnboardingTextLayout(text: text, size: size, weight: weight, color: NSColor(color), lineHeight: lineHeight, kerning: kerning, lines: lines, alignment: alignment, italic: italic, strike: strike))
       .accessibilityElement()
       .accessibilityLabel(text)
       .accessibilityAddTraits(.isStaticText)
@@ -49,9 +51,11 @@ struct OnboardingTextLayout: Equatable {
   let alignment: NSTextAlignment
   var italic = false
   var family: String?
+  var strike = false
 
-  init(text: String, size: CGFloat, weight: Int, color: NSColor, lineHeight: CGFloat?, kerning: CGFloat, lines: Int, alignment: NSTextAlignment, italic: Bool = false, family: String? = nil) {
+  init(text: String, size: CGFloat, weight: Int, color: NSColor, lineHeight: CGFloat?, kerning: CGFloat, lines: Int, alignment: NSTextAlignment, italic: Bool = false, family: String? = nil, strike: Bool = false) {
     self.init(runs: [OnboardingTextRun(text: text)], size: size, weight: weight, color: color, lineHeight: lineHeight, kerning: kerning, lines: lines, alignment: alignment, italic: italic, family: family)
+    self.strike = strike
   }
 
   init(runs: [OnboardingTextRun], size: CGFloat, weight: Int, color: NSColor, lineHeight: CGFloat?, kerning: CGFloat, lines: Int, alignment: NSTextAlignment, italic: Bool = false, family: String? = nil) {
@@ -101,6 +105,7 @@ struct OnboardingTextLayout: Equatable {
     paragraph.lineBreakStrategy = []
     var base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
     if kerning != 0 { base[.kern] = kerning }
+    if strike { base[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
     var offset: CGFloat?
     if let lineHeight {
       paragraph.minimumLineHeight = lineHeight

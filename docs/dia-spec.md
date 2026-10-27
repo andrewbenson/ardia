@@ -139,12 +139,22 @@ window is opaque in both, so comparing an active window with an inactive one als
   the host bright and the path dim. Actions appear on the right: `bookmark`, `rectangle.split.2x1`,
   `signature`, `slider.horizontal.3`.
 - A divider sits under the toolbar on web pages. There is none on the New Tab page. It is 1 pt (2 px at 2x), not
-  a device hairline: on a light page 2 rows of (242, 242, 242) over white, black at ~5%; on a dark page 2 rows of
-  (25, 26, 26) over the (19, 20, 20) page, white at ~2.5% (hill.com/dashboard, Dia 2x captures, 2026-10-26).
-- The toolbar fill is the page's painted top colour (a top header, else body/html background), even when a
-  `theme-color` says otherwise: hill.com's `#191A1E` tag is ignored and the bar is the page's (19, 20, 20). Dia samples
-  the top of the page (`sampleTopOfPageColor`, `ColorSampleControllerV2` in its binary); ours falls back to
-  `theme-color` only on a page with nothing painted.
+  a device hairline, in the same colour as the bar with a little white or black over it. Values are raw display
+  pixels from 2x window captures (`screencapture -l`), averaged across the toolbar:
+  - Dark page: 2 rows of (25, 26, 26) over a bar and page of (19, 20, 20), so white at ~2.5%. Source: the owner's
+    capture of hill.com/dashboard, 2026-10-26 (`Clip 2026-10-26 at 18.05.49@2x.png`).
+  - Light page: 2 rows of (242, 242, 242) over a white bar and page, so black at ~5%. Source: a capture of Dia's window
+    on a white page, 2026-10-26.
+  - No site colour: not measured. Dia always colours the bar from the page, so a web page never shows Dia's own
+    toolbar colour; a capture of one (a page that is still blank, an error page) would settle it.
+- The toolbar fill is the colour the page paints at its top, not `theme-color`. hill.com sets
+  `<meta name="theme-color" content="#191A1E">` (24, 25, 28 on screen), and Dia's bar is the page's (19, 20, 20), the
+  same as the page below it (the owner's capture above). Dia's binary has `sampleTopOfPageColor`,
+  `_sampleTopOfPageColorInfo` and `ADK2.ColorSampleControllerV2`: it samples the top of the rendered page. Its
+  `themeColor` strings are Chrome's observed attribute, which the hill capture shows it doesn't use for the bar.
+  Whether Dia ever falls back to `theme-color` on a page with nothing painted is unknown from strings; our page
+  script does (`page_script.js`: top header, else body/html background, else `theme-color`, else the default page
+  colour), which also keeps a dark Gmail under its white tag dark (#219).
 
 ## URL click → command panel (anchored, no scrim)
 

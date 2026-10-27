@@ -238,9 +238,6 @@ final class ToolbarUrlFieldView: NSView {
     for (i, d) in dividers.enumerated() where i >= usedDividers { d.isHidden = true }
     let size = label.intrinsicContentSize
     let textRight = right
-    if let editor {
-      editor.frame = CGRect(x: x - 2 - 2, y: 4 + (h - 30) / 2 + 2, width: max(0, textRight - x + 4), height: 18)
-    }
     let developer = state?.developer != nil
     let shift = developer ? .zero : ToolbarUrlFieldView.diaTextShift
     label.frame = CGRect(
@@ -248,6 +245,7 @@ final class ToolbarUrlFieldView: NSView {
       y: developer ? (((h - size.height) / 2 - 0.5) * 2).rounded() / 2 : ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded() + shift.y,
       width: max(0, textRight - x - shift.x + ToolbarUrlFieldView.labelInset),
       height: size.height)
+    if let editor { editor.frame = label.frame.offsetBy(dx: 0, dy: 1) }
   }
 }
 

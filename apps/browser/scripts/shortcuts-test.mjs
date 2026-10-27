@@ -19,6 +19,7 @@ const rep = reporter(join(scratch, "shortcuts-test.log"), { name: `shortcuts-tes
 const server = createServer((req, res) => {
   const name = new URL(req.url, "http://x").search.slice(1) || "page";
   res.writeHead(200, { "content-type": "text/html" });
+  if (name === "autofocus") return res.end(`<!doctype html><title>autofocus</title><textarea id=t autofocus style="position:fixed;left:20px;top:120px;width:300px;height:60px"></textarea><script>document.getElementById("t").focus()</script>`);
   res.end(`<!doctype html><title>${name}</title><body style="font:20px system-ui"><h1>${name}</h1><input id=f value="hello field" style="position:fixed;left:20px;top:120px;width:300px;height:30px">`);
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
@@ -628,6 +629,19 @@ for (const [name, keys, busy, firstExpected] of handoffEnds) {
   const after = trace.slice(trace.findLastIndex((l) => / claim /.test(l)) + 1);
   const forwarded = after.some((l) => / forward paste/.test(l)), dropped = after.some((l) => / drop /.test(l));
   check("⌘L, a URL, Return, then a fresh ⌘V 150 ms later: the paste goes on to the page, not dropped", forwarded && !dropped, `trace ${after.join(" / ")}`);
+}
+{
+  await resetToPageField("", [0, 0]);
+  await clipboard.set("landed-after-return");
+  await postKeys([keyPress("l", 37)]);
+  await sleep(700);
+  await ac(`const d = ac.omnibox.get("w1:panel") ?? ac.omnibox.get("w1:sidebar"); return d ? Promise.resolve(d.type(${JSON.stringify(`${pages}/?autofocus`)})).then(() => new Promise((r) => setTimeout(r, 400))).then(() => 1) : 0;`);
+  await postKeys([keyPress("\r", 36, 0, []), keyPress("v", 9, 150)]);
+  await sleep(1200);
+  const landed = await cdp("?autofocus", `document.getElementById("t").value`);
+  check("⌘L, a URL to a page that focuses a textarea, Return, then ⌘V 150 ms later: the textarea holds the paste", landed === "landed-after-return", `textarea ${JSON.stringify(landed)}`);
+  await cdp("?autofocus", "(history.back(), true)");
+  await sleep(1000);
 }
 await resetToPageField("", [0, 0]);
 await countPastes();

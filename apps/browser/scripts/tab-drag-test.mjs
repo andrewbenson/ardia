@@ -247,7 +247,7 @@ try {
   });
 
   await check("a tab dragged onto another window's tabs: the strip makes room at the pointer, and it lands there", async () => {
-    await run(`ac.store.setState((s) => ({ ui: { ...s.ui, focusOrder: ["w6", "w5", ...s.ui.focusOrder.filter((id) => id !== "w6" && id !== "w5")] } })); return 1;`);
+    await run(`st().setFocusedWindow("w5"); st().setFocusedWindow("w6"); return 1;`);
     const from = await run(`return tabItems("w5");`);
     const into = await run(`return tabItems("w6");`);
     const dx = 600;
@@ -740,7 +740,7 @@ try {
   });
 
   await check("file drop: a finished download dragged from the Downloads popover opens in the tab list", async () => {
-    await run(`ac.store.setState({ downloads: [{ id: "dl-drop", url: "https://example.com/downloaded.pdf", filename: "downloaded.pdf", path: ${JSON.stringify(download)}, state: "finished", paused: false, received: 10, total: 10, speed: 0, mimeType: "application/pdf" }] });
+    await run(`st().upsertDownload({ id: "dl-drop", url: "https://example.com/downloaded.pdf", filename: "downloaded.pdf", path: ${JSON.stringify(download)}, state: "finished", paused: false, received: 10, total: 10, speed: 0, mimeType: "application/pdf" });
       st().setDownloadsOpen("w1", true); return settle(900);`);
     const spot = await run(`return win("w1").then((n) => { const pts = []; for (let y = 30; y < 420; y += 6) for (let x = 20; x < 700; x += 12) pts.push([x, y]);
       return Promise.all(pts.map(([x, y]) => C.devWindow(n, "hit:" + x + "," + y).then((h) => (/FileDragView/.test(h) ? [x, y] : null)))).then((hits) => hits.filter(Boolean)); });`);

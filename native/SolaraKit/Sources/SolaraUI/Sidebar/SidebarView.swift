@@ -79,7 +79,10 @@ public final class SidebarView: NSView {
     let previous = context
     let moved = previous != nil && previous?.activeId != next.activeId
     context = next
+    let resting = motion
+    if let previous, SidebarMotion.folding(previous.state, next.state, windowId: windowId) { motion = .fold }
     reconcile(animated: previous != nil && canAnimate && SidebarDragController.existing(self)?.suppressesMotion != true)
+    motion = resting
     if let previous { revealChanges(from: previous, to: next) }
     if moved && !isHiddenOrHasHiddenAncestor { NotificationCenter.default.post(name: Self.selectionShown, object: self) }
   }
@@ -154,7 +157,12 @@ public final class SidebarView: NSView {
   public var hoverKey: String? { hoveredKey }
 
   public func motionSample() -> [[String: Any]] {
-    rows.subviews.compactMap { view in
+    let folds: [[String: Any]] = boxes.subviews.compactMap { view in
+      guard let box = view as? SidebarFoldingBox else { return nil }
+      let key = (box as? GroupBoxView)?.item?.key ?? (box as? SidebarRowView)?.item?.key ?? ""
+      return ["key": key, "y": box.frame.minY, "height": box.shownHeight, "box": true]
+    }
+    return folds + rows.subviews.compactMap { view in
       guard let row = view as? SidebarRowView, let key = row.item?.key, let layer = row.layer else { return nil }
       let shown = layer.presentation() ?? layer
       return ["key": key, "y": row.frame.minY, "shownY": shown.frame.minY, "alpha": Double(shown.opacity), "retired": row.retired,
@@ -273,7 +281,7 @@ public final class SidebarView: NSView {
       if reparented { parent.addSubview(view) }
       let slidesHere = animated && known != nil && !reparented && item.region == .scroll
       if view.frame != item.frame {
-        if slidesHere && (view.frame.size == item.frame.size || parent === rows || view is LiveBoxView) {
+        if slidesHere && (view.frame.size == item.frame.size || parent === rows || parent === boxes) {
           slides.append((view, item.frame))
         } else {
           view.frame = item.frame
@@ -314,6 +322,10 @@ public final class SidebarView: NSView {
       motion.timingFunction = timing.slideCurve
       for (view, to) in moves {
         let from = view.frame
+        if let box = view as? SidebarFoldingBox, from.size != to.size {
+          box.fold(to: to, motion: timing)
+          continue
+        }
         view.animator().frame = to
         if to.minY > from.minY, let cover = inserted.first(where: { $0.minY <= from.minY + 0.5 && $0.maxY > from.minY + 0.5 }) {
           clipUnder(view, from: from, to: to, edge: cover.maxY)

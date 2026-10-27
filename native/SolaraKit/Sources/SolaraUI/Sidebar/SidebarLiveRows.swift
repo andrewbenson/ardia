@@ -199,6 +199,7 @@ class LiveRowView: SidebarRowView {
 
 final class LiveBoxView: SidebarRowView {
   private let box = CALayer()
+  var fill: CALayer { box }
 
   override var pressScales: Bool { false }
 

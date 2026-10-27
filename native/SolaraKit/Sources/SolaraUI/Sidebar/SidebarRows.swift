@@ -813,6 +813,7 @@ final class GroupHeaderView: SidebarRowView {
 
 final class GroupBoxView: NSView {
   private let box = CALayer()
+  var fill: CALayer { box }
   private var groupId = ""
   private var shown = false
   var item: SidebarItem?

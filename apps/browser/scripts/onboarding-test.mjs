@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
@@ -124,6 +124,28 @@ try {
     assert.ok(isField(r.focus), `first responder: ${r.focus}`);
     assert.equal(r.after, r.during, "the bar's height");
     return `${r.focus}, bar ${r.during} -> ${r.after}`;
+  });
+
+  await rep.check("Continue through every step ends onboarding, saved at the outro", async () => {
+    const r = await run(`
+      const state = () => nativeOverlay().then((n) => (n ? S.devOnboarding("state").then(JSON.parse) : { active: !!acOnboarding.store.getState().windowId, step: acOnboarding.store.getState().step, sub: acOnboarding.store.getState().sub }));
+      acOnboarding.start(null, "source");
+      let continues = 0;
+      const pages = [];
+      const loop = () => state().then((s) => {
+        if (!s.active || acOnboarding.store.getState().leaving) return { continues, pages };
+        if (continues > 40) throw new Error("still on " + s.step + ":" + s.sub + " after 40 clicks");
+        pages.push(s.step + ":" + s.sub);
+        continues += 1;
+        return click([363, 663]).then(() => settle(700)).then(loop);
+      });
+      return settle(1500).then(() => act("fakeActiveClicks")).then(() => click([311, 389])).then(() => settle(500)).then(loop);
+    `);
+    await sleep(1500);
+    const saved = JSON.parse(readFileSync(join(data, "onboarding.json"), "utf8"));
+    assert.ok(saved.completedAt, "completedAt");
+    assert.equal(saved.step, "outro", "the saved step");
+    return `${r.continues} clicks: ${r.pages.join(" ")}; picked ${Object.keys(saved.picked ?? {}).length}`;
   });
 } finally {
   await app?.quit();

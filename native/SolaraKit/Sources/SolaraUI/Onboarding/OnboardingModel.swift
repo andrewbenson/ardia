@@ -107,7 +107,7 @@ public final class OnboardingModel {
 
   public func go(_ step: OnboardingStep, sub: Int = 0) {
     self.step = step
-    self.sub = sub
+    self.sub = max(0, min(sub, questions(for: step).count - 1))
     save(["step": .string(step.rawValue), "sub": .number(Double(sub))])
   }
 

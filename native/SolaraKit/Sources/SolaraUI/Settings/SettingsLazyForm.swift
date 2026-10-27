@@ -76,7 +76,7 @@ struct SettingsLazySectionRows: View {
   var body: some View {
     let rows = section.content
     let hasHeader = !section.header.isEmpty
-    Color.clear.frame(height: first ? SettingsFormMetrics.topInset : hasHeader ? SettingsFormMetrics.sectionSpacing : SettingsFormMetrics.headerlessSectionSpacing)
+    Color.clear.frame(height: first ? SettingsFormMetrics.topInset : hasHeader ? SettingsFormMetrics.sectionSpacing : rows.isEmpty ? 0 : SettingsFormMetrics.headerlessSectionSpacing)
     if hasHeader {
       VStack(alignment: .leading, spacing: 0) { section.header }
         .environment(\.settingsFormHeader, true)

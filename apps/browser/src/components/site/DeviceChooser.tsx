@@ -8,7 +8,8 @@ import {
 } from "@ardia/ardiacore";
 import { Symbol } from "@ardia/shell";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { nativeToolbarAvailable, NativeDeviceChooserView, type NativeDeviceChooserEvent } from "@ardia/settings";
 import { create } from "zustand";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
@@ -102,6 +103,46 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
     if (index !== null) void selectDevice(chooser.id, index);
   };
   const cancel = () => void cancelDeviceChooser(chooser.id);
+
+  if (nativeToolbarAvailable()) {
+    return (
+      <Popover key={chooser.id} width={340} top={top} left={left} modal={false}>
+        <NativeChooserBody
+          state={JSON.stringify({
+            id: chooser.id,
+            title: chooser.title,
+            icon: chooser.showSignal || scanning ? "dot.radiowaves.left.and.right" : "cable.connector",
+            options: chooser.options.map((o) => ({ name: o.name, detail: o.connected ? "Connected" : o.paired ? "Paired" : null, signal: chooser.showSignal ? o.signal : -1 })),
+            selected,
+            scanning,
+            refreshing: chooser.refreshing,
+            canRefresh: chooser.canRefresh,
+            scanningText: chooser.scanningText,
+            noOptionsText: chooser.noOptionsText,
+            unauthorized: chooser.unauthorized,
+            adapterOff: chooser.adapterOff,
+            notice: chooser.unauthorized ? `${PRODUCT} needs access to Bluetooth to find devices.` : chooser.adapterOff ? "Bluetooth is turned off. Turn it on to find devices." : null,
+            noticeIcon: chooser.unauthorized ? "lock" : chooser.adapterOff ? "antenna.radiowaves.left.and.right.slash" : null,
+            noticeLink: chooser.unauthorized ? "Open Bluetooth Settings" : null,
+            cancelLabel: chooser.cancelLabel || "Cancel",
+            okLabel: chooser.okLabel || "Connect",
+            valid,
+            dark: !!theme.dark,
+            theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, toolbarHover: theme.toolbarHover, rowHover: theme.rowHover, icon: theme.icon, accent: theme.accent },
+            goButton: theme.goButton,
+            goButtonText: theme.goButtonText,
+          })}
+          onEvent={(e) => {
+            if (e.kind === "select") setSelected(e.index);
+            else if (e.kind === "choose") choose(e.index < 0 ? selected : e.index);
+            else if (e.kind === "cancel") cancel();
+            else if (e.kind === "refresh") void refreshDeviceChooser(chooser.id);
+            else void openBluetoothSettings(chooser.id);
+          }}
+        />
+      </Popover>
+    );
+  }
 
   let body;
   if (chooser.unauthorized) {
@@ -198,6 +239,15 @@ function TextLink({ title, onPress }: { title: string; onPress: () => void }) {
       <Pressable onPress={onPress}>
         <Text style={{ fontSize: 12, fontWeight: "500", color: theme.accent, textDecorationLine: hovered ? "underline" : "none" }}>{title}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function NativeChooserBody({ state, onEvent }: { state: string; onEvent: (e: NativeDeviceChooserEvent) => void }) {
+  const [height, setHeight] = useState<number | null>(null);
+  return (
+    <View style={{ height: height ?? undefined, minHeight: 1 }}>
+      <NativeDeviceChooserView style={StyleSheet.absoluteFill} state={state} onChooserEvent={(e) => onEvent(e.nativeEvent)} onChooserHeight={(e) => setHeight(e.nativeEvent.height)} />
     </View>
   );
 }

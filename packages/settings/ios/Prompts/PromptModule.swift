@@ -45,3 +45,47 @@ final class NativePromptView: ExpoView {
     body.update(state)
   }
 }
+
+public class DeviceChooserModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("SolaraDeviceChooser")
+
+    View(NativeDeviceChooserView.self) {
+      Events("onChooserEvent", "onChooserHeight")
+
+      Prop("state") { (view: NativeDeviceChooserView, v: String) in MainActor.assumeIsolated { view.setState(v) } }
+    }
+  }
+}
+
+final class NativeDeviceChooserView: ExpoView {
+  let onChooserEvent = EventDispatcher()
+  let onChooserHeight = EventDispatcher()
+  let body = DeviceChooserView(frame: .zero)
+  private var json = ""
+
+  override var isFlipped: Bool { true }
+
+  required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+    body.autoresizingMask = [.width, .height]
+    body.frame = bounds
+    body.onHeight = { [weak self] h in self?.onChooserHeight(["height": h]) }
+    body.onEvent = { [weak self] e in
+      switch e {
+      case .select(let i): self?.onChooserEvent(["kind": "select", "index": i])
+      case .choose(let i): self?.onChooserEvent(["kind": "choose", "index": i ?? -1])
+      case .cancel: self?.onChooserEvent(["kind": "cancel"])
+      case .refresh: self?.onChooserEvent(["kind": "refresh"])
+      case .openSettings: self?.onChooserEvent(["kind": "openSettings"])
+      }
+    }
+    addSubview(body)
+  }
+
+  func setState(_ next: String) {
+    guard next != json, let state = DeviceChooserState.decode(next) else { return }
+    json = next
+    body.update(state)
+  }
+}

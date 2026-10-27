@@ -70,7 +70,13 @@ enum PromptMetrics {
 
 final class PromptPressable: HoverFillView {
   var fill: (Bool, Bool) -> CGColor? = { _, _ in nil }
+  var onDoublePress: (() -> Void)?
   override func refresh() { layer?.backgroundColor = fill(hovered, pressed) }
+
+  override func mouseUp(with event: NSEvent) {
+    super.mouseUp(with: event)
+    if event.clickCount == 2, bounds.contains(convert(event.locationInWindow, from: nil)) { onDoublePress?() }
+  }
 }
 
 @MainActor

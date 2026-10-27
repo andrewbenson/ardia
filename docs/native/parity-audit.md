@@ -31,7 +31,7 @@ deliberate, ask the lead first.
 | 2 | Downloads popover | Closed in 79a94f86. Was: no panel, rows drawn straight over the sidebar and page with no fill, border or shadow | Release, light and dark: panel fill, border, arrow and shadow on the same pixels as RN; 16 px differ (max 36 light, 40 dark), all in the progress bar | port-omnibox |
 | 3 | Settings | No title and no back/forward in the titlebar | Content 20 pt higher (first heading y 62 vs 82) | settings-ui |
 | 4 | Settings | Intentionally native-styled (owner, 2026-10-27), not a gap: Settings is compared on content and behaviour only. Was: colours and chrome differ on every pane | Selected row grey (216) vs blue (108,165,250); sidebar 237/36 vs 219/64; pane 255 vs 240; group box 566 vs 550 pt, no border | settings-ui |
-| 5 | Status bubble | Timings and scheme are intentional (Dia's; see Intentional differences). Open until the Release re-check: the dark mode read grey | Dark: fill 107, text 188 (contrast about 2.8:1); RN fill 44, text 224. Light matches Dia (fill 226, text 113, border 203) | status-bubble |
+| 5 | Status bubble | Not a port bug: timings, scheme and dark appearance all follow Dia (see Intentional differences). Dark over a white page reads grey with low contrast, as Dia's does; whether to diverge from Dia there for readability is with the lead | Release (25a3b373): light/white 226/113 (3.77:1), light/dark page 148/74 (2.92:1), dark/white 107/188 (2.81:1), dark/dark page 28/153 (5.98:1); my audit run read the same 107/188 | status-bubble |
 | 6 | Extension badge | Closed in c8f13a73. Was: "12" drawn as "1" | Release, light and dark: badge 2497–2527 × 54–75 px in both, "12" whole, badge pixels identical; icon edge 1 px wider on the left (2488 vs 2489) | port-omnibox |
 | 7 | Find bar | Count closed in 6dfce5c4 (was: the total in "1 \| 3" cut in half). Still open: in replace mode the "Replace" and "All" buttons are clipped on the right ("Al"), sit 7.5 pt and 4 pt right of RN's and 0.5 pt lower; `FindTextButton` sizes its label without the cell's 2 pt inset that 6dfce5c4 gave the other labels. "No results" and the replace note sit 0.5 pt lower (the note also 8 pt right, following the buttons) | Release, light and dark. Count and buttons row: max diff 0–1. "No results" 2201–2312 vs 2202–2313 × 145–163 vs 146–164 px, colour (251,99,92) / (191,49,48) in both. Replace ink 2331–2421 vs 2346–2433 px (91 vs 88 wide), All 2463–2490 vs 2471–2492 (28 vs 22). Note "Not in a text field" 189 px wide in both, 2109 vs 2125 px. The native field shows an accent-blue selection where RN's unfocused window shows grey | port-omnibox |
 | 8 | Settings › Privacy | Rule counts are stale and read once | 176,026 / 43,797 vs the engine's 254,167 / 44,271 | settings-ui |
@@ -63,7 +63,7 @@ Matching Dia rather than RN, so not gaps: see Intentional differences above.
 | 2 | 79a94f86 | Closed in light and dark (see row 2) |
 | 6 | c8f13a73 | Closed in light and dark (see row 6) |
 | 7 | 6dfce5c4 | Count and "No results" closed; replace-row buttons clipped and offset, labels 0.5 pt low (see row 7) |
-| 5 | d637be2d (in progress) | status-bubble, from Dia's dark values |
+| 5 | 25a3b373 (d637be2d documents it) | Matches Dia, including dark mode (Dia sets no dark-specific colour: popover material following the window, white 0.20 border). Dark over white 107/188, 2.81:1; the readability call is with the lead |
 
 ## Same in both
 

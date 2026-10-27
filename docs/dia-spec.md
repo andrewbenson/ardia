@@ -120,6 +120,34 @@ window is opaque in both, so comparing an active window with an inactive one als
   tint. Samples: `#1B1416` at the top, `#1F1C1D` at the bottom. Web content is opaque and sits
   below the toolbar; the toolbar itself is translucent card.
 
+## Link status bubble (Dia 1.54.2)
+
+The bubble at the bottom left of the card that shows a hovered link's URL. Pixels from a 2x crop of Dia over a white
+page (light, active window); behaviour from the binary (`DiaStatusText`, `StatusText` and its state enum).
+
+- Frame: 10 pt from the card's leading edge and 10 pt from its bottom (`leading 10`, `bottom -10`, kept within
+  `leading >= 10`, `trailing <= -10`). Height 24 (`>= 24`), a full pill (radius height x 0.5).
+- Width: the text plus 9 pt each side (text field insets 0, 9, 0, 9), at most 400 pt while compact. A
+  `https://github.com/andrewbenson` link measures 214.5 x 24 pt.
+- Text: system 12 pt medium, one line, `NSColor.secondaryLabelColor` (darkest ink about #6C over the fill).
+  Middle truncation while compact, tail truncation once expanded. The scheme stays (`https://`).
+- Background: `NSVisualEffectView`, material `.popover`, blending `.withinWindow`, a capsule mask image. Over white it
+  reads #E3E3E3; over green icons #DEE0DF, so it samples the page.
+- Border: 1 pt of `FloatingScrimBorder` (`ARCClients_BaseAssets.bundle`): black at 0.10 in light, white at 0.20 in
+  dark. Reads about #C8CAC9 to #CDCDCD over white.
+- Shadow: black, opacity 0.12, radius 5, offset (0, 0), with a shadow path. Reads #F0 at the edge, back to #FD about
+  8 pt out.
+- Container: an `NSStackView`, spacing 6, with an icon slot before the text (empty for links).
+- States: hidden, pendingPresentation, visible, pendingDismissal, hiding.
+  - A link waits 0.5 s before it shows. Another link while waiting restarts the wait; leaving cancels it.
+  - Leaving a link waits 0.5 s, then fades out over 0.1 s (`NSAnimationContext`, alpha only, no motion).
+  - A link during that wait or the fade shows at once, compact, and restarts the expansion timer.
+  - 1.5 s after it shows, the bubble expands: its 400 pt cap lifts to the card width less the insets. Moving between
+    links keeps an expanded bubble expanded; before that, each new link restarts the 1.5 s.
+- Pointer: the bubble's frame grown by 10 pt is its hit area. When the pointer enters that area in the leading slot the
+  bubble jumps to the trailing corner (10 pt from the right); it jumps back when the pointer is in the trailing slot's
+  area, and stays put when the pointer is in both. The jump is instant.
+
 ## Toolbar (inside the card)
 
 - Height 41. Icon centers from the card's left edge: 21, 56, 92, 127 (sidebar.left, chevron.left,

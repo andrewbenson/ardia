@@ -5,6 +5,7 @@ final class SolaraHostedView: ExpoView {
   var kind = ""
   var windowId = ""
   var active = true
+  var state = ""
   private var mount: HostedMount?
   private var mountedKey: String?
 
@@ -32,11 +33,16 @@ final class SolaraHostedView: ExpoView {
   func sync() {
     let key = "\(kind)\u{1}\(windowId)"
     guard active, !kind.isEmpty, let window else { return unmount() }
-    if mount != nil && mountedKey == key { return }
+    if mount != nil && mountedKey == key { return deliverState() }
     unmount()
     guard let content = HostedViews.make(kind, windowId: windowId) else { return }
     mountedKey = key
     mount = HostedMount(content: content, in: self, window: window)
+    deliverState()
+  }
+
+  private func deliverState() {
+    mount?.content.onState?(state)
   }
 
   func unmount() {

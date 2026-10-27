@@ -2,7 +2,7 @@ import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modu
 import type { ComponentType } from "react";
 import type { ViewProps } from "react-native";
 
-export type HostedViewProps = ViewProps & { kind: string; windowId: string; active?: boolean };
+export type HostedViewProps = ViewProps & { kind: string; windowId: string; active?: boolean; state?: string };
 
 type HostedModule = {
   kinds(): string[];

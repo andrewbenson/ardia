@@ -4,10 +4,14 @@ import Synchronization
 public struct HostedContent {
   public let view: NSView
   public let onUnmount: (() -> Void)?
+  public let takesFocus: Bool
+  public let onState: ((String) -> Void)?
 
-  public init(view: NSView, onUnmount: (() -> Void)? = nil) {
+  public init(view: NSView, onUnmount: (() -> Void)? = nil, takesFocus: Bool = true, onState: ((String) -> Void)? = nil) {
     self.view = view
     self.onUnmount = onUnmount
+    self.takesFocus = takesFocus
+    self.onState = onState
   }
 }
 
@@ -46,7 +50,7 @@ final class HostedMount {
   init(content: HostedContent, in host: NSView, window: NSWindow) {
     self.content = content
     self.window = window
-    let responder = window.firstResponder
+    let responder = content.takesFocus ? window.firstResponder : nil
     if let editor = responder as? NSTextView, editor.isFieldEditor, let field = editor.delegate as? NSResponder {
       savedResponder = field
       savedSelection = editor.selectedRange()
@@ -57,12 +61,17 @@ final class HostedMount {
     content.view.frame = host.bounds
     content.view.autoresizingMask = [.width, .height]
     host.addSubview(content.view)
-    window.makeFirstResponder(content.view)
+    if content.takesFocus { window.makeFirstResponder(content.view) }
   }
 
   func end() {
     guard !ended else { return }
     ended = true
+    guard content.takesFocus else {
+      content.view.removeFromSuperview()
+      content.onUnmount?()
+      return
+    }
     let hadFocus = window.map { focus(in: $0) } ?? false
     content.view.removeFromSuperview()
     content.onUnmount?()

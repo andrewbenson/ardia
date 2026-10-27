@@ -480,7 +480,7 @@ function PageOverlays({
     <>
       <FindBar tabId={tabId} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>
-        <StatusBubble tabId={tabId} maxWidth={Math.max(160, width / 2)} />
+        <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
       <SadTab tabId={tabId} />
       {cliPill && (

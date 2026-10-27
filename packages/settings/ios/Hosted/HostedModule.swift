@@ -5,6 +5,8 @@ public class HostedModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraHosted")
 
+    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register() } } }
+
     Function("kinds") { () -> [String] in
       HostedViews.kinds
     }
@@ -13,6 +15,7 @@ public class HostedModule: Module {
       Prop("kind") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.kind = v } }
       Prop("windowId") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.windowId = v } }
       Prop("active") { (view: SolaraHostedView, v: Bool?) in MainActor.assumeIsolated { view.active = v ?? true } }
+      Prop("state") { (view: SolaraHostedView, v: String?) in MainActor.assumeIsolated { view.state = v ?? "" } }
 
       OnViewDidUpdateProps { (view: SolaraHostedView) in MainActor.assumeIsolated { view.propsDidUpdate() } }
     }

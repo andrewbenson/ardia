@@ -1,4 +1,5 @@
 import { toAppUrl, urlForDisplay } from "@ardia/core";
+import { hostedKinds, SolaraHostedView } from "@ardia/settings";
 import { Surface, Symbol } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
@@ -7,7 +8,26 @@ import { webviews } from "../../lib/webviews";
 import { PromptButton } from "./controls";
 import { patchPage, usePage } from "./pageState";
 
-export function StatusBubble({ tabId, maxWidth }: { tabId: string; maxWidth: number }) {
+let nativeStatusBubble = false;
+
+function hasNativeStatusBubble() {
+  nativeStatusBubble ||= hostedKinds().includes("statusBubble");
+  return nativeStatusBubble;
+}
+
+export function StatusBubble({ tabId, windowId, maxWidth }: { tabId: string; windowId: string; maxWidth: number }) {
+  if (hasNativeStatusBubble()) return <NativeStatusBubble key={tabId} tabId={tabId} windowId={windowId} />;
+  return <ReactStatusBubble tabId={tabId} maxWidth={maxWidth} />;
+}
+
+function NativeStatusBubble({ tabId, windowId }: { tabId: string; windowId: string }) {
+  const dark = useTheme().dark;
+  const text = usePage(tabId, (p) => p.status);
+  const state = JSON.stringify({ text, dark });
+  return <SolaraHostedView kind="statusBubble" windowId={windowId} state={state} pointerEvents="none" style={StyleSheet.absoluteFill} />;
+}
+
+function ReactStatusBubble({ tabId, maxWidth }: { tabId: string; maxWidth: number }) {
   const theme = useTheme();
   const status = usePage(tabId, (p) => p.status);
   const [shown, setShown] = useState(status);

@@ -65,7 +65,7 @@ final class TabIconView: NSView {
   private var madeImage: NSImageView?
   private var madeSymbol: SymbolView?
   private var madeEmoji: NSTextField?
-  private var madeInitial: NSTextField?
+  private var madeInitial: DrawnLetterView?
   private let fallback = CALayer()
   private var badge: NSView?
   private var spec: TabIconSpec?
@@ -107,7 +107,7 @@ final class TabIconView: NSView {
 
   private var emoji: NSTextField { made(&madeEmoji) { Self.centeredLabel() } }
 
-  private var initial: NSTextField { made(&madeInitial) { Self.centeredLabel() } }
+  private var initial: DrawnLetterView { made(&madeInitial) { DrawnLetterView() } }
 
   private static func centeredLabel() -> NSTextField {
     let label = NSTextField(labelWithString: "")
@@ -205,11 +205,9 @@ final class TabIconView: NSView {
     fallback.backgroundColor = (dark ? NSColor(srgbRed: 247 / 255, green: 245 / 255, blue: 1, alpha: 0.2) : NSColor(white: 0, alpha: 0.13)).cgColor
     fallback.isHidden = false
     CATransaction.commit()
-    initial.font = .systemFont(ofSize: (tile * 0.64).rounded(), weight: .semibold)
-    initial.textColor = palette.textSecondary
-    initial.stringValue = letter
-    let fitting = initial.fittingSize
-    initial.frame = NSRect(x: (size - fitting.width) / 2, y: (size - fitting.height) / 2, width: fitting.width, height: fitting.height)
+    let initial = self.initial
+    initial.set(letter, font: .systemFont(ofSize: (tile * 0.64).rounded(), weight: .semibold), color: palette.textSecondary)
+    initial.frame = NSRect(x: 0, y: 0, width: size, height: size)
     initial.isHidden = false
   }
 
@@ -242,5 +240,37 @@ final class TabIconView: NSView {
     if host.range(of: #"^[\d.]+$"#, options: .regularExpression) != nil || host.hasPrefix("[") { return "" }
     if host.hasPrefix("www.") { host.removeFirst(4) }
     return host.first.map { String($0).uppercased() } ?? ""
+  }
+}
+
+final class DrawnLetterView: NSView {
+  private var text = NSAttributedString()
+
+  override var isFlipped: Bool { true }
+
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    wantsLayer = true
+    layerContentsRedrawPolicy = .onSetNeedsDisplay
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+  func set(_ letter: String, font: NSFont, color: NSColor) {
+    let next = NSAttributedString(string: letter, attributes: [.font: font, .foregroundColor: color])
+    guard next != text else { return }
+    text = next
+    needsDisplay = true
+  }
+
+  override func draw(_ dirtyRect: NSRect) {
+    guard text.length > 0, let font = text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont else { return }
+    let scale = window?.backingScaleFactor ?? 2
+    let snap = { (value: CGFloat) in (value * scale).rounded() / scale }
+    let x = snap((bounds.width - text.size().width) / 2)
+    let y = snap((bounds.height - font.capHeight) / 2 - (font.ascender - font.capHeight))
+    text.draw(at: NSPoint(x: x, y: y))
   }
 }

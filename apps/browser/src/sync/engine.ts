@@ -635,12 +635,13 @@ function guardedExtraction(scope: string, prefix: string, state: Guarded, extrac
     const record = state.records[key];
     if (record && record.v !== null && state.base[key] === undefined) state.base[key] = canonical(record.v);
   }
+  const backToBase = new Set([...values].filter(([key, value]) => edited(key, value) && state.base[key] === canonical(value)).map(([key]) => key));
   for (const [key, value] of values) kept.set(key, choice(value));
   for (const key of deleted) kept.delete(key);
   return {
     values,
     ignore: (key) => (extraction.ignore?.(key) ?? false) || (!values.has(key) && !deleted.has(key) && fromFolder(key, extraction.values.get(key) ?? null)),
-    republish: extraction.republish,
+    republish: (key) => backToBase.has(key) || (extraction.republish?.(key) ?? false),
     published: extraction.published,
   };
 }

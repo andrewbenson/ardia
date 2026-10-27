@@ -880,3 +880,25 @@ test("B48: after a relaunch with a healthy state, a setting changed back to a va
   assert.equal(S().settings.appearance, "dark");
   assert.deepEqual(other.store.get("set:appearance"), { v: "dark" });
 });
+
+test("B49: after a relaunch, a setting changed back to what this Mac last synced is published over an older choice elsewhere, not taken for no change", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const other = appMac("set:");
+  S().updateSettings({ appearance: "light" });
+  await engine.syncNow();
+  await settle();
+  S().updateSettings({ appearance: "dark" });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  other.store.set("set:appearance", { v: "system" });
+  await other.sync();
+  S().updateSettings({ appearance: "light" });
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(S().settings.appearance, "light");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
+});

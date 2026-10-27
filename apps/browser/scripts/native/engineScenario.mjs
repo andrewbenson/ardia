@@ -67,7 +67,16 @@ function mulberry32(seed) {
 
 const plain = (v) => (v === undefined ? null : JSON.parse(JSON.stringify(v)));
 
-async function environment(prefix, folderOps) {
+async function environment(prefix, sharedFolderOps) {
+  let foldersInFlight = 0;
+  const folderOps = async (op, a) => {
+    foldersInFlight++;
+    try {
+      return await sharedFolderOps(op, a);
+    } finally {
+      foldersInFlight--;
+    }
+  };
   let now = START;
   Date.now = () => now;
   Math.random = mulberry32(prefix === "o" ? 0xbeef : 0x5eed);
@@ -282,7 +291,7 @@ async function environment(prefix, folderOps) {
   await launch();
 
   const drain = async () => {
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 400 || (foldersInFlight > 0 && i < 400_000); i++) {
       if (!docMode.hold) landAll();
       await new Promise((r) => setImmediate(r));
     }

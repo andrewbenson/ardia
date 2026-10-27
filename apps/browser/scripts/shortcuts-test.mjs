@@ -264,7 +264,7 @@ const focuses = {
 };
 
 let since = Date.now();
-function recordFocus(focusName) {
+function recordFocus(focusName, late) {
   const lines = [];
   for (const [name] of shortcuts) {
     const r = results.get(name)[focusName];
@@ -272,10 +272,12 @@ function recordFocus(focusName) {
   }
   for (const l of [...lines.filter((l) => l.startsWith("FAIL")), ...lines.filter((l) => !l.startsWith("FAIL"))]) rep.log(l);
   const failed = shortcuts.filter(([name]) => results.get(name)[focusName]?.result === "FAIL").map(([name]) => name);
-  rep.record(`every shortcut with the focus in ${focusName}`, {
-    ms: Date.now() - since,
-    error: failed.length ? `${failed.length} failed: ${failed.join(" ")}` : null,
-  });
+  const errors = [
+    ...(failed.length ? [`${failed.length} failed: ${failed.join(" ")}`] : []),
+    ...(late.length ? [`${late.length} came back from the page after their wait and were dropped, so their verdicts are unknown: ${late.join(", ")}`] : []),
+  ];
+  if (late.length) failures++;
+  rep.record(`every shortcut with the focus in ${focusName}`, { ms: Date.now() - since, error: errors.length ? errors.join("; ") : null });
   since = Date.now();
 }
 const results = new Map(shortcuts.map(([name]) => [name, {}]));
@@ -286,6 +288,7 @@ if (part === "matrix") {
   for (const [focusName, focus] of Object.entries(focuses)) {
     if (onlyFocuses && !onlyFocuses.includes(focusName)) continue;
     await focus.setup?.();
+    const late = [];
     for (const [name, key, expect, , only] of shortcuts) {
       if (focusName !== "sidebar" && (only === "window-only" || only === "clipboard")) continue;
       const inField =
@@ -294,12 +297,15 @@ if (part === "matrix") {
         ((only === "devtools-own" || devToolsOwn.has(name)) && focusName === "devTools");
       await focus.before?.();
       const r = await press(key, { ...focus.press, dry: true });
+      late.push(...(r.lateBounces ?? []));
       const result = verdict(r, inField ? null : expect);
       if (result === "FAIL") failures++;
       results.get(name)[focusName] = { result, detail: describe(r), responder: r.firstResponder };
     }
+    await sleep(1000);
+    late.push(...(await ac(`return globalThis.expo.modules.ArdiaApp.devKeyEquivalentLateBounces();`)));
     await focus.teardown?.();
-    recordFocus(focusName);
+    recordFocus(focusName, late);
   }
   const cols = Object.keys(focuses);
   rep.log(`\n${"shortcut".padEnd(8)} ${"Dia".padEnd(26)} ${cols.map((c) => c.padEnd(10)).join(" ")}`);

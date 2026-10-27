@@ -419,6 +419,14 @@ public class AppModule: Module {
       #endif
     }.runOnQueue(.main)
 
+    AsyncFunction("devKeyEquivalentLateBounces") { () -> [String] in
+      #if DEBUG
+      return KeyEquivalents.drainLateBounces()
+      #else
+      return []
+      #endif
+    }.runOnQueue(.main)
+
     AsyncFunction("devKeyEquivalentTrace") { () -> [String] in
       #if DEBUG
       return KeyEquivalents.trace
@@ -676,6 +684,15 @@ enum KeyEquivalents {
   private static var pressing = 0, dryPressing = 0
   private static var handler: ((String, String?, String?) -> Void)?
   private static var menuKeyIMP: IMP?
+  private static var awaitingDry: [TimeInterval: String] = [:]
+  private static var lateDry: [TimeInterval: String] = [:]
+  private static var lateBounces: [String] = []
+  private static let lateDryKept = 30.0
+
+  static func drainLateBounces() -> [String] {
+    defer { lateBounces = [] }
+    return lateBounces
+  }
   private(set) static var trace: [String] = []
 
   private static func note(_ line: String) {
@@ -720,6 +737,7 @@ enum KeyEquivalents {
     matched = []
     NSApp.postEvent(event, atStart: true)
     let current = NSApp.nextEvent(matching: .keyDown, until: .distantPast, inMode: .default, dequeue: true) ?? event
+    if dry { awaitingDry[current.timestamp] = ((press["modifiers"] as? [String] ?? []) + [key]).joined(separator: "+") }
     var result: [String: Any] = ["firstResponder": window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"]
     if press["send"] as? Bool == true {
       NSApp.sendEvent(current)
@@ -761,7 +779,15 @@ enum KeyEquivalents {
     DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(press["wait"] as? Int ?? 250)) {
       result["firstResponderAfter"] = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
       restoreKeyWindow?()
+      if dry, let label = awaitingDry.removeValue(forKey: current.timestamp), fired.isEmpty, matched.isEmpty {
+        lateDry[current.timestamp] = label
+        DispatchQueue.main.asyncAfter(deadline: .now() + lateDryKept) {
+          lateDry.removeValue(forKey: current.timestamp)
+          restoreMenuKeyIfIdle()
+        }
+      }
       if !throughAppKit { end(dry: dry) }
+      result["lateBounces"] = drainLateBounces()
       result["fired"] = fired
       result["matched"] = matched
       note("resolved")
@@ -806,12 +832,21 @@ enum KeyEquivalents {
   }
 
   private static func begin(dry: Bool) {
-    if pressing == 0, let method = class_getInstanceMethod(NSMenu.self, #selector(NSMenu.performKeyEquivalent(with:))) {
+    if menuKeyIMP == nil, let method = class_getInstanceMethod(NSMenu.self, #selector(NSMenu.performKeyEquivalent(with:))) {
       let original = method_getImplementation(method)
       menuKeyIMP = original
       typealias PerformKey = @convention(c) (NSMenu, Selector, NSEvent) -> Bool
       let block: @convention(block) (NSMenu, NSEvent) -> Bool = { menu, event in
         guard menu === NSApp.mainMenu else {
+          return unsafeBitCast(original, to: PerformKey.self)(menu, #selector(NSMenu.performKeyEquivalent(with:)), event)
+        }
+        awaitingDry.removeValue(forKey: event.timestamp)
+        if let label = lateDry.removeValue(forKey: event.timestamp) {
+          lateBounces.append(label)
+          note("late dry bounce \(label) dropped")
+          return true
+        }
+        guard pressing > 0 else {
           return unsafeBitCast(original, to: PerformKey.self)(menu, #selector(NSMenu.performKeyEquivalent(with:)), event)
         }
         guard let (item, parent) = menuItem(for: event) else { return false }
@@ -837,9 +872,14 @@ enum KeyEquivalents {
       if dryPressing == 0 { MenuTarget.shared.handler = handler }
     }
     pressing -= 1
-    if pressing == 0, let imp = menuKeyIMP, let method = class_getInstanceMethod(NSMenu.self, #selector(NSMenu.performKeyEquivalent(with:))) {
-      method_setImplementation(method, imp)
-    }
+    restoreMenuKeyIfIdle()
+  }
+
+  private static func restoreMenuKeyIfIdle() {
+    guard pressing == 0, lateDry.isEmpty, let imp = menuKeyIMP,
+      let method = class_getInstanceMethod(NSMenu.self, #selector(NSMenu.performKeyEquivalent(with:))) else { return }
+    method_setImplementation(method, imp)
+    menuKeyIMP = nil
   }
 
   private static func menuItem(for event: NSEvent, in menu: NSMenu? = NSApp.mainMenu) -> (NSMenuItem, NSMenu)? {

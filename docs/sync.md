@@ -411,9 +411,10 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   - a value that differs from base goes out, unless it matches a value the pull delivered,
     stamped after the state's own record, or the key is still waiting to be applied. That is what
     a rolled-back copy looks like. A value the user changed since the note always goes out.
-  - While a download is pending, a fresh scope publishes and applies nothing, for up to ten minutes
-    after the load. A rolled-back state can't see its own newer batches or another Mac's newer
-    edits until they arrive.
+  - While a file is still downloading or can't be read yet, a fresh scope publishes and applies
+    nothing, for up to ten minutes after the load. A rolled-back state can't see its own newer
+    batches or another Mac's newer edits until they arrive. On a healthy Mac this delays its first
+    publish after a launch while iCloud catches up.
 - **Rebuild.** A lost state, or one found behind its own seqs in the folder, gets a rebuild marker,
   saved with the state and settled per adapter prefix. Until a prefix settles:
   - it publishes keys the folder never had (not while a download younger than a day or a damaged
@@ -438,6 +439,8 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   - A rolled-back state whose own batch is still downloading after the ten-minute wait can reuse
     its seq.
   - Passwords saved while a rebuilding Mac can't read them are taken as stale.
+  - A rolled-back state with a password it couldn't apply yet resends its older copy, because a
+    password waiting to be applied isn't taken as stale: passwords can be edited while unreadable.
 
 ## Tests
 
@@ -465,7 +468,7 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   survive a Mac on the previous version) and `src/sync/engine.test.mjs` (the engine against a fake native module: a crash the
   moment a batch lands re-sends the journalled batches byte for byte and numbers the next one after
   them; nothing is published before its journal is on disk). `src/sync/engineSafety.test.mjs` and
-  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B72), each
+  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B74), each
   failing on the commit before its fix.
 - Convergence oracle: `node apps/browser/scripts/native/engineScenario.mjs --oracle <n> --seed <s>`
   runs two Macs in separate processes against the real engine, store and adapters. They edit,

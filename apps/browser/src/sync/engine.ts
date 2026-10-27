@@ -537,7 +537,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     read: async (name, known) => {
       const listing = await transport.read(name, known);
       pulled = true;
-      downloading = listing.pending.length > 0;
+      downloading = listing.pending.length > 0 || listing.damaged.length > 0;
       if (adapters.some((a) => unlooked(a.prefix) || rebuilding(a.prefix))) for (const file of listing.files) noteDelivered(delivered, file.payload, (key) => state.records[key]?.h);
       return listing;
     },
@@ -691,7 +691,8 @@ function noteBaseline(scope: string, prefix: string, extraction: Extraction) {
 
 function stillDownloading(state: ScopeState): boolean {
   const now = Date.now();
-  return Object.values(state.pendingSince ?? {}).some((at) => now - at <= DOWNLOAD_GIVE_UP_MS) || Object.keys(state.damaged).some((id) => !state.files[id]);
+  const young = (at: number) => now - at <= DOWNLOAD_GIVE_UP_MS;
+  return Object.values(state.pendingSince ?? {}).some(young) || Object.entries(state.damaged).some(([id, at]) => !state.files[id] && young(at));
 }
 
 function guardedExtraction(

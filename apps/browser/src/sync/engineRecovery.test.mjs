@@ -1691,3 +1691,94 @@ test("B72: a state that fell back to before it took a password takes the other M
     native.readPasswords = realReadPasswords;
   }
 });
+
+test("B73: a rebuild whose damaged file is later only listed as downloading gives up on it after a day instead of holding its applies for good", async () => {
+  reset();
+  const realNow = Date.now;
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const before = new Set(files().map((f) => f.payload));
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  await engine.syncNow();
+  await settle();
+  const later = new Set(files().filter((f) => !before.has(f.payload) && f.scope === `p:${syncId}`).map((f) => f.payload));
+  assert.ok(later.size > 0, "control: Two went out in a later batch");
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [oneKey, oneValue] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(oneKey, { ...oneValue, t: "One renamed on B" });
+  await other.sync();
+  const realRead = native.read;
+  let reads = 0;
+  native.read = async (...args) => {
+    const listing = await realRead(...args);
+    const unreadable = listing.files.filter((f) => later.has(f.payload));
+    const rest = listing.files.filter((f) => !later.has(f.payload));
+    if (!unreadable.length) return listing;
+    reads++;
+    if (reads === 1 && true) return { ...listing, files: rest, damaged: [...listing.damaged, ...unreadable.map((f) => ({ id: f.id, age: 0 }))] };
+    return { ...listing, files: rest, pending: [...listing.pending, ...unreadable.map((f) => f.id)] };
+  };
+  try {
+    shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+    const again = await launch();
+    again.startSync();
+    await settle();
+    for (let i = 0; i < 2; i++) await again.syncNow();
+    await settle();
+    for (const hours of [25, 50, 75, 100]) {
+      Date.now = () => realNow() + hours * 3_600_000;
+      for (let i = 0; i < 3; i++) await again.syncNow();
+      await settle();
+    }
+    assert.ok(titles().includes("One renamed on B"), `100 hours on, B's rename is applied here (this Mac has ${titles()})`);
+  } finally {
+    Date.now = realNow;
+    native.read = realRead;
+  }
+});
+
+async function rolledBackWithOwnBatchUnreadable() {
+  let again;
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const older = new Map(shell.docs);
+  const before = new Set(files().map((f) => f.payload));
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  await engine.syncNow();
+  await settle();
+  const mine = files().filter((f) => !before.has(f.payload) && f.scope === `p:${syncId}` && f.file.kind === "log");
+  assert.ok(mine.length > 0, "control: Two went out in its own batch");
+  const hidden = new Set(mine.map((f) => f.payload));
+  const realRead = native.read;
+      native.read = async (...args) => {
+      const listing = await realRead(...args);
+      const stuck = listing.files.filter((f) => hidden.has(f.payload));
+      return { ...listing, files: listing.files.filter((f) => !hidden.has(f.payload)), damaged: [...listing.damaged, ...stuck.map((f) => ({ id: f.id, age: 0 }))] };
+    };
+  try {
+    shell.docs.clear();
+    for (const [name, contents] of older) shell.docs.set(name, contents);
+    again = await launch();
+    again.startSync();
+    await settle();
+    S().addBookmark({ profileId: "default", url: "https://three.example/", title: "Three" });
+    await again.syncNow();
+    await again.syncNow();
+    await settle();
+  } finally {
+    native.read = realRead;
+  }
+  await again.syncNow();
+  await settle();
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  return { b: [...other.store.values()].map((v) => v.t).sort() };
+}
+
+test("B74: a rolled-back state whose own newer batch can't be read yet waits for it instead of reusing its seq", async () => {
+  const { b } = await rolledBackWithOwnBatchUnreadable();
+  assertNoSeqReused();
+  assert.deepEqual(b, ["One", "Three", "Two"]);
+});

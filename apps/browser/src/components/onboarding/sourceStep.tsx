@@ -1,5 +1,5 @@
 import { fileExists, fileIcon, Symbol } from "@ardia/shell";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useHover } from "../primitives";
 import { importModule } from "../import/module";
@@ -84,43 +84,42 @@ export function SourceStep() {
           onSkip={() => useOnboarding.getState().skip()}
         />
       }
-      preview={<SourcePreview tile={chosen ?? null} fresh={source === "fresh"} found={found} />}
+      preview={
+        <SourcePreview tile={chosen ?? null} fresh={source === "fresh"} found={found}>
+          {canImport && chosen ? <ImportOffer name={chosen.name} importing={importing === chosen.id} onImport={startImport} /> : null}
+        </SourcePreview>
+      }
     >
-      {found.length ? (
-        <View style={{ gap: 8 }}>
-          <SectionLabel title="Found on this Mac" />
-          <TileGrid tiles={found} selected={source} onPress={choose} />
-        </View>
-      ) : null}
       <View style={{ gap: 8 }}>
-        <SectionLabel title={found.length ? "Others" : "Browsers"} />
-        <TileGrid tiles={others} selected={source} onPress={choose} fresh />
+        <SectionLabel title="Browsers" />
+        <TileGrid tiles={[...found, ...others]} selected={source} onPress={choose} fresh />
       </View>
-      {canImport && chosen ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 12,
-            padding: 12,
-            borderRadius: 12,
-            backgroundColor: colors.row,
-            borderWidth: StyleSheet.hairlineWidth * 2,
-            borderColor: colors.rowBorder,
-          }}
-        >
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, fontWeight: "500", color: colors.title }}>
-              {importing === chosen.id ? `Importing from ${chosen.name}` : `Bring your stuff from ${chosen.name}`}
-            </Text>
-            <Text style={{ fontSize: 12, color: colors.rowSubtitle }}>
-              {importing === chosen.id ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs."}
-            </Text>
-          </View>
-          {importing === chosen.id ? <CheckMark on size={18} /> : <SecondaryButton title="Import…" filled onPress={startImport} />}
-        </View>
-      ) : null}
     </StepLayout>
+  );
+}
+
+function ImportOffer({ name, importing, onImport }: { name: string; importing: boolean; onImport: () => void }) {
+  const colors = useOnboardingColors();
+  return (
+    <View
+      style={{
+        width: 300,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        padding: 12,
+        borderRadius: 12,
+        backgroundColor: colors.row,
+        borderWidth: StyleSheet.hairlineWidth * 2,
+        borderColor: colors.rowBorder,
+      }}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.title }}>{importing ? `Importing from ${name}` : `Bring your stuff from ${name}`}</Text>
+        <Text style={{ fontSize: 12, color: colors.rowSubtitle }}>{importing ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs."}</Text>
+      </View>
+      {importing ? <CheckMark on size={18} /> : <SecondaryButton title="Import…" filled onPress={onImport} />}
+    </View>
   );
 }
 
@@ -179,7 +178,7 @@ function SourceTile({ title, icon, symbol, selected, onPress }: { title: string;
   );
 }
 
-function SourcePreview({ tile, fresh, found }: { tile: Tile | null; fresh: boolean; found: Tile[] }) {
+function SourcePreview({ tile, fresh, found, children }: { tile: Tile | null; fresh: boolean; found: Tile[]; children?: ReactNode }) {
   const colors = useOnboardingColors();
   const preset = presetFor(tile?.id ?? (fresh ? "fresh" : null));
   const from = tile ? [tile] : fresh ? [] : found.filter((t) => t.icon).slice(0, 6);
@@ -204,6 +203,7 @@ function SourcePreview({ tile, fresh, found }: { tile: Tile | null; fresh: boole
       {from.length ? <Symbol name="arrow.down" size={18} weight="medium" color={colors.steps} style={{ width: 24, height: 24 }} /> : null}
       <Image source={ICON} style={{ width: tile || fresh ? 96 : 72, height: tile || fresh ? 96 : 72 }} />
       {tile || fresh ? <Tag title={preset === "arc" ? "Starts out Arc-style" : "Starts out Dia-style"} /> : null}
+      {children}
     </View>
   );
 }

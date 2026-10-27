@@ -199,38 +199,13 @@ struct SourceStepView: View {
   let model: OnboardingModel
 
   var body: some View {
-    let colors = OnboardingColors.of(scheme)
     let tiles = model.sourceTiles
     let found = tiles.filter { $0.app != nil }
     let others = tiles.filter { $0.app == nil }
     OnboardingStepLayout(model: model, text: model.pageText(.source)) {
-      if !found.isEmpty {
-        VStack(alignment: .leading, spacing: 8) {
-          OnboardingSectionLabel(title: "Found on this Mac")
-          grid(found, fresh: false)
-        }
-      }
       VStack(alignment: .leading, spacing: 8) {
-        OnboardingSectionLabel(title: found.isEmpty ? "Browsers" : "Others")
-        grid(others, fresh: true)
-      }
-      if model.canImport, let chosen = model.chosenTile {
-        let importing = model.importing == chosen.id
-        HStack(spacing: 12) {
-          VStack(alignment: .leading, spacing: 2) {
-            Text(importing ? "Importing from \(chosen.name)" : "Bring your stuff from \(chosen.name)").font(OnboardingFont.system(13, 500)).foregroundStyle(colors.title)
-            Text(importing ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs.").font(OnboardingFont.system(12)).foregroundStyle(colors.rowSubtitle)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          if importing {
-            OnboardingCheckMark(on: true, size: 18)
-          } else {
-            OnboardingSecondaryButton(title: "Import…", filled: true) { model.startImport() }
-          }
-        }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(colors.row))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(colors.rowBorder, lineWidth: 1))
+        OnboardingSectionLabel(title: "Browsers")
+        grid(found + others, fresh: true)
       }
     } actions: {
       OnboardingStepActions(model: model, disabled: model.source == nil) { model.confirmCurrent() }
@@ -312,7 +287,37 @@ struct SourcePreview: View {
       }
       OnboardingAppIconImage(model: model, size: tile != nil || fresh ? 96 : 72)
       if tile != nil || fresh { OnboardingTag(title: preset == .arc ? "Starts out Arc-style" : "Starts out Dia-style") }
+      if model.canImport, let chosen = model.chosenTile {
+        SourceImportOffer(model: model, chosen: chosen)
+      }
     }
+  }
+}
+
+struct SourceImportOffer: View {
+  @Environment(\.colorScheme) private var scheme
+  let model: OnboardingModel
+  let chosen: BrowserSourceTile
+
+  var body: some View {
+    let colors = OnboardingColors.of(scheme)
+    let importing = model.importing == chosen.id
+    HStack(spacing: 12) {
+      VStack(alignment: .leading, spacing: 2) {
+        Text(importing ? "Importing from \(chosen.name)" : "Bring your stuff from \(chosen.name)").font(OnboardingFont.system(13, 500)).foregroundStyle(colors.title)
+        Text(importing ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs.").font(OnboardingFont.system(12)).foregroundStyle(colors.rowSubtitle)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      if importing {
+        OnboardingCheckMark(on: true, size: 18)
+      } else {
+        OnboardingSecondaryButton(title: "Import…", filled: true) { model.startImport() }
+      }
+    }
+    .padding(12)
+    .frame(width: 300)
+    .background(RoundedRectangle(cornerRadius: 12).fill(colors.row))
+    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(colors.rowBorder, lineWidth: 1))
   }
 }
 

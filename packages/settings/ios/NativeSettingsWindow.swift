@@ -29,6 +29,22 @@ final class StoreSettingsSource: SettingsStoreSource {
   }
 }
 
+final class SettingsHostingController: NSHostingController<SettingsWindowView> {
+  override func viewWillAppear() {
+    super.viewWillAppear()
+    guard view.window?.toolbar == nil else { return }
+    sceneBridgingOptions = []
+    sceneBridgingOptions = [.toolbars]
+  }
+
+  override func viewDidAppear() {
+    super.viewDidAppear()
+    view.window?.makeFirstResponder(nil)
+    guard let search = NativeSettingsWindow.makeContext()?.search, !search.query.isEmpty else { return }
+    search.requestFocus()
+  }
+}
+
 @MainActor
 enum NativeSettingsWindow {
   static let windowId = "settings"
@@ -48,13 +64,14 @@ enum NativeSettingsWindow {
     }
   }
 
-  private static var built: NSHostingController<SettingsWindowView>?
+  private static var built: SettingsHostingController?
   static var isBuilt: Bool { built != nil }
+  static var window: NSWindow? { built?.view.window }
 
-  static func controller() -> NSHostingController<SettingsWindowView>? {
+  static func controller() -> SettingsHostingController? {
     if let built { return built }
     guard enabled, let context = makeContext() else { return nil }
-    let made = NSHostingController(rootView: SettingsWindowView(context: context))
+    let made = SettingsHostingController(rootView: SettingsWindowView(context: context))
     made.sceneBridgingOptions = [.toolbars]
     built = made
     return made

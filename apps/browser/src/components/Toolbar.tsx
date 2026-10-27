@@ -60,8 +60,7 @@ type ToolbarProps = {
 };
 
 export function Toolbar(props: ToolbarProps) {
-  const developer = useTabDeveloperMode(props.tabId);
-  return nativeToolbarAvailable() && !developer ? <NativeToolbar {...props} /> : <ReactToolbar {...props} />;
+  return nativeToolbarAvailable() ? <NativeToolbar {...props} /> : <ReactToolbar {...props} />;
 }
 
 function ReactToolbar({ tabId, geometry, windowId, inSplit, focused, bare }: ToolbarProps) {

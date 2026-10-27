@@ -31,6 +31,7 @@ holds the rest.
 | --- | --- | --- |
 | Release smoke test | `.claude/skills/release/scripts/smoke.sh` (the `release` skill) | Every release, whole |
 | Shortcuts | `node apps/browser/scripts/shortcuts-test.mjs <Debug app> matrix`, then `… presses` | `matrix`: every shortcut in every focus, dry (0.2.8: ⌘1–9 were swallowed outside a page). `presses`: real presses, ⌘T/⌘L/⌘F focus handoffs, ⌘Q. About 6 and 4 min |
+| Developer Mode toolbar | `node apps/browser/scripts/developer-toolbar-test.mjs <Debug app>` | RN and native in turn on a 127.0.0.1 page, light and dark: Chromium's NONE and no not-secure badge, the resting and editing URL where RN draws it (1 px at 2x), the URL not moving when editing starts, the dark stripes pixel for pixel, ⌘L editing in place with Return going and Escape keeping the URL. About 1 min |
 | Profile swipes | `node apps/browser/scripts/profile-swipe-test.mjs <Debug app>` | The native pager's races (0.2.14–0.2.18 fixes) |
 | Tab dragging | `node apps/browser/scripts/tab-drag-test.mjs <Debug app>` | Dragging in the top tab strip moves the tab, never the window (0.2.18); the empty strip moves it over its whole height and a double-click zooms (0.2.25); the empty sidebar under the rows moves it too, and a double-click there still opens a tab |
 | Windowing | `node apps/browser/scripts/windowing-test.mjs <Debug app>` | Window frames and what the screen shows in passing |

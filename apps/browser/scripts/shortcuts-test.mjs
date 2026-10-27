@@ -49,7 +49,7 @@ app = await launch(appPath, {
     windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t3" } }],
     tabs: ids.map((id) => tab(id, id.startsWith("pin"))),
   }),
-  switches: "--disable-backgrounding-occluded-windows",
+  switches: "--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=PMProcessPriorityPolicy",
   ready: "return !!ac.shell.devKeyEquivalent",
   env: { ARDIA_NATIVE_NEWTAB: process.env.ARDIA_NATIVE_NEWTAB ?? null, ARDIA_NATIVE_OMNIBOX: process.env.ARDIA_NATIVE_OMNIBOX ?? null },
 });

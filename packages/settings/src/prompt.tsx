@@ -31,3 +31,19 @@ export function NativeDeviceChooserView(props: NativeDeviceChooserProps) {
   ChooserView ??= requireNativeViewManager<NativeDeviceChooserProps>("SolaraDeviceChooser") as ComponentType<NativeDeviceChooserProps>;
   return <ChooserView {...props} />;
 }
+
+export type NativePanelEvent = { kind: "step"; step: number } | { kind: string; [key: string]: unknown };
+
+export type NativePanelProps = ViewProps & {
+  kind: string;
+  state: string;
+  onPanelEvent?(e: NativeSyntheticEvent<NativePanelEvent>): void;
+  onPanelHeight?(e: NativeSyntheticEvent<{ height: number }>): void;
+};
+
+let PanelView: ComponentType<NativePanelProps> | null = null;
+
+export function NativePanelView(props: NativePanelProps) {
+  PanelView ??= requireNativeViewManager<NativePanelProps>("SolaraPanel") as ComponentType<NativePanelProps>;
+  return <PanelView {...props} />;
+}

@@ -89,3 +89,61 @@ final class NativeDeviceChooserView: ExpoView {
     body.update(state)
   }
 }
+
+public class PanelModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("SolaraPanel")
+
+    View(NativePanelView.self) {
+      Events("onPanelEvent", "onPanelHeight")
+
+      Prop("kind") { (view: NativePanelView, v: String) in MainActor.assumeIsolated { view.kind = v } }
+      Prop("state") { (view: NativePanelView, v: String) in MainActor.assumeIsolated { view.setState(v) } }
+    }
+  }
+}
+
+final class NativePanelView: ExpoView {
+  let onPanelEvent = EventDispatcher()
+  let onPanelHeight = EventDispatcher()
+  var kind = "" { didSet { if kind != oldValue { apply() } } }
+  private var json = ""
+  private var applied = ""
+  private var zoom: ZoomPanelView?
+
+  override var isFlipped: Bool { true }
+
+  func setState(_ next: String) {
+    json = next
+    apply()
+  }
+
+  private func apply() {
+    let key = kind + "\u{1}" + json
+    guard !kind.isEmpty, key != applied, let data = json.data(using: .utf8) else { return }
+    applied = key
+    switch kind {
+    case "zoom":
+      guard let state = try? JSONDecoder().decode(ZoomPanelState.self, from: data) else { return }
+      let body = zoom ?? make { ZoomPanelView(frame: .zero) }
+      zoom = body
+      body.onEvent = { [weak self] e in
+        switch e {
+        case .step(let step): self?.onPanelEvent(["kind": "step", "step": step])
+        }
+      }
+      body.update(state)
+    default:
+      break
+    }
+  }
+
+  private func make<Body: NSView>(_ build: () -> Body) -> Body {
+    let body = build()
+    body.autoresizingMask = [.width, .height]
+    body.frame = bounds
+    if let zoom = body as? ZoomPanelView { zoom.onHeight = { [weak self] h in self?.onPanelHeight(["height": h]) } }
+    addSubview(body)
+    return body
+  }
+}

@@ -1,6 +1,6 @@
 {
   "platforms": ["apple"],
   "apple": {
-    "modules": ["SettingsModule", "NewTabModule", "HostedModule", "OmniboxModule", "ToolbarModule", "FindBarModule", "DownloadsModule", "PromptModule", "DeviceChooserModule", "SitePanelModule", "MediaModule", "WindowShellModule"]
+    "modules": ["SettingsModule", "NewTabModule", "HostedModule", "OmniboxModule", "ToolbarModule", "FindBarModule", "DownloadsModule", "PromptModule", "DeviceChooserModule", "PanelModule", "SitePanelModule", "MediaModule", "WindowShellModule"]
   }
 }

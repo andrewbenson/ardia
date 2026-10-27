@@ -6,7 +6,7 @@ public class HostedModule: Module {
     Name("SolaraHosted")
 
     Function("kinds") { () -> [String] in
-      MainActor.assumeIsolated { HostedViews.kinds }
+      HostedViews.kinds
     }
 
     View(SolaraHostedView.self) {

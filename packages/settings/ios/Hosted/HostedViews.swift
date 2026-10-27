@@ -1,4 +1,5 @@
 import AppKit
+import Synchronization
 
 public struct HostedContent {
   public let view: NSView
@@ -15,20 +16,23 @@ public enum HostedViews {
   public typealias Make = (_ windowId: String) -> HostedContent?
 
   private static var makers: [String: Make] = [:]
+  nonisolated private static let registered = Mutex<Set<String>>([])
 
   public static func register(_ kind: String, _ make: @escaping Make) {
     makers[kind] = make
+    registered.withLock { _ = $0.insert(kind) }
   }
 
   public static func unregister(_ kind: String) {
     makers[kind] = nil
+    registered.withLock { _ = $0.remove(kind) }
   }
 
   static func make(_ kind: String, windowId: String) -> HostedContent? {
     makers[kind]?(windowId)
   }
 
-  static var kinds: [String] { makers.keys.sorted() }
+  nonisolated static var kinds: [String] { registered.withLock { $0.sorted() } }
 }
 
 @MainActor

@@ -27,11 +27,27 @@ pixels, points are half of them.
 | 13 | Command panel | 1.5 pt taller at the bottom, top 0.5 pt higher, no top border row | Bottom 217 vs 214 px (383 vs 378 with suggestions); bottom border 58 vs 81 | port-omnibox |
 | 14 | Toolbar, dark page | Host darker than the icons | Host 161, icons 220; Dia's host matches its icons | port-omnibox |
 | 15 | Onboarding | No onboarding controls in the accessibility tree; no New Tab field either | | settings-ui, main |
-| 16 | Small layout | Settings extra "About" row, Profiles caption style, Shortcuts rows 41 vs 43 pt, section gaps +10 pt; "centre" → "center"; prompt button labels 0.5 pt lower; Site Controls top-row glyphs a hair lighter | | settings-ui, port-omnibox |
+| 16 | Small layout | Profiles caption style, Shortcuts rows 41 vs 43 pt, section gaps +10 pt; "centre" → "center"; prompt button labels 0.5 pt lower; Site Controls top-row glyphs a hair lighter | | settings-ui, port-omnibox |
 
 Matching Dia rather than RN, so not gaps: the URL host at SF 13 regular in (51,51,51) light, (149–161) dark; the
 status bubble's timings and light colours; the Developer Mode stripes (RN drew none on the dark page in this run, bar
 flat 42; native 42–46).
+
+## Settled
+
+- Settings' "About" row in the sidebar is native only, and it stays (owner's call, 2026-10-27).
+
+## Re-checks on Release (2026-10-27)
+
+| # | Fix | Result |
+|---|---|---|
+| 1 | ca8ec86e | Closed: the reopened window is key and takes typing ("x" replaces the kept "cookie"), one makeKey per open |
+| 3 | ca8ec86e | Closed: title and back/forward in the content header, title ink 0.5 pt below RN's, content no longer 20 pt high |
+| 4 | 42cc78bb, cb7e8ea7 | Closed in light and dark: selected row (17,110,247) / (23,120,247), sidebar 219 / 64, pane 240 / 28, group box 233 / 38, box edges on the same pixels; sub-pixel text antialiasing left |
+| 8 | 26d150ec | Closed: native reads 254,028 / 44,270; RN was the stale one in this run (176,026 / 43,797) |
+| 9 | 5abac41a | Open: letter tiles for all five sources; RN draws its bundled icons (`apps/browser/src/lib/siteIcons.ts`) for GitHub, Notion and Google Drive before the letter tile, and `SettingsFavicon` has no such step |
+| 2, 6, 7 | | Waiting on omnibox-gaps |
+| 5 | d637be2d (in progress) | status-bubble, from Dia's dark values |
 
 ## Same in both
 

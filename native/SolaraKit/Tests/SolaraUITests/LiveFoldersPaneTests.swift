@@ -65,17 +65,6 @@ final class FakeLiveFoldersServices: LiveFoldersServices {
   func connectGoogleDrive(clientId: String, clientSecret: String) async throws { calls.append("gdrive \(clientId)") }
   func copyText(_ text: String) { calls.append("copy \(text)") }
   func openInBrowser(_ url: String) { calls.append("open \(url)") }
-  func favicon(site: String) async -> NSImage? {
-    let symbol: String
-    switch site {
-    case LiveSourceId.github.site: symbol = "chevron.left.forwardslash.chevron.right"
-    case LiveSourceId.bitbucket.site: symbol = "shippingbox.fill"
-    case LiveSourceId.notion.site: symbol = "n.square.fill"
-    case LiveSourceId.confluence.site: symbol = "doc.richtext"
-    default: symbol = "triangle"
-    }
-    return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-  }
 }
 
 @MainActor

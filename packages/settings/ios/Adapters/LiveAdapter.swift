@@ -62,8 +62,6 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
 
   func openInBrowser(_ url: String) { SettingsJS.shared.fire("liveFolders.openInBrowser", url) }
 
-  func favicon(site: String) async -> NSImage? { await SettingsAdapters.favicon(url: site, profile: nil) }
-
   func calendarState() async -> CalendarPaneState {
     Self.calendarState(SettingsJS.shared.latestValue(Self.calendarTopic))
   }

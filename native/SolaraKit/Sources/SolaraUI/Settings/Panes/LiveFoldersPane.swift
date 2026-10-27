@@ -155,7 +155,6 @@ public protocol LiveFoldersServices: AnyObject {
   func connectGoogleDrive(clientId: String, clientSecret: String) async throws
   func copyText(_ text: String)
   func openInBrowser(_ url: String)
-  func favicon(site: String) async -> NSImage?
 }
 
 enum LiveFoldersText {
@@ -209,7 +208,6 @@ public final class LiveFoldersPaneModel: SettingsPaneProvider {
   @ObservationIgnored let store: SettingsStoreSource
   @ObservationIgnored private var listening: Task<Void, Never>?
   var state: LiveFoldersState?
-  var icons: [LiveSourceId: NSImage] = [:]
 
   public init(services: LiveFoldersServices, store: SettingsStoreSource) {
     self.services = services
@@ -221,7 +219,6 @@ public final class LiveFoldersPaneModel: SettingsPaneProvider {
   public func prepare(_ place: SettingsPlace) async {
     listen()
     if state == nil { state = await services.liveFoldersState() }
-    await loadIcons()
   }
 
   public func view(_ place: SettingsPlace) -> AnyView {
@@ -236,12 +233,6 @@ public final class LiveFoldersPaneModel: SettingsPaneProvider {
         guard let self else { return }
         self.state = next
       }
-    }
-  }
-
-  private func loadIcons() async {
-    for source in LiveSourceId.allCases where icons[source] == nil {
-      if let image = await services.favicon(site: source.site) { icons[source] = image }
     }
   }
 
@@ -361,27 +352,6 @@ struct LiveFoldersFolderSection: View {
   }
 }
 
-struct LiveFoldersSourceIcon: View {
-  let image: NSImage?
-  let size: CGFloat
-
-  var body: some View {
-    Group {
-      if let image {
-        Image(nsImage: image)
-          .resizable()
-          .interpolation(.high)
-      } else {
-        Image(systemName: "globe")
-          .resizable()
-          .foregroundStyle(.secondary)
-      }
-    }
-    .aspectRatio(contentMode: .fit)
-    .frame(width: size, height: size)
-  }
-}
-
 struct LiveFoldersSourceRow: View {
   @Environment(\.settingsContext) private var context
   let model: LiveFoldersPaneModel
@@ -399,7 +369,7 @@ struct LiveFoldersSourceRow: View {
         }
       } label: {
         HStack(spacing: 10) {
-          LiveFoldersSourceIcon(image: model.icons[source], size: 18)
+          SettingsFavicon(url: source.site, size: 18)
           VStack(alignment: .leading, spacing: 2) {
             Text(context?.index.entry(source.settingsAnchor)?.title ?? source.name)
             Text(LiveFoldersText.sourceDescription(source, account))

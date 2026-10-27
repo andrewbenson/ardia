@@ -232,7 +232,7 @@ struct SettingsAnchorMark: View {
       .opacity(glow)
       .allowsHitTesting(false)
       .background {
-        if revealing {
+        if revealing || serial != nil {
           Color.clear.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
             context?.anchorFrames[id] = frame
           }

@@ -259,6 +259,7 @@ struct SettingsSwitch: View {
     }
     .buttonStyle(.plain)
     .opacity(isEnabled ? 1 : 0.45)
+    .modifier(SettingsProbeSwitch(on: on))
     .accessibilityRepresentation {
       Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
     }

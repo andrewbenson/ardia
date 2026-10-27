@@ -4,17 +4,22 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { attach, launch, reporter } from "../../../scripts/lib/instance.mjs";
 
-const HELP = `usage: node settings-shift-test.mjs <Debug Solara.app> [--port N] [--attach <data dir>] [--panes a,b] [--keep]
+const HELP = `usage: node settings-shift-test.mjs <Debug Solara.app> [--port N] [--attach <data dir>] [--panes a,b] [--keep] [--rn]
 
 Opens Settings in a hidden instance and switches to every pane, the first one right after the window opens.
 For each pane it records every view's frame, every text and every switch's value on the first frame the pane
 is on screen and again once it has settled, and fails when anything moved, appeared, disappeared or changed.
 Then it checks Settings search: ⌘F focuses the field, typing finds the row, Return opens its pane, scrolls the
-row into view and highlights it, Escape clears the field.`;
+row into view and highlights it, Escape clears the field.
+
+The native window (the default) is read through SolaraSettings' dev hooks: devSettingsSwitch captures every NSView's
+frame, every text view's text and every switch on the first frame a pane appears and again 1.2 s later, and
+devSettings("search") reports the query, results, highlight and the highlighted row's frame against the viewport.
+ARDIA_NATIVE_SETTINGS=0 (--rn) runs the same checks on the RN window.`;
 
 const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
-  options: { port: { type: "string" }, attach: { type: "string" }, panes: { type: "string" }, keep: { type: "boolean" }, help: { type: "boolean", short: "h" } },
+  options: { port: { type: "string" }, attach: { type: "string" }, panes: { type: "string" }, keep: { type: "boolean" }, rn: { type: "boolean" }, help: { type: "boolean", short: "h" } },
 });
 if (flags.help || (!positionals[0] && !flags.attach)) {
   console.log(HELP);
@@ -142,12 +147,51 @@ return wait(400)
       .then(() => ({ ...out, cleared: s.useSettingsSearch.getState().query === "" })),
   );`;
 
+const NATIVE_SWITCH = (pane, from, idleMs) => `
+const S = globalThis.expo.modules.SolaraSettings;
+ac.openSettings(${JSON.stringify(from)});
+return new Promise((r) => setTimeout(r, ${idleMs} + 300)).then(() => S.devSettingsSwitch(${JSON.stringify(pane)})).then((t) => JSON.parse(t));`;
+
+const NATIVE_SEARCH = (query, id, downs = 0) => `
+const S = globalThis.expo.modules.SolaraSettings;
+const state = () => S.devSettings("search").then((t) => JSON.parse(t));
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const until = (test, ms) => { const end = Date.now() + ms; const loop = () => state().then((s) => (test(s) ? s : Date.now() > end ? null : wait(30).then(loop))); return loop(); };
+ac.openSettings("general");
+let before;
+return wait(400)
+  .then(state)
+  .then((s) => { before = s.focusRequest; return ac.shell.devKeyEquivalent("settings", { key: "f", keyCode: 3, modifiers: ["command"], asKey: true }); })
+  .then(() => until((s) => s.focusRequest !== before, 2000))
+  .then((focused) => {
+    if (!focused) throw new Error("⌘F didn't focus the search field");
+    return wait(150).then(() => ac.shell.devTypeKeys("settings", ${JSON.stringify(query)}, 15));
+  })
+  .then(() => until((s) => s.query === ${JSON.stringify(query)}, 2000))
+  .then((typed) => {
+    if (!typed) throw new Error("typing didn't reach the search field");
+    if (typed.results[${downs}] !== ${JSON.stringify(id)}) throw new Error("result ${downs + 1} is " + typed.results[${downs}] + ", not ${id}");
+    const press = (key, keyCode) => ac.shell.devKeyEquivalent("settings", { key, keyCode, modifiers: [], send: true, asKey: true, wait: 30 });
+    const downs = Array.from({ length: ${downs} }).reduce((p) => p.then(() => press("\\uF701", 125)), Promise.resolve());
+    return downs.then(() => press("\\r", 36)).then(() => until((s) => s.flash === ${JSON.stringify(id)} && s.anchor, 3000)).then((s) => ({ results: typed.results, s }));
+  })
+  .then(({ results, s }) => {
+    if (!s) throw new Error("${id} wasn't highlighted");
+    return ac.shell.devKeyEquivalent("settings", { key: "\\u001b", keyCode: 53, modifiers: [], send: true, asKey: true, wait: 30 })
+      .then(() => wait(200))
+      .then(state)
+      .then((after) => ({ results, nav: s.pane, frame: s.anchor, viewport: s.viewport, cleared: after.query === "" }));
+  });`;
+
 let app;
 try {
   app = flags.attach
     ? attach(data)
-    : await launch(resolve(positionals[0]), { data, port: flags.port, onboarded: true, ready: "return !!ac.openSettings" });
+    : await launch(resolve(positionals[0]), { data, port: flags.port, onboarded: true, ready: "return !!ac.openSettings", env: flags.rn ? { ARDIA_NATIVE_SETTINGS: "0" } : {} });
   const ac = (body) => app.eval(body, { timeout: 60000 });
+  const native = await ac("return !!globalThis.expo.modules.SolaraSettings?.available?.()");
+  rep.log(`window: ${native ? "native" : "RN"}`);
+  if (native) await new Promise((r) => setTimeout(r, 6000));
 
   await ac(`
     const cef = globalThis.expo.modules.ArdiaCEF;
@@ -161,7 +205,8 @@ try {
   for (const [i, pane] of PANES.entries()) {
     const source = pane === from ? (pane === "general" ? "tabs" : "general") : from;
     await rep.check(`${pane}${i === 0 ? " (right after opening)" : ""}`, async () => {
-      const result = await ac(switchTo(pane, source, i === 0 ? 0 : 500));
+      const result = await ac(native ? NATIVE_SWITCH(pane, source, i === 0 ? 0 : 500) : switchTo(pane, source, i === 0 ? 0 : 500));
+      if (result.error) throw new Error(result.error);
       const problems = compare(result);
       if (problems.length) throw new Error([`${problems.length} changes after the first frame (shown ${result.shownAfter} ms after the click)`, ...problems.slice(0, 15)].join("\n"));
       return `${result.first.frames.length} views, ${result.first.switches.length} switches, shown after ${result.shownAfter} ms, nothing changed`;
@@ -171,10 +216,11 @@ try {
 
   for (const [query, id, downs] of [["cookies", "privacy.blockCookieBanners", 0], ["dark", "appearance.theme", 0], ["licenses", "advanced.licenses", 0], ["password", "passwords.offerToSave", 1]]) {
     await rep.check(`search "${query}"${downs ? ` ↓×${downs}` : ""} opens ${id}`, async () => {
-      const out = await ac(SEARCH(query, id, downs));
+      const out = await ac(native ? NATIVE_SEARCH(query, id, downs) : SEARCH(query, id, downs));
       const [, y, , h] = out.frame;
       if (out.nav !== id.split(".")[0]) throw new Error(`opened ${out.nav}`);
-      if (!(y >= 52 && y + h <= 640)) throw new Error(`row isn't in view: y ${y}, height ${h}`);
+      const [top, bottom] = native ? [out.viewport[1], out.viewport[1] + out.viewport[3]] : [52, 640];
+      if (!(y >= top && y + h <= bottom)) throw new Error(`row isn't in view: y ${y}, height ${h}, view ${top}–${bottom}`);
       if (!out.cleared) throw new Error("Escape didn't clear the field");
       return `${out.results.length} results, row at y ${y}`;
     });

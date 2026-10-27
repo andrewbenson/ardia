@@ -120,21 +120,23 @@ struct OnboardingTextLayout: Equatable {
   }
 }
 
-final class OnboardingTextNSView: NSView {
+public final class OnboardingTextNSView: NSView {
   let storage = NSTextStorage()
+
+  public var text: String { storage.string }
   let manager = NSLayoutManager()
   let container = NSTextContainer()
 
-  override init(frame: NSRect) {
+  override public init(frame: NSRect) {
     super.init(frame: frame)
     container.lineFragmentPadding = 0
     manager.addTextContainer(container)
     storage.addLayoutManager(manager)
   }
 
-  required init?(coder: NSCoder) { nil }
+  public required init?(coder: NSCoder) { nil }
 
-  override var isFlipped: Bool { true }
+  override public var isFlipped: Bool { true }
 
   func apply(_ layout: OnboardingTextLayout) {
     storage.setAttributedString(layout.attributed)
@@ -153,19 +155,19 @@ final class OnboardingTextNSView: NSView {
 
   static func ceilPixel(_ value: CGFloat) -> CGFloat { (value * 2 - 0.01).rounded(.up) / 2 }
 
-  override func layout() {
+  override public func layout() {
     super.layout()
     container.size = CGSize(width: bounds.width, height: .greatestFiniteMagnitude)
   }
 
-  override func draw(_ dirtyRect: NSRect) {
+  override public func draw(_ dirtyRect: NSRect) {
     container.size = CGSize(width: bounds.width, height: .greatestFiniteMagnitude)
     let range = manager.glyphRange(for: container)
     manager.drawBackground(forGlyphRange: range, at: .zero)
     manager.drawGlyphs(forGlyphRange: range, at: .zero)
   }
 
-  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  override public func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 struct OnboardingTextRepresentable: NSViewRepresentable {

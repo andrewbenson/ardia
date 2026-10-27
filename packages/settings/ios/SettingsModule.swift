@@ -38,6 +38,11 @@ public class SettingsModule: Module {
       MainActor.assumeIsolated { SettingsDev.drive(action, argument) }
     }.runOnQueue(.main)
 
+    AsyncFunction("devSettingsSwitch") { (pane: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated { SettingsDev.switchPane(pane) { reply.resolve($0) } }
+    }.runOnQueue(.main)
+
     AsyncFunction("devTimings") { () -> String in
       MainActor.assumeIsolated { SettingsTimings.takeJSON() }
     }.runOnQueue(.main)

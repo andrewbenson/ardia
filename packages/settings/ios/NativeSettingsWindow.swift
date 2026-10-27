@@ -48,6 +48,7 @@ enum NativeSettingsWindow {
   }
 
   static func install() {
+    SettingsProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
     NativeOnboarding.register()
     SettingsPrewarm.schedule()
     WindowHost.makeAuxController = { id, kind in
@@ -82,7 +83,11 @@ enum NativeSettingsWindow {
       return SettingsJS.shared.latestValue("extensions.defaultProfile") as? String
     }
     made.onPaneChange = { pane in if !SettingsPrewarm.warming { SettingsJS.shared.fire("settings.paneShown", pane.rawValue) } }
-    made.onPaneAppear = { place in if !SettingsPrewarm.warming { SettingsTimings.paneAppeared(place.pane.rawValue) } }
+    made.onPaneAppear = { place in
+      guard !SettingsPrewarm.warming else { return }
+      SettingsTimings.paneAppeared(place.pane.rawValue)
+      SettingsDev.paneAppeared(place.pane.rawValue)
+    }
     SettingsAdapters.register(made, store: store)
     context = made
     return made

@@ -357,8 +357,19 @@ try {
   await inHistory("C", `${W}/openc.html?nne2e=tabC`);
   check("C joins", text(await ev("C", `return acSync.enterRecoveryPhrase(${JSON.stringify(FOLDER)}, ${JSON.stringify(phrase)})`)) === '{"ok":true}');
   await sync("C", "C", "A", "B", "C");
-  const c = await state("C");
+  let c = await state("C");
   a = await state("A");
+  try {
+    await until(
+      "C converges with A",
+      async () => {
+        c = await state("C");
+        a = await state("A");
+        return c.status === "updated" && same(a, c);
+      },
+      ["C", "A", "C"],
+    );
+  } catch {}
   check("C converges with A", same(a, c), text({ a: data(a), c: data(c) }));
   check("A lists three devices, and two other devices' tabs roll up into \"Your Devices\"", a.devices.length === 3 && (await ev("A", "return acSync.menu.syncedDevicesMenuItem('default')")).title === "Your Devices");
 

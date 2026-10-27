@@ -230,8 +230,12 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   @objc(commandDispatch:) func performCommand(_ sender: NSMenuItem) {
     guard let item = sender as? CommandItem else { return }
     _ = FocusHandoff.shared.takeBegun()
+    let settled = !FocusHandoff.shared.gatesKeyWindow
     if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window = NSApp.keyWindow {
       FocusHandoff.shared.begin(in: window)
+    }
+    if settled, let window = WindowManager.shared.keyBrowserWindow {
+      NotificationCenter.default.post(name: Notification.Name("SolaraCommandWillDispatch"), object: window, userInfo: ["command": item.command])
     }
     handler?(item.command, item.arg, item.windowless ? nil : WindowManager.shared.keyWindowId)
     if item.command == "tabSwitcher" { SwitcherHold.opened(by: item) }

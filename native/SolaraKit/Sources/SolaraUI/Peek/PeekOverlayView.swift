@@ -253,10 +253,28 @@ public final class PeekOverlayView: NSView {
     animate(progress: 1, expand: 1, duration: PeekTiming.expand, curve: { 1 - pow(1 - $0, 3) }, done: done)
   }
 
+  public func apply(json: String) {
+    guard !json.isEmpty, let data = json.data(using: .utf8), let next = try? JSONDecoder().decode(PeekState.self, from: data) else { return clear() }
+    apply(next)
+  }
+
+  public static func eventJSON(_ event: PeekEvent) -> [String: String] {
+    switch event {
+    case .dismiss: return ["kind": "dismiss"]
+    case .openAsTab: return ["kind": "openAsTab"]
+    case .openInSplit: return ["kind": "openInSplit"]
+    case .closed(let tabId): return ["kind": "closed", "tabId": tabId]
+    }
+  }
+
   public func clear() {
     state = nil
     shownTab = nil
     leaving = nil
+    card.layer?.removeAllAnimations()
+    dim.layer?.removeAllAnimations()
+    card.layer?.opacity = 0
+    dim.layer?.opacity = 0
   }
 
   @objc private func pinched(_ g: NSMagnificationGestureRecognizer) {

@@ -85,8 +85,11 @@ try {
     await rep.check(name, async () => {
       await ac(`${setup} return true;`);
       await sleep(1200);
+      const native = name === "sidebar" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("sidebar");`));
       const { hovered, shifts } = name === "downloads" && pass === "native"
         ? await nativeDownloadShifts()
+        : native
+        ? await ac(`return globalThis.expo.modules.SolaraHosted.sidebarHoverShifts("w1").then((json) => JSON.parse(json)).then((r) => ({ hovered: r.hovered, shifts: r.shifts.map((s) => ({ hovered: s, view: "native row", before: [], after: [] })) }));`)
         : await ac(`return ac.hoverShift.check({ scopes: ${JSON.stringify(scopes)} });`);
       if (!hovered) throw new Error("nothing hover-tracked found");
       if (shifts.length) {

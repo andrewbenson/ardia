@@ -214,9 +214,13 @@ struct KitLabel: View {
   var lines = 1
   var family: String?
   var lineHeight: Double?
-  let text: Text
+  let runs: [OnboardingTextRun]
 
   init(_ g: KitGeo, _ size: Double, _ color: String, weight: Int = 400, lines: Int = 1, family: String? = nil, lineHeight: Double? = nil, _ string: String) {
+    self.init(g, size, color, weight: weight, lines: lines, family: family, lineHeight: lineHeight, runs: [OnboardingTextRun(text: string)])
+  }
+
+  init(_ g: KitGeo, _ size: Double, _ color: String, weight: Int = 400, lines: Int = 1, family: String? = nil, lineHeight: Double? = nil, runs: [OnboardingTextRun]) {
     self.g = g
     self.size = size
     self.color = color
@@ -224,31 +228,16 @@ struct KitLabel: View {
     self.lines = lines
     self.family = family
     self.lineHeight = lineHeight
-    text = Text(string)
-  }
-
-  init(_ g: KitGeo, _ size: Double, _ color: String, weight: Int = 400, text: Text) {
-    self.g = g
-    self.size = size
-    self.color = color
-    self.weight = weight
-    self.text = text
-  }
-
-  var font: Font {
-    let px = size * g.s
-    if let family { return Font.custom(family, size: px).weight(OnboardingFont.weight(weight)) }
-    return .system(size: px, weight: OnboardingFont.weight(weight))
+    self.runs = runs
   }
 
   var body: some View {
-    let height = (lineHeight ?? size * 1.3) * g.s
-    text
-      .font(font)
-      .foregroundStyle(PreviewColor.color(color))
-      .lineLimit(lines)
-      .lineSpacing(max(0, height - size * g.s * 1.2))
-      .frame(minHeight: lines == 1 ? height : nil, alignment: .leading)
+    let layout = OnboardingTextLayout(
+      runs: runs, size: size * g.s, weight: weight, color: NSColor(PreviewColor.color(color)),
+      lineHeight: (lineHeight ?? size * 1.3) * g.s, kerning: 0, lines: lines, alignment: .left, family: family)
+    OnboardingTextRepresentable(layout: layout)
+      .accessibilityElement()
+      .accessibilityLabel(layout.text)
   }
 }
 
@@ -412,8 +401,7 @@ struct KitCrumb: View {
   var body: some View {
     let p = palette ?? look.plain
     let host = tab.host.hasPrefix("www.") ? String(tab.host.dropFirst(4)) : tab.host
-    let rest = Text("  /  \(tab.title)").foregroundStyle(PreviewColor.color(p.secondary)).fontWeight(.regular)
-    KitLabel(g, 13, p.text, weight: 500, text: Text("\(Text(host))\(rest)"))
+    KitLabel(g, 13, p.text, weight: 500, runs: [OnboardingTextRun(text: host), OnboardingTextRun(text: "  /  \(tab.title)", color: NSColor(PreviewColor.color(p.secondary)), weight: 400)])
       .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
@@ -639,8 +627,8 @@ struct KitSuggestionRow: View {
       } else {
         KitGlyph(g: g, name: s.icon ?? "magnifyingglass", size: 13, color: look.t.textSecondary, weight: .medium, box: 16)
       }
-      let detail = s.detail.map { Text("  \($0)").foregroundStyle(PreviewColor.color(look.t.textTertiary)) } ?? Text("")
-      KitLabel(g, 14, look.t.textPrimary, text: Text("\(Text(s.title))\(detail)"))
+      let detail = s.detail.map { [OnboardingTextRun(text: "  \($0)", color: NSColor(PreviewColor.color(look.t.textTertiary)))] } ?? []
+      KitLabel(g, 14, look.t.textPrimary, runs: [OnboardingTextRun(text: s.title)] + detail)
         .frame(maxWidth: .infinity, alignment: .leading)
       if let hint = s.hint { KitLabel(g, 12, look.t.textTertiary, hint) }
     }

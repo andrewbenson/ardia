@@ -226,10 +226,10 @@ public final class HeroBarModel {
   }
 
   public func focusOnce() {
-    guard !focusedOnce else { return }
+    guard !focusedOnce, let field else { return }
     focusedOnce = true
-    field?.focusField()
-    field?.show(value: value, selection: selection)
+    field.focusField()
+    field.show(value: value, selection: selection)
     events.journey(.focused)
   }
 

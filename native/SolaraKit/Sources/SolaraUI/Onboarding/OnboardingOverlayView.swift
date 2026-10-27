@@ -106,7 +106,7 @@ struct OnboardingOverlay: View {
           .modifier(OnboardingCardDriver(card: settled ? 1 : card))
         }
         if intro {
-          OnboardingIntroView(model: model) { model.go(.source) }
+          OnboardingIntroView(model: model) { if model.step == .intro { model.go(.source) } }
         }
       }
       .frame(width: proxy.size.width, height: proxy.size.height)
@@ -145,6 +145,7 @@ struct OnboardingIntroView: View {
   @State private var start = Date()
   @State private var skipped: (at: Double, exit: Double, date: Date)?
   @State private var done = false
+  @State private var timer: Task<Void, Never>?
 
   static let skipDuration = 280.0
   static let iconSpring = SpringParams.origami(friction: 7, tension: 50)
@@ -160,10 +161,15 @@ struct OnboardingIntroView: View {
       start = Date()
       model.services.playIntroMusic(cues, muted: model.introMusicMuted)
       let end = cues.end
-      Task { @MainActor in
+      timer = Task { @MainActor in
         try? await Task.sleep(for: .milliseconds(Int(end * 1000)))
+        guard !Task.isCancelled else { return }
         if skipped == nil { finish() }
       }
+    }
+    .onDisappear {
+      timer?.cancel()
+      done = true
     }
   }
 
@@ -178,8 +184,10 @@ struct OnboardingIntroView: View {
     model.services.stopIntroMusic(fade: 0.35)
     let elapsed = Date().timeIntervalSince(start)
     skipped = (elapsed, values(at: elapsed).exit, Date())
-    Task { @MainActor in
+    timer?.cancel()
+    timer = Task { @MainActor in
       try? await Task.sleep(for: .milliseconds(Int(Self.skipDuration)))
+      guard !Task.isCancelled else { return }
       finish()
     }
   }

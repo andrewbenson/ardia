@@ -66,9 +66,9 @@ struct OnboardingPressable<Label: View>: View {
   @State private var hovered = false
 
   var body: some View {
-    Button(action: action) { EmptyView() }
-      .buttonStyle(OnboardingPressStyle { pressed in AnyView(label(hovered, pressed)) })
-      .disabled(disabled)
+    Button { if !disabled { action() } } label: { EmptyView() }
+      .buttonStyle(OnboardingPressStyle { pressed in AnyView(label(hovered, pressed && !disabled)) })
+      .allowsHitTesting(!disabled)
       .onKeyPress(.return) {
         guard !disabled else { return .ignored }
         action()
@@ -95,10 +95,7 @@ struct OnboardingStepProgress: View {
         }
       }
       HStack(spacing: 10) {
-        Text("STEP \(index + 1) OF \(steps.count)")
-          .font(OnboardingFont.system(11, 500))
-          .kerning(0.2)
-          .foregroundStyle(colors.steps)
+        OnboardingText("STEP \(index + 1) OF \(steps.count)", size: 11, weight: 500, color: colors.steps, kerning: 0.2)
         if count > 1 {
           HStack(spacing: 4) {
             ForEach(0..<count, id: \.self) { i in
@@ -125,18 +122,9 @@ struct OnboardingStepTitle: View {
   var body: some View {
     let colors = OnboardingColors.of(scheme)
     VStack(alignment: .leading, spacing: 10) {
-      Text(title)
-        .font(OnboardingFont.system(26, 300))
-        .kerning(-0.4)
-        .lineSpacing(31 - 26 * 1.19)
-        .foregroundStyle(colors.title)
-        .fixedSize(horizontal: false, vertical: true)
+      OnboardingText(title, size: 26, weight: 300, color: colors.title, lineHeight: 31, kerning: -0.4)
       if let subtitle {
-        Text(subtitle)
-          .font(OnboardingFont.system(13.5))
-          .lineSpacing(19 - 13.5 * 1.19)
-          .foregroundStyle(colors.subtitle)
-          .fixedSize(horizontal: false, vertical: true)
+        OnboardingText(subtitle, size: 13.5, color: colors.subtitle, lineHeight: 19)
       }
     }
   }
@@ -153,18 +141,17 @@ struct OnboardingPrimaryButton: View {
     let colors = OnboardingColors.of(scheme)
     OnboardingPressable(disabled: disabled, action: action) { hovered, pressed in
       HStack(spacing: 6) {
-        Text(title).font(OnboardingFont.system(13, 600)).foregroundStyle(colors.primaryText)
+        OnboardingText(title, size: 13, weight: 600, color: colors.primaryText)
         if let icon {
           Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(colors.primaryText).frame(width: 12, height: 12)
         }
       }
       .padding(.horizontal, 20)
       .frame(height: 36)
-      .background(Capsule().fill(hovered && !disabled ? colors.primaryHover : colors.primary))
+      .background(Capsule().fill(hovered && !disabled ? colors.primaryHover : colors.primary).opacity(disabled ? 0.4 : 1))
       .scaleEffect(pressed ? 0.98 : 1)
       .contentShape(Capsule())
     }
-    .opacity(disabled ? 0.4 : 1)
     .accessibilityLabel(title)
   }
 }
@@ -178,10 +165,9 @@ struct OnboardingSecondaryButton: View {
   var body: some View {
     let colors = OnboardingColors.of(scheme)
     OnboardingPressable(action: action) { hovered, pressed in
-      Text(title)
-        .font(OnboardingFont.system(13, 500))
-        .foregroundStyle(filled ? colors.buttonText : colors.noThanksText)
+      OnboardingText(title, size: 13, weight: 500, color: filled ? colors.buttonText : colors.noThanksText)
         .padding(.horizontal, 18)
+        .padding(.horizontal, filled ? 0 : 1)
         .frame(height: 36)
         .background(Capsule().fill(filled ? (hovered ? colors.buttonHover : colors.button) : hovered ? colors.outlinedHover : .clear))
         .overlay { if !filled { CapsuleRing().fill(colors.noThanksBorder, style: FillStyle(eoFill: true)) } }
@@ -278,9 +264,7 @@ struct OnboardingTag: View {
 
   var body: some View {
     let colors = OnboardingColors.of(scheme)
-    Text(title)
-      .font(OnboardingFont.system(11, 600))
-      .foregroundStyle(colors.title)
+    OnboardingText(title, size: 11, weight: 600, color: colors.title)
       .padding(.horizontal, 8)
       .frame(height: 20)
       .background(Capsule().fill(colors.button))
@@ -292,9 +276,7 @@ struct OnboardingSectionLabel: View {
   let title: String
 
   var body: some View {
-    Text(title)
-      .font(OnboardingFont.system(12, 500))
-      .foregroundStyle(OnboardingColors.of(scheme).subtitle)
+    OnboardingText(title, size: 12, weight: 500, color: OnboardingColors.of(scheme).subtitle)
       .frame(maxWidth: .infinity, minHeight: 18, maxHeight: 18, alignment: .leading)
   }
 }
@@ -312,6 +294,7 @@ struct OnboardingRowFrame<Content: View>: View {
     HStack(spacing: compact ? 10 : 12) { content() }
       .padding(.vertical, compact ? 6 : 9)
       .padding(.horizontal, 12)
+      .padding(1)
       .frame(minHeight: compact ? 36 : nil)
       .background(RoundedRectangle(cornerRadius: radius).fill(hovered && !disabled ? colors.button : colors.row))
       .overlay(RoundedRectangle(cornerRadius: radius).strokeBorder(colors.rowBorder, lineWidth: 1))
@@ -340,9 +323,9 @@ struct OnboardingCheckRow: View {
             .background(RoundedRectangle(cornerRadius: 7).fill(colors.iconContainer))
         }
         VStack(alignment: .leading, spacing: 2) {
-          Text(title).font(OnboardingFont.system(compact ? 12.5 : 13, 500)).foregroundStyle(colors.title)
+          OnboardingText(title, size: compact ? 12.5 : 13, weight: 500, color: colors.title)
           if let subtitle {
-            Text(subtitle).font(OnboardingFont.system(compact ? 11 : 12)).foregroundStyle(colors.rowSubtitle).lineLimit(2)
+            OnboardingText(subtitle, size: compact ? 11 : 12, color: colors.rowSubtitle, lines: 2)
           }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -351,8 +334,18 @@ struct OnboardingCheckRow: View {
       .contentShape(Rectangle())
     }
     .opacity(disabled ? 0.5 : 1)
-    .accessibilityLabel(title)
-    .accessibilityAddTraits(value ? .isSelected : [])
+    .onboardingCheckbox(title, on: value, disabled: disabled) { onChange(!value) }
+  }
+}
+
+extension View {
+  func onboardingCheckbox(_ title: String, on: Bool, disabled: Bool, toggle: @escaping () -> Void) -> some View {
+    accessibilityRepresentation {
+      Toggle(title, isOn: Binding(get: { on }, set: { if $0 != on { toggle() } }))
+        .toggleStyle(.checkbox)
+        .disabled(disabled)
+    }
+    .modifier(OnboardingProbeModifier(title: title, on: on, disabled: disabled))
   }
 }
 
@@ -370,13 +363,14 @@ struct OnboardingChoiceRow: View {
       HStack(spacing: 12) {
         OnboardingRadio(on: selected)
         VStack(alignment: .leading, spacing: 2) {
-          Text(title).font(OnboardingFont.system(13, 500)).foregroundStyle(colors.title)
-          Text(subtitle).font(OnboardingFont.system(12)).foregroundStyle(colors.rowSubtitle).lineLimit(2)
+          OnboardingText(title, size: 13, weight: 500, color: colors.title)
+          OnboardingText(subtitle, size: 12, color: colors.rowSubtitle, lines: 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .padding(.vertical, 10)
       .padding(.horizontal, 14)
+      .padding(1)
       .frame(minHeight: 56)
       .background(RoundedRectangle(cornerRadius: 12).fill(selected || hovered ? colors.button : colors.row))
       .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? colors.checkboxBorder : colors.rowBorder, lineWidth: 1))
@@ -406,7 +400,7 @@ struct OnboardingOptionRow<T: Hashable>: View {
   var body: some View {
     let colors = OnboardingColors.of(scheme)
     OnboardingRowFrame(compact: true) {
-      Text(title).font(OnboardingFont.system(12.5, 500)).foregroundStyle(colors.title).frame(maxWidth: .infinity, alignment: .leading)
+      OnboardingText(title, size: 12.5, weight: 500, color: colors.title).frame(maxWidth: .infinity, alignment: .leading)
       HStack(spacing: 2) {
         ForEach(options) { option in
           OnboardingSegment(title: option.title, image: option.image, imageSlot: options.contains { $0.image != nil }, selected: option.value == value) { onChange(option.value) }
@@ -439,7 +433,7 @@ struct OnboardingSegment: View {
             Color.clear.frame(width: 26, height: 26)
           }
         } else {
-          Text(title).font(OnboardingFont.system(11.5, selected ? 600 : 500)).foregroundStyle(selected ? colors.title : colors.subtitle)
+          OnboardingText(title, size: 11.5, weight: selected ? 600 : 500, color: selected ? colors.title : colors.subtitle)
         }
       }
       .padding(.horizontal, isImage ? 2 : 8)
@@ -469,6 +463,7 @@ struct OnboardingTileFrame<Content: View>: View {
   var body: some View {
     let colors = OnboardingColors.of(scheme)
     VStack(spacing: gap) { content() }
+      .padding(selected ? 1.5 : 1)
       .frame(width: width, height: height)
       .background(RoundedRectangle(cornerRadius: 12).fill(selected || hovered ? colors.button : colors.row))
       .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? colors.title : colors.rowBorder, lineWidth: selected ? 1.5 : 1))

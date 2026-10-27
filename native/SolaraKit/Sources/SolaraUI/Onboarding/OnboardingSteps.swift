@@ -115,7 +115,7 @@ struct EngineTile: View {
     OnboardingPressable(action: action) { hovered, pressed in
       OnboardingTileFrame(width: OnboardingMetrics.tile, height: 64, selected: selected, hovered: hovered, pressed: pressed, checkSize: 12) {
         OnboardingFavicon(model: model, url: "https://\(engineHost(engine))", size: 18)
-        Text(engine.name).font(OnboardingFont.system(11, 500)).foregroundStyle(selected ? colors.title : colors.subtitle).lineLimit(1)
+        OnboardingText(engine.name, size: 11, weight: 500, color: selected ? colors.title : colors.subtitle, lines: 1)
       }
     }
     .accessibilityLabel(engine.name)
@@ -246,7 +246,7 @@ struct SourceTile: View {
             .background(RoundedRectangle(cornerRadius: 9).fill(colors.iconContainer))
             .padding(3)
         }
-        Text(title).font(OnboardingFont.system(11, 500)).foregroundStyle(selected ? colors.title : colors.subtitle).lineLimit(1).padding(.horizontal, 4)
+        OnboardingText(title, size: 11, weight: 500, color: selected ? colors.title : colors.subtitle, lines: 1).padding(.horizontal, 4)
       }
     }
     .accessibilityLabel(title)
@@ -278,7 +278,7 @@ struct SourcePreview: View {
                   .frame(width: 72, height: 72)
                   .background(RoundedRectangle(cornerRadius: 18).fill(colors.iconContainer))
               }
-              Text(t.name).font(OnboardingFont.system(11)).foregroundStyle(colors.subtitle)
+              OnboardingText(t.name, size: 11, color: colors.subtitle)
             }
           }
         }
@@ -304,8 +304,8 @@ struct SourceImportOffer: View {
     let importing = model.importing == chosen.id
     HStack(spacing: 12) {
       VStack(alignment: .leading, spacing: 2) {
-        Text(importing ? "Importing from \(chosen.name)" : "Bring your stuff from \(chosen.name)").font(OnboardingFont.system(13, 500)).foregroundStyle(colors.title)
-        Text(importing ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs.").font(OnboardingFont.system(12)).foregroundStyle(colors.rowSubtitle)
+        OnboardingText(importing ? "Importing from \(chosen.name)" : "Bring your stuff from \(chosen.name)", size: 13, weight: 500, color: colors.title)
+        OnboardingText(importing ? "It runs in its own window. Carry on here." : "Bookmarks, history, passwords and tabs.", size: 12, color: colors.rowSubtitle)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       if importing {
@@ -353,11 +353,10 @@ struct SiteTile: View {
     OnboardingPressable(action: action) { hovered, pressed in
       OnboardingTileFrame(width: 80, height: 70, gap: 7, selected: selected, hovered: hovered, pressed: pressed) {
         OnboardingFavicon(model: model, url: site.url, size: 22).opacity(selected || hovered ? 1 : 0.7)
-        Text(site.title).font(OnboardingFont.system(11, 500)).foregroundStyle(selected ? colors.title : colors.subtitle)
+        OnboardingText(site.title, size: 11, weight: 500, color: selected ? colors.title : colors.subtitle)
       }
     }
-    .accessibilityLabel(site.title)
-    .accessibilityAddTraits(selected ? .isSelected : [])
+    .onboardingCheckbox(site.title, on: selected, disabled: false, toggle: action)
   }
 }
 
@@ -449,7 +448,7 @@ struct SystemPreview: View {
   func chip(_ on: Bool, _ icon: String, _ label: String, _ colors: OnboardingColors) -> some View {
     HStack(spacing: 8) {
       Image(systemName: icon).font(.system(size: 13)).foregroundStyle(colors.title).frame(width: 16, height: 16)
-      Text(label).font(OnboardingFont.system(12, 500)).foregroundStyle(colors.title)
+      OnboardingText(label, size: 12, weight: 500, color: colors.title)
       OnboardingCheckMark(on: on, size: 16)
     }
     .padding(.leading, 12)
@@ -483,11 +482,11 @@ struct OutroStepView: View {
       VStack(alignment: .leading, spacing: 10) {
         ForEach(OnboardingModel.shortcuts, id: \.keys) { shortcut in
           HStack(spacing: 12) {
-            Text(shortcut.keys).font(OnboardingFont.system(12, 500)).foregroundStyle(colors.title)
+            OnboardingText(shortcut.keys, size: 12, weight: 500, color: colors.title)
               .padding(.horizontal, 7)
               .frame(minWidth: 38, minHeight: 24, maxHeight: 24)
               .background(RoundedRectangle(cornerRadius: 6).fill(colors.button))
-            Text(shortcut.label).font(OnboardingFont.system(13)).foregroundStyle(colors.subtitle)
+            OnboardingText(shortcut.label, size: 13, color: colors.subtitle)
           }
         }
       }
@@ -510,18 +509,16 @@ struct Postcard: View {
     let shown = Array(lines.prefix(8))
     HStack(alignment: .top, spacing: 0) {
       VStack(alignment: .leading, spacing: 10) {
-        Text("Hello!").font(OnboardingFont.system(20, 300)).italic().foregroundStyle(colors.title)
+        OnboardingText("Hello!", size: 20, weight: 300, color: colors.title, italic: true)
         if shown.isEmpty {
-          Text("Glad you're here. Make yourself at home. Your tabs, bookmarks and pins are ready.")
-            .font(OnboardingFont.system(12)).lineSpacing(17 - 12 * 1.19).foregroundStyle(colors.subtitle)
-            .fixedSize(horizontal: false, vertical: true)
+          OnboardingText("Glad you're here. Make yourself at home. Your tabs, bookmarks and pins are ready.", size: 12, color: colors.subtitle, lineHeight: 17)
         } else {
           VStack(alignment: .leading, spacing: 4) {
-            Text("You picked:").font(OnboardingFont.system(11)).foregroundStyle(colors.subtitle).frame(height: 15)
+            OnboardingText("You picked:", size: 11, color: colors.subtitle, lineHeight: 15)
             ForEach(Array(shown.enumerated()), id: \.offset) { _, line in
               HStack(alignment: .top, spacing: 6) {
                 Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(colors.title).frame(width: 10, height: 15)
-                Text(line).font(OnboardingFont.system(11)).lineSpacing(15 - 11 * 1.19).foregroundStyle(colors.title).fixedSize(horizontal: false, vertical: true)
+                OnboardingText(line, size: 11, color: colors.title, lineHeight: 15).frame(maxWidth: .infinity, alignment: .leading)
               }
             }
           }

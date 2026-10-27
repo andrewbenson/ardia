@@ -130,8 +130,8 @@ struct LayoutButton: View {
         HStack(spacing: 8) {
           OnboardingRadio(on: selected)
           VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(OnboardingFont.system(12.5, 500)).foregroundStyle(colors.title)
-            Text(subtitle).font(OnboardingFont.system(11)).foregroundStyle(colors.rowSubtitle)
+            OnboardingText(title, size: 12.5, weight: 500, color: colors.title)
+            OnboardingText(subtitle, size: 11, color: colors.rowSubtitle)
           }
           Spacer(minLength: 0)
         }

@@ -25,7 +25,18 @@ public final class NewTabHeroView: NSView {
   public var favicons: NewTabFavicons? { didSet { refreshEnvironment() } }
   public var theme = NewTabTheme.fallbackLight { didSet { if theme != oldValue { applyTheme() } } }
   public var incognito = false { didSet { model?.incognito = incognito; needsLayout = true } }
-  public var onboarding = false { didSet { if onboarding != oldValue { rebuildContent() } } }
+  public var onboarding = false {
+    didSet {
+      guard onboarding != oldValue else { return }
+      rebuildContent()
+      guard !onboarding else { return }
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.window != nil else { return }
+        self.layoutSubtreeIfNeeded()
+        self.model?.focusOnce()
+      }
+    }
+  }
   public var under: CGFloat = 0 { didSet { if under != oldValue { needsLayout = true } } }
   public var panelOpen = false { didSet { model?.panelOpened(panelOpen) } }
   public var playIntro = false {

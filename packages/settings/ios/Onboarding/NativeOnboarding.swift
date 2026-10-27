@@ -12,17 +12,55 @@ enum NativeOnboarding {
   static let kind = "onboarding"
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_ONBOARDING"] == "1" && NativeSettingsWindow.enabled
+    ProcessInfo.processInfo.environment["ARDIA_NATIVE_ONBOARDING"] != "0" && NativeSettingsWindow.enabled
   }
+
+  private static var sessions: [OnboardingSession] = []
 
   static func register() {
     guard enabled else { return }
+    OnboardingProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
     HostedViews.register(kind) { windowId in
       guard let settings = NativeSettingsHandle.model else { return nil }
       let session = OnboardingSession(windowId: windowId, settings: settings)
-      return HostedContent(view: session.view, onUnmount: { session.end() })
+      sessions.append(session)
+      return HostedContent(view: session.view, onUnmount: {
+        session.end()
+        sessions.removeAll { $0 === session }
+      })
     }
   }
+
+  static func drive(_ action: String, _ argument: String?) -> String {
+    guard enabled else { return #"{"error":"native onboarding is off"}"# }
+    guard let model = sessions.last?.model else { return #"{"active":false}"# }
+    switch action {
+    case "go":
+      let parts = (argument ?? "").split(separator: ":").map(String.init)
+      guard let step = parts.first.flatMap(OnboardingStep.init(rawValue:)) else { return #"{"error":"unknown step"}"# }
+      model.go(step, sub: parts.count > 1 ? Int(parts[1]) ?? 0 : 0)
+    case "next": model.next()
+    case "back": model.back()
+    case "skip": model.skip()
+    case "finish": model.finish()
+    case "state": break
+    case "find":
+      guard let view = sessions.last?.view, let window = view.window, let content = window.contentView else { return #"{"error":"no window"}"# }
+      guard let row = OnboardingProbe.rows[argument ?? ""] else { return #"{"found":false}"# }
+      let local = view.isFlipped ? row.frame : NSRect(x: row.frame.minX, y: view.bounds.height - row.frame.maxY, width: row.frame.width, height: row.frame.height)
+      let inContent = content.convert(view.convert(local, to: nil), from: nil)
+      let top = content.isFlipped ? inContent.minY : content.bounds.height - inContent.maxY
+      return json(["found": true, "value": row.on ? "1" : "0", "enabled": !row.disabled, "frame": [inContent.minX, top, inContent.width, inContent.height]])
+    default: return #"{"error":"unknown action"}"#
+    }
+    return json(["active": model.isActive, "step": model.step.rawValue, "sub": model.sub, "windowId": sessions.last?.windowId ?? ""])
+  }
+
+  private static func json(_ object: [String: Any]) -> String {
+    guard let data = try? JSONSerialization.data(withJSONObject: object), let text = String(data: data, encoding: .utf8) else { return "{}" }
+    return text
+  }
+
 }
 
 @MainActor

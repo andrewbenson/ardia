@@ -30,6 +30,10 @@ public class SettingsModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("devOnboarding") { (action: String, argument: String?) -> String in
+      MainActor.assumeIsolated { NativeOnboarding.drive(action, argument) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devTimings") { () -> String in
       MainActor.assumeIsolated { SettingsTimings.takeJSON() }
     }.runOnQueue(.main)

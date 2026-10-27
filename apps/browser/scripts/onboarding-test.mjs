@@ -8,7 +8,7 @@ import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node onboarding-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data]\n\nNo text field sits behind the onboarding card, where its I-beam and clicks would come through the rows, the first row's checkbox toggles on a click, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once onboarding ends, in a bar that keeps its height.");
+  console.error("usage: node onboarding-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data] [--rn | --native]\n\n--rn and --native pick the overlay (ARDIA_NATIVE_ONBOARDING=0 or 1); the checks are the same for both.\n\nNo text field sits behind the onboarding card, where its I-beam and clicks would come through the rows, the first row's checkbox toggles on a click, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once onboarding ends, in a bar that keeps its height.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -17,6 +17,8 @@ const defaultBrowserRow = `Set ${product} as default browser`;
 const defaultBrowserAx = new RegExp(`AXCheckBox: ${defaultBrowserRow}`);
 const port = args.find((a) => a.startsWith("--port="))?.slice(7);
 const keep = args.includes("--keep-data");
+const extraEnv = Object.fromEntries(args.filter((a) => a.startsWith("--env=")).map((a) => a.slice(6).split("=")));
+const overlay = args.includes("--rn") ? { ARDIA_NATIVE_ONBOARDING: "0" } : args.includes("--native") ? { ARDIA_NATIVE_ONBOARDING: "1" } : {};
 const scratch = mkdtempSync(join(tmpdir(), "ac-onboarding-"));
 const data = join(scratch, "data");
 const rep = reporter(join(scratch, "onboarding-test.log"), { name: "onboarding-test" });
@@ -51,43 +53,75 @@ const barHeight = () => new Promise((r) => {
   bar.stateNode.measureInWindow((x, y, w, h) => r(h));
 });
 const click = ([x, y]) => act("mouse:down:" + x + "," + y).then(() => settle(70)).then(() => act("mouse:up:" + x + "," + y));
+const S = globalThis.expo.modules.SolaraSettings;
+const nativeOverlay = () => (S.devOnboarding ? S.devOnboarding("state").then((t) => JSON.parse(t).active === true) : Promise.resolve(false));
+const findNative = (label) => S.devOnboarding("find", label).then((t) => JSON.parse(t));
+const goStep = (step) => nativeOverlay().then((n) => (n ? S.devOnboarding("go", step + ":0") : acOnboarding.store.getState().go(step)));
+const isChecked = (label) => nativeOverlay().then((n) => (n ? findNative(label).then((e) => e.value === "1") : checked(label)));
+const isDisabled = (label) => nativeOverlay().then((n) => (n ? findNative(label).then((e) => e.enabled === false) : !!checkRow(label)?.memoizedProps.accessibilityState?.disabled));
+const toggleAt = (label) => nativeOverlay().then((n) => (n ? findNative(label).then((e) => [Math.round(e.frame[0] + e.frame[2] - 24), Math.round(e.frame[1] + e.frame[3] / 2)]) : checkMarkCenter(label)));
+const finish = () => nativeOverlay().then((n) => (n ? S.devOnboarding("finish") : acOnboarding.finish()));
+const nativeNewTab = () => !!globalThis.expo.modules.SolaraNewTab?.available?.();
+const focusOf = (number) => C.devWindow(number, "type:");
+const rootWindow = () => C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window);
 `;
 const run = (body) => app.eval(`${HELPERS}\n${body}`, { timeout: 20000 });
 const textFields = (ax) => ax.split("\n").filter((line) => line.trim().startsWith("AXTextField"));
+const isField = (responder) => /NSTextView|NSTextField|FieldEditor|TextField/.test(responder);
 
 try {
-  app = await launch(appPath, { data, port, env: { ARDIA_ONBOARDING: "1" } });
+  app = await launch(appPath, { data, port, env: { ARDIA_ONBOARDING: "1", ...overlay, ...extraEnv } });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await app.ready({ test: "return !!globalThis.acOnboarding?.store.getState().windowId" });
+  rep.log(`overlay: ${(await run("return nativeOverlay();")) ? "native" : "RN"}`);
+
+  const native = await run("return nativeOverlay();");
+  const newTab = await run("return nativeNewTab();");
+  rep.log(`New Tab page: ${newTab ? "native" : "RN"}`);
 
   await rep.check("the home step has no text field behind its card", async () => {
-    const ax = await run(`acOnboarding.store.getState().go("home"); return settle(1200).then(() => act("ax"));`);
-    assert.match(ax, defaultBrowserAx, "the step is on screen");
-    assert.deepEqual(textFields(ax), [], "a text field behind the card takes the first row's cursor and clicks");
+    const r = await run(`return goStep("home").then(() => settle(1200)).then(() => Promise.all([act("ax"), act("type:"), nativeOverlay().then((n) => (n ? S.devOnboarding("state").then(JSON.parse) : null))]))`);
+    const [ax, responder, state] = r;
+    if (native) assert.equal(state.step, "home", "the step is on screen");
+    else assert.match(ax, defaultBrowserAx, "the step is on screen");
+    if (newTab) assert.ok(!isField(responder), `a text field behind the card takes the first row's keys and clicks: ${responder}`);
+    else assert.deepEqual(textFields(ax), [], "a text field behind the card takes the first row's cursor and clicks");
+    return responder;
   });
 
   const label = JSON.stringify(defaultBrowserRow);
   const toggles = "a click on the first row's checkbox toggles it";
-  if (await run(`return !!checkRow(${label})?.memoizedProps.accessibilityState?.disabled;`))
+  if (await run(`return isDisabled(${label});`))
     rep.record(toggles, { skip: "this build is the system's default browser, so the row is disabled" });
   else await rep.check(toggles, async () => {
-    const r = await run(`const before = checked(${label}); return act("fakeActiveClicks").then(() => checkMarkCenter(${label})).then((at) => click(at).then((hit) => settle(400).then(() => ({ at, hit, before, after: checked(${label}) }))));`);
+    const r = await run(`let before; return isChecked(${label}).then((b) => { before = b; return act("fakeActiveClicks"); }).then(() => toggleAt(${label})).then((at) => click(at).then((hit) => settle(400).then(() => isChecked(${label})).then((after) => ({ at, hit, before, after }))));`);
     assert.notEqual(r.after, r.before, `the click at ${r.at} reached ${r.hit}`);
     return `${r.before} -> ${r.after}`;
   });
 
   await rep.check("another window keeps its New Tab field during onboarding", async () => {
-    const axes = await run(`const id = ac.store.getState().createWindow(); return settle(1500).then(windowsAx).then((axes) => { ac.store.getState().closeWindow(id); return settle(500).then(() => axes); });`);
+    const r = await run(`return rootWindow().then((first) => { const id = ac.store.getState().createWindow(); return settle(1500).then(() => C.chromeWindows()).then((ws) => { const other = ws.find((w) => w.hasRoot && w.window !== first)?.window; return Promise.all([windowsAx(), focusOf(first), other ? focusOf(other) : ""]); }).then((out) => { ac.store.getState().closeWindow(id); return settle(500).then(() => out); }); })`);
+    const [axes, onboardingFocus, otherFocus] = r;
     assert.equal(axes.length, 2, "two windows");
+    if (newTab) {
+      assert.ok(!isField(onboardingFocus), `the onboarding window: ${onboardingFocus}`);
+      assert.ok(isField(otherFocus), `the other window's New Tab field: ${otherFocus}`);
+      return otherFocus;
+    }
     const [onboarding, other] = defaultBrowserAx.test(axes[0]) ? axes : [...axes].reverse();
     assert.deepEqual(textFields(onboarding), [], "the onboarding window");
     assert.equal(textFields(other).length, 1, "the other window's New Tab field");
   });
 
   await rep.check("after onboarding the New Tab field is back and focused, in a bar of the same height", async () => {
-    const r = await run(`return barHeight().then((during) => { acOnboarding.finish(); return settle(1500).then(() => Promise.all([act("ax"), act("type:"), barHeight()])).then(([ax, focus, after]) => ({ ax, focus, during, after })); });`);
+    if (newTab) {
+      const r = await run(`return finish().then(() => settle(1500)).then(() => act("type:"))`);
+      assert.ok(isField(r), `first responder: ${r}`);
+      return `${r} (the native bar's height isn't measured here)`;
+    }
+    const r = await run(`return barHeight().then((during) => { finish(); return settle(1500).then(() => Promise.all([act("ax"), act("type:"), barHeight()])).then(([ax, focus, after]) => ({ ax, focus, during, after })); });`);
     assert.equal(textFields(r.ax).length, 1, "the New Tab field");
-    assert.match(r.focus, /NSTextView|NSTextField/, `first responder: ${r.focus}`);
+    assert.ok(isField(r.focus), `first responder: ${r.focus}`);
     assert.equal(r.after, r.during, "the bar's height");
     return `${r.focus}, bar ${r.during} -> ${r.after}`;
   });

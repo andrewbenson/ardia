@@ -179,6 +179,7 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
   var sharing = false
   var sheet: PrivacySheet?
   var confirmingAdsOff = false
+  @ObservationIgnored private var watchingBlocker: Task<Void, Never>?
 
   public init(services: PrivacyServices, diagnostics: DiagnosticsSharingServices?, store: SettingsStoreSource) {
     self.services = services
@@ -203,6 +204,7 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
   }
 
   public func prepare(_ place: SettingsPlace) async {
+    watchBlocker()
     let profile = defaultEngineProfile
     let blocker = Task { await reloadBlocker() }
     let origins = Task { await loadOrigins(profile) }
@@ -222,6 +224,16 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
   func reloadBlocker() async {
     blocker = await services.contentBlocker()
     blockerLoaded = true
+  }
+
+  func watchBlocker() {
+    guard watchingBlocker == nil else { return }
+    let changes = services.contentBlockerChanges()
+    watchingBlocker = Task { [weak self] in
+      for await _ in changes {
+        await self?.reloadBlocker()
+      }
+    }
   }
 
   func loadOrigins(_ profile: String) async { origins[profile] = await services.siteSettingsOrigins(profile: profile) }
@@ -343,17 +355,16 @@ struct PrivacyPane: View {
         Section {
         } footer: {
           Text(PrivacyPaneModel.rulesLoaded(blocker))
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+            .font(.system(size: 11.5))
+            .padding(.top, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
       ShareDiagnosticsSection(model: model)
     }
     .task {
-      for await _ in model.services.contentBlockerChanges() {
-        await model.reloadBlocker()
-      }
+      model.watchBlocker()
+      await model.reloadBlocker()
     }
     .task(id: model.zoomProfile) {
       if model.zoom[model.zoomProfile] == nil { await model.loadZoom(model.zoomProfile) }

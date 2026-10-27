@@ -61,7 +61,7 @@ public final class SidebarView: NSView {
   required init?(coder: NSCoder) { fatalError() }
 
   public func update(state: BrowserState, host: SidebarHostState) {
-    let next = SidebarContext(state: state, host: host, windowId: windowId, favicons: favicons)
+    let next = SidebarContext(state: state, host: host, windowId: windowId, favicons: favicons, previous: context)
     next.send = { [weak self] action in self?.onAction(action) }
     let previous = context
     let moved = previous != nil && previous?.activeId != next.activeId

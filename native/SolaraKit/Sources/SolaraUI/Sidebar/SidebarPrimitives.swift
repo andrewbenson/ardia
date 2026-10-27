@@ -2,15 +2,15 @@ import AppKit
 import QuartzCore
 
 final class SurfaceLayer: CALayer {
-  var fill: NSColor? { didSet { apply() } }
-  var radius: CGFloat = 0 { didSet { apply() } }
-  var borderTint: NSColor? { didSet { apply() } }
-  var border: CGFloat = 0 { didSet { apply() } }
-  var borderColors: [NSColor] = [] { didSet { apply() } }
-  var glowColor: NSColor? { didSet { apply() } }
-  var glowOpacity: Double = 0 { didSet { apply() } }
-  var glowRadius: CGFloat = 0 { didSet { apply() } }
-  var glowOffset = CGSize(width: 0, height: 0.5) { didSet { apply() } }
+  var fill: NSColor? { didSet { if fill != oldValue { setNeedsLayout() } } }
+  var radius: CGFloat = 0 { didSet { if radius != oldValue { setNeedsLayout() } } }
+  var borderTint: NSColor? { didSet { if borderTint != oldValue { setNeedsLayout() } } }
+  var border: CGFloat = 0 { didSet { if border != oldValue { setNeedsLayout() } } }
+  var borderColors: [NSColor] = [] { didSet { if borderColors != oldValue { setNeedsLayout() } } }
+  var glowColor: NSColor? { didSet { if glowColor != oldValue { setNeedsLayout() } } }
+  var glowOpacity: Double = 0 { didSet { if glowOpacity != oldValue { setNeedsLayout() } } }
+  var glowRadius: CGFloat = 0 { didSet { if glowRadius != oldValue { setNeedsLayout() } } }
+  var glowOffset = CGSize(width: 0, height: 0.5) { didSet { if glowOffset != oldValue { setNeedsLayout() } } }
 
   private let plate = CALayer()
   private let shadowLayer = CALayer()

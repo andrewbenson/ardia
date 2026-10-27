@@ -92,11 +92,11 @@ final class SidebarGlassTile: NSView {
   private let glass = NSGlassEffectView()
   private let selection = GlassSelectionLayer()
   private let outline = CALayer()
-  var radius: CGFloat = SidebarMetrics.tileRadius { didSet { apply() } }
+  var radius: CGFloat = SidebarMetrics.tileRadius { didSet { if radius != oldValue { needsLayout = true } } }
   var tint: NSColor? { didSet { if tint != oldValue { glass.tintColor = tint } } }
-  var dark = true { didSet { if dark != oldValue { apply() } } }
-  var raisedSelection = false { didSet { if raisedSelection != oldValue { apply() } } }
-  var outlineColor: NSColor? { didSet { apply() } }
+  var dark = true { didSet { if dark != oldValue { glass.appearance = NSAppearance(named: dark ? .darkAqua : .aqua); needsLayout = true } } }
+  var raisedSelection = false { didSet { if raisedSelection != oldValue { needsLayout = true } } }
+  var outlineColor: NSColor? { didSet { if outlineColor != oldValue { needsLayout = true } } }
 
   override var isFlipped: Bool { true }
 
@@ -105,6 +105,7 @@ final class SidebarGlassTile: NSView {
     wantsLayer = true
     glass.cornerRadius = radius
     glass.style = .regular
+    glass.appearance = NSAppearance(named: .darkAqua)
     addSubview(glass)
     outline.actions = SurfaceLayer.noActions
     outline.cornerCurve = .continuous
@@ -123,9 +124,8 @@ final class SidebarGlassTile: NSView {
   }
 
   private func apply() {
-    glass.frame = bounds
-    glass.cornerRadius = radius
-    glass.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+    if glass.frame != bounds { glass.frame = bounds }
+    if glass.cornerRadius != radius { glass.cornerRadius = radius }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     selection.frame = bounds

@@ -53,12 +53,24 @@ final class SidebarContext {
   let favicons: SidebarFavicons
   var send: (SidebarAction) -> Void = { _ in }
 
-  init(state: BrowserState, host: SidebarHostState, windowId: String, favicons: SidebarFavicons) {
+  let paletteGeneration: Int
+
+  init(state: BrowserState, host: SidebarHostState, windowId: String, favicons: SidebarFavicons, previous: SidebarContext? = nil) {
     self.state = state
     query = SidebarQuery(state)
     self.host = host
-    flags = SidebarFlags(host)
-    palette = SidebarPalette(host)
+    if let previous, previous.host == host {
+      flags = previous.flags
+    } else {
+      flags = SidebarFlags(host)
+    }
+    if let previous, previous.host.dark == host.dark, previous.host.theme == host.theme, previous.host.border == host.border, previous.host.glow == host.glow {
+      palette = previous.palette
+      paletteGeneration = previous.paletteGeneration
+    } else {
+      palette = SidebarPalette(host)
+      paletteGeneration = (previous?.paletteGeneration ?? 0) + 1
+    }
     self.windowId = windowId
     activeId = state.activeTabId(windowId, host.profileId)
     showClear = host.clear
@@ -130,12 +142,23 @@ class SidebarRowView: NSView {
     layoutBody()
   }
 
+  private var rendered: AnyHashable?
+
   func update(_ item: SidebarItem, _ context: SidebarContext) {
+    let key = renderKey(item, context)
+    if let key, key == rendered, item == self.item {
+      self.context = context
+      return
+    }
+    let resized = self.item?.frame.size != item.frame.size
     self.item = item
     self.context = context
+    rendered = key
     render()
-    needsLayout = true
+    if resized { needsLayout = true }
   }
+
+  func renderKey(_ item: SidebarItem, _ context: SidebarContext) -> AnyHashable? { nil }
 
   func render() {}
   func repaint() {}
@@ -235,6 +258,28 @@ final class TabRowView: SidebarRowView {
 
   var tabId: String? { tab?.id }
 
+  private struct Inputs: Hashable {
+    let tab: Tab
+    let active, selected, loading, playing, developer, sleeping, renaming, resettable, faded: Bool
+    let closeKind: String
+    let engine, closeHint: String?
+    let palette: Int
+
+    func hash(into hasher: inout Hasher) { hasher.combine(tab.id) }
+  }
+
+  override func renderKey(_ item: SidebarItem, _ context: SidebarContext) -> AnyHashable? {
+    guard case .tab(let id) = item.kind, let tab = context.state.tabs[id] else { return nil }
+    let flags = context.flags
+    return Inputs(
+      tab: tab, active: context.activeId == id, selected: flags.selection.contains(id), loading: flags.loading.contains(id),
+      playing: flags.playing.contains(id), developer: flags.developer.contains(id), sleeping: flags.sleeping.contains(id),
+      renaming: context.host.renaming == "tab:\(id)", resettable: context.query.awayFromPinnedUrl(id),
+      faded: context.state.settings.bool("fadeUnloadedTabs") && context.query.pageUnloaded(id),
+      closeKind: "\(context.query.closeKind(id))", engine: context.host.engines[id], closeHint: context.host.closeHint,
+      palette: context.paletteGeneration)
+  }
+
   override func render() {
     guard let context, case .tab(let id)? = item?.kind, let tab = context.state.tabs[id] else { return }
     self.tab = tab
@@ -284,8 +329,14 @@ final class TabRowView: SidebarRowView {
     icon.isHidden = resetting
     if resetting { label.text = "Back to Pinned URL" } else if let tab, !renaming { label.text = context.title(tab) }
     if closeButton.isHidden == false { closeButton.syncHover() }
-    needsLayout = true
+    let shape = [closeButton.isHidden, loading, showsAudio, developer]
+    if shape != laidOutShape {
+      laidOutShape = shape
+      needsLayout = true
+    }
   }
+
+  private var laidOutShape: [Bool] = []
 
   private var backHovered: Bool {
     guard let window else { return false }

@@ -575,7 +575,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
       apply: async (visible, changed, base, records) => {
         if (waiting()) return false;
         const before = baselineOf(scope, adapter.prefix);
-        const ok = await adapter.apply(visible, changed, before ? (key) => base(key) ?? parseKept(before.get(key)) : base, records);
+        const ok = await adapter.apply(visible, changed, before && rebuilding(adapter.prefix) ? (key) => base(key) ?? parseKept(before.get(key)) : base, records);
         if (!before || ok === false) return ok;
         const noted = rebuilding(adapter.prefix) ? notedFor(state, adapter.prefix, before) : null;
         for (const key of changed) {
@@ -715,7 +715,7 @@ function guardedExtraction(scope: string, prefix: string, state: Guarded, extrac
     const record = state.records[key];
     if (record && record.v !== null && state.base[key] === undefined) state.base[key] = canonical(record.v);
   }
-  const backToBase = new Set(rebuilding ? [] : [...values].filter(([key, value]) => edited(key, value) && state.base[key] === canonical(value)).map(([key]) => key));
+  const backToBase = new Set([...values].filter(([key, value]) => (rebuilding ? changedHere(key, value) : edited(key, value)) && state.base[key] === canonical(value)).map(([key]) => key));
   for (const [key, value] of [...values, ...settledHere]) {
     kept.set(key, choice(value));
     if (noted) noted[key] = digest(choice(value));
@@ -767,14 +767,14 @@ function resendRevival(scope: string, state: ScopeState, device: string) {
   held.length = 0;
 }
 
-async function noteWhatThisMacHas(only?: string) {
-  if (!loaded) return;
-  if (only === undefined) baselines = new Map();
+async function noteWhatThisMacHas(when: "launch" | "load", only?: string) {
+  if (when === "launch" && only === undefined) baselines = new Map();
   for (const [scope, profileId] of [[APP_SCOPE, null] as const, ...Object.entries(doc.profiles).map(([id, link]) => [`p:${link.syncId}`, id] as const)]) {
     const adapters = profileId === null ? appAdapters(false, true) : profileAdapters(profileId, false, true);
-    const state = doc.scopes[scope];
+    const state = loaded ? doc.scopes[scope] : undefined;
     for (const adapter of adapters) {
-      if (adapter.prefix === "pw:" || adapter.prefix === "ext:" || (only !== undefined && adapter.prefix !== only) || baselineOf(scope, adapter.prefix)) continue;
+      const had = baselineOf(scope, adapter.prefix);
+      if ((adapter.prefix === "pw:" && when === "load") || adapter.prefix === "ext:" || (only !== undefined && adapter.prefix !== only) || (had && when === "launch")) continue;
       try {
         const extraction = await adapter.extract(
           (key) => (state?.base[key] === undefined ? undefined : (JSON.parse(state.base[key]!) as unknown)),
@@ -784,7 +784,9 @@ async function noteWhatThisMacHas(only?: string) {
           (key) => state?.records[key]?.v,
           (key) => state?.records[key]?.h,
         );
-        if (extraction) noteBaseline(scope, adapter.prefix, extraction);
+        if (!extraction) continue;
+        if (!had) noteBaseline(scope, adapter.prefix, extraction);
+        else for (const [key, value] of extraction.values) if (!had.has(key)) had.set(key, choice(value));
       } catch (error) {
         console.warn(`[sync] ${adapter.prefix} wasn't ready to note what this Mac had`, error);
       }
@@ -1019,7 +1021,7 @@ async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: 
   try {
     if (!(await loadState(unlocking)) || unlocking !== generation) return { error: "interrupted" };
     loaded = true;
-    await noteWhatThisMacHas();
+    await noteWhatThisMacHas("load");
     keepNotes();
     if (rebuildingAny()) save();
   } catch (error) {
@@ -1167,6 +1169,7 @@ export function startSync() {
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
     loaded = false;
+    void noteWhatThisMacHas("launch");
     const unlocking = ++generation;
     loading = SyncNative.unlock(doc.deviceId)
       .then(async (ok) => {
@@ -1174,7 +1177,7 @@ export function startSync() {
         if (!ok) return showLocked();
         if (!(await loadState(unlocking)) || unlocking !== generation) return;
         loaded = true;
-        await noteWhatThisMacHas();
+        await noteWhatThisMacHas("load");
         if (unlocking !== generation) return;
         keepNotes();
         if (rebuildingAny()) save();
@@ -1190,8 +1193,8 @@ export function startSync() {
       });
   }
   useBrowser.subscribe((s, prev) => {
-    if (doc.enabled && s.bookmarksReady !== prev.bookmarksReady) void noteWhatThisMacHas("bm:");
-    if (doc.enabled && s.historyReady !== prev.historyReady) void noteWhatThisMacHas("h:");
+    if (doc.enabled && s.bookmarksReady !== prev.bookmarksReady) void noteWhatThisMacHas("launch", "bm:");
+    if (doc.enabled && s.historyReady !== prev.historyReady) void noteWhatThisMacHas("launch", "h:");
     if (!doc.enabled || running) return;
     if (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.groups !== prev.groups) scheduleSync();
   });

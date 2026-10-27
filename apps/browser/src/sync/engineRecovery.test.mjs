@@ -1363,3 +1363,95 @@ async function rebuiltOverRename(profileOf, corrupt) {
 
 test("B62: a rebuild doesn't republish the stale name of a profile that shares another profile's data over another Mac's newer rename", () =>
   rebuiltOverRename((work) => work, () => shell.docs.set("sync-state.nns", "not-sealed-by-this-key")));
+
+test("B63: after losing its state, a setting changed while this Mac is still locked at launch is published once it unlocks", async () => {
+  reset();
+  const engine = await onAndSynced();
+  S().updateSettings({ appearance: "dark" });
+  await engine.syncNow();
+  await settle();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  let unlock;
+  fake.unlockGate = new Promise((resolve) => (unlock = resolve));
+  const again = await launch();
+  again.startSync();
+  await settle();
+  S().updateSettings({ appearance: "light" });
+  await settle();
+  unlock();
+  fake.unlockGate = null;
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  const other = appMac("set:");
+  await other.sync();
+  assert.equal(S().settings.appearance, "light");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
+});
+
+test("B64: a rolled-back state that rebuilds still publishes a setting changed back to its synced value over an older choice elsewhere", async () => {
+  reset();
+  const engine = await onAndSynced();
+  S().updateSettings({ appearance: "light" });
+  await engine.syncNow();
+  await settle();
+  const backup = new Map(shell.docs);
+  S().updateSettings({ appearance: "dark" });
+  await engine.syncNow();
+  await settle();
+  const other = appMac("set:");
+  await other.sync();
+  other.store.set("set:appearance", { v: "system" });
+  await other.sync();
+  shell.docs.clear();
+  for (const [name, contents] of backup) shell.docs.set(name, contents);
+  const again = await launch();
+  again.startSync();
+  await settle();
+  S().updateSettings({ appearance: "light" });
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assertNoSeqReused();
+  assert.equal(S().settings.appearance, "light");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
+});
+
+test("B65: after a healthy relaunch, a password saved here while passwords couldn't be read is kept over an older one another Mac saved for the same login", async () => {
+  reset();
+  const here = new Map();
+  let readable = true;
+  shell.passwordStores.set(null, here);
+  native.readPasswords = async () => (readable ? [...here.values()] : null);
+  const realST = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms) => (ms === 250 ? realSetTimeout(fn, 0) : 0);
+  const realNow = Date.now;
+  try {
+    const engine = await onAndSynced();
+    const syncId = engine.useSync.getState().profiles.default.syncId;
+    const b = passwordMac(`p:${syncId}`);
+    const key = "pw:https://site.example\nme";
+    b.store.set(key, { o: "https://site.example", u: "me", p: "from-B" });
+    await b.sync();
+    readable = false;
+    const again = await launch();
+    again.startSync();
+    await settle();
+    here.set("https://site.example\nme", { origin: "https://site.example/", url: "https://site.example/", username: "me", password: "saved-here", created: realNow() });
+    await again.syncNow();
+    await settle(60);
+    readable = true;
+    for (let i = 1; i <= 3; i++) {
+      Date.now = () => realNow() + i * 60_000;
+      await again.syncNow();
+      await settle(60);
+    }
+    await b.sync();
+    assert.equal(here.get("https://site.example\nme")?.password, "saved-here");
+    assert.equal(b.store.get(key)?.p, "saved-here", `the later password reaches B (B has ${b.store.get(key)?.p})`);
+  } finally {
+    Date.now = realNow;
+    globalThis.setTimeout = realST;
+    native.readPasswords = realReadPasswords;
+  }
+});

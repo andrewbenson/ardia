@@ -93,3 +93,32 @@ import Testing
     #expect(hidden == 1)
   }
 }
+
+@MainActor @Suite struct PrimitivesHoverCardTests {
+  @Test func cardSitsAtOriginAndTakesClicksOnlyOnceShown() async throws {
+    let host = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+    let card = HoverCardView(frame: host.bounds)
+    host.addSubview(card)
+    card.layoutSubtreeIfNeeded()
+    let body = NSView(frame: NSRect(x: 0, y: 0, width: 264, height: 152))
+    let button = NSButton(frame: NSRect(x: 10, y: 10, width: 60, height: 24))
+    body.addSubview(button)
+    let origin = HoverCardMotion.origin(anchor: CGRect(x: 10, y: 54, width: 59, height: 40))
+    card.show(body, origin: origin)
+    #expect(body.frame.origin == origin)
+    #expect(card.phase == .entering)
+    #expect(card.hitTest(NSPoint(x: origin.x + 20, y: origin.y + 20)) == nil)
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(card.phase == .shown)
+    let inButton = card.convert(NSPoint(x: button.frame.midX, y: button.frame.midY), from: body)
+    #expect(card.hitTest(host.convert(inButton, from: card)) === button)
+    #expect(card.hitTest(NSPoint(x: 5, y: 5)) == nil)
+    var hidden = false
+    card.onHidden = { hidden = true }
+    card.hide()
+    #expect(card.hitTest(host.convert(inButton, from: card)) == nil)
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(hidden && card.content == nil && card.phase == .hidden)
+  }
+}
+

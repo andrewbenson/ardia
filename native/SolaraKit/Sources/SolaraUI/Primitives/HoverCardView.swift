@@ -20,7 +20,12 @@ public final class HoverCardView: NSView {
   public var onHidden: (() -> Void)?
   public private(set) var content: NSView?
   public private(set) var phase: Phase = .hidden
-  public var origin: CGPoint = .zero { didSet { if origin != oldValue { applyRest() } } }
+  public var origin: CGPoint = .zero {
+    didSet {
+      content?.setFrameOrigin(origin)
+      if origin != oldValue { applyRest() }
+    }
+  }
 
   private let motion = PrimitiveFlippedView()
   private var scale = SpringTrack.resting(HoverCardMotion.fromScale)
@@ -49,6 +54,7 @@ public final class HoverCardView: NSView {
       content = view
       motion.addSubview(view)
     }
+    view.setFrameOrigin(origin)
     guard fresh || returning else { return }
     run += 1
     let now = CACurrentMediaTime()
@@ -126,7 +132,7 @@ public final class HoverCardView: NSView {
 
   public override func hitTest(_ point: NSPoint) -> NSView? {
     guard phase == .shown, let content else { return nil }
-    let local = convert(point, from: superview)
+    let local = motion.convert(point, from: superview)
     guard content.frame.contains(local) else { return nil }
     return content.hitTest(local)
   }

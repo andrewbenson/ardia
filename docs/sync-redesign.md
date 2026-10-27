@@ -151,19 +151,22 @@ the tree, and so does the echo of sync's pushes.
 - Each read journals `diff(fetched, shadow)` per node, by value. The diff is taken before `readTree`
   replays pending store edits over the fetched tree (:249-251), so a concurrent extension edit is
   journaled and isn't hidden.
-- **Echo filter.** A pushed-values table records `node → value sync last pushed`. A fetched node
-  equal to its pushed value isn't journaled. Entries clear after the next successful read.
+- **Echo filter: pushed values, recorded as intents** (abbfd475, revised for the final review's
+  item 6).
+  - The bridge keeps a **shadow generation** `G`, saved with the shadow in `bookmarks-cache.json`.
+  - **Before each push.** Before calling `applyBookmarkOps`, the bridge writes, synchronously, an
+    intent record per node, `node → { value, tag: G + 1 }`, to `bookmarks-pushed.json`. A crash
+    after Chrome commits the push therefore always leaves the intent on disk.
+  - **After the push succeeds.** The bridge writes the shadow with `G + 1`, synchronously, then
+    prunes the intents tagged `≤ G + 1` from `bookmarks-pushed.json`, also synchronously. A clear is
+    therefore never in memory only.
+  - **During a session**, a fetched node equal to a live intent's value isn't journaled.
+  - **At launch**, an intent is honoured only if the saved shadow's generation is below its tag.
+    That means the push may have landed after the last shadow write: the crash case (a). An intent
+    whose tag the saved shadow has already reached is stale and is dropped unread. So an extension
+    setting a node back to an old pushed value (case b) is journaled like any other edit.
 - **The first read at launch** is journaled like any other, so an extension edit made before it
-  isn't lost. To keep the diff truthful, the shadow cache is saved synchronously after each apply
-  and push. Today it's debounced by 2 s, so a quit could leave it stale.
-- **The shadow and the pushed values are saved together.** The shadow cache and the pushed-values
-  table go to disk in one synchronous write (`bookmarks-cache.json`), after each apply and push.
-  - **The gap this closes.** A crash between a push and that write leaves a shadow from before the
-    push. At launch, the value this Mac pushed and already published then differs from the shadow.
-    It would be journaled as a fresh edit and resent with a launch-time stamp, over a newer edit
-    from another Mac.
-  - **The rule.** A launch diff that equals a value in the pushed-values table isn't journaled. The
-    table and the shadow land together, so after any crash one of them covers the pushed value.
+  isn't lost. Its diff is taken against the saved shadow, minus the honoured intents.
 
 **Passwords: Chrome's Login Data is the source** (D1–D3, re-review 1–3).
 - **Ledger.** `pwLedger`, kept in Solara's data folder:
@@ -231,6 +234,16 @@ cleared. Observation keys (above) are still published by diff.
 
 **Applying.** Every key with a difference and no live entry takes the folder's value. A key with a
 live entry is never applied over, in any adapter (D11).
+- **No adapter can skip a key and report success** (review5 P1).
+  - `Adapter.apply` returns the set of keys it actually wrote, not a boolean. `applyAdapter` sets
+    base and clears `unapplied` only for those. Every other key stays unapplied and is offered again
+    next cycle.
+  - Today two adapters skip a key and return ok:
+    - the passwords adapter's conflict check (adapters.ts:521, 538), after which `applyAdapter` sets
+      base to the remote value (scope.ts:347-350) and the next look republishes the local one;
+    - the pinned homes adapter `pgh:` (pinned.ts), found by inspection.
+  - With the returned set, that sequence is impossible in any adapter. Passwords skip only for a
+    live ledger change here, so those keys are published, not marked applied.
 - **Bookmarks apply** (D7, re-review 10, final review 4) rebuilds the tree from what's visible. A
   local node that isn't visible is removed only when one of these holds:
   - its key has a tombstone in the records;
@@ -437,6 +450,14 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 | oracle 25066 / B70 | partial apply wipes bookmarks, published as deleted | D7 apply rule; invariant 1 |
 | oracle 43, 212, 390, 398 (strict) | tie repair rewrites whole records | separate tie-by-key fix |
 | design review, HLC overflow | counter past `zzzz` sorts low | carry into wall time (D9) |
+| review5 P1, P1b, oracle 32144 | rolled-back base p1, keychain p3, B's p2: p3 ends everywhere | ledger outside the sync state (p3 equals the ledger, so it's no edit and p2 applies); apply returns written keys |
+| review5 A3, A3s | rename or setting made during the 10-minute wait, then a relaunch inside it, reverted to B's older value | no wait; the edit is journaled at command time |
+| review5 A1 | one stuck download holds every launch for 10 minutes | no wait |
+| review5 C1 | reused seq, then a peer's compaction, deletes the user's own new bookmark | new chain (no reuse); the bookmarks apply removes a node only on a tombstone or a covered origin |
+| review5 D1 | a type turned on mid-session skips the first look | no first look: the turned-on type is judged by the journal (per-type settle) |
+| oracle 40636 | a healthy relaunch takes a coincident password for a rollback | detection by ledger, not by delivered values |
+| oracle 35309 (review5: a stale batch-journal replay flushed before the pull) | seq reused | new chain: the replayed ops keep their stamps under new seqs, and their old stamps lose to anything newer |
+| final review item 6 (a), (b) | pushed-values crash window; stale intent reverts an extension edit | intent before the push, shadow generations, persisted pruning |
 
 ## Today's accepted residuals
 
@@ -523,6 +544,15 @@ Final review:
 - **FR5:** a pin's page-title change doesn't send its old group or position over a move made
   elsewhere.
 - **FR6:** Solara always passes `--user-data-dir`.
+- **I6a:** a crash after Chrome takes a push, before the cache write, doesn't resend the pushed
+  value over a newer rename elsewhere.
+- **I6b:** an extension setting a node back to an old pushed value just before quit is kept and
+  published.
+
+Both are guards today: no intent table exists, so neither failure can happen on today's bridge.
+The review5 repros (repros/guard-review5) are red on HEAD for their stated reasons: A1, A3, A3s,
+C1, D1, P1 and P1b. So are seeds 32144, 40636 and 35309. Each is listed in the table above
+with what removes it.
 
 **Tie seeds.** The cited seeds come from a strict oracle, the tracked harness with the two
 "repair counts as a choice" rules removed (`/private/tmp/redesign-tests/engineScenario-strict.mjs`).

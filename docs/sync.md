@@ -419,6 +419,11 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
     nothing, for up to ten minutes after the load. A rolled-back state can't see its own newer
     batches or another Mac's newer edits until they arrive. On a healthy Mac this delays its first
     publish after a launch while iCloud catches up.
+- **Known gaps in this guard** (review5, being replaced by docs/sync-redesign.md):
+  - A type turned on mid-session skips the first look.
+  - A stuck download holds every launch for ten minutes.
+  - An edit made during that wait, followed by a relaunch inside it, can be reverted.
+
 - **Rebuild.** A lost state, or one found behind its own seqs in the folder, gets a rebuild marker,
   saved with the state and settled per adapter prefix. Until a prefix settles:
   - it publishes keys the folder never had (not while a download younger than a day or a damaged

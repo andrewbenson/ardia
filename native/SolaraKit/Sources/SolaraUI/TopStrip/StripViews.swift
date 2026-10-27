@@ -175,6 +175,8 @@ final class StripTabChip: StripHoverView {
   private var tab: Tab?
   private var active = false
   private var showsAudio = false
+  private var band: StripEasedColor?
+  private lazy var bandTicker = StripTicker(view: self) { [weak self] now in self?.stepBand(now) ?? false }
   var tuck: (() -> Void)?
   var dragged = false
 
@@ -206,10 +208,15 @@ final class StripTabChip: StripHoverView {
   func update(_ tabId: String, _ context: StripContext) {
     self.context = context
     guard let tab = context.state.tabs[tabId] else { return }
+    if self.tab?.id != tabId { self.band = nil }
     self.tab = tab
     active = context.activeId == tabId
     showsAudio = context.playing.contains(tabId) || tab.muted
-    let band = active ? context.band(tabId) : nil
+    let website = context.band(tabId)
+    if band == nil { band = StripEasedColor(website?.background) }
+    band?.retarget(website?.background, duration: StripMotionTiming.band)
+    if band?.running == true { bandTicker.start() }
+    let band = active ? website : nil
     let base = context.base
     icon.favicons = context.sidebar.favicons
     icon.set(context.sidebar.iconSpec(tab), palette: base)
@@ -224,15 +231,24 @@ final class StripTabChip: StripHoverView {
     close.set(
       tuck != nil ? "minus" : control.icon, size: 9, weight: .semibold, color: band?.icon ?? base.icon, hover: base.toolbarHover, pressed: base.toolbarPressed,
       tooltip: tuck != nil ? "Hide in Group" : control.tooltip)
-    selected.isHidden = !active
-    if active {
-      var colors = [context.palette.card]
-      if dragged { colors.insert(context.palette.windowTint, at: 0) }
-      if let band { colors.append(band.background) }
-      selected.render(width: bounds.width, colors: colors, floating: context.host.floating, palette: context.palette)
-    }
+    renderSelected()
     repaint()
     needsLayout = true
+  }
+
+  private func renderSelected() {
+    selected.isHidden = !active
+    guard active, let context else { return }
+    var colors = [context.palette.card]
+    if dragged { colors.insert(context.palette.windowTint, at: 0) }
+    if let eased = band?.value, eased.alphaComponent > 0 { colors.append(eased) }
+    selected.render(width: bounds.width, colors: colors, floating: context.host.floating, palette: context.palette)
+  }
+
+  private func stepBand(_ now: Double) -> Bool {
+    band?.step(now: now)
+    renderSelected()
+    return band?.running ?? false
   }
 
   override func repaint() {

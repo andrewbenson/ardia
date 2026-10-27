@@ -15,7 +15,6 @@ public struct StripHostState: Decodable, Equatable, Sendable {
   public var capture: [String: String]
   public var bands: [String: String]
   public var closeHint: String?
-  public var developer: [String]
   public var newTabMark: String?
   public var pages: [SidebarPageLook]?
 
@@ -32,7 +31,6 @@ public struct StripHostState: Decodable, Equatable, Sendable {
     engines = [:]
     capture = [:]
     bands = [:]
-    developer = []
   }
 
   public static func decode(_ json: String) -> StripHostState? {

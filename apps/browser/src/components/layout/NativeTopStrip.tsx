@@ -15,7 +15,8 @@ import { pressGroupClose, pressTabClose } from "../sidebar/closeControl";
 import { openGroupMenu, openTabMenu } from "../sidebar/menus";
 import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
-import { useToolbarSiteColor } from "../site/developerMode";
+import { developerModeFor } from "../site/developerMode";
+import { isDeveloperMode } from "../../lib/developerMode";
 import { usePagerPages } from "./profilePager";
 import { openNewTabInSplit } from "./splitActions";
 import { openFolderMenu, openTileFolderStripMenu } from "./stripFolderMenu";
@@ -127,8 +128,18 @@ const split = (ids: string) => (ids ? ids.split(",") : NONE);
 export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId, floating, pageWidth }: { windowId: string; profileId: string; floating: boolean; pageWidth: number }) {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
-  const activeId = useBrowser((s) => s.windows[windowId]?.activeTabIds[profileId] ?? "");
-  const band = useToolbarSiteColor(activeId || undefined);
+  const bands = useBrowser(
+    useShallow((s) => {
+      const out: Record<string, string> = {};
+      if (!s.settings.extendWebsiteColor) return out;
+      for (const id of s.windows[windowId]?.tabIds ?? NONE) {
+        const tab = s.tabs[id];
+        const color = s.live[id]?.themeColor;
+        if (tab?.url && color && !isDeveloperMode(tab.url, developerModeFor(s.settings, tab.profileId))) out[id] = color;
+      }
+      return out;
+    }),
+  );
   const playing = useBrowser((s) => {
     let out = "";
     for (const id of s.windows[windowId]?.tabIds ?? NONE) if (s.live[id]?.playingAudio) out += (out ? "," : "") + id;
@@ -162,13 +173,12 @@ export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId
         sleeping,
         engines,
         capture: {},
-        bands: band && activeId ? { [activeId]: band } : {},
+        bands,
         closeHint,
-        developer: NONE,
         newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
         pages,
       }),
-    [pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, band, activeId, closeHint],
+    [pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, bands, closeHint],
   );
 
   return <SolaraHostedView kind="topStrip" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;

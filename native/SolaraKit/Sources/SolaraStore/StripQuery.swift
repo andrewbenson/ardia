@@ -31,6 +31,12 @@ public struct StripGroupEntry: Equatable, Sendable {
   public var collapsed: Bool
   public var members: [StripMember]
 
+  public init(id: String, collapsed: Bool, members: [StripMember]) {
+    self.id = id
+    self.collapsed = collapsed
+    self.members = members
+  }
+
   public func shown(active: String) -> Int? { members.firstIndex { $0.holds(active) } }
 }
 

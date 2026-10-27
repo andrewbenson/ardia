@@ -1275,6 +1275,11 @@ function StripGroup({
       return true;
     },
   });
+  useEffect(() => {
+    if (!__DEV__) return;
+    devGroupSizes.set(entry.id, size);
+    return () => void (devGroupSizes.get(entry.id) === size && devGroupSizes.delete(entry.id));
+  }, [entry.id]);
   const tail = useMemo(() => Animated.add(size, -(TAIL_EXPANDED - 2.25)), []);
   if (!group) return null;
   const tint = groupTint(group.color);
@@ -1351,6 +1356,12 @@ function StripGroup({
       </View>
     </Animated.View>
   );
+}
+
+const devGroupSizes = new Map<string, Animated.Value>();
+if (__DEV__) {
+  const g = globalThis as { acStrip?: Record<string, unknown> };
+  g.acStrip = { ...g.acStrip, groupSize: (groupId: string) => (devGroupSizes.get(groupId) as unknown as { __getValue(): number } | undefined)?.__getValue() ?? null };
 }
 
 function GroupMember({

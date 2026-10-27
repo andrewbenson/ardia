@@ -28,7 +28,6 @@ final class StripContext {
   let windowId: String
   let activeId: String
   let playing: Set<String>
-  let developer: Set<String>
   var send: (StripAction) -> Void = { _ in }
 
   init(state: BrowserState, host: StripHostState, windowId: String, favicons: SidebarFavicons, previous: StripContext?) {
@@ -40,7 +39,6 @@ final class StripContext {
     self.windowId = windowId
     activeId = state.windows[windowId]?.activeTabIds[host.profileId] ?? ""
     playing = Set(host.playing)
-    developer = Set(host.developer)
   }
 
   var base: SidebarPalette { palette.base }

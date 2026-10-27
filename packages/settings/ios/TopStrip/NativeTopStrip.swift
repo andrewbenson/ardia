@@ -19,6 +19,10 @@ public class TopStripModule: Module {
       MainActor.assumeIsolated { NativeTopStrip.hoverShifts(windowId: windowId) ?? "null" }
     }.runOnQueue(.main)
 
+    AsyncFunction("groupSize") { (windowId: String, groupId: String) -> Double? in
+      MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.groupSize(groupId) }
+    }.runOnQueue(.main)
+
     AsyncFunction("keys") { (windowId: String, profileId: String) -> [String] in
       MainActor.assumeIsolated { NativeStoreHandle.store.map { StripQuery($0.state).keys(windowId: windowId, profileId: profileId) } ?? [] }
     }.runOnQueue(.main)

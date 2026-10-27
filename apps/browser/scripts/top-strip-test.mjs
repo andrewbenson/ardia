@@ -115,6 +115,20 @@ async function measure(native) {
     const t2 = out.spans.filter(([, , k]) => k !== "SolaraUI.StripNewTabButton").at(-1);
     await run(`return act("w1", "click:${t2[0] + 70},21").then(() => settle(400));`);
     out.clicked = await run(`return st().windows.w1.activeTabIds.default;`);
+    out.motion = await run(`
+      const size = ${native ? `() => globalThis.expo.modules.SolaraTopStrip.groupSize("w1", "g1")` : `() => Promise.resolve(globalThis.acStrip.groupSize("g1"))`};
+      const samples = [];
+      return size().then((open) => {
+        const t0 = performance.now();
+        st().updateGroup("g1", { collapsed: true });
+        const frame = () => new Promise((r) => requestAnimationFrame(r));
+        const loop = () => {
+          const at = performance.now() - t0;
+          if (at > 800) return samples;
+          return size().then((v) => { samples.push([(at + performance.now() - t0) / 2, v]); return frame().then(loop); });
+        };
+        return loop().then((r) => { st().updateGroup("g1", { collapsed: false }); return settle(800).then(() => ({ open, samples: r })); });
+      });`);
     return { ...out, run, app };
   } catch (e) {
     await app.quit();
@@ -167,6 +181,23 @@ try {
       assert.deepEqual(off, []);
     });
     await rep.check("a click on a tab selects it on RN too", async () => assert.equal(rn.clicked, "t2"));
+    await rep.check("a collapsing group closes on RN's spring, frame for frame", async () => {
+      const ours = native.motion.samples, theirs = rn.motion.samples;
+      rep.log(`rn motion ${JSON.stringify(theirs.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
+      rep.log(`native motion ${JSON.stringify(ours.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
+      assert.equal(native.motion.open, rn.motion.open, "the same open width");
+      const at = (t) => { const i = theirs.findIndex(([u]) => u >= t); if (i <= 0) return i === 0 ? theirs[0][1] : theirs.at(-1)[1]; const [t0, x0] = theirs[i - 1], [t1, x1] = theirs[i]; return x0 + ((x1 - x0) * (t - t0)) / (t1 - t0); };
+      let best = null;
+      for (let lag = -60; lag <= 60; lag += 1) {
+        const near = (t, x) => Math.min(...[-2, -1, 0, 1, 2].map((d) => Math.abs(x - at(t + lag + d))));
+        const error = Math.max(...ours.filter(([t]) => t + lag > theirs[0][0] + 2 && t + lag < theirs.at(-1)[0] - 2).map(([t, x]) => near(t, x)));
+        if (!best || error < best.error) best = { lag, error };
+      }
+      rep.log(`motion: RN runs ${best.lag} ms behind native, then they differ by at most ${best.error.toFixed(2)} pt (within 2 ms)`);
+      assert.ok(Math.abs(ours.at(-1)[1] - theirs.at(-1)[1]) < 0.05, `both settle at the same width: rn ${theirs.at(-1)[1]} native ${ours.at(-1)[1]}`);
+      assert.ok(Math.abs(best.lag) <= 17, `RN is ${best.lag} ms behind native's start: more than a frame`);
+      assert.ok(best.error <= 2, `the curves differ by ${best.error} pt`);
+    });
     if (rn.snapshot && native.snapshot) {
       await rep.check("the strips' pixels match RN's", async () => {
         const diff = stripDiff(readPng(rn.snapshot), readPng(native.snapshot), 0, 42);

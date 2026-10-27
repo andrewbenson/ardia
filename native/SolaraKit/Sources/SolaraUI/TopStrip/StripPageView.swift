@@ -48,6 +48,8 @@ public final class StripPageView: NSView {
   private var hoveredViews: [StripHoverView] = []
   private var tracking: NSTrackingArea?
   private var revealed: String?
+  private var motions: [String: StripGroupMotion] = [:]
+  private lazy var ticker = StripTicker(view: self) { [weak self] now in self?.tick(now) ?? false }
   var pageWidth: CGFloat = 0
 
   public override var isFlipped: Bool { true }
@@ -113,7 +115,6 @@ public final class StripPageView: NSView {
     var liveTabs = Set<String>()
     var liveSplits = Set<String>()
     var liveGroups = Set<String>()
-    let h = StripMetrics.height
     dock.isHidden = layout.dockCells.isEmpty
     for item in layout.items {
       switch item.kind {
@@ -124,15 +125,15 @@ public final class StripPageView: NSView {
         liveTabs.insert(m.id)
         let view = tabs[m.id] ?? make { StripTabChip() }
         tabs[m.id] = view
-        view.frame = NSRect(x: StripLayout.pixel(item.x), y: 0, width: StripLayout.pixel(item.width), height: h)
         view.layer?.zPosition = context.activeId == m.id ? 1 : 0
+        view.frame.size = NSSize(width: StripLayout.pixel(item.width), height: StripMetrics.height)
         view.update(m.id, context)
       case .split(let m):
         liveSplits.insert(m.id)
         let view = splits[m.id] ?? make { StripSplitChip() }
         splits[m.id] = view
-        view.frame = NSRect(x: StripLayout.pixel(item.x), y: 0, width: StripLayout.pixel(item.width), height: h)
         view.layer?.zPosition = m.tabIds.contains(context.activeId) ? 1 : 0
+        view.frame.size = NSSize(width: StripLayout.pixel(item.width), height: StripMetrics.height)
         view.update(m.tabIds, context)
       case .folder:
         break
@@ -140,12 +141,14 @@ public final class StripPageView: NSView {
         liveGroups.insert(g.entry.id)
         let view = groups[g.entry.id] ?? make { StripGroupView() }
         groups[g.entry.id] = view
-        view.frame = NSRect(x: StripLayout.pixel(item.x), y: 0, width: StripLayout.pixel(g.width), height: h)
-        view.size = StripLayout.pixel(g.width)
-        view.open = g.expanded ? 1 : 0
+        if let motion = motions[g.entry.id] {
+          motion.retarget(g)
+        } else {
+          motions[g.entry.id] = StripGroupMotion(expanded: g.expanded, width: g.width, state: StripGroupMotion.state(g))
+          motions[g.entry.id]?.retarget(g)
+        }
         view.update(g, chip: layout.chip, context)
       case .newTab:
-        newTab.frame = NSRect(x: StripLayout.pixel(item.x), y: StripMetrics.itemTop, width: StripMetrics.itemHeight, height: StripMetrics.itemHeight)
         newTab.update(context)
       }
     }
@@ -160,9 +163,48 @@ public final class StripPageView: NSView {
     for (id, view) in groups where !liveGroups.contains(id) {
       view.removeFromSuperview()
       groups[id] = nil
+      motions[id] = nil
     }
-    document.frame = NSRect(x: 0, y: 0, width: max(layout.contentWidth, scroll.frame.width), height: h)
+    place()
+    if motions.values.contains(where: \.running) { ticker.start() }
     syncHover()
+  }
+
+  private func place() {
+    let h = StripMetrics.height
+    var shift: CGFloat = 0
+    for item in pageLayout.items {
+      let x = StripLayout.pixel(item.x + shift)
+      switch item.kind {
+      case .dock, .folder:
+        break
+      case .tab(let m):
+        tabs[m.id]?.frame = NSRect(x: x, y: 0, width: StripLayout.pixel(item.width), height: h)
+      case .split(let m):
+        splits[m.id]?.frame = NSRect(x: x, y: 0, width: StripLayout.pixel(item.width), height: h)
+      case .group(let g):
+        guard let view = groups[g.entry.id], let motion = motions[g.entry.id] else { continue }
+        let size = CGFloat(motion.size.value)
+        view.frame = NSRect(x: x, y: 0, width: StripLayout.pixel(size), height: h)
+        view.shownFade = motion.shown
+        view.moving = motion.moving
+        view.size = StripLayout.pixel(size)
+        view.open = CGFloat(motion.open.value)
+        view.arrange()
+        shift += size - g.width
+      case .newTab:
+        newTab.frame = NSRect(x: x, y: StripMetrics.itemTop, width: StripMetrics.itemHeight, height: StripMetrics.itemHeight)
+      }
+    }
+    document.frame = NSRect(x: 0, y: 0, width: max(pageLayout.contentWidth + shift, scroll.frame.width), height: h)
+  }
+
+  private func tick(_ now: Double) -> Bool {
+    for motion in motions.values { motion.step(now: now) }
+    place()
+    let running = motions.values.contains(where: \.running)
+    if !running { syncHover() }
+    return running
   }
 
   private func make<V: NSView>(_ build: () -> V) -> V {
@@ -232,6 +274,8 @@ public final class StripPageView: NSView {
     for view in next { view.hovered = true }
     hoveredViews = next
   }
+
+  public func groupSize(_ groupId: String) -> Double? { motions[groupId]?.size.value }
 
   public func frameOf(_ key: String) -> NSRect? {
     let view: NSView? =

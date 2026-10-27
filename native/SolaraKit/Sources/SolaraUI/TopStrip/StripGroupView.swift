@@ -203,7 +203,7 @@ final class StripGroupView: NSView {
     for m in placed.members {
       guard let view = members[m.member.id] else { continue }
       let x = start + m.offset * open
-      view.frame = NSRect(x: open == 0 || open == 1 ? StripLayout.pixel(x) : x, y: 0, width: m.width, height: StripMetrics.height)
+      view.frame = NSRect(x: StripLayout.pixel(x), y: 0, width: m.width, height: StripMetrics.height)
       let shown = shownFade[m.member.id] ?? (m.shown ? 1 : 0)
       view.alphaValue = min(1, shown + openFade)
       view.interactive = StripLayout.memberInteractive(shown: m.shown, expanded: placed.expanded, moving: moving)

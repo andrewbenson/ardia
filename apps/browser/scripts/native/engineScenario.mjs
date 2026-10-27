@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { fork } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { deflateRawSync } from "node:zlib";
 
 const HELP = `usage: node scripts/native/engineScenario.mjs [--out <dir>] [--runs <n>] [--steps <n>] [--seed <n>]
+       node scripts/native/engineScenario.mjs --oracle <n> [--steps <n>] [--seed <n>]
 
 Runs sync engine scenarios through the real engine.ts, the JS store and every JS adapter, over fake
 natives (a shared in-memory sync folder, sealing as "sealed:<text>", documents in memory, timers that
@@ -23,7 +24,17 @@ are left out of the ordered calls and compared at step ends instead. Every folde
 whether the journal on disk already held its batch.
 
 SolaraSyncTests replays the scripts through the Swift engine, answering native calls from the trace.
-Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios (engine.json.deflate).`;
+Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios (engine.json.deflate).
+
+--oracle <n> runs n convergence scenarios from --seed instead, each in its own process: both Macs
+edit, crash, lose or roll back their state, go locked and fail writes at random, then settle. Both
+must end with the same data; for every key, the value that wins is the latest choice by its stamp,
+counting a write that carries a real edit or a position repair as a choice of its whole record, and
+excusing only edits that never reached the folder before their Mac lost its state, that the same
+Mac replaced or reverted before sending, or saved passwords changed while a rebuilding Mac couldn't
+read them yet. No seq may carry two different batches. ORACLE_KEY=<url,
+setting or prof:> prints one key's edits, writes and losses; ORACLE_ENGINE=<file> runs another
+engine.ts; ORACLE_TRACE=1 keeps every step's full trace.`;
 
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
@@ -84,7 +95,7 @@ async function environment(prefix, folderOps) {
   const gate = async (name) => {
     if (heldNatives.has(name)) await new Promise((resolve) => nativeGates.push(resolve));
   };
-  const modes = { chain: "ok", unlock: true, phrase: true };
+  const modes = { chain: "ok", unlock: true, phrase: true, passwordsNull: false };
   let deviceIds = 0;
   const recordCall = (n, a, r) => calls?.push(r === undefined ? { n, a: plain(a) } : { n, a: plain(a), r: plain(r) });
   const shellFake = { docs: null, journalHolds: null };
@@ -137,7 +148,11 @@ async function environment(prefix, folderOps) {
     },
     sealLocal: async (text) => (await gate("sealLocal"), `sealed:${text}`),
     openLocal: async (sealed) => (await gate("openLocal"), sealed.startsWith("sealed:") ? sealed.slice(7) : null),
-    readPasswords: async (profile) => (recordCall("readPasswords", [profile], null), null),
+    readPasswords: async (profile) => {
+      const logins = modes.passwordsNull ? null : [...(shellFake.logins?.() ?? [])];
+      recordCall("readPasswords", [profile], logins);
+      return logins;
+    },
     folderInfo: async () => ({ path: "/sync", defaultPath: "/sync", iCloudAvailable: false, inICloud: false, exists: true, writable: true, hasSyncData: true }),
     chooseFolder: async () => null,
   };
@@ -149,12 +164,13 @@ async function environment(prefix, folderOps) {
       if (loaded.source == null) return loaded;
       let source = typeof loaded.source === "string" ? loaded.source : new TextDecoder().decode(loaded.source);
       if (url.includes("/src/sync/engine.ts")) {
+        if (process.env.ORACLE_ENGINE) source = readFileSync(process.env.ORACLE_ENGINE, "utf8");
         source = source.replace(
           "if (profiles.length && (await probeExtensionSync(profiles[0]!))) watchExtensionIntents(profiles);",
           "if (profiles.length && (await globalThis.__traceProbe(profiles[0]!, () => probeExtensionSync(profiles[0]!)))) watchExtensionIntents(profiles);",
         );
         source = source.replace("  useBrowser.subscribe((s, prev) => {", "  globalThis.__engineUnsubscribe = useBrowser.subscribe((s, prev) => {");
-        source += `\nglobalThis.__engineMemory = () => ({ loaded, doc, savedJson, savedState, journal, journalOnDisk, forcePasswords, running, again, sealing: !!sealing, passwords: Object.fromEntries([...passwordAdapters].map(([k, a]) => [k, a.__replayMemory?.() ?? null])), extensions: [...extensionAdapters.keys()] });\nglobalThis.__engineUi = useSync;\n`;
+        source += `\nglobalThis.__engineMemory = () => ({ loaded, doc, savedJson, savedState, journal, journalOnDisk, forcePasswords, running, again, sealing: !!sealing, passwords: Object.fromEntries([...passwordAdapters].map(([k, a]) => [k, a.__replayMemory?.() ?? null])), extensions: [...extensionAdapters.keys()] });\nglobalThis.__engineUi = useSync;\nglobalThis.__engineBaselines = () => baselines;\n`;
       } else if (url.endsWith("/src/sync/adapters.ts")) {
         source = source.replace('  return {\n    prefix: "pw:",', '  return {\n    __replayMemory: () => ({ lastRead, quietUntil, created: [...created] }),\n    prefix: "pw:",');
       } else if (url.endsWith("/src/store/model.ts")) {
@@ -173,6 +189,9 @@ async function environment(prefix, folderOps) {
     return answer;
   };
   const shell = await import(pathToFileURL(join(app, "src/test-native/index.ts")).href);
+  shell.current.device = prefix || "local";
+  shell.passwordStores.set(shell.current.device, new Map());
+  shellFake.logins = () => [...shell.passwordStores.get(shell.current.device).values()];
   const disk = new Map();
   const staged = new Map();
   const landing = [];
@@ -237,9 +256,15 @@ async function environment(prefix, folderOps) {
 
   let engine = null;
   let launches = 0;
-  const edits = [];
-  let everUpdated = false;
-  const edited = (kind, key, value) => edits.push({ kind, key, value, cycles: 0, exempt: kind !== "bookmark" && !everUpdated });
+  let stepEdits = [];
+  const edited = (kind, key, value, from, unseen = false) => stepEdits.push({ kind, key, value, from, ...(unseen ? { unseen } : {}) });
+  const unseenByRebuild = (prefix) => {
+    const memory = globalThis.__engineMemory?.();
+    const link = memory?.doc?.profiles?.default;
+    const scope = link && `p:${link.syncId}`;
+    const state = scope && memory.doc.scopes?.[scope];
+    return !!state?.rebuild && !state.rebuild.settled?.includes(prefix) && !globalThis.__engineBaselines?.().get(scope)?.has(prefix);
+  };
   const inFlight = [];
   let unsubscribe = null;
   const launch = async () => {
@@ -252,13 +277,7 @@ async function environment(prefix, folderOps) {
     nativeGates.splice(0);
     engine = await import(`${pathToFileURL(join(app, "src/sync/engine.ts")).href}?${prefix}${++launches}`);
     const ui = globalThis.__engineUi;
-    unsubscribe = ui.subscribe((state) => {
-      calls?.push({ publish: plain(state) });
-      if (state.status === "updated") {
-        everUpdated = true;
-        for (const edit of edits) edit.cycles++;
-      }
-    });
+    unsubscribe = ui.subscribe((state) => calls?.push({ publish: plain(state) }));
   };
   await launch();
 
@@ -321,7 +340,6 @@ async function environment(prefix, folderOps) {
         break;
       }
       case "relaunch":
-        if (docMode.fail && globalThis.__engineMemory().doc.rebuilding?.length) for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
         if (!docMode.fail) for (const [name, save] of staged) disk.set(name, save.contents);
         staged.clear();
         landing.splice(0);
@@ -332,7 +350,6 @@ async function environment(prefix, folderOps) {
         globalThis.__snapshot = new Map(disk);
         break;
       case "crash":
-        if (globalThis.__engineMemory().doc.rebuilding?.length) for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
         staged.clear();
         landing.splice(0);
         retrying.splice(0);
@@ -357,7 +374,6 @@ async function environment(prefix, folderOps) {
           disk.set(step.doc, `sealed:${JSON.stringify(parsed)}`);
           break;
         }
-        for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
         const damaged = { drop: null, corrupt: "sealed:{\"app\":", foreign: "sealed-elsewhere:{}", malformed: 'sealed:{"journal":{"app":[{"v":1,"kind":"log","device":"x","seq":1}]}}' }[step.how];
         staged.delete(step.doc);
         if (damaged === null) disk.delete(step.doc);
@@ -388,16 +404,56 @@ async function environment(prefix, folderOps) {
         break;
       case "bookmark": {
         const profileId = pick(profileIds(), step.profile) ?? "default";
+        if (!S().bookmarksReady[profileId]) break;
         S().addBookmark({ profileId, url: step.url, title: step.title });
-        if (profileId === "default") edited("bookmark", `${step.url}|${step.title}`, true);
+        if (profileId === "default") edited("bm-exists", step.url, true), edited("bm-title", step.url, step.title), edited("bm-parent", step.url, "bar");
         jsOnly();
         break;
       }
+      case "renameBookmark":
+      case "moveBookmark":
+      case "deleteBookmark": {
+        const node = pick(bookmarkNodes(), step.pick);
+        if (!node || !S().bookmarksReady.default) break;
+        if (step.op === "renameBookmark") {
+          if (node.title === step.title) break;
+          S().updateBookmark(node.id, { title: step.title });
+          edited("bm-title", node.url, step.title, node.title);
+        } else if (step.op === "moveBookmark") {
+          if (node.parent === step.to) break;
+          const roots = S().bookmarks.roots.default;
+          S().moveBookmark(node.id, step.to === "bar" ? roots.bar : roots.other);
+          edited("bm-parent", node.url, step.to, node.parent);
+        } else S().removeBookmark(node.id), edited("bm-exists", node.url, false, true);
+        jsOnly();
+        break;
+      }
+      case "password": {
+        const logins = shell.passwordStores.get(shell.current.device);
+        if (logins.get(`${step.origin}\n${step.user}`)?.password === step.password) break;
+        logins.set(`${step.origin}\n${step.user}`, { origin: `${step.origin}/`, url: step.origin, username: step.user, password: step.password, created: now });
+        edited("pw", `${step.origin}\n${step.user}`, step.password, undefined, unseenByRebuild("pw:"));
+        break;
+      }
+      case "ready":
+        useBrowser.setState({ [step.store === "bookmarks" ? "bookmarksReady" : "historyReady"]: step.value ? { default: true } : {} });
+        break;
+      case "unpin": {
+        const tab = pick(Object.values(S().tabs).filter((t) => t.pinned && t.profileId === "default"), step.pick);
+        if (!tab) break;
+        command("togglePin", tab.id);
+        edited("pinned", tab.pinnedUrl ?? tab.url, false);
+        break;
+      }
+      case "save":
+        engine.setTypeSynced("history", true);
+        break;
       case "visit": {
         const profileId = pick(profileIds(), step.profile) ?? "default";
         const list = [...(S().history[profileId] ?? [])].filter((e) => e.url !== step.url);
         list.unshift({ url: step.url, title: step.title, favicon: null, visits: step.visits ?? 1, lastVisit: now, visitTimes: [now] });
-        useBrowser.setState({ history: { ...S().history, [profileId]: list }, historyReady: { ...S().historyReady, [profileId]: true } });
+        useBrowser.setState({ history: { ...S().history, [profileId]: list } });
+        if (profileId === "default") edited("history", step.url, true);
         jsOnly();
         break;
       }
@@ -409,8 +465,10 @@ async function environment(prefix, folderOps) {
       }
       case "rename": {
         const id = pick(profileIds(), step.profile);
-        if (id) command("updateProfile", id, { name: step.name });
-        if (id === "default") edited("name", "default", step.name);
+        if (!id || S().profiles[id]?.name === step.name) break;
+        const was = S().profiles[id]?.name;
+        command("updateProfile", id, { name: step.name });
+        if (id === "default") edited("name", "default", step.name, was);
         break;
       }
       case "theme": {
@@ -419,8 +477,8 @@ async function environment(prefix, folderOps) {
         break;
       }
       case "settings":
+        for (const [key, value] of Object.entries(step.patch)) if (!S().settings.chosen?.includes(key) || JSON.stringify(S().settings[key]) !== JSON.stringify(value)) edited("setting", key, value, S().settings.chosen?.includes(key) ? S().settings[key] : undefined);
         command("updateSettings", step.patch);
-        for (const [key, value] of Object.entries(step.patch)) edited("setting", key, value);
         break;
       case "recover": {
         const status = globalThis.__engineUi.getState().status;
@@ -432,6 +490,7 @@ async function environment(prefix, folderOps) {
         if (!w) break;
         const tab = command("newTab", w, { url: step.url });
         command("togglePin", tab);
+        if (S().tabs[tab]?.profileId === "default") edited("pinned", step.url, true);
         break;
       }
       case "deleteProfile": {
@@ -469,23 +528,33 @@ async function environment(prefix, folderOps) {
     });
   };
 
-  const report = () => {
+  function bookmarkNodes() {
     const s = S();
     const roots = s.bookmarks.roots.default;
-    const inside = new Set();
-    const walk = (id) => {
+    const out = [];
+    const walk = (id, parent) => {
       const node = s.bookmarks.nodes[id];
       if (!node) return;
-      if (node.kind === "url") inside.add(`${node.url}|${node.title}`);
-      else node.children.forEach(walk);
+      if (node.kind === "url") out.push({ id, url: node.url, title: node.title, parent });
+      else node.children.forEach((child) => walk(child, parent));
     };
-    if (roots) [roots.bar, roots.other].forEach(walk);
+    if (roots) {
+      walk(roots.bar, "bar");
+      walk(roots.other, "other");
+    }
+    return out.sort((a, z) => (a.url < z.url ? -1 : a.url > z.url ? 1 : 0));
+  }
+  const report = () => {
+    const s = S();
+    const logins = shell.passwordStores.get(shell.current.device) ?? new Map();
     return plain({
       status: globalThis.__engineUi.getState().status,
-      bookmarks: [...inside].sort(),
+      bookmarks: Object.fromEntries(bookmarkNodes().map((n) => [n.url, { title: n.title, parent: n.parent }])),
       settings: Object.fromEntries(["searchEngine", "tabLayout", "warnBeforeQuitting", "appearance"].map((k) => [k, s.settings[k]])),
       name: s.profiles.default?.name,
-      edits,
+      passwords: Object.fromEntries([...logins].sort(([a], [z]) => (a < z ? -1 : 1)).map(([k, l]) => [k, l.password])),
+      history: (s.history.default ?? []).map((e) => e.url).sort(),
+      pinned: [...new Set(Object.values(s.tabs).filter((t) => t.pinned && t.profileId === "default").map((t) => t.pinnedUrl ?? t.url))].sort(),
     });
   };
 
@@ -495,19 +564,21 @@ async function environment(prefix, folderOps) {
       plain({ state: projectState(S()), model: globalThis.__modelMemory.read(), host: { bookmarks: S().bookmarks, history: S().history, historyReady: S().historyReady, bookmarksReady: S().bookmarksReady } }),
     async step(step) {
       calls = [];
+      stepEdits = [];
+      if (step.now !== undefined) now = step.now;
       const loadedBefore = globalThis.__engineMemory().loaded;
       await runStep(step);
       await drain();
       const memory = globalThis.__engineMemory();
-      if (memory.loaded && (!loadedBefore || step.op === "start") && memory.doc.rebuilding?.length)
-        for (const edit of edits) if (edit.cycles < 2 && edit.kind !== "bookmark") edit.exempt = true;
+      void memory;
+      void loadedBefore;
       for (const p of [...inFlight]) {
         const settled = await Promise.race([p.then(() => true, () => true), new Promise((r) => setImmediate(() => r(false)))]);
         if (settled) inFlight.splice(inFlight.indexOf(p), 1);
       }
       const made = calls;
       calls = null;
-      return { calls: made, after: boundary() };
+      return { calls: made, after: boundary(), edits: stepEdits };
     },
   };
 }
@@ -742,7 +813,7 @@ async function oracle() {
     }
     if (verdict.length) {
       failed++;
-      if (failed <= 8) console.log(`${script.name}: ${verdict.slice(0, 3).join("; ")}`);
+      if (failed <= 8) console.log(`${script.name}: ${verdict.slice(0, process.env.ORACLE_KEY ? 999 : 3).join("; ")}`);
     }
   }
   console.log(`oracle: ${oracleRuns - failed} of ${oracleRuns} scenarios converge with every kept edit and no seq reused`);
@@ -754,11 +825,13 @@ async function runScenario(script) {
   let counter = 0;
   const published = new Map();
   const reused = [];
+  const history = { at: 0, edits: [], losses: [], writes: [], removed: [], nows: script.steps.map((step, i) => step.now ?? script.steps.slice(0, i).findLast((s) => s.now !== undefined)?.now ?? 0) };
   const folderOps = async (op, a) => {
     switch (op) {
       case "write": {
         const [scope, payload] = a;
         const file = JSON.parse(payload);
+        history.writes.push({ at: history.at, mac: String(file.device).startsWith("o") ? "other" : "local", ops: file.ops ?? Object.entries(file.records ?? {}).map(([k, r]) => ({ k, h: r.h, v: r.v })) });
         if (file.kind === "log") {
           const key = `${scope} ${file.device} ${file.seq}`;
           const ops = JSON.stringify(file.ops);
@@ -775,6 +848,7 @@ async function runScenario(script) {
         return { files: here.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
       }
       case "remove":
+        if (process.env.ORACLE_KEY) history.removed.push(...a[1].filter((id) => folder.get(id)?.payload.includes(process.env.ORACLE_KEY)).map((id) => ({ at: history.at, id, payload: folder.get(id).payload.slice(0, 300) })));
         for (const id of a[1]) folder.delete(id);
         return null;
       case "deleteChain":
@@ -801,40 +875,172 @@ async function runScenario(script) {
   await ask({ ready: true });
   const local = await environment("", folderOps);
   const trace = { name: script.name, script, init: local.init(), steps: [] };
+  const LOSSES = new Set(["relaunch", "crash", "damage"]);
   for (const step of script.steps) {
+    history.at++;
+    if (LOSSES.has(step.op)) history.losses.push({ at: history.at, mac: step.mac });
+    let edits = [];
     if (step.mac === "other") {
       const reply = await ask({ step });
-      trace.steps.push({ other: true, error: reply.error ?? null, folder: [...folder.keys()] });
-      continue;
+      edits = reply.edits ?? [];
+      trace.steps.push({ other: true, error: reply.error ?? null, folder: [...folder.keys()], ...(reply.result ? { after: reply.result.after, calls: reply.result.calls } : {}) });
+    } else {
+      try {
+        const result = await local.step(step);
+        edits = result.edits ?? [];
+        if (!script.oracle) delete result.edits;
+        trace.steps.push(script.oracle && !process.env.ORACLE_TRACE ? { op: step.op } : result);
+      } catch (error) {
+        trace.steps.push({ error: String(error?.message ?? error) });
+      }
     }
-    try {
-      trace.steps.push(await local.step(step));
-    } catch (error) {
-      trace.steps.push({ error: String(error?.message ?? error) });
-    }
+    for (const edit of edits) history.edits.push({ ...edit, at: history.at, mac: step.mac });
   }
-  if (script.oracle) trace.oracle = oracleVerdict(local.report(), (await ask({ report: true })).report, reused);
+  if (script.oracle) trace.oracle = oracleVerdict(local.report(), (await ask({ report: true })).report, reused, history);
   child.kill();
   return trace;
 }
 
-function oracleVerdict(local, other, reused) {
+function oracleVerdict(local, other, reused, history) {
   const problems = reused.map((key) => `seq ${key} carried two different batches`);
   for (const mac of [local, other]) if (mac.status !== "updated") problems.push(`a Mac ended ${mac.status}`);
-  if (JSON.stringify(local.bookmarks) !== JSON.stringify(other.bookmarks)) problems.push(`bookmarks differ: ${JSON.stringify(local.bookmarks)} vs ${JSON.stringify(other.bookmarks)}`);
-  if (JSON.stringify(local.settings) !== JSON.stringify(other.settings)) problems.push(`settings differ: ${JSON.stringify(local.settings)} vs ${JSON.stringify(other.settings)}`);
-  if (local.name !== other.name) problems.push(`profile names differ: ${local.name} vs ${other.name}`);
-  const edits = [...local.edits, ...other.edits];
-  for (const edit of edits.filter((e) => e.kind === "bookmark")) if (!local.bookmarks.includes(edit.key)) problems.push(`bookmark ${edit.key} was lost`);
-  const allowed = (kind, key) => edits.filter((e) => e.kind === kind && e.key === key).map((e) => JSON.stringify(e.value));
-  for (const key of Object.keys(local.settings)) {
-    const values = allowed("setting", key);
-    const kept = edits.filter((e) => e.kind === "setting" && e.key === key && !e.exempt);
-    if (kept.length && !values.includes(JSON.stringify(local.settings[key]))) problems.push(`setting ${key} ended ${JSON.stringify(local.settings[key])}, which no one chose`);
+  for (const field of ["bookmarks", "settings", "name", "passwords", "history", "pinned"])
+    if (JSON.stringify(local[field]) !== JSON.stringify(other[field])) problems.push(`${field} differ: ${JSON.stringify(local[field])} vs ${JSON.stringify(other[field])}`);
+  const bmKeys = new Map();
+  for (const write of history.writes) for (const op of write.ops) if (op.k.startsWith("bm:") && op.v?.u) bmKeys.set(op.v.u, op.k);
+  const pinKeys = new Map();
+  for (const write of history.writes) for (const op of write.ops) if (op.k.startsWith("pin:t:") && op.v?.u) pinKeys.set(op.v.u, op.k);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const carries = (edit, op) => {
+    switch (edit.kind) {
+      case "setting":
+        return op.k === `set:${edit.key}` && same(op.v?.v, edit.value);
+      case "name":
+        return op.k.startsWith("prof:") && op.v?.d && op.v.n === edit.value;
+      case "bm-exists":
+        return edit.value ? op.k.startsWith("bm:") && op.v?.u === edit.key : op.k === bmKeys.get(edit.key) && op.v === null;
+      case "bm-title":
+        return op.k.startsWith("bm:") && op.v?.u === edit.key && op.v.t === edit.value;
+      case "bm-parent":
+        return op.k.startsWith("bm:") && op.v?.u === edit.key && op.v.p === edit.value;
+      case "pw":
+        return op.k === `pw:${edit.key}` && op.v?.p === edit.value;
+      case "history":
+        return op.k === `h:${edit.key}`;
+      case "pinned":
+        return edit.value ? op.k.startsWith("pin:t:") && op.v?.u === edit.key : op.k === pinKeys.get(edit.key) && op.v === null;
+      default:
+        return false;
+    }
+  };
+  const ordered = [...history.writes].sort((a, z) => a.at - z.at);
+  const carrier = (edit) => {
+    if ("carrier" in edit) return edit.carrier;
+    for (const w of ordered) if (w.mac === edit.mac && w.at >= edit.at) for (const op of w.ops) if (carries(edit, op)) return (edit.carrier = op);
+    return (edit.carrier = null);
+  };
+  const reached = (edit) => carrier(edit) !== null;
+  const lost = (edit) => !reached(edit) && history.losses.some((l) => l.mac === edit.mac && l.at > edit.at);
+  const touches = (edit, op) => {
+    switch (edit.kind) {
+      case "setting":
+        return op.k === `set:${edit.key}`;
+      case "name":
+        return op.k.startsWith("prof:") && !!op.v?.d;
+      case "pw":
+        return op.k === `pw:${edit.key}`;
+      case "history":
+        return op.k === `h:${edit.key}`;
+      case "pinned":
+        return op.v?.u === edit.key || op.k === pinKeys.get(edit.key);
+      default:
+        return op.v?.u === edit.key || op.k === bmKeys.get(edit.key);
+    }
+  };
+  const sentBetween = (edit, from, to) => ordered.some((w) => w.mac === edit.mac && w.at >= from && w.at < to && w.ops.some((op) => touches(edit, op)));
+  const unsent = (edit) => {
+    if (reached(edit) || lost(edit)) return false;
+    const mine = history.edits.filter((e) => e.mac === edit.mac && e.kind === edit.kind && e.key === edit.key && !sentBetween(edit, Math.min(e.at, edit.at), Math.max(e.at, edit.at)));
+    return mine.some((e) => e.at > edit.at) || mine.some((e) => e.at <= edit.at && !reached(e) && e.from !== undefined && same(e.from, edit.value));
+  };
+  const exempt = (edit) => lost(edit) || unsent(edit) || (edit.unseen && !reached(edit));
+  const stamp = (h) => [parseInt(h.split(".")[0], 36), h];
+  const when = (edit) => (reached(edit) ? stamp(carrier(edit).h) : [history.nows[edit.at - 1] ?? 0, ""]);
+  const later = (a, z) => {
+    const [ta, ha] = when(a);
+    const [tz, hz] = when(z);
+    return ta !== tz ? ta > tz : ha !== hz ? ha > hz : a.at >= z.at;
+  };
+  const wholeRecord = (w, op) => [
+    { at: w.at, mac: w.mac, kind: "bm-exists", key: op.v.u, value: true, carrier: op },
+    { at: w.at, mac: w.mac, kind: "bm-title", key: op.v.u, value: op.v.t, carrier: op },
+    { at: w.at, mac: w.mac, kind: "bm-parent", key: op.v.u, value: op.v.p, carrier: op },
+  ];
+  const shown = new Map();
+  const implied = [];
+  for (const w of ordered)
+    for (const op of w.ops) {
+      const pin = op.k.startsWith("pin:t:");
+      if (!(op.k.startsWith("bm:") || pin) || !op.v?.u) continue;
+      const earlier = shown.get(op.k) ?? [];
+      const repair = earlier.some((before) => before.pos !== op.v.pos && same({ ...before, pos: op.v.pos }, op.v));
+      shown.set(op.k, [...earlier, op.v]);
+      if (pin) {
+        if (repair) implied.push({ at: w.at, mac: w.mac, kind: "pinned", key: op.v.u, value: true, carrier: op });
+        continue;
+      }
+      const choice = history.edits.some((e) => e.mac === w.mac && e.key === op.v.u && e.kind.startsWith("bm-") && carrier(e) === op);
+      if (repair || choice) implied.push(...wholeRecord(w, op));
+    }
+  const groups = new Map();
+  for (const edit of [...history.edits, ...implied].sort((a, z) => a.at - z.at)) {
+    const id = `${edit.kind} ${edit.key}`;
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(edit);
   }
-  const names = allowed("name", "default");
-  if (edits.some((e) => e.kind === "name" && !e.exempt) && !names.includes(JSON.stringify(local.name)))
-    problems.push(`the profile name ended ${local.name}, which no one chose (${JSON.stringify(edits.filter((e) => e.kind === "name"))})`);
+  const finalOf = (report, kind, key) => {
+    const bm = report.bookmarks[key];
+    switch (kind) {
+      case "setting":
+        return report.settings[key];
+      case "name":
+        return report.name;
+      case "bm-exists":
+        return !!bm;
+      case "bm-title":
+        return bm?.title;
+      case "bm-parent":
+        return bm?.parent;
+      case "pw":
+        return report.passwords[key];
+      case "history":
+        return report.history.includes(key);
+      case "pinned":
+        return report.pinned.includes(key);
+    }
+  };
+  for (const [id, edits] of groups) {
+    const [kind, ...rest] = id.split(" ");
+    const key = rest.join(" ");
+    if ((kind === "bm-title" || kind === "bm-parent") && !local.bookmarks[key]) continue;
+    const kept = edits.filter((e) => !exempt(e));
+    if (!kept.length) continue;
+    const last = kept.reduce((latest, e) => (later(e, latest) ? e : latest));
+    const allowed = [last.value, ...edits.filter((e) => e.at > last.at && exempt(e)).map((e) => e.value)].map((v) => JSON.stringify(v));
+    const got = finalOf(local, kind, key);
+    if (!allowed.includes(JSON.stringify(got))) problems.push(`${id} ended ${JSON.stringify(got)}; the latest kept choice was ${JSON.stringify(last.value)} (${last.mac}, step ${last.at})`);
+  }
+  if (process.env.ORACLE_KEY) {
+    const url = process.env.ORACLE_KEY;
+    const k = bmKeys.get(url) ?? pinKeys.get(url) ?? `set:${url}`;
+    const lines = [
+      ...history.edits.filter((e) => e.key === url || (url === "prof:" && e.kind === "name")).map((e) => ({ at: e.at, mac: e.mac, edit: e.kind, value: e.value })),
+      ...history.writes.flatMap((w) => w.ops.filter((op) => op.k === k || op.v?.u === url || op.k.startsWith(url)).map((op) => ({ at: w.at, mac: w.mac, write: op.k, h: op.h, v: op.v }))),
+      ...history.losses.map((l) => ({ at: l.at, mac: l.mac, loss: true })),
+      ...history.removed.map((r) => ({ at: r.at, removed: r.id, payload: r.payload })),
+    ].sort((a, z) => a.at - z.at);
+    problems.push(...lines.map((line) => JSON.stringify(line)));
+  }
   return problems;
 }
 
@@ -842,7 +1048,8 @@ export function oracleScript(seed, steps) {
   const rand = mulberry32(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
   const script = { name: `oracle ${seed}`, oracle: true, steps: [] };
-  const push = (mac, step) => script.steps.push({ mac, ...step });
+  let clock = START;
+  const push = (mac, step) => script.steps.push({ mac, ...step, now: (clock += 1000) });
   push("local", { op: "start" });
   push("other", { op: "start" });
   const [first, second] = rand() < 0.5 ? ["local", "other"] : ["other", "local"];
@@ -851,32 +1058,57 @@ export function oracleScript(seed, steps) {
   push(second, { op: "join", folder: "/sync", phrase: "abandon ability" });
   push(second, { op: "syncNow" });
   let made = 0;
+  const origins = ["https://a.example", "https://b.example", "https://c.example"];
   for (let i = 0; i < steps; i++) {
     const mac = rand() < 0.55 ? "local" : "other";
     const r = rand();
-    if (r < 0.22) push(mac, { op: pick(["syncNow", "fire", "fire"]) });
-    else if (r < 0.36) push(mac, { op: "bookmark", profile: 0, url: `https://${mac[0]}${++made}.example/`, title: pick(["A", "B", "Ünï"]) });
-    else if (r < 0.44) push(mac, { op: "settings", patch: pick([{ searchEngine: pick(["duckduckgo", "bing", "google"]) }, { tabLayout: pick(["topbar", "sidebar"]) }, { warnBeforeQuitting: rand() < 0.5 }, { appearance: pick(["dark", "light"]) }]) });
-    else if (r < 0.49) push(mac, { op: "rename", profile: 0, name: pick(["Personal", "Home", "Mine"]) });
-    else if (r < 0.53) push(mac, { op: "relaunch" }), push(mac, { op: "start" });
-    else if (r < 0.56) push(mac, { op: "snapshot" });
-    else if (r < 0.6) push(mac, { op: "crash", snapshot: rand() < 0.4 }), push(mac, { op: "start" });
-    else if (r < 0.63) push(mac, { op: "damage", doc: pick(["sync-state.nns", "sync-journal.nns"]), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
-    else if (r < 0.65) push(mac, { op: "damage", doc: "sync-state.nns", how: "newer" }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
-    else if (r < 0.68) push(mac, { op: "holdNative", names: [pick(["read", "write", "chainStatus", "unlock", "sealLocal", "openLocal"])] });
-    else if (r < 0.72) push(mac, { op: "releaseNative" });
-    else if (r < 0.75) push(mac, { op: "hold", value: rand() < 0.5 });
-    else if (r < 0.78) push(mac, { op: "land" });
-    else if (r < 0.8) push(mac, { op: "failDocs", value: rand() < 0.4 });
-    else if (r < 0.83) push(mac, { op: "mode", key: "chain", value: pick(["ok", "ok", "unavailable"]) });
-    else if (r < 0.85) push(mac, { op: "mode", key: "unlock", value: rand() < 0.7 });
-    else push(mac, { op: "advance", ms: pick([1000, 60_000, 3_600_000]) });
+    if (r < 0.2) push(mac, { op: pick(["syncNow", "fire", "fire"]) });
+    else if (r < 0.29) push(mac, { op: "bookmark", profile: 0, url: `https://${mac[0]}${++made}.example/`, title: pick(["A", "B", "Ünï"]) });
+    else if (r < 0.33) push(mac, { op: "renameBookmark", pick: Math.floor(rand() * 8), title: pick(["Renamed", "Again", "Ünï 2"]) });
+    else if (r < 0.36) push(mac, { op: "moveBookmark", pick: Math.floor(rand() * 8), to: pick(["bar", "other"]) });
+    else if (r < 0.38) push(mac, { op: "deleteBookmark", pick: Math.floor(rand() * 8) });
+    else if (r < 0.43) push(mac, { op: "settings", patch: pick([{ searchEngine: pick(["duckduckgo", "bing", "google"]) }, { tabLayout: pick(["topbar", "sidebar"]) }, { warnBeforeQuitting: rand() < 0.5 }, { appearance: pick(["dark", "light"]) }]) });
+    else if (r < 0.46) push(mac, { op: "rename", profile: 0, name: pick(["Personal", "Home", "Mine"]) });
+    else if (r < 0.49) push(mac, { op: "password", origin: pick(origins), user: pick(["me", "you"]), password: pick(["p1", "p2", "p3"]) });
+    else if (r < 0.51) push(mac, { op: "visit", profile: 0, url: `https://h${++made}.example/`, title: "Visited" });
+    else if (r < 0.53) push(mac, { op: "pin", url: `https://pin${++made}.example/` });
+    else if (r < 0.545) push(mac, { op: "unpin", pick: Math.floor(rand() * 4) });
+    else if (r < 0.565) push(mac, { op: "ready", store: pick(["bookmarks", "history"]), value: rand() < 0.5 });
+    else if (r < 0.575) push(mac, { op: "mode", key: "passwordsNull", value: rand() < 0.5 });
+    else if (r < 0.59) push(mac, { op: "save" });
+    else if (r < 0.62) push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    else if (r < 0.645) push(mac, { op: "snapshot" });
+    else if (r < 0.675) push(mac, { op: "crash", snapshot: rand() < 0.4 }), push(mac, { op: "start" });
+    else if (r < 0.7) push(mac, { op: "damage", doc: pick(["sync-state.nns", "sync-journal.nns"]), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    else if (r < 0.715) push(mac, { op: "damage", doc: "sync-state.nns", how: "newer" }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    else if (r < 0.75) push(mac, { op: "holdNative", names: [pick(["read", "write", "chainStatus", "unlock", "sealLocal", "openLocal"])] });
+    else if (r < 0.785) push(mac, { op: "releaseNative" });
+    else if (r < 0.81) push(mac, { op: "hold", value: rand() < 0.5 });
+    else if (r < 0.835) push(mac, { op: "land" });
+    else if (r < 0.85) push(mac, { op: "failDocs", value: rand() < 0.4 });
+    else if (r < 0.87) push(mac, { op: "mode", key: "chain", value: pick(["ok", "ok", "unavailable"]) });
+    else if (r < 0.885) push(mac, { op: "mode", key: "unlock", value: rand() < 0.7 });
+    else clock += pick([1000, 60_000, 3_600_000]);
   }
   for (const mac of ["local", "other"]) {
-    for (const step of [{ op: "mode", key: "chain", value: "ok" }, { op: "mode", key: "unlock", value: true }, { op: "failDocs", value: false }, { op: "hold", value: false }, { op: "releaseNative" }, { op: "land" }, { op: "recover" }])
+    for (const step of [
+      { op: "mode", key: "chain", value: "ok" },
+      { op: "mode", key: "unlock", value: true },
+      { op: "mode", key: "passwordsNull", value: false },
+      { op: "ready", store: "bookmarks", value: true },
+      { op: "ready", store: "history", value: true },
+      { op: "failDocs", value: false },
+      { op: "hold", value: false },
+      { op: "releaseNative" },
+      { op: "land" },
+      { op: "recover" },
+    ])
       push(mac, step);
   }
-  for (let round = 0; round < 4; round++) for (const mac of ["local", "other"]) push(mac, { op: "syncNow" }), push(mac, { op: "fire" });
+  for (let round = 0; round < 5; round++) {
+    if (round === 2) clock += 60_000;
+    for (const mac of ["local", "other"]) push(mac, { op: "syncNow" }), push(mac, { op: "fire" });
+  }
   return script;
 }
 
@@ -906,8 +1138,8 @@ async function other() {
       return;
     }
     try {
-      await env.step(message.step);
-      process.send({ done: message.id });
+      const result = await env.step(message.step);
+      process.send({ done: message.id, edits: result.edits, ...(process.env.ORACLE_TRACE ? { result } : {}) });
     } catch (error) {
       process.send({ done: message.id, error: String(error?.message ?? error) });
     }

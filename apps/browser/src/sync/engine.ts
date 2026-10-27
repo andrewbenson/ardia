@@ -10,11 +10,14 @@ import {
   visible,
   writtenSeq,
   type Adapter,
+  type Extraction,
   type ExtensionsAdapter,
   type FolderInfo,
   type LogFile,
+  type Op,
   type PhraseResult,
   type ScopeState,
+  type Transport,
 } from "@ardia/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
@@ -157,7 +160,11 @@ let generation = 0;
 let loading: Promise<void> | null = null;
 let unverified = new Set<string>();
 let revivalBatches = new Map<string, LogFile[]>();
-type Rebuilt = ScopeState & { rebuildBaseline?: Record<string, string> };
+type Rebuild = { since: number; settled?: string[] };
+type Guarded = ScopeState & { rebuild?: Rebuild; heldOutbox?: Op[]; rebuildBaseline?: unknown };
+const openRebuild = (): Rebuild => ({ since: Date.now() });
+let baselines = new Map<string, Map<string, Map<string, string>>>();
+const DOWNLOAD_GIVE_UP_MS = 86_400_000;
 const STOP_WAITS_FOR_LOAD_MS = 3000;
 let forceRequests = 0;
 const passwordAdapters = new Map<string, Adapter>();
@@ -209,9 +216,13 @@ function readableScope(v: unknown): v is ScopeState {
     Array.isArray(v.outbox) &&
     v.outbox.every(readableOp) &&
     typeof v.seq === "number" &&
-    (v.journal === undefined || (Array.isArray(v.journal) && v.journal.every(readableBatch)))
+    (v.journal === undefined || (Array.isArray(v.journal) && v.journal.every(readableBatch))) &&
+    (v.heldOutbox === undefined || (Array.isArray(v.heldOutbox) && v.heldOutbox.every(readableOp))) &&
+    (v.rebuild === undefined || readableRebuild(v.rebuild))
   );
 }
+
+const readableRebuild = (r: unknown) => isObject(r) && (r.settled === undefined || (Array.isArray(r.settled) && r.settled.every((p) => typeof p === "string")));
 
 const readableBatch = (f: unknown): f is LogFile => isObject(f) && typeof f.device === "string" && typeof f.seq === "number" && Array.isArray(f.ops) && f.ops.every(readableOp);
 
@@ -240,10 +251,12 @@ async function loadState(loading: number): Promise<boolean> {
   }
   const skipped = (scope: string) => doc.retired?.[scope] !== undefined && !revived.has(scope);
   const expected = new Set([APP_SCOPE, ...Object.values(doc.profiles).map((l) => `p:${l.syncId}`), ...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)]);
-  const rebuilding = new Set(doc.rebuilding ?? []);
-  for (const scope of expected) if (!skipped(scope) && !scopes[scope]) rebuilding.add(scope);
-  if (rebuilding.size) doc.rebuilding = [...rebuilding];
-  for (const scope of rebuilding) scopes[scope] ??= emptyScope();
+  for (const scope of expected) if (!skipped(scope) && !scopes[scope]) scopes[scope] = { ...emptyScope(), rebuild: openRebuild() } as Guarded;
+  for (const [name, scope] of Object.entries(scopes) as [string, Guarded][]) {
+    if ((doc.rebuilding?.includes(name) || scope.rebuildBaseline !== undefined) && !scope.rebuild) scope.rebuild = openRebuild();
+    delete scope.rebuildBaseline;
+  }
+  delete doc.rebuilding;
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
     if (skipped(scope)) continue;
     const mine = (journal[scope] ?? []).filter((f) => f.device === doc.deviceId);
@@ -420,17 +433,17 @@ async function runCycle({ retiring = false } = {}) {
     settleAppliedThemes(app);
     if (doc.types.settings && !retiring) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
     if (!retiring && !doc.joining) linkProfiles(app);
+    const appGuard = guard(APP_SCOPE, app, device, appAdapters(retiring), transport, retiring);
     await syncScope({
       scope: APP_SCOPE,
       state: app,
-      transport,
-      adapters: pullingFirst(APP_SCOPE, app, device, rebuildingAware(APP_SCOPE, appAdapters(retiring))),
+      transport: appGuard.transport,
+      adapters: appGuard.adapters,
       clock,
       device,
       options: { persist: persistJournal(APP_SCOPE) },
     });
-    settleRebuild(APP_SCOPE, app);
-    settleVerified(APP_SCOPE, app);
+    appGuard.settle();
     if (app.joined) linkProfiles(app);
     confirmThemes(app);
     let pending = app.pending;
@@ -441,17 +454,17 @@ async function runCycle({ retiring = false } = {}) {
       if (!retire && !link.enabled) continue;
       const scope = `p:${link.syncId}`;
       const state = (doc.scopes[scope] ??= freshScope(scope));
+      const scopeGuard = guard(scope, state, device, profileAdapters(profileId, retire), transport, retire);
       await syncScope({
         scope,
         state,
-        transport,
-        adapters: pullingFirst(scope, state, device, rebuildingAware(scope, profileAdapters(profileId, retire))),
+        transport: scopeGuard.transport,
+        adapters: scopeGuard.adapters,
         clock,
         device,
         options: { expired: historyExpired, persist: persistJournal(scope) },
       });
-      settleRebuild(scope, state);
-      settleVerified(scope, state);
+      scopeGuard.settle();
       pending += state.pending;
       if (!retire && doc.types.extensions && !s.profiles[profileId]?.dataId && extensionSyncAvailable()) await extensionsOf(profileId).reconcile(visible(state, "ext:"), Date.now());
       if (retire) {
@@ -489,21 +502,159 @@ async function runCycle({ retiring = false } = {}) {
   }
 }
 
-function pullingFirst(scope: string, state: ScopeState, device: string, adapters: Adapter[]): Adapter[] {
-  if (!unverified.has(scope)) return adapters;
-  return adapters.map((adapter) => ({
-    ...adapter,
-    publishAfterPull: true,
-    extract: async (base, queued, now, known, remote, stamp) => {
-      state.seq = Math.max(state.seq, state.vv[device] ?? 0, ...(state.extra[device] ?? []));
-      resendRevival(scope, state, device);
-      return adapter.extract(base, queued, now, known, remote, stamp);
+function guard(scope: string, state: Guarded, device: string, adapters: Adapter[], transport: Transport, retiring: boolean) {
+  const fresh = unverified.has(scope);
+  if (fresh && state.outbox.length) {
+    state.heldOutbox = [...(state.heldOutbox ?? []), ...state.outbox];
+    state.outbox = [];
+  }
+  if (!fresh && !state.rebuild) return { adapters, transport, settle: () => settleRevival(scope, state) };
+  let pulled = false;
+  let checked = false;
+  const delivered = new Map<string, Set<string>>();
+  const watched: Transport = {
+    ...transport,
+    read: async (name, known) => {
+      const listing = await transport.read(name, known);
+      pulled = true;
+      for (const file of listing.files) noteDelivered(delivered, file.payload);
+      return listing;
     },
-  }));
+  };
+  const fromFolder = (key: string, value: unknown) => delivered.get(key)?.has(value === null ? "null" : choice(value)) ?? false;
+  const afterPull = () => {
+    if (checked) return;
+    checked = true;
+    if (!fresh) return;
+    state.seq = Math.max(state.seq, state.vv[device] ?? 0, ...(state.extra[device] ?? []));
+    resendHeld(state, device);
+    resendRevival(scope, state, device);
+  };
+  const ready = new Set<string>();
+  const rebuilding = (prefix: string) => !!state.rebuild && !state.rebuild.settled?.includes(prefix);
+  const wrapped = adapters.map(
+    (adapter): Adapter => ({
+      ...adapter,
+      ...(rebuilding(adapter.prefix) ? { adoptRemoteOnJoin: false } : {}),
+      extract: async (base, queued, now, known, remote, stamp) => {
+        if (!pulled) return null;
+        afterPull();
+        const extraction = await adapter.extract(base, queued, now, known, remote, stamp);
+        if (!extraction || retiring) return extraction;
+        ready.add(adapter.prefix);
+        if (!fresh && !rebuilding(adapter.prefix)) return extraction;
+        return guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? () => true : fromFolder, rebuilding(adapter.prefix));
+      },
+      apply: async (visible, changed, base, records) => {
+        const before = baselineOf(scope, adapter.prefix);
+        const ok = await adapter.apply(visible, changed, before ? (key) => base(key) ?? parseKept(before.get(key)) : base, records);
+        if (before && ok !== false) for (const key of changed) visible.has(key) ? before.set(key, choice(visible.get(key))) : before.delete(key);
+        return ok;
+      },
+    }),
+  );
+  const settle = () => {
+    if (pulled) unverified.delete(scope);
+    settleRevival(scope, state);
+    const rebuild = state.rebuild;
+    if (!rebuild || !pulled || stillDownloading(state)) return;
+    const prefixes = adapters.map((a) => a.prefix);
+    const owner = (key: string) => prefixes.filter((p) => key.startsWith(p)).sort((a, z) => z.length - a.length)[0];
+    for (const prefix of prefixes) {
+      if (!ready.has(prefix) || !rebuilding(prefix) || state.unapplied.some((key) => owner(key) === prefix)) continue;
+      const stale = staleKeys(state, prefix, baselineOf(scope, prefix)!).filter((key) => owner(key) === prefix);
+      if (stale.length) state.unapplied = [...state.unapplied, ...stale];
+      else rebuild.settled = [...(rebuild.settled ?? []), prefix];
+    }
+    if (Object.values(doc.types).every(Boolean) && prefixes.every((p) => !rebuilding(p))) delete state.rebuild;
+  };
+  return { adapters: wrapped, transport: watched, settle };
 }
 
-function settleVerified(scope: string, state: ScopeState) {
-  if (state.pending === 0 && Object.keys(state.damaged).length === 0) unverified.delete(scope);
+function staleKeys(state: ScopeState, prefix: string, kept: Map<string, string>): string[] {
+  const keys = new Set([...Object.keys(state.records), ...kept.keys()].filter((key) => key.startsWith(prefix)));
+  return [...keys].filter((key) => {
+    const value = state.records[key]?.v;
+    return (value === null || value === undefined ? undefined : choice(value)) !== kept.get(key) && !(value === undefined && kept.has(key));
+  });
+}
+
+const choice = (value: unknown) => {
+  if (!isObject(value) || !("pos" in value)) return canonical(value);
+  const { pos: _derived, ...chosen } = value;
+  return canonical(chosen);
+};
+
+function noteDelivered(delivered: Map<string, Set<string>>, payload: string) {
+  let file: unknown;
+  try {
+    file = JSON.parse(payload);
+  } catch {
+    return;
+  }
+  if (!isObject(file)) return;
+  const note = (key: unknown, value: unknown) => {
+    if (typeof key !== "string") return;
+    const seen = delivered.get(key) ?? new Set<string>();
+    seen.add(value === null || value === undefined ? "null" : choice(value));
+    delivered.set(key, seen);
+  };
+  if (Array.isArray(file.ops)) for (const op of file.ops) if (isObject(op)) note(op.k, op.v);
+  if (isObject(file.records)) for (const [key, record] of Object.entries(file.records)) if (isObject(record)) note(key, record.v);
+}
+
+const parseKept = (text: string | undefined) => (text === undefined ? undefined : (JSON.parse(text) as unknown));
+
+function baselineOf(scope: string, prefix: string) {
+  return baselines.get(scope)?.get(prefix);
+}
+
+function noteBaseline(scope: string, prefix: string, extraction: Extraction) {
+  let byPrefix = baselines.get(scope);
+  if (!byPrefix) baselines.set(scope, (byPrefix = new Map()));
+  if (byPrefix.has(prefix)) return false;
+  byPrefix.set(prefix, new Map([...extraction.values].map(([key, value]) => [key, choice(value)])));
+  return true;
+}
+
+function stillDownloading(state: ScopeState): boolean {
+  const now = Date.now();
+  return Object.values(state.pendingSince ?? {}).some((at) => now - at <= DOWNLOAD_GIVE_UP_MS) || Object.keys(state.damaged).length > 0;
+}
+
+function guardedExtraction(scope: string, prefix: string, state: Guarded, extraction: Extraction, known: (key: string) => boolean, fromFolder: (key: string, value: unknown) => boolean, rebuilding: boolean): Extraction {
+  noteBaseline(scope, prefix, extraction);
+  const kept = baselineOf(scope, prefix)!;
+  const downloading = rebuilding && stillDownloading(state);
+  const edited = (key: string, value: unknown) => kept.get(key) !== choice(value);
+  const values = new Map([...extraction.values].filter(([key, value]) => (known(key) ? edited(key, value) || !fromFolder(key, value) : !downloading)));
+  const deleted = new Set([...kept.keys()].filter((key) => key.startsWith(prefix) && !extraction.values.has(key) && !extraction.ignore?.(key) && known(key)));
+  for (const key of deleted) {
+    const record = state.records[key];
+    if (record && record.v !== null && state.base[key] === undefined) state.base[key] = canonical(record.v);
+  }
+  for (const [key, value] of values) kept.set(key, choice(value));
+  for (const key of deleted) kept.delete(key);
+  return {
+    values,
+    ignore: (key) => (extraction.ignore?.(key) ?? false) || (!values.has(key) && !deleted.has(key) && fromFolder(key, extraction.values.get(key) ?? null)),
+    republish: extraction.republish,
+    published: extraction.published,
+  };
+}
+
+function resendHeld(state: Guarded, device: string) {
+  const held = state.heldOutbox;
+  delete state.heldOutbox;
+  if (!held?.length) return;
+  for (const op of held) {
+    const record = state.records[op.k];
+    if (record && record.h === op.h) record.o = [device, state.seq + 1];
+  }
+  state.outbox = [...held, ...state.outbox];
+}
+
+function settleRevival(scope: string, state: ScopeState) {
   const held = revivalBatches.get(scope);
   if (!held || held.length || state.outbox.length || state.journal?.length) return;
   revivalBatches.delete(scope);
@@ -526,51 +677,23 @@ function resendRevival(scope: string, state: ScopeState, device: string) {
   held.length = 0;
 }
 
-function rebuildingAware(scope: string, adapters: Adapter[]): Adapter[] {
-  if (!doc.rebuilding?.includes(scope)) return adapters;
-  return adapters.map((adapter) => ({
-    ...adapter,
-    adoptRemoteOnJoin: false,
-    publishAfterPull: true,
-    extract: async (base, queued, now, known, remote, stamp) => {
-      const extraction = await adapter.extract(base, queued, now, known, remote, stamp);
-      if (!extraction) return extraction;
-      const baseline = (doc.scopes[scope] as Rebuilt | undefined)?.rebuildBaseline;
-      const editedSinceLoad = (key: string, value: unknown) => !!baseline && baseline[key] !== digest(canonical(value));
-      const values = new Map([...extraction.values].filter(([key, value]) => !known(key) || editedSinceLoad(key, value)));
-      return { values, ignore: (key) => !values.has(key), published: extraction.published };
-    },
-  }));
-}
-
-function digest(text: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
-  return (h >>> 0).toString(36);
-}
-
-async function captureRebuildBaselines() {
-  for (const scope of doc.rebuilding ?? []) {
-    const state = doc.scopes[scope] as Rebuilt | undefined;
-    if (!state || state.rebuildBaseline) continue;
-    const profileId = Object.entries(doc.profiles).find(([, link]) => `p:${link.syncId}` === scope)?.[0];
-    const adapters = scope === APP_SCOPE ? appAdapters(false) : profileId ? profileAdapters(profileId, false) : [];
-    const baseline: Record<string, string> = {};
+async function noteWhatThisMacHas(only?: string) {
+  if (only === undefined) baselines = new Map();
+  for (const [scope, profileId] of [[APP_SCOPE, null] as const, ...Object.entries(doc.profiles).map(([id, link]) => [`p:${link.syncId}`, id] as const)]) {
+    const adapters = profileId === null ? appAdapters(false) : profileAdapters(profileId, false);
     for (const adapter of adapters) {
-      const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined);
-      for (const [key, value] of extraction?.values ?? []) baseline[key] = digest(canonical(value));
+      if ((only !== undefined && adapter.prefix !== only) || baselineOf(scope, adapter.prefix)) continue;
+      try {
+        const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined);
+        if (extraction) noteBaseline(scope, adapter.prefix, extraction);
+      } catch (error) {
+        console.warn(`[sync] ${adapter.prefix} wasn't ready to note what this Mac had`, error);
+      }
     }
-    state.rebuildBaseline = baseline;
   }
 }
 
-function settleRebuild(scope: string, state: ScopeState) {
-  if (!doc.rebuilding?.includes(scope) || state.pending > 0 || Object.keys(state.damaged).length > 0) return;
-  delete (state as Rebuilt).rebuildBaseline;
-  const left = doc.rebuilding.filter((s) => s !== scope);
-  if (left.length) doc.rebuilding = left;
-  else delete doc.rebuilding;
-}
+const rebuildingAny = () => Object.values(doc.scopes).some((state) => !!(state as Guarded).rebuild);
 
 function freshScope(scope: string, extra: Partial<ScopeState> = {}): ScopeState {
   const seq = doc.retired?.[scope];
@@ -794,10 +917,8 @@ async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: 
   if (unlocking !== generation) return { error: "interrupted" };
   try {
     if (!(await loadState(unlocking)) || unlocking !== generation) return { error: "interrupted" };
-    await captureRebuildBaselines();
-    if (unlocking !== generation) return { error: "interrupted" };
     loaded = true;
-    if (doc.rebuilding) save();
+    if (rebuildingAny()) save();
   } catch (error) {
     if (unlocking === generation) showLocked(error);
     return { error: "keychain" };
@@ -943,16 +1064,15 @@ export function startSync() {
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
     loaded = false;
+    void noteWhatThisMacHas();
     const unlocking = ++generation;
     loading = SyncNative.unlock(doc.deviceId)
       .then(async (ok) => {
         if (unlocking !== generation) return;
         if (!ok) return showLocked();
         if (!(await loadState(unlocking)) || unlocking !== generation) return;
-        await captureRebuildBaselines();
-        if (unlocking !== generation) return;
         loaded = true;
-        if (doc.rebuilding) save();
+        if (rebuildingAny()) save();
         settleAppliedThemes(doc.scopes[APP_SCOPE]);
         publishUi();
         scheduleSync(500);
@@ -965,6 +1085,8 @@ export function startSync() {
       });
   }
   useBrowser.subscribe((s, prev) => {
+    if (doc.enabled && s.bookmarksReady !== prev.bookmarksReady) void noteWhatThisMacHas("bm:");
+    if (doc.enabled && s.historyReady !== prev.historyReady) void noteWhatThisMacHas("h:");
     if (!doc.enabled || running) return;
     if (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.groups !== prev.groups) scheduleSync();
   });

@@ -76,6 +76,7 @@ const shell = await import("../test-native/index.ts");
 const sync = await import("@ardia/sync");
 const { useBrowser } = await import("../store/browser.ts");
 const S = () => useBrowser.getState();
+const emptyBookmarks = S().bookmarks;
 const settle = async (n = 30) => {
   for (let i = 0; i < n; i++) await new Promise((resolve) => setImmediate(resolve));
 };
@@ -84,7 +85,7 @@ const launch = async () => import(`./engine.ts?rev${++launches}`);
 
 function reset() {
   S().hydrate({});
-  useBrowser.setState({ bookmarksReady: { default: true } });
+  useBrowser.setState({ bookmarks: emptyBookmarks, bookmarksReady: { default: true } });
   folder.clear();
   shell.docs.clear();
   shell.heldSaves.on = false;
@@ -482,4 +483,373 @@ test("B35: a sync.json from a newer format is left alone instead of being rebuil
   assert.deepEqual(JSON.parse(shell.docs.get("sync.json")), newer, "sync.json is untouched");
   assert.equal(folder.size, writes, "nothing is published");
   assert.ok("error" in (await engine.turnOnSync("/sync")));
+});
+
+const native = globalThis.acTestNativeModules.ArdiaSync;
+
+test("B36: a rebuild whose baseline is taken before bookmarks are ready republishes every stale bookmark over newer remote edits", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  other.store.set(key, { ...value, t: "Renamed again on B" });
+  await other.sync();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  useBrowser.setState({ bookmarksReady: {} });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  useBrowser.setState({ bookmarksReady: { default: true } });
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.equal(other.store.get(key)?.t, "Renamed again on B", `B's newer rename survives (B now has ${other.store.get(key)?.t})`);
+});
+
+test("B36-control: same with bookmarks ready at load", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  other.store.set(key, { ...value, t: "Renamed again on B" });
+  await other.sync();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(other.store.get(key)?.t, "Renamed again on B");
+});
+
+const realReadPasswords = native.readPasswords;
+
+test("B37: a rebuild that ends while bookmarks couldn't be applied republishes stale local bookmarks on the next cycle", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const again = await launch();
+  again.startSync();
+  await settle();
+  useBrowser.setState({ bookmarksReady: {} });
+  await again.syncNow();
+  await settle();
+  useBrowser.setState({ bookmarksReady: { default: true } });
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(other.store.get(key)?.t, "Renamed on B", `B's rename survives (B now has ${other.store.get(key)?.t})`);
+});
+
+function passwordMac(scope) {
+  const store = new Map();
+  const state = sync.emptyScope();
+  state.joined = true;
+  const clock = new sync.Clock("pwMac");
+  const adapter = {
+    prefix: "pw:",
+    extract: () => ({ values: new Map(store) }),
+    apply: (visible, changed) => {
+      for (const k of changed) visible.has(k) ? store.set(k, visible.get(k)) : store.delete(k);
+    },
+  };
+  return { store, sync: () => sync.syncScope({ scope, state, transport: rawTransport, adapters: [adapter], clock, device: "pwMac" }) };
+}
+
+test("B38: a rebuilt passwords scope keeps the stale local password, then republishes it over B's newer one", async () => {
+  reset();
+  const here = new Map([["https://site.example\nme", { origin: "https://site.example/", url: "https://site.example/", username: "me", password: "old", created: 1 }]]);
+  shell.passwordStores.set(null, here);
+  native.readPasswords = async () => [...here.values()];
+  const realST = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms) => (ms === 250 ? realSetTimeout(fn, 0) : 0);
+  try {
+    const engine = await onAndSynced();
+    const syncId = engine.useSync.getState().profiles.default.syncId;
+    const b = passwordMac(`p:${syncId}`);
+    await b.sync();
+    const key = "pw:https://site.example\nme";
+    assert.equal(b.store.get(key)?.p, "old", "control: B has this Mac's password");
+    b.store.set(key, { ...b.store.get(key), p: "new-from-B" });
+    await b.sync();
+    shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+    const again = await launch();
+    again.startSync();
+    await settle();
+    for (let i = 0; i < 3; i++) {
+      await again.syncNow();
+      await settle(60);
+    }
+    const realNow = Date.now;
+    Date.now = () => realNow() + 60_000;
+    try {
+      await again.syncNow();
+      await settle(60);
+    } finally {
+      Date.now = realNow;
+    }
+    await b.sync();
+    assert.equal(b.store.get(key)?.p, "new-from-B", `B's newer password survives this Mac's rebuild (B has ${b.store.get(key)?.p}, this Mac ${here.get("https://site.example\nme")?.password})`);
+  } finally {
+    globalThis.setTimeout = realST;
+    native.readPasswords = realReadPasswords;
+  }
+});
+
+test("B39: an adapter that throws while the rebuild baseline is taken locks a healthy, unlocked Mac", async () => {
+  reset();
+  await onAndSynced();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  native.readPasswords = async () => {
+    throw new Error("password store not ready");
+  };
+  try {
+    const again = await launch();
+    again.startSync();
+    await settle();
+    assert.notEqual(again.useSync.getState().status, "locked", `status ${again.useSync.getState().status}: ${again.useSync.getState().error}`);
+  } finally {
+    native.readPasswords = realReadPasswords;
+  }
+});
+
+const realRead = native.read;
+const realNow = Date.now;
+
+test("B40: a rebuilt scope with one file that never downloads never finishes the rebuild, so local deletions are never published", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  native.read = async (...args) => {
+    const listing = await realRead(...args);
+    return args[1] === `p:${syncId}` ? { ...listing, pending: ["stuck"], present: [...listing.present, "stuck"] } : listing;
+  };
+  try {
+    shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+    const again = await launch();
+    again.startSync();
+    await settle();
+    S().addBookmark({ profileId: "default", url: "https://early.example/", title: "Early" });
+    await again.syncNow();
+    await again.syncNow();
+    await settle();
+    const early = files().filter(({ scope }) => scope === `p:${syncId}`).flatMap(({ file }) => file.ops ?? []);
+    const skew = 25 * 3_600_000;
+    Date.now = () => realNow() + skew;
+    S().addBookmark({ profileId: "default", url: "https://control.example/", title: "Control" });
+    const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+    S().removeBookmark(one.id);
+    assert.ok(!Object.values(S().bookmarks.nodes).some((n) => n.kind === "url" && n.title === "One"), "control: One is gone here");
+    for (let i = 0; i < 3; i++) await again.syncNow();
+    await settle();
+    const ops = files().filter(({ scope }) => scope === `p:${syncId}`).flatMap(({ file }) => file.ops ?? []);
+    assert.ok(ops.some((op) => op.v?.t === "Control"), "control: an added bookmark is published after the 24 h give-up");
+    const oneKey = ops.find((op) => op.v?.t === "One")?.k;
+    assert.ok(ops.some((op) => op.k === oneKey && op.v === null), "the deletion of One is published");
+  } finally {
+    native.read = realRead;
+    Date.now = realNow;
+  }
+});
+
+test("B41: a rolled-back (but readable) sync state republishes values this Mac took from B since the backup, over B's newer edit", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const older = new Map(shell.docs);
+  const [key, value] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(key, { ...value, t: "Renamed on B" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  const here = () => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title);
+  assert.ok(here().includes("Renamed on B"), "control: this Mac took B's first rename");
+  other.store.set(key, { ...value, t: "Renamed again on B" });
+  await other.sync();
+  shell.docs.clear();
+  for (const [name, contents] of older) shell.docs.set(name, contents);
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assertNoSeqReused();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.equal(other.store.get(key)?.t, "Renamed again on B", `B's newer rename survives this Mac's rollback (B now has ${other.store.get(key)?.t}, this Mac ${here()})`);
+});
+
+test("B42: a rolled-back state sealed mid-publish (outbox not empty) writes its outbox before the pull raises the seq", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const older = new Map(shell.docs);
+  for (const title of ["Two", "Three"]) {
+    S().addBookmark({ profileId: "default", url: `https://${title}.example/`, title });
+    await engine.syncNow();
+  }
+  S().updateSettings({ searchEngine: "bing" });
+  await engine.syncNow();
+  await settle();
+  const state = JSON.parse(older.get("sync-state.nns").slice(7));
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const scope = state[`p:${syncId}`];
+  const dev = JSON.parse(older.get("sync.json")).deviceId;
+  const h = `${Date.now().toString(36).padStart(9, "0")}.0000.${dev}`;
+  scope.outbox = [{ k: "bm:outboxed", h, v: { k: "u", p: "bar", t: "Outboxed", u: "https://outboxed.example/", a: 1, pos: "z" } }];
+  scope.records["bm:outboxed"] = { h, v: scope.outbox[0].v, o: [dev, scope.seq + 1] };
+  older.set("sync-state.nns", `sealed:${JSON.stringify(state)}`);
+  shell.docs.clear();
+  for (const [name, contents] of older) shell.docs.set(name, contents);
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await settle();
+  assertNoSeqReused();
+});
+
+const bookmarkOps = (syncId) => files().filter(({ scope }) => scope === `p:${syncId}`).flatMap(({ file }) => file.ops ?? Object.entries(file.records ?? {}).map(([k, r]) => ({ k, v: r.v })));
+const titles = () => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title).sort();
+
+test("B43: after a relaunch with a healthy state, an edit made just before quitting goes out in the first cycle, ahead of a later edit elsewhere", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().updateBookmark(one.id, { title: "Renamed before quitting" });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await settle();
+  assert.ok(bookmarkOps(syncId).some((op) => op.v?.t === "Renamed before quitting"), "the rename went out in the first cycle after the relaunch");
+});
+
+test("B44: an adapter that never becomes ready doesn't keep the others rebuilding, so a later relaunch keeps an edit made before quitting", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  void engine;
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const rebuilt = await launch();
+  rebuilt.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await rebuilt.syncNow();
+  await settle();
+  assert.ok(!S().historyReady?.default, "control: history never became ready");
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().updateBookmark(one.id, { title: "Renamed before quitting" });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  assert.deepEqual(titles(), ["Renamed before quitting"]);
+  assert.ok(bookmarkOps(syncId).some((op) => op.v?.t === "Renamed before quitting"), "the rename was published");
+});
+
+function appMac(prefix) {
+  const store = new Map();
+  const state = sync.emptyScope();
+  state.joined = true;
+  const clock = new sync.Clock("appMac");
+  const adapter = {
+    prefix,
+    extract: () => ({ values: new Map(store) }),
+    apply: (visible, changed) => {
+      for (const k of changed) visible.has(k) ? store.set(k, visible.get(k)) : store.delete(k);
+    },
+  };
+  return { store, sync: () => sync.syncScope({ scope: "app", state, transport: rawTransport, adapters: [adapter], clock, device: "appMac" }) };
+}
+
+test("B45: after a relaunch with a healthy state, a setting first chosen here while another Mac's older choice waited in the folder is kept, not replaced by it", async () => {
+  reset();
+  await onAndSynced();
+  const other = appMac("set:");
+  await other.sync();
+  other.store.set("set:appearance", { v: "dark" });
+  await other.sync();
+  S().updateSettings({ appearance: "light" });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(S().settings.appearance, "light");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
+});
+
+test("B46: a rebuild doesn't count a bookmark as edited when only its position moved because a sibling was deleted here, so it doesn't bring back a bookmark another Mac deleted", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  S().addBookmark({ profileId: "default", url: "https://three.example/", title: "Three" });
+  await engine.syncNow();
+  await settle();
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [twoKey] = [...other.store].find(([, v]) => v.t === "Two");
+  other.store.delete(twoKey);
+  await other.sync();
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const again = await launch();
+  again.startSync();
+  await settle();
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().removeBookmark(one.id);
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.ok(!other.store.has(twoKey), `Two stays deleted in the folder (B has ${[...other.store.values()].map((v) => v.t)})`);
+  assert.deepEqual(titles(), ["Three"]);
+});
+
+test("B47: during a rebuild, a bookmark renamed right after the bookmarks load, before the first cycle, keeps the rename", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  useBrowser.setState({ bookmarksReady: {} });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  useBrowser.setState({ bookmarksReady: { default: true } });
+  await settle();
+  const one = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "One");
+  S().updateBookmark(one.id, { title: "Renamed after loading" });
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  assert.deepEqual(titles(), ["Renamed after loading"]);
+  assert.ok(bookmarkOps(syncId).some((op) => op.v?.t === "Renamed after loading"), "the rename was published");
 });

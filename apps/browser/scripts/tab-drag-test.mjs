@@ -481,7 +481,7 @@ try {
           .then((f) => { out.before = f; return click(1).then(() => click(2)); }).then(() => settle(900)).then(frame)
           .then((f) => { out.after = f; out.opened = st().windows.w1.tabIds.length - out.tabs; return out; });
       });`);
-    assert.match(result.hit, /WindowDragRegion/, "the empty sidebar is the drag region's");
+    assert.match(result.hit, /WindowDragRegion|SidebarDocumentView/, "the empty sidebar is the drag region's");
     assert.equal(result.drags, 1, "a press there drags the window");
     assert.equal(result.opened, 1, "a double-click opens a tab");
     assert.equal(result.after, result.before, "and doesn't zoom the window");

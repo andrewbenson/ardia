@@ -18,6 +18,10 @@ import { overPins, pinGrid, pinGridHeight, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
 import { closeFolderPanel, folderPanel } from "./tileFolderUi";
 import { folderIdOfCell } from "../../store/tileFolders";
+import { hostedKinds } from "@ardia/settings";
+import { installNativeDragProbe, nativeSidebarDrag, useNativeDragMarks } from "./nativeDrag";
+
+const nativeSidebar = () => hostedKinds().includes("sidebar");
 
 type Frame = { x: number; y: number; w: number; h: number };
 type Section = "tiles" | "pinnedRows" | "pinnedGroups" | "list" | "folder";
@@ -202,6 +206,14 @@ class DragController {
     this.token = null;
     this.setLanding(null);
     return commit && drop.type === "tabs" ? drop.placement : null;
+  }
+
+  async panelToNative(windowId: string) {
+    const panel = this.regions.get("folder") ?? null;
+    const members = [...this.items.values()].filter((i) => i.section === "folder" && i.kind === "row");
+    const [frame, ...frames] = await Promise.all([measure(panel), ...members.map((i) => measure(i.view))]);
+    if (!frame) return nativeSidebarDrag.panel(windowId, null);
+    return nativeSidebarDrag.panel(windowId, { frame, members: members.flatMap((i, n) => (frames[n] ? [{ tabId: i.tabIds[0]!, ...frames[n]! }] : [])) });
   }
 
   async tilesLaidOut() {
@@ -628,7 +640,11 @@ const DragContext = createContext<DragController | null>(null);
 
 export function DragProvider({ children }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode }) {
   const controller = useMemo(() => new DragController(), []);
-  if (__DEV__) (globalThis as { sidebarDrag?: DragController }).sidebarDrag = controller;
+  const windowId = useWindowId();
+  if (__DEV__ && !nativeSidebar()) (globalThis as { sidebarDrag?: DragController }).sidebarDrag = controller;
+  useEffect(() => {
+    if (nativeSidebar()) installNativeDragProbe(windowId, () => controller);
+  }, [controller, windowId]);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   controller.setGhost = setGhost;
   useEffect(() => () => void (controller.active && controller.end(false)), [controller]);
@@ -695,7 +711,11 @@ export const usePinSlots = (cells: string[]) =>
 export const usePinnedCount = (cells: string[]) =>
   useStore(useContext(DragContext)?.marks ?? noMarks, (m) => cells.reduce((n, cell) => n + (m.sources.has(cellKey(cell)) ? 0 : 1), 0) + m.pinCount);
 export const useFolderTarget = (key: string) => useStore(useContext(DragContext)?.marks ?? noMarks, (m) => m.folderTarget === key);
-export const useFolderAway = () => useStore(useContext(DragContext)?.marks ?? noMarks, (m) => m.folderAway);
+export const useFolderAway = () => {
+  const js = useStore(useContext(DragContext)?.marks ?? noMarks, (m) => m.folderAway);
+  const native = useNativeDragMarks((m) => !!m.marks?.folderAway);
+  return js || native;
+};
 export const useDragFolded = (key: string) => useStore(useContext(DragContext)?.marks ?? noMarks, (m) => m.folded === key);
 export const useDragging = () => useStore(useContext(DragContext)?.marks ?? noMarks, (m) => m.sources.size > 0);
 
@@ -712,18 +732,27 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     };
   }, [controller, item, key]);
 
-  const responder = useMemo(
-    () =>
-      PanResponder.create({
+  const windowId = useWindowId();
+  const responder = useMemo(() => {
+    const tabId = spec.tabIds[0] ?? "";
+    if (spec.section === "folder" && controller && nativeSidebar())
+      return PanResponder.create({
         onMoveShouldSetPanResponder: (_, g) => spec.kind !== "tail" && Math.hypot(g.dx, g.dy) > 4,
-        onPanResponderGrant: (_, g) => void controller?.begin(key, g.x0, g.y0),
-        onPanResponderMove: (_, g) => controller?.move(g.moveX, g.moveY),
-        onPanResponderRelease: () => controller?.end(true),
-        onPanResponderTerminate: () => controller?.end(false),
+        onPanResponderGrant: (_, g) => void controller.panelToNative(windowId).then(() => nativeSidebarDrag.panelDrag(windowId, "begin", tabId, g.x0, g.y0)),
+        onPanResponderMove: (_, g) => void nativeSidebarDrag.panelDrag(windowId, "move", tabId, g.moveX, g.moveY),
+        onPanResponderRelease: (_, g) => void nativeSidebarDrag.panelDrag(windowId, "end", tabId, g.moveX, g.moveY),
+        onPanResponderTerminate: (_, g) => void nativeSidebarDrag.panelDrag(windowId, "cancel", tabId, g.moveX, g.moveY),
         onPanResponderTerminationRequest: () => false,
-      }),
-    [controller, key],
-  );
+      });
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => spec.kind !== "tail" && Math.hypot(g.dx, g.dy) > 4,
+      onPanResponderGrant: (_, g) => void controller?.begin(key, g.x0, g.y0),
+      onPanResponderMove: (_, g) => controller?.move(g.moveX, g.moveY),
+      onPanResponderRelease: () => controller?.end(true),
+      onPanResponderTerminate: () => controller?.end(false),
+      onPanResponderTerminationRequest: () => false,
+    });
+  }, [controller, key, windowId]);
   const ref = useCallback(
     (view: View | null) => {
       if (item) item.view = view;
@@ -737,7 +766,9 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     [item],
   );
 
-  const source = useStore(marks, (m) => m.sources.has(key));
+  const jsSource = useStore(marks, (m) => m.sources.has(key));
+  const nativeSource = useNativeDragMarks((m) => spec.section === "folder" && !!m.marks?.sources.includes(key));
+  const source = jsSource || nativeSource;
   const landing = useStore(marks, (m) => m.landing === key);
   const clipped = useClipped(clip);
   const horizontal = spec.kind === "tile";

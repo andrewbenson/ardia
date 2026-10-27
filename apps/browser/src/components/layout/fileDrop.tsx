@@ -11,7 +11,7 @@ export type TabDropTarget = {
   enter(count: number, at: DropPoint, token: number): unknown;
   move(at: DropPoint, token: number): void;
   leave(token: number): void;
-  drop(at: DropPoint, token: number): TabPlacement | null;
+  drop(at: DropPoint, token: number): TabPlacement | null | Promise<TabPlacement | null>;
 };
 type LandedDrop = { windowId: string; profileId: string; placement: TabPlacement | null };
 
@@ -102,9 +102,9 @@ export const TabDropArea = forwardRef<View, Props>(function TabDropArea({ target
       const windowId = latest.current.windowId;
       const profileId = useBrowser.getState().windows[windowId]?.profileId;
       const urls = droppedUrls(e.items);
-      void run(() => {
+      void run(async () => {
         const current = token === generation.current;
-        const placement = current ? latest.current.drop(at(e), token) : null;
+        const placement = current ? await latest.current.drop(at(e), token) : null;
         if (current) generation.current = ++tokens;
         if (profileId) openDropped({ windowId, profileId, placement }, urls);
       });

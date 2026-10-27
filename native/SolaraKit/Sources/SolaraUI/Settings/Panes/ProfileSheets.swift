@@ -98,20 +98,50 @@ struct ClearBrowsingDataSheet: View {
   }
 }
 
+@MainActor
+protocol CreateProfileSource: AnyObject {
+  var profiles: [ProfileSummary] { get }
+  func create(name: String, color: ProfileColorValue, shareWith: String?) -> String
+}
+
+extension CreateProfileSource {
+  func profile(_ id: String) -> ProfileSummary? { profiles.first { $0.id == id } }
+
+  func dataGroups() -> [(dataId: String, profileIds: [String])] {
+    var groups: [(dataId: String, profileIds: [String])] = []
+    for profile in profiles {
+      if let index = groups.firstIndex(where: { $0.dataId == profile.dataGroup }) {
+        groups[index].profileIds.append(profile.id)
+      } else {
+        groups.append((profile.dataGroup, [profile.id]))
+      }
+    }
+    return groups
+  }
+}
+
+extension ProfilesPaneModel: CreateProfileSource {}
+
 struct CreateProfileSheet: View {
-  let model: ProfilesPaneModel
+  let model: any CreateProfileSource
   let close: () -> Void
-  @State private var name = ""
+  @State private var name: String
   @State private var color: ProfileColorValue
-  @State private var share = false
+  @State private var share: Bool
   @State private var shareWith: String
   @FocusState private var nameFocused: Bool
 
-  init(model: ProfilesPaneModel, close: @escaping () -> Void) {
+  init(model: any CreateProfileSource, current: String, presetName: String = "", presetShareWith: String? = nil, close: @escaping () -> Void) {
     self.model = model
     self.close = close
+    _name = State(initialValue: presetName)
     _color = State(initialValue: ProfileColorValue.unused(by: model.profiles))
-    _shareWith = State(initialValue: model.defaultProfileId)
+    _share = State(initialValue: presetShareWith != nil)
+    _shareWith = State(initialValue: presetShareWith ?? current)
+  }
+
+  init(model: ProfilesPaneModel, close: @escaping () -> Void) {
+    self.init(model: model, current: model.defaultProfileId, close: close)
   }
 
   var body: some View {
@@ -193,7 +223,7 @@ struct CreateProfileSheet: View {
     }
     .padding(20)
     .frame(width: 420, alignment: .leading)
-    .onAppear { nameFocused = true }
+    .onAppear { DispatchQueue.main.async { nameFocused = true } }
   }
 
   private func submit(_ groupHead: String?) {

@@ -146,8 +146,6 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
   var defaultProfileId: String { store.string("defaultProfileId") }
   var lookSource: ThemeLookSource { store.bool("spacesFollowAppearance") ? .app : .own }
 
-  func profile(_ id: String) -> ProfileSummary? { profiles.first { $0.id == id } }
-
   func sharingProfiles(_ id: String) -> [String] {
     guard let profile = profile(id) else { return [] }
     return profiles.filter { $0.id != id && $0.dataGroup == profile.dataGroup }.map(\.id)
@@ -164,18 +162,6 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
       id == defaultProfileId ? "Default" : nil,
       names.isEmpty ? nil : "Shares data with \(ProfileNames.listOf(names))",
     ].compactMap { $0 }.joined(separator: " · ")
-  }
-
-  func dataGroups() -> [(dataId: String, profileIds: [String])] {
-    var groups: [(dataId: String, profileIds: [String])] = []
-    for profile in profiles {
-      if let index = groups.firstIndex(where: { $0.dataId == profile.dataGroup }) {
-        groups[index].profileIds.append(profile.id)
-      } else {
-        groups.append((profile.dataGroup, [profile.id]))
-      }
-    }
-    return groups
   }
 
   func setDefault(_ id: String) {

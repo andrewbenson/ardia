@@ -53,6 +53,7 @@ final class NativePageView: ExpoView {
   private let history = HistoryPageModel()
   private let bookmarks = BookmarksPageModel()
   private let bookmarkForm = BookmarkFormModel()
+  private let createProfile = CreateProfileFormModel()
 
   override var isFlipped: Bool { true }
 
@@ -64,6 +65,7 @@ final class NativePageView: ExpoView {
     history.onEvent = { [weak self] event in self?.send(event) }
     bookmarks.onEvent = { [weak self] event in self?.send(event) }
     bookmarkForm.onEvent = { [weak self] event in self?.send(event) }
+    createProfile.onEvent = { [weak self] event in self?.send(event) }
     Self.live.add(self)
     PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
   }
@@ -133,6 +135,7 @@ final class NativePageView: ExpoView {
       case "history": NSHostingView(rootView: HistoryPageView(model: history, favicons: PageNetwork.favicons))
       case "bookmarks": NSHostingView(rootView: BookmarksPageView(model: bookmarks, favicons: PageNetwork.favicons))
       case "bookmarkForm": NSHostingView(rootView: BookmarkFormView(model: bookmarkForm))
+      case "createProfile": NSHostingView(rootView: CreateProfileFormView(model: createProfile))
       default: nil
       }
     guard let made else { return }
@@ -165,6 +168,7 @@ final class NativePageView: ExpoView {
     case "history": history.apply(json: json)
     case "bookmarks": bookmarks.apply(json: json)
     case "bookmarkForm": bookmarkForm.apply(json: json)
+    case "createProfile": createProfile.apply(json: json)
     default: break
     }
   }
@@ -221,6 +225,13 @@ final class NativePageView: ExpoView {
     case .cancel: onPageEvent(["kind": "cancel"])
     case .save(let name, let url, let parentId): onPageEvent(["kind": "save", "name": name, "url": url, "parentId": parentId ?? NSNull()])
     case .newFolder(let parentId): onPageEvent(["kind": "newFolder", "parentId": parentId ?? NSNull()])
+    }
+  }
+
+  private func send(_ event: CreateProfileEvent) {
+    switch event {
+    case .create(let name, let color, let shareWith): onPageEvent(["kind": "create", "name": name, "color": color, "shareWith": shareWith ?? NSNull()])
+    case .cancel: onPageEvent(["kind": "cancel"])
     }
   }
 }

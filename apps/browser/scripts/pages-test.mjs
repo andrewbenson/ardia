@@ -7,7 +7,8 @@
 // tree opens a folder, search finds across folders, click, ⌘-click and shift-click select, Delete removes with an
 // Undo toast that puts them back, and dragging a row moves it. The ⌘D popover renames with Return, moves to the
 // folder picked in its tree with Done, saves on Esc and on a click outside, and Remove deletes; the editor won't
-// save without a URL, saves with Return, and Esc or a click outside cancels.
+// save without a URL, saves with Return, and Esc or a click outside cancels. Create a Profile makes the profile named
+// in its field with Return, starts from a preset's name and sharing, and Esc or a click outside creates nothing.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -368,6 +369,46 @@ try {
     await dev("click:40,700");
     assert.ok((await closed()).ok, "closed after a click outside");
     assert.notEqual(await bookmarkTitle(id), "Delta Outside");
+  });
+  await rep.check("Create a Profile: Return creates it, a preset shares data, Esc and a click outside create nothing", async () => {
+    const count = () => app.eval(`return ac.store.getState().profileOrder.length`);
+    const open = async (preset) => {
+      const pending = app.eval(`const s = ac.store.getState(); globalThis.__created = undefined; ac.actions.createProfile(Object.keys(s.windows)[0], ${JSON.stringify(preset ?? {})}).then((id) => { globalThis.__created = id; }); return true`);
+      await pending;
+      return until(async () => {
+        const all = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages;
+        return { ok: all.some((p) => p.kind === "createProfile") };
+      });
+    };
+    const created = () => until(async () => ({ ok: (await app.eval(`return globalThis.__created !== undefined`)) }));
+    const before = await count();
+    assert.ok((await open()).ok, "sheet shown");
+    await sleep(300);
+    await dev("type:Travel");
+    await dev("keys:0:\r:36");
+    assert.ok((await created()).ok, "resolved after Return");
+    const travel = await app.eval(`const s = ac.store.getState(); return JSON.stringify(s.profiles[globalThis.__created] ?? null)`);
+    assert.equal(JSON.parse(travel)?.name, "Travel");
+    assert.equal(await count(), before + 1);
+    await open();
+    await sleep(300);
+    await dev("keys:0:\u001b:53");
+    assert.ok((await created()).ok, "resolved after Esc");
+    assert.equal(await app.eval(`return globalThis.__created`), null);
+    await open();
+    await sleep(300);
+    await dev("click:40,700");
+    assert.ok((await created()).ok, "resolved after a click outside");
+    assert.equal(await app.eval(`return globalThis.__created`), null);
+    assert.equal(await count(), before + 1, "nothing made by Esc or the outside click");
+    const head = await app.eval(`const s = ac.store.getState(); return s.windows[Object.keys(s.windows)[0]].profileId`);
+    await open({ name: "Shared", shareWith: head });
+    await sleep(300);
+    await dev("keys:0:\r:36");
+    assert.ok((await created()).ok, "resolved after Return");
+    const shared = JSON.parse(await app.eval(`const s = ac.store.getState(); const p = s.profiles[globalThis.__created]; return JSON.stringify({ name: p?.name, data: p?.dataId ?? p?.id, head: s.profiles[${JSON.stringify(head)}]?.dataId ?? ${JSON.stringify(head)} })`));
+    assert.equal(shared.name, "Shared");
+    assert.equal(shared.data, shared.head, "shares the preset's data");
   });
 } finally {
   await app?.quit();

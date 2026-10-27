@@ -1,6 +1,7 @@
+import { NativePage, nativePagesAvailable } from "@ardia/settings";
 import { Symbol } from "@ardia/shell";
 import { useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
 import { PROFILE_COLORS, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
@@ -39,7 +40,43 @@ export function CreateProfileHost() {
     useRequest.setState({ request: null });
     request.resolve(id);
   };
-  return <CreateProfileSheet windowId={windowId} preset={request.preset} onDone={done} />;
+  return nativePagesAvailable() ? (
+    <NativeCreateProfile windowId={windowId} preset={request.preset} onDone={done} />
+  ) : (
+    <CreateProfileSheet windowId={windowId} preset={request.preset} onDone={done} />
+  );
+}
+
+let nativeRequests = 0;
+
+function NativeCreateProfile({ windowId, preset, onDone }: { windowId: string; preset: CreateProfilePreset; onDone: (id: string | null) => void }) {
+  const theme = useTheme();
+  const profiles = useBrowser((s) => s.profiles);
+  const profileOrder = useBrowser((s) => s.profileOrder);
+  const current = useBrowser((s) => (!s.windows[windowId]?.incognito ? s.windows[windowId]!.profileId : s.settings.defaultProfileId));
+  const [key] = useState(() => `create:${++nativeRequests}`);
+  const state = JSON.stringify({
+    key,
+    profiles: profileOrder.filter((id) => profiles[id]).map((id) => ({ id, name: profiles[id]!.name, color: profiles[id]!.color, dataId: profiles[id]!.dataId ?? null })),
+    current,
+    presetName: preset.name ?? null,
+    presetShareWith: preset.shareWith ?? null,
+    dark: !!theme.dark,
+  });
+  return (
+    <NativePage
+      kind="createProfile"
+      state={state}
+      style={StyleSheet.absoluteFill}
+      onPageEvent={(e) => {
+        const ev = e.nativeEvent;
+        if (ev.kind === "create") {
+          const id = useBrowser.getState().createProfile({ name: String(ev.name ?? ""), color: ev.color as ProfileColor, shareWith: (ev.shareWith as string | null) ?? null });
+          onDone(id);
+        } else if (ev.kind === "cancel") onDone(null);
+      }}
+    />
+  );
 }
 
 export function profileNames(names: string[]): string {

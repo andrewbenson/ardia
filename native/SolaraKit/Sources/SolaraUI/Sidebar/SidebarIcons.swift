@@ -5,6 +5,7 @@ public struct SidebarFaviconRequest: Hashable, Sendable {
   public var favicon: String?
   public var profileId: String
   public var dark: Bool
+  public var direct = false
 }
 
 @MainActor
@@ -57,14 +58,15 @@ struct TabIconSpec: Equatable {
   var size: CGFloat = 16
   var dimmed = false
   var engineSymbol: String?
+  var direct = false
 }
 
 final class TabIconView: NSView {
-  private let image = NSImageView()
-  private let symbol = SymbolView()
-  private let emoji = NSTextField(labelWithString: "")
+  private var madeImage: NSImageView?
+  private var madeSymbol: SymbolView?
+  private var madeEmoji: NSTextField?
+  private var madeInitial: NSTextField?
   private let fallback = CALayer()
-  private let initial = NSTextField(labelWithString: "")
   private var badge: NSView?
   private var spec: TabIconSpec?
   private var dark = true
@@ -77,20 +79,41 @@ final class TabIconView: NSView {
   override init(frame: NSRect) {
     super.init(frame: frame)
     wantsLayer = true
-    image.imageScaling = .scaleProportionallyUpOrDown
-    image.wantsLayer = true
-    for v in [image, symbol, emoji, initial] as [NSView] {
-      v.isHidden = true
-      addSubview(v)
-    }
-    emoji.alignment = .center
-    initial.alignment = .center
     fallback.cornerCurve = .continuous
     fallback.actions = SurfaceLayer.noActions
     layer?.insertSublayer(fallback, at: 0)
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  private func made<View: NSView>(_ view: inout View?, _ make: () -> View) -> View {
+    if let view { return view }
+    let made = make()
+    if let badge { addSubview(made, positioned: .below, relativeTo: badge) } else { addSubview(made) }
+    view = made
+    return made
+  }
+
+  private var image: NSImageView {
+    made(&madeImage) {
+      let image = NSImageView()
+      image.imageScaling = .scaleProportionallyUpOrDown
+      image.wantsLayer = true
+      return image
+    }
+  }
+
+  private var symbol: SymbolView { made(&madeSymbol) { SymbolView() } }
+
+  private var emoji: NSTextField { made(&madeEmoji) { Self.centeredLabel() } }
+
+  private var initial: NSTextField { made(&madeInitial) { Self.centeredLabel() } }
+
+  private static func centeredLabel() -> NSTextField {
+    let label = NSTextField(labelWithString: "")
+    label.alignment = .center
+    return label
+  }
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -113,7 +136,7 @@ final class TabIconView: NSView {
     guard let spec, let palette else { return }
     let size = spec.size
     let box = NSRect(x: 0, y: 0, width: size, height: size)
-    for v in [image, symbol, emoji, initial] as [NSView] { v.isHidden = true }
+    for view in [madeImage, madeSymbol, madeEmoji, madeInitial] as [NSView?] { view?.isHidden = true }
     fallback.isHidden = true
     if let icon = spec.customIcon, icon.hasPrefix("symbol:") {
       let name = String(icon.dropFirst("symbol:".count))
@@ -141,7 +164,7 @@ final class TabIconView: NSView {
   }
 
   private func showFavicon(_ spec: TabIconSpec, box: NSRect) {
-    let request = SidebarFaviconRequest(url: spec.url, favicon: spec.favicon, profileId: spec.profileId, dark: dark)
+    let request = SidebarFaviconRequest(url: spec.url, favicon: spec.favicon, profileId: spec.profileId, dark: dark, direct: spec.direct)
     image.frame = box
     image.contentTintColor = nil
     image.alphaValue = 1

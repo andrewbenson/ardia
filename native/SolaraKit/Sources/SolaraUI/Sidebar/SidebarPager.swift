@@ -35,8 +35,18 @@ public final class SidebarPagerView: NSView {
     order.compactMap { id in
       guard let page = pages[id] else { return ["id": id, "made": false] }
       return ["id": id, "made": true, "x": page.frame.minX, "hidden": page.isHidden, "docked": page.pageLayout.docked, "current": id == host?.profileId]
-    } + [["position": position]]
+    } + [["position": position], ["views": Self.count(self), "windowViews": window?.contentView.map { Self.count($0) } ?? 0,
+          "layers": layer.map { Self.layers($0) } ?? 0, "windowLayers": window?.contentView?.layer.map { Self.layers($0) } ?? 0, "classes": Self.classes(self)]]
   }
+
+  static func classes(_ view: NSView) -> [String: Int] {
+    var out = [String(describing: type(of: view)): 1]
+    for sub in view.subviews { out.merge(classes(sub), uniquingKeysWith: +) }
+    return out
+  }
+
+  static func count(_ view: NSView) -> Int { 1 + view.subviews.reduce(0) { $0 + count($1) } }
+  static func layers(_ layer: CALayer) -> Int { 1 + (layer.sublayers ?? []).reduce(0) { $0 + layers($1) } }
 
   public func update(state: BrowserState, host: SidebarHostState) {
     self.state = state

@@ -394,6 +394,13 @@ Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the 
   just under a new one is clipped at the new row's bottom edge while it slides, which gives Dia's look over our
   translucent selected fill. Hover is checked again after every layout (react-native-macos patch, `RCTView.m`), so it
   follows the final layout during the slide. Collapsed groups, pins and moves between windows don't animate.
+- Native sidebar (`SidebarView.swift`, behind `ARDIA_NATIVE_SIDEBAR=1`): the same curves and durations with Core
+  Animation. Rows in the scroll area that keep their slot's size slide, a closed row (rows and group boxes) drops its
+  selected fill and fades behind the others, and the row under a new one is masked at the new row's bottom edge. Hover
+  is checked against the final layout right after. Measured with `SolaraHosted.sidebarMotion` in a hidden instance
+  (close, duplicate, close of the active tab): every moving row fits the 0.14 s curve within 0.4 % of its travel, and
+  the fade takes about 0.10 s. With Reduce Motion
+  on nothing animates. Not animated yet: a group box's height change (it jumps).
 
 ### Hiding and showing the sidebar (Auto-Hide Tabs, ⌘S; owner recording 2026-10-06, 240 fps)
 

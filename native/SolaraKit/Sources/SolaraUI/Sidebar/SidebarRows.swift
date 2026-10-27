@@ -38,6 +38,7 @@ public enum SidebarAction: Sendable {
   case clear
   case renamed(kind: String, id: String, text: String?)
   case hover(kind: String?, id: String?)
+  case live(action: String, folderId: String, id: String?, meta: Bool)
 }
 
 @MainActor
@@ -51,6 +52,7 @@ final class SidebarContext {
   var activeId: String?
   let showClear: Bool
   let favicons: SidebarFavicons
+  var live: SidebarLiveBlocks?
   var send: (SidebarAction) -> Void = { _ in }
 
   let paletteGeneration: Int
@@ -104,6 +106,7 @@ class SidebarRowView: NSView {
   var pressed = false { didSet { if pressed != oldValue { pressChanged() } } }
   var hoverKey: String { item?.key ?? "" }
   var pressScales: Bool { true }
+  private(set) var retired = false
 
   override var isFlipped: Bool { true }
 
@@ -123,9 +126,17 @@ class SidebarRowView: NSView {
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
+    if retired { return nil }
     let hit = super.hitTest(point)
     return hit === body ? self : hit
   }
+
+  func retire() {
+    retired = true
+    retiredLook()
+  }
+
+  func retiredLook() {}
 
   var hoverHost: SidebarView? {
     var view = superview
@@ -180,14 +191,23 @@ class SidebarRowView: NSView {
       hoverHost?.dismissHover()
       return contextMenu()
     }
+    if let host = hoverHost { SidebarDragController.of(host).press(self, event) }
     pressed = true
   }
 
   override func mouseDragged(with event: NSEvent) {
+    if let host = hoverHost, SidebarDragController.of(host).dragged(self, event) {
+      pressed = false
+      return
+    }
     pressed = bounds.contains(convert(event.locationInWindow, from: nil))
   }
 
   override func mouseUp(with event: NSEvent) {
+    if let host = hoverHost, SidebarDragController.of(host).release(self, event) {
+      pressed = false
+      return
+    }
     let inside = bounds.contains(convert(event.locationInWindow, from: nil))
     let wasPressed = pressed
     pressed = false
@@ -210,14 +230,14 @@ class SidebarRowView: NSView {
 final class TabRowView: SidebarRowView {
   private let surface = SurfaceLayer()
   private let icon = TabIconView()
-  private let back = SymbolView()
-  private let audio = SidebarIconButton()
   private let label = FadeLabel(fontSize: 13)
-  private let closeButton = SidebarIconButton()
-  private let spinner = SpinnerView()
-  private let subtitle = FadeLabel(fontSize: 11)
-  private let developerGap = CAShapeLayer()
-  private let developerDash = CAShapeLayer()
+  private var back: SymbolView?
+  private var audio: SidebarIconButton?
+  private var closeButton: SidebarIconButton?
+  private var spinner: SpinnerView?
+  private var subtitle: FadeLabel?
+  private var developerRing: (gap: CAShapeLayer, dash: CAShapeLayer)?
+  private var closeLook: (symbol: String, tooltip: String) = ("xmark", "Close Tab")
   private var developer = false
   private var tab: Tab?
   private var active = false
@@ -232,31 +252,61 @@ final class TabRowView: SidebarRowView {
     super.init(frame: frame)
     body.layer?.addSublayer(surface)
     surface.radius = SidebarMetrics.rowRadius
-    for view in [icon, back, audio, label, subtitle, spinner, closeButton] as [NSView] { body.addSubview(view) }
-    for (ring, color) in [(developerGap, NSColor(srgbRed: 0x14 / 255, green: 0x14 / 255, blue: 0x14 / 255, alpha: 1)), (developerDash, NSColor(srgbRed: 0xF5 / 255, green: 0xC5 / 255, blue: 0x2A / 255, alpha: 1))] {
-      ring.fillColor = nil
-      ring.strokeColor = color.cgColor
-      ring.lineWidth = 2
-      ring.actions = SurfaceLayer.noActions
-      ring.isHidden = true
-      body.layer?.addSublayer(ring)
-    }
-    developerDash.lineDashPattern = [6, 6]
-    closeButton.radius = 6
-    closeButton.onPress = { [weak self] in
-      guard let self, let id = self.tab?.id else { return }
-      self.context?.send(.close(tabId: id))
-    }
-    audio.radius = 0
-    audio.onPress = { [weak self] in
-      guard let self, let id = self.tab?.id else { return }
-      self.context?.send(.toggleMute(tabId: id))
-    }
+    for view in [icon, label] as [NSView] { body.addSubview(view) }
   }
 
   required init?(coder: NSCoder) { fatalError() }
 
+  private func attached<View: NSView>(_ view: inout View?, _ make: () -> View) -> View {
+    if let view { return view }
+    let made = make()
+    body.addSubview(made)
+    view = made
+    needsLayout = true
+    return made
+  }
+
+  private func makeClose() -> SidebarIconButton {
+    let button = SidebarIconButton()
+    button.radius = 6
+    button.onPress = { [weak self] in
+      guard let self, let id = self.tab?.id else { return }
+      self.context?.send(.close(tabId: id))
+    }
+    return button
+  }
+
+  private func makeAudio() -> SidebarIconButton {
+    let button = SidebarIconButton()
+    button.radius = 0
+    button.onPress = { [weak self] in
+      guard let self, let id = self.tab?.id else { return }
+      self.context?.send(.toggleMute(tabId: id))
+    }
+    return button
+  }
+
+  private func makeDeveloperRing() -> (gap: CAShapeLayer, dash: CAShapeLayer) {
+    let ring = (gap: CAShapeLayer(), dash: CAShapeLayer())
+    for (shape, color) in [(ring.gap, NSColor(srgbRed: 0x14 / 255, green: 0x14 / 255, blue: 0x14 / 255, alpha: 1)), (ring.dash, NSColor(srgbRed: 0xF5 / 255, green: 0xC5 / 255, blue: 0x2A / 255, alpha: 1))] {
+      shape.fillColor = nil
+      shape.strokeColor = color.cgColor
+      shape.lineWidth = 2
+      shape.actions = SurfaceLayer.noActions
+      body.layer?.addSublayer(shape)
+    }
+    ring.dash.lineDashPattern = [6, 6]
+    needsLayout = true
+    return ring
+  }
+
   var tabId: String? { tab?.id }
+
+  override func retiredLook() {
+    active = false
+    selected = false
+    repaint()
+  }
 
   private struct Inputs: Hashable {
     let tab: Tab
@@ -290,19 +340,27 @@ final class TabRowView: SidebarRowView {
     resettable = context.query.awayFromPinnedUrl(id)
     developer = context.flags.developer.contains(id)
     let palette = context.palette
-    subtitle.isHidden = !developer
-    subtitle.text = developer ? (URL(string: tab.url).map { url in url.port.map { "\(url.host() ?? ""):\($0)" } ?? url.host() ?? "" } ?? "") : ""
-    subtitle.color = palette.textSecondary
+    if developer {
+      let subtitle = attached(&subtitle) { FadeLabel(fontSize: 11) }
+      subtitle.isHidden = false
+      subtitle.text = URL(string: tab.url).map { url in url.port.map { "\(url.host() ?? ""):\($0)" } ?? url.host() ?? "" } ?? ""
+      subtitle.color = palette.textSecondary
+    } else {
+      subtitle?.isHidden = true
+    }
     icon.favicons = context.favicons
     icon.set(context.iconSpec(tab), palette: palette)
     label.text = context.host.renaming == "tab:\(id)" ? "" : context.title(tab)
-    audio.set(tab.muted ? "speaker.slash" : "speaker.wave.2", size: 12, weight: .regular, color: palette.textTab, tooltip: tab.muted ? "Unmute Site" : "Mute Site")
-    audio.isHidden = !showsAudio
+    if showsAudio {
+      let audio = attached(&audio, makeAudio)
+      audio.set(tab.muted ? "speaker.slash" : "speaker.wave.2", size: 12, weight: .regular, color: palette.textTab, tooltip: tab.muted ? "Unmute Site" : "Mute Site")
+      audio.isHidden = false
+    } else {
+      audio?.isHidden = true
+    }
     let kind = context.query.closeKind(id)
     let closeTip = kind == .removePin ? "Remove Pinned Tab" : (kind == .unload ? "Unload Tab" : "Close Tab") + (context.host.closeHint.map { "  \($0)" } ?? "")
-    closeButton.set(kind == .unload ? "minus" : "xmark", size: 10, weight: .semibold, color: palette.icon, tooltip: closeTip)
-    closeButton.hoverFill = palette.toolbarHover
-    closeButton.pressedFill = palette.toolbarPressed
+    closeLook = (kind == .unload ? "minus" : "xmark", closeTip)
     repaint()
   }
 
@@ -318,18 +376,42 @@ final class TabRowView: SidebarRowView {
     surface.glowOpacity = active ? palette.glowOpacity : 0
     surface.glowRadius = palette.glowRadius
     label.color = active ? palette.selectedText : palette.textTab
-    developerGap.isHidden = !(developer && active)
-    developerDash.isHidden = developerGap.isHidden
+    let ringShown = developer && active
+    if ringShown || developerRing != nil {
+      let ring = developerRing ?? makeDeveloperRing()
+      developerRing = ring
+      ring.gap.isHidden = !ringShown
+      ring.dash.isHidden = !ringShown
+    }
     let renaming = context.host.renaming == "tab:\(tab?.id ?? "")"
-    closeButton.isHidden = !(hovered && !renaming)
-    spinner.isHidden = !loading || !closeButton.isHidden
+    let closeShown = hovered && !renaming
+    if closeShown {
+      let close = attached(&closeButton, makeClose)
+      close.set(closeLook.symbol, size: 10, weight: .semibold, color: palette.icon, tooltip: closeLook.tooltip)
+      close.hoverFill = palette.toolbarHover
+      close.pressedFill = palette.toolbarPressed
+      close.isHidden = false
+    } else {
+      closeButton?.isHidden = true
+    }
+    if loading && !closeShown {
+      attached(&spinner) { SpinnerView() }.isHidden = false
+    } else if let spinner {
+      spinner.removeFromSuperview()
+      self.spinner = nil
+    }
     resetting = resettable && hovered && backHovered && !renaming
-    back.set("arrow.uturn.backward", size: 11, weight: .semibold, color: active ? palette.selectedText : palette.textTab)
-    back.isHidden = !resetting
+    if resetting {
+      let back = attached(&back) { SymbolView() }
+      back.set("arrow.uturn.backward", size: 11, weight: .semibold, color: active ? palette.selectedText : palette.textTab)
+      back.isHidden = false
+    } else {
+      back?.isHidden = true
+    }
     icon.isHidden = resetting
     if resetting { label.text = "Back to Pinned URL" } else if let tab, !renaming { label.text = context.title(tab) }
-    if closeButton.isHidden == false { closeButton.syncHover() }
-    let shape = [closeButton.isHidden, loading, showsAudio, developer]
+    if closeShown { closeButton?.syncHover() }
+    let shape = [!closeShown, loading, showsAudio, developer]
     if shape != laidOutShape {
       laidOutShape = shape
       needsLayout = true
@@ -352,29 +434,30 @@ final class TabRowView: SidebarRowView {
     let h = bounds.height
     var x: CGFloat = 9
     icon.frame = NSRect(x: x, y: (h - 16) / 2, width: 16, height: 16)
-    back.frame = icon.frame
+    back?.frame = icon.frame
     x += 16
     if showsAudio {
       x += 6
-      audio.frame = NSRect(x: x, y: (h - 16) / 2, width: 18, height: 16)
+      audio?.frame = NSRect(x: x, y: (h - 16) / 2, width: 18, height: 16)
       x += 18
     }
     x += 5
     let right = bounds.width - 6
-    let slot: CGFloat = closeButton.isHidden ? (loading ? 14 : 0) : 22
-    closeButton.frame = NSRect(x: right - 22, y: (h - 22) / 2, width: 22, height: 22)
-    spinner.frame = NSRect(x: right - 14, y: (h - 12) / 2, width: 12, height: 12)
+    let closeShown = closeButton.map { !$0.isHidden } ?? false
+    let slot: CGFloat = closeShown ? 22 : (loading ? 14 : 0)
+    closeButton?.frame = NSRect(x: right - 22, y: (h - 22) / 2, width: 22, height: 22)
+    spinner?.frame = NSRect(x: right - 14, y: (h - 12) / 2, width: 12, height: 12)
     let titleWidth = max(0, right - slot - x)
     if developer {
       label.frame = NSRect(x: x, y: (h - 30) / 2, width: titleWidth, height: 16)
-      subtitle.frame = NSRect(x: x, y: (h - 30) / 2 + 16, width: titleWidth, height: 14)
+      subtitle?.frame = NSRect(x: x, y: (h - 30) / 2 + 16, width: titleWidth, height: 14)
     } else {
       label.frame = NSRect(x: x, y: (h - 18) / 2, width: titleWidth, height: 18)
     }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     let ring = CGPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), cornerWidth: SidebarMetrics.rowRadius - 1, cornerHeight: SidebarMetrics.rowRadius - 1, transform: nil)
-    for shape in [developerGap, developerDash] {
+    for shape in [developerRing?.gap, developerRing?.dash].compactMap({ $0 }) {
       shape.frame = bounds
       shape.path = ring
     }
@@ -567,6 +650,7 @@ final class SplitRowView: SidebarRowView {
       hoverHost?.dismissHover()
       return contextMenu()
     }
+    if let host = hoverHost { SidebarDragController.of(host).press(self, event) }
     pressed = pressedPane != nil
     if let pane = pane(at: event) { PressFeedback.apply(pane, pressed: true) }
   }
@@ -574,6 +658,10 @@ final class SplitRowView: SidebarRowView {
   override func mouseUp(with event: NSEvent) {
     let target = pane(at: event)
     if let id = pressedPane, let pane = panes.first(where: { $0.tabId == id }) { PressFeedback.apply(pane, pressed: false) }
+    if let host = hoverHost, SidebarDragController.of(host).release(self, event) {
+      pressed = false
+      return
+    }
     let wasPressed = pressed
     pressed = false
     guard wasPressed, let target, target.tabId == pressedPane else { return }
@@ -874,6 +962,8 @@ final class DividerRowView: SidebarRowView {
     body.addSubview(clearButton)
     tidyButton.onPress = { [weak self] in self?.context?.send(.tidy) }
     clearButton.onPress = { [weak self] in self?.context?.send(.clear) }
+    tidyButton.describe("Tidy pinned tabs")
+    clearButton.describe("Clear unpinned tabs")
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -986,6 +1076,18 @@ final class DividerButton: NSView {
   required init?(coder: NSCoder) { fatalError() }
 
   var fittingWidth: CGFloat { 8 + iconWidth + 3 + label.fittingSize.width }
+
+  func describe(_ text: String) {
+    toolTip = text
+    setAccessibilityElement(true)
+    setAccessibilityRole(.button)
+    setAccessibilityLabel(text)
+  }
+
+  override func accessibilityPerformPress() -> Bool {
+    onPress?()
+    return onPress != nil
+  }
 
   override func layout() {
     super.layout()

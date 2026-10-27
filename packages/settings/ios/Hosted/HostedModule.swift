@@ -19,6 +19,10 @@ public class HostedModule: Module {
       MainActor.assumeIsolated { NativeSidebar.hoverShifts(windowId: windowId) ?? "null" }
     }.runOnQueue(.main)
 
+    AsyncFunction("sidebarMotion") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeSidebar.motion(windowId: windowId) ?? "null" }
+    }.runOnQueue(.main)
+
     AsyncFunction("sidebarPages") { (windowId: String) -> String in
       MainActor.assumeIsolated { NativeSidebar.pages(windowId: windowId) ?? "null" }
     }.runOnQueue(.main)

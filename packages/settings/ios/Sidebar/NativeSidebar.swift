@@ -15,6 +15,7 @@ enum NativeSidebar {
 
   static func register() {
     guard enabled else { return }
+    NativeSidebarLive.start()
     HostedViews.register(kind) { windowId in
       let host = SidebarHost(windowId: windowId)
       hosts[windowId] = host
@@ -44,6 +45,12 @@ enum NativeSidebar {
     return json.flatMap { String(data: $0, encoding: .utf8) }
   }
 
+  static func motion(windowId: String) -> String? {
+    guard let page = hosts[windowId]?.view.current else { return nil }
+    let json = try? JSONSerialization.data(withJSONObject: ["t": CACurrentMediaTime(), "rows": page.motionSample()])
+    return json.flatMap { String(data: $0, encoding: .utf8) }
+  }
+
   static func pages(windowId: String) -> String? {
     guard let host = hosts[windowId] else { return nil }
     let json = try? JSONSerialization.data(withJSONObject: host.view.describePages())
@@ -55,6 +62,9 @@ enum NativeSidebar {
       let image = SettingsAdapters.image(favicon)
     {
       return image
+    }
+    if request.direct, let favicon = request.favicon, let url = URL(string: favicon) {
+      return await Task.detached { (try? Data(contentsOf: url)).flatMap(NSImage.init(data:)) }.value
     }
     guard let uri = try await SettingsAdapters.jsThrowing("sidebar.favicon", request.url, request.profileId, request.dark) as? String else { return nil }
     if let image = SettingsAdapters.image(uri) { return image }
@@ -201,6 +211,7 @@ final class SidebarHost {
     case .clear: call("clear", "")
     case .hover(let kind, let id): call("hover", id ?? "", ["kind": kind ?? NSNull()])
     case .renamed(let kind, let id, let text): call("renamed", id, ["kind": kind, "text": text ?? NSNull()])
+    case .live(let action, let folderId, let id, let meta): call("live", folderId, ["action": action, "item": id ?? NSNull(), "meta": meta])
     }
   }
 
@@ -219,6 +230,32 @@ final class SidebarHost {
     let payload = SidebarPayload(extra)
     Task { @MainActor in
       _ = await SettingsAdapters.js("sidebar.action", windowId, name, id, payload.value)
+    }
+  }
+}
+
+@MainActor
+enum NativeSidebarLive {
+  static let topic = "sidebar.live"
+  private static var observer: UUID?
+  private static var generation = 0
+
+  static func start() {
+    guard observer == nil else { return }
+    observer = SettingsJS.shared.observe(topic) { value in receive(value) }
+    receive(SettingsJS.shared.latestValue(topic))
+  }
+
+  private static func receive(_ value: Any?) {
+    guard let text = value as? String else { return }
+    generation += 1
+    let ticket = generation
+    Task.detached(priority: .userInitiated) {
+      guard let state = SidebarLive.decode(text) else { return }
+      await MainActor.run {
+        guard ticket == generation else { return }
+        SidebarLiveFeed.shared.apply(state)
+      }
     }
   }
 }

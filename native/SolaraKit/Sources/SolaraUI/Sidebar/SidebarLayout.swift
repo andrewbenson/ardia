@@ -47,6 +47,7 @@ public enum SidebarItemKind: Hashable, Sendable {
   case newTab
   case divider
   case incognito
+  case live(String)
 
   public var key: String {
     switch self {
@@ -59,6 +60,7 @@ public enum SidebarItemKind: Hashable, Sendable {
     case .newTab: "newTab"
     case .divider: "divider"
     case .incognito: "incognito"
+    case .live(let key): key
     }
   }
 }
@@ -130,6 +132,7 @@ public struct SidebarLayoutInput: Sendable {
   public var balanced = false
   public var divided = false
   public var incognitoBadge = false
+  public var live: SidebarLiveBlocks?
 
   public init(windowId: String, profileId: String, width: CGFloat, height: CGFloat) {
     self.windowId = windowId
@@ -153,6 +156,7 @@ public struct SidebarLayout {
   public static func headGap(_ first: String?) -> CGFloat { first?.hasPrefix("g:") == true ? M.rowGap : 0 }
 
   public func entryHeight(_ entry: String) -> CGFloat {
+    if entry.hasPrefix(SidebarLive.prefix) { return liveHeight(entry) }
     guard entry.hasPrefix("g:") else { return M.rowHeight }
     return M.groupBorder * 2 + M.rowHeight + membersHeight(String(entry.dropFirst(2)))
   }
@@ -264,6 +268,10 @@ public struct SidebarLayout {
     var y = top
     for (i, entry) in entries.enumerated() {
       if i > 0 { y += M.rowGap }
+      if entry.hasPrefix(SidebarLive.prefix) {
+        y = placeLive(entry, top: y, x: x, width: width, section: section, into: &items)
+        continue
+      }
       let id = String(entry.dropFirst(2))
       if entry.hasPrefix("g:") {
         y = placeGroup(id, top: y, x: x, width: width, groups: groups, section: section, into: &items)

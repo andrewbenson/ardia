@@ -205,6 +205,16 @@ final class SpinnerView: NSView {
     spin()
   }
 
+  override func viewDidHide() {
+    super.viewDidHide()
+    spin()
+  }
+
+  override func viewDidUnhide() {
+    super.viewDidUnhide()
+    spin()
+  }
+
   private func recolor() {
     effectiveAppearance.performAsCurrentDrawingAppearance {
       track.strokeColor = NSColor.secondaryLabelColor.withAlphaComponent(0.18).cgColor
@@ -213,7 +223,8 @@ final class SpinnerView: NSView {
   }
 
   private func spin() {
-    guard window != nil, ring.animation(forKey: "activityRotation") == nil else { return }
+    guard window != nil, !isHiddenOrHasHiddenAncestor else { return ring.removeAnimation(forKey: "activityRotation") }
+    guard ring.animation(forKey: "activityRotation") == nil else { return }
     let turn = CABasicAnimation(keyPath: "transform.rotation.z")
     turn.fromValue = 0
     turn.toValue = 2 * Double.pi

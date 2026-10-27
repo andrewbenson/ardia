@@ -9,20 +9,20 @@ public final class SidebarView: NSView {
   public var onAction: (SidebarAction) -> Void = { _ in }
   public private(set) var pageLayout = SidebarPageLayout()
 
-  private var context: SidebarContext?
+  var context: SidebarContext?
   private let fixed = SidebarLayer()
   private let edgeLine = CALayer()
-  private let clip = SidebarLayer()
-  private let scroll = NSScrollView()
+  let clip = SidebarLayer()
+  let scroll = NSScrollView()
   private let document = SidebarDocumentView()
   private let boxes = SidebarLayer()
-  private let rows = SidebarLayer()
+  let rows = SidebarLayer()
   private let dock = SidebarLayer()
   private let dockLine = CALayer()
   private let pill = SidebarActivePill()
   private var pillShown = false
   private var dockLineShown = false
-  private var views: [String: NSView] = [:]
+  var views: [String: NSView] = [:]
   private var hoveredKey: String?
   private var hoveredGroup: String?
   private var tracking: NSTrackingArea?
@@ -68,6 +68,7 @@ public final class SidebarView: NSView {
     addSubview(pill)
     NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     DevPointer.observe(self, #selector(devPointer(_:)))
+    NotificationCenter.default.addObserver(self, selector: #selector(liveChanged), name: SidebarLiveFeed.changed, object: nil)
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -78,7 +79,7 @@ public final class SidebarView: NSView {
     let previous = context
     let moved = previous != nil && previous?.activeId != next.activeId
     context = next
-    reconcile()
+    reconcile(animated: previous != nil && canAnimate && SidebarDragController.existing(self)?.suppressesMotion != true)
     if let previous { revealChanges(from: previous, to: next) }
     if moved && !isHiddenOrHasHiddenAncestor { NotificationCenter.default.post(name: Self.selectionShown, object: self) }
   }
@@ -152,6 +153,15 @@ public final class SidebarView: NSView {
 
   public var hoverKey: String? { hoveredKey }
 
+  public func motionSample() -> [[String: Any]] {
+    rows.subviews.compactMap { view in
+      guard let row = view as? SidebarRowView, let key = row.item?.key, let layer = row.layer else { return nil }
+      let shown = layer.presentation() ?? layer
+      return ["key": key, "y": row.frame.minY, "shownY": shown.frame.minY, "alpha": Double(shown.opacity), "retired": row.retired,
+              "clip": (shown.mask?.presentation() ?? shown.mask).map { Double($0.frame.minY) } ?? NSNull()]
+    }
+  }
+
   public func hoverShifts() -> (hovered: Int, shifts: [String]) {
     let rows = views.values.compactMap { $0 as? SidebarRowView }.filter { $0.window != nil && !$0.isHidden }
     func placed() -> [String: CGRect] {
@@ -189,22 +199,32 @@ public final class SidebarView: NSView {
     }
   }
 
-  private func reconcile() {
+  private var canAnimate: Bool {
+    window != nil && !isHiddenOrHasHiddenAncestor && !pageLayout.items.isEmpty && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  }
+
+  private func reconcile(animated: Bool = false) {
     guard let context, bounds.width > 0 else { return }
     var input = SidebarLayoutInput(windowId: windowId, profileId: context.host.profileId, width: bounds.width, height: bounds.height)
     input.addressBar = context.host.addressBar
     input.newTabAtTop = context.host.newTabAtTop
     input.balanced = context.state.settings.bool("balancedTopApps")
-    let entries = context.query.entries(windowId: windowId, profileId: context.host.profileId)
+    var entries = context.query.entries(windowId: windowId, profileId: context.host.profileId)
+    if let live = SidebarLiveFeed.shared.live {
+      let blocks = SidebarLiveBlocks(live, state: context.state, windowId: windowId, profileId: context.host.profileId)
+      input.live = blocks
+      context.live = blocks
+      entries.pinned = blocks.sequence(entries.pinned)
+    }
     context.host.clear = context.showClear && !entries.list.isEmpty
     input.divided = context.host.tidy || context.host.clear
     input.incognitoBadge = context.host.addressBar && context.host.incognito
     let next = SidebarLayout(query: context.query, input: input).layout(entries)
     pageLayout = next
-    place(next, context)
+    place(next, context, animated: animated)
   }
 
-  private func place(_ layout: SidebarPageLayout, _ context: SidebarContext) {
+  private func place(_ layout: SidebarPageLayout, _ context: SidebarContext, animated: Bool) {
     let width = bounds.width
     let inset = SidebarMetrics.inset
     fixed.frame = NSRect(x: 0, y: 0, width: width, height: layout.fixedHeight)
@@ -234,6 +254,8 @@ public final class SidebarView: NSView {
       width: pillSize.width, height: pillSize.height)
 
     var seen = Set<String>()
+    var slides: [(view: NSView, to: NSRect)] = []
+    var inserted: [NSRect] = []
     for item in layout.items {
       seen.insert(item.key)
       let parent: NSView
@@ -241,12 +263,23 @@ public final class SidebarView: NSView {
       case (.fixed, _): parent = fixed
       case (.dock, _): parent = dock
       case (_, .groupBox): parent = boxes
+      case (_, .live(let key)) where key.hasPrefix(SidebarLive.prefix): parent = boxes
       default: parent = rows
       }
-      let view = views[item.key] ?? make(item.kind)
+      let known = views[item.key]
+      let view = known ?? make(item.kind)
       views[item.key] = view
-      if view.superview !== parent { parent.addSubview(view) }
-      if view.frame != item.frame { view.frame = item.frame }
+      let reparented = view.superview !== parent
+      if reparented { parent.addSubview(view) }
+      let slidesHere = animated && known != nil && !reparented && item.region == .scroll
+      if view.frame != item.frame {
+        if slidesHere && (view.frame.size == item.frame.size || parent === rows || view is LiveBoxView) {
+          slides.append((view, item.frame))
+        } else {
+          view.frame = item.frame
+        }
+      }
+      if animated && known == nil && item.region == .scroll && parent === rows { inserted.append(item.frame) }
       if let row = view as? SidebarRowView {
         row.update(item, context)
         row.hovered = hoveredKey == item.key
@@ -256,12 +289,74 @@ public final class SidebarView: NSView {
       }
     }
     for (key, view) in views where !seen.contains(key) {
-      view.removeFromSuperview()
       views[key] = nil
+      if animated && (view.superview === rows || view.superview === boxes) { retire(view) } else { view.removeFromSuperview() }
     }
     if let hoveredKey, !seen.contains(hoveredKey) { self.hoveredKey = nil }
+    if !slides.isEmpty { slide(slides, under: inserted) }
     syncEdge()
     syncPill()
+    if animated { syncPointer() }
+    SidebarDragController.placed(self)
+  }
+
+  static let slideDuration: TimeInterval = 0.14
+  static let slideCurve = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
+  static let fadeDuration: TimeInterval = 0.10
+  static let fadeCurve = CAMediaTimingFunction(controlPoints: 0, 0, 0.58, 1)
+
+  private var motion = SidebarMotion.standard
+
+  private func slide(_ moves: [(view: NSView, to: NSRect)], under inserted: [NSRect]) {
+    let timing = self.motion
+    NSAnimationContext.runAnimationGroup { motion in
+      motion.duration = timing.slide
+      motion.timingFunction = timing.slideCurve
+      for (view, to) in moves {
+        let from = view.frame
+        view.animator().frame = to
+        if to.minY > from.minY, let cover = inserted.first(where: { $0.minY <= from.minY + 0.5 && $0.maxY > from.minY + 0.5 }) {
+          clipUnder(view, from: from, to: to, edge: cover.maxY)
+        }
+      }
+    }
+  }
+
+  private func clipUnder(_ view: NSView, from: NSRect, to: NSRect, edge: CGFloat) {
+    guard let layer = view.layer else { return }
+    let mask = CALayer()
+    mask.backgroundColor = NSColor.black.cgColor
+    mask.actions = SurfaceLayer.noActions
+    let hiddenFrom = edge - from.minY
+    let hiddenTo = min(0, edge - to.minY)
+    let size = CGSize(width: to.width, height: to.height)
+    func originY(_ hidden: CGFloat) -> CGFloat { view.isFlipped ? hidden : -hidden }
+    mask.frame = CGRect(origin: CGPoint(x: 0, y: originY(hiddenTo)), size: size)
+    layer.mask = mask
+    let move = CABasicAnimation(keyPath: "position.y")
+    move.fromValue = originY(hiddenFrom) + size.height / 2
+    move.toValue = originY(hiddenTo) + size.height / 2
+    move.duration = motion.slide
+    move.timingFunction = motion.slideCurve
+    CATransaction.begin()
+    CATransaction.setCompletionBlock { [weak layer, weak mask] in
+      if let layer, layer.mask === mask { layer.mask = nil }
+    }
+    mask.add(move, forKey: "clip")
+    CATransaction.commit()
+  }
+
+  private func retire(_ view: NSView) {
+    (view as? SidebarRowView)?.retire()
+    view.superview?.addSubview(view, positioned: .below, relativeTo: nil)
+    let timing = self.motion
+    NSAnimationContext.runAnimationGroup { motion in
+      motion.duration = timing.fade
+      motion.timingFunction = timing.fadeCurve
+      view.animator().alphaValue = 0
+    } completionHandler: {
+      MainActor.assumeIsolated { view.removeFromSuperview() }
+    }
   }
 
   private func groupId(_ kind: SidebarItemKind) -> String? {
@@ -279,7 +374,15 @@ public final class SidebarView: NSView {
     case .divider: DividerRowView()
     case .tile, .folder: TileView()
     case .incognito: IncognitoBadgeView()
+    case .live(let key): SidebarLiveViews.make(key)
     }
+  }
+
+  @objc private func liveChanged() {
+    guard let context else { return }
+    motion = SidebarLiveFeed.shared.motion
+    update(state: context.state, host: context.host)
+    motion = .standard
   }
 
   @objc private func scrolled() {
@@ -373,7 +476,7 @@ public final class SidebarView: NSView {
     if pillShown, pill.bounds.contains(pill.convert(windowPoint, from: nil)) { return nil }
     for container in [dock, fixed, rows] {
       if container === rows, !clip.bounds.contains(clip.convert(windowPoint, from: nil)) { continue }
-      for case let row as SidebarRowView in container.subviews.reversed() where !row.isHidden {
+      for case let row as SidebarRowView in container.subviews.reversed() where !row.isHidden && !row.retired {
         if row.bounds.contains(row.convert(windowPoint, from: nil)) { return row }
       }
     }
@@ -414,6 +517,7 @@ public final class SidebarView: NSView {
   }
 
   private func setHover(_ row: SidebarRowView?, group: String?) {
+    if SidebarDragController.existing(self)?.active == true { return }
     let key = row?.item?.key
     if key != hoveredKey {
       if let old = hoveredKey, let view = views[old] as? SidebarRowView { view.hovered = false }

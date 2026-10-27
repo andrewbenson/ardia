@@ -132,7 +132,7 @@ const attaching = argv[0] === "--attach";
 if (attaching) argv.shift();
 const keep = flag("--keep") || attaching;
 const audioOutputOf = (browserPid) => {
-  const utilities = execFileSync("ps", ["-A", "-ww", "-o", "ppid=,command="], { encoding: "utf8" }).split("\n")
+  const utilities = execFileSync("ps", ["-A", "-ww", "-o", "ppid=,command="], { encoding: "utf8", maxBuffer: 64 << 20 }).split("\n")
     .filter((line) => line.trim().split(/\s+/)[0] === String(browserPid) && line.includes("--type=utility"));
   if (!utilities.length) return null;
   return utilities.some((line) => line.includes(" --disable-audio-output")) ? "fake" : "speakers";
@@ -747,6 +747,7 @@ try {
     }, 90000);
     if (info.engine !== "ardiacore") throw new Error(`engine ${info.engine}`);
     const s = await until("a window", async () => ((await state()).windowId ? state() : null), 30000);
+    await evalApp(`ac.store.getState().updateSettings({ warnBeforeQuitting: false }); return true`);
     const front = execFileSync("lsappinfo", ["front"]).toString();
     const asn = execFileSync("lsappinfo", ["info", "-only", "pid", front.trim()]).toString();
     if (asn.includes(`=${child.pid}`)) throw new Error("the app took focus");
@@ -1041,7 +1042,7 @@ try {
     await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
     await until("A shown", async () => (await state()).active === first.id);
     await evalApp(`ac.store.getState().navigate("${first.id}", "chrome://version", { userInitiated: true }); return true`);
-    await until("chrome://version", async () => (await state()).tabs.find((t) => t.id === first.id && /^(chrome|ardia):\/\/version/.test(t.url ?? "") && t.title === "About Version"), 20000);
+    await until("chrome://version", async () => (await state()).tabs.find((t) => t.id === first.id && /^(chrome|ardia|solara):\/\/version/.test(t.url ?? "") && t.title === "About Version"), 20000);
     try {
       const t = await pageFor(first.id, "chrome://version");
       const text = (await cdp(t, "Runtime.evaluate", { expression: "document.body?.innerText ?? ''", returnByValue: true })).result?.value ?? "";

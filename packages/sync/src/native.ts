@@ -18,7 +18,8 @@ export type PhraseResult =
   | { error: "checksum" }
   | { error: "noData" }
   | { error: "mismatch" }
-  | { error: "keychain" };
+  | { error: "keychain" }
+  | { error: "interrupted" };
 
 export type SavedLogin = { origin: string; url: string; username: string; password: string; created: number };
 

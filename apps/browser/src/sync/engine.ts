@@ -215,23 +215,35 @@ async function loadState(loading: number): Promise<boolean> {
   }
   journalOnDisk = Object.keys(journal).length > 0;
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
+  const revived = new Map<string, number>();
   for (const link of Object.values(doc.profiles)) {
     const scope = `p:${link.syncId}`;
     const retired = doc.retired;
     const floor = retired?.[scope];
     if (!retired || floor === undefined) continue;
     doc.seqs = { ...doc.seqs, [scope]: Math.max(doc.seqs?.[scope] ?? 0, floor) };
+    revived.set(scope, floor);
     delete retired[scope];
     if (!Object.keys(retired).length) delete doc.retired;
   }
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
     if (doc.retired?.[scope] !== undefined) continue;
     const mine = (journal[scope] ?? []).filter((f) => f.device === doc.deviceId);
+    const floor = revived.get(scope);
+    if (floor !== undefined) renumberBelow(mine, floor);
     restoreJournal((scopes[scope] ??= emptyScope()), mine, clock, doc.seqs?.[scope]);
   }
+  if (revived.size && Object.keys(journal).length) void persistJournal([...revived.keys()][0]!)([]).catch(() => {});
   if (doc.deviceId && Object.keys(journal).length) doc.clock = clock.last;
   doc.scopes = scopes;
   return true;
+}
+
+function renumberBelow(batches: LogFile[], floor: number) {
+  const below = batches.filter((f) => f.seq <= floor).sort((a, z) => a.seq - z.seq);
+  let next = Math.max(floor, ...batches.map((f) => f.seq));
+  for (const file of below) file.seq = ++next;
+  batches.sort((a, z) => a.seq - z.seq);
 }
 
 const persistJournal = (scope: string) => async (batches: LogFile[]) => {
@@ -672,9 +684,10 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
 async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: string, text: string): Promise<PhraseResult> {
   const unlocking = generation;
   const result = await native.enterPhrase(doc.deviceId!, text, doc.folder ?? folder);
-  if (!("ok" in result) || unlocking !== generation) return result;
+  if (!("ok" in result)) return result;
+  if (unlocking !== generation) return { error: "interrupted" };
   try {
-    if (!(await loadState(unlocking))) return result;
+    if (!(await loadState(unlocking)) || unlocking !== generation) return { error: "interrupted" };
   } catch (error) {
     if (unlocking === generation) showLocked(error);
     return { error: "keychain" };
@@ -822,7 +835,7 @@ export function startSync() {
       .then(async (ok) => {
         if (unlocking !== generation) return;
         if (!ok) return showLocked();
-        if (!(await loadState(unlocking))) return;
+        if (!(await loadState(unlocking)) || unlocking !== generation) return;
         loaded = true;
         settleAppliedThemes(doc.scopes[APP_SCOPE]);
         publishUi();

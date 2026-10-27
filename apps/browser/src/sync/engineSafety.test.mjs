@@ -693,3 +693,59 @@ test("B22: a saved state whose records or batches hold entries of another shape 
   assert.equal(engine.useSync.getState().status, "updated");
   assertNoSeqReused();
 });
+
+test("B23: batches an older build journaled for a re-added scope below the retired floor go out again under new seqs", async () => {
+  reset();
+  const engine = await launch();
+  engine.startSync();
+  const work = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [work]: true } });
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await engine.syncNow();
+  for (let i = 0; i < 3; i++) {
+    S().addBookmark({ profileId: work, url: `https://w${i}.example/`, title: `W${i}` });
+    await engine.syncNow();
+  }
+  await settle();
+  const syncId = engine.useSync.getState().profiles[work].syncId;
+  const scope = `p:${syncId}`;
+  S().deleteProfile(work);
+  await engine.syncNow();
+  await engine.syncNow();
+  await settle();
+  const saved = JSON.parse(shell.docs.get("sync.json"));
+  const floor = saved.retired[scope];
+  const again = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [again]: true } });
+  const older = { v: 1, kind: "log", device: saved.deviceId, seq: 1, at: Date.now(), ops: [{ k: "bm:older", h: "0zzzzzzzz.0000.older", v: { k: "u", p: "bar", t: "Older", u: "https://older.example/", a: 1, pos: "m" } }] };
+  shell.docs.set("sync.json", JSON.stringify({ ...saved, profiles: { ...saved.profiles, [again]: { syncId, enabled: true } }, seqs: { ...saved.seqs, [scope]: 0 } }));
+  shell.docs.set("sync-journal.nns", `sealed:${JSON.stringify({ journal: { [scope]: [older] } })}`);
+  const next = await launch();
+  next.startSync();
+  await settle();
+  await next.syncNow();
+  await settle();
+  const out = files().filter((f) => f.scope === scope && f.file.kind === "log" && f.file.ops.some((op) => op.k === "bm:older" && op.h === "0zzzzzzzz.0000.older"));
+  assert.ok(out.length && out.every((f) => f.file.seq > floor), `the older batch goes out above the floor (${floor}): ${out.map((f) => f.file.seq)}`);
+  assertNoSeqReused();
+});
+
+test("B24: a phrase unlock overtaken by stopping and turning sync on again says so instead of reporting success", async () => {
+  reset();
+  await onAndSynced();
+  fake.unlockResult = false;
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  fake.unlockResult = true;
+  let open;
+  fake.phraseGate = new Promise((resolve) => (open = resolve));
+  const phrase = engine.enterRecoveryPhrase("/sync", "words");
+  await settle();
+  await engine.stopSync();
+  await settle();
+  fake.phraseGate = null;
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  open();
+  assert.deepEqual(await phrase, { error: "interrupted" });
+});

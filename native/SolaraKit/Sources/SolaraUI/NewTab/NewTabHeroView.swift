@@ -194,6 +194,7 @@ public final class NewTabHeroView: NSView {
     } else {
       let hosting = NSHostingView(rootView: view)
       hosting.sizingOptions = []
+      hosting.safeAreaRegions = []
       surface.addSubview(hosting)
       content = hosting
     }
@@ -204,6 +205,7 @@ public final class NewTabHeroView: NSView {
     let view = AnyView(IncognitoHeadingView { [weak self] h in self?.setHeadingHeight(h) }.environment(\.newTab, environment()))
     let hosting = NSHostingView(rootView: view)
     hosting.sizingOptions = []
+    hosting.safeAreaRegions = []
     addSubview(hosting)
     heading = hosting
   }

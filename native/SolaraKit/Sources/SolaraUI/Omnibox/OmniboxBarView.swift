@@ -100,6 +100,7 @@ public final class OmniboxBarView: NSView {
     } else {
       let hosting = NSHostingView(rootView: view)
       hosting.sizingOptions = []
+      hosting.safeAreaRegions = []
       addSubview(hosting)
       content = hosting
     }

@@ -181,3 +181,234 @@ test("device tabs over random windows, tabs and peeks", () => {
     adapters.deviceTabsAdapter("default", "dev1", () => "Mac", k.chance(0.1)).extract();
   }
 });
+
+const pinned = await import("../../src/sync/pinned.ts");
+const tileFolders = await import("../../src/store/tileFolders.ts");
+const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+
+const PIN_URLS = ["https://mail.example/", "https://cal.example/inbox", "https://docs.example/", "https://news.example/#top", "netnyahoo://settings", "https://row.example/", ""];
+const POSITIONS = ["V", "l", "t", "x", "z", "0", "a0", "Vk", "", "zz", "A", "￿", "V0", "lV"];
+const GROUP_COLORS = ["blue", "red", "none", "grey", null, undefined, "chartreuse"];
+const dropUndefined = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+const pinKey = (x) => x.pinKey ?? x.id;
+
+function pinnedWorld(k) {
+  S().hydrate({});
+  const profiles = ["default", ...(k.chance(0.3) ? [S().createProfile({ name: "Work" })] : [])];
+  const windows = [S().createWindow()];
+  if (k.chance(0.4)) windows.push(S().createWindow());
+  if (profiles.length > 1 && k.chance(0.6)) windows.push(S().createWindow({ profileId: profiles[1] }));
+  for (const w of windows) {
+    const ids = Array.from({ length: k.pick([2, 3, 5, 8]) }, () => S().newTab(w, { url: k.pick(PIN_URLS.filter(Boolean)), background: true }));
+    const live = () => ids.filter((id) => S().tabs[id]);
+    const tiles = k.some(live(), 0.5);
+    if (tiles.length) S().pinTabs(tiles, true);
+    const rows = k.some(live().filter((id) => !S().tabs[id]?.pinned), 0.4);
+    if (rows.length) S().pinTabs(rows, true, true);
+    const loose = live().filter((id) => !S().tabs[id]?.pinned);
+    if (loose.length >= 1 && k.chance(0.7)) {
+      const groupId = S().groupTabs(k.some(loose, 0.6).slice(0, 3).concat(loose[0]).filter((id, i, a) => a.indexOf(id) === i), { pinned: true, name: k.pick(["Work", "", "Ünï"]) });
+      if (groupId && S().groups[groupId] && k.chance(0.4)) S().newNestedGroup(groupId);
+      if (groupId && S().groups[groupId] && k.chance(0.4)) S().updateGroup(groupId, { color: k.pick(["none", "blue", "red"]) });
+    }
+    const left = live().filter((id) => !S().tabs[id]?.pinned && !Object.values(S().groups).some((g) => g.tabIds.includes(id)));
+    if (left.length >= 2 && k.chance(0.3)) S().groupTabs(left.slice(0, 2), { pinned: false, name: "Loose" });
+    const tileIds = live().filter((id) => S().tabs[id]?.pinned && !S().tabs[id].pinnedAsRow);
+    if (tileIds.length >= 2 && k.chance(0.5)) useBrowser.setState(tileFolders.newTileFolder(S(), tileIds.slice(0, k.pick([2, 3])), k.pick(["", "Reading"])).state, true);
+    for (const id of live()) {
+      if (k.chance(0.2)) S().updateTab(id, { customTitle: k.pick(["Mine", "", null]) });
+      if (k.chance(0.15)) S().updateTab(id, { unloaded: true });
+    }
+  }
+  const foldered = Object.values(S().tabs).filter((t) => t.tileFolder);
+  if (foldered.length && k.chance(0.5)) {
+    const t = k.pick(foldered);
+    useBrowser.setState({ tabs: { ...S().tabs, [t.id]: { ...t, tileFolder: { ...t.tileFolder, name: k.pick(["Later", "Earlier"]), renamedAt: k.pick([1, 5, 1e15]) } } } });
+  }
+  if (windows.length > 1 && k.chance(0.35)) S().closeWindow(k.pick(windows));
+  if (k.chance(0.25)) S().closeWindow(windows[0]);
+  return { profiles };
+}
+
+function worldKeys(k) {
+  const s = S();
+  const tabKeys = [...new Set(Object.values(s.tabs).map(pinKey)), ...Object.values(s.parkedPins).flatMap((p) => p.tabs.map((t) => t.id))];
+  const groupKeys = [...new Set(Object.values(s.groups).map(pinKey)), ...Object.values(s.parkedPins).flatMap((p) => p.groups.map((g) => g.id))];
+  const folderIds = [...new Set([...Object.values(s.tabs).map((t) => t.tileFolder?.id), ...Object.values(s.parkedPins).flatMap((p) => p.tabs.map((t) => t.tileFolder?.id))].filter(Boolean))];
+  return { tabKeys: [...tabKeys, "ghost-tab", "ghost-two"], groupKeys: [...groupKeys, "ghost-group", "5"], folderIds: [...folderIds, "tf-ghost"] };
+}
+
+function pinRecords(k, keys) {
+  const { tabKeys, groupKeys, folderIds } = keys;
+  const groupRef = () => k.pick([...groupKeys, null, undefined, 5, "", "ghost-group"]);
+  const entries = [];
+  for (const key of k.some(tabKeys, 0.6)) {
+    entries.push([`pin:t:${key}`, dropUndefined({ g: groupRef(), u: k.pick(PIN_URLS), t: k.pick([null, "Mine", undefined]), i: k.pick([null, "🙂", undefined]), ti: k.pick(["", "Title"]), pos: k.pick(POSITIONS) })]);
+    if (k.chance(0.25)) entries.push([`pinn:t:${key}`, dropUndefined({ g: groupRef() })]);
+    if (k.chance(0.4)) entries.push([`pinrow:${key}`, k.pick([1, 0, 2, "1", null])]);
+    if (k.chance(0.3)) entries.push([`tilefold:${key}`, k.pick([{ f: k.pick(folderIds) }, { f: 5 }, {}, null, "x", { f: "" }])]);
+    if (k.chance(0.3)) entries.push([`pgh:${key}`, k.pick(["https://home.example/", "", 5, null, {}, "netnyahoo://home"])]);
+  }
+  for (const key of k.some(groupKeys, 0.6)) {
+    if (k.chance(0.7)) entries.push([`pin:g:${key}`, dropUndefined({ n: k.pick(["Work", "", "Ünï"]), i: k.pick([null, "📁", undefined]), c: k.pick(GROUP_COLORS), pos: k.pick(POSITIONS) })]);
+    if (k.chance(0.4)) entries.push([`pinn:g:${key}`, dropUndefined({ n: k.pick(["Inner", ""]), i: k.pick([null, undefined]), c: k.pick(GROUP_COLORS), p: k.pick([...groupKeys, key, 5, undefined]) })]);
+    if (k.chance(0.3)) entries.push([`pgc:${key}`, k.pick(["none", "blue", null, 5, {}])]);
+    if (k.chance(0.4)) entries.push([`pord:g:${key}`, k.pick([{ a: k.pick([...tabKeys, null]) }, { a: 5 }, {}, 5, null, "x"])]);
+  }
+  for (const id of k.some(folderIds, 0.5)) entries.push([`tilefold:n:${id}`, k.pick([{ n: "Named" }, { n: 5 }, {}, null, { n: "" }])]);
+  return entries;
+}
+
+function pinBase(k, keys) {
+  const { tabKeys, groupKeys, folderIds } = keys;
+  const base = new Map();
+  for (const key of k.some(tabKeys, 0.5)) {
+    base.set(`pin:t:${key}`, dropUndefined({ g: k.pick([null, undefined, ...groupKeys]), pos: k.pick([...POSITIONS, undefined, null]), u: "https://old.example/" }));
+    if (k.chance(0.4)) base.set(`pinrow:${key}`, k.pick([1, 0]));
+    if (k.chance(0.3)) base.set(`pgh:${key}`, k.pick(["https://home.example/", "", 5]));
+    if (k.chance(0.3)) base.set(`tilefold:${key}`, k.pick([{ f: k.pick(folderIds) }, {}, null]));
+  }
+  for (const key of k.some(groupKeys, 0.5)) {
+    base.set(`pin:g:${key}`, dropUndefined({ pos: k.pick([...POSITIONS, undefined]), n: "Old" }));
+    if (k.chance(0.3)) base.set(`pgc:${key}`, k.pick(["none", "blue"]));
+    if (k.chance(0.4)) base.set(`pord:g:${key}`, k.pick([{ a: k.pick([...tabKeys, null]) }, {}, { a: 5 }]));
+  }
+  for (const id of k.some(folderIds, 0.5)) base.set(`tilefold:n:${id}`, k.pick([{ n: "Synced" }, { n: 5 }, {}]));
+  return base;
+}
+
+function pinChoicesFor(k, keys, profiles) {
+  const { tabKeys, groupKeys } = keys;
+  const mine = () =>
+    Object.fromEntries(
+      [...k.some(tabKeys, 0.2).map((key) => k.pick([`place:${key}`, key])), ...k.some(groupKeys, 0.2).map((key) => k.pick([`group:${key}`, `order:${key}`]))].map((c, i) => [c, 100 + i]),
+    );
+  const pinChoices = Object.fromEntries(profiles.filter(() => k.chance(0.5)).map((p) => [p, mine()]));
+  const pinSync = Object.fromEntries(
+    profiles.filter(() => k.chance(0.4)).map((p) => [p, Object.fromEntries(k.some(tabKeys, 0.3).map((key) => [key, k.pick([{ g: k.pick(groupKeys) ?? "x", w: k.pick([0, 5, 1e15]) }, { g: k.pick(groupKeys) ?? "x" }, {}])]))]),
+  );
+  useBrowser.setState({ pinChoices, pinSync });
+}
+
+const PINNED_FACTORIES = ["tileFoldersAdapter", "pinnedRowsAdapter", "pinnedOrderAdapter", "groupLooksAdapter", "pinnedHomesAdapter", "pinnedAdapter"];
+
+function attempt(fn) {
+  try {
+    return fn();
+  } catch (error) {
+    if (process.env.ADAPTER_FUZZ_LOUD) console.error(`pinned fuzz: ${error?.stack ?? error}`);
+    return undefined;
+  }
+}
+
+const PIN_BATCH = 5;
+
+function pinnedRun(run) {
+  {
+    const k = kit(17000 + run);
+    const { profiles } = pinnedWorld(k);
+    const keys = worldKeys(k);
+    pinChoicesFor(k, keys, profiles);
+    const profileId = k.pick(profiles);
+    const base = pinBase(k, keys);
+    const records = pinRecords(k, keys);
+    const remote = new Map(records.filter(() => k.chance(0.7)));
+    for (const key of k.some([...base.keys()], 0.2)) remote.set(key, null);
+    const known = new Set([...base.keys(), ...records.map(([key]) => key)].filter(() => k.chance(0.5)));
+    const stamps = new Map([...base.keys(), ...records.map(([key]) => key)].filter(() => k.chance(0.5)).map((key) => [key, k.pick(["0001", "0002-b", "0003", "0002-a", "0010"])]));
+    const now = k.pick([0, 5, 1e15]);
+    for (const name of PINNED_FACTORIES) {
+      const adapter = pinned[name](profileId);
+      const extraction = attempt(() =>
+        adapter.extract((key) => base.get(key), (key) => key.length % 3 === 0, now, (key) => known.has(key), (key) => remote.get(key), (key) => stamps.get(key)),
+      );
+      if (extraction) {
+        for (const [key] of k.some(records, 0.3)) {
+          extraction.ignore?.(key);
+          extraction.republish?.(key);
+        }
+        if (extraction.published && k.chance(0.5)) attempt(() => extraction.published(new Set([...extraction.values.keys()].filter(() => k.chance(0.6)))));
+      }
+      const prefix = adapter.prefix;
+      const mine = records.filter(([key]) => key.startsWith(prefix));
+      const visible = new Map(mine.filter(() => k.chance(0.8)));
+      const changed = new Set([...k.some(mine, 0.7).map(([key]) => key), ...k.some([...base.keys()].filter((key) => key.startsWith(prefix)), 0.3)]);
+      if (k.chance(0.1)) changed.clear();
+      attempt(() => adapter.apply(visible, changed, (key) => base.get(key), { known: (key) => known.has(key), now, horizon: k.pick([0, 1000, 7776000000]), joined: k.chance(0.2) }));
+    }
+  }
+}
+
+for (let batch = 0; batch < Math.ceil((RUNS * 2) / PIN_BATCH); batch++) {
+  test(`pinned area: extract and apply over random pins, groups, folders, rows and records, batch ${batch}`, () => {
+    for (let run = batch * PIN_BATCH; run < Math.min(RUNS * 2, (batch + 1) * PIN_BATCH); run++) pinnedRun(run);
+  });
+}
+
+class FuzzFolder {
+  files = new Map();
+  counter = 0;
+  transport() {
+    return {
+      write: async (scope, payload) => {
+        const id = `f${++this.counter}`;
+        this.files.set(id, { scope, payload });
+        return id;
+      },
+      read: async (scope, known) => {
+        const shown = [...this.files].filter(([, f]) => f.scope === scope);
+        return { files: shown.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload })), pending: [], damaged: [], present: shown.map(([id]) => id) };
+      },
+      remove: async (_scope, ids) => ids.forEach((id) => this.files.delete(id)),
+    };
+  }
+}
+
+async function pinnedPair(run) {
+  {
+    const k = kit(21000 + run);
+    const folder = new FuzzFolder();
+    const devices = ["a", "b"].map((id, i) => {
+      if (i === 0) pinnedWorld(k);
+      else S().hydrate({});
+      return { id, browser: S(), scope: emptyScope(), clock: new Clock(id) };
+    });
+    const sync = async (d) => {
+      useBrowser.setState(d.browser, true);
+      try {
+        await syncScope({ scope: "p", state: d.scope, transport: folder.transport(), adapters: pinned.pinnedAreaAdapters("default"), clock: d.clock, device: d.id });
+      } catch (error) {
+        if (process.env.ADAPTER_FUZZ_LOUD) console.error(`pinned sync fuzz: ${error?.stack ?? error}`);
+      } finally {
+        d.browser = S();
+      }
+    };
+    for (let round = 0; round < 4; round++) {
+      const d = k.pick(devices);
+      useBrowser.setState(d.browser, true);
+      const s = S();
+      const w = s.windowOrder.find((id) => !s.windows[id]?.incognito) ?? S().createWindow();
+      const tabs = (S().windows[w]?.tabIds ?? []).filter((id) => S().tabs[id]?.profileId === "default");
+      attempt(() => {
+        const pick = k.pick(tabs);
+        switch (k.pick(["pin", "row", "unpin", "group", "color", "folder", "rename", "new"])) {
+          case "pin": if (pick) S().pinTabs([pick], true); break;
+          case "row": if (pick) S().pinTabs([pick], true, true); break;
+          case "unpin": if (pick) S().pinTabs([pick], false); break;
+          case "group": if (tabs.length >= 2) S().groupTabs(tabs.slice(-2), { pinned: true, name: "Synced" }); break;
+          case "color": { const g = Object.values(S().groups).find((x) => x.pinned); if (g) S().updateGroup(g.id, { color: k.pick(["none", "blue"]) }); break; }
+          case "folder": { const t = tabs.filter((id) => S().tabs[id]?.pinned && !S().tabs[id].pinnedAsRow); if (t.length >= 2) useBrowser.setState(tileFolders.newTileFolder(S(), t.slice(0, 2), "F").state, true); break; }
+          case "rename": { const t = tabs.find((id) => S().tabs[id]?.tileFolder); if (t) useBrowser.setState(tileFolders.renameTileFolder(S(), w, S().tabs[t].tileFolder.id, k.pick(["Renamed", "Other"])), true); break; }
+          default: S().newTab(w, { url: k.pick(PIN_URLS.filter(Boolean)), background: true });
+        }
+      });
+      d.browser = S();
+      await sync(d);
+      await sync(k.pick(devices));
+    }
+  }
+}
+
+for (let run = 0; run < Math.max(2, Math.floor(RUNS / 4)); run++) {
+  test(`pinned area: two Macs edit pins at random and sync, run ${run}`, () => pinnedPair(run));
+}

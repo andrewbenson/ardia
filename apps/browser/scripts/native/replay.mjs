@@ -143,7 +143,13 @@ function readMemory() {
     lastTabKeepsWindow: globalThis.__replayNewTabBar?.read() ?? false,
     fromSyncDepth: globalThis.__replayOrderChoices?.read() ?? 0,
     ...(globalThis.__replayChromeTabs ? { chromeTabs: plain(globalThis.__replayChromeTabs.read()) } : {}),
+    ...tileFolderMemory(),
   };
+}
+
+function tileFolderMemory() {
+  const folders = globalThis.__replayLocalFolders?.() ?? {};
+  return Object.keys(folders).length ? { tileFolders: folders } : {};
 }
 
 function readConfig() {
@@ -280,7 +286,10 @@ async function record(file) {
       const loaded = next(url, context);
       if (phase === "adapters" && (url.endsWith("/src/sync/adapters.ts") || url.endsWith("/src/sync/pinned.ts")) && loaded.source != null) {
         const text = typeof loaded.source === "string" ? loaded.source : new TextDecoder().decode(loaded.source);
-        return { ...loaded, source: instrumentAdapters(text) };
+        const exposed = url.endsWith("/src/sync/pinned.ts")
+          ? "\nglobalThis.__replayLocalFolders = () => Object.fromEntries([...localFolders].map(([profileId, ids]) => [profileId, [...ids]]));\n"
+          : "";
+        return { ...loaded, source: instrumentAdapters(text) + exposed };
       }
       const rule = INSTRUMENT.find(([suffix]) => url.endsWith(suffix));
       if (!rule || loaded.source == null) return loaded;
@@ -659,7 +668,10 @@ async function record(file) {
               republish: asked("republish", r.republish),
               published: typeof r.published === "function" ? (keys) => {
                 c.published = [...keys];
-                return r.published(keys);
+                const before = plain(useBrowser.getState().pinChoices ?? null);
+                const out = r.published(keys);
+                c.publishedChoices = { before, after: plain(useBrowser.getState().pinChoices ?? null) };
+                return out;
               } : r.published,
             };
           };

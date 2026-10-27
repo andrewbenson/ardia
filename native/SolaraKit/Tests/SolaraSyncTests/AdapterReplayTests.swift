@@ -121,7 +121,7 @@ final class Lookups: @unchecked Sendable {
 
 func readArgument(_ args: [JSONValue], _ i: Int) -> JSONValue? { i < args.count ? args[i]["read"] : nil }
 
-func makeAdapter(_ name: String, _ args: [JSONValue], _ store: Store, _ adopted: @escaping (String) -> Void) -> SyncAdapter? {
+func makeAdapter(_ name: String, _ args: [JSONValue], _ store: Store, _ adopted: @escaping (String) -> Void, folders: TileFolderMemory = TileFolderMemory()) -> SyncAdapter? {
   let links = { (readArgument(args, 0)?.object).map { JSMap($0.map { ($0.key, $0.value) }) } ?? JSMap() }
   switch name {
   case "settingsAdapter": return SettingsAdapter(store: store)
@@ -139,6 +139,12 @@ func makeAdapter(_ name: String, _ args: [JSONValue], _ store: Store, _ adopted:
     return DeviceTabsAdapter(
       store: store, profileId: args[0].string ?? "", deviceId: args[1].string ?? "", name: { deviceName }, retired: args.count > 3 && args[3].truthy)
   case "developerModeAdapter": return DeveloperModeAdapter(store: store, profileId: args[0].string ?? "")
+  case "pinnedAdapter": return PinnedAdapter(store: store, profileId: args[0].string ?? "")
+  case "pinnedOrderAdapter": return PinnedOrderAdapter(store: store, profileId: args[0].string ?? "")
+  case "pinnedRowsAdapter": return PinnedRowsAdapter(store: store, profileId: args[0].string ?? "")
+  case "groupLooksAdapter": return GroupLooksAdapter(store: store, profileId: args[0].string ?? "")
+  case "pinnedHomesAdapter": return PinnedHomesAdapter(store: store, profileId: args[0].string ?? "")
+  case "tileFoldersAdapter": return TileFoldersAdapter(store: store, profileId: args[0].string ?? "", folders: folders)
   default: return nil
   }
 }
@@ -155,9 +161,13 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
     }(), clock: { now })
   var adopted: [JSONValue] = []
   let name = json["adapter"]?["name"]?.string ?? ""
-  guard let adapter = makeAdapter(name, json["adapter"]?["args"]?.array ?? [], store, { adopted.append([.string($0)]) }) else { return .some(nil) }
+  var held: [String: [String]] = [:]
+  for (profileId, ids) in json["memory"]?["tileFolders"]?.object ?? [:] { held[profileId] = ids.array?.compactMap(\.string) ?? [] }
+  let folders = TileFolderMemory(held)
+  guard let adapter = makeAdapter(name, json["adapter"]?["args"]?.array ?? [], store, { adopted.append([.string($0)]) }, folders: folders) else { return .some(nil) }
   let lookups = Lookups(json["lookups"])
   var problems: [String] = []
+  var stateChecked = false
   if json["call"] == "extract" {
     let context = ExtractContext(
       base: { lookups.value("base", $0) }, queued: { lookups.flag("queued", $0) }, now: json["at"]?.number ?? 0, known: { lookups.flag("known", $0) },
@@ -183,7 +193,22 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
           problems.append("\(kind)(\(key)): swift \(answer.map(String.init) ?? "no function") vs js \(parts[2].text())")
         }
       }
-      if let published = json["published"]?.array?.compactMap(\.string) { extraction.published?(published) }
+      if let d = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { problems.append("state after: \(d)") }
+      stateChecked = true
+      if let published = json["published"]?.array?.compactMap(\.string) {
+        if let choices = json["publishedChoices"] {
+          try store.dispatch(Command("applyState", [["pinChoices": choices["before"] ?? .null]]))
+          extraction.published?(published)
+          if let d = adapterDifference(store.state.stateJSON["pinChoices"] ?? .null, choices["after"] ?? .null) { problems.append("pin choices after published: \(d)") }
+        } else {
+          extraction.published?(published)
+        }
+      }
+      if let recorded = json["memoryAfter"]?["tileFolders"]?.object {
+        var want: [String: [String]] = [:]
+        for (profileId, ids) in recorded { want[profileId] = ids.array?.compactMap(\.string) ?? [] }
+        if folders.snapshot != want { problems.append("tile folders: swift \(folders.snapshot) vs js \(want)") }
+      }
     } else if !(expected?.isNull ?? true) {
       problems.append("extract: swift returned nothing, js returned \(expected!.text().prefix(300))")
     }
@@ -200,7 +225,8 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
     let got = result.map(JSONValue.bool) ?? .null
     if got != expected { problems.append("result: swift \(got.text()) vs js \(expected.text())") }
   }
-  if let d = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { problems.append("state after: \(d)") }
+  if !stateChecked, let d = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { problems.append("state after: \(d)") }
+  if let d = memoryDifference(store.memory, json["memoryAfter"]) { problems.append("memory after: \(d)") }
   if let callbacks = json["callbacks"], JSONValue.array(adopted) != callbacks { problems.append("adopted: swift \(JSONValue.array(adopted).text()) vs js \(callbacks.text())") }
   if !lookups.missed.isEmpty { problems.append("asked what js didn't: \(lookups.missed.prefix(4).joined(separator: ", "))") }
   return .some(problems.isEmpty ? nil : problems.joined(separator: "; "))
@@ -241,6 +267,25 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
 }
 
 func makeAdapterName(_ json: JSONObject) -> Bool {
-  ["settingsAdapter", "profilesAdapter", "profileThemesAdapter", "sharedDataAdapter", "deviceAdapter", "deviceTabsAdapter", "developerModeAdapter"]
-    .contains(json["adapter"]?["name"]?.string ?? "")
+  [
+    "settingsAdapter", "profilesAdapter", "profileThemesAdapter", "sharedDataAdapter", "deviceAdapter", "deviceTabsAdapter", "developerModeAdapter",
+    "pinnedAdapter", "pinnedOrderAdapter", "pinnedRowsAdapter", "groupLooksAdapter", "pinnedHomesAdapter", "tileFoldersAdapter",
+  ].contains(json["adapter"]?["name"]?.string ?? "")
+}
+
+func memoryDifference(_ memory: StoreMemory, _ recorded: JSONValue?) -> String? {
+  guard let recorded, recorded.object != nil else { return nil }
+  var out: [String] = []
+  if let n = recorded["counter"]?.number, Double(memory.ids.counter) != n { out.append("counter swift \(memory.ids.counter) vs js \(jsNumberText(n))") }
+  if let n = recorded["navSeq"]?.number, Double(memory.navSeq) != n { out.append("navSeq swift \(memory.navSeq) vs js \(jsNumberText(n))") }
+  if let n = recorded["lastPinChoice"]?.number, memory.lastPinChoice != n { out.append("lastPinChoice swift \(jsNumberText(memory.lastPinChoice)) vs js \(jsNumberText(n))") }
+  if let n = recorded["fromSyncDepth"]?.number, Double(memory.fromSyncDepth) != n { out.append("fromSyncDepth swift \(memory.fromSyncDepth) vs js \(jsNumberText(n))") }
+  if let deletions = recorded["remotePinDeletions"]?.object {
+    var want = JSMap<Double>()
+    for (k, v) in deletions { want[k] = v.number ?? 0 }
+    if want.keys.sorted() != memory.remotePinDeletions.keys.sorted() || want.keys.contains(where: { want[$0] != memory.remotePinDeletions[$0] }) {
+      out.append("remotePinDeletions swift \(memory.remotePinDeletions.map { "\($0.key)=\(jsNumberText($0.value))" }) vs js \(want.map { "\($0.key)=\(jsNumberText($0.value))" })")
+    }
+  }
+  return out.isEmpty ? nil : out.joined(separator: ", ")
 }

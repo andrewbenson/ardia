@@ -322,6 +322,14 @@ Saved passwords are Chrome's (its password manager).
   (`ChromiumSecrets`, `packages/import`). Chrome's key is its "Ardia Safe Storage" item, or
   the mock keychain's where ArdiaCoreHost uses that (test instances, ad hoc builds). No Touch ID prompt is needed each cycle, and no
   Chromium change.
+  - The reader copies `Login Data` and its `-journal` and `-wal` (Chrome holds the file with an
+    exclusive lock, so no second connection can read it). A copy taken while Chrome commits could
+    hold half a transaction, and missing logins would read as deletions. So the copy is kept only
+    when the files' sizes and modification times are the same before and after it, and otherwise
+    retried, 50 times 20 ms apart, before the read gives up. On a volume with whole-second times
+    (HFS+) that check can't see a commit in the same second, so the files are copied twice and the
+    two copies must match byte for byte (`SQLiteSnapshot.copyUnchanged`, in packages/import and
+    the native port's SolaraImport).
 - **Writing.** Writes go through Chrome's API (`savePassword`, `deletePassword` in
   `@ardia/ardiacore`), so Chrome's in-memory store and autofill see them at once. A changed
   password is a delete plus an add: the update API needs the device check.

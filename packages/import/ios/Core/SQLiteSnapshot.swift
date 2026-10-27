@@ -5,7 +5,7 @@ final class SQLiteSnapshot {
   private var db: OpaquePointer?
   private let tempDir: URL
 
-  init(copying source: URL) throws {
+  init(copying source: URL, assumeCoarseTimes: Bool = false) throws {
     let fm = FileManager.default
     guard fm.fileExists(atPath: source.path) else {
       throw ImportError.notFound("\(source.lastPathComponent) not found")
@@ -14,16 +14,10 @@ final class SQLiteSnapshot {
     try fm.createDirectory(at: tempDir, withIntermediateDirectories: true)
     let copy = tempDir.appendingPathComponent("db.sqlite")
     do {
-      try fm.copyItem(at: source, to: copy)
-      for suffix in ["-wal", "-journal"] {
-        let sibling = URL(fileURLWithPath: source.path + suffix)
-        if fm.fileExists(atPath: sibling.path) {
-          try? fm.copyItem(at: sibling, to: URL(fileURLWithPath: copy.path + suffix))
-        }
-      }
+      try Self.copyUnchanged(source, to: copy, assumeCoarseTimes: assumeCoarseTimes)
     } catch {
       try? fm.removeItem(at: tempDir)
-      throw ImportError.unreadable("Couldn't copy \(source.lastPathComponent): \(error.localizedDescription)")
+      throw Self.copyFailure(source.lastPathComponent, error)
     }
 
     if sqlite3_open_v2(copy.path, &db, SQLITE_OPEN_READWRITE, nil) != SQLITE_OK {
@@ -39,6 +33,73 @@ final class SQLiteSnapshot {
       }
     }
     sqlite3_busy_timeout(db, 2000)
+  }
+
+  static let siblings = ["-wal", "-journal"]
+
+  static func copyFailure(_ name: String, _ error: Error) -> ImportError {
+    let cause = (error as? ImportError).map { "\($0)" } ?? error.localizedDescription
+    return .unreadable("Couldn't copy \(name): \(cause)")
+  }
+
+  struct FileStamp: Equatable {
+    var size: Int64
+    var seconds: Int
+    var nanoseconds: Int
+  }
+
+  static func stamp(_ path: String) -> FileStamp? {
+    var info = stat()
+    guard stat(path, &info) == 0 else { return nil }
+    return FileStamp(size: Int64(info.st_size), seconds: info.st_mtimespec.tv_sec, nanoseconds: info.st_mtimespec.tv_nsec)
+  }
+
+  static func stamps(_ source: URL) -> [FileStamp?] {
+    [stamp(source.path)] + siblings.map { stamp(source.path + $0) }
+  }
+
+  static func copyUnchanged(_ source: URL, to copy: URL, attempts: Int = 50, assumeCoarseTimes: Bool = false) throws {
+    let fm = FileManager.default
+    let second = URL(fileURLWithPath: copy.path + ".check")
+    let copies = { (to: URL) throws in
+      for path in [to.path] + siblings.map({ to.path + $0 }) { try? fm.removeItem(atPath: path) }
+      try fm.copyItem(at: source, to: to)
+      for suffix in siblings where fm.fileExists(atPath: source.path + suffix) {
+        try fm.copyItem(at: URL(fileURLWithPath: source.path + suffix), to: URL(fileURLWithPath: to.path + suffix))
+      }
+    }
+    let sameBytes = { () -> Bool in
+      ([""] + siblings).allSatisfy { suffix in
+        fm.contents(atPath: copy.path + suffix) == fm.contents(atPath: second.path + suffix)
+      }
+    }
+    var failure: Error = ImportError.unreadable("\(source.lastPathComponent) kept changing while it was copied")
+    defer { for path in [second.path] + siblings.map({ second.path + $0 }) { try? fm.removeItem(atPath: path) } }
+    for attempt in 0..<attempts {
+      if attempt > 0 { usleep(20_000) }
+      let before = stamps(source)
+      do {
+        try copies(copy)
+      } catch {
+        failure = error
+        continue
+      }
+      guard stamps(source) == before else {
+        failure = ImportError.unreadable("\(source.lastPathComponent) kept changing while it was copied")
+        continue
+      }
+      let coarse = assumeCoarseTimes || before.contains { $0 != nil && $0!.nanoseconds == 0 }
+      if !coarse { return }
+      do {
+        try copies(second)
+      } catch {
+        failure = error
+        continue
+      }
+      if stamps(source) == before && sameBytes() { return }
+      failure = ImportError.unreadable("\(source.lastPathComponent) kept changing while it was copied")
+    }
+    throw failure
   }
 
   deinit {

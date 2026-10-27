@@ -1455,3 +1455,132 @@ test("B65: after a healthy relaunch, a password saved here while passwords could
     native.readPasswords = realReadPasswords;
   }
 });
+
+async function chosenWhileLocked({ gated }) {
+  reset();
+  const engine = await onAndSynced();
+  const other = appMac("set:");
+  await other.sync();
+  other.store.set("set:appearance", { v: "dark" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  assert.equal(S().settings.appearance, "dark", "control: this Mac took B's dark");
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  let unlock;
+  if (gated) fake.unlockGate = new Promise((resolve) => (unlock = resolve));
+  const again = await launch();
+  again.startSync();
+  await settle();
+  if (!gated) await settle();
+  S().updateSettings({ appearance: "light" });
+  await settle();
+  if (gated) {
+    unlock();
+    fake.unlockGate = null;
+    await settle();
+  }
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assertNoSeqReused();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.equal(S().settings.appearance, "light", `the choice made after the loss stands here (this Mac has ${S().settings.appearance})`);
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" }, `and reaches B (B has ${JSON.stringify(other.store.get("set:appearance"))})`);
+}
+
+test("B66: after losing its state, a setting first chosen here while the Mac is still unlocking is published, not replaced by the folder's older value", () => chosenWhileLocked({ gated: true }));
+
+test("B67: same while the Mac sits locked at launch until the recovery phrase is entered", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const other = appMac("set:");
+  await other.sync();
+  other.store.set("set:appearance", { v: "dark" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  assert.equal(S().settings.appearance, "dark", "control: this Mac took B's dark");
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  fake.unlockResult = false;
+  const again = await launch();
+  again.startSync();
+  await settle();
+  assert.equal(again.useSync.getState().status, "locked", "control: this Mac is locked");
+  S().updateSettings({ appearance: "light" });
+  await settle();
+  fake.unlockResult = true;
+  assert.ok("ok" in (await again.enterRecoveryPhrase("/sync", "the phrase")));
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assertNoSeqReused();
+  assert.equal(again.useSync.getState().status, "updated");
+  assert.equal(S().settings.appearance, "light", `the choice made while locked stands here (this Mac has ${S().settings.appearance})`);
+  assert.deepEqual(other.store.get("set:appearance"), { v: "light" }, `and reaches B (B has ${JSON.stringify(other.store.get("set:appearance"))})`);
+});
+
+async function renamedWhileUnlocking({ slowPasswords }) {
+  reset();
+  const engine = await launch();
+  engine.startSync();
+  const work = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [work]: true } });
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  S().addBookmark({ profileId: work, url: "https://work.example/", title: "Work One" });
+  for (let i = 0; i < 2; i++) await engine.syncNow();
+  await settle();
+  const syncId = engine.useSync.getState().profiles[work].syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [key] = [...other.store].find(([, v]) => v.t === "Work One");
+  assert.ok(key, "control: B has Work's bookmark");
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  let release;
+  const passwordsGate = new Promise((resolve) => (release = resolve));
+  if (slowPasswords) native.readPasswords = async () => (await passwordsGate, []);
+  let unlock;
+  fake.unlockGate = new Promise((resolve) => (unlock = resolve));
+  try {
+    const again = await launch();
+    again.startSync();
+    await settle();
+    const id = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "Work One").id;
+    S().updateBookmark(id, { title: "Renamed here" });
+    await settle();
+    unlock();
+    fake.unlockGate = null;
+    await settle();
+    release();
+    native.readPasswords = realReadPasswords;
+    await settle();
+    for (let i = 0; i < 3; i++) await again.syncNow();
+    await settle();
+    await other.sync();
+    assertNoSeqReused();
+    const here = Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url" && n.url === "https://work.example/").map((n) => n.title);
+    assert.equal(again.useSync.getState().status, "updated");
+    assert.deepEqual(here, ["Renamed here"], `the rename made after the loss stands here (this Mac has ${here})`);
+    assert.equal(other.store.get(key)?.t, "Renamed here", `and reaches B (B has ${other.store.get(key)?.t})`);
+  } finally {
+    native.readPasswords = realReadPasswords;
+  }
+}
+
+test("B68: after losing its state, a rename in a second profile made while unlocking survives the launch note waiting on the first profile's passwords", () => renamedWhileUnlocking({ slowPasswords: true }));
+
+test("B69: with password sync turned off, a relaunch doesn't read saved passwords into the launch note", async () => {
+  reset();
+  const engine = await onAndSynced();
+  engine.setTypeSynced("passwords", false);
+  engine.setTypeSynced("history", false);
+  await engine.syncNow();
+  await settle();
+  fake.passwordReads = 0;
+  const again = await launch();
+  again.startSync();
+  await settle();
+  assert.equal(again.useSync.getState().types.passwords, false, "control: passwords sync is off");
+  assert.equal(fake.passwordReads, 0, `the keychain isn't read for a type that's off (read ${fake.passwordReads} time(s))`);
+});

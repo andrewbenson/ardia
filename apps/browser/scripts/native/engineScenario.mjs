@@ -27,7 +27,8 @@ SolaraSyncTests replays the scripts through the Swift engine, answering native c
 Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios (engine.json.deflate).
 
 --oracle <n> runs n convergence scenarios from --seed instead, each in its own process: both Macs
-edit, crash, lose or roll back their state, go locked and fail writes at random, then settle. Both
+edit, crash, lose or roll back their state, go locked, fail writes and see the newest folder files
+only as pending or damaged for a while, at random, then settle. Both
 must end with the same data; for every key, the value that wins is the latest choice by its stamp,
 counting a write that carries a real edit or a position repair as a choice of its whole record, and
 excusing only edits that never reached the folder before their Mac lost its state, that the same
@@ -836,7 +837,8 @@ async function runScenario(script) {
   const published = new Map();
   const reused = [];
   const history = { at: 0, edits: [], losses: [], writes: [], removed: [], nows: script.steps.map((step, i) => step.now ?? script.steps.slice(0, i).findLast((s) => s.now !== undefined)?.now ?? 0) };
-  const folderOps = async (op, a) => {
+  const hidden = { local: new Map(), other: new Map() };
+  const folderOps = async (op, a, mac = "local") => {
     switch (op) {
       case "write": {
         const [scope, payload] = a;
@@ -855,7 +857,13 @@ async function runScenario(script) {
       case "read": {
         const [scope, known] = a;
         const here = [...folder].filter(([, f]) => f.scope === scope);
-        return { files: here.filter(([id]) => !known.includes(id)).map(([id, f]) => ({ id, payload: f.payload })), pending: [], damaged: [], present: here.map(([id]) => id) };
+        const away = (id) => hidden[mac].get(id);
+        return {
+          files: here.filter(([id]) => !known.includes(id) && !away(id)).map(([id, f]) => ({ id, payload: f.payload })),
+          pending: here.filter(([id]) => away(id) === "pending").map(([id]) => id),
+          damaged: here.filter(([id]) => away(id) === "damaged").map(([id]) => ({ id, age: 0 })),
+          present: here.map(([id]) => id),
+        };
       }
       case "remove":
         if (process.env.ORACLE_KEY) history.removed.push(...a[1].filter((id) => folder.get(id)?.payload.includes(process.env.ORACLE_KEY)).map((id) => ({ at: history.at, id, payload: folder.get(id).payload.slice(0, 300) })));
@@ -873,7 +881,7 @@ async function runScenario(script) {
   const waiting = new Map();
   let ids = 0;
   child.on("message", async (message) => {
-    if (message.folder) child.send({ reply: message.id, value: await folderOps(message.folder, message.args) });
+    if (message.folder) child.send({ reply: message.id, value: await folderOps(message.folder, message.args, "other") });
     else if (message.done !== undefined) waiting.get(message.done)?.(message);
   });
   const ask = (payload) =>
@@ -890,7 +898,11 @@ async function runScenario(script) {
     history.at++;
     if (LOSSES.has(step.op)) history.losses.push({ at: history.at, mac: step.mac });
     let edits = [];
-    if (step.mac === "other") {
+    if (step.op === "hide" || step.op === "reveal") {
+      if (step.op === "reveal") hidden[step.mac].clear();
+      else for (const id of [...folder.keys()].slice(-step.count)) hidden[step.mac].set(id, step.as);
+      trace.steps.push({ op: step.op, hidden: [...hidden[step.mac]] });
+    } else if (step.mac === "other") {
       const reply = await ask({ step });
       edits = reply.edits ?? [];
       trace.steps.push({ other: true, error: reply.error ?? null, folder: [...folder.keys()], ...(reply.result ? { after: reply.result.after, calls: reply.result.calls } : {}) });
@@ -1098,6 +1110,7 @@ export function oracleScript(seed, steps) {
     else if (r < 0.85) push(mac, { op: "failDocs", value: rand() < 0.4 });
     else if (r < 0.87) push(mac, { op: "mode", key: "chain", value: pick(["ok", "ok", "unavailable"]) });
     else if (r < 0.885) push(mac, { op: "mode", key: "unlock", value: rand() < 0.7 });
+    else if (r < 0.9) push(mac, rand() < 0.6 ? { op: "hide", count: 1 + Math.floor(rand() * 3), as: rand() < 0.7 ? "pending" : "damaged" } : { op: "reveal" });
     else clock += pick([1000, 60_000, 3_600_000]);
   }
   for (const mac of ["local", "other"]) {
@@ -1112,6 +1125,7 @@ export function oracleScript(seed, steps) {
       { op: "releaseNative" },
       { op: "land" },
       { op: "recover" },
+      { op: "reveal" },
     ])
       push(mac, step);
   }

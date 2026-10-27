@@ -391,6 +391,52 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
 5. Saves `sync.json` (in the app's data folder): links, settings of sync and the last seq written
    per scope; and `sync-state.nns`, sealed: the replica, base, version vectors and known files.
 
+### After a load: lost and rolled-back state
+
+The saved state can come back older than the folder (a lost save, a restored backup) or not at
+all (unreadable, foreign, malformed). Either way its base no longer says what this Mac published,
+so a plain diff would send stale local values over newer edits made elsewhere. The guard around
+each scope's cycle (`guard` in `engine.ts`) holds that back.
+
+- **What this Mac had.** At launch, before the state loads (so edits made while locked count), the
+  engine notes what each adapter extracts, for every data type except history and passwords when
+  they're off. Passwords are read last, so a slow keychain doesn't hold up the rest. Bookmarks and
+  history are noted as soon as they load; extensions at their first extraction. A key the note
+  doesn't have counts as changed only against the kept note. Derived positions (`pos`) don't
+  count when comparing.
+- **The first look after a load.** For each adapter:
+  - the first cycle publishes nothing until it has pulled;
+  - the held outbox and an older build's revived batches go out after the pull, under a seq past
+    every one of this Mac's seqs in the folder;
+  - a value that differs from base goes out, unless it matches a value the pull delivered,
+    stamped after the state's own record, or the key is still waiting to be applied. That is what
+    a rolled-back copy looks like. A value the user changed since the note always goes out.
+  - While a download is pending, a fresh scope publishes and applies nothing, for up to ten minutes
+    after the load. A rolled-back state can't see its own newer batches or another Mac's newer
+    edits until they arrive.
+- **Rebuild.** A lost state, or one found behind its own seqs in the folder, gets a rebuild marker,
+  saved with the state and settled per adapter prefix. Until a prefix settles:
+  - it publishes keys the folder never had (not while a download younger than a day or a damaged
+    file is pending);
+  - it publishes values changed this session, unless the folder's record already has them;
+  - it publishes values changed against the kept note in an earlier session only if the folder
+    never delivered them;
+  - everything else takes the folder's value.
+  The kept note is saved in the marker as digests, so a relaunch doesn't forget an edit made after
+  the loss. A prefix settles once the pull is complete, its adapter is ready, nothing is
+  unapplied, and no value disagrees with the folder; disagreeing values are queued for apply. The
+  marker stays while a data type is off, so turning it on later is still guarded.
+- **Known residuals** (each from a review or the convergence oracle):
+  - On a healthy relaunch, a setting chosen here that equals a value another Mac once had, in
+    batches this Mac hadn't pulled, is taken for a rolled-back copy and loses to that Mac's later
+    value.
+  - A rolled-back state that wrote nothing after the backup goes undetected once compaction has
+    removed the values it took.
+  - A rebuild an older build started forgets that build's baseline.
+  - A rolled-back state whose own batch is still downloading after the ten-minute wait can reuse
+    its seq.
+  - Passwords saved while a rebuilding Mac can't read them are taken as stale.
+
 ## Tests
 
 - `pnpm --filter @ardia/sync test`:
@@ -416,7 +462,16 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
   such, an unpin deletes the marks with the pin, the app's old names are read as today's, pinned group tabs' homes go across and
   survive a Mac on the previous version) and `src/sync/engine.test.mjs` (the engine against a fake native module: a crash the
   moment a batch lands re-sends the journalled batches byte for byte and numbers the next one after
-  them; nothing is published before its journal is on disk).
+  them; nothing is published before its journal is on disk). `src/sync/engineSafety.test.mjs` and
+  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B69), each
+  failing on the commit before its fix.
+- Convergence oracle: `node apps/browser/scripts/native/engineScenario.mjs --oracle <n> --seed <s>`
+  runs two Macs in separate processes against the real engine, store and adapters. They edit,
+  crash, lose, damage or roll back their state, go locked and fail writes at random, then settle.
+  Both must end with the same data, the latest choice for each key by stamp must win, and no seq
+  may carry two different batches (`--help` lists what it excuses). It also hides the newest folder
+  files from one Mac as pending or damaged for a while. It doesn't cover extensions (no fake of
+  Chrome's engine calls).
 - End to end: `node packages/sync/scripts/e2e.mjs [Debug app] [work dir]` drives two hidden
   instances (then a third) with their own data folders through a temporary sync folder, never
   iCloud Drive, over the dev harness. It checks 54 things, and all 54 passed on 2026-10-21 (Debug

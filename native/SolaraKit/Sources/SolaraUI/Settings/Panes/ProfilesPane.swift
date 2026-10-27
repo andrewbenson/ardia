@@ -301,7 +301,11 @@ struct ProfilesPane: View {
       Section {
         EmptyView()
       } header: {
-        SettingsIntro("Profiles keep your browsing organized. Each keeps its own history, logins, cookies, and extensions, unless you turn on Share data when you create it: then it uses another profile's, and only the tabs are its own.")
+        Text("Profiles keep your browsing organized. Each keeps its own history, logins, cookies, and extensions, unless you turn on Share data when you create it: then it uses another profile's, and only the tabs are its own.")
+          .font(.callout)
+          .fontWeight(.regular)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
 
       SettingsSection("New windows open with") {
@@ -309,7 +313,8 @@ struct ProfilesPane: View {
           SettingPicker(
             model.profiles.map { SettingOption($0.id, $0.name) },
             selection: Binding(get: { model.defaultProfileId }, set: { model.setDefault($0) })
-          ).popUpWidth(160)
+          )
+          .frame(minWidth: 160, alignment: .trailing)
         }
       }
 

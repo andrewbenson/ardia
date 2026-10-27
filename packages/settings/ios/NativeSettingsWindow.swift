@@ -30,6 +30,13 @@ final class StoreSettingsSource: SettingsStoreSource {
 }
 
 final class SettingsHostingController: NSHostingController<SettingsWindowView> {
+  override func viewWillAppear() {
+    super.viewWillAppear()
+    guard view.window?.toolbar == nil else { return }
+    sceneBridgingOptions = []
+    sceneBridgingOptions = [.toolbars]
+  }
+
   override func viewDidAppear() {
     super.viewDidAppear()
     view.window?.makeFirstResponder(nil)
@@ -66,7 +73,7 @@ enum NativeSettingsWindow {
     if let built { return built }
     guard enabled, let context = makeContext() else { return nil }
     let made = SettingsHostingController(rootView: SettingsWindowView(context: context))
-    made.sceneBridgingOptions = []
+    made.sceneBridgingOptions = [.toolbars]
     built = made
     return made
   }
@@ -76,7 +83,7 @@ enum NativeSettingsWindow {
     guard let model = NativeSettingsHandle.model else { return nil }
     let store = StoreSettingsSource(model: model)
     let made = SettingsContext(appName: Bundle.main.productName, liquidGlass: liquidGlass, store: store)
-    made.favicons = SettingsFavicons(displayHost: SettingsAdapters.displayHost) { url, profile in await SettingsAdapters.favicon(url: url, profile: profile) }
+    made.favicons = SettingsFavicons(displayHost: SettingsAdapters.displayHost, bundled: bundledSiteIcon) { url, profile in await SettingsAdapters.favicon(url: url, profile: profile) }
     made.profileForPane = { pane, current in
       guard pane == .extensions else { return nil }
       if current.pane == .extensions, let profile = current.profileId { return profile }
@@ -96,6 +103,11 @@ enum NativeSettingsWindow {
   static var liquidGlass: Bool {
     if #available(macOS 26.0, *) { return true }
     return false
+  }
+
+  static func bundledSiteIcon(_ name: String) -> NSImage? {
+    guard let url = Bundle.main.resourceURL?.appendingPathComponent("assets/assets/site-icons/\(name).png") else { return nil }
+    return NSImage(contentsOf: url)
   }
 
   static func navigate(pane: String?, profileId: String?, detail: String?) {

@@ -82,7 +82,7 @@ struct AppearancePane: View {
       Section {
         SettingToggle("appearance.spacesFollowAppearance", key: "spacesFollowAppearance")
       } header: {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
           SettingsSectionHeader(description: "Also in View › Appearance. Incognito windows are always dark.", anchor: "appearance.theme")
           HStack(spacing: 14) {
             ForEach(AppearancePaneModel.modes, id: \.value) { mode in
@@ -91,17 +91,16 @@ struct AppearancePane: View {
               }
             }
           }
-          .padding(.horizontal, -SettingsFormMetrics.headerLeading)
-          .padding(.bottom, 6)
+          .padding(.bottom, 2)
         }
       }
 
       Section {
         SettingRow("appearance.commandBarPlacement") {
-          SettingPicker([SettingOption("field", "At the address"), SettingOption("centred", "In the centre")], selection: store.choice("commandBarPlacement")).popUpWidth(160)
+          SettingPicker([SettingOption("field", "At the address"), SettingOption("centred", "In the centre")], selection: store.choice("commandBarPlacement"))
         }
       } header: {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
           SettingsSectionHeader(description: AppearancePaneModel.addressBarDescription(topTabs: store.topTabLayout), anchor: "appearance.addressBar")
           HStack(spacing: 14) {
             SettingsChoiceCard(title: "In the toolbar", selected: addressBar != "sidebar", action: { store.set("addressBar", "toolbar") }) {
@@ -111,20 +110,19 @@ struct AppearancePane: View {
               AddressBarPreview(sidebar: true)
             }
           }
-          .padding(.horizontal, -SettingsFormMetrics.headerLeading)
-          .padding(.bottom, 6)
+          .padding(.bottom, 2)
         }
       }
 
       SettingsSection("Selected Tab") {
         SettingRow("appearance.selectedTabGlow") {
-          SettingPicker([SettingOption("full", "Full"), SettingOption("soft", "Soft"), SettingOption("off", "Off")], selection: store.choice("selectedTabGlow")).popUpWidth(120)
+          SettingPicker([SettingOption("full", "Full"), SettingOption("soft", "Soft"), SettingOption("off", "Off")], selection: store.choice("selectedTabGlow"))
         }
       }
 
       SettingsSection("Scroll Bars") {
         SettingRow("appearance.pageScrollBars") {
-          SettingPicker([SettingOption("system", "Follow macOS"), SettingOption("thin", "Thin")], selection: store.choice("pageScrollBars")).popUpWidth(140)
+          SettingPicker([SettingOption("system", "Follow macOS"), SettingOption("thin", "Thin")], selection: store.choice("pageScrollBars"))
         }
       }
 

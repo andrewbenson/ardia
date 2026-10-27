@@ -136,7 +136,7 @@ struct AdvancedPane: View {
           SettingPicker(
             [SettingOption("lowBattery", "When battery is low"), SettingOption("unplugged", "When unplugged"), SettingOption("never", "Never")],
             selection: store.choice("batterySaverWhen")
-          ).popUpWidth(190)
+          )
         }
       }
 

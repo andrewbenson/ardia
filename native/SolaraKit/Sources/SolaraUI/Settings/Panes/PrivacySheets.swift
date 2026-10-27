@@ -140,7 +140,7 @@ struct PrivacySheetFooter: View {
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
       Button("Done", action: done)
-        .buttonStyle(.settingsPrimary)
+        .buttonStyle(.borderedProminent)
         .keyboardShortcut(.defaultAction)
     }
     .padding(.horizontal, 20)
@@ -252,7 +252,7 @@ struct SiteSheet: View {
           .fixedSize(horizontal: false, vertical: true)
           .frame(maxWidth: .infinity, alignment: .leading)
         Button("Done") { dismiss() }
-          .buttonStyle(.settingsPrimary)
+          .buttonStyle(.borderedProminent)
           .keyboardShortcut(.defaultAction)
       }
       .padding(.horizontal, 20)

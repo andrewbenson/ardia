@@ -38,7 +38,6 @@ public struct SettingsSection<Content: View, Action: View>: View {
 
 public struct SettingsSectionHeader<Action: View>: View {
   @Environment(\.settingsContext) private var context
-  @Environment(\.colorScheme) private var scheme
   let title: String?
   let description: String?
   let anchor: String?
@@ -52,16 +51,19 @@ public struct SettingsSectionHeader<Action: View>: View {
   }
 
   public var body: some View {
-    let theme = SettingsTheme(scheme)
     SettingsAnchor(anchor) {
-      HStack(alignment: .bottom, spacing: 0) {
+      HStack(alignment: .bottom) {
         VStack(alignment: .leading, spacing: 3) {
-          OnboardingText(resolvedTitle, size: 13, weight: 600, color: theme.textPrimary)
+          Text(resolvedTitle)
           if let description {
-            OnboardingText(description, size: 12, color: theme.textSecondary, lineHeight: 16)
+            Text(description)
+              .font(.callout)
+              .fontWeight(.regular)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Spacer(minLength: 8)
         action
       }
     }
@@ -94,7 +96,6 @@ public enum RowDescription {
 
 public struct SettingRow<Control: View>: View {
   @Environment(\.settingsContext) private var context
-  @Environment(\.colorScheme) private var scheme
   let anchor: String?
   let title: String?
   let description: RowDescription
@@ -112,9 +113,9 @@ public struct SettingRow<Control: View>: View {
       LabeledContent {
         control
       } label: {
-        OnboardingText(resolvedTitle, size: 13, color: SettingsTheme(scheme).textPrimary, lineHeight: 16)
+        Text(resolvedTitle)
         if let text = resolvedDescription {
-          OnboardingText(text, size: 11.5, color: SettingsTheme(scheme).textSecondary, lineHeight: 15)
+          Text(text)
         }
       }
     }
@@ -189,8 +190,22 @@ public struct SettingPicker: View {
     _selection = selection
   }
 
+  @Environment(\.settingsFormHeader) private var inHeader
+
   public var body: some View {
-    SettingsPopUp(options, selection: $selection)
+    if inHeader {
+      Picker("", selection: $selection) {
+        ForEach(options, id: \.value) { option in
+          if option.separatorBefore { Divider() }
+          Text(option.title).tag(option.value)
+        }
+      }
+      .labelsHidden()
+      .pickerStyle(.menu)
+      .fixedSize()
+    } else {
+      SettingsPopUp(options, selection: $selection)
+    }
   }
 }
 
@@ -250,20 +265,5 @@ struct SettingsAnchorMark: View {
   private var flashSerial: Int? {
     guard let flash = context?.search.flash, flash.id == id else { return nil }
     return flash.serial
-  }
-}
-
-public struct SettingsIntro: View {
-  @Environment(\.colorScheme) private var scheme
-  let text: String
-
-  public init(_ text: String) {
-    self.text = text
-  }
-
-  public var body: some View {
-    OnboardingText(text, size: 12.5, color: SettingsTheme(scheme).textSecondary, lineHeight: 17)
-      .padding(.horizontal, -SettingsFormMetrics.headerLeading)
-      .padding(.top, SettingsFormMetrics.topInset - SettingsFormMetrics.headerTop)
   }
 }

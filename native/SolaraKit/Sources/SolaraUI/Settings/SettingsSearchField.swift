@@ -6,28 +6,20 @@ struct SettingsSearchField: NSViewRepresentable {
   let focusRequest: Int
   let onSubmit: () -> Void
   let onArrow: (Int) -> Void
-  var placeholder = "Search"
 
   func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-  func makeNSView(context: Context) -> NSTextField {
-    let field = NSTextField()
-    field.isBordered = false
-    field.isBezeled = false
-    field.drawsBackground = false
-    field.font = .systemFont(ofSize: 13)
-    field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: NSColor.tertiaryLabelColor])
-    field.cell?.usesSingleLineMode = true
-    field.cell?.lineBreakMode = .byClipping
+  func makeNSView(context: Context) -> NSSearchField {
+    let field = NSSearchField()
+    field.placeholderString = "Search"
     field.delegate = context.coordinator
+    field.sendsSearchStringImmediately = true
     field.focusRingType = .none
     field.setAccessibilityIdentifier("settings.search")
-    field.setAccessibilityRole(.textField)
-    field.setAccessibilityLabel(placeholder)
     return field
   }
 
-  func updateNSView(_ field: NSTextField, context: Context) {
+  func updateNSView(_ field: NSSearchField, context: Context) {
     context.coordinator.parent = self
     if field.stringValue != text { field.stringValue = text }
     if focusRequest != context.coordinator.lastFocusRequest {
@@ -40,7 +32,7 @@ struct SettingsSearchField: NSViewRepresentable {
   }
 
   @MainActor
-  final class Coordinator: NSObject, NSTextFieldDelegate {
+  final class Coordinator: NSObject, NSSearchFieldDelegate {
     var parent: SettingsSearchField
     var lastFocusRequest: Int
 
@@ -50,7 +42,7 @@ struct SettingsSearchField: NSViewRepresentable {
     }
 
     func controlTextDidChange(_ notification: Notification) {
-      guard let field = notification.object as? NSTextField else { return }
+      guard let field = notification.object as? NSSearchField else { return }
       parent.text = field.stringValue
     }
 
@@ -67,7 +59,7 @@ struct SettingsSearchField: NSViewRepresentable {
         return true
       case #selector(NSResponder.cancelOperation(_:)):
         parent.text = ""
-        (control as? NSTextField)?.stringValue = ""
+        (control as? NSSearchField)?.stringValue = ""
         return true
       default:
         return false

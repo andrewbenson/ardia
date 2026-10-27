@@ -350,7 +350,7 @@ struct PasswordsLockedSection: View {
           .fontWeight(.regular)
           .foregroundStyle(.secondary)
         Button("Unlock") { Task { await model.unlock(profile) } }
-          .buttonStyle(.settingsPrimary)
+          .buttonStyle(.borderedProminent)
           .padding(.top, 6)
       }
       .frame(maxWidth: .infinity)

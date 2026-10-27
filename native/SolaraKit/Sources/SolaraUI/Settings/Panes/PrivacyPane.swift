@@ -355,8 +355,8 @@ struct PrivacyPane: View {
         Section {
         } footer: {
           Text(PrivacyPaneModel.rulesLoaded(blocker))
-            .font(.system(size: 11.5))
-            .padding(.top, 6)
+            .font(.caption)
+            .foregroundStyle(.tertiary)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
       }

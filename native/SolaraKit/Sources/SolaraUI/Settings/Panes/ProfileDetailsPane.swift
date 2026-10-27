@@ -45,7 +45,7 @@ struct ProfileDetailsPane: View {
         SettingRow(title: "Name", description: RowDescription.none) {
           TextField("", text: $name)
             .labelsHidden()
-            .textFieldStyle(SettingsTextFieldStyle())
+            .textFieldStyle(.roundedBorder)
             .multilineTextAlignment(.leading)
             .frame(width: 220)
             .focused($nameFocused)

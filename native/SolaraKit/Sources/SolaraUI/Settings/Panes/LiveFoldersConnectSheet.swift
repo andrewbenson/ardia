@@ -100,7 +100,7 @@ struct LiveFoldersConnectField<Field: View>: View {
       Text(label)
         .font(.system(size: 12, weight: .medium))
       field
-        .textFieldStyle(SettingsTextFieldStyle())
+        .textFieldStyle(.roundedBorder)
     }
     .padding(.bottom, 10)
   }
@@ -159,7 +159,7 @@ struct LiveFoldersGithubConnect: View {
             self.flow = nil
           }
           Button("Open GitHub") { model.services.openInBrowser(flow.verificationUri) }
-            .buttonStyle(.settingsPrimary)
+            .buttonStyle(.borderedProminent)
         }
       }
       .onDisappear { model.services.cancelGithubDeviceFlow(flow) }
@@ -174,7 +174,7 @@ struct LiveFoldersGithubConnect: View {
           Button("Cancel") { dismiss() }
             .keyboardShortcut(.cancelAction)
           Button(runner.busy ? "Checking…" : "Connect") { connect() }
-            .buttonStyle(.settingsPrimary)
+            .buttonStyle(.borderedProminent)
             .disabled(!filled(token) || runner.busy)
         }
         Divider()
@@ -237,7 +237,7 @@ struct LiveFoldersBitbucketConnect: View {
         Button("Cancel") { dismiss() }
           .keyboardShortcut(.cancelAction)
         Button(runner.busy ? "Checking…" : "Connect") { go() }
-          .buttonStyle(.settingsPrimary)
+          .buttonStyle(.borderedProminent)
           .disabled(!filled(user, token) || runner.busy)
       }
     }
@@ -267,7 +267,7 @@ struct LiveFoldersNotionConnect: View {
         Button("Cancel") { dismiss() }
           .keyboardShortcut(.cancelAction)
         Button(runner.busy ? "Checking…" : "Connect") { go() }
-          .buttonStyle(.settingsPrimary)
+          .buttonStyle(.borderedProminent)
           .disabled(!filled(token) || runner.busy)
       }
     }
@@ -311,7 +311,7 @@ struct LiveFoldersConfluenceConnect: View {
         Button("Cancel") { dismiss() }
           .keyboardShortcut(.cancelAction)
         Button(runner.busy ? "Checking…" : "Connect") { go() }
-          .buttonStyle(.settingsPrimary)
+          .buttonStyle(.borderedProminent)
           .disabled(!filled(site, email, token) || runner.busy)
       }
     }
@@ -353,7 +353,7 @@ struct LiveFoldersGoogleConnect: View {
         Button("Cancel") { dismiss() }
           .keyboardShortcut(.cancelAction)
         Button(runner.busy ? "Waiting for Google…" : "Sign In with Google…") { go() }
-          .buttonStyle(.settingsPrimary)
+          .buttonStyle(.borderedProminent)
           .disabled(!filled(clientId, secret) || runner.busy)
       }
     }

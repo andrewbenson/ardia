@@ -3,10 +3,8 @@ import SwiftUI
 
 public struct SettingsWindowView: View {
   static let sidebarWidth: CGFloat = 214
-  static let toolbarHeight: CGFloat = 52
   static let revealMargin: CGFloat = 16
 
-  @Environment(\.colorScheme) private var scheme
   let context: SettingsContext
 
   public init(context: SettingsContext) {
@@ -14,17 +12,15 @@ public struct SettingsWindowView: View {
   }
 
   public var body: some View {
-    let theme = SettingsTheme(scheme)
-    HStack(spacing: 0) {
+    NavigationSplitView {
       SettingsSidebar(context: context)
         .frame(width: Self.sidebarWidth)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(SettingsVisualEffect())
-      Rectangle().fill(theme.sidebarDivider).frame(width: 1)
+        .navigationSplitViewColumnWidth(min: Self.sidebarWidth, ideal: Self.sidebarWidth, max: Self.sidebarWidth)
+    } detail: {
       SettingsDetail(context: context)
     }
-    .background(theme.window)
-    .ignoresSafeArea()
+    .toolbar(removing: .sidebarToggle)
+    .background(WindowChromeTrimmer())
     .environment(\.settingsContext, context)
     .onAppear { context.syncShown() }
     .onChange(of: context.navigation.place) { _, place in
@@ -47,8 +43,7 @@ struct SettingsSidebar: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      WindowDragArea(draggable: true).frame(height: SettingsWindowView.toolbarHeight)
-      SettingsSearchBox(
+      SettingsSearchField(
         text: $search.query,
         focusRequest: search.focusRequest,
         onSubmit: { context.submitSearch() },
@@ -65,44 +60,9 @@ struct SettingsSidebar: View {
   }
 }
 
-struct SettingsSearchBox: View {
-  @Environment(\.colorScheme) private var scheme
-  @Binding var text: String
-  let focusRequest: Int
-  let onSubmit: () -> Void
-  let onArrow: (Int) -> Void
-  var placeholder = "Search"
-
-  var body: some View {
-    let theme = SettingsTheme(scheme)
-    HStack(spacing: 5) {
-      Image(systemName: "magnifyingglass")
-        .font(.system(size: 12))
-        .foregroundStyle(theme.textSecondary)
-        .frame(width: 14, height: 14)
-      SettingsSearchField(text: $text, focusRequest: focusRequest, onSubmit: onSubmit, onArrow: onArrow, placeholder: placeholder)
-      if !text.isEmpty {
-        Button { text = "" } label: {
-          Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 12))
-            .foregroundStyle(theme.textTertiary)
-            .frame(width: 16, height: 16)
-        }
-        .buttonStyle(.plain)
-        .help("Clear")
-      }
-    }
-    .padding(.horizontal, 9)
-    .frame(height: 28)
-    .contentShape(Rectangle())
-    .background(RoundedRectangle(cornerRadius: 8).fill(theme.field))
-    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(theme.fieldBorder, lineWidth: 1))
-  }
-}
-
 struct SettingsPaneList: View {
-  static let rowHeight: CGFloat = 30
-  static let rowGap: CGFloat = 1
+  static let rowHeight: CGFloat = 32
+  static let highlightHeight: CGFloat = 30
 
   @Environment(\.colorScheme) private var scheme
   @FocusState private var focused: Bool
@@ -111,7 +71,7 @@ struct SettingsPaneList: View {
   var body: some View {
     let selected = context.navigation.pane
     ScrollView(.vertical) {
-      LazyVStack(spacing: Self.rowGap) {
+      LazyVStack(spacing: 0) {
         ForEach(SettingsPane.allCases) { pane in
           SettingsPaneRow(pane: pane, selected: pane == selected, scheme: scheme)
             .onTapGesture { context.goToPane(pane) }
@@ -143,27 +103,29 @@ struct SettingsPaneRow: View {
   let pane: SettingsPane
   let selected: Bool
   let scheme: ColorScheme
-  @State private var hovered = false
 
   var body: some View {
-    let theme = SettingsTheme(scheme)
-    HStack(spacing: 9) {
+    HStack(spacing: 5) {
       Image(systemName: pane.symbol)
-        .font(.system(size: 13))
-        .foregroundStyle(selected ? Color.white : theme.icon)
-        .frame(width: 20, height: 20)
-      OnboardingText(pane.title, size: 13, color: selected ? .white : theme.textPrimary, lines: 1)
+        .font(.system(size: 17))
+        .foregroundStyle(scheme == .dark ? Color(red: 152 / 255, green: 153 / 255, blue: 159 / 255) : Color(red: 139 / 255, green: 139 / 255, blue: 144 / 255))
+        .frame(width: 24, height: 22)
+      Text(pane.title)
+        .font(.system(size: 13, weight: selected ? .semibold : .regular))
+        .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+        .lineLimit(1)
       Spacer(minLength: 0)
     }
-    .padding(.horizontal, 8)
-    .frame(height: SettingsPaneList.rowHeight)
+    .padding(.leading, 7)
+    .frame(height: SettingsPaneList.highlightHeight)
     .background {
-      if selected || hovered {
-        RoundedRectangle(cornerRadius: 7).fill(selected ? theme.accent : theme.selected)
+      if selected {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(scheme == .dark ? Color.white.opacity(0.13) : Color.black.opacity(0.09))
       }
     }
+    .frame(height: SettingsPaneList.rowHeight)
     .contentShape(Rectangle())
-    .onHover { hovered = $0 }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(pane.title)
     .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
@@ -171,45 +133,44 @@ struct SettingsPaneRow: View {
 }
 
 struct SettingsSearchResults: View {
-  @Environment(\.colorScheme) private var scheme
   let context: SettingsContext
 
   var body: some View {
-    let theme = SettingsTheme(scheme)
     let search = context.search
     let results = search.results
     if results.isEmpty {
       VStack(spacing: 4) {
-        OnboardingText("No Results", size: 13, weight: 600, color: theme.textSecondary)
-        OnboardingText("Nothing matches “\(search.query.trimmingCharacters(in: .whitespaces))”.", size: 12, color: theme.textTertiary, alignment: .center)
+        Text("No Results")
+          .font(.system(size: 13, weight: .semibold))
+          .foregroundStyle(.secondary)
+        Text("Nothing matches “\(search.query.trimmingCharacters(in: .whitespaces))”.")
+          .font(.system(size: 12))
+          .foregroundStyle(.tertiary)
+          .multilineTextAlignment(.center)
       }
       .padding(.top, 40)
       .padding(.horizontal, 16)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     } else {
       ScrollViewReader { proxy in
-        ScrollView(.vertical) {
-          LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(groups(results), id: \.pane) { group in
-              HStack(spacing: 6) {
-                Image(systemName: group.pane.symbol).font(.system(size: 11)).foregroundStyle(theme.textTertiary).frame(width: 16, height: 16)
-                OnboardingText(group.pane.title, size: 11, weight: 600, color: theme.textTertiary, lines: 1)
-              }
-              .padding(.horizontal, 8)
-              .frame(height: 26)
-              .padding(.top, 4)
+        List {
+          ForEach(groups(results), id: \.pane) { group in
+            Section {
               ForEach(group.rows, id: \.offset) { row in
-                ResultRow(entry: row.entry, selected: row.offset == search.selected, theme: theme)
+                ResultRow(entry: row.entry, selected: row.offset == search.selected)
                   .id(row.offset)
                   .contentShape(Rectangle())
                   .onTapGesture { context.reveal(row.entry.id) }
                   .onHover { if $0 { search.selected = row.offset } }
               }
+            } header: {
+              Label(group.pane.title, systemImage: group.pane.symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.tertiary)
             }
           }
-          .padding(.horizontal, 10)
-          .padding(.bottom, 12)
         }
+        .listStyle(.sidebar)
         .onChange(of: search.selected) { _, selected in
           proxy.scrollTo(selected)
         }
@@ -233,17 +194,21 @@ struct SettingsSearchResults: View {
 struct ResultRow: View {
   let entry: SettingEntry
   let selected: Bool
-  let theme: SettingsTheme
 
   var body: some View {
     VStack(alignment: .leading, spacing: 1) {
-      OnboardingText(entry.title, size: 13, color: selected ? .white : theme.textPrimary, lines: 1)
-      OnboardingText(entry.section != entry.title ? entry.section : entry.paneTitle, size: 11, color: selected ? Color.white.opacity(0.8) : theme.textSecondary, lines: 1)
+      Text(entry.title)
+        .font(.system(size: 13))
+        .foregroundStyle(selected ? Color.white : Color.primary)
+        .lineLimit(1)
+      Text(entry.section != entry.title ? entry.section : entry.paneTitle)
+        .font(.system(size: 11))
+        .foregroundStyle(selected ? Color.white.opacity(0.8) : Color.secondary)
+        .lineLimit(1)
     }
-    .padding(.horizontal, 8)
-    .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
-    .background(selected ? RoundedRectangle(cornerRadius: 7).fill(theme.accent) : nil)
-    .accessibilityElement(children: .combine)
+    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+    .padding(.horizontal, 6)
+    .background(selected ? RoundedRectangle(cornerRadius: 7).fill(Color.accentColor) : nil)
   }
 }
 
@@ -252,13 +217,7 @@ struct SettingsDetail: View {
   @State private var lastKey: SettingsPlace?
 
   var body: some View {
-    VStack(spacing: 0) {
-      SettingsDetailHeader(context: context)
-      content
-    }
-  }
-
-  private var content: some View {
+    let navigation = context.navigation
     ScrollViewReader { proxy in
       Group {
         if let shown = context.shown {
@@ -277,6 +236,21 @@ struct SettingsDetail: View {
       .onChange(of: context.shown) { _, shown in
         DispatchQueue.main.async { lastKey = shown }
       }
+    }
+    .toolbar {
+      ToolbarItemGroup(placement: .navigation) {
+        Button { navigation.goBack() } label: { Image(systemName: "chevron.left") }
+          .disabled(!navigation.canGoBack)
+          .help("Back")
+        Button { navigation.goForward() } label: { Image(systemName: "chevron.right") }
+          .disabled(!navigation.canGoForward)
+          .help("Forward")
+      }
+      ToolbarItem(placement: .navigation) {
+        OnboardingText(context.shown.map(context.title(for:)) ?? "", size: 15, weight: 600, color: Color(nsColor: .labelColor), lines: 1)
+          .padding(.leading, 8)
+      }
+      .sharedBackgroundVisibility(.hidden)
     }
   }
 
@@ -322,61 +296,28 @@ struct SettingsDetail: View {
   }
 }
 
-struct SettingsDetailHeader: View {
-  @Environment(\.colorScheme) private var scheme
-  let context: SettingsContext
-
-  var body: some View {
-    let theme = SettingsTheme(scheme)
-    let navigation = context.navigation
-    ZStack(alignment: .leading) {
-      WindowDragArea(draggable: true)
-      HStack(spacing: 2) {
-        SettingsIconButton(symbol: "chevron.left", help: "Back", disabled: !navigation.canGoBack) { navigation.goBack() }
-        SettingsIconButton(symbol: "chevron.right", help: "Forward", disabled: !navigation.canGoForward) { navigation.goForward() }
-        OnboardingText(context.shown.map(context.title(for:)) ?? "", size: 15, weight: 600, color: theme.textPrimary, lines: 1)
-          .padding(.leading, 8)
-          .allowsHitTesting(false)
+struct WindowChromeTrimmer: NSViewRepresentable {
+  final class Probe: NSView {
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      trim()
+      DispatchQueue.main.async { [weak self] in
+        self?.trim()
+        if self?.window?.firstResponder is NSText { self?.window?.makeFirstResponder(nil) }
       }
-      .padding(.horizontal, 12)
     }
-    .frame(height: SettingsWindowView.toolbarHeight)
-  }
-}
 
-struct SettingsIconButton: View {
-  @Environment(\.colorScheme) private var scheme
-  let symbol: String
-  let help: String
-  var disabled = false
-  let action: () -> Void
-  @State private var hovered = false
-
-  var body: some View {
-    let theme = SettingsTheme(scheme)
-    Button(action: action) {
-      Image(systemName: symbol)
-        .font(.system(size: 13))
-        .foregroundStyle(disabled ? theme.iconDisabled : theme.icon)
-        .frame(width: 28, height: 28)
-        .background(RoundedRectangle(cornerRadius: 6).fill(!disabled && hovered ? theme.toolbarHover : .clear))
-        .contentShape(Rectangle())
+    func trim() {
+      guard let toolbar = window?.toolbar else { return }
+      for (index, item) in toolbar.items.enumerated().reversed() where item.itemIdentifier == .toggleSidebar || item.itemIdentifier.rawValue.localizedCaseInsensitiveContains("toggleSidebar") || item.itemIdentifier.rawValue.localizedCaseInsensitiveContains("sidebarToggle") {
+        toolbar.removeItem(at: index)
+      }
     }
-    .buttonStyle(SettingsIconPressStyle(disabled: disabled, theme: theme))
-    .disabled(disabled)
-    .onHover { hovered = $0 }
-    .help(help)
-    .accessibilityLabel(help)
+  }
+
+  func makeNSView(context: Context) -> Probe { Probe() }
+
+  func updateNSView(_ view: Probe, context: Context) {
+    DispatchQueue.main.async { view.trim() }
   }
 }
-
-struct SettingsIconPressStyle: ButtonStyle {
-  let disabled: Bool
-  let theme: SettingsTheme
-
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .background(RoundedRectangle(cornerRadius: 6).fill(configuration.isPressed && !disabled ? theme.toolbarPressed : .clear))
-  }
-}
-

@@ -165,8 +165,11 @@ struct ShortcutsPane: View {
       Section {
         SettingToggle("shortcuts.undoReopensClosedTab", key: "undoReopensClosedTab")
       } header: {
-        SettingsIntro("Perform common actions in \(app) faster and from anywhere. Select an action to customize its keyboard shortcut.")
-          .padding(.bottom, 6)
+        Text("Perform common actions in \(app) faster and from anywhere. Select an action to customize its keyboard shortcut.")
+          .font(.callout)
+          .fontWeight(.regular)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
 
       Section {
@@ -174,16 +177,17 @@ struct ShortcutsPane: View {
       } header: {
         SettingsAnchor("shortcuts.actions") {
           HStack(spacing: 8) {
-            SettingsSearchBox(text: $model.query, focusRequest: 0, onSubmit: {}, onArrow: { _ in }, placeholder: "Search actions")
+            ShortcutsSearchField(text: $model.query)
               .frame(maxWidth: .infinity)
-            SettingsPopUp(ShortcutFilter.allCases.map { SettingsPopUpItem($0, $0.title) }, selection: $model.filter, minWidth: 170)
+            SettingsPopUp(ShortcutFilter.allCases.map { SettingsPopUpItem($0, $0.title) }, selection: $model.filter)
+              .frame(minWidth: 170)
+              .fixedSize()
             Button("Reset All Shortcuts") { model.resetAll() }
-              .buttonStyle(SettingsButtonStyle())
               .disabled(overrides.isEmpty)
           }
+          .font(.body)
+          .fontWeight(.regular)
         }
-        .padding(.horizontal, -SettingsFormMetrics.headerLeading)
-        .padding(.top, SettingsFormMetrics.headerlessSectionSpacing - SettingsFormMetrics.headerTop)
       }
 
       if model.items != nil && shown.isEmpty {
@@ -264,7 +268,6 @@ struct ShortcutRow: View {
 }
 
 struct ShortcutField: View {
-  @Environment(\.colorScheme) private var scheme
   let shortcut: KeyShortcut
   let remappable: Bool
   let recording: Bool
@@ -280,22 +283,24 @@ struct ShortcutField: View {
     if remappable {
       recorder
     } else {
-      OnboardingText(text.isEmpty ? "—" : text, size: 13, color: SettingsTheme(scheme).textTertiary)
+      Text(text.isEmpty ? "—" : text)
+        .foregroundStyle(.tertiary)
         .frame(minWidth: Self.minWidth, alignment: .trailing)
         .help("(not remappable)")
     }
   }
 
   private var recorder: some View {
-    let theme = SettingsTheme(scheme)
-    return HStack(spacing: 4) {
-      OnboardingText(text.isEmpty ? "None" : text, size: 13, color: recording ? theme.accent : text.isEmpty ? theme.textTertiary : theme.textPrimary, lines: 1, alignment: .center)
+    HStack(spacing: 4) {
+      Text(text.isEmpty ? "None" : text)
+        .foregroundStyle(recording ? AnyShapeStyle(Color.accentColor) : text.isEmpty ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+        .lineLimit(1)
         .frame(maxWidth: .infinity)
       if hovered && !recording && !shortcut.key.isEmpty {
         Button(action: onClear) {
           Image(systemName: "xmark.circle.fill")
             .font(.system(size: 11))
-            .foregroundStyle(theme.textTertiary)
+            .foregroundStyle(.tertiary)
             .frame(width: 14, height: 14)
         }
         .buttonStyle(.plain)
@@ -307,11 +312,11 @@ struct ShortcutField: View {
     .fixedSize()
     .background {
       RoundedRectangle(cornerRadius: 6)
-        .fill(recording ? theme.accent.opacity(0.2) : hovered ? theme.controlHover : theme.control)
+        .fill(recording ? Color.accentColor.opacity(0.2) : Color.primary.opacity(hovered ? 0.1 : 0.05))
     }
     .overlay {
       RoundedRectangle(cornerRadius: 6)
-        .strokeBorder(recording ? theme.accent : theme.controlBorder, lineWidth: recording ? 1.5 : 1)
+        .strokeBorder(recording ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: recording ? 1.5 : 1)
     }
     .contentShape(RoundedRectangle(cornerRadius: 6))
     .onTapGesture(perform: onRecord)
@@ -323,3 +328,35 @@ struct ShortcutField: View {
   }
 }
 
+struct ShortcutsSearchField: NSViewRepresentable {
+  @Binding var text: String
+
+  func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+  func makeNSView(context: Context) -> NSSearchField {
+    let field = NSSearchField()
+    field.placeholderString = "Search actions"
+    field.sendsSearchStringImmediately = true
+    field.delegate = context.coordinator
+    return field
+  }
+
+  func updateNSView(_ field: NSSearchField, context: Context) {
+    context.coordinator.text = $text
+    if field.stringValue != text { field.stringValue = text }
+  }
+
+  @MainActor
+  final class Coordinator: NSObject, NSSearchFieldDelegate {
+    var text: Binding<String>
+
+    init(text: Binding<String>) {
+      self.text = text
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+      guard let field = notification.object as? NSSearchField else { return }
+      text.wrappedValue = field.stringValue
+    }
+  }
+}

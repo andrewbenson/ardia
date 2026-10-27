@@ -20,11 +20,7 @@ enum SettingsDev {
 
   static func firstFrame(showing title: String, turns: Int, _ done: @escaping ([String: Any]) -> Void) {
     DispatchQueue.main.async {
-      let snapshot = capture()
-      let texts = (snapshot["texts"] as? [[Any]]) ?? []
-      let header = texts.contains { entry in
-        (entry.first as? String)?.hasPrefix("root/_NSGraphicsView:0/") == true && (entry.last as? String) == title
-      }
+      let header = toolbarTitle(in: NativeSettingsWindow.window?.contentView?.superview) == title
       if turns <= 0 || header {
         NativeSettingsWindow.window?.contentView?.layoutSubtreeIfNeeded()
         return done(capture())
@@ -33,7 +29,16 @@ enum SettingsDev {
     }
   }
 
-  static func switchPane(_ pane: String, done: @escaping (String) -> Void) {
+  static func toolbarTitle(in view: NSView?) -> String? {
+    guard let view else { return nil }
+    if let text = view as? OnboardingTextNSView { return text.text }
+    for child in view.subviews {
+      if let found = toolbarTitle(in: child) { return found }
+    }
+    return nil
+  }
+
+    static func switchPane(_ pane: String, done: @escaping (String) -> Void) {
     guard NativeSettingsWindow.window != nil else { return done(#"{"error":"no window"}"#) }
     awaiting = (pane, Date(), done)
     NativeSettingsWindow.navigate(pane: pane, profileId: nil, detail: nil)
@@ -112,6 +117,8 @@ enum SettingsDev {
       }
     case "search":
       return json(search())
+    case "backdrop":
+      return json(["views": backdrop(window?.contentView?.superview, active: argument == "active")])
     case "windows":
       let list = NSApp.windows.map { "\(type(of: $0)) #\($0.windowNumber) '\($0.title)' visible=\($0.isVisible) key=\($0.isKeyWindow)" }
       return json(["windows": list])
@@ -119,6 +126,32 @@ enum SettingsDev {
       return #"{"error":"unknown action"}"#
     }
     return json(state(window))
+  }
+
+  static func backdrop(_ view: NSView?, active: Bool) -> [[String: Any]] {
+    guard let view, let window = view.window else { return [] }
+    var found: [[String: Any]] = []
+    let name = String(describing: type(of: view))
+    let frame = view.convert(view.bounds, to: nil)
+    let fill = view.layer?.backgroundColor.flatMap { NSColor(cgColor: $0)?.alphaComponent } ?? 0
+    if let effect = view as? NSVisualEffectView {
+      if active { effect.state = .active }
+      found.append([
+        "view": name, "frame": "\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))",
+        "material": effect.material.rawValue, "blending": effect.blendingMode == .behindWindow ? "behindWindow" : "withinWindow",
+        "state": effect.state.rawValue, "hidden": effect.isHiddenOrHasHiddenAncestor,
+      ])
+    } else if name.localizedCaseInsensitiveContains("glass") || name.localizedCaseInsensitiveContains("backdrop") || view.isOpaque || fill > 0.01 {
+      found.append([
+        "view": name, "frame": "\(Int(frame.minX)),\(Int(frame.minY)) \(Int(frame.width))x\(Int(frame.height))",
+        "opaque": view.isOpaque, "fill": fill, "hidden": view.isHiddenOrHasHiddenAncestor,
+      ])
+    }
+    if view === window.contentView?.superview {
+      found.append(["window": "opaque=\(window.isOpaque) background=\(window.backgroundColor.alphaComponent) titlebarTransparent=\(window.titlebarAppearsTransparent)"])
+    }
+    for child in view.subviews { found += backdrop(child, active: active) }
+    return found
   }
 
   static func keyCode(_ text: String) -> UInt16 {

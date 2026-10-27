@@ -119,7 +119,7 @@ struct AutofillAddressSheet: View {
           if index > 0 { Divider() }
           PasswordsSheetRow(title: field.title) {
             TextField("", text: Binding(get: { values[field] ?? "" }, set: { values[field] = $0 }))
-              .textFieldStyle(SettingsTextFieldStyle())
+              .textFieldStyle(.roundedBorder)
               .frame(width: 250)
               .focused($focused, equals: field)
               .onSubmit { if !AutofillAddressField.isEmpty(values) { Task { await save() } } }
@@ -193,7 +193,7 @@ struct AutofillCardSheet: View {
                 error = ""
                 self.number = AutofillText.formatCardNumber(String(AutofillText.digits(typed).prefix(19)))
               }))
-              .textFieldStyle(SettingsTextFieldStyle())
+              .textFieldStyle(.roundedBorder)
               .frame(width: saved == nil ? 250 : 222)
               .focused($numberFocused)
               if saved != nil {
@@ -210,15 +210,15 @@ struct AutofillCardSheet: View {
         Divider()
         PasswordsSheetRow(title: "Name on Card") {
           TextField("", text: $name)
-            .textFieldStyle(SettingsTextFieldStyle())
+            .textFieldStyle(.roundedBorder)
             .frame(width: 250)
         }
         Divider()
         PasswordsSheetRow(title: "Expiration Date") {
           HStack(spacing: 6) {
-            SettingPicker(AutofillText.monthOptions, selection: $month).popUpWidth(90)
+            SettingPicker(AutofillText.monthOptions, selection: $month)
               .frame(minWidth: 90)
-            SettingPicker(AutofillText.yearOptions(current: saved?.expYear, now: model.now()), selection: $year).popUpWidth(90)
+            SettingPicker(AutofillText.yearOptions(current: saved?.expYear, now: model.now()), selection: $year)
               .frame(minWidth: 90)
           }
         }

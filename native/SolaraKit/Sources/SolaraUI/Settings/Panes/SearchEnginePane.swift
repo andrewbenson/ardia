@@ -283,7 +283,7 @@ struct SheetField: View {
         .font(.system(size: 11.5))
         .foregroundStyle(.secondary)
       TextField("", text: $text, prompt: Text(placeholder))
-        .textFieldStyle(SettingsTextFieldStyle())
+        .textFieldStyle(.roundedBorder)
         .onSubmit(submit)
     }
     .padding(.top, 12)

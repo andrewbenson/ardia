@@ -366,6 +366,12 @@ struct PrivacyPaneTests {
     #expect(SettingsFavicon.hostInitial("https://www.github.com/x") == "G")
     #expect(SettingsFavicon.hostInitial("http://127.0.0.1:8080") == nil)
     #expect(SettingsFavicon.hostInitial("about:blank") == nil)
+    #expect(BundledSiteIcons.name(for: "https://github.com", dark: false) == "github")
+    #expect(BundledSiteIcons.name(for: "https://github.com", dark: true) == "github-dark")
+    #expect(BundledSiteIcons.name(for: "https://www.notion.so", dark: true) == "notion")
+    #expect(BundledSiteIcons.name(for: "https://docs.google.com/document/d/1", dark: false) == "docs")
+    #expect(BundledSiteIcons.name(for: "https://docs.google.com/spreadsheets/d/1", dark: false) == nil)
+    #expect(BundledSiteIcons.name(for: "https://bitbucket.org", dark: false) == nil)
     let png = NSImage(size: NSSize(width: 2, height: 2), flipped: false) { _ in true }
     let data = try! #require(png.tiffRepresentation.flatMap { NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) })
     #expect(PrivacyImages.dataURI("data:image/png;base64,\(data.base64EncodedString())") != nil)

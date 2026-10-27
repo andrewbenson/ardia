@@ -271,7 +271,7 @@ struct UpdatesSection: View {
                 model.setUpdater { $0.channel = next }
                 Task { await model.services.setUpdateChannel(next); await model.refreshUpdater() }
               })
-            ).popUpWidth(190)
+            )
             .disabled(!ready)
           }
         }

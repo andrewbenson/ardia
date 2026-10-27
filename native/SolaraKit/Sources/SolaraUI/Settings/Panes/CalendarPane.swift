@@ -183,17 +183,17 @@ struct CalendarPane: View {
             Button("Open System Settings") { model.services.openCalendarPrivacySettings() }
           } else if !model.connected {
             Button("Connect Calendar…") { model.connect() }
-              .buttonStyle(.settingsPrimary)
+              .buttonStyle(.borderedProminent)
           }
         }
       }
 
       SettingsSection("Meeting alerts") {
         SettingRow("calendar.nextAlert") {
-          SettingPicker(CalendarAlertLeads.options, selection: Binding(get: { options.alertLead }, set: { model.update(.alertLead($0)) })).popUpWidth(170)
+          SettingPicker(CalendarAlertLeads.options, selection: Binding(get: { options.alertLead }, set: { model.update(.alertLead($0)) }))
         }
         SettingRow("calendar.alertCondition") {
-          SettingPicker(CalendarAlertLeads.conditions, selection: Binding(get: { options.alertCondition }, set: { model.update(.alertCondition($0)) })).popUpWidth(170)
+          SettingPicker(CalendarAlertLeads.conditions, selection: Binding(get: { options.alertCondition }, set: { model.update(.alertCondition($0)) }))
             .disabled(options.alertLead == "never")
         }
       }

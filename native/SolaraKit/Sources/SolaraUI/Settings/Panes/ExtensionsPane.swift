@@ -317,7 +317,7 @@ struct ExtensionsList: View {
           HStack(spacing: 6) {
             TextField("", text: $link, prompt: Text("chromewebstore.google.com/detail/…"))
               .labelsHidden()
-              .textFieldStyle(SettingsTextFieldStyle())
+              .textFieldStyle(.roundedBorder)
               .frame(width: 210)
               .onSubmit(addLink)
             Button("Add", action: addLink)

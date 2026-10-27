@@ -48,14 +48,7 @@ enum NativeMedia {
     HostedViews.register(smallBar) { windowId in
       let view = SmallBarView()
       var tabId = ""
-      view.onAction = { event in
-        switch event {
-        case .button(let id): action(windowId, "smallBar", tabId, ["action": id])
-        case .fieldClick: action(windowId, "smallBar", tabId, ["action": "field"])
-        case .fieldMenu: action(windowId, "smallBar", tabId, ["action": "fieldMenu"])
-        case .profile: action(windowId, "smallBar", tabId, ["action": "profile"])
-        }
-      }
+      view.onAction = { smallBarAction(windowId, tabId, $0) }
       return content(smallBar, windowId, view) { json in
         guard let state = SmallBarState.decode(json) else { return }
         tabId = state.tabId ?? ""
@@ -125,11 +118,23 @@ enum NativeMedia {
   }
 
   private static func content(_ kind: String, _ windowId: String, _ view: NSView, takesFocus: Bool = false, onState: @escaping (String) -> Void) -> HostedContent {
+    HostedContent(view: view, onUnmount: track(kind, windowId, view), takesFocus: takesFocus, onState: onState)
+  }
+
+  static func track(_ kind: String, _ windowId: String, _ view: NSView) -> () -> Void {
     mounted.removeAll { $0.view.value == nil }
     let entry = WeakMediaView(view)
     mounted.append((kind, windowId, entry))
-    return HostedContent(
-      view: view, onUnmount: { mounted.removeAll { $0.view === entry } }, takesFocus: takesFocus, onState: onState)
+    return { mounted.removeAll { $0.view === entry } }
+  }
+
+  static func smallBarAction(_ windowId: String, _ tabId: String, _ event: SmallBarAction) {
+    switch event {
+    case .button(let id): action(windowId, "smallBar", tabId, ["action": id])
+    case .fieldClick: action(windowId, "smallBar", tabId, ["action": "field"])
+    case .fieldMenu: action(windowId, "smallBar", tabId, ["action": "fieldMenu"])
+    case .profile: action(windowId, "smallBar", tabId, ["action": "profile"])
+    }
   }
 
   static func player(_ source: String, _ windowId: String, _ tabId: String, _ action: MediaAction) {

@@ -1,4 +1,5 @@
 import { WindowBackdrop } from "@ardia/shaders";
+import { littleSolaraShellActive, setLittleSolaraBackdrop, setLittleSolaraBar } from "@ardia/settings";
 import { ContextMenuArea, setTrafficLightsCenter, WindowDragRegion } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
@@ -29,15 +30,20 @@ const FIELD_LEFT = 84;
 
 export function LittleArdiaWindow() {
   const theme = useTheme();
+  const windowId = useWindowId();
+  const [shell] = useState(() => littleSolaraShellActive(windowId));
   const [width, setWidth] = useState(0);
   return (
-    <View style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-      <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
-      <View style={{ flex: 1, flexDirection: "row", paddingTop: SMALL_BAR_HEIGHT, paddingLeft: SMALL_INSET, paddingRight: SMALL_INSET, paddingBottom: SMALL_INSET }}>
+    <View style={{ flex: 1 }} pointerEvents={shell ? "box-none" : "auto"} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {shell ? null : <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />}
+      <View
+        pointerEvents={shell ? "box-none" : "auto"}
+        style={{ flex: 1, flexDirection: "row", paddingTop: SMALL_BAR_HEIGHT, paddingLeft: SMALL_INSET, paddingRight: SMALL_INSET, paddingBottom: SMALL_INSET }}
+      >
         <ContentCard />
       </View>
-      <View style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
-        <LittleArdiaBar />
+      <View pointerEvents={shell ? "box-none" : "auto"} style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
+        {shell ? <ShellLittleArdiaBar /> : <LittleArdiaBar />}
       </View>
       <CommandPanel windowWidth={width} />
       <DownloadsPopover />
@@ -96,7 +102,7 @@ function LittleArdiaBar() {
   return nativeMedia("littleSolara.bar") ? <NativeLittleArdiaBar /> : <RNLittleArdiaBar />;
 }
 
-function NativeLittleArdiaBar() {
+function useSmallBarState() {
   const theme = useTheme();
   const windowId = useWindowId();
   const tab = useActiveTab();
@@ -107,22 +113,11 @@ function NativeLittleArdiaBar() {
   const live = useTabLive(tab?.id ?? "");
   const progress = usePageProgress(tab?.id ?? "");
   const insecure = usePage(tab?.id ?? "", (p) => !!insecureLevel(p));
-  const holder = useRef<View>(null);
-  useEffect(() => {
-    void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
-  }, [windowId]);
   const buttons = [
     { id: "copy", icon: copied ? "checkmark" : "link", size: 14, disabled: !tab?.url, tooltip: "Copy Link (⇧⌘C)" },
     { id: "open", icon: "arrow.up.left.and.arrow.down.right", size: 13, tooltip: `Open in ${PRODUCT} (⌘O)` },
   ];
   const count = buttons.length + (severalProfiles ? 1 : 0);
-  const anchor = () =>
-    holder.current?.measureInWindow((x, y, width) => {
-      const right = SMALL_INSET + count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * 2 + 6;
-      const fieldWidth = width - FIELD_LEFT - right;
-      if (fieldWidth > 0) setUrlAnchor(windowId, { left: x + FIELD_LEFT, top: y + (SMALL_BAR_HEIGHT - 28) / 2, width: fieldWidth, sidebar: { height: 28 } });
-    });
-  useEffect(anchor, [count]);
   const url = tab?.url ?? "";
   const host = !url ? "" : url.startsWith("file:") ? "File" : breadcrumb(url).host;
   const state = {
@@ -142,6 +137,42 @@ function NativeLittleArdiaBar() {
       : null,
     theme: mediaTheme(theme, { iconDisabled: theme.iconDisabled }),
   };
+  return { windowId, tab, state, count };
+}
+
+function useBarAnchor(windowId: string, count: number) {
+  const holder = useRef<View>(null);
+  useEffect(() => {
+    void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
+  }, [windowId]);
+  const anchor = () =>
+    holder.current?.measureInWindow((x, y, width) => {
+      const right = SMALL_INSET + count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * 2 + 6;
+      const fieldWidth = width - FIELD_LEFT - right;
+      if (fieldWidth > 0) setUrlAnchor(windowId, { left: x + FIELD_LEFT, top: y + (SMALL_BAR_HEIGHT - 28) / 2, width: fieldWidth, sidebar: { height: 28 } });
+    });
+  useEffect(anchor, [count]);
+  return { holder, anchor };
+}
+
+function ShellLittleArdiaBar() {
+  const theme = useTheme();
+  const { windowId, tab, state, count } = useSmallBarState();
+  const { holder, anchor } = useBarAnchor(windowId, count);
+  const json = JSON.stringify(state);
+  const backdrop = JSON.stringify({ vibrancy: true, colors: theme.windowTint, angle: 180, grainScale: 1, ...theme.backdrop, grainOpacity: theme.grain });
+  useEffect(() => void setLittleSolaraBar(windowId, json), [windowId, json]);
+  useEffect(() => void setLittleSolaraBackdrop(windowId, backdrop), [windowId, backdrop]);
+  return (
+    <View ref={holder} onLayout={anchor} pointerEvents="box-none" style={{ height: SMALL_BAR_HEIGHT }}>
+      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={(SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2} right={SMALL_INSET} /> : null}
+    </View>
+  );
+}
+
+function NativeLittleArdiaBar() {
+  const { windowId, tab, state, count } = useSmallBarState();
+  const { holder, anchor } = useBarAnchor(windowId, count);
   return (
     <View ref={holder} onLayout={anchor} style={{ height: SMALL_BAR_HEIGHT }}>
       <WindowDragRegion style={StyleSheet.absoluteFill} />

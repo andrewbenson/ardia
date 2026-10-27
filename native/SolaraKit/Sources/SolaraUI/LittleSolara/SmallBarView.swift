@@ -181,7 +181,7 @@ final class SmallBarField: NSView {
     let available = max(0, bounds.width - x - 8)
     let hostSize = host.intrinsicContentSize
     let hostWidth = min(ceil(hostSize.width), available * 0.6)
-    host.frame = CGRect(x: x, y: ((h - hostSize.height) / 2).rounded(), width: hostWidth, height: hostSize.height)
+    host.frame = CGRect(x: x - 2, y: ((h - hostSize.height) / 2).rounded(), width: hostWidth + 4, height: hostSize.height)
     title.frame = CGRect(x: x + hostWidth, y: (h - 18) / 2, width: max(0, available - hostWidth), height: 18)
     let ph = placeholder.intrinsicContentSize
     placeholder.frame = CGRect(x: x, y: ((h - ph.height) / 2).rounded(), width: available, height: ph.height)

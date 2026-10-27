@@ -1,0 +1,82 @@
+import { NativeOmnibox, type NativeOmniboxHandle, type NativeOmniboxVariant } from "@ardia/settings";
+import { useMemo, useRef, useState } from "react";
+import { View } from "react-native";
+import { commandBarFocus } from "../../lib/focusClaims";
+import { useTheme } from "../../lib/theme";
+import { useBrowser } from "../../store/browser";
+import { useWindowId, useWindowProfileId } from "../../store/hooks";
+import type { NewTabTarget } from "../../store/types";
+import { setPopover } from "../layout/pageState";
+import type { BarDismissal } from "./barState";
+import { useOpenTabsStart } from "./dropdownStart";
+import { openFromBar, useNativeBar, useThemeTokens } from "./nativeBar";
+import { openFromNewTabBar } from "./newTabBar";
+import type { Disposition } from "./open";
+
+export function NativeOmniboxBar({
+  variant,
+  tabId,
+  initialText = "",
+  onCancel,
+  onDone = onCancel,
+  opensTab,
+  floating = false,
+}: {
+  variant: NativeOmniboxVariant;
+  floating?: boolean;
+  tabId: string;
+  initialText?: string;
+  opensTab?: NewTabTarget;
+  onCancel?(): void;
+  onDone?(reason?: BarDismissal): void;
+}) {
+  const theme = useTheme();
+  const windowId = useWindowId();
+  const profileId = useWindowProfileId();
+  const incognito = useBrowser((s) => !!s.windows[windowId]?.incognito);
+  const currentUrl = useBrowser((s) => (opensTab ? "" : (s.tabs[tabId]?.url ?? "")));
+  const openTabRows = useOpenTabsStart(!!opensTab, windowId, profileId);
+  const openTabs = useMemo(
+    () => JSON.stringify(openTabRows.map((s) => (s.kind === "page" ? { url: s.url, title: s.title, favicon: s.favicon ?? null, tabId: s.tabId ?? null } : null)).filter(Boolean)),
+    [openTabRows],
+  );
+  const themeProps = useThemeTokens(theme);
+  const ref = useRef<NativeOmniboxHandle>(null);
+  const [height, setHeight] = useState<number | null>(null);
+
+  const go = (url: string, disposition: Disposition = "current") => {
+    if (!url) return;
+    if (opensTab && disposition !== "newWindow") return openFromNewTabBar(windowId, opensTab, url);
+    openFromBar(url, tabId, disposition);
+  };
+  const { props } = useNativeBar({ ref, windowId, tabId, profileId, driverId: `${windowId}:${variant}`, focusTag: commandBarFocus, go });
+
+  return (
+    <View style={{ height: height ?? undefined }}>
+      <NativeOmnibox
+        ref={ref}
+        style={{ flex: 1, minHeight: height ?? 1 }}
+        windowId={windowId}
+        tabId={tabId}
+        profileId={profileId}
+        variant={variant}
+        floating={floating}
+        opensTab={!!opensTab}
+        initialText={initialText}
+        incognito={incognito}
+        currentUrl={currentUrl}
+        openTabs={openTabs}
+        dark={!!theme.dark}
+        theme={themeProps}
+        {...props}
+        onDone={(e) => onDone?.(e.nativeEvent.reason ?? undefined)}
+        onCancel={() => onCancel?.()}
+        onSiteControls={() => {
+          onCancel?.();
+          setPopover(tabId, "siteControls");
+        }}
+        onBarLayout={(e) => setHeight(e.nativeEvent.height)}
+      />
+    </View>
+  );
+}

@@ -12,7 +12,9 @@ import { commandBarCentred, useCardAnchors, useUrlAnchors } from "./layout/windo
 import { barWidth } from "./NewTabPage";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
-import { Omnibox, PANEL_TEXT_LEFT } from "./Omnibox";
+import { nativeOmniboxAvailable } from "@ardia/settings";
+import { Omnibox as ReactOmnibox, PANEL_TEXT_LEFT } from "./Omnibox";
+import { NativeOmniboxBar } from "./omnibox/NativeOmniboxBar";
 import { closePanelToHeroBar, type BarDismissal } from "./omnibox/barState";
 import { insecureLevel, URL_FIELD, urlTextLeft } from "./Toolbar";
 
@@ -26,6 +28,10 @@ const DROPDOWN_PAST_FIELD = 137;
 const DROPDOWN_RADIUS = 12;
 const PANEL_OPEN_HEIGHT = 107;
 const CENTRED_TOP_SHARE = 0.22;
+
+function Omnibox(props: ComponentProps<typeof ReactOmnibox> & { variant: "panel" | "sidebar" }) {
+  return nativeOmniboxAvailable() ? <NativeOmniboxBar {...props} /> : <ReactOmnibox {...props} />;
+}
 
 const GROW_MS = 130;
 const GROW_EASING = Easing.out(Easing.exp);

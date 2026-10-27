@@ -51,7 +51,11 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
     guard let field else { return }
     applying = true
     defer { applying = false }
-    if field.stringValue != value { field.stringValue = value }
+    if let editor = field.currentEditor() as? NSTextView {
+      if editor.string != value { editor.string = value }
+    } else if field.stringValue != value {
+      field.stringValue = value
+    }
     if let editor = field.currentEditor() {
       let length = (value as NSString).length
       let start = min(selection.start, length)
@@ -90,10 +94,22 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
   }
 
   func controlTextDidEndEditing(_ obj: Notification) {
-    model.didBlur()
+    DispatchQueue.main.async { [weak self] in
+      guard let self, !self.holdsFocus else { return }
+      self.model.didBlur()
+    }
+  }
+
+  var holdsFocus: Bool {
+    guard let field, let responder = field.window?.firstResponder else { return false }
+    if responder === field { return true }
+    guard let editor = responder as? NSTextView, editor.isFieldEditor else { return false }
+    return editor.delegate as AnyObject? === field
   }
 
   func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+    if textView.hasMarkedText() { return false }
+    if selector == #selector(NSResponder.deleteBackward(_:)) && !textView.string.isEmpty { return false }
     let flags = NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []
     func key(_ name: HeroKey.Name) -> HeroKey {
       HeroKey(name, shift: flags.contains(.shift), alt: flags.contains(.option), meta: flags.contains(.command), ctrl: flags.contains(.control))

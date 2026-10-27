@@ -42,6 +42,7 @@ import { ResizeHandle } from "./sidebar/ResizeHandle";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge } from "./sidebar/ScrollEdge";
 import { entriesHeight, firstPaintEntries, rowSpan, startsOffScreen, type Section } from "./sidebar/geometry";
 import { measureRow } from "./sidebar/state";
+import { NativeSidebar, nativeSidebarEnabled } from "./sidebar/NativeSidebar";
 import { SplitRowItem, TabRowItem } from "./sidebar/TabRow";
 import { closeFolderPanel } from "./sidebar/tileFolderUi";
 import { useSidebarTokens } from "./sidebar/tokens";
@@ -104,7 +105,9 @@ export function Sidebar({ width }: { width: number }) {
             }}
             onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
           >
-            {pages.map((page) => (
+            {nativeSidebarEnabled() ? (
+              <NativeSidebar windowId={windowId} profileId={current} addressBar={addressBar} />
+            ) : pages.map((page) => (
               <SidebarPage
                 key={page.id}
                 profileId={page.id}

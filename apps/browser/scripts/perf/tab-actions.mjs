@@ -25,6 +25,8 @@
 //   UI blocks           the blocks: native views created, updated, moved (actabs.m)
 //   display+CA commit   the blocks' end → Core Animation's commit of that transaction (AppKit layout, views drawn, commit)
 //   first paint         event → that commit, for the first React commit after the store change
+//   selection shown     event → the Core Animation commit that shows the new active row: the native sidebar's
+//                       (ARDIA_NATIVE_SIDEBAR=1, its SolaraSidebarSelectionShown notification), else first paint
 //   ui                  event → the commit of the last React commit within 500 ms that changed anything on screen (a flush
 //                       Core Animation doesn't commit within 60 ms had nothing to draw)
 //   page                event → the shown page's second requestAnimationFrame after it turned visible (CDP; switches)
@@ -325,11 +327,12 @@ async function runAction(rig, ctx, name) {
       await sleep(900);
       const r = await rowPoint(rig, w1, id);
       if (!r) throw new Error("no row for the new tab");
-      await rig.eval(`const f = acPerf.findFibers("TabRow", 400).find((f) => f.memoizedProps.tabId === ${JSON.stringify(id)});
+      const fiber = await rig.eval(`const f = acPerf.findFibers("TabRow", 400).find((f) => f.memoizedProps.tabId === ${JSON.stringify(id)});
         let host = null;
         for (let c = f?.child; c && !host; c = c.child) if (c.tag === 5) host = c;
         host?.memoizedProps.onMouseEnter?.();
         return !!host;`);
+      if (!fiber) await rig.op({ op: "hover", window: ctx.win.number, x: r.x + r.width / 2, y: r.y + r.height / 2 });
       await sleep(250);
       send = () => rig.op({ op: "click", window: ctx.win.number, x: r.x + r.width - 6 - 11, y: r.y + r.height / 2, holdMs: 60 });
       start = "up";
@@ -416,6 +419,9 @@ async function runAction(rig, ctx, name) {
     }
   }
   const timing = analyse({ changes: got.changes, commits: got.commits, flushes, pageFrame }, startAt);
+  const nativeShown = rig.records(t0).find((r) => r.k === "n" && r.s >= startAt - 1);
+  timing.shown = nativeShown ? nativeShown.c - startAt : timing.firstPaint;
+  timing.nativeStore = nativeShown ? nativeShown.s - startAt : NaN;
   if (name === "cmdT") {
     await S(`const w = S().windows[${JSON.stringify(w1)}]; const id = w.activeTabIds[w.profileId]; if (!S().tabs[id].url) S().closeTab(id); return true;`);
   }
@@ -506,14 +512,14 @@ function report() {
   const sides = [...new Set(samples.map((s) => s.side))];
   const actions = [...new Set(samples.map((s) => s.action))];
   const f = (x) => (Number.isFinite(x) ? x.toFixed(1) : "–");
-  console.log("| action | side | n | total median | total p90 | first paint | event→store | store→commit | layout | main wait | UI blocks | display+CA commit | page | renders | commits | errors |");
-  console.log("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+  console.log("| action | side | n | total median | total p90 | selection shown | first paint | event→store | store→commit | layout | main wait | UI blocks | display+CA commit | page | renders | commits | errors |");
+  console.log("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
   for (const a of actions)
     for (const side of sides) {
       const all = samples.filter((s) => s.action === a && s.side === side);
       const ok = all.filter((s) => !s.error && s.worked !== false && Number.isFinite(s.total));
       const m = (k, q = 0.5) => quantile(ok.map((s) => s[k]), q);
-      console.log(`| ${a} | ${side} | ${ok.length} | ${f(m("total"))} | ${f(m("total", 0.9))} | ${f(m("firstPaint"))} | ${f(m("store"))} | ${f(m("commit"))} | ${f(m("layout"))} | ${f(m("mainWait"))} | ${f(m("blocks"))} | ${f(m("display"))} | ${f(m("page"))} | ${f(m("renders"))} | ${f(m("commits"))} | ${all.length - ok.length} |`);
+      console.log(`| ${a} | ${side} | ${ok.length} | ${f(m("total"))} | ${f(m("total", 0.9))} | ${f(m("shown"))} | ${f(m("firstPaint"))} | ${f(m("store"))} | ${f(m("commit"))} | ${f(m("layout"))} | ${f(m("mainWait"))} | ${f(m("blocks"))} | ${f(m("display"))} | ${f(m("page"))} | ${f(m("renders"))} | ${f(m("commits"))} | ${all.length - ok.length} |`);
     }
 }
 

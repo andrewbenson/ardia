@@ -166,6 +166,21 @@ export function holdHover(on: boolean) {
   ownerWindow = hover.windowId;
 }
 
+let nativeTarget: Target | null = null;
+
+export function nativeRowHover(windowId: string, target: Target | null) {
+  const previous = nativeTarget;
+  nativeTarget = target;
+  if (previous && previous.id !== target?.id) {
+    if (underPointer === previous.id) underPointer = null;
+    hoverLeave(previous.id);
+  }
+  if (target && target.id !== previous?.id) {
+    underPointer = target.id;
+    hoverEnter(windowId, target);
+  }
+}
+
 export function dismissHover() {
   held = false;
   owner = null;

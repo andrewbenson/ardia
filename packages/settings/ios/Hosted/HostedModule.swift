@@ -5,11 +5,19 @@ public class HostedModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraHosted")
 
-    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register() } } }
+    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register(); NativeSidebar.register() } } }
 
     Function("kinds") { () -> [String] in
       HostedViews.kinds
     }
+
+    AsyncFunction("sidebarRowFrame") { (windowId: String, key: String) -> [String: Double]? in
+      MainActor.assumeIsolated { NativeSidebar.rowFrame(windowId: windowId, key: key) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("sidebarHoverShifts") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeSidebar.hoverShifts(windowId: windowId) ?? "null" }
+    }.runOnQueue(.main)
 
     View(SolaraHostedView.self) {
       Prop("kind") { (view: SolaraHostedView, v: String) in MainActor.assumeIsolated { view.kind = v } }

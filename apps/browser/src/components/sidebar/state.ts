@@ -1,3 +1,4 @@
+import { sidebarRowFrame } from "@ardia/settings";
 import type { View } from "react-native";
 import { create } from "zustand";
 
@@ -43,6 +44,6 @@ export function rowView(windowId: string, id: string): View | undefined {
 
 export function measureRow(windowId: string, id: string): Promise<Anchor | null> {
   const view = rowView(windowId, id);
-  if (!view) return Promise.resolve(null);
+  if (!view) return sidebarRowFrame(windowId, id).catch(() => null);
   return new Promise((resolve) => view.measureInWindow((x, y, width, height) => resolve(width ? { x, y, width, height } : null)));
 }

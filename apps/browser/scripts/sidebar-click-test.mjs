@@ -46,7 +46,8 @@ const act = (a) => win().then((n) => C.devWindow(n, a));
 const shown = () => st().windows.w1.activeTabIds[st().windows.w1.profileId];
 const center = (id) => new Promise((r) => {
   const item = [...globalThis.sidebarDrag.items.values()].find((i) => i.view && i.tabIds.includes(id));
-  item ? item.view.measureInWindow((x, y, w, h) => r([Math.round(x + Math.min(w / 2, 60)), Math.round(y + h / 2)])) : r(null);
+  item ? item.view.measureInWindow((x, y, w, h) => r([Math.round(x + Math.min(w / 2, 60)), Math.round(y + h / 2)]))
+    : ac.sidebarRows.measureRow("w1", id).then((f) => r(f ? [Math.round(f.x + Math.min(f.width / 2, 60)), Math.round(f.y + f.height / 2)] : null));
 });
 const point = (x, y) => ac.shell.devSetPointer("w1", { x, y });
 const click = (x, y) => act("mouse:down:" + x + "," + y).then(() => settle(70)).then(() => act("mouse:up:" + x + "," + y));

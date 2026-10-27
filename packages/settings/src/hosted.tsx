@@ -7,6 +7,7 @@ export type HostedViewProps = ViewProps & { kind: string; windowId: string; acti
 type HostedModule = {
   kinds(): string[];
   devHost(kind: string, windowId: string, on: boolean): Promise<Record<string, string>>;
+  sidebarRowFrame(windowId: string, key: string): Promise<{ x: number; y: number; width: number; height: number } | null>;
 };
 
 const native = requireOptionalNativeModule<HostedModule>("SolaraHosted");
@@ -17,6 +18,10 @@ export function hostedKinds(): string[] {
   } catch {
     return [];
   }
+}
+
+export function sidebarRowFrame(windowId: string, key: string) {
+  return native?.sidebarRowFrame(windowId, key) ?? Promise.resolve(null);
 }
 
 let View: ComponentType<HostedViewProps> | null = null;

@@ -5,10 +5,11 @@ public enum TabSlotKey: Hashable, Sendable {
   case pane(String, String)
   case peek(String)
   case popup(String)
+  case sidePanel(String)
 
   public var windowId: String {
     switch self {
-    case .card(let w), .pane(let w, _), .peek(let w), .popup(let w): return w
+    case .card(let w), .pane(let w, _), .peek(let w), .popup(let w), .sidePanel(let w): return w
     }
   }
 }

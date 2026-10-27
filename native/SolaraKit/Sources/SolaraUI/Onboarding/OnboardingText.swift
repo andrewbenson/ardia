@@ -147,10 +147,11 @@ final class OnboardingTextNSView: NSView {
     container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
     manager.ensureLayout(for: container)
     let used = manager.usedRect(for: container).size
-    return CGSize(width: Self.ceilPixel(used.width), height: Self.ceilPixel(used.height))
+    let fits = width.isFinite && used.width + 0.5 > width
+    return CGSize(width: fits ? width : Self.ceilPixel(used.width + 0.5), height: Self.ceilPixel(used.height))
   }
 
-  static func ceilPixel(_ value: CGFloat) -> CGFloat { (value * 2).rounded(.up) / 2 }
+  static func ceilPixel(_ value: CGFloat) -> CGFloat { (value * 2 - 0.01).rounded(.up) / 2 }
 
   override func layout() {
     super.layout()

@@ -461,15 +461,28 @@ struct SyncPane: View {
   }
 }
 
+struct SyncOffFooter: View {
+  @Environment(\.colorScheme) private var scheme
+  let failure: String?
+
+  var body: some View {
+    let theme = SettingsTheme(scheme)
+    VStack(alignment: .leading, spacing: 0) {
+      if let failure {
+        OnboardingText(failure, size: 12, color: theme.destructive)
+      }
+      OnboardingText(SyncText.offNote, size: 11.5, color: theme.textTertiary, lineHeight: 15)
+        .padding(.top, failure == nil ? 4 : 12)
+    }
+    .padding(.horizontal, -SettingsFormMetrics.headerLeading)
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
 struct SyncIntroHeader: View {
   var body: some View {
-    Text(SyncText.intro)
-      .font(.callout)
-      .fontWeight(.regular)
-      .foregroundStyle(.secondary)
-      .textCase(nil)
-      .fixedSize(horizontal: false, vertical: true)
-      .padding(.bottom, 6)
+    SettingsIntro(SyncText.intro)
+      .padding(.bottom, 10)
   }
 }
 
@@ -492,12 +505,12 @@ struct SyncOffSection: View {
             }
             .settingsMenu()
             Button("Enter Recovery Phrase…") { model.sheet = .phrase(canChangeFolder: true) }
-              .buttonStyle(.borderedProminent)
+              .buttonStyle(.settingsPrimary)
           } else {
             Button("Enter Recovery Phrase…") { model.sheet = .phrase(canChangeFolder: true) }
               .disabled(noICloud)
             Button(model.turningOn ? "Turning On…" : "Turn On Sync") { Task { await model.turnOn() } }
-              .buttonStyle(.borderedProminent)
+              .buttonStyle(.settingsPrimary)
               .disabled(model.turningOn || noICloud || model.info == nil)
           }
           }
@@ -523,15 +536,7 @@ struct SyncOffSection: View {
     } header: {
       SyncIntroHeader()
     } footer: {
-      VStack(alignment: .leading, spacing: 8) {
-        if let failure = model.failure {
-          Text(failure).foregroundStyle(Color.red)
-        }
-        Text(SyncText.offNote).foregroundStyle(.tertiary)
-      }
-      .font(.callout)
-      .fixedSize(horizontal: false, vertical: true)
-      .frame(maxWidth: .infinity, alignment: .leading)
+      SyncOffFooter(failure: model.failure)
     }
   }
 }
@@ -550,7 +555,7 @@ struct SyncOnSections: View {
           HStack(spacing: 8) {
             if locked {
               Button("Enter Recovery Phrase…") { model.sheet = .phrase(canChangeFolder: false) }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.settingsPrimary)
             } else {
               Button("Connect Another Device…") { model.sheet = .connectDevice }
             }

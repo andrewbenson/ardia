@@ -36,7 +36,7 @@ struct PasswordDetailSheet: View {
         PasswordsSheetRow(title: "Username") {
           if editing {
             TextField("", text: $username)
-              .textFieldStyle(.roundedBorder)
+              .textFieldStyle(SettingsTextFieldStyle())
               .frame(width: 220)
           } else {
             HStack(spacing: 4) {
@@ -56,7 +56,7 @@ struct PasswordDetailSheet: View {
                 SecureField("", text: passwordBinding)
               }
             }
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(SettingsTextFieldStyle())
             .frame(width: 220)
           } else {
             HStack(spacing: 4) {

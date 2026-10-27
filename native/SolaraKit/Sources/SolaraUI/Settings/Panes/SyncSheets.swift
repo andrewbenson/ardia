@@ -215,7 +215,7 @@ struct SyncPhraseSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
           if canChangeFolder {
             Button("Change…") { Task { await model.changeFolderForPhrase() } }
-              .buttonStyle(.link)
+              .buttonStyle(.settingsPlain)
           }
         }
         .font(.system(size: 11.5))
@@ -375,7 +375,7 @@ struct SyncStopSheet: View {
       Button("Cancel") { dismiss() }
         .keyboardShortcut(.cancelAction)
       Button("Stop Syncing", role: .destructive) { model.sheet = .deleteData }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.settingsPrimary)
         .tint(.red)
     }
   }
@@ -398,7 +398,7 @@ struct SyncDeleteDataSheet: View {
         .keyboardShortcut(.cancelAction)
         .disabled(busy)
       Button("Delete My Sync Data", role: .destructive) { Task { await finish(deleteData: true) } }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.settingsPrimary)
         .tint(.red)
         .disabled(!understood || busy)
     }

@@ -1,33 +1,29 @@
 import SwiftUI
 
 enum SettingsFormMetrics {
-  static let sideInset: CGFloat = 20
+  static let maxWidth: CGFloat = 600
+  static let sideInset: CGFloat = 24
   static let topInset: CGFloat = 20
-  static let bottomInset: CGFloat = 20
-  static let sectionSpacing: CGFloat = 30
-  static let headerlessSectionSpacing: CGFloat = 10
-  static let headerBottom: CGFloat = 10
-  static let headerLeading: CGFloat = 10
-  static let footerTop: CGFloat = 10
-  static let boxRadius: CGFloat = 12
-  static let rowHorizontal: CGFloat = 10
-  static let rowTop: CGFloat = 10
-  static let rowBottom: CGFloat = 10
-  static let separator: CGFloat = 1
-  static let controlDrop: CGFloat = 0.5
-  static let controlBottom: CGFloat = 10
-  static let switchRowGrowth: CGFloat = 0.5
-  static let titleBaselineAboveCenter: CGFloat = 5
-  static let descriptionSpacing: CGFloat = 2
-  static let labelIconSpacing: CGFloat = 10
-  static let controlSpacing: CGFloat = 12
-  static let labelMinWidth: CGFloat = 210
-  static let stackedSpacing: CGFloat = 8
-  static let separatorLeading: CGFloat = 10
+  static let bottomInset: CGFloat = 40
+  static let headerTop: CGFloat = 22
+  static let headerBottom: CGFloat = 8
+  static let headerLeading: CGFloat = 2
+  static let headerlessSectionSpacing: CGFloat = 14
+  static let footerTop: CGFloat = 8
+  static let groupRadius: CGFloat = 10
+  static let border: CGFloat = 1
+  static let rowHorizontal: CGFloat = 12
+  static let rowVertical: CGFloat = 9
+  static let rowMinHeight: CGFloat = 40
+  static let rowGap: CGFloat = 12
+  static let separatorInset: CGFloat = 12
+  static let descriptionGap: CGFloat = 2
+  static let labelIconSpacing: CGFloat = 12
 }
 
 struct SettingsLazyForm<Content: View>: View {
   @Environment(\.settingsContext) private var context
+  @Environment(\.colorScheme) private var scheme
   @State private var eager = false
   let content: Content
 
@@ -47,6 +43,8 @@ struct SettingsLazyForm<Content: View>: View {
       }
     }
     .labeledContentStyle(SettingsRowStyle())
+    .buttonStyle(SettingsButtonStyle())
+    .textFieldStyle(SettingsTextFieldStyle())
     .onChange(of: revealing, initial: true) { _, now in
       if now { eager = true }
     }
@@ -66,35 +64,45 @@ struct SettingsFormInsets: ViewModifier {
     content
       .padding(.horizontal, SettingsFormMetrics.sideInset)
       .padding(.bottom, SettingsFormMetrics.bottomInset)
+      .frame(maxWidth: SettingsFormMetrics.maxWidth)
+      .frame(maxWidth: .infinity)
   }
 }
 
 struct SettingsLazySectionRows: View {
+  @Environment(\.colorScheme) private var scheme
   let section: SectionConfiguration
   let first: Bool
 
   var body: some View {
+    let theme = SettingsTheme(scheme)
     let rows = section.content
     let hasHeader = !section.header.isEmpty
-    Color.clear.frame(height: first ? SettingsFormMetrics.topInset : hasHeader ? SettingsFormMetrics.sectionSpacing : rows.isEmpty ? 0 : SettingsFormMetrics.headerlessSectionSpacing)
+    Color.clear.frame(height: spacing(hasHeader: hasHeader, empty: rows.isEmpty))
     if hasHeader {
       VStack(alignment: .leading, spacing: 0) { section.header }
         .environment(\.settingsFormHeader, true)
         .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(.primary)
+        .foregroundStyle(theme.textPrimary)
         .padding(.horizontal, SettingsFormMetrics.headerLeading)
-        .padding(.bottom, SettingsFormMetrics.headerBottom)
+        .padding(.bottom, rows.isEmpty ? 0 : SettingsFormMetrics.headerBottom)
     }
     ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
       SettingsLazyRow(first: index == 0, last: index == rows.count - 1) { row }
     }
     if !section.footer.isEmpty {
       VStack(alignment: .leading, spacing: 0) { section.footer }
-        .font(.system(size: 11))
-        .foregroundStyle(.secondary)
+        .font(.system(size: 11.5))
+        .foregroundStyle(theme.textTertiary)
         .padding(.horizontal, SettingsFormMetrics.headerLeading)
         .padding(.top, SettingsFormMetrics.footerTop)
     }
+  }
+
+  private func spacing(hasHeader: Bool, empty: Bool) -> CGFloat {
+    if hasHeader { return SettingsFormMetrics.headerTop }
+    if first { return SettingsFormMetrics.topInset }
+    return empty ? 0 : SettingsFormMetrics.headerlessSectionSpacing
   }
 }
 
@@ -105,31 +113,61 @@ struct SettingsLazyRow<Row: View>: View {
   @ViewBuilder let row: Row
 
   var body: some View {
-    let radius = SettingsFormMetrics.boxRadius
-    row
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.horizontal, SettingsFormMetrics.rowHorizontal)
-      .padding(.top, SettingsFormMetrics.rowTop)
-      .padding(.bottom, SettingsFormMetrics.rowBottom)
-      .padding(.top, first ? 0 : SettingsFormMetrics.separator)
-      .overlay(alignment: .top) {
-        if !first {
-          Rectangle()
-            .fill(SettingsFormColors.separator(scheme))
-            .frame(height: SettingsFormMetrics.separator)
-            .padding(.horizontal, SettingsFormMetrics.separatorLeading)
-        }
+    let theme = SettingsTheme(scheme)
+    let radius = SettingsFormMetrics.groupRadius
+    let shape = UnevenRoundedRectangle(
+      topLeadingRadius: first ? radius : 0, bottomLeadingRadius: last ? radius : 0,
+      bottomTrailingRadius: last ? radius : 0, topTrailingRadius: first ? radius : 0
+    )
+    VStack(spacing: 0) {
+      if !first {
+        Rectangle().fill(theme.separator).frame(height: SettingsFormMetrics.border)
+          .padding(.horizontal, SettingsFormMetrics.separatorInset)
       }
-      .background(
-        UnevenRoundedRectangle(
-          topLeadingRadius: first ? radius : 0,
-          bottomLeadingRadius: last ? radius : 0,
-          bottomTrailingRadius: last ? radius : 0,
-          topTrailingRadius: first ? radius : 0,
-          style: .continuous
-        )
-        .fill(SettingsFormColors.box(scheme))
-      )
+      row
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, SettingsFormMetrics.rowHorizontal)
+        .padding(.vertical, SettingsFormMetrics.rowVertical)
+        .frame(minHeight: SettingsFormMetrics.rowMinHeight)
+    }
+    .padding(.horizontal, SettingsFormMetrics.border)
+    .padding(.top, first ? SettingsFormMetrics.border : 0)
+    .padding(.bottom, last ? SettingsFormMetrics.border : 0)
+    .background(shape.fill(theme.group))
+    .overlay {
+      SettingsGroupEdge(first: first, last: last, radius: radius)
+        .stroke(theme.groupBorder, lineWidth: SettingsFormMetrics.border)
+        .padding(SettingsFormMetrics.border / 2)
+    }
+  }
+}
+
+struct SettingsGroupEdge: Shape {
+  let first: Bool
+  let last: Bool
+  let radius: CGFloat
+
+  func path(in rect: CGRect) -> Path {
+    let r = max(0, radius - 0.5)
+    var path = Path()
+    let top = first ? rect.minY : rect.minY - 1
+    let bottom = last ? rect.maxY : rect.maxY + 1
+    path.move(to: CGPoint(x: rect.minX, y: bottom - (last ? r : 0)))
+    path.addLine(to: CGPoint(x: rect.minX, y: top + (first ? r : 0)))
+    if first {
+      path.addArc(center: CGPoint(x: rect.minX + r, y: top + r), radius: r, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+      path.addLine(to: CGPoint(x: rect.maxX - r, y: top))
+      path.addArc(center: CGPoint(x: rect.maxX - r, y: top + r), radius: r, startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false)
+    } else {
+      path.move(to: CGPoint(x: rect.maxX, y: top))
+    }
+    path.addLine(to: CGPoint(x: rect.maxX, y: bottom - (last ? r : 0)))
+    if last {
+      path.addArc(center: CGPoint(x: rect.maxX - r, y: bottom - r), radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+      path.addLine(to: CGPoint(x: rect.minX + r, y: bottom))
+      path.addArc(center: CGPoint(x: rect.minX + r, y: bottom - r), radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+    }
+    return path
   }
 }
 
@@ -144,74 +182,32 @@ struct SettingsRow: View {
   let configuration: LabeledContentStyleConfiguration
 
   var body: some View {
-    SettingsRowLayout {
+    HStack(alignment: .center, spacing: SettingsFormMetrics.rowGap) {
       SettingsRowLabelText(label: configuration.label)
         .labelStyle(SettingsRowLabelStyle())
-        .alignmentGuide(.settingsRowTitle) { $0[.firstTextBaseline] - SettingsFormMetrics.titleBaselineAboveCenter }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabeledPair(role: .label, id: "row", in: pair)
       configuration.content
         .environment(\.settingsFormRowControl, true)
-        .alignmentGuide(.settingsRowTitle) { $0[VerticalAlignment.center] }
-        .offset(y: SettingsFormMetrics.controlDrop)
         .accessibilityLabeledPair(role: .content, id: "row", in: pair)
     }
   }
 }
 
-struct SettingsRowLayout: Layout {
-  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-    arrange(proposal: proposal, subviews: subviews).size
-  }
-
-  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-    let arrangement = arrange(proposal: ProposedViewSize(width: bounds.width, height: bounds.height), subviews: subviews)
-    for (index, frame) in arrangement.frames.enumerated() where subviews.indices.contains(index) {
-      subviews[index].place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
-    }
-  }
-
-  private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, frames: [CGRect]) {
-    guard subviews.count == 2 else {
-      let size = subviews.first?.sizeThatFits(proposal) ?? .zero
-      return (size, [CGRect(origin: .zero, size: size)])
-    }
-    let label = subviews[0], content = subviews[1]
-    let width = proposal.width ?? label.sizeThatFits(.unspecified).width + SettingsFormMetrics.controlSpacing + content.sizeThatFits(.unspecified).width
-    let contentSize = content.sizeThatFits(.unspecified)
-    let labelNeeds = min(label.sizeThatFits(.unspecified).width, SettingsFormMetrics.labelMinWidth)
-    if contentSize.width + SettingsFormMetrics.controlSpacing + labelNeeds > width {
-      let labelSize = label.sizeThatFits(ProposedViewSize(width: width, height: nil))
-      let contentTop = labelSize.height + SettingsFormMetrics.stackedSpacing
-      return (
-        CGSize(width: width, height: contentTop + contentSize.height),
-        [CGRect(x: 0, y: 0, width: width, height: labelSize.height), CGRect(x: max(0, width - contentSize.width), y: contentTop, width: min(contentSize.width, width), height: contentSize.height)]
-      )
-    }
-    let labelWidth = max(0, width - contentSize.width - SettingsFormMetrics.controlSpacing)
-    let labelSize = label.sizeThatFits(ProposedViewSize(width: labelWidth, height: nil))
-    let labelLine = label.dimensions(in: ProposedViewSize(width: labelWidth, height: nil))[.settingsRowTitle]
-    let contentLine = content.dimensions(in: .unspecified)[.settingsRowTitle]
-    let above = max(labelLine, contentLine - SettingsFormMetrics.rowTop)
-    let below = max(labelSize.height - labelLine, contentSize.height - contentLine - SettingsFormMetrics.rowBottom + SettingsFormMetrics.controlBottom)
-    return (
-      CGSize(width: width, height: above + below),
-      [CGRect(x: 0, y: above - labelLine, width: labelWidth, height: labelSize.height), CGRect(x: width - contentSize.width, y: above - contentLine, width: contentSize.width, height: contentSize.height)]
-    )
-  }
-}
-
 struct SettingsRowLabelText<Label: View>: View {
+  @Environment(\.colorScheme) private var scheme
   let label: Label
 
   var body: some View {
+    let theme = SettingsTheme(scheme)
     Group(subviews: label) { parts in
-      VStack(alignment: .leading, spacing: SettingsFormMetrics.descriptionSpacing) {
+      VStack(alignment: .leading, spacing: SettingsFormMetrics.descriptionGap) {
         ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
           if index == 0 {
-            part.font(.body).foregroundStyle(.primary)
+            part.font(.system(size: 13)).foregroundStyle(theme.textPrimary)
           } else {
-            part.font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            part.font(.system(size: 11.5)).foregroundStyle(theme.textSecondary).lineSpacing(1).fixedSize(horizontal: false, vertical: true).frame(minHeight: 15)
           }
         }
       }
@@ -221,21 +217,11 @@ struct SettingsRowLabelText<Label: View>: View {
 
 struct SettingsRowLabelStyle: LabelStyle {
   func makeBody(configuration: Configuration) -> some View {
-    HStack(alignment: .settingsRowTitle, spacing: SettingsFormMetrics.labelIconSpacing) {
+    HStack(alignment: .center, spacing: SettingsFormMetrics.labelIconSpacing) {
       configuration.icon
-        .alignmentGuide(.settingsRowTitle) { $0[VerticalAlignment.center] }
       SettingsRowLabelText(label: configuration.title)
-        .alignmentGuide(.settingsRowTitle) { $0[.firstTextBaseline] - SettingsFormMetrics.titleBaselineAboveCenter }
     }
   }
-}
-
-extension VerticalAlignment {
-  private enum SettingsRowTitle: AlignmentID {
-    static func defaultValue(in context: ViewDimensions) -> CGFloat { context[VerticalAlignment.center] }
-  }
-
-  static let settingsRowTitle = VerticalAlignment(SettingsRowTitle.self)
 }
 
 public struct SettingsSwitchStyle: ToggleStyle {
@@ -245,14 +231,37 @@ public struct SettingsSwitchStyle: ToggleStyle {
 }
 
 struct SettingsSwitch: View {
-  @Environment(\.settingsFormRowControl) private var inRow
+  static let width: CGFloat = 32
+  static let height: CGFloat = 18
+  static let knob: CGFloat = 15
+  static let inset: CGFloat = 1.5
+
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.isEnabled) private var isEnabled
   let configuration: ToggleStyleConfiguration
 
   var body: some View {
-    Toggle(configuration)
-      .toggleStyle(.switch)
-      .controlSize(.mini)
-      .padding(.vertical, inRow ? SettingsFormMetrics.switchRowGrowth : 0)
+    let theme = SettingsTheme(scheme)
+    let on = configuration.isOn
+    Button { configuration.isOn.toggle() } label: {
+      ZStack(alignment: .leading) {
+        Capsule().fill(theme.switchOff)
+        Capsule().fill(theme.accent).opacity(on ? 1 : 0)
+        Circle()
+          .fill(Color.white)
+          .overlay(Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 0.5))
+          .frame(width: Self.knob, height: Self.knob)
+          .offset(x: Self.inset + (on ? Self.width - Self.knob - Self.inset * 2 : 0))
+      }
+      .frame(width: Self.width, height: Self.height)
+      .animation(.rn(160, .outCubic), value: on)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .opacity(isEnabled ? 1 : 0.45)
+    .accessibilityRepresentation {
+      Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
+    }
   }
 }
 
@@ -260,17 +269,91 @@ public extension ToggleStyle where Self == SettingsSwitchStyle {
   static var settingsSwitch: SettingsSwitchStyle { SettingsSwitchStyle() }
 }
 
-enum SettingsFormColors {
-  static func box(_ scheme: ColorScheme) -> Color {
-    scheme == .dark ? Color.white.opacity(0.03) : Color.black.opacity(0.03)
+public struct SettingsButtonStyle: ButtonStyle {
+  public enum Kind: Sendable { case standard, primary, plain }
+
+  var kind: Kind = .standard
+
+  public init(kind: Kind = .standard) {
+    self.kind = kind
   }
 
-  static func popUpCircle(_ scheme: ColorScheme) -> Color {
-    scheme == .dark ? Color.white.opacity(0.081) : Color.black.opacity(0.075)
+  public func makeBody(configuration: Configuration) -> some View {
+    SettingsButtonBody(configuration: configuration, kind: kind)
   }
+}
 
-  static func separator(_ scheme: ColorScheme) -> Color {
-    scheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.048)
+public extension ButtonStyle where Self == SettingsButtonStyle {
+  static var settingsPrimary: SettingsButtonStyle { SettingsButtonStyle(kind: .primary) }
+  static var settingsPlain: SettingsButtonStyle { SettingsButtonStyle(kind: .plain) }
+}
+
+struct SettingsButtonBody: View {
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.isEnabled) private var isEnabled
+  let configuration: ButtonStyleConfiguration
+  let kind: SettingsButtonStyle.Kind
+  @State private var hovered = false
+
+  var body: some View {
+    let theme = SettingsTheme(scheme)
+    let destructive = configuration.role == .destructive
+    let text: Color = kind == .primary ? .white : destructive ? theme.destructive : kind == .plain ? theme.accent : theme.textPrimary
+    let pressed = configuration.isPressed
+    let fill: Color = switch kind {
+    case .plain: .clear
+    case .primary: pressed ? theme.accentPressed : theme.accent
+    case .standard: pressed ? theme.controlPressed : hovered ? theme.controlHover : theme.control
+    }
+    configuration.label
+      .font(.system(size: 13))
+      .foregroundStyle(text)
+      .labelStyle(SettingsButtonLabelStyle())
+      .lineLimit(1)
+      .underline(kind == .plain && hovered)
+      .padding(.horizontal, kind == .plain ? 0 : 10)
+      .frame(height: kind == .plain ? nil : 22)
+      .background(RoundedRectangle(cornerRadius: 5.5).fill(fill))
+      .overlay {
+        if kind == .standard { RoundedRectangle(cornerRadius: 5.5).strokeBorder(theme.controlBorder, lineWidth: 1) }
+      }
+      .contentShape(Rectangle())
+      .opacity(isEnabled ? 1 : 0.45)
+      .onHover { hovered = $0 }
+      .fixedSize()
+  }
+}
+
+struct SettingsButtonLabelStyle: LabelStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(spacing: 5) {
+      configuration.icon.font(.system(size: 11)).frame(width: 13, height: 13)
+      configuration.title
+    }
+  }
+}
+
+public struct SettingsTextFieldStyle: TextFieldStyle {
+  public init() {}
+
+  public func _body(configuration: TextField<Self._Label>) -> some View {
+    configuration.modifier(SettingsFieldChrome())
+  }
+}
+
+struct SettingsFieldChrome: ViewModifier {
+  @Environment(\.colorScheme) private var scheme
+
+  func body(content: Content) -> some View {
+    let theme = SettingsTheme(scheme)
+    content
+      .textFieldStyle(.plain)
+      .font(.system(size: 13))
+      .foregroundStyle(theme.textPrimary)
+      .padding(.horizontal, 7)
+      .frame(height: 24)
+      .background(RoundedRectangle(cornerRadius: 5).fill(theme.field))
+      .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(theme.fieldBorder, lineWidth: 1))
   }
 }
 

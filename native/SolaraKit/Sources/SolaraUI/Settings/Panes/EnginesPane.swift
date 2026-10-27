@@ -136,7 +136,7 @@ struct EnginesPane: View {
           ForEach(rules, id: \.site) { rule in
             LabeledContent {
               HStack(spacing: 6) {
-                SettingPicker(EnginesPaneModel.engineOptions, selection: Binding(get: { rule.engine }, set: { model.services.setWebsiteEngine(rule.site, $0) }))
+                SettingPicker(EnginesPaneModel.engineOptions, selection: Binding(get: { rule.engine }, set: { model.services.setWebsiteEngine(rule.site, $0) })).popUpWidth(110)
                 Button { sheet = .edit(site: rule.site, engine: rule.engine) } label: { Image(systemName: "pencil") }
                   .buttonStyle(.borderless)
                   .help("Edit")

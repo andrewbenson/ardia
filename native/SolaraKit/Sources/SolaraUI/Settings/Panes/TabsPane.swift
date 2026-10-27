@@ -79,26 +79,27 @@ struct TabsPane: View {
         }
         SettingToggle("tabs.fadeUnloadedTabs", key: "fadeUnloadedTabs")
       } header: {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
           SettingsSectionHeader(anchor: "tabs.layout")
           HStack(spacing: 14) {
             TabLayoutChoice(layout: "sidebar", title: "Tab layout in the sidebar", selected: !top) { store.chooseTabLayout("sidebar") }
             TabLayoutChoice(layout: "top", title: "Tab layout across the top of the window", selected: top) { store.chooseTabLayout("top") }
           }
-          .padding(.bottom, 2)
+          .padding(.horizontal, -SettingsFormMetrics.headerLeading)
+          .padding(.bottom, 6)
         }
       }
 
       SettingsSection("General") {
         SettingRow("tabs.newTabOpens") {
-          SettingPicker([SettingOption("page", "New Tab Page"), SettingOption("commandBar", "Command Bar")], selection: store.choice("newTabOpens"))
+          SettingPicker([SettingOption("page", "New Tab Page"), SettingOption("commandBar", "Command Bar")], selection: store.choice("newTabOpens")).popUpWidth(160)
         }
         SettingRow("tabs.newTabPosition") {
-          SettingPicker(TabsPaneModel.newTabPositions(top: top), selection: store.choice("newTabPosition"))
+          SettingPicker(TabsPaneModel.newTabPositions(top: top), selection: store.choice("newTabPosition")).popUpWidth(190)
         }
         if !top {
           SettingRow("tabs.newTabButtonPosition") {
-            SettingPicker(TabsPaneModel.newTabButtonPositions, selection: store.choice("newTabButtonPosition"))
+            SettingPicker(TabsPaneModel.newTabButtonPositions, selection: store.choice("newTabButtonPosition")).popUpWidth(190)
           }
         }
         SettingToggle("tabs.shareTabsAcrossWindows", key: "shareTabsAcrossWindows")

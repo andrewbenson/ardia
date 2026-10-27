@@ -119,7 +119,7 @@ struct GeneralPane: View {
           SettingPicker(
             [SettingOption("small", "Little \(app)"), SettingOption("tab", "A new tab")],
             selection: Binding(get: { store.bool("openLinksInLittleArdia") ? "small" : "tab" }, set: { store.set("openLinksInLittleArdia", $0 == "small") })
-          )
+          ).popUpWidth(190)
         }
       }
 
@@ -128,7 +128,7 @@ struct GeneralPane: View {
           SettingPicker(
             [SettingOption("keep", "Preserve tabs and windows"), SettingOption("close", "Start fresh")],
             selection: Binding(get: { store.bool("restoreSession") ? "keep" : "close" }, set: { store.set("restoreSession", $0 == "keep") })
-          )
+          ).popUpWidth(190)
         }
       }
 
@@ -137,7 +137,7 @@ struct GeneralPane: View {
           SettingPicker(
             [SettingOption("website", "Use Website First"), SettingOption("search", "Prefer Search Engine")],
             selection: store.choice("commandBarPreference")
-          )
+          ).popUpWidth(190)
         }
       }
 
@@ -157,6 +157,7 @@ struct GeneralPane: View {
 
 struct DefaultBrowserCard: View {
   @Environment(\.settingsContext) private var context
+  @Environment(\.colorScheme) private var scheme
   let model: GeneralPaneModel
 
   var body: some View {
@@ -167,18 +168,19 @@ struct DefaultBrowserCard: View {
         HStack(spacing: 12) {
           Image(systemName: isDefault ? "checkmark.seal.fill" : "safari")
             .font(.system(size: 20))
-            .foregroundStyle(isDefault ? Color.green : Color.secondary)
+            .foregroundStyle(isDefault ? SettingsTheme.rgba(0x34, 0xC7, 0x59) : SettingsTheme(scheme).icon)
             .frame(width: 28, height: 28)
-          Text(isDefault ? "\(app) is your default browser" : "\(app) works best as your default browser")
+          OnboardingText(isDefault ? "\(app) is your default browser" : "\(app) works best as your default browser", size: 13, color: SettingsTheme(scheme).textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
           if !isDefault {
             Button("Set \(app) as Default") {
               Task { model.isDefault = await model.services.setAsDefaultBrowser() }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.settingsPrimary)
           }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 2)
+        .padding(.vertical, 5)
       }
     }
   }

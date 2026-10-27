@@ -82,7 +82,7 @@ struct AppearancePane: View {
       Section {
         SettingToggle("appearance.spacesFollowAppearance", key: "spacesFollowAppearance")
       } header: {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
           SettingsSectionHeader(description: "Also in View › Appearance. Incognito windows are always dark.", anchor: "appearance.theme")
           HStack(spacing: 14) {
             ForEach(AppearancePaneModel.modes, id: \.value) { mode in
@@ -91,16 +91,17 @@ struct AppearancePane: View {
               }
             }
           }
-          .padding(.bottom, 2)
+          .padding(.horizontal, -SettingsFormMetrics.headerLeading)
+          .padding(.bottom, 6)
         }
       }
 
       Section {
         SettingRow("appearance.commandBarPlacement") {
-          SettingPicker([SettingOption("field", "At the address"), SettingOption("centred", "In the center")], selection: store.choice("commandBarPlacement"))
+          SettingPicker([SettingOption("field", "At the address"), SettingOption("centred", "In the centre")], selection: store.choice("commandBarPlacement")).popUpWidth(160)
         }
       } header: {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
           SettingsSectionHeader(description: AppearancePaneModel.addressBarDescription(topTabs: store.topTabLayout), anchor: "appearance.addressBar")
           HStack(spacing: 14) {
             SettingsChoiceCard(title: "In the toolbar", selected: addressBar != "sidebar", action: { store.set("addressBar", "toolbar") }) {
@@ -110,19 +111,20 @@ struct AppearancePane: View {
               AddressBarPreview(sidebar: true)
             }
           }
-          .padding(.bottom, 2)
+          .padding(.horizontal, -SettingsFormMetrics.headerLeading)
+          .padding(.bottom, 6)
         }
       }
 
       SettingsSection("Selected Tab") {
         SettingRow("appearance.selectedTabGlow") {
-          SettingPicker([SettingOption("full", "Full"), SettingOption("soft", "Soft"), SettingOption("off", "Off")], selection: store.choice("selectedTabGlow"))
+          SettingPicker([SettingOption("full", "Full"), SettingOption("soft", "Soft"), SettingOption("off", "Off")], selection: store.choice("selectedTabGlow")).popUpWidth(120)
         }
       }
 
       SettingsSection("Scroll Bars") {
         SettingRow("appearance.pageScrollBars") {
-          SettingPicker([SettingOption("system", "Follow macOS"), SettingOption("thin", "Thin")], selection: store.choice("pageScrollBars"))
+          SettingPicker([SettingOption("system", "Follow macOS"), SettingOption("thin", "Thin")], selection: store.choice("pageScrollBars")).popUpWidth(140)
         }
       }
 
@@ -267,6 +269,7 @@ struct AddressBarPreview: View {
           }
           Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SettingsPreviewColors.page(scheme))
         .clipShape(RoundedRectangle(cornerRadius: 4))
       }

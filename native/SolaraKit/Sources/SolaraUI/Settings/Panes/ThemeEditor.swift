@@ -49,7 +49,7 @@ struct ThemeSection: View {
       }
       .fixedSize()
     } content: {
-      SettingRow(title: "Color", description: .text(state.colorDescription(preset: profile.color))) {
+      SettingRow(title: "Colour", description: .text(state.colorDescription(preset: profile.color))) {
         HStack(spacing: 7) {
           ForEach(ProfileColorValue.allCases, id: \.self) { color in
             Button {
@@ -199,7 +199,7 @@ struct ThemeEditor: View {
             } label: {
               Image(systemName: "minus").frame(width: 12, height: 12)
             }
-            .help("Remove Color")
+            .help("Remove Colour")
             .disabled(theme.stops.count <= 1)
             Button {
               change(ThemeMath.withAddedStop(theme), true)
@@ -207,7 +207,7 @@ struct ThemeEditor: View {
             } label: {
               Image(systemName: "plus").frame(width: 12, height: 12)
             }
-            .help("Add Color")
+            .help("Add Colour")
             .disabled(theme.stops.count >= ThemeMath.maxStops)
           }
           .controlSize(.small)

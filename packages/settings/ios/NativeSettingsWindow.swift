@@ -30,13 +30,6 @@ final class StoreSettingsSource: SettingsStoreSource {
 }
 
 final class SettingsHostingController: NSHostingController<SettingsWindowView> {
-  override func viewWillAppear() {
-    super.viewWillAppear()
-    guard view.window?.toolbar == nil else { return }
-    sceneBridgingOptions = []
-    sceneBridgingOptions = [.toolbars]
-  }
-
   override func viewDidAppear() {
     super.viewDidAppear()
     view.window?.makeFirstResponder(nil)
@@ -72,7 +65,7 @@ enum NativeSettingsWindow {
     if let built { return built }
     guard enabled, let context = makeContext() else { return nil }
     let made = SettingsHostingController(rootView: SettingsWindowView(context: context))
-    made.sceneBridgingOptions = [.toolbars]
+    made.sceneBridgingOptions = []
     built = made
     return made
   }

@@ -24,7 +24,7 @@ public struct ImportExtensionsFound: Sendable, Equatable {
 @MainActor
 @Observable
 public final class ImportModel {
-  public static let diaNotShared = "Custom tab names, colors, spaces and folders stay in Dia: its AppleScript doesn't share them."
+  public static let diaNotShared = "Custom tab names, colours, spaces and folders stay in Dia: its AppleScript doesn't share them."
 
   @ObservationIgnored public let services: ImportServices
   @ObservationIgnored public var doneDelay: Duration = .milliseconds(700)

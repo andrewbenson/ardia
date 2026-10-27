@@ -256,7 +256,7 @@ public struct SettingsIndex: Sendable {
           Row(
             key: "spacesFollowAppearance",
             title: "Profile themes follow this appearance",
-            description: "Every profile goes light or dark with this choice, even when its theme (like one imported from an Arc space) says Light. In dark mode a light theme's colors are darkened so white text reads.",
+            description: "Every profile goes light or dark with this choice, even when its theme (like one imported from an Arc space) says Light. In dark mode a light theme's colours are darkened so white text reads.",
             keywords: ["space", "profile theme", "arc theme", "follow system"]
           ),
         ]),
@@ -265,7 +265,7 @@ public struct SettingsIndex: Sendable {
           Row(
             key: "commandBarPlacement",
             title: "⌘L opens the command bar",
-            description: "In the center, ⌘L and a click on the address show it over the middle of the page, as in Arc.",
+            description: "In the centre, ⌘L and a click on the address show it over the middle of the page, as in Arc.",
             keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar"]
           ),
         ]),

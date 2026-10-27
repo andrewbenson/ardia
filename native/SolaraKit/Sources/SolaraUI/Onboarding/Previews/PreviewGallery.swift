@@ -25,7 +25,7 @@ enum PreviewGallery {
     [
       MockState(label: "⌘L field, sidebar address", settings: MockSettings(tabLayout: "sidebar", addressBar: "sidebar", appearance: "light", extendWebsiteColor: true), accent: plum, focus: .cmdlField),
       MockState(label: "⌘L field, toolbar address, dark", settings: MockSettings(tabLayout: "sidebar", addressBar: "toolbar", appearance: "dark", extendWebsiteColor: true), accent: "#4691C3", focus: .cmdlField),
-      MockState(label: "⌘L centered", settings: dia, accent: "#7873AF", focus: .cmdlCentred),
+      MockState(label: "⌘L centred", settings: dia, accent: "#7873AF", focus: .cmdlCentred),
       MockState(label: "Website color on", settings: dia, accent: plum, focus: .sitecolorOn),
     ],
   ]

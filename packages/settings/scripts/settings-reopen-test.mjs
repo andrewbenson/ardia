@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The native Settings window, opened, closed and opened again, in a hidden instance: each window is key, has its
-// toolbar (title and back/forward), and takes typing; a query typed before closing comes back selected, so the next key
-// replaces it. Both opens go through the pre-built controller, as they do after launch.
+// The native Settings window, opened, closed and opened again, in a hidden instance: each window is key and takes
+// typing; a query typed before closing comes back selected, so the next key replaces it. Both opens go through the
+// pre-built controller, as they do after launch.
 //
 //   node packages/settings/scripts/settings-reopen-test.mjs <Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -34,10 +34,9 @@ try {
   await app.ready({ test: "return !!globalThis.expo?.modules?.SolaraSettings?.devSettings" });
   await sleep(7000);
 
-  await rep.check("the first window is key, has its toolbar and takes typing", async () => {
+  await rep.check("the first window is key and takes typing", async () => {
     const first = await opened();
     assert.equal(first.key, true, "key");
-    assert.ok(first.toolbarItems > 0, `toolbar items: ${first.toolbarItems}`);
     await app.eval(`globalThis.expo.modules.SolaraSettings.focusSearch(); return true`);
     await sleep(300);
     const typed = await dev("type", "cookie");
@@ -45,13 +44,12 @@ try {
     return typed.firstResponder;
   });
 
-  await rep.check("a reopened window is key, has its toolbar, and the next key replaces the kept query", async () => {
+  await rep.check("a reopened window is key, and the next key replaces the kept query", async () => {
     await dev("close");
     await sleep(1000);
     assert.equal((await dev("state")).window, false, "closed");
     const again = await opened();
     assert.equal(again.key, true, "key");
-    assert.ok(again.toolbarItems > 0, `toolbar items: ${again.toolbarItems}`);
     assert.equal(again.query, "cookie", "the kept query");
     const typed = await dev("type", "x");
     assert.equal(typed.query, "x", `first responder: ${typed.firstResponder}`);

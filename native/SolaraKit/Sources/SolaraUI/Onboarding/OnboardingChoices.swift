@@ -103,7 +103,7 @@ public extension OnboardingModel {
     case .cmdl:
       [
         OnboardingChoice("field", .cmdlField, "Under the address", "Drops down from the field, as in Dia"),
-        OnboardingChoice("centred", .cmdlCentred, "In the center", "Floats over the page, as in Arc"),
+        OnboardingChoice("centred", .cmdlCentred, "In the centre", "Floats over the page, as in Arc"),
       ]
     case .newTab:
       [
@@ -261,7 +261,7 @@ public extension OnboardingModel {
     switch question {
     case .tabs: return [string("tabLayout") == "top" ? "Tabs along the top" : "Tabs in the sidebar"]
     case .address: return [string("addressBar") == "sidebar" ? "Address in the sidebar" : "Address in the toolbar"]
-    case .cmdl: return [string("commandBarPlacement") == "centred" ? "⌘L opens in the center" : "⌘L opens under the address"]
+    case .cmdl: return [string("commandBarPlacement") == "centred" ? "⌘L opens in the centre" : "⌘L opens under the address"]
     case .newTab: return [string("newTabOpens") == "commandBar" ? "⌘T opens the command bar" : "⌘T opens the New Tab page"]
     case .tidy:
       return value("cleanUpInactiveTabsAfterHours").number.map { ["Old tabs tidy up after \(Self.hoursLabel($0))"] } ?? ["Old tabs stay until you close them"]

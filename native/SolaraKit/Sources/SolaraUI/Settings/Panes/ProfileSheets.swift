@@ -127,7 +127,7 @@ struct CreateProfileSheet: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, 6)
       TextField("Profile name", text: $name)
-        .textFieldStyle(.roundedBorder)
+        .textFieldStyle(SettingsTextFieldStyle())
         .focused($nameFocused)
         .onSubmit { submit(selected?.profileIds.first) }
         .padding(.top, 16)

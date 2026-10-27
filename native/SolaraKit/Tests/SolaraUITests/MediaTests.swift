@@ -121,4 +121,48 @@ import Testing
     #expect(f["close"] == CGRect(x: 208, y: -6, width: 18, height: 18))
     #expect(abs(player.seekProgress - 0.5) < 0.01)
   }
+
+  @Test func castPickerListsRowsAndReportsItsHeight() {
+    var heights: [Double] = []
+    let picker = CastPickerView(frame: NSRect(x: 0, y: 0, width: 340, height: 400))
+    picker.onAction = { if case .height(let h) = $0 { heights.append(h) } }
+    let sink = { (i: Int, active: Bool) in CastSinkState(id: "s\(i)", name: "Speaker \(i)", icon: "hifispeaker", detail: active ? "Casting" : nil, issue: false, active: active, busy: false) }
+    picker.update(CastPickerState(dialogId: "d", tabId: "t", title: "Cast tab", canScreen: false, rejected: false, rejectedText: "", sinks: [sink(0, false), sink(1, true)], theme: theme))
+    picker.layoutSubtreeIfNeeded()
+    let f = picker.controlFrames
+    #expect(f["sink0"] == CGRect(x: 6, y: 44, width: 328, height: 42))
+    #expect(abs(f["sink1"]!.minY - 88) < 0.01)
+    #expect(f["stop1"] != nil && f["stop0"] == nil)
+    #expect(f["done"]!.maxX == 340 - 16 && f["done"]!.minY == 44 + 86 + 10)
+    #expect(heights.last == Double(44 + 86 + 10 + 28 + 16))
+    #expect(f["source"] == nil)
+  }
+
+  @Test func castPickerCapsTheListAndShowsSources() {
+    let picker = CastPickerView(frame: NSRect(x: 0, y: 0, width: 340, height: 600))
+    let sinks = (0..<10).map { CastSinkState(id: "s\($0)", name: "TV \($0)", icon: "tv", detail: nil, issue: false, active: false, busy: false) }
+    picker.update(CastPickerState(dialogId: "d", tabId: "t", title: "Cast tab", canScreen: true, rejected: false, rejectedText: "", sinks: sinks, theme: theme))
+    picker.layoutSubtreeIfNeeded()
+    let f = picker.controlFrames
+    #expect(f["header"]!.height == 46)
+    #expect(f["source"]!.height == 22 && f["source"]!.maxX == 340 - 16 + 6)
+    #expect(abs(picker.contentHeight - 380) < 0.01)
+  }
+
+  @Test func sharePickerTilesScreensTwoAcross() {
+    let picker = SharePickerView(frame: NSRect(x: 0, y: 0, width: 460, height: 600))
+    picker.update(SharePickerState(
+      requestId: "r", tabId: "t", title: "Share your screen with meet.test", subtitle: "The site will see what you choose.",
+      tabs: [ShareTabSource(id: "t", title: "Meet", url: "https://meet.test/", favicon: nil, profileId: "p", current: true)],
+      screens: [ShareScreenSource(id: "s1", name: "Built-in", size: "1512 × 982", aspect: 982 / 1512), ShareScreenSource(id: "s2", name: "Studio", size: nil, aspect: 0.5625)],
+      windows: [], selected: "s2", valid: true, audio: nil, tileWidth: 220, theme: theme))
+    picker.layoutSubtreeIfNeeded()
+    let f = picker.controlFrames
+    let tile: CGFloat = 220
+    #expect(f["tab:t"]!.width == 448 && f["tab:t"]!.height == 34)
+    #expect(f["s1"]!.width == tile && f["s2"]!.minX == f["s1"]!.maxX + 8 && f["s1"]!.minY == f["s2"]!.minY)
+    #expect(f["share"]!.maxX == 460 - 16 && f["cancel"]!.maxX == f["share"]!.minX - 8)
+    #expect(SharePickerMetrics.previewHeight(tileWidth: tile, aspect: 982 / 1512) == 80)
+    #expect(picker.selectedId == "s2")
+  }
 }

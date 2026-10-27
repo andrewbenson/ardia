@@ -12,6 +12,12 @@ import { Favicon, useHover } from "../primitives";
 import { Checkbox } from "../settings/controls";
 import { noteTabShare } from "./ShareBar";
 import { useMedia } from "./state";
+import { useWindowId } from "../../store/hooks";
+import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "./nativeMedia";
+
+const NATIVE_HEIGHT_GUESS = 220;
+const shareHandlers: Record<string, (extra: Record<string, unknown>) => void> = {};
+addMediaActions({ sharePicker: (_windowId, tabId, extra) => shareHandlers[tabId]?.(extra) });
 
 const WIDTH = 460;
 const REFRESH_MS = 2500;
@@ -99,6 +105,15 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const [shareAudio, setShareAudio] = useState(AUDIO_SHARED_BY_DEFAULT);
   const [icons, setIcons] = useState<Record<number, string | null>>({});
   const list = useRef<ScrollView>(null);
+  const native = nativeMedia("media.sharePicker");
+  const windowId = useWindowId();
+  const [nativeHeight, setNativeHeight] = useState(NATIVE_HEIGHT_GUESS);
+  const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
+  useEffect(() => {
+    if (!native) return;
+    shareHandlers[tabId] = (extra) => handler.current(extra);
+    return () => void delete shareHandlers[tabId];
+  }, [tabId, native]);
 
   useEffect(() => {
     if (!request) return;
@@ -141,6 +156,53 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const frameHost = request.frameOrigin ? hostOf(request.frameOrigin) : "";
   const receiver = frameHost && frameHost !== hostOf(request.origin) ? `${frameHost}, a frame on this page,` : "The site";
   const width = Math.min(WIDTH, paneWidth - 24);
+  const subtitle = audioFor(selectedKind)
+    ? `${receiver} will see and hear what you choose.`
+    : request.audio && !request.audio.screen && !request.audio.window && selectedKind !== "tab"
+      ? `${receiver} will see what you choose. Only tabs share their audio.`
+      : `${receiver} will see what you choose.`;
+
+  if (native) {
+    handler.current = (extra) => {
+      const id = typeof extra.id === "string" ? extra.id : null;
+      switch (extra.action) {
+        case "height":
+          return typeof extra.height === "number" && setNativeHeight(extra.height);
+        case "select":
+          return id && setSelected(id);
+        case "share":
+          return share(id ?? selected);
+        case "cancel":
+          return cancel();
+        case "audio":
+          return selectedKind && setShareAudio((current) => ({ ...current, [selectedKind]: !!extra.value }));
+      }
+    };
+    const state = {
+      requestId: request.id,
+      tabId,
+      title: `Share your screen with ${hostOf(request.origin)}`,
+      subtitle,
+      tabs: tabs.map((t) => ({ id: t.id, title: t.title || t.url, url: t.url, favicon: t.favicon ?? null, profileId: t.profileId, current: t.id === tabId })),
+      screens: screens.map((src) => ({ id: src.id, name: src.name, size: src.width ? `${src.width} × ${src.height}` : null, aspect: src.width && src.height ? src.height / src.width : 10 / 16 })),
+      windows: windows.map((src) => {
+        const title = src.name || src.app || "Window";
+        return { id: src.id, title, app: src.app && src.app !== title ? src.app : null, icon: src.pid !== undefined ? (icons[src.pid] ?? null) : null };
+      }),
+      selected,
+      valid,
+      audio: selectedKind && request.audio && audioOffered(selectedKind, request.audio) ? { label: audioLabel(selectedKind, request.audio), value: shareAudio[selectedKind] } : null,
+      tileWidth: (width - 2 * PANEL.rowInset - 8) / 2,
+      theme: mediaTheme(theme),
+    };
+    return (
+      <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
+        <View style={{ height: nativeHeight }}>
+          <NativeMediaView kind="media.sharePicker" windowId={windowId} state={state} />
+        </View>
+      </Popover>
+    );
+  }
 
   return (
     <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
@@ -154,13 +216,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
             </View>
           }
           title={`Share your screen with ${hostOf(request.origin)}`}
-          subtitle={
-            audioFor(selectedKind)
-              ? `${receiver} will see and hear what you choose.`
-              : request.audio && !request.audio.screen && !request.audio.window && selectedKind !== "tab"
-                ? `${receiver} will see what you choose. Only tabs share their audio.`
-                : `${receiver} will see what you choose.`
-          }
+          subtitle={subtitle}
           subtitleLines={2}
         />
 

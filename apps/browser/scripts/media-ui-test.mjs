@@ -12,7 +12,7 @@ if (!appArg) {
 The media controls on a local tone page: the sidebar player shows for a playing tab that isn't shown, its play
 button pauses and plays, Close Player hides it without pausing or moving to the tab, a new play brings it back, Back
 to Tab shows the tab and ends the player; the pinned tab's hover player scrolls a long title and ticks its time; the
-CLI pill appears and hides with RN's timing. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls.`);
+CLI pill appears and hides with RN's timing; the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls.`);
   process.exit(2);
 }
 const native = args.includes("--native");
@@ -68,6 +68,9 @@ const click = (p) => hover(p).then(() => settle(60)).then(() => act("mouse:down:
 const playerShown = () => ${native} ? probe("media.sidebarPlayer").then((rows) => rows.length) : Promise.resolve(fibers("RNSidebarPlayer").length);
 const first = (kind) => probe(kind).then((rows) => rows[0] || null);
 const session = () => acMedia.useMedia.getState().sessions.p;
+const hostOf = (fiber) => { let f = fiber; while (f && !(f.stateNode && f.stateNode.measureInWindow)) f = f.child; return f && f.stateNode; };
+const measure = (fiber) => new Promise((r) => { const n = hostOf(fiber); return n ? n.measureInWindow((x, y, w, h) => r([x, y, w, h])) : r(null); });
+const surface = () => { const [f] = acPerf.findFibers("PopoverSurface", 5); return f ? measure(f) : Promise.resolve(null); };
 `;
 let app = null;
 const run = (body, timeout = 20000) => app.eval(`${HELPERS}\n${body}`, { timeout });
@@ -194,6 +197,68 @@ try {
     if (peak < 0.99) throw new Error(`never fully shown: ${peak}`);
     if (off.at(-1).opacity > 0.01) throw new Error(`still visible 320 ms after hiding: ${off.at(-1).opacity}`);
     return { samples: samples.length, frame: on.at(-1).frame, peak };
+  });
+  const RN_CAST = [340, 185];
+  const RN_SHARE = [460, 423];
+  const CAST = {
+    id: "cast-fixture", browserId: 0, open: true, header: "Cast tab", permissionRejected: false,
+    sinks: [
+      { id: "s1", name: "Living Room", state: "available", modes: 1, icon: 0, status: "", issue: "" },
+      { id: "s2", name: "Kitchen Speaker", state: "connected", routeId: "r2", modes: 1, icon: 2, status: "Casting Player", issue: "" },
+    ],
+  };
+  await rep.check("cast-picker", async () => {
+    await run(`acCast.useCast.setState({ dialogs: { b: ${JSON.stringify(CAST)} } }); return true;`);
+    const rect = await until("cast popover", `return surface();`, 4000);
+    await sleep(300);
+    const settled = await run(`return surface();`);
+    const out = { rect: settled };
+    if (Math.abs(settled[2] - RN_CAST[0]) > 0.5 || Math.abs(settled[3] - RN_CAST[1]) > 0.5) throw new Error(`cast popover ${settled[2]}x${settled[3]}, RN draws ${RN_CAST.join("x")}`);
+    if (native) {
+      const row = await until("native cast picker", `return first("media.castPicker");`, 3000);
+      out.height = row.height;
+      if (Math.abs(row.height + 1 - settled[3]) > 0.5) throw new Error(`native body ${row.height} tall in a ${settled[3]} popover`);
+      await run(`globalThis.__castLog = []; const a = acNativeMedia.actions; globalThis.__castReal = a.castPicker; a.castPicker = (w, t, e) => { __castLog.push(e); }; return true;`);
+      await run(`return first("media.castPicker").then((r) => click(centre(r.frames.done))).then(() => true);`);
+      await run(`return first("media.castPicker").then((r) => click(centre(r.frames.sink0))).then(() => true);`);
+      const log = await until("cast actions", `return __castLog.filter((e) => e.action !== "height").length >= 2 ? __castLog.filter((e) => e.action !== "height") : null;`, 3000);
+      await run(`acNativeMedia.actions.castPicker = __castReal; return true;`);
+      if (log[0].action !== "done" || log[1].action !== "cast" || log[1].sinkId !== "s1") throw new Error(`cast actions ${JSON.stringify(log)}`);
+      out.actions = log.map((e) => e.action);
+    }
+    await run(`acCast.useCast.setState({ dialogs: {} }); return true;`);
+    return out;
+  });
+
+  const SHARE = {
+    id: "share-fixture", origin: "https://meet.test", frameOrigin: null, audio: { tab: true, screen: false, window: null },
+    sources: [
+      { id: "screen:fixture", kind: "screen", name: "Fixture Display", width: 1512, height: 982 },
+      { id: "window:fixture", kind: "window", name: "Fixture Notes", app: "Notes" },
+    ],
+    pageUrl: url("b"),
+  };
+  await rep.check("share-picker", async () => {
+    await run(`acMedia.useMedia.setState((m) => ({ displayRequests: { ...m.displayRequests, b: ${JSON.stringify(SHARE)} } })); return true;`);
+    await until("share popover", `return surface();`, 4000);
+    await sleep(300);
+    const settled = await run(`return surface();`);
+    const out = { rect: settled };
+    if (Math.abs(settled[2] - RN_SHARE[0]) > 0.5 || Math.abs(settled[3] - RN_SHARE[1]) > 0.5) throw new Error(`share popover ${settled[2]}x${settled[3]}, RN draws ${RN_SHARE.join("x")}`);
+    if (native) {
+      const row = await until("native share picker", `return first("media.sharePicker");`, 3000);
+      out.height = row.height;
+      if (Math.abs(row.height + 1 - settled[3]) > 0.5) throw new Error(`native body ${row.height} tall in a ${settled[3]} popover`);
+      await run(`return first("media.sharePicker").then((r) => click(centre(r.frames["tab:p"]))).then(() => true);`);
+      const picked = await until("tab selected", `return first("media.sharePicker").then((r) => r.selected === "tab:p" ? r : null);`, 3000);
+      out.audio = !!picked.frames.audio;
+      if (!picked.frames.audio) throw new Error("no tab audio checkbox for a tab");
+      await run(`return first("media.sharePicker").then((r) => click(centre(r.frames.cancel))).then(() => true);`);
+    } else {
+      await run(`acMedia.useMedia.setState((m) => { const d = { ...m.displayRequests }; delete d.b; return { displayRequests: d }; }); return true;`);
+    }
+    await until("share request ends", `return !acMedia.useMedia.getState().displayRequests.b;`, 3000);
+    return out;
   });
 } catch (e) {
   rep.record("run", { error: e });

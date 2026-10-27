@@ -64,7 +64,7 @@ final class PromptButtonView: NSView {
     }
   }
 
-  override var fittingSize: NSSize { NSSize(width: ceil(label.intrinsicContentSize.width) + 24, height: 28) }
+  override var fittingSize: NSSize { NSSize(width: label.intrinsicContentSize.width + 24, height: 28) }
 
   override func layout() {
     super.layout()

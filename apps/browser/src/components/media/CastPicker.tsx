@@ -1,18 +1,102 @@
 import { CastMode, preferredCastMode, startCasting, stopCasting, type CastSink } from "@ardia/ardiacore";
 import { openExternalURL, showMenu, Symbol } from "@ardia/shell";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { PANEL, PanelHeader, Popover, POPOVER_MARGIN, PopoverValue, PromptButton } from "../layout/controls";
 import { useHover } from "../primitives";
 import { closeCastPicker, useCast } from "./cast";
 import { PRODUCT } from "../../lib/productName";
+import { useWindowId } from "../../store/hooks";
+import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "./nativeMedia";
 
 const WIDTH = 340;
 
 const SINK_ICON: Record<number, string> = { 0: "tv", 1: "hifispeaker.2", 2: "hifispeaker", 6: "display", 7: "tv" };
 
-export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
+const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
+const NATIVE_HEIGHT_GUESS = 120;
+
+const castHandlers: Record<string, (extra: Record<string, unknown>) => void> = {};
+addMediaActions({ castPicker: (_windowId, tabId, extra) => castHandlers[tabId]?.(extra) });
+
+const castModeFor = (sink: CastSink, screen: boolean) =>
+  screen && sink.modes & CastMode.screen ? CastMode.screen : preferredCastMode(sink.modes & ~CastMode.screen) || preferredCastMode(sink.modes);
+
+const pickSource = async (screen: boolean) => {
+  const choice = await showMenu([
+    { id: "tab", title: "Cast Tab", checked: !screen },
+    { id: "screen", title: "Cast Screen", checked: screen },
+  ]);
+  return choice ? choice === "screen" : null;
+};
+
+export function CastPicker(props: { tabId: string; paneWidth: number }) {
+  return nativeMedia("media.castPicker") ? <NativeCastPicker {...props} /> : <RNCastPicker {...props} />;
+}
+
+function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
+  const theme = useTheme();
+  const windowId = useWindowId();
+  const dialog = useCast((c) => c.dialogs[tabId]);
+  const [screen, setScreen] = useState(false);
+  const [height, setHeight] = useState(NATIVE_HEIGHT_GUESS);
+  useEffect(() => setScreen(false), [dialog?.id]);
+  const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
+  useEffect(() => {
+    castHandlers[tabId] = (extra) => handler.current(extra);
+    return () => void delete castHandlers[tabId];
+  }, [tabId]);
+  if (!dialog) return null;
+  const close = () => closeCastPicker(tabId);
+  const available = dialog.sinks.filter((s) => s.state !== "unavailable");
+  handler.current = (extra) => {
+    const sink = available.find((s) => s.id === extra.sinkId);
+    switch (extra.action) {
+      case "height":
+        return typeof extra.height === "number" && setHeight(extra.height);
+      case "cast": {
+        const mode = sink && castModeFor(sink, screen);
+        return sink && mode ? void startCasting(dialog.id, sink.id, mode) : undefined;
+      }
+      case "stop":
+        return sink ? void stopCasting(dialog.id, sink.routeId) : undefined;
+      case "source":
+        return void pickSource(screen).then((next) => next !== null && setScreen(next));
+      case "link":
+        return void openExternalURL(LOCAL_NETWORK_SETTINGS);
+      case "done":
+        return close();
+    }
+  };
+  const state = {
+    dialogId: dialog.id,
+    tabId,
+    title: screen ? "Cast screen" : dialog.header || "Cast tab",
+    canScreen: dialog.sinks.some((s) => s.modes & CastMode.screen),
+    rejected: !!dialog.permissionRejected,
+    rejectedText: `${PRODUCT} needs Local Network access to find Cast devices.`,
+    sinks: available.map((sink) => ({
+      id: sink.id,
+      name: sink.name,
+      icon: SINK_ICON[sink.icon] ?? "tv",
+      detail: sink.issue || sink.status || null,
+      issue: !!sink.issue,
+      active: sink.state === "connected" && !!sink.routeId,
+      busy: sink.state === "connecting" || sink.state === "disconnecting",
+    })),
+    theme: mediaTheme(theme),
+  };
+  return (
+    <Popover key={dialog.id} width={Math.min(WIDTH, paneWidth - 24)} top={POPOVER_MARGIN} right={POPOVER_MARGIN} onDismiss={close}>
+      <View style={{ height }}>
+        <NativeMediaView kind="media.castPicker" windowId={windowId} state={state} />
+      </View>
+    </Popover>
+  );
+}
+
+function RNCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
   const theme = useTheme();
   const dialog = useCast((c) => c.dialogs[tabId]);
   const [screen, setScreen] = useState(false);
@@ -23,7 +107,7 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
   const canScreen = dialog.sinks.some((s) => s.modes & CastMode.screen);
   const width = Math.min(WIDTH, paneWidth - 24);
   const cast = (sink: CastSink) => {
-    const mode = screen && sink.modes & CastMode.screen ? CastMode.screen : preferredCastMode(sink.modes & ~CastMode.screen) || preferredCastMode(sink.modes);
+    const mode = castModeFor(sink, screen);
     if (mode) void startCasting(dialog.id, sink.id, mode);
   };
 
@@ -40,7 +124,7 @@ export function CastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: num
           <Message
             text={`${PRODUCT} needs Local Network access to find Cast devices.`}
             link="Open Local Network Settings"
-            onLink={() => void openExternalURL("x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")}
+            onLink={() => void openExternalURL(LOCAL_NETWORK_SETTINGS)}
           />
         ) : available.length ? (
           <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset, gap: 2 }}>
@@ -97,11 +181,8 @@ function SinkRow({ sink, onCast, onStop }: { sink: CastSink; onCast(): void; onS
 
 function SourceButton({ screen, onChange }: { screen: boolean; onChange: (screen: boolean) => void }) {
   const pick = async () => {
-    const choice = await showMenu([
-      { id: "tab", title: "Cast Tab", checked: !screen },
-      { id: "screen", title: "Cast Screen", checked: screen },
-    ]);
-    if (choice) onChange(choice === "screen");
+    const next = await pickSource(screen);
+    if (next !== null) onChange(next);
   };
   return <PopoverValue title="Sources" chevron="chevron.down" tooltip="Source" onPress={() => void pick()} />;
 }

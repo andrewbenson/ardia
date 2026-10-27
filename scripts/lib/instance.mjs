@@ -331,6 +331,7 @@ export async function launch(app, opts = {}) {
     ...(location ? { ARDIA_JS_LOCATION: location } : {}),
     ...(switches ? { ARDIA_CHROMIUM_SWITCHES: switches } : {}),
     ...(process.env.ARDIA_NATIVE_SIDEBAR ? { ARDIA_NATIVE_SIDEBAR: process.env.ARDIA_NATIVE_SIDEBAR } : {}),
+    ...(process.env.ARDIA_NATIVE_MEDIA ? { ARDIA_NATIVE_MEDIA: process.env.ARDIA_NATIVE_MEDIA } : {}),
     ...opts.env,
   });
   const log = resolve(opts.log ?? join(data, "app.out.log"));

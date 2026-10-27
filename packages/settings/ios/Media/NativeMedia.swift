@@ -8,6 +8,8 @@ enum NativeMedia {
   static let sidebarPlayer = "media.sidebarPlayer"
   static let hoverPlayer = "media.hoverPlayer"
   static let shareBar = "media.shareBar"
+  static let castPicker = "media.castPicker"
+  static let sharePicker = "media.sharePicker"
   static let smallBar = "littleSolara.bar"
 
   nonisolated static var enabled: Bool {
@@ -70,6 +72,43 @@ enum NativeMedia {
         view.update(state)
       }
     }
+    HostedViews.register(castPicker) { windowId in
+      let view = CastPickerView()
+      var tabId = ""
+      view.onAction = { event in
+        switch event {
+        case .cast(let id): action(windowId, "castPicker", tabId, ["action": "cast", "sinkId": id])
+        case .stop(let id): action(windowId, "castPicker", tabId, ["action": "stop", "sinkId": id])
+        case .source: action(windowId, "castPicker", tabId, ["action": "source"])
+        case .link: action(windowId, "castPicker", tabId, ["action": "link"])
+        case .done: action(windowId, "castPicker", tabId, ["action": "done"])
+        case .height(let h): action(windowId, "castPicker", tabId, ["action": "height", "height": h])
+        }
+      }
+      return content(castPicker, windowId, view) { json in
+        guard let state = CastPickerState.decode(json) else { return }
+        tabId = state.tabId
+        view.update(state)
+      }
+    }
+    HostedViews.register(sharePicker) { windowId in
+      let view = SharePickerView()
+      var tabId = ""
+      view.onAction = { event in
+        switch event {
+        case .select(let id): action(windowId, "sharePicker", tabId, ["action": "select", "id": id])
+        case .share(let id): action(windowId, "sharePicker", tabId, ["action": "share", "id": id ?? NSNull()])
+        case .cancel: action(windowId, "sharePicker", tabId, ["action": "cancel"])
+        case .audio(let on): action(windowId, "sharePicker", tabId, ["action": "audio", "value": on])
+        case .height(let h): action(windowId, "sharePicker", tabId, ["action": "height", "height": h])
+        }
+      }
+      return content(sharePicker, windowId, view, takesFocus: true) { json in
+        guard let state = SharePickerState.decode(json) else { return }
+        tabId = state.tabId
+        view.update(state)
+      }
+    }
     HostedViews.register(cliPill) { windowId in
       let view = CliControlPillView()
       view.onStop = { action(windowId, "cliStop") }
@@ -79,12 +118,12 @@ enum NativeMedia {
     }
   }
 
-  private static func content(_ kind: String, _ windowId: String, _ view: NSView, onState: @escaping (String) -> Void) -> HostedContent {
+  private static func content(_ kind: String, _ windowId: String, _ view: NSView, takesFocus: Bool = false, onState: @escaping (String) -> Void) -> HostedContent {
     mounted.removeAll { $0.view.value == nil }
     let entry = WeakMediaView(view)
     mounted.append((kind, windowId, entry))
     return HostedContent(
-      view: view, onUnmount: { mounted.removeAll { $0.view === entry } }, takesFocus: false, onState: onState)
+      view: view, onUnmount: { mounted.removeAll { $0.view === entry } }, takesFocus: takesFocus, onState: onState)
   }
 
   static func player(_ source: String, _ windowId: String, _ tabId: String, _ action: MediaAction) {
@@ -121,6 +160,12 @@ enum NativeMedia {
       }
       if let bar = view as? ShareBarView {
         return ["primary": bar.primaryTitle, "frames": frames(bar, bar.controlFrames)]
+      }
+      if let picker = view as? SharePickerView {
+        return ["height": picker.contentHeight, "selected": picker.selectedId ?? NSNull(), "focused": picker.window?.firstResponder === picker, "frames": frames(picker, picker.controlFrames)]
+      }
+      if let picker = view as? CastPickerView {
+        return ["height": picker.contentHeight, "frame": frames(picker, ["view": picker.bounds])["view"] ?? [], "frames": frames(picker, picker.controlFrames)]
       }
       if let player = view as? SidebarPlayerView {
         return ["corners": player.cornersShown, "seek": player.seekProgress, "height": player.frame.height, "frames": frames(player, player.controlFrames)]

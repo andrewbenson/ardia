@@ -10,7 +10,7 @@ import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { seekTo, skip } from "./MiniPlayer";
 import { hasTrackControls, hostOf, mediaCommand, useMedia, type Session } from "./state";
 
-export type NativeMediaKind = "media.cliPill" | "media.sidebarPlayer" | "media.hoverPlayer" | "media.shareBar" | "littleSolara.bar";
+export type NativeMediaKind = "media.cliPill" | "media.sidebarPlayer" | "media.hoverPlayer" | "media.shareBar" | "media.castPicker" | "media.sharePicker" | "littleSolara.bar";
 
 const kinds: Partial<Record<NativeMediaKind, boolean>> = {};
 

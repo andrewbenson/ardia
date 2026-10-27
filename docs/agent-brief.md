@@ -213,7 +213,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   - Keyboard shortcuts: `ac.shell.devKeyEquivalent(windowId, { key, keyCode, modifiers, focus, asKey })` presses a
     key as AppKit dispatches it (Chrome's window, then the menu bar), `ac.shell.devTypeKeys("key", text, ms)` types
     into whatever window is key, and
-    `node apps/browser/scripts/shortcuts-test.mjs <Debug app>` checks every shortcut in every focus.
+    `node apps/browser/scripts/shortcuts-test.mjs <Debug app> matrix` checks every shortcut in every focus (`presses`
+    runs the real presses and focus handoffs).
   - Page content: `scripts/agent/ac page <data dir> <url part> '<expression>'`, or CDP on the instance's port
     (`http://localhost:<port>/json`, `Runtime.evaluate`, `Page.captureScreenshot`). A `ARDIA_BACKGROUND` instance's windows answer NO to
     `-[NSWindow isOccluded]` (`ArdiaCoreHost.mm`), so a covered window shows a tab at once instead of after Chrome's 1 s

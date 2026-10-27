@@ -5,16 +5,16 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { isAlive, launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
 
-const [appArg, port] = process.argv.slice(2);
+const [appArg, part, port] = process.argv.slice(2);
 const appPath = appArg && resolve(appArg);
-if (!appPath) {
-  console.error("usage: node shortcuts-test.mjs <Debug Solara.app> [cdpPort]");
+if (!appPath || (part !== "matrix" && part !== "presses")) {
+  console.error("usage: node shortcuts-test.mjs <Debug Solara.app> matrix|presses [cdpPort]");
   process.exit(2);
 }
 const startedAt = Date.now();
 const scratch = mkdtempSync(join(tmpdir(), "ac-shortcuts-"));
 const data = join(scratch, "data");
-const rep = reporter(join(scratch, "shortcuts-test.log"), { name: "shortcuts-test" });
+const rep = reporter(join(scratch, "shortcuts-test.log"), { name: `shortcuts-test ${part}` });
 
 const server = createServer((req, res) => {
   const name = new URL(req.url, "http://x").search.slice(1) || "page";
@@ -61,6 +61,9 @@ const ac = (body, timeout = 60000) => app.eval(body, { timeout }).catch(async (e
   if (/timed out/.test(error.message) && app.alive) error.message += `\n${await diagnoseHang()}`;
   throw error;
 });
+const pagesHost = new URL(pages).hostname;
+await ac(`const off = { on: [], off: [${JSON.stringify(pagesHost)}], reload: "reload" };
+  ac.store.getState().updateSettings({ developerMode: { default: off, "p-work": off }, warnBeforeQuitting: false }); return 1;`);
 async function diagnoseHang() {
   let pending = "?", landed = "?";
   try { pending = readFileSync(join(data, "dev-eval.js"), "utf8").split("\n")[0]; } catch {}
@@ -186,9 +189,9 @@ const shortcuts = [
   ["⌃⌘P", cmd("p", 35, "control"), { command: "newGroupWithTabs" }, "(Chrome's)"],
   ["⌃⌘C", cmd("c", 8, "control"), { command: "newTabInGroup" }, "(Chrome's)"],
   ["⌃⌘W", cmd("w", 13, "control"), { command: "closeTabGroup" }, "(Chrome's)"],
-  ["⌘D", cmd("d", 2), { command: "bookmarkPage" }, "⌘D"],
+  ["⌘D", cmd("d", 2), { command: "togglePinnedRow" }, "⌘D (Arc's)"],
   ["⇧⌘D", cmd("D", 2, "shift"), { command: "bookmarkAllTabs" }, "(Chrome's)", "devtools-own"],
-  ["⌥⇧⌘D", cmd("D", 2, "option", "shift"), { command: "togglePinnedRow" }, "(Arc's ⌘D is Bookmark)"],
+  ["⌥⇧⌘D", cmd("D", 2, "option", "shift"), { command: "bookmarkPage" }, "(Dia's ⌘D)"],
   ["⌥⌘B", cmd("b", 11, "option"), { command: "manageBookmarks" }, "⌥⌘B"],
   ["⌘Y", cmd("y", 16), { command: "showHistory" }, "⌘Y"],
   ["⇧⌘⌫", cmd(F(0x7f), 51, "shift"), { command: "clearBrowsingData" }, "⇧⌘⌫", "page-field"],
@@ -233,6 +236,7 @@ const focuses = {
   commandBar: {
     press: { asKey: true },
     before: async () => {
+      if ((await state()).panel) return;
       await ac(`ac.runCommand({ command: "focusCommandBar", arg: null, windowId: "w1" });`);
       await sleep(400);
     },
@@ -278,23 +282,32 @@ const results = new Map(shortcuts.map(([name]) => [name, {}]));
 let failures = 0;
 await showPage("t3");
 const onlyFocuses = process.env.SHORTCUTS_FOCUSES?.split(",").filter(Boolean);
-for (const [focusName, focus] of Object.entries(focuses)) {
-  if (onlyFocuses && !onlyFocuses.includes(focusName)) continue;
-  await focus.setup?.();
-  for (const [name, key, expect, , only] of shortcuts) {
-    if (focusName !== "sidebar" && (only === "window-only" || only === "clipboard")) continue;
-    const inField =
-      (only === "not-field" && (focusName === "field" || focusName === "commandBar" || focusName === "heroBar" || focusName === "devTools")) ||
-      (only === "page-field" && (focusName === "field" || focusName === "devTools")) ||
-      ((only === "devtools-own" || devToolsOwn.has(name)) && focusName === "devTools");
-    await focus.before?.();
-    const r = await press(key, { ...focus.press, dry: true });
-    const result = verdict(r, inField ? null : expect);
-    if (result === "FAIL") failures++;
-    results.get(name)[focusName] = { result, detail: describe(r), responder: r.firstResponder };
+if (part === "matrix") {
+  for (const [focusName, focus] of Object.entries(focuses)) {
+    if (onlyFocuses && !onlyFocuses.includes(focusName)) continue;
+    await focus.setup?.();
+    for (const [name, key, expect, , only] of shortcuts) {
+      if (focusName !== "sidebar" && (only === "window-only" || only === "clipboard")) continue;
+      const inField =
+        (only === "not-field" && (focusName === "field" || focusName === "commandBar" || focusName === "heroBar" || focusName === "devTools")) ||
+        (only === "page-field" && (focusName === "field" || focusName === "devTools")) ||
+        ((only === "devtools-own" || devToolsOwn.has(name)) && focusName === "devTools");
+      await focus.before?.();
+      const r = await press(key, { ...focus.press, dry: true });
+      const result = verdict(r, inField ? null : expect);
+      if (result === "FAIL") failures++;
+      results.get(name)[focusName] = { result, detail: describe(r), responder: r.firstResponder };
+    }
+    await focus.teardown?.();
+    recordFocus(focusName);
   }
-  await focus.teardown?.();
-  recordFocus(focusName);
+  const cols = Object.keys(focuses);
+  rep.log(`\n${"shortcut".padEnd(8)} ${"Dia".padEnd(26)} ${cols.map((c) => c.padEnd(10)).join(" ")}`);
+  for (const [name, , , dia] of shortcuts) {
+    const row = results.get(name);
+    rep.log(`${name.padEnd(8)} ${dia.padEnd(26)} ${cols.map((c) => (row[c]?.result ?? "—").padEnd(10)).join(" ")}`);
+  }
+  await finish(rep.summary() && !failures ? 0 : 1);
 }
 
 const check = (name, ok, detail) => {
@@ -414,6 +427,7 @@ const clipboard = {
 };
 const busyJsOnce = (ms) => ac(`const off = ac.store.subscribe(() => { off(); const t = Date.now(); while (Date.now() - t < ${ms}); }); return 1;`);
 const fieldInAx = async (text) => (await devWindow("ax")).split("\n").some((l) => /AXTextField|AXTextArea/.test(l) && l.includes(text));
+const barValue = () => ac(`const bar = ac.omnibox.get("w1:panel") ?? ac.omnibox.get("w1:sidebar"); return String(bar?.state().value ?? "");`);
 const pageField = (expr) => cdp("?t3", `(f => ${expr})(document.getElementById('f'))`);
 await devWindow("fakeActiveClicks");
 const resetToPageField = async (value, selection) => {
@@ -456,7 +470,7 @@ for (const busy of [0, 120]) {
       await sleep(900);
       const inPage = await pageField("f.value");
       const inHero = name === "⌘T" && await ac(`return String(ac.omnibox.get("w1:hero")?.state().value ?? "").includes(${JSON.stringify(pasted)});`);
-      const inDestination = inHero || (await fieldInAx(pasted));
+      const inDestination = inHero || (name === "⌘L" ? (await barValue()).includes(pasted) : await fieldInAx(pasted));
       const held = postedAt[1] - postedAt[0];
       check(`${label} ⌘V pastes into the new field, not the page`, inDestination && !String(inPage).includes(pasted) && held >= gap - 1 && held < gap + 30,
         `page "${inPage}", destination ${inDestination}, keys ${held.toFixed(1)} ms apart`);
@@ -480,11 +494,11 @@ for (let run = 1; run <= 5; run++) {
   await busyJsOnce(60);
   await postKeys([keyPress("f", 3), keyPress("l", 37), keyPress("v", 9)]);
   await sleep(1500);
-  const bar = (await devWindow("ax")).split("\n").filter((l) => /AXTextField/.test(l) && l.includes(pasted)).length;
+  const bar = await barValue();
   const panelOpen = (await state()).panel;
   const findQuery = await ac(`return ac.store.getState().find.t3?.query ?? "";`);
   check(`⌘F ⌘L ⌘V back to back (run ${run}): the paste goes to the command bar`,
-    panelOpen && bar > 0 && !findQuery.includes(pasted) && (await pageField("f.value")) === "", `panel ${panelOpen}, fields with the paste ${bar}, find "${findQuery}"`);
+    panelOpen && bar.includes(pasted) && !findQuery.includes(pasted) && (await pageField("f.value")) === "", `panel ${panelOpen}, bar "${bar}", find "${findQuery}"`);
 }
 for (const busy of [0, 120]) {
   for (const gap of [0, 30, 60]) {
@@ -493,7 +507,7 @@ for (const busy of [0, 120]) {
     const typed = [["q", 12], ["w", 13], ["e", 14], ["r", 15]].map(([k, code], i) => keyPress(k, code, i ? 15 : gap, []));
     await postKeys([keyPress("l", 37), ...typed]);
     await sleep(1200);
-    const bar = (await devWindow("ax")).split("\n").find((l) => /AXTextField/.test(l))?.trim().replace(/^AXTextField:? ?/, "") ?? "";
+    const bar = await barValue();
     const inPage = await pageField("f.value");
     const beforeGate = gap === 0 && bar === "wer" && inPage === "q";
     check(`⌘L then typing at +${gap} ms${busy ? `, JS busy ${busy} ms` : ""}: the letters land in the bar, in order`, (bar === "qwer" && inPage === "") || beforeGate,
@@ -505,7 +519,7 @@ for (const busy of [0, 120]) {
   await clipboard.set("ordered");
   await postKeys([keyPress("l", 37), keyPress("v", 9), keyPress("q", 12, 0, [])]);
   await sleep(1200);
-  const bar = (await devWindow("ax")).split("\n").find((l) => /AXTextField/.test(l))?.trim().replace(/^AXTextField:? ?/, "") ?? "";
+  const bar = await barValue();
   const inPage = await pageField("f.value");
   check("⌘L ⌘V q back to back: the paste lands in the bar and keeps its place before q", (bar === "orderedq" && inPage === "") || (bar === "ordered" && inPage === "q"),
     `bar "${bar}", page "${inPage}"`);
@@ -652,12 +666,5 @@ for (let i = 0; i < 150 && !quit; i++) {
   quit = app.exited;
 }
 check("⌘Q quits", quit, quit ? "" : "still running after 15 s");
-
-const cols = Object.keys(focuses);
-rep.log(`\n${"shortcut".padEnd(8)} ${"Dia".padEnd(26)} ${cols.map((c) => c.padEnd(10)).join(" ")}`);
-for (const [name, , , dia] of shortcuts) {
-  const row = results.get(name);
-  rep.log(`${name.padEnd(8)} ${dia.padEnd(26)} ${cols.map((c) => (row[c]?.result ?? "—").padEnd(10)).join(" ")}`);
-}
 
 finish(rep.summary() && !failures ? 0 : 1);

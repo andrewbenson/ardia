@@ -1584,3 +1584,46 @@ test("B69: with password sync turned off, a relaunch doesn't read saved password
   assert.equal(again.useSync.getState().types.passwords, false, "control: passwords sync is off");
   assert.equal(fake.passwordReads, 0, `the keychain isn't read for a type that's off (read ${fake.passwordReads} time(s))`);
 });
+
+test("B70: a rebuild that can't read some files yet doesn't apply the bookmarks it has over the whole tree, and so never publishes the rest as deleted", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const before = new Set(files().map((f) => f.payload));
+  S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
+  S().addBookmark({ profileId: "default", url: "https://three.example/", title: "Three" });
+  await engine.syncNow();
+  await settle();
+  const later = new Set(files().filter((f) => !before.has(f.payload) && f.scope === `p:${syncId}`).map((f) => f.payload));
+  assert.ok(later.size > 0, "control: Two and Three went out in a later batch");
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const [oneKey, oneValue] = [...other.store].find(([, v]) => v.t === "One");
+  other.store.set(oneKey, { ...oneValue, t: "One renamed on B" });
+  await other.sync();
+  const realRead = native.read;
+  native.read = async (...args) => {
+    const listing = await realRead(...args);
+    const unreadable = listing.files.filter((f) => later.has(f.payload));
+    return { ...listing, files: listing.files.filter((f) => !later.has(f.payload)), damaged: [...listing.damaged, ...unreadable.map((f) => ({ id: f.id, age: 0 }))] };
+  };
+  try {
+    shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+    const again = await launch();
+    again.startSync();
+    await settle();
+    for (let i = 0; i < 3; i++) await again.syncNow();
+    await settle();
+    assert.deepEqual(titles(), ["One", "Three", "Two"], "nothing is removed while files are missing");
+  } finally {
+    native.read = realRead;
+  }
+  const again = await launch();
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.deepEqual([...other.store.values()].map((v) => v.t).sort(), ["One renamed on B", "Three", "Two"], "no bookmark was deleted in the folder");
+  assert.deepEqual(titles(), ["One renamed on B", "Three", "Two"]);
+});

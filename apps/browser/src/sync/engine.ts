@@ -573,7 +573,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         return guarded;
       },
       apply: async (visible, changed, base, records) => {
-        if (waiting()) return false;
+        if (waiting() || (rebuilding(adapter.prefix) && stillDownloading(state))) return false;
         const before = baselineOf(scope, adapter.prefix);
         const ok = await adapter.apply(visible, changed, before && rebuilding(adapter.prefix) ? (key) => base(key) ?? parseKept(before.get(key)) : base, records);
         if (!before || ok === false) return ok;

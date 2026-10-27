@@ -422,8 +422,10 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   - it publishes values changed against the kept note in an earlier session only if the folder
     never delivered them;
   - everything else takes the folder's value.
-  The kept note is saved in the marker as digests, so a relaunch doesn't forget an edit made after
-  the loss. A prefix settles once the pull is complete, its adapter is ready, nothing is
+  While a download younger than a day or a damaged file is pending, a rebuilding prefix applies
+  nothing either: the bookmarks adapter rebuilds the whole tree from what's visible, so applying a
+  partial replica would remove the rest locally. The kept note is saved in the marker as digests,
+  so a relaunch doesn't forget an edit made after the loss. A prefix settles once the pull is complete, its adapter is ready, nothing is
   unapplied, and no value disagrees with the folder; disagreeing values are queued for apply. The
   marker stays while a data type is off, so turning it on later is still guarded.
 - **Known residuals** (each from a review or the convergence oracle):
@@ -463,7 +465,7 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   survive a Mac on the previous version) and `src/sync/engine.test.mjs` (the engine against a fake native module: a crash the
   moment a batch lands re-sends the journalled batches byte for byte and numbers the next one after
   them; nothing is published before its journal is on disk). `src/sync/engineSafety.test.mjs` and
-  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B69), each
+  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B70), each
   failing on the commit before its fix.
 - Convergence oracle: `node apps/browser/scripts/native/engineScenario.mjs --oracle <n> --seed <s>`
   runs two Macs in separate processes against the real engine, store and adapters. They edit,

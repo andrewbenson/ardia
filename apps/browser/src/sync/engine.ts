@@ -149,7 +149,7 @@ let locked = false;
 let loaded = true;
 let stopping = false;
 let turningOn = false;
-let enteringPhrase = false;
+let phraseEntry: Promise<PhraseResult> | null = null;
 let generation = 0;
 let forceRequests = 0;
 const passwordAdapters = new Map<string, Adapter>();
@@ -183,18 +183,24 @@ async function openSealed<T>(name: string, fallback: T): Promise<T> {
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
+const readableRecord = (r: unknown) => isObject(r) && typeof r.h === "string" && Array.isArray(r.o) && typeof r.o[0] === "string" && typeof r.o[1] === "number";
+const readableOp = (op: unknown) => isObject(op) && typeof op.k === "string" && typeof op.h === "string";
+
 function readableScope(v: unknown): v is ScopeState {
   if (!isObject(v)) return false;
   return (
     [v.records, v.base, v.vv, v.extra, v.files, v.damaged, v.seen].every(isObject) &&
+    Object.values(v.records as Record<string, unknown>).every(readableRecord) &&
+    Object.values(v.base as Record<string, unknown>).every((b) => typeof b === "string") &&
     Array.isArray(v.unapplied) &&
     Array.isArray(v.outbox) &&
+    v.outbox.every(readableOp) &&
     typeof v.seq === "number" &&
     (v.journal === undefined || (Array.isArray(v.journal) && v.journal.every(readableBatch)))
   );
 }
 
-const readableBatch = (f: unknown): f is LogFile => isObject(f) && typeof f.device === "string" && typeof f.seq === "number" && Array.isArray(f.ops);
+const readableBatch = (f: unknown): f is LogFile => isObject(f) && typeof f.device === "string" && typeof f.seq === "number" && Array.isArray(f.ops) && f.ops.every(readableOp);
 
 async function loadState(loading: number): Promise<boolean> {
   const saved = await openSealed<unknown>(STATE, {});
@@ -643,12 +649,12 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
   const native = SyncNative;
   if (!native) return { error: "unavailable" };
   if (doc.enabled && doc.deviceId && locked) {
-    if (enteringPhrase) return { error: "unavailable" };
-    enteringPhrase = true;
+    if (phraseEntry) return phraseEntry;
+    phraseEntry = unlockWithPhrase(native, folder, text);
     try {
-      return await unlockWithPhrase(native, folder, text);
+      return await phraseEntry;
     } finally {
-      enteringPhrase = false;
+      phraseEntry = null;
     }
   }
   if (doc.enabled || turningOn) return { error: "unavailable" };

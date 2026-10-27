@@ -467,7 +467,7 @@ test("B14: a load that fails at startup or after the phrase leaves the phrase ab
   release();
   const results = [await first, await second];
   fake.phraseGate = null;
-  assert.equal(results.filter((r) => "ok" in r).length, 1, `one entry loads: ${JSON.stringify(results)}`);
+  assert.deepEqual(results, [{ ok: true }, { ok: true }], "both entries get the one unlock's answer");
   await engine.syncNow();
   await settle();
   assert.equal(engine.useSync.getState().status, "updated");
@@ -676,3 +676,20 @@ async function lateFailure(kind) {
 
 test("B21: a stale unlock that finds no key doesn't lock the new device", () => lateFailure("noKey"));
 test("B21b: nor does a stale load that fails", () => lateFailure("throws"));
+
+test("B22: a saved state whose records or batches hold entries of another shape is rebuilt, not trusted", async () => {
+  reset();
+  await onAndSynced();
+  const state = stateOf();
+  state.app.records["junk"] = null;
+  shell.docs.set("sync-state.nns", `sealed:${JSON.stringify(state)}`);
+  shell.docs.set("sync-journal.nns", `sealed:${JSON.stringify({ journal: { app: [{ v: 1, kind: "log", device: JSON.parse(shell.docs.get("sync.json")).deviceId, seq: 50, ops: [null] }] } })}`);
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  S().addBookmark({ profileId: "default", url: "https://after.example/", title: "After" });
+  await engine.syncNow();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "updated");
+  assertNoSeqReused();
+});

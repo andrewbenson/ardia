@@ -1,7 +1,8 @@
 # Sync redesign: the edit journal and publishing chains
 
-Status: proposal, revised after the design review (D1–D11, against 9f61ca29) and the re-review
-(ten items, against b916ad7c). It replaces
+Status: proposal, revised after the design review (D1–D11, against 9f61ca29), the re-review
+(ten items, against b916ad7c), the final review and review5, and the re-check of ef3db5da (the
+rollback audit). It replaces
 the load guard described in docs/sync.md (§ After a load) as of 095f633c. Four reviews and the
 convergence oracle kept finding new holes in that guard because it decides "changed here" by
 comparing snapshots of the store (notes and baselines). Those snapshots are taken at the wrong time,
@@ -34,6 +35,11 @@ The current guard guesses which differences are real edits, and every guess has 
    whatever the listing later says (pending, damaged or gone).
 4. **Settling is per data type.** A type that's off isn't part of a rebuild. When it's turned on, it
    is judged by the journal.
+5. **Every Solara doc that decides a claim is anchored.** A doc whose rollback could turn a value
+   sync applied into a claimed edit either carries a generation that Chrome's own data also holds
+   (Login Data's `meta` row for the password ledger, the bar node's `solara_shadow` for the bookmark
+   shadow and intents), or rolls back in one write with the data it describes. A mismatch is a
+   rebuild that claims nothing Solara could have written (§ Rollback audit).
 
 Consequence: what a rolled-back or rebuilt Mac sends is only what its user changed, stamped by one
 monotonic clock. It can't collide with a batch already written.
@@ -76,30 +82,53 @@ action runs: settings, profiles, bookmarks, pins, groups, a history delete, and 
 | --- | --- | --- |
 | `sync-edits.json` | the entries; the journal generation `g`; the newest `h` | synchronously on each user command, before its gen doc |
 | `sync-edits.gen` | `g`; the last in-step time `T`, with the version vector of every synced scope at `T` | right after `sync-edits.json` (same `g`), and after each in-step cycle (new `T` and vv) |
-| `sync-pw-ledger.json` | per key: the last 4 digests, `h`, `modified`; the ledger generation `L`; Login Data's inode and creation time | after every apply or publish that touches passwords, right after the meta row |
+| `sync-pw-ledger.json` | per key: the last 4 digests, `h`, `modified`; the ledger generation `L` and the time `t` of its write; Login Data's inode and creation time | after every apply or publish that touches passwords, right after the meta row |
+| `bookmarks-cache.json` | the shadow and its generation `G` | on every shadow write (§ Bookmarks) |
+| `bookmarks-pushed.json` | intents, `node → { value, tag }` | before each push; pruned after each shadow write |
+| the store's own docs (shell.docs) | each store-backed type's items, with the journal generation `g` they reflect and the ever-seen keys of those types | by the store's persist, as today, in the same write as the items |
 
-The fourth piece lives in Login Data itself: a row `solara_sync_ledger = L` in its `meta` table,
-written through ArdiaCore **before** `sync-pw-ledger.json` (final review 1).
+Two more pieces live in Chrome's own data, so they roll back only with it (§ Rollback audit):
+- **Login Data:** a row `solara_sync_ledger = L@t` in its `meta` table, written through ArdiaCore
+  **before** `sync-pw-ledger.json` (final review 1).
+- **Bookmarks:** the generation `G` in the bookmark bar node's meta info (`solara_shadow`), and on
+  each node whose record this Mac applied or published, that record's last origin
+  (`solara_origin = device.seq`). They're written through `applyBookmarkOps`, the way the node's
+  sync key already is (ac_bookmarks.cc:327-329): inside the push itself, or as a meta-only call
+  after a read or a publish. Chrome's Bookmarks file holds the tree and its marks from one write. The bar node is used because this Chromium's codec doesn't persist the invisible root's
+  meta info; it encodes only the three permanent folders, each with its own (bookmark_codec.cc:56-77,
+  204-206). Extensions can't read or write meta info.
 
 - **Journal check at load.**
-  - `sync-edits.json` unreadable, or its `g` below the gen doc's, means a lost journal.
-  - A journal ahead by one is a crash between the two writes, and it's fine.
-  - A missing `sync-edits.gen` with a readable journal means the journal is valid, so no fallback
-    runs. The gen doc is rewritten from it.
+  - `sync-edits.json` unreadable, or its `g` below the gen doc's or below the `g` the store's docs
+    reflect, means a lost journal. The store's `g` is the anchor when the journal and its gen doc
+    roll back together.
+  - A journal ahead of the gen doc, by any amount, is valid: a crash between the two writes, or a
+    gen doc rolled back alone. The gen doc is rewritten from it, and nothing falls back.
+  - A missing `sync-edits.gen` with a readable journal is valid too, the same way.
+  - **A lost journal with no gen doc** has no `T` and no `vv(T)`, so there's no union fallback
+    (re-check 4). Nothing is published. Every key takes the folder's value, and a local item the
+    folder lacks is kept, unpublished, only if its key was never seen. An ever-seen key the folder
+    lacks is removed.
 - **Ledger check on each read.** The meta row and the logins are read from the same copy of Login
   Data, one read of the file, so a restore between the two can't mix them.
-  - **Row equal to `L`:** consistent.
-  - **Row at `L + 1`:** a crash between the row write and the ledger's, or between Chrome's write
-    and the ledger's. It isn't a mismatch, but the in-between write can't be trusted, so each key is
-    judged against the folder:
-    - a local digest equal to its record is seeded, not published;
-    - a local digest that differs is handled by the edit rules below.
-    The ledger is then rewritten at `L + 1`.
-  - **Row below `L`, missing, or a different inode:** always a restore, a raze or a replacement, so
-    a mismatch, and the passwords type rebuilds.
-  - **The order matters.** The row goes first, so a backup taken between the two writes carries
-    the new row with the old ledger state (`L + 1`, handled above), never an old row that would pass.
-    Most backups carry `L - 1`, which is exactly a restore.
+  - **Row equal to `L@t`:** consistent; detection by ledger, below.
+  - **Anything else is a mismatch, and the passwords type rebuilds** (re-check 1). That covers:
+    - a row above `L`, by one or more: `sync-pw-ledger.json` rolled back, alone or with all of
+      shell.docs, while Login Data didn't, or a crash between the row write and the ledger's;
+    - a row below `L`, missing, or a different inode: Login Data restored, razed or replaced.
+  - **A rebuild claims only what Chrome stamped after Solara's last write.** A login whose
+    `date_password_modified` is later than both the row's `t` and the ledger's `t` was changed by
+    the user after every write sync made, so it's an edit, stamped `Clock.at(modified)` and merged
+    by the conflict rule below. Every other login is judged against the folder, and nothing of it is
+    claimed: equal is seeded; different takes the folder's value; missing locally is applied from
+    the folder; a login the folder lacks is kept, unpublished, only if the ledger and the folder
+    have never held its key. Nothing is published as deleted. The ledger is then rewritten at the
+    row's `L + 1`.
+  - Why both times: after a docs rollback the row's `t` is the newer, so a value sync applied after
+    the backup (modified at or before that write) isn't claimed. After a Login Data restore the
+    ledger's `t` is the newer, so an old login carried back by the restore isn't either.
+  - **The order matters.** The row goes first, so a crash between the two writes leaves a row
+    ahead of the ledger, a mismatch, never an old row that would pass.
 
 **Durability** (D4, re-review 4).
 - Write-through, in the order in the table above. The reverse order would turn a crash into a lost
@@ -116,7 +145,10 @@ written through ArdiaCore **before** `sync-pw-ledger.json` (final review 1).
     beats A's stale title.
   - **A local item the folder lacks** is kept and published at `Clock.at(T)` only if its key has
     never been seen in this Mac's records (the ever-seen set, below) and has no tombstone. An
-    ever-seen key the folder lacks was deleted or collected, so the item is removed.
+    ever-seen key the folder lacks was deleted or collected, so the item is removed. The ever-seen
+    set it reads is the one that rolls back with the items: in the store's docs for store-backed
+    types, in Chrome's nodes for bookmarks, the ledger and Login Data's own keys for passwords. So
+    an item applied by sync after a backup can't be both present and unseen.
   - Nothing is published as deleted.
 
 **How it's written.** The store's command layer writes entries for commands not tagged
@@ -152,21 +184,45 @@ the tree, and so does the echo of sync's pushes.
   replays pending store edits over the fetched tree (:249-251), so a concurrent extension edit is
   journaled and isn't hidden.
 - **Echo filter: pushed values, recorded as intents** (abbfd475, revised for the final review's
-  item 6).
-  - The bridge keeps a **shadow generation** `G`, saved with the shadow in `bookmarks-cache.json`.
-  - **Before each push.** Before calling `applyBookmarkOps`, the bridge writes, synchronously, an
-    intent record per node, `node → { value, tag: G + 1 }`, to `bookmarks-pushed.json`. A crash
-    after Chrome commits the push therefore always leaves the intent on disk.
-  - **After the push succeeds.** The bridge writes the shadow with `G + 1`, synchronously, then
-    prunes the intents tagged `≤ G + 1` from `bookmarks-pushed.json`, also synchronously. A clear is
-    therefore never in memory only.
+  item 6 and the re-check's items 2 and 3).
+  - The bridge keeps a **shadow generation** `G`, saved with the shadow in `bookmarks-cache.json`,
+    and Chrome keeps its own copy, `solara_shadow` on the bar node (above), read back with every
+    tree fetch as `G_c`.
+  - **Every shadow write advances `G` and mirrors it into Chrome** (re-check 2 and 3): a push
+    (lib/bookmarks.ts:256, 266) and a read that changes the shadow (:252). For a push the mark is
+    the push's first op. For a read it's a meta-only `applyBookmarkOps` call after the journal
+    entries and the cache are written. A read whose fetched tree equals the shadow writes nothing.
+  - **Every shadow write prunes** the intents tagged `≤ G` from `bookmarks-pushed.json`,
+    synchronously, right after the cache. A clear is never in memory only.
+  - **A push, in order:**
+    1. write an intent per node, `node → { value, tag: G + 1 }`, synchronously;
+    2. call `applyBookmarkOps`, whose first op sets `solara_shadow = G + 1` inside the same grouped
+       change, so Chrome records the generation even when a later op fails part way;
+    3. write the shadow with `G + 1`, synchronously, success or failure (a failed push writes the
+       tree fetched after it);
+    4. prune the intents tagged `≤ G + 1`.
+    A failed push's intent therefore can't stay live: step 3 runs anyway, and step 4 clears it.
   - **During a session**, a fetched node equal to a live intent's value isn't journaled.
-  - **At launch**, an intent is honoured only if the saved shadow's generation is below its tag.
-    That means the push may have landed after the last shadow write: the crash case (a). An intent
-    whose tag the saved shadow has already reached is stale and is dropped unread. So an extension
-    setting a node back to an old pushed value (case b) is journaled like any other edit.
-- **The first read at launch** is journaled like any other, so an extension edit made before it
-  isn't lost. Its diff is taken against the saved shadow, minus the honoured intents.
+- **At launch, Chrome's `G_c` is compared with the cache's `G`.**
+  - **Equal:** the cache is current. Intents still on disk are stale (their push never reached
+    Chrome's file) and are dropped. The first read's diff is journaled like any other, so an
+    extension edit made while the app was down isn't lost (RR5).
+  - **`G_c = G + 1`, with intents tagged `G + 1`:** a crash after Chrome took a push and before the
+    shadow write (case a). The diff is taken against the saved shadow with those intents applied, so
+    the push's values aren't journaled; anything else that differs is.
+  - **Anything else** (re-check 2): `G_c` above `G` without those intents means the cache rolled
+    back, alone or with all of shell.docs, while Chrome's Bookmarks didn't. `G_c` below `G`, or
+    missing where the cache has one, means Chrome's Bookmarks rolled back, or its file write was
+    lost in a crash. Either way **bookmarks rebuild and claim nothing**: nothing is journaled from
+    this read, every differing node takes the folder's value, and a node the folder lacks is kept,
+    unpublished, only if it carries no `solara_origin` (never seen). The rebuild's first shadow
+    write sets both generations.
+  - **Upgrade:** no `G_c` and no cache generation, so the first read is a claim-nothing rebuild.
+  - So an extension setting a node back to an old pushed value (case b) is journaled like any other
+    edit: its intent's tag is at or below `G` and was pruned.
+- **Why a read marks Chrome too.** Without it, a cache rolled back across reads only (no push)
+  would still match `G_c`, and its older shadow would re-journal extension edits already published,
+  with new stamps, over a rename made elsewhere since.
 
 **Passwords: Chrome's Login Data is the source** (D1–D3, re-review 1–3).
 - **Ledger.** `pwLedger`, kept in Solara's data folder:
@@ -179,9 +235,11 @@ the tree, and so does the echo of sync's pushes.
   (`ac_passwords_mark`). Each read compares the two.
   - A mismatch means Login Data was restored, replaced or razed under the ledger. The inode and
     creation time can't see an in-place restore (`cp`, `rsync --inplace`); the meta row can.
-  - On a mismatch the passwords type rebuilds. Nothing is claimed as an edit, and each key is
-    judged against the folder: equal is re-seeded; different takes the folder's value; missing
-    locally is applied from the folder. Nothing is published as deleted.
+  - The row also catches the reverse: the ledger rolled back (alone or with all of shell.docs)
+    while Login Data didn't leaves the row ahead of `L`.
+  - Any mismatch rebuilds the passwords type under the rule in the ledger check above: only a login
+    Chrome stamped after both write times is claimed, everything else is judged against the folder,
+    and nothing is published as deleted.
 - **Detection by ledger**, on each read:
   - **Addition:** a key not in the ledger.
   - **Deletion:** a ledger key missing locally.
@@ -227,7 +285,9 @@ written to the folder. A newer edit replaces the entry, so the clear leaves it a
 the write and the clear re-sends the same op, which changes nothing.
 
 **Publishing.** For each entry of an adapter's prefix, `publishAdapter` publishes `{k, h: entry.h,
-v: current value or null}`. If the record already has `h >= entry.h`, the entry is stale and is
+v: entry.v}`, the value the command wrote, not the store's current value. A store doc rolled back
+under a current journal therefore can't send an older value under a newer stamp; once the entry
+clears, the store takes the folder's value like any other key. If the record already has `h >= entry.h`, the entry is stale and is
 cleared. Observation keys (above) are still published by diff.
 - **Bookmark positions** (D6, re-review 10) come from the records first and fall back to base, so a
   lost base never renumbers.
@@ -238,6 +298,8 @@ live entry is never applied over, in any adapter (D11).
   - `Adapter.apply` returns the set of keys it actually wrote, not a boolean. `applyAdapter` sets
     base and clears `unapplied` only for those. Every other key stays unapplied and is offered again
     next cycle.
+  - **A key already equal to the folder's value counts as written** (re-check 5). Nothing needed
+    writing, so it's applied; otherwise it would stay unapplied forever.
   - Today two adapters skip a key and return ok:
     - the passwords adapter's conflict check (adapters.ts:521, 538), after which `applyAdapter` sets
       base to the remote value (scope.ts:347-350) and the next look republishes the local one;
@@ -248,9 +310,10 @@ live entry is never applied over, in any adapter (D11).
   local node that isn't visible is removed only when one of these holds:
   - its key has a tombstone in the records;
   - its key is in the **ever-seen set** with a saved origin `(device, seq)` that the current vv
-    covers, and the record is gone. The set holds each key this Mac's bookmark records have ever
-    held, with that record's last origin, kept per profile beside the journal and outside the sync
-    state.
+    covers, and the record is gone. For bookmarks the set is the nodes' own `solara_origin` meta
+    info in Chrome's tree, so it rolls back exactly with the nodes. A crash between a publish and
+    its mark leaves the node unmarked until the next cycle, which finds the record and marks it. For store-backed types it is kept in the store's docs beside the
+    items (the file table).
   Any other invisible node is kept: one never seen, or one whose origin's file hasn't arrived yet.
 - So after a state loss:
   - a bookmark deleted elsewhere is removed once the file or snapshot that covers it has arrived,
@@ -409,6 +472,12 @@ rely on the date: detection is by ledger and stamping by the sync clock.
     a second SQLite connection can't write it while Chrome runs. The row has to be written through
     Chrome's own `LoginDatabase`, as an engine patch that adds a method reaching `meta_table_` on the
     password store's sequence, exposed as `ac_passwords_mark`. That's one more patch in the series.
+- **Bookmark marks need an engine change, not a Chromium patch.** `ac_bookmarks_apply` gains an op
+  that sets meta info on a node (`solara_shadow` on the bar node, `solara_origin` on any node), and
+  `ac_bookmarks_tree` returns the bar node's `solara_shadow`. Both are in our own
+  engine/chromium/src/chrome/browser/ardia/ac_bookmarks.cc, which already reads and writes a node's
+  sync key through meta info (:59, :327-329). Meta info is saved in Chrome's Bookmarks file with
+  each node (bookmark_codec.cc:204-206), and the extensions API doesn't expose it.
 - **Chrome's own cleanup of undecryptable logins.** With `kClearUndecryptablePasswords` on,
   `LoginDatabase` deletes logins it can't decrypt (login_database.cc:2266). It doesn't when Chrome
   runs with `--user-data-dir` (:1036). Solara always passes it (ArdiaCoreHost.mm:638), and ArdiaCore
@@ -418,6 +487,36 @@ rely on the date: detection is by ledger and stamping by the sync clock.
   Whether to move it to the data-protection keychain is the owner's decision.
 - **The mass-change prompt** waits on the user. Until they answer, the held keys aren't published,
   and the folder's values aren't applied over them.
+
+## Rollback audit
+
+The rule (re-check 6): a Solara doc whose rollback could turn a value sync applied into a claimed
+edit is anchored in Chrome's own data, or its mismatch is a rebuild that claims nothing. Each doc is
+taken three ways: rolled back alone; all of shell.docs rolled back while Chrome's data (Login Data,
+the Bookmarks model, History) stays current; and the reverse, Chrome's data rolled back while
+shell.docs stays current.
+
+| Doc | Alone | All of shell.docs | Chrome's data instead | Anchor or rule | Tests |
+| --- | --- | --- | --- | --- | --- |
+| `sync-edits.json` (journal) | its `g` is below the gen doc's or the store's: a lost journal, so the vv(T)-bounded fallback. A value sync applied equals its record, so there's no difference to claim | rolls back with the store, ever-seen and state: one older snapshot. Revived entries lose to any record with `h ≥` theirs; a new chain is minted (I2) | not involved: Chrome-side changes are judged by the ledger and the shadow rows | the store's `g`; gen doc | guard-review r2, r4, A, A2, A3; RR4, FR3 |
+| `sync-edits.gen` | the journal is ahead of it: valid, and the gen doc is rewritten. Nothing falls back | as the journal | not involved | none needed: it can only start the fallback, never claim | needs the journal (no gen doc today) |
+| journal and gen doc together, store current | the store's `g` is above the journal's: a lost journal | — | — | the store's `g` | needs the journal |
+| lost journal, no gen doc | no `T`: publish nothing; keep only never-seen keys (re-check 4) | — | — | rule | needs the journal |
+| `sync-pw-ledger.json` | the row is above `L`: rebuild; only logins Chrome stamped after both write times are claimed | the same: the ledger is in shell.docs, so P1's "p3 equals the ledger" doesn't hold and P1 rebuilds | the row is below `L`, missing, or another inode: the same rebuild | Login Data's `meta` row `L@t` | P1, P1b (row at `L + 1`), AUDIT-pw-docs-two-writes (`L + 2`), seed 32144; FR1, RR1, D2a/b |
+| `bookmarks-cache.json` (shadow, `G`) | `G_c` is above `G`: claim-nothing rebuild | the same, with the journal and intents rolled back too | `G_c` is below `G`: the same rebuild | `solara_shadow` on the bar node | AUDIT-docs-all, AUDIT-chrome-bookmarks; RR5-stale-cache |
+| `bookmarks-pushed.json` (intents) | an older table's intents are at or below `G` and are dropped; a missing crash intent leaves `G_c = G + 1` without its intents: rebuild | as the cache | as the cache | `solara_shadow`; every shadow write prunes | I6a, I6b, I3-failed-push |
+| ever-seen, bookmarks | lives on Chrome's nodes, so it can't roll back apart from them | not in shell.docs | rolls back with the nodes it describes | `solara_origin` per node | RR10, FR4 |
+| ever-seen, store-backed types | lives in the store's docs with the items, same write | rolls back with the items: an item sync applied after the backup is absent from both | not involved | same write as the items | D7a, RR10 |
+| store docs (items, `g`) | older values with no entry take the folder's value; an entry publishes its own `v`, not the store's | as the journal row | not involved | entries carry `v` | guard-review3 r1, r1b; D4a/b |
+| `sync-state.nns` | own seqs or a snapshot above its seq: new chain. Publishing reads the journal, not base, so a lost base claims nothing | as the journal row | not involved | I2's checks | revsync4 R-rollback, R-rollback-outbox; guard-review r1, E; seed 35309; D8, RR7 |
+| History (Chrome) | — | visits are unions with their own times; a republished visit set adds nothing new; a revived delete entry loses to the visit records after it | visits missing after a restore are never published as deleted (deletions are journaled commands only); the folder's visits are applied back | rule: no inferred deletions | AUDIT-history-restore; RR6 |
+
+Residuals the audit leaves, both from this Mac's own clock or Chrome's lack of edit times:
+- **Passwords:** if the wall clock is set back, a user's change after Solara's last write can carry
+  a `date_password_modified` before it. A rebuild then takes the folder's value over it.
+- **Bookmarks:** Chrome keeps no modified time for a title or URL, so a claim-nothing rebuild loses
+  an extension or importer edit made after the last mark and not yet read. Reads run on Chrome's
+  change events, so the window is the time from the edit to the next read.
 
 ## Repros mapped to the design
 
@@ -450,7 +549,11 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 | oracle 25066 / B70 | partial apply wipes bookmarks, published as deleted | D7 apply rule; invariant 1 |
 | oracle 43, 212, 390, 398 (strict) | tie repair rewrites whole records | separate tie-by-key fix |
 | design review, HLC overflow | counter past `zzzz` sorts low | carry into wall time (D9) |
-| review5 P1, P1b, oracle 32144 | rolled-back base p1, keychain p3, B's p2: p3 ends everywhere | ledger outside the sync state (p3 equals the ledger, so it's no edit and p2 applies); apply returns written keys |
+| review5 P1, P1b, oracle 32144 | all of shell.docs rolled back, so base and ledger both say p1; Login Data has p3 from sync's apply after the backup; B's p2: p3 ends everywhere | the ledger rolls back with the rest, so the row is at `L + 1`: a mismatch. Passwords rebuild; p3 was modified before the row's write time, so it isn't claimed, and p2 applies. Apply returns written keys |
+| AUDIT-pw-docs-two-writes | the same two writes behind (row at `L + 2`) | the same rebuild; no rule special-cases a distance |
+| AUDIT-docs-all | all of shell.docs rolled back with bookmarks; R1 applied by sync after the backup | `G_c` above the cache's `G`: claim-nothing rebuild, so R1 isn't journaled and B's R2 applies |
+| AUDIT-chrome-bookmarks | Chrome's Bookmarks rolled back, shell.docs current | `G_c` below `G`: the same rebuild; the older title takes the folder's value |
+| AUDIT-history-restore | Chrome's History rolled back to before some visits | no deletion without a journaled command; the folder's visits are applied back |
 | review5 A3, A3s | rename or setting made during the 10-minute wait, then a relaunch inside it, reverted to B's older value | no wait; the edit is journaled at command time |
 | review5 A1 | one stuck download holds every launch for 10 minutes | no wait |
 | review5 C1 | reused seq, then a peer's compaction, deletes the user's own new bookmark | new chain (no reuse); the bookmarks apply removes a node only on a tombstone or a covered origin |
@@ -550,6 +653,28 @@ Final review:
   published.
 
 Both are guards today: no intent table exists, so neither failure can happen on today's bridge.
+
+Re-check (rollback audit, § Rollback audit):
+- **AUDIT-pw-docs-two-writes:** all of shell.docs rolled back two ledger writes behind Login Data
+  (p3 and p4 applied after the backup), then B's p2: B keeps p2 and this Mac takes it. Red on HEAD:
+  this Mac resends p4.
+- **P1, P1b** are the one-write case (`L + 1`) and stay red on HEAD for their stated reason.
+- **AUDIT-docs-all:** all of shell.docs rolled back with bookmarks after sync applied B's R1, then
+  B's R2: nothing is resent for the key and R2 lands. Green on HEAD, so a guard: HEAD has no journal
+  to claim R1 into. It's the test that keeps the `solara_shadow` comparison honest once the journal
+  exists.
+- **AUDIT-chrome-bookmarks:** Chrome's Bookmarks restored to before B's rename, shell.docs current:
+  the restored older title isn't sent. Red on HEAD.
+- **AUDIT-history-restore:** Chrome's History missing three of six recent URLs publishes no
+  deletion. Red on HEAD.
+- **I3-failed-push:** a refused push, then an extension setting the node to that refused value
+  after a newer rename from B: the extension's value reaches B. A guard (no intents today).
+- **Not expressible on HEAD,** since the journal and gen doc don't exist yet: a gen doc rolled back
+  alone, the journal and gen doc rolled back together under a current store, a lost journal with no
+  gen doc (re-check 4), and an adapter counting an already-equal key as written (re-check 5). Each
+  is a unit test in the journal's own commit.
+- **A test skipped in the scratch suite:** AUDIT-store-vs-journal needs the store's persisted docs
+  in the harness (persist.ts), which it doesn't load.
 The review5 repros (repros/guard-review5) are red on HEAD for their stated reasons: A1, A3, A3s,
 C1, D1, P1 and P1b. So are seeds 32144, 40636 and 35309. Each is listed in the table above
 with what removes it.

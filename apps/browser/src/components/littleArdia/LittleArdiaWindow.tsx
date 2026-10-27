@@ -12,6 +12,7 @@ import { ContentCard } from "../ContentCard";
 import { DownloadsPopover } from "../Downloads";
 import { ExtensionOverlays } from "../extensions/ExtensionOverlays";
 import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
+import { dropToolbarAnchor, setToolbarAnchor } from "../extensions/bridge";
 import { setUrlAnchor } from "../layout/windowLayout";
 import { showUrlBarMenu } from "../omnibox/paste";
 import { useHover } from "../primitives";
@@ -42,9 +43,13 @@ export function LittleArdiaWindow() {
       >
         <ContentCard />
       </View>
-      <View pointerEvents={shell ? "box-none" : "auto"} style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
-        {shell ? <ShellLittleArdiaBar /> : <LittleArdiaBar />}
-      </View>
+      {shell ? (
+        <ShellLittleArdiaBar width={width} />
+      ) : (
+        <View style={{ position: "absolute", left: 0, right: 0, top: 0 }}>
+          <LittleArdiaBar />
+        </View>
+      )}
       <CommandPanel windowWidth={width} />
       <DownloadsPopover />
       <ExtensionOverlays />
@@ -147,27 +152,35 @@ function useBarAnchor(windowId: string, count: number) {
   }, [windowId]);
   const anchor = () =>
     holder.current?.measureInWindow((x, y, width) => {
-      const right = SMALL_INSET + count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * 2 + 6;
-      const fieldWidth = width - FIELD_LEFT - right;
+      const fieldWidth = width - FIELD_LEFT - barRight(count);
       if (fieldWidth > 0) setUrlAnchor(windowId, { left: x + FIELD_LEFT, top: y + (SMALL_BAR_HEIGHT - 28) / 2, width: fieldWidth, sidebar: { height: 28 } });
     });
   useEffect(anchor, [count]);
   return { holder, anchor };
 }
 
-function ShellLittleArdiaBar() {
+const barRight = (count: number) => SMALL_INSET + count * SMALL_BAR_BUTTON + Math.max(0, count - 1) * 2 + 6;
+
+function ShellLittleArdiaBar({ width }: { width: number }) {
   const theme = useTheme();
   const { windowId, tab, state, count } = useSmallBarState();
-  const { holder, anchor } = useBarAnchor(windowId, count);
   const json = JSON.stringify(state);
   const backdrop = JSON.stringify({ vibrancy: true, colors: theme.windowTint, angle: 180, grainScale: 1, ...theme.backdrop, grainOpacity: theme.grain });
+  const tabId = tab?.id;
   useEffect(() => void setLittleSolaraBar(windowId, json), [windowId, json]);
   useEffect(() => void setLittleSolaraBackdrop(windowId, backdrop), [windowId, backdrop]);
-  return (
-    <View ref={holder} onLayout={anchor} pointerEvents="box-none" style={{ height: SMALL_BAR_HEIGHT }}>
-      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={(SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2} right={SMALL_INSET} /> : null}
-    </View>
-  );
+  useEffect(() => void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER), [windowId]);
+  useEffect(() => {
+    const fieldWidth = width - FIELD_LEFT - barRight(count);
+    if (width > 0 && fieldWidth > 0) setUrlAnchor(windowId, { left: FIELD_LEFT, top: (SMALL_BAR_HEIGHT - 28) / 2, width: fieldWidth, sidebar: { height: 28 } });
+  }, [windowId, width, count]);
+  useEffect(() => {
+    if (!tabId || width <= 0) return;
+    const anchor = { x: width - SMALL_INSET - SMALL_BAR_BUTTON, y: (SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2, width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON };
+    setToolbarAnchor(windowId, tabId, "*", anchor);
+    return () => dropToolbarAnchor(windowId, tabId, "*", anchor);
+  }, [windowId, tabId, width]);
+  return null;
 }
 
 function NativeLittleArdiaBar() {

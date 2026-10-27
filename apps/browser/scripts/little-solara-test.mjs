@@ -107,8 +107,10 @@ try {
     if (!near(info.bar, [0, 0, w, 38])) throw new Error(`bar ${info.bar}`);
     if (info.blankBarHit !== "SolaraUI.LittleSolaraDragStrip") throw new Error(`a click on the bar's blank part reaches ${info.blankBarHit}, not the drag strip`);
     if (info.reactFill !== null) throw new Error(`the RN root keeps its fill over the backdrop and bar: ${info.reactFill}`);
-    const bars = await run(`return [fibers("ShellLittleArdiaBar").length, fibers("NativeLittleArdiaBar").length, fibers("RNLittleArdiaBar").length];`);
+    const bars = await run(`return [acPerf.findFibers("ShellLittleArdiaBar", 5).length, fibers("NativeLittleArdiaBar").length, fibers("RNLittleArdiaBar").length];`);
     if (bars.join() !== "1,0,0") throw new Error(`JS bars (shell, hosted, RN) ${bars}`);
+    const drawn = await run(`return acPerf.findFibers("ShellLittleArdiaBar", 5).filter((f) => !!f.child).length;`);
+    if (drawn) throw new Error("the shell's JS bar still mounts RN views");
     return { slots, card: info.card, bounds: info.bounds, blankBarHit: info.blankBarHit };
   });
 

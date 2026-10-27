@@ -169,11 +169,19 @@ page (light, active window); behaviour from the binary (`DiaStatusText`, `Status
     Dia's ink: a 132 px wide box, stems mostly 3 px (2 px runs 60, 3 px runs 126). Medium draws 137 px and
     mostly 3–4 px stems, which is what ours showed (126 px for `apple.com`, the same as medium there).
   - Same glyph size: the host's ink spans 25 px tall (ascender to descender) in both, x-height rows 14 px.
-  - Colours. Light: host darkest ink (58, 58, 58), about black at 77–80%. Path (187, 187, 187), black at ~27–30%.
-    Ours had (26, 26, 26) and (138, 138, 138). Dark (bar (19, 20, 20)): host (157–161), white at ~55–59%. Path
-    (73, 76, 75), white at ~20–23%. The host matches the toolbar's icons in both.
-  - Position: the host's ink starts 68 px (34 pt) after the reload glyph's ink, and its x-height top sits 9 px
-    (4.5 pt) below the reload glyph's top. Ours was 65 px and 8 px.
+  - Colours, from the saturated stem cores (the 12 darkest or brightest pixels all read the same). Light: host
+    (51, 51, 51), black at 80%. Path (178, 178, 178), black at 30%. Ours (RN) had (25, 25, 25) and (127, 127, 127).
+    Dark (bar (19, 20, 20)): host (147, 151, 149), white at ~54%. Path (64, 67, 66), white at ~19%. The host has
+    the same colour as the toolbar's icons in both.
+  - Position: the host's ink starts 68 px (34 pt) after the reload glyph's ink. Measured from the reload glyph's ink
+    centre, the text origin is 56.5 px to the right and the host's ink top is 9.5 px above it. Ours (RN) is 53 px
+    and 11 px.
+  - Native toolbar (`ARDIA_NATIVE_OMNIBOX=1`, hidden instance, `screencapture -l`, 2x), apple.com/mac and a dark
+    page whose sampler reports #131414 under a #191A1E theme-color: host `apple.com` 123 px wide (SF 13 regular
+    renders 123, medium 127), (51, 51, 51), path (178, 178, 178). Dark host 90 px wide (regular 90, medium 93),
+    (149, 149, 149), path (67, 67, 67). Origin 56 px right of the reload centre, ink top 9.5 px above it. Divider
+    2 rows of 242 (light) and 2 rows of (26, 26, 26) (dark). The band reads (20, 20, 20) in both the native and
+    the RN toolbar on that page: both draw the sampler's #131414, and the capture shifts it by one level.
   - The sidebar toggle has no background at rest.
   - Ours shows one in the owner's crop, most likely a hover left behind when the click moved the button out from under the pointer.
   The title is not split on `·`, `|` or `—`. **1.50.1: web pages show the host alone**, see "URL bar (1.50.1)".

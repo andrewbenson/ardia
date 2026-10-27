@@ -5,7 +5,7 @@ import WebKit
 public class WebKitModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaWebKit")
-    Events("onDownload", "onPermission", "onPermissionDismissed")
+    Events("onWebKitDownload", "onWebKitPermission", "onWebKitPermissionDismissed")
 
     OnCreate {
       WebKitHub.shared.events = { [weak self] name, payload in self?.sendEvent(name, payload) }

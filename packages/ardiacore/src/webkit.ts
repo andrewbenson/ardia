@@ -21,9 +21,9 @@ export type PageCookie = {
 };
 
 export type WebKitNative = {
-  addListener(name: "onDownload", listener: (d: Download) => void): EventSubscription;
-  addListener(name: "onPermission", listener: (p: PermissionRequest) => void): EventSubscription;
-  addListener(name: "onPermissionDismissed", listener: (p: { id: string }) => void): EventSubscription;
+  addListener(name: "onWebKitDownload", listener: (d: Download) => void): EventSubscription;
+  addListener(name: "onWebKitPermission", listener: (p: PermissionRequest) => void): EventSubscription;
+  addListener(name: "onWebKitPermissionDismissed", listener: (p: { id: string }) => void): EventSubscription;
   prepareTransfer(key: string): void;
   releaseTransfer(key: string): void;
   resolvePermission(id: string, result: PermissionResult, remember: boolean): Promise<void>;
@@ -59,7 +59,7 @@ export const isWebKitExternalApp = (id: string) => id.startsWith("wk-external-")
 export const WEBKIT_SITE_SETTINGS: readonly SiteSettingType[] = ["camera", "microphone"];
 
 export const webKitListener = <T>(name: "onDownload" | "onPermission" | "onPermissionDismissed", listener: (value: T) => void): EventSubscription =>
-  WebKit ? WebKit.addListener(name as "onDownload", listener as (d: Download) => void) : NO_SUBSCRIPTION;
+  WebKit ? WebKit.addListener(`onWebKit${name.slice(2)}` as "onWebKitDownload", listener as (d: Download) => void) : NO_SUBSCRIPTION;
 
 export function leftDownloadStaging(download: Download): { path: string; uuid: string; folder: string } | null {
   const uuid = download.stagingId ?? (download.id.startsWith("wk-download-") ? download.id.slice("wk-download-".length) : "");

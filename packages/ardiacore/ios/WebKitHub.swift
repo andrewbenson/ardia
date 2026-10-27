@@ -133,7 +133,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     for (id, pending) in pendingPermissions where pending.store === ended.store {
       pendingPermissions.removeValue(forKey: id)
       pending.decide(false)
-      events?("onPermissionDismissed", ["id": id])
+      events?("onWebKitPermissionDismissed", ["id": id])
     }
     for tab in owners.values.compactMap(\.tab) where tab.webView.map(uses) == true { tab.close() }
     ended.store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {}
@@ -313,7 +313,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     lastPermission += 1
     let id = "wk-permission-\(lastPermission)"
     pendingPermissions[id] = PendingPermission(browserId: browserId, keys: keys, store: dataStore(for: profile), decide: decide)
-    events?("onPermission", ["id": id, "browserId": Int(browserId), "origin": origin, "permissions": kinds])
+    events?("onWebKitPermission", ["id": id, "browserId": Int(browserId), "origin": origin, "permissions": kinds])
   }
 
   func resolvePermission(_ id: String, result: String, remember: Bool) {
@@ -327,7 +327,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     for (id, pending) in pendingPermissions where pending.browserId == browserId {
       pendingPermissions.removeValue(forKey: id)
       pending.decide(false)
-      events?("onPermissionDismissed", ["id": id])
+      events?("onWebKitPermissionDismissed", ["id": id])
     }
   }
 
@@ -618,7 +618,7 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
   private func item(for download: WKDownload) -> Item? { byDownload[ObjectIdentifier(download)].flatMap { items[$0] } }
 
   private func report(_ item: Item) {
-    WebKitHub.shared.events?("onDownload", [
+    WebKitHub.shared.events?("onWebKitDownload", [
       "id": item.id, "url": item.url, "filename": item.filename, "path": item.path, "state": item.state,
       "paused": item.phase == .pausing || item.phase == .paused || item.phase == .resuming,
       "received": Double(item.received), "total": Double(item.total), "speed": item.speed, "mimeType": item.mimeType,

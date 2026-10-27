@@ -161,7 +161,7 @@ let loading: Promise<void> | null = null;
 let unverified = new Set<string>();
 let unverifiedSince = 0;
 let firstLooks = new Map<string, Set<string>>();
-type Delivered = { values: Map<string, Set<string>>; mine: Map<string, { h: string; value: string }> };
+type Delivered = Map<string, Set<string>>;
 let freshDelivered = new Map<string, Delivered>();
 let revivalBatches = new Map<string, LogFile[]>();
 type Rebuild = { since: number; settled?: string[]; noted?: Record<string, Record<string, string>> };
@@ -529,7 +529,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
   let pulled = false;
   let checked = false;
   let downloading = false;
-  const delivered: Delivered = freshDelivered.get(scope) ?? { values: new Map(), mine: new Map() };
+  const delivered: Delivered = freshDelivered.get(scope) ?? new Map();
   if (looked) freshDelivered.set(scope, delivered);
   const watched: Transport = {
     ...transport,
@@ -537,13 +537,12 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
       const listing = await transport.read(name, known);
       pulled = true;
       downloading = listing.pending.length > 0;
-      for (const file of listing.files) noteDelivered(delivered, file.payload, (key) => state.records[key]?.h, device);
+      for (const file of listing.files) noteDelivered(delivered, file.payload, (key) => state.records[key]?.h);
       return listing;
     },
   };
   const waiting = () => fresh && downloading && Date.now() - unverifiedSince < FRESH_WAITS_FOR_DOWNLOADS_MS;
-  const fromFolder = (key: string, value: unknown) => delivered.values.get(key)?.has(deliveredAs(value)) ?? false;
-  const sentHere = (key: string, value: unknown) => delivered.mine.get(key)?.value === deliveredAs(value);
+  const fromFolder = (key: string, value: unknown) => delivered.get(key)?.has(deliveredAs(value)) ?? false;
   const afterPull = () => {
     if (checked) return;
     checked = true;
@@ -567,7 +566,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         if (!unlooked(adapter.prefix) && !rebuilding(adapter.prefix)) return extraction;
         const unapplied = new Set(state.unapplied);
         const stale = (key: string, value: unknown) => unapplied.has(key) || fromFolder(key, value);
-        const guarded = guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? sentHere : stale, rebuilding(adapter.prefix));
+        const guarded = guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? fromFolder : stale, rebuilding(adapter.prefix));
         looked?.add(adapter.prefix);
         return guarded;
       },
@@ -650,7 +649,7 @@ const choice = (value: unknown) => {
 
 const deliveredAs = (value: unknown) => (value === null || value === undefined ? "null" : choice(value));
 
-function noteDelivered(delivered: Delivered, payload: string, had: (key: string) => string | undefined, device: string) {
+function noteDelivered(delivered: Delivered, payload: string, had: (key: string) => string | undefined) {
   let file: unknown;
   try {
     file = JSON.parse(payload);
@@ -658,18 +657,16 @@ function noteDelivered(delivered: Delivered, payload: string, had: (key: string)
     return;
   }
   if (!isObject(file)) return;
-  const note = (key: unknown, value: unknown, h: unknown, from: unknown) => {
+  const note = (key: unknown, value: unknown, h: unknown) => {
     if (typeof key !== "string" || typeof h !== "string") return;
     const known = had(key);
     if (known !== undefined && h <= known) return;
-    const seen = delivered.values.get(key) ?? new Set<string>();
+    const seen = delivered.get(key) ?? new Set<string>();
     seen.add(deliveredAs(value));
-    delivered.values.set(key, seen);
-    const mine = delivered.mine.get(key);
-    if (from === device && (!mine || mine.h < h)) delivered.mine.set(key, { h, value: deliveredAs(value) });
+    delivered.set(key, seen);
   };
-  if (Array.isArray(file.ops)) for (const op of file.ops) if (isObject(op)) note(op.k, op.v, op.h, file.device);
-  if (isObject(file.records)) for (const [key, record] of Object.entries(file.records)) if (isObject(record)) note(key, record.v, record.h, Array.isArray(record.o) ? record.o[0] : file.device);
+  if (Array.isArray(file.ops)) for (const op of file.ops) if (isObject(op)) note(op.k, op.v, op.h);
+  if (isObject(file.records)) for (const [key, record] of Object.entries(file.records)) if (isObject(record)) note(key, record.v, record.h);
 }
 
 const parseKept = (text: string | undefined) => (text === undefined ? undefined : (JSON.parse(text) as unknown));
@@ -702,14 +699,15 @@ function guardedExtraction(scope: string, prefix: string, state: Guarded, extrac
     const record = state.records[key];
     return !!record && record.v !== null && choice(record.v) === choice(value);
   };
+  const changedHere = (key: string, value: unknown) => kept.get(key) !== choice(value);
   const publishes = (key: string, value: unknown) => {
     if (!known(key)) return !downloading;
     if (!rebuilding) return edited(key, value) || !fromFolder(key, value);
-    return edited(key, value) && !fromFolder(key, value) && !recorded(key, value);
+    return !recorded(key, value) && (changedHere(key, value) || (edited(key, value) && !fromFolder(key, value)));
   };
   const values = new Map([...extraction.values].filter(([key, value]) => publishes(key, value)));
   const gone = [...(noted ? Object.keys(noted) : kept.keys())].filter((key) => key.startsWith(prefix) && !extraction.values.has(key) && !extraction.ignore?.(key) && known(key));
-  const deleted = new Set(gone.filter((key) => !rebuilding || !fromFolder(key, null)));
+  const deleted = new Set(gone.filter((key) => !rebuilding || kept.has(key) || !fromFolder(key, null)));
   const settledHere = rebuilding ? [...extraction.values].filter(([key, value]) => known(key) && !values.has(key) && edited(key, value)) : [];
   for (const key of deleted) {
     const record = state.records[key];

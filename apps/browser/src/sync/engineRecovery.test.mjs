@@ -1196,3 +1196,56 @@ test("B57: a state that fell back to before it took a bookmark, with bookmarks l
   const taken = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "Taken");
   assert.equal(taken.parentId, S().bookmarks.roots.default.other);
 });
+
+test("B58: after losing its state, a setting this Mac sent before and another Mac replaced, chosen again before the first cycle, is published", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const other = appMac("set:");
+  S().updateSettings({ appearance: "dark" });
+  await engine.syncNow();
+  await settle();
+  await other.sync();
+  other.store.set("set:appearance", { v: "light" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  assert.equal(S().settings.appearance, "light", "control: this Mac took the other Mac's newer choice");
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const rebuilt = await launch();
+  rebuilt.startSync();
+  await settle();
+  S().updateSettings({ appearance: "dark" });
+  for (let i = 0; i < 3; i++) await rebuilt.syncNow();
+  await settle();
+  await other.sync();
+  assert.deepEqual(other.store.get("set:appearance"), { v: "dark" });
+  assert.equal(S().settings.appearance, "dark");
+});
+
+test("B59: a rebuilding state that falls back to before it took the folder's value doesn't send that value later over a newer choice elsewhere", async () => {
+  reset();
+  await onAndSynced();
+  const other = appMac("set:");
+  await other.sync();
+  other.store.set("set:appearance", { v: "light" });
+  await other.sync();
+  S().updateSettings({ appearance: "dark" });
+  shell.docs.set("sync-state.nns", "not-sealed-by-this-key");
+  const rebuilt = await launch();
+  rebuilt.startSync();
+  await settle();
+  const atLoad = new Map(shell.docs);
+  S().updateSettings({ appearance: "light" });
+  shell.docs.clear();
+  for (const [name, contents] of atLoad) shell.docs.set(name, contents);
+  other.store.set("set:appearance", { v: "system" });
+  await other.sync();
+  const again = await launch();
+  again.startSync();
+  await settle();
+  for (let i = 0; i < 3; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.deepEqual(other.store.get("set:appearance"), { v: "system" });
+  assert.equal(S().settings.appearance, "system");
+});

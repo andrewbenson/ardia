@@ -487,7 +487,7 @@ async function environment(prefix, sharedFolderOps) {
         break;
       }
       case "settings":
-        for (const [key, value] of Object.entries(step.patch)) if (!S().settings.chosen?.includes(key) || JSON.stringify(S().settings[key]) !== JSON.stringify(value)) edited("setting", key, value, S().settings.chosen?.includes(key) ? S().settings[key] : undefined);
+        for (const [key, value] of Object.entries(step.patch)) if (!S().settings.chosen?.includes(key) || JSON.stringify(S().settings[key]) !== JSON.stringify(value)) edited("setting", key, value, S().settings[key]);
         command("updateSettings", step.patch);
         break;
       case "recover": {

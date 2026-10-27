@@ -60,42 +60,64 @@ action runs: settings, profiles, bookmarks, pins, groups, a history delete, and 
 - Device observations stay outside the journal and are published by diff, as today: `tabs:<this
   device>`, and a pin's page title and favicon. No observation writes the journal, so a navigation
   never does synchronous IO.
-- Observation keys are owned by this device or carry only display fields, so a diff can't send
-  another Mac's choice back.
+- `tabs:<this device>` is owned by this device. A diff of it can't send another Mac's choice back.
+- **Pins mix both** (final review 5). A `pin:t:` record holds observations (`ti` page title, `i`
+  favicon) and choices (`g` group, `pos` position, `u` home, `t` custom title).
+  - When only observation fields differ from the record, the record is published by diff, with the
+    record's own choice fields.
+  - When a choice field differs too and there's no journal entry, nothing is published. The
+    folder's value lands first, and the next cycle publishes the observation over it.
+  - So a title change never carries a stale group or position over a move made elsewhere, and a
+    rolled-back Mac can't either.
 
 **Where it lives: three files in Solara's data folder, outside `sync-state.nns`.**
 
 | File | Holds | Written |
 | --- | --- | --- |
 | `sync-edits.json` | the entries; the journal generation `g`; the newest `h` | synchronously on each user command, before its gen doc |
-| `sync-edits.gen` | one line: `g`, and the last in-step time `T` | right after `sync-edits.json` (same `g`), and after each in-step cycle (new `T`) |
-| `sync-pw-ledger.json` | per key: the last 4 digests, `h`, `modified`; the ledger generation `L`; Login Data's inode and creation time | after every apply or publish that touches passwords, before the meta write |
+| `sync-edits.gen` | `g`; the last in-step time `T`, with the version vector of every synced scope at `T` | right after `sync-edits.json` (same `g`), and after each in-step cycle (new `T` and vv) |
+| `sync-pw-ledger.json` | per key: the last 4 digests, `h`, `modified`; the ledger generation `L`; Login Data's inode and creation time | after every apply or publish that touches passwords, right after the meta row |
 
 The fourth piece lives in Login Data itself: a row `solara_sync_ledger = L` in its `meta` table,
-written through ArdiaCore right after `sync-pw-ledger.json`.
+written through ArdiaCore **before** `sync-pw-ledger.json` (final review 1).
 
-- **Journal check at load.** `sync-edits.json` unreadable, or its `g` below the gen doc's, means a
-  lost journal. A journal ahead by one is a crash between the two writes, and it's fine.
-- **Ledger check on each read.**
-  - The meta row equal to `L`, or to `L - 1` (a crash between the two writes, after which the row is
-    rewritten), means consistent.
-  - Anything else is a mismatch, and the passwords type rebuilds. That covers a lower `L` (Login
-    Data restored), a missing row (Login Data razed or replaced), and a different inode.
-  - A restore taken exactly between the two writes is the one case it can't see.
+- **Journal check at load.**
+  - `sync-edits.json` unreadable, or its `g` below the gen doc's, means a lost journal.
+  - A journal ahead by one is a crash between the two writes, and it's fine.
+  - A missing `sync-edits.gen` with a readable journal means the journal is valid, so no fallback
+    runs. The gen doc is rewritten from it.
+- **Ledger check on each read.** The meta row and the logins are read from the same copy of Login
+  Data, one read of the file, so a restore between the two can't mix them.
+  - **Row equal to `L`:** consistent.
+  - **Row at `L + 1`:** a crash between the row write and the ledger's, or between Chrome's write
+    and the ledger's. It isn't a mismatch, but the in-between write can't be trusted, so each key is
+    judged against the folder:
+    - a local digest equal to its record is seeded, not published;
+    - a local digest that differs is handled by the edit rules below.
+    The ledger is then rewritten at `L + 1`.
+  - **Row below `L`, missing, or a different inode:** always a restore, a raze or a replacement, so
+    a mismatch, and the passwords type rebuilds.
+  - **The order matters.** The row goes first, so a backup taken between the two writes carries
+    the new row with the old ledger state (`L + 1`, handled above), never an old row that would pass.
+    Most backups carry `L - 1`, which is exactly a restore.
 
 **Durability** (D4, re-review 4).
 - Write-through, in the order in the table above. The reverse order would turn a crash into a lost
   journal.
 - **Last in-step time.** The end of the last cycle in which a pull completed with nothing unapplied,
-  for every synced type. It is saved in `sync-edits.gen` after each such cycle.
-- **Fallback on a lost journal: a union bounded by the last in-step time `T`.**
-  - A local value that differs from its record is published at `Clock.at(T)`, but only where the
-    record's `h` is older than `T`. Where the record is newer, the folder's value is applied: another
-    Mac changed it after this Mac last agreed with the folder.
-  - A local item the folder lacks is kept and published at `Clock.at(T)`, unless the key has a
-    tombstone. A tombstone is a deletion, so the item is removed.
-  - Renames and deletions made elsewhere after `T` win. Edits here between `T` and the loss either
-    survive at `T` or lose to a newer change elsewhere; nothing is deleted.
+  for every synced type. It's saved in `sync-edits.gen` after each such cycle, together with each
+  scope's version vector at that moment, `vv(T)`.
+- **Fallback on a lost journal: a union bounded by what this Mac had seen at `T`** (final review 3).
+  - **A local value that differs from its record** is published at `Clock.at(T)`, but only where the
+    record's origin `(device, seq)` is covered by `vv(T)`. That means this Mac had already applied
+    that record when it was last in step, so the difference was made here after `T`.
+  - **A record whose origin isn't covered** wins, and its value is applied, whatever its stamp says.
+    That includes a late file: Mac C's 9:00 rename arriving at 10:30, after A's `T` of 10:00, still
+    beats A's stale title.
+  - **A local item the folder lacks** is kept and published at `Clock.at(T)` only if its key has
+    never been seen in this Mac's records (the ever-seen set, below) and has no tombstone. An
+    ever-seen key the folder lacks was deleted or collected, so the item is removed.
+  - Nothing is published as deleted.
 
 **How it's written.** The store's command layer writes entries for commands not tagged
 `fromSync`:
@@ -160,9 +182,13 @@ the tree, and so does the echo of sync's pushes.
 - **Detection by ledger**, on each read:
   - **Addition:** a key not in the ledger.
   - **Deletion:** a ledger key missing locally.
-  - **Edit:** a key whose digest isn't the ledger's newest. If the digest matches an older one of
-    the last 4, it's a rollback signal (an older copy of Login Data), not an edit. The key is
-    treated like a mismatch for that key alone and takes the folder's value.
+  - **Edit:** a key whose digest isn't the ledger's newest.
+  - **A digest matching an older one of the last 4** (final review 2) can be either case:
+    - **A rollback:** an older copy of Login Data carries its old date, so `date_password_modified`
+      is at or before the ledger's `modified`. It takes the folder's value.
+    - **A deliberate revert:** a user going back to an earlier password gets `Now()` from Chrome,
+      later than the ledger's `modified`. It's an edit like any other.
+    Both dates come from this Mac's own clock, so skew doesn't enter.
 - **Conflicts are decided by value** (re-review 3). For a deletion or an edit:
   - **No conflict** when the record's current digest equals the ledger's newest, meaning nothing
     elsewhere changed it since this Mac last agreed. The change is stamped
@@ -205,12 +231,19 @@ cleared. Observation keys (above) are still published by diff.
 
 **Applying.** Every key with a difference and no live entry takes the folder's value. A key with a
 live entry is never applied over, in any adapter (D11).
-- **Bookmarks apply** (D7, re-review 10) rebuilds the tree from what's visible. It keeps a local
-  node that isn't visible only when the node's key isn't in the **ever-seen set**: the keys this
-  Mac's bookmark records have ever held, kept per profile beside the journal, outside the sync
-  state.
-- So after a state loss, a bookmark deleted elsewhere is removed even when compaction has collected
-  its tombstone (45 days), and a new local bookmark nobody has seen yet is kept.
+- **Bookmarks apply** (D7, re-review 10, final review 4) rebuilds the tree from what's visible. A
+  local node that isn't visible is removed only when one of these holds:
+  - its key has a tombstone in the records;
+  - its key is in the **ever-seen set** with a saved origin `(device, seq)` that the current vv
+    covers, and the record is gone. The set holds each key this Mac's bookmark records have ever
+    held, with that record's last origin, kept per profile beside the journal and outside the sync
+    state.
+  Any other invisible node is kept: one never seen, or one whose origin's file hasn't arrived yet.
+- So after a state loss:
+  - a bookmark deleted elsewhere is removed once the file or snapshot that covers it has arrived,
+    even when compaction collected its tombstone (45 days);
+  - a bookmark whose file is still downloading is kept, however long the hold lasted;
+  - a new local bookmark nobody has seen is kept.
 
 **Joining and first sync** (re-review 8).
 - When sync is turned on, or a profile or type is first linked, existing local items get entries
@@ -255,9 +288,10 @@ live entry is never applied over, in any adapter (D11).
 One hold remains: a rebuilding type doesn't apply while its pull is incomplete.
 - Each unreadable file the state doesn't know gets a first-seen time, saved in the state and kept
   whatever its listing says, including pending after damaged (Q1).
-- After 10 minutes a file stops holding anything. The type then applies what it has. With D7's apply
-  rule, nothing it can't see is removed unless it was deleted, and nothing local is published as
-  deleted without a journal entry.
+- After 10 minutes a file stops holding anything. The type then applies what it has. Under the
+  bookmarks apply rule, an invisible node is removed only on a tombstone, or when the vv covers its
+  last origin. A node whose file is still pending isn't covered, so it stays. Nothing local is
+  published as deleted without a journal entry.
 - The Sync pane shows "Waiting for N files" until a file arrives or is given up after a day.
 - A healthy Mac is never under this hold.
 
@@ -362,6 +396,11 @@ rely on the date: detection is by ledger and stamping by the sync clock.
     a second SQLite connection can't write it while Chrome runs. The row has to be written through
     Chrome's own `LoginDatabase`, as an engine patch that adds a method reaching `meta_table_` on the
     password store's sequence, exposed as `ac_passwords_mark`. That's one more patch in the series.
+- **Chrome's own cleanup of undecryptable logins.** With `kClearUndecryptablePasswords` on,
+  `LoginDatabase` deletes logins it can't decrypt (login_database.cc:2266). It doesn't when Chrome
+  runs with `--user-data-dir` (:1036). Solara always passes it (ArdiaCoreHost.mm:638), and ArdiaCore
+  refuses to start without it (ac_main_delegate.cc:410). The ledger would read such a cleanup as
+  deletions, so the dependency is pinned by a test that checks both lines (FR6).
 - **Keychain class.** Twins are handled by `IOPlatformUUID`; the item still copies with the Mac.
   Whether to move it to the data-protection keychain is the owner's decision.
 - **The mass-change prompt** waits on the user. Until they answer, the held keys aren't published,
@@ -396,7 +435,7 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 | guard-review4 Q3, Q3-pre | rolled-back password resent over newer | ledger outside the sync state; detection by digest; apply by ledger (D1–D3) |
 | oracle 35309 | corrupt sync journal, seq reused | invariant 2 |
 | oracle 25066 / B70 | partial apply wipes bookmarks, published as deleted | D7 apply rule; invariant 1 |
-| oracle 212, 265, 43 | tie repair rewrites whole records | separate tie-by-key fix |
+| oracle 43, 212, 390, 398 (strict) | tie repair rewrites whole records | separate tie-by-key fix |
 | design review, HLC overflow | counter past `zzzz` sorts low | carry into wall time (D9) |
 
 ## Today's accepted residuals
@@ -473,3 +512,20 @@ Re-review items:
 - **RR10:**
   - Positions come from records, with base as the fallback.
   - The ever-seen set removes a bookmark whose tombstone was collected.
+
+Final review:
+- **FR1:** Login Data restored in place from one ledger write ago (row at `L - 1`), dropping 30
+  of 70 logins applied in that write, deletes none elsewhere.
+- **FR2:** a deliberate revert to an earlier password is published.
+- **FR3 (RR4):** a late file older than `T` (C's 9:00 rename arriving at 10:30) wins over this
+  Mac's stale title, and nothing stale is sent.
+- **FR4:** the ever-seen set removes nothing whose file is still downloading.
+- **FR5:** a pin's page-title change doesn't send its old group or position over a move made
+  elsewhere.
+- **FR6:** Solara always passes `--user-data-dir`.
+
+**Tie seeds.** The cited seeds come from a strict oracle, the tracked harness with the two
+"repair counts as a choice" rules removed (`/private/tmp/redesign-tests/engineScenario-strict.mjs`).
+In its first 400 seeds, 43, 212, 390 and 398 fail on tie repairs. 265 no longer does, since the
+settle phase and hidden-file steps changed what it generates. The tie-by-key fix's commit puts the
+rules back to failures, so these pass on their merits.

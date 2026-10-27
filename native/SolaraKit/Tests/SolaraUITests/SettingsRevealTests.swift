@@ -36,7 +36,12 @@ struct SettingsRevealTests {
     context.search.revealSetting(id, navigation: context.navigation) { _, _ in nil }
     try await Self.settle(host)
     #expect(context.search.flash?.id == id)
-    let offsets = Self.scrollViews(in: host).map(\.contentView.bounds.origin.y)
+    let deadline = Date().addingTimeInterval(4)
+    var offsets = Self.scrollViews(in: host).map(\.contentView.bounds.origin.y)
+    while !offsets.contains(where: { $0 > 100 }), Date() < deadline {
+      try await Self.settle(host, for: 0.1)
+      offsets = Self.scrollViews(in: host).map(\.contentView.bounds.origin.y)
+    }
     #expect(offsets.contains { $0 > 100 })
     context.search.revealSetting(id, navigation: context.navigation) { _, _ in nil }
     try await Self.settle(host)

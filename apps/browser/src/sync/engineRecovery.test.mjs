@@ -853,3 +853,30 @@ test("B47: during a rebuild, a bookmark renamed right after the bookmarks load, 
   assert.deepEqual(titles(), ["Renamed after loading"]);
   assert.ok(bookmarkOps(syncId).some((op) => op.v?.t === "Renamed after loading"), "the rename was published");
 });
+
+test("B48: after a relaunch with a healthy state, a setting changed back to a value an older batch still carries is kept over an earlier choice elsewhere, not taken for a rolled-back copy", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const other = appMac("set:");
+  other.store.set("set:appearance", { v: "dark" });
+  await other.sync();
+  const older = files().find(({ scope, file }) => scope === "app" && file.device === "appMac" && file.ops?.some((op) => op.k === "set:appearance"));
+  other.store.set("set:appearance", { v: "light" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  assert.equal(S().settings.appearance, "light", "control: this Mac took the newer choice");
+  other.store.set("set:appearance", { v: "system" });
+  await other.sync();
+  S().updateSettings({ appearance: "dark" });
+  await rawTransport.write("app", JSON.stringify({ ...older.file, device: "thirdMac", seq: 1 }));
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(S().settings.appearance, "dark");
+  assert.deepEqual(other.store.get("set:appearance"), { v: "dark" });
+});

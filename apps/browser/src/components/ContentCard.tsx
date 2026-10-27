@@ -38,6 +38,8 @@ import { useTabDrag } from "./layout/tabDrag";
 import { SadTab, StatusBubble } from "./layout/PaneOverlays";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
+import { useWindowShell } from "./layout/ShellBackdrop";
+import { useNativeSplitChrome } from "./layout/nativeSplitChrome";
 import { pagerFor } from "./layout/profilePager";
 import { openFromPage } from "./layout/openFromPage";
 import { dockMoving, useDockMotion, usePeekEdge } from "./layout/dockMotion";
@@ -93,6 +95,8 @@ export function ContentCard() {
   useEffect(startPeeks, []);
   const peekId = useBrowser((s) => s.peeks[windowId]?.tabId);
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
+  const shell = useWindowShell();
+  useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
   }, [fullscreenTab, peekId, peekFullscreen, windowId]);
@@ -300,7 +304,7 @@ export function ContentCard() {
       {size.width > 0 && !split && !fullscreenTab && (
         <FrozenPage windowId={windowId} tabId={activeId} top={(!addressInSidebar && !small && !hideWhileScrolling ? layout.toolbarHeight : 0) + (barMode === "always" && !small && !hideWhileScrolling ? BOOKMARKS_BAR_HEIGHT : 0)} />
       )}
-      {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
+      {split && !fullscreenTab && !shell && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
       {size.width > 0 && popoversOverCard && origin && activeRect && peekEdge !== undefined && (
         <BesidePeekPopovers
           tabId={popoversOverCard}
@@ -309,7 +313,7 @@ export function ContentCard() {
           room={size.width}
         />
       )}
-      {!fullscreenTab && <DropTargets panes={panes} origin={origin} />}
+      {!fullscreenTab && <DropTargets panes={panes} origin={origin} windowId={windowId} native={shell} />}
       {(!fullscreenTab || peekFullscreen) && !small && (
         <PeekOverlay
           windowId={windowId}
@@ -320,7 +324,7 @@ export function ContentCard() {
           page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} fullscreen={peekFullscreen} />}
         />
       )}
-      <SplitToast windowId={windowId} />
+      {!shell && <SplitToast windowId={windowId} />}
     </View>
   );
 }

@@ -8,10 +8,10 @@ import type { SplitView } from "../../store/types";
 import { resize, type Divider, type Rect } from "./geometry";
 import { useHover } from "../primitives";
 import { hideToast, useToasts } from "./splitActions";
-import { useWindowId } from "../../store/hooks";
 import { overPeek } from "./dockMotion";
 import { zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
 import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "./tabDrag";
+import { publishNativeDrop } from "./nativeSplitChrome";
 
 export function SplitDividers({ split, dividers, width, height }: { split: SplitView; dividers: Divider[]; width: number; height: number }) {
   return (
@@ -87,8 +87,7 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
   );
 }
 
-export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null }) {
-  const windowId = useWindowId();
+export function DropTargets({ panes, origin, windowId, native = false }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null; windowId: string; native?: boolean }) {
   const dragging = useTabDrag((s) => (s.windowId === windowId ? s.tabId : null));
   const x = useTabDrag((s) => s.x);
   const y = useTabDrag((s) => s.y);
@@ -148,7 +147,10 @@ export function DropTargets({ panes, origin }: { panes: Record<string, Rect>; or
     if (shown) setMounted(candidates);
   }, [shown, candidates]);
 
-  if (!mounted.length) return null;
+  useEffect(() => {
+    if (native && (shown || mounted.length)) publishNativeDrop(windowId, { shown, grown, px, target: shown ? target : null, panes: mounted.length ? mounted : candidates });
+  }, [native, windowId, shown, grown, px, target?.tabId, target?.side, mounted]);
+  if (!mounted.length || native) return null;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {mounted.flatMap(([tabId, rect]) =>

@@ -18,6 +18,7 @@ public final class SplitChromeView: NSView {
   private var split: SplitView?
   private var activeId: String?
   private var fullscreenTab: String?
+  private var covered = false
   private var theme = SplitChromeTheme.fallback
   private var dividers: [String: SplitDividerView] = [:]
   private let zones = SplitDropZonesView()
@@ -56,15 +57,16 @@ public final class SplitChromeView: NSView {
     needsLayout = true
   }
 
-  public func setChrome(theme next: SplitChromeTheme, fullscreenTab nextFullscreen: String?) {
+  public func setChrome(theme next: SplitChromeTheme, fullscreenTab nextFullscreen: String?, covered nextCovered: Bool = false) {
     if next != theme {
       theme = next
       zones.theme = next
       toast.theme = next
       for divider in dividers.values { divider.dark = next.dark }
     }
-    if nextFullscreen != fullscreenTab {
+    if nextFullscreen != fullscreenTab || nextCovered != covered {
       fullscreenTab = nextFullscreen
+      covered = nextCovered
       needsLayout = true
     }
   }
@@ -94,6 +96,7 @@ public final class SplitChromeView: NSView {
         if split.tabIds.contains(fullscreenTab) { panes[fullscreenTab] = bounds } else { panes = [fullscreenTab: bounds] }
         shown = []
       }
+      if covered { shown = [] }
     } else if let id = fullscreenTab ?? activeId, size.width > 0 {
       panes = [id: bounds]
     }
@@ -172,6 +175,16 @@ public final class SplitChromeView: NSView {
     dispatches += 1
     onResize?(pending.splitId, pending.sizes, pending.stack)
   }
+
+  public func devDragBegin(_ key: String) -> Bool {
+    guard let view = dividers[key] else { return false }
+    view.onBegin?()
+    return drag != nil
+  }
+
+  public func devDragMove(_ delta: CGFloat) { moved(delta) }
+
+  public func devDragEnd() { ended() }
 
   public func sample() -> [String: Any] {
     func rect(_ r: CGRect) -> [Double] { [r.minX, r.minY, r.width, r.height].map(Double.init) }

@@ -20,6 +20,7 @@ enum NativeWindowShell {
   static func install() {
     guard enabled, !installed, let make = WindowHost.makeContentView else { return }
     installed = true
+    NativeSplitChrome.start()
     WindowHost.makeContentView = { windowId in
       guard isBrowserWindow(windowId) else { return make(windowId) }
       activeIds.withLock { _ = $0.insert(windowId) }
@@ -126,6 +127,7 @@ final class ShellHost {
       "slots": WindowShellView.Slot.allCases.compactMap { slot in shell.view(in: slot).map { [slot.rawValue, NSStringFromClass(type(of: $0))] } },
       "order": shell.subviews.map { NSStringFromClass(type(of: $0)) },
       "backdrop": backdropJSON ?? NSNull(),
+      "split": NativeSplitChrome.sample(shell.windowId) ?? NSNull(),
     ]
   }
 }

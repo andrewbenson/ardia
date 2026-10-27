@@ -6,6 +6,7 @@ public final class WindowShellView: NSView {
     case backdrop
     case react
     case card
+    case splitChrome
     case peek
     case sidebar
     case topStrip
@@ -96,7 +97,7 @@ public final class WindowShellView: NSView {
     let frame: CGRect
     switch slot {
     case .backdrop, .react, .overlay: frame = bounds
-    case .card, .peek: frame = frames.card
+    case .card, .splitChrome, .peek: frame = frames.card
     case .sidebar: frame = (frames.sidebar ?? .zero).offsetBy(dx: frames.sidebarShift, dy: 0)
     case .topStrip: frame = frames.topStrip ?? .zero
     }

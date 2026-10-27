@@ -19,6 +19,7 @@ final class SidebarDragGhostView: NSView {
 
   init() {
     super.init(frame: .zero)
+    identifier = NSUserInterfaceItemIdentifier(SidebarDragTrace.ghostIdentifier)
     wantsLayer = true
     layer?.masksToBounds = false
     layer?.addSublayer(surface)
@@ -193,5 +194,17 @@ enum SidebarSpring {
     spring.toValue = to
     spring.duration = spring.settlingDuration
     return spring
+  }
+
+  static func restDuration(distance: CGFloat) -> CFTimeInterval {
+    let omega = (8100.0 as Double).squareRoot()
+    let d = Double(abs(distance))
+    var t = 0.0
+    while t < 1 {
+      let decay = exp(-omega * t)
+      if d * (1 + omega * t) * decay < 0.25 && d * omega * omega * t * decay < 2 { return t }
+      t += 1.0 / 240
+    }
+    return t
   }
 }

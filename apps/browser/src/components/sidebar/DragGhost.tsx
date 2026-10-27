@@ -25,7 +25,7 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
   const folderTile = tile && !!item.folderId;
   const onPage = useTabDrag((d) => d.onPage);
   return (
-    <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height, opacity: onPage ? 0 : 1, transform: position.getTranslateTransform() }}>
+    <Animated.View testID="sidebar-drag-ghost" pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height, opacity: onPage ? 0 : 1, transform: position.getTranslateTransform() }}>
       <Surface
         fill={hex(tokens.dragSilhouette)}
         cornerRadius={10}

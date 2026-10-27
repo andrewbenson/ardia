@@ -48,6 +48,17 @@ public class SidebarDragModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("trace") { (identifier: String, milliseconds: Double) in
+      MainActor.assumeIsolated { SidebarDragTrace.shared.start(identifier, milliseconds: milliseconds) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("traceSamples") { () -> String in
+      MainActor.assumeIsolated {
+        let data = (try? JSONSerialization.data(withJSONObject: SidebarDragTrace.shared.samples)) ?? Data("[]".utf8)
+        return String(decoding: data, as: UTF8.self)
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("scrollTo") { (windowId: String, y: Double) in
       MainActor.assumeIsolated {
         guard let page = NativeSidebarDrag.page(windowId) else { return }
@@ -123,7 +134,7 @@ final class NativeSidebarDrag: SidebarDragBridge {
   func closeFolderPanel(windowId: String) { send("sidebar.drag.closePanel", [windowId]) }
 
   func changed(windowId: String) {
-    if SidebarDragHub.probing { Self.refresh(windowId) }
+    if SidebarDragHub.probing { Self.refreshSoon(windowId) }
     if let page = Self.page(windowId), let controller = SidebarDragController.existing(page), controller.panelOpen {
       send("sidebar.drag.marks", [windowId, controller.marksJSON])
     }
@@ -143,6 +154,22 @@ final class NativeSidebarDrag: SidebarDragBridge {
   static func startProbe(_ windowId: String) -> String {
     SidebarDragHub.probing = true
     return refresh(windowId)
+  }
+
+  private static var pendingRefresh: Set<String> = []
+
+  static func refreshSoon(_ windowId: String) {
+    if let page = page(windowId), SidebarDragController.existing(page)?.active == true {
+      refresh(windowId)
+      return
+    }
+    guard pendingRefresh.insert(windowId).inserted else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(80)) {
+      MainActor.assumeIsolated {
+        pendingRefresh.remove(windowId)
+        refresh(windowId)
+      }
+    }
   }
 
   @discardableResult

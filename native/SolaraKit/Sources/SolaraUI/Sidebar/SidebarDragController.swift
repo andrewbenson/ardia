@@ -527,6 +527,7 @@ public final class SidebarDragController {
     let to = ghostFrame(for: CGPoint(x: target.minX, y: target.minY), in: view)
     ghost.frame = to
     let spring = SidebarSpring.make("position", from: NSValue(point: CGPoint(x: from.minX, y: from.minY)), to: NSValue(point: CGPoint(x: to.minX, y: to.minY)))
+    spring.duration = SidebarSpring.restDuration(distance: hypot(to.minX - from.minX, to.minY - from.minY))
     let mine = token
     CATransaction.begin()
     CATransaction.setCompletionBlock { [weak self] in

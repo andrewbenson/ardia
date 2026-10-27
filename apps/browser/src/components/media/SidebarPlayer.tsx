@@ -5,12 +5,13 @@ import { Image, Pressable, View } from "react-native";
 import { switchToTab, toggleMute } from "../../lib/actions";
 import { hex, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
-import { useTab } from "../../store/hooks";
+import { useTab, useWindowId } from "../../store/hooks";
 import { Favicon, IconButton, useHover } from "../primitives";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { useArtwork } from "./artwork";
 import { seekTo, SeekBar, skip } from "./MiniPlayer";
 import { hasTrackControls, hostOf, isPlaying, isTabShown, mediaCommand, playerTabFor, SKIP_SECONDS, useMedia, useSession, useTicker } from "./state";
+import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView, playerState, runPlayerAction } from "./nativeMedia";
 import { useMediaTokens } from "./tokens";
 
 export const SIDEBAR_PLAYER_HEIGHT = 74 + 8;
@@ -33,6 +34,24 @@ export function useSidebarPlayerTab(windowId: string, profileId: string): string
 }
 
 export function SidebarPlayer({ tabId }: { tabId: string }) {
+  return nativeMedia("media.sidebarPlayer") ? <NativeSidebarPlayer tabId={tabId} /> : <RNSidebarPlayer tabId={tabId} />;
+}
+
+addMediaActions({ sidebarPlayer: (_windowId, tabId, extra) => runPlayerAction(tabId, extra, () => switchToTab(tabId)) });
+
+function NativeSidebarPlayer({ tabId }: { tabId: string }) {
+  const theme = useTheme();
+  const tokens = useSidebarTokens();
+  const windowId = useWindowId();
+  const session = useSession(tabId);
+  const tab = useTab(tabId);
+  const artwork = useArtwork(tabId, session?.artwork);
+  if (!session || !tab) return null;
+  const look = mediaTheme(theme, { groupFill: hex(tokens.groupFill), groupStroke: hex(tokens.groupStroke) });
+  return <NativeMediaView kind="media.sidebarPlayer" windowId={windowId} state={playerState(session, tab, artwork, look)} style={{ height: SIDEBAR_PLAYER_HEIGHT - 8 }} />;
+}
+
+function RNSidebarPlayer({ tabId }: { tabId: string }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const media = useMediaTokens();

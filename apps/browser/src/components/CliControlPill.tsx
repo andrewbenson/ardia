@@ -3,12 +3,25 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { cliCommand, cliProduct, stopCliControl, useCliIndicator } from "../lib/cliControl";
 import { hex, useTheme } from "../lib/theme";
+import { useWindowId } from "../store/hooks";
+import { mediaTheme, nativeMedia, NativeMediaView } from "./media/nativeMedia";
 import { useHover } from "./primitives";
 
 const PILL_HEIGHT = 32;
 const PILL_BOTTOM = 12;
 
 export function CliControlPill() {
+  return nativeMedia("media.cliPill") ? <NativeCliControlPill /> : <RNCliControlPill />;
+}
+
+function NativeCliControlPill() {
+  const shown = useCliIndicator((s) => s.shown);
+  const theme = useTheme();
+  const windowId = useWindowId();
+  return <NativeMediaView kind="media.cliPill" windowId={windowId} state={{ shown, command: cliCommand(), product: cliProduct(), theme: mediaTheme(theme) }} />;
+}
+
+function RNCliControlPill() {
   const shown = useCliIndicator((s) => s.shown);
   const [mounted, setMounted] = useState(shown);
   const [appearAtOnce, setAppearAtOnce] = useState(shown);

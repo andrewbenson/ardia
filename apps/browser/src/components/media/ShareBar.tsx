@@ -8,7 +8,9 @@ import { engineProfile } from "../../store/model";
 import { browserIdOf } from "../extensions/state";
 import { PromptButton } from "../layout/controls";
 import { pageOf, usePages } from "../layout/pageState";
+import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "./nativeMedia";
 import { useMedia, type TabShare } from "./state";
+import { useWindowId } from "../../store/hooks";
 import { CAPTURE_RED } from "./tokens";
 
 const SHARE_BAR_HEIGHT = 38;
@@ -81,8 +83,19 @@ function dismiss(capturer: string, tabId: string) {
   });
 }
 
+addMediaActions({
+  shareBar: (_windowId, tabId, extra) => {
+    const capturer = typeof extra.capturer === "string" ? extra.capturer : "";
+    if (!capturer) return;
+    if (extra.action === "stop") return void stopCapture(browserIdOf(capturer));
+    if (extra.action === "shareInstead") return void shareInstead(capturer, tabId);
+    if (extra.action === "dismiss") return dismiss(capturer, tabId);
+  },
+});
+
 export function ShareBar({ tabId }: { tabId: string }) {
   const theme = useTheme();
+  const windowId = useWindowId();
   const found = useShareFor(tabId);
   const height = useRef(new Animated.Value(0)).current;
   const visible = !!found;
@@ -96,6 +109,12 @@ export function ShareBar({ tabId }: { tabId: string }) {
   const [capturer, share] = shown;
   const isShared = share.capturedTabId === tabId;
   const host = hostOf(share.origin || pageOf(capturer).security?.origin || useBrowser.getState().tabs[capturer]?.url || "");
+  if (nativeMedia("media.shareBar"))
+    return (
+      <Animated.View style={{ height, overflow: "hidden" }}>
+        <NativeMediaView kind="media.shareBar" windowId={windowId} state={{ capturer, tabId, shared: isShared, host, theme: mediaTheme(theme) }} style={{ height: SHARE_BAR_HEIGHT }} />
+      </Animated.View>
+    );
   return (
     <Animated.View style={{ height, overflow: "hidden" }}>
       <View

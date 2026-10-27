@@ -129,6 +129,17 @@ function instrumentAdapters(source) {
   return `${source}\n${appended.join("\n")}\n`;
 }
 
+const textOrNone = (v) => v === undefined || v === null || typeof v === "string";
+function wronglyTyped(s) {
+  const tabBad = (t) => !!t && (typeof t.url !== "string" || typeof t.title !== "string" || !textOrNone(t.customTitle) || !textOrNone(t.customIcon) || !textOrNone(t.pinnedUrl));
+  const groupBad = (g) => !!g && (typeof g.name !== "string" || !textOrNone(g.color) || !textOrNone(g.icon));
+  return (
+    Object.values(s.tabs ?? {}).some(tabBad) ||
+    Object.values(s.groups ?? {}).some(groupBad) ||
+    Object.values(s.profiles ?? {}).some((p) => typeof p.name !== "string" || typeof p.color !== "string" || !textOrNone(p.icon))
+  );
+}
+
 function readMemory() {
   const model = globalThis.__replayModel?.read() ?? {};
   const organize = globalThis.__replayOrganize?.read() ?? {};
@@ -625,6 +636,7 @@ async function record(file) {
         callbacks = null;
         c.after = spec.project(useBrowser.getState(), model);
         c.memoryAfter = readMemory();
+        if (c.call === "apply" && wronglyTyped(c.after)) c.lossy = "the state after holds a field of the wrong type, which a typed store cannot carry";
         if (!ok || !c.test) return;
         const { test: _t, now: _n, ...rest } = c;
         const digest = createHash("sha1").update(JSON.stringify(rest)).digest("hex");

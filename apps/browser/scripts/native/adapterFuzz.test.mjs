@@ -243,14 +243,14 @@ function pinRecords(k, keys) {
   const groupRef = () => k.pick([...groupKeys, null, undefined, 5, "", "ghost-group"]);
   const entries = [];
   for (const key of k.some(tabKeys, 0.6)) {
-    entries.push([`pin:t:${key}`, dropUndefined({ g: groupRef(), u: k.pick(PIN_URLS), t: k.pick([null, "Mine", undefined]), i: k.pick([null, "🙂", undefined]), ti: k.pick(["", "Title"]), pos: k.pick(POSITIONS) })]);
+    entries.push([`pin:t:${key}`, dropUndefined({ g: groupRef(), u: k.chance(0.03) ? 5 : k.pick(PIN_URLS), t: k.pick([null, "Mine", undefined, ...(k.chance(0.05) ? [7] : [])]), i: k.pick([null, "🙂", undefined]), ti: k.chance(0.03) ? [] : k.pick(["", "Title"]), pos: k.pick(POSITIONS) })]);
     if (k.chance(0.25)) entries.push([`pinn:t:${key}`, dropUndefined({ g: groupRef() })]);
     if (k.chance(0.4)) entries.push([`pinrow:${key}`, k.pick([1, 0, 2, "1", null])]);
     if (k.chance(0.3)) entries.push([`tilefold:${key}`, k.pick([{ f: k.pick(folderIds) }, { f: 5 }, {}, null, "x", { f: "" }])]);
     if (k.chance(0.3)) entries.push([`pgh:${key}`, k.pick(["https://home.example/", "", 5, null, {}, "netnyahoo://home"])]);
   }
   for (const key of k.some(groupKeys, 0.6)) {
-    if (k.chance(0.7)) entries.push([`pin:g:${key}`, dropUndefined({ n: k.pick(["Work", "", "Ünï"]), i: k.pick([null, "📁", undefined]), c: k.pick(GROUP_COLORS), pos: k.pick(POSITIONS) })]);
+    if (k.chance(0.7)) entries.push([`pin:g:${key}`, dropUndefined({ n: k.chance(0.03) ? 9 : k.pick(["Work", "", "Ünï"]), i: k.pick([null, "📁", undefined]), c: k.chance(0.03) ? 3 : k.pick(GROUP_COLORS), pos: k.pick(POSITIONS) })]);
     if (k.chance(0.4)) entries.push([`pinn:g:${key}`, dropUndefined({ n: k.pick(["Inner", ""]), i: k.pick([null, undefined]), c: k.pick(GROUP_COLORS), p: k.pick([...groupKeys, key, 5, undefined]) })]);
     if (k.chance(0.3)) entries.push([`pgc:${key}`, k.pick(["none", "blue", null, 5, {}])]);
     if (k.chance(0.4)) entries.push([`pord:g:${key}`, k.pick([{ a: k.pick([...tabKeys, null]) }, { a: 5 }, {}, 5, null, "x"])]);

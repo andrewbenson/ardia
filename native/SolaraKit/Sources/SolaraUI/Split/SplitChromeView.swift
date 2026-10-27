@@ -85,21 +85,9 @@ public final class SplitChromeView: NSView {
   public var panes: [String: CGRect] { SplitSlots.shared.panes(windowId) }
 
   private func relayout() {
-    let size = bounds.size
-    var panes: [String: CGRect] = [:]
-    var shown: [SplitDivider] = []
-    if let split, size.width > 0, size.height > 0 {
-      let geometry = ShellGeometry.split(split, width: size.width, height: size.height)
-      panes = geometry.panes
-      shown = geometry.dividers
-      if let fullscreenTab {
-        if split.tabIds.contains(fullscreenTab) { panes[fullscreenTab] = bounds } else { panes = [fullscreenTab: bounds] }
-        shown = []
-      }
-      if covered { shown = [] }
-    } else if let id = fullscreenTab ?? activeId, size.width > 0 {
-      panes = [id: bounds]
-    }
+    let laid = SplitLayout.panes(split: split, activeId: activeId, fullscreenTab: fullscreenTab, bounds: bounds)
+    let panes = laid.panes
+    let shown = covered ? [] : laid.dividers
     SplitSlots.shared.publish(windowId, panes)
     var seen = Set<String>()
     for divider in shown {

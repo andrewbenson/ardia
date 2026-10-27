@@ -80,3 +80,33 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     #expect(view.hitTest(CGPoint(x: 503, y: 300)) is SplitDividerView)
   }
 }
+
+@Suite(.serialized) @MainActor struct SplitPanesTests {
+  @Test func eachLeafRegistersItsPageContainerUnderTheToolbar() throws {
+    let view = SplitPanesView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    view.update(state: try splitState())
+    view.layoutSubtreeIfNeeded()
+    let a = try #require(view.container("a"))
+    #expect(TabSlots.shared.container(for: .pane("w1", "a")) === a)
+    #expect(a.superview?.frame == CGRect(x: 0, y: 0, width: 500, height: 700))
+    #expect(a.frame == CGRect(x: 0, y: 41, width: 500, height: 659))
+    #expect(TabSlots.shared.container(for: .pane("w1", "b")) === view.container("b"))
+  }
+
+  @Test func leavingTheSplitRemovesOnlyItsOwnSlots() throws {
+    let view = SplitPanesView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    view.update(state: try splitState())
+    view.layoutSubtreeIfNeeded()
+    let other = NSView()
+    TabSlots.shared.set(.pane("w1", "b"), container: other)
+    var state = try splitState()
+    state.splits = Table()
+    view.update(state: state)
+    view.layoutSubtreeIfNeeded()
+    #expect(TabSlots.shared.container(for: .pane("w1", "a")) == nil)
+    #expect(TabSlots.shared.container(for: .pane("w1", "b")) === other)
+    TabSlots.shared.remove(.pane("w1", "b"), container: other)
+  }
+}

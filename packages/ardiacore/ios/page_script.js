@@ -881,11 +881,14 @@
     return color;
   };
   const backgroundOf = (el) => el && parse(getComputedStyle(el).backgroundColor);
-  const pageBackground = () => {
+  const paintedBackground = () => {
     for (const el of [document.body, document.documentElement]) {
       const c = backgroundOf(el);
       if (c && c.a > 0) return c;
     }
+    return null;
+  };
+  const defaultBackground = () => {
     const dark = /dark/.test(getComputedStyle(document.documentElement).colorScheme) && matchMedia("(prefers-color-scheme: dark)").matches;
     return dark ? { r: 18, g: 18, b: 18, a: 1 } : { r: 255, g: 255, b: 255, a: 1 };
   };
@@ -910,18 +913,27 @@
     return null;
   };
   let lastTheme;
+  let lastSource = null;
   let metaCache;
   const cachedMetaColor = () => (metaCache === undefined ? (metaCache = metaColor(scheduleTheme)) : metaCache);
   const reportTheme = guard(() => {
     if (!document.documentElement) return;
-    let color = cachedMetaColor();
-    let source = color ? "meta" : null;
-    if (!color && document.body) {
-      const page = pageBackground();
-      const header = headerColor(page);
-      color = hex(header || page);
+    let color = null;
+    let source = null;
+    const painted = document.body ? paintedBackground() : null;
+    const header = document.body ? headerColor(painted || defaultBackground()) : null;
+    if (header || painted) {
+      color = hex(header || painted);
       source = header ? "header" : "background";
+    } else {
+      color = cachedMetaColor();
+      source = color ? "meta" : null;
+      if (!color && document.body) {
+        color = hex(defaultBackground());
+        source = "background";
+      }
     }
+    lastSource = source;
     const key = color + source;
     if (key === lastTheme) return;
     lastTheme = key;
@@ -977,7 +989,7 @@
   let scrollSettle = 0;
   let scrollSettled = false;
   const sampleScroll = guard((settled) => {
-    if (!document.documentElement || cachedMetaColor()) return;
+    if (!document.documentElement || lastSource === "meta") return;
     const past = window.scrollY > 4;
     const now = performance.now();
     if (!settled && past === scrolledPastTop && now - scrollSampledAt < 150) return;
@@ -998,7 +1010,7 @@
     );
   };
   const scrollTheme = () => {
-    if (metaCache) return;
+    if (lastSource === "meta") return;
     apply(clearTimer, window, [scrollSettle]);
     scrollSettle = after(() => {
       scrollSettled = true;

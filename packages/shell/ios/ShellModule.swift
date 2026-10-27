@@ -897,6 +897,7 @@ public class HairlineModule: Module {
     View(Hairline.self) {
       Prop("color") { (view: Hairline, color: NSColor?) in view.color = color }
       Prop("edge") { (view: Hairline, edge: String?) in view.atTop = edge == "top" }
+      Prop("thickness") { (view: Hairline, points: Double?) in view.points = points.map { CGFloat($0) } }
     }
   }
 }
@@ -905,6 +906,7 @@ final class Hairline: ExpoView {
   private let line = NSView()
   var color: NSColor? { didSet { recolor() } }
   var atTop = false { didSet { relayout() } }
+  var points: CGFloat? { didSet { relayout() } }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -936,7 +938,7 @@ final class Hairline: ExpoView {
 
   private func relayout() {
     let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
-    let thickness = min(1 / max(scale, 1), bounds.height)
+    let thickness = min(points ?? 1 / max(scale, 1), bounds.height)
     let y = atTop == isFlipped ? 0 : bounds.height - thickness
     CATransaction.begin()
     CATransaction.setDisableActions(true)

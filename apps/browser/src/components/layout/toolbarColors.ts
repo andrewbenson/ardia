@@ -31,6 +31,10 @@ export function luminance(color: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+const LIGHT_SITE_DIVIDER = "rgba(0,0,0,0.05)";
+const DARK_SITE_DIVIDER = "rgba(255,255,255,0.025)";
+export const TOOLBAR_DIVIDER_THICKNESS = 1;
+
 const cache = new Map<string, ToolbarPalette>();
 
 export function toolbarPalette(theme: Theme, websiteColor: string | null): ToolbarPalette {
@@ -47,7 +51,7 @@ export function toolbarPalette(theme: Theme, websiteColor: string | null): Toolb
       hover: theme.toolbarHover,
       pressed: theme.toolbarPressed,
       pill: theme.urlPill,
-      divider: theme.divider,
+      divider: theme.dark ? DARK_SITE_DIVIDER : LIGHT_SITE_DIVIDER,
     };
   } else {
     const l = luminance(websiteColor);
@@ -62,7 +66,7 @@ export function toolbarPalette(theme: Theme, websiteColor: string | null): Toolb
           hover: "rgba(0,0,0,0.07)",
           pressed: "rgba(0,0,0,0.12)",
           pill: "rgba(0,0,0,0.06)",
-          divider: "rgba(0,0,0,0.1)",
+          divider: LIGHT_SITE_DIVIDER,
         }
       : {
           background: websiteColor.slice(0, 7),
@@ -73,7 +77,7 @@ export function toolbarPalette(theme: Theme, websiteColor: string | null): Toolb
           hover: "rgba(255,255,255,0.14)",
           pressed: "rgba(255,255,255,0.22)",
           pill: "rgba(255,255,255,0.1)",
-          divider: "rgba(255,255,255,0.12)",
+          divider: DARK_SITE_DIVIDER,
         };
   }
   cache.set(key, palette);

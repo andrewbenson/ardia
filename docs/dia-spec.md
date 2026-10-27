@@ -138,7 +138,13 @@ window is opaque in both, so comparing an active window with an inactive one als
 - URL hover: the breadcrumb morphs into a pill (white ~8%, radius 8) showing the full URL, with
   the host bright and the path dim. Actions appear on the right: `bookmark`, `rectangle.split.2x1`,
   `signature`, `slider.horizontal.3`.
-- A hairline divider sits under the toolbar on web pages. There is none on the New Tab page.
+- A divider sits under the toolbar on web pages. There is none on the New Tab page. It is 1 pt (2 px at 2x), not
+  a device hairline: on a light page 2 rows of (242, 242, 242) over white, black at ~5%; on a dark page 2 rows of
+  (25, 26, 26) over the (19, 20, 20) page, white at ~2.5% (hill.com/dashboard, Dia 2x captures, 2026-10-26).
+- The toolbar fill is the page's painted top colour (a top header, else body/html background), even when a
+  `theme-color` says otherwise: hill.com's `#191A1E` tag is ignored and the bar is the page's (19, 20, 20). Dia samples
+  the top of the page (`sampleTopOfPageColor`, `ColorSampleControllerV2` in its binary); ours falls back to
+  `theme-color` only on a page with nothing painted.
 
 ## URL click → command panel (anchored, no scrim)
 

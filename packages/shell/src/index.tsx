@@ -399,7 +399,7 @@ export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabe
 
 export const ActivitySpinner = requireNativeViewManager<ViewProps>("ArdiaActivitySpinner");
 
-export type HairlineProps = ViewProps & { color: ColorValue; edge?: "top" | "bottom" };
+export type HairlineProps = ViewProps & { color: ColorValue; edge?: "top" | "bottom"; thickness?: number };
 
 export type HairlineNative = Record<string, never>;
 
@@ -407,9 +407,10 @@ const NativeHairline = optionalNativeModule("ArdiaHairline")
   ? requireNativeViewManager<Omit<HairlineProps, "color"> & { color: ReturnType<typeof processColor> }>("ArdiaHairline")
   : null;
 
-export function Hairline({ color, edge = "bottom", style, ...props }: HairlineProps) {
-  if (NativeHairline) return <NativeHairline pointerEvents="none" {...props} style={style} edge={edge} color={processColor(color)} />;
-  const border = edge === "top" ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color } : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color };
+export function Hairline({ color, edge = "bottom", thickness, style, ...props }: HairlineProps) {
+  if (NativeHairline) return <NativeHairline pointerEvents="none" {...props} style={style} edge={edge} thickness={thickness} color={processColor(color)} />;
+  const width = thickness ?? StyleSheet.hairlineWidth;
+  const border = edge === "top" ? { borderTopWidth: width, borderTopColor: color } : { borderBottomWidth: width, borderBottomColor: color };
   return <View pointerEvents="none" {...props} style={[style, border]} />;
 }
 

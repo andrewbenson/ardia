@@ -6,7 +6,7 @@ import { layout, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
 import { useStoreWhile } from "../store/tabWatch";
 import type { ToolbarGeometry } from "./layout/geometry";
-import { toolbarPalette, useEasedColor } from "./layout/toolbarColors";
+import { TOOLBAR_DIVIDER_THICKNESS, toolbarPalette, useEasedColor } from "./layout/toolbarColors";
 import { useHistoryMenu } from "./layout/history";
 import { usePages } from "./layout/pageState";
 import { useExtensions } from "./extensions/store";
@@ -171,7 +171,7 @@ export function AutoHideBackdrop({ tabId, mode, motion }: { tabId: string; mode:
       </Animated.View>
       {url ? (
         <Animated.View style={{ position: "absolute", left: 0, right: 0, top: H - 1, height: 1, transform: anim ? [{ translateY: anim.dividerTop }] : undefined }}>
-          <Hairline color={palette.divider} style={StyleSheet.absoluteFill} />
+          <Hairline color={palette.divider} thickness={TOOLBAR_DIVIDER_THICKNESS} style={StyleSheet.absoluteFill} />
         </Animated.View>
       ) : null}
     </View>

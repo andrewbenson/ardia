@@ -17,7 +17,7 @@ import { setPopover, usePage, usePages, type PageState } from "./layout/pageStat
 import { closeHistoryMenu, goBack, goForward, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu } from "./layout/history";
 import { openModeFor, openUrl } from "./bookmarks/actions";
 import { closePane, openSplitPane, showSplitMenu } from "./layout/splitActions";
-import { toolbarPalette, useEasedColor, type ToolbarPalette } from "./layout/toolbarColors";
+import { TOOLBAR_DIVIDER_THICKNESS, toolbarPalette, useEasedColor, type ToolbarPalette } from "./layout/toolbarColors";
 import { setToolbarExtensionsWidth, SIDEBAR_FIELD } from "./layout/windowLayout";
 import { showUrlBarMenu } from "./omnibox/paste";
 import { useHover } from "./primitives";
@@ -120,7 +120,7 @@ export function Toolbar({
         )}
       </Animated.View>
 
-      {tab.url && !bare ? <Hairline color={palette.divider} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1 }} /> : null}
+      {tab.url && !bare ? <Hairline color={palette.divider} thickness={TOOLBAR_DIVIDER_THICKNESS} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1 }} /> : null}
       {isLoading && <TabProgressBar key={tabId} tabId={tabId} color={palette.background ? palette.icon : theme.accent} />}
     </View>
   );
@@ -136,7 +136,7 @@ export function ToolbarBackdrop({ tabId }: { tabId: string }) {
     <View pointerEvents="none" style={{ height: layout.toolbarHeight }}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
       {developer && <DeveloperStripes palette={palette} />}
-      {url ? <Hairline color={palette.divider} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1 }} /> : null}
+      {url ? <Hairline color={palette.divider} thickness={TOOLBAR_DIVIDER_THICKNESS} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1 }} /> : null}
     </View>
   );
 }

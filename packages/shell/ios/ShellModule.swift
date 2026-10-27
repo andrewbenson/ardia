@@ -890,6 +890,67 @@ final class ActivitySpinner: ExpoView {
   }
 }
 
+public class HairlineModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("ArdiaHairline")
+
+    View(Hairline.self) {
+      Prop("color") { (view: Hairline, color: NSColor?) in view.color = color }
+      Prop("edge") { (view: Hairline, edge: String?) in view.atTop = edge == "top" }
+    }
+  }
+}
+
+final class Hairline: ExpoView {
+  private let line = NSView()
+  var color: NSColor? { didSet { recolor() } }
+  var atTop = false { didSet { relayout() } }
+
+  required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+    line.wantsLayer = true
+    addSubview(line)
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+  override func setFrameSize(_ newSize: NSSize) {
+    super.setFrameSize(newSize)
+    relayout()
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    relayout()
+  }
+
+  override func viewDidChangeBackingProperties() {
+    super.viewDidChangeBackingProperties()
+    relayout()
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    recolor()
+  }
+
+  private func relayout() {
+    let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+    let thickness = min(1 / max(scale, 1), bounds.height)
+    let y = atTop == isFlipped ? 0 : bounds.height - thickness
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    line.frame = NSRect(x: 0, y: y, width: bounds.width, height: thickness)
+    CATransaction.commit()
+  }
+
+  private func recolor() {
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      line.layer?.backgroundColor = color?.cgColor
+    }
+  }
+}
+
 public class SymbolModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaSymbol")

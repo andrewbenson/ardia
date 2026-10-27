@@ -1,7 +1,7 @@
 import { requireNativeModule, requireOptionalNativeModule } from "expo-modules-core";
 import type { AppModule } from "./app";
 import type { CliNative } from "./cli";
-import type { DockSelectionNative, GlassEffectNative, InlineCompletionNative, PopoverBubbleNative, ShellNative, TranslationModule } from "./index";
+import type { DockSelectionNative, GlassEffectNative, HairlineNative, InlineCompletionNative, PopoverBubbleNative, ShellNative, TranslationModule } from "./index";
 import type { CalendarNative, KeychainNative } from "./live";
 import type { FileDropNative, MagnifyAreaNative, SystemNative } from "./system";
 import type { UserScriptsNative } from "./userScripts";
@@ -20,6 +20,7 @@ export type ShellNativeModules = {
 
 export type ShellOptionalNativeModules = {
   ArdiaPopoverBubble: PopoverBubbleNative;
+  ArdiaHairline: HairlineNative;
   ArdiaMagnifyArea: MagnifyAreaNative;
   ArdiaFileDrop: FileDropNative;
   ArdiaCli: CliNative;

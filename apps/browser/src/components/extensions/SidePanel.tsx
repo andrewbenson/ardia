@@ -1,4 +1,5 @@
 import { WebView } from "@ardia/ardiacore";
+import { Hairline } from "@ardia/shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Image, PanResponder, StyleSheet, Text, View } from "react-native";
 import { layout, useTheme } from "../../lib/theme";
@@ -110,7 +111,7 @@ function PanelCard({ windowId, panel }: { windowId: string; panel: SidePanel }) 
         />
         <IconButton icon="xmark" size={12} weight="medium" tooltip="Close Side Panel" onPress={() => closeSidePanel(windowId)} />
       </View>
-      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)" }} />
+      <Hairline color={theme.dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"} style={{ height: 1 }} />
       <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
         <WebView
           style={StyleSheet.absoluteFill}

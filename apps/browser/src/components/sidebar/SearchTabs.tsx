@@ -1,5 +1,5 @@
 import { displayUrl, fuzzyScore } from "@ardia/core";
-import { FadeLabel, Surface, Symbol } from "@ardia/shell";
+import { FadeLabel, Hairline, Surface, Symbol } from "@ardia/shell";
 import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { switchToTab } from "../../lib/actions";
@@ -157,7 +157,7 @@ function Panel({ windowId, windowWidth }: { windowId: string; windowWidth: numbe
             style={{ flex: 1, fontSize: 16, color: theme.textPrimary, paddingVertical: 0 }}
           />
         </View>
-        <View style={{ height: 0.5, backgroundColor: theme.divider }} />
+        <Hairline color={theme.divider} style={{ height: 1 }} />
         <ScrollView ref={scroll} style={{ maxHeight: ROW * MAX_ROWS + 60 }} showsVerticalScrollIndicator={false}>
           {rows.length === 0 ? (
             <Text style={{ paddingHorizontal: 16, paddingVertical: 14, fontSize: 13, color: theme.textTertiary }}>No tabs match “{query.trim()}”</Text>

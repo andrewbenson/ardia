@@ -1,4 +1,5 @@
 import { breadcrumb } from "@ardia/core";
+import { Hairline } from "@ardia/shell";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { layout, useTheme } from "../lib/theme";
@@ -169,9 +170,9 @@ export function AutoHideBackdrop({ tabId, mode, motion }: { tabId: string; mode:
         {developer && <DeveloperStripes palette={palette} />}
       </Animated.View>
       {url ? (
-        <Animated.View
-          style={{ position: "absolute", left: 0, right: 0, top: H - 1, height: 1, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.divider, transform: anim ? [{ translateY: anim.dividerTop }] : undefined }}
-        />
+        <Animated.View style={{ position: "absolute", left: 0, right: 0, top: H - 1, height: 1, transform: anim ? [{ translateY: anim.dividerTop }] : undefined }}>
+          <Hairline color={palette.divider} style={StyleSheet.absoluteFill} />
+        </Animated.View>
       ) : null}
     </View>
   );

@@ -233,4 +233,5 @@ export const shellOptionalNativeModules: OptionalModules = {
   ArdiaFileDrop: () => fileDrop,
   ArdiaCli: () => cli,
   ArdiaUserScripts: () => (testGlobals.acTestUserScripts ? userScripts : null),
+  ArdiaHairline: () => null,
 };

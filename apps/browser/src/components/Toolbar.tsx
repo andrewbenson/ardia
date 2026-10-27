@@ -1,5 +1,5 @@
 import { breadcrumb, urlForDisplay } from "@ardia/core";
-import { ContextMenuArea, FadeLabel, MouseArea, Symbol, WindowDragRegion } from "@ardia/shell";
+import { ContextMenuArea, FadeLabel, Hairline, MouseArea, Symbol, WindowDragRegion } from "@ardia/shell";
 import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
@@ -120,7 +120,7 @@ export function Toolbar({
         )}
       </Animated.View>
 
-      {tab.url && !bare ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.divider }} /> : null}
+      {tab.url && !bare ? <Hairline color={palette.divider} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1 }} /> : null}
       {isLoading && <TabProgressBar key={tabId} tabId={tabId} color={palette.background ? palette.icon : theme.accent} />}
     </View>
   );
@@ -136,7 +136,7 @@ export function ToolbarBackdrop({ tabId }: { tabId: string }) {
     <View pointerEvents="none" style={{ height: layout.toolbarHeight }}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />
       {developer && <DeveloperStripes palette={palette} />}
-      {url ? <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.divider }} /> : null}
+      {url ? <Hairline color={palette.divider} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1 }} /> : null}
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { requireNativeViewManager, type EventSubscription } from "expo-modules-core";
-import type { ViewProps } from "react-native";
+import { processColor, StyleSheet, View, type ColorValue, type ViewProps } from "react-native";
 import { nativeModule, optionalNativeModule } from "./nativeModules";
 
 export * from "./system";
@@ -398,6 +398,20 @@ export type FadeLabelProps = ViewProps & {
 export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabel");
 
 export const ActivitySpinner = requireNativeViewManager<ViewProps>("ArdiaActivitySpinner");
+
+export type HairlineProps = ViewProps & { color: ColorValue; edge?: "top" | "bottom" };
+
+export type HairlineNative = Record<string, never>;
+
+const NativeHairline = optionalNativeModule("ArdiaHairline")
+  ? requireNativeViewManager<Omit<HairlineProps, "color"> & { color: ReturnType<typeof processColor> }>("ArdiaHairline")
+  : null;
+
+export function Hairline({ color, edge = "bottom", style, ...props }: HairlineProps) {
+  if (NativeHairline) return <NativeHairline pointerEvents="none" {...props} style={style} edge={edge} color={processColor(color)} />;
+  const border = edge === "top" ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color } : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color };
+  return <View pointerEvents="none" {...props} style={[style, border]} />;
+}
 
 export type ContextMenuAreaProps = ViewProps & {
   onContextMenu?: () => void;

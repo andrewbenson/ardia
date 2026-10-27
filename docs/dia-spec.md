@@ -142,6 +142,8 @@ page (light, active window); behaviour from the binary (`DiaStatusText`, `Status
   than `secondaryLabelColor`, so the bubble follows the window's appearance with the same `.popover` material. Its
   `overlayColor` layer (zPosition 3) is never given a colour. Over a white page in dark mode that material reads mid
   grey (about #6B with #BC text, 2.8:1) in our copy; no Dia dark capture exists yet to confirm Dia reads the same.
+  Solara diverges here (owner, 2026-10-27, "fix dark only"): in dark the bubble is an opaque #2B2B2B pill with text
+  at white 0.85 and the same white 0.20 border, about 10.6:1 over any page; light keeps Dia's material and colours.
 - States: hidden, pendingPresentation, visible, pendingDismissal, hiding.
   - A link waits 0.5 s before it shows. Another link while waiting restarts the wait; leaving cancels it.
   - Leaving a link waits 0.5 s, then fades out over 0.1 s (`NSAnimationContext`, alpha only, no motion).

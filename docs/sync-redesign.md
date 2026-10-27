@@ -40,16 +40,20 @@ monotonic clock. It can't collide with a batch already written.
 
 ## 1. The local edit journal
 
-**Entry.** `(profile, key) → { v: value | null, h: HLC }`, holding the latest user edit to that key.
-A deletion is `v: null`.
+**Entry.** `(scope, key) → { v: value | null, h: HLC, seen: digest of the record's value when the
+edit was made, or null if there was no record }`, holding the latest user edit to that key. A
+deletion is `v: null`.
 
-**Which profiles.** The journal records a profile's edits whether sync is on or off, so a rename
-made while sync was off keeps its time on a rejoin (D10).
-- Turning one profile's sync off retires it. Its entries are dropped, and nothing is journaled for
-  it while it stays off.
-- Turning it back on is a join of that profile: union seeding, as below. Deletions made while it
-  was off aren't published, so those items come back. That's the price of dropping the entries
-  (re-review D10a).
+**Which profiles** (D10, lead's rule).
+- A profile deleted on this Mac drops its entries when it retires, and nothing of it is published.
+- A profile whose sync is turned off, but which is kept, goes on journaling as normal.
+- When its sync is turned back on, each entry publishes under the same conflict rule as passwords:
+  - **No conflict:** the record's digest still equals the entry's `seen`. The edit or deletion goes
+    out with its edit-time stamp.
+  - **Conflict:** the record changed since. The entry goes out stamped at its edit time, and last
+    writer wins. So a deletion made while off holds only if nobody touched the item elsewhere after
+    it, and a rename made while off loses only to a later one.
+- The same rule covers a rejoin after Stop Syncing, since the journal kept running.
 
 **What's journaled: user commands only** (re-review 9). These are the store commands a user
 action runs: settings, profiles, bookmarks, pins, groups, a history delete, and imports.
@@ -59,16 +63,29 @@ action runs: settings, profiles, bookmarks, pins, groups, a history delete, and 
 - Observation keys are owned by this device or carry only display fields, so a diff can't send
   another Mac's choice back.
 
-**Where it lives.** Two documents in Solara's data folder, outside `sync-state.nns`:
-- `sync-edits.json`: the entries.
-- `sync-edits.gen`: one line holding a generation and the last in-step time (below).
+**Where it lives: three files in Solara's data folder, outside `sync-state.nns`.**
+
+| File | Holds | Written |
+| --- | --- | --- |
+| `sync-edits.json` | the entries; the journal generation `g`; the newest `h` | synchronously on each user command, before its gen doc |
+| `sync-edits.gen` | one line: `g`, and the last in-step time `T` | right after `sync-edits.json` (same `g`), and after each in-step cycle (new `T`) |
+| `sync-pw-ledger.json` | per key: the last 4 digests, `h`, `modified`; the ledger generation `L`; Login Data's inode and creation time | after every apply or publish that touches passwords, before the meta write |
+
+The fourth piece lives in Login Data itself: a row `solara_sync_ledger = L` in its `meta` table,
+written through ArdiaCore right after `sync-pw-ledger.json`.
+
+- **Journal check at load.** `sync-edits.json` unreadable, or its `g` below the gen doc's, means a
+  lost journal. A journal ahead by one is a crash between the two writes, and it's fine.
+- **Ledger check on each read.**
+  - The meta row equal to `L`, or to `L - 1` (a crash between the two writes, after which the row is
+    rewritten), means consistent.
+  - Anything else is a mismatch, and the passwords type rebuilds. That covers a lower `L` (Login
+    Data restored), a missing row (Login Data razed or replaced), and a different inode.
+  - A restore taken exactly between the two writes is the one case it can't see.
 
 **Durability** (D4, re-review 4).
-- Write-through: a user command writes `sync-edits.json` synchronously, then `sync-edits.gen` with
-  the generation incremented. The journal is always written first, so a crash between the two leaves
-  a journal newer than the gen doc, which is fine. The reverse order would be a lost journal.
-- On load, a journal that is unreadable, missing, or holds a generation older than `sync-edits.gen`
-  is lost.
+- Write-through, in the order in the table above. The reverse order would turn a crash into a lost
+  journal.
 - **Last in-step time.** The end of the last cycle in which a pull completed with nothing unapplied,
   for every synced type. It is saved in `sync-edits.gen` after each such cycle.
 - **Fallback on a lost journal: a union bounded by the last in-step time `T`.**
@@ -125,8 +142,8 @@ the tree, and so does the echo of sync's pushes.
     after sync's write;
   - plus a ledger generation.
 - **Login Data generation.** Whenever the ledger changes, its generation is also written into Login
-  Data's own `meta` table, through a new ArdiaCore call (`ac_passwords_mark`). Each read compares
-  the two.
+  Data's own `meta` table (`solara_sync_ledger`), through a new ArdiaCore call
+  (`ac_passwords_mark`). Each read compares the two.
   - A mismatch means Login Data was restored, replaced or razed under the ledger. The inode and
     creation time can't see an in-place restore (`cp`, `rsync --inplace`); the meta row can.
   - On a mismatch the passwords type rebuilds. Nothing is claimed as an edit, and each key is
@@ -274,7 +291,8 @@ One hold remains: a rebuilding type doesn't apply while its pull is incomplete.
 - **Journal at upgrade.** It starts empty, and no edits are claimed. An older build's edits that
   weren't published before the upgrade are taken as stale. That includes edits made during an
   old-format rebuild (B-old). It's a one-time window of a few seconds, since an old build publishes
-  within 3 s of an edit.
+  within 3 s of an edit. The lead accepted it. guard-review2's B-old repro stays red as the record
+  of it, named EXPECTED RED.
 - **Password ledger at upgrade.**
   - Seeded from keys equal to their record.
   - A differing login is claimed only if Chrome modified it after the record's time (§ 1).
@@ -322,10 +340,20 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 
 - **A missed command path.** A user edit that bypasses the command layer is never published. Each
   native path above gets a test.
-- **Login Data `meta` writes.** They depend on Chrome tolerating a foreign meta row and on our
-  ArdiaCore call running with Chrome's DB open. The design needs that confirmed in the engine before
-  it's built. If it can't be done, the fallback is a digest of every login, kept in the ledger and
-  compared on each read: any difference across many keys at once is treated like a mismatch.
+- **Login Data `meta` writes: checked in Chromium, they work but need an engine patch.**
+  - `sql::MetaTable` (sql/meta_table.cc) is a plain key/value table. `Init` only creates it if it's
+    missing (:153), `SetValue` inserts or replaces one key (:204), and nothing in
+    `LoginDatabase::Init`, its migrations (:1196-1240, `FixVersionIfNeeded` :916) or its version
+    checks (:1148-1160) touches keys other than the version pair. So a custom row survives
+    migrations and version checks.
+  - `DeleteAndRecreateDatabaseFile` (:1908-1929) deletes the file, row included. Its one caller is
+    Chrome Sync's bridge (password_sync_bridge.cc:942), which Solara never runs. If it ever did, the
+    missing row reads as a mismatch, which is the safe outcome.
+  - A database too new for this Chrome fails `Init` (:1154): passwords are unreadable, not mismatched.
+  - Login Data is opened with exclusive locking (`DatabaseOptions` default, sql/database.h:350), so
+    a second SQLite connection can't write it while Chrome runs. The row has to be written through
+    Chrome's own `LoginDatabase`, as an engine patch that adds a method reaching `meta_table_` on the
+    password store's sequence, exposed as `ac_passwords_mark`. That's one more patch in the series.
 - **Keychain class.** Twins are handled by `IOPlatformUUID`; the item still copies with the Mac.
   Whether to move it to the data-protection keychain is the owner's decision.
 - **The mass-change prompt** waits on the user. Until they answer, the held keys aren't published,
@@ -392,8 +420,11 @@ scratch suite is /private/tmp/redesign-tests/ (`run.sh`).
 - **D7:** a partial replica doesn't wipe bookmarks.
 - **D8:** a copied Mac never reuses a seq.
 - **D9:** the counter carry.
-- **D10:** a rename made while sync was off wins on rejoin, and a profile re-added publishes no
-  deletion made while it was off.
+- **D10:**
+  - A rename made while sync was off wins on rejoin over an older rename elsewhere.
+  - A deletion made while a profile's sync was off goes out when it's turned back on, if the item
+    is untouched.
+  - The same deletion loses to a later rename elsewhere.
 - **D11:** a setting changed while joining stands.
 
 Re-review items:

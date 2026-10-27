@@ -257,6 +257,7 @@ try {
   await check("boot", async () => {
     await booted();
     mainWindow = await until("a window", async () => (await appState()).focused ?? Object.keys((await appState()).windows)[0], 30000);
+    await evalApp(`ac.store.getState().updateSettings({ warnBeforeQuitting: false }); return true`);
     const installed = await evalApp(`return globalThis.expo.modules.ArdiaExtensions.install(${JSON.stringify(extDir)}, "")`);
     if (installed?.error) throw new Error(installed.error);
     extId = installed.id;
@@ -757,7 +758,6 @@ try {
     const pathOf = (url) => new URL(url).pathname;
     const before = await appState();
     const want = { "/restore-a": pathOf(before.windows[mainWindow].url), "/restore-d": pathOf(before.windows[other].url) };
-    await evalApp(`ac.store.getState().updateSettings({ warnBeforeQuitting: false }); return true`);
     await evalApp(`return ac.shell.devKeyEquivalent(${JSON.stringify(mainWindow)}, { key: "q", keyCode: 12, modifiers: ["command"], focus: "window" })`, 5000).catch(() => null);
     await until("the app to exit", async () => !alive(), 30000);
     const relaunched = Date.now();

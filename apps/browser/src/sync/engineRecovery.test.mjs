@@ -1163,3 +1163,36 @@ test("B56: during a rebuild, a setting chosen again with a value it had long ago
   assert.equal(S().settings.appearance, "light");
   assert.deepEqual(other.store.get("set:appearance"), { v: "light" });
 });
+
+test("B57: a state that fell back to before it took a bookmark, with bookmarks loading only after the first cycles, doesn't send it over the move another Mac made", async () => {
+  reset();
+  const engine = await onAndSynced();
+  const syncId = engine.useSync.getState().profiles.default.syncId;
+  const other = otherMac(`p:${syncId}`);
+  await other.sync();
+  const beforeTaking = new Map(shell.docs);
+  other.store.set("bm:taken", { k: "u", p: "bar", t: "Taken", u: "https://taken.example/", a: 1, pos: "z" });
+  await other.sync();
+  await engine.syncNow();
+  await settle();
+  assert.ok(titles().includes("Taken"), "control: this Mac took the bookmark");
+  other.store.set("bm:taken", { ...other.store.get("bm:taken"), p: "other" });
+  await other.sync();
+  shell.docs.clear();
+  for (const [name, contents] of beforeTaking) shell.docs.set(name, contents);
+  useBrowser.setState({ bookmarksReady: {} });
+  const again = await launch();
+  again.startSync();
+  await settle();
+  await again.syncNow();
+  await again.syncNow();
+  await settle();
+  useBrowser.setState({ bookmarksReady: { default: true } });
+  await settle();
+  for (let i = 0; i < 2; i++) await again.syncNow();
+  await settle();
+  await other.sync();
+  assert.equal(other.store.get("bm:taken")?.p, "other", `B's move survives (B has ${other.store.get("bm:taken")?.p})`);
+  const taken = Object.values(S().bookmarks.nodes).find((n) => n.kind === "url" && n.title === "Taken");
+  assert.equal(taken.parentId, S().bookmarks.roots.default.other);
+});

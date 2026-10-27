@@ -291,7 +291,8 @@ async function environment(prefix, sharedFolderOps) {
   await launch();
 
   const drain = async () => {
-    for (let i = 0; i < 400 || (foldersInFlight > 0 && i < 400_000); i++) {
+    for (let idle = 0, i = 0; idle < 400 && i < 400_000; i++) {
+      idle = foldersInFlight > 0 ? 0 : idle + 1;
       if (!docMode.hold) landAll();
       await new Promise((r) => setImmediate(r));
     }

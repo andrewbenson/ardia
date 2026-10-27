@@ -160,6 +160,7 @@ let generation = 0;
 let loading: Promise<void> | null = null;
 let unverified = new Set<string>();
 let unverifiedSince = 0;
+let firstLooks = new Map<string, Set<string>>();
 type Delivered = { values: Map<string, Set<string>>; mine: Map<string, { h: string; value: string }> };
 let freshDelivered = new Map<string, Delivered>();
 let revivalBatches = new Map<string, LogFile[]>();
@@ -277,6 +278,7 @@ async function loadState(loading: number): Promise<boolean> {
   doc.scopes = scopes;
   unverified = new Set([...expected, ...Object.keys(scopes)]);
   unverifiedSince = Date.now();
+  firstLooks = new Map([...unverified].map((scope) => [scope, new Set<string>()]));
   freshDelivered = new Map();
   return true;
 }
@@ -517,12 +519,18 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     state.heldOutbox = [...(state.heldOutbox ?? []), ...state.outbox];
     state.outbox = [];
   }
-  if (!fresh && !state.rebuild) return { adapters, transport, settle: () => settleRevival(scope, state) };
+  const looked = firstLooks.get(scope);
+  const unlooked = (prefix: string) => !!looked && !looked.has(prefix);
+  if (!fresh && !state.rebuild && !adapters.some((a) => unlooked(a.prefix))) {
+    firstLooks.delete(scope);
+    freshDelivered.delete(scope);
+    return { adapters, transport, settle: () => settleRevival(scope, state) };
+  }
   let pulled = false;
   let checked = false;
   let downloading = false;
   const delivered: Delivered = freshDelivered.get(scope) ?? { values: new Map(), mine: new Map() };
-  if (fresh) freshDelivered.set(scope, delivered);
+  if (looked) freshDelivered.set(scope, delivered);
   const watched: Transport = {
     ...transport,
     read: async (name, known) => {
@@ -556,8 +564,12 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         const extraction = await adapter.extract(base, queued, now, known, remote, stamp);
         if (!extraction || retiring) return extraction;
         ready.add(adapter.prefix);
-        if (!fresh && !rebuilding(adapter.prefix)) return extraction;
-        return guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? sentHere : fromFolder, rebuilding(adapter.prefix));
+        if (!unlooked(adapter.prefix) && !rebuilding(adapter.prefix)) return extraction;
+        const unapplied = new Set(state.unapplied);
+        const stale = (key: string, value: unknown) => unapplied.has(key) || fromFolder(key, value);
+        const guarded = guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? sentHere : stale, rebuilding(adapter.prefix));
+        looked?.add(adapter.prefix);
+        return guarded;
       },
       apply: async (visible, changed, base, records) => {
         if (waiting()) return false;
@@ -577,10 +589,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     }),
   );
   const settle = () => {
-    if (pulled && !waiting()) {
-      unverified.delete(scope);
-      freshDelivered.delete(scope);
-    }
+    if (pulled && !waiting()) unverified.delete(scope);
     settleRevival(scope, state);
     const rebuild = state.rebuild;
     if (!rebuild || !pulled || stillDownloading(state)) return;
@@ -931,6 +940,7 @@ export async function chooseSyncFolder(): Promise<string | null> {
 function begin(folder: string, deviceId: string, joining: boolean) {
   generation++;
   unverified = new Set();
+  firstLooks = new Map();
   freshDelivered = new Map();
   revivalBatches = new Map();
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };

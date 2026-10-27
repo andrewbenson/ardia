@@ -641,9 +641,19 @@ const DragContext = createContext<DragController | null>(null);
 export function DragProvider({ children }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode }) {
   const controller = useMemo(() => new DragController(), []);
   const windowId = useWindowId();
-  if (__DEV__ && !nativeSidebar()) (globalThis as { sidebarDrag?: DragController }).sidebarDrag = controller;
+  if (__DEV__ && !nativeSidebar()) {
+    const dev = globalThis as { sidebarDrag?: DragController; sidebarDrags?: Record<string, unknown> };
+    dev.sidebarDrag = controller;
+    (dev.sidebarDrags ??= {})[windowId] = controller;
+  }
   useEffect(() => {
-    if (nativeSidebar()) installNativeDragProbe(windowId, () => controller);
+    if (nativeSidebar()) return installNativeDragProbe(windowId, () => controller);
+    if (!__DEV__) return;
+    const dev = globalThis as { sidebarDrag?: DragController; sidebarDrags?: Record<string, unknown> };
+    return () => {
+      if (dev.sidebarDrags?.[windowId] === controller) delete dev.sidebarDrags[windowId];
+      if (dev.sidebarDrag === controller) dev.sidebarDrag = Object.values(dev.sidebarDrags ?? {}).at(-1) as DragController | undefined;
+    };
   }, [controller, windowId]);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   controller.setGhost = setGhost;

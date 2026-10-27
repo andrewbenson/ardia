@@ -378,6 +378,35 @@ try {
     assert.deepEqual(await order("w1"), ids);
   });
 
+  await check("sidebar: a row dragged into another window's sidebar moves there", async () => {
+    const [wa, wb, id] = await run(`st().updateSettings({ tabLayout: "sidebar" });
+      const page = (n) => "data:text/html,<title>" + n + "</title>" + n;
+      const wa = st().createWindow({ frame: [100, 60, 560, 420], url: page("xa1") });
+      const wb = st().createWindow({ frame: [700, 60, 560, 420], url: page("xb1") });
+      const id = st().newTab(wb, { url: page("xb2"), background: true });
+      st().newTab(wb, { url: page("xb3"), background: true });
+      return settle(2000).then(() => [wa, wb, id]);`);
+    try {
+      const rows = await run(`const c = globalThis.sidebarDrags?.[${JSON.stringify(wb)}];
+        return Promise.all([...c.items.values()].filter((i) => i.kind === "row" && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], x, y, w, h })))));`);
+      const row = rows.find((r) => r.id === id);
+      assert.ok(row && row.w > 0, `a row for ${id}: ${JSON.stringify(rows)}`);
+      const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+      const tx = 90 - 600;
+      const seen = await run(`const seen = [];
+        const iv = setInterval(() => seen.push(globalThis.acTabDrag.getState().overWindow ?? null), 40);
+        return act(${JSON.stringify(wb)}, "drag:${sx},${sy};${sx + 10},${sy + 6};-60,${sy};${tx},${sy};${tx + 2},${sy + 2};${tx},${sy}").then(() => settle(1600)).then(() => { clearInterval(iv); return seen; });`);
+      assert.ok(seen.includes(wa), `over the other window during the drag: ${JSON.stringify([...new Set(seen)])}`);
+      const after = await run(`return [st().windows[${JSON.stringify(wa)}]?.tabIds ?? [], st().windows[${JSON.stringify(wb)}]?.tabIds ?? []];`);
+      assert.ok(after[0].includes(id), `${id} moved: ${JSON.stringify(after)}`);
+      assert.ok(!after[1].includes(id), `${id} left its window: ${JSON.stringify(after)}`);
+      const shown = await run(`return [...globalThis.sidebarDrags[${JSON.stringify(wb)}].items.values()].filter((i) => i.kind === "row").map((i) => i.tabIds[0]);`);
+      assert.ok(!shown.includes(id), `its old sidebar dropped the row: ${JSON.stringify(shown)}`);
+    } finally {
+      await run(`st().closeWindow(${JSON.stringify(wa)}); st().closeWindow(${JSON.stringify(wb)}); return settle(900);`);
+    }
+  });
+
   await check("sidebar: a row dragged onto the page's left target splits", async () => {
     await run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); st().updateSettings({ tabLayout: "sidebar" }); return settle(1500);`);
     const rows = await run(`const c = globalThis.sidebarDrag; const out = [];

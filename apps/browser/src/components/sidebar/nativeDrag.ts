@@ -214,5 +214,11 @@ export function installNativeDragProbe(
       if (value === null) void native.clearLanded(windowId);
     },
   };
-  (globalThis as { sidebarDrag?: unknown }).sidebarDrag = probe;
+  const dev = globalThis as { sidebarDrag?: unknown; sidebarDrags?: Record<string, unknown> };
+  dev.sidebarDrag = probe;
+  (dev.sidebarDrags ??= {})[windowId] = probe;
+  return () => {
+    if (dev.sidebarDrags?.[windowId] === probe) delete dev.sidebarDrags[windowId];
+    if (dev.sidebarDrag === probe) dev.sidebarDrag = Object.values(dev.sidebarDrags ?? {}).at(-1);
+  };
 }

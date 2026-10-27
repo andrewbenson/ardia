@@ -12,6 +12,10 @@ public class DownloadsModule: Module {
 
       Prop("state") { (view: NativeDownloadsView, v: String) in MainActor.assumeIsolated { view.setState(v) } }
     }
+
+    AsyncFunction("devHoverShifts") { () -> String in
+      MainActor.assumeIsolated { DownloadsHoverShifts.check() }
+    }.runOnQueue(.main)
   }
 }
 
@@ -25,6 +29,7 @@ final class NativeDownloadsView: ExpoView {
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
+    DownloadsHoverShifts.shown.add(self)
     list.autoresizingMask = [.width, .height]
     list.frame = bounds
     list.onHeight = { [weak self] h in self?.onDownloadsHeight(["height": h]) }
@@ -49,5 +54,76 @@ final class NativeDownloadsView: ExpoView {
     guard next != json, let state = DownloadsListState.decode(next) else { return }
     json = next
     list.update(state)
+  }
+}
+
+@MainActor
+enum DownloadsHoverShifts {
+  static let shown = NSHashTable<NativeDownloadsView>.weakObjects()
+
+  static func check() -> String {
+    #if DEBUG
+    var hosts = 0
+    var hovered = 0
+    var shifts: [[String: Any]] = []
+    for host in shown.allObjects where host.window != nil {
+      hosts += 1
+      let root = host.list
+      root.layoutSubtreeIfNeeded()
+      for target in descendants(of: root) where target.trackingAreas.contains(where: { $0.owner === target }) {
+        guard let enter = event(.mouseEntered, in: target), let exit = event(.mouseExited, in: target) else { continue }
+        hovered += 1
+        let before = frames(in: root)
+        target.mouseEntered(with: enter)
+        root.layoutSubtreeIfNeeded()
+        let after = frames(in: root)
+        target.mouseExited(with: exit)
+        root.layoutSubtreeIfNeeded()
+        for (id, was) in before {
+          guard let now = after[id], moved(was.frame, now.frame), !labelMakesRoom(was.view, was.frame, now.frame) else { continue }
+          shifts.append(["hovered": name(target), "view": name(was.view), "before": rect(was.frame), "after": rect(now.frame)])
+        }
+      }
+    }
+    let json = try? JSONSerialization.data(withJSONObject: ["hosts": hosts, "hovered": hovered, "shifts": shifts])
+    return json.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    #else
+    return "{}"
+    #endif
+  }
+
+  private static func descendants(of view: NSView) -> [NSView] {
+    view.subviews.flatMap { [$0] + descendants(of: $0) }
+  }
+
+  private static func frames(in root: NSView) -> [ObjectIdentifier: (view: NSView, frame: NSRect)] {
+    var out: [ObjectIdentifier: (view: NSView, frame: NSRect)] = [:]
+    for view in descendants(of: root) where !view.isHiddenOrHasHiddenAncestor && view.alphaValue > 0 {
+      out[ObjectIdentifier(view)] = (view, view.convert(view.bounds, to: root))
+    }
+    return out
+  }
+
+  private static func event(_ type: NSEvent.EventType, in view: NSView) -> NSEvent? {
+    NSEvent.enterExitEvent(
+      with: type, location: view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil), modifierFlags: [],
+      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: view.window?.windowNumber ?? 0, context: nil,
+      eventNumber: 0, trackingNumber: 0, userData: nil)
+  }
+
+  private static func moved(_ a: NSRect, _ b: NSRect) -> Bool {
+    abs(a.minX - b.minX) > 0.01 || abs(a.minY - b.minY) > 0.01 || abs(a.width - b.width) > 0.01 || abs(a.height - b.height) > 0.01
+  }
+
+  private static func labelMakesRoom(_ view: NSView, _ a: NSRect, _ b: NSRect) -> Bool {
+    let label = view is NSTextField || view.superview is NSTextField
+    return label && abs(a.minX - b.minX) <= 0.01 && abs(a.minY - b.minY) <= 0.01 && abs(a.height - b.height) <= 0.01 && b.width < a.width
+  }
+
+  private static func rect(_ r: NSRect) -> [Double] { [r.minX, r.minY, r.width, r.height].map { Double($0) } }
+
+  private static func name(_ view: NSView) -> String {
+    let label = (view as? NSTextField)?.stringValue ?? view.accessibilityLabel() ?? ""
+    return label.isEmpty ? String(describing: type(of: view)) : "\(type(of: view)) \"\(label)\""
   }
 }

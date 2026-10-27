@@ -35,7 +35,7 @@ holds the rest.
 | Tab dragging | `node apps/browser/scripts/tab-drag-test.mjs <Debug app>` | Dragging in the top tab strip moves the tab, never the window (0.2.18); the empty strip moves it over its whole height and a double-click zooms (0.2.25); the empty sidebar under the rows moves it too, and a double-click there still opens a tab |
 | Windowing | `node apps/browser/scripts/windowing-test.mjs <Debug app>` | Window frames and what the screen shows in passing |
 | Hidden panes | `node apps/browser/scripts/hidden-pane-test.mjs <Debug app>` | What changes while a tab is hidden (URL, title, loading, zoom, find bar, a permission prompt) is on screen the moment it is shown |
-| Hover layout | `node apps/browser/scripts/hover-shift-test.mjs <Debug app>` | Hovering moves nothing: every hover-tracked view in the sidebar, the tab strip and the downloads popover (below) |
+| Hover layout | `node apps/browser/scripts/hover-shift-test.mjs <Debug app>` | Hovering moves nothing: every hover-tracked view in the sidebar, the tab strip and the downloads popover (below), once with the RN surfaces and once with `ARDIA_NATIVE_OMNIBOX=1 ARDIA_NATIVE_NEWTAB=1` |
 | Sidebar clicks | `node apps/browser/scripts/sidebar-click-test.mjs <Debug app>` | One click opens a tab or pinned tile: in the frame its hover card appears, under another tile's appearing card, after a New Tab and after closing a pinned tab (0.2.39-nightly.5: tabs needed two clicks) |
 | Onboarding | `node apps/browser/scripts/onboarding-test.mjs <Debug app> [--rn \| --native]` | No text field sits behind the onboarding card, a click on the first row's checkbox toggles it, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once it ends, in a bar of the same height (the hidden New Tab field took the first row's cursor and its checkbox clicks) |
 | Settings reopen | `node packages/settings/scripts/settings-reopen-test.mjs <app>` | The native Settings window, opened, closed and opened again, is key and takes typing (the reused pre-built view kept a switch focused, so a reopened window took no keys) |
@@ -138,9 +138,14 @@ A control that shows on hover (a row's ✕, a live folder's refresh, Show in Fin
 (`components/HoverSlot.tsx`): the slot keeps the width of what it shows at rest, at least the control's, and the control
 lies over it. `useHover` and `useRowHover` mark their handlers, and the dev harness's `ac.hoverShift.check({ scopes })`
 (`src/lib/hoverShift.ts`) hovers each marked view inside the named components in turn, measures every view under its
-parent before and while hovered, and returns what moved or resized; only a HoverSlot's inside may change.
+parent before and while hovered, and returns what moved or resized; only a HoverSlot's inside may change. One
+exception, as Dia does it: a row's title may give up its trailing edge to the ✕ (its leading edge, baseline and height
+stay, and the slot grows leftward by exactly what the title gives up), and the Clear divider's line may shorten from its
+trailing end while its leading edge and y stay. The native downloads list has the same check in Swift
+(`SolaraDownloads.devHoverShifts()`), where a label may only give up its trailing edge.
 `hover-shift-test.mjs` runs it on the sidebar (with groups, a live folder and its open items), the tab strip and the
-downloads popover, and fails on any shift. Run it after changing anything a hover touches.
+downloads popover, in an RN pass and a native pass, and fails on any other shift. Run it after changing anything a
+hover touches.
 
 ## What's kept, and why
 

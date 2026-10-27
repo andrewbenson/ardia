@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
 
 const [appArg, port] = process.argv.slice(2);
@@ -8,10 +10,24 @@ if (!appArg) {
   console.error("usage: node hover-shift-test.mjs <Debug Solara.app> [cdpPort]");
   process.exit(2);
 }
+const passes = {
+  rn: { ARDIA_NATIVE_OMNIBOX: "0", ARDIA_NATIVE_NEWTAB: "0" },
+  native: { ARDIA_NATIVE_OMNIBOX: "1", ARDIA_NATIVE_NEWTAB: "1" },
+};
+const pass = process.env.HOVER_SHIFT_PASS;
+if (!pass) {
+  const failed = Object.keys(passes).filter((name) =>
+    spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: "inherit", env: { ...process.env, HOVER_SHIFT_PASS: name } }).status !== 0);
+  process.exit(failed.length ? 1 : 0);
+}
+if (!passes[pass]) {
+  console.error(`HOVER_SHIFT_PASS is ${Object.keys(passes).join(" or ")}`);
+  process.exit(2);
+}
 const scratch = mkdtempSync(join(tmpdir(), "ac-hover-shift-"));
 const data = join(scratch, "data");
 mkdirSync(data);
-const rep = reporter(join(scratch, "hover-shift-test.log"), { name: "hover-shift-test" });
+const rep = reporter(join(scratch, "hover-shift-test.log"), { name: `hover-shift-test ${pass}` });
 const file = join(data, "report.pdf");
 writeFileSync(file, "%PDF-1.4\n");
 
@@ -28,8 +44,14 @@ try {
     data, port,
     session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t2" } }], tabs: ids.map(tab) }),
     ready: "return !!ac.hoverShift",
+    env: passes[pass],
   });
   const ac = (body) => app.eval(body, { timeout: 120000 });
+  const nativeDownloadShifts = async () => {
+    const r = JSON.parse(await ac(`return globalThis.expo.modules.SolaraDownloads.devHoverShifts();`));
+    if (!r.hosts) throw new Error("the native downloads list isn't shown");
+    return { hovered: r.hovered, shifts: r.shifts };
+  };
 
   await ac(`
     const s = ac.store.getState();
@@ -63,7 +85,9 @@ try {
     await rep.check(name, async () => {
       await ac(`${setup} return true;`);
       await sleep(1200);
-      const { hovered, shifts } = await ac(`return ac.hoverShift.check({ scopes: ${JSON.stringify(scopes)} });`);
+      const { hovered, shifts } = name === "downloads" && pass === "native"
+        ? await nativeDownloadShifts()
+        : await ac(`return ac.hoverShift.check({ scopes: ${JSON.stringify(scopes)} });`);
       if (!hovered) throw new Error("nothing hover-tracked found");
       if (shifts.length) {
         throw new Error([`${shifts.length} views moved or resized (${hovered} hovered)`,

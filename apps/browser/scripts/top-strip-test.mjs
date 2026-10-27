@@ -208,7 +208,7 @@ try {
   }
 } finally {
   if (native) await native.app.quit();
-  if (!keep && rep.results.every((r) => r.ok)) rmSync(scratch, { recursive: true, force: true });
+  if (!keep && rep.results.every((r) => r.ok)) for (const name of ["rn", "native", "rn.png", "native.png"]) rmSync(join(scratch, name), { recursive: true, force: true });
   else rep.say(`kept ${scratch}`);
 }
 process.exit(rep.summary() ? 0 : 1);

@@ -551,3 +551,128 @@ test("B18: stopping while locked clears the sealed state it can no longer open",
   await settle();
   assert.equal(shell.docs.get("sync-state.nns") ?? "", "");
 });
+
+const stateOf = () => {
+  const sealed = shell.docs.get("sync-state.nns");
+  return sealed ? JSON.parse(sealed.slice(7)) : {};
+};
+
+test("B19: a scope an older build re-added starts after the retired floor, not after the older build's seqs", async () => {
+  reset();
+  const engine = await launch();
+  engine.startSync();
+  const work = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [work]: true } });
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await engine.syncNow();
+  for (let i = 0; i < 4; i++) {
+    S().addBookmark({ profileId: work, url: `https://w${i}.example/`, title: `W${i}` });
+    await engine.syncNow();
+  }
+  await settle();
+  const syncId = engine.useSync.getState().profiles[work].syncId;
+  const scope = `p:${syncId}`;
+  S().deleteProfile(work);
+  await engine.syncNow();
+  await engine.syncNow();
+  await settle();
+  const saved = JSON.parse(shell.docs.get("sync.json"));
+  assert.ok(saved.retired?.[scope] >= 3);
+  const again = S().createProfile({ name: "Work" });
+  useBrowser.setState({ bookmarksReady: { ...S().bookmarksReady, [again]: true } });
+  shell.docs.set("sync.json", JSON.stringify({ ...saved, profiles: { ...saved.profiles, [again]: { syncId, enabled: true } }, seqs: { ...saved.seqs, [scope]: 1 } }));
+  shell.docs.set("sync-state.nns", `sealed:${JSON.stringify({ ...stateOf(), [scope]: { ...sync.emptyScope(), seq: 1, joined: true } })}`);
+  const next = await launch();
+  next.startSync();
+  await settle();
+  S().addBookmark({ profileId: again, url: "https://new.example/", title: "New" });
+  await next.syncNow();
+  await settle();
+  assertNoSeqReused();
+});
+
+async function staleLoad(viaPhrase, failLate) {
+  reset();
+  await onAndSynced();
+  let open;
+  const gate = new Promise((resolve) => (open = resolve));
+  const engine = await launch();
+  let phrase = null;
+  if (viaPhrase) {
+    fake.unlockResult = false;
+    engine.startSync();
+    await settle();
+    fake.unlockResult = true;
+    fake.phraseGate = gate;
+    phrase = engine.enterRecoveryPhrase("/sync", "words");
+  } else {
+    fake.unlockGate = gate;
+    engine.startSync();
+  }
+  await settle();
+  await engine.stopSync();
+  await settle();
+  fake.phraseGate = null;
+  fake.unlockGate = null;
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await settle();
+  S().addBookmark({ profileId: "default", url: "https://a.example/", title: "a" });
+  await engine.syncNow();
+  await settle();
+  let releaseRead;
+  const readHeld = new Promise((resolve) => (releaseRead = resolve));
+  fake.readGate = (scope) => (scope.startsWith("p:") ? readHeld : null);
+  S().addBookmark({ profileId: "default", url: "https://b.example/", title: "b" });
+  const cycle = engine.syncNow();
+  await settle();
+  if (failLate === "noKey") fake.unlockResult = false;
+  if (failLate === "throws") fake.openFails = true;
+  open();
+  await phrase;
+  await settle();
+  fake.openFails = false;
+  fake.unlockResult = true;
+  S().addBookmark({ profileId: "default", url: "https://c.example/", title: "c" });
+  fake.readGate = null;
+  releaseRead();
+  await cycle;
+  await settle();
+  S().addBookmark({ profileId: "default", url: "https://d.example/", title: "d" });
+  await engine.syncNow();
+  await settle();
+  assertNoSeqReused();
+  assert.equal(engine.useSync.getState().status, "updated", "the new device keeps syncing");
+}
+
+test("B20: a startup load that finishes after sync was stopped and turned on again is dropped", () => staleLoad(false, null));
+test("B20b: so is a phrase unlock's load", () => staleLoad(true, null));
+async function lateFailure(kind) {
+  reset();
+  await onAndSynced();
+  let open;
+  fake.unlockGate = new Promise((resolve) => (open = resolve));
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  await engine.stopSync();
+  await settle();
+  fake.unlockGate = null;
+  assert.ok("ok" in (await engine.turnOnSync("/sync")));
+  await settle();
+  S().addBookmark({ profileId: "default", url: "https://a.example/", title: "a" });
+  await engine.syncNow();
+  await settle();
+  if (kind === "noKey") fake.unlockResult = false;
+  else fake.openFails = true;
+  open();
+  await settle();
+  fake.openFails = false;
+  fake.unlockResult = true;
+  S().addBookmark({ profileId: "default", url: "https://b.example/", title: "b" });
+  await engine.syncNow();
+  await settle();
+  assert.equal(engine.useSync.getState().status, "updated", "the new device keeps syncing");
+}
+
+test("B21: a stale unlock that finds no key doesn't lock the new device", () => lateFailure("noKey"));
+test("B21b: nor does a stale load that fails", () => lateFailure("throws"));

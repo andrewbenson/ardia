@@ -150,6 +150,7 @@ let loaded = true;
 let stopping = false;
 let turningOn = false;
 let enteringPhrase = false;
+let generation = 0;
 let forceRequests = 0;
 const passwordAdapters = new Map<string, Adapter>();
 const extensionAdapters = new Map<string, ExtensionsAdapter>();
@@ -195,11 +196,12 @@ function readableScope(v: unknown): v is ScopeState {
 
 const readableBatch = (f: unknown): f is LogFile => isObject(f) && typeof f.device === "string" && typeof f.seq === "number" && Array.isArray(f.ops);
 
-async function loadState() {
+async function loadState(loading: number): Promise<boolean> {
   const saved = await openSealed<unknown>(STATE, {});
+  const savedJournal = (await openSealed<{ journal?: unknown }>(JOURNAL, {})).journal;
+  if (loading !== generation) return false;
   const scopes: SyncDoc["scopes"] = {};
   for (const [name, scope] of Object.entries(isObject(saved) ? saved : {})) if (readableScope(scope)) scopes[name] = scope;
-  const savedJournal = (await openSealed<{ journal?: unknown }>(JOURNAL, {})).journal;
   journal = {};
   for (const [name, list] of Object.entries(isObject(savedJournal) ? savedJournal : {})) {
     const batches = Array.isArray(list) ? list.filter((f): f is LogFile => readableBatch(f) && f.device === doc.deviceId) : [];
@@ -209,9 +211,12 @@ async function loadState() {
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
   for (const link of Object.values(doc.profiles)) {
     const scope = `p:${link.syncId}`;
-    if (doc.retired?.[scope] === undefined) continue;
-    delete doc.retired[scope];
-    if (!Object.keys(doc.retired).length) delete doc.retired;
+    const retired = doc.retired;
+    const floor = retired?.[scope];
+    if (!retired || floor === undefined) continue;
+    doc.seqs = { ...doc.seqs, [scope]: Math.max(doc.seqs?.[scope] ?? 0, floor) };
+    delete retired[scope];
+    if (!Object.keys(retired).length) delete doc.retired;
   }
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
     if (doc.retired?.[scope] !== undefined) continue;
@@ -220,6 +225,7 @@ async function loadState() {
   }
   if (doc.deviceId && Object.keys(journal).length) doc.clock = clock.last;
   doc.scopes = scopes;
+  return true;
 }
 
 const persistJournal = (scope: string) => async (batches: LogFile[]) => {
@@ -532,6 +538,7 @@ function linkProfiles(app: ScopeState) {
 
 async function resetFromElsewhere() {
   await SyncNative?.forget(doc.deviceId!);
+  generation++;
   doc = { ...emptyDoc(), folder: doc.folder, types: doc.types };
   passwordAdapters.clear();
   extensionAdapters.clear();
@@ -597,6 +604,7 @@ export async function chooseSyncFolder(): Promise<string | null> {
 }
 
 function begin(folder: string, deviceId: string, joining: boolean) {
+  generation++;
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
   locked = false;
   loaded = true;
@@ -656,12 +664,13 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
 }
 
 async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: string, text: string): Promise<PhraseResult> {
+  const unlocking = generation;
   const result = await native.enterPhrase(doc.deviceId!, text, doc.folder ?? folder);
-  if (!("ok" in result)) return result;
+  if (!("ok" in result) || unlocking !== generation) return result;
   try {
-    await loadState();
+    if (!(await loadState(unlocking))) return result;
   } catch (error) {
-    showLocked(error);
+    if (unlocking === generation) showLocked(error);
     return { error: "keychain" };
   }
   locked = false;
@@ -707,6 +716,7 @@ async function turnOff(native: NonNullable<typeof SyncNative>, deleteData: boole
     }
   }
   if (doc.deviceId) await native.forget(doc.deviceId);
+  generation++;
   doc = { ...emptyDoc(), folder, types: doc.types };
   locked = false;
   loaded = true;
@@ -801,16 +811,18 @@ export function startSync() {
   void watchExtensions();
   if (doc.enabled && doc.deviceId) {
     loaded = false;
+    const unlocking = ++generation;
     void SyncNative.unlock(doc.deviceId)
       .then(async (ok) => {
+        if (unlocking !== generation) return;
         if (!ok) return showLocked();
-        await loadState();
+        if (!(await loadState(unlocking))) return;
         loaded = true;
         settleAppliedThemes(doc.scopes[APP_SCOPE]);
         publishUi();
         scheduleSync(500);
       })
-      .catch((error) => showLocked(error));
+      .catch((error) => unlocking === generation && showLocked(error));
   }
   useBrowser.subscribe((s, prev) => {
     if (!doc.enabled || running) return;

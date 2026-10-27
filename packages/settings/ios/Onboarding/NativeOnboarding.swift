@@ -41,7 +41,9 @@ final class OnboardingSession {
       appName: Bundle.main.productName, appIcon: NSApp.applicationIconImage)
     model.powerUpView = { spec in AnyView(OnboardingPowerUp(spec: spec)) }
     adapter.onWindowChange = { [weak model] in model?.refreshSettings() }
-    view = NSHostingView(rootView: OnboardingHostedRoot(model: model, windowId: windowId) { [weak self] in self?.dismissed() })
+    let hosting = NSHostingView(rootView: OnboardingHostedRoot(model: model, windowId: windowId) { [weak self] in self?.dismissed() })
+    hosting.safeAreaRegions = []
+    view = hosting
     begin()
   }
 
@@ -76,6 +78,7 @@ struct OnboardingHostedRoot: View {
 
   var body: some View {
     OnboardingOverlayView(model: model, windowId: windowId)
+      .ignoresSafeArea()
       .onChange(of: model.isActive(in: windowId)) { was, now in
         if was && !now { onDismiss() }
       }

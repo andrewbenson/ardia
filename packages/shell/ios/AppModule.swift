@@ -64,6 +64,7 @@ public class AppModule: Module {
     }.runOnQueue(.main)
     AsyncFunction("appIcon") { () -> String in AppIcons.current }.runOnQueue(.main)
     AsyncFunction("setAppIcon") { (id: String) in AppIcons.set(id, announce: ACIsolatedDataDirectory() == nil) }.runOnQueue(.main)
+    AsyncFunction("devApplicationIconImage") { () -> String? in AppIcons.dataURL(NSApp.applicationIconImage) }.runOnQueue(.main)
 
     AsyncFunction("notificationPermission") { (promise: Promise) in
       NotificationHub.shared.permission { promise.resolve($0) }

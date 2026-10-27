@@ -22,6 +22,8 @@ struct SettingsSearchTests {
     #expect(first("pip") == "tabs.autoPictureInPicture")
     #expect(first("vertical tabs") == "tabs.layout")
     #expect(first("1password") == "passwords.managerApps")
+    #expect(first("app icon") == "appearance.appIcon")
+    #expect(first("dock") == "appearance.appIcon")
   }
 
   @Test func aPanesNameFindsThatPanesRowsFirst() {

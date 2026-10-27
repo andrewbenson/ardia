@@ -32,3 +32,22 @@ r classic 512 apps/browser/assets/app-icon-solara.png
 ```
 
 The fork picks the set with `AC_APP_ICON = SolaraIcon` (`docs/releasing.md` › Shipping your own fork).
+
+## Calm
+
+"Calm" is the same artwork with the horizon taken away: no floor, grid, horizon band or horizon line, only the sun on
+the sky. With nothing in front of it the sun is drawn whole, a striped circle of the same radius centred 28 px below
+the middle (y 540), its gradient spanning the full disc. The stripe gaps keep Classic's heights and sit in the lower
+half, with the bars between them thinning toward a small cap at the bottom. The sky, squircle, rim and shadow are
+unchanged. `calm.svg` is the 1024 px master; `calm-128.svg`, `calm-64.svg`, `calm-32.svg` and `calm-16.svg` follow
+the classic small masters (their gap heights and rim widths).
+
+Settings › Appearance › App Icon offers it as "Calm" (id `calm`), beside "Classic" (`default`, the bundle icon).
+`AppIcons` draws it at runtime from the `SolaraCalm` image set, so only the 1024 master ships, at two scales; the
+small masters are kept for a bundle icon or a document icon later.
+
+```sh
+set=apps/browser/macos/Ardia-macOS/Assets.xcassets/SolaraCalm.imageset
+rsvg-convert -w 512 -h 512 -o $set/calm_512.png docs/brand/solara/calm.svg
+rsvg-convert -w 1024 -h 1024 -o $set/calm_1024.png docs/brand/solara/calm.svg
+```

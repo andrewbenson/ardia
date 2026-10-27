@@ -8,6 +8,7 @@ enum AppIcons {
     let plate: (top: NSColor, bottom: NSColor)?
     let mono: Bool
     var tint: String? = nil
+    var artwork: String? = nil
   }
 
   static let defaultsKey = "ACAppIcon"
@@ -23,7 +24,20 @@ enum AppIcons {
     didSet { cache.removeAll() }
   }
 
-  static var variants: [Variant] { iconName == upstreamIconName ? upstreamVariants : [upstreamVariants[0]] }
+  static let solaraIconName = "SolaraIcon"
+
+  static var variants: [Variant] {
+    switch iconName {
+    case upstreamIconName: upstreamVariants
+    case solaraIconName: solaraVariants
+    default: [upstreamVariants[0]]
+    }
+  }
+
+  private static let solaraVariants: [Variant] = [
+    Variant(id: "default", name: "Classic", plate: nil, mono: false),
+    Variant(id: "calm", name: "Calm", plate: nil, mono: false, artwork: "SolaraCalm"),
+  ]
 
   private static let upstreamVariants: [Variant] = [
     Variant(id: "default", name: "Default", plate: nil, mono: false),
@@ -76,7 +90,7 @@ enum AppIcons {
     let key = "\(id)@\(size)"
     if let hit = cache[key] { return hit }
     guard let variant = variants.first(where: { $0.id == id }) else { return nil }
-    let source = variant.plate == nil ? base : mark(variant)
+    let source = variant.artwork.flatMap(markNamed) ?? (variant.plate == nil ? base : mark(variant))
     let artwork = variant.mono ? monochrome(source) : source
     let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
       guard let plate = variant.plate else {
@@ -119,8 +133,11 @@ enum AppIcons {
   }
 
   static func preview(_ id: String, size: CGFloat) -> String? {
-    guard let image = image(id, size: size * 2),
-          let tiff = image.tiffRepresentation,
+    image(id, size: size * 2).flatMap(dataURL)
+  }
+
+  static func dataURL(_ image: NSImage) -> String? {
+    guard let tiff = image.tiffRepresentation,
           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return nil }
     return "data:image/png;base64,\(png.base64EncodedString())"
   }

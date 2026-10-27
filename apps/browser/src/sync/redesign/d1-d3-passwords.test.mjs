@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fixedBy } from "./switchOn.mjs";
 import { shell, settle, launch, reset, onAndSynced, passwordMac, native, realReadPasswords, realSetTimeout, restoreDocs } from "./harness.mjs";
 
 const SITE = "https://site.example";
@@ -76,7 +77,7 @@ test("D1b: a password changed here wins over another Mac's earlier change stampe
     assert.equal(b.store.get(syncKey("me"))?.p, "changed-here-later", `the later real change wins (B has ${b.store.get(syncKey("me"))?.p})`);
   }));
 
-test("D2a: Login Data replaced by a copy without most logins doesn't delete them everywhere", { todo: "step 3" }, () =>
+test("D2a: Login Data replaced by a copy without most logins doesn't delete them everywhere", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     for (let i = 0; i < 10; i++) w.here.set(loginKey(`u${i}`), login(`u${i}`, `p${i}`, Date.now()));
     const engine = await onAndSynced();
@@ -90,7 +91,7 @@ test("D2a: Login Data replaced by a copy without most logins doesn't delete them
     assert.equal(b.store.size, 10, `B keeps all ten logins (B has ${b.store.size})`);
   }));
 
-test("D2b: a deletion noticed after the keychain was unreadable loses to a newer change made elsewhere meanwhile", { todo: "step 3" }, () =>
+test("D2b: a deletion noticed after the keychain was unreadable loses to a newer change made elsewhere meanwhile", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     w.here.set(loginKey("me"), login("me", "v1", Date.now()));
     const engine = await onAndSynced();
@@ -154,7 +155,7 @@ test("D3: with its state lost, a login B changed meanwhile is applied here and t
     assert.ok(!sealed.rebuild || sealed.rebuild.settled?.includes("pw:"), `the passwords type settles (${JSON.stringify(sealed.rebuild)})`);
   }));
 
-test("Q3-family: a state rolled back past a password it had taken resends nothing over B's newer one", { todo: "step 3" }, () =>
+test("Q3-family: a state rolled back past a password it had taken resends nothing over B's newer one", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     w.here.set(loginKey("me"), login("me", "v1", Date.now() - 86_400_000));
     const engine = await onAndSynced();

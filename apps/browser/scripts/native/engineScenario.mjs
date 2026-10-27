@@ -36,7 +36,8 @@ Mac replaced or reverted before sending, or saved passwords changed while a rebu
 read them yet. No seq may carry two different batches. ORACLE_KEY=<url,
 setting or prof:> prints one key's edits, writes and losses; ORACLE_ENGINE=<file> runs another
 engine.ts; ORACLE_TRACE=1 keeps every step's full trace; ORACLE_STRICT=1 stops counting a position
-repair as a choice.`;
+repair as a choice; ORACLE_REDESIGN=1 runs with the syncRedesign switch on, over a Login Data with its
+own sync mark.`;
 
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
@@ -205,6 +206,20 @@ async function environment(prefix, sharedFolderOps) {
   shell.current.device = prefix || "local";
   shell.passwordStores.set(shell.current.device, new Map());
   shellFake.logins = () => [...shell.passwordStores.get(shell.current.device).values()];
+  if (process.env.ORACLE_REDESIGN) {
+    const marks = new WeakMap();
+    const loginData = () => shell.passwordStores.get(shell.current.device);
+    native.readPasswordsWithMark = async (profile) => {
+      const logins = await native.readPasswords(profile);
+      return logins ? { logins, mark: marks.get(loginData()) ?? null } : null;
+    };
+    globalThis.acTestEngineCall = (name, _profile, args) => {
+      if (name !== "ac_passwords_mark") return undefined;
+      marks.set(loginData(), args.value);
+      return { ok: true };
+    };
+    (await import(pathToFileURL(join(app, "src/sync/redesignSwitch.ts")).href)).syncRedesign.on = true;
+  }
   const disk = new Map();
   const staged = new Map();
   const landing = [];

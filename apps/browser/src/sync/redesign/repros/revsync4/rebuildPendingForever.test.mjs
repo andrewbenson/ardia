@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "../../switchOn.mjs";
 import { fake, folder, shell, S, settle, launch, reset, files, onAndSynced } from "./harness.mjs";
 
 const native = globalThis.acTestNativeModules.ArdiaSync;

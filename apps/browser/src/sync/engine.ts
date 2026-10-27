@@ -49,6 +49,7 @@ import {
 import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
 import { syncRedesign } from "./redesignSwitch";
+import { ledgerPasswordsAdapter, type HeldPasswords } from "./ledgerPasswords";
 
 type DataType = "bookmarks" | "history" | "tabs" | "pinned" | "passwords" | "extensions" | "settings";
 
@@ -127,6 +128,7 @@ type SyncUi = {
   devices: SyncedDevice[];
   remoteTabs: Record<string, RemoteTabs[]>;
   remoteProfiles: RemoteProfile[];
+  heldPasswords: Record<string, number>;
 };
 
 export const useSync = create<SyncUi>(() => ({
@@ -141,6 +143,7 @@ export const useSync = create<SyncUi>(() => ({
   devices: [],
   remoteTabs: {},
   remoteProfiles: [],
+  heldPasswords: {},
 }));
 
 let doc: SyncDoc = emptyDoc();
@@ -357,8 +360,28 @@ function publishUi(patch: Partial<SyncUi> = {}) {
     profiles: { ...doc.profiles },
     lastSyncedAt: doc.lastSyncedAt,
     ...(doc.enabled ? summarize() : { devices: [], remoteTabs: {}, remoteProfiles: [], pending: 0 }),
+    heldPasswords: heldPasswordsByProfile(),
     ...patch,
   });
+}
+
+export const ledgerScopeOf = (profileId: string) => `${doc.folder}\n${doc.deviceId}@${doc.setupAt ?? 0}\n${doc.profiles[profileId]?.syncId ?? ""}`;
+
+function heldPasswordsByProfile(): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [profileId, adapter] of passwordAdapters) {
+    const held = (adapter as Partial<HeldPasswords>).held?.() ?? 0;
+    if (held) out[profileId] = held;
+  }
+  return out;
+}
+
+export function resolveHeldPasswords(profileId: string, choice: "restore" | "confirm") {
+  (passwordAdapters.get(profileId) as Partial<HeldPasswords> | undefined)?.resolveHeld?.(choice);
+  publishUi();
+  forcePasswords = true;
+  forceRequests++;
+  scheduleSync(0);
 }
 
 export const deviceName = () => SyncNative?.deviceName() ?? "This Mac";
@@ -383,7 +406,11 @@ function profileAdapters(profileId: string, retiring: boolean, everyType = false
   const ownsData = !s.profiles[profileId]?.dataId;
   const t = everyType ? { ...(Object.fromEntries(Object.keys(doc.types).map((type) => [type, true])) as typeof doc.types), history: doc.types.history, passwords: doc.types.passwords } : doc.types;
   let passwords = passwordAdapters.get(profileId);
-  if (!passwords) passwordAdapters.set(profileId, (passwords = passwordsAdapter(profileId, () => cycleForcesPasswords)));
+  if (!passwords) {
+    const readMarked = SyncNative?.readPasswordsWithMark?.bind(SyncNative);
+    passwords = syncRedesign.on && readMarked ? ledgerPasswordsAdapter(profileId, () => cycleForcesPasswords, readMarked, () => ledgerScopeOf(profileId)) : passwordsAdapter(profileId, () => cycleForcesPasswords);
+    passwordAdapters.set(profileId, passwords);
+  }
   return [
     ...(t.pinned ? pinnedAreaAdapters(profileId) : []),
     ...(t.bookmarks && ownsData ? [inTodaysNames(bookmarksAdapter(profileId))] : []),
@@ -562,12 +589,16 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     (adapter): Adapter => ({
       ...adapter,
       ...(rebuilding(adapter.prefix) ? { adoptRemoteOnJoin: false } : {}),
-      extract: async (base, queued, now, known, remote, stamp) => {
+      extract: async (base, queued, now, known, remote, stamp, downloading) => {
         if (!pulled || waiting()) return null;
         afterPull();
-        const extraction = await adapter.extract(base, queued, now, known, remote, stamp);
+        const extraction = await adapter.extract(base, queued, now, known, remote, stamp, downloading);
         if (!extraction || retiring) return extraction;
         ready.add(adapter.prefix);
+        if (adapter.ownsItsChanges) {
+          looked?.add(adapter.prefix);
+          return extraction;
+        }
         if (!unlooked(adapter.prefix) && !rebuilding(adapter.prefix)) return extraction;
         const unapplied = new Set(state.unapplied);
         const stale = (key: string, value: unknown) => (unapplied.has(key) && !EDITABLE_WHILE_UNREADABLE.has(adapter.prefix)) || fromFolder(key, value);
@@ -603,7 +634,8 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     const owner = (key: string) => prefixes.filter((p) => key.startsWith(p)).sort((a, z) => z.length - a.length)[0];
     for (const prefix of prefixes) {
       if (!ready.has(prefix) || !rebuilding(prefix) || state.unapplied.some((key) => owner(key) === prefix)) continue;
-      const stale = staleKeys(state, prefix, notedFor(state, prefix, baselineOf(scope, prefix)!)).filter((key) => owner(key) === prefix);
+      const own = adapters.find((a) => a.prefix === prefix)?.ownsItsChanges;
+      const stale = own ? [] : staleKeys(state, prefix, notedFor(state, prefix, baselineOf(scope, prefix)!)).filter((key) => owner(key) === prefix);
       if (stale.length) {
         state.unapplied = [...state.unapplied, ...stale];
         continue;
@@ -788,14 +820,14 @@ async function noteWhatThisMacHas(only?: string) {
   const scopes = [[APP_SCOPE, null] as const, ...Object.entries(doc.profiles).map(([id, link]) => [`p:${link.syncId}`, id] as const)];
   const toNote = scopes.flatMap(([scope, profileId]) =>
     (profileId === null ? appAdapters(false, true) : profileAdapters(profileId, false, true))
-      .filter((adapter) => adapter.prefix !== "ext:" && (only === undefined || adapter.prefix === only))
+      .filter((adapter) => adapter.prefix !== "ext:" && !adapter.ownsItsChanges && (only === undefined || adapter.prefix === only))
       .map((adapter) => [scope, adapter] as const),
   );
   const passwordsLast = [...toNote.filter(([, a]) => a.prefix !== "pw:"), ...toNote.filter(([, a]) => a.prefix === "pw:")];
   for (const [scope, adapter] of passwordsLast) {
     if (baselineOf(scope, adapter.prefix)) continue;
     try {
-      const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined);
+      const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined, () => false);
       if (extraction) noteBaseline(scope, adapter.prefix, extraction);
     } catch (error) {
       console.warn(`[sync] ${adapter.prefix} wasn't ready to note what this Mac had`, error);

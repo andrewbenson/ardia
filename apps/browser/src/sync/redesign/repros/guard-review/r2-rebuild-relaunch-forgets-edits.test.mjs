@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "../../switchOn.mjs";
 import { reset, onAndSynced, shell, S, settle, launch, fake, bookmarkOps, titles } from "./harness.mjs";
 
 test("R2a: a deletion made after the loss, while the folder was offline, is undone by a relaunch before the rebuild could publish it", async () => {

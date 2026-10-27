@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "../../switchOn.mjs";
 import { reset, onAndSynced, shell, S, settle, launch, native, otherMac, files } from "./harness.mjs";
 
 async function scenario(pendingRemote) {

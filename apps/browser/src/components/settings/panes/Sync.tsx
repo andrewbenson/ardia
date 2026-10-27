@@ -12,6 +12,7 @@ import {
   chooseSyncFolder,
   DATA_TYPES,
   folderInfo,
+  resolveHeldPasswords,
   setProfileSynced,
   setTypeSynced,
   syncNow,
@@ -166,6 +167,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   const links = useSync((s) => s.profiles);
   const devices = useSync((s) => s.devices);
   const remoteProfiles = useSync((s) => s.remoteProfiles);
+  const heldPasswords = useSync((s) => s.heldPasswords);
   const profiles = useProfiles();
   const allProfiles = useBrowser((s) => s.profiles);
   const [, tick] = useState(0);
@@ -205,6 +207,18 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         </Row>
         <Row anchor="sync.folder" description={info ? folderLabel(info) : " "} />
       </Group>
+      {Object.entries(heldPasswords).map(([profileId, count]) => (
+        <Group key={profileId} style={{ marginTop: 12 }}>
+          <Row
+            icon={<Symbol name="key.fill" size={14} color={theme.icon} style={{ width: 24, height: 20 }} />}
+            title={heldPasswordsTitle(count, profiles.length > 1 ? allProfiles[profileId]?.name : undefined)}
+            description="Remove or change them on your other Macs too, or restore them here?"
+          >
+            <Button title="Restore Here" kind="primary" onPress={() => resolveHeldPasswords(profileId, "restore")} />
+            <Button title="Change Everywhere" onPress={() => resolveHeldPasswords(profileId, "confirm")} />
+          </Row>
+        </Group>
+      ))}
       {error && status !== "updated" ? (
         <View style={{ flexDirection: "row", gap: 6, marginTop: 8, paddingHorizontal: 2 }}>
           <Symbol name="exclamationmark.circle.fill" size={11} color={colors.destructive} style={{ width: 14, height: 15 }} />
@@ -268,6 +282,11 @@ function remoteProfileDescription(p: { sharesWith?: { name: string; added: boole
   if (!p.sharesWith) return "On your other devices";
   const { name, added } = p.sharesWith;
   return added ? `On your other devices. Shares data with ${name}, which is added too.` : `On your other devices. Shares data with ${name}.`;
+}
+
+export function heldPasswordsTitle(count: number, profileName?: string): string {
+  const what = count === 1 ? "1 password was" : `${count} passwords were`;
+  return `${what} removed or changed on this Mac${profileName ? ` in ${profileName}` : ""}.`;
 }
 
 export function ago(at: number, now = Date.now()): string {

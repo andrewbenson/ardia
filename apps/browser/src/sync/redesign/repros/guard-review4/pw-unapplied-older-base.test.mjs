@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fixedBy } from "../../switchOn.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -167,7 +168,7 @@ function passwordMac(scope) {
 
 const titles = () => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title).sort();
 
-test("Q3-preexisting: a rolled-back state with a password still unapplied and an older base resends this Mac's older copy over another Mac's newer one", { todo: "step 3" }, async () => {
+test("Q3-preexisting: a rolled-back state with a password still unapplied and an older base resends this Mac's older copy over another Mac's newer one", fixedBy("step 3"), async () => {
   reset();
   const here = new Map();
   let readable = true;

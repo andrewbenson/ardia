@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "../../switchOn.mjs";
 import { fake, folder, shell, S, settle, launch, reset, files, otherMac, assertNoSeqReused, onAndSynced } from "./harness.mjs";
 
 test("R-rollback: a rolled-back (but readable) sync state republishes values this Mac took from B since the backup, over B's newer edit", async () => {

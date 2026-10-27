@@ -1,5 +1,5 @@
 import { canonical } from "./canon.ts";
-import { hlcWall, type Clock, type HLC } from "./hlc.ts";
+import { hlcAfter, hlcWall, type Clock, type HLC } from "./hlc.ts";
 
 export type Origin = [device: string, seq: number];
 export type SyncRecord = { h: HLC; v: unknown; o: Origin };
@@ -73,6 +73,9 @@ export type Extraction = {
   ignore?: (key: string) => boolean;
   republish?: (key: string) => boolean;
   published?: (keys: Set<string>) => void;
+  stamp?: (key: string) => { at: number; after?: HLC | null } | undefined;
+  remove?: Set<string>;
+  reapply?: Set<string>;
 };
 
 export type ApplyRecords = {
@@ -93,11 +96,14 @@ export interface Adapter {
     known: (key: string) => boolean,
     remote: (key: string) => unknown,
     stamp: (key: string) => HLC | undefined,
+    downloading: () => boolean,
   ): Extraction | null | Promise<Extraction | null>;
   apply(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): ApplyResult | Promise<ApplyResult>;
   editedAt?(value: unknown): number | undefined;
   adoptRemoteOnJoin?: boolean;
   publishAfterPull?: boolean;
+  publishOnlyAfterPull?: boolean;
+  ownsItsChanges?: boolean;
 }
 
 export type ScopeOptions = {
@@ -194,6 +200,8 @@ const parseBase = (json: string | undefined) => (json === undefined ? undefined 
 
 const settling = new WeakMap<ScopeState, (() => void)[]>();
 const waitingAfterPull = new WeakMap<ScopeState, boolean>();
+const downloadingRecently = new WeakMap<ScopeState, boolean>();
+export const DOWNLOAD_HOLD_MS = 10 * 60_000;
 
 function settleWhenDurable(state: ScopeState, settle: () => void) {
   const queue = settling.get(state);
@@ -208,18 +216,28 @@ function settleDurable(state: ScopeState) {
   for (const settle of queue) settle();
 }
 
-async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock, device: string, now: number): Promise<Set<string>> {
+function stampedHLC(clock: Clock, device: string, stamped: { at: number; after?: HLC | null }): HLC {
+  const at = clock.at(stamped.at);
+  const after = stamped.after ? hlcAfter(stamped.after, device) : null;
+  const h = after && after > at ? after : at;
+  clock.observe(h);
+  return h;
+}
+
+async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock, device: string, now: number, beforePull = false): Promise<Set<string>> {
   const published = new Set<string>();
+  if (beforePull && adapter.publishOnlyAfterPull) return published;
   if (adapter.adoptRemoteOnJoin && !state.joined) return published;
   if (adapter.publishAfterPull && waitingAfterPull.get(state) !== false) return published;
   let pending: Set<string> | null = null;
   const queued = (key: string) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
-  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h);
+  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, () => downloadingRecently.get(state) !== false);
   if (!extraction) return published;
   const put = (key: string, value: unknown) => {
     const known = state.records[key];
+    const stamped = extraction.stamp?.(key);
     const editedAt = !known && value !== null ? adapter.editedAt?.(value) : undefined;
-    const h = editedAt !== undefined ? clock.at(editedAt) : clock.tick();
+    const h = stamped ? stampedHLC(clock, device, stamped) : editedAt !== undefined ? clock.at(editedAt) : clock.tick();
     if (known && known.h >= h) return;
     state.records[key] = { h, v: value, o: [device, state.seq + 1] };
     state.outbox.push({ k: key, h, v: value });
@@ -237,6 +255,12 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
     delete state.base[key];
     put(key, null);
   }
+  for (const key of extraction.remove ?? []) {
+    if (!key.startsWith(adapter.prefix) || extraction.values.has(key) || !state.records[key] || state.records[key]!.v === null) continue;
+    delete state.base[key];
+    put(key, null);
+  }
+  for (const key of extraction.reapply ?? []) if (key.startsWith(adapter.prefix) && !state.unapplied.includes(key)) state.unapplied.push(key);
   const { published: settle } = extraction;
   if (settle && published.size) settleWhenDurable(state, () => settle(published));
   return published;
@@ -244,7 +268,7 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
 
 export async function publish(state: ScopeState, adapters: Adapter[], clock: Clock, device: string, now = Date.now()): Promise<Set<string>> {
   const published = new Set<string>();
-  for (const adapter of adapters) for (const key of await publishAdapter(state, adapter, clock, device, now)) published.add(key);
+  for (const adapter of adapters) for (const key of await publishAdapter(state, adapter, clock, device, now, true)) published.add(key);
   return published;
 }
 
@@ -333,6 +357,7 @@ export async function pull(state: ScopeState, transport: Transport, scope: strin
   else delete state.pendingSince;
   const downloading = Object.values(pendingSince).some((at) => now - at <= damagedGiveUp);
   waitingAfterPull.set(state, downloading || Object.keys(state.damaged).length > 0);
+  downloadingRecently.set(state, [...Object.values(pendingSince), ...Object.values(state.damaged)].some((at) => now - at <= DOWNLOAD_HOLD_MS));
   return changed;
 }
 
@@ -416,6 +441,7 @@ export async function syncScope(args: {
   for (const adapter of adapters) {
     const late = await publishAdapter(state, adapter, clock, device, now());
     published += late.size;
+    for (const key of state.unapplied) if (key.startsWith(adapter.prefix)) keys.add(key);
     for (const key of late) keys.delete(key);
     unapplied.push(...(await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), !!options?.writtenKeysOnly)));
   }

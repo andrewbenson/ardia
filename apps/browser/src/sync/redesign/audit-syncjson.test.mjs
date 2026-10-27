@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./switchOn.mjs";
 import { S, shell, settle, launch, reset, onAndSynced, files } from "./harness.mjs";
 
 const relaunchWith = async (syncJson) => {

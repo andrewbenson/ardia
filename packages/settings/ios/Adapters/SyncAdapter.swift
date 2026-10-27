@@ -39,6 +39,8 @@ final class SyncAdapter: SyncServices {
 
   func addRemoteProfile(_ syncId: String) { SettingsJS.shared.fire("sync.addRemoteProfile", syncId) }
 
+  func resolveHeldPasswords(_ profileId: String, restore: Bool) { SettingsJS.shared.fire("sync.resolveHeldPasswords", profileId, restore) }
+
   func folderInfo(path: String?) async -> SyncFolderInfo? {
     guard let info = await SettingsAdapters.js("sync.folderInfo", jsonArg(path)) as? [String: Any], let path = info.string("path") else { return nil }
     return SyncFolderInfo(
@@ -112,12 +114,18 @@ final class SyncAdapter: SyncServices {
       pending: dict.int("pending") ?? 0,
       devices: dict.list("devices").compactMap(device),
       localProfiles: dict.list("localProfiles").compactMap(localProfile),
-      remoteProfiles: dict.list("remoteProfiles").compactMap(remoteProfile)
+      remoteProfiles: dict.list("remoteProfiles").compactMap(remoteProfile),
+      heldPasswords: dict.list("heldPasswords").compactMap(heldPasswords)
     )
   }
 
   static func badge(_ dict: [String: Any]) -> SyncProfileBadge {
     SyncProfileBadge(name: dict.string("name") ?? "", accentHex: dict.string("accentHex") ?? "", icon: dict.string("icon"))
+  }
+
+  static func heldPasswords(_ dict: [String: Any]) -> SyncHeldPasswords? {
+    guard let id = dict.string("profileId"), let count = dict.int("count"), count > 0 else { return nil }
+    return SyncHeldPasswords(profileId: id, profileName: dict.string("profileName"), count: count)
   }
 
   static func device(_ dict: [String: Any]) -> SyncDevice? {

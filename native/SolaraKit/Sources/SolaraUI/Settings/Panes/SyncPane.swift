@@ -136,6 +136,19 @@ public struct SyncDevice: Sendable, Equatable, Identifiable {
   }
 }
 
+public struct SyncHeldPasswords: Sendable, Equatable, Identifiable {
+  public var profileId: String
+  public var profileName: String?
+  public var count: Int
+  public var id: String { profileId }
+
+  public init(profileId: String, profileName: String? = nil, count: Int) {
+    self.profileId = profileId
+    self.profileName = profileName
+    self.count = count
+  }
+}
+
 public struct SyncState: Sendable, Equatable {
   public var status: SyncStatus
   public var enabled: Bool
@@ -147,6 +160,7 @@ public struct SyncState: Sendable, Equatable {
   public var devices: [SyncDevice]
   public var localProfiles: [SyncLocalProfile]
   public var remoteProfiles: [SyncRemoteProfile]
+  public var heldPasswords: [SyncHeldPasswords]
 
   public init(
     status: SyncStatus,
@@ -158,7 +172,8 @@ public struct SyncState: Sendable, Equatable {
     pending: Int = 0,
     devices: [SyncDevice] = [],
     localProfiles: [SyncLocalProfile] = [],
-    remoteProfiles: [SyncRemoteProfile] = []
+    remoteProfiles: [SyncRemoteProfile] = [],
+    heldPasswords: [SyncHeldPasswords] = []
   ) {
     self.status = status
     self.enabled = enabled
@@ -170,6 +185,7 @@ public struct SyncState: Sendable, Equatable {
     self.devices = devices
     self.localProfiles = localProfiles
     self.remoteProfiles = remoteProfiles
+    self.heldPasswords = heldPasswords
   }
 }
 
@@ -216,6 +232,7 @@ public protocol SyncServices: AnyObject {
   func setTypeSynced(_ type: SyncDataType, _ on: Bool)
   func setProfileSynced(_ profileId: String, _ on: Bool)
   func addRemoteProfile(_ syncId: String)
+  func resolveHeldPasswords(_ profileId: String, restore: Bool)
 
   func folderInfo(path: String?) async -> SyncFolderInfo?
   func recoveryWords() async -> [String]?
@@ -227,6 +244,10 @@ public protocol SyncServices: AnyObject {
   func copyRecoveryPhrase() async
   func revealFolder(_ path: String) async
   func openICloudSettings()
+}
+
+public extension SyncServices {
+  func resolveHeldPasswords(_ profileId: String, restore: Bool) {}
 }
 
 public enum SyncSheet: Identifiable, Equatable {
@@ -385,6 +406,13 @@ enum SyncText {
     let days = hours / 24
     return days == 1 ? "yesterday" : "\(days) days ago"
   }
+
+  static func heldPasswordsTitle(_ held: SyncHeldPasswords) -> String {
+    let what = held.count == 1 ? "1 password was" : "\(held.count) passwords were"
+    return "\(what) removed or changed on this Mac\(held.profileName.map { " in \($0)" } ?? "")."
+  }
+
+  static let heldPasswordsQuestion = "Remove or change them on your other Macs too, or restore them here?"
 
   static func statusLine(_ status: SyncStatus, lastSyncedAt: Date?, pending: Int, now: Date) -> String {
     let since = lastSyncedAt.map { ago($0, now: now) }
@@ -575,6 +603,24 @@ struct SyncOnSections: View {
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(30))
         now = Date()
+      }
+    }
+
+    ForEach(state.heldPasswords) { held in
+      Section {
+        HStack(spacing: 10) {
+          Image(systemName: "key.fill")
+            .font(.system(size: 14))
+            .foregroundStyle(.secondary)
+            .frame(width: 28, height: 20)
+          SettingRow(title: SyncText.heldPasswordsTitle(held), description: SyncText.heldPasswordsQuestion) {
+            HStack(spacing: 8) {
+              Button("Change Everywhere") { model.services.resolveHeldPasswords(held.profileId, restore: false) }
+              Button("Restore Here") { model.services.resolveHeldPasswords(held.profileId, restore: true) }
+                .buttonStyle(.borderedProminent)
+            }
+          }
+        }
       }
     }
 

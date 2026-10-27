@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { shell, S, settle, launch, reset, onAndSynced, passwordMac, appMac, native, realReadPasswords, realSetTimeout, assertNoSeqReused, restoreDocs, useBrowser, files } from "./harness.mjs";
+import { fixedBy } from "./switchOn.mjs";
+import { shell, S, settle, launch, reset, onAndSynced, passwordMac, appMac, native, realReadPasswords, realSetTimeout, assertNoSeqReused, restoreDocs, useBrowser, files , loginDataMark } from "./harness.mjs";
 
 const SITE = "https://site.example";
 const loginKey = (user) => `${SITE}\n${user}`;
@@ -34,7 +35,7 @@ async function passwordsWorld(run) {
   }
 }
 
-test("RR1: Login Data restored in place to an older copy reverts nothing on other Macs", { todo: "step 3" }, () =>
+test("RR1: Login Data restored in place to an older copy reverts nothing on other Macs", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     w.here.set(loginKey("me"), login("me", "v1", Date.now()));
     const engine = await onAndSynced();
@@ -42,6 +43,7 @@ test("RR1: Login Data restored in place to an older copy reverts nothing on othe
     const b = passwordMac(`p:${syncId}`);
     await b.sync();
     const backup = new Map([...w.here].map(([k, v]) => [k, { ...v }]));
+    const markInBackup = loginDataMark.value;
     w.later(60);
     b.store.set(syncKey("me"), { o: SITE, u: "me", p: "v2" });
     await b.sync();
@@ -49,13 +51,14 @@ test("RR1: Login Data restored in place to an older copy reverts nothing on othe
     assert.equal(w.here.get(loginKey("me"))?.password, "v2", "control: this Mac took v2");
     w.here.clear();
     for (const [k, v] of backup) w.here.set(k, v);
+    loginDataMark.value = markInBackup;
     await w.cycles(engine);
     await b.sync();
     assert.equal(b.store.get(syncKey("me"))?.p, "v2", `B keeps v2 (B has ${b.store.get(syncKey("me"))?.p})`);
     assert.equal(w.here.get(loginKey("me"))?.password, "v2", "and this Mac takes v2 back");
   }));
 
-test("RR2: changing most passwords at once doesn't go out until confirmed", { todo: "step 3" }, () =>
+test("RR2: changing most passwords at once doesn't go out until confirmed", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     for (let i = 0; i < 10; i++) w.here.set(loginKey(`u${i}`), login(`u${i}`, `p${i}`, Date.now()));
     const engine = await onAndSynced();
@@ -90,7 +93,7 @@ test("RR3a: another Mac republishing the same value doesn't undo a deletion made
     assert.ok(!b.store.has(syncKey("me")), `the deletion reaches B (B has ${JSON.stringify(b.store.get(syncKey("me")))})`);
   }));
 
-test("RR3b: a password changed here on day 1 while unreadable loses to the other Mac's change on day 2", { todo: "step 3" }, () =>
+test("RR3b: a password changed here on day 1 while unreadable loses to the other Mac's change on day 2", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     w.here.set(loginKey("me"), login("me", "v1", Date.now()));
     const engine = await onAndSynced();

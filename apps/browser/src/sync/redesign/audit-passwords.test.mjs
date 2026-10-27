@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fixedBy } from "./switchOn.mjs";
 import { reset, onAndSynced, S, shell, settle, launch, native, sync, rawTransport, realSetTimeout, files } from "./harness.mjs";
 
 function passwordMac(scope) {
@@ -92,7 +93,7 @@ async function scenario(applied, editAfterRelaunch = false, later = "p2") {
 }
 
 
-test("AUDIT-pw-docs-two-writes: all of shell.docs rolled back two ledger writes behind Login Data (row at L + 2): sync's applied p4 isn't claimed over B's newer p2", { todo: "step 3" }, async () => {
+test("AUDIT-pw-docs-two-writes: all of shell.docs rolled back two ledger writes behind Login Data (row at L + 2): sync's applied p4 isn't claimed over B's newer p2", fixedBy("step 3"), async () => {
   const { there, mine, resent } = await scenario(["p3", "p4"]);
   assert.equal(there, "p2", `B's newer password survives (B has ${there}; this Mac sent ${resent} batch(es) carrying the key)`);
   assert.equal(mine, "p2", `this Mac takes p2 (has ${mine})`);

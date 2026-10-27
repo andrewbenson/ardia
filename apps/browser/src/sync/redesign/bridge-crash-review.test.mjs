@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./switchOn.mjs";
 import { S, settle, launch, reset, onAndSynced, otherMac, realSetTimeout, files } from "./harness.mjs";
 
 const stub = await import("../../test-native/index.ts");

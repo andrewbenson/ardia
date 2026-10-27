@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fixedBy } from "../../switchOn.mjs";
 import { reset, onAndSynced, S, shell, settle, launch, native, sync, rawTransport, realSetTimeout, files } from "./harness.mjs";
 
 function passwordMac(scope) {
@@ -89,7 +90,7 @@ async function scenario(rolledBack, ownWriteAfterBackup = false) {
   }
 }
 
-test("P1: a rolled-back state whose base still holds an older password than the keychain treats B's newer password as a local conflict, marks it applied without writing it, then resends its own older copy over it", { todo: "step 3" }, async () => {
+test("P1: a rolled-back state whose base still holds an older password than the keychain treats B's newer password as a local conflict, marks it applied without writing it, then resends its own older copy over it", fixedBy("step 3"), async () => {
   const { there, mine, resent, rebuilding } = await scenario(true);
   assert.ok(!rebuilding, "control: nothing told this Mac its state was behind (no rebuild)");
   assert.equal(there, "p2", `B's newer password survives (B has ${there}; this Mac sent ${resent} batch(es) carrying the key)`);
@@ -102,7 +103,7 @@ test("P1-control: the same relaunch with the state not rolled back takes B's p2"
   assert.equal(mine, "p2");
 });
 
-test("P1b: the same with an own batch written after the backup, so the rollback is detected and the scope rebuilds", { todo: "step 3" }, async () => {
+test("P1b: the same with an own batch written after the backup, so the rollback is detected and the scope rebuilds", fixedBy("step 3"), async () => {
   const { there, mine, resent, rebuilding } = await scenario(true, true);
   assert.ok(rebuilding, "control: the relaunch found the state behind its own seqs and opened a rebuild");
   assert.equal(there, "p2", `B's newer password survives (B has ${there}; this Mac sent ${resent} batch(es) carrying the key)`);

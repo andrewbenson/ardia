@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./switchOn.mjs";
 
 const replicaFake = {
   rev: 0,

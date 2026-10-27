@@ -82,8 +82,10 @@ const settle = async (n = 30) => {
 };
 let launches = 0;
 const launch = async () => import(`../engine.ts?rev${++launches}`);
+const launchRev = () => launches;
 
 function reset() {
+  Object.assign(loginDataMark, { value: null, refuse: false, marks: [] });
   S().hydrate({});
   useBrowser.setState({ bookmarks: emptyBookmarks, bookmarksReady: { default: true } });
   folder.clear();
@@ -201,10 +203,11 @@ function appMacWithState(prefix) {
 
 const native = globalThis.acTestNativeModules.ArdiaSync;
 const realReadPasswords = native.readPasswords;
+const loginDataMark = globalThis.acTestLoginDataMark ?? { value: null, refuse: false, marks: [] };
 const titles = () => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title).sort();
 const bookmarkOps = (syncId) => files().filter(({ scope }) => scope === `p:${syncId}`).flatMap(({ file }) => file.ops ?? Object.entries(file.records ?? {}).map(([k, r]) => ({ k, v: r.v })));
 const restoreDocs = (snapshot) => {
   shell.docs.clear();
   for (const [name, contents] of snapshot) shell.docs.set(name, contents);
 };
-export { fake, folder, shell, sync, useBrowser, S, settle, launch, reset, files, assertNoSeqReused, onAndSynced, rawTransport, otherMac, realSetTimeout, passwordMac, appMac, appMacWithState, native, realReadPasswords, titles, bookmarkOps, restoreDocs };
+export { launchRev, loginDataMark, fake, folder, shell, sync, useBrowser, S, settle, launch, reset, files, assertNoSeqReused, onAndSynced, rawTransport, otherMac, realSetTimeout, passwordMac, appMac, appMacWithState, native, realReadPasswords, titles, bookmarkOps, restoreDocs };

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { shell, S, settle, launch, reset, onAndSynced, otherMac, passwordMac, native, realReadPasswords, realSetTimeout, files, titles, bookmarkOps, sync, rawTransport } from "./harness.mjs";
+import { fixedBy } from "./switchOn.mjs";
+import { shell, S, settle, launch, reset, onAndSynced, otherMac, passwordMac, native, realReadPasswords, realSetTimeout, files, titles, bookmarkOps, sync, rawTransport , loginDataMark } from "./harness.mjs";
 
 const SITE = "https://site.example";
 const loginKey = (user) => `${SITE}\n${user}`;
@@ -34,7 +35,7 @@ async function passwordsWorld(run) {
   }
 }
 
-test("FR1: Login Data restored in place from one ledger write ago, dropping 30 of 70 logins applied in that write, deletes none of them elsewhere", { todo: "step 3" }, () =>
+test("FR1: Login Data restored in place from one ledger write ago, dropping 30 of 70 logins applied in that write, deletes none of them elsewhere", fixedBy("step 3"), () =>
   passwordsWorld(async (w) => {
     for (let i = 0; i < 40; i++) w.here.set(loginKey(`old${i}`), login(`old${i}`, `p${i}`, Date.now()));
     const engine = await onAndSynced();
@@ -42,12 +43,14 @@ test("FR1: Login Data restored in place from one ledger write ago, dropping 30 o
     const b = passwordMac(`p:${syncId}`);
     await b.sync();
     const backup = new Map([...w.here].map(([k, v]) => [k, { ...v }]));
+    const markInBackup = loginDataMark.value;
     for (let i = 0; i < 30; i++) b.store.set(syncKey(`new${i}`), { o: SITE, u: `new${i}`, p: `n${i}` });
     await b.sync();
     await w.cycles(engine);
     assert.equal(w.here.size, 70, "control: this Mac applied B's 30 logins in one go");
     w.here.clear();
     for (const [k, v] of backup) w.here.set(k, v);
+    loginDataMark.value = markInBackup;
     await w.cycles(engine);
     await b.sync();
     assert.equal(b.store.size, 70, `B keeps all 70 (B has ${b.store.size})`);

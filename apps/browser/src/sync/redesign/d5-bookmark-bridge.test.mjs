@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./switchOn.mjs";
 const { useBrowser } = await import("../../store/browser.ts");
 const { reloadBookmarks, startBookmarks } = await import("../../lib/bookmarks.ts");
 const stub = await import("../../test-native/index.ts");

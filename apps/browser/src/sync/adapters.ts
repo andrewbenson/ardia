@@ -548,7 +548,7 @@ export function passwordsAdapter(
   };
 }
 
-function originOf(login: SavedLogin): string | null {
+export function originOf(login: SavedLogin): string | null {
   const realm = login.origin.replace(/\/$/, "");
   return /^https?:\/\/[^/\s]+$/.test(realm) ? realm : null;
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./switchOn.mjs";
 import { Clock } from "../../../../../packages/sync/src/hlc.ts";
 
 test("D9b: a clock pinned behind a skewed stamp keeps its stamps increasing past 36^4 ticks", { todo: "step 12" }, () => {

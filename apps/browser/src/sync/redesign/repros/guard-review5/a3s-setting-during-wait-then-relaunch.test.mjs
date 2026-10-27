@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "../../switchOn.mjs";
 import { reset, onAndSynced, settle, launch, native, S, appMac } from "./harness.mjs";
 
 const realNow = Date.now;

@@ -8,6 +8,7 @@ import {
   DATA_TYPES,
   enterRecoveryPhrase,
   folderInfo,
+  resolveHeldPasswords,
   setProfileSynced,
   setTypeSynced,
   stopSync,
@@ -46,6 +47,11 @@ function syncTopic() {
         },
       ];
     }),
+    heldPasswords: Object.entries(sync.heldPasswords ?? {}).map(([profileId, count]) => ({
+      profileId,
+      profileName: profileOrder.length > 1 ? (profiles[profileId]?.name ?? null) : null,
+      count,
+    })),
     remoteProfiles: sync.remoteProfiles.map((p) => ({
       syncId: p.syncId,
       name: p.name,
@@ -85,6 +91,7 @@ export const syncHandlers: Record<string, SettingsHandler> = {
   "sync.setTypeSynced": (type: DataType, on: boolean) => setTypeSynced(type, on),
   "sync.setProfileSynced": (profileId: string, on: boolean) => setProfileSynced(profileId, on),
   "sync.addRemoteProfile": (syncId: string) => void addRemoteProfile(syncId),
+  "sync.resolveHeldPasswords": (profileId: string, restore: boolean) => resolveHeldPasswords(profileId, restore ? "restore" : "confirm"),
   "sync.recoveryWords": () => withNative((n) => n.recoveryWords()),
   "sync.qrCode": () => withNative((n) => n.qrCode()),
   "sync.recoveryKitPreview": (width: number) => withNative((n) => n.recoveryKitPreview(width)),

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "./switchOn.mjs";
 import { S, settle, reset, onAndSynced, useBrowser, files } from "./harness.mjs";
 
 test("AUDIT-history-restore: Chrome's History rolled back to before some visits publishes no deletion for them", { todo: "step 6" }, async () => {

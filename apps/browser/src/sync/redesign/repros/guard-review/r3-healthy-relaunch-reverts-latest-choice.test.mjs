@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import "../../switchOn.mjs";
 import { reset, onAndSynced, S, settle, launch, appMac } from "./harness.mjs";
 
 test("R3: after a relaunch with a healthy state, a setting chosen here last is replaced by an older choice from another Mac when that Mac once had the same value", { todo: "step 6" }, async () => {

@@ -414,3 +414,8 @@ struct SyncSnapshotTests {
     }
   }
 }
+
+@Test func heldPasswordsTitleNamesTheCountAndTheProfile() {
+  #expect(SyncText.heldPasswordsTitle(SyncHeldPasswords(profileId: "default", count: 8)) == "8 passwords were removed or changed on this Mac.")
+  #expect(SyncText.heldPasswordsTitle(SyncHeldPasswords(profileId: "w", profileName: "Work", count: 1)) == "1 password was removed or changed on this Mac in Work.")
+}

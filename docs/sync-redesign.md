@@ -387,8 +387,12 @@ live entry is never applied over, in any adapter (D11).
   get no seeded entries, so a joining Mac adopts the synced settings and profile names instead of
   overwriting everyone's with its own. A user command run during the join is journaled as an edit
   like any other.
-- Passwords seed the ledger: an equal login is seeded; a differing one takes the folder's value; a
-  login the folder lacks is an addition.
+- Passwords join through the ledger's upgrade mode, the same rule as a first run (§ 1, Upgrade): an
+  equal login is seeded; a differing one is claimed only if Chrome modified it after the record's
+  wall time, otherwise it takes the folder's value; a login the folder lacks is an addition. The
+  ledger records the join it was written for (the folder, this join's device id and setup time,
+  and the profile's sync id), so after Stop Syncing, a new folder or a rejoin that keeps the
+  profile's sync id (step 10), an old ledger is never trusted and every login is judged again.
 
 ## 2. Publishing chains
 
@@ -428,6 +432,45 @@ One hold remains: a rebuilding type doesn't apply while its pull is incomplete.
   published as deleted without a journal entry.
 - The Sync pane shows "Waiting for N files" until a file arrives or is given up after a day.
 - A healthy Mac is never under this hold.
+
+## Timing rules for adapters
+
+Three reviews in a row found the same kind of bug: a throttle or a gate that, under some sequence,
+never opens again (step 1's password livelock, 3a's quiet-forever, and 3a's pull gate removed then
+needed back). So every adapter follows one model, and its tests check each rule.
+
+- **Throttled reads.** An adapter that reads an expensive source (Login Data, Chrome's history) may
+  skip a read for a minimum interval (passwords: 30 s). The skip is only ever a delay:
+  - a forced read (Sync Now, a resolved prompt, a cycle the engine marks forced) always reads,
+    whatever the interval or quiet window says;
+  - nothing else can set the next allowed read further out than one interval from now.
+- **The quiet window.** After an apply whose read-back didn't confirm, reads pause (passwords: 30 s)
+  so the source can finish writing. The window opens only when a key fails to confirm that didn't
+  fail last time. A key that keeps failing doesn't reopen it, and a forced read passes it. A key that
+  never confirms stays unapplied and is retried each cycle. It never holds the adapter's other keys.
+- **Settle waits.** An apply may wait for its read-back (passwords: up to 5 s, 250 ms steps). It
+  waits only for keys it wrote. A key it skipped (kept here, held, claimed) is never waited on.
+- **The pull gate.** An adapter that claims changes by comparing local data with records never
+  publishes before the cycle's pull (`publishOnlyAfterPull`). While a file first seen less than 10
+  minutes ago is pending or damaged, the adapter's `extract` gets `downloading() === true` and holds
+  back only its deletions. Edits and additions go out: last writer wins settles them the same way
+  whether the other Mac's file is pending or visible, while a deletion stamped at read time would
+  beat an edit still downloading (3a's pending-delete). A held deletion stays a live claim, so apply
+  doesn't write the folder's value over it, and the next judgement decides it again. Past the
+  10-minute first-seen limit (§ 3) `downloading()` is false and the deletion goes out (GATE-bound).
+  The gate lives in `extract`, not around it: skipping `extract` while files hid left the adapter's
+  claims stale and starved publishing (oracle seeds 22, 39, 198).
+  - First-seen is when this Mac noticed the file, not the other Mac's stamp, so comparing a claim's
+    stamp with it decides nothing; no such comparison is made.
+  - An addition over a tombstone still downloading is stamped at its own modified time, or after
+    the tombstone once the tombstone is visible. The two orders give different stamps for the
+    addition, and both converge on the addition.
+- **Persisted holds.** A hold that waits on the user (the mass-change prompt) is saved, and is
+  lifted only by the user's choice or by the held change disappearing. Its size isn't recomputed
+  against a changing denominator.
+- **Every gate has a test** that drives the sequence keeping it shut (a key that never confirms,
+  a cycle period shorter than the window, a pending file) and requires the adapter to make
+  progress within a bounded number of cycles.
 
 ## 4. Per-type settle
 

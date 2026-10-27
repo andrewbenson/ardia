@@ -134,6 +134,14 @@ the tree, and so does the echo of sync's pushes.
 - **The first read at launch** is journaled like any other, so an extension edit made before it
   isn't lost. To keep the diff truthful, the shadow cache is saved synchronously after each apply
   and push. Today it's debounced by 2 s, so a quit could leave it stale.
+- **The shadow and the pushed values are saved together.** The shadow cache and the pushed-values
+  table go to disk in one synchronous write (`bookmarks-cache.json`), after each apply and push.
+  - **The gap this closes.** A crash between a push and that write leaves a shadow from before the
+    push. At launch, the value this Mac pushed and already published then differs from the shadow.
+    It would be journaled as a fresh edit and resent with a launch-time stamp, over a newer edit
+    from another Mac.
+  - **The rule.** A launch diff that equals a value in the pushed-values table isn't journaled. The
+    table and the shadow land together, so after any crash one of them covers the pushed value.
 
 **Passwords: Chrome's Login Data is the source** (D1–D3, re-review 1–3).
 - **Ledger.** `pwLedger`, kept in Solara's data folder:
@@ -411,6 +419,19 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 
 Every repro above becomes a failing-first test in engineRecovery, and so does each finding. The
 scratch suite is /private/tmp/redesign-tests/ (`run.sh`).
+
+Harness notes:
+- **Bookmarks with the engine** (rr5-bridge-engine.test.mjs) runs the real `lib/bookmarks.ts` over
+  the Chrome bookmark fake, together with the engine. A gate on the fake's `ac_bookmarks_apply`
+  holds an app edit pending.
+- **The setTimeout shim.** The engine harness stubs `setTimeout` to return 0 and never fire. The
+  bridge saves its cache at stop only when `cacheTimer` is truthy, so under that stub the cache is
+  never written, and the first launch read replays the whole stale store over Chrome. That made a
+  fake red result. Any test running the bridge must return a non-zero id for the 2 s cache timer
+  (without firing it), and must let the 5 ms `reloadBookmarks` wait run on real time.
+- **RR5 and RR5-stale-cache are guards.** They're green on today's bridge, which has no restore tag.
+  The new code must keep them green. RR5-stale-cache also checks that a stale shadow doesn't resend
+  this Mac's own pushed value.
 - **D1:** a username-only rename survives an older tombstone of the new key, and a change here wins
   over a clock running an hour ahead.
 - **D2:** Login Data losing most logins doesn't delete them everywhere.

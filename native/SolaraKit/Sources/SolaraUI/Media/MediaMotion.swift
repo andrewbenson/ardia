@@ -54,6 +54,12 @@ enum MediaMotion {
     return CATransform3DTranslate(t, -bounds.midX, -bounds.midY, 0)
   }
 
+  static func scale(about point: CGPoint, scale: Double, translateY: Double) -> CATransform3D {
+    var t = CATransform3DMakeTranslation(point.x, point.y + translateY, 0)
+    t = CATransform3DScale(t, scale, scale, 1)
+    return CATransform3DTranslate(t, -point.x, -point.y, 0)
+  }
+
   static func setInstantly(_ body: () -> Void) {
     CATransaction.begin()
     CATransaction.setDisableActions(true)

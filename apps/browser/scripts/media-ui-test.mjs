@@ -203,8 +203,39 @@ try {
     if (off.at(-1).opacity > 0.01) throw new Error(`still visible 320 ms after hiding: ${off.at(-1).opacity}`);
     return { samples: samples.length, frame: on.at(-1).frame, peak };
   });
-  const RN_CAST = [340, 185];
-  const RN_SHARE = [460, 423];
+  const RN_CAST = [925, 55, 340, 185];
+  const RN_SHARE = [501.5, 55, 460, 423];
+  const sameRect = (what, rect, want) => {
+    if (!rect || rect.some((v, i) => Math.abs(v - want[i]) > 0.5)) throw new Error(`${what} popover at ${JSON.stringify(rect)}, RN draws ${JSON.stringify(want)}`);
+  };
+  const openPopover = async (kind, open) => {
+    if (!native) {
+      await run(open);
+      await until("popover", `return surface();`, 4000);
+      await sleep(300);
+      return { rect: await run(`return surface();`) };
+    }
+    const samples = await run(`
+      const out = [];
+      const sample = (until) => performance.now() >= until ? Promise.resolve() : first(${JSON.stringify(kind)}).then((r) => { if (r) out.push(r); return settle(8); }).then(() => sample(until));
+      ${open}
+      return sample(performance.now() + 400).then(() => out);`, 10000);
+    const last = samples.at(-1);
+    if (!last) throw new Error("no native popover");
+    const moving = samples.filter((r) => r.opacity > 0.02 && r.opacity < 0.98);
+    if (!moving.length) throw new Error(`the popover never animated in: ${JSON.stringify(samples.map((r) => r.opacity))}`);
+    const hidden = samples.filter((r) => r.opacity <= 0.02);
+    const shownAt = Math.min(...moving.map((r) => r.t));
+    const span = Math.max(...moving.map((r) => r.t)) - (hidden.length ? Math.max(...hidden.map((r) => r.t)) : shownAt);
+    const delay = shownAt - samples[0].t;
+    if (span > 0.17) throw new Error(`open took ${span}s, RN's is 0.15: ${JSON.stringify(samples.map((r) => [Math.round((r.t - samples[0].t) * 1000), r.opacity, r.progress, r.height]))}`);
+    if (delay > 0.05) throw new Error(`the popover waited ${delay}s before animating: ${JSON.stringify(samples.map((r) => [r.t - samples[0].t, r.opacity, r.height]))}`);
+    for (const r of moving) {
+      if (Math.abs(r.opacity - r.progress) > 0.08) throw new Error(`opacity ${r.opacity} at progress ${r.progress}`);
+    }
+    if (last.opacity < 0.999) throw new Error(`popover still at ${last.opacity} after 400 ms`);
+    return { rect: last.card, frames: last.frames, height: last.height, animatedSamples: moving.length };
+  };
   const CAST = {
     id: "cast-fixture", browserId: 0, open: true, header: "Cast tab", permissionRejected: false,
     sinks: [
@@ -213,22 +244,17 @@ try {
     ],
   };
   await rep.check("cast-picker", async () => {
-    await run(`acCast.useCast.setState({ dialogs: { b: ${JSON.stringify(CAST)} } }); return true;`);
-    const rect = await until("cast popover", `return surface();`, 4000);
-    await sleep(300);
-    const settled = await run(`return surface();`);
-    const out = { rect: settled };
-    if (Math.abs(settled[2] - RN_CAST[0]) > 0.5 || Math.abs(settled[3] - RN_CAST[1]) > 0.5) throw new Error(`cast popover ${settled[2]}x${settled[3]}, RN draws ${RN_CAST.join("x")}`);
+    const opened = await openPopover("media.castPicker", `acCast.useCast.setState({ dialogs: { b: ${JSON.stringify(CAST)} } });`);
+    sameRect("cast", opened.rect, RN_CAST);
+    const out = { rect: opened.rect, samples: opened.animatedSamples };
     if (native) {
-      const row = await until("native cast picker", `return first("media.castPicker");`, 3000);
-      out.height = row.height;
-      if (Math.abs(row.height + 1 - settled[3]) > 0.5) throw new Error(`native body ${row.height} tall in a ${settled[3]} popover`);
       await run(`globalThis.__castLog = []; const a = acNativeMedia.actions; globalThis.__castReal = a.castPicker; a.castPicker = (w, t, e) => { __castLog.push(e); }; return true;`);
       await run(`return first("media.castPicker").then((r) => click(centre(r.frames.done))).then(() => true);`);
       await run(`return first("media.castPicker").then((r) => click(centre(r.frames.sink0))).then(() => true);`);
-      const log = await until("cast actions", `return __castLog.filter((e) => e.action !== "height").length >= 2 ? __castLog.filter((e) => e.action !== "height") : null;`, 3000);
+      await run(`return first("media.castPicker").then((r) => click([Math.round(r.card[0] - 200), Math.round(r.card[1] + 100)])).then(() => true);`);
+      const log = await until("cast actions", `return __castLog.length >= 3 ? __castLog : null;`, 3000);
       await run(`acNativeMedia.actions.castPicker = __castReal; return true;`);
-      if (log[0].action !== "done" || log[1].action !== "cast" || log[1].sinkId !== "s1") throw new Error(`cast actions ${JSON.stringify(log)}`);
+      if (log.map((e) => e.action).join() !== "done,cast,dismiss" || log[1].sinkId !== "s1") throw new Error(`cast actions ${JSON.stringify(log)}`);
       out.actions = log.map((e) => e.action);
     }
     await run(`acCast.useCast.setState({ dialogs: {} }); return true;`);
@@ -243,22 +269,23 @@ try {
     ],
     pageUrl: url("b"),
   };
+  const openShare = `acMedia.useMedia.setState((m) => ({ displayRequests: { ...m.displayRequests, b: ${JSON.stringify(SHARE)} } }));`;
   await rep.check("share-picker", async () => {
-    await run(`acMedia.useMedia.setState((m) => ({ displayRequests: { ...m.displayRequests, b: ${JSON.stringify(SHARE)} } })); return true;`);
-    await until("share popover", `return surface();`, 4000);
-    await sleep(300);
-    const settled = await run(`return surface();`);
-    const out = { rect: settled };
-    if (Math.abs(settled[2] - RN_SHARE[0]) > 0.5 || Math.abs(settled[3] - RN_SHARE[1]) > 0.5) throw new Error(`share popover ${settled[2]}x${settled[3]}, RN draws ${RN_SHARE.join("x")}`);
+    const opened = await openPopover("media.sharePicker", openShare);
+    sameRect("share", opened.rect, RN_SHARE);
+    const out = { rect: opened.rect, samples: opened.animatedSamples };
     if (native) {
-      const row = await until("native share picker", `return first("media.sharePicker");`, 3000);
-      out.height = row.height;
-      if (Math.abs(row.height + 1 - settled[3]) > 0.5) throw new Error(`native body ${row.height} tall in a ${settled[3]} popover`);
       await run(`return first("media.sharePicker").then((r) => click(centre(r.frames["tab:p"]))).then(() => true);`);
       const picked = await until("tab selected", `return first("media.sharePicker").then((r) => r.selected === "tab:p" ? r : null);`, 3000);
-      out.audio = !!picked.frames.audio;
+      out.focused = picked.focused;
       if (!picked.frames.audio) throw new Error("no tab audio checkbox for a tab");
+      if (!picked.focused) throw new Error("the share picker doesn't hold focus for Escape and Enter");
       await run(`return first("media.sharePicker").then((r) => click(centre(r.frames.cancel))).then(() => true);`);
+      await until("share request ends", `return !acMedia.useMedia.getState().displayRequests.b;`, 3000);
+      await run(`${openShare} return true;`);
+      const again = await until("share picker again", `return first("media.sharePicker").then((r) => r && r.opacity > 0.99 ? r : null);`, 3000);
+      const below = [Math.round(again.card[0] + again.card[2] / 2), Math.round(again.card[1] + again.card[3] + 40)];
+      await run(`return click(${JSON.stringify(below)}).then(() => true);`);
     } else {
       await run(`acMedia.useMedia.setState((m) => { const d = { ...m.displayRequests }; delete d.b; return { displayRequests: d }; }); return true;`);
     }

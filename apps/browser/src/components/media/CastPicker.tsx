@@ -15,7 +15,6 @@ const WIDTH = 340;
 const SINK_ICON: Record<number, string> = { 0: "tv", 1: "hifispeaker.2", 2: "hifispeaker", 6: "display", 7: "tv" };
 
 const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
-const NATIVE_HEIGHT_GUESS = 120;
 
 const castHandlers: Record<string, (extra: Record<string, unknown>) => void> = {};
 addMediaActions({ castPicker: (_windowId, tabId, extra) => castHandlers[tabId]?.(extra) });
@@ -40,7 +39,6 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
   const windowId = useWindowId();
   const dialog = useCast((c) => c.dialogs[tabId]);
   const [screen, setScreen] = useState(false);
-  const [height, setHeight] = useState(NATIVE_HEIGHT_GUESS);
   useEffect(() => setScreen(false), [dialog?.id]);
   const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
   useEffect(() => {
@@ -53,8 +51,6 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
   handler.current = (extra) => {
     const sink = available.find((s) => s.id === extra.sinkId);
     switch (extra.action) {
-      case "height":
-        return typeof extra.height === "number" && setHeight(extra.height);
       case "cast": {
         const mode = sink && castModeFor(sink, screen);
         return sink && mode ? void startCasting(dialog.id, sink.id, mode) : undefined;
@@ -66,6 +62,7 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
       case "link":
         return void openExternalURL(LOCAL_NETWORK_SETTINGS);
       case "done":
+      case "dismiss":
         return close();
     }
   };
@@ -86,14 +83,9 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
       busy: sink.state === "connecting" || sink.state === "disconnecting",
     })),
     theme: mediaTheme(theme),
+    popover: { width: Math.min(WIDTH, paneWidth - 24), top: POPOVER_MARGIN, right: POPOVER_MARGIN },
   };
-  return (
-    <Popover key={dialog.id} width={Math.min(WIDTH, paneWidth - 24)} top={POPOVER_MARGIN} right={POPOVER_MARGIN} onDismiss={close}>
-      <View style={{ height }}>
-        <NativeMediaView kind="media.castPicker" windowId={windowId} state={state} />
-      </View>
-    </Popover>
-  );
+  return <NativeMediaView key={dialog.id} kind="media.castPicker" windowId={windowId} state={state} />;
 }
 
 function RNCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {

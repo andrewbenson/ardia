@@ -74,38 +74,44 @@ enum NativeMedia {
     }
     HostedViews.register(castPicker) { windowId in
       let view = CastPickerView()
+      let popover = MediaPopoverView(body: view)
       var tabId = ""
-      view.onAction = { event in
+      popover.onDismiss = { action(windowId, "castPicker", tabId, ["action": "dismiss"]) }
+      view.onAction = { [weak popover] event in
         switch event {
         case .cast(let id): action(windowId, "castPicker", tabId, ["action": "cast", "sinkId": id])
         case .stop(let id): action(windowId, "castPicker", tabId, ["action": "stop", "sinkId": id])
         case .source: action(windowId, "castPicker", tabId, ["action": "source"])
         case .link: action(windowId, "castPicker", tabId, ["action": "link"])
         case .done: action(windowId, "castPicker", tabId, ["action": "done"])
-        case .height(let h): action(windowId, "castPicker", tabId, ["action": "height", "height": h])
+        case .height(let h): popover?.set(bodyHeight: CGFloat(h))
         }
       }
-      return content(castPicker, windowId, view) { json in
-        guard let state = CastPickerState.decode(json) else { return }
+      return content(castPicker, windowId, popover) { json in
+        guard let state = CastPickerState.decode(json), let placement = PopoverEnvelope.decode(json) else { return }
         tabId = state.tabId
+        popover.set(placement: placement, dark: state.theme.dark)
         view.update(state)
       }
     }
     HostedViews.register(sharePicker) { windowId in
       let view = SharePickerView()
+      let popover = MediaPopoverView(body: view)
       var tabId = ""
-      view.onAction = { event in
+      popover.onDismiss = { action(windowId, "sharePicker", tabId, ["action": "cancel"]) }
+      view.onAction = { [weak popover] event in
         switch event {
         case .select(let id): action(windowId, "sharePicker", tabId, ["action": "select", "id": id])
         case .share(let id): action(windowId, "sharePicker", tabId, ["action": "share", "id": id ?? NSNull()])
         case .cancel: action(windowId, "sharePicker", tabId, ["action": "cancel"])
         case .audio(let on): action(windowId, "sharePicker", tabId, ["action": "audio", "value": on])
-        case .height(let h): action(windowId, "sharePicker", tabId, ["action": "height", "height": h])
+        case .height(let h): popover?.set(bodyHeight: CGFloat(h))
         }
       }
-      return content(sharePicker, windowId, view, takesFocus: true) { json in
-        guard let state = SharePickerState.decode(json) else { return }
+      return content(sharePicker, windowId, popover, takesFocus: true) { json in
+        guard let state = SharePickerState.decode(json), let placement = PopoverEnvelope.decode(json) else { return }
         tabId = state.tabId
+        popover.set(placement: placement, dark: state.theme.dark)
         view.update(state)
       }
     }
@@ -161,11 +167,20 @@ enum NativeMedia {
       if let bar = view as? ShareBarView {
         return ["primary": bar.primaryTitle, "frames": frames(bar, bar.controlFrames)]
       }
-      if let picker = view as? SharePickerView {
-        return ["height": picker.contentHeight, "selected": picker.selectedId ?? NSNull(), "focused": picker.window?.firstResponder === picker, "frames": frames(picker, picker.controlFrames)]
-      }
-      if let picker = view as? CastPickerView {
-        return ["height": picker.contentHeight, "frame": frames(picker, ["view": picker.bounds])["view"] ?? [], "frames": frames(picker, picker.controlFrames)]
+      if let popover = view as? MediaPopoverView {
+        var row: [String: Any] = [
+          "card": frames(popover, ["card": popover.cardFrame])["card"] ?? [], "progress": popover.progress, "opacity": popover.presentedOpacity,
+          "t": CACurrentMediaTime(), "focused": popover.window?.firstResponder === popover,
+        ]
+        if let picker = popover.body as? SharePickerView {
+          row["height"] = picker.contentHeight
+          row["selected"] = picker.selectedId ?? NSNull()
+          row["frames"] = frames(picker, picker.controlFrames)
+        } else if let picker = popover.body as? CastPickerView {
+          row["height"] = picker.contentHeight
+          row["frames"] = frames(picker, picker.controlFrames)
+        }
+        return row
       }
       if let player = view as? SidebarPlayerView {
         return ["corners": player.cornersShown, "seek": player.seekProgress, "height": player.frame.height, "frames": frames(player, player.controlFrames)]
@@ -180,6 +195,15 @@ enum NativeMedia {
     }
     let json = try? JSONSerialization.data(withJSONObject: rows)
     return json.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+  }
+}
+
+struct PopoverEnvelope: Decodable {
+  let popover: MediaPopoverPlacement
+
+  static func decode(_ json: String) -> MediaPopoverPlacement? {
+    guard let data = json.data(using: .utf8) else { return nil }
+    return (try? JSONDecoder().decode(PopoverEnvelope.self, from: data))?.popover
   }
 }
 

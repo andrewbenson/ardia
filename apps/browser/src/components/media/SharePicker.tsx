@@ -15,7 +15,6 @@ import { useMedia } from "./state";
 import { useWindowId } from "../../store/hooks";
 import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "./nativeMedia";
 
-const NATIVE_HEIGHT_GUESS = 220;
 const shareHandlers: Record<string, (extra: Record<string, unknown>) => void> = {};
 addMediaActions({ sharePicker: (_windowId, tabId, extra) => shareHandlers[tabId]?.(extra) });
 
@@ -107,7 +106,6 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const list = useRef<ScrollView>(null);
   const native = nativeMedia("media.sharePicker");
   const windowId = useWindowId();
-  const [nativeHeight, setNativeHeight] = useState(NATIVE_HEIGHT_GUESS);
   const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
   useEffect(() => {
     if (!native) return;
@@ -166,8 +164,6 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
     handler.current = (extra) => {
       const id = typeof extra.id === "string" ? extra.id : null;
       switch (extra.action) {
-        case "height":
-          return typeof extra.height === "number" && setNativeHeight(extra.height);
         case "select":
           return id && setSelected(id);
         case "share":
@@ -194,14 +190,9 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
       audio: selectedKind && request.audio && audioOffered(selectedKind, request.audio) ? { label: audioLabel(selectedKind, request.audio), value: shareAudio[selectedKind] } : null,
       tileWidth: (width - 2 * PANEL.rowInset - 8) / 2,
       theme: mediaTheme(theme),
+      popover: { width, top: POPOVER_MARGIN, left: (paneWidth - width) / 2 },
     };
-    return (
-      <Popover key={request.id} width={width} top={POPOVER_MARGIN} left={(paneWidth - width) / 2} onDismiss={cancel}>
-        <View style={{ height: nativeHeight }}>
-          <NativeMediaView kind="media.sharePicker" windowId={windowId} state={state} />
-        </View>
-      </Popover>
-    );
+    return <NativeMediaView key={request.id} kind="media.sharePicker" windowId={windowId} state={state} />;
   }
 
   return (

@@ -30,14 +30,19 @@ struct TabViewPlanTests {
     #expect(ops == [.hide("a", "w1", adopt: false), .visible("a", false)])
   }
 
-  @Test func warmTabsStayVisibleWhileHidden() {
-    let ops = TabViewPlan.plan(wanted: [want("m", "w1", .none, warm: true)], slots: [.card("w1")], current: ["m": .hidden("w1")], visible: ["m": false])
-    #expect(ops == [.visible("m", true)])
+  @Test func aTabWithNoSlotIsNeverVisibleEvenWhenWarm() {
+    let ops = TabViewPlan.plan(wanted: [want("m", "w1", .none, warm: true), want("h", "w1", .none)], slots: [], current: ["m": .hidden("w1"), "h": .slot(.card("w1"))], visible: ["m": true, "h": true])
+    #expect(ops == [.hide("h", "w1", adopt: false), .visible("h", false), .visible("m", false)])
   }
 
-  @Test func aFrozenTabIsNeverMadeVisibleByAPark() {
-    let ops = TabViewPlan.plan(wanted: [want("f", "w1", .none, frozen: true)], slots: [.card("w1")], current: ["f": .slot(.card("w1"))], visible: ["f": false])
-    #expect(ops == [.hide("f", "w1", adopt: false)])
+  @Test func warmNeighboursWaitBehindTheCardNotVisible() {
+    let ops = TabViewPlan.plan(wanted: [want("a"), want("m", "w1", .none, warm: true)], slots: [.card("w1")], current: ["a": .slot(.card("w1")), "m": .hidden("w1")], visible: ["a": true, "m": false])
+    #expect(ops == [.behind("m", .card("w1"), adopt: false)])
+  }
+
+  @Test func aFrozenTabIsNeverMadeVisible() {
+    let ops = TabViewPlan.plan(wanted: [want("f", "w1", .card, frozen: true)], slots: [.card("w1")], current: ["f": .hidden("w1")], visible: ["f": false])
+    #expect(ops == [.attach("f", .card("w1"), adopt: false)])
   }
 
   @Test func aCrossWindowMoveAdoptsWithoutRecreating() {

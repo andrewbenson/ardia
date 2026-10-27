@@ -15,6 +15,7 @@ public enum TabSlotKey: Hashable, Sendable {
 
 public enum TabViewPlace: Equatable, Sendable {
   case slot(TabSlotKey)
+  case behind(TabSlotKey)
   case hidden(String)
 }
 
@@ -46,6 +47,7 @@ public enum TabViewOp: Equatable, Sendable {
   case create(String, String)
   case attach(String, TabSlotKey, adopt: Bool)
   case hide(String, String, adopt: Bool)
+  case behind(String, TabSlotKey, adopt: Bool)
   case visible(String, Bool)
 }
 
@@ -63,7 +65,7 @@ public enum TabViewPlan {
 
   static func windowOf(_ place: TabViewPlace) -> String {
     switch place {
-    case .slot(let key): return key.windowId
+    case .slot(let key), .behind(let key): return key.windowId
     case .hidden(let w): return w
     }
   }
@@ -78,6 +80,8 @@ public enum TabViewPlan {
       if let key = slot(for: w, in: slots), !claimed.contains(key) {
         claimed.insert(key)
         targets.append((w, .slot(key)))
+      } else if w.warm, slots.contains(.card(w.windowId)) {
+        targets.append((w, .behind(.card(w.windowId))))
       } else {
         targets.append((w, .hidden(w.windowId)))
       }
@@ -89,13 +93,18 @@ public enum TabViewPlan {
       if now != place { ops.append(.hide(w.tabId, window, adopt: windowOf(now) != window)) }
     }
     for (w, place) in targets {
+      guard case .behind(let key) = place else { continue }
+      let now = current[w.tabId] ?? .hidden(w.windowId)
+      if now != place { ops.append(.behind(w.tabId, key, adopt: windowOf(now) != key.windowId)) }
+    }
+    for (w, place) in targets {
       guard case .slot(let key) = place else { continue }
       let now = current[w.tabId] ?? .hidden(w.windowId)
       if now != place { ops.append(.attach(w.tabId, key, adopt: windowOf(now) != key.windowId)) }
     }
-    for (w, place) in targets where !w.frozen {
+    for (w, place) in targets {
       let shown: Bool
-      if case .slot = place { shown = true } else { shown = w.warm }
+      if case .slot = place { shown = !w.frozen } else { shown = false }
       if visible[w.tabId] != shown { ops.append(.visible(w.tabId, shown)) }
     }
     return ops
@@ -111,6 +120,7 @@ public enum TabViewPlan {
       case .create(let id, let w): places[id] = .hidden(w)
       case .attach(let id, let key, _): places[id] = .slot(key)
       case .hide(let id, let w, _): places[id] = .hidden(w)
+      case .behind(let id, let key, _): places[id] = .behind(key)
       case .visible(let id, let on): shown[id] = on
       }
     }

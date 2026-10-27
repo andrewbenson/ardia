@@ -114,8 +114,25 @@ final class NativePanelView: ExpoView {
   private var install: ExtensionInstallView?
   private var pins: ExtensionPinsView?
   private var markUri: String?
+  private var popover: PopoverView?
 
   override var isFlipped: Bool { true }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+
+  private var bodyHeight: CGFloat = 0
+
+  private func reportHeight(_ h: CGFloat) {
+    bodyHeight = h
+    if popover != nil {
+      DispatchQueue.main.async { [weak self] in self?.popover?.set(bodyHeight: h) }
+    } else {
+      onPanelHeight(["height": h])
+    }
+  }
 
   func setState(_ next: String) {
     json = next
@@ -126,6 +143,7 @@ final class NativePanelView: ExpoView {
     let key = kind + "\u{1}" + json
     guard !kind.isEmpty, key != applied, let data = json.data(using: .utf8) else { return }
     applied = key
+    defer { placePopover(data) }
     switch kind {
     case "zoom":
       guard let state = try? JSONDecoder().decode(ZoomPanelState.self, from: data) else { return }
@@ -142,7 +160,7 @@ final class NativePanelView: ExpoView {
       let body = history ?? make { HistoryPanelView(frame: .zero) }
       if history == nil {
         body.favicons.loader = { request in try await NativeSidebar.favicon(request) }
-        body.onHeight = { [weak self] h in self?.onPanelHeight(["height": h]) }
+        body.onHeight = { [weak self] h in self?.reportHeight(h) }
       }
       history = body
       body.onEvent = { [weak self] e in
@@ -171,7 +189,7 @@ final class NativePanelView: ExpoView {
 
   private func dialog<Body: ExtensionDialogBody>(_ build: () -> Body) -> Body {
     let body = make(build)
-    body.onHeight = { [weak self] h in self?.onPanelHeight(["height": h]) }
+    body.onHeight = { [weak self] h in self?.reportHeight(h) }
     body.onEvent = { [weak self] e in
       switch e {
       case .cancel: self?.onPanelEvent(["kind": "cancel"])
@@ -203,10 +221,36 @@ final class NativePanelView: ExpoView {
 
   private func make<Body: NSView>(_ build: () -> Body) -> Body {
     let body = build()
-    body.autoresizingMask = [.width, .height]
-    body.frame = bounds
-    if let zoom = body as? ZoomPanelView { zoom.onHeight = { [weak self] h in self?.onPanelHeight(["height": h]) } }
-    addSubview(body)
+    if let zoom = body as? ZoomPanelView { zoom.onHeight = { [weak self] h in self?.reportHeight(h) } }
+    if let data = json.data(using: .utf8), PanelPopover.placement(data) != nil {
+      let made = PopoverView(body: body)
+      made.autoresizingMask = [.width, .height]
+      made.frame = bounds
+      made.onDismiss = { [weak self] in self?.onPanelEvent(["kind": "dismiss"]) }
+      addSubview(made)
+      popover = made
+    } else {
+      body.autoresizingMask = [.width, .height]
+      body.frame = bounds
+      addSubview(body)
+    }
     return body
   }
+
+  private func placePopover(_ data: Data) {
+    guard let popover, let placement = PanelPopover.placement(data) else { return }
+    popover.set(placement: placement, dark: PanelPopover.dark(data))
+    if bodyHeight > 0 { popover.set(bodyHeight: bodyHeight) }
+  }
+}
+
+enum PanelPopover {
+  private struct Envelope: Decodable {
+    let popover: PopoverPlacement?
+    let dark: Bool?
+  }
+
+  static func placement(_ data: Data) -> PopoverPlacement? { (try? JSONDecoder().decode(Envelope.self, from: data))?.popover }
+
+  static func dark(_ data: Data) -> Bool { (try? JSONDecoder().decode(Envelope.self, from: data))?.dark ?? false }
 }

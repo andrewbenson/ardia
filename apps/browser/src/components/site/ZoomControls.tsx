@@ -37,16 +37,21 @@ export function ZoomPopover({ tabId, right, left, top }: { tabId: string; right?
   const zoom = useTab(tabId)?.zoom ?? 1;
   if (nativeToolbarAvailable()) {
     return (
-      <Popover width={ZOOM_POPOVER_WIDTH} top={top} right={right} left={left} onDismiss={() => setPopover(tabId, null)}>
-        <View style={{ height: ZOOM_BAR }}>
-          <NativePanelView
-            kind="zoom"
-            style={StyleSheet.absoluteFill}
-            state={JSON.stringify({ zoom, dark: !!theme.dark, theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, toolbarHover: theme.toolbarHover, toolbarPressed: theme.toolbarPressed, icon: theme.icon } })}
-            onPanelEvent={(e) => e.nativeEvent.kind === "step" && void webviews.get(tabId)?.zoomStep(Math.sign(Number(e.nativeEvent.step)) as -1 | 0 | 1)}
-          />
-        </View>
-      </Popover>
+      <NativePanelView
+        kind="zoom"
+        style={StyleSheet.absoluteFill}
+        pointerEvents="box-none"
+        state={JSON.stringify({
+          zoom,
+          dark: !!theme.dark,
+          theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, toolbarHover: theme.toolbarHover, toolbarPressed: theme.toolbarPressed, icon: theme.icon },
+          popover: { width: ZOOM_POPOVER_WIDTH, top, right: right ?? null, left: left ?? null },
+        })}
+        onPanelEvent={(e) => {
+          if (e.nativeEvent.kind === "dismiss") return setPopover(tabId, null);
+          if (e.nativeEvent.kind === "step") void webviews.get(tabId)?.zoomStep(Math.sign(Number(e.nativeEvent.step)) as -1 | 0 | 1);
+        }}
+      />
     );
   }
   return (

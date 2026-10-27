@@ -1,5 +1,5 @@
 import { MouseArea, Symbol } from "@ardia/shell";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { nativeToolbarAvailable, NativePanelView, type NativePanelEvent } from "@ardia/settings";
 import { useTheme } from "../../lib/theme";
@@ -39,25 +39,29 @@ export function HistoryPopover({ tabId, windowId, anchors }: { tabId: string; wi
   const left = Math.max(POPOVER_MARGIN, (menu.direction < 0 ? anchors.back : anchors.forward) - FAVICON_X - 2);
   if (nativeToolbarAvailable()) {
     return (
-      <Popover width={WIDTH} top={POPOVER_MARGIN} left={left} onDismiss={closeHistoryMenu}>
-        <NativeHistoryBody
-          state={JSON.stringify({
-            items: menu.items.map((item) => ({ title: item.title, url: item.url, favicon: favicons.get(item.url) ?? null, newTab: item.offset === "newTab" })),
-            profileId,
-            dark: !!theme.dark,
-            theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, icon: theme.icon },
-            newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
-          })}
-          onEvent={(e) => {
-            if (e.kind === "fullHistory") {
-              closeHistoryMenu();
-              return openInternalPage("history", windowId);
-            }
-            const item = menu.items[Number(e.index)];
-            if (item) open(item, { metaKey: !!e.metaKey, shiftKey: !!e.shiftKey, altKey: !!e.altKey, middle: !!e.middle });
-          }}
-        />
-      </Popover>
+      <NativePanelView
+        kind="history"
+        style={StyleSheet.absoluteFill}
+        pointerEvents="box-none"
+        state={JSON.stringify({
+          items: menu.items.map((item) => ({ title: item.title, url: item.url, favicon: favicons.get(item.url) ?? null, newTab: item.offset === "newTab" })),
+          profileId,
+          dark: !!theme.dark,
+          theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, icon: theme.icon },
+          newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
+          popover: { width: WIDTH, top: POPOVER_MARGIN, left },
+        })}
+        onPanelEvent={(e) => {
+          const ev = e.nativeEvent as NativePanelEvent & { index?: unknown; metaKey?: unknown; shiftKey?: unknown; altKey?: unknown; middle?: unknown };
+          if (ev.kind === "dismiss") return closeHistoryMenu();
+          if (ev.kind === "fullHistory") {
+            closeHistoryMenu();
+            return openInternalPage("history", windowId);
+          }
+          const item = menu.items[Number(ev.index)];
+          if (item) open(item, { metaKey: !!ev.metaKey, shiftKey: !!ev.shiftKey, altKey: !!ev.altKey, middle: !!ev.middle });
+        }}
+      />
     );
   }
 
@@ -149,11 +153,3 @@ function ActionRow({ icon, title, onPress }: { icon: string; title: string; onPr
   );
 }
 
-function NativeHistoryBody({ state, onEvent }: { state: string; onEvent: (e: NativePanelEvent & { index?: unknown; metaKey?: unknown; shiftKey?: unknown; altKey?: unknown; middle?: unknown }) => void }) {
-  const [height, setHeight] = useState<number | null>(null);
-  return (
-    <View style={{ height: height ?? undefined, minHeight: 1 }}>
-      <NativePanelView kind="history" style={StyleSheet.absoluteFill} state={state} onPanelEvent={(e) => onEvent(e.nativeEvent)} onPanelHeight={(e) => setHeight(e.nativeEvent.height)} />
-    </View>
-  );
-}

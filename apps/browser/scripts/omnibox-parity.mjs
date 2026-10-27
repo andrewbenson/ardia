@@ -62,6 +62,11 @@ const scripts = {
   "tab accepts the inline completion": { bar: "panel", steps: [...typing("mai"), k("Tab")] },
   "a pasted newline becomes a space": { bar: "panel", steps: [t("hacker\nnews")] },
   "localhost and urls": { bar: "panel", steps: [t("localhost:3000"), t("foo/"), t("münchen.de"), t("a.b")] },
+  "command return opens the row in a new tab": { bar: "panel", nav: true, steps: [t("localhost:3000/x"), k("Enter", { metaKey: true })] },
+  "option return opens the row in a new tab": { bar: "panel", nav: true, steps: [t("localhost:3000/x"), k("Enter", { altKey: true })] },
+  "shift command return searches what was typed": { bar: "panel", nav: true, steps: [t("hacker"), k("Enter", { metaKey: true, shiftKey: true })] },
+  "shift return opens a new window": { bar: "panel", nav: true, steps: [t("localhost:3000/x"), k("Enter", { shiftKey: true })] },
+  "control return adds www and com": { bar: "panel", nav: true, steps: [t("example"), k("Enter", { ctrlKey: true })] },
 };
 
 const pick = (s) => ({
@@ -86,8 +91,15 @@ async function start(native) {
   return instance;
 }
 
+const navState = `(() => { const S = ac.store.getState(); const w = Object.keys(S.windows)[0]; const win = S.windows[w];
+  const norm = (u) => { try { const x = new URL(u); const q = x.searchParams.get("q"); return x.origin + x.pathname + (q ? "?q=" + q : ""); } catch { return u; } };
+  const active = norm(S.tabs[win.activeTabIds[win.profileId]]?.url ?? "");
+  const opened = Object.values(S.tabs).filter((t) => !globalThis.__parityTabs.includes(t.id)).map((t) => \`\${t.windowId === w ? "same" : "other"} \${norm(t.url)}\`).sort();
+  return { windows: Object.keys(S.windows).length, active, opened }; })()`;
+
 async function run(instance, script) {
   const states = [];
+  if (script.nav) await instance.eval(`globalThis.__parityTabs = Object.keys(ac.store.getState().tabs); return 1;`);
   const opened = await instance.eval(`
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const S = () => ac.store.getState();
@@ -114,9 +126,13 @@ async function run(instance, script) {
       : kind === "select" ? `d.select(${a}, ${b})`
       : "0";
     const s = await instance.eval(`const d = ac.omnibox.get(${JSON.stringify(id)}); return Promise.resolve(${call})
-      .then(() => new Promise((r) => setTimeout(r, 300))).then(() => ac.omnibox.get(${JSON.stringify(id)})?.state() ?? null);`);
-    states.push(s ? pick(s) : null);
+      .then(() => new Promise((r) => setTimeout(r, ${script.nav ? 900 : 300}))).then(() => ${script.nav ? navState : `ac.omnibox.get(${JSON.stringify(id)})?.state() ?? null`});`);
+    states.push(script.nav ? s : s ? pick(s) : null);
   }
+  if (script.nav) await instance.eval(`const S = ac.store.getState(); const w = Object.keys(S.windows)[0];
+    for (const t of Object.values(S.tabs)) if (!globalThis.__parityTabs.includes(t.id)) S.closeTab(t.id);
+    for (const id of Object.keys(S.windows)) if (id !== w) S.closeWindow?.(id);
+    return new Promise((r) => setTimeout(r, 600)).then(() => 1);`);
   await instance.eval(`const S = ac.store.getState(); const w = Object.keys(S.windows)[0]; S.closePanel(w);
     for (const t of Object.values(S.tabs)) if (t.windowId === w && !t.url && Object.values(S.tabs).filter((x) => x.windowId === w).length > 2) S.closeTab(t.id);
     return 1;`);
@@ -142,7 +158,7 @@ try {
         failures++;
         console.log(`FAIL ${name}`);
         for (const d of diffs.slice(0, 8)) console.log(`  ${d}`);
-      } else console.log(`PASS ${name}`);
+      } else console.log(`PASS ${name}${script.nav ? `  ${JSON.stringify(b[b.length - 1])}` : ""}`);
     } catch (e) {
       failures++;
       console.log(`FAIL ${name}: ${e.message.split("\n")[0]}`);

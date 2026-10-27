@@ -18,10 +18,8 @@ public final class SidebarView: NSView {
   private let boxes = SidebarLayer()
   let rows = SidebarLayer()
   private let dock = SidebarLayer()
-  private let dockLine = CALayer()
   private let pill = SidebarActivePill()
   private var pillShown = false
-  private var dockLineShown = false
   var views: [String: NSView] = [:]
   private var hoveredKey: String?
   private var hoveredGroup: String?
@@ -61,9 +59,6 @@ public final class SidebarView: NSView {
     addSubview(fixed)
     addSubview(dock)
     dock.wantsLayer = true
-    dockLine.actions = SurfaceLayer.noActions
-    dockLine.opacity = 0
-    dock.layer?.addSublayer(dockLine)
     pill.alphaValue = 0
     pill.onPress = { [weak self] in self?.revealActive() }
     addSubview(pill)
@@ -253,11 +248,6 @@ public final class SidebarView: NSView {
     boxes.frame = NSRect(x: inset, y: 0, width: width - inset * 2, height: docHeight)
     rows.frame = boxes.frame
     dock.frame = bounds
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    dockLine.frame = CGRect(x: 0, y: layout.scrollBottom, width: width, height: 0.5)
-    dockLine.backgroundColor = context.palette.scrollEdge.cgColor
-    CATransaction.commit()
     let pillSize = SidebarActivePill.size
     pill.frame = NSRect(
       x: ((width - pillSize.width) / 2).rounded(), y: layout.scrollBottom - SidebarActivePill.gapAboveDock - pillSize.height,
@@ -429,8 +419,6 @@ public final class SidebarView: NSView {
   private func syncPill() {
     let top = scroll.contentView.bounds.minY
     let viewport = scroll.frame.height
-    dockLine.frame.origin.y = pageLayout.scrollBottom
-    fade(dockLine, shown: pageLayout.docked && top + viewport < document.frame.height - 0.5, was: &dockLineShown)
     var shown = false
     if let context, let active = context.activeId, let tab = context.state.tabs[active], let item = scrollItem(active, context),
       viewport > 0, item.frame.maxY <= top || item.frame.minY >= top + viewport

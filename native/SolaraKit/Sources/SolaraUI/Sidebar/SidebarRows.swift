@@ -457,8 +457,8 @@ final class TabRowView: SidebarRowView {
     spinner?.frame = NSRect(x: right - 14, y: (h - 12) / 2, width: 12, height: 12)
     let titleWidth = max(0, right - slot - x)
     if developer {
-      label.frame = NSRect(x: x, y: (h - 30) / 2, width: titleWidth, height: 16)
-      subtitle?.frame = NSRect(x: x, y: (h - 30) / 2 + 16, width: titleWidth, height: 14)
+      label.frame = NSRect(x: x, y: (h - 30) / 2 + 14, width: titleWidth, height: 16)
+      subtitle?.frame = NSRect(x: x, y: (h - 30) / 2, width: titleWidth, height: 14)
     } else {
       label.frame = NSRect(x: x, y: (h - 18) / 2, width: titleWidth, height: 18)
     }

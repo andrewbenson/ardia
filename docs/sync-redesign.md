@@ -836,6 +836,18 @@ nightlies start earliest. Nothing of the old guard is removed until what replace
 - Every adapter returns a set; an already-equal key counts as written; `applyAdapter` sets base
   and clears `unapplied` only for those. The passwords conflict skip and `pgh:` stop returning ok.
 - Green: the P1 apply half (P1 still needs step 3 to be fully green); unit tests per adapter.
+- **What landed (0f09f36b, then the livelock fix):** `apply` may return a Set; `true` or nothing
+  still means "every changed key written". Only the two adapters that skipped a key they'd otherwise
+  write return a Set (passwords, `pgh:`). The rest were audited and keep `true`, since each writes
+  every changed key or ignores keys outside what it syncs: `set:` (names outside `SYNCED_SETTINGS`),
+  `prof:`, `pth:`, `share:`, `dev:`, `devmode:`, `bm:`, `h:` (URLs `keptInHistory` refuses, visits
+  outside the window), `tabs:`, the pinned family (`pin`, `pord:`, `pinrow:`, `pgc:`, `tilefold:`)
+  and `ext:`. Making a Set the only return type would mean editing every test's fake adapter,
+  which the switch-off rule forbids; step 6, which needs per-key results everywhere, makes it so.
+- **Kept keys don't hold the settle wait** (step 1 review). A login kept here over the folder's
+  value is left out of the read-back wait. Otherwise, with the switch on, every 15 s cycle re-ran
+  apply on it, waited 5 s, and pushed the 30 s quiet ahead, so the edit was never published
+  (step1-pw-livelock tests, at 15, 29 and 31 s cycles).
 - Small and mechanical, but it touches every adapter, so it goes first and alone.
 
 **Step 2. Login Data's row and the dated read** (engine).

@@ -11,6 +11,7 @@ import { sanitizeTheme } from "../lib/profileTheme";
 import { developerModeOf } from "../lib/developerMode";
 import { fromLegacy } from "../legacy";
 import type { BookmarkNode, HistoryEntry, Profile, ProfileTheme } from "../store/types";
+import { syncRedesign } from "./redesignSwitch";
 
 const store = () => useBrowser.getState();
 
@@ -514,11 +515,15 @@ export function passwordsAdapter(
       const local = await read();
       if (!local) return false;
       let ok = true;
+      const keptHere = new Set<string>();
       for (const key of changed) {
         const v = visible.get(key) as PasswordValue | undefined;
         const have = local.get(key);
         const known = base(key) as PasswordValue | undefined;
-        if (have && known?.p !== have.p) continue;
+        if (have && known?.p !== have.p) {
+          keptHere.add(key);
+          continue;
+        }
         const [origin, username] = [key.slice(3, key.indexOf("\n")), key.slice(key.indexOf("\n") + 1)];
         if (v) {
           if (have?.p === v.p) continue;
@@ -533,7 +538,7 @@ export function passwordsAdapter(
       let settled = false;
       for (let i = 0; i < 20 && !settled; i++) {
         latest = await read();
-        settled = [...changed].every((k) => confirmed(latest, k));
+        settled = [...changed].every((k) => (syncRedesign.on && keptHere.has(k)) || confirmed(latest, k));
         if (!settled) await new Promise((r) => setTimeout(r, 250));
       }
       if (!settled) quietUntil = Date.now() + 30_000;

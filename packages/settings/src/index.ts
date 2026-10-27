@@ -56,3 +56,4 @@ export * from "./newTab";
 export * from "./hosted";
 export * from "./omnibox";
 export * from "./toolbar";
+export * from "./findBar";

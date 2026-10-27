@@ -21,6 +21,8 @@ public struct NewTabTheme: Equatable, Sendable {
   public var ntpBarBorder: CSSColor
   public var toolbarHover: CSSColor
   public var toolbarPressed: CSSColor
+  public var icon: CSSColor
+  public var iconDisabled: CSSColor
 
   public static let keys = NewTabThemeTokens.keys
 
@@ -46,6 +48,8 @@ public struct NewTabTheme: Equatable, Sendable {
     ntpBarBorder = c("ntpBarBorder")
     toolbarHover = c("toolbarHover")
     toolbarPressed = c("toolbarPressed")
+    icon = c("icon")
+    iconDisabled = c("iconDisabled")
   }
 
   public static let fallbackDark = NewTabTheme(dark: true, tokens: [:])

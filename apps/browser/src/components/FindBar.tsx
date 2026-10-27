@@ -10,6 +10,7 @@ import { useFind } from "../store/hooks";
 import type { FindState } from "../store/types";
 import { IconButton, useHover } from "./primitives";
 import { replaceInField } from "./site/selection";
+import { nativeToolbarAvailable, NativeFindBarView, type NativeFindEvent } from "@ardia/settings";
 
 export function FindBar({ tabId }: { tabId: string }) {
   const hasPage = useBrowser((s) => !!s.tabs[tabId]?.url);
@@ -32,6 +33,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
   const nextHint = useShortcutHint("findNext");
   const theme = useTheme();
   const input = useRef<TextInput>(null);
+  const nativeRef = useRef<View>(null);
   const appear = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(appear, { toValue: 1, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -40,6 +42,7 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
     const request = find.focusRequest;
     if (!request || handledFocus.get(tabId) === request) return;
     handledFocus.set(tabId, request);
+    if (nativeToolbarAvailable()) return;
     input.current?.focus();
     input.current?.setSelection(0, find.query.length);
     const windowId = useBrowser.getState().tabs[tabId]?.windowId;
@@ -75,6 +78,36 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
   const separator = theme.dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
   const error = theme.dark ? "#FF6B63" : "#C93333";
 
+  const nativeState = nativeToolbarAvailable()
+    ? JSON.stringify({
+        query: find.query,
+        count: find.count,
+        active: find.active,
+        replace: !!find.replace,
+        note: note?.text ?? null,
+        noteError: !!note?.error,
+        focusRequest: find.focusRequest ?? 0,
+        previousTooltip: withShortcut("Previous", previousHint),
+        nextTooltip: withShortcut("Next", nextHint),
+        dark: !!theme.dark,
+        theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, placeholder: theme.placeholder, selection: theme.selection, toolbarHover: theme.toolbarHover, toolbarPressed: theme.toolbarPressed, icon: theme.icon, iconDisabled: theme.iconDisabled, rowHover: theme.rowHover },
+      })
+    : null;
+  const onNativeEvent = (e: NativeFindEvent) => {
+    if (e.kind === "query") {
+      setFind({ query: e.text });
+      run(false, e.text, false);
+    } else if (e.kind === "step") run(e.backwards);
+    else if (e.kind === "close") close();
+    else if (e.kind === "replacement") setReplacement(e.text);
+    else if (e.kind === "replace") void replace(e.all);
+    else if (e.kind === "focused") {
+      const windowId = useBrowser.getState().tabs[tabId]?.windowId;
+      if (windowId) claimFocusTag(windowId, findFocus(tabId), () => findNodeHandle(nativeRef.current));
+      if (find.query) void webviews.get(tabId)?.find(find.query, true, false);
+    }
+  };
+
   return (
     <Animated.View
       style={{
@@ -96,6 +129,12 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
         shadowOffset={[0, 6]}
         style={{ width: 340 }}
       >
+        {nativeState ? (
+          <View ref={nativeRef} style={{ height: find.replace ? 79 : 40 }}>
+            <NativeFindBarView style={StyleSheet.absoluteFill} state={nativeState} onFindEvent={(e) => onNativeEvent(e.nativeEvent)} />
+          </View>
+        ) : (
+        <>
         <View style={{ height: 40, flexDirection: "row", alignItems: "center", paddingLeft: 11, paddingRight: 4, gap: 2 }}>
           <Symbol name="magnifyingglass" size={13} color={theme.textSecondary} style={{ width: 16, height: 16, marginRight: 5 }} />
           <TextInput
@@ -153,6 +192,8 @@ function FindBarPanel({ tabId, find }: { tabId: string; find: FindState }) {
             <TextButton title="Replace" disabled={!find.query} onPress={() => void replace(false)} />
             <TextButton title="All" disabled={!find.query} onPress={() => void replace(true)} />
           </View>
+        )}
+        </>
         )}
       </Surface>
     </Animated.View>

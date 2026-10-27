@@ -964,6 +964,9 @@ final class FocusHandoff {
   private var epochs: [Int: Int] = [:]
   private var releases: [UInt16: Release] = [:]
   private var closedAt: [Int: TimeInterval] = [:]
+  private var barCommittedAt: [Int: TimeInterval] = [:]
+  private static let barCommitFence: TimeInterval = 0.3
+  static let barCommitted = Notification.Name("SolaraBarCommitted")
   private var typedAfterGate: [Int: TimeInterval] = [:]
   private weak var acknowledged: NSEvent?
   private(set) var trace: [String] = []
@@ -998,6 +1001,11 @@ final class FocusHandoff {
   }
 
   func defers(_ action: Selector) -> Bool {
+    if let window = NSApp.keyWindow, let at = barCommittedAt[window.windowNumber], ProcessInfo.processInfo.systemUptime - at < Self.barCommitFence {
+      note("drop \(action): the bar committed")
+      NSSound.beep()
+      return true
+    }
     guard let window = NSApp.keyWindow, let gate = gates[ObjectIdentifier(window)], live(gate) else {
       return dropsLateAcknowledgement(action, in: NSApp.keyWindow)
     }
@@ -1102,6 +1110,11 @@ final class FocusHandoff {
       guard let self, let window = note.object as? NSWindow else { return }
       self.closedAt[window.windowNumber] = nil
       self.typedAfterGate[window.windowNumber] = nil
+      self.barCommittedAt[window.windowNumber] = nil
+    }
+    center.addObserver(forName: Self.barCommitted, object: nil, queue: .main) { [weak self] note in
+      guard let self, let window = note.object as? NSWindow else { return }
+      self.barCommittedAt[window.windowNumber] = ProcessInfo.processInfo.systemUptime
     }
   }
 

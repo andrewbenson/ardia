@@ -32,7 +32,7 @@ final class HeroTextField: NSTextField {
 
 @MainActor
 final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldControl {
-  let model: HeroBarModel
+  var model: HeroBarModel
   weak var field: HeroTextField?
   private var applying = false
   private var before: TextSelection?
@@ -70,6 +70,21 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
   }
 
   static let fittingTextLeft: CGFloat = 2.5
+
+  static let commandKeys: [Selector: Set<UInt16>] = [
+    #selector(NSResponder.cancelOperation(_:)): [53], #selector(NSResponder.moveDown(_:)): [125], #selector(NSResponder.moveUp(_:)): [126],
+    #selector(NSResponder.scrollPageUp(_:)): [116], #selector(NSResponder.pageUp(_:)): [116], #selector(NSResponder.scrollPageDown(_:)): [121],
+    #selector(NSResponder.pageDown(_:)): [121], #selector(NSResponder.insertTab(_:)): [48], #selector(NSResponder.insertBacktab(_:)): [48],
+    #selector(NSResponder.deleteBackward(_:)): [51], #selector(NSResponder.deleteForward(_:)): [117], #selector(NSResponder.insertNewline(_:)): [36, 76],
+    #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)): [36, 76], #selector(NSResponder.insertLineBreak(_:)): [36, 76],
+  ]
+
+  static func flags(for selector: Selector) -> NSEvent.ModifierFlags {
+    if let event = NSApp.currentEvent, event.type == .keyDown, commandKeys[selector]?.contains(event.keyCode) ?? true {
+      return event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    }
+    return NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+  }
   private weak var watchedEditor: NSView?
 
   private func watchEditorFrame(_ editor: NSText) {
@@ -96,6 +111,13 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
     }
     let leftmost = clip.constrainBoundsRect(NSRect(origin: NSPoint(x: -10_000, y: clip.bounds.origin.y), size: clip.bounds.size)).origin.x
     if clip.bounds.origin.x != leftmost { clip.scroll(to: NSPoint(x: leftmost, y: clip.bounds.origin.y)) }
+  }
+
+  func releaseFocus() {
+    guard let field, let window = field.window else { return }
+    NotificationCenter.default.post(name: Notification.Name("SolaraBarCommitted"), object: window)
+    let responder = window.firstResponder as? NSView
+    if holdsFocus || (responder.map { $0 === field || $0.isDescendant(of: field) } ?? false) { window.makeFirstResponder(nil) }
   }
 
   func focusField() {
@@ -143,7 +165,7 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
   func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
     if textView.hasMarkedText() { return false }
     if selector == #selector(NSResponder.deleteBackward(_:)) && !textView.string.isEmpty { return false }
-    let flags = NSApp.currentEvent?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []
+    let flags = HeroFieldCoordinator.flags(for: selector)
     func key(_ name: HeroKey.Name) -> HeroKey {
       HeroKey(name, shift: flags.contains(.shift), alt: flags.contains(.option), meta: flags.contains(.command), ctrl: flags.contains(.control))
     }
@@ -200,6 +222,11 @@ struct HeroFieldView: NSViewRepresentable {
   }
 
   func updateNSView(_ field: HeroTextField, context: Context) {
+    if context.coordinator.model !== model {
+      context.coordinator.model = model
+      field.model = model
+      model.field = context.coordinator
+    }
     style(field)
   }
 

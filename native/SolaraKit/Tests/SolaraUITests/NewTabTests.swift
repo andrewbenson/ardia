@@ -160,6 +160,7 @@ final class FakeHeroField: HeroFieldControl {
     self.selection = selection
   }
   func focusField() { focused += 1 }
+  func releaseFocus() {}
   var fieldSelection: TextSelection { selection }
 }
 

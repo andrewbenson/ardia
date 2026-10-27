@@ -61,6 +61,7 @@ public struct HeroBarEvents {
 public protocol HeroFieldControl: AnyObject {
   func show(value: String, selection: TextSelection)
   func focusField()
+  func releaseFocus()
   var fieldSelection: TextSelection { get }
 }
 
@@ -433,7 +434,7 @@ public final class HeroBarModel {
     guard !url.isEmpty else { return }
     if disposition == .current { events.journey(.navigate) }
     events.open(url, disposition)
-    if disposition != .current { dismiss() }
+    if disposition != .current { dismiss() } else if !hero { field?.releaseFocus() }
   }
 
   func choose(_ s: SolaraOmnibox.Suggestion?, _ disposition: Disposition, byEnter: Bool) {
@@ -459,6 +460,7 @@ public final class HeroBarModel {
       if let tabId, !tabId.isEmpty, !(opensTab && disposition == .newTab) {
         events.switchTo(tabId, url, disposition)
         if hero && disposition == .current { reset() }
+        if !hero && disposition == .current { field?.releaseFocus() }
         return
       }
       go(url, disposition)

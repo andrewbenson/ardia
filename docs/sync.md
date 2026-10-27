@@ -465,7 +465,7 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   survive a Mac on the previous version) and `src/sync/engine.test.mjs` (the engine against a fake native module: a crash the
   moment a batch lands re-sends the journalled batches byte for byte and numbers the next one after
   them; nothing is published before its journal is on disk). `src/sync/engineSafety.test.mjs` and
-  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B71), each
+  `src/sync/engineRecovery.test.mjs` pin each engine bug a review or the oracle found (B1–B72), each
   failing on the commit before its fix.
 - Convergence oracle: `node apps/browser/scripts/native/engineScenario.mjs --oracle <n> --seed <s>`
   runs two Macs in separate processes against the real engine, store and adapters. They edit,

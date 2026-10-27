@@ -1649,3 +1649,45 @@ test("B71: a rebuild isn't held up by a damaged entry the saved state kept for a
   await settle();
   assert.deepEqual(titles(), ["Renamed on B"]);
 });
+
+test("B72: a state that fell back to before it took a password takes the other Mac's newer one, instead of keeping and resending the old", async () => {
+  reset();
+  const here = new Map();
+  shell.passwordStores.set(null, here);
+  native.readPasswords = async () => [...here.values()];
+  const realST = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms) => (ms === 250 ? realSetTimeout(fn, 0) : 0);
+  const realNow = Date.now;
+  try {
+    const engine = await onAndSynced();
+    const syncId = engine.useSync.getState().profiles.default.syncId;
+    const b = passwordMac(`p:${syncId}`);
+    const key = "pw:https://site.example\nme";
+    b.store.set(key, { o: "https://site.example", u: "me", p: "first-from-B" });
+    await b.sync();
+    const older = new Map(shell.docs);
+    Date.now = () => realNow() + 60_000;
+    await engine.syncNow();
+    await settle(60);
+    assert.equal(here.get("https://site.example\nme")?.password, "first-from-B", "control: this Mac took B's password");
+    b.store.set(key, { o: "https://site.example", u: "me", p: "newer-from-B" });
+    await b.sync();
+    shell.docs.clear();
+    for (const [name, contents] of older) shell.docs.set(name, contents);
+    const again = await launch();
+    again.startSync();
+    await settle();
+    for (let i = 2; i <= 4; i++) {
+      Date.now = () => realNow() + i * 60_000;
+      await again.syncNow();
+      await settle(60);
+    }
+    await b.sync();
+    assert.equal(b.store.get(key)?.p, "newer-from-B", `B's newer password survives (B has ${b.store.get(key)?.p})`);
+    assert.equal(here.get("https://site.example\nme")?.password, "newer-from-B");
+  } finally {
+    Date.now = realNow;
+    globalThis.setTimeout = realST;
+    native.readPasswords = realReadPasswords;
+  }
+});

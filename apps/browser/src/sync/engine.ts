@@ -170,6 +170,7 @@ const openRebuild = (): Rebuild => ({ since: Date.now() });
 let baselines = new Map<string, Map<string, Map<string, string>>>();
 const DOWNLOAD_GIVE_UP_MS = 86_400_000;
 const FRESH_WAITS_FOR_DOWNLOADS_MS = 600_000;
+const EDITABLE_WHILE_UNREADABLE = new Set(["pw:"]);
 const STOP_WAITS_FOR_LOAD_MS = 3000;
 let forceRequests = 0;
 const passwordAdapters = new Map<string, Adapter>();
@@ -554,6 +555,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     resendRevival(scope, state, device);
   };
   const ready = new Set<string>();
+  const heldBack = new Set<string>();
   const rebuilding = (prefix: string) => !!state.rebuild && !state.rebuild.settled?.includes(prefix);
   const wrapped = adapters.map(
     (adapter): Adapter => ({
@@ -567,15 +569,16 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         ready.add(adapter.prefix);
         if (!unlooked(adapter.prefix) && !rebuilding(adapter.prefix)) return extraction;
         const unapplied = new Set(state.unapplied);
-        const stale = (key: string, value: unknown) => unapplied.has(key) || fromFolder(key, value);
-        const guarded = guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? fromFolder : stale, rebuilding(adapter.prefix));
+        const stale = (key: string, value: unknown) => (unapplied.has(key) && !EDITABLE_WHILE_UNREADABLE.has(adapter.prefix)) || fromFolder(key, value);
+        const guarded = guardedExtraction(scope, adapter.prefix, state, extraction, known, rebuilding(adapter.prefix) ? fromFolder : stale, rebuilding(adapter.prefix), heldBack);
         looked?.add(adapter.prefix);
         return guarded;
       },
       apply: async (visible, changed, base, records) => {
         if (waiting() || (rebuilding(adapter.prefix) && stillDownloading(state))) return false;
         const before = baselineOf(scope, adapter.prefix);
-        const ok = await adapter.apply(visible, changed, before && rebuilding(adapter.prefix) ? (key) => base(key) ?? parseKept(before.get(key)) : base, records);
+        const standIn = (key: string) => rebuilding(adapter.prefix) || heldBack.has(key);
+        const ok = await adapter.apply(visible, changed, before ? (key) => base(key) ?? (standIn(key) ? parseKept(before.get(key)) : undefined) : base, records);
         if (!before || ok === false) return ok;
         const noted = rebuilding(adapter.prefix) ? notedFor(state, adapter.prefix, before) : null;
         for (const key of changed) {
@@ -691,7 +694,16 @@ function stillDownloading(state: ScopeState): boolean {
   return Object.values(state.pendingSince ?? {}).some((at) => now - at <= DOWNLOAD_GIVE_UP_MS) || Object.keys(state.damaged).some((id) => !state.files[id]);
 }
 
-function guardedExtraction(scope: string, prefix: string, state: Guarded, extraction: Extraction, known: (key: string) => boolean, fromFolder: (key: string, value: unknown) => boolean, rebuilding: boolean): Extraction {
+function guardedExtraction(
+  scope: string,
+  prefix: string,
+  state: Guarded,
+  extraction: Extraction,
+  known: (key: string) => boolean,
+  fromFolder: (key: string, value: unknown) => boolean,
+  rebuilding: boolean,
+  heldBack: Set<string>,
+): Extraction {
   noteBaseline(scope, prefix, extraction);
   const kept = baselineOf(scope, prefix)!;
   const noted = rebuilding ? notedFor(state, prefix, kept) : null;
@@ -724,6 +736,7 @@ function guardedExtraction(scope: string, prefix: string, state: Guarded, extrac
     kept.delete(key);
     if (noted) delete noted[key];
   }
+  for (const key of extraction.values.keys()) if (known(key) && !values.has(key)) heldBack.add(key);
   const deferred = (key: string) => rebuilding || fromFolder(key, extraction.values.get(key) ?? null);
   return {
     values,

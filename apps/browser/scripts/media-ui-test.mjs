@@ -179,6 +179,11 @@ try {
     if (Math.abs(later.marquee - expected) > 0.1) throw new Error(`marquee at ${later.marquee}, RN would be near ${expected}`);
     if (later.elapsed === first.elapsed) throw new Error(`time stood still at ${later.elapsed}`);
     await run(`return Promise.resolve(acMediaHover("w1", null)).then(() => true);`);
+    await until("hover player gone", `return first("media.hoverPlayer").then((r) => !r);`, 3000);
+    await sleep(300);
+    if (await paused()) throw new Error("hiding the hover player paused playback");
+    const after = await run(`return shown();`);
+    if (after !== "b") throw new Error(`hiding the hover player moved to tab ${after}`);
     return { overflow: later.titleOverflow, marquee: later.marquee, expected, elapsed: [first.elapsed, later.elapsed] };
   });
 

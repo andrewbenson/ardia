@@ -54,6 +54,11 @@ const scripts = {
   "escape leaves a scope first": { bar: "panel", steps: [t("youtube.com"), ["keys", " "], k("Escape")] },
   "the dropdown starts with recent pages": { bar: "sidebar", steps: [["noop"], ...typing("wik")] },
   "the new tab bar lists open tabs": { bar: "newTab", steps: [["noop"], k("ArrowDown"), k("ArrowUp"), ...typing("hack"), del(4)] },
+  "right arrow accepts the completion": { bar: "panel", steps: [...typing("git"), ["keys", "\uF703"]] },
+  "backspace after accepting deletes": { bar: "panel", steps: [...typing("git"), ["keys", "\uF703"], del()] },
+  "no completion with the caret before the end": { bar: "panel", steps: [...typing("gi"), ["keys", "\uF702"], ...typing("x")] },
+  "typing over a selection completes": { bar: "panel", steps: [...typing("gi"), ["select", 0, 2], ...typing("g")] },
+  "shift delete removes a history row": { bar: "panel", steps: [...typing("hacker"), k("ArrowDown"), k("Delete", { shiftKey: true })] },
   "localhost and urls": { bar: "panel", steps: [t("localhost:3000"), t("foo/"), t("münchen.de"), t("a.b")] },
 };
 
@@ -104,6 +109,7 @@ async function run(instance, script) {
       kind === "type" ? `d.type(${JSON.stringify(a)})`
       : kind === "key" ? `d.key(${JSON.stringify(a)}, ${JSON.stringify(b)})`
       : kind === "keys" ? `ac.shell.devTypeKeys(${JSON.stringify(opened.w)}, ${JSON.stringify(a)}, 40)`
+      : kind === "select" ? `d.select(${a}, ${b})`
       : "0";
     const s = await instance.eval(`const d = ac.omnibox.get(${JSON.stringify(id)}); return Promise.resolve(${call})
       .then(() => new Promise((r) => setTimeout(r, 300))).then(() => ac.omnibox.get(${JSON.stringify(id)})?.state() ?? null);`);

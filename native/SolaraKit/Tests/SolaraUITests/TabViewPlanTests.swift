@@ -1,3 +1,4 @@
+import AppKit
 import Testing
 @testable import SolaraUI
 
@@ -66,5 +67,27 @@ struct TabViewPlanTests {
     let first = TabViewPlan.plan(wanted: wanted, slots: slots, current: start, visible: ["z": false, "b": true, "e": false])
     let after = TabViewPlan.apply(first, to: start, visible: ["z": false, "b": true, "e": false])
     #expect(TabViewPlan.plan(wanted: wanted, slots: slots, current: after.current, visible: after.visible).isEmpty)
+  }
+}
+
+@MainActor
+struct TabSlotsTests {
+  @Test func removeIsANoOpForAContainerThatIsNoLongerRegistered() {
+    let slots = TabSlots()
+    let first = NSView(), second = NSView()
+    slots.set(.pane("w1", "a"), container: first)
+    slots.set(.pane("w1", "a"), container: second)
+    slots.remove(.pane("w1", "a"), container: first)
+    #expect(slots.container(for: .pane("w1", "a")) === second)
+    slots.remove(.pane("w1", "a"), container: second)
+    #expect(slots.container(for: .pane("w1", "a")) == nil)
+  }
+
+  @Test func keysAreScopedToAWindow() {
+    let slots = TabSlots()
+    slots.set(.card("w1"), container: NSView())
+    slots.set(.peek("w2"), container: NSView())
+    #expect(slots.keys(in: "w1") == [.card("w1")])
+    #expect(slots.keys == [.card("w1"), .peek("w2")])
   }
 }

@@ -140,8 +140,10 @@ public struct DockedLayoutFrames: Equatable, Sendable {
     let size = input.size
     let inset = input.inset
     let dock = input.dock
+    let base = input.addressBarInSidebar && !input.topTabs ? ShellMetrics.arcLightsCenter : ShellMetrics.lightsCenter
     if input.fullscreen {
-      return DockedLayoutFrames(card: CGRect(origin: .zero, size: size), sidebar: nil, sidebarShift: 0, topStrip: nil, lights: nil)
+      let lights = input.topTabs ? nil : DockMotion.lightsCenter(offset: 0, base: base)
+      return DockedLayoutFrames(card: CGRect(origin: .zero, size: size), sidebar: nil, sidebarShift: 0, topStrip: nil, lights: lights)
     }
     let top = input.topTabs ? ShellMetrics.cardTop + (inset.top - ShellMetrics.cardTop) * dock : inset.top
     let left = input.topTabs ? inset.left : inset.left + (input.sidebarWidth - inset.left) * dock
@@ -157,7 +159,6 @@ public struct DockedLayoutFrames: Equatable, Sendable {
     } else {
       sidebar = CGRect(x: input.away ? -10_000 : 0, y: 0, width: width, height: size.height)
     }
-    let base = input.addressBarInSidebar ? ShellMetrics.arcLightsCenter : ShellMetrics.lightsCenter
     let offset = input.peeking ? (width + 12) * (1 - input.peekSlide) - ShellMetrics.peekOrigin.x : width * (1 - dock)
     let lights = DockMotion.lightsCenter(offset: offset, down: input.peeking ? ShellMetrics.peekOrigin.y : 0, base: base)
     let peekIn = input.peeking ? -12 + (width + 12) * input.peekSlide : 0

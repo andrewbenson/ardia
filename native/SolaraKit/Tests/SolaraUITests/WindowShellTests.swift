@@ -200,6 +200,9 @@ struct WindowShellGeometryTests {
     let f = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 1, fullscreen: true))
     #expect(f.card == CGRect(origin: .zero, size: size))
     #expect(f.sidebar == nil)
+    #expect(f.lights == nil)
+    let arc = DockedLayoutFrames.of(DockedLayoutInput(size: size, dock: 1, fullscreen: true, addressBarInSidebar: true))
+    #expect(arc.lights == CGPoint(x: 25, y: 24), "RN still places Arc's lights in full screen")
   }
 }
 
@@ -241,6 +244,17 @@ struct WindowShellViewTests {
     #expect(reported.count == 2)
   }
 
+  @Test func theFillForwardsToTheReactRoot() {
+    let shell = WindowShellView(windowId: "w")
+    #expect(shell.backgroundColor == nil)
+    let react = FilledView()
+    shell.mount(.react, react)
+    shell.backgroundColor = .red
+    #expect(react.backgroundColor == .red)
+    shell.setValue(nil, forKey: "backgroundColor")
+    #expect(react.backgroundColor == nil)
+  }
+
   @Test func theShellItselfTakesNoClicks() {
     let shell = WindowShellView(windowId: "w")
     shell.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
@@ -249,4 +263,8 @@ struct WindowShellViewTests {
     shell.mount(.react, react)
     #expect(shell.hitTest(NSPoint(x: 10, y: 10)) === react)
   }
+}
+
+final class FilledView: NSView {
+  @objc var backgroundColor: NSColor?
 }

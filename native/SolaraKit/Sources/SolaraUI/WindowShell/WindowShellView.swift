@@ -6,6 +6,7 @@ public final class WindowShellView: NSView {
     case backdrop
     case react
     case card
+    case peek
     case sidebar
     case topStrip
     case overlay
@@ -31,6 +32,17 @@ public final class WindowShellView: NSView {
   required init?(coder: NSCoder) { fatalError() }
 
   public func view(in slot: Slot) -> NSView? { mounted[slot] }
+
+  @objc public var backgroundColor: NSColor? {
+    get {
+      guard let react = mounted[.react], react.responds(to: Selector(("backgroundColor"))) else { return nil }
+      return react.value(forKey: "backgroundColor") as? NSColor
+    }
+    set {
+      guard let react = mounted[.react], react.responds(to: Selector(("setBackgroundColor:"))) else { return }
+      react.setValue(newValue, forKey: "backgroundColor")
+    }
+  }
 
   public func mount(_ slot: Slot, _ view: NSView?) {
     if let current = mounted[slot], current === view { return }
@@ -84,7 +96,7 @@ public final class WindowShellView: NSView {
     let frame: CGRect
     switch slot {
     case .backdrop, .react, .overlay: frame = bounds
-    case .card: frame = frames.card
+    case .card, .peek: frame = frames.card
     case .sidebar: frame = (frames.sidebar ?? .zero).offsetBy(dx: frames.sidebarShift, dy: 0)
     case .topStrip: frame = frames.topStrip ?? .zero
     }

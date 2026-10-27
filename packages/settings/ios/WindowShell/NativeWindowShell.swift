@@ -21,11 +21,10 @@ enum NativeWindowShell {
     guard enabled, !installed, let make = WindowHost.makeContentView else { return }
     installed = true
     WindowHost.makeContentView = { windowId in
-      let root = make(windowId)
-      guard isBrowserWindow(windowId) else { return root }
-      let host = ShellHost(windowId: windowId, root: root)
-      shells[windowId] = host
+      guard isBrowserWindow(windowId) else { return make(windowId) }
       activeIds.withLock { _ = $0.insert(windowId) }
+      let host = ShellHost(windowId: windowId, root: make(windowId))
+      shells[windowId] = host
       host.shell.onDetach = { [weak host] in
         DispatchQueue.main.async {
           MainActor.assumeIsolated {

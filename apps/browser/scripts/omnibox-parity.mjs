@@ -59,6 +59,8 @@ const scripts = {
   "no completion with the caret before the end": { bar: "panel", steps: [...typing("gi"), ["keys", "\uF702"], ...typing("x")] },
   "typing over a selection completes": { bar: "panel", steps: [...typing("gi"), ["select", 0, 2], ...typing("g")] },
   "shift delete removes a history row": { bar: "panel", steps: [...typing("hacker"), k("ArrowDown"), k("Delete", { shiftKey: true })] },
+  "tab accepts the inline completion": { bar: "panel", steps: [...typing("mai"), k("Tab")] },
+  "a pasted newline becomes a space": { bar: "panel", steps: [t("hacker\nnews")] },
   "localhost and urls": { bar: "panel", steps: [t("localhost:3000"), t("foo/"), t("münchen.de"), t("a.b")] },
 };
 

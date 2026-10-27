@@ -28,7 +28,7 @@ Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios (engine.json.defla
 
 --oracle <n> runs n convergence scenarios from --seed instead, each in its own process: both Macs
 edit, crash, lose or roll back their state, go locked, fail writes and see the newest folder files
-only as pending or damaged for a while, at random, then settle. Both
+only as pending or damaged for up to nine minutes, at random, then settle. Both
 must end with the same data; for every key, the value that wins is the latest choice by its stamp,
 counting a write that carries a real edit or a position repair as a choice of its whole record, and
 excusing only edits that never reached the folder before their Mac lost its state, that the same
@@ -56,6 +56,7 @@ const role = option("--role", "parent");
 const oracleRuns = Number(option("--oracle", "0"));
 
 const START = 1_793_000_000_000;
+const HIDDEN_AT_MOST_MS = 9 * 60_000;
 
 function mulberry32(seed) {
   return () => {
@@ -857,7 +858,11 @@ async function runScenario(script) {
       case "read": {
         const [scope, known] = a;
         const here = [...folder].filter(([, f]) => f.scope === scope);
-        const away = (id) => hidden[mac].get(id);
+        const now = history.nows[history.at - 1] ?? 0;
+        const away = (id) => {
+          const entry = hidden[mac].get(id);
+          return entry && now - entry.since < HIDDEN_AT_MOST_MS ? entry.as : undefined;
+        };
         return {
           files: here.filter(([id]) => !known.includes(id) && !away(id)).map(([id, f]) => ({ id, payload: f.payload })),
           pending: here.filter(([id]) => away(id) === "pending").map(([id]) => id),
@@ -900,7 +905,7 @@ async function runScenario(script) {
     let edits = [];
     if (step.op === "hide" || step.op === "reveal") {
       if (step.op === "reveal") hidden[step.mac].clear();
-      else for (const id of [...folder.keys()].slice(-step.count)) hidden[step.mac].set(id, step.as);
+      else for (const id of [...folder.keys()].slice(-step.count)) hidden[step.mac].set(id, { as: step.as, since: history.nows[history.at - 1] ?? 0 });
       trace.steps.push({ op: step.op, hidden: [...hidden[step.mac]] });
     } else if (step.mac === "other") {
       const reply = await ask({ step });

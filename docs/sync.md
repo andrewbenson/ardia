@@ -475,7 +475,7 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
   crash, lose, damage or roll back their state, go locked and fail writes at random, then settle.
   Both must end with the same data, the latest choice for each key by stamp must win, and no seq
   may carry two different batches (`--help` lists what it excuses). It also hides the newest folder
-  files from one Mac as pending or damaged for a while. It doesn't cover extensions (no fake of
+  files from one Mac as pending or damaged for up to nine minutes, inside the fresh scope's wait. It doesn't cover extensions (no fake of
   Chrome's engine calls).
 - End to end: `node packages/sync/scripts/e2e.mjs [Debug app] [work dir]` drives two hidden
   instances (then a third) with their own data folders through a temporary sync folder, never

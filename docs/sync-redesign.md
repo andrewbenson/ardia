@@ -158,6 +158,60 @@ the stand-in base. The guard keeps:
 - re-sending held and revived batches under the current chain;
 - per-type settle.
 
+## Checked: Chromium's `date_password_modified`
+
+Read in this tree's Chromium (`components/password_manager/core/browser`):
+- **Password manager: add.** `saved_passwords_presenter.cc:88-89` (used by the Settings add-password
+  dialog) sets `date_created = date_password_modified = Now()`.
+- **Password manager: edit.** `saved_passwords_presenter.cc:857-861`: when the password changes,
+  `date_password_modified = Now()`.
+- **Password manager: username-only edit.** It keeps the old `date_password_modified` and goes
+  through `UpdateLoginWithPrimaryKey` (`:870-874`). That's a different key (`origin\nusername`).
+  The new key shows up with an old time and the old key disappears.
+- **Note-only edit.** It doesn't touch the modified date, and we don't sync notes.
+- **Saving on a form.** `form_saver_impl.cc:86, 127, 139, 157`: a first save, an update after
+  sign-in, and the change-password and generated-password flows all set `Now()`. These are the
+  paths the change-password flow without Chrome sync goes through.
+- **CSV import.** `import/password_importer.cc:648` adds new credentials through
+  `presenter_->AddCredentials` (the add path above, `Now()`). A conflict the user chooses to replace
+  goes through the presenter's edit path (`Now()` when the password differs).
+- **Database.** `login_database.cc:265, 1510` write the field as given. Migration v30
+  (`:853-858`) set old rows to `date_created`.
+
+**What the design does with it.** "Edited here" is tracked per key against a presence ledger
+(`pwApplied: key → modified time`), kept with Chrome's data and outside the sync state:
+- **A key not in the ledger** is a new local login and is an edit. That covers a username-only edit
+  (the new key) whatever its modified time.
+- **A ledger key that is now missing locally** is a local deletion. Chrome keeps no tombstone, so a
+  deletion has no modified time, which is why the ledger tracks presence and not only times.
+- **A ledger key whose modified time is later than the ledger's** is a local edit.
+- **Every apply and publish** updates the ledger with the time read back from Chrome after the
+  write, so sync's own writes never count as edits.
+
+Remaining exposure: a write path that changes the password without updating the date. I found
+none in the paths above. A new one in a Chromium update would show up as a missed edit, and a test
+that edits through each path above pins it.
+
+## Checked: store mutations that would bypass the middleware
+
+The middleware wraps the store's `set`, so every JS store change passes through it, including the
+direct `useBrowser.setState(...)` calls in 13 non-test files. The risk is the opposite: changes that
+aren't user edits but carry no `fromSync` tag, and user edits made outside the JS store. Found:
+
+| Path | What happens | Handling |
+| --- | --- | --- |
+| Session restore and hydrate (`browser.ts hydrate`) | loads saved state at launch | tagged `restore`: not an edit |
+| Bookmarks: Chrome's BookmarkModel is the source. `lib/bookmarks.ts` re-reads a profile's tree on `onBookmarksChanged` and adopts it whole | user edits made in Chrome itself (extension `chrome.bookmarks` API, Chrome's own importers) arrive only this way. Sync's own applies, pushed to the engine by `push(s)`, come back the same way as an echo | the adopt diff is journaled, except nodes whose new value equals the last value sync pushed for them (a pushed-values table, kept until the echo is seen) |
+| NativeStore (`nativeStore.ts`): when active it owns settings and downloads; JS gets replica revs | sync's `updateSettings(…, { fromSync })` goes to Swift and returns as a rev without the tag | journal on the Swift side, where the command and its flag are seen, or carry the flag on the rev. The Swift port needs this anyway |
+| Imports (`components/import/apply.ts`) | bookmarks, history and pins go through store commands. Passwords go straight to Chrome (`savePassword`) | store commands are journaled; passwords via the ledger (not in it, so an edit) |
+| Engine events for tabs and pins (page title `ti`, favicon) | automatic, not user edits | journaled like any non-sync change: they're this device's observation and are published today too |
+| `bookmarksReady`, `historyReady` and other flags | not synced data | ignored: no sync key maps to them |
+| `sync/adapters.ts` and pinned `fromSync` applies | sync's own writes | tagged `fromSync` |
+
+So no user edit path bypasses the journal. What the design adds instead is two echo filters, one
+for bookmarks and one for NativeStore, plus the restore tag. Each needs a test: an echo must not be
+journaled, and a real edit made while an echo is pending must be.
+
 ## Holes I can see
 
 - **A missed mutation path.** An edit that bypasses the middleware is never published.

@@ -91,11 +91,12 @@ final class ToolbarUrlFieldView: NSView {
     field.textColor = toolbarColor(palette.text)
     if dev.request != handledEditRequest {
       handledEditRequest = dev.request
-      field.stringValue = dev.text
+      if let editing = field.currentEditor() as? NSTextView { editing.string = dev.text } else { field.stringValue = dev.text }
       field.finished = false
-      DispatchQueue.main.async { [weak field] in
-        guard let field, let window = field.window else { return }
-        window.makeFirstResponder(field)
+      DispatchQueue.main.async { [weak self, weak field] in
+        guard let self, let field, let window = field.window else { return }
+        self.layoutSubtreeIfNeeded()
+        if field.currentEditor() == nil || window.firstResponder !== field.currentEditor() { window.makeFirstResponder(field) }
         field.currentEditor()?.selectedRange = NSRange(location: 0, length: (field.stringValue as NSString).length)
         field.onFocused()
       }
@@ -270,6 +271,17 @@ final class DeveloperUrlField: NSTextField, NSTextFieldDelegate {
 
   override var mouseDownCanMoveWindow: Bool { false }
 
+  private var resizing = false
+
+  override func setFrameSize(_ newSize: NSSize) {
+    guard newSize != frame.size, let editor = currentEditor() as? NSTextView else { return super.setFrameSize(newSize) }
+    let selection = editor.selectedRanges
+    resizing = true
+    super.setFrameSize(newSize)
+    resizing = false
+    if let resumed = currentEditor() as? NSTextView { resumed.selectedRanges = selection }
+  }
+
   func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
     if textView.hasMarkedText() { return false }
     switch selector {
@@ -285,7 +297,7 @@ final class DeveloperUrlField: NSTextField, NSTextFieldDelegate {
   }
 
   func controlTextDidEndEditing(_ obj: Notification) {
-    if !finished {
+    if !finished && !resizing {
       finished = true
       onFinish(.blur, stringValue)
     }

@@ -24,7 +24,7 @@ const browserInfo = await (await fetch(`http://localhost:${port}/json/version`))
 check(`engine is Chromium ${chromiumVersion}`, browserInfo.Browser === `Chrome/${chromiumVersion}`, browserInfo.Browser);
 
 let targets = (await instance.targets()).filter((t) => t.type === "page");
-const notes = targets.filter((t) => new RegExp(`/release-notes/?#${version.replace(/\./g, "\\.")}$`).test(t.url));
+const notes = targets.filter((t) => new RegExp(`/(release-notes/?|releases)#${version.replace(/\./g, "\\.")}$`).test(t.url));
 check("release notes opened once after the update", notes.length === 1, targets.map((t) => t.url).join(", "));
 const page = notes[0] ?? targets.find((t) => t.url.startsWith("http") && !t.url.includes("/count.html"));
 if (!page) {

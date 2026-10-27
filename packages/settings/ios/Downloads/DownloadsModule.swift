@@ -16,6 +16,14 @@ public class DownloadsModule: Module {
     AsyncFunction("devHoverShifts") { () -> String in
       MainActor.assumeIsolated { DownloadsHoverShifts.check() }
     }.runOnQueue(.main)
+
+    AsyncFunction("devLastFileDrag") { () -> [String] in
+      #if DEBUG
+      return MainActor.assumeIsolated { DownloadsDrags.lastPaths }
+      #else
+      return []
+      #endif
+    }.runOnQueue(.main)
   }
 }
 

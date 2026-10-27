@@ -147,6 +147,11 @@ func rowFill(dark: Bool, hovered: Bool, pressed: Bool) -> CGColor? {
   return dark ? NSColor(white: 1, alpha: pressed ? 0.12 : 0.07).cgColor : NSColor(white: 0, alpha: pressed ? 0.1 : 0.06).cgColor
 }
 
+@MainActor
+public enum DownloadsDrags {
+  public internal(set) static var lastPaths: [String] = []
+}
+
 final class DownloadRowView: HoverFillView, NSDraggingSource {
   var row: DownloadRowState
   var theme: NewTabTheme
@@ -278,6 +283,7 @@ final class DownloadRowView: HoverFillView, NSDraggingSource {
     dragStart = nil
     pressed = false
     refresh()
+    DownloadsDrags.lastPaths = [row.path]
     let item = NSDraggingItem(pasteboardWriter: URL(fileURLWithPath: row.path) as NSURL)
     item.setDraggingFrame(icon.frame, contents: icon.image)
     beginDraggingSession(with: [item], event: event, source: self)

@@ -20,7 +20,6 @@ deliberate, ask the lead first.
 | ⌘L | The URL stays put and the scheme is prepended to its left from cached widths; RN moves the URL | fa6e79e2 | Matches Dia |
 | Command bar | Rows show hover only after the pointer moves, not when the list grows under a still pointer | 00a89525 | Matches Dia |
 | Status bubble | Dia's timings (0.5 s show, 0.5 s hide, 0.1 s fade), its scheme handling and its light and dark colours | 25a3b373, d637be2d | Matches Dia |
-| Developer Mode | URL bar stripes as Dia and Arc draw them in both appearances (RN draws them in dark, identically along a row through the bar, and none in light: bar flat 248, native 244–248); the native toolbar now serves Developer Mode tabs too | 92286cb9 | Matches Dia and Arc |
 | Not-secure treatment | Chromium's security level (`WARNING`, `DANGEROUS`) drawn as Dia's red badge and red URL with its scheme; RN keeps its grey lock on the same levels | 065c15c2 | Matches Dia |
 
 ## Gaps, most noticeable first

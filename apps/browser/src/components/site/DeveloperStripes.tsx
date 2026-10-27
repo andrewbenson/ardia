@@ -13,9 +13,10 @@ const onDarkBar = (palette: ToolbarPalette) => {
 };
 
 export const DeveloperStripes = memo(function DeveloperStripes({ palette }: { palette: ToolbarPalette }) {
+  const onDark = onDarkBar(palette);
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: "hidden" }]}>
-      <Image source={onDarkBar(palette) ? LIGHT_STRIPES : DARK_STRIPES} style={{ position: "absolute", left: 0, top: 0, width: 2560, height: 50 }} />
+      <Image key={onDark ? "light" : "dark"} source={onDark ? LIGHT_STRIPES : DARK_STRIPES} style={{ position: "absolute", left: 0, top: 0, width: 2560, height: 50 }} />
     </View>
   );
 });

@@ -7,7 +7,7 @@ which is in Developer Mode by default. For light and dark it snapshots the windo
 edited (⌘L), and checks:
   - Chromium's level for the loopback page is NONE and the field shows no red not-secure badge;
   - the native resting URL's ink box matches RN's within 1 px at 2x, and so does the native editing one;
-  - in dark mode the toolbar's stripes match RN's pixel for pixel along a row through the bar;
+  - the toolbar's stripes (none in light) match RN's pixel for pixel along two rows through the bar;
   - ⌘L opens no command bar, typed text and Return navigate the tab, Escape leaves the URL as it was.
 Exits 1 on any failure.`;
 
@@ -129,7 +129,7 @@ for (const native of [false, true]) {
       const dark = appearance === "dark";
       results[`${side}-${appearance}`] = {
         rest: inkBox(rest, dark, field), edit: inkBox(edit, dark, field), red: redPixels(rest, field), level: r.level, panel: r.panel,
-        row: Array.from({ length: rest.width }, (_, x) => rgb(rest, x, Math.round(5 * scale)).join(",")),
+        row: [5, 44].flatMap((y) => Array.from({ length: rest.width }, (_, x) => rgb(rest, x, Math.round(y * scale)).join(","))),
       };
     }
     const edits = await inApp(`
@@ -159,10 +159,10 @@ for (const appearance of ["light", "dark"]) {
   check(`${appearance}: the URL doesn't move when editing starts`, near(nat.edit, nat.rest), `rest ${box(nat.rest)}, edit ${box(nat.edit)}`);
   check(`${appearance}: ⌘L edits in place, no command bar`, !nat.panel && !rn.panel, `panel native ${nat.panel}, rn ${rn.panel}`);
 }
-{
-  const rn = results["rn-dark"].row, nat = results["native-dark"].row;
+for (const appearance of ["light", "dark"]) {
+  const rn = results[`rn-${appearance}`].row, nat = results[`native-${appearance}`].row;
   const differ = rn.filter((v, i) => v !== nat[i]).length;
-  check("dark: the toolbar's stripes match RN's along a row through the bar", differ === 0, `${differ} of ${rn.length} px differ`);
+  check(`${appearance}: the toolbar's stripes match RN's along two rows through the bar`, differ === 0, `${differ} of ${rn.length} px differ`);
 }
 for (const side of ["rn", "native"]) {
   const e = results[`${side}-edits`];

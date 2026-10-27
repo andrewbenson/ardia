@@ -318,6 +318,23 @@ corner**, the corner nearest the row.
   (120 Hz, a hidden instance): opacity within 0.007 of Dia's curve over its 12 frames, scale within 0.001 of the spring
   (peak 1.0022 at 180 ms, settled by 340 ms); the fade out takes 12 frames.
 
+### Tab hover card (owner's 2x clip, 2026-10-26, dark)
+
+Measured from `Clip 2026-10-26 at 23.59.10@2x.png`, a sidebar tab with a two-line title.
+- Card: **200 × 109 pt**, fill **#262626**, border **0.5 pt #404040**, corner radius about **11 pt** (continuous), a
+  faint shadow. No favicon.
+- Placement: left edge at the sidebar's right edge (+0.5 pt), about 10 pt right of the row; vertically centred on the
+  hovered row (34 pt row, centres within 0.5 pt).
+- Text: 14 pt side inset. Title 13 pt semibold, 16 pt lines, white at **0.86**, two lines then a tail ellipsis, first
+  line top 16.5 pt from the card's top (baselines 29.25 and 45.25 pt). Then the bare host (`www.` dropped, no path),
+  13 pt regular, 16 pt line, white at **0.585**, baseline 61.75 pt.
+- Actions: icon only, about 14 pt symbols in the host's grey, centres 89 pt from the top, on a **49 pt** pitch inside
+  2 pt of horizontal padding (centres 26.25, 75, 124.25, 173.25 pt). Dia's four are pin, bookmark, split and chat.
+- Ours (native sidebar, `components/sidebar/HoverCard.tsx` `DiaTabCard`): those numbers, with Pin, Bookmark, Split
+  (not for the selected or pinned tab), PiP (with video) and Back to Pinned URL (away from its pinned URL), each with a
+  tooltip; no chat (no AI features). More than four shrink the pitch to fit. Same motion as above. Light mode uses the
+  theme's panel, border and text colours. The React Native sidebar keeps the labelled card.
+
 ### Opening and closing tabs (owner's 2× recording, 120 fps, 2026-10-15)
 
 Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the hover ✕ and ⌘W.

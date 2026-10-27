@@ -24,8 +24,22 @@ import { useSidebarUi, type Anchor, type Hover } from "./state";
 import { TabIcon } from "./TabIcon";
 import { HoverPlayer, usePlayerEdge, useShowsMiniPlayer } from "../media/HoverPlayer";
 import { useMedia, usePictureInPicture } from "../media/state";
+import { nativeSidebarEnabled } from "./NativeSidebar";
+import { useSidebarWidth } from "./tokens";
 
 const WIDTH = 264;
+const DIA_WIDTH = 200;
+const DIA_HEIGHT = 109;
+const DIA_PITCH = 49;
+
+type ActionPress = GestureResponderEvent | AccessibilityActionEvent;
+
+function diaCardOrigin(anchor: Anchor, sidebarWidth: number, cardHeight: number, windowHeight: number) {
+  const right = anchor.x + anchor.width;
+  const left = right <= sidebarWidth + 1 ? sidebarWidth + 0.5 : right + 8;
+  const centred = anchor.y + anchor.height / 2 - cardHeight / 2;
+  return { left, top: Math.max(8, Math.min(centred, windowHeight - cardHeight - 8)) };
+}
 
 export function HoverCard({ windowId, width, height }: { windowId: string; width: number; height: number }) {
   const hover = useSidebarUi((u) => (u.hover?.windowId === windowId ? u.hover : null));
@@ -42,23 +56,151 @@ export function HoverCard({ windowId, width, height }: { windowId: string; width
   const { drawn, leaving, entering, motion } = useHoverCardMotion(windowId, target);
   const shown = drawn ?? target;
   const player = useShowsMiniPlayer(shown?.kind === "tab" ? shown.id : undefined);
+  const calendar = useIsCalendarTab(shown?.kind === "tab" ? shown.id : null);
   const edge = usePlayerEdge(windowId, shown?.anchor);
-  useHoverCardPlacement(motion, shown ? hoverCardOrigin(shown.anchor, player ? edge : undefined) : null, { width, height });
+  const sidebarWidth = useSidebarWidth(windowId);
+  const [diaHeight, setDiaHeight] = useState(DIA_HEIGHT);
+  const dia = nativeSidebarEnabled() && shown?.kind === "tab" && !player && !calendar;
+  const origin = !shown ? null : dia ? diaCardOrigin(shown.anchor, sidebarWidth, diaHeight, height) : hoverCardOrigin(shown.anchor, player ? edge : undefined);
+  useHoverCardPlacement(motion, origin, { width, height });
   if (!shown) return null;
   return (
     <Animated.View pointerEvents={leaving || entering ? "none" : "box-none"} style={[StyleSheet.absoluteFill, motion.style]}>
-      <HoverContent hover={shown} windowId={windowId} player={player} windowHeight={height} />
+      {dia && origin ? (
+        <DiaTabCard tabId={shown.id} windowId={windowId} origin={origin} onHeight={setDiaHeight} />
+      ) : (
+        <HoverContent hover={shown} windowId={windowId} player={player} calendar={calendar} windowHeight={height} />
+      )}
     </Animated.View>
   );
 }
 
-function HoverContent({ hover, windowId, player, windowHeight }: { hover: Hover; windowId: string; player: boolean; windowHeight: number }) {
-  const calendar = useIsCalendarTab(hover.kind === "tab" ? hover.id : null);
+function HoverContent({ hover, windowId, player, calendar, windowHeight }: { hover: Hover; windowId: string; player: boolean; calendar: boolean; windowHeight: number }) {
   if (hover.kind === "live") return <LiveItemCard id={hover.id} windowId={windowId} anchor={hover.anchor} />;
   if (hover.kind === "tab" && player) return <HoverPlayer tabId={hover.id} windowId={windowId} anchor={hover.anchor} />;
   if (hover.kind === "tab" && calendar) return <CalendarPreview tabId={hover.id} windowId={windowId} anchor={hover.anchor} />;
   if (hover.kind === "folder") return <FolderPeek folderId={hover.id} windowId={windowId} anchor={hover.anchor} />;
   return hover.kind === "tab" ? <TabCard tabId={hover.id} windowId={windowId} anchor={hover.anchor} /> : <GroupPanel key={`${windowId}:${hover.id}`} groupId={hover.id} windowId={windowId} anchor={hover.anchor} windowHeight={windowHeight} />;
+}
+
+function bareHost(url: string): string {
+  try {
+    const { protocol, hostname } = new URL(url);
+    if ((protocol === "http:" || protocol === "https:") && hostname) return hostname.replace(/^www\./, "");
+  } catch {}
+  return displayUrl(url);
+}
+
+function DiaTabCard({ tabId, windowId, origin, onHeight }: { tabId: string; windowId: string; origin: { left: number; top: number }; onHeight: (height: number) => void }) {
+  const theme = useTheme();
+  const tab = useBrowser((s) => s.tabs[tabId]);
+  const isActive = useBrowser((s) => activeTabId(s, windowId) === tabId);
+  const bookmarked = useIsBookmarked(tab?.url ?? "");
+  const video = useMedia((m) => !!m.sessions[tabId]?.hasVideo || !!m.pipOpen[tabId]);
+  const [pip, togglePip] = usePictureInPicture(tabId);
+  const sleeping = useIsSleeping(tabId);
+  if (!tab) return null;
+  const s = () => useBrowser.getState();
+  const away = awayFromPin(tab);
+  const primary = theme.dark ? "rgba(255,255,255,0.86)" : theme.textPrimary;
+  const secondary = theme.dark ? "rgba(255,255,255,0.585)" : theme.textSecondary;
+  const actions: { icon: string; label: string; onPress(press: ActionPress): void }[] = [
+    { icon: tab.pinned ? "pin.slash" : "pin", label: tab.pinned ? "Unpin" : "Pin", onPress: () => s().togglePin(tabId) },
+  ];
+  if (tab.url)
+    actions.push({
+      icon: bookmarked ? "bookmark.fill" : "bookmark",
+      label: bookmarked ? "Remove Bookmark" : "Bookmark",
+      onPress: () => s().toggleBookmark(bookmarkProfileId(s(), s().windows[windowId]), { url: tab.url, title: tabTitle(tab), favicon: tab.favicon }),
+    });
+  if (!isActive && !tab.pinned)
+    actions.push({
+      icon: "rectangle.split.2x1",
+      label: "Open in Split View",
+      onPress: () => {
+        dismissHover();
+        openInSplit(tabId);
+      },
+    });
+  if (video) actions.push({ icon: pip ? "pip.exit" : "pip.enter", label: pip ? "Exit Picture in Picture" : "Picture in Picture", onPress: togglePip });
+  if (away)
+    actions.push({
+      icon: "arrow.uturn.backward",
+      label: "Back to Pinned URL",
+      onPress: () => {
+        dismissHover();
+        s().returnToPinnedUrl(tabId);
+      },
+    });
+  const pitch = Math.min(DIA_PITCH, (DIA_WIDTH - 4) / actions.length);
+  return (
+    <Surface
+      {...cardHoverProps}
+      onLayout={(e) => {
+        cardHoverProps.onLayout(e);
+        onHeight(e.nativeEvent.layout.height);
+      }}
+      fill={theme.dark ? "#262626" : hex(theme.panel)}
+      cornerRadius={11}
+      borderColor={theme.dark ? "#404040" : hex(theme.panelBorder)}
+      borderWidth={0.5}
+      shadowColor="#000000"
+      shadowOpacity={theme.panelShadowOpacity * 0.8}
+      shadowRadius={16}
+      shadowOffset={[0, 6]}
+      style={{ position: "absolute", ...origin, width: DIA_WIDTH, paddingTop: 16.5, paddingBottom: 6 }}
+    >
+      <Text numberOfLines={2} ellipsizeMode="tail" style={{ marginHorizontal: 14, fontSize: 13, lineHeight: 16, fontWeight: "600", color: primary }}>
+        {tabTitle(tab)}
+      </Text>
+      {tab.url ? (
+        <Text numberOfLines={1} ellipsizeMode="tail" style={{ marginHorizontal: 14, fontSize: 13, lineHeight: 16, color: secondary }}>
+          {bareHost(tab.url)}
+        </Text>
+      ) : null}
+      {sleeping ? (
+        <Text numberOfLines={1} accessibilityLabel="Web content has been discarded" style={{ marginHorizontal: 14, marginTop: 2, fontSize: 11.5, color: theme.textTertiary }}>
+          This tab needs to reload
+        </Text>
+      ) : null}
+      <View style={{ flexDirection: "row", justifyContent: "center", marginTop: 10, paddingHorizontal: 2 }}>
+        {actions.map((a) => (
+          <IconAction key={a.label} width={pitch} icon={a.icon} label={a.label} color={secondary} onPress={a.onPress} />
+        ))}
+      </View>
+    </Surface>
+  );
+}
+
+function IconAction({ width, icon, label, color, onPress }: { width: number; icon: string; label: string; color: string; onPress(press: ActionPress): void }) {
+  const theme = useTheme();
+  const { hovered, hoverProps } = useHover();
+  return (
+    <View {...hoverProps} tooltip={label} style={{ width, height: 28, alignItems: "center", justifyContent: "center" }}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityActions={ACTIVATE}
+        onAccessibilityAction={(event) => event.nativeEvent.actionName === "activate" && onPress(event)}
+      >
+        {({ pressed }) => (
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 7,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: pressed ? theme.toolbarPressed : hovered ? theme.toolbarHover : undefined,
+            }}
+          >
+            <Symbol name={icon} size={14} color={color} style={{ width: 20, height: 20 }} />
+          </View>
+        )}
+      </Pressable>
+    </View>
+  );
 }
 
 function Card({ anchor, children }: { anchor: Anchor; children: React.ReactNode }) {

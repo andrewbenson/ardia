@@ -11,7 +11,9 @@ if (!appArg) {
 
 Little Solara on a local page: the window opens with its bar and card where SmallChrome puts them (field at 84, 5,
 28 high, the buttons at the right, the card inset 6 below a 38 pt bar), a click on the field opens the command panel,
-a click on the bar's blank part leaves the window alone, and Open in Solara (its button natively, ⌘O's command under RN) moves the tab to the main window and closes the small one. --native runs with ARDIA_NATIVE_MEDIA=1, where the window is the native Little Solara shell:
+a click on the bar's blank part leaves the window alone, and Open in Solara (its button natively, ⌘O's command under RN) moves the tab to the main window and closes the small one;
+then a relaunch handed a link, as another app hands it (ARDIA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
+passes outside links on to another copy), opens it in Little Solara and not the main window. --native runs with ARDIA_NATIVE_MEDIA=1, where the window is the native Little Solara shell:
 its backdrop, bar and RN slots in that order and the bar fed from JS.`);
   process.exit(2);
 }
@@ -149,6 +151,25 @@ try {
     return { moved };
   });
 
+
+  await rep.check("link-from-another-app", async () => {
+    await sleep(1500);
+    await app.quit();
+    app = null;
+    app = await launch(resolve(appArg), {
+      data, probe: true, urls: [url("c")],
+      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
+      ready: "return !!ac.store.getState().windows.w1",
+    });
+    const id = await until("Little Solara for the link", `return small()?.id ?? null;`, 15000);
+    const tab = await until("page C in it", `const t = st().tabs[st().windows[${JSON.stringify(id)}]?.tabIds[0]]; return t && t.title === "C" ? t.id : null;`, 15000);
+    const main = await run(`return st().windows.w1.tabIds.map((t) => st().tabs[t].url);`);
+    if (main.includes(url("c"))) throw new Error(`the link opened in the main window too: ${main}`);
+    const active = await run(`return !!M && !!M.littleActive && M.littleActive(${JSON.stringify(id)});`);
+    if (active !== native) throw new Error(`littleActive ${active} with the switch ${native ? "on" : "off"}`);
+    const shell = native ? await until("the shell's bar", `return M.describeLittle(${JSON.stringify(id)}).then(JSON.parse).then((d) => d && d.barShown && d.blankBarHit === "SolaraUI.LittleSolaraDragStrip" ? d : null);`) : null;
+    return { id, tab, slots: shell?.slots.map(([slot]) => slot) };
+  });
 } catch (e) {
   rep.record("run", { error: e });
 } finally {

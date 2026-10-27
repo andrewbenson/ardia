@@ -74,7 +74,7 @@ enum NativeMedia {
     }
     HostedViews.register(castPicker) { windowId in
       let view = CastPickerView()
-      let popover = MediaPopoverView(body: view)
+      let popover = PopoverView(body: view)
       var tabId = ""
       popover.onDismiss = { action(windowId, "castPicker", tabId, ["action": "dismiss"]) }
       view.onAction = { [weak popover] event in
@@ -96,7 +96,7 @@ enum NativeMedia {
     }
     HostedViews.register(sharePicker) { windowId in
       let view = SharePickerView()
-      let popover = MediaPopoverView(body: view)
+      let popover = PopoverView(body: view)
       var tabId = ""
       popover.onDismiss = { action(windowId, "sharePicker", tabId, ["action": "cancel"]) }
       view.onAction = { [weak popover] event in
@@ -167,7 +167,7 @@ enum NativeMedia {
       if let bar = view as? ShareBarView {
         return ["primary": bar.primaryTitle, "frames": frames(bar, bar.controlFrames)]
       }
-      if let popover = view as? MediaPopoverView {
+      if let popover = view as? PopoverView {
         var row: [String: Any] = [
           "card": frames(popover, ["card": popover.cardFrame])["card"] ?? [], "progress": popover.progress, "opacity": popover.presentedOpacity,
           "t": CACurrentMediaTime(), "focused": popover.window?.firstResponder === popover,
@@ -199,9 +199,9 @@ enum NativeMedia {
 }
 
 struct PopoverEnvelope: Decodable {
-  let popover: MediaPopoverPlacement
+  let popover: PopoverPlacement
 
-  static func decode(_ json: String) -> MediaPopoverPlacement? {
+  static func decode(_ json: String) -> PopoverPlacement? {
     guard let data = json.data(using: .utf8) else { return nil }
     return (try? JSONDecoder().decode(PopoverEnvelope.self, from: data))?.popover
   }

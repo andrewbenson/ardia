@@ -1,43 +1,52 @@
 import AppKit
 import QuartzCore
 
-public struct MediaPopoverPlacement: Decodable, Equatable, Sendable {
+public struct PopoverPlacement: Decodable, Equatable, Sendable {
   public var width: Double
   public var top: Double
   public var right: Double?
   public var left: Double?
+  public var modal: Bool?
+  public var fitHeight: Bool?
 
-  public init(width: Double, top: Double, right: Double? = nil, left: Double? = nil) {
+  public init(width: Double, top: Double, right: Double? = nil, left: Double? = nil, modal: Bool? = nil, fitHeight: Bool? = nil) {
     self.width = width
     self.top = top
     self.right = right
     self.left = left
+    self.modal = modal
+    self.fitHeight = fitHeight
   }
 }
 
-public enum MediaPopoverMotion {
+public enum PopoverMetrics {
   public static let open = (duration: 0.15, easing: RNEasing.outCubic)
+  public static let close = (duration: 0.1, easing: RNEasing.inQuad)
   public static let fromScale = 0.94
   public static let fromTranslateY = -4.0
   public static let radius: CGFloat = 12
   public static let border: CGFloat = 0.5
+  public static let margin: CGFloat = 8
 }
 
-public final class MediaPopoverView: NSView {
+public final class PopoverView: NSView {
   public var onDismiss: (() -> Void)?
+  public var onClosed: (() -> Void)?
 
   public let body: NSView
-  private let motion = FlippedDocument()
-  private let card = FlippedDocument()
+  private let motion = PrimitiveFlippedView()
+  private let card = PrimitiveFlippedView()
+  private let scroll = NSScrollView()
   private let surface = SurfaceLayer()
   private let effect = NSVisualEffectView()
   private let overlay = CALayer()
   private let rim = SurfaceLayer()
-  private var placement = MediaPopoverPlacement(width: 0, top: 0)
+  private var placement = PopoverPlacement(width: 0, top: 0)
   private var bodyHeight: CGFloat = 0
-  private var dark = true
   private var tween = RNTween.resting(0)
   private var opened = false
+  private var closing = false
+  private var closeTimer: Timer?
   private var pressedOutside = false
 
   public override var isFlipped: Bool { true }
@@ -52,7 +61,7 @@ public final class MediaPopoverView: NSView {
     card.wantsLayer = true
     card.layer?.masksToBounds = false
     card.layer?.addSublayer(surface)
-    surface.radius = MediaPopoverMotion.radius
+    surface.radius = PopoverMetrics.radius
     surface.glowColor = .black
     surface.glowRadius = 18
     surface.glowOffset = CGSize(width: 0, height: 8)
@@ -60,17 +69,21 @@ public final class MediaPopoverView: NSView {
     effect.blendingMode = .withinWindow
     effect.state = .active
     effect.wantsLayer = true
-    effect.layer?.cornerRadius = MediaPopoverMotion.radius
+    effect.layer?.cornerRadius = PopoverMetrics.radius
     effect.layer?.cornerCurve = .continuous
     effect.layer?.masksToBounds = true
     card.addSubview(effect)
-    overlay.cornerRadius = MediaPopoverMotion.radius
+    overlay.cornerRadius = PopoverMetrics.radius
     overlay.cornerCurve = .continuous
     overlay.actions = SurfaceLayer.noActions
     effect.layer?.addSublayer(overlay)
-    card.addSubview(body)
-    rim.radius = MediaPopoverMotion.radius
-    rim.border = MediaPopoverMotion.border
+    scroll.drawsBackground = false
+    scroll.hasVerticalScroller = false
+    scroll.horizontalScrollElasticity = .none
+    scroll.documentView = body
+    card.addSubview(scroll)
+    rim.radius = PopoverMetrics.radius
+    rim.border = PopoverMetrics.border
     rim.zPosition = 10
     card.layer?.addSublayer(rim)
     motion.addSubview(card)
@@ -79,14 +92,13 @@ public final class MediaPopoverView: NSView {
 
   required init?(coder: NSCoder) { fatalError() }
 
-  public func set(placement next: MediaPopoverPlacement, dark nextDark: Bool) {
+  public func set(placement next: PopoverPlacement, dark: Bool) {
     placement = next
-    dark = nextDark
-    surface.fill = MediaPalette.parse(dark ? "rgba(38,36,37,0.94)" : "rgba(252,251,252,0.96)")
+    surface.fill = CSSColor(dark ? "rgba(38,36,37,0.94)" : "rgba(252,251,252,0.96)")?.ns
     surface.glowOpacity = dark ? 0.45 : 0.16
-    rim.borderTint = MediaPalette.parse(dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.12)")
+    rim.borderTint = CSSColor(dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.12)")?.ns
     effect.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-    MediaMotion.setInstantly { overlay.backgroundColor = MediaPalette.parse(dark ? "rgba(38,36,37,0.72)" : "rgba(252,251,252,0.7)")?.cgColor }
+    PrimitiveMotion.setInstantly { overlay.backgroundColor = CSSColor(dark ? "rgba(38,36,37,0.72)" : "rgba(252,251,252,0.7)")?.cg }
     needsLayout = true
   }
 
@@ -96,8 +108,10 @@ public final class MediaPopoverView: NSView {
     needsLayout = true
   }
 
+  public var modal: Bool { placement.modal ?? true }
   public var cardFrame: CGRect { card.frame }
   public var progress: Double { tween.value(at: CACurrentMediaTime()) }
+  public var isClosing: Bool { closing }
   public var presentedOpacity: Double { Double(motion.layer?.presentation()?.opacity ?? motion.layer?.opacity ?? 0) }
 
   private var origin: CGPoint {
@@ -108,18 +122,21 @@ public final class MediaPopoverView: NSView {
   public override func layout() {
     super.layout()
     let width = CGFloat(placement.width)
-    let height = bodyHeight + 2 * MediaPopoverMotion.border
+    let inner = width - 2 * PopoverMetrics.border
+    var height = bodyHeight + 2 * PopoverMetrics.border
+    if placement.fitHeight == true { height = min(height, max(0, bounds.height - CGFloat(placement.top) - PopoverMetrics.margin)) }
     let x = placement.right.map { bounds.width - CGFloat($0) - width } ?? CGFloat(placement.left ?? 0)
     motion.frame = bounds
     card.frame = CGRect(x: x, y: CGFloat(placement.top), width: width, height: height)
-    MediaMotion.setInstantly {
+    PrimitiveMotion.setInstantly {
       surface.frame = card.bounds
       rim.frame = card.bounds
       overlay.frame = card.bounds
     }
     effect.frame = card.bounds
-    body.frame = CGRect(x: MediaPopoverMotion.border, y: MediaPopoverMotion.border, width: width - 2 * MediaPopoverMotion.border, height: bodyHeight)
-    if !opened, window != nil, bodyHeight > 0 { open() } else { apply(progress: tween.to) }
+    scroll.frame = CGRect(x: PopoverMetrics.border, y: PopoverMetrics.border, width: inner, height: max(0, height - 2 * PopoverMetrics.border))
+    body.frame = CGRect(x: 0, y: 0, width: inner, height: bodyHeight)
+    if !opened, !closing, window != nil, bodyHeight > 0 { animate(to: 1) } else { apply(progress: tween.to) }
   }
 
   public override func viewDidMoveToWindow() {
@@ -127,35 +144,49 @@ public final class MediaPopoverView: NSView {
     if window != nil, !opened, bodyHeight > 0 { needsLayout = true }
   }
 
-  private func open() {
-    opened = true
-    let now = CACurrentMediaTime()
-    tween = RNTween(from: 0, to: 1, start: now, duration: MediaPopoverMotion.open.duration, easing: MediaPopoverMotion.open.easing)
-    guard let layer = motion.layer else { return }
-    let point = origin
-    apply(progress: 1)
-    layer.add(MediaMotion.keyframes("opacity", tween) { NSNumber(value: $0) }, forKey: "popoverOpacity")
-    layer.add(MediaMotion.keyframes("sublayerTransform", tween) { NSValue(caTransform3D: Self.transform(point, $0)) }, forKey: "popoverTransform")
+  public func close() {
+    guard !closing else { return }
+    closing = true
+    animate(to: 0)
   }
 
-  private static func transform(_ point: CGPoint, _ p: Double) -> CATransform3D {
-    let scale = MediaPopoverMotion.fromScale + (1 - MediaPopoverMotion.fromScale) * p
-    return MediaMotion.scale(about: point, scale: scale, translateY: MediaPopoverMotion.fromTranslateY * (1 - p))
+  private func animate(to target: Double) {
+    let now = CACurrentMediaTime()
+    let spec = target > 0 ? PopoverMetrics.open : PopoverMetrics.close
+    if target > 0 { opened = true }
+    tween = RNTween(from: tween.value(at: now), to: target, start: now, duration: spec.duration, easing: spec.easing)
+    guard let layer = motion.layer else { return }
+    let point = origin
+    apply(progress: target)
+    let values = tween.samples()
+    layer.add(PrimitiveMotion.keyframes("opacity", values, duration: tween.duration, start: now) { NSNumber(value: $0) }, forKey: "popoverOpacity")
+    layer.add(PrimitiveMotion.keyframes("sublayerTransform", values, duration: tween.duration, start: now) { NSValue(caTransform3D: Self.transform(point, $0)) }, forKey: "popoverTransform")
+    closeTimer?.invalidate()
+    guard target == 0 else { return }
+    closeTimer = Timer.scheduledTimer(withTimeInterval: spec.duration, repeats: false) { [weak self] _ in
+      MainActor.assumeIsolated { self?.onClosed?() }
+    }
+  }
+
+  static func transform(_ point: CGPoint, _ p: Double) -> CATransform3D {
+    let scale = PopoverMetrics.fromScale + (1 - PopoverMetrics.fromScale) * p
+    return PrimitiveMotion.scale(about: point, scale: scale, translateY: PopoverMetrics.fromTranslateY * (1 - p))
   }
 
   private func apply(progress: Double) {
     guard let layer = motion.layer else { return }
     let point = origin
-    MediaMotion.setInstantly {
+    PrimitiveMotion.setInstantly {
       layer.opacity = Float(opened ? progress : 0)
       layer.sublayerTransform = Self.transform(point, progress)
     }
   }
 
   public override func hitTest(_ point: NSPoint) -> NSView? {
+    if closing { return nil }
     let local = convert(point, from: superview)
     if card.frame.contains(local) { return super.hitTest(point) }
-    return onDismiss == nil ? nil : self
+    return modal && onDismiss != nil ? self : nil
   }
 
   public override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -172,4 +203,8 @@ public final class MediaPopoverView: NSView {
   public override func keyDown(with event: NSEvent) {
     if body.acceptsFirstResponder { body.keyDown(with: event) } else { super.keyDown(with: event) }
   }
+}
+
+final class PrimitiveFlippedView: NSView {
+  override var isFlipped: Bool { true }
 }

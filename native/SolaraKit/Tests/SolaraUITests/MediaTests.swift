@@ -168,16 +168,16 @@ import Testing
 
   @Test func popoverPlacesItsCardAsRNDoes() {
     let body = CastPickerView()
-    let popover = MediaPopoverView(body: body)
+    let popover = PopoverView(body: body)
     popover.frame = NSRect(x: 0, y: 0, width: 1083, height: 746)
     popover.onDismiss = {}
-    popover.set(placement: MediaPopoverPlacement(width: 340, top: 8, right: 8), dark: true)
+    popover.set(placement: PopoverPlacement(width: 340, top: 8, right: 8), dark: true)
     popover.set(bodyHeight: 184)
     popover.layoutSubtreeIfNeeded()
     #expect(popover.cardFrame == CGRect(x: 735, y: 8, width: 340, height: 185))
-    #expect(body.frame == CGRect(x: 0.5, y: 0.5, width: 339, height: 184))
+    #expect(body.convert(body.bounds, to: popover) == CGRect(x: 735.5, y: 8.5, width: 339, height: 184))
     #expect(popover.hitTest(NSPoint(x: 100, y: 100)) === popover)
-    popover.set(placement: MediaPopoverPlacement(width: 460, top: 8, left: 311.5), dark: false)
+    popover.set(placement: PopoverPlacement(width: 460, top: 8, left: 311.5), dark: false)
     popover.layoutSubtreeIfNeeded()
     #expect(popover.cardFrame.minX == 311.5)
   }

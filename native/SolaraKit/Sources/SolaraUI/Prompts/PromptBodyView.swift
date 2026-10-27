@@ -196,7 +196,7 @@ public final class PromptBodyView: NSView {
     let well = s.dark ? NSColor(white: 1, alpha: 0.06) : NSColor(white: 0, alpha: 0.04)
     switch d.kind {
     case "well":
-      let box = NSView()
+      let box = FlippedView()
       box.wantsLayer = true
       box.layer?.cornerRadius = 8
       box.layer?.backgroundColor = well.cgColor
@@ -228,7 +228,7 @@ public final class PromptBodyView: NSView {
       box.frame = CGRect(x: PromptMetrics.inset, y: top, width: width, height: y)
       return y
     case "choices":
-      let box = NSView()
+      let box = FlippedView()
       box.wantsLayer = true
       box.layer?.cornerRadius = 8
       box.layer?.backgroundColor = well.cgColor

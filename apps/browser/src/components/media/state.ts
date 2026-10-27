@@ -146,7 +146,7 @@ export function exitPictureInPicture(tabId: string) {
   setPip(tabId, null);
 }
 
-async function togglePictureInPicture(tabId: string, press: ControlPress): Promise<boolean> {
+export async function togglePictureInPicture(tabId: string, press: ControlPress): Promise<boolean> {
   const view = webviews.get(tabId);
   if (!view) return false;
   if (useMedia.getState().pipOpen[tabId] || (await inPictureInPicture(tabId))) {

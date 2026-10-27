@@ -13,6 +13,7 @@ import {
   type SiteSettings,
 } from "@ardia/ardiacore";
 import { displayHost } from "@ardia/core";
+import { nativeToolbarAvailable } from "@ardia/settings";
 import { confirm, showMenu } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -28,12 +29,13 @@ import { PANEL, PanelHeader, Popover, PopoverRow, PopoverSeparator, PopoverValue
 import { pageOf, patchPage, setPopover, usePage } from "../layout/pageState";
 import { showToast } from "../layout/splitActions";
 import { toggleCastPicker } from "../media/cast";
-import { useMedia, usePictureInPicture } from "../media/state";
+import { togglePictureInPicture, useMedia, usePictureInPicture } from "../media/state";
 import { openSettings } from "../settings/windows";
 import { copyPageUrl } from "./selection";
 import { canShare, shareTab } from "./share";
 import { canToggleDeveloperModeFor, setDeveloperModeFor, useDeveloperMode } from "./developerMode";
 import { ActionTile, FooterChip, gridColumns, MoreButton, SectionTitle, SettingRow, SITE_PANEL, TileRow } from "./SiteControlsParts";
+import { NativeSiteBody, type SitePanelHandler, type SitePanelItem } from "./NativeSiteControls";
 import { SiteExtensions } from "./SiteExtensions";
 import { TranslateRows } from "./TranslateControls";
 import { ZoomStepper } from "./ZoomControls";
@@ -262,6 +264,104 @@ function SiteControlsPanel({
   const otherPermissions = permissionList.filter((p) => !featured?.has(p.type));
   const value = (p: Permission) => (settings ? choiceTitle(p.type, settings[p.type]?.value ?? "ask") : "…");
 
+  if (nativeToolbarAvailable()) {
+    const look = connectionLook(security);
+    const tileList: { id: string; icon: string; label: string; active?: boolean }[] = [];
+    const handlers: Record<string, SitePanelHandler> = {};
+    if (canShare(tab)) {
+      tileList.push({ id: "share", icon: "square.and.arrow.up", label: "Share…" });
+      handlers.share = {
+        press: (rect) => {
+          close();
+          void shareTab(tab, tab.windowId, null, rect);
+        },
+      };
+    }
+    tileList.push({ id: "copy", icon: "link", label: "Copy Clean Link" });
+    handlers.copy = {
+      press: () => {
+        close();
+        void copyPageUrl(tabId);
+      },
+    };
+    if (findable) {
+      tileList.push({ id: "find", icon: "text.magnifyingglass", label: "Find on Page" });
+      handlers.find = {
+        press: () => {
+          close();
+          useBrowser.getState().setFind(tabId, { open: true, replace: false, focusRequest: Date.now() });
+        },
+      };
+    }
+    if (video) {
+      tileList.push({ id: "pip", icon: pip ? "pip.exit" : "pip.enter", label: pip ? "Exit Picture in Picture" : "Picture in Picture", active: pip });
+      handlers.pip = {
+        press: (_rect, clickAt) => {
+          void togglePictureInPicture(tabId, { clickAt, control: 0 });
+          close();
+        },
+      };
+    } else if (castTile) {
+      tileList.push({ id: "cast", icon: "tv.and.mediabox", label: "Cast…" });
+    }
+    handlers.cast = { press: cast };
+    const items: SitePanelItem[] = [{ kind: "tiles", tiles: tileList }, { kind: "slot", id: "extensions", columns: gridColumns(tileList.length) }];
+    if (origin) {
+      items.push({ kind: "section", title: "Settings", tight: true });
+      const blockerPress = !blocker || pageEngine === "webkit" ? undefined : blocker.enabled ? () => void toggleBlocker(blocker.allowed) : () => (close(), openSettings("privacy"));
+      items.push({ kind: "setting", id: "blocker", icon: "shield.lefthalf.filled", title: "Block Ads & Trackers", value: blockerValue, on: pageEngine !== "webkit" && !!blocker?.enabled && !blocker.allowed, pressable: !!blockerPress });
+      if (blockerPress) handlers.blocker = { press: blockerPress };
+      items.push({ kind: "setting", id: "developer", icon: "hammer.fill", title: "Developer Mode", value: developer ? "On" : "Off", on: developer, pressable: developerToggles });
+      if (developerToggles) handlers.developer = { press: () => setDeveloperModeFor(tabId, !developer) };
+      items.push({ kind: "setting", id: "engine", icon: ENGINE_SYMBOLS[pageEngine], title: "Opens in", value: opensIn, on: !!engineRule, pressable: true });
+      handlers.engine = { press: () => void pickEngine() };
+      for (const p of shownPermissions) {
+        items.push({ kind: "setting", id: `perm:${p.type}`, icon: p.badge, title: p.title, value: value(p), on: settings?.[p.type]?.value === "allow", pressable: true });
+        handlers[`perm:${p.type}`] = { press: () => void pickPermission(p.type, p.choices) };
+      }
+    }
+    if (expanded === "connection") {
+      items.push({ kind: "separator" });
+      items.push({ kind: "header", title: host ? displayHost(host) : tabLabel(tab), detail: tab.title, favicon: { url, favicon: tab.favicon ?? null, profileId: tab.profileId } });
+      const row = connectionRowOf(security);
+      items.push({ kind: "row", id: "connection-row", icon: look.icon, iconColor: look.color ?? theme.icon, title: row.title, detail: row.detail });
+      if (security?.certificate) items.push({ kind: "certificate", rows: certificateRows(security) });
+    }
+    if (expanded === "more") {
+      items.push({ kind: "separator" });
+      items.push({ kind: "row", id: "zoom", icon: "plus.magnifyingglass", title: "Zoom", accessory: { kind: "zoom", zoom: tab.zoom } });
+      handlers.zoom = { zoom: (step) => void webviews.get(tabId)?.zoomStep(Math.sign(step) as -1 | 0 | 1) };
+      if (origin && !castTile) items.push({ kind: "row", id: "cast", icon: "tv.and.mediabox", title: "Cast…", pressable: true });
+      if (origin) {
+        items.push({ kind: "row", id: "other-engine", icon: ENGINE_SYMBOLS[otherEngine(pageEngine)], title: `Open Page in ${ENGINE_NAMES[otherEngine(pageEngine)]}`, pressable: true });
+        handlers["other-engine"] = {
+          press: () => {
+            close();
+            void togglePageEngine(tabId);
+          },
+        };
+        items.push({ kind: "separator" }, { kind: "slot", id: "translate" });
+        for (const p of otherPermissions) {
+          items.push({ kind: "row", id: `perm:${p.type}`, icon: p.icon, title: p.title, accessory: { kind: "value", title: value(p) } });
+          handlers[`perm:${p.type}`] = { press: () => void pickPermission(p.type, p.choices) };
+        }
+        if (otherPermissions.length) items.push({ kind: "separator" });
+        items.push({ kind: "row", id: "clear", icon: "trash", title: "Clear Cookies and Site Data…", detail: cleared ?? undefined, pressable: true });
+        handlers.clear = { press: () => void clearData() };
+      }
+      items.push({ kind: "row", id: "full-url", icon: "text.alignleft", title: "Show Full URL", accessory: { kind: "toggle", value: showFullUrl } });
+      handlers["full-url"] = { toggle: (v) => useBrowser.getState().updateSettings({ showFullUrl: v }) };
+    }
+    items.push({ kind: "footer", top: origin ? 8 : 14, chip: { icon: look.icon, title: look.chip, color: look.color, open: expanded === "connection" }, moreOpen: expanded === "more" });
+    handlers.connection = { press: () => toggle("connection") };
+    handlers.more = { press: () => toggle("more") };
+    return (
+      <Popover width={SITE_PANEL.width} top={top} right={right} left={left} onDismiss={close} fitHeight closing={closing} onClosed={onClosed}>
+        <NativeSiteBody tabId={tabId} windowId={tab.windowId} items={items} handlers={handlers} onClose={close} />
+      </Popover>
+    );
+  }
+
   return (
     <Popover width={SITE_PANEL.width} top={top} right={right} left={left} onDismiss={close} fitHeight closing={closing} onClosed={onClosed}>
       <View style={{ paddingTop: PANEL.inset }}>
@@ -387,10 +487,8 @@ function ConnectionChip({ security, open, onPress }: { security: SecurityInfo | 
   return <FooterChip icon={look.icon} title={look.chip} color={look.color} open={open} onPress={onPress} />;
 }
 
-function ConnectionRow({ security }: { security: SecurityInfo | null }) {
-  const theme = useTheme();
-  const look = connectionLook(security);
-  const { level } = look;
+function connectionRowOf(security: SecurityInfo | null) {
+  const { level } = connectionLook(security);
   const secure = level === "secure";
   const local = level === "local" || level === "none";
   const title = secure ? "Connection is secure" : local ? "This is a local or internal page" : "Connection is not secure";
@@ -404,11 +502,17 @@ function ConnectionRow({ security }: { security: SecurityInfo | null }) {
           : secure && security?.certificate
             ? `Certificate issued by ${security.certificate.issuer.organizations[0] || security.certificate.issuer.commonName}`
             : undefined;
+  return { title, detail };
+}
+
+function ConnectionRow({ security }: { security: SecurityInfo | null }) {
+  const theme = useTheme();
+  const look = connectionLook(security);
+  const { title, detail } = connectionRowOf(security);
   return <PopoverRow icon={look.icon} iconColor={look.color ?? theme.icon} title={title} detail={detail} />;
 }
 
-function CertificateDetails({ security }: { security: SecurityInfo }) {
-  const theme = useTheme();
+function certificateRows(security: SecurityInfo): [string, string][] {
   const cert = security.certificate!;
   const date = (ms: number) => new Date(ms).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   const rows: [string, string][] = [
@@ -420,6 +524,12 @@ function CertificateDetails({ security }: { security: SecurityInfo }) {
     ...(security.protocol ? [["Protocol", security.protocol] as [string, string]] : []),
     ...(cert.sha256 ? [["SHA-256", cert.sha256.replace(/[^0-9a-f]/gi, "").replace(/(.{2})(?!$)/g, "$1 ").slice(0, 47) + "…"] as [string, string]] : []),
   ];
+  return rows;
+}
+
+function CertificateDetails({ security }: { security: SecurityInfo }) {
+  const theme = useTheme();
+  const rows = certificateRows(security);
   return (
     <View style={{ marginHorizontal: PANEL.inset, marginTop: 2, marginBottom: 4, padding: PANEL.rowPadding, borderRadius: 8, backgroundColor: theme.dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", gap: 3 }}>
       {rows.map(([k, v]) => (

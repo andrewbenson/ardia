@@ -22,7 +22,7 @@ export function SiteExtensions({ windowId, tabId, columns, onClose }: { windowId
             onClose();
             openWebStore(windowId);
           }}
-          onContextMenu={() => void addMenu(windowId, onClose)}
+          onContextMenu={() => void addExtensionMenu(windowId, onClose)}
         />
       </TileGrid>
     </>
@@ -51,7 +51,7 @@ function ExtensionGridTile({ ext, windowId, tabId, onClose }: { ext: InstalledEx
   );
 }
 
-async function addMenu(windowId: string, onClose: () => void) {
+export async function addExtensionMenu(windowId: string, onClose: () => void) {
   const choice = await showMenu([
     { id: "add", title: "Add Extension…", symbol: "plus" },
     { id: "pin", title: "Pin Extensions…", symbol: "pin" },

@@ -41,7 +41,7 @@ export const TranslateButton = memo(function TranslateButton({ tabId, palette, o
   );
 });
 
-async function chooseLanguage(tabId: string) {
+export async function chooseLanguage(tabId: string) {
   const languages = await otherLanguages();
   const current = translateStateOf(tabId).target;
   const items: MenuItem[] = languages.map((l) => ({ id: l.id, title: l.name, checked: l.id === current }));

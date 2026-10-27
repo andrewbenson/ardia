@@ -1,0 +1,96 @@
+import AppKit
+import Foundation
+
+public struct ToolbarPaletteState: Decodable, Equatable, Sendable {
+  public var background: String?
+  public var text: String
+  public var secondary: String
+  public var icon: String
+  public var iconDisabled: String
+  public var hover: String
+  public var pressed: String
+  public var pill: String
+  public var divider: String
+}
+
+public struct ToolbarGeometryState: Decodable, Equatable, Sendable {
+  public var sidebarButton: Double?
+  public var back: Double
+  public var forward: Double
+  public var reload: Double
+  public var urlLeft: Double
+  public var urlRight: Double
+}
+
+public struct ToolbarButtonState: Decodable, Equatable, Sendable {
+  public var id: String
+  public var icon: String
+  public var size: Double?
+  public var box: Double?
+  public var radius: Double?
+  public var weight: String?
+  public var color: String?
+  public var enabled: Bool?
+  public var active: Bool?
+  public var tooltip: String?
+  public var menu: Bool?
+  public var longPress: Bool?
+  public var middle: Bool?
+  public var plain: Bool?
+}
+
+public struct ToolbarUrlState: Decodable, Equatable, Sendable {
+  public var host: String
+  public var restTrail: String
+  public var hoverTrail: String
+  public var insecure: String?
+  public var hoverButtons: [ToolbarButtonState]
+  public var trailing: [ToolbarButtonState]
+  public var pinned: Bool
+}
+
+public struct ToolbarState: Decodable, Equatable, Sendable {
+  public var tabId: String
+  public var height: Double
+  public var bare: Bool
+  public var focused: Bool
+  public var palette: ToolbarPaletteState
+  public var accent: String
+  public var geometry: ToolbarGeometryState
+  public var left: [ToolbarButtonState]
+  public var url: ToolbarUrlState?
+  public var right: [ToolbarButtonState]
+  public var rightInset: Double
+  public var hairline: Bool
+  public var progress: Double?
+
+  public static func decode(_ json: String) -> ToolbarState? {
+    guard let data = json.data(using: .utf8) else { return nil }
+    return try? JSONDecoder().decode(ToolbarState.self, from: data)
+  }
+}
+
+public struct ToolbarClick: Sendable, Equatable {
+  public enum Kind: String, Sendable {
+    case press, menu, middle
+  }
+
+  public var id: String
+  public var kind: Kind
+  public var meta = false
+  public var alt = false
+  public var shift = false
+
+  public init(id: String, kind: Kind, flags: NSEvent.ModifierFlags = []) {
+    self.id = id
+    self.kind = kind
+    meta = flags.contains(.command)
+    alt = flags.contains(.option)
+    shift = flags.contains(.shift)
+  }
+}
+
+func toolbarColor(_ text: String?) -> NSColor? {
+  guard let text, let parsed = CSSColor(text) else { return nil }
+  return parsed.ns
+}

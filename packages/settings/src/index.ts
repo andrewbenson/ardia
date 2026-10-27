@@ -55,3 +55,4 @@ export function serveNativeSettings(handlers: Record<string, SettingsHandler>): 
 export * from "./newTab";
 export * from "./hosted";
 export * from "./omnibox";
+export * from "./toolbar";

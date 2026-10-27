@@ -29,6 +29,8 @@ import { DeveloperUrlInput } from "./site/DeveloperUrlInput";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
+import { nativeToolbarAvailable } from "@ardia/settings";
+import { NativeToolbar } from "./NativeToolbar";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;
 const toolbarTab = (t: Tab | undefined): ToolbarTab | undefined =>
@@ -44,21 +46,21 @@ export const urlTextLeft = (insecure: boolean) => (insecure ? LOCK.left + LOCK.w
 export const insecureLevel = (p: PageState) =>
   p.security && (p.security.level === "insecure" || p.security.level === "certificateError") ? p.security.level : null;
 
-export function Toolbar({
-  tabId,
-  geometry,
-  windowId,
-  inSplit,
-  focused,
-  bare,
-}: {
+type ToolbarProps = {
   tabId: string;
   geometry: ToolbarGeometry;
   windowId: string;
   inSplit: boolean;
   focused: boolean;
   bare?: boolean;
-}) {
+};
+
+export function Toolbar(props: ToolbarProps) {
+  const developer = useTabDeveloperMode(props.tabId);
+  return nativeToolbarAvailable() && !developer ? <NativeToolbar {...props} /> : <ReactToolbar {...props} />;
+}
+
+function ReactToolbar({ tabId, geometry, windowId, inSplit, focused, bare }: ToolbarProps) {
   const theme = useTheme();
   const sidebarHint = useShortcutHint("toggleSidebar");
   const tab = useToolbarTab(tabId);

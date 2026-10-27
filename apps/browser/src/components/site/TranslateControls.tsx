@@ -49,7 +49,7 @@ async function chooseLanguage(tabId: string) {
   if (choice) void translatePage(tabId, choice);
 }
 
-async function showTranslateMenu(tabId: string) {
+export async function showTranslateMenu(tabId: string) {
   const tab = useBrowser.getState().tabs[tabId];
   if (!tab) return;
   const translated = translateStateOf(tabId).status !== "idle";

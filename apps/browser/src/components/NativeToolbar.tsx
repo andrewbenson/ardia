@@ -1,0 +1,233 @@
+import { breadcrumb, urlForDisplay } from "@ardia/core";
+import { NativeToolbarView, type ToolbarClick } from "@ardia/settings";
+import { translation, WindowDragRegion } from "@ardia/shell";
+import { useEffect, useMemo } from "react";
+import { StyleSheet, View } from "react-native";
+import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
+import { withLivePage } from "../lib/livePage";
+import { layout, useTheme } from "../lib/theme";
+import { webviews } from "../lib/webviews";
+import { useBrowser } from "../store/browser";
+import { useIsBookmarked, useSettings, useTabLive } from "../store/hooks";
+import { bookmarkProfileId } from "../store/model";
+import { usePageProgress } from "../store/pageProgress";
+import { openModeFor, openUrl } from "./bookmarks/actions";
+import { ToolbarExtensions, useToolbarExtensionsWidth } from "./extensions/ToolbarExtensions";
+import { type ToolbarGeometry } from "./layout/geometry";
+import { closeHistoryMenu, goBack, goForward, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu } from "./layout/history";
+import { setPopover, usePage, usePages } from "./layout/pageState";
+import { closePane, openSplitPane, showSplitMenu } from "./layout/splitActions";
+import { toolbarPalette } from "./layout/toolbarColors";
+import { setToolbarExtensionsWidth } from "./layout/windowLayout";
+import { showUrlBarMenu } from "./omnibox/paste";
+import { useToolbarSiteColor } from "./site/developerMode";
+import { showTranslateMenu } from "./site/TranslateControls";
+import { languageName, toggleTranslation, useTranslateState } from "./site/translate";
+import { insecureLevel, urlFieldRight, useToolbarTab } from "./Toolbar";
+
+const isWebUrl = (url: string) => /^https?:/i.test(url);
+
+function safeDecode(s: string) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+const togglePopover = (tabId: string, name: "siteControls" | "zoom" | "popups") =>
+  setPopover(tabId, (usePages.getState().popover[tabId] ?? null) === name ? null : name);
+
+export function NativeToolbar({
+  tabId,
+  geometry,
+  windowId,
+  inSplit,
+  focused,
+  bare,
+}: {
+  tabId: string;
+  geometry: ToolbarGeometry;
+  windowId: string;
+  inSplit: boolean;
+  focused: boolean;
+  bare?: boolean;
+}) {
+  const theme = useTheme();
+  const tab = useToolbarTab(tabId);
+  const isLoading = useTabLive(tabId, (l) => l.isLoading);
+  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
+  const history = useHistoryAvailability(tabId);
+  const extensionsWidth = useToolbarExtensionsWidth(windowId);
+  useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
+  const showFullUrl = useSettings((s) => s.showFullUrl);
+  const bookmarked = useIsBookmarked(tab?.url ?? "");
+  const insecure = usePage(tabId, insecureLevel);
+  const popups = usePage(tabId, (p) => p.popups.length);
+  const capture = usePage(tabId, (p) => p.mediaAccess);
+  const popover = usePages((p) => p.popover[tabId] ?? null);
+  const progress = usePageProgress(tabId);
+  const translate = useTranslateState(tabId);
+  const hints = {
+    sidebar: useShortcutHint("toggleSidebar"),
+    back: useShortcutHint("back"),
+    forward: useShortcutHint("forward"),
+    reload: useShortcutHint("reload"),
+    bookmark: useShortcutHint("bookmarkPage"),
+    split: useShortcutHint("openSplitPane"),
+  };
+
+  const state = useMemo(() => {
+    if (!tab) return null;
+    const url = tab.url;
+    const isFile = url.startsWith("file:");
+    const host = isFile ? "File" : url ? breadcrumb(url).host : "";
+    const full = isFile ? ` ${safeDecode(url.slice("file://".length))}` : url ? urlForDisplay(url) : "";
+    const path = !isFile && full.startsWith(host) ? full.slice(host.length) : full;
+    const restTrail = showFullUrl ? path.replace(/\/$/, "") : !isWebUrl(url) && tab.title ? ` / ${tab.title}` : "";
+    const small = { size: 13, box: 24, radius: 6 };
+    const translated = translate.status !== "idle";
+    const trailing = [
+      ...(capture
+        ? [{
+            id: "capture",
+            icon: capture.screen ? "rectangle.inset.filled.on.rectangle" : capture.camera ? "video.fill" : "mic.fill",
+            size: 12,
+            box: 24,
+            color: "#FF453A",
+            plain: true,
+            tooltip: `This page is using your ${[capture.camera && "camera", capture.microphone && "microphone", capture.screen && "screen"].filter(Boolean).join(" and ")}`,
+          }]
+        : []),
+      ...(translation && (translate.source || translated)
+        ? [{
+            id: "translate",
+            icon: "translate",
+            ...small,
+            color: translated ? theme.accent : undefined,
+            menu: true,
+            tooltip: translated ? `Show Original (${languageName(translate.source ?? "")})` : "Translate this page",
+          }]
+        : []),
+      ...(Math.abs(tab.zoom - 1) >= 0.001
+        ? [{ id: "zoom", icon: tab.zoom > 1 ? "plus.magnifyingglass" : "minus.magnifyingglass", ...small, active: popover === "zoom", tooltip: `Zoom: ${Math.round(tab.zoom * 100)}%` }]
+        : []),
+      ...(popups > 0 ? [{ id: "popups", icon: "macwindow.badge.plus", ...small, active: popover === "popups", tooltip: "Pop-ups blocked on this page" }] : []),
+    ];
+    return {
+      tabId,
+      height: layout.toolbarHeight,
+      bare: !!bare,
+      focused,
+      palette,
+      accent: theme.accent,
+      geometry: { ...geometry, urlRight: urlFieldRight(inSplit, extensionsWidth) },
+      left: [
+        ...(geometry.sidebarButton !== null ? [{ id: "sidebar", icon: "sidebar.left", size: 13, tooltip: withShortcut("Auto-Hide Tabs", hints.sidebar) }] : []),
+        { id: "back", icon: "chevron.left", size: 13, enabled: history.back, menu: true, longPress: true, middle: true, tooltip: withShortcut("Go Back", hints.back) },
+        { id: "forward", icon: "chevron.right", size: 13, enabled: history.forward, menu: true, longPress: true, middle: true, tooltip: withShortcut("Go Forward", hints.forward) },
+        {
+          id: "reload",
+          icon: isLoading ? "xmark" : "arrow.clockwise",
+          size: 13,
+          enabled: !!url,
+          tooltip: isLoading ? "Stop Loading This Page" : withShortcut("Refresh", hints.reload),
+        },
+      ],
+      url: url
+        ? {
+            host,
+            restTrail,
+            hoverTrail: path,
+            insecure,
+            pinned: popover === "siteControls",
+            hoverButtons: [
+              { id: "bookmark", icon: bookmarked ? "bookmark.fill" : "bookmark", ...small, tooltip: bookmarked ? "Remove Bookmark" : withShortcut("Bookmark This Page", hints.bookmark) },
+              ...(!inSplit ? [{ id: "split", icon: "rectangle.split.2x1", ...small, tooltip: withShortcut("Open Split View", hints.split) }] : []),
+              { id: "siteControls", icon: "slider.horizontal.3", ...small, active: popover === "siteControls", tooltip: "Site Controls" },
+            ],
+            trailing,
+          }
+        : null,
+      right: inSplit
+        ? [
+            { id: "splitMenu", icon: "rectangle.split.2x1", size: 14, box: 30, tooltip: "Split View" },
+            { id: "closePane", icon: "xmark", size: 12, weight: "medium", box: 30, tooltip: "Close Pane" },
+          ]
+        : [],
+      rightInset: 8,
+      hairline: !!url && !bare,
+      progress: isLoading ? progress : null,
+    };
+  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split]);
+  const json = useMemo(() => (state ? JSON.stringify(state) : null), [state]);
+
+  if (!tab || !json) return <View style={{ height: layout.toolbarHeight }} />;
+
+  const focus = () => {
+    if (!focused) useBrowser.getState().activate(tabId);
+  };
+  const onClick = async (c: ToolbarClick) => {
+    focus();
+    const m = { metaKey: c.meta, altKey: c.alt, shiftKey: c.shift };
+    switch (c.id) {
+      case "sidebar":
+        return useBrowser.getState().toggleSidebar(windowId);
+      case "back":
+      case "forward": {
+        const direction = c.id === "back" ? -1 : 1;
+        if (c.kind === "menu") {
+          const open = useHistoryMenu.getState().menu;
+          if (open?.tabId === tabId && open.direction === direction) return closeHistoryMenu();
+          return void openHistoryMenu(tabId, direction);
+        }
+        closeHistoryMenu();
+        const mode = openModeFor({ ...m, middle: c.kind === "middle" });
+        if (mode === "current" || mode === "split") return direction < 0 ? goBack(tabId) : goForward(tabId);
+        const [target] = await historyItems(tabId, direction, 1);
+        if (target?.url) openUrl(target.url, windowId, mode);
+        return;
+      }
+      case "reload":
+        if (isLoading) return void webviews.get(tabId)?.stopLoading();
+        if (m.metaKey) return void useBrowser.getState().newTab(tab.windowId, { url: tab.url, background: true, openerId: tab.id });
+        return void withLivePage(tabId, (page) => (m.shiftKey ? page.forceReload() : page.reload()));
+      case "url":
+        if (c.kind === "menu") return void showUrlBarMenu(tab);
+        return useBrowser.getState().openPanel(windowId, tab.url);
+      case "lock":
+      case "capture":
+      case "siteControls":
+        return togglePopover(tabId, "siteControls");
+      case "bookmark": {
+        const s = useBrowser.getState();
+        const page = s.tabs[tabId];
+        if (page) s.toggleBookmark(bookmarkProfileId(s, s.windows[windowId]), page);
+        return;
+      }
+      case "split":
+        return openSplitPane(windowId, { anchorTabId: tabId });
+      case "translate":
+        if (c.kind === "menu") return void showTranslateMenu(tabId);
+        return toggleTranslation(tabId);
+      case "zoom":
+        return togglePopover(tabId, "zoom");
+      case "popups":
+        return togglePopover(tabId, "popups");
+      case "splitMenu":
+        return showSplitMenu(tabId);
+      case "closePane":
+        return closePane(tabId);
+    }
+  };
+
+  return (
+    <View style={{ height: layout.toolbarHeight }}>
+      <WindowDragRegion style={StyleSheet.absoluteFill} />
+      <NativeToolbarView style={StyleSheet.absoluteFill} state={json} onToolbarClick={(e) => void onClick(e.nativeEvent)} />
+      <View style={[StyleSheet.absoluteFill, { opacity: focused ? 1 : 0.5 }]} pointerEvents="box-none">
+        <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={21.2 - 14} right={inSplit ? 8 + 60 : 8} />
+      </View>
+    </View>
+  );
+}

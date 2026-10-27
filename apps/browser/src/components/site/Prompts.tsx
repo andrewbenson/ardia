@@ -11,6 +11,8 @@ import { PANEL, PanelCloseButton, Popover, PopoverRow, PopoverSeparator, PromptB
 import { Checkbox } from "../settings/controls";
 import { patchPage, pageOf, setPopover, usePage } from "../layout/pageState";
 import { answerPermission, describePermission } from "./permissions";
+import { nativeToolbarAvailable } from "@ardia/settings";
+import { NativePromptBody } from "./NativePromptBody";
 
 const hostOf = (origin: string) => {
   try {
@@ -62,6 +64,13 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
   const { icons, question } = describePermission(request);
   return (
     <Popover key={request.id} width={300} top={top} left={left} modal={false}>
+      {nativeToolbarAvailable() ? (
+        <NativePromptBody
+          spec={{ icons, title: question, message: "Click the lock to change this any time", buttons: [{ id: "deny", title: "Don't Allow" }, { id: "accept", title: "Allow", primary: true }] }}
+          onButton={(id) => answerPermission(tabId, request.id, id as "deny" | "accept")}
+          onClose={() => answerPermission(tabId, request.id, "dismiss")}
+        />
+      ) : (
       <View>
         <PromptBody icons={icons} title={question} message="Click the lock to change this any time">
           <PromptButton title="Don't Allow" onPress={() => answerPermission(tabId, request.id, "deny")} />
@@ -69,6 +78,7 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
         </PromptBody>
         <PanelCloseButton onPress={() => answerPermission(tabId, request.id, "dismiss")} />
       </View>
+      )}
     </Popover>
   );
 }
@@ -91,6 +101,22 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
   return (
     <Popover width={BLOCKED_POPUPS_WIDTH} top={top} right={right} left={left} onDismiss={close}>
       <View style={{ paddingBottom: PANEL.listPadding }}>
+        {nativeToolbarAvailable() ? (
+          <NativePromptBody
+            spec={{
+              icons: ["macwindow.badge.plus"],
+              title: `Always allow pop-ups from ${site}?`,
+              message: `Allow ${site} to always open pop-up windows, choose every time, or always deny pop-ups.`,
+              buttons: [{ id: "deny", title: "Always Deny" }, { id: "once", title: "Only Once" }, { id: "allow", title: "Always Allow", primary: true }],
+              close: false,
+            }}
+            onButton={(id) => {
+              if (id === "deny") void setSiteSetting(profile(), origin, "popups", "block");
+              else for (const p of popups) void web()?.openBlockedPopup(p.id, id === "allow");
+              done();
+            }}
+          />
+        ) : (
         <PromptBody
           icons={["macwindow.badge.plus"]}
           title={`Always allow pop-ups from ${site}?`}
@@ -119,6 +145,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
             }}
           />
         </PromptBody>
+        )}
         <PopoverSeparator />
         {popups.slice(-5).map((p) => (
           <PopoverRow
@@ -169,6 +196,38 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const choices = update && prompt.usernames.length > 1 ? prompt.usernames : [];
   return (
     <Popover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={update ? 310 : 350} top={top} right={right} modal={false}>
+      {nativeToolbarAvailable() ? (
+        <NativePromptBody
+          spec={{
+            icons: ["key.fill"],
+            title: update ? "Update saved password?" : `Save password for ${site}?`,
+            message: update ? `It will be auto-filled on ${site}` : "That way, it'll be auto-filled next time",
+            details: [
+              choices.length
+                ? { kind: "choices", choices: choices.map((name) => ({ id: name, title: name, selected: name === username })) }
+                : {
+                    kind: "well",
+                    sections: [
+                      {
+                        lines: [
+                          { text: username || (prompt.federation ? `Signed in with ${hostOf(prompt.federation)}` : "No username"), strong: true, maxLines: 1 },
+                          ...(prompt.passwordLength > 0 ? [{ text: "•".repeat(Math.min(prompt.passwordLength, 16)), tone: "secondary" as const, kern: 1, maxLines: 1 }] : []),
+                        ],
+                      },
+                    ],
+                  },
+            ],
+            buttons: [
+              ...(!update ? [{ id: "never", title: "Never on This Site" }] : []),
+              { id: update ? "nope" : "dismiss", title: "Not Now" },
+              { id: update ? "update" : "save", title: update ? "Update" : "Save", primary: true },
+            ],
+          }}
+          onButton={(id) => answer(id as PasswordPromptAnswer)}
+          onChoice={setChosen}
+          onClose={() => answer("dismiss")}
+        />
+      ) : (
       <View>
         <PromptBody
           icons={["key.fill"]}
@@ -201,6 +260,7 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
         </PromptBody>
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>
+      )}
     </Popover>
   );
 }
@@ -239,6 +299,33 @@ export function AutofillPrompt({ tabId, right, top }: { tabId: string; right: nu
         : [section(values("to"))];
   return (
     <Popover key={prompt.id} width={350} top={top} right={right} modal={false}>
+      {nativeToolbarAvailable() ? (
+        <NativePromptBody
+          spec={{
+            icons: [prompt.kind === "saveCard" ? "creditcard.fill" : "mappin.and.ellipse"],
+            title: prompt.title,
+            message: prompt.message || null,
+            details: [
+              {
+                kind: "well",
+                sections:
+                  prompt.kind !== "updateAddress"
+                    ? [{ lines: prompt.lines.map((text, i) => ({ text, strong: i === 0, tone: i === 0 ? ("primary" as const) : ("secondary" as const), maxLines: 2 })) }]
+                    : prompt.newLabel
+                      ? [
+                          { label: prompt.newLabel, lines: values("to").map((text) => ({ text: String(text), maxLines: 2 })) },
+                          { label: prompt.oldLabel, lines: values("from").map((text) => ({ text: String(text), maxLines: 2 })) },
+                        ]
+                      : [{ lines: values("to").map((text, i) => ({ text: String(text), strong: i === 0, tone: i === 0 ? ("primary" as const) : ("secondary" as const), maxLines: 2 })) }],
+              },
+              ...(prompt.footer ? [{ kind: "note" as const, text: prompt.footer }] : []),
+            ],
+            buttons: [{ id: "decline", title: prompt.decline }, { id: "accept", title: prompt.accept, primary: true }],
+          }}
+          onButton={(id) => answer(id as AutofillPromptAnswer)}
+          onClose={() => answer("dismiss")}
+        />
+      ) : (
       <View>
         <PromptBody
           icons={[prompt.kind === "saveCard" ? "creditcard.fill" : "mappin.and.ellipse"]}
@@ -256,6 +343,7 @@ export function AutofillPrompt({ tabId, right, top }: { tabId: string; right: nu
         </PromptBody>
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>
+      )}
     </Popover>
   );
 }
@@ -271,6 +359,21 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
   };
   return (
     <Popover key={request.id} width={340} top={top} left={left} modal={false}>
+      {nativeToolbarAvailable() ? (
+        <NativePromptBody
+          spec={{
+            icons: request.icon ? [] : [request.app ? "app" : "questionmark.app.dashed"],
+            image: request.icon,
+            title: request.title,
+            message: request.message,
+            details: request.remember ? [{ kind: "checkbox", label: request.remember, value: always }] : [],
+            buttons: request.app ? [{ id: "cancel", title: "Cancel" }, { id: "open", title: "Open", primary: true }] : [{ id: "ok", title: "OK", primary: true }],
+          }}
+          onButton={(id) => answer(id === "open")}
+          onToggle={setAlways}
+          onClose={() => answer(false)}
+        />
+      ) : (
       <View>
         <PromptBody
           icons={request.icon ? [] : [request.app ? "app" : "questionmark.app.dashed"]}
@@ -299,6 +402,7 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
         </PromptBody>
         <PanelCloseButton onPress={() => answer(false)} />
       </View>
+      )}
     </Popover>
   );
 }

@@ -124,6 +124,7 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
 struct HeroFieldView: NSViewRepresentable {
   let model: HeroBarModel
   let theme: NewTabTheme
+  var fontSize: CGFloat = 17
 
   func makeCoordinator() -> HeroFieldCoordinator { HeroFieldCoordinator(model: model) }
 
@@ -138,7 +139,7 @@ struct HeroFieldView: NSViewRepresentable {
     field.cell?.wraps = false
     field.cell?.isScrollable = true
     field.lineBreakMode = .byClipping
-    field.font = .systemFont(ofSize: 17)
+    field.font = .systemFont(ofSize: fontSize)
     field.delegate = context.coordinator
     field.setContentHuggingPriority(.defaultLow, for: .horizontal)
     field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -154,11 +155,12 @@ struct HeroFieldView: NSViewRepresentable {
   }
 
   private func style(_ field: HeroTextField) {
+    if field.font?.pointSize != fontSize { field.font = .systemFont(ofSize: fontSize) }
     field.textColor = theme.textPrimary.ns
     field.selectionColor = theme.selection.ns
     let placeholder = model.placeholder
     if field.placeholderAttributedString?.string != placeholder || field.placeholderAttributedString?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor != theme.placeholder.ns {
-      field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: theme.placeholder.ns, .font: NSFont.systemFont(ofSize: 17)])
+      field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: theme.placeholder.ns, .font: NSFont.systemFont(ofSize: fontSize)])
     }
   }
 }

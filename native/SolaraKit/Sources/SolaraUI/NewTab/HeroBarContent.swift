@@ -267,12 +267,13 @@ struct PressTintStyle: ButtonStyle {
 struct ScopeChipView: View {
   @Environment(\.newTab) private var env
   let scope: SearchScope
+  var large = true
 
   var body: some View {
     HStack(spacing: 6) {
       NewTabFavicon(url: "https://\(scope.host)", size: 14)
       Text(scope.name)
-        .font(.system(size: 15, weight: .medium))
+        .font(.system(size: large ? 15 : 14, weight: .medium))
         .foregroundStyle(env.theme.textPrimary.color)
         .lineLimit(1)
         .frame(maxWidth: 220, alignment: .leading)
@@ -280,7 +281,7 @@ struct ScopeChipView: View {
     }
     .padding(.leading, 7)
     .padding(.trailing, 9)
-    .frame(height: 28)
+    .frame(height: large ? 28 : 26)
     .background(RoundedRectangle(cornerRadius: 8).fill(env.theme.rowSelected.color))
   }
 }

@@ -360,3 +360,80 @@ struct NewTabHistoryPatchTests {
     #expect(sources.history("p").map(\.url) == ["a"])
   }
 }
+
+@MainActor
+struct OmniboxPanelModelTests {
+  func make(_ variant: BarVariant, opensTab: Bool = false, initialText: String = "", currentUrl: String = "") -> (HeroBarModel, FakeHeroField, [String]) {
+    let sources = NewTabSources()
+    let now = Date().timeIntervalSince1970 * 1000
+    sources.setHistory(
+      (0..<6).map { HistoryRow(url: "https://site\($0).example/", title: "Site \($0)", favicon: nil, visits: 2, lastVisit: now - Double($0) * 1000) },
+      profileId: "p")
+    sources.setTabs([TabRow(id: "t1", url: currentUrl, title: "Current", favicon: nil)], profileId: "p")
+    let model = HeroBarModel(
+      windowId: "w", tabId: "t1", profileId: "p", incognito: false, settings: { Settings(values: [:]) }, sources: sources, variant: variant,
+      opensTab: opensTab, initialText: initialText, currentUrl: currentUrl)
+    let field = FakeHeroField()
+    model.field = field
+    return (model, field, [])
+  }
+
+  @Test func escapeClosesThePanelAndLeavesAScopeFirst() {
+    let (model, _, _) = make(.panel)
+    var done: [BarDismissal?] = []
+    var e = HeroBarEvents()
+    e.done = { done.append($0) }
+    model.events = e
+    model.textChanged("youtube.com", edit: nil)
+    model.textChanged("youtube.com ", edit: nil)
+    #expect(model.scope != nil)
+    model.key(HeroKey(.escape))
+    #expect(model.scope == nil && done.isEmpty)
+    model.key(HeroKey(.escape))
+    #expect(done == [.escape])
+  }
+
+  @Test func openingElsewhereOrRunningAnActionClosesThePanel() {
+    let (model, _, _) = make(.panel)
+    var done = 0
+    var opened: [Disposition] = []
+    var e = HeroBarEvents()
+    e.done = { _ in done += 1 }
+    e.open = { opened.append($1) }
+    model.events = e
+    model.textChanged("site1", edit: nil)
+    model.key(HeroKey(.enter, meta: true))
+    #expect(opened == [.newTab] && done == 1)
+    model.textChanged("site1", edit: nil)
+    model.key(HeroKey(.enter))
+    #expect(opened == [.newTab, .current] && done == 1)
+  }
+
+  @Test func theDropdownStartsWithTheCurrentPageAndFourRecent() {
+    let (model, _, _) = make(.sidebar, currentUrl: "https://site2.example/")
+    let urls = model.items.map { if case .page(let url, _, _, _, _, _) = $0 { url } else { "" } }
+    #expect(urls == ["https://site2.example/", "https://site0.example/", "https://site1.example/", "https://site3.example/", "https://site4.example/"])
+    model.textChanged("site5", edit: nil)
+    #expect(model.items.contains { if case .page(let url, _, _, _, _, _) = $0 { url == "https://site5.example/" } else { false } })
+    #expect(model.items.count != 5 || !model.items.allSatisfy { if case .page(_, _, _, _, _, let visited) = $0 { visited } else { false } })
+  }
+
+  @Test func theNewTabBarStartsWithNoRowSelected() {
+    let (model, _, _) = make(.panel, opensTab: true)
+    model.openTabs = [.page(url: "https://a.example/", title: "A", favicon: nil, tabId: "t9")]
+    #expect(model.selectedIndex == -1)
+    model.key(HeroKey(.arrowDown))
+    #expect(model.selectedIndex == 0)
+    model.textChanged("x", edit: nil)
+    model.textChanged("", edit: nil)
+    #expect(model.selectedIndex == -1)
+  }
+
+  @Test func thePanelOpensWithItsTextSelected() {
+    let (model, _, _) = make(.panel, initialText: "https://site0.example/", currentUrl: "https://site0.example/")
+    #expect(model.typed == "https://site0.example/")
+    #expect(model.selection == TextSelection(start: 0, end: 22))
+    #expect(model.items.isEmpty)
+    #expect(model.goEnabled)
+  }
+}

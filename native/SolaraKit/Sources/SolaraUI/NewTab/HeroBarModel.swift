@@ -14,6 +14,14 @@ public enum Disposition: String, Sendable {
   }
 }
 
+public enum BarVariant: String, Sendable {
+  case hero, panel, sidebar
+}
+
+public enum BarDismissal: String, Sendable {
+  case escape, closeKey
+}
+
 public enum HeroJourney: String, Sendable {
   case committed, focused, keystroke, suggestions, navigate
 }
@@ -36,6 +44,9 @@ public struct HeroBarEvents {
   public var journey: (HeroJourney) -> Void = { _ in }
   public var latency: (Double) -> Void = { _ in }
   public var changed: () -> Void = {}
+  public var done: (BarDismissal?) -> Void = { _ in }
+  public var cancel: () -> Void = {}
+  public var siteControls: () -> Void = {}
   public var copy: (String) -> Void = { text in
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
@@ -87,6 +98,9 @@ public final class HeroBarModel {
   @ObservationIgnored static var saved: [String: HeroBarSnapshot] = [:]
   static let bangWord = try! NSRegularExpression(pattern: "^![^\\s!]+$")
 
+  public let variant: BarVariant
+  public let opensTab: Bool
+  public let initialText: String
   public let windowId: String
   public let tabId: String
   public let profileId: String
@@ -94,6 +108,8 @@ public final class HeroBarModel {
   @ObservationIgnored public var events = HeroBarEvents()
   @ObservationIgnored public weak var field: HeroFieldControl?
   @ObservationIgnored public var settings: () -> Settings
+  public var currentUrl: String
+  public var openTabs: [SolaraOmnibox.Suggestion] = []
   @ObservationIgnored let sources: NewTabSources
   @ObservationIgnored let fetcher: SuggestFetcher?
   @ObservationIgnored let bangs: () -> any BangTable
@@ -117,8 +133,13 @@ public final class HeroBarModel {
 
   public init(
     windowId: String, tabId: String, profileId: String, incognito: Bool, settings: @escaping () -> Settings,
-    sources: NewTabSources = .shared, fetcher: SuggestFetcher? = nil, bangs: @escaping () -> any BangTable = { BundledBangs.table }
+    sources: NewTabSources = .shared, fetcher: SuggestFetcher? = nil, bangs: @escaping () -> any BangTable = { BundledBangs.table },
+    variant: BarVariant = .hero, opensTab: Bool = false, initialText: String = "", currentUrl: String = ""
   ) {
+    self.variant = variant
+    self.opensTab = opensTab
+    self.initialText = initialText
+    self.currentUrl = opensTab ? "" : currentUrl
     self.windowId = windowId
     self.tabId = tabId
     self.profileId = profileId
@@ -127,20 +148,29 @@ public final class HeroBarModel {
     self.sources = sources
     self.fetcher = fetcher
     self.bangs = bangs
-    let restored = HeroBarModel.saved[tabId]
-    typed = restored?.typed ?? ""
+    let restored = variant == .hero ? HeroBarModel.saved[tabId] : nil
+    typed = restored?.typed ?? initialText
     edited = restored?.edited ?? false
-    selected = restored?.selected ?? 0
+    selected = restored?.selected ?? (opensTab ? -1 : 0)
     scope = restored?.scope
     scopeFrom = restored?.scopeFrom ?? ""
-    selection = restored?.selection ?? .caret(restored?.typed.utf16.count ?? 0)
+    selection = restored?.selection ?? (initialText.isEmpty ? .caret(0) : TextSelection(start: 0, end: initialText.utf16.count))
     recompute()
   }
 
   public var engine: SearchEngine { defaultSearchEngine(settings()) }
-  public var items: [SolaraOmnibox.Suggestion] { result.items }
+  public var hero: Bool { variant == .hero }
+  var noneSelected: Int { opensTab ? -1 : 0 }
+  var idle: Bool { opensTab && scope == nil && jsTrim(typed).isEmpty }
+  var showsStart: Bool { variant == .sidebar && !edited && scope == nil }
+
+  public var items: [SolaraOmnibox.Suggestion] {
+    if showsStart { return dropdownStart() }
+    if idle { return openTabs }
+    return result.items
+  }
   public var value: String { typed + shown }
-  public var selectedIndex: Int { min(max(selected, 0), items.count - 1) }
+  public var selectedIndex: Int { selected < 0 && idle ? -1 : min(max(selected, 0), items.count - 1) }
   public var current: SolaraOmnibox.Suggestion? { items.indices.contains(selectedIndex) ? items[selectedIndex] : nil }
 
   public var tabScope: SearchScope? {
@@ -161,7 +191,7 @@ public final class HeroBarModel {
     }
   }
 
-  public var goEnabled: Bool { !jsTrim(typed).isEmpty }
+  public var goEnabled: Bool { !hero || !jsTrim(typed).isEmpty }
 
   public var leadingSuggestion: SolaraOmnibox.Suggestion? {
     guard let current, !typed.isEmpty || scope != nil else { return nil }
@@ -176,11 +206,12 @@ public final class HeroBarModel {
   }
 
   public func save() {
+    guard hero else { return }
     if !typed.isEmpty || scope != nil { HeroBarModel.saved[tabId] = snapshot() } else { HeroBarModel.saved[tabId] = nil }
   }
 
   public func panelOpened(_ open: Bool) {
-    if open && !listAway { listAway = true }
+    if hero && open && !listAway { listAway = true }
   }
 
   public func mounted() {
@@ -208,6 +239,7 @@ public final class HeroBarModel {
 
   public func didBlur() {
     editing = false
+    if !hero { events.cancel() }
   }
 
   public func sourcesChanged() {
@@ -228,7 +260,7 @@ public final class HeroBarModel {
     typed = next
     shown = ""
     suppressCompletion = suppress
-    selected = 0
+    selected = opensTab && jsTrim(next).isEmpty ? -1 : 0
     selection = edit?.after ?? .caret(next.utf16.count)
     update()
   }
@@ -250,6 +282,8 @@ public final class HeroBarModel {
     case .escape:
       if scope != nil {
         leaveScope(nil)
+      } else if !hero {
+        events.done(.escape)
       } else if !shown.isEmpty {
         suppressCompletion = true
         update()
@@ -378,17 +412,21 @@ public final class HeroBarModel {
     shown = ""
     edited = false
     scope = nil
-    selected = 0
+    selected = noneSelected
     suppressCompletion = true
     selection = .caret(0)
     update()
+  }
+
+  func dismiss() {
+    if hero { reset() } else { events.done(nil) }
   }
 
   func go(_ url: String, _ disposition: Disposition = .current) {
     guard !url.isEmpty else { return }
     if disposition == .current { events.journey(.navigate) }
     events.open(url, disposition)
-    if disposition != .current { reset() }
+    if disposition != .current { dismiss() }
   }
 
   func choose(_ s: SolaraOmnibox.Suggestion?, _ disposition: Disposition, byEnter: Bool) {
@@ -411,9 +449,9 @@ public final class HeroBarModel {
     }
     switch s {
     case .page(let url, _, _, let tabId, _, _):
-      if let tabId, !tabId.isEmpty {
+      if let tabId, !tabId.isEmpty, !(opensTab && disposition == .newTab) {
         events.switchTo(tabId, url, disposition)
-        if disposition == .current { reset() }
+        if hero && disposition == .current { reset() }
         return
       }
       go(url, disposition)
@@ -428,10 +466,10 @@ public final class HeroBarModel {
       selection = TextSelection(start: 0, end: result.utf16.count)
       update()
     case .action(let id, _, _, _):
-      reset()
+      dismiss()
       events.runAction(id)
     case .extension:
-      reset()
+      dismiss()
       events.runExtension(s)
     }
   }
@@ -483,6 +521,10 @@ public final class HeroBarModel {
     let n = items.count
     guard n > 0 else {
       selected = 0
+      return
+    }
+    if selectedIndex < 0 {
+      selected = delta > 0 ? 0 : n - 1
       return
     }
     selected = (selectedIndex + delta + n) % n
@@ -537,7 +579,7 @@ public final class HeroBarModel {
       actions: sources.actions(windowId),
       extensions: sources.extensions(windowId),
       currentTabId: tabId,
-      currentUrl: nil,
+      currentUrl: currentUrl.isEmpty ? nil : currentUrl,
       scope: scope,
       preventInline: suppressCompletion,
       bangs: table)
@@ -614,5 +656,29 @@ extension HeroBarModel {
     if ctrl && key == "p" { return self.key(HeroKey(.arrowUp, ctrl: true)) }
     guard let name = names[key] else { return false }
     return self.key(HeroKey(name, shift: mods["shiftKey"] ?? false, alt: mods["altKey"] ?? false, meta: mods["metaKey"] ?? false, ctrl: ctrl))
+  }
+}
+
+extension HeroBarModel {
+  static let recentInDropdown = 4
+
+  func dropdownStart() -> [SolaraOmnibox.Suggestion] {
+    let current = sources.tabs(profileId).first { $0.id == tabId }
+    let url = current?.url ?? currentUrl
+    var seen = Set(url.isEmpty ? [] : [HeroBarModel.pageKey(url)])
+    var out: [SolaraOmnibox.Suggestion] = []
+    if !url.isEmpty { out.append(.page(url: url, title: current?.title ?? "", favicon: current?.favicon)) }
+    for h in sources.history(profileId).sorted(by: { $0.lastVisit > $1.lastVisit }) {
+      let key = HeroBarModel.pageKey(h.url)
+      guard seen.insert(key).inserted else { continue }
+      out.append(.page(url: h.url, title: h.title, favicon: h.favicon, visited: true))
+      if out.count == HeroBarModel.recentInDropdown + (url.isEmpty ? 0 : 1) { break }
+    }
+    return out
+  }
+
+  static func pageKey(_ url: String) -> String {
+    guard let hash = url.firstIndex(of: "#") else { return url }
+    return String(url[..<hash])
   }
 }

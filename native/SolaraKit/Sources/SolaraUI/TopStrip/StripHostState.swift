@@ -17,6 +17,7 @@ public struct StripHostState: Decodable, Equatable, Sendable {
   public var closeHint: String?
   public var newTabMark: String?
   public var pages: [SidebarPageLook]?
+  public var selection: [String]?
 
   public init(profileId: String, dark: Bool = true) {
     self.profileId = profileId

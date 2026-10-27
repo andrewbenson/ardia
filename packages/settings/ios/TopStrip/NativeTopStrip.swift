@@ -125,6 +125,7 @@ final class TopStripHost {
     view = TopStripView(windowId: windowId)
     view.favicons.loader = { request in try await NativeSidebar.favicon(request) }
     view.onAction = { [weak self] action in self?.handle(action) }
+    view.dragBridge = TopStripDrag.shared
     commits.host = self
     pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) {
       [weak self] note in
@@ -218,5 +219,55 @@ final class TopStripHost {
     Task { @MainActor in
       _ = await SettingsAdapters.js("topStrip.action", windowId, name, id, payload.value)
     }
+  }
+}
+
+@MainActor
+final class TopStripDrag: StripDragBridge {
+  static let shared = TopStripDrag()
+
+  private var chain: Task<Void, Never>?
+  private var pendingMove: (windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat)?
+
+  private func send(_ name: String, _ args: [Any], done: (@MainActor (Any?) -> Void)? = nil) {
+    let previous = chain
+    let payload = SidebarPayload(["args": args])
+    chain = Task { @MainActor in
+      await previous?.value
+      let args = payload.value["args"] as? [Any] ?? []
+      let result = try? await SettingsJS.shared.invoke(name, args)
+      done?(result ?? nil)
+    }
+  }
+
+  func dragBegan(windowId: String, tabId: String?, tabIds: [String]) {
+    pendingMove = nil
+    send("topStrip.drag.begin", [windowId, tabId ?? NSNull(), tabIds])
+  }
+
+  func dragPicture(windowId: String, rect: CGRect, grab: CGPoint) {
+    send("topStrip.drag.picture", [windowId, rect.minX, rect.minY, rect.width, rect.height, grab.x, grab.y])
+  }
+
+  func dragMoved(windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat) {
+    let queued = pendingMove != nil
+    pendingMove = (windowId, at, lifted, dx)
+    if queued { return }
+    let previous = chain
+    chain = Task { @MainActor in
+      await previous?.value
+      guard let move = self.pendingMove else { return }
+      self.pendingMove = nil
+      _ = try? await SettingsJS.shared.invoke("topStrip.drag.move", [move.windowId, move.at.x, move.at.y, move.lifted, move.dx])
+    }
+  }
+
+  func dragEnded(windowId: String, commit: Bool, done: @escaping @MainActor (Bool) -> Void) {
+    send("topStrip.drag.end", [windowId, commit]) { result in done((result as? Bool) ?? false) }
+  }
+
+  func drop(ids: [String], drop: JSONValue) -> Bool {
+    guard let store = NativeStoreHandle.store, let commit = try? store.dispatch(Command("dropTabs", [JSONValue(ids), drop]), origin: .native) else { return false }
+    return !commit.changes.isEmpty
   }
 }

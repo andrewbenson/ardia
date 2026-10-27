@@ -79,6 +79,7 @@ final class StripMemberView: NSView {
 @MainActor
 final class StripGroupView: NSView {
   private let box = CALayer()
+  private let ring = StripOntoRing()
   private let divider = CALayer()
   private let tail = NSView()
   private let tailLine = CALayer()
@@ -93,6 +94,9 @@ final class StripGroupView: NSView {
   var size: CGFloat = 0 { didSet { if size != oldValue { arrange() } } }
   var shownFade: [String: CGFloat] = [:]
   var moving = false
+  var memberShift: (Int, StripMemberView) -> CGFloat = { _, _ in 0 }
+  var memberRaised: (StripMemberView) -> Bool = { _ in false }
+  var onto = false { didSet { if onto != oldValue { arrange() } } }
 
   override var isFlipped: Bool { true }
   override var mouseDownCanMoveWindow: Bool { false }
@@ -107,6 +111,7 @@ final class StripGroupView: NSView {
     box.cornerCurve = .continuous
     box.borderWidth = 0.5
     layer?.addSublayer(box)
+    layer?.addSublayer(ring)
     layer?.addSublayer(divider)
     tail.wantsLayer = true
     tail.layer?.addSublayer(tailLine)
@@ -155,7 +160,6 @@ final class StripGroupView: NSView {
       let groupId = group.id
       let tuck: (() -> Void)? = tuckable && m.shown ? { [weak context] in context?.send(.tuck(groupId: groupId)) } : nil
       view.update(m, chip: chip, tuck: tuck, context)
-      view.layer?.zPosition = m.shown ? 2 : 1
     }
     hasClose = context.groupClose(group.id) != nil
     if let control = context.groupClose(group.id) {
@@ -193,6 +197,7 @@ final class StripGroupView: NSView {
     divider.opacity = Float(min(1, max(0, open)))
     tailLine.frame = CGRect(x: 0, y: (StripMetrics.itemHeight - 15) / 2, width: 0.5, height: 15)
     CATransaction.commit()
+    if let context { ring.show(onto, width: size, palette: context.base) }
     tail.frame = NSRect(x: StripLayout.pixel(size - (StripMetrics.tailExpanded - 2.25)), y: StripMetrics.itemTop, width: 0.5 + 1 + 24, height: StripMetrics.itemHeight)
     tail.alphaValue = min(1, max(0, open))
     close.frame = NSRect(x: 1.5, y: (StripMetrics.itemHeight - 24) / 2, width: 24, height: 24)
@@ -200,10 +205,11 @@ final class StripGroupView: NSView {
     header.frame = NSRect(x: 0, y: StripMetrics.itemTop, width: placed.chip, height: StripMetrics.itemHeight)
     let start = placed.membersStart
     let openFade = min(1, max(0, open / 0.5))
-    for m in placed.members {
+    for (i, m) in placed.members.enumerated() {
       guard let view = members[m.member.id] else { continue }
       let x = start + m.offset * open
-      view.frame = NSRect(x: StripLayout.pixel(x), y: 0, width: m.width, height: StripMetrics.height)
+      view.frame = NSRect(x: StripLayout.pixel(x) + memberShift(i, view), y: 0, width: m.width, height: StripMetrics.height)
+      view.layer?.zPosition = memberRaised(view) ? 10 : m.shown ? 2 : 1
       let shown = shownFade[m.member.id] ?? (m.shown ? 1 : 0)
       view.alphaValue = min(1, shown + openFade)
       view.interactive = StripLayout.memberInteractive(shown: m.shown, expanded: placed.expanded, moving: moving)

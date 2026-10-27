@@ -16,6 +16,9 @@ public struct StripPlacedGroup: Equatable, Sendable {
   public var shown: Int?
   public var expanded: Bool { !entry.collapsed }
   public var membersStart: CGFloat { chip + StripMetrics.membersInset }
+  public var geometry: StripDragGeometry {
+    StripDragGeometry(members.map { StripDragSlot(tabIds: $0.member.tabIds, width: $0.width) }, gap: StripMetrics.gap)
+  }
 }
 
 public enum StripPlacedKind: Equatable, Sendable {

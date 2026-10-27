@@ -78,11 +78,14 @@ public struct StripSpringValue: Sendable, Equatable {
 }
 
 public struct StripTimedValue: Sendable, Equatable {
+  public enum Easing: Sendable { case quad, cubic }
+
   public private(set) var value: Double
   public private(set) var target: Double
   private var from: Double = 0
   private var start: Double?
   private var duration: Double = 0
+  private var easing = Easing.quad
   public var running: Bool { duration > 0 }
 
   public init(_ value: Double) {
@@ -96,12 +99,13 @@ public struct StripTimedValue: Sendable, Equatable {
     duration = 0
   }
 
-  public mutating func animate(to target: Double, duration: Double) {
+  public mutating func animate(to target: Double, duration: Double, easing: Easing = .quad) {
     guard target != self.target else { return }
     from = value
     self.target = target
     start = nil
     self.duration = duration
+    self.easing = easing
   }
 
   public mutating func step(now: Double) {
@@ -111,7 +115,7 @@ public struct StripTimedValue: Sendable, Equatable {
       return
     }
     let p = min(1, max(0, (now - start) / duration))
-    let eased = 1 - (1 - p) * (1 - p)
+    let eased = easing == .cubic ? 1 - pow(1 - p, 3) : 1 - (1 - p) * (1 - p)
     value = from + (target - from) * eased
     if p >= 1 {
       value = target
@@ -224,6 +228,8 @@ final class StripGroupMotion {
 public enum StripMotionTiming {
   public static let tuckFade = 0.12
   public static let band = 0.18
+  public static let lift = 0.15
+  public static let onto = 0.1
 }
 
 struct StripEasedColor {

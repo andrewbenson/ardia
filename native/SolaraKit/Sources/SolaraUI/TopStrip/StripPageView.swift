@@ -50,6 +50,11 @@ public final class StripPageView: NSView {
   private var revealed: String?
   private var motions: [String: StripGroupMotion] = [:]
   private lazy var ticker = StripTicker(view: self) { [weak self] now in self?.tick(now) ?? false }
+  private(set) lazy var drag = StripDrag(page: self)
+  private weak var fadedView: NSView?
+  private weak var draggedView: NSView?
+  private var raisedViews: [(view: NSView, below: NSView?)] = []
+  weak var dragBridge: StripDragBridge?
   var pageWidth: CGFloat = 0
 
   public override var isFlipped: Bool { true }
@@ -73,6 +78,7 @@ public final class StripPageView: NSView {
     scroll.documentView = document
     document.addSubview(dock)
     document.addSubview(newTab)
+    dock.layer?.zPosition = 2
     addSubview(scroll)
     NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     DevPointer.observe(self, #selector(devPointer(_:)))
@@ -125,14 +131,12 @@ public final class StripPageView: NSView {
         liveTabs.insert(m.id)
         let view = tabs[m.id] ?? make { StripTabChip() }
         tabs[m.id] = view
-        view.layer?.zPosition = context.activeId == m.id ? 1 : 0
         view.frame.size = NSSize(width: StripLayout.pixel(item.width), height: StripMetrics.height)
         view.update(m.id, context)
       case .split(let m):
         liveSplits.insert(m.id)
         let view = splits[m.id] ?? make { StripSplitChip() }
         splits[m.id] = view
-        view.layer?.zPosition = m.tabIds.contains(context.activeId) ? 1 : 0
         view.frame.size = NSSize(width: StripLayout.pixel(item.width), height: StripMetrics.height)
         view.update(m.tabIds, context)
       case .folder:
@@ -172,20 +176,37 @@ public final class StripPageView: NSView {
 
   private func place() {
     let h = StripMetrics.height
+    let activeId = context?.activeId ?? ""
     var shift: CGFloat = 0
+    let collapse = drag.collapse(.top)
     for item in pageLayout.items {
       let x = StripLayout.pixel(item.x + shift)
+      let lane = item.slot.map { drag.offset(.top, $0) } ?? 0
       switch item.kind {
-      case .dock, .folder:
+      case .dock:
+        let tuck = drag.collapse(.dock)
+        dock.arrange { [drag] i, cell in
+          drag.offset(.dock, i) + drag.translation(cell) - (tuck.map { i > $0.index ? $0.by : 0 } ?? 0)
+        }
+        dock.raised = { [drag] cell in drag.dragging(cell) }
+      case .folder:
         break
       case .tab(let m):
-        tabs[m.id]?.frame = NSRect(x: x, y: 0, width: StripLayout.pixel(item.width), height: h)
+        guard let view = tabs[m.id] else { break }
+        view.frame = NSRect(x: x + lane + drag.translation(view), y: 0, width: StripLayout.pixel(item.width), height: h)
+        view.layer?.zPosition = drag.dragging(view) ? 10 : activeId == m.id ? 1 : 0
       case .split(let m):
-        splits[m.id]?.frame = NSRect(x: x, y: 0, width: StripLayout.pixel(item.width), height: h)
+        guard let view = splits[m.id] else { break }
+        view.frame = NSRect(x: x + lane + drag.translation(view), y: 0, width: StripLayout.pixel(item.width), height: h)
+        view.layer?.zPosition = drag.dragging(view) ? 10 : m.tabIds.contains(activeId) ? 1 : 0
       case .group(let g):
         guard let view = groups[g.entry.id], let motion = motions[g.entry.id] else { continue }
         let size = CGFloat(motion.size.value)
-        view.frame = NSRect(x: x, y: 0, width: StripLayout.pixel(size), height: h)
+        let groupLane = StripLane.group(g.entry.id)
+        view.memberShift = { [drag] i, member in drag.offset(groupLane, i) + member.chips.reduce(0) { $0 + drag.translation($1) } }
+        view.memberRaised = { [drag] member in member.chips.contains { drag.dragging($0) } }
+        view.frame = NSRect(x: x + lane + drag.translation(view), y: 0, width: StripLayout.pixel(size), height: h)
+        view.layer?.zPosition = drag.dragging(view) ? 10 : 0
         view.shownFade = motion.shown
         view.moving = motion.moving
         view.size = StripLayout.pixel(size)
@@ -193,16 +214,22 @@ public final class StripPageView: NSView {
         view.arrange()
         shift += size - g.width
       case .newTab:
-        newTab.frame = NSRect(x: x, y: StripMetrics.itemTop, width: StripMetrics.itemHeight, height: StripMetrics.itemHeight)
+        newTab.frame = NSRect(
+          x: x + drag.offset(.top, pageLayout.top.slots.count), y: StripMetrics.itemTop, width: StripMetrics.itemHeight, height: StripMetrics.itemHeight)
       }
+      if let collapse, item.slot == collapse.index { shift -= collapse.by }
     }
+    if let faded = fadedView, faded !== drag.fadingView { faded.alphaValue = 1 }
+    fadedView = drag.fadingView
+    fadedView?.alphaValue = drag.fadingAlpha
     document.frame = NSRect(x: 0, y: 0, width: max(pageLayout.contentWidth + shift, scroll.frame.width), height: h)
   }
 
   private func tick(_ now: Double) -> Bool {
     for motion in motions.values { motion.step(now: now) }
+    drag.tick(now)
     place()
-    let running = motions.values.contains(where: \.running)
+    let running = motions.values.contains(where: \.running) || drag.running
     if !running { syncHover() }
     return running
   }
@@ -263,7 +290,7 @@ public final class StripPageView: NSView {
 
   private func hover(at point: NSPoint?) {
     var next: [StripHoverView] = []
-    if let point, let superview, var view = hitTest(convert(point, to: superview)) {
+    if let point, !drag.active, let superview, var view = hitTest(convert(point, to: superview)) {
       while true {
         if let hoverable = view as? StripHoverView { next.append(hoverable) }
         guard let up = view.superview, up !== self else { break }
@@ -276,6 +303,154 @@ public final class StripPageView: NSView {
   }
 
   public func groupSize(_ groupId: String) -> Double? { motions[groupId]?.size.value }
+
+  var dragState: BrowserState? { context?.state }
+  var selection: [String] { context?.host.selection ?? [] }
+  var bridge: StripDragBridge? { dragBridge }
+
+  func geometry(_ lane: StripLane) -> StripDragGeometry? {
+    switch lane {
+    case .top: return pageLayout.top
+    case .dock: return pageLayout.dock
+    case .group(let id):
+      for item in pageLayout.items {
+        if case .group(let g) = item.kind, g.entry.id == id { return g.geometry }
+      }
+      return nil
+    }
+  }
+
+  var dropTargets: [StripDropTarget?] {
+    var out: [StripDropTarget?] = []
+    for item in pageLayout.items where item.slot != nil {
+      switch item.kind {
+      case .tab(let m): out.append(.tab(m.id))
+      case .group(let g): out.append(.group(g.entry.id))
+      default: out.append(nil)
+      }
+    }
+    return out
+  }
+
+  func windowRect(_ view: NSView) -> CGRect? {
+    guard let window = view.window, let content = window.contentView, view.superview != nil else { return nil }
+    let r = view.convert(view.bounds, to: nil)
+    return CGRect(x: r.minX, y: content.bounds.height - r.maxY, width: r.width, height: r.height)
+  }
+
+  func dragChanged() {
+    let dragged = drag.source?.view
+    if draggedView !== dragged {
+      (draggedView as? StripDraggable)?.dragged = false
+      (dragged as? StripDraggable)?.dragged = true
+      draggedView = dragged
+      lowerRaised()
+      if let dragged { raise(dragged, levels: drag.source.map(\.levels) ?? 0) }
+    }
+    place()
+    if drag.running { ticker.start() }
+  }
+
+  private func raise(_ view: NSView, levels: Int) {
+    var at: NSView? = view
+    for _ in 0...max(0, levels) {
+      guard let v = at, v !== document, let parent = v.superview else { return }
+      if let i = parent.subviews.firstIndex(where: { $0 === v }), i < parent.subviews.count - 1 {
+        raisedViews.append((v, parent.subviews[i + 1]))
+        parent.addSubview(v, positioned: .above, relativeTo: nil)
+      }
+      if parent === document { return }
+      at = parent
+    }
+  }
+
+  private func lowerRaised() {
+    for (view, below) in raisedViews.reversed() {
+      guard let parent = view.superview, let below, below.superview === parent else { continue }
+      parent.addSubview(view, positioned: .below, relativeTo: below)
+    }
+    raisedViews = []
+  }
+
+  func dragEnded() {
+    syncHover()
+  }
+
+  func ontoChanged(from old: StripDropTarget?, to new: StripDropTarget?) {
+    for (target, on) in [(old, false), (new, true)] {
+      switch target {
+      case .tab(let id): tabs[id]?.onto = on
+      case .group(let id): groups[id]?.onto = on
+      case nil: break
+      }
+    }
+  }
+
+  func dragSources(from view: NSView) -> [StripDragSource] {
+    guard context != nil else { return [] }
+    let gap = StripMetrics.gap
+    var out: [StripDragSource] = []
+    var at: NSView? = view
+    while let v = at, v !== self {
+      if let part = v as? StripSplitPart, !part.tabId.isEmpty {
+        out.append(StripDragSource(view: part, lane: .top, from: -1, tabId: part.tabId, ids: [part.tabId], width: 0, gap: 0, axis: .y))
+      } else if let chip = v as? StripTabChip, let tabId = chip.tabId {
+        if let member = chip.superview as? StripMemberView {
+          guard member.member?.kind == .tab, let source = memberSource(chip, member, tabId: tabId, ids: nil) else { return out }
+          return out + [source]
+        }
+        guard let slot = slot(of: "tab:\(tabId)") else { return out }
+        return out + [StripDragSource(view: chip, lane: .top, from: slot.index, tabId: tabId, width: slot.width, gap: gap, aims: true)]
+      } else if let chip = v as? StripSplitChip, !chip.tabIds.isEmpty {
+        if let member = chip.superview as? StripMemberView {
+          guard let source = memberSource(chip, member, tabId: nil, ids: chip.tabIds) else { return out }
+          return out + [source]
+        }
+        guard let item = pageLayout.items.first(where: { if case .split(let m) = $0.kind { m.tabIds == chip.tabIds } else { false } }), let index = item.slot
+        else { return out }
+        let slot = (index: index, width: item.width)
+        return out + [StripDragSource(view: chip, lane: .top, from: slot.index, ids: chip.tabIds, width: slot.width, gap: gap, axis: .x)]
+      } else if let header = v as? StripGroupHeader, let group = header.superview as? StripGroupView {
+        guard let slot = slot(of: "group:\(header.groupId)") else { return out }
+        let ids = context?.state.groups[header.groupId]?.tabIds ?? []
+        return out + [StripDragSource(view: group, lane: .top, from: slot.index, ids: ids, width: 0, gap: 0, axis: .x, local: true, drop: .moveGroup(header.groupId))]
+      } else if let cell = v as? StripPinnedCell, let i = dock.order.firstIndex(of: cell.cell) {
+        let step = StripMetrics.pinnedSpacing
+        if cell.folderId != nil {
+          let ids = pageLayout.dockMembers[cell.cell] ?? []
+          return out + [StripDragSource(view: cell, lane: .dock, from: i, ids: ids, pinned: true, width: StripMetrics.pinnedCell, gap: step, local: true, drop: .tileFolder)]
+        }
+        return out + [StripDragSource(view: cell, lane: .dock, from: i, tabId: cell.cell, pinned: true, width: StripMetrics.pinnedCell, gap: step, levels: 1)]
+      }
+      at = v.superview
+    }
+    return out
+  }
+
+  private func slot(of key: String) -> (index: Int, width: CGFloat)? {
+    guard let item = pageLayout.items.first(where: { $0.key == key }), let slot = item.slot else { return nil }
+    return (slot, item.width)
+  }
+
+  private func memberSource(_ chip: NSView, _ member: StripMemberView, tabId: String?, ids: [String]?) -> StripDragSource? {
+    guard let groupView = member.superview as? StripGroupView, let groupId = groupView.groupId, let m = member.member,
+      let item = pageLayout.items.first(where: { $0.key == "group:\(groupId)" }), case .group(let g) = item.kind, let slot = item.slot,
+      let i = g.members.firstIndex(where: { $0.member.id == m.id })
+    else { return nil }
+    let placed = g.members[i]
+    let top = pageLayout.top
+    let left = top.lefts[slot] + g.chip + StripMetrics.membersInset + (g.expanded ? placed.offset : 0)
+    let from = g.expanded ? i : -1
+    guard tabId != nil else {
+      return StripDragSource(view: chip, lane: .group(groupId), from: from, ids: ids, groupId: groupId, width: placed.width, gap: StripMetrics.gap, axis: .x, levels: 1)
+    }
+    let end = (top.lefts.last ?? 0) + (top.slots.last?.width ?? 0)
+    let range = (top.lefts[0] - left - placed.width / 2)...max(top.lefts[0] - left - placed.width / 2, end - left - placed.width / 2)
+    let exit = StripMemberExit(slot: slot, chip: g.chip, expanded: g.expanded, left: left)
+    return StripDragSource(
+      view: chip, lane: .group(groupId), from: from, tabId: tabId, groupId: groupId, width: placed.width, gap: StripMetrics.gap, range: range, drop: .leaveGroup(exit),
+      levels: 1)
+  }
 
   public func frameOf(_ key: String) -> NSRect? {
     let view: NSView? =

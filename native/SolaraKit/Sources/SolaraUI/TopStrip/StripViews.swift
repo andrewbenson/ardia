@@ -4,6 +4,45 @@ import SolaraModel
 import SolaraStore
 
 @MainActor
+protocol StripDraggable: AnyObject {
+  var dragged: Bool { get set }
+}
+
+@MainActor
+final class StripOntoRing: CALayer {
+  override init() {
+    super.init()
+    actions = SurfaceLayer.noActions
+    cornerRadius = StripMetrics.tabRadius
+    cornerCurve = .continuous
+    borderWidth = 1.5
+    isHidden = true
+  }
+
+  override init(layer: Any) { super.init(layer: layer) }
+  required init?(coder: NSCoder) { fatalError() }
+
+  func show(_ on: Bool, width: CGFloat, palette: SidebarPalette) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    frame = CGRect(x: 0, y: StripMetrics.itemTop, width: width, height: StripMetrics.itemHeight)
+    borderColor = palette.accent.cgColor
+    backgroundColor = palette.pressed.cgColor
+    CATransaction.commit()
+    guard on != !isHidden else { return }
+    isHidden = !on
+    removeAnimation(forKey: "fade")
+    guard on else { return }
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = 0
+    fade.toValue = 1
+    fade.duration = StripMotionTiming.onto
+    fade.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
+    add(fade, forKey: "fade")
+  }
+}
+
+@MainActor
 class StripHoverView: NSView {
   var hovered = false { didSet { if hovered != oldValue { repaint() } } }
   var pressed = false { didSet { if pressed != oldValue { repaint() } } }
@@ -24,16 +63,34 @@ class StripHoverView: NSView {
   func press(_ mods: SidebarClickMods) {}
   func contextMenu() {}
 
+  private var page: StripPageView? {
+    var at = superview
+    while let v = at {
+      if let page = v as? StripPageView { return page }
+      at = v.superview
+    }
+    return nil
+  }
+
   override func mouseDown(with event: NSEvent) {
     if event.modifierFlags.contains(.control) { return contextMenu() }
+    page?.drag.press(self, event)
     pressed = true
   }
 
   override func mouseDragged(with event: NSEvent) {
+    if page?.drag.dragged(self, event) == true {
+      pressed = false
+      return
+    }
     pressed = bounds.contains(convert(event.locationInWindow, from: nil))
   }
 
   override func mouseUp(with event: NSEvent) {
+    if page?.drag.released(self, event) == true {
+      pressed = false
+      return
+    }
     let inside = bounds.contains(convert(event.locationInWindow, from: nil))
     let was = pressed
     pressed = false
@@ -165,8 +222,10 @@ final class SelectedTabLayer: CALayer {
 }
 
 @MainActor
-final class StripTabChip: StripHoverView {
+final class StripTabChip: StripHoverView, StripDraggable {
   private let selected = SelectedTabLayer()
+  private let lifted = CALayer()
+  private let ring = StripOntoRing()
   private let row = CALayer()
   private let icon = TabIconView()
   private let audio = StripIconButton()
@@ -178,12 +237,31 @@ final class StripTabChip: StripHoverView {
   private var band: StripEasedColor?
   private lazy var bandTicker = StripTicker(view: self) { [weak self] now in self?.stepBand(now) ?? false }
   var tuck: (() -> Void)?
-  var dragged = false
+  var dragged = false {
+    didSet {
+      guard dragged != oldValue else { return }
+      renderSelected()
+      repaint()
+    }
+  }
+  var onto = false {
+    didSet {
+      guard onto != oldValue else { return }
+      renderOnto()
+      repaint()
+    }
+  }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
     selected.isHidden = true
     layer?.addSublayer(selected)
+    lifted.actions = SurfaceLayer.noActions
+    lifted.cornerRadius = StripMetrics.tabRadius
+    lifted.cornerCurve = .continuous
+    lifted.isHidden = true
+    layer?.addSublayer(lifted)
+    layer?.addSublayer(ring)
     row.actions = SurfaceLayer.noActions
     row.cornerRadius = StripMetrics.tabRadius
     row.cornerCurve = .continuous
@@ -236,8 +314,18 @@ final class StripTabChip: StripHoverView {
     needsLayout = true
   }
 
+  private func renderOnto() {
+    guard let context else { return }
+    ring.show(onto, width: bounds.width, palette: context.base)
+  }
+
   private func renderSelected() {
     selected.isHidden = !active
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    lifted.isHidden = !(dragged && !active)
+    if let context { lifted.backgroundColor = context.palette.windowTint.cgColor }
+    CATransaction.commit()
     guard active, let context else { return }
     var colors = [context.palette.card]
     if dragged { colors.insert(context.palette.windowTint, at: 0) }
@@ -254,7 +342,7 @@ final class StripTabChip: StripHoverView {
   override func repaint() {
     guard let context else { return }
     let base = context.base
-    let fill: NSColor = pressed && !active ? base.pressed : (hovered || dragged) && !active ? base.hover : .clear
+    let fill: NSColor = pressed && !active ? base.pressed : (hovered || dragged) && !active && !onto ? base.hover : .clear
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     row.backgroundColor = fill.cgColor
@@ -275,7 +363,9 @@ final class StripTabChip: StripHoverView {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     row.frame = CGRect(x: 0, y: StripMetrics.itemTop, width: w, height: StripMetrics.itemHeight)
+    lifted.frame = row.frame
     CATransaction.commit()
+    if onto { renderOnto() }
     var x: CGFloat = 9.5
     icon.frame = NSRect(x: x, y: StripMetrics.mid - 8, width: 16, height: 16)
     x += 16
@@ -384,6 +474,9 @@ final class StripDockView: NSView {
   private let box = CALayer()
   private var cells: [String: StripPinnedCell] = [:]
   private(set) var order: [String] = []
+  private var lefts: [CGFloat] = []
+  private var shift: (Int, StripPinnedCell) -> CGFloat = { _, _ in 0 }
+  var raised: (StripPinnedCell) -> Bool = { _ in false }
 
   override var isFlipped: Bool { true }
 
@@ -422,8 +515,18 @@ final class StripDockView: NSView {
         addSubview(view)
         cells[id] = view
       }
-      view.frame = NSRect(x: geometry.lefts[i], y: 0.5, width: StripMetrics.pinnedCell, height: StripMetrics.itemHeight - 1)
       view.update(id, members: members[id] ?? [id], context)
+    }
+    lefts = geometry.lefts
+    arrange(shift)
+  }
+
+  func arrange(_ shift: @escaping (Int, StripPinnedCell) -> CGFloat) {
+    self.shift = shift
+    for (i, id) in order.enumerated() {
+      guard let view = cells[id], i < lefts.count else { continue }
+      view.frame = NSRect(x: lefts[i] + shift(i, view), y: 0.5, width: StripMetrics.pinnedCell, height: StripMetrics.itemHeight - 1)
+      view.layer?.zPosition = raised(view) ? 10 : 0
     }
   }
 
@@ -700,13 +803,16 @@ final class StripSplitPart: StripHoverView {
 }
 
 @MainActor
-final class StripSplitChip: StripHoverView {
+final class StripSplitChip: StripHoverView, StripDraggable {
   private let selected = SelectedTabLayer()
   private let row = CALayer()
   private let symbol = SymbolView()
   private var parts: [StripSplitPart] = []
   private var active = false
   private(set) var tabIds: [String] = []
+  var dragged = false {
+    didSet { if dragged != oldValue, let context { update(tabIds, context) } }
+  }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -738,6 +844,7 @@ final class StripSplitChip: StripHoverView {
     selected.isHidden = !active
     if active {
       var colors = [context.palette.card]
+      if dragged { colors.insert(context.palette.windowTint, at: 0) }
       if let band { colors.append(band.background) }
       selected.render(width: bounds.width, colors: colors, floating: context.host.floating, palette: context.palette)
     }
@@ -775,8 +882,6 @@ final class StripSplitChip: StripHoverView {
     }
   }
 
-  override func mouseDown(with event: NSEvent) {}
-  override func mouseUp(with event: NSEvent) {}
 }
 
 @MainActor

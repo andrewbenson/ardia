@@ -6,6 +6,9 @@ public final class TopStripView: NSView {
   public let windowId: String
   public let favicons = SidebarFavicons()
   public var onAction: (StripAction) -> Void = { _ in }
+  public weak var dragBridge: StripDragBridge? {
+    didSet { for page in pages.values { page.dragBridge = dragBridge } }
+  }
 
   private var pages: [String: StripPageView] = [:]
   private var state: BrowserState?
@@ -99,6 +102,7 @@ public final class TopStripView: NSView {
     if let page = pages[id] { return page }
     let page = StripPageView(windowId: windowId, profileId: id, favicons: favicons)
     page.onAction = { [weak self] action in self?.onAction(action) }
+    page.dragBridge = dragBridge
     page.isHidden = true
     pages[id] = page
     addSubview(page)

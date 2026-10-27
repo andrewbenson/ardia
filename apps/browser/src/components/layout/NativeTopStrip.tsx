@@ -21,6 +21,7 @@ import { usePagerPages } from "./profilePager";
 import { openNewTabInSplit } from "./splitActions";
 import { openFolderMenu, openTileFolderStripMenu } from "./stripFolderMenu";
 import { tuckTarget } from "./stripGroups";
+import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, updateTabDrag } from "./tabDrag";
 
 let nativeTopStrip: boolean | undefined;
 
@@ -87,6 +88,23 @@ addNativeSettingsHandlers({
         return void (toggleNewTabBar(windowId) || s.newTab(windowId, { newTabCommand: true }));
     }
   },
+});
+
+let dragSeq = 0;
+let dragDx = 0;
+
+addNativeSettingsHandlers({
+  "topStrip.drag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
+    dragDx = 0;
+    dragSeq = beginTabDrag(tabId, tabIds);
+  },
+  "topStrip.drag.picture": (_windowId: string, x: number, y: number, w: number, h: number, gx: number, gy: number) =>
+    setDragPicture(dragSeq, () => [x + dragDx, y, w, h], [gx, gy]),
+  "topStrip.drag.move": (_windowId: string, x: number, y: number, lifted: boolean, dx: number) => {
+    dragDx = dx;
+    updateTabDrag(x, y, lifted);
+  },
+  "topStrip.drag.end": (_windowId: string, commit: boolean) => (commit ? endTabDrag() : (cancelTabDrag(), false)),
 });
 
 function themeTokens(theme: Theme): Record<string, string> {
@@ -158,6 +176,7 @@ export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId
     }),
   );
   const pages = usePageLooks(windowId);
+  const selection = useBrowser(useShallow((s) => s.selection[windowId] ?? NONE));
 
   const state = useMemo(
     () =>
@@ -177,8 +196,9 @@ export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId
         closeHint,
         newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
         pages,
+        selection,
       }),
-    [pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, bands, closeHint],
+    [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, bands, closeHint],
   );
 
   return <SolaraHostedView kind="topStrip" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;

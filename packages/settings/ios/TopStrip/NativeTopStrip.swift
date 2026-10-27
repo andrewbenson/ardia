@@ -23,6 +23,14 @@ public class TopStripModule: Module {
       MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.groupSize(groupId) }
     }.runOnQueue(.main)
 
+    AsyncFunction("traceSlot") { (windowId: String, tabIds: String) in
+      MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.traceSlot(tabIds) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("slotTrace") { (windowId: String) -> [[Double]] in
+      MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.slotTrace ?? [] }
+    }.runOnQueue(.main)
+
     AsyncFunction("keys") { (windowId: String, profileId: String) -> [String] in
       MainActor.assumeIsolated { NativeStoreHandle.store.map { StripQuery($0.state).keys(windowId: windowId, profileId: profileId) } ?? [] }
     }.runOnQueue(.main)

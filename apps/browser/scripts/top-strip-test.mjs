@@ -129,6 +129,16 @@ async function measure(native) {
         };
         return loop().then((r) => { st().updateGroup("g1", { collapsed: false }); return settle(800).then(() => ({ open, samples: r })); });
       });`);
+    out.room = await run(`
+      const key = "g1a,g1b";
+      const trace = ${native ? `() => globalThis.expo.modules.SolaraTopStrip.slotTrace("w1")` : `() => Promise.resolve(globalThis.acStrip.slotTrace(key))`};
+      const arm = ${native ? `globalThis.expo.modules.SolaraTopStrip.traceSlot("w1", key)` : `Promise.resolve(globalThis.acStrip.traceSlot(key))`};
+      const path = ["222,21", "232,21", "640,21", ...Array(4).fill("640,21")].join(";");
+      return arm.then(() => act("w1", "drag:" + path)).then(() => settle(150 + 74 * 16 + 700)).then(trace).then((samples) => {
+        const moved = st().windows.w1.tabIds.indexOf("t1") > st().windows.w1.tabIds.indexOf("g1b");
+        st().placeTabs(["t1"], { pinned: false, beforeId: "g1a" });
+        return settle(500).then(() => ({ moved, samples }));
+      });`);
     return { ...out, run, app };
   } catch (e) {
     await app.quit();
@@ -197,6 +207,23 @@ try {
       assert.ok(Math.abs(ours.at(-1)[1] - theirs.at(-1)[1]) < 0.05, `both settle at the same width: rn ${theirs.at(-1)[1]} native ${ours.at(-1)[1]}`);
       assert.ok(Math.abs(best.lag) <= 25, `RN is ${best.lag} ms behind native's start: more than a frame and a half`);
       assert.ok(best.error <= 2, `the curves differ by ${best.error} pt`);
+    });
+    await rep.check("the strip makes room for a dragged tab on RN's spring, frame for frame", async () => {
+      const ours = native.room.samples, theirs = rn.room.samples;
+      rep.log(`rn room ${JSON.stringify(theirs.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
+      rep.log(`native room ${JSON.stringify(ours.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
+      assert.ok(rn.room.moved && native.room.moved, `the tab landed past the group: rn ${rn.room.moved} native ${native.room.moved}`);
+      assert.ok(theirs.length > 3 && ours.length > 3, `traced: rn ${theirs.length} native ${ours.length}`);
+      const far = (samples) => samples.reduce((m, [, x]) => (Math.abs(x) > Math.abs(m) ? x : m), 0);
+      assert.ok(Math.abs(far(theirs)) > 100 && Math.abs(far(ours) - far(theirs)) < 0.05, `the same room: rn ${far(theirs)} native ${far(ours)}`);
+      const at = (t) => { const i = theirs.findIndex(([u]) => u >= t); if (i <= 0) return i === 0 ? theirs[0][1] : theirs.at(-1)[1]; const [t0, x0] = theirs[i - 1], [t1, x1] = theirs[i]; return x0 + ((x1 - x0) * (t - t0)) / (t1 - t0); };
+      let best = null;
+      for (let lag = -25; lag <= 25; lag += 0.5) {
+        const error = Math.max(...ours.filter(([t]) => t + lag >= 0 && t + lag <= theirs.at(-1)[0]).map(([t, x]) => Math.abs(x - at(t + lag))));
+        if (!best || error < best.error) best = { lag, error };
+      }
+      rep.log(`room: RN's spring runs ${best.lag} ms behind native's, and they differ by at most ${best.error.toFixed(2)} pt`);
+      assert.ok(best.error <= 2, `the curves differ by ${best.error.toFixed(2)} pt at best (RN ${best.lag} ms behind)`);
     });
     if (rn.snapshot && native.snapshot) {
       await rep.check("the strips' pixels match RN's", async () => {

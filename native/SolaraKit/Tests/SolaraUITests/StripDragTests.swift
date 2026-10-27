@@ -41,3 +41,59 @@ import Testing
     #expect(lift.value == 1 && !lift.running)
   }
 }
+
+@Suite struct StripDockCrossTests {
+  private let gap = StripMetrics.gap
+  private let top = StripDragGeometry((0..<3).map { StripDragSlot(tabIds: ["t\($0)"], width: 173) }, gap: StripMetrics.gap)
+  private let dock = StripDragGeometry(["p1", "p2"].map { StripDragSlot(tabIds: [$0], width: StripMetrics.pinnedCell) }, gap: StripMetrics.pinnedSpacing)
+  private var dockLeft: CGFloat { -(StripMetrics.dockWidth(2) + StripMetrics.dockGap) }
+
+  @Test func theDockShrinksByACellOrByItsLastCellAndGap() {
+    #expect(StripLayout.dockShrink(2) == 36)
+    #expect(StripLayout.dockShrink(1) == 38.5)
+  }
+
+  @Test func slotStartIsALeftEdgeOrPastTheLastSlot() {
+    #expect(StripLayout.slotStart(top, 1, gap: gap) == 177)
+    #expect(StripLayout.slotStart(top, 3, gap: gap) == 531)
+    #expect(StripLayout.slotStart(StripDragGeometry([], gap: gap), 0, gap: gap) == 0)
+  }
+
+  @Test func dockCellLeftExtendsPastTheLastCell() {
+    #expect(StripLayout.dockCellLeft(dock, 1) == 36)
+    #expect(StripLayout.dockCellLeft(dock, 2) == 72)
+    #expect(StripLayout.dockCellLeft(StripDragGeometry([], gap: 2), 0) == 0)
+  }
+
+  @Test func aTabCrossesIntoTheDockOnlyPastItsGap() {
+    #expect(StripLayout.tabInIndex(top: top, dock: dock, dockLeft: dockLeft, from: 0, dx: -4, grab: 86.5) == nil)
+    #expect(StripLayout.tabInIndex(top: top, dock: dock, dockLeft: dockLeft, from: 0, dx: -74, grab: 86.5) == 2)
+    #expect(StripLayout.tabInIndex(top: top, dock: dock, dockLeft: dockLeft, from: 0, dx: -140, grab: 86.5) == 0)
+    #expect(StripLayout.tabInIndex(top: top, dock: dock, dockLeft: dockLeft, from: 1, dx: -286.5, grab: 86.5) == 1)
+  }
+
+  @Test func aTileCrossesOutPastTheDockAndLandsBetweenTabs() {
+    #expect(StripLayout.pinOutIndex(top: top, dock: dock, dockLeft: dockLeft, from: 1, dx: 20) == nil)
+    #expect(StripLayout.pinOutIndex(top: top, dock: dock, dockLeft: dockLeft, from: 1, dx: 40) == 0)
+    #expect(StripLayout.pinOutIndex(top: top, dock: dock, dockLeft: dockLeft, from: 0, dx: 74.5 + 36 + 60) == 1)
+  }
+
+  @Test func theHeldTileStopsAtTheDockEnd() {
+    #expect(StripLayout.tileHold(dx: -50, limit: -20) == 0)
+    #expect(StripLayout.tileHold(dx: 10, limit: -20) == -30)
+  }
+}
+
+@Suite struct StripDragMotionTests {
+  @Test func aDragSpringStartsItsClockWhenStartedNotOnTheNextFrame() {
+    var started = StripSpringValue(0)
+    started.animate(to: -127, .slide, at: 1)
+    started.step(now: 1 + 1.0 / 60)
+    var deferred = StripSpringValue(0)
+    deferred.animate(to: -127, .slide)
+    deferred.step(now: 1)
+    deferred.step(now: 1 + 1.0 / 60)
+    #expect(abs(started.value - deferred.value) < 1e-9)
+    #expect(abs(started.value - -56.1) < 0.2)
+  }
+}

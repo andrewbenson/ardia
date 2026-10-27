@@ -54,6 +54,7 @@ public final class StripPageView: NSView {
   private weak var fadedView: NSView?
   private weak var draggedView: NSView?
   private var raisedViews: [(view: NSView, below: NSView?)] = []
+  private var crossOverlay: NSView?
   weak var dragBridge: StripDragBridge?
   var pageWidth: CGFloat = 0
 
@@ -189,6 +190,7 @@ public final class StripPageView: NSView {
           drag.offset(.dock, i) + drag.translation(cell) - (tuck.map { i > $0.index ? $0.by : 0 } ?? 0)
         }
         dock.raised = { [drag] cell in drag.dragging(cell) }
+        dock.grow = CGFloat(drag.grow.value)
       case .folder:
         break
       case .tab(let m):
@@ -221,7 +223,8 @@ public final class StripPageView: NSView {
     }
     if let faded = fadedView, faded !== drag.fadingView { faded.alphaValue = 1 }
     fadedView = drag.fadingView
-    fadedView?.alphaValue = drag.fadingAlpha
+    fadedView?.alphaValue = drag.crossed ? 0 : drag.fadingAlpha
+    placeCrossOverlay()
     document.frame = NSRect(x: 0, y: 0, width: max(pageLayout.contentWidth + shift, scroll.frame.width), height: h)
   }
 
@@ -304,6 +307,14 @@ public final class StripPageView: NSView {
 
   public func groupSize(_ groupId: String) -> Double? { motions[groupId]?.size.value }
 
+  func slotKey(_ lane: StripLane, _ index: Int) -> String? {
+    guard let g = geometry(lane), index < g.slots.count else { return nil }
+    return g.slots[index].tabIds.joined(separator: ",")
+  }
+
+  public func traceSlot(_ tabIds: String) { drag.traceSlot(tabIds) }
+  public var slotTrace: [[Double]] { drag.traced }
+
   var dragState: BrowserState? { context?.state }
   var selection: [String] { context?.host.selection ?? [] }
   var bridge: StripDragBridge? { dragBridge }
@@ -372,6 +383,58 @@ public final class StripPageView: NSView {
     raisedViews = []
   }
 
+  var dockLeft: CGFloat { -(StripMetrics.dockWidth(pageLayout.dockCells.count) + StripMetrics.dockGap) }
+
+  func crossChanged() {
+    crossOverlay?.removeFromSuperview()
+    crossOverlay = nil
+    guard drag.crossed, let source = drag.source, let tabId = source.tabId, let context else { return }
+    let overlay: StripHoverView
+    switch source.cross {
+    case .tabIn:
+      let cell = StripPinnedCell()
+      cell.frame.size = NSSize(width: StripMetrics.pinnedCell, height: StripMetrics.itemHeight - 1)
+      cell.update(tabId, members: [tabId], context)
+      overlay = cell
+    case .pinOut:
+      let chip = StripTabChip()
+      chip.frame.size = NSSize(width: pageLayout.chip, height: StripMetrics.height)
+      chip.update(tabId, context)
+      chip.dragged = true
+      overlay = chip
+    case nil:
+      return
+    }
+    overlay.passive = true
+    document.addSubview(overlay)
+    crossOverlay = overlay
+    placeCrossOverlay()
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = 0
+    fade.toValue = 1
+    fade.duration = StripMotionTiming.onto
+    fade.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.46, 0.45, 0.94)
+    overlay.layer?.add(fade, forKey: "fade")
+  }
+
+  private func placeCrossOverlay() {
+    guard let overlay = crossOverlay, let source = drag.source, source.view.superview != nil else { return }
+    let f = source.view.convert(source.view.bounds, to: document)
+    switch source.cross {
+    case .tabIn:
+      let top = pageLayout.top
+      guard source.from >= 0, source.from < top.lefts.count else { return }
+      let cell = StripMetrics.pinnedCell
+      let limit = dockLeft + CGFloat(pageLayout.dockCells.count) * StripMetrics.cellStep - top.lefts[source.from] - drag.grabX + cell / 2
+      let hold = StripLayout.tileHold(dx: CGFloat(drag.dx.value), limit: limit)
+      overlay.frame = NSRect(x: f.minX + drag.grabX - cell / 2 + hold, y: StripMetrics.itemTop + 0.5, width: cell, height: StripMetrics.itemHeight - 1)
+    case .pinOut:
+      overlay.frame = NSRect(x: f.minX, y: 0, width: pageLayout.chip, height: StripMetrics.height)
+    case nil:
+      break
+    }
+  }
+
   func dragEnded() {
     syncHover()
   }
@@ -400,7 +463,8 @@ public final class StripPageView: NSView {
           return out + [source]
         }
         guard let slot = slot(of: "tab:\(tabId)") else { return out }
-        return out + [StripDragSource(view: chip, lane: .top, from: slot.index, tabId: tabId, width: slot.width, gap: gap, aims: true)]
+        let cross: StripDragSource.Cross? = pageLayout.dockCells.isEmpty ? nil : .tabIn
+        return out + [StripDragSource(view: chip, lane: .top, from: slot.index, tabId: tabId, width: slot.width, gap: gap, aims: true, cross: cross)]
       } else if let chip = v as? StripSplitChip, !chip.tabIds.isEmpty {
         if let member = chip.superview as? StripMemberView {
           guard let source = memberSource(chip, member, tabId: nil, ids: chip.tabIds) else { return out }
@@ -420,7 +484,7 @@ public final class StripPageView: NSView {
           let ids = pageLayout.dockMembers[cell.cell] ?? []
           return out + [StripDragSource(view: cell, lane: .dock, from: i, ids: ids, pinned: true, width: StripMetrics.pinnedCell, gap: step, local: true, drop: .tileFolder)]
         }
-        return out + [StripDragSource(view: cell, lane: .dock, from: i, tabId: cell.cell, pinned: true, width: StripMetrics.pinnedCell, gap: step, levels: 1)]
+        return out + [StripDragSource(view: cell, lane: .dock, from: i, tabId: cell.cell, pinned: true, width: StripMetrics.pinnedCell, gap: step, levels: 1, cross: .pinOut)]
       }
       at = v.superview
     }

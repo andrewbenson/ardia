@@ -30,6 +30,7 @@ struct StripMemberExit {
 
 struct StripDragSource {
   enum Axis { case x, y }
+  enum Cross { case tabIn, pinOut }
   enum Drop {
     case none
     case leaveGroup(StripMemberExit)
@@ -52,6 +53,7 @@ struct StripDragSource {
   var range: ClosedRange<CGFloat>?
   var drop = Drop.none
   var levels = 0
+  var cross: Cross?
 
   var hasDrop: Bool {
     if case .none = drop { return false }
@@ -113,6 +115,8 @@ final class StripDrag {
   private var swallowing = false
   private(set) var dx = StripSpringValue(0)
   private(set) var lift = StripTimedValue(0)
+  private(set) var grow = StripSpringValue(0)
+  private(set) var crossed = false
   private var shifts: [StripLane: [Int: StripSpringValue]] = [:]
   private var ids: [String] = []
   private var origin = CGPoint.zero
@@ -124,13 +128,18 @@ final class StripDrag {
   private var landing: (() -> Void)?
   private var landingToken = 0
   private var changed = false
+  private var traceKey: String?
+  private var trace: (lane: StripLane, index: Int, start: Double)?
+  private(set) var traced: [[Double]] = []
 
   init(page: StripPageView) {
     self.page = page
   }
 
   var active: Bool { source != nil }
-  var running: Bool { dx.running || lift.running || shifts.values.contains { $0.values.contains(where: \.running) } }
+  var grabX: CGFloat { grab }
+
+  var running: Bool { dx.running || lift.running || grow.running || shifts.values.contains { $0.values.contains(where: \.running) } }
 
   func offset(_ lane: StripLane, _ index: Int) -> CGFloat {
     CGFloat(shifts[lane]?[index]?.value ?? 0)
@@ -151,6 +160,12 @@ final class StripDrag {
   var fadingView: NSView? { fading?.view }
   var fadingAlpha: CGFloat { CGFloat(1 - lift.value) }
 
+  func traceSlot(_ key: String) {
+    traceKey = key
+    trace = nil
+    traced = []
+  }
+
   func press(_ view: NSView, _ event: NSEvent) {
     press = (view, windowPoint(event), page.dragSources(from: view))
   }
@@ -167,8 +182,7 @@ final class StripDrag {
     guard let source = press.candidates.first(where: { $0.claims(d) }) else { return false }
     self.press = nil
     swallowing = true
-    begin(source, at: press.at)
-    move(at)
+    begin(source, at: at)
     return true
   }
 
@@ -216,6 +230,18 @@ final class StripDrag {
 
   private func range(_ source: StripDragSource) -> ClosedRange<CGFloat> {
     if let range = source.range { return range }
+    let layout = page.pageLayout
+    if source.cross == .tabIn, !layout.dockCells.isEmpty, source.from >= 0, source.from < layout.top.slots.count {
+      let upper = StripLayout.dragRange(layout.top, from: source.from).upperBound
+      let lower = min(0, page.dockLeft - layout.top.lefts[source.from] - grab + StripMetrics.pinnedCell / 2)
+      return lower...max(lower, upper)
+    }
+    if source.cross == .pinOut, source.from >= 0, source.from < layout.dock.lefts.count {
+      let top = layout.top
+      let end = top.slots.isEmpty ? StripMetrics.maxChip : top.lefts[top.lefts.count - 1] + top.slots[top.slots.count - 1].width
+      let lower = -layout.dock.lefts[source.from]
+      return lower...max(lower, end - page.dockLeft - layout.dock.lefts[source.from] - StripMetrics.pinnedCell)
+    }
     guard source.from >= 0, let g = page.geometry(source.lane), source.from < g.slots.count else { return 0...0 }
     return StripLayout.dragRange(g, from: source.from)
   }
@@ -239,10 +265,12 @@ final class StripDrag {
     setLifted(lifted)
     let bounds = range(source)
     if !lifted { dx.set(Double(min(bounds.upperBound, max(bounds.lowerBound, gdx)))) }
-    let aim = lifted ? nil : aim(source, gdx)
+    let across = !lifted && crossAt(source)
+    setCross(across)
+    let aim = across || lifted ? nil : aim(source, gdx)
     let targets = page.dropTargets
     setOnto(aim?.onto.flatMap { $0 < targets.count ? targets[$0] : nil })
-    makeRoom(lifted || source.from < 0 ? -1 : aim?.to ?? index(source, gdx))
+    if !across { makeRoom(lifted || source.from < 0 ? -1 : aim?.to ?? index(source, gdx)) }
     if !source.local { page.bridge?.dragMoved(windowId: page.windowId, at: at, lifted: lifted, dx: CGFloat(dx.value)) }
     page.dragChanged()
   }
@@ -250,7 +278,103 @@ final class StripDrag {
   private func setLifted(_ on: Bool) {
     guard lifted != on else { return }
     lifted = on
-    lift.animate(to: on ? 1 : 0, duration: StripMotionTiming.lift, easing: .cubic)
+    lift.animate(to: on ? 1 : 0, duration: StripMotionTiming.lift, easing: .cubic, at: StripTicker.now)
+  }
+
+  private func crossAt(_ source: StripDragSource) -> Bool {
+    let layout = page.pageLayout
+    guard let cross = source.cross, !layout.dockCells.isEmpty else { return false }
+    let top = layout.top
+    let dock = layout.dock
+    let dx = CGFloat(self.dx.value)
+    let from = source.from
+    switch cross {
+    case .tabIn:
+      guard let j = StripLayout.tabInIndex(top: top, dock: dock, dockLeft: page.dockLeft, from: from, dx: dx, grab: grab) else { return false }
+      shift(.dock, count: dock.slots.count, skip: -1) { $0 >= j ? StripMetrics.cellStep : 0 }
+      shift(.top, count: top.slots.count, skip: from) { StripMetrics.cellStep - ($0 > from ? source.width + source.gap : 0) }
+      growTo(StripMetrics.cellStep)
+    case .pinOut:
+      guard let k = StripLayout.pinOutIndex(top: top, dock: dock, dockLeft: page.dockLeft, from: from, dx: dx) else { return false }
+      let shrink = StripLayout.dockShrink(dock.slots.count)
+      shift(.dock, count: dock.slots.count, skip: from) { $0 > from ? -StripMetrics.cellStep : 0 }
+      shift(.top, count: top.slots.count, skip: -1) { -shrink + ($0 >= k ? layout.chip + StripMetrics.gap : 0) }
+      growTo(dock.slots.count > 1 ? -StripMetrics.cellStep : -StripMetrics.pinnedCell)
+    }
+    return true
+  }
+
+  private func crossLand(_ source: StripDragSource) -> (dx: CGFloat, drop: JSONValue)? {
+    let layout = page.pageLayout
+    guard let cross = source.cross, !layout.dockCells.isEmpty, let state = page.dragState else { return nil }
+    let top = layout.top
+    let dock = layout.dock
+    let dx = CGFloat(self.dx.value)
+    switch cross {
+    case .tabIn:
+      guard let j = StripLayout.tabInIndex(top: top, dock: dock, dockLeft: page.dockLeft, from: source.from, dx: dx, grab: grab) else { return nil }
+      let target = page.dockLeft + StripLayout.dockCellLeft(dock, j)
+      let beforeId = j < dock.slots.count ? dock.slots[j].tabIds.first : nil
+      return (target - (top.lefts[source.from] + grab - StripMetrics.pinnedCell / 2), SidebarDrop.tabs([("pinned", true), ("beforeId", JSONValue(beforeId))]))
+    case .pinOut:
+      guard let k = StripLayout.pinOutIndex(top: top, dock: dock, dockLeft: page.dockLeft, from: source.from, dx: dx) else { return nil }
+      let target = StripLayout.slotStart(top, k, gap: StripMetrics.gap) - StripLayout.dockShrink(dock.slots.count)
+      let beforeId = k < top.slots.count ? top.slots[k].tabIds.first : nil
+      return (target - (page.dockLeft + dock.lefts[source.from]), SidebarDrop.resolve(state, DragSource(kind: .tab), .list(beforeId: beforeId)))
+    }
+  }
+
+  private func crossClear(_ source: StripDragSource) {
+    switch source.cross {
+    case .tabIn: shift(.dock, count: page.pageLayout.dock.slots.count, skip: -1) { _ in 0 }
+    case .pinOut: shift(.top, count: page.pageLayout.top.slots.count, skip: -1) { _ in 0 }
+    case nil: return
+    }
+    growTo(0)
+  }
+
+  private func growTo(_ target: CGFloat) {
+    guard grow.target != Double(target) else { return }
+    grow.animate(to: Double(target), .slide, at: StripTicker.now)
+  }
+
+  private func setCross(_ on: Bool) {
+    guard crossed != on else { return }
+    crossed = on
+    if !on {
+      if let source { crossClear(source) }
+      to = Int.min
+    }
+    page.crossChanged()
+  }
+
+  private func settleStrip() {
+    shifts[.top] = nil
+    shifts[.dock] = nil
+    grow.set(0)
+  }
+
+  private func settleAcross(_ source: StripDragSource, _ landing: (dx: CGFloat, drop: JSONValue)) {
+    landingToken += 1
+    let token = landingToken
+    let ids = self.ids
+    self.landing = { [weak self] in
+      guard let self, self.landingToken == token else { return }
+      self.landing = nil
+      self.dx.set(0)
+      self.source = nil
+      self.lift.set(0)
+      self.fading = nil
+      self.lifted = false
+      self.crossed = false
+      self.settleStrip()
+      self.page.crossChanged()
+      _ = self.dispatch(ids, landing.drop)
+      self.page.dragChanged()
+      self.page.dragEnded()
+    }
+    dx.animate(to: Double(landing.dx), .slide, at: StripTicker.now)
+    page.dragChanged()
   }
 
   private func setOnto(_ target: StripDropTarget?) {
@@ -274,7 +398,11 @@ final class StripDrag {
       let target = Double(offsetOf(i))
       var spring = springs[i] ?? StripSpringValue(0)
       if spring.target == target { continue }
-      spring.animate(to: target, .slide)
+      if trace == nil, let key = traceKey, page.slotKey(lane, i) == key {
+        trace = (lane, i, StripTicker.now)
+        traced = [[0, spring.value]]
+      }
+      spring.animate(to: target, .slide, at: StripTicker.now)
       springs[i] = spring
     }
     shifts[lane] = springs
@@ -299,13 +427,15 @@ final class StripDrag {
 
   private func finish(_ source: StripDragSource, gdx: CGFloat, lifted: Bool, ended: Bool) {
     if (!source.local && (ended || lifted)) || (source.from < 0 && !source.hasDrop) { return reset() }
+    if crossed, let landing = crossLand(source) { return settleAcross(source, landing) }
+    setCross(false)
     let onto = self.onto
     setOnto(nil)
     if !source.local, let onto, let state = page.dragState, dispatch(ids, StripDrop.onto(state, onto)) {
       settleRoom(source.lane)
       return reset()
     }
-    let bounds = source.range
+    let bounds = source.range ?? (source.cross != nil ? range(source) : nil)
     let travelled = bounds.map { min($0.upperBound, max($0.lowerBound, gdx)) } ?? gdx
     if !source.local {
       changed = false
@@ -346,13 +476,14 @@ final class StripDrag {
       self.page.dragChanged()
       self.page.dragEnded()
     }
-    dx.animate(to: Double(target), .slide)
+    dx.animate(to: Double(target), .slide, at: StripTicker.now)
     page.dragChanged()
   }
 
   func tick(_ now: Double) {
     dx.step(now: now)
     lift.step(now: now)
+    grow.step(now: now)
     for (lane, springs) in shifts {
       var next = springs
       for (i, var spring) in springs where spring.running {
@@ -360,6 +491,9 @@ final class StripDrag {
         next[i] = spring
       }
       shifts[lane] = next
+    }
+    if let trace, now - trace.start < 0.6, let value = shifts[trace.lane]?[trace.index]?.value {
+      traced.append([(now - trace.start) * 1000, value])
     }
     if landing != nil, !dx.running { landing?() }
     if fading != nil, source == nil, !lift.running, lift.value == 0 {
@@ -371,6 +505,7 @@ final class StripDrag {
   private func reset() {
     landingToken += 1
     owns = false
+    setCross(false)
     setOnto(nil)
     makeRoom(-1)
     dx.set(0)
@@ -386,6 +521,7 @@ final class StripDrag {
     guard source != nil else { return }
     if owns, let source, !source.local { page.bridge?.dragEnded(windowId: page.windowId, commit: false) { _ in } }
     for lane in Array(shifts.keys) { settleRoom(lane) }
+    grow.set(0)
     reset()
   }
 

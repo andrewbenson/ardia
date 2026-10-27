@@ -12,6 +12,27 @@ export function registerSlot(geometry: () => DragGeometry, index: () => number, 
   return () => void slots.delete(slot);
 }
 
+const keyOf = (slot: Slot) => slot.geometry().slots[slot.index()]?.tabIds.join();
+const traces = new Map<string, [number, number][]>();
+
+function traceSpring(slot: Slot) {
+  const samples = __DEV__ ? traces.get(keyOf(slot) ?? "") : undefined;
+  if (!samples || samples.length) return;
+  const start = performance.now();
+  samples.push([0, (slot.shift as unknown as { __getValue(): number }).__getValue()]);
+  const id = slot.shift.addListener(({ value }) => samples.push([performance.now() - start, value]));
+  setTimeout(() => slot.shift.removeListener(id), 600);
+}
+
+if (__DEV__) {
+  const g = globalThis as { acStrip?: Record<string, unknown> };
+  g.acStrip = {
+    ...g.acStrip,
+    traceSlot: (tabIds: string) => void traces.set(tabIds, []),
+    slotTrace: (tabIds: string) => traces.get(tabIds) ?? null,
+  };
+}
+
 export function reorderOffsets({ slots: row, lefts }: DragGeometry, from: number, to: number): number[] {
   const gap = row.length > 1 ? lefts[1]! - lefts[0]! - row[0]!.width - (row[0]!.marginRight ?? 0) - (row[1]!.marginLeft ?? 0) : 0;
   const order = row.map((_, i) => i).filter((i) => i !== from);
@@ -34,6 +55,7 @@ export function shiftRoom(geometry: DragGeometry, offsetOf: (index: number) => n
     const target = offsetOf(i);
     if (slot.to === target) continue;
     slot.to = target;
+    if (__DEV__) traceSpring(slot);
     Animated.spring(slot.shift, { toValue: target, ...SLIDE }).start();
   }
 }

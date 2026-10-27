@@ -26,14 +26,15 @@ public struct StripSpringValue: Sendable, Equatable {
     velocity = 0
   }
 
-  public mutating func animate(to target: Double, _ spring: StripSpring) {
+  public mutating func animate(to target: Double, _ spring: StripSpring, at now: Double? = nil) {
     initialVelocity = running ? velocity : 0
     self.spring = spring
     from = value
     self.target = target
     elapsed = 0
     running = true
-    starting = true
+    starting = now == nil
+    if let now { lastTime = now }
   }
 
   public mutating func step(now: Double) {
@@ -99,11 +100,11 @@ public struct StripTimedValue: Sendable, Equatable {
     duration = 0
   }
 
-  public mutating func animate(to target: Double, duration: Double, easing: Easing = .quad) {
+  public mutating func animate(to target: Double, duration: Double, easing: Easing = .quad, at now: Double? = nil) {
     guard target != self.target else { return }
     from = value
     self.target = target
-    start = nil
+    start = now
     self.duration = duration
     self.easing = easing
   }

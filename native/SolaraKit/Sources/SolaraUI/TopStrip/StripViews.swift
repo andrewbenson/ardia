@@ -47,6 +47,7 @@ class StripHoverView: NSView {
   var hovered = false { didSet { if hovered != oldValue { repaint() } } }
   var pressed = false { didSet { if pressed != oldValue { repaint() } } }
   var context: StripContext?
+  var passive = false
 
   override var isFlipped: Bool { true }
   override var mouseDownCanMoveWindow: Bool { false }
@@ -58,6 +59,8 @@ class StripHoverView: NSView {
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  override func hitTest(_ point: NSPoint) -> NSView? { passive ? nil : super.hitTest(point) }
 
   func repaint() {}
   func press(_ mods: SidebarClickMods) {}
@@ -477,6 +480,7 @@ final class StripDockView: NSView {
   private var lefts: [CGFloat] = []
   private var shift: (Int, StripPinnedCell) -> CGFloat = { _, _ in 0 }
   var raised: (StripPinnedCell) -> Bool = { _ in false }
+  var grow: CGFloat = 0 { didSet { if grow != oldValue { sizeBox() } } }
 
   override var isFlipped: Bool { true }
 
@@ -501,7 +505,6 @@ final class StripDockView: NSView {
     order = ids
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    box.frame = CGRect(x: 0, y: 0, width: StripMetrics.dockWidth(ids.count), height: StripMetrics.itemHeight)
     box.backgroundColor = context.base.pinnedResting.cgColor
     box.borderColor = context.base.pinnedRestingStroke.cgColor
     CATransaction.commit()
@@ -518,7 +521,17 @@ final class StripDockView: NSView {
       view.update(id, members: members[id] ?? [id], context)
     }
     lefts = geometry.lefts
+    sizeBox()
     arrange(shift)
+  }
+
+  private func sizeBox() {
+    let width = max(0, StripMetrics.dockWidth(order.count) + grow)
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    box.frame = CGRect(x: 0, y: 0, width: width, height: StripMetrics.itemHeight)
+    box.opacity = Float(min(1, width / (StripMetrics.pinnedCell / 2)))
+    CATransaction.commit()
   }
 
   func arrange(_ shift: @escaping (Int, StripPinnedCell) -> CGFloat) {

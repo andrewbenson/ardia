@@ -192,6 +192,38 @@ public enum StripLayout {
     return out
   }
 
+  public static func dockShrink(_ cells: Int) -> CGFloat {
+    cells > 1 ? StripMetrics.cellStep : StripMetrics.pinnedCell + StripMetrics.dockGap
+  }
+
+  public static func slotStart(_ g: StripDragGeometry, _ k: Int, gap: CGFloat) -> CGFloat {
+    if k < g.slots.count { return g.lefts[k] - g.slots[k].marginLeft }
+    guard let last = g.slots.last, let left = g.lefts.last else { return 0 }
+    return left + last.width + last.marginRight + gap
+  }
+
+  public static func dockCellLeft(_ dock: StripDragGeometry, _ j: Int) -> CGFloat {
+    j < dock.lefts.count ? dock.lefts[j] : (dock.lefts.last ?? -StripMetrics.cellStep) + StripMetrics.cellStep
+  }
+
+  public static func pinOutIndex(top: StripDragGeometry, dock: StripDragGeometry, dockLeft: CGFloat, from: Int, dx: CGFloat) -> Int? {
+    guard from >= 0, from < dock.lefts.count else { return nil }
+    let left = dockLeft + dock.lefts[from] + dx
+    if left < -StripMetrics.dockGap { return nil }
+    let shrink = dockShrink(dock.slots.count)
+    return top.slots.indices.filter { top.lefts[$0] - shrink + top.slots[$0].width / 2 < left }.count
+  }
+
+  public static func tabInIndex(top: StripDragGeometry, dock: StripDragGeometry, dockLeft: CGFloat, from: Int, dx: CGFloat, grab: CGFloat) -> Int? {
+    guard from >= 0, from < top.lefts.count else { return nil }
+    let left = top.lefts[from] + dx
+    if left >= -StripMetrics.dockGap { return nil }
+    let tile = Swift.min(left + grab - StripMetrics.pinnedCell / 2, dockLeft + CGFloat(dock.slots.count) * StripMetrics.cellStep)
+    return dock.slots.indices.filter { dockLeft + dock.lefts[$0] + StripMetrics.pinnedCell / 2 < tile }.count
+  }
+
+  public static func tileHold(dx: CGFloat, limit: CGFloat) -> CGFloat { -Swift.max(0, dx - limit) }
+
   public static func dockCell(_ cells: [String], members: (String) -> [String], tabId: String) -> Int? {
     if let own = cells.firstIndex(of: tabId) { return own }
     return cells.firstIndex { members($0).contains(tabId) }

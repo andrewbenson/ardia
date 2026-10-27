@@ -4,6 +4,7 @@ const { useBrowser } = await import("./browser.ts");
 const { bookmarkUuidFor } = await import("./bookmarks.ts");
 const { migrateBookmarksFile, reloadBookmarks, startBookmarks } = await import("../lib/bookmarks.ts");
 const stub = await import("../test-native/index.ts");
+const { ardiaCoreNativeModules } = await import("../test-native/ardiacore.ts");
 
 const S = () => useBrowser.getState();
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -104,6 +105,36 @@ test("the store's tree and Chrome's stay alike: the app's edits go as ops, an ex
   assert.equal(S().bookmarks.nodes["0f0f0f0f-0000-4000-8000-000000000001"]?.title, "Ext");
   assert.equal(stub.bookmarkOpsSent.length, sent, "the app sends nothing back for it");
   stop();
+});
+
+test("while Chrome refuses every push, the bridge retries once at once and then backs off, and a later success goes through", async () => {
+  S().hydrate({ bookmarks: { nodes: {}, roots: {} } });
+  stub.docs.clear();
+  stub.bookmarkDbs.clear();
+  const cef = ardiaCoreNativeModules.ArdiaCEF;
+  const realEngineCall = cef.engineCall;
+  const refusing = { on: false, calls: 0 };
+  cef.engineCall = async (name, profile, json) => {
+    if (name === "ac_bookmarks_apply" && refusing.on) {
+      refusing.calls++;
+      throw new Error("refused");
+    }
+    return realEngineCall(name, profile, json);
+  };
+  const stop = startBookmarks();
+  try {
+    await reloadBookmarks();
+    refusing.on = true;
+    S().addBookmark({ profileId: "default", url: "https://refused.example/", title: "Refused" });
+    await new Promise((r) => setTimeout(r, 500));
+    assert.equal(refusing.calls, 2, "one push and one retry, then nothing until the back-off ends");
+    refusing.on = false;
+    for (let i = 0; i < 300 && !JSON.stringify(chromeTree()).includes("Refused"); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(chromeTree().bar, { "Bookmarks Bar": ["Refused=https://refused.example/"] });
+  } finally {
+    cef.engineCall = realEngineCall;
+    stop();
+  }
 });
 
 test("an edit made at launch, before Chrome's tree is read, reaches Chrome and stays", async () => {

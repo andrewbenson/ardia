@@ -9,6 +9,8 @@ const LEGACY_FILE = "bookmarks.json";
 const LEGACY_KEPT_MS = 10_000;
 const CACHE_FILE = "bookmarks-cache.json";
 const CACHE_SAVE_MS = 2000;
+const PUSH_RETRY_FIRST_MS = 1500;
+const PUSH_RETRY_MAX_MS = 60_000;
 const store = () => useBrowser.getState();
 
 type FlatNode = { kind: "url" | "folder"; parent: string | null; title: string; url?: string; addedAt: number; key?: string };
@@ -195,11 +197,14 @@ type EngineState = {
   busy: boolean;
   needRead: boolean;
   needPush: boolean;
+  failedPushes: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  retryPending: boolean;
 };
 const engines = new Map<string, EngineState>();
 const stateOf = (engine: string) => {
   let state = engines.get(engine);
-  if (!state) engines.set(engine, (state = { shadow: null, shown: null, busy: false, needRead: false, needPush: false }));
+  if (!state) engines.set(engine, (state = { shadow: null, shown: null, busy: false, needRead: false, needPush: false, failedPushes: 0, retryTimer: null, retryPending: false }));
   return state;
 };
 let legacyMoved = false;
@@ -252,19 +257,39 @@ async function readTree(engine: string, state: EngineState) {
   state.shadow = fetched;
   state.shown = null;
   adopt(engine, merged);
-  if (!edits.length) return;
-  if (await sendOps(engine, edits)) state.shadow = merged;
-  else state.needRead = true;
+  if (!edits.length || state.retryPending) return;
+  if (await sendOps(engine, edits)) {
+    state.shadow = merged;
+    state.failedPushes = 0;
+  } else pushFailed(engine, state);
+}
+
+function pushFailed(engine: string, state: EngineState) {
+  state.failedPushes++;
+  if (state.failedPushes === 1) {
+    state.needRead = true;
+    return;
+  }
+  if (state.retryPending) return;
+  state.retryPending = true;
+  const delay = Math.min(PUSH_RETRY_MAX_MS, PUSH_RETRY_FIRST_MS * 2 ** (state.failedPushes - 2));
+  state.retryTimer = setTimeout(() => {
+    state.retryTimer = null;
+    state.retryPending = false;
+    if (engines.get(engine) === state) read(engine);
+  }, delay);
 }
 
 async function pushTree(engine: string, state: EngineState) {
-  if (!state.shadow) return;
+  if (!state.shadow || state.retryPending) return;
   const desired = flatFromStore(store().bookmarks, engine);
   if (!desired.nodes.size) return;
   const ops = bookmarkOps(state.shadow, desired, engine);
   if (!ops.length) return;
-  if (await sendOps(engine, ops)) state.shadow = desired;
-  else state.needRead = true;
+  if (await sendOps(engine, ops)) {
+    state.shadow = desired;
+    state.failedPushes = 0;
+  } else pushFailed(engine, state);
 }
 
 function work(engine: string) {
@@ -448,6 +473,7 @@ export function startBookmarks() {
     cacheTimer = undefined;
     changes.remove();
     stop();
+    for (const state of engines.values()) if (state.retryTimer) clearTimeout(state.retryTimer);
     engines.clear();
     legacyMoved = false;
   };

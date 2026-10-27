@@ -243,15 +243,17 @@ struct WindowShellViewTests {
     #expect(reported.count == 2)
   }
 
-  @Test func theFillForwardsToTheReactRoot() {
+  @Test func theReactRootStaysClearOverTheNativeBackdrop() {
     let shell = WindowShellView(windowId: "w")
-    #expect(shell.backgroundColor == nil)
     let react = FilledView()
+    react.backgroundColor = .windowBackgroundColor
     shell.mount(.react, react)
-    shell.backgroundColor = .red
-    #expect(react.backgroundColor == .red)
-    shell.setValue(nil, forKey: "backgroundColor")
     #expect(react.backgroundColor == nil)
+    shell.setValue(NSColor.windowBackgroundColor, forKey: "backgroundColor")
+    #expect(react.backgroundColor == nil)
+    #expect(shell.backgroundColor == .windowBackgroundColor)
+    shell.setValue(nil, forKey: "backgroundColor")
+    #expect(shell.backgroundColor == nil)
   }
 
   @Test func theShellItselfTakesNoClicks() {

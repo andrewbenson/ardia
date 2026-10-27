@@ -37,16 +37,7 @@ public final class WindowShellView: NSView {
 
   public func view(in slot: Slot) -> NSView? { mounted[slot] }
 
-  @objc public var backgroundColor: NSColor? {
-    get {
-      guard let react = mounted[.react], react.responds(to: Selector(("backgroundColor"))) else { return nil }
-      return react.value(forKey: "backgroundColor") as? NSColor
-    }
-    set {
-      guard let react = mounted[.react], react.responds(to: Selector(("setBackgroundColor:"))) else { return }
-      react.setValue(newValue, forKey: "backgroundColor")
-    }
-  }
+  @objc public var backgroundColor: NSColor?
 
   public func mount(_ slot: Slot, _ view: NSView?) {
     precondition(slot != .card || view === card, "page views attach inside the card container")
@@ -56,6 +47,7 @@ public final class WindowShellView: NSView {
     mounted[slot] = view
     guard let view else { return }
     view.autoresizingMask = []
+    if slot == .react, view.responds(to: Selector(("setBackgroundColor:"))) { view.setValue(nil, forKey: "backgroundColor") }
     let above = Slot.allCases.drop { $0 != slot }.dropFirst().lazy.compactMap { self.mounted[$0] }.first { $0.superview === self }
     let foreign = subviews.first { subview in subview !== view && !mounted.values.contains { $0 === subview } }
     if let above = above ?? foreign { addSubview(view, positioned: .below, relativeTo: above) } else { addSubview(view) }

@@ -44,7 +44,7 @@ public struct StatusBubbleView: View {
   public var body: some View {
     Text(verbatim: text)
       .font(.system(size: StatusBubbleMetrics.fontSize, weight: .medium))
-      .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+      .foregroundStyle(Color(nsColor: StatusBubbleChromeView.text))
       .lineLimit(1)
       .truncationMode(expanded ? .tail : .middle)
       .padding(.horizontal, StatusBubbleMetrics.padding)
@@ -64,6 +64,14 @@ final class StatusBubbleChromeView: NSView {
     appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
       ? NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.2) : NSColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.1)
   }
+
+  static let text = NSColor(name: "StatusBubbleText") { appearance in
+    isDark(appearance) ? NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.85) : .secondaryLabelColor
+  }
+
+  static let darkFill = NSColor(srgbRed: 0x2B / 255, green: 0x2B / 255, blue: 0x2B / 255, alpha: 1)
+
+  static func isDark(_ appearance: NSAppearance) -> Bool { appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
 
   static let shadowRoom = StatusBubbleMetrics.shadowRadius * 3
 
@@ -122,8 +130,11 @@ final class StatusBubbleChromeView: NSView {
   }
 
   private func applyAppearance() {
+    let dark = Self.isDark(effectiveAppearance)
+    effect.isHidden = dark
     effectiveAppearance.performAsCurrentDrawingAppearance {
       pill.layer?.borderColor = Self.border.cgColor
+      pill.layer?.backgroundColor = dark ? Self.darkFill.cgColor : nil
     }
   }
 

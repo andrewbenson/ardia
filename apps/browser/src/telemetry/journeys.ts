@@ -317,7 +317,7 @@ export function journeySuggestions(tabId: string) {
 
 const panelMarks: [string, number][] = [];
 export const panelFrameMarks = () => panelMarks.splice(0);
-export function markPanelFrame(kind: "mount" | "growStart" | "growEnd") {
+export function markPanelFrame(kind: "dispatch" | "mount" | "growStart" | "growEnd") {
   panelMarks.push([kind, Date.now()]);
   if (panelMarks.length > 64) panelMarks.shift();
   if (kind === "mount") native?.markFrame("panel", kind);

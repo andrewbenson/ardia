@@ -1,3 +1,4 @@
+import { markPanelFrame } from "../telemetry/journeys";
 import {
   closeWindow as closeNativeWindow,
   copyText,
@@ -157,6 +158,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     case "restoreClosed":
       return arg ? s.restoreClosed(arg, windowId) : undefined;
     case "focusCommandBar":
+      markPanelFrame("dispatch");
       if (page && tabInDeveloperMode(page.id)) {
         expectFocus(windowId, urlEditFocus(page.id));
         return startUrlEdit(page.id);

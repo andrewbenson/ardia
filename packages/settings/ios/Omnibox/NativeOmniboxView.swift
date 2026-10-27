@@ -56,7 +56,12 @@ final class NativeOmniboxView: ExpoView {
   func propsDidUpdate() {
     bar.theme = NewTabTheme(dark: dark, tokens: themeTokens)
     if !windowId.isEmpty && !tabId.isEmpty {
+      let before = bar.model
       bar.configure(OmniboxBarIdentity(windowId: windowId, tabId: tabId, profileId: profileId, variant: variant, opensTab: opensTab, initialText: initialText))
+      if variant == .panel, bar.model !== before {
+        FieldTimingMarks.now("panel", "configured")
+        FieldTimingMarks.atPresent("panel", "content")
+      }
     }
   }
 
@@ -115,6 +120,10 @@ final class NativeOmniboxView: ExpoView {
 }
 
 enum FieldTimingMarks {
+  static func now(_ key: String, _ kind: String) {
+    NotificationCenter.default.post(name: Notification.Name("ACFieldMarkAtPresent"), object: [key, kind, "now"] as NSArray)
+  }
+
   static func atPresent(_ key: String, _ kind: String) {
     NotificationCenter.default.post(name: Notification.Name("ACFieldMarkAtPresent"), object: [key, kind] as NSArray)
   }

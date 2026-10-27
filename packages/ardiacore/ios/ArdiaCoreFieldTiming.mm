@@ -53,6 +53,7 @@ void SetEnabled(bool enabled) {
       gPresentObserver = [NSNotificationCenter.defaultCenter addObserverForName:@"ACFieldMarkAtPresent" object:nil queue:nil usingBlock:^(NSNotification *note) {
         NSArray *mark = [note.object isKindOfClass:NSArray.class] ? note.object : nil;
         if (mark.count == 2) ACFieldMarkAtPresent(mark[0], mark[1]);
+        else if (mark.count == 3) ACFieldMarkNow(mark[0], mark[1]);
       }];
     } else if (!enabled && gPresentObserver) {
       [NSNotificationCenter.defaultCenter removeObserver:gPresentObserver];

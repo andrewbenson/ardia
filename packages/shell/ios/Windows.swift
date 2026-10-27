@@ -966,7 +966,6 @@ final class FocusHandoff {
   private var closedAt: [Int: TimeInterval] = [:]
   private var barCommittedAt: [Int: TimeInterval] = [:]
   private let resignedPages = NSMapTable<NSNumber, NSView>(keyOptions: .strongMemory, valueOptions: .weakMemory)
-  private static let barCommitFence: TimeInterval = 0.3
   static let barCommitted = Notification.Name("SolaraBarCommitted")
   private var typedAfterGate: [Int: TimeInterval] = [:]
   private weak var acknowledged: NSEvent?
@@ -1003,8 +1002,8 @@ final class FocusHandoff {
   }
 
   func defers(_ action: Selector) -> Bool {
-    if let window = NSApp.keyWindow, let at = barCommittedAt[window.windowNumber], ProcessInfo.processInfo.systemUptime - at < Self.barCommitFence {
-      note("drop \(action): the bar committed")
+    if let window = NSApp.keyWindow, let committed = barCommittedAt[window.windowNumber], let pressed = Self.origin(of: acknowledged ?? NSApp.currentEvent), pressed < committed {
+      note("drop \(action): pressed before the bar committed")
       NSSound.beep()
       return true
     }

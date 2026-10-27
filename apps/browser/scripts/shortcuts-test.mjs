@@ -615,6 +615,20 @@ for (const [name, keys, busy, firstExpected] of handoffEnds) {
     first === firstExpected && strays === 0 && second === firstExpected + 1 && responder.startsWith("RenderWidgetHostViewCocoa"),
     `active ${active}, pastes ${first} then ${second}, elsewhere ${strays}, first responder ${responder}${trace}`);
 }
+{
+  await resetToPageField("", [0, 0]);
+  await countPastes();
+  await clipboard.set("fresh-after-return");
+  await postKeys([keyPress("l", 37)]);
+  await sleep(700);
+  await ac(`const d = ac.omnibox.get("w1:panel") ?? ac.omnibox.get("w1:sidebar"); return d ? Promise.resolve(d.type(${JSON.stringify(`${pages}/?t3#after-return`)})).then(() => new Promise((r) => setTimeout(r, 400))).then(() => 1) : 0;`);
+  await postKeys([keyPress("\r", 36, 0, []), keyPress("v", 9, 150)]);
+  await sleep(900);
+  const trace = await ac(`return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace();`);
+  const after = trace.slice(trace.findLastIndex((l) => / claim /.test(l)) + 1);
+  const forwarded = after.some((l) => / forward paste/.test(l)), dropped = after.some((l) => / drop /.test(l));
+  check("⌘L, a URL, Return, then a fresh ⌘V 150 ms later: the paste goes on to the page, not dropped", forwarded && !dropped, `trace ${after.join(" / ")}`);
+}
 await resetToPageField("", [0, 0]);
 await countPastes();
 await devWindow("responder");

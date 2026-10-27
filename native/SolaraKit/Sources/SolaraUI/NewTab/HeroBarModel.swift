@@ -62,6 +62,7 @@ public protocol HeroFieldControl: AnyObject {
   func show(value: String, selection: TextSelection)
   func focusField()
   func releaseFocus()
+  var hasFocus: Bool { get }
   var fieldSelection: TextSelection { get }
 }
 

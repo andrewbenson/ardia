@@ -70,6 +70,13 @@ public final class OmniboxBarView: NSView {
     model?.focusSelectingAll()
   }
 
+  public override func viewWillMove(toWindow newWindow: NSWindow?) {
+    if newWindow == nil, let window, model?.field?.hasFocus == true {
+      NotificationCenter.default.post(name: Notification.Name("SolaraBarRemovedWithFocus"), object: window)
+    }
+    super.viewWillMove(toWindow: newWindow)
+  }
+
   public override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
     guard window != nil else { return }

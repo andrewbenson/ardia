@@ -965,6 +965,7 @@ final class FocusHandoff {
   private var releases: [UInt16: Release] = [:]
   private var closedAt: [Int: TimeInterval] = [:]
   private var barCommittedAt: [Int: TimeInterval] = [:]
+  private let resignedPages = NSMapTable<NSNumber, NSView>(keyOptions: .strongMemory, valueOptions: .weakMemory)
   private static let barCommitFence: TimeInterval = 0.3
   static let barCommitted = Notification.Name("SolaraBarCommitted")
   private var typedAfterGate: [Int: TimeInterval] = [:]
@@ -985,6 +986,7 @@ final class FocusHandoff {
     if let page = focused as? NSView, Self.isPage(page) {
       NotificationCenter.default.post(name: Self.outgoingFocus, object: page)
       gate.resigned = page
+      resignedPages.setObject(page, forKey: NSNumber(value: window.windowNumber))
       window.makeFirstResponder(nil)
     }
     generations += 1
@@ -1111,6 +1113,15 @@ final class FocusHandoff {
       self.closedAt[window.windowNumber] = nil
       self.typedAfterGate[window.windowNumber] = nil
       self.barCommittedAt[window.windowNumber] = nil
+    }
+    center.addObserver(forName: Notification.Name("SolaraBarRemovedWithFocus"), object: nil, queue: .main) { [weak self] note in
+      guard let self, let window = note.object as? NSWindow else { return }
+      DispatchQueue.main.async { [weak self, weak window] in
+        guard let self, let window, Self.unfocused(window), let page = self.resignedPages.object(forKey: NSNumber(value: window.windowNumber)),
+          page.window === window, !page.isHiddenOrHasHiddenAncestor else { return }
+        self.note("bar removed with the focus: back to the page")
+        window.makeFirstResponder(page)
+      }
     }
     center.addObserver(forName: Self.barCommitted, object: nil, queue: .main) { [weak self] note in
       guard let self, let window = note.object as? NSWindow else { return }

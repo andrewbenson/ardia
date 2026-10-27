@@ -155,6 +155,8 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
     }
   }
 
+  var hasFocus: Bool { holdsFocus }
+
   var holdsFocus: Bool {
     guard let field, let responder = field.window?.firstResponder else { return false }
     if responder === field { return true }

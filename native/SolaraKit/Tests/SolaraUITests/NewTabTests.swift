@@ -161,6 +161,7 @@ final class FakeHeroField: HeroFieldControl {
   }
   func focusField() { focused += 1 }
   func releaseFocus() {}
+  var hasFocus: Bool { false }
   var fieldSelection: TextSelection { selection }
 }
 

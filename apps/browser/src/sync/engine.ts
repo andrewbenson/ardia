@@ -79,6 +79,7 @@ type SyncDoc = {
   joining: boolean;
   seqs?: Record<string, number>;
   retired?: Record<string, number>;
+  rebuilding?: string[];
 };
 
 const DOC = "sync.json";
@@ -151,6 +152,10 @@ let stopping = false;
 let turningOn = false;
 let phraseEntry: Promise<PhraseResult> | null = null;
 let generation = 0;
+let loading: Promise<void> | null = null;
+let unverified = new Set<string>();
+type Rebuilt = ScopeState & { rebuildBaseline?: Record<string, string> };
+const STOP_WAITS_FOR_LOAD_MS = 3000;
 let forceRequests = 0;
 const passwordAdapters = new Map<string, Adapter>();
 const extensionAdapters = new Map<string, ExtensionsAdapter>();
@@ -192,7 +197,11 @@ function readableScope(v: unknown): v is ScopeState {
     [v.records, v.base, v.vv, v.extra, v.files, v.damaged, v.seen].every(isObject) &&
     Object.values(v.records as Record<string, unknown>).every(readableRecord) &&
     Object.values(v.base as Record<string, unknown>).every((b) => typeof b === "string") &&
+    [v.vv, v.seen, v.damaged].every((m) => Object.values(m as Record<string, unknown>).every((n) => typeof n === "number")) &&
+    Object.values(v.extra as Record<string, unknown>).every((list) => Array.isArray(list) && list.every((n) => typeof n === "number")) &&
+    Object.values(v.files as Record<string, unknown>).every(isObject) &&
     Array.isArray(v.unapplied) &&
+    v.unapplied.every((k) => typeof k === "string") &&
     Array.isArray(v.outbox) &&
     v.outbox.every(readableOp) &&
     typeof v.seq === "number" &&
@@ -226,6 +235,11 @@ async function loadState(loading: number): Promise<boolean> {
     delete retired[scope];
     if (!Object.keys(retired).length) delete doc.retired;
   }
+  const expected = new Set([APP_SCOPE, ...Object.values(doc.profiles).map((l) => `p:${l.syncId}`), ...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)]);
+  const rebuilding = new Set(doc.rebuilding ?? []);
+  for (const scope of expected) if (doc.retired?.[scope] === undefined && !scopes[scope]) rebuilding.add(scope);
+  if (rebuilding.size) doc.rebuilding = [...rebuilding];
+  for (const scope of rebuilding) scopes[scope] ??= emptyScope();
   for (const scope of new Set([...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)])) {
     if (doc.retired?.[scope] !== undefined) continue;
     const mine = (journal[scope] ?? []).filter((f) => f.device === doc.deviceId);
@@ -234,8 +248,10 @@ async function loadState(loading: number): Promise<boolean> {
     restoreJournal((scopes[scope] ??= emptyScope()), mine, clock, doc.seqs?.[scope]);
   }
   if (revived.size && Object.keys(journal).length) void persistJournal([...revived.keys()][0]!)([]).catch(() => {});
-  if (doc.deviceId && Object.keys(journal).length) doc.clock = clock.last;
+  for (const scope of Object.values(scopes)) for (const record of Object.values(scope.records)) clock.observe(record.h);
+  if (doc.deviceId) doc.clock = clock.last;
   doc.scopes = scopes;
+  unverified = new Set([...expected, ...Object.keys(scopes)]);
   return true;
 }
 
@@ -287,7 +303,7 @@ function save() {
     writeDocument(STATE, "");
     return;
   }
-  const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, s.seq]));
+  const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)]));
   const sealedDoc = doc;
   sealing = (async () => {
     let landed = false;
@@ -401,18 +417,21 @@ async function runCycle({ retiring = false } = {}) {
     const transport = folderTransport(native, doc.folder);
     clock = new Clock(doc.deviceId, doc.clock);
     const device = doc.deviceId;
-    const app = (doc.scopes[APP_SCOPE] ??= { ...emptyScope(), awaitRemote: doc.joining });
+    const app = (doc.scopes[APP_SCOPE] ??= doc.joining ? { ...emptyScope(), awaitRemote: true } : { ...emptyScope(), joined: true });
     settleAppliedThemes(app);
     if (doc.types.settings && !retiring) app.unapplied = [...new Set([...app.unapplied, ...settingsToReapply(app.records)])];
+    if (!retiring && !doc.joining) linkProfiles(app);
     await syncScope({
       scope: APP_SCOPE,
       state: app,
       transport,
-      adapters: appAdapters(retiring),
+      adapters: pullingFirst(APP_SCOPE, app, device, rebuildingAware(APP_SCOPE, appAdapters(retiring))),
       clock,
       device,
       options: { persist: persistJournal(APP_SCOPE) },
     });
+    settleRebuild(APP_SCOPE, app);
+    settleVerified(APP_SCOPE, app);
     if (app.joined) linkProfiles(app);
     confirmThemes(app);
     let pending = app.pending;
@@ -427,11 +446,13 @@ async function runCycle({ retiring = false } = {}) {
         scope,
         state,
         transport,
-        adapters: profileAdapters(profileId, retire),
+        adapters: pullingFirst(scope, state, device, rebuildingAware(scope, profileAdapters(profileId, retire))),
         clock,
         device,
         options: { expired: historyExpired, persist: persistJournal(scope) },
       });
+      settleRebuild(scope, state);
+      settleVerified(scope, state);
       pending += state.pending;
       if (!retire && doc.types.extensions && !s.profiles[profileId]?.dataId && extensionSyncAvailable()) await extensionsOf(profileId).reconcile(visible(state, "ext:"), Date.now());
       if (retire) {
@@ -467,6 +488,68 @@ async function runCycle({ retiring = false } = {}) {
       }
     }
   }
+}
+
+function pullingFirst(scope: string, state: ScopeState, device: string, adapters: Adapter[]): Adapter[] {
+  if (!unverified.has(scope)) return adapters;
+  return adapters.map((adapter) => ({
+    ...adapter,
+    publishAfterPull: true,
+    extract: async (base, queued, now, known, remote, stamp) => {
+      state.seq = Math.max(state.seq, state.vv[device] ?? 0, ...(state.extra[device] ?? []));
+      return adapter.extract(base, queued, now, known, remote, stamp);
+    },
+  }));
+}
+
+function settleVerified(scope: string, state: ScopeState) {
+  if (state.pending === 0 && Object.keys(state.damaged).length === 0) unverified.delete(scope);
+}
+
+function rebuildingAware(scope: string, adapters: Adapter[]): Adapter[] {
+  if (!doc.rebuilding?.includes(scope)) return adapters;
+  return adapters.map((adapter) => ({
+    ...adapter,
+    adoptRemoteOnJoin: false,
+    publishAfterPull: true,
+    extract: async (base, queued, now, known, remote, stamp) => {
+      const extraction = await adapter.extract(base, queued, now, known, remote, stamp);
+      if (!extraction) return extraction;
+      const baseline = (doc.scopes[scope] as Rebuilt | undefined)?.rebuildBaseline;
+      const editedSinceLoad = (key: string, value: unknown) => !!baseline && baseline[key] !== digest(canonical(value));
+      const values = new Map([...extraction.values].filter(([key, value]) => !known(key) || editedSinceLoad(key, value)));
+      return { values, ignore: (key) => !values.has(key), published: extraction.published };
+    },
+  }));
+}
+
+function digest(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(36);
+}
+
+async function captureRebuildBaselines() {
+  for (const scope of doc.rebuilding ?? []) {
+    const state = doc.scopes[scope] as Rebuilt | undefined;
+    if (!state || state.rebuildBaseline) continue;
+    const profileId = Object.entries(doc.profiles).find(([, link]) => `p:${link.syncId}` === scope)?.[0];
+    const adapters = scope === APP_SCOPE ? appAdapters(false) : profileId ? profileAdapters(profileId, false) : [];
+    const baseline: Record<string, string> = {};
+    for (const adapter of adapters) {
+      const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined);
+      for (const [key, value] of extraction?.values ?? []) baseline[key] = digest(canonical(value));
+    }
+    state.rebuildBaseline = baseline;
+  }
+}
+
+function settleRebuild(scope: string, state: ScopeState) {
+  if (!doc.rebuilding?.includes(scope) || state.pending > 0 || Object.keys(state.damaged).length > 0) return;
+  delete (state as Rebuilt).rebuildBaseline;
+  const left = doc.rebuilding.filter((s) => s !== scope);
+  if (left.length) doc.rebuilding = left;
+  else delete doc.rebuilding;
 }
 
 function freshScope(scope: string, extra: Partial<ScopeState> = {}): ScopeState {
@@ -623,6 +706,7 @@ export async function chooseSyncFolder(): Promise<string | null> {
 
 function begin(folder: string, deviceId: string, joining: boolean) {
   generation++;
+  unverified = new Set();
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
   locked = false;
   loaded = true;
@@ -688,6 +772,8 @@ async function unlockWithPhrase(native: NonNullable<typeof SyncNative>, folder: 
   if (unlocking !== generation) return { error: "interrupted" };
   try {
     if (!(await loadState(unlocking)) || unlocking !== generation) return { error: "interrupted" };
+    await captureRebuildBaselines();
+    if (unlocking !== generation) return { error: "interrupted" };
   } catch (error) {
     if (unlocking === generation) showLocked(error);
     return { error: "keychain" };
@@ -721,6 +807,7 @@ export async function stopSync({ deleteData = false } = {}) {
 
 async function turnOff(native: NonNullable<typeof SyncNative>, deleteData: boolean) {
   clearTimeout(timer);
+  if (loading && !loaded && !locked) await Promise.race([loading, new Promise((r) => setTimeout(r, STOP_WAITS_FOR_LOAD_MS))]);
   while (running) await new Promise((r) => setTimeout(r, 100));
   try {
     if (!locked) await runCycle({ retiring: true });
@@ -831,17 +918,24 @@ export function startSync() {
   if (doc.enabled && doc.deviceId) {
     loaded = false;
     const unlocking = ++generation;
-    void SyncNative.unlock(doc.deviceId)
+    loading = SyncNative.unlock(doc.deviceId)
       .then(async (ok) => {
         if (unlocking !== generation) return;
         if (!ok) return showLocked();
         if (!(await loadState(unlocking)) || unlocking !== generation) return;
+        await captureRebuildBaselines();
+        if (unlocking !== generation) return;
         loaded = true;
         settleAppliedThemes(doc.scopes[APP_SCOPE]);
         publishUi();
         scheduleSync(500);
       })
-      .catch((error) => unlocking === generation && showLocked(error));
+      .catch((error) => {
+        if (unlocking === generation) showLocked(error);
+      })
+      .finally(() => {
+        if (unlocking === generation) loading = null;
+      });
   }
   useBrowser.subscribe((s, prev) => {
     if (!doc.enabled || running) return;

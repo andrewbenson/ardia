@@ -610,7 +610,9 @@ async function staleLoad(viaPhrase, failLate) {
     engine.startSync();
   }
   await settle();
+  globalThis.setTimeout = realSetTimeout;
   await engine.stopSync();
+  globalThis.setTimeout = () => 0;
   await settle();
   fake.phraseGate = null;
   fake.unlockGate = null;
@@ -654,7 +656,9 @@ async function lateFailure(kind) {
   const engine = await launch();
   engine.startSync();
   await settle();
+  globalThis.setTimeout = realSetTimeout;
   await engine.stopSync();
+  globalThis.setTimeout = () => 0;
   await settle();
   fake.unlockGate = null;
   assert.ok("ok" in (await engine.turnOnSync("/sync")));
@@ -748,4 +752,23 @@ test("B24: a phrase unlock overtaken by stopping and turning sync on again says 
   assert.ok("ok" in (await engine.turnOnSync("/sync")));
   open();
   assert.deepEqual(await phrase, { error: "interrupted" });
+});
+
+test("B29: stopping while the saved state is still loading waits for it and retires this Mac", async () => {
+  reset();
+  await onAndSynced();
+  const device = JSON.parse(shell.docs.get("sync.json")).deviceId;
+  let open;
+  fake.unlockGate = new Promise((resolve) => (open = resolve));
+  const engine = await launch();
+  engine.startSync();
+  await settle();
+  const stopping = engine.stopSync();
+  await settle();
+  fake.unlockGate = null;
+  open();
+  await stopping;
+  await settle();
+  const ops = files().filter(({ scope }) => scope === "app").flatMap(({ file }) => file.ops ?? []).filter((op) => op.k === `dev:${device}`);
+  assert.equal(ops.at(-1)?.v ?? null, null, "the other Macs hear this Mac left");
 });

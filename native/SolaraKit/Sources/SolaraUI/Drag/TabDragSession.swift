@@ -36,6 +36,10 @@ public final class TabDragSession {
   public private(set) var aim: TabDropAim?
   public private(set) var endedAim: TabDropAim?
 
+  private struct Asked {
+    weak var zone: TabDropZone?
+  }
+
   private struct Registered {
     weak var zone: TabDropZone?
     let windowId: String
@@ -43,9 +47,10 @@ public final class TabDragSession {
   }
 
   private static var zones: [Registered] = []
-  private var aimed: TabDropZone?
-  private var asked: [ObjectIdentifier: TabDropZone] = [:]
+  private weak var aimed: TabDropZone?
+  private var asked: [ObjectIdentifier: Asked] = [:]
   private var closeObserver: NSObjectProtocol?
+  private var belowSource: Set<ObjectIdentifier>?
 
   init(tabIds: [String], sourceWindow: String) {
     self.tabIds = tabIds
@@ -75,7 +80,8 @@ public final class TabDragSession {
   public func move(screenPoint: CGPoint) {
     guard Self.current === self else { return }
     pointer = screenPoint
-    let window = Self.window(at: screenPoint)
+    if belowSource == nil { belowSource = coveringStart(screenPoint) }
+    let window = window(at: screenPoint)
     overWindow = window.map { $0.0 }
     outside = overWindow != sourceWindow
     var next: (zone: TabDropZone, aim: TabDropAim)?
@@ -84,7 +90,7 @@ public final class TabDragSession {
       let candidates = Self.zones.filter { $0.windowId == windowId && $0.zone != nil }.sorted { $0.priority < $1.priority }
       for entry in candidates {
         guard let zone = entry.zone else { continue }
-        asked[ObjectIdentifier(zone)] = zone
+        asked[ObjectIdentifier(zone)] = Asked(zone: zone)
         guard let found = zone.aim(self, at: local) else { continue }
         next = (zone, found)
         break
@@ -127,7 +133,7 @@ public final class TabDragSession {
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
     closeObserver = nil
     aimed?.clear()
-    for zone in asked.values where zone !== aimed { zone.clear() }
+    for zone in asked.values.compactMap(\.zone) where zone !== aimed { zone.clear() }
     asked = [:]
     aimed = nil
     aim = nil
@@ -140,11 +146,22 @@ public final class TabDragSession {
     Self.windowOf(windowId).map { Self.windowPoint(pointer, in: $0) }
   }
 
-  private static func window(at screenPoint: CGPoint) -> (String, NSWindow)? {
+  private func window(at screenPoint: CGPoint) -> (String, NSWindow)? {
     for nsWindow in NSApp.orderedWindows where nsWindow.isVisible && nsWindow.frame.contains(screenPoint) {
-      if let id = windowIdOf(nsWindow) { return (id, nsWindow) }
+      if belowSource?.contains(ObjectIdentifier(nsWindow)) == true { continue }
+      if let id = Self.windowIdOf(nsWindow) { return (id, nsWindow) }
     }
     return nil
+  }
+
+  private func coveringStart(_ screenPoint: CGPoint) -> Set<ObjectIdentifier> {
+    guard let source = Self.windowOf(sourceWindow), source.frame.contains(screenPoint) else { return [] }
+    var covering: Set<ObjectIdentifier> = []
+    for nsWindow in NSApp.orderedWindows {
+      if nsWindow === source { return covering }
+      if nsWindow.isVisible && nsWindow.frame.contains(screenPoint) { covering.insert(ObjectIdentifier(nsWindow)) }
+    }
+    return covering
   }
 
   private static func windowPoint(_ screenPoint: CGPoint, in window: NSWindow) -> CGPoint {

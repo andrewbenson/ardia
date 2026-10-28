@@ -8,6 +8,7 @@ import SolaraUI
 final class NativeTabDrag {
   static let shared = NativeTabDrag()
   static let endDeadline: Double = 2
+  static let replyMargin: Double = 0.5
 
   private var chain: Task<Void, Never>?
   private var pendingMove: [Any]?
@@ -137,7 +138,7 @@ final class NativeTabDrag {
         finish(nil)
       }
     }
-    let deadline = (Date().timeIntervalSince1970 + Self.endDeadline) * 1000
+    let deadline = (Date().timeIntervalSince1970 + Self.endDeadline - Self.replyMargin) * 1000
     send("tabDrag.end", [windowId, commit && !zoned, deadline]) { result in
       guard reply.open() else { return }
       finish(result as? [String: Any])

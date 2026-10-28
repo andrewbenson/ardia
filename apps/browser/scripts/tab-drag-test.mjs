@@ -247,20 +247,25 @@ try {
   });
 
   await check("a tab dragged onto another window's tabs: the strip makes room at the pointer, and it lands there", async () => {
-    await run(`st().setFocusedWindow("w5"); st().setFocusedWindow("w6"); return 1;`);
-    const from = await run(`return tabItems("w5");`);
-    const into = await run(`return tabItems("w6");`);
-    const dx = 600;
-    const a1 = Math.round((from[0][0] + from[0][1]) / 2);
-    const between = dx + Math.round((into[0][1] + into[1][1]) / 2);
-    const seen = await run(`${PREVIEW}
-      const seen = [];
-      const iv = setInterval(() => preview().then((p) => { const d = globalThis.acTabDrag.getState(); seen.push({ shape: p.shape, insert: d.insert, over: d.overWindow }); }), 30);
-      return act("w5", "drag:${a1},21;${a1},-20;${dx - 30},-20;${between - 3},21;${between - 1},22;${between},21").then(() => settle(1400)).then(() => { clearInterval(iv); return seen; });`);
-    assert.ok(seen.some((s) => s.over === "w6" && s.insert?.windowId === "w6" && s.insert.beforeId === "b2"), JSON.stringify(seen.slice(-4)));
-    assert.ok(seen.some((s) => s.insert && s.shape === "pill"), "the pill over the strip");
-    assert.deepEqual(await tabsOf("w6"), ["b1", "a1", "b2", "b3"]);
-    assert.deepEqual(await tabsOf("w5"), ["a2"]);
+    try {
+      await run(`st().setFocusedWindow("w5"); st().setFocusedWindow("w6"); return 1;`);
+      const from = await run(`return tabItems("w5");`);
+      const into = await run(`return tabItems("w6");`);
+      const dx = 600;
+      const a1 = Math.round((from[0][0] + from[0][1]) / 2);
+      const between = dx + Math.round((into[0][1] + into[1][1]) / 2);
+      const seen = await run(`${PREVIEW}
+        const seen = [];
+        const iv = setInterval(() => preview().then((p) => { const d = globalThis.acTabDrag.getState(); seen.push({ shape: p.shape, insert: d.insert, over: d.overWindow }); }), 30);
+        return act("w5", "drag:${a1},21;${a1},-20;${dx - 30},-20;${between - 3},21;${between - 1},22;${between},21").then(() => settle(1400)).then(() => { clearInterval(iv); return seen; });`);
+      const overW6 = seen.filter((s) => s.over === "w6");
+      assert.ok(seen.some((s) => s.over === "w6" && s.insert?.windowId === "w6" && s.insert.beforeId === "b2"), JSON.stringify({ overW6: overW6.slice(-4), samples: seen.length, w6: await tabsOf("w6") }));
+      assert.ok(seen.some((s) => s.insert && s.shape === "pill"), "the pill over the strip");
+      assert.deepEqual(await tabsOf("w6"), ["b1", "a1", "b2", "b3"]);
+      assert.deepEqual(await tabsOf("w5"), ["a2"]);
+    } finally {
+      await run(`st().closeWindow("w5"); st().closeWindow("w6"); return settle(900);`);
+    }
   });
 
   await check("a background tab's card shows its own page: its last picture, else its icon and title", async () => {
@@ -496,6 +501,38 @@ try {
     assert.equal(after.windows.length, before.windows.length, `no new window: ${JSON.stringify({ row, windows: after.windows, seen, lastDrop })}`);
     assert.equal(after.tabs[row.id], "w1", `${row.id} stayed: ${JSON.stringify(after.tabs)}`);
     assert.equal(after.dragging, 0, "no drag left");
+  });
+
+  if (nativeSidebar)
+  await check("sidebar: a split drop whose end reply comes late commits once, or not at all", async () => {
+    await run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); st().updateSettings({ tabLayout: "sidebar" });
+      for (let i = 0; i < 2; i++) st().newTab("w1", { url: "data:text/html,late" + i, background: true });
+      return settle(1500);`);
+    const free = await run(`const s = st(); const w = s.windows.w1; const split = new Set(Object.values(s.splits).flatMap((v) => v.tabIds));
+      return w.tabIds.filter((id) => !split.has(id) && id !== w.activeTabIds[w.profileId]);`);
+    const probe = await nativeProbe("w1");
+    const rows = probe.items.filter((i) => i.kind === "row" && i.tabIds.length === 1 && free.includes(i.tabIds[0]));
+    assert.ok(rows.length >= 2, JSON.stringify({ free, rows: rows.map((r) => r.tabIds) }));
+    const dropLate = async (row, delay) => {
+      const before = await live();
+      const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+      const left = Math.round(row.x + row.w + 140);
+      await run(`globalThis.acTabDragEndDelay = ${delay};
+        return act("w1", "drag:${sx},${sy};${sx + 40},${sy + 20};${left},380;${left + 4},390;${left + 6},396;${left + 6},398").then(() => settle(2800)).finally(() => { globalThis.acTabDragEndDelay = 0; });`);
+      const after = await live();
+      const splits = await run(`return Object.values(st().splits).filter((v) => v.tabIds.includes(${JSON.stringify(row.tabIds[0])})).length;`);
+      const lastDrop = (await nativeProbe("w1"))?.lastDrop ?? null;
+      return { id: row.tabIds[0], before, after, splits, lastDrop };
+    };
+    const inTime = await dropLate(rows[0], 1200);
+    assert.equal(inTime.splits, 1, `a reply in time splits once: ${JSON.stringify(inTime)}`);
+    assert.equal(inTime.after.windows.length, inTime.before.windows.length, `and opens no window: ${JSON.stringify(inTime)}`);
+    assert.equal(inTime.after.tabs[inTime.id], "w1");
+    const late = await dropLate(rows[1], 1700);
+    assert.ok(late.splits <= 1, `a late reply splits at most once: ${JSON.stringify(late)}`);
+    assert.equal(late.after.windows.length, late.before.windows.length, `and opens no window: ${JSON.stringify(late)}`);
+    assert.equal(late.after.tabs[late.id], "w1");
+    assert.equal(late.after.dragging, 0, "no drag left");
   });
 
   await check("sidebar: Esc and the release in the same moment end the drag once, and the next drag still works", async () => {

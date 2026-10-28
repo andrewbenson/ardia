@@ -3,7 +3,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 import { create } from "zustand";
 import type { TabPlacement } from "../../store/organize";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { beginTabDrag, cancelTabDrag, captureDragPage, endNativeTabDrag, updateNativeTabDrag, useTabDrag } from "../layout/tabDrag";
+import "../layout/nativeTabDrag";
 import { arrangeLive } from "./pinnedOrder";
 import { closeFolderPanel } from "./tileFolderUi";
 
@@ -39,7 +39,6 @@ export type NativeMarks = {
 };
 
 type DragModule = {
-  tabDrag(onPage: boolean, insert: boolean): Promise<void>;
   escape(): Promise<void>;
   external(windowId: string, phase: string, x: number, y: number, count: number): Promise<string | null>;
   panel(windowId: string, frameJSON: string | null): Promise<void>;
@@ -57,50 +56,7 @@ export const useNativeDragMarks = create<{
   marks: NativeMarks | null;
 }>()(() => ({ windowId: null, marks: null }));
 
-let stopWatching: (() => void) | null = null;
-
-function watchTabDrag() {
-  stopWatching?.();
-  let sent = "";
-  stopWatching = useTabDrag.subscribe((d) => {
-    const insert = !!d.overWindow && d.insert?.windowId === d.overWindow;
-    const key = `${d.onPage}:${insert}`;
-    if (key === sent) return;
-    sent = key;
-    void native?.tabDrag(d.onPage, insert);
-  });
-  void native?.tabDrag(false, false);
-}
-
-function stopTabDrag() {
-  stopWatching?.();
-  stopWatching = null;
-  void native?.tabDrag(false, false);
-}
-
 addNativeSettingsHandlers({
-  "tabDrag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
-    beginTabDrag(tabId, tabIds, true);
-    watchTabDrag();
-  },
-  "tabDrag.capture": (windowId: string) => captureDragPage(windowId),
-  "tabDrag.move": (
-    _windowId: string,
-    x: number,
-    y: number,
-    outside: boolean,
-    overWindow: string | null,
-    ox: number,
-    oy: number,
-    lifted: boolean | null,
-    zoneBefore: string | null | false,
-  ) => updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null, lifted, zoneBefore),
-  "tabDrag.end": (_windowId: string, commit: boolean, deadline?: number) => {
-    const late = !!deadline && Date.now() > deadline;
-    const end = commit && !late ? endNativeTabDrag() : (cancelTabDrag(), { split: false, insert: false, before: null, onPage: false });
-    stopTabDrag();
-    return end;
-  },
   "sidebar.drag.live": (sequence: string[]) => arrangeLive(sequence),
   "sidebar.drag.escape": (on: boolean) => setDragEscapeCapture(on),
   "sidebar.drag.haptic": () => hapticTick(),

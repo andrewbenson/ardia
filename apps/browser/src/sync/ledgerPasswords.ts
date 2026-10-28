@@ -30,7 +30,11 @@ const ledgerWritable = () => typeof ledgerRead() !== "string";
 const unwritable = new Set<string>();
 let migrationTried = false;
 export type LedgerPause = "newer" | "older" | "unreadable" | "unwritable";
-export function ledgerPauseReason(): LedgerPause | null {
+export function ledgerPauseReason(syncing?: Iterable<string>): LedgerPause | null {
+  if (syncing) {
+    const still = new Set(syncing);
+    for (const profile of unwritable) if (!still.has(profile)) unwritable.delete(profile);
+  }
   const doc = ledgerRead();
   if (doc === "older") return migrationTried ? "older" : null;
   if (typeof doc === "string") return doc;

@@ -179,8 +179,12 @@ const PASSWORD_PAUSES: Record<LedgerPause, string> = {
   unreadable: PASSWORDS_LEDGER_UNREADABLE,
   unwritable: PASSWORDS_LEDGER_UNREADABLE,
 };
+const passwordEngineProfiles = () => {
+  const s = useBrowser.getState();
+  return Object.entries(doc.profiles).filter(([id, l]) => l.enabled && !l.retire && s.profiles[id] && !s.profiles[id]!.dataId).map(([id]) => engineProfile(id));
+};
 const passwordsPause = () => {
-  const reason = syncRedesign.on && doc.types.passwords ? ledgerPauseReason() : null;
+  const reason = syncRedesign.on && doc.types.passwords ? ledgerPauseReason(passwordEngineProfiles()) : null;
   return reason ? PASSWORD_PAUSES[reason] : null;
 };
 const SEALED_PASSWORD_FAULT = "Sync stopped on an internal fault: a pw: value didn't open with this Mac's sync key, so nothing was sent.";

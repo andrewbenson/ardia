@@ -1,3 +1,4 @@
+import ArdiaCore
 import Foundation
 import Observation
 import SolaraUI
@@ -5,31 +6,44 @@ import SolaraUI
 @MainActor
 final class PrivacyAdapter: PrivacyServices {
   func contentBlocker() async -> ContentBlockerState? {
-    (await SettingsAdapters.js("privacy.contentBlocker") as? [String: Any]).map(Self.blocker)
+    await EngineCalls.result({ done in ArdiaCoreContentBlocker.state { done($0) } }) { EngineCalls.failed($0, "contentBlocker") ? nil : Self.blocker($0) }
   }
 
   func contentBlockerChanges() -> AsyncStream<Void> {
-    SettingsJS.shared.stream("privacy.contentBlockerChanged") { _ in () }
+    AsyncStream { continuation in
+      let observer = NotificationCenter.default.addObserver(forName: ArdiaCoreSettingsBridge.contentBlockerChanged, object: nil, queue: .main) { _ in
+        continuation.yield()
+      }
+      nonisolated(unsafe) let token = observer
+      continuation.onTermination = { _ in NotificationCenter.default.removeObserver(token) }
+    }
   }
 
   func setContentBlockerEnabled(_ on: Bool) async throws {
-    _ = try await SettingsAdapters.jsThrowing("privacy.setContentBlockerEnabled", on)
+    try await EngineCalls.settle { done in ArdiaCoreContentBlocker.setEnabled(on) { done($0) } }
   }
 
   func setFilterListEnabled(_ id: String, enabled: Bool) async throws {
-    _ = try await SettingsAdapters.jsThrowing("privacy.setFilterListEnabled", id, enabled)
+    try await EngineCalls.settle { done in ArdiaCoreContentBlocker.setList(id, enabled: enabled) { done($0) } }
   }
 
   func setContentBlockerAllowed(host: String, allowed: Bool) async throws {
-    _ = try await SettingsAdapters.jsThrowing("privacy.setContentBlockerAllowed", host, allowed)
+    try await EngineCalls.settle { done in ArdiaCoreContentBlocker.setAllowed(allowed, host: host) { done($0) } }
   }
 
   func siteSettingsOrigins(profile: String) async -> [String] {
-    await SettingsAdapters.js("privacy.siteSettingsOrigins", profile) as? [String] ?? []
+    await withCheckedContinuation { continuation in
+      ArdiaCoreServices.siteSettingsOrigins(profile: profile) { continuation.resume(returning: $0) }
+    }
   }
 
   func siteSettings(profile: String, origin: String) async -> [SiteSettingType: SiteSettingState]? {
-    guard let raw = await SettingsAdapters.js("privacy.siteSettings", profile, origin) as? [String: Any] else { return nil }
+    await EngineCalls.result({ done in ArdiaCoreServices.siteSettings(profile: profile, origin: origin) { done($0) } }) {
+      EngineCalls.failed($0, "siteSettings") ? nil : Self.siteSettings($0)
+    }
+  }
+
+  nonisolated static func siteSettings(_ raw: [String: Any]) -> [SiteSettingType: SiteSettingState] {
     var settings: [SiteSettingType: SiteSettingState] = [:]
     for (key, entry) in raw {
       guard let type = SiteSettingType(rawValue: key), let entry = entry as? [String: Any],
@@ -40,41 +54,54 @@ final class PrivacyAdapter: PrivacyServices {
   }
 
   func setSiteSetting(profile: String, origin: String, type: SiteSettingType, value: SiteSettingValue) async {
-    await SettingsAdapters.js("privacy.setSiteSetting", profile, origin, type.rawValue, value.rawValue)
+    ArdiaCoreServices.setSiteSetting(value.rawValue, profile: profile, origin: origin, type: type.rawValue)
   }
 
   func resetSiteSettings(profile: String, origin: String) async {
-    await SettingsAdapters.js("privacy.resetSiteSettings", profile, origin)
+    ArdiaCoreServices.resetSiteSettings(profile: profile, origin: origin)
   }
 
   func clearSiteData(profile: String, origin: String) async -> ClearSiteDataResult {
-    let result = await SettingsAdapters.js("privacy.clearSiteData", profile, origin) as? [String: Any] ?? [:]
-    let cookies = (result["cookies"] as? NSNumber).flatMap { CFGetTypeID($0) == CFBooleanGetTypeID() ? nil : $0.intValue }
-    return ClearSiteDataResult(cookies: cookies, storage: result.bool("storage") ?? false)
+    await EngineCalls.result({ done in ArdiaCoreServices.clearSiteData(profile: profile, origin: origin) { done($0) } }) { result in
+      let cookies = (result["cookies"] as? NSNumber).flatMap { CFGetTypeID($0) == CFBooleanGetTypeID() ? nil : $0.intValue }
+      return ClearSiteDataResult(cookies: cookies, storage: result.bool("storage") ?? false)
+    }
   }
 
   func externalAppAllowances(profile: String) async -> [ExternalAppAllowance] {
-    let list = await SettingsAdapters.js("privacy.externalAppAllowances", profile) as? [[String: Any]] ?? []
-    return list.compactMap { entry in
+    let chromium: [ExternalAppAllowance] = await withCheckedContinuation { continuation in
+      ArdiaCoreServices.externalAppAllowances(profile: profile) { list in
+        continuation.resume(returning: Self.allowances(list as? [[String: Any]] ?? []))
+      }
+    }
+    let seen = Set(chromium.map { "\($0.origin)|\($0.scheme)" })
+    let webkit = Self.allowances(ArdiaCoreSettingsBridge.webKitExternalAppAllowances(profile: profile))
+    return chromium + webkit.filter { !seen.contains("\($0.origin)|\($0.scheme)") }
+  }
+
+  nonisolated static func allowances(_ list: [[String: Any]]) -> [ExternalAppAllowance] {
+    list.compactMap { entry in
       guard let origin = entry.string("origin"), let scheme = entry.string("scheme") else { return nil }
       return ExternalAppAllowance(origin: origin, scheme: scheme, app: entry.string("app"), icon: entry.string("icon"))
     }
   }
 
   func removeExternalAppAllowance(profile: String, origin: String, scheme: String) async {
-    await SettingsAdapters.js("privacy.removeExternalAppAllowance", profile, origin, scheme)
+    ArdiaCoreServices.removeExternalAppAllowance(profile: profile, origin: origin, scheme: scheme)
+    ArdiaCoreSettingsBridge.removeWebKitExternalAppAllowance(profile: profile, origin: origin, scheme: scheme)
   }
 
   func zoomLevels(profile: String) async -> [String: Double] {
-    let levels = await SettingsAdapters.js("privacy.zoomLevels", profile) as? [String: Any] ?? [:]
-    return levels.compactMapValues { ($0 as? NSNumber)?.doubleValue }
+    await withCheckedContinuation { continuation in
+      ArdiaCoreServices.zoomLevels(profile: profile) { levels in continuation.resume(returning: levels.mapValues(\.doubleValue)) }
+    }
   }
 
   func setZoom(profile: String, host: String, zoom: Double) async {
-    await SettingsAdapters.js("privacy.setZoom", profile, host, zoom)
+    ArdiaCoreServices.setZoom(zoom, profile: profile, host: host)
   }
 
-  static func blocker(_ dict: [String: Any]) -> ContentBlockerState {
+  nonisolated static func blocker(_ dict: [String: Any]) -> ContentBlockerState {
     let lists = dict.list("lists").compactMap { list -> FilterList? in
       guard let id = list.string("id"), let category = list.string("category").flatMap(FilterListCategory.init(rawValue:)) else { return nil }
       return FilterList(

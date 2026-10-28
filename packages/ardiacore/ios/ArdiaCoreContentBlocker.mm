@@ -758,7 +758,10 @@ void Changed(NSString *error, void (^completion)(NSString *error)) {
   if (error) return completion(error);
   completion = [completion copy];
   FollowDefault(nil, ^(NSString *followError) {
-    State(^(NSDictionary *state) { if (ArdiaCoreHost.eventHandler) ArdiaCoreHost.eventHandler(@"contentBlocker", state[@"stats"]); });
+    State(^(NSDictionary *state) {
+      if (ArdiaCoreHost.eventHandler) ArdiaCoreHost.eventHandler(@"contentBlocker", state[@"stats"]);
+      [NSNotificationCenter.defaultCenter postNotificationName:@"ArdiaCoreContentBlockerChanged" object:nil];
+    });
     completion(followError);
   });
 }

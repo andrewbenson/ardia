@@ -1,21 +1,31 @@
 import AppKit
+import ArdiaCore
 import Foundation
 import SolaraUI
 
 @MainActor
 final class AutofillAdapter: AutofillServices {
   func autofillSettings(profile: String) async -> AutofillEnabled {
-    let result = await SettingsAdapters.js("autofill.settings", profile) as? [String: Any] ?? [:]
-    return AutofillEnabled(addresses: result.bool("addresses") ?? true, cards: result.bool("cards") ?? true)
+    _ = await addresses(profile: profile)
+    return AutofillEnabled(
+      addresses: ArdiaCoreServices.boolPreference("autofill.profile_enabled", profile: profile),
+      cards: ArdiaCoreServices.boolPreference("autofill.credit_card_enabled", profile: profile)
+    )
   }
 
   func setAutofillSettings(addresses: Bool?, cards: Bool?, profile: String) async {
-    await SettingsAdapters.js("autofill.setSettings", jsonArg(addresses), jsonArg(cards), profile)
+    if let addresses { ArdiaCoreServices.setBoolPreference("autofill.profile_enabled", value: addresses, profile: profile) }
+    if let cards { ArdiaCoreServices.setBoolPreference("autofill.credit_card_enabled", value: cards, profile: profile) }
   }
 
   func addresses(profile: String) async -> [SavedAddress] {
-    let list = await SettingsAdapters.js("autofill.addresses", profile) as? [[String: Any]] ?? []
-    return list.compactMap { entry in
+    await EngineCalls.result({ done in ArdiaCoreServices.addresses(profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "addresses") ? [] : Self.addresses($0.list("addresses"))
+    }
+  }
+
+  nonisolated static func addresses(_ list: [[String: Any]]) -> [SavedAddress] {
+    list.compactMap { entry in
       guard let id = entry.string("id") else { return nil }
       return SavedAddress(
         id: id,
@@ -33,12 +43,20 @@ final class AutofillAdapter: AutofillServices {
   }
 
   func saveAddress(_ address: AddressInput, profile: String) async -> String? {
-    await SettingsAdapters.js("autofill.saveAddress", address.fields, profile) as? String
+    let fields = address.fields
+    return await EngineCalls.result({ done in ArdiaCoreServices.saveAddress(fields, profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "saveAddress") ? nil : $0.string("id")
+    }
   }
 
   func cards(profile: String) async -> [SavedCard] {
-    let list = await SettingsAdapters.js("autofill.cards", profile) as? [[String: Any]] ?? []
-    return list.compactMap { entry in
+    await EngineCalls.result({ done in ArdiaCoreServices.cards(profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "cards") ? [] : Self.cards($0.list("cards"))
+    }
+  }
+
+  nonisolated static func cards(_ list: [[String: Any]]) -> [SavedCard] {
+    list.compactMap { entry in
       guard let id = entry.string("id") else { return nil }
       return SavedCard(
         id: id,
@@ -56,15 +74,21 @@ final class AutofillAdapter: AutofillServices {
     if let id = card.id { fields["id"] = id }
     if let month = card.expMonth { fields["expMonth"] = month }
     if let year = card.expYear { fields["expYear"] = year }
-    return await SettingsAdapters.js("autofill.saveCard", fields, jsonArg(number), profile) as? String
+    return await EngineCalls.result({ done in ArdiaCoreServices.saveCard(fields, number: number, profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "saveCard") ? nil : $0.string("id")
+    }
   }
 
   func deleteAutofillEntry(_ id: String, profile: String) async {
-    await SettingsAdapters.js("autofill.deleteEntry", id, profile)
+    await EngineCalls.result({ done in ArdiaCoreServices.deleteAutofillEntry(id, profile: profile) { done($0) } }) {
+      _ = EngineCalls.failed($0, "deleteAutofillEntry")
+    }
   }
 
   func revealCardNumber(_ id: String, profile: String) async -> String? {
-    await SettingsAdapters.js("autofill.revealCardNumber", id, profile) as? String
+    await EngineCalls.result({ done in ArdiaCoreServices.revealCardNumber(id, profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "revealCardNumber") ? nil : $0.string("number")
+    }
   }
 
   func copy(_ text: String) { SettingsAdapters.copyText(text) }

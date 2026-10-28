@@ -36,6 +36,9 @@ public enum SidebarGroupCardMetrics {
   static let iconSlot: CGFloat = 20
   static let iconGap: CGFloat = 10
   static let separatorGap: CGFloat = 5
+  static let border: CGFloat = 0.5
+  static let fieldPadding: CGFloat = 2
+  static let baselineNudge: CGFloat = 0.5
   static let maxRows = 7
   static let edge: CGFloat = 8
   static var listPad: CGFloat { inset - (row - iconSlot) / 2 }
@@ -97,7 +100,7 @@ public final class SidebarGroupCardView: NSView, NSTextFieldDelegate {
   private let surface = PanelSurfaceView()
   private let glass = SymbolView()
   private let field = NSTextField()
-  private let separator = CALayer()
+  private let separator = NSView()
   private let scroll = NSScrollView()
   private let list = GroupCardListView()
   private let empty = NSTextField(labelWithString: "")
@@ -129,8 +132,8 @@ public final class SidebarGroupCardView: NSView, NSTextFieldDelegate {
     field.cell?.usesSingleLineMode = true
     field.cell?.isScrollable = true
     addSubview(field)
-    separator.actions = SurfaceLayer.noActions
-    layer?.addSublayer(separator)
+    separator.wantsLayer = true
+    addSubview(separator)
     scroll.drawsBackground = false
     scroll.hasVerticalScroller = false
     scroll.horizontalScrollElasticity = .none
@@ -139,6 +142,7 @@ public final class SidebarGroupCardView: NSView, NSTextFieldDelegate {
     empty.lineBreakMode = .byTruncatingTail
     empty.font = .systemFont(ofSize: 13)
     list.addSubview(empty)
+    DevPointer.observe(self, #selector(devPointer(_:)))
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -162,7 +166,7 @@ public final class SidebarGroupCardView: NSView, NSTextFieldDelegate {
     (field.currentEditor() as? NSTextView)?.insertionPointColor = color("textPrimary", dark ? "#FFFFFF" : "#000000")
     empty.textColor = color("textTertiary", dark ? "#FFFFFF59" : "#00000059")
     PrimitiveMotion.setInstantly {
-      separator.backgroundColor = CSSColor(dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)")?.cg
+      separator.layer?.backgroundColor = CSSColor(dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)")?.cg
     }
     if ticker == nil {
       let timer = Timer(timeInterval: 30, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refreshRows() } }
@@ -213,22 +217,22 @@ public final class SidebarGroupCardView: NSView, NSTextFieldDelegate {
     super.layout()
     let m = SidebarGroupCardMetrics.self
     surface.frame = bounds
-    glass.frame = NSRect(x: m.inset, y: (m.searchRow - m.iconSlot) / 2, width: m.iconSlot, height: m.iconSlot)
+    let inner = bounds.insetBy(dx: m.border, dy: m.border)
+    let (x0, y0, width) = (inner.minX, inner.minY, inner.width)
+    glass.frame = NSRect(x: x0 + m.inset, y: y0 + (m.searchRow - m.iconSlot) / 2, width: m.iconSlot, height: m.iconSlot)
     let fieldX = m.inset + m.iconSlot + m.iconGap
     let fieldHeight = ceil(NSFont.systemFont(ofSize: 13).boundingRectForFont.height)
-    field.frame = NSRect(x: fieldX, y: (m.searchRow - fieldHeight) / 2, width: bounds.width - fieldX - m.inset, height: fieldHeight)
-    PrimitiveMotion.setInstantly {
-      separator.frame = CGRect(x: m.inset, y: m.searchRow + m.separatorGap, width: bounds.width - 2 * m.inset, height: m.hairline)
-    }
-    let listTop = m.searchRow + m.separator
+    field.frame = NSRect(x: x0 + fieldX, y: y0 + (m.searchRow - fieldHeight) / 2 + m.baselineNudge, width: width - fieldX - m.inset, height: fieldHeight)
+    separator.frame = NSRect(x: x0 + m.inset, y: y0 + m.searchRow + m.separatorGap, width: width - 2 * m.inset, height: m.hairline)
+    let listTop = y0 + m.searchRow + m.separator
     let listHeight = m.listHeight(state?.rows.count ?? 0)
-    scroll.frame = NSRect(x: 0, y: listTop, width: bounds.width, height: listHeight)
+    scroll.frame = NSRect(x: x0, y: listTop, width: width, height: listHeight)
     let content = m.listPad * 2 + CGFloat(shown.count) * m.row
-    list.frame = NSRect(x: 0, y: 0, width: bounds.width, height: max(listHeight, content))
+    list.frame = NSRect(x: 0, y: 0, width: width, height: max(listHeight, content))
     for (index, view) in rowViews.enumerated() {
-      view.frame = NSRect(x: m.rowInset, y: m.listPad + CGFloat(index) * m.row, width: bounds.width - 2 * m.rowInset, height: m.row)
+      view.frame = NSRect(x: m.rowInset, y: m.listPad + CGFloat(index) * m.row, width: width - 2 * m.rowInset, height: m.row)
     }
-    empty.frame = NSRect(x: m.inset, y: m.listPad + (m.row - 16) / 2, width: bounds.width - 2 * m.inset, height: 16)
+    empty.frame = NSRect(x: m.inset, y: m.listPad + (m.row - 16) / 2, width: width - 2 * m.inset, height: 16)
   }
 
   private func select(_ index: Int, reveal: Bool) {
@@ -325,6 +329,13 @@ public final class SidebarGroupCardView: NSView, NSTextFieldDelegate {
 
   public override func mouseExited(with event: NSEvent) { pointer(false) }
 
+  @objc private func devPointer(_ note: Notification) {
+    guard DevPointer.inside(self, note) else { return pointer(false) }
+    guard !inside else { return }
+    pointer(true)
+    if live { takeFocus() }
+  }
+
   public override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
     if window == nil {
@@ -399,7 +410,7 @@ final class GroupCardRowView: NSView {
     let width = max(0, bounds.width - x - m.rowPadding)
     let top = (bounds.height - 30) / 2
     title.frame = NSRect(x: x, y: top, width: width, height: 16)
-    subtitle.frame = NSRect(x: x, y: top + 16, width: width, height: 14)
+    subtitle.frame = NSRect(x: x - m.fieldPadding, y: top + 16 + m.baselineNudge, width: width + 2 * m.fieldPadding, height: 14)
   }
 
   private func paint() {

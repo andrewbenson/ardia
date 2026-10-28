@@ -54,6 +54,20 @@ final class SidebarHoverCardHost {
     card.onPointer = { [weak self] inside in self?.pointer(inside) }
     return card
   }()
+  private lazy var groupCard: SidebarGroupCardView = {
+    let card = SidebarGroupCardView(favicons: NativeSidebar.hosts[windowId]?.view.favicons ?? SidebarFavicons())
+    card.onEvent = { [weak self, weak card] event in
+      guard let self, let id = card?.state?.groupId else { return }
+      switch event {
+      case .choose(let tabId): NativeSidebarHoverCard.send(self.windowId, id, "choose", ["tabId": tabId])
+      case .close: NativeSidebarHoverCard.send(self.windowId, id, "close")
+      case .hold(let on): NativeSidebarHoverCard.send(self.windowId, id, on ? "hold" : "release")
+      case .focusPage: NativeSidebarHoverCard.send(self.windowId, id, "focusPage")
+      }
+    }
+    card.onPointer = { [weak self] inside in self?.pointer(inside) }
+    return card
+  }()
   private var kind: String?
 
   init(windowId: String) {
@@ -68,6 +82,7 @@ final class SidebarHoverCardHost {
 
   func show(_ card: [String: Any]?) {
     guard let card, let kind = card["kind"] as? String else {
+      if kind == "group" { groupCard.live = false }
       motion.hide()
       return coverChanged()
     }
@@ -80,6 +95,7 @@ final class SidebarHoverCardHost {
       motion.hide()
       return coverChanged()
     }
+    if self.kind == "group", kind != "group" { groupCard.live = false }
     self.kind = kind
     motion.show(placed.view, origin: placed.origin)
     NativeSidebarHoverCard.send(windowId, "", "layout", ["frame": [placed.origin.x, placed.origin.y, placed.view.frame.width, placed.view.frame.height]])
@@ -93,9 +109,19 @@ final class SidebarHoverCardHost {
       guard let state = SidebarTabCardState.decode(card) else { return nil }
       tabCard.set(state)
       return (tabCard, SidebarTabCardMetrics.origin(anchor: state.anchorRect, sidebarWidth: state.sidebarWidth, cardHeight: tabCard.height, windowHeight: state.windowHeight))
+    case "group":
+      guard let state = Self.decode(SidebarGroupCardState.self, card) else { return nil }
+      groupCard.live = true
+      groupCard.set(state)
+      return (groupCard, SidebarGroupCardMetrics.origin(anchor: state.anchorRect, height: groupCard.frame.height, windowHeight: state.windowHeight))
     default:
       return nil
     }
+  }
+
+  private static func decode<T: Decodable>(_ type: T.Type, _ value: [String: Any]) -> T? {
+    guard JSONSerialization.isValidJSONObject(value), let data = try? JSONSerialization.data(withJSONObject: value) else { return nil }
+    return try? JSONDecoder().decode(T.self, from: data)
   }
 
   private func pointer(_ inside: Bool) {
@@ -108,6 +134,7 @@ final class SidebarHoverCardHost {
       let r = content.convert(content.bounds, to: nil)
       info["frame"] = [r.minX, root.bounds.height - r.maxY, r.width, r.height]
       info["inWindow"] = root.bounds.contains(r)
+      info["typingInCard"] = (window.firstResponder as? NSView)?.isDescendant(of: content) ?? false
       info["onScreen"] = window.isVisible && !content.isHiddenOrHasHiddenAncestor && motion.superview != nil
       var buttons: [String: [Double]] = [:]
       func walk(_ view: NSView) {
@@ -120,6 +147,7 @@ final class SidebarHoverCardHost {
       walk(content)
       info["buttons"] = buttons
       if kind == "tab", let look = tabCard.state?.look { info["fill"] = look.fill }
+      if kind == "group" { info["rows"] = groupCard.state?.rows.map(\.id) ?? [] }
     }
     return info
   }

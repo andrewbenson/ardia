@@ -11,8 +11,9 @@ import { awayFromPin } from "../../store/organize";
 import { openInSplit } from "../layout/splitActions";
 import { togglePictureInPicture, useMedia } from "../media/state";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { tabTitle } from "./actions";
-import { cardHoverProps, dismissHover } from "./hover";
+import { clickTab, tabTitle } from "./actions";
+import { returnFocusToPage, useGroupRows } from "./GroupPanel";
+import { cardHoverProps, dismissHover, holdHover } from "./hover";
 import { nativeSidebarEnabled } from "./NativeSidebar";
 import type { Anchor, Hover } from "./state";
 
@@ -20,7 +21,7 @@ const TOPIC = "sidebar.hoverCard";
 const cards: Record<string, object> = {};
 let queued = false;
 
-export type NativeCardKind = "tab";
+export type NativeCardKind = "tab" | "group";
 
 function publish() {
   if (queued) return;
@@ -54,6 +55,7 @@ export function useNativeHoverCardActive(windowId: string): boolean {
 export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean): NativeCardKind | null {
   if (!active || !hover) return null;
   if (dia) return "tab";
+  if (hover.kind === "group") return "group";
   return null;
 }
 
@@ -98,19 +100,46 @@ function useTabCard(windowId: string, id: string | null, anchor: Anchor | null, 
   };
 }
 
+function useGroupCard(windowId: string, id: string | null, anchor: Anchor | null, windowHeight: number) {
+  const theme = useTheme();
+  const exists = useBrowser((s) => !!id && !!s.groups[id]);
+  const rows = useGroupRows(id ?? "", windowId);
+  if (!id || !anchor || !exists) return null;
+  return {
+    kind: "group",
+    groupId: id,
+    rows: rows.map((r) => ({ id: r.id, title: r.title, url: r.url, usedAt: r.usedAt ?? 0, favicon: r.favicon, icon: r.icon, profileId: r.profileId })),
+    anchor: frame(anchor),
+    windowHeight,
+    dark: theme.dark,
+    theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, textTertiary: theme.textTertiary, placeholder: theme.placeholder },
+  };
+}
+
 export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null, target: Hover | null, sidebarWidth: number, windowHeight: number) {
   const live = target && kind ? target : null;
   const anchor = live?.anchor ?? null;
   const tab = useTabCard(windowId, kind === "tab" ? (live?.id ?? null) : null, anchor, sidebarWidth, windowHeight);
-  const key = tab && JSON.stringify(tab);
+  const group = useGroupCard(windowId, kind === "group" ? (live?.id ?? null) : null, anchor, windowHeight);
+  const card = tab ?? group;
+  const key = card && JSON.stringify(card);
   useLayoutEffect(() => setCard(windowId, key ? JSON.parse(key) : null), [windowId, key]);
   useLayoutEffect(() => () => setCard(windowId, null), [windowId]);
 }
 
 addNativeSettingsHandlers({
-  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[] }) => {
+  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[]; tabId?: string }) => {
     if (event === "enter") return cardHoverProps.onMouseEnter();
     if (event === "leave") return cardHoverProps.onMouseLeave();
+    if (event === "hold") return holdHover(true);
+    if (event === "release") return holdHover(false);
+    if (event === "close") return dismissHover();
+    if (event === "focusPage") return returnFocusToPage(windowId);
+    if (event === "choose") {
+      if (!extra?.tabId) return;
+      dismissHover();
+      return clickTab(windowId, extra.tabId);
+    }
     if (event === "layout") {
       const [x = 0, y = 0, width = 0, height = 0] = extra?.frame ?? [];
       return cardHoverProps.onLayout({ nativeEvent: { layout: { x, y, width, height } } } as LayoutChangeEvent);

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // The native sidebar's hover cards in the window shell's overlay (ARDIA_NATIVE_SIDEBAR=1, ARDIA_NATIVE_SHELL=1): a
 // card shows after RN's 500 ms intent and not before, RN draws none of its own, moving onto the card keeps it past the
-// 160 ms hide delay, its buttons act, and it leaves on hover away, a click in the sidebar and a tab switch.
+// 160 ms hide delay, its buttons act, and it leaves on hover away, a click in the sidebar and a space switch (a tab
+// switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -20,13 +21,14 @@ const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-hover-card-"));
 const rep = reporter(join(scratch, "hover-card-test.log"), { name: "hover-card-test" });
 const ids = Array.from({ length: 8 }, (_, i) => `t${i}`);
-const tabs = ids.map((id, i) => ({ id, url: `https://example.com/?${id}`, title: i === 3 ? "Anker USB-C to USB-C Cable (240W, 6 ft), Nylon Braided" : `Tab ${id}` }));
+const titleOf = (id, i) => (i === 3 ? "Anker USB-C to USB-C Cable (240W, 6 ft), Nylon Braided" : `Tab ${id}`);
+const tabs = ids.map((id, i) => ({ id, url: `data:text/html,<title>${titleOf(id, i)}</title>`, title: titleOf(id, i), lastActiveAt: Date.now() - i * 60_000 }));
 
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
   env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1" },
   probe: true,
-  session: session({ profiles: ["Personal"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
+  session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
 });
 const run = (body) => app.eval(body, { timeout: 30000 });
@@ -40,7 +42,7 @@ const until = async (what, test, ms = 3000) => {
   for (;;) {
     const got = await test();
     if (got) return got;
-    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what} (hover ${await hover()}, card ${JSON.stringify(await card())}, ${await run(`const h = ac.sidebarHover; return JSON.stringify({ rows: ["t3","t4","t5"].filter(h.pointerOnRow), onCard: h.pointerOnCard(), ui: ac.sidebarRows.useSidebarUi.getState() })`)})`);
     await sleep(40);
   }
 };
@@ -56,13 +58,13 @@ try {
   await sleep(3000);
 
   await rep.check("a card waits for the 500 ms hover intent, then shows natively with no RN card", async () => {
-    const t0 = Date.now();
-    await onRow("t3");
-    await sleep(300);
-    assert.equal(await hover(), null, "nothing at 300 ms");
-    assert.equal((await card())?.phase ?? "hidden", "hidden", "no native card at 300 ms");
+    const r = await row("t3");
+    const early = await run(`const H = globalThis.expo.modules.SolaraHosted; return ac.shell.devSetPointer("w1", { x: ${r.x + 60}, y: ${Math.round(r.y + r.height / 2)} }).then(() => { const t0 = Date.now(); return new Promise((done) => setTimeout(done, 300)).then(() => H.sidebarHoverCard("w1")).then((c) => ({ ms: Date.now() - t0, hover: ac.sidebarRows.useSidebarUi.getState().hover, phase: JSON.parse(c)?.phase ?? "hidden" })); })`);
+    assert.ok(early.ms < 450, `sampled in time (${early.ms} ms)`);
+    assert.equal(early.hover, null, "nothing at 300 ms");
+    assert.equal(early.phase, "hidden", "no native card at 300 ms");
     const c = await shown("t3");
-    rep.say(`shown after ${Date.now() - t0} ms at ${c.frame.map(Math.round)}`);
+    rep.say(`shown at ${c.frame.map(Math.round)}`);
     assert.ok(c.inWindow && c.onScreen && c.opacity > 0.99, "on screen and opaque");
     assert.equal(await rnCards(), 0, "RN draws no Dia card of its own");
     assert.deepEqual(Object.keys(c.buttons).sort(), ["Bookmark", "Open in Split View", "Pin"]);
@@ -87,19 +89,21 @@ try {
   });
 
   await rep.check("hovering away hides it after the 160 ms delay and the 100 ms fade", async () => {
-    const t0 = Date.now();
-    await point(900, 600);
-    await sleep(100);
-    assert.equal((await card()).phase, "shown", "still shown inside the delay");
+    const early = await run(`const H = globalThis.expo.modules.SolaraHosted; return ac.shell.devSetPointer("w1", { x: 900, y: 600 }).then(() => { const t0 = Date.now(); return new Promise((done) => setTimeout(done, 80)).then(() => H.sidebarHoverCard("w1")).then((c) => ({ ms: Date.now() - t0, phase: JSON.parse(c)?.phase })); })`);
+    if (early.ms < 150) assert.equal(early.phase, "shown", `still shown inside the delay (${early.ms} ms)`);
     await gone("hover away");
-    rep.say(`gone after ${Date.now() - t0} ms`);
   });
 
-  await rep.check("a tab switch dismisses it", async () => {
+  await rep.check("a tab switch keeps it, as RN's does, and a space switch dismisses it", async () => {
     await onRow("t4");
     await shown("t4");
     await run(`ac.actions.switchToTab("t5"); return true`);
-    await gone("a tab switch");
+    await sleep(400);
+    assert.equal((await card()).phase, "shown", "kept through the tab switch");
+    await run(`ac.store.getState().switchProfile("w1", "work"); return true`);
+    await gone("a space switch");
+    await run(`ac.store.getState().switchProfile("w1", "default"); return true`);
+    await sleep(600);
   });
 
   await rep.check("a click in the sidebar dismisses it", async () => {
@@ -109,6 +113,28 @@ try {
     await shown("t6");
     await run(`return ac.shell.devClick("w1", { x: ${r.x + 60}, y: ${Math.round(r.y + r.height / 2)} })`);
     await gone("a click");
+  });
+
+  await rep.check("a group's card lists its tabs natively, filters as you type and Return switches to the match", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    const g = await run(`const s = ac.store.getState(); const g = s.createGroup(["t2", "t3", "t4"], { name: "Group" }); ac.store.getState().updateGroup(g, { collapsed: true }); return g`);
+    await sleep(600);
+    const r = await row(g);
+    assert.ok(r, "the group's row is measured");
+    await point(r.x + 60, Math.round(r.y + r.height / 2));
+    const c = await shown(g);
+    assert.equal(c.kind, "group");
+    assert.deepEqual([...c.rows].sort(), ["t2", "t3", "t4"]);
+    assert.equal(await run(`return acPerf.findFibers("GroupPanel", 5).length`), 0, "RN draws no group panel");
+    const [x, y, w] = c.frame;
+    await point(x + w / 2, y + 20);
+    await until("the search field to take the keys", async () => (await card())?.typingInCard);
+    await run(`return ac.shell.devTypeKeys("w1", "Anker", 10)`);
+    await until("one match", async () => Object.keys((await card())?.buttons ?? {}).length === 1);
+    await run(`return ac.shell.devTypeKeys("w1", "\\r", 10)`);
+    await until("t3 active", () => run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId] === "t3"`));
+    await gone("choosing a row");
   });
 } finally {
   await app.quit();

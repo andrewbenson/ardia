@@ -29,7 +29,7 @@ const NOW_TICK_MS = 30_000;
 
 type Row = GroupPanelTab & { favicon: string | null; icon: string | null; profileId: string };
 
-function returnFocusToPage(windowId: string) {
+export function returnFocusToPage(windowId: string) {
   const s = useBrowser.getState();
   const active = activeTabId(s, windowId);
   if (!active) return;
@@ -37,7 +37,7 @@ function returnFocusToPage(windowId: string) {
   else focusHeroBar(windowId, active);
 }
 
-function useGroupRows(groupId: string, windowId: string): Row[] {
+export function useGroupRows(groupId: string, windowId: string): Row[] {
   const ids = useBrowser(useShallow((s) => groupTabIds(s.groups, groupId)));
   const tabs = useBrowser(useShallow((s) => ids.map((id) => s.tabs[id])));
   return useMemo(() => {

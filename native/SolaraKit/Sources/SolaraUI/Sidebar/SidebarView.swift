@@ -477,14 +477,17 @@ public final class SidebarView: NSView {
     setHover(nil, group: nil)
   }
 
+  private var devPointerAt: NSPoint?
+
   private func syncPointer() {
     guard let window, !isHiddenOrHasHiddenAncestor else { return }
-    let at = window.mouseLocationOutsideOfEventStream
+    let at = devPointerAt.map { window.convertPoint(fromScreen: $0) } ?? window.mouseLocationOutsideOfEventStream
     if bounds.contains(convert(at, from: nil)) { point(at) } else { setHover(nil, group: nil) }
   }
 
   @objc private func devPointer(_ note: Notification) {
-    guard let window, !isHiddenOrHasHiddenAncestor, let screen = (note.object as? NSValue)?.pointValue else { return }
+    devPointerAt = (note.object as? NSValue)?.pointValue
+    guard let window, !isHiddenOrHasHiddenAncestor, let screen = devPointerAt else { return }
     let at = window.convertPoint(fromScreen: screen)
     if DevPointer.inside(self, note) { point(at) } else { setHover(nil, group: nil) }
   }

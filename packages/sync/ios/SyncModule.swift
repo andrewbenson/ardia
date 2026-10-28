@@ -5,10 +5,13 @@ import Security
 
 public class SyncModule: Module {
   private let state = KeyState()
+  private let owner = DeviceOwnerCheck()
   private static let work = DispatchQueue(label: "ardia.sync", qos: .utility)
 
   public func definition() -> ModuleDefinition {
     Name("ArdiaSync")
+
+    OnCreate { Self.work.async { Self.removeTemporaryKits() } }
 
     AsyncFunction("folderInfo") { (path: String?) -> [String: Any] in
       let url = path.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultFolder
@@ -44,6 +47,7 @@ public class SyncModule: Module {
     AsyncFunction("createPhrase") { (account: String) -> Bool in
       let entropy = RecoveryPhrase.generateEntropy()
       guard Self.keyStore.save(entropy, account: account) else { return false }
+      self.owner.revoke()
       self.state.set(entropy)
       return true
     }.runOnQueue(Self.work)
@@ -64,6 +68,7 @@ public class SyncModule: Module {
         return ["error": SyncFolder.hasSyncData(folderURL) ? "mismatch" : "noData"]
       }
       guard Self.keyStore.save(entropy, account: account) else { return ["error": "keychain"] }
+      self.owner.revoke()
       self.state.set(entropy)
       return ["ok": true]
     }.runOnQueue(Self.work)
@@ -77,7 +82,11 @@ public class SyncModule: Module {
     AsyncFunction("forget") { (account: String) in
       Self.keyStore.delete(account: account)
       self.state.set(nil)
+      self.owner.revoke()
+      Self.removeTemporaryKits()
     }.runOnQueue(Self.work)
+
+    AsyncFunction("phraseUnavailable") { () -> String? in DeviceOwnerCheck.unavailable()?.rawValue }.runOnQueue(.main)
 
     AsyncFunction("chainStatus") { (folder: String) throws -> String in
       let vault = try self.vault(folder)
@@ -124,61 +133,68 @@ public class SyncModule: Module {
       return String(decoding: plain, as: UTF8.self)
     }.runOnQueue(Self.work)
 
-    AsyncFunction("recoveryWords") { () throws -> [String] in try self.words() }.runOnQueue(Self.work)
+    AsyncFunction("recoveryWords") { (promise: Promise) in
+      self.disclose(promise, on: Self.work) { words in words }
+    }.runOnQueue(Self.work)
 
-    AsyncFunction("qrCode") { () throws -> String? in
-      guard let image = RecoveryKit.qrCode(words: try self.words()), let png = RecoveryKit.png(image) else { return nil }
-      return "data:image/png;base64," + png.base64EncodedString()
+    AsyncFunction("qrCode") { (promise: Promise) in
+      self.disclose(promise, on: Self.work) { words -> String? in
+        guard let image = RecoveryKit.qrCode(words: words), let png = RecoveryKit.png(image) else { return nil }
+        return "data:image/png;base64," + png.base64EncodedString()
+      }
     }.runOnQueue(Self.work)
 
     AsyncFunction("recoveryKitPreview") { (width: Double) throws -> String? in
-      try self.preview(width: CGFloat(width))
+      _ = try self.words()
+      return Self.preview(width: CGFloat(width))
     }.runOnQueue(.main)
 
     AsyncFunction("saveRecoveryKit") { (format: String, promise: Promise) in
-      do {
-        let words = try self.words()
-        let panel = NSSavePanel()
-        let text = format == "text"
-        panel.nameFieldStringValue = text ? RecoveryKit.textName : RecoveryKit.pdfName
-        panel.allowedContentTypes = [text ? .plainText : .pdf]
-        panel.canCreateDirectories = true
-        panel.begin { response in
-          guard response == .OK, let url = panel.url else { return promise.resolve(nil) }
-          do {
-            try Self.kit(words, text: text).write(to: url, options: [.atomic])
-            promise.resolve(url.path)
-          } catch {
-            promise.reject("save", error.localizedDescription)
-          }
+      guard (try? self.words()) != nil else { return promise.reject("locked", "Sync isn't set up on this Mac.") }
+      let panel = NSSavePanel()
+      let text = format == "text"
+      panel.nameFieldStringValue = text ? RecoveryKit.textName : RecoveryKit.pdfName
+      panel.allowedContentTypes = [text ? .plainText : .pdf]
+      panel.canCreateDirectories = true
+      panel.begin { response in
+        guard response == .OK, let url = panel.url else { return promise.resolve(nil) }
+        self.disclose(promise, on: .main) { words -> String? in
+          try Self.kit(words, text: text).write(to: url, options: [.atomic])
+          return url.path
         }
-      } catch {
-        promise.reject("locked", "Sync isn't set up on this Mac.")
       }
     }.runOnQueue(.main)
 
-    AsyncFunction("copyRecoveryKit") { () throws in
-      let url = try self.temporaryKit()
-      NSPasteboard.general.clearContents()
-      NSPasteboard.general.writeObjects([url as NSURL])
+    AsyncFunction("copyRecoveryKit") { (promise: Promise) in
+      self.disclose(promise, on: .main) { words -> Bool in
+        let url = try Self.temporaryKit(words)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([url as NSURL])
+        return true
+      }
     }.runOnQueue(.main)
 
-    AsyncFunction("shareRecoveryKit") { () throws in
-      let url = try self.temporaryKit()
-      let presenting = NSApp.keyWindow ?? NSApp.windows.first { $0.isVisible && $0.attachedSheet != nil }?.attachedSheet
-        ?? NSApp.windows.first { $0.isVisible && $0.title == "Settings" } ?? NSApp.windows.first(where: \.isVisible)
-      guard let window = presenting, let view = window.contentView else { return }
-      let point = view.convert(window.mouseLocationOutsideOfEventStream, from: nil)
-      NSSharingServicePicker(items: [url]).show(relativeTo: NSRect(origin: point, size: .zero), of: view, preferredEdge: .minY)
+    AsyncFunction("shareRecoveryKit") { (promise: Promise) in
+      self.disclose(promise, on: .main) { words -> Bool in
+        let presenting = NSApp.keyWindow ?? NSApp.windows.first { $0.isVisible && $0.attachedSheet != nil }?.attachedSheet
+          ?? NSApp.windows.first { $0.isVisible && $0.title == "Settings" } ?? NSApp.windows.first(where: \.isVisible)
+        guard let window = presenting, let view = window.contentView else { return false }
+        let url = try Self.temporaryKit(words)
+        let point = view.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        NSSharingServicePicker(items: [url]).show(relativeTo: NSRect(origin: point, size: .zero), of: view, preferredEdge: .minY)
+        return true
+      }
     }.runOnQueue(.main)
 
-    AsyncFunction("copyRecoveryPhrase") { () throws in
-      let words = try self.words().joined(separator: " ")
-      let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
-      pasteboard.declareTypes([.string, NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")], owner: nil)
-      pasteboard.setString(words, forType: .string)
-      pasteboard.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+    AsyncFunction("copyRecoveryPhrase") { (promise: Promise) in
+      self.disclose(promise, on: .main) { words -> Bool in
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.declareTypes([.string, NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")], owner: nil)
+        pasteboard.setString(words.joined(separator: " "), forType: .string)
+        pasteboard.setString("", forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
+        return true
+      }
     }.runOnQueue(.main)
 
     AsyncFunction("revealFolder") { (path: String) in
@@ -228,6 +244,20 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
   }
 
+  private func disclose<T>(_ promise: Promise, on queue: DispatchQueue, _ reveal: @escaping ([String]) throws -> T?) {
+    guard state.entropy != nil else { return promise.reject("locked", "Sync isn't set up on this Mac.") }
+    owner.disclose(reason: "show your sync recovery phrase", current: { self.state.entropy }) { entropy in
+      queue.async {
+        guard let entropy, self.state.entropy == entropy else { return promise.resolve(nil) }
+        do {
+          promise.resolve(try reveal(RecoveryPhrase.words(for: entropy)))
+        } catch {
+          promise.reject(error)
+        }
+      }
+    }
+  }
+
   private func vault(_ folder: String) throws -> SyncVault {
     guard let keys = state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
     return SyncVault(folder: URL(fileURLWithPath: folder, isDirectory: true), keys: keys)
@@ -244,16 +274,24 @@ public class SyncModule: Module {
       : RecoveryKit.pdf(words: words, created: Date(), device: device)
   }
 
-  private func temporaryKit() throws -> URL {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(RecoveryKit.title, isDirectory: true)
+  private static let temporaryKitFolder = FileManager.default.temporaryDirectory.appendingPathComponent(RecoveryKit.title, isDirectory: true)
+
+  private static func removeTemporaryKits() {
+    try? FileManager.default.removeItem(at: temporaryKitFolder)
+  }
+
+  private static func temporaryKit(_ words: [String]) throws -> URL {
+    let dir = temporaryKitFolder
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     let url = dir.appendingPathComponent(RecoveryKit.pdfName)
-    try Self.kit(try words(), text: false).write(to: url, options: [.atomic])
+    try kit(words, text: false).write(to: url, options: [.atomic])
     return url
   }
 
-  private func preview(width: CGFloat) throws -> String? {
-    let pdf = Self.kit(try words(), text: false)
+  private static let hiddenWords = Array(repeating: "••••••", count: 24)
+
+  private static func preview(width: CGFloat) -> String? {
+    let pdf = kit(hiddenWords, text: false)
     guard let page = NSImage(data: pdf) else { return nil }
     let scale = (NSScreen.main?.backingScaleFactor ?? 2)
     let size = NSSize(width: width, height: width * page.size.height / page.size.width)

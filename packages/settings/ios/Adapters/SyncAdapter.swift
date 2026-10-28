@@ -56,6 +56,8 @@ final class SyncAdapter: SyncServices {
 
   func recoveryWords() async -> [String]? { await SettingsAdapters.js("sync.recoveryWords") as? [String] }
 
+  func phraseUnavailable() async -> String? { await SettingsAdapters.js("sync.phraseUnavailable") as? String }
+
   func recoveryQRCode() async -> Data? { Self.dataURL(await SettingsAdapters.js("sync.qrCode") as? String) }
 
   func recoveryKitPreview(width: Double) async -> Data? {

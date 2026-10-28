@@ -41,13 +41,14 @@ type SyncNative = {
   deleteChain(folder: string): Promise<void>;
   sealLocal(text: string): Promise<string>;
   openLocal(sealed: string): Promise<string | null>;
-  recoveryWords(): Promise<string[]>;
+  phraseUnavailable(): Promise<"noLoginPassword" | null>;
+  recoveryWords(): Promise<string[] | null>;
   qrCode(): Promise<string | null>;
   recoveryKitPreview(width: number): Promise<string | null>;
   saveRecoveryKit(format: "pdf" | "text"): Promise<string | null>;
-  copyRecoveryKit(): Promise<void>;
-  shareRecoveryKit(): Promise<void>;
-  copyRecoveryPhrase(): Promise<void>;
+  copyRecoveryKit(): Promise<boolean | null>;
+  shareRecoveryKit(): Promise<boolean | null>;
+  copyRecoveryPhrase(): Promise<boolean | null>;
   revealFolder(path: string): Promise<void>;
   readPasswords(engineProfile: string): Promise<SavedLogin[] | null>;
   readPasswordsWithMark?(engineProfile: string): Promise<MarkedLogins | null>;

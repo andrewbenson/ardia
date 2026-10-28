@@ -96,6 +96,10 @@ reset by email, because there's no one to email.
     shows "not syncing" with Enter Recovery Phrase…, and the same device carries on.
 - The key never crosses to JS. The words do, only for the Recovery Kit and Connect Another Device
   sheets, or when the user types them.
+- Showing, copying, sharing or saving the phrase asks for Touch ID or the login password first
+  (`DeviceOwnerCheck`, one approval covers 60 s; Stop Syncing, Turn On Sync and Enter Recovery
+  Phrase end it). A Mac with no login password can't answer that, so the sheets say the phrase
+  can't be shown until a login password is set in System Settings › Users & Groups.
 
 A wrong phrase is caught in one of two ways. A typo fails the checksum. A valid but different
 phrase derives a chain tag that isn't in the folder: "This recovery phrase doesn’t match the

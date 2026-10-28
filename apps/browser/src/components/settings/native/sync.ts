@@ -94,6 +94,7 @@ export const syncHandlers: Record<string, SettingsHandler> = {
   "sync.addRemoteProfile": (syncId: string) => void addRemoteProfile(syncId),
   "sync.resolveHeldPasswords": (profileId: string, restore: boolean) => resolveHeldPasswords(profileId, restore ? "restore" : "confirm"),
   "sync.recoveryWords": () => withNative((n) => n.recoveryWords()),
+  "sync.phraseUnavailable": () => withNative((n) => n.phraseUnavailable()),
   "sync.qrCode": () => withNative((n) => n.qrCode()),
   "sync.recoveryKitPreview": (width: number) => withNative((n) => n.recoveryKitPreview(width)),
   "sync.saveRecoveryKit": (format: "pdf" | "text") => withNative((n) => n.saveRecoveryKit(format)),

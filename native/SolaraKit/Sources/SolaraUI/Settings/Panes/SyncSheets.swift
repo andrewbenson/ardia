@@ -95,6 +95,7 @@ struct SyncRecoveryKitSheet: View {
   let model: SyncPaneModel
   @State private var preview: Data?
   @State private var saved: String?
+  @State private var unavailable: String?
 
   static let previewSize = CGSize(width: 168, height: 217)
 
@@ -120,6 +121,10 @@ struct SyncRecoveryKitSheet: View {
             SyncSheetBody("Saved to \(SyncText.homeRelative(saved)).")
               .padding(.top, 4)
           }
+          if unavailable != nil {
+            SyncPhraseUnavailableNote()
+              .padding(.top, 10)
+          }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         SyncPNGImage(png: preview, width: Self.previewSize.width, height: Self.previewSize.height)
@@ -144,12 +149,29 @@ struct SyncRecoveryKitSheet: View {
       Button("Save…") { Task { await save(.pdf) } }
         .keyboardShortcut(.defaultAction)
     }
-    .task { preview = await model.services.recoveryKitPreview(width: Double(Self.previewSize.width)) }
+    .task {
+      unavailable = await model.services.phraseUnavailable()
+      preview = await model.services.recoveryKitPreview(width: Double(Self.previewSize.width))
+    }
     .onDisappear { preview = nil }
   }
 
   func save(_ format: SyncKitFormat) async {
     if let path = await model.services.saveRecoveryKit(format) { saved = path }
+  }
+}
+
+struct SyncPhraseUnavailableNote: View {
+  var body: some View {
+    HStack(alignment: .firstTextBaseline, spacing: 8) {
+      Image(systemName: "lock.fill")
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+      Text("Your recovery phrase can’t be shown, copied or saved because this Mac has no login password. Set one in System Settings › Users & Groups, then try again.")
+        .font(.system(size: 12))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 }
 
@@ -297,6 +319,7 @@ struct SyncConnectDeviceSheet: View {
   let model: SyncPaneModel
   @State private var qrCode: Data?
   @State private var words: [String]?
+  @State private var unavailable: String?
 
   var body: some View {
     let app = context?.appName ?? ""
@@ -304,7 +327,13 @@ struct SyncConnectDeviceSheet: View {
       SyncSheetTitle("Connect Another Device")
       SyncSheetBody("On your other Mac, open \(app) › Settings › Sync and choose the same sync folder. Then click Enter Recovery Phrase and enter the 24 words of your recovery phrase.")
       HStack(spacing: 16) {
-        SyncPNGImage(png: qrCode, width: 120, height: 120)
+        Group {
+          if qrCode == nil {
+            Button("Show Code") { Task { qrCode = await model.services.recoveryQRCode() } }
+          } else {
+            SyncPNGImage(png: qrCode, width: 120, height: 120)
+          }
+        }
           .frame(width: 132, height: 132)
           .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
           .accessibilityLabel("Recovery phrase QR code")
@@ -317,6 +346,10 @@ struct SyncConnectDeviceSheet: View {
       .padding(.top, 16)
       if let words {
         SyncWordGrid(words: words)
+          .padding(.top, 14)
+      }
+      if unavailable != nil {
+        SyncPhraseUnavailableNote()
           .padding(.top, 14)
       }
     } leading: {
@@ -332,7 +365,7 @@ struct SyncConnectDeviceSheet: View {
       Button("Done") { dismiss() }
         .keyboardShortcut(.defaultAction)
     }
-    .task { qrCode = await model.services.recoveryQRCode() }
+    .task { unavailable = await model.services.phraseUnavailable() }
     .onDisappear {
       words = nil
       qrCode = nil

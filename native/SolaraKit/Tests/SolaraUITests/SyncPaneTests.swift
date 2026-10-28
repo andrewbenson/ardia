@@ -15,6 +15,7 @@ final class FakeSyncServices: SyncServices {
   var turnOnError: String?
   var phraseResult: SyncPhraseResult = .ok
   var words = ["abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire", "across", "act", "action", "actor", "actress", "actual"]
+  var unavailable: String?
   var calls: [String] = []
   var folderInfoRequests: [String?] = []
   private var continuation: AsyncStream<SyncState>.Continuation?
@@ -66,6 +67,7 @@ final class FakeSyncServices: SyncServices {
   }
 
   func recoveryWords() async -> [String]? { words }
+  func phraseUnavailable() async -> String? { unavailable }
   func recoveryQRCode() async -> Data? { SyncTestImages.qrCode(words.joined(separator: " ")) }
   func recoveryKitPreview(width: Double) async -> Data? { SyncTestImages.kitPreview() }
   func saveRecoveryKit(_ format: SyncKitFormat) async -> String? {

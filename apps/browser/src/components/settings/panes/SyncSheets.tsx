@@ -30,6 +30,23 @@ function Buttons({ children, left }: { children: ReactNode; left?: ReactNode }) 
   );
 }
 
+function usePhraseUnavailable() {
+  const [reason, setReason] = useState<string | null>(null);
+  useEffect(() => void SyncNative?.phraseUnavailable().then(setReason), []);
+  return reason;
+}
+
+function PhraseUnavailableNote({ reason }: { reason: string | null }) {
+  const theme = useTheme();
+  if (reason !== "noLoginPassword") return null;
+  return (
+    <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 16, color: theme.textSecondary }}>
+      Your recovery phrase can’t be shown, copied or saved because this Mac has no login password. Set one in System Settings › Users & Groups,
+      then try again.
+    </Text>
+  );
+}
+
 export function showRecoveryKit() {
   showSettingsSheet(<RecoveryKitSheet />);
 }
@@ -39,6 +56,7 @@ function RecoveryKitSheet() {
   const colors = useFormColors();
   const [preview, setPreview] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const unavailable = usePhraseUnavailable();
   useEffect(() => void SyncNative?.recoveryKitPreview(168).then(setPreview), []);
   const save = async (format: "pdf" | "text") => {
     const path = await SyncNative?.saveRecoveryKit(format);
@@ -78,6 +96,7 @@ function RecoveryKitSheet() {
             </Text>
           </View>
           {saved ? <Body style={{ marginTop: 10 }}>Saved to {saved.replace(/^\/Users\/[^/]+/, "~")}.</Body> : null}
+          <PhraseUnavailableNote reason={unavailable} />
         </View>
         <View
           accessibilityLabel="Recovery kit preview"
@@ -201,7 +220,7 @@ function ConnectDeviceSheet() {
   const colors = useFormColors();
   const [qr, setQr] = useState<string | null>(null);
   const [words, setWords] = useState<string[] | null>(null);
-  useEffect(() => void SyncNative?.qrCode().then(setQr), []);
+  const unavailable = usePhraseUnavailable();
   return (
     <Sheet width={480} onClose={closeSettingsSheet}>
       <Title>Connect Another Device</Title>
@@ -211,7 +230,7 @@ function ConnectDeviceSheet() {
       </Body>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginTop: 16 }}>
         <View style={{ width: 132, height: 132, borderRadius: 8, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" }}>
-          {qr ? <Image source={{ uri: qr }} style={{ width: 120, height: 120 }} /> : null}
+          {qr ? <Image source={{ uri: qr }} style={{ width: 120, height: 120 }} /> : <Button title="Show Code" onPress={() => void SyncNative?.qrCode().then(setQr)} />}
         </View>
         <Text style={{ flex: 1, fontSize: 12, lineHeight: 16, color: theme.textSecondary }}>
           Or scan this code with your iPhone’s camera to copy the words, then paste them on your other Mac with Universal Clipboard.
@@ -227,6 +246,7 @@ function ConnectDeviceSheet() {
           ))}
         </View>
       ) : null}
+      <PhraseUnavailableNote reason={unavailable} />
       <Buttons
         left={
           <>

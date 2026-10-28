@@ -239,6 +239,7 @@ public protocol SyncServices: AnyObject {
 
   func folderInfo(path: String?) async -> SyncFolderInfo?
   func recoveryWords() async -> [String]?
+  func phraseUnavailable() async -> String?
   func recoveryQRCode() async -> Data?
   func recoveryKitPreview(width: Double) async -> Data?
   func saveRecoveryKit(_ format: SyncKitFormat) async -> String?

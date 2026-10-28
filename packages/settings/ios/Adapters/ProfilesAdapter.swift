@@ -1,5 +1,6 @@
 import AppKit
 import ArdiaCore
+import ArdiaShaders
 import Foundation
 import Observation
 import SolaraModel
@@ -97,7 +98,7 @@ final class ProfilesAdapter: ProfilesServices {
 
   func adoptProfileTheme(_ id: String) { SettingsJS.shared.fire("profiles.adoptTheme", id) }
 
-  func holdThemedWindowsKeyLook(_ on: Bool) { SettingsJS.shared.fire("profiles.holdKeyLook", on) }
+  func holdThemedWindowsKeyLook(_ on: Bool) { ThemedWindows.holdKeyLook(on) }
 
   func arcThemeChoices() async -> [ArcThemeChoice] {
     let list = await SettingsAdapters.js("profiles.arcThemeChoices") as? [[String: Any]] ?? []

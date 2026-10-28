@@ -608,3 +608,8 @@ final class ThemeSwatchView: ExpoView {
                    provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
   }
 }
+
+@MainActor
+public enum ThemedWindows {
+  public static func holdKeyLook(_ on: Bool) { WindowTreatmentView.holdsKeyLook = on }
+}

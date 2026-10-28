@@ -1,5 +1,4 @@
 import { clearBrowsingData, listExtensions, type BrowsingDataType } from "@ardia/ardiacore";
-import { holdThemedWindowsKeyLook } from "@ardia/shaders";
 import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
 import { pruneProfileFavicons } from "../../../lib/favicons";
 import { sanitizeTheme } from "../../../lib/profileTheme";
@@ -26,7 +25,6 @@ export const profilesHandlers: Record<string, SettingsHandler> = {
       () => null,
     ),
   "profiles.adoptTheme": (id: string) => adoptProfileTheme(id),
-  "profiles.holdKeyLook": (on: boolean) => holdThemedWindowsKeyLook(on),
   "profiles.arcThemeChoices": () =>
     arcThemeChoices().then(
       (choices) =>

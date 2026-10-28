@@ -90,13 +90,21 @@ export function updateTabDrag(x: number, y: number, lifted: boolean | null = nul
   syncPreview();
 }
 
-export function updateNativeTabDrag(x: number, y: number, outside: boolean, overWindow: string | null, overPoint: [number, number] | null) {
+export function updateNativeTabDrag(
+  x: number,
+  y: number,
+  outside: boolean,
+  overWindow: string | null,
+  overPoint: [number, number] | null,
+  lifted: boolean | null = null,
+) {
   const drag = useTabDrag.getState();
   if (!drag.tabIds.length || !drag.windowId) return;
   if (overWindow && overWindow !== drag.overWindow && useBrowser.getState().settings.tabReorderHaptics) hapticTick();
   const insert = drag.insert?.windowId === overWindow ? drag.insert : null;
   pointer = [x, y];
-  useTabDrag.setState({ x, y, outside, overWindow, overPoint, insert });
+  if (lifted === false && drag.lifted === false && !outside && !drag.outside) return;
+  useTabDrag.setState({ x, y, lifted, outside, overWindow, overPoint, insert });
 }
 
 const insertResolvers = new Map<string, (point: [number, number]) => string | null | undefined>();

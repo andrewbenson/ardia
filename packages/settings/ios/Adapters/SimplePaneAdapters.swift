@@ -133,7 +133,10 @@ final class SearchEngineAdapter: SearchEngineServices {
   func manageExtensions(profile: String) { SettingsJS.shared.fire("search.manageExtensions", profile) }
 
   func disableExtension(profile: String, extensionId: String) async {
-    await SettingsAdapters.js("search.disableExtension", profile, extensionId)
+    _ = await EngineCalls.result({ done in ArdiaCoreServices.setExtension(extensionId, enabled: false, profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "search.disableExtension")
+    }
+    SettingsJS.shared.fire("extensions.refresh", profile)
   }
 
   static func engineInput(_ input: SearchEngineInput) -> SolaraOmnibox.EngineInput {

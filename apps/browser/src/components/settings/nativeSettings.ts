@@ -7,7 +7,6 @@ import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
 import { SHARING_COPY } from "../../telemetry/copy";
 import { trackSettingsSection } from "../../telemetry/track";
-import { setEnabled } from "../extensions/state";
 import { extensionsProfileId } from "../extensions/store";
 import { openInternalPage } from "../pages/urls";
 import { autofillHandlers } from "./native/autofill";
@@ -58,7 +57,6 @@ const coreHandlers: Record<string, SettingsHandler> = {
   "tabs.chooseLayout": (layout: "sidebar" | "top") => chooseTabLayout(layout),
 
   "search.manageExtensions": (profile: string) => manageExtensionsOf(profile),
-  "search.disableExtension": (profile: string, extensionId: string) => setEnabled(profile, extensionId, false),
 
   "advanced.installCli": () => installCliInBackground("settings"),
 };

@@ -121,6 +121,10 @@ enum SettingsDev {
     case "resetDeveloperModeSites":
       guard let model = NativeSettingsHandle.model else { return #"{"error":"no store"}"# }
       AdvancedAdapter(model: model).resetDeveloperModeSites()
+    case "disableSearchExtension":
+      guard let model = NativeSettingsHandle.model, let argument else { return #"{"error":"no store"}"# }
+      let parts = argument.split(separator: " ", maxSplits: 1).map(String.init)
+      Task { await SearchEngineAdapter(model: model).disableExtension(profile: parts.count > 1 ? parts[1] : "", extensionId: parts[0]) }
     default:
       return #"{"error":"unknown action"}"#
     }

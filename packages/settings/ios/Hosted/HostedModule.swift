@@ -5,7 +5,7 @@ public class HostedModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraHosted")
 
-    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register(); NativeSidebar.register(); NativeTabPickers.register() } } }
+    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register(); NativeSidebar.register(); NativeDownloadMagnet.register(); NativeTabPickers.register() } } }
 
     Function("kinds") { () -> [String] in
       HostedViews.kinds

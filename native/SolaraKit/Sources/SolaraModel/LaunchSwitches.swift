@@ -23,6 +23,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativeOmnibox = "ARDIA_NATIVE_OMNIBOX"
   case nativePages = "ARDIA_NATIVE_PAGES"
   case nativeStatusBubble = "ARDIA_NATIVE_STATUS_BUBBLE"
+  case nativeDownloadMagnet = "ARDIA_NATIVE_DOWNLOAD_MAGNET"
   case nativeStore = "ARDIA_NATIVE_STORE"
   case nativeTabPickers = "ARDIA_NATIVE_TAB_PICKERS"
 

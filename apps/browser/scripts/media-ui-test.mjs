@@ -367,6 +367,23 @@ try {
     await until("share request ends", `return !acMedia.useMedia.getState().displayRequests.b;`, 3000);
     return out;
   });
+  await rep.check("cli-pill-native-indicator", async () => {
+    const set = (shown) => run(`return globalThis.expo.modules.SolaraMedia.devSetCliIndicator(${shown}).then(() => true);`);
+    await set(true);
+    try {
+      await until("JS mirrors the native indicator", `return globalThis.acCli.indicator.getState().shown || null;`, 3000);
+      await run(`setTimeout(() => { try { globalThis.nativeModuleProxy.DevSettings.reload(); } catch {} }, 50); return true;`);
+      await sleep(1500);
+      await app.ready({ timeout: 60000, test: "return !!ac.store.getState().windows.w1" });
+      await until("the native indicator survives a JS reload", `return globalThis.acCli.indicator.getState().shown || null;`, 5000);
+      const pill = native ? await until("the native pill shows after the reload", `return first("media.cliPill").then((r) => r && r.opacity > 0.99 ? r : null);`, 5000) : null;
+      await set(false);
+      await until("JS follows the native indicator off", `return globalThis.acCli.indicator.getState().shown ? null : true;`, 3000);
+      return { pill: pill ? pill.frame : null };
+    } finally {
+      await set(false).catch(() => {});
+    }
+  });
 } catch (e) {
   rep.record("run", { error: e });
 } finally {

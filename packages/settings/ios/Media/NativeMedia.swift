@@ -19,7 +19,13 @@ enum NativeMedia {
 
   private static var mounted: [(kind: String, windowId: String, view: WeakMediaView)] = []
 
+  private static var indicatorMirror: NSObjectProtocol?
+  nonisolated private static let cliShownLock = NSLock()
+  nonisolated(unsafe) private static var cliShownValue: Bool?
+  nonisolated static var cliShown: Bool? { cliShownLock.withLock { cliShownValue } }
+
   static func register() {
+    mirrorCliIndicator()
     guard enabled else { return }
     MediaImages.load = { SettingsAdapters.image($0) }
     MediaImages.favicons.loader = { request in
@@ -105,6 +111,19 @@ enum NativeMedia {
         if let state = CliPillState.decode(json) { view.update(state) }
       }
     }
+  }
+
+  private static func mirrorCliIndicator() {
+    guard indicatorMirror == nil else { return }
+    indicatorMirror = NotificationCenter.default.addObserver(forName: CliPillIndicator.changed, object: CliPillIndicator.shared, queue: .main) { _ in
+      MainActor.assumeIsolated {
+        guard let status = CliPillIndicator.shared.status else { return }
+        cliShownLock.withLock { cliShownValue = status.shown }
+        action("", "cliIndicator", "", ["shown": status.shown])
+      }
+    }
+    let seeded = CliPillIndicator.shared.status?.shown
+    cliShownLock.withLock { cliShownValue = seeded }
   }
 
   private static func content(_ kind: String, _ windowId: String, _ view: NSView, takesFocus: Bool = false, onState: @escaping (String) -> Void) -> HostedContent {

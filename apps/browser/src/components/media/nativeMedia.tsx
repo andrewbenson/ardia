@@ -1,7 +1,7 @@
-import { hostedKinds, nativeSettingsAvailable, SolaraHostedView } from "@ardia/settings";
+import { hostedKinds, nativeCliIndicatorShown, nativeSettingsAvailable, SolaraHostedView } from "@ardia/settings";
 import { Image, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { toggleMute } from "../../lib/actions";
-import { stopCliControl } from "../../lib/cliControl";
+import { stopCliControl, useCliIndicator } from "../../lib/cliControl";
 import { faviconUri } from "../../lib/favicons";
 import { bundledSiteIcon } from "../../lib/siteIcons";
 import type { Theme } from "../../lib/theme";
@@ -92,7 +92,11 @@ type MediaActionHandler = (windowId: string, tabId: string, extra: Record<string
 
 const actions: Record<string, MediaActionHandler> = {
   cliStop: () => stopCliControl(),
+  cliIndicator: (_windowId, _tabId, extra) => useCliIndicator.setState({ shown: extra.shown === true }),
 };
+
+const cliShownAtLoad = nativeCliIndicatorShown();
+if (cliShownAtLoad !== null) useCliIndicator.setState({ shown: cliShownAtLoad });
 
 export type PickerHandler = (extra: Record<string, unknown>) => void;
 export type PickerHandlers = Record<string, PickerHandler[]>;

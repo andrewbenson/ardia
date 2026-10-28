@@ -88,6 +88,21 @@ import Testing
     #expect(!view.stopTitleClipped)
   }
 
+  @Test func cliPillStopGoesToTheNativeIndicatorOnlyWhileItIsShown() {
+    let view = CliControlPillView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+    let indicator = CliPillIndicator()
+    view.indicator = indicator
+    var stops: [String] = []
+    view.onStop = { stops.append("js") }
+    indicator.onStop = { stops.append("native") }
+    indicator.stop(fallback: view.onStop)
+    indicator.set(shown: true, product: "Solara", command: "solara")
+    indicator.stop(fallback: view.onStop)
+    indicator.set(shown: false, product: "Solara", command: "solara")
+    indicator.stop(fallback: view.onStop)
+    #expect(stops == ["js", "native", "js"])
+  }
+
   @Test func cliPillNeverOverflowsANarrowPane() {
     let view = CliControlPillView(frame: NSRect(x: 0, y: 0, width: 120, height: 200))
     view.update(CliPillState(shown: true, command: "solara", product: "Solara", theme: theme))

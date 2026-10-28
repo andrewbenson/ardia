@@ -13,6 +13,32 @@ public struct CliPillState: Decodable, Equatable, Sendable {
   }
 }
 
+@MainActor
+public final class CliPillIndicator {
+  public struct Status: Equatable, Sendable {
+    public var shown: Bool
+    public var product: String
+    public var command: String
+  }
+
+  public static let shared = CliPillIndicator()
+  public static let changed = Notification.Name("SolaraCliPillIndicatorChanged")
+
+  public private(set) var status: Status?
+  public var onStop: (() -> Void)?
+
+  public func set(shown: Bool, product: String, command: String) {
+    let next = Status(shown: shown, product: product, command: command)
+    guard next != status else { return }
+    status = next
+    NotificationCenter.default.post(name: Self.changed, object: self)
+  }
+
+  func stop(fallback: (() -> Void)?) {
+    if status?.shown == true, let onStop { onStop() } else { fallback?() }
+  }
+}
+
 public final class CliControlPillView: NSView {
   public static let height: CGFloat = 32
   public static let bottom: CGFloat = 12
@@ -30,6 +56,7 @@ public final class CliControlPillView: NSView {
   private let label = NSTextField(labelWithString: "")
   private let stop = MediaTextButton(title: "Stop", fontSize: 12, weight: .medium)
   private var state: CliPillState?
+  var indicator = CliPillIndicator.shared
   private var tween = RNTween.resting(0)
   private var settleTimer: Timer?
 
@@ -50,7 +77,7 @@ public final class CliControlPillView: NSView {
     motion.addSubview(label)
     stop.radius = (Self.height - 8) / 2
     stop.paddingX = 10
-    stop.onPress = { [weak self] in self?.onStop?() }
+    stop.onPress = { [weak self] in self?.indicator.stop(fallback: self?.onStop) }
     motion.addSubview(stop)
     motion.setAccessibilityElement(true)
     motion.setAccessibilityRole(.group)

@@ -82,5 +82,6 @@ export * from "./windowShell";
 export * from "./tabPool";
 export * from "./profilePager";
 export * from "./littleSolara";
+export * from "./cliIndicator";
 export * from "./topStrip";
 export * from "./pages";

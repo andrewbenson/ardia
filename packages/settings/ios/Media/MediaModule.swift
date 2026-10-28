@@ -1,5 +1,7 @@
 import AppKit
+import ArdiaShell
 import ExpoModulesCore
+import SolaraUI
 
 public class MediaModule: Module {
   public func definition() -> ModuleDefinition {
@@ -15,6 +17,17 @@ public class MediaModule: Module {
         }
       }
     }
+
+    Function("cliIndicatorShown") { () -> Bool? in NativeMedia.cliShown }
+
+    #if DEBUG
+      AsyncFunction("devSetCliIndicator") { (shown: Bool) in
+        MainActor.assumeIsolated {
+          let product = Bundle.main.productName
+          CliPillIndicator.shared.set(shown: shown, product: product, command: product.lowercased())
+        }
+      }.runOnQueue(.main)
+    #endif
 
     Function("littleActive") { (windowId: String) -> Bool in
       NativeMedia.enabled && NativeLittleSolara.active(windowId)

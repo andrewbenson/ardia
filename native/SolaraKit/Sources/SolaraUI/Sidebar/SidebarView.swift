@@ -131,11 +131,7 @@ public final class SidebarView: NSView {
     }
     to = min(to, max(0, document.frame.height - viewport))
     guard abs(to - top) > 0.5 else { return }
-    NSAnimationContext.runAnimationGroup { motion in
-      motion.duration = 0.25
-      motion.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-      scroll.contentView.animator().setBoundsOrigin(NSPoint(x: 0, y: to))
-    }
+    scroll.contentView.setBoundsOrigin(NSPoint(x: 0, y: to))
     scroll.reflectScrolledClipView(scroll.contentView)
   }
 

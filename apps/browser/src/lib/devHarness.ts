@@ -53,6 +53,12 @@ export function startDevHarness() {
     get peek(): typeof import("../components/peek/actions") {
       return require("../components/peek/actions");
     },
+    get pageProgress(): typeof import("../store/pageProgress") {
+      return require("../store/pageProgress");
+    },
+    get webNotifications(): typeof import("./webNotifications") {
+      return require("./webNotifications");
+    },
     get toasts(): typeof import("../components/layout/splitActions").useToasts {
       return require("../components/layout/splitActions").useToasts;
     },

@@ -115,7 +115,7 @@ export function ExtensionSidePanel() {
   return (
     <Animated.View style={{ width: appear.interpolate({ inputRange: [0, 1], outputRange: [0, room] }), overflow: "hidden" }}>
       <Animated.View style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: width, opacity: appear }}>
-        <PanelCard key={`${shown.extensionId}|${shown.pageProfile}|${shown.url}`} windowId={windowId} panel={shown} />
+        <PanelCard key={`${shown.extensionId}|${shown.pageProfile}|${shown.url}|${shown.opened}`} windowId={windowId} panel={shown} />
         <View
           {...responder.panHandlers}
           onDoubleClick={() => useBrowser.getState().updateSettings({ extensionSidePanelWidth: 360 })}
@@ -144,10 +144,10 @@ function useShellRoom(windowId: string, appear: Animated.Value, room: number) {
 }
 
 function NativePanelCard({ windowId, panel, width, onResize }: { windowId: string; panel: SidePanel; width: number; onResize: (width: number, ended: boolean) => void }) {
-  const { extensionId, profile, pageProfile, url } = panel;
+  const { extensionId, profile, pageProfile, url, opened } = panel;
   const theme = useTheme();
   const ext = useExtensions((e) => e.lists[profile]?.find((x) => x.id === extensionId));
-  const key = `${extensionId}|${pageProfile}|${url}`;
+  const key = `${extensionId}|${pageProfile}|${url}|${opened}`;
   const live = useRef({ key, onResize });
   live.current = { key, onResize };
   useEffect(

@@ -4,6 +4,7 @@ import { shownBrowserId, extensionProfile, isPrivate, pageProfile, shownIn, useE
 
 const wanted = new Map<string, string>();
 const fetches = new Map<string, number>();
+let opens = 0;
 
 const nextFetch = (windowId: string) => {
   const ticket = (fetches.get(windowId) ?? 0) + 1;
@@ -59,8 +60,8 @@ export async function syncSidePanel(windowId: string): Promise<void> {
   if (fetches.get(windowId) !== ticket) return;
   if (!url || !shownIn(windowId, extensionId)) return closeSidePanel(windowId);
   const s = useBrowser.getState();
-  const panel = { extensionId, profile: extensionProfile(s, windowId), pageProfile: pageProfile(s, windowId), url };
   const now = useExtensions.getState().sidePanels[windowId];
+  const panel = { extensionId, profile: extensionProfile(s, windowId), pageProfile: pageProfile(s, windowId), url, opened: now?.opened ?? ++opens };
   if (now && now.extensionId === panel.extensionId && now.url === url && now.profile === panel.profile && now.pageProfile === panel.pageProfile) return;
   useExtensions.setState((e) => ({ sidePanels: { ...e.sidePanels, [windowId]: panel } }));
 }

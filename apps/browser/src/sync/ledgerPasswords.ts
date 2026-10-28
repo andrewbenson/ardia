@@ -40,9 +40,9 @@ function ledgerRead() {
 export const ledgerFromNewerVersion = () => ledgerRead() === "newer";
 const ledgerWritable = () => typeof ledgerRead() !== "string";
 
-function readLedgers(): LedgerDoc {
+function readLedgers(): LedgerDoc | null {
   const doc = ledgerRead();
-  return typeof doc === "string" ? { v: 2, profiles: {} } : doc;
+  return typeof doc === "string" ? null : doc;
 }
 
 export async function migrateLedger(migrate: (text: string) => Promise<string | null | undefined>) {
@@ -89,30 +89,34 @@ export function ledgerPasswordsAdapter(
     return { local, mark: parseMark(marked.mark) };
   };
 
-  const storedOf = () => readLedgers().profiles[profile()] ?? null;
-  const rejoined = () => {
-    const stored = storedOf();
-    return !!stored && stored.scope !== undefined && stored.scope !== ledgerScope();
-  };
-  const ledgerOf = (): Stored | null => (rejoined() ? null : storedOf());
-  const saveGated = (gated: Record<string, number>) => {
-    if (!ledgerWritable()) return;
+  const rejoinedFrom = (stored: Stored | null) => !!stored && stored.scope !== undefined && stored.scope !== ledgerScope();
+  const ledgerNow = (): { ledger: Stored | null; fresh: boolean } | null => {
     const doc = readLedgers();
+    if (!doc) return null;
+    const stored = doc.profiles[profile()] ?? null;
+    const fresh = rejoinedFrom(stored);
+    return { ledger: fresh ? null : stored, fresh };
+  };
+  const saveGated = (gated: Record<string, number>): boolean => {
+    const doc = readLedgers();
+    if (!doc) return false;
     const stored = doc.profiles[profile()];
-    if (!stored || rejoined()) return;
-    if (JSON.stringify(stored.gated ?? {}) === JSON.stringify(gated)) return;
+    if (!stored || rejoinedFrom(stored)) return true;
+    if (JSON.stringify(stored.gated ?? {}) === JSON.stringify(gated)) return true;
     doc.profiles[profile()] = { ...stored, gated };
     writeDocument(LEDGER_DOC, JSON.stringify(doc));
+    return true;
   };
-  const saveHeld = (keys: Set<string>) => {
-    if (!ledgerWritable()) return;
+  const saveHeld = (keys: Set<string>): boolean => {
     const doc = readLedgers();
+    if (!doc) return false;
     const stored = doc.profiles[profile()];
-    if (!stored || rejoined()) return;
+    if (!stored || rejoinedFrom(stored)) return true;
     const next = [...keys].sort();
-    if (JSON.stringify(stored.held ?? []) === JSON.stringify(next)) return;
+    if (JSON.stringify(stored.held ?? []) === JSON.stringify(next)) return true;
     doc.profiles[profile()] = { ...stored, held: next };
     writeDocument(LEDGER_DOC, JSON.stringify(doc));
+    return true;
   };
 
   const record = (records: Map<string, FolderRecord>, keys: Iterable<string>, remote: (key: string) => unknown, stamp: (key: string) => string | undefined) => {
@@ -126,8 +130,9 @@ export function ledgerPasswordsAdapter(
     const gone = [...deletedBeforeUpgrade];
     const list = [...keys];
     writing = writing.then(async () => {
-      if (!ledgerWritable()) return;
-      const ledger = ledgerOf();
+      const before = ledgerNow();
+      if (!before) return;
+      const ledger = before.ledger;
       const L = Math.max(ledger?.L ?? 0, now.mark?.L ?? 0) + 1;
       const mark = { L, t: Math.max(Date.now(), newest) };
       try {
@@ -137,7 +142,10 @@ export function ledgerPasswordsAdapter(
         return;
       }
       const doc = readLedgers();
-      doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list, gone), scope: ledgerScope(), held: ledger?.held ?? [], gated: ledger?.gated ?? {} };
+      if (!doc) return;
+      const latest = doc.profiles[profile()] ?? null;
+      const kept = latest && !rejoinedFrom(latest) ? latest : null;
+      doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list, gone), scope: ledgerScope(), held: kept?.held ?? [], gated: kept?.gated ?? {} };
       writeDocument(LEDGER_DOC, JSON.stringify(doc));
     });
     return writing;
@@ -166,8 +174,9 @@ export function ledgerPasswordsAdapter(
       const opens = await sealed.check(localValues.map(([, l]) => l.value));
       const unopened = new Set(localValues.filter((_, i) => opens[i] !== true).map(([key]) => key));
       lastRead = now;
-      const fresh = rejoined();
-      const ledger = ledgerOf();
+      const decided = ledgerNow();
+      if (!decided) return null;
+      const { fresh, ledger } = decided;
       const records = new Map<string, FolderRecord>();
       const firstLedger = !ledger;
       record(records, new Set([...here.local.keys(), ...Object.keys(ledger?.keys ?? {}), ...(firstLedger ? (agreedKeys?.() ?? []) : [])]), remote, stamp);
@@ -195,23 +204,24 @@ export function ledgerPasswordsAdapter(
       for (const c of j.claims) if (lost(c)) j.apply.add(c.key);
       const known = Object.keys(ledger?.keys ?? {}).length;
       for (const [key, digest] of restoring) if (!unopened.has(key) && digestOf(here.local.get(key)?.value) === digest) j.apply.add(key);
-      restoring = new Map();
       const changes = winning.filter((c) => ledger?.keys[c.key] && !confirmed.has(c.key) && !j.apply.has(c.key));
-      confirmed = new Set();
       const stillHeld = [...keptHeld].filter((key) => changes.some((c) => c.key === key) || (j.mode === "rebuild" && digestOf(here.local.get(key)?.value) !== digestOf(records.get(key)?.v)));
       const mass = changes.length > MASS_CHANGE_AT_LEAST && changes.length > known / 2;
-      held = new Set([...stillHeld, ...(mass ? changes.map((c) => c.key) : [])]);
-      heldDigests = new Map([...held].map((key) => [key, digestOf(here.local.get(key)?.value)]));
-      saveHeld(held);
-      const live = winning.filter((c) => !held.has(c.key) && !j.apply.has(c.key));
-      claimed = new Set(live.map((c) => c.key));
-      judgedForFolder = new Set(j.apply);
+      const nextHeld = new Set([...stillHeld, ...(mass ? changes.map((c) => c.key) : [])]);
+      const live = winning.filter((c) => !nextHeld.has(c.key) && !j.apply.has(c.key));
       const deletions = live.filter((c) => !c.v).map((c) => c.key);
       const firstGated: Record<string, number> = {};
       for (const key of deletions) firstGated[key] = ledger?.gated?.[key] ?? now;
       const busy = downloading();
       const gated = new Set(busy ? deletions.filter((key) => now - firstGated[key]! < DOWNLOAD_HOLD_MS) : []);
-      saveGated(busy ? Object.fromEntries(Object.entries(firstGated).filter(([key]) => gated.has(key) || ledger?.gated?.[key] !== undefined)) : {});
+      if (!saveHeld(nextHeld)) return null;
+      if (!saveGated(busy ? Object.fromEntries(Object.entries(firstGated).filter(([key]) => gated.has(key) || ledger?.gated?.[key] !== undefined)) : {})) return null;
+      restoring = new Map();
+      confirmed = new Set();
+      held = nextHeld;
+      heldDigests = new Map([...held].map((key) => [key, digestOf(here.local.get(key)?.value)]));
+      claimed = new Set(live.map((c) => c.key));
+      judgedForFolder = new Set(j.apply);
       const byKey = new Map(live.filter((c) => !gated.has(c.key)).map((c) => [c.key, c]));
       const seeds = [...j.seed].filter((k) => (j.mode !== "consistent" || ledger?.keys[k]?.d[0] !== digestOf(here.local.get(k)?.value)));
       if (j.mode !== "consistent" || seeds.length) await write(here, records, seeds, 0, j.deletedBeforeUpgrade);
@@ -237,7 +247,9 @@ export function ledgerPasswordsAdapter(
       await writing;
       const before = await read();
       if (!before) return false;
-      const ledger = ledgerOf();
+      const decided = ledgerNow();
+      if (!decided) return false;
+      const ledger = decided.ledger;
       const changedHere = (key: string) => {
         const have = before.local.get(key);
         if (!have || judgedForFolder.has(key)) return false;

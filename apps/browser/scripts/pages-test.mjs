@@ -13,7 +13,8 @@
 // opens the meeting and Ignore dismisses it. The page prompts (permission, password, autofill, external app, engine
 // offer, device chooser, blocked pop-ups) open in the native popover frame at the card RN draws for them; Esc or a
 // click on the page leaves the first six unanswered and closes the pop-ups list, and a pop-up's row opens just that
-// one, as RN does (a second instance without ARDIA_NATIVE_PAGES gives RN's numbers).
+// one, as RN does (a second instance without ARDIA_NATIVE_PAGES gives RN's numbers). A click on the native frame's
+// Allow less than 0.5 s after the prompt shows is ignored (promptGuard) and one 0.8 s later answers it.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -560,6 +561,37 @@ try {
     }
     assert.equal(nativePrompts.popups.afterOutside, false, "pop-ups: closed by a click on the page");
     assert.equal(nativePrompts.popups.afterRow, "pop1,pop2", "pop-ups: the last row opens pop3 and the rest stay listed");
+  });
+
+  await rep.check("a click on the native frame's Allow within 0.5 s of the prompt is ignored, and 0.8 s later it answers", async () => {
+    const ids = JSON.parse(await app.eval(`const C = globalThis.expo.modules.ArdiaCEF; const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
+      const tab = s.newTab(w, { url: "data:text/html,<body>guard</body>" });
+      return C.chromeWindows().then((ws) => JSON.stringify({ tab, win: ws.find((x) => x.hasRoot).window }))`));
+    await sleep(2000);
+    const tab = JSON.stringify(ids.tab);
+    const asked = () => app.eval(`return !!ac.pageState.getState().pages[${tab}]?.permission`);
+    const buttons = async () => {
+      const found = [];
+      for (let i = 0; i < 6; i++) {
+        const f = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${ids.win}, "PromptPressable#${i}")`));
+        if (f.found) found.push(f);
+      }
+      return found.filter((f) => Math.round(f.height) === 28).sort((a, b) => a.x - b.x);
+    };
+    await app.eval(`ac.pageState.setState((s) => ({ pages: { ...s.pages, [${tab}]: { ...(s.pages[${tab}] || {}), permission: { id: "guard-perm", browserId: 0, origin: "https://example.com", permissions: ["notifications"] } } } })); return true`);
+    const shown = await until(async () => {
+      const list = await buttons();
+      return { ok: list.length >= 2, list };
+    }, 2000);
+    assert.ok(shown.ok, `the prompt's buttons: ${JSON.stringify(shown.list)}`);
+    const allow = shown.list[shown.list.length - 1];
+    await click(allow);
+    await sleep(300);
+    assert.equal(await asked(), true, "the early click is ignored");
+    await sleep(800);
+    await click(allow);
+    const answered = await until(async () => ({ ok: !(await asked()) }), 2000);
+    assert.ok(answered.ok, "the later click answers it");
   });
 } finally {
   await app?.quit();

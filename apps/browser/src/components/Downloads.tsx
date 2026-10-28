@@ -629,7 +629,7 @@ export function DownloadMagnet() {
       s.downloads.forEach((d) => seen.current!.add(d.id));
       if (!fresh || s.ui.focusedWindowId !== windowId || !downloadVisibleIn(fresh, s.windows[windowId])) return;
       setFlight({ id: fresh.id, path: fresh.path || fresh.filename });
-      if (native) return;
+      if (native) return void setTimeout(() => setFlight((f) => (f?.id === fresh.id ? null : f)), 700);
       t.setValue(0);
       Animated.timing(t, { toValue: 1, duration: 700, easing: Easing.bezier(0.45, 0, 0.2, 1), useNativeDriver: true }).start(({ finished }) => finished && setFlight(null));
     });

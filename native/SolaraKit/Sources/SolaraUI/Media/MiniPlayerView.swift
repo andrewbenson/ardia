@@ -4,6 +4,8 @@ import QuartzCore
 public final class MiniPlayerView: NSView {
   public static let width: CGFloat = 320
   public static let height: CGFloat = 76
+  static let border: CGFloat = 0.5
+  static let labelPadding: CGFloat = 2
   static let inset: CGFloat = 10
   static let art: CGFloat = 56
   static let textX = inset + art + 12
@@ -132,12 +134,13 @@ public final class MiniPlayerView: NSView {
     super.layout()
     MediaMotion.setInstantly { surface.frame = bounds }
     let inset = Self.inset
-    artView.frame = CGRect(x: inset, y: inset, width: Self.art, height: Self.art)
-    unmute.frame = CGRect(x: inset + Self.art + 5 - 20, y: inset + Self.art + 5 - 20, width: 20, height: 20)
+    let o = Self.border
+    artView.frame = CGRect(x: inset + o, y: inset + o, width: Self.art, height: Self.art)
+    unmute.frame = CGRect(x: inset + Self.art + 5 - 20 + o, y: inset + Self.art + 5 - 20 + o, width: 20, height: 20)
     let textWidth = Self.width - Self.textX - Self.controlsWidth - 8 - inset
-    title.frame = CGRect(x: Self.textX, y: 10, width: textWidth, height: 18)
-    artist.frame = CGRect(x: Self.textX, y: 30, width: textWidth, height: 16)
-    let controlsX = Self.width - inset - Self.controlsWidth
+    title.frame = CGRect(x: Self.textX + o, y: 10, width: textWidth, height: 18)
+    artist.frame = CGRect(x: Self.textX + o, y: 30, width: textWidth, height: 16)
+    let controlsX = Self.width - inset - Self.controlsWidth + o
     let tracks = state?.tracks ?? false
     place(previous, left: controlsX, width: 16, size: tracks ? 14 : 15)
     place(play, left: controlsX + 32, width: 24, size: 24)
@@ -147,25 +150,26 @@ public final class MiniPlayerView: NSView {
 
   private func place(_ button: TransportButton, left: CGFloat, width: CGFloat, size: CGFloat) {
     let box = max(width, size + 4)
-    button.frame = CGRect(x: left - (box - width) / 2, y: 9, width: box, height: 38)
+    button.frame = CGRect(x: left - (box - width) / 2, y: 9 + Self.border, width: box, height: 38)
   }
 
   private func layoutTime() {
-    let left = Self.textX
-    let right = Self.width - Self.inset
-    let top: CGFloat = 50
+    let left = Self.textX + Self.border
+    let right = Self.width - Self.inset + Self.border
+    let top: CGFloat = 50 + Self.border
     let height: CGFloat = 18
     let elapsedSize = elapsed.intrinsicContentSize
-    elapsed.frame = CGRect(x: left, y: top + ((height - elapsedSize.height) / 2).rounded(), width: ceil(elapsedSize.width), height: elapsedSize.height)
+    let elapsedWidth = ceil(elapsedSize.width)
+    elapsed.frame = CGRect(x: left - Self.labelPadding, y: top + (height - elapsedSize.height) / 2, width: elapsedWidth + Self.labelPadding * 2, height: elapsedSize.height)
     let hasDuration = state?.hasDuration ?? false
     remaining.isHidden = !hasDuration
     seek.isHidden = !hasDuration
     guard hasDuration else { return }
     let remainingSize = remaining.intrinsicContentSize
     let remainingWidth = ceil(remainingSize.width)
-    remaining.frame = CGRect(x: right - remainingWidth, y: top + ((height - remainingSize.height) / 2).rounded(), width: remainingWidth, height: remainingSize.height)
-    let seekLeft = elapsed.frame.maxX + 6
-    seek.frame = CGRect(x: seekLeft, y: top, width: max(0, remaining.frame.minX - 6 - seekLeft), height: height)
+    remaining.frame = CGRect(x: right - remainingWidth - Self.labelPadding, y: top + (height - remainingSize.height) / 2, width: remainingWidth + Self.labelPadding * 2, height: remainingSize.height)
+    let seekLeft = left + elapsedWidth + 6
+    seek.frame = CGRect(x: seekLeft, y: top, width: max(0, right - remainingWidth - 6 - seekLeft), height: height)
   }
 
   public var controlFrames: [String: CGRect] { ["play": play.frame, "art": artView.frame, "seek": seek.frame, "previous": previous.frame] }

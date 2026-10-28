@@ -156,11 +156,12 @@ public final class SidebarPlayerView: NSView {
     artView.frame = CGRect(x: pad, y: pad, width: 32, height: 32)
     let textX = pad + 32 + 8
     let textWidth = max(0, width - pad - textX)
-    title.frame = CGRect(x: textX, y: pad, width: textWidth, height: 16)
+    let textTop = pad + (32 - 16 - 14) / 2
+    title.frame = CGRect(x: textX, y: textTop, width: textWidth, height: 16)
     let muted = state?.muted ?? false
-    mutedIcon.frame = CGRect(x: textX, y: pad + 16 + 1, width: 13, height: 12)
+    mutedIcon.frame = CGRect(x: textX, y: textTop + 16 + 1, width: 13, height: 12)
     let subX = muted ? textX + 13 : textX
-    subtitle.frame = CGRect(x: subX, y: pad + 16, width: max(0, width - pad - subX), height: 14)
+    subtitle.frame = CGRect(x: subX, y: textTop + 16, width: max(0, width - pad - subX), height: 14)
     textHit.frame = CGRect(x: textX, y: pad, width: textWidth, height: 32)
     let row: CGFloat = pad + 32 + 4
     previous.frame = CGRect(x: pad - 4, y: row, width: 24, height: 24)

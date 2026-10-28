@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The native internal pages (ARDIA_NATIVE_PAGES=1) in a hidden instance, driven by clicks and keys: Downloads lists
+// The native internal pages (on by default) in a hidden instance, driven by clicks and keys: Downloads lists
 // the window's downloads, the search field filters them and Escape clears it, ✕ removes one from the list and
 // Clear All keeps only the running ones. History groups visits by day, search filters, hovering a row shows its
 // checkbox, a click selects and shift-click extends the selection, Cancel clears it, and Clear Browsing Data… opens
@@ -148,7 +148,7 @@ async function promptOutcomes(instance) {
 }
 
 try {
-  app = await launch(resolve(appArg), { data, onboarded: true, env: { ARDIA_NATIVE_PAGES: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
+  app = await launch(resolve(appArg), { data, onboarded: true, env: { ARDIA_CALENDAR_FIXTURE: "1" } });
   await app.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devPages" });
   await sleep(5000);
   await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; for (const d of ${JSON.stringify(downloads)}) s.upsertDownload(d); s.setDownloadsOpen(w, false); ac.pages.openInternalPage("downloads", w); return true`);
@@ -633,7 +633,7 @@ mkdirSync(shellData, { recursive: true });
 writeFileSync(join(shellData, "calendar-fixture.json"), calendarFixture);
 let shell = null;
 try {
-  shell = await launch(resolve(appArg), { data: shellData, onboarded: true, env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
+  shell = await launch(resolve(appArg), { data: shellData, onboarded: true, env: { ARDIA_NATIVE_SHELL: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
   await shell.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
   await sleep(4000);
   await rep.check("under the native shell the meeting alert is in a native frame at RN's spot; Join opens the meeting, ✕ dismisses it", async () => {

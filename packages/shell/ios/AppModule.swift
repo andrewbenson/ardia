@@ -56,14 +56,14 @@ public class AppModule: Module {
       SharePicker.perform(service: service, url: url, title: title, windowId: windowId)
     }.runOnQueue(.main)
 
-    AsyncFunction("isInDock") { () -> Bool in DockTile.isInDock }.runOnQueue(.main)
-    AsyncFunction("addToDock") { () -> Bool in DockTile.add() }.runOnQueue(.main)
+    AsyncFunction("isInDock") { () -> Bool in SystemServices.isInDock }.runOnQueue(.main)
+    AsyncFunction("addToDock") { () -> Bool in SystemServices.addToDock() }.runOnQueue(.main)
 
     AsyncFunction("appIcons") { (size: Double) -> [[String: Any]] in
       AppIcons.variants.map { ["id": $0.id, "name": $0.name, "preview": AppIcons.preview($0.id, size: size) as Any] }
     }.runOnQueue(.main)
-    AsyncFunction("appIcon") { () -> String in AppIcons.current }.runOnQueue(.main)
-    AsyncFunction("setAppIcon") { (id: String) in AppIcons.set(id, announce: ACIsolatedDataDirectory() == nil) }.runOnQueue(.main)
+    AsyncFunction("appIcon") { () -> String in SystemServices.currentAppIcon }.runOnQueue(.main)
+    AsyncFunction("setAppIcon") { (id: String) in SystemServices.setAppIcon(id) }.runOnQueue(.main)
     AsyncFunction("devApplicationIconImage") { () -> String? in AppIcons.dataURL(NSApp.applicationIconImage) }.runOnQueue(.main)
 
     AsyncFunction("notificationPermission") { (promise: Promise) in

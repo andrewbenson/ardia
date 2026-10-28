@@ -8,15 +8,13 @@ import SolaraUI
 
 @MainActor
 final class GeneralAdapter: GeneralServices {
-  func loginItemStatus() async -> LoginItemStatus {
-    (await SettingsAdapters.js("general.loginItemStatus") as? String).flatMap(LoginItemStatus.init(rawValue:)) ?? .notRegistered
-  }
+  func loginItemStatus() async -> LoginItemStatus { SettingsAdapters.loginItemStatus() }
 
-  func setLaunchAtLogin(_ on: Bool) async { await SettingsAdapters.js("general.setLaunchAtLogin", on) }
+  func setLaunchAtLogin(_ on: Bool) async { SettingsAdapters.setLaunchAtLogin(on) }
 
-  func isDefaultBrowser() async -> Bool { await SettingsAdapters.js("general.isDefaultBrowser") as? Bool ?? false }
+  func isDefaultBrowser() async -> Bool { SystemServices.isDefaultBrowser() }
 
-  func setAsDefaultBrowser() async -> Bool { await SettingsAdapters.js("general.setAsDefaultBrowser") as? Bool ?? false }
+  func setAsDefaultBrowser() async -> Bool { await SettingsAdapters.setAsDefaultBrowser() }
 
   func downloadSettings(profile: String) async -> DownloadSettings? {
     (await SettingsAdapters.js("general.downloadSettings", profile) as? [String: Any]).flatMap(Self.downloads)
@@ -52,15 +50,11 @@ final class GeneralAdapter: GeneralServices {
 @MainActor
 final class AppearanceAdapter: AppearanceServices {
   func appIcons(size: CGFloat) async -> (icons: [AppIconChoice], current: String?) {
-    let result = await SettingsAdapters.js("appearance.appIcons", Double(size)) as? [String: Any] ?? [:]
-    let icons = result.list("icons").compactMap { icon -> AppIconChoice? in
-      guard let id = icon.string("id") else { return nil }
-      return AppIconChoice(id: id, name: icon.string("name") ?? id, preview: SettingsAdapters.image(icon.string("preview")))
-    }
-    return (icons, result.string("current"))
+    let icons = SystemServices.appIconChoices.map { AppIconChoice(id: $0.id, name: $0.name, preview: SystemServices.appIconPreview($0.id, size: size)) }
+    return (icons, SystemServices.currentAppIcon)
   }
 
-  func setAppIcon(_ id: String) async { await SettingsAdapters.js("appearance.setAppIcon", id) }
+  func setAppIcon(_ id: String) async { SystemServices.setAppIcon(id) }
 
   func setAppearance(_ mode: String) async {
     NSApp.appearance = mode == "light" ? NSAppearance(named: .aqua) : mode == "dark" ? NSAppearance(named: .darkAqua) : nil
@@ -248,4 +242,22 @@ final class AboutAdapter: AboutServices {
   func copyText(_ text: String) { SettingsAdapters.copyText(text) }
 
   func openURL(_ url: String) { SettingsJS.shared.fire("app.openUrls", [url]) }
+}
+
+extension SettingsAdapters {
+  static func loginItemStatus() -> LoginItemStatus {
+    LoginItemStatus(rawValue: SystemServices.launchAtLoginStatus()) ?? .notRegistered
+  }
+
+  static func setLaunchAtLogin(_ on: Bool) {
+    do {
+      try SystemServices.setLaunchAtLogin(on)
+    } catch {
+      NSLog("[settings] setLaunchAtLogin failed: %@", String(describing: error))
+    }
+  }
+
+  static func setAsDefaultBrowser() async -> Bool {
+    await withCheckedContinuation { continuation in SystemServices.setAsDefaultBrowser { continuation.resume(returning: $0) } }
+  }
 }

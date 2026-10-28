@@ -3,55 +3,77 @@ import ExpoModulesCore
 import UniformTypeIdentifiers
 import ServiceManagement
 
+public enum SystemServices {
+  public static func isDefaultBrowser() -> Bool {
+    guard let probe = URL(string: "https://example.com"),
+          let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
+    return handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
+  }
+
+  public static func setAsDefaultBrowser(_ done: @escaping (Bool) -> Void) {
+    if FileDropView.background {
+      NSLog("ArdiaSystem: background instance, not setting the default browser")
+      return done(false)
+    }
+    let app = Bundle.main.bundleURL
+    NSWorkspace.shared.setDefaultApplication(at: app, toOpenURLsWithScheme: "http") { error in
+      guard error == nil else { return DispatchQueue.main.async { done(false) } }
+      NSWorkspace.shared.setDefaultApplication(at: app, toOpenURLsWithScheme: "https") { _ in
+        DispatchQueue.main.async { done(isDefaultBrowser()) }
+      }
+    }
+  }
+
+  public static func launchAtLoginStatus() -> String {
+    switch SMAppService.mainApp.status {
+    case .enabled: return "enabled"
+    case .requiresApproval: return "requiresApproval"
+    case .notFound: return "notFound"
+    default: return "notRegistered"
+    }
+  }
+
+  public static func setLaunchAtLogin(_ enabled: Bool) throws {
+    if FileDropView.background {
+      NSLog("ArdiaSystem: background instance, not changing launch at login")
+      return
+    }
+    if enabled {
+      try SMAppService.mainApp.register()
+    } else {
+      try SMAppService.mainApp.unregister()
+    }
+  }
+
+  public static var appIconChoices: [(id: String, name: String)] { AppIcons.variants.map { ($0.id, $0.name) } }
+
+  public static func appIconPreview(_ id: String, size: CGFloat) -> NSImage? { AppIcons.image(id, size: size * 2) }
+
+  public static var currentAppIcon: String { AppIcons.current }
+
+  public static func setAppIcon(_ id: String) { AppIcons.set(id, announce: ACIsolatedDataDirectory() == nil) }
+
+  public static var isInDock: Bool { DockTile.isInDock }
+
+  @discardableResult
+  public static func addToDock() -> Bool { DockTile.add() }
+}
+
 public class SystemModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaSystem")
 
     Constant("backgroundInstance") { () -> Bool in FileDropView.background }
 
-    AsyncFunction("isDefaultBrowser") { () -> Bool in
-      guard let probe = URL(string: "https://example.com"),
-            let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
-      return handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
-    }.runOnQueue(.main)
+    AsyncFunction("isDefaultBrowser") { () -> Bool in SystemServices.isDefaultBrowser() }.runOnQueue(.main)
 
     AsyncFunction("setAsDefaultBrowser") { (promise: Promise) in
-      if FileDropView.background {
-        NSLog("ArdiaSystem: background instance, not setting the default browser")
-        return promise.resolve(false)
-      }
-      let app = Bundle.main.bundleURL
-      NSWorkspace.shared.setDefaultApplication(at: app, toOpenURLsWithScheme: "http") { error in
-        guard error == nil else { return promise.resolve(false) }
-        NSWorkspace.shared.setDefaultApplication(at: app, toOpenURLsWithScheme: "https") { _ in
-          DispatchQueue.main.async {
-            let handler = URL(string: "https://example.com").flatMap(NSWorkspace.shared.urlForApplication(toOpen:))
-            promise.resolve(handler?.standardizedFileURL == app.standardizedFileURL)
-          }
-        }
-      }
+      SystemServices.setAsDefaultBrowser { promise.resolve($0) }
     }.runOnQueue(.main)
 
-    AsyncFunction("launchAtLoginStatus") { () -> String in
-      switch SMAppService.mainApp.status {
-      case .enabled: return "enabled"
-      case .requiresApproval: return "requiresApproval"
-      case .notFound: return "notFound"
-      default: return "notRegistered"
-      }
-    }.runOnQueue(.main)
+    AsyncFunction("launchAtLoginStatus") { () -> String in SystemServices.launchAtLoginStatus() }.runOnQueue(.main)
 
-    AsyncFunction("setLaunchAtLogin") { (enabled: Bool) in
-      if FileDropView.background {
-        NSLog("ArdiaSystem: background instance, not changing launch at login")
-        return
-      }
-      if enabled {
-        try SMAppService.mainApp.register()
-      } else {
-        try SMAppService.mainApp.unregister()
-      }
-    }.runOnQueue(.main)
+    AsyncFunction("setLaunchAtLogin") { (enabled: Bool) in try SystemServices.setLaunchAtLogin(enabled) }.runOnQueue(.main)
 
     Function("fileExists") { (path: String) -> Bool in FileManager.default.fileExists(atPath: path) }
 

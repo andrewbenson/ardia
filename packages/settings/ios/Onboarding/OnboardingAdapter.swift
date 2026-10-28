@@ -123,31 +123,27 @@ final class OnboardingAdapter: OnboardingServices {
 
   var backgroundInstance: Bool { ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" }
 
-  func isDefaultBrowser() async -> Bool { await Self.call("general.isDefaultBrowser") as? Bool ?? false }
+  func isDefaultBrowser() async -> Bool { SystemServices.isDefaultBrowser() }
 
-  func isInDock() async -> Bool { await Self.call("onboarding.isInDock") as? Bool ?? false }
+  func isInDock() async -> Bool { SystemServices.isInDock }
 
   func loginItemStatus() async -> LoginItemStatus {
-    (await Self.call("general.loginItemStatus") as? String).flatMap(LoginItemStatus.init(rawValue:)) ?? .notRegistered
+    SettingsAdapters.loginItemStatus()
   }
 
-  func setAsDefaultBrowser() async -> Bool { await Self.call("general.setAsDefaultBrowser") as? Bool ?? false }
+  func setAsDefaultBrowser() async -> Bool { await SettingsAdapters.setAsDefaultBrowser() }
 
-  func setLaunchAtLogin(_ on: Bool) async { await Self.call("general.setLaunchAtLogin", on) }
+  func setLaunchAtLogin(_ on: Bool) async { SettingsAdapters.setLaunchAtLogin(on) }
 
-  func addToDock() async { await Self.call("onboarding.addToDock") }
+  func addToDock() async { SystemServices.addToDock() }
 
   func appIcons(size: Int) async -> [OnboardingAppIcon] {
-    let result = await Self.call("appearance.appIcons", Double(size)) as? [String: Any] ?? [:]
-    return result.list("icons").compactMap { icon in
-      guard let id = icon.string("id") else { return nil }
-      return OnboardingAppIcon(id: id, name: icon.string("name") ?? id, preview: SettingsAdapters.image(icon.string("preview")))
-    }
+    SystemServices.appIconChoices.map { OnboardingAppIcon(id: $0.id, name: $0.name, preview: SystemServices.appIconPreview($0.id, size: CGFloat(size))) }
   }
 
-  func currentAppIcon() async -> String? { await Self.call("onboarding.currentAppIcon") as? String }
+  func currentAppIcon() async -> String? { SystemServices.currentAppIcon }
 
-  func setAppIcon(_ id: String) async { await Self.call("appearance.setAppIcon", id) }
+  func setAppIcon(_ id: String) async { SystemServices.setAppIcon(id) }
 
   func pinnedHosts(_ windowId: String) -> Set<String> {
     guard windowId == self.windowId else { return [] }

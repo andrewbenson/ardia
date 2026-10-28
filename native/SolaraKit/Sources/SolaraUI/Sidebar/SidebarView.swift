@@ -19,6 +19,7 @@ public final class SidebarView: NSView {
   let rows = SidebarLayer()
   private let dock = SidebarLayer()
   private let pill = SidebarActivePill()
+  private let panels = SidebarLayer()
   private var pillShown = false
   var views: [String: NSView] = [:]
   private var hoveredKey: String?
@@ -62,6 +63,7 @@ public final class SidebarView: NSView {
     pill.alphaValue = 0
     pill.onPress = { [weak self] in self?.revealActive() }
     addSubview(pill)
+    addSubview(panels)
     NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     DevPointer.observe(self, #selector(devPointer(_:)))
     NotificationCenter.default.addObserver(self, selector: #selector(liveChanged), name: SidebarLiveFeed.changed, object: nil)
@@ -195,8 +197,11 @@ public final class SidebarView: NSView {
     return (rows.count, shifts)
   }
 
+  public var panelLayer: NSView { panels }
+
   public override func layout() {
     super.layout()
+    panels.frame = bounds
     if bounds.size != lastSize {
       lastSize = bounds.size
       reconcile()
@@ -497,6 +502,7 @@ public final class SidebarView: NSView {
 
   private func rowAt(_ windowPoint: NSPoint) -> SidebarRowView? {
     if pillShown, pill.bounds.contains(pill.convert(windowPoint, from: nil)) { return nil }
+    if panels.hitTest(panels.superview?.convert(windowPoint, from: nil) ?? .zero) != nil { return nil }
     for container in [dock, fixed, rows] {
       if container === rows, !clip.bounds.contains(clip.convert(windowPoint, from: nil)) { continue }
       for case let row as SidebarRowView in container.subviews.reversed() where !row.isHidden && !row.retired {

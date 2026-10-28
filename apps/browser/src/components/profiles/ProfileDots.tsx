@@ -5,7 +5,7 @@ import { switchProfile } from "../../lib/actions";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useIsIncognito } from "../../store/hooks";
-import { usePagerPages, type PagerPage } from "../layout/profilePager";
+import { useNativePagerPosition, usePagerPages, type PagerPage } from "../layout/profilePager";
 import { useHover } from "../primitives";
 import { TooltipAbove } from "../TooltipAbove";
 
@@ -40,6 +40,7 @@ export function ProfileDots({ windowId }: { windowId: string }) {
 
 function Dot({ id, windowId, page, pos }: { id: string; windowId: string; page: PagerPage | undefined; pos: Animated.Value }) {
   const theme = useTheme();
+  useNativePagerPosition(windowId);
   const name = useBrowser((s) => s.profiles[id]?.name ?? "");
   const { hovered, hoverProps } = useHover();
   const [pressed, setPressed] = useState(false);

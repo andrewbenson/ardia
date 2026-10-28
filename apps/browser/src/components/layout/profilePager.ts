@@ -1,5 +1,5 @@
 import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerStateEvent, type SwipeEvent } from "@ardia/ardiacore";
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
 import { Animated, unstable_batchedUpdates } from "react-native";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
@@ -99,6 +99,10 @@ class ProfilePager {
     if (i < 0) return null;
     const order = useBrowser.getState().profileOrder;
     return [i - 1, i, i + 1].filter((slot) => slot >= 0 && slot < order.length).map((slot) => ({ id: order[slot]!, slot }));
+  }
+
+  reapplyNativePosition() {
+    this.pos.setOffset(0);
   }
 
   get active() {
@@ -203,8 +207,14 @@ export function usePagerNativeConfig(windowId: string, width?: number): NativePa
   );
 }
 
+export function useNativePagerPosition(windowId: string) {
+  const pager = pagerFor(windowId);
+  useLayoutEffect(() => pager.reapplyNativePosition());
+}
+
 export function usePageStyle(windowId: string, slot: number, width: number) {
   const { pos } = pagerFor(windowId);
+  useNativePagerPosition(windowId);
   return useMemo(() => ({ transform: [{ translateX: Animated.multiply(Animated.add(pos, -slot), -width) }] }), [pos, slot, width]);
 }
 

@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 import { profileTheme, spaceLookSource } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";
-import { pagerFor, usePagerNativeConfig, usePagerPages, usePagerSurface } from "./profilePager";
+import { pagerFor, useNativePagerPosition, usePagerNativeConfig, usePagerPages, usePagerSurface } from "./profilePager";
 
 
 export function ProfileSwipe({ children }: { children: ReactNode }) {
@@ -70,6 +70,7 @@ export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "side
 export function ProfileTint() {
   const windowId = useWindowId();
   const { pages, paging, pager } = usePagerPages(windowId);
+  useNativePagerPosition(windowId);
   const themes = useBrowser(useShallow((s) => pages.map((p) => profileTheme(s.profiles[p.id], s.ui.appDark, spaceLookSource(s.settings)))));
   if (!paging) return null;
   return (

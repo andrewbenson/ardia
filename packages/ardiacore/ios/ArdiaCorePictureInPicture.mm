@@ -233,7 +233,6 @@ typedef NS_ENUM(NSInteger, ACPiPEdge) { ACPiPEdgeNone = 0, ACPiPEdgeLeft = -1, A
 @property (nonatomic, readonly) ACPiPOverlay *overlay;
 @property (nonatomic, readonly) ACPiPEdge stashedEdge;
 @property (nonatomic) BOOL keepOnTop;
-- (void)setVideoFrame:(NSString *)frameId;
 - (void)roundCorners;
 - (void)backToTab;
 - (void)unstash;
@@ -283,7 +282,6 @@ typedef NS_ENUM(NSInteger, ACPiPEdge) { ACPiPEdgeNone = 0, ACPiPEdgeLeft = -1, A
 
 @implementation ACPiPController {
   NSMutableArray *_observers;
-  NSString *_frameId;
   NSTimer *_slide;
   BOOL _animating;
   BOOL _sawDrag;
@@ -347,11 +345,9 @@ typedef NS_ENUM(NSInteger, ACPiPEdge) { ACPiPEdgeNone = 0, ACPiPEdgeLeft = -1, A
   [NSObject cancelPreviousPerformRequestsWithTarget:self];
   [_slide invalidate];
   [_overlay removeFromSuperview];
-  _frameId = nil;
   objc_setAssociatedObject(_window, kControllerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-- (void)setVideoFrame:(NSString *)frameId { _frameId = [frameId copy]; }
 
 - (void)roundCorners {
   NSView *content = _window.contentView;
@@ -401,7 +397,7 @@ typedef NS_ENUM(NSInteger, ACPiPEdge) { ACPiPEdgeNone = 0, ACPiPEdgeLeft = -1, A
   if (!view) return;
   ActivateApp(@"Back to Tab (menu)");
   [view emit:@"activateRequest" payload:@{@"reason" : @"pictureInPicture"}];
-  [view exitPictureInPictureInFrame:_frameId];
+  [view exitPictureInPicture];
 }
 
 - (void)windowMoved {
@@ -1268,16 +1264,16 @@ void InstallZoomMonitor() {
                                                   }];
 }
 
-bool Attach(ArdiaCoreWebView *view, NSString *host, NSString *frameId) {
+bool Attach(ArdiaCoreWebView *view, NSString *host) {
   for (NSWindow *window in NSApp.windows) {
     ACPiPController *controller = [ACPiPController forWindow:window];
     if (!IsChromeVideoPictureInPicture(window) && !(controller && window.visible)) continue;
     if (!window.hasShadow) continue;
+    if (controller.view && controller.view.browserId != view.browserId) continue;
     BOOL fresh = !controller;
     if (fresh) controller = [[ACPiPController alloc] initWithWindow:window];
     controller.view = view;
     controller.host = host;
-    [controller setVideoFrame:frameId];
     [controller roundCorners];
     PreventActivation(window);
     if (ardiacore_host::Background()) {
@@ -1306,14 +1302,13 @@ void TabRequestedActivation(ArdiaCoreWebView *view) {
       return ActivateApp(@"Back to Tab (Chrome's button)");
 }
 
-void VideoChanged(ArdiaCoreWebView *view, NSString *host, NSString *frameId, bool active) {
-  if (!active) return;
+void VideoEntered(ArdiaCoreWebView *view, NSString *host) {
   __block int tries = 0;
   __block void (^look)(void);
   __weak ArdiaCoreWebView *weakView = view;
   look = ^{
     ArdiaCoreWebView *strongView = weakView;
-    if (!strongView || Attach(strongView, host, frameId) || ++tries >= 20) {
+    if (!strongView || Attach(strongView, host) || ++tries >= 20) {
       look = nil;
       return;
     }

@@ -11,7 +11,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)requestFocusRestoreIn:(NSWindow *)window;
 - (void)devToolsChanged:(nullable NSView *)devToolsView;
 - (void)emit:(NSString *)name payload:(NSDictionary<NSString *, id> *)payload;
-- (void)exitPictureInPictureInFrame:(nullable NSString *)frameId;
 + (void)keepTransfersOfWindow:(NSWindow *)window;
 @end
 

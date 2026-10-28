@@ -8,7 +8,7 @@ namespace ardiacore_pip {
 
 void WatchZoom();
 
-void VideoChanged(ArdiaCoreWebView *view, NSString *host, NSString *frameId, bool active);
+void VideoEntered(ArdiaCoreWebView *view, NSString *host);
 
 void TabRequestedActivation(ArdiaCoreWebView *view);
 

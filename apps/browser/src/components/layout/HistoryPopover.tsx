@@ -9,7 +9,7 @@ import { openInternalPage } from "../pages/urls";
 import { Favicon, NEW_TAB_MARK, NewTabIcon, useHover } from "../primitives";
 import { modifiersOf, PANEL, Popover, POPOVER_MARGIN, PopoverSeparator } from "./controls";
 import { closeHistoryMenu, goToHistoryItem, useHistoryMenu, type HistoryItem } from "./history";
-import { useNativeHistoryHandler, useNativePaneOverlay, usePageFrame } from "./nativePaneOverlays";
+import { useNativePaneHandler, useNativePaneOverlay, usePageFrame } from "./nativePaneOverlays";
 
 const WIDTH = 300;
 const FAVICON_X = PANEL.inset + (PANEL.iconSlot - 16) / 2;
@@ -57,7 +57,7 @@ export function HistoryPopover({ tabId, windowId, anchors, nativeAllowed = true 
     if (item) open(item, { metaKey: !!ev.metaKey, shiftKey: !!ev.shiftKey, altKey: !!ev.altKey, middle: !!ev.middle });
   };
   useNativePaneOverlay(inShell, windowId, tabId, "history", panelState && frame ? { ...panelState, frame } : null);
-  useNativeHistoryHandler(inShell, windowId, tabId, onPanelEvent);
+  useNativePaneHandler("history", inShell, windowId, tabId, onPanelEvent);
   if (!menu) return null;
   if (inShell) return <View ref={ref} pointerEvents="none" collapsable={false} onLayout={onLayout} style={StyleSheet.absoluteFill} />;
 

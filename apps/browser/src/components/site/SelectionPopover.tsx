@@ -1,3 +1,4 @@
+import { windowShellActive } from "@ardia/settings";
 import { Surface, Symbol, VisualEffect } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
@@ -5,13 +6,20 @@ import { hex, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { defaultSearchEngine } from "../../store/settings";
 import { useHover } from "../primitives";
+import { useWindowId } from "../../store/hooks";
+import { useNativePaneHandler, useNativePaneOverlay, usePageFrame, type PaneClick } from "../layout/nativePaneOverlays";
 import { searchSelection, setPageSelection, usePageSelection, type ClickModifiers, type PageSelection } from "./selection";
 
 const HEIGHT = 32;
 const GAP = 6;
 const SHOW_DELAY = 150;
 
-export function SelectionPopover({ tabId, zoom }: { tabId: string; zoom: number }) {
+export function SelectionPopover({ tabId, zoom, nativeAllowed = true }: { tabId: string; zoom: number; nativeAllowed?: boolean }) {
+  const theme = useTheme();
+  const windowId = useWindowId();
+  const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
+  const page = usePageFrame();
+  const engine = useBrowser((s) => defaultSearchEngine(s.settings).name);
   const enabled = useBrowser((s) => s.settings.showSelectionSearch);
   const selection = usePageSelection((s) => (enabled ? (s[tabId] ?? null) : null));
   const [shown, setShown] = useState<PageSelection | null>(null);
@@ -22,7 +30,22 @@ export function SelectionPopover({ tabId, zoom }: { tabId: string; zoom: number 
     return () => clearTimeout(timer);
   }, [selection]);
   useEffect(() => () => setPageSelection(tabId, null), [tabId]);
+  const r = shown?.rect;
+  useNativePaneOverlay(inShell, windowId, tabId, "selection", shown && r && page.frame ? {
+    key: `${r.x},${r.y}`,
+    top: r.y * zoom,
+    bottom: (r.y + r.height) * zoom,
+    center: (r.x + r.width / 2) * zoom,
+    dark: !!theme.dark,
+    icon: theme.icon,
+    textPrimary: theme.textPrimary,
+    tooltip: searchTooltip(engine, shown.text),
+    label: `Search ${engine}`,
+    frame: page.frame,
+  } : null);
+  useNativePaneHandler("selection", inShell, windowId, tabId, (click: PaneClick) => shown && searchSelection(tabId, shown.text, click));
   if (!selection && !shown) return null;
+  if (inShell) return <View ref={page.ref} pointerEvents="none" collapsable={false} onLayout={page.onLayout} style={StyleSheet.absoluteFill} />;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill} onLayout={(e) => setArea(e.nativeEvent.layout)}>
@@ -81,13 +104,17 @@ function Bar({ tabId, selection, zoom, area }: { tabId: string; selection: PageS
   );
 }
 
+function searchTooltip(engine: string, text: string) {
+  const quoted = text.length > 40 ? `${text.slice(0, 40).trimEnd()}…` : text;
+  return `Search ${engine} for “${quoted.replace(/\s+/g, " ")}”`;
+}
+
 function SearchButton({ tabId, text }: { tabId: string; text: string }) {
   const theme = useTheme();
   const engine = useBrowser((s) => defaultSearchEngine(s.settings).name);
   const { hovered, hoverProps } = useHover();
-  const quoted = text.length > 40 ? `${text.slice(0, 40).trimEnd()}…` : text;
   return (
-    <View {...hoverProps} tooltip={`Search ${engine} for “${quoted.replace(/\s+/g, " ")}”`}>
+    <View {...hoverProps} tooltip={searchTooltip(engine, text)}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Search ${engine}`} onPress={(e) => searchSelection(tabId, text, e.nativeEvent as unknown as ClickModifiers)}>
         {({ pressed }) => (
           <View

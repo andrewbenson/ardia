@@ -97,6 +97,7 @@ final class PaneOverlayHost {
   private var sadTabs: [String: SadTabView] = [:]
   private var zooms: [String: PanePopover<ZoomPanelView>] = [:]
   private var histories: [String: PanePopover<HistoryPanelView>] = [:]
+  private var selections: [String: SelectionBarView] = [:]
   private var swipes: [String: (wrap: PanePopoverWrap, capsule: SwipeCapsuleView)] = [:]
   private static let swipeFavicons: SidebarFavicons = {
     let made = SidebarFavicons()
@@ -119,6 +120,7 @@ final class PaneOverlayHost {
     var sad = Set<String>()
     var zoomed = Set<String>()
     var listed = Set<String>()
+    var selected = Set<String>()
     for (tabId, value) in tabs {
       if let data = entry(value, kind: "sadTab", tabId: tabId), let json = String(data: data, encoding: .utf8), let state = SadTabState.decode(json), state.mode != nil {
         sad.insert(tabId)
@@ -129,6 +131,10 @@ final class PaneOverlayHost {
         let zoom = zooms[tabId] ?? makeZoom(tabId)
         zoom.body.update(state)
         zoom.popover.set(placement: placement, dark: state.dark)
+      }
+      if let data = entry(value, kind: "selection", tabId: tabId), let state = try? JSONDecoder().decode(SelectionBarState.self, from: data) {
+        selected.insert(tabId)
+        (selections[tabId] ?? makeSelection(tabId)).update(state)
       }
       if let data = entry(value, kind: "history", tabId: tabId), let state = try? JSONDecoder().decode(HistoryPanelState.self, from: data), let placement = PanelPopover.placement(data) {
         listed.insert(tabId)
@@ -148,6 +154,10 @@ final class PaneOverlayHost {
     for (tabId, zoom) in zooms where !zoomed.contains(tabId) {
       zoom.wrap.removeFromSuperview()
       zooms[tabId] = nil
+    }
+    for (tabId, bar) in selections where !selected.contains(tabId) {
+      bar.removeFromSuperview()
+      selections[tabId] = nil
     }
     for (tabId, history) in histories where !listed.contains(tabId) {
       history.wrap.removeFromSuperview()
@@ -180,6 +190,17 @@ final class PaneOverlayHost {
     zoom.wrap.autoresizingMask = [.width, .height]
     zooms[tabId] = zoom
     return zoom
+  }
+
+  private func makeSelection(_ tabId: String) -> SelectionBarView {
+    let bar = SelectionBarView(frame: .zero)
+    let windowId = windowId
+    bar.onSearch = { click in
+      Task { @MainActor in _ = await SettingsAdapters.js("pane.selection", windowId, tabId, ["metaKey": click.meta, "shiftKey": click.shift, "altKey": click.alt]) }
+    }
+    bar.autoresizingMask = [.width, .height]
+    selections[tabId] = bar
+    return bar
   }
 
   private func makeHistory(_ tabId: String) -> PanePopover<HistoryPanelView> {
@@ -252,6 +273,10 @@ final class PaneOverlayHost {
     }
     for (tabId, zoom) in zooms { zoom.place(in: slot(tabId)) }
     for (tabId, history) in histories { history.place(in: slot(tabId)) }
+    for (tabId, bar) in selections {
+      Self.place(bar, in: slot(tabId), bottom: false)
+      bar.isHidden = bar.superview == nil
+    }
     for (tabId, entry) in swipes {
       Self.place(entry.wrap, in: slot(tabId), bottom: false)
       entry.capsule.frame = entry.wrap.bounds
@@ -278,6 +303,10 @@ final class PaneOverlayHost {
     }
     for (tabId, zoom) in zooms { tabs[tabId, default: [:]]["zoom"] = zoom.describe(inWindow) }
     for (tabId, history) in histories { tabs[tabId, default: [:]]["history"] = history.describe(inWindow) }
+    for (tabId, bar) in selections {
+      tabs[tabId, default: [:]]["selection"] = ["hidden": bar.isHiddenOrHasHiddenAncestor, "area": inWindow(bar, bar.bounds), "bar": bar.barFrame.map { inWindow(bar, $0) } ?? NSNull(),
+        "button": bar.buttonFrame.map { inWindow(bar, $0) } ?? NSNull(), "above": bar.above, "opacity": bar.presentedOpacity]
+    }
     for (tabId, entry) in swipes {
       let c = entry.capsule
       let s = c.sample()
@@ -286,6 +315,6 @@ final class PaneOverlayHost {
     }
     let card = NativeWindowShell.host(windowId)?.shell.card
     let layer = PaneOverlays.shared.layer(windowId: windowId)
-    return ["top": layer != nil && card?.subviews.last === layer, "inCard": !(sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty && swipes.isEmpty) && layer != nil && layer?.superview === card, "tabs": tabs]
+    return ["top": layer != nil && card?.subviews.last === layer, "inCard": !(sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty && swipes.isEmpty && selections.isEmpty) && layer != nil && layer?.superview === card, "tabs": tabs]
   }
 }

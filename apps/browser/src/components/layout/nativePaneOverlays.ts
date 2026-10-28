@@ -8,7 +8,8 @@ import { patchPage, setPopover } from "./pageState";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
-const historyHandlers = new Map<string, { current: ((event: PaneHistoryEvent) => void) | null }>();
+export type PaneClick = { metaKey: boolean; shiftKey: boolean; altKey: boolean };
+const handlers = new Map<string, { current: ((event: never) => void) | null }>();
 const windows: Record<string, Record<string, Record<string, object>>> = {};
 let queued = false;
 
@@ -42,22 +43,24 @@ addNativeSettingsHandlers({
       return void webviews.get(tabId)?.resolveUnresponsive(action === "exit");
     }
   },
-  "pane.history": (windowId: string, tabId: string, event: PaneHistoryEvent) => historyHandlers.get(`${windowId}:${tabId}`)?.current?.(event),
+  "pane.history": (windowId: string, tabId: string, event: PaneHistoryEvent) => handlers.get(`history:${windowId}:${tabId}`)?.current?.(event as never),
+  "pane.selection": (windowId: string, tabId: string, click: PaneClick) => handlers.get(`selection:${windowId}:${tabId}`)?.current?.(click as never),
   "pane.zoom": (_windowId: string, tabId: string, kind: string, step: number) => {
     if (kind === "dismiss") return setPopover(tabId, null);
     if (kind === "step") void webviews.get(tabId)?.zoomStep(Math.sign(Number(step)) as -1 | 0 | 1);
   },
 });
 
-export function useNativeHistoryHandler(active: boolean, windowId: string, tabId: string, handler: (event: PaneHistoryEvent) => void) {
+export function useNativePaneHandler<Event>(kind: "history" | "selection", active: boolean, windowId: string, tabId: string, handler: (event: Event) => void) {
   const ref = useRef(handler);
   ref.current = handler;
   useEffect(() => {
     if (!active) return;
-    const key = `${windowId}:${tabId}`;
-    historyHandlers.set(key, ref);
-    return () => void (historyHandlers.get(key) === ref && historyHandlers.delete(key));
-  }, [active, windowId, tabId]);
+    const key = `${kind}:${windowId}:${tabId}`;
+    const entry = ref as { current: ((event: never) => void) | null };
+    handlers.set(key, entry);
+    return () => void (handlers.get(key) === entry && handlers.delete(key));
+  }, [kind, active, windowId, tabId]);
 }
 
 export function usePageFrame() {

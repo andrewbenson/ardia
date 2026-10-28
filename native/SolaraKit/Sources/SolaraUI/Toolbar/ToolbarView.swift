@@ -23,6 +23,7 @@ public final class ToolbarView: NSView {
   private let url = ToolbarUrlFieldView()
   private var bandColor: CGColor?
   private var shownProgress: Double?
+  private var interactive = true
 
   public override var isFlipped: Bool { true }
 
@@ -43,7 +44,22 @@ public final class ToolbarView: NSView {
 
   required init?(coder: NSCoder) { fatalError() }
 
+  public func setAutoHide(opacity: CGFloat, scale: CGFloat, lift: CGFloat, interactive: Bool) {
+    self.interactive = interactive
+    alphaValue = opacity
+    guard let layer else { return }
+    let cx = bounds.midX, cy = bounds.midY
+    var t = CATransform3DMakeTranslation(cx, cy - lift, 0)
+    t = CATransform3DScale(t, scale, scale, 1)
+    t = CATransform3DTranslate(t, -cx, -cy, 0)
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    layer.sublayerTransform = scale == 1 && lift == 0 ? CATransform3DIdentity : t
+    CATransaction.commit()
+  }
+
   public override func hitTest(_ point: NSPoint) -> NSView? {
+    guard interactive else { return nil }
     let hit = super.hitTest(point)
     return hit === self || hit === content ? nil : hit
   }

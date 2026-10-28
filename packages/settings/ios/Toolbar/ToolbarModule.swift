@@ -25,6 +25,14 @@ final class NativeToolbarHostView: ExpoView {
   let onToolbarAnchors = EventDispatcher()
   let toolbar = ToolbarView(frame: .zero)
   private var json = ""
+  private static let live = NSHashTable<NativeToolbarHostView>.weakObjects()
+
+  static func toolbar(windowId: String, tabId: String) -> ToolbarView? {
+    let tabWindow = NativeStoreHandle.store?.state.tabs[tabId]?.windowId
+    guard tabWindow == nil || tabWindow == windowId else { return nil }
+    let hosts = live.allObjects.filter { $0.window != nil && $0.toolbar.state?.tabId == tabId }
+    return (hosts.first { !$0.isHiddenOrHasHiddenAncestor } ?? hosts.first)?.toolbar
+  }
 
   override var isFlipped: Bool { true }
 
@@ -39,6 +47,7 @@ final class NativeToolbarHostView: ExpoView {
       self?.onToolbarAnchors(["anchors": anchors.mapValues { [$0.minX, $0.minY, $0.width, $0.height] }])
     }
     addSubview(toolbar)
+    Self.live.add(self)
   }
 
   override func setFrameOrigin(_ newOrigin: NSPoint) {

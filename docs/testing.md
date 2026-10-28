@@ -91,6 +91,7 @@ make an instance a test instance; the rest are hooks for one test.
 | `ARDIA_CHROMIUM_SWITCHES` | `ArdiaCoreHost.mm` | Extra Chrome switches, space-separated (background mode drops the auto-accept capture ones); only on Chrome's mock keychain, like argv |
 | `ARDIA_ALLOW_OCCLUSION=1` | `ArdiaCoreHost.mm` | Background mode keeps Chrome's occlusion. macOS posts no occlusion change for a window a band below normal, so minimizing and deminiaturizing post one for it (the page goes hidden as in a user's minimized window) |
 | `ARDIA_ALLOW_AUDIO=1` | `ArdiaCoreHost.mm`, `IntroMusic.swift` | Background mode keeps sound |
+| `ARDIA_DRAW_WINDOWS=1` | `ArdiaCoreActivation.mm` | Background mode draws its windows at the alpha asked for instead of 0, so the window server composites them: `screencapture -l`, CGWindowList alpha and the perf benches (`xbench`, `energy`, `js-bench`, `native-bench`, `scroll-frames`, `windowing-test` and release smoke set it). They show wherever the owner's desktop is uncovered. `ARDIA_ALLOW_OCCLUSION=1` implies it: a window at alpha 0 is never seen, so its real occlusion would always read hidden |
 | `ARDIA_DOWNLOADS_DIR` | engine `ac_downloads.cc` | Chrome's download folder for this launch: the pref's default, never written to the profile (a folder the user picked still wins) |
 | `ARDIA_TEST_REAUTH=granted` | engine `ac_reauth.cc` | Background mode grants macOS re-auth requests (otherwise refused, each reported as `reauth.requested`). Only builds that aren't signed for distribution (Debug, ad hoc) and run on Chrome's mock keychain honor it, so it can never reveal what the real "Ardia Safe Storage" key encrypts; a Developer ID build refuses every request in background mode |
 | `ARDIA_CONTEXT_MENU_LOG` | engine `ac_context_menu.mm` | Context menus go to the host instead of the screen, in any build; the pick runs on the model that owns it, logged as `[ardiacore-menu]` in the system log |
@@ -128,7 +129,10 @@ make an instance a test instance; the rest are hooks for one test.
   logged. With `ARDIA_ALLOW_OCCLUSION=1` a window the owner's cover is really occluded.
   Full screen is acted out (no new Space); windows answer NO to `-[NSWindow isOccluded]`, so a covered
   window shows a tab at once instead of after Chrome's 1 s delay, with `--disable-backgrounding-occluded-windows`;
-  PiP windows stay at alpha 0 and click-through; the drag preview stays above its own window only.
+  Every window stays at alpha 0 (`-alphaValue` answers the one asked for), so none ever shows over the owner's
+  uncovered desktop, acted full screen included; pages stay visible, the acted occlusion and in-process snapshots work as before,
+  and the window server composites nothing (`screencapture -l` needs `ARDIA_DRAW_WINDOWS=1`). PiP windows are also click-through; the
+  drag preview stays above its own window only.
 - **Media:** `--mute-audio` (Chrome then reports no tab as audible, so the speaker never lights; the ArdiaCore
   acceptance run sets `ARDIA_ALLOW_AUDIO=1` with `--disable-audio-output`, so Chrome still hears its -60 dBFS fixtures and the speakers get nothing), no intro music, `--use-fake-device-for-media-stream` with the microphone kept on a fake
   input (`ac_fake_media.mm`), and `--disable-modal-animations` (a locked screen never ends a dialog's close animation).

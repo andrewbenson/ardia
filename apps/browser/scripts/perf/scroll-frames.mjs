@@ -285,7 +285,7 @@ try {
   for (let round = 0; round < +opt.rounds; round++) {
     for (const arm of round % 2 ? [...arms].reverse() : arms) {
       const data = join(out, `data-${arm.label}`);
-      const inst = await launch(arm.app, { data, port, js: "none", ready: false, fresh: true, onboarded: true, env: arm.env });
+      const inst = await launch(arm.app, { data, port, js: "none", ready: false, fresh: true, onboarded: true, env: { ARDIA_DRAW_WINDOWS: "1", ...arm.env } });
       try {
         let b = null;
         for (const end = Date.now() + 60000; !b && Date.now() < end; await sleep(200)) b = await inst.browser().catch(() => null);

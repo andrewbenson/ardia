@@ -326,6 +326,9 @@ NSWindowLevel (*gAppKitLevel)(id, SEL);
 void (*gAppKitSetLevel)(id, SEL, NSWindowLevel);
 const void *kAskedLevelKey = &kAskedLevelKey;
 bool gSettingLevel = false;
+CGFloat (*gAppKitAlpha)(id, SEL);
+void (*gAppKitSetAlpha)(id, SEL, CGFloat);
+const void *kAskedAlphaKey = &kAskedAlphaKey;
 
 NSWindowLevel Lowered(NSWindowLevel level) {
   return level < 0 ? level : level < kLevelBand ? level - kLevelBand : -1;
@@ -333,6 +336,7 @@ NSWindowLevel Lowered(NSWindowLevel level) {
 
 void KeepLowered(NSWindow *window) {
   if (gAppKitLevel(window, @selector(level)) >= 0) window.level = window.level;
+  if (gAppKitAlpha && gAppKitAlpha(window, @selector(alphaValue)) > 0) window.alphaValue = window.alphaValue;
 }
 
 void KeepBehindOwnerWindows() {
@@ -350,6 +354,18 @@ void KeepBehindOwnerWindows() {
     NSNumber *asked = gSettingLevel ? nil : objc_getAssociatedObject(window, kAskedLevelKey);
     return asked ? asked.integerValue : gAppKitLevel(window, @selector(level));
   });
+  if (!getenv("ARDIA_DRAW_WINDOWS") && !getenv("ARDIA_ALLOW_OCCLUSION")) {
+    gAppKitAlpha = (decltype(gAppKitAlpha))method_getImplementation(class_getInstanceMethod(NSWindow.class, @selector(alphaValue)));
+    gAppKitSetAlpha = (decltype(gAppKitSetAlpha))method_getImplementation(class_getInstanceMethod(NSWindow.class, @selector(setAlphaValue:)));
+    Swizzle(NSWindow.class, @selector(setAlphaValue:), ^(NSWindow *window, CGFloat alpha) {
+      objc_setAssociatedObject(window, kAskedAlphaKey, @(alpha), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      gAppKitSetAlpha(window, @selector(setAlphaValue:), 0);
+    });
+    Swizzle(NSWindow.class, @selector(alphaValue), ^CGFloat(NSWindow *window) {
+      NSNumber *asked = objc_getAssociatedObject(window, kAskedAlphaKey);
+      return asked ? asked.doubleValue : gAppKitAlpha(window, @selector(alphaValue));
+    });
+  }
   {
     SEL selector = @selector(initWithContentRect:styleMask:backing:defer:);
     auto original = (id (*)(id, SEL, NSRect, NSWindowStyleMask, NSBackingStoreType, BOOL))method_getImplementation(

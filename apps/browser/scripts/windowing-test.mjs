@@ -207,7 +207,7 @@ try {
   mkdirSync(data, { recursive: true });
   const built = spawnSync("swiftc", ["-O", recorderSource, "-o", recorder], { encoding: "utf8" });
   if (built.status !== 0) rep.log(`(no recorder: ${built.stderr.trim().split("\n")[0]})`);
-  app = await launch(appPath, { data, port, session: fixture(), onboarded: true, probe: true });
+  app = await launch(appPath, { data, port, session: fixture(), onboarded: true, probe: true, env: { ARDIA_DRAW_WINDOWS: "1" } });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await sleep(2500);
   let probe = null;

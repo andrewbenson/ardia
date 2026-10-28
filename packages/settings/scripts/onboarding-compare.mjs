@@ -33,7 +33,7 @@ const inApp = (inst, body) => inst.eval(body);
 for (const variant of VARIANTS) {
   const data = path.join(out, `${variant}-data`);
   fs.rmSync(data, { recursive: true, force: true });
-  const env = { ARDIA_ONBOARDING: "1", ARDIA_NATIVE_ONBOARDING: variant === "native" ? "1" : "0" };
+  const env = { ARDIA_DRAW_WINDOWS: "1", ARDIA_ONBOARDING: "1", ARDIA_NATIVE_ONBOARDING: variant === "native" ? "1" : "0" };
   const inst = await launch(app, { data, env });
   try {
     await inst.ready({ test: "return !!globalThis.acOnboarding?.store.getState().windowId" });

@@ -431,7 +431,7 @@ class Instance {
   env() {
     const env = { HOME: this.home, CFFIXED_USER_HOME: this.home };
     if (isArdia(this.name)) {
-      Object.assign(env, { ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: join(this.home, "data"), ARDIA_REMOTE_DEBUGGING_PORT: String(port), ARDIA_UPDATE_FEED_URL: `http://127.0.0.1:${opt["page-port"]}/appcast.xml` });
+      Object.assign(env, { ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: join(this.home, "data"), ARDIA_REMOTE_DEBUGGING_PORT: String(port), ARDIA_UPDATE_FEED_URL: `http://127.0.0.1:${opt["page-port"]}/appcast.xml`, ARDIA_DRAW_WINDOWS: "1" });
       if (this.mode === "hidden") env.ARDIA_ALLOW_OCCLUSION = "1";
     }
     for (const e of perName(opt.env, this.name)) env[e.slice(0, e.indexOf("="))] = e.slice(e.indexOf("=") + 1);

@@ -210,6 +210,9 @@ and a session whose window was left on its second profile, and checks, over CDP 
 - the feed in the build's Info.plist (`SUFeedURL`: GitHub's `releases/latest/download/appcast.xml`) answers with an
   appcast (`.claude/skills/release/scripts/feed.sh --before-publish`).
 
+smoke.sh launches with `ARDIA_DRAW_WINDOWS=1`: these checks read the window server's own alpha and stacking, so its windows are
+drawn (and show wherever the desktop is uncovered) rather than kept at alpha 0 like other hidden instances.
+
 Everything must pass before publishing. One known exception: the two passkey window-order checks read
 CGWindowList, which isn't reliable while the Mac's screen is locked (window animations freeze). smoke.sh
 detects the lock (`CGSSessionScreenIsLocked`) and prints them as SKIP; publish when the release doesn't

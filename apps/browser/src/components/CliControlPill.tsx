@@ -11,6 +11,7 @@ import { useHover } from "./primitives";
 
 const PILL_HEIGHT = 32;
 const PILL_BOTTOM = 12;
+const NATIVE_HIDE_MS = 250;
 
 type FollowStyle = Animated.WithAnimatedValue<ViewStyle>;
 
@@ -19,11 +20,7 @@ export function CliControlPill({ tabId, style, nativeAllowed = true }: { tabId: 
   const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
   if (!nativeMedia("media.cliPill")) return <RNCliControlPill style={style} />;
   if (inShell) return <PaneCliControlPill windowId={windowId} tabId={tabId} />;
-  return (
-    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
-      <NativeCliControlPill windowId={windowId} />
-    </Animated.View>
-  );
+  return <NativeCliControlPill windowId={windowId} style={style} />;
 }
 
 function useCliPillState() {
@@ -32,13 +29,38 @@ function useCliPillState() {
   return { shown, command: cliCommand(), product: cliProduct(), theme: mediaTheme(theme) };
 }
 
+function useNativePillPresence(shown: boolean) {
+  const [mounted, setMounted] = useState(shown);
+  const [revealed, setRevealed] = useState(shown);
+  useEffect(() => {
+    if (shown) {
+      setMounted(true);
+      const frame = requestAnimationFrame(() => setRevealed(true));
+      return () => cancelAnimationFrame(frame);
+    }
+    setRevealed(false);
+    const timer = setTimeout(() => setMounted(false), NATIVE_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
+  return { mounted: mounted || shown, shown: shown && revealed };
+}
+
 function PaneCliControlPill({ windowId, tabId }: { windowId: string; tabId: string }) {
-  useNativePaneOverlay(true, windowId, tabId, "cliPill", useCliPillState());
+  const state = useCliPillState();
+  const presence = useNativePillPresence(state.shown);
+  useNativePaneOverlay(presence.mounted, windowId, tabId, "cliPill", { ...state, shown: presence.shown });
   return null;
 }
 
-function NativeCliControlPill({ windowId }: { windowId: string }) {
-  return <NativeMediaView kind="media.cliPill" windowId={windowId} state={useCliPillState()} />;
+function NativeCliControlPill({ windowId, style }: { windowId: string; style?: FollowStyle }) {
+  const state = useCliPillState();
+  const presence = useNativePillPresence(state.shown);
+  if (!presence.mounted) return null;
+  return (
+    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
+      <NativeMediaView kind="media.cliPill" windowId={windowId} state={{ ...state, shown: presence.shown }} />
+    </Animated.View>
+  );
 }
 
 function RNCliControlPill({ style }: { style?: FollowStyle }) {

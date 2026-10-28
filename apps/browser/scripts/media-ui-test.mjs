@@ -213,6 +213,9 @@ try {
     const peak = Math.max(...on.map((s) => s.opacity));
     if (peak < 0.99) throw new Error(`never fully shown: ${peak}`);
     if (off.at(-1).opacity > 0.01) throw new Error(`still visible 320 ms after hiding: ${off.at(-1).opacity}`);
+    if (on[0].opacity > 0.9) throw new Error(`appeared at once instead of animating in: ${on[0].opacity}`);
+    const left = await run(`return settle(100).then(() => first("media.cliPill"))`);
+    if (left) throw new Error(`a hidden pill stays mounted: ${JSON.stringify(left)}`);
     const pane = await (async () => {
       if (!shell) return null;
       await run(`globalThis.acCli.indicator.setState({ shown: true }); return true;`);

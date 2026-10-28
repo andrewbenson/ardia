@@ -48,6 +48,8 @@ const CHECKS = {
   "sync-pause": "after the re-key, the key file replaced by another key (a reset or Start Over), sync on with ARDIA_SYNC_REDESIGN=1: sync's read is nil, it logs the pause, no login or note is deleted",
   "sync-ledger": "re-key, then the first sealed ledger (ARDIA_SYNC_REDESIGN=1): each profile's Login Data mark equals its ledger L@t, nothing held, Login Data otherwise unchanged, and a second Mac joining gets exactly the fixture's passwords",
   "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
+  "a-crash": "the file keychain seeded with mock_password, a crash after keying, after the update and after keyed, then a relaunch: migrated with an update and no add, or back to A",
+  "version-change": "re-key, then a copy with another CFBundleVersion (and a crash at before-cleanup on it): .rekey-old removed, no keychain write, everything reads",
   "off-mode": "a re-key stopped at staged, then a build that can't re-key (mock keychain, no test mode): the quit message, nothing touched; then the test build finishes it",
   "test-refused": "ARDIA_TEST_REKEY=1 without the file keychain, and ARDIA_TEST_REKEY=yes: refused and logged, no re-key, data untouched",
   "rollback": "re-key, then the manual rollback (originals back from .rekey-old, item and journal deleted): the next launch re-keys again",
@@ -1002,6 +1004,55 @@ const CASES = {
     seedKey(run, MOCK);
     return migrateAndCheck(ctx, run, REKEY, { fromA: true });
   },
+  async "a-crash"(ctx) {
+    const lines = [];
+    for (const point of ["after-keying", "after-key-write", "after-keyed"]) {
+      const run = prepare(ctx.root, `a-crash-${point}`, ctx.fixture);
+      seedKey(run, MOCK);
+      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: point });
+      const s = snapshot(run);
+      if (run.started.outcome !== "exited" || points(s.appLog).at(-1) !== point) { lines.push({ ok: false, name: `from A, crash at ${point}`, detail: `${run.started.outcome}, last point ${points(s.appLog).at(-1)}` }); continue; }
+      const result = await recoverAndCheck(ctx, run, `from A, crash at ${point}`, {}, { fromA: true });
+      const after = snapshot(run);
+      const adds = count(after.keyLog, "add created");
+      result.push({ ok: adds === 0, name: `from A, crash at ${point}: the item was updated, never added`, detail: after.keyLog.join(", ") });
+      lines.push(...result);
+      if (!ctx.keep && result.every((l) => l.ok)) discard([run]);
+    }
+    return lines;
+  },
+  async "version-change"(ctx) {
+    const next = join(ctx.root, "next", "Solara.app");
+    mkdirSync(join(next, ".."), { recursive: true });
+    execFileSync("cp", ["-c", "-R", ctx.app, next]);
+    const plist = join(next, "Contents", "Info.plist");
+    const version = execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print CFBundleVersion", plist], { encoding: "utf8" }).trim();
+    execFileSync("/usr/libexec/PlistBuddy", ["-c", `Set CFBundleVersion ${version}9`, plist]);
+    execFileSync("codesign", ["--force", "--deep", "-s", "-", next], { stdio: "ignore" });
+    const lines = [];
+    for (const crashAt of [null, "before-cleanup"]) {
+      const label = crashAt ? "a crash at before-cleanup, then " : "";
+      const run = prepare(ctx.root, crashAt ? "version-change-crash" : "version-change", ctx.fixture);
+      run.started = await start(ctx.app, run, REKEY);
+      if (run.started.outcome === "running") await run.started.instance.quit();
+      const first = snapshot(run);
+      if (first.journal?.phase !== "done" || !first.old) { lines.push({ ok: false, name: `${label}a re-key to start from`, detail: `${run.started.outcome}, journal ${JSON.stringify(first.journal?.phase)}, old ${first.old}` }); continue; }
+      if (crashAt) {
+        run.started = await start(next, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: crashAt });
+        const c = snapshot(run);
+        if (run.started.outcome !== "exited" || points(c.appLog).at(-1) !== crashAt) { lines.push({ ok: false, name: `crash at ${crashAt} on the next version`, detail: `${run.started.outcome}, last point ${points(c.appLog).at(-1)}` }); continue; }
+      }
+      run.started = await start(next, run, REKEY);
+      if (run.started.outcome !== "running") { lines.push({ ok: false, name: `${label}the next version reaches Chrome`, detail: run.started.outcome }); continue; }
+      const r = await settle(next, run, ctx.origin, ctx.profiles);
+      const s = snapshot(run);
+      const state = migratedState(run, ctx.manifest);
+      const wrong = compare(r, ctx.manifest, state.scanned);
+      const ok = !s.old && !s.stagingDir && s.key === first.key && !s.keyLog.slice(first.keyLog.length).some((l) => /add|update/.test(l)) && !state.wrong.length && !wrong.length;
+      lines.push({ ok, name: `${label}the first launch of another CFBundleVersion: .rekey-old removed, no keychain write, everything reads`, detail: `old ${s.old}, staging ${s.stagingDir}, keychain ${s.keyLog.slice(first.keyLog.length).join(", ")}; ${[...state.wrong, ...wrong].join("; ")}` });
+    }
+    return lines;
+  },
   async "off-mode"(ctx) {
     const run = prepare(ctx.root, "off-mode", ctx.fixture);
     run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-staged" });
@@ -1083,7 +1134,7 @@ async function notMigrated(ctx, run, what, decision, keys) {
   return [{ ok: decision.test(s.rekeyLog) && !state.wrong.length && (!s.journal || s.journal.phase === "abandoned"), name: `${what}: not migrating, data and item unchanged`, detail: `${run.started.outcome}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` }];
 }
 
-async function recoverAndCheck(ctx, run, what, extra = {}) {
+async function recoverAndCheck(ctx, run, what, extra = {}, opts = {}) {
   run.started = await start(ctx.app, run, { ...REKEY, ...extra });
   if (run.started.outcome === "running") {
     let r;
@@ -1094,7 +1145,7 @@ async function recoverAndCheck(ctx, run, what, extra = {}) {
       const wrong = compare(r, ctx.manifest, state.scanned);
       return [{ ok: !state.wrong.length && !wrong.length, name: `${what}, then a relaunch: fell back to A, everything reads`, detail: [...state.wrong, ...wrong].join("; ") }];
     }
-    const state = migratedState(run, ctx.manifest);
+    const state = migratedState(run, ctx.manifest, opts);
     const wrong = compare(r, ctx.manifest, state.scanned);
     return [{ ok: !state.wrong.length && !wrong.length, name: `${what}, then a relaunch: migrated, everything reads`, detail: [...state.wrong, ...wrong].join("; ") }];
   }

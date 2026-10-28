@@ -154,7 +154,14 @@ async function measure(native) {
           .then(() => act("w1", "mouse:moved:300,24")).then(() => settle(150)).then(() => act("w1", "mouse:moved:520,30")).then(() => settle(500))
           .then(() => { seen.overStrip = ${live}; seen.hit = null; return act("w1", "hit:520,30"); }).then((hit) => (seen.hit = hit))
           .then(() => act("w1", "mouse:moved:520,160")).then(() => settle(600)).then(() => (seen.away = ${live}))
-          .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
+          .then(() => globalThis.expo.modules.SolaraTopStrip.peekMonitors()).then((n) => (seen.afterHide = n))
+          .then(() => globalThis.acLayout.peek["strip:w1"].show()).then(() => settle(500)).then(() => globalThis.expo.modules.SolaraTopStrip.peekMonitors()).then((n) => (seen.whileOut = n))
+          .then(() => { st().toggleSidebar("w1"); return settle(700); }).then(() => globalThis.expo.modules.SolaraTopStrip.peekMonitors()).then((n) => (seen.afterStripBack = n))
+          .then(() => { seen.w2 = st().createWindow({ frame: [200, 160, 1200, 700] }); return settle(2500); })
+          .then(() => { st().toggleSidebar(seen.w2); return settle(600); }).then(() => globalThis.acLayout.peek["strip:" + seen.w2]?.show()).then(() => settle(500))
+          .then(() => globalThis.expo.modules.SolaraTopStrip.peekMonitors()).then((n) => (seen.secondOut = n))
+          .then(() => { st().closeWindow(seen.w2); return settle(1500); }).then(() => globalThis.expo.modules.SolaraTopStrip.peekMonitors()).then((n) => (seen.afterClose = n))
+          .then(() => seen);`);
     }
     const t2 = out.spans.filter(([, , k]) => k !== "SolaraUI.StripNewTabButton").at(-1);
     await run(`return act("w1", "click:${t2[0] + 70},21").then(() => settle(400));`);
@@ -291,6 +298,7 @@ try {
       assert.match(seen.hit, /^SolaraUI\.Strip/, `the pointer is over the native strip: ${seen.hit}`);
       assert.equal(seen.overStrip, true, "still out over the native strip");
       assert.equal(seen.away, false, "gone once the pointer left the panel");
+      assert.deepEqual([seen.afterHide, seen.whileOut, seen.afterStripBack, seen.secondOut, seen.afterClose], [0, 1, 0, 1, 0], "one pointer monitor while a peek is out, none after it hides, the strip comes back or its window closes");
     });
     for (const [look, , , bottom = 42] of LOOKS) {
       if (!rn.looks?.[look] || !native.looks?.[look]) continue;

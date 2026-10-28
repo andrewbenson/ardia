@@ -23,6 +23,10 @@ public class TopStripModule: Module {
       MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.groupSize(groupId) }
     }.runOnQueue(.main)
 
+    AsyncFunction("peekMonitors") { () -> Int in
+      MainActor.assumeIsolated { TopStripHost.peekMonitors }
+    }.runOnQueue(.main)
+
     AsyncFunction("traceGroup") { (windowId: String, groupId: String) in
       MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.traceGroup(groupId) }
     }.runOnQueue(.main)
@@ -153,7 +157,10 @@ final class TopStripHost {
   private let commits = TopStripCommits()
   private var markUri: String?
   private var pagerObserver: NSObjectProtocol?
-  private var peekMonitor: Any?
+  private var peekMonitor: Any? {
+    didSet { Self.peekMonitors += (peekMonitor != nil ? 1 : 0) - (oldValue != nil ? 1 : 0) }
+  }
+  static var peekMonitors = 0
   private var peekInside = true
 
   init(windowId: String, takesDrops: Bool = true) {

@@ -26,8 +26,9 @@ export function useIsCalendarTab(tabId: string | null): boolean {
 
 const JOINABLE_BEFORE_MS = 10 * 60_000;
 
-export function CalendarPreview({ tabId, windowId, anchor }: { tabId: string; windowId: string; anchor: Anchor }) {
-  const theme = useTheme();
+export type CalendarPreviewBody = "denied" | "signIn" | "loading" | "error" | "none" | "noMore" | "events";
+
+export function useCalendarPreviewState(tabId: string) {
   const now = useNow(15_000);
   const { access, events, loading, error, lastFetch } = useCalendar();
   const connected = access === "fullAccess" || access === "fixture";
@@ -38,64 +39,69 @@ export function CalendarPreview({ tabId, windowId, anchor }: { tabId: string; wi
   const allDay = upcoming.filter((e) => e.allDay);
   const timed = upcoming.filter((e) => !e.allDay);
   const date = new Date(now).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  const body: CalendarPreviewBody = !connected
+    ? access === "denied" || access === "restricted"
+      ? "denied"
+      : "signIn"
+    : !lastFetch && loading
+      ? "loading"
+      : error && !lastFetch
+        ? "error"
+        : !today.length
+          ? "none"
+          : !upcoming.length
+            ? "noMore"
+            : "events";
+  const state = {
+    tabId,
+    date,
+    connected,
+    loading,
+    product: PRODUCT,
+    body,
+    allDay: allDay.map((e) => ({ id: e.occurrence, title: e.title || "Untitled event", color: e.color })),
+    events: timed.map((e) => {
+      const link = joinLink(e);
+      const joinable = !!link && isMeeting(e) && now >= e.start - JOINABLE_BEFORE_MS && now < e.end;
+      return {
+        id: e.occurrence,
+        title: e.title || "Untitled event",
+        color: e.color,
+        time: timeRange(e),
+        when: e.start <= now ? "Now" : relativeTime(e.start, now),
+        running: e.start <= now,
+        past: e.end <= now,
+        joinTitle: joinable ? joinTitle(link!.provider) : null,
+        people: e.attendees.filter((a) => !a.me).map((a) => a.name || a.email),
+      };
+    }),
+  };
+  return { state, now, access, connected, loading, error, lastFetch, today, upcoming, allDay, timed, date };
+}
+
+export function calendarPreviewAction(tabId: string, windowId: string, timed: CalendarEvent[], e: { kind: string; id?: unknown }) {
+  if (e.kind === "activate") {
+    dismissHover();
+    useBrowser.getState().activate(tabId);
+  } else if (e.kind === "join") {
+    const event = timed.find((x) => x.occurrence === e.id);
+    if (event) {
+      dismissHover();
+      joinEvent(event, false, windowId);
+    }
+  } else if (e.kind === "refresh") void refreshCalendar();
+  else if (e.kind === "connect") void connectCalendar();
+}
+
+export function CalendarPreview({ tabId, windowId, anchor }: { tabId: string; windowId: string; anchor: Anchor }) {
+  const theme = useTheme();
+  const { state: preview, now, access, connected, loading, error, lastFetch, today, upcoming, allDay, timed, date } = useCalendarPreviewState(tabId);
 
   if (nativePagesAvailable()) {
-    const state = JSON.stringify({
-      card: "calendarPreview",
-      dark: !!theme.dark,
-      nowColor: colorsNow(!!theme.dark),
-      date,
-      connected,
-      loading,
-      product: PRODUCT,
-      body: !connected
-        ? access === "denied" || access === "restricted"
-          ? "denied"
-          : "signIn"
-        : !lastFetch && loading
-          ? "loading"
-          : error && !lastFetch
-            ? "error"
-            : !today.length
-              ? "none"
-              : !upcoming.length
-                ? "noMore"
-                : "events",
-      allDay: allDay.map((e) => ({ id: e.occurrence, title: e.title || "Untitled event", color: e.color })),
-      events: timed.map((e) => {
-        const link = joinLink(e);
-        const joinable = !!link && isMeeting(e) && now >= e.start - JOINABLE_BEFORE_MS && now < e.end;
-        return {
-          id: e.occurrence,
-          title: e.title || "Untitled event",
-          color: e.color,
-          time: timeRange(e),
-          when: e.start <= now ? "Now" : relativeTime(e.start, now),
-          running: e.start <= now,
-          past: e.end <= now,
-          joinTitle: joinable ? joinTitle(link!.provider) : null,
-          people: e.attendees.filter((a) => !a.me).map((a) => a.name || a.email),
-        };
-      }),
-    });
+    const state = JSON.stringify({ card: "calendarPreview", dark: !!theme.dark, nowColor: colorsNow(!!theme.dark), ...preview });
     return (
       <HoverSurface anchor={anchor} width={300}>
-        <NativeCard
-          state={state}
-          onEvent={(e) => {
-            if (e.kind === "activate") {
-              dismissHover();
-              useBrowser.getState().activate(tabId);
-            } else if (e.kind === "join") {
-              const event = timed.find((x) => x.occurrence === e.id);
-              if (event) {
-                dismissHover();
-                joinEvent(event, false, windowId);
-              }
-            } else if (e.kind === "refresh") void refreshCalendar();
-            else if (e.kind === "connect") void connectCalendar();
-          }}
-        />
+        <NativeCard state={state} onEvent={(e) => calendarPreviewAction(tabId, windowId, timed, e)} />
       </HoverSurface>
     );
   }

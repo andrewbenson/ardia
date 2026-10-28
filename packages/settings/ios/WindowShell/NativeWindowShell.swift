@@ -32,6 +32,7 @@ enum NativeWindowShell {
     guard enabled, !installed, let make = WindowHost.makeContentView else { return }
     installed = true
     NativeSplitChrome.start()
+    NativePeek.start()
     if let store = NativeStoreHandle.store {
       let sink = commits
       storeListener = store.subscribe { commit in
@@ -119,6 +120,7 @@ final class ShellHost {
   }
 
   func stop() {
+    NativePeek.windowEnded(shell.windowId)
     if let panes { NativePaneRoots.end(shell.windowId, ifHost: panes) }
     panes = nil
     for observer in observers { NotificationCenter.default.removeObserver(observer) }
@@ -150,10 +152,14 @@ final class ShellHost {
   func setBackdrop(_ json: String) {
     guard json != backdropJSON else { return }
     backdropJSON = json
-    guard let data = json.data(using: .utf8), let props = (try? JSONSerialization.jsonObject(with: data)) as? NSDictionary,
-      let view = EarlyBackdrop.make(props)
-    else { return shell.mount(.backdrop, nil) }
+    defer { NativePeek.backdropChanged(shell.windowId) }
+    guard let view = makeBackdrop() else { return shell.mount(.backdrop, nil) }
     shell.mount(.backdrop, view)
+  }
+
+  func makeBackdrop() -> NSView? {
+    guard let data = backdropJSON?.data(using: .utf8), let props = (try? JSONSerialization.jsonObject(with: data)) as? NSDictionary else { return nil }
+    return EarlyBackdrop.make(props)
   }
 
   func describe() -> [String: Any] {
@@ -174,6 +180,7 @@ final class ShellHost {
       "split": NativeSplitChrome.sample(shell.windowId) ?? NSNull(),
       "paneRoots": NativePaneRoots.sample(shell.windowId) ?? NSNull(),
       "reactOnTop": shell.reactOnTop,
+      "peek": NativePeek.sample(shell.windowId) ?? NSNull(),
     ]
   }
 }
@@ -337,6 +344,17 @@ public class WindowShellModule: Module {
       #else
       return [:]
       #endif
+    }.runOnQueue(.main)
+
+    Function("peekNative") { (windowId: String) -> Bool in NativePeek.enabled && NativeWindowShell.active(windowId) }
+
+    AsyncFunction("peekClose") { (windowId: String) -> Bool in
+      MainActor.assumeIsolated { NativePeek.close(windowId) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("peekExpand") { (windowId: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated { NativePeek.expand(windowId) { reply.resolve(true) } }
     }.runOnQueue(.main)
 
     AsyncFunction("devReactBlockers") { (windowId: String, step: Double) -> String in

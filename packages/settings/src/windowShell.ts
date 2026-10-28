@@ -5,6 +5,9 @@ type WindowShellModule = {
   pagesPool?(): boolean;
   paneRoots?(windowId: string): boolean;
   mainOnTop?(windowId: string): boolean;
+  peekNative?(windowId: string): boolean;
+  peekClose?(windowId: string): Promise<boolean>;
+  peekExpand?(windowId: string): Promise<boolean>;
   setBackdrop(windowId: string, json: string): Promise<void>;
   describe(windowId: string): Promise<string>;
 };
@@ -41,6 +44,22 @@ export function windowMainOnTop(windowId: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function windowPeekNative(windowId: string): boolean {
+  try {
+    return native?.peekNative?.(windowId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function closeWindowPeek(windowId: string): Promise<boolean> {
+  return native?.peekClose?.(windowId) ?? Promise.resolve(false);
+}
+
+export function expandWindowPeek(windowId: string): Promise<boolean> {
+  return native?.peekExpand?.(windowId) ?? Promise.resolve(false);
 }
 
 export function setWindowShellBackdrop(windowId: string, json: string) {

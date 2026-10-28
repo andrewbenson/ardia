@@ -44,6 +44,8 @@ const CHECKS = {
   "unlisted-v10": "a v10-looking title in a database the re-key doesn't list: logged, no block, migrated",
   "undo": "ARDIA_TEST_REKEY_FAIL_AFTER_KEY=1: a failure after the key is undone to A (mock_password item, journal abandoned), data intact and readable",
   "undo-crash": "every after-undo point the undo run logs, crashed, then a relaunch: undone to A or the abort message, dir intact",
+  "sync-reads": "after the re-key, sync's own password read (acSync.native.readPasswords) decrypts every planted password with the key file's bytes",
+  "sync-pause": "after the re-key, the key file replaced by another key (a reset or Start Over), sync on with ARDIA_SYNC_REDESIGN=1: sync's read is nil, it logs the pause, no login or note is deleted",
   "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
 };
 
@@ -167,6 +169,33 @@ function* leaves(value, path = "") {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     for (const [k, v] of Object.entries(value)) yield* leaves(v, path ? `${path}.${k}` : k);
   } else yield [path, value];
+}
+
+function plainRows(file) {
+  const db = openRead(file);
+  try {
+    const out = {};
+    for (const { name: table } of db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
+      out[table] = db.prepare(`SELECT * FROM ${q(table)} ORDER BY rowid`).all().map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => {
+        const b = v instanceof Uint8Array ? Buffer.from(v) : null;
+        return [k, b ? (b.subarray(0, 3).toString("latin1") === "v10" ? "<v10>" : b.toString("base64")) : typeof v === "bigint" ? String(v) : v];
+      })));
+    }
+    return out;
+  } finally {
+    db.close();
+  }
+}
+
+function loginDataChanges(template, udd, dirs) {
+  const wrong = [];
+  for (const dir of dirs) {
+    const before = plainRows(join(template, "Chromium", dir, "Login Data"));
+    const after = plainRows(join(udd, dir, "Login Data"));
+    for (const table of new Set([...Object.keys(before), ...Object.keys(after)]))
+      if (JSON.stringify(before[table]) !== JSON.stringify(after[table])) wrong.push(`${dir}/Login Data ${table}: ${JSON.stringify(before[table]).slice(0, 200)} → ${JSON.stringify(after[table]).slice(0, 200)}`);
+  }
+  return wrong;
 }
 
 function trackedPrefs(userDataDir, dirs) {
@@ -662,6 +691,8 @@ async function migrateAndCheck(ctx, run, env, opts = {}) {
   }
   const state = migratedState(run, ctx.manifest, opts);
   lines.push({ ok: !state.wrong.length, name: "migrated: key, journal, file keychain, nothing mock-keyed, counts under the new key", detail: state.wrong.join("; ") });
+  const rows = loginDataChanges(join(ctx.fixture, "template"), run.udd, ctx.manifest.profiles.map((p) => p.dir));
+  lines.push({ ok: !rows.length, name: "Login Data unchanged but for the ciphertexts: meta rows, every login's dates, every other table", detail: rows.join("; ") });
   const wrong = compare(readBackResult, ctx.manifest, state.scanned);
   lines.push({ ok: !wrong.length, name: "every planted value reads back through Chrome (notes and IBANs under the new key)", detail: wrong.join("; ") });
   run.started = await start(ctx.app, run, env);
@@ -834,12 +865,73 @@ const CASES = {
     }
     return lines;
   },
+  async "sync-reads"(ctx) {
+    const run = prepare(ctx.root, "sync-reads", ctx.fixture);
+    run.started = await start(ctx.app, run, REKEY);
+    if (run.started.outcome !== "running") return [{ ok: false, name: "the migrated launch reaches Chrome", detail: run.started.outcome }];
+    const got = await syncRead(ctx, run);
+    await run.started.instance.quit();
+    const s = snapshot(run);
+    const want = Object.fromEntries(Object.entries(ctx.manifest.want).map(([n, w]) => [n, w.passwords.map((p) => `${p.username}=${p.password}`).sort()]));
+    return [{ ok: s.journal?.phase === "done" && JSON.stringify(got) === JSON.stringify(want), name: "after the re-key sync decrypts every password with the key file's bytes (the same secret Chrome's FileKeychain uses)", detail: `journal ${s.journal?.phase}; got ${JSON.stringify(got)}` }];
+  },
+  async "sync-pause"(ctx) {
+    const run = prepare(ctx.root, "sync-pause", ctx.fixture);
+    run.started = await start(ctx.app, run, REKEY);
+    if (run.started.outcome !== "running") return [{ ok: false, name: "the migrated launch reaches Chrome", detail: run.started.outcome }];
+    await run.started.instance.quit();
+    const counts = () => Object.fromEntries(ctx.manifest.profiles.map((p) => {
+      const db = openRead(join(run.udd, p.dir, "Login Data"));
+      try { return [p.dir, [db.prepare("SELECT count(*) AS n FROM logins").get().n, db.prepare("SELECT count(*) AS n FROM password_notes").get().n].join("/")]; } finally { db.close(); }
+    }));
+    const before = counts();
+    seedKey(run, randomBytes(16).toString("base64"));
+    const folder = join(run.dir, "folder");
+    mkdirSync(folder);
+    run.started = await start(ctx.app, run, REKEY);
+    if (run.started.outcome !== "running") return [{ ok: false, name: "the launch over a replaced key reaches Chrome", detail: run.started.outcome }];
+    let read = null;
+    try { read = await syncRead(ctx, run); } finally { await run.started.instance.quit(); }
+    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder });
+    if (run.started.outcome !== "running") return [{ ok: false, name: "the sealed launch over a replaced key reaches Chrome", detail: run.started.outcome }];
+    const app = run.started.instance;
+    let state = null;
+    try {
+      await waitWindow(app);
+      const on = await app.eval(`return acSync.turnOnSync(${JSON.stringify(folder)})`, { timeout: 90000 });
+      for (let i = 0; i < 3; i++) { await app.eval("return acSync.syncNow()", { timeout: 90000 }); await sleep(1000); }
+      state = { on, ...(await app.eval("const u = acSync.useSync.getState(); return { status: u.status, error: u.error, passwordsError: u.passwordsError ?? null, pending: u.pending };", { timeout: 20000 })) };
+    } finally {
+      await app.quit();
+    }
+    const s = snapshot(run);
+    const after = counts();
+    const paused = /saved passwords didn't decrypt; not syncing passwords now/.test(s.appLog);
+    const sealedFiles = readdirSync(folder, { recursive: true }).map(String);
+    return [
+      { ok: Object.values(read ?? {}).every((v) => v === null), name: "with Chrome's key replaced (a reset or Start Over), sync's read of every profile is nil", detail: JSON.stringify(read) },
+      { ok: paused, name: "sync logs the pause and doesn't sync passwords", detail: JSON.stringify(state) },
+      { ok: JSON.stringify(before) === JSON.stringify(after), name: "no login and no note deleted from Login Data", detail: `${JSON.stringify(before)} → ${JSON.stringify(after)}` },
+      { ok: s.journal?.phase === "done" && !/migrating|undoing/.test(s.rekeyLog.split("\n").slice(-3).join(" ")), name: "the re-key leaves a replaced item alone", detail: `${s.journal?.phase}; files ${sealedFiles.length}` },
+    ];
+  },
   async "a-then-d"(ctx) {
     const run = prepare(ctx.root, "a-then-d", ctx.fixture);
     seedKey(run, MOCK);
     return migrateAndCheck(ctx, run, REKEY, { fromA: true });
   },
 };
+
+async function syncRead(ctx, run) {
+  const app = run.started.instance;
+  await waitWindow(app);
+  const out = {};
+  for (const p of ctx.manifest.profiles) {
+    const list = await app.eval(`return acSync.native.readPasswords(${JSON.stringify(p.id === "default" ? "" : p.id)})`, { timeout: 30000 });
+    out[p.name] = Array.isArray(list) ? list.map((l) => `${l.username}=${l.password}`).sort() : null;
+  }
+  return out;
+}
 
 async function notMigrated(ctx, run, what, decision, keys) {
   if (run.started.outcome === "running") await run.started.instance.quit();

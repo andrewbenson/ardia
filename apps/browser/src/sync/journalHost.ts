@@ -1,7 +1,8 @@
 import { readDocument, writeDocument } from "@ardia/shell";
 import type { ScopeState } from "@ardia/sync";
-import { openJournal, type EditJournal } from "./editJournal";
-import { nativeStoreActive } from "../store/nativeStore";
+import { GEN_DOC, openJournal, type EditJournal } from "./editJournal";
+import { nativeSyncAnchor, nativeSyncAnchorSupported, setNativeSyncAnchor } from "@ardia/store";
+import { nativeOwnsWorkspace, nativeStoreActive } from "../store/nativeStore";
 import { syncRedesign } from "./redesignSwitch";
 
 const SESSION_DOC = "session.json";
@@ -19,7 +20,47 @@ export function onJournalChange(listener: () => void) {
 
 function changed() {
   version++;
+  writeNativeAnchor();
   for (const listener of listeners) listener();
+}
+
+const NATIVE_SETTINGS_KEYS = ["set:", "devmode:"];
+const anchoredNatively = () => nativeStoreActive() && nativeSyncAnchorSupported();
+const inNativeStore = (key: string) => anchoredNatively() && (nativeOwnsWorkspace() || NATIVE_SETTINGS_KEYS.some((p) => key.startsWith(p)));
+
+type Anchor = { journalG?: number; journalT?: number; everSeen?: SavedSeen };
+
+function parseAnchor(value: unknown): Anchor | null {
+  try {
+    const anchor = typeof value === "string" ? JSON.parse(value) : value;
+    return anchor && typeof anchor === "object" ? (anchor as Anchor) : null;
+  } catch {
+    return null;
+  }
+}
+
+const savedNativeAnchor = () => (anchoredNatively() ? parseAnchor(nativeSyncAnchor()) : null);
+let nativeAnchorText: string | null = null;
+
+function anchorFields(j: EditJournal | null, seen: SavedSeen): Anchor {
+  return {
+    ...(j?.g ? { journalG: j.g } : {}),
+    ...(j?.lastInStepT ? { journalT: j.lastInStepT } : {}),
+    ...(Object.keys(seen.scopes).length ? { everSeen: seen } : {}),
+  };
+}
+
+function writeJournalDocument(name: string, text: string) {
+  writeDocument(name, text);
+  if (journal && name === GEN_DOC) writeNativeAnchor();
+}
+
+function writeNativeAnchor() {
+  if (!syncRedesign.on || !anchoredNatively()) return;
+  seenKeys();
+  const text = JSON.stringify(anchorFields(journal, compactSeen(inNativeStore)));
+  if (text === nativeAnchorText) return;
+  if (setNativeSyncAnchor(text)) nativeAnchorText = text;
 }
 let everSeen: Record<string, Record<string, [string, number]>> | null = null;
 
@@ -31,44 +72,53 @@ function savedSession(): { journalG?: unknown; everSeen?: unknown } | null {
   }
 }
 
+const numberOr0 = (value: unknown) => (typeof value === "number" ? value : 0);
+
 function storeG(): number {
-  const session = savedSession();
-  return typeof session?.journalG === "number" ? session.journalG : 0;
+  return Math.max(numberOr0(savedSession()?.journalG), numberOr0(savedNativeAnchor()?.journalG));
 }
 
 function storeT(): number {
-  const session = savedSession() as { journalT?: unknown } | null;
-  return typeof session?.journalT === "number" ? session.journalT : 0;
+  const session = numberOr0((savedSession() as { journalT?: unknown } | null)?.journalT);
+  if (!anchoredNatively()) return session;
+  const native = numberOr0(savedNativeAnchor()?.journalT);
+  return nativeOwnsWorkspace() ? native : Math.min(session, native);
 }
 
 type SavedSeen = { devices: string[]; scopes: Record<string, Record<string, [number, number]>> };
 
+function mergeSeen(into: Record<string, Record<string, [string, number]>>, saved: Partial<SavedSeen> | undefined, keep: (key: string) => boolean) {
+  if (!saved || !Array.isArray(saved.devices) || !saved.scopes || typeof saved.scopes !== "object") return;
+  for (const [scope, keys] of Object.entries(saved.scopes)) {
+    const out = (into[scope] ??= {});
+    for (const [key, [device, seq]] of Object.entries(keys)) if (keep(key) && saved.devices[device] !== undefined) out[key] = [saved.devices[device]!, seq];
+  }
+}
+
 function seenKeys() {
   if (everSeen) return everSeen;
   everSeen = {};
-  const saved = savedSession()?.everSeen as Partial<SavedSeen> | undefined;
-  if (saved && Array.isArray(saved.devices) && saved.scopes && typeof saved.scopes === "object") {
-    for (const [scope, keys] of Object.entries(saved.scopes)) {
-      const out: Record<string, [string, number]> = {};
-      for (const [key, [device, seq]] of Object.entries(keys)) if (saved.devices[device] !== undefined) out[key] = [saved.devices[device]!, seq];
-      everSeen[scope] = out;
-    }
-  }
+  const native = savedNativeAnchor();
+  const nativeHasAnchor = !!native;
+  mergeSeen(everSeen, savedSession()?.everSeen as Partial<SavedSeen> | undefined, (key) => !nativeHasAnchor || !inNativeStore(key));
+  mergeSeen(everSeen, native?.everSeen, inNativeStore);
+  if (anchoredNatively() && !nativeHasAnchor) queueMicrotask(writeNativeAnchor);
   return everSeen;
 }
 
-function compactSeen(): SavedSeen {
+function compactSeen(keep: (key: string) => boolean = () => true): SavedSeen {
   const devices: string[] = [];
   const index = new Map<string, number>();
   const scopes: SavedSeen["scopes"] = {};
   for (const [scope, keys] of Object.entries(everSeen ?? {})) {
     const out: Record<string, [number, number]> = {};
     for (const [key, [device, seq]] of Object.entries(keys)) {
+      if (!keep(key)) continue;
       let i = index.get(device);
       if (i === undefined) index.set(device, (i = devices.push(device) - 1));
       out[key] = [i, seq];
     }
-    scopes[scope] = out;
+    if (Object.keys(out).length) scopes[scope] = out;
   }
   return { devices, scopes };
 }
@@ -115,8 +165,8 @@ export function forgetSeenScope(scope: string) {
 export function editJournal(): EditJournal | null {
   if (!syncRedesign.on) return null;
   if (!journal) {
-    journal = openJournal({ read: readDocument, write: writeDocument }, { storeG: storeG(), storeT: storeT() });
-    if (journal.lost && nativeStoreActive()) journal.fallback = "nothing";
+    journal = openJournal({ read: readDocument, write: writeJournalDocument }, { storeG: storeG(), storeT: storeT() });
+    if (journal.lost && nativeStoreActive() && !savedNativeAnchor()) journal.fallback = "nothing";
   }
   return journal;
 }
@@ -124,17 +174,14 @@ export function editJournal(): EditJournal | null {
 export function forgetEditJournal() {
   journal = null;
   everSeen = null;
+  nativeAnchorText = null;
 }
 
-export function journalAnchor(): { journalG?: number; journalT?: number; everSeen?: SavedSeen } {
+export function journalAnchor(): Anchor {
   if (!syncRedesign.on) return {};
   const j = editJournal()!;
-  const seen = seenKeys();
-  return {
-    ...(j.g ? { journalG: j.g } : {}),
-    ...(j.lastInStepT ? { journalT: j.lastInStepT } : {}),
-    ...(Object.keys(seen).length ? { everSeen: compactSeen() } : {}),
-  };
+  seenKeys();
+  return anchorFields(j, compactSeen((key) => !inNativeStore(key)));
 }
 
 export function noteInStep(scopes: Record<string, ScopeState>, now: number) {

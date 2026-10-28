@@ -27,6 +27,8 @@ public final class WindowShellView: NSView {
   public let card = FlippedContainerView()
   public let overlay = ShellOverlayView()
   public let hiddenPages = FlippedContainerView()
+  public let cardPage = FlippedContainerView()
+  public var cardPageFrame: CGRect? { didSet { if cardPageFrame != oldValue { placeCardPage() } } }
   private var mounted: [Slot: NSView] = [:]
   private var pointerLayer: ObjectIdentifier?
 
@@ -43,6 +45,8 @@ public final class WindowShellView: NSView {
     hiddenPages.autoresizingMask = []
     addSubview(hiddenPages)
     addTrackingArea(NSTrackingArea(rect: .zero, options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect], owner: self, userInfo: nil))
+    cardPage.autoresizingMask = []
+    card.addSubview(cardPage)
     mount(.card, card)
     mount(.overlay, overlay)
     overlay.onChildrenChanged = { [weak self] in self?.coverChanged() }
@@ -111,6 +115,7 @@ public final class WindowShellView: NSView {
 
   public override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
+    if window == nil { TabSlots.shared.remove(.card(windowId), container: cardPage) } else { TabSlots.shared.set(.card(windowId), container: cardPage) }
     onWindow?(window)
   }
 
@@ -159,10 +164,17 @@ public final class WindowShellView: NSView {
     frames = next
     for (slot, view) in mounted { place(slot, view) }
     if hiddenPages.frame != frames.card { hiddenPages.frame = frames.card }
+    placeCardPage()
     if changed {
       coverChanged()
       onFrames?(next)
     }
+  }
+
+  private func placeCardPage() {
+    let top = min(ShellMetrics.toolbarHeight, frames.card.height)
+    let frame = cardPageFrame ?? CGRect(x: 0, y: top, width: frames.card.width, height: frames.card.height - top)
+    if cardPage.frame != frame { cardPage.frame = frame }
   }
 
   private func place(_ slot: Slot, _ view: NSView) {

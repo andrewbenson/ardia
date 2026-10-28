@@ -4,6 +4,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol ArdiaCoreParkedPageHolder <ArdiaCoreTabDelegate>
 @property(nonatomic, readonly) BOOL closedByChrome;
+@property(nonatomic, readonly) BOOL closedWithWindow;
 @end
 
 @interface ArdiaCoreTabParking : NSObject
@@ -14,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)tookTransfer:(NSString *)key;
 + (void)releaseTransfer:(NSString *)key;
 + (BOOL)launchWasClosed:(NSString *)key;
++ (BOOL)launchClosedWithWindow:(NSString *)key;
 + (void)rehomeFromWindow:(ArdiaCoreWindowController *)closing;
 
 + (void)keepOffscreen:(ArdiaCoreTab *)tab holder:(id<ArdiaCoreParkedPageHolder>)holder;

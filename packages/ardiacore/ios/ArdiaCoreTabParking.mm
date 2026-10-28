@@ -29,6 +29,11 @@ NSMutableSet<NSString *> *ClosedLaunch() {
   return keys;
 }
 
+NSMutableSet<NSString *> *ClosedLaunchWithWindow() {
+  static NSMutableSet<NSString *> *keys = [NSMutableSet set];
+  return keys;
+}
+
 ArdiaCoreTab *gLaunchTab;
 NSString *gLaunchKey;
 NSString *gLaunchURL;
@@ -111,6 +116,7 @@ void CloseLinkTabs() {
 
 + (void)releaseTransfer:(NSString *)key {
   [ClosedLaunch() removeObject:key];
+  [ClosedLaunchWithWindow() removeObject:key];
   ArdiaCoreTab *tab = Parked()[key];
   if (!tab) return;
   [Parked() removeObjectForKey:key];
@@ -123,8 +129,13 @@ void CloseLinkTabs() {
   if (held && (tab.closed || held.closedByChrome)) {
     [Parked() removeObjectForKey:key];
     [ClosedLaunch() addObject:key];
+    if (held.closedWithWindow) [ClosedLaunchWithWindow() addObject:key];
   }
   return [ClosedLaunch() containsObject:key];
+}
+
++ (BOOL)launchClosedWithWindow:(NSString *)key {
+  return [ClosedLaunchWithWindow() containsObject:key];
 }
 
 + (void)rehomeFromWindow:(ArdiaCoreWindowController *)closing {

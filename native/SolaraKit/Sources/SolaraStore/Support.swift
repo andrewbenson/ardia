@@ -208,3 +208,9 @@ extension Session {
     return !tab.url.isEmpty || tab.navigation != nil ? tabEngine(s, tab.id) : defaultEngine(s)
   }
 }
+
+public extension Store {
+  func pageEngine(_ tabId: String, in s: BrowserState) -> String {
+    Session(state: s, memory: StoreMemory(), env: env, config: config, now: 0).tabEngine(s, tabId)
+  }
+}

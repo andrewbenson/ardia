@@ -587,6 +587,7 @@ static void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId,
 @property (nonatomic, copy) NSString *url;
 @property (nonatomic, copy) NSString *profile;
 @property (nonatomic, readonly) BOOL closedByChrome;
+@property (nonatomic, readonly) BOOL closedWithWindow;
 - (void)replayTo:(ArdiaCoreWebView *)view tab:(ArdiaCoreTab *)tab;
 @end
 
@@ -708,6 +709,7 @@ static BOOL HeldSelector(SEL selector) {
 
 - (void)tabWillClose:(ArdiaCoreTab *)tab {
   _closedByChrome = YES;
+  _closedWithWindow = [tab respondsToSelector:@selector(closingWithWindow)] && tab.closingWithWindow;
   [ArdiaCoreEarlyWindow dropPage:tab];
 }
 
@@ -1282,10 +1284,11 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   if ([ArdiaCoreTabParking launchWasClosed:_transferKey]) {
     if (!_launchCloseSent) {
       _launchCloseSent = YES;
+      const BOOL withWindow = [ArdiaCoreTabParking launchClosedWithWindow:_transferKey];
       __weak ArdiaCoreWebView *weakSelf = self;
       dispatch_async(dispatch_get_main_queue(), ^{
         ArdiaCoreWebView *view = weakSelf;
-        if (view && !view->_tab) [view emit:@"windowClose" payload:@{}];
+        if (view && !view->_tab) [view emit:@"windowClose" payload:withWindow ? @{@"withWindow" : @YES} : @{}];
       });
     }
     return YES;

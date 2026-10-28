@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
+import { tabPoolAvailable } from "./tabPool";
 
 type WindowShellModule = {
   active(windowId: string): boolean;
@@ -24,7 +25,7 @@ export function windowShellActive(windowId: string): boolean {
 
 export function windowPagesPoolActive(): boolean {
   try {
-    return native?.pagesPool?.() ?? false;
+    return (native?.pagesPool?.() ?? false) && tabPoolAvailable();
   } catch {
     return false;
   }

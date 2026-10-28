@@ -191,3 +191,122 @@ public enum PageCalls {
     resolve(nil)
   }
 }
+
+public struct PooledPageSpec: Equatable {
+  public var engine: String
+  public var profile: String
+  public var url: String?
+  public var adoptId: String?
+  public var temporarySource: String?
+
+  public init(engine: String, profile: String, url: String?, adoptId: String?, temporarySource: String?) {
+    self.engine = engine
+    self.profile = profile
+    self.url = url
+    self.adoptId = adoptId
+    self.temporarySource = temporarySource
+  }
+}
+
+@MainActor
+public final class PooledPage {
+  public let tabId: String
+  public let spec: PooledPageSpec
+  public let view: NSView
+  private let events: PooledPageEvents
+  private var retired = false
+
+  public init(tabId: String, spec: PooledPageSpec, onEvent: @escaping @MainActor (String, [String: Any]) -> Void) {
+    self.tabId = tabId
+    self.spec = spec
+    events = PooledPageEvents(onEvent)
+    if spec.engine == "webkit" {
+      let tab = WebKitTab(frame: .zero)
+      tab.profile = spec.profile
+      tab.initialURL = spec.url
+      tab.adoptId = spec.adoptId
+      tab.transferKey = tabId
+      view = tab
+    } else {
+      let web = ArdiaCoreWebView(frame: .zero)
+      web.owned = true
+      web.profile = spec.profile
+      web.initialURL = spec.url
+      web.adoptId = spec.adoptId
+      web.transferKey = tabId
+      web.temporary = spec.temporarySource != nil
+      web.temporarySource = spec.temporarySource
+      view = web
+    }
+    (view as? ArdiaCoreWebView)?.delegate = events
+    if let tab = view as? WebKitTab {
+      tab.delegate = events
+      tab.start()
+    }
+  }
+
+  public func setShown(_ shown: Bool, warm: Bool, neighbour: Bool) {
+    if let web = view as? ArdiaCoreWebView {
+      if web.warm != warm { web.warm = warm }
+      if web.neighbour != neighbour { web.neighbour = neighbour }
+      if web.visible != shown { web.visible = shown }
+    } else if let tab = view as? WebKitTab {
+      if tab.warm != warm { tab.warm = warm }
+      if tab.visible != shown { tab.visible = shown }
+    }
+  }
+
+  public func apply(_ props: [String: Any]) {
+    guard let web = view as? ArdiaCoreWebView else { return }
+    for (key, value) in props {
+      let given: Any? = value is NSNull ? nil : value
+      switch key {
+      case "pageColor": web.pageColor = given as? String
+      case "contentsBackgroundColor": web.contentsBackgroundColor = (given as? String).flatMap(Self.color)
+      case "autoPictureInPicture": web.autoPictureInPicture = (given as? NSNumber)?.boolValue ?? false
+      case "shownUrl": web.shownURL = given as? String
+      default: break
+      }
+    }
+  }
+
+  public func retire() {
+    guard !retired else { return }
+    retired = true
+    if let web = view as? ArdiaCoreWebView {
+      web.delegate = nil
+      web.closeBrowser()
+    } else if let tab = view as? WebKitTab {
+      tab.delegate = nil
+      tab.close()
+    }
+    view.removeFromSuperview()
+  }
+
+  static func color(_ hex: String) -> NSColor? {
+    var digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+    if digits.count == 3 { digits = digits.map { "\($0)\($0)" }.joined() }
+    guard digits.count == 6 || digits.count == 8, let value = UInt64(digits, radix: 16) else { return nil }
+    let rgba = digits.count == 6 ? value << 8 | 0xff : value
+    let channel = { (shift: UInt64) in CGFloat((rgba >> shift) & 0xff) / 255 }
+    return NSColor(srgbRed: channel(24), green: channel(16), blue: channel(8), alpha: channel(0))
+  }
+}
+
+final class PooledPageEvents: NSObject, ArdiaCoreWebViewDelegate, WebKitTabDelegate {
+  private let onEvent: @MainActor (String, [String: Any]) -> Void
+
+  init(_ onEvent: @escaping @MainActor (String, [String: Any]) -> Void) {
+    self.onEvent = onEvent
+  }
+
+  func webView(_ view: ArdiaCoreWebView, event name: String, payload: [String: Any]) {
+    guard let prop = PageEvents.props[name] else { return }
+    MainActor.assumeIsolated { onEvent(prop, payload) }
+  }
+
+  func webKitTab(_ tab: WebKitTab, event name: String, payload: [String: Any]) {
+    guard let prop = PageEvents.props[name] else { return }
+    MainActor.assumeIsolated { onEvent(prop, payload) }
+  }
+}

@@ -20,14 +20,21 @@ final class NativePromptView: ExpoView {
   let onPromptHeight = EventDispatcher()
   let body = PromptBodyView(frame: .zero)
   private var json = ""
+  private lazy var host = PromptPopoverHost(owner: self, body: body) { [weak self] in self?.onPromptEvent(["kind": "dismiss"]) }
 
   override var isFlipped: Bool { true }
 
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    body.autoresizingMask = [.width, .height]
-    body.frame = bounds
-    body.onHeight = { [weak self] h in self?.onPromptHeight(["height": h]) }
+    body.onHeight = { [weak self] h in
+      guard let self else { return }
+      if !self.host.report(h) { self.onPromptHeight(["height": h]) }
+    }
     body.onEvent = { [weak self] e in
       switch e {
       case .button(let id): self?.onPromptEvent(["kind": "button", "id": id])
@@ -36,13 +43,59 @@ final class NativePromptView: ExpoView {
       case .close: self?.onPromptEvent(["kind": "close"])
       }
     }
-    addSubview(body)
   }
 
   func setState(_ next: String) {
     guard next != json, let state = PromptState.decode(next) else { return }
     json = next
+    host.mount(next)
     body.update(state)
+  }
+}
+
+@MainActor
+final class PromptPopoverHost {
+  private weak var owner: NSView?
+  private let body: NSView
+  private let dismiss: () -> Void
+  private var popover: PopoverView?
+  private var mounted = false
+  private var bodyHeight: CGFloat = 0
+
+  init(owner: NSView, body: NSView, dismiss: @escaping () -> Void) {
+    self.owner = owner
+    self.body = body
+    self.dismiss = dismiss
+  }
+
+  func mount(_ json: String) {
+    guard let owner, let data = json.data(using: .utf8) else { return }
+    let placement = PanelPopover.placement(data)
+    if !mounted {
+      mounted = true
+      if placement != nil {
+        let made = PopoverView(body: body)
+        made.autoresizingMask = [.width, .height]
+        made.frame = owner.bounds
+        made.onDismiss = { [weak self] in self?.dismiss() }
+        owner.addSubview(made)
+        popover = made
+      } else {
+        body.autoresizingMask = [.width, .height]
+        body.frame = owner.bounds
+        owner.addSubview(body)
+      }
+    }
+    guard let popover, let placement else { return }
+    popover.set(placement: placement, dark: PanelPopover.dark(data))
+    if bodyHeight > 0 { popover.set(bodyHeight: bodyHeight) }
+  }
+
+  func report(_ height: CGFloat) -> Bool {
+    bodyHeight = height
+    guard let popover else { return false }
+    DispatchQueue.main.async { popover.set(bodyHeight: height) }
+    return true
   }
 }
 
@@ -63,14 +116,21 @@ final class NativeDeviceChooserView: ExpoView {
   let onChooserHeight = EventDispatcher()
   let body = DeviceChooserView(frame: .zero)
   private var json = ""
+  private lazy var host = PromptPopoverHost(owner: self, body: body) { [weak self] in self?.onChooserEvent(["kind": "dismiss"]) }
 
   override var isFlipped: Bool { true }
 
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    body.autoresizingMask = [.width, .height]
-    body.frame = bounds
-    body.onHeight = { [weak self] h in self?.onChooserHeight(["height": h]) }
+    body.onHeight = { [weak self] h in
+      guard let self else { return }
+      if !self.host.report(h) { self.onChooserHeight(["height": h]) }
+    }
     body.onEvent = { [weak self] e in
       switch e {
       case .select(let i): self?.onChooserEvent(["kind": "select", "index": i])
@@ -80,12 +140,12 @@ final class NativeDeviceChooserView: ExpoView {
       case .openSettings: self?.onChooserEvent(["kind": "openSettings"])
       }
     }
-    addSubview(body)
   }
 
   func setState(_ next: String) {
     guard next != json, let state = DeviceChooserState.decode(next) else { return }
     json = next
+    host.mount(next)
     body.update(state)
   }
 }

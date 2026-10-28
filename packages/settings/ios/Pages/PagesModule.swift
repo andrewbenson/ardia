@@ -16,6 +16,14 @@ public class PagesModule: Module {
       MainActor.assumeIsolated { NativePageView.devState() }
     }.runOnQueue(.main)
 
+    AsyncFunction("devDropTarget") { (windowNumber: Int, x: Double, y: Double, type: String) -> String in
+      MainActor.assumeIsolated { DropProbe.json(DropProbe.target(windowNumber: windowNumber, x: x, y: y, type: type)) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("devViewFrame") { (windowNumber: Int, needle: String) -> String in
+      MainActor.assumeIsolated { DropProbe.json(DropProbe.frame(windowNumber: windowNumber, classContains: needle)) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devPageHover") { (key: String?) in
       MainActor.assumeIsolated { NativePageView.devHover(key) }
     }.runOnQueue(.main)
@@ -184,6 +192,7 @@ final class NativePageView: ExpoView {
       case .reveal(let id): ("reveal", id)
       case .pause(let id): ("pause", id)
       case .resume(let id): ("resume", id)
+      case .keep(let id): ("keep", id)
       case .cancel(let id): ("cancel", id)
       case .menu(let id): ("menu", id)
       case .remove(let id): ("remove", id)

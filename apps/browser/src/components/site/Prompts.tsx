@@ -12,7 +12,7 @@ import { Checkbox } from "../settings/controls";
 import { patchPage, pageOf, setPopover, usePage } from "../layout/pageState";
 import { answerPermission, describePermission } from "./permissions";
 import { nativeToolbarAvailable } from "@ardia/settings";
-import { NativePromptBody } from "./NativePromptBody";
+import { NativePromptBody, PromptPopover } from "./NativePromptBody";
 
 const hostOf = (origin: string) => {
   try {
@@ -63,7 +63,7 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
   if (!request) return null;
   const { icons, question } = describePermission(request);
   return (
-    <Popover key={request.id} width={300} top={top} left={left} modal={false}>
+    <PromptPopover key={request.id} width={300} top={top} left={left} modal={false}>
       {nativeToolbarAvailable() ? (
         <NativePromptBody
           spec={{ icons, title: question, message: "Click the lock to change this any time", buttons: [{ id: "deny", title: "Don't Allow" }, { id: "accept", title: "Allow", primary: true }] }}
@@ -79,7 +79,7 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
         <PanelCloseButton onPress={() => answerPermission(tabId, request.id, "dismiss")} />
       </View>
       )}
-    </Popover>
+    </PromptPopover>
   );
 }
 
@@ -195,7 +195,7 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const well = theme.dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
   const choices = update && prompt.usernames.length > 1 ? prompt.usernames : [];
   return (
-    <Popover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={update ? 310 : 350} top={top} right={right} modal={false}>
+    <PromptPopover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={update ? 310 : 350} top={top} right={right} modal={false}>
       {nativeToolbarAvailable() ? (
         <NativePromptBody
           spec={{
@@ -261,7 +261,7 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>
       )}
-    </Popover>
+    </PromptPopover>
   );
 }
 
@@ -298,7 +298,7 @@ export function AutofillPrompt({ tabId, right, top }: { tabId: string; right: nu
         ? [section(values("to"), prompt.newLabel), section(values("from"), prompt.oldLabel)]
         : [section(values("to"))];
   return (
-    <Popover key={prompt.id} width={350} top={top} right={right} modal={false}>
+    <PromptPopover key={prompt.id} width={350} top={top} right={right} modal={false}>
       {nativeToolbarAvailable() ? (
         <NativePromptBody
           spec={{
@@ -344,7 +344,7 @@ export function AutofillPrompt({ tabId, right, top }: { tabId: string; right: nu
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>
       )}
-    </Popover>
+    </PromptPopover>
   );
 }
 
@@ -358,7 +358,7 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
     setAlways(false);
   };
   return (
-    <Popover key={request.id} width={340} top={top} left={left} modal={false}>
+    <PromptPopover key={request.id} width={340} top={top} left={left} modal={false}>
       {nativeToolbarAvailable() ? (
         <NativePromptBody
           spec={{
@@ -403,7 +403,7 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
         <PanelCloseButton onPress={() => answer(false)} />
       </View>
       )}
-    </Popover>
+    </PromptPopover>
   );
 }
 

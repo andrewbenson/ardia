@@ -14,6 +14,7 @@ import { create } from "zustand";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { PANEL, Popover, PromptButton } from "../layout/controls";
+import { PromptPopover, usePromptPlacement } from "./NativePromptBody";
 import { tabForBrowser } from "../layout/pageState";
 import { useHover } from "../primitives";
 import { PRODUCT } from "../../lib/productName";
@@ -106,7 +107,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
 
   if (nativeToolbarAvailable()) {
     return (
-      <Popover key={chooser.id} width={340} top={top} left={left} modal={false}>
+      <PromptPopover key={chooser.id} width={340} top={top} left={left} modal={false}>
         <NativeChooserBody
           state={JSON.stringify({
             id: chooser.id,
@@ -140,7 +141,7 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
             else void openBluetoothSettings(chooser.id);
           }}
         />
-      </Popover>
+      </PromptPopover>
     );
   }
 
@@ -245,6 +246,11 @@ function TextLink({ title, onPress }: { title: string; onPress: () => void }) {
 
 function NativeChooserBody({ state, onEvent }: { state: string; onEvent: (e: NativeDeviceChooserEvent) => void }) {
   const [height, setHeight] = useState<number | null>(null);
+  const frame = usePromptPlacement();
+  if (frame) {
+    const framed = JSON.stringify({ ...(JSON.parse(state) as object), popover: frame.placement });
+    return <NativeDeviceChooserView style={StyleSheet.absoluteFill} state={framed} onChooserEvent={(e) => ((e.nativeEvent as { kind: string }).kind === "dismiss" ? frame.onDismiss?.() : onEvent(e.nativeEvent))} />;
+  }
   return (
     <View style={{ height: height ?? undefined, minHeight: 1 }}>
       <NativeDeviceChooserView style={StyleSheet.absoluteFill} state={state} onChooserEvent={(e) => onEvent(e.nativeEvent)} onChooserHeight={(e) => setHeight(e.nativeEvent.height)} />

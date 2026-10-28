@@ -7,7 +7,7 @@ import { PanelCloseButton, Popover, PromptButton } from "../layout/controls";
 import { Checkbox } from "../settings/controls";
 import { PromptBody } from "./Prompts";
 import { nativeToolbarAvailable } from "@ardia/settings";
-import { NativePromptBody } from "./NativePromptBody";
+import { NativePromptBody, PromptPopover } from "./NativePromptBody";
 
 export function EngineOfferPrompt({ tabId, left, top }: { tabId: string; left: number; top: number }) {
   const offer = useEngineOffers((offers) => offers[tabId]);
@@ -18,7 +18,7 @@ function OfferPopover({ tabId, offer, left, top }: { tabId: string; offer: Engin
   const [remember, setRemember] = useState(false);
   const theme = useTheme();
   return (
-    <Popover width={320} top={top} left={left} modal={false}>
+    <PromptPopover width={320} top={top} left={left} modal={false}>
       {nativeToolbarAvailable() ? (
         <NativePromptBody
           spec={{
@@ -55,6 +55,6 @@ function OfferPopover({ tabId, offer, left, top }: { tabId: string; offer: Engin
         <PanelCloseButton onPress={() => stayOnPage(tabId)} />
       </View>
       )}
-    </Popover>
+    </PromptPopover>
   );
 }

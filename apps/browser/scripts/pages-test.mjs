@@ -10,7 +10,9 @@
 // save without a URL, saves with Return, and Esc or a click outside cancels. Create a Profile makes the profile named
 // in its field with Return, starts from a preset's name and sharing, and Esc or a click outside creates nothing.
 // The calendar preview lists today's fixture events and a click shows the calendar tab; the meeting alert's Join
-// opens the meeting and Ignore dismisses it.
+// opens the meeting and Ignore dismisses it. The six page prompts (permission, password, autofill, external app,
+// engine offer, device chooser) open in the native popover frame at the card RN draws for them, and Esc or a click on
+// the page leaves each one unanswered, as RN does (a second instance without ARDIA_NATIVE_PAGES gives RN's numbers).
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -47,6 +49,7 @@ const download = (id, filename, state, extra = {}) => ({
 });
 const downloads = [download("d1", "report.pdf", "finished"), download("d2", "photo.png", "finished"), download("d3", "big.zip", "downloading")];
 let app = null;
+let nativePrompts = null;
 const dev = (action) =>
   app.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, ${JSON.stringify(action)}))`);
 const page = async () => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages[0];
@@ -62,6 +65,66 @@ const until = async (test, ms = 3000) => {
 };
 const frameOf = (current, label) => current.frames.find((f) => f.label === label);
 const click = (frame) => dev(`click:${frame.x + frame.width / 2},${frame.y + frame.height / 2}`);
+
+const PROMPT_FIELDS = {
+  permission: ["permission", `{ id: "probe-perm", browserId: 0, origin: "https://example.com", permissions: ["notifications"] }`],
+  password: ["passwordPrompt", `{ state: "save", origin: "https://example.com", username: "ada@example.com", passwordLength: 12, federation: "", usernames: ["ada@example.com"] }`],
+  autofill: ["autofillPrompt", `{ id: 7, kind: "saveAddress", origin: "https://example.com", title: "Save address?", message: "", accept: "Save", decline: "No thanks", footer: "", lines: ["Ada Lovelace", "1 Analytical Way"] }`],
+  externalApp: ["externalApp", `{ id: "probe-ext", url: "zoommtg://x", scheme: "zoommtg", origin: "https://example.com", app: "zoom.us", appPath: null, icon: null, title: "Open zoom.us?", message: "https://example.com wants to open this application.", remember: "Always allow example.com to open links of this type" }`],
+};
+const CHOOSER = `{ id: 991, browserId: 0, open: true, title: "example.com wants to pair", okLabel: "Pair", cancelLabel: "Cancel", noOptionsText: "No devices", scanningText: "Scanning…", refreshing: false, canRefresh: true, adapterOff: false, unauthorized: false, bothButtonsEnabled: false, showSignal: false, options: [{ name: "Keyboard", connected: false, paired: false, signal: 0 }] }`;
+const PROMPT_NAMES = [...Object.keys(PROMPT_FIELDS), "engine", "chooser"];
+
+async function promptOutcomes(instance) {
+  const run = (action) =>
+    instance.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, ${JSON.stringify(action)}))`);
+  const ids = JSON.parse(await instance.eval(`const C = globalThis.expo.modules.ArdiaCEF; const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
+    const tab = s.newTab(w, { url: "data:text/html,<body>prompts</body>" });
+    return C.chromeWindows().then((ws) => JSON.stringify({ tab, win: ws.find((x) => x.hasRoot).window }))`));
+  await run("fakeActiveClicks");
+  await sleep(2000);
+  const tab = JSON.stringify(ids.tab);
+  const pageField = (field, value) => `ac.pageState.setState((s) => ({ pages: { ...s.pages, [${tab}]: { ...(s.pages[${tab}] || {}), ${field}: ${value} } } })); return true`;
+  const show = (name) =>
+    instance.eval(
+      name === "engine" ? `ac.pages.engineOffers.setState({ [${tab}]: { site: "https://example.com", host: "example.com", keySystem: "com.widevine.alpha", canRemember: true } }); return true`
+      : name === "chooser" ? `globalThis.acDeviceChoosers.useChoosers.setState((s) => ({ byTab: { ...s.byTab, [${tab}]: ${CHOOSER} } })); return true`
+      : pageField(PROMPT_FIELDS[name][0], PROMPT_FIELDS[name][1]),
+    );
+  const clear = (name) =>
+    instance.eval(
+      name === "engine" ? `ac.pages.engineOffers.setState({}, true); return true`
+      : name === "chooser" ? `globalThis.acDeviceChoosers.useChoosers.setState({ byTab: {} }); return true`
+      : pageField(PROMPT_FIELDS[name][0], "null"),
+    );
+  const present = (name) =>
+    instance.eval(
+      name === "engine" ? `return !!ac.pages.engineOffers.getState()[${tab}]`
+      : name === "chooser" ? `return !!globalThis.acDeviceChoosers.useChoosers.getState().byTab[${tab}]`
+      : `return !!ac.pageState.getState().pages[${tab}]?.${PROMPT_FIELDS[name][0]}`,
+    );
+  const viewFrame = async (needle) => JSON.parse(await instance.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${ids.win}, ${JSON.stringify(needle)})`));
+  const out = {};
+  for (const name of PROMPT_NAMES) {
+    await show(name);
+    await sleep(600);
+    const popover = await viewFrame("PopoverView");
+    const body = await viewFrame(name === "chooser" ? "NativeDeviceChooserView" : "NativePromptView");
+    const card = popover.found ? popover : body.found ? { x: body.x - 0.5, y: body.y - 0.5, width: body.width + 1, height: body.height + 1 } : null;
+    await run("keys:0:\u001b:53");
+    await sleep(400);
+    const afterEsc = await present(name);
+    await show(name);
+    await sleep(400);
+    await run("click:700,560");
+    await sleep(400);
+    const afterOutside = await present(name);
+    await clear(name);
+    await sleep(300);
+    out[name] = { native: popover.found, card, afterEsc, afterOutside };
+  }
+  return out;
+}
 
 try {
   app = await launch(resolve(appArg), { data, onboarded: true, env: { ARDIA_NATIVE_PAGES: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
@@ -463,9 +526,43 @@ try {
     const gone = await until(async () => ({ ok: (await app.eval(`return ac.pages.meetingAlert.getState().event === null`)) }));
     assert.ok(gone.ok, "dismissed");
   });
+
+  await rep.check("the six page prompts open in the native popover frame and stay up on Esc and a click on the page", async () => {
+    nativePrompts = await promptOutcomes(app);
+    for (const name of PROMPT_NAMES) {
+      const got = nativePrompts[name];
+      assert.ok(got.native, `${name}: in a PopoverView`);
+      assert.equal(got.afterEsc, true, `${name}: still asked after Esc`);
+      assert.equal(got.afterOutside, true, `${name}: still asked after a click on the page`);
+    }
+  });
 } finally {
   await app?.quit();
   if (!keep) for (const dir of [data, files]) rmSync(dir, { recursive: true, force: true });
   else rep.say(`data: ${data}`);
+}
+
+const rnData = join(scratch, "rn-data");
+mkdirSync(rnData, { recursive: true });
+let rn = null;
+try {
+  rn = await launch(resolve(appArg), { data: rnData, onboarded: true, env: {} });
+  await rn.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
+  await sleep(4000);
+  await rep.check("each prompt's native card sits where RN draws it, and Esc and a click on the page answer it as RN does", async () => {
+    const rnPrompts = await promptOutcomes(rn);
+    for (const name of PROMPT_NAMES) {
+      const mine = nativePrompts?.[name];
+      const theirs = rnPrompts[name];
+      assert.ok(mine && theirs.card, `${name}: measured in both`);
+      assert.equal(theirs.native, false, `${name}: RN draws its own frame`);
+      for (const key of ["x", "y", "width", "height"]) assert.ok(Math.abs(mine.card[key] - theirs.card[key]) <= 1, `${name}: ${key} ${mine.card[key]} vs RN ${theirs.card[key]}`);
+      assert.equal(mine.afterEsc, theirs.afterEsc, `${name}: Esc`);
+      assert.equal(mine.afterOutside, theirs.afterOutside, `${name}: a click on the page`);
+    }
+  });
+} finally {
+  await rn?.quit();
+  if (!keep) rmSync(rnData, { recursive: true, force: true });
 }
 process.exit(rep.summary() ? 0 : 1);

@@ -5,6 +5,7 @@ import { useBookmarkDialog } from "../bookmarks/actions";
 import { useBookmarkEditor } from "../bookmarks/edit";
 import { useMeetingAlert } from "../../live/alerts";
 import { useCalendar } from "../../live/calendar";
+import { useEngineOffers } from "../../lib/engines";
 import { setSidebarUi } from "../sidebar/state";
 import { useClearDataRequest } from "./ClearDataDialog";
 import { openInternalPage } from "./urls";
@@ -20,6 +21,7 @@ export const pagesDrivers = {
   clearDataRequest: useClearDataRequest,
   meetingAlert: useMeetingAlert,
   calendar: useCalendar,
+  engineOffers: useEngineOffers,
   setSidebarUi,
   applyResult,
   applySafari,

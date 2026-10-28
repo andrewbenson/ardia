@@ -1,8 +1,23 @@
-import { NativePromptView, type NativePromptEvent } from "@ardia/settings";
-import { useState } from "react";
+import { nativePagesAvailable, nativeToolbarAvailable, NativePromptView, type NativePromptEvent } from "@ardia/settings";
+import { createContext, useContext, useState, type ComponentProps, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useTheme } from "../../lib/theme";
+import { Popover } from "../layout/controls";
 import { useFormColors } from "../settings/controls";
+
+export type PromptPlacement = { width: number; top: number; left: number | null; right: number | null; modal: boolean };
+
+const Placement = createContext<{ placement: PromptPlacement; onDismiss?: () => void } | null>(null);
+
+export const usePromptPlacement = () => useContext(Placement);
+
+export const nativePromptFrames = () => nativeToolbarAvailable() && nativePagesAvailable();
+
+export function PromptPopover(props: ComponentProps<typeof Popover> & { children: ReactNode }) {
+  if (!nativePromptFrames()) return <Popover {...props} />;
+  const placement = { width: props.width, top: props.top, left: props.left ?? null, right: props.right ?? null, modal: props.modal ?? true };
+  return <Placement.Provider value={{ placement, onDismiss: props.onDismiss }}>{props.children}</Placement.Provider>;
+}
 
 export type PromptLine = { text: string; strong?: boolean; tone?: "primary" | "secondary"; size?: number; kern?: number; maxLines?: number };
 export type PromptDetail =
@@ -35,8 +50,10 @@ export function NativePromptBody({
 }) {
   const theme = useTheme();
   const colors = useFormColors();
+  const frame = usePromptPlacement();
   const [height, setHeight] = useState<number | null>(null);
   const state = JSON.stringify({
+    popover: frame?.placement ?? null,
     icons: spec.icons,
     image: spec.image ?? null,
     title: spec.title,
@@ -55,8 +72,10 @@ export function NativePromptBody({
     if (e.kind === "button") onButton(e.id);
     else if (e.kind === "choice") onChoice?.(e.id);
     else if (e.kind === "toggle") onToggle?.(e.value);
+    else if ((e as { kind: string }).kind === "dismiss") frame?.onDismiss?.();
     else onClose?.();
   };
+  if (frame) return <NativePromptView style={StyleSheet.absoluteFill} state={state} onPromptEvent={(e) => onEvent(e.nativeEvent)} />;
   return (
     <View style={{ height: height ?? undefined, minHeight: 1 }}>
       <NativePromptView style={StyleSheet.absoluteFill} state={state} onPromptEvent={(e) => onEvent(e.nativeEvent)} onPromptHeight={(e) => setHeight(e.nativeEvent.height)} />

@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// The native sidebar's hover cards in the window shell's overlay (ARDIA_NATIVE_SIDEBAR=1, ARDIA_NATIVE_SHELL=1): a
+// The native sidebar's hover cards in the window shell's overlay (ARDIA_NATIVE_SIDEBAR=1, ARDIA_NATIVE_SHELL=1 and
+// ARDIA_NATIVE_MEDIA=1 for the player): a
 // card shows after RN's 500 ms intent and not before, RN draws none of its own, moving onto the card keeps it past the
 // 160 ms hide delay, its buttons act, and it leaves on hover away, a click in the sidebar and a space switch (a tab
 // switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
-// pull request's card opens the pull request from its comments line.
+// pull request's card opens the pull request from its comments line. A playing pinned tab's player card goes back to
+// the tab from its artwork.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -27,7 +29,7 @@ const tabs = ids.map((id, i) => ({ id, url: `data:text/html,<title>${titleOf(id,
 
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
-  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1" },
+  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_MEDIA: "1" },
   probe: true,
   session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
@@ -165,6 +167,26 @@ try {
     await until("the pull request to open", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.tabIds.map((id) => s.tabs[id].url)`)).includes("https://example.com/pr/7"));
     await gone("opening the item");
     assert.ok((await run(`return ac.store.getState().windows.w1.tabIds.length`)) >= before);
+  });
+
+  await rep.check("a playing pinned tab's player card shows natively, and its artwork goes back to the tab", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    await run(`ac.store.getState().updateSettings({ sidebarMediaControls: true }); ac.store.getState().togglePin("t0");
+      ac.media.setState((m) => ({ sessions: { ...m.sessions, t0: { title: "A Song", artist: "An Artist", album: "", artwork: null, playbackState: "playing", position: 30, duration: 200,
+        playbackRate: 0, timestamp: Date.now(), hasVideo: false, actions: ["play", "pause"], controllable: true, playedAt: Date.now() } } })); return true`);
+    await sleep(800);
+    await onRow("t0");
+    const c = await shown("t0");
+    assert.equal(c.kind, "player");
+    assert.deepEqual([c.frame[2], c.frame[3]], [320, 76]);
+    assert.equal(await run(`return acPerf.findFibers("NativeHoverPlayer", 5).length + acPerf.findFibers("RNHoverPlayer", 5).length`), 0, "RN draws no player card");
+    const [x, y, w, h] = c.buttons["Back to Tab"];
+    await point(x + w / 2, y + h / 2);
+    await sleep(200);
+    await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
+    await until("t0 active", () => run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId] === "t0"`));
+    await gone("going back to the tab");
   });
 } finally {
   await app.quit();

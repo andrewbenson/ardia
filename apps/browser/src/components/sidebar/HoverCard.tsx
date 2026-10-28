@@ -64,8 +64,8 @@ export function HoverCard({ windowId, width, height }: { windowId: string; width
   const dia = nativeSidebarEnabled() && shown?.kind === "tab" && !player && !calendar;
   const origin = !shown ? null : dia ? diaCardOrigin(shown.anchor, sidebarWidth, diaHeight, height) : hoverCardOrigin(shown.anchor, player ? edge : undefined);
   useHoverCardPlacement(motion, origin, { width, height });
-  const nativeKind = nativeCardKind(useNativeHoverCardActive(windowId), shown, dia);
-  useNativeHoverCard(windowId, nativeKind, target, sidebarWidth, height);
+  const nativeKind = nativeCardKind(useNativeHoverCardActive(windowId), shown, dia, player);
+  useNativeHoverCard(windowId, nativeKind, target, sidebarWidth, height, edge);
   if (!shown || nativeKind) return null;
   return (
     <Animated.View pointerEvents={leaving || entering ? "none" : "box-none"} style={[StyleSheet.absoluteFill, motion.style]}>

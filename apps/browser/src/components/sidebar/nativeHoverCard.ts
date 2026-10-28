@@ -5,11 +5,13 @@ import type { LayoutChangeEvent } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
 import { useIsSleeping } from "../../lib/tabLifecycle";
 import { useBrowser } from "../../store/browser";
-import { useIsBookmarked } from "../../store/hooks";
+import { useIsBookmarked, useTab } from "../../store/hooks";
 import { activeTabId, bookmarkProfileId } from "../../store/model";
 import { awayFromPin } from "../../store/organize";
 import { openInSplit } from "../layout/splitActions";
-import { togglePictureInPicture, useMedia } from "../media/state";
+import { useArtwork } from "../media/artwork";
+import { mediaTheme, nativeMedia, playerState } from "../media/nativeMedia";
+import { togglePictureInPicture, useMedia, useSession } from "../media/state";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { openLiveItem } from "../../live/engine";
 import { useLive } from "../../live/store";
@@ -24,7 +26,7 @@ const TOPIC = "sidebar.hoverCard";
 const cards: Record<string, object> = {};
 let queued = false;
 
-export type NativeCardKind = "tab" | "group" | "live";
+export type NativeCardKind = "tab" | "group" | "live" | "player";
 
 function publish() {
   if (queued) return;
@@ -55,9 +57,10 @@ export function useNativeHoverCardActive(windowId: string): boolean {
   return active;
 }
 
-export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean): NativeCardKind | null {
+export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean, player: boolean): NativeCardKind | null {
   if (!active || !hover) return null;
   if (dia) return "tab";
+  if (hover.kind === "tab" && player && nativeMedia("media.hoverPlayer")) return "player";
   if (hover.kind === "group") return "group";
   if (hover.kind === "live") return "live";
   return null;
@@ -120,6 +123,15 @@ function useGroupCard(windowId: string, id: string | null, anchor: Anchor | null
   };
 }
 
+function usePlayerCard(id: string | null, anchor: Anchor | null, edge: number) {
+  const theme = useTheme();
+  const session = useSession(id ?? undefined);
+  const tab = useTab(id ?? "");
+  const artwork = useArtwork(id ?? "", session?.artwork);
+  if (!id || !anchor || !session || !tab) return null;
+  return { kind: "player", state: JSON.stringify(playerState(session, tab, artwork, mediaTheme(theme))), anchor: frame(anchor), edge };
+}
+
 function liveItem(id: string): [string, string] {
   const [, folderId = "", itemId = ""] = id.split("|");
   return [folderId, itemId];
@@ -158,13 +170,14 @@ function useLiveCard(id: string | null, anchor: Anchor | null) {
   };
 }
 
-export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null, target: Hover | null, sidebarWidth: number, windowHeight: number) {
+export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null, target: Hover | null, sidebarWidth: number, windowHeight: number, edge: number) {
   const live = target && kind ? target : null;
   const anchor = live?.anchor ?? null;
   const tab = useTabCard(windowId, kind === "tab" ? (live?.id ?? null) : null, anchor, sidebarWidth, windowHeight);
   const group = useGroupCard(windowId, kind === "group" ? (live?.id ?? null) : null, anchor, windowHeight);
   const liveCard = useLiveCard(kind === "live" ? (live?.id ?? null) : null, anchor);
-  const card = tab ?? group ?? liveCard;
+  const player = usePlayerCard(kind === "player" ? (live?.id ?? null) : null, anchor, edge);
+  const card = tab ?? group ?? liveCard ?? player;
   const key = card && JSON.stringify(card);
   useLayoutEffect(() => setCard(windowId, key ? JSON.parse(key) : null), [windowId, key]);
   useLayoutEffect(() => () => setCard(windowId, null), [windowId]);

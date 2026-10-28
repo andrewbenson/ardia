@@ -82,6 +82,15 @@ final class SidebarHoverCardHost {
     card.onResize = { [weak self] in self?.coverChanged() }
     return card
   }()
+  private lazy var playerCard: HoverPlayerCardView = {
+    let card = HoverPlayerCardView()
+    card.player.onAction = { [weak self, weak card] action in
+      guard let self, let id = card?.state?.tabId else { return }
+      NativeMedia.player("hoverPlayer", self.windowId, id, action)
+    }
+    card.onPointer = { [weak self] inside in self?.pointer(inside) }
+    return card
+  }()
   private var kind: String?
   private var liveCardInput: [String: Any]?
   private var liveObserver: NSObjectProtocol?
@@ -138,6 +147,11 @@ final class SidebarHoverCardHost {
       groupCard.live = true
       groupCard.set(state)
       return (groupCard, SidebarGroupCardMetrics.origin(anchor: state.anchorRect, height: groupCard.frame.height, windowHeight: state.windowHeight))
+    case "player":
+      guard let json = card["state"] as? String, let state = MediaPlayerState.decode(json), let anchor = card["anchor"] as? [Double], anchor.count == 4 else { return nil }
+      playerCard.set(state)
+      let edge = card["edge"] as? Double ?? anchor[0] + anchor[2]
+      return (playerCard, HoverCardMotion.origin(anchor: CGRect(x: anchor[0], y: anchor[1], width: anchor[2], height: anchor[3]), edge: edge))
     case "live":
       liveCardInput = card
       guard let state = Self.liveState(card) else { return nil }

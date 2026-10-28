@@ -179,6 +179,23 @@ class SidebarRowView: NSView {
   func middleClick() {}
   func contextMenu() { context?.send(.sidebarMenu) }
   var hoverTarget: (kind: String, id: String)? { nil }
+  var accessibleTitle: String? { nil }
+
+  override func isAccessibilityElement() -> Bool { !retired && accessibleTitle != nil }
+  override func accessibilityRole() -> NSAccessibility.Role? { .button }
+  override func accessibilityLabel() -> String? { accessibleTitle }
+
+  override func accessibilityPerformPress() -> Bool {
+    guard !retired, accessibleTitle != nil else { return false }
+    click(SidebarClickMods([]), count: 1)
+    return true
+  }
+
+  override func accessibilityPerformShowMenu() -> Bool {
+    guard !retired, accessibleTitle != nil else { return false }
+    contextMenu()
+    return true
+  }
 
   func pointerMoved() {}
 
@@ -238,6 +255,8 @@ final class TabRowView: SidebarRowView {
   private var closeButton: SidebarIconButton?
   private var spinner: SpinnerView?
   private var subtitle: FadeLabel?
+
+  override var accessibleTitle: String? { tab.flatMap { tab in context?.title(tab) } }
   private var developerRing: (gap: CAShapeLayer, dash: CAShapeLayer)?
   private var closeLook: (symbol: String, tooltip: String) = ("xmark", "Close Tab")
   private var developer = false
@@ -713,6 +732,7 @@ final class GroupHeaderView: SidebarRowView {
   private var rename: SidebarRenameField?
 
   override var pressScales: Bool { false }
+  override var accessibleTitle: String? { label.text }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -885,6 +905,8 @@ final class NewTabRowView: SidebarRowView {
   private let label = FadeLabel(fontSize: 13)
   private let hint = NSTextField(labelWithString: "")
   private let overflow = SidebarIconButton()
+
+  override var accessibleTitle: String? { label.text }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -1143,6 +1165,15 @@ final class TileView: SidebarRowView {
   private var selected = false
   private var showsBadge = false
   private var badges: TabMediaBadgesView?
+
+  override var accessibleTitle: String? {
+    guard let context else { return nil }
+    if let folderId {
+      let name = context.query.folderMembers(windowId: context.windowId, folderId).lazy.compactMap { context.state.tabs[$0]?.tileFolder?.name }.first
+      return name.map { $0.isEmpty ? "Folder" : $0 } ?? "Folder"
+    }
+    return tabId.flatMap { context.state.tabs[$0] }.map(context.title)
+  }
 
   override init(frame: NSRect) {
     super.init(frame: frame)

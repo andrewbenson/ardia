@@ -15,6 +15,7 @@ public final class TopStripView: NSView {
   private var host: StripHostState?
   private var pagerPosition: Double?
   private lazy var dropZone = StripDropZone(strip: self)
+  public var takesDrops = true
 
   public override var isFlipped: Bool { true }
 
@@ -34,7 +35,7 @@ public final class TopStripView: NSView {
 
   public override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
-    if window == nil {
+    if window == nil || !takesDrops {
       TabDragSession.unregister(dropZone)
     } else {
       TabDragSession.register(dropZone, windowId: windowId, priority: .insert)

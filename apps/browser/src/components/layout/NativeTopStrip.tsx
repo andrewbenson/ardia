@@ -228,5 +228,5 @@ export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId
     [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, bands, closeHint],
   );
 
-  return <SolaraHostedView kind="topStrip" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
+  return <SolaraHostedView kind={floating ? "topStripFloating" : "topStrip"} windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });

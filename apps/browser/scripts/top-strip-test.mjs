@@ -113,6 +113,12 @@ const LOOKS = [
     `st().updateSettings({ extendWebsiteColor: true }); st().updateLive("t1", { themeColor: "#2b6cb0" }); st().updateLive("g1a", { themeColor: "#f6e05e" }); st().updateLive("t2", { themeColor: "#1a202c" });`,
     `st().updateSettings({ extendWebsiteColor: false }); for (const id of ["t1", "g1a", "t2"]) st().updateLive(id, { themeColor: null });`,
   ],
+  [
+    "peek",
+    `st().toggleSidebar("w1"); setTimeout(() => globalThis.acLayout.peek["strip:w1"].show(), 450);`,
+    `globalThis.acLayout.peek["strip:w1"].hide(); st().toggleSidebar("w1");`,
+    56,
+  ],
 ];
 
 async function measure(native) {
@@ -135,6 +141,7 @@ async function measure(native) {
       const shot = join(scratch, `${native ? "native" : "rn"}-${look}.png`);
       await run(`${setup} return settle(900);`);
       out.looks[look] = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(shot)});`)) ? shot : null;
+      if (look === "peek") out.peekHit = await run(`return act("w1", "hit:200,22");`);
       await run(`${undo} return settle(600);`);
     }
     const t2 = out.spans.filter(([, , k]) => k !== "SolaraUI.StripNewTabButton").at(-1);
@@ -265,10 +272,11 @@ try {
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });
     }
-    for (const [look] of LOOKS) {
+    for (const [look, , , bottom = 42] of LOOKS) {
       if (!rn.looks?.[look] || !native.looks?.[look]) continue;
-      await rep.check(`the strips' pixels match RN's, ${{ paging: "halfway through a swipe to the next profile", flipped: "in the other appearance", bands: "with website colour bands" }[look]}`, async () => {
-        const diff = stripDiff(readPng(rn.looks[look]), readPng(native.looks[look]), 0, 42);
+      await rep.check(`the strips' pixels match RN's, ${{ paging: "halfway through a swipe to the next profile", flipped: "in the other appearance", bands: "with website colour bands", peek: "in the peek over a hidden strip" }[look]}`, async () => {
+        if (look === "peek") assert.match(native.peekHit, /^SolaraUI\.Strip/, `the peek holds the native strip: ${native.peekHit}`);
+        const diff = stripDiff(readPng(rn.looks[look]), readPng(native.looks[look]), 0, bottom);
         rep.log(`${look} pixel diff ${JSON.stringify(diff)}`);
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });

@@ -31,7 +31,7 @@ import { FolderMosaic } from "../sidebar/FolderTile";
 import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/tileFolders";
 import { usePeek } from "./usePeek";
-import { lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
+import { devPeeks, lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import { NativeTopStrip, nativeTopStripEnabled } from "./NativeTopStrip";
 import {
   aimDrop,
@@ -122,9 +122,9 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
     <FloatingStrip.Provider value={floating}>
       <StripDropArea style={{ height: TOP_STRIP_HEIGHT }}>
         <WindowDragRegion style={StyleSheet.absoluteFill} />
-        <View pointerEvents={!floating && nativeTopStripEnabled() ? "box-none" : "auto"} style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), top: 0, bottom: 0, overflow: "hidden" }}>
-          {!floating && nativeTopStripEnabled() ? (
-            <NativeTopStrip windowId={windowId} profileId={current} floating={false} pageWidth={pageWidth} />
+        <View pointerEvents={nativeTopStripEnabled() ? "box-none" : "auto"} style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), top: 0, bottom: 0, overflow: "hidden" }}>
+          {nativeTopStripEnabled() ? (
+            <NativeTopStrip windowId={windowId} profileId={current} floating={floating} pageWidth={pageWidth} />
           ) : (
             pages.map((page) => <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />)
           )}
@@ -1607,6 +1607,7 @@ export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; en
   const windowId = useWindowId();
   const downloadsOpen = useBrowser((s) => !!s.windowUi[windowId]?.downloadsOpen);
   const { slide, live, show, hide, recheck } = usePeek(enabled, false, () => !!useBrowser.getState().windowUi[windowId]?.downloadsOpen);
+  if (__DEV__) devPeeks[`strip:${windowId}`] = { show, hide };
   useEffect(() => {
     if (!downloadsOpen) recheck();
   }, [downloadsOpen]);

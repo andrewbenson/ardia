@@ -61,6 +61,7 @@ public class TopStripModule: Module {
 @MainActor
 enum NativeTopStrip {
   static let kind = "topStrip"
+  static let floatingKind = "topStripFloating"
   static var hosts: [String: TopStripHost] = [:]
 
   nonisolated static var enabled: Bool {
@@ -80,6 +81,10 @@ enum NativeTopStrip {
         },
         takesFocus: false,
         onState: { [weak host] json in host?.apply(json) })
+    }
+    HostedViews.register(floatingKind) { windowId in
+      let host = TopStripHost(windowId: windowId, takesDrops: false)
+      return HostedContent(view: host.view, onUnmount: { host.stop() }, takesFocus: false, onState: { [weak host] json in host?.apply(json) })
     }
   }
 
@@ -149,9 +154,10 @@ final class TopStripHost {
   private var markUri: String?
   private var pagerObserver: NSObjectProtocol?
 
-  init(windowId: String) {
+  init(windowId: String, takesDrops: Bool = true) {
     self.windowId = windowId
     view = TopStripView(windowId: windowId)
+    view.takesDrops = takesDrops
     view.favicons.loader = { request in try await NativeSidebar.favicon(request) }
     view.onAction = { [weak self] action in self?.handle(action) }
     view.dragBridge = TopStripDrag.shared

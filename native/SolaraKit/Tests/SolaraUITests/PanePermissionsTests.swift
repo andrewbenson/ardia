@@ -99,4 +99,27 @@ import Testing
     let json = try! JSONSerialization.data(withJSONObject: spec.merging(look) { a, _ in a })
     #expect(DeviceChooserState.decode(String(data: json, encoding: .utf8)!)?.selected == 1)
   }
+
+  @Test func selectionComesFromPageMessagesAndGoesWithThePage() {
+    var page = PanePromptPage()
+    _ = take(&page, "onNavigationChange", ["url": "https://a.test/one"])
+    #expect(take(&page, "onPageMessage", ["kind": "selection", "data": ["text": "hello", "rect": ["x": 10, "y": 20.5, "width": 30, "height": 12]]]))
+    #expect(page.selection?.text == "hello" && page.selection?.y == 20.5)
+    #expect(!take(&page, "onPageMessage", ["kind": "scroll", "data": ["y": 3]]))
+    #expect(take(&page, "onNavigationChange", ["url": "https://a.test/two"]))
+    #expect(page.selection == nil)
+    _ = take(&page, "onPageMessage", ["kind": "selection", "data": ["text": "x", "rect": ["x": 0, "y": 0, "width": 1, "height": 1]]])
+    #expect(take(&page, "onPageMessage", ["kind": "selection", "data": NSNull()]))
+    #expect(page.selection == nil)
+  }
+
+  @Test func selectionBarMatchesRN() {
+    let selection = PaneSelection(["text": "a  quick\nbrown fox jumps over the lazy dog and keeps running", "rect": ["x": 10, "y": 20, "width": 30, "height": 12]])!
+    let bar = PanePromptSpecs.selectionBar(selection, zoom: 2, engine: "Google", dark: true, icon: "#fff", textPrimary: "#eee")
+    #expect(bar.key == "10,20" && bar.top == 40 && bar.bottom == 64 && bar.center == 50)
+    #expect(bar.label == "Search Google")
+    #expect(bar.tooltip == "Search Google for \u{201C}a quick brown fox jumps over the lazy d\u{2026}\u{201D}")
+    #expect(PanePromptSpecs.searchTooltip(engine: "Kagi", text: "short") == "Search Kagi for \u{201C}short\u{201D}")
+  }
 }
+

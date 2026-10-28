@@ -90,6 +90,7 @@ public struct PanePromptPage: Equatable, Sendable {
   public var permissions: [PanePermissionRequest] = []
   public var chooser: PaneDeviceChooser?
   public var chooserSelected: Int?
+  public var selection: PaneSelection?
 
   public init() {}
 
@@ -122,6 +123,8 @@ public struct PanePromptPage: Equatable, Sendable {
     case "onExternalApp":
       externalApp = PaneExternalApp(payload)
       alwaysOpen = false
+    case "onPageMessage":
+      if payload["kind"] as? String == "selection" { selection = PaneSelection(payload["data"]) }
     case "onNavigationChange":
       guard let reported = payload["url"] as? String else { break }
       let blankInitial = payload["initialDocumentAccessed"] as? Bool == true && payload["committedInitial"] as? Bool == true
@@ -131,6 +134,7 @@ public struct PanePromptPage: Equatable, Sendable {
         password = nil
         chosenUsername = nil
         permissions = []
+        selection = nil
         if externalApp != nil, Self.host(key) != Self.host(pageKey) {
           externalApp = nil
           alwaysOpen = false

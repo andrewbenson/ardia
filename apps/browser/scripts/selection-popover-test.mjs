@@ -13,7 +13,9 @@ The selection search bar over a local page whose custom search engine is a local
 (ARDIA_NATIVE_SHELL=1: SelectionBarView in the tab's pane overlay container on top of the shell's card). A word selected in the page, as a mouse selection reports it, brings the bar up 6 above it
 (and below a word near the top), centred on it and kept 8 inside the page; the bar and its Search button sit on the same window frames in both
 within half a point, RN draws no bar with the switch on, the native bar fades in, and a click on Search through the
-window searches the custom engine for the word and takes the bar down.`);
+window searches the custom engine for the word and takes the bar down. A third run pools the page with
+ARDIA_NATIVE_PANE_PROMPTS=1: RN mounts no SelectionPopover and the bar comes from the pool's page messages, on the same
+frames, and searches the same way.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -79,11 +81,13 @@ const select = (id) => page.eval(`(() => {
 const got = {};
 
 try {
-  for (const nativeShell of [false, true]) {
-    const tag = nativeShell ? "native" : "rn";
+  for (const tag of ["rn", "native", "prompts"]) {
+    const nativeShell = tag !== "rn";
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
+      env: tag === "prompts"
+        ? { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" }
+        : { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0", ARDIA_NATIVE_PANE_PROMPTS: "0" },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);
@@ -112,12 +116,12 @@ try {
     }
 
     if (nativeShell) {
-      await rep.check("native-search-click", async () => {
+      await rep.check(`${tag}-search-click`, async () => {
         await select("mid");
         const f = await until("the bar again", `return native().then((d) => { const s = d && d.tabs.a && d.tabs.a.selection; return s && s.button && s.opacity === 1 ? s.button : null; });`, 3000);
         await run(`return click(${number}, ${JSON.stringify(centre(f))}).then(() => true);`);
         const searched = await until("the search", `return Object.values(ac.store.getState().tabs).map((t) => t.url).find((u) => u.includes("/search?q=selectable")) || null;`, 5000);
-        await until("the bar goes", `return native().then((d) => !d || !d.inCard || null);`, 3000);
+        await until("the bar goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.selection || null);`, 3000);
         return { searched };
       });
     }
@@ -126,14 +130,16 @@ try {
     await app.quit();
     app = null;
   }
-  await rep.check("native-matches-rn", async () => {
-    for (const id of ["mid", "top"]) {
-      const [nb, nbtn] = got[`native-${id}`];
-      const [rb, rbtn] = got[`rn-${id}`];
-      if (!near(nb, rb) || !near(nbtn, rbtn)) throw new Error(`#${id}: native ${nb} / ${nbtn}, RN ${rb} / ${rbtn}`);
-    }
-    return got;
-  });
+  for (const tag of ["native", "prompts"]) {
+    await rep.check(`${tag}-matches-rn`, async () => {
+      for (const id of ["mid", "top"]) {
+        const [nb, nbtn] = got[`${tag}-${id}`];
+        const [rb, rbtn] = got[`rn-${id}`];
+        if (!near(nb, rb) || !near(nbtn, rbtn)) throw new Error(`#${id}: ${tag} ${nb} / ${nbtn}, RN ${rb} / ${rbtn}`);
+      }
+      return got;
+    });
+  }
 } catch (e) {
   rep.record("run", { error: e });
 } finally {

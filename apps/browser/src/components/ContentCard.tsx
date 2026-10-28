@@ -33,7 +33,7 @@ import { startPermissionPrompts } from "./site/permissions";
 import { patchPage, useFullscreenTab, usePages } from "./layout/pageState";
 import { useTabDrag } from "./layout/tabDrag";
 import { SadTab, StatusBubble } from "./layout/PaneOverlays";
-import { useNativePanePopups, useNativePanePromptsPane, useNativePanePromptsTheme } from "./layout/nativePaneOverlays";
+import { useNativePaneHint, useNativePanePopups, useNativePanePromptsPane, useNativePanePromptsTheme } from "./layout/nativePaneOverlays";
 import { useFormColors } from "./settings/controls";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
@@ -538,6 +538,7 @@ function PageOverlays({
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const popoverSide = toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN };
   useNativePanePopups(nativePrompts, windowId, tabId, popovers && popover === "popups", toolbar ? "right" : "left");
+  useNativePaneHint(nativePrompts, windowId, tabId, { zoom });
   return (
     <>
       <FindBar tabId={tabId} />
@@ -558,7 +559,7 @@ function PageOverlays({
       {!newTabShown && !nativePrompts && <DeviceChooser tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       <CastPicker tabId={tabId} paneWidth={width} nativeAllowed={!peek} />
       <NavigationOverlays tabId={tabId} windowId={windowId} geometry={geometry} peek={peek} />
-      <SelectionPopover tabId={tabId} zoom={zoom} nativeAllowed={!peek} />
+      {!nativePrompts && <SelectionPopover tabId={tabId} zoom={zoom} nativeAllowed={!peek} />}
     </>
   );
 }

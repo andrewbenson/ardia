@@ -270,6 +270,10 @@ final class PaneOverlayHost {
         share.body.update(state)
       }
     }
+    for found in PanePrompts.selections(in: windowId) {
+      selected.insert(found.tabId)
+      (selections[found.tabId] ?? makeSelection(found.tabId)).update(found.state)
+    }
     for tabId in PanePrompts.sadTabs(in: windowId) {
       guard let state = PanePrompts.sadTab(windowId, tabId) else { continue }
       sad.insert(tabId)
@@ -393,6 +397,7 @@ final class PaneOverlayHost {
     let bar = SelectionBarView(frame: .zero)
     let windowId = windowId
     bar.onSearch = { click in
+      if PanePrompts.searchSelection(windowId, tabId, ["metaKey": click.meta, "shiftKey": click.shift, "altKey": click.alt]) { return }
       Task { @MainActor in _ = await SettingsAdapters.js("pane.selection", windowId, tabId, ["metaKey": click.meta, "shiftKey": click.shift, "altKey": click.alt]) }
     }
     bar.autoresizingMask = [.width, .height]

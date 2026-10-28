@@ -231,3 +231,49 @@ extension PanePromptSpecs {
     ]
   }
 }
+
+public struct PaneSelection: Equatable, Sendable {
+  public var text: String
+  public var x: Double
+  public var y: Double
+  public var width: Double
+  public var height: Double
+
+  public init?(_ data: Any?) {
+    guard let data = data as? [String: Any], let text = data["text"] as? String, let rect = data["rect"] as? [String: Any] else { return nil }
+    func number(_ key: String) -> Double { (rect[key] as? NSNumber)?.doubleValue ?? 0 }
+    self.text = text
+    x = number("x")
+    y = number("y")
+    width = number("width")
+    height = number("height")
+  }
+}
+
+extension PanePromptSpecs {
+  public static let selectionDelay: TimeInterval = 0.15
+
+  public static func searchTooltip(engine: String, text: String) -> String {
+    let units = Array(text.utf16)
+    let cut = units.count > 40 ? (String(utf16CodeUnits: Array(units.prefix(40)), count: 40).replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression) + "\u{2026}") : text
+    return "Search \(engine) for \u{201C}\(cut.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression))\u{201D}"
+  }
+
+  public static func selectionBar(_ selection: PaneSelection, zoom: Double, engine: String, dark: Bool, icon: String, textPrimary: String) -> SelectionBarState {
+    SelectionBarState(
+      key: "\(Self.number(selection.x)),\(Self.number(selection.y))",
+      top: selection.y * zoom,
+      bottom: (selection.y + selection.height) * zoom,
+      center: (selection.x + selection.width / 2) * zoom,
+      dark: dark,
+      icon: icon,
+      textPrimary: textPrimary,
+      tooltip: searchTooltip(engine: engine, text: selection.text),
+      label: "Search \(engine)"
+    )
+  }
+
+  static func number(_ value: Double) -> String {
+    value == value.rounded() && abs(value) < 1e15 ? String(Int(value)) : String(value)
+  }
+}

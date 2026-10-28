@@ -8,6 +8,9 @@ import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { pageOf, patchPage, setPopover, usePage } from "./pageState";
 import { answerBlockedPopups, openOneBlockedPopup, type BlockedPopupsAnswer } from "../site/Prompts";
 import { answerPermission } from "../site/permissions";
+import { searchSelection, type ClickModifiers } from "../site/selection";
+import { useBrowser } from "../../store/browser";
+import { defaultSearchEngine } from "../../store/settings";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
@@ -60,6 +63,7 @@ addNativeSettingsHandlers({
     if (pageOf(tabId).externalApp?.id === id) patchPage(tabId, { externalApp: null });
     void resolveExternalApp(id, open, remember);
   },
+  "pane.searchSelection": (_windowId: string, tabId: string, text: string, click: ClickModifiers) => searchSelection(tabId, text, click),
   "pane.permission": (_windowId: string, tabId: string, id: string, result: PermissionResult) => answerPermission(tabId, id, result),
   "pane.popups": (_windowId: string, tabId: string, action: string, id: string) => {
     if (action === "row") openOneBlockedPopup(tabId, id);
@@ -131,7 +135,10 @@ export function useNativePanePromptsTheme(active: boolean, windowId: string, the
     goButton,
     goButtonText,
   };
-  const key = JSON.stringify({ dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, prompt });
+  const engine = useBrowser((s) => defaultSearchEngine(s.settings).name);
+  const searchEnabled = useBrowser((s) => !!s.settings.showSelectionSearch);
+  const search = { engine, enabled: searchEnabled };
+  const key = JSON.stringify({ dark, textPrimary, textSecondary, icon, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, prompt, search });
   useEffect(() => {
     if (!active) return;
     (promptWindows[windowId] ??= { panes: {} }).theme = JSON.parse(key);
@@ -160,6 +167,13 @@ export function useNativePanePromptsPane(active: boolean, windowId: string, tabI
     },
     [active, windowId, tabId],
   );
+}
+
+export function useNativePaneHint(active: boolean, windowId: string, tabId: string, hint: Record<string, unknown>) {
+  const key = JSON.stringify(hint);
+  useEffect(() => {
+    if (active) setPaneHint(windowId, tabId, JSON.parse(key));
+  }, [active, windowId, tabId, key]);
 }
 
 export function useNativePanePopups(active: boolean, windowId: string, tabId: string, open: boolean, side: "left" | "right") {

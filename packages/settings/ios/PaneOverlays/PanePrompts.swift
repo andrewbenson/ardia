@@ -20,6 +20,8 @@ enum PanePrompts {
   private static var pages: [String: PanePromptPage] = [:]
   private static var windows: [String: [String: Any]] = [:]
   private static var browsers = PaneBrowsers()
+  private static var selectionShown: [String: PaneSelection] = [:]
+  private static var selectionGeneration = 0
   private(set) static var activatedAt: TimeInterval = 0
 
   nonisolated static var enabled: Bool {
@@ -56,14 +58,57 @@ enum PanePrompts {
     }
     if name == "onPageGone" {
       browsers.gone(tabId)
+      selectionShown[tabId] = nil
       guard let gone = pages.removeValue(forKey: tabId), gone.shown != PanePromptPage().shown else { return }
       return refreshAll()
     }
     var page = pages[tabId] ?? PanePromptPage()
     let shown = page.shown
+    let selection = page.selection
     guard page.take(name, payload) else { return pages[tabId] = page }
     pages[tabId] = page
+    if page.selection != selection { selectionChanged(tabId, page.selection) }
     if page.shown != shown { changed(tabId) }
+  }
+
+  private static func selectionChanged(_ tabId: String, _ selection: PaneSelection?) {
+    guard let selection else {
+      if selectionShown.removeValue(forKey: tabId) != nil { changed(tabId) }
+      return
+    }
+    selectionGeneration += 1
+    let generation = selectionGeneration
+    DispatchQueue.main.asyncAfter(deadline: .now() + PanePromptSpecs.selectionDelay) {
+      MainActor.assumeIsolated {
+        guard generation == selectionGeneration, pages[tabId]?.selection == selection else { return }
+        selectionShown[tabId] = selection
+        changed(tabId)
+      }
+    }
+  }
+
+  static func selections(in windowId: String) -> [(tabId: String, state: SelectionBarState)] {
+    guard let window = windows[windowId], let theme = window["theme"] as? [String: Any], let search = theme["search"] as? [String: Any], search["enabled"] as? Bool == true else { return [] }
+    let panes = window["panes"] as? [String: [String: Any]] ?? [:]
+    let engine = search["engine"] as? String ?? ""
+    return selectionShown.keys.sorted().compactMap { tabId in
+      guard owns(tabId), TabPoolHost.shared.windowOf(tabId) == windowId, let selection = selectionShown[tabId] else { return nil }
+      let zoom = (panes[tabId]?["zoom"] as? NSNumber)?.doubleValue ?? 1
+      let state = PanePromptSpecs.selectionBar(selection, zoom: zoom, engine: engine, dark: theme["dark"] as? Bool ?? false, icon: theme["icon"] as? String ?? "", textPrimary: theme["textPrimary"] as? String ?? "")
+      return (tabId, state)
+    }
+  }
+
+  static func searchSelection(_ windowId: String, _ tabId: String, _ click: [String: Bool]) -> Bool {
+    guard let selection = selectionShown[tabId] else { return false }
+    selectionShown[tabId] = nil
+    if var page = pages[tabId] {
+      page.selection = nil
+      pages[tabId] = page
+    }
+    changed(tabId)
+    js("pane.searchSelection", windowId, tabId, selection.text, click)
+    return true
   }
 
   static func coreEvent(_ name: String, _ payload: [String: Any]) {

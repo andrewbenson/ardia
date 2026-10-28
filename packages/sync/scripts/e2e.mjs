@@ -87,7 +87,8 @@ async function state(name) {
     const b = s.bookmarks; const roots = b.roots.default;
     const walk = (id) => { const n = b.nodes[id]; return n.kind === "url" ? n.title + " " + n.url : { [n.title]: n.children.map(walk) }; };
     const u = acSync.useSync.getState();
-    return Promise.all([acSync.native.readPasswords(""), globalThis.expo.modules.ArdiaCEF.listPasswords("")]).then(([pw, list]) => ({
+    const c = globalThis.expo.modules.ArdiaCEF;
+    return c.listPasswords("").then((list) => Promise.all(((list && list.passwords) || []).map((p) => c.getPassword("", p.origin, p.username).then((r) => ({ ...p, password: r && !r.error ? r.password : "unreadable: " + (r && r.error) })))).then((pw) => [pw, list])).then(([pw, list]) => ({
       status: u.status, error: u.error, enabled: u.enabled, pending: u.pending,
       bookmarks: [walk(roots.bar), walk(roots.other)],
       history: (s.history.default || []).map((h) => h.url).sort(),
@@ -96,7 +97,7 @@ async function state(name) {
       rows: Object.values(s.tabs).filter((t) => t.pinned && t.pinnedAsRow).map((t) => t.pinnedUrl || t.url).sort(),
       groups: Object.values(s.groups).filter((g) => g.pinned).map((g) => g.name + ": " + g.tabIds.map((id) => s.tabs[id].url).join(", ")).sort(),
       unloadedPins: Object.values(s.tabs).filter((t) => t.pinned && t.unloaded).length,
-      passwords: (pw || []).map((p) => p.origin + " " + p.username + "=" + p.password).sort(),
+      passwords: pw.map((p) => p.origin + " " + p.username + "=" + p.password).sort(),
       chromePasswords: ((list && list.passwords) || []).map((p) => p.origin + " " + p.username).sort(),
       devices: u.devices.map((d) => d.id),
       remoteTabs: (u.remoteTabs.default || []).map((d) => ({ id: d.deviceId, urls: d.tabs.map((t) => t.url) })),
@@ -216,7 +217,7 @@ try {
   check("B's rename, delete and new bookmark reach A", text(a.bookmarks).includes("Beta Renamed on B") && !text(a.bookmarks).includes("Gamma from B") && text(a.bookmarks).includes("Delta from B"));
   check("B's history delete and new visit reach A", !a.history.some((u) => u.includes("hist1")) && a.history.some((u) => u.includes("hist2")));
   check("B's settings reach A", a.settings.showFullUrl === true && a.settings.cleanUp === 24);
-  check("B's password change and deletion reach A", text(a.passwords) === text(["https://nne2e-bank.example/ nne2e-alice=ACE2E-changed-on-B"]), text(a.passwords));
+  check("B's password change and deletion reach A", text(a.passwords) === text(["https://nne2e-bank.example nne2e-alice=ACE2E-changed-on-B"]), text(a.passwords));
 
   await ev(
     "A",

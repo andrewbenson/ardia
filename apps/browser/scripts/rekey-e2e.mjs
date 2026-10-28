@@ -130,7 +130,64 @@ function scan(userDataDir, secret = MOCK) {
       db.close();
     }
   }
+  for (const file of prefFiles(userDataDir)) {
+    const rel = relative(userDataDir, file);
+    let json;
+    try { json = JSON.parse(readFileSync(file, "utf8")); } catch (e) { unreadable.push(`${rel}: ${e.message}`); continue; }
+    for (const [path, value] of leaves(json)) {
+      if (typeof value !== "string" || value.length < 28 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) continue;
+      if (!decrypt(key, Buffer.from(value, "base64"))) continue;
+      const where = `${rel} prefs`;
+      hits[where] = (hits[where] ?? 0) + 1;
+      (values[where] ??= []).push(path);
+    }
+  }
   return { hits, values, unreadable };
+}
+
+function prefFiles(userDataDir) {
+  const files = [join(userDataDir, "Local State")];
+  for (const name of readdirSync(userDataDir))
+    if (name === "Default" || name.startsWith("Profile ")) files.push(join(userDataDir, name, "Preferences"), join(userDataDir, name, "Secure Preferences"));
+  return files.filter((f) => existsSync(f));
+}
+
+function* leaves(value, path = "") {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    for (const [k, v] of Object.entries(value)) yield* leaves(v, path ? `${path}.${k}` : k);
+  } else yield [path, value];
+}
+
+function trackedPrefs(userDataDir, dirs) {
+  const out = {};
+  for (const dir of dirs) {
+    const read = (name) => { try { return JSON.parse(readFileSync(join(userDataDir, dir, name), "utf8")); } catch { return {}; } };
+    const secure = read("Secure Preferences"), plain = read("Preferences");
+    const at = (obj, path) => path.split(".").reduce((o, k) => (o && typeof o === "object" ? o[k] : undefined), obj);
+    const values = {};
+    for (const [path] of leaves(secure.protection?.macs ?? {})) {
+      if (/_encrypted_hash/.test(path)) continue;
+      const v = at(secure, path) ?? at(plain, path);
+      values[path] = v === undefined ? null : JSON.stringify(v);
+    }
+    out[dir] = { values, resetTime: at(secure, "prefs.preference_reset_time") ?? at(plain, "prefs.preference_reset_time") ?? null };
+  }
+  return out;
+}
+
+const VOLATILE_TRACKED = [/^extensions\.settings\./, /^schedule_to_flush_to_disk$/, /^media\.storage_id_salt$/];
+function trackedChanges(before, after) {
+  const wrong = [];
+  for (const [dir, b] of Object.entries(before)) {
+    const a = after[dir];
+    if (!a) { wrong.push(`${dir}: no tracked prefs`); continue; }
+    if (a.resetTime !== b.resetTime) wrong.push(`${dir}: prefs.preference_reset_time ${b.resetTime} → ${a.resetTime}`);
+    for (const [path, v] of Object.entries(b.values)) {
+      if (VOLATILE_TRACKED.some((r) => r.test(path))) continue;
+      if (a.values[path] !== v) wrong.push(`${dir}: ${path} ${String(v).slice(0, 60)} → ${String(a.values[path]).slice(0, 60)}`);
+    }
+  }
+  return wrong;
 }
 
 async function serve() {
@@ -155,7 +212,7 @@ const PLANT = [
   ], cards: [{ name: "Ada Lovelace", number: "4111111111111111", expMonth: "12", expYear: "2031" }],
     ibans: [{ value: "GB82WEST12345698765432", nickname: "Personal IBAN" }],
     keywords: [{ name: "Rekey Search", keyword: "rk", url: "https://rekey.example/search?q={searchTerms}" }],
-    history: ["personal.html", "personal-two.html"] },
+    history: ["personal.html", "personal-two.html"], extensionsOff: ["fajbdaomknpkicfjcpipdmcpoamdmilh"] },
   { name: "Work", page: "work.html", cookies: [
     { name: "w_persist", value: "persist-work-3f8" },
     { name: "w_session", value: "session-work-d11", session: true },
@@ -164,7 +221,7 @@ const PLANT = [
     cards: [{ name: "Grace Hopper", number: "5555555555554444", expMonth: "06", expYear: "2030" }],
     ibans: [{ value: "DE89370400440532013000", nickname: "Work IBAN" }],
     keywords: [{ name: "Work Search", keyword: "wk", url: "https://work.example/find?q={searchTerms}" }],
-    history: ["work.html"] },
+    history: ["work.html"], extensionsOff: [] },
 ];
 
 const HELP = `const S = () => ac.store.getState(); const C = globalThis.expo.modules.ArdiaCEF; const X = globalThis.expo.modules.ArdiaExtensions;
@@ -213,6 +270,7 @@ async function readBack(app, origin, profiles) {
       return C.unlockPasswords(p).then(() => C.listPasswords(p)).then((l) => { r.passwords = []; return seq((l && l.passwords) || [], (e) => C.getPassword(p, e.origin, e.username).then((v) => { r.passwords.push({ origin: e.origin, username: e.username, password: v && v.password }); })); })
         .then(() => C.listCards(p)).then((l) => { r.cards = []; return seq((l && l.cards) || [], (c) => C.revealCardNumber(p, c.id).then((n) => { r.cards.push({ name: c.name, number: n && n.number }); })); })
         .then(() => X.searchEngineList(p)).then((l) => { r.engines = JSON.parse(JSON.stringify(l)); })
+        .then(() => X.list(p)).then((l) => { r.extensions = ((l && l.extensions) || []).map((e) => ({ id: e.id, enabled: !!e.enabled })).sort((a, b) => a.id.localeCompare(b.id)); })
         .then(() => C.engineCall("ac_history_query", p, JSON.stringify({ maxUrls: 200, maxVisits: 5 }))).then((h) => { r.history = (JSON.parse(h).entries || []).map((e) => e.u).sort(); })
         .then(() => r);`, 60000));
     r.passwords?.sort((a, b) => a.username.localeCompare(b.username));
@@ -270,6 +328,7 @@ function wanted(origin, profiles) {
       ibans: p.plant.ibans.map((x) => x.value).sort(),
       keywords: p.plant.keywords.map((k) => k.keyword),
       history: p.plant.history.map((h) => `${origin}/${h}`),
+      extensionsOff: p.plant.extensionsOff,
     };
   return want;
 }
@@ -288,6 +347,10 @@ function compare(read, manifest, scanned) {
     if (!same(got.cards ?? [], want.cards)) wrong.push(`${name} cards: ${JSON.stringify(got.cards)}`);
     const keywords = (JSON.stringify(got.engines ?? {}).match(/"keyword":"[^"]*"/g) ?? []).map((k) => k.slice(11, -1));
     for (const k of want.keywords) if (!keywords.includes(k)) wrong.push(`${name} search engine ${k} missing`);
+    for (const id of want.extensionsOff ?? []) {
+      const e = (got.extensions ?? []).find((x) => x.id === id);
+      if (!e || e.enabled) wrong.push(`${name} extension ${id} ${e ? "enabled again (a tracked-pref reset?)" : "missing"}`);
+    }
     for (const h of want.history) if (!(got.history ?? []).some((u) => u === h || u.startsWith(`${h}?`))) wrong.push(`${name} history ${h} missing`);
     if (scanned) {
       const dir = manifest.profiles.find((p) => p.name === name).dir;
@@ -331,6 +394,7 @@ async function makeFixture(app, dir) {
       await inApp(instance, `const p = P(${JSON.stringify(id)});
         return seq(${JSON.stringify(plant.passwords)}, (x) => C.savePassword(p, ${JSON.stringify(origin)}, x.username, x.password).then((r) => { if (!r || !r.ok) throw new Error("savePassword " + JSON.stringify(r)); }))
           .then(() => seq(${JSON.stringify(plant.cards)}, (c) => C.saveCard(p, { name: c.name, expMonth: c.expMonth, expYear: c.expYear }, c.number).then((r) => { if (!r || !r.id) throw new Error("saveCard " + JSON.stringify(r)); })))
+          .then(() => seq(${JSON.stringify(plant.extensionsOff)}, (x) => X.setEnabled(x, p, false)))
           .then(() => "ok");`, 60000);
       profiles.push({ id, name: plant.name, page: plant.page, plant });
       console.log(`planted ${plant.name} (${id})`);
@@ -367,7 +431,10 @@ async function makeFixture(app, dir) {
     profiles: profiles.map((p) => ({ id: p.id, name: p.name, dir: p.dir, page: p.page })),
     want: wanted(origin, profiles),
     mockHits: scanned.hits,
+    tracked: trackedPrefs(userDataDir, profiles.map((p) => p.dir)),
   };
+  const resets = Object.entries(manifest.tracked).filter(([, t]) => t.resetTime);
+  if (resets.length) throw new Error(`Chrome reset tracked prefs while making the fixture: ${resets.map(([d]) => d).join(", ")}`);
   writeFileSync(join(dir, "baseline-read.json"), JSON.stringify(read, null, 2));
   writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
   const wrong = compare(read, manifest, scanned);
@@ -535,8 +602,9 @@ function migratedState(run, manifest, { fromA = false, allowUnlisted = [] } = {}
   const left = Object.entries(mock.hits).filter(([w]) => !allowUnlisted.some((u) => w.includes(u)));
   if (left.length) wrong.push(`still mock-keyed: ${left.map(([w, n]) => `${w} ${n}`).join(", ")}`);
   const fresh = isRealSecret(s.key) ? scan(run.udd, s.key) : { hits: {}, values: {} };
-  const counts = (h) => JSON.stringify(Object.entries(h).filter(([w]) => !allowUnlisted.some((u) => w.includes(u))).sort());
+  const counts = (h) => JSON.stringify(Object.entries(h).filter(([w]) => !w.endsWith(" prefs") && !allowUnlisted.some((u) => w.includes(u))).sort());
   if (counts(fresh.hits) !== counts(manifest.mockHits)) wrong.push(`under the new key ${counts(fresh.hits)}, made ${counts(manifest.mockHits)}`);
+  wrong.push(...trackedChanges(manifest.tracked ?? {}, trackedPrefs(run.udd, manifest.profiles.map((p) => p.dir))).map((w) => `tracked pref ${w}`));
   return { wrong, snapshot: s, scanned: fresh };
 }
 
@@ -546,8 +614,9 @@ function intactState(run, manifest, { key = [null] } = {}) {
   if (!key.includes(s.key)) wrong.push(`key file ${JSON.stringify(s.key)}`);
   if (s.staging || s.old) wrong.push("re-key folders left");
   const mock = scan(run.udd, MOCK);
-  const counts = (h) => JSON.stringify(Object.entries(h).sort());
+  const counts = (h) => JSON.stringify(Object.entries(h).filter(([w]) => !w.endsWith(" prefs")).sort());
   if (counts(mock.hits) !== counts(manifest.mockHits)) wrong.push(`mock-keyed ${counts(mock.hits)}, made ${counts(manifest.mockHits)}`);
+  wrong.push(...trackedChanges(manifest.tracked ?? {}, trackedPrefs(run.udd, manifest.profiles.map((p) => p.dir))).map((w) => `tracked pref ${w}`));
   return { wrong, snapshot: s, scanned: mock };
 }
 

@@ -422,13 +422,18 @@ public final class PasswordsAdapter: SyncAdapter {
   let profileId: String
   let forced: () -> Bool
   let now: () -> Double
+  let redesign: () -> Bool
   public private(set) var memory: PasswordsMemory
 
-  public init(host: PasswordsHost, profileId: String, forced: @escaping () -> Bool, now: @escaping () -> Double, memory: PasswordsMemory = PasswordsMemory()) {
+  public init(
+    host: PasswordsHost, profileId: String, forced: @escaping () -> Bool, now: @escaping () -> Double, redesign: @escaping () -> Bool = { false },
+    memory: PasswordsMemory = PasswordsMemory()
+  ) {
     self.host = host
     self.profileId = profileId
     self.forced = forced
     self.now = now
+    self.redesign = redesign
     self.memory = memory
   }
 
@@ -464,18 +469,26 @@ public final class PasswordsAdapter: SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    guard let local = try await read() else { return false }
+    try await applyKeys(visible, changed, base, records) != .failed
+  }
+
+  public func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> ApplyOutcome {
+    guard let local = try await read() else { return .failed }
     let shown = shown(visible)
     let engine = host.engineProfile(profileId)
     var ok: JSONValue = true
     func and(_ result: JSONValue?) {
       if !(result?.truthy ?? false) { ok = result ?? .null }
     }
+    var keptHere = Set<JSKey>()
     for key in changed {
       let v = shown[key]
       let have = local[key]
       let known = base(key)
-      if let have, !jsStrict(known?["p"], have["p"]) { continue }
+      if let have, !jsStrict(known?["p"], have["p"]) {
+        keptHere.insert(JSKey(key))
+        continue
+      }
       let newline = key.jsIndexOf("\n")
       let origin = key.jsSlice(3, newline)
       let username = key.jsSlice(newline + 1)
@@ -487,19 +500,21 @@ public final class PasswordsAdapter: SyncAdapter {
         and(try await host.deletePassword(engine, origin, username))
       }
     }
+    func confirmed(_ now: OrderedDict<String, JSONObject>?, _ k: String) -> Bool {
+      guard let now else { return false }
+      return jsStrict(shown[k]?["p"], now[k]?["p"])
+    }
+    var latest: OrderedDict<String, JSONObject>? = nil
     var settled = false
     var i = 0
     while i < 20 && !settled {
-      let fresh = try await read()
-      settled = fresh != nil && changed.allSatisfy { k in jsStrict(shown[k]?["p"], fresh?[k]?["p"]) }
+      latest = try await read()
+      settled = changed.allSatisfy { k in (redesign() && keptHere.contains(JSKey(k))) || confirmed(latest, k) }
       if !settled { await host.sleep(250) }
       i += 1
     }
     if !settled { memory.quietUntil = now() + 30_000 }
-    switch ok {
-    case .bool(let b): return b
-    case .null: return nil
-    default: return ok.truthy ? true : nil
-    }
+    if !ok.truthy { return .failed }
+    return .written(changed.filter { confirmed(latest, $0) })
   }
 }

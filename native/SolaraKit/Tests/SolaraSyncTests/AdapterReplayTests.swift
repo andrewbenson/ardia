@@ -123,7 +123,7 @@ func readArgument(_ args: [JSONValue], _ i: Int) -> JSONValue? { i < args.count 
 
 func makeAdapter(
   _ name: String, _ args: [JSONValue], _ store: Store, _ adopted: @escaping (String) -> Void, folders: TileFolderMemory = TileFolderMemory(),
-  host: ScriptedHost? = nil, now: Double = 0, memory: JSONValue? = nil
+  host: ScriptedHost? = nil, now: Double = 0, memory: JSONValue? = nil, redesign: Bool = false
 ) -> SyncAdapter? {
   let links = { (readArgument(args, 0)?.object).map { JSMap($0.map { ($0.key, $0.value) }) } ?? JSMap() }
   switch name {
@@ -152,7 +152,7 @@ func makeAdapter(
   case "historyAdapter": return host.map { HistoryAdapter(host: $0, profileId: args[0].string ?? "", now: { now }) }
   case "passwordsAdapter":
     let forced = readArgument(args, 1)?.truthy ?? false
-    return host.map { PasswordsAdapter(host: $0, profileId: args[0].string ?? "", forced: { forced }, now: { now }, memory: passwordsMemory(memory)) }
+    return host.map { PasswordsAdapter(host: $0, profileId: args[0].string ?? "", forced: { forced }, now: { now }, redesign: { redesign }, memory: passwordsMemory(memory)) }
   default: return nil
   }
 }
@@ -175,7 +175,8 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
   let host = json["host"].map { ScriptedHost($0, calls: json["hostCalls"]) }
   guard
     let adapter = makeAdapter(
-      name, json["adapter"]?["args"]?.array ?? [], store, { adopted.append([.string($0)]) }, folders: folders, host: host, now: now, memory: json["adapterMemory"])
+      name, json["adapter"]?["args"]?.array ?? [], store, { adopted.append([.string($0)]) }, folders: folders, host: host, now: now, memory: json["adapterMemory"],
+      redesign: json["redesign"]?.truthy ?? false)
   else { return .some(nil) }
   let lookups = Lookups(json["lookups"])
   var problems: [String] = []
@@ -238,9 +239,17 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
     let changed = json["changed"]?.array?.compactMap(\.string) ?? []
     let r = json["records"]
     let records = ApplyRecords(known: { lookups.flag("recordKnown", $0) }, now: r?["now"]?.number ?? now, horizon: r?["horizon"]?.number ?? 0, joined: r?["joined"]?.truthy ?? false)
-    let result = try await adapter.apply(visible, changed, { lookups.value("base", $0) }, records)
     let expected = json["result"] ?? .null
-    let got = result.map(JSONValue.bool) ?? .null
+    let got: JSONValue
+    if expected["written"] != nil {
+      switch try await adapter.applyKeys(visible, changed, { lookups.value("base", $0) }, records) {
+      case .failed: got = false
+      case .applied: got = true
+      case .written(let keys): got = ["written": .array(keys.map(JSONValue.string))]
+      }
+    } else {
+      got = try await adapter.apply(visible, changed, { lookups.value("base", $0) }, records).map(JSONValue.bool) ?? .null
+    }
     if got != expected { problems.append("result: swift \(got.text()) vs js \(expected.text())") }
   }
   if !stateChecked, let d = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { problems.append("state after: \(d)") }

@@ -15,11 +15,13 @@ the Swift core owns in that phase as a case: the state before, the command, the 
 the clock and the id counter. SolaraStoreTests replays each case through the Swift core and
 diffs canonical JSON. Each test file runs in its own process, as node --test runs them.
 
---phase adapters records the sync adapters of src/sync/adapters.ts and pinned.ts instead: each
+--phase adapters records the sync adapters of src/sync/adapters.ts and pinned.ts, as the tests in
+src/sync and src/sync/redesign drive them, instead: each
 extract and apply call with the state before, the adapter's arguments, every lookup it made
 (base, known, queued, remote, stamp) and its answer, the values it extracted in order, the
 answers ignore and republish gave the merge, what apply was given, the store commands it issued,
-its result and the state after. Default out for it: native/SolaraKit/Tests/SolaraSyncTests/Adapters.
+its result (the keys an apply wrote as {written: [...]}), redesign: true when the syncRedesign
+switch was on, and the state after. Default out for it: native/SolaraKit/Tests/SolaraSyncTests/Adapters.
 SolaraSyncTests replays each call through the Swift adapter.`;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,7 +52,7 @@ const harvest = option("--harvest", null);
 function orchestrate() {
   const files = args.length
     ? args.map((f) => resolve(f))
-    : (phase === "adapters" ? ["src/sync"] : ["src/store", "src/lib", "src/sync"]).flatMap((dir) =>
+    : (phase === "adapters" ? ["src/sync", "src/sync/redesign"] : ["src/store", "src/lib", "src/sync"]).flatMap((dir) =>
         readdirSync(join(app, dir)).filter((f) => f.endsWith(".test.mjs")).map((f) => join(app, dir, f)),
       );
   mkdirSync(out, { recursive: true });
@@ -87,7 +89,8 @@ const INSTRUMENT = [
     ['import { resolveInput } from "@ardia/core";', 'import { resolveInput as __resolveInput } from "@ardia/core";\nconst resolveInput = (input, prefix) => { const out = __resolveInput(input, prefix); globalThis.__replayCalls?.resolve.push([input, prefix, out]); return out; };'],
     ['import { searchUrlPrefix } from "./settings";', 'import { searchUrlPrefix as __searchUrlPrefix } from "./settings";\nconst searchUrlPrefix = (settings) => { const out = __searchUrlPrefix(settings); if (globalThis.__replayCalls) globalThis.__replayCalls.prefix = out; return out; };'],
   ]],
-  ["/src/store/pinOrderChoices.ts", "globalThis.__replayOrderChoices = { read: () => remote };"],
+  ["/src/store/syncOrigin.ts", "globalThis.__replayOrderChoices = { read: () => remote };"],
+  ["/src/sync/redesignSwitch.ts", "globalThis.__replayRedesign = syncRedesign;"],
   ["/src/store/browser.ts", "", [["export const storeTransaction = transactions.transaction;", "export const storeTransaction = (run) => (globalThis.__replayTransaction ? globalThis.__replayTransaction(run, transactions.transaction) : transactions.transaction(run));"]]],
   ["/src/lib/chromeTabs.ts", "globalThis.__replayChromeTabs = { read: () => ({ strips: [...mirror.values()], lastRev, seen: [...seen], inflight: Object.fromEntries(inflight), groups: Object.fromEntries(groups), tried: Object.fromEntries(tried), changedAt: Object.fromEntries(changedAt), madeInFront: Object.fromEntries(madeInFront) }) };\nconst sendTabStripCommand = (command) => { const cmd = __sendTabStripCommand(command); globalThis.__replayCalls?.sent?.push([command, cmd]); return cmd; };\nfunction receive(tx) { return globalThis.__replayCommand ? globalThis.__replayCommand(\"stripTransaction\", [tx], () => __replayReceiveImpl(tx)) : __replayReceiveImpl(tx); }\nfunction project(s) { return globalThis.__replayCommand ? globalThis.__replayCommand(\"projectStrips\", [], () => __replayProjectImpl(s)) : __replayProjectImpl(s); }", [
     ["  sendTabStripCommand,\n", "  sendTabStripCommand as __sendTabStripCommand,\n"],
@@ -772,6 +775,7 @@ async function record(file) {
           c.visible = [...visible].map(([k, v]) => [k, plain(v)]);
           c.changed = [...changed];
           c.records = records ? { now: records.now, horizon: records.horizon, joined: !!records.joined } : null;
+          if (globalThis.__replayRedesign?.on) c.redesign = true;
           let result;
           try {
             result = adapter.apply(visible, changed, logged(c, "base", base), records ? { ...records, known: logged(c, "recordKnown", records.known) } : records);
@@ -782,7 +786,7 @@ async function record(file) {
           return settle(
             result,
             (r) => {
-              c.result = r === undefined ? null : plain(r);
+              c.result = r === undefined ? null : r instanceof Set ? { written: [...r] } : plain(r);
               end(c, true);
             },
             () => end(c, false),

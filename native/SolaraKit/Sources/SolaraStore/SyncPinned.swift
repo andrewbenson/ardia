@@ -812,18 +812,21 @@ public extension Session {
     return true
   }
 
-  func applySyncedPinHomes(_ profileId: String, _ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?) -> Bool {
+  func applySyncedPinHomes(_ profileId: String, _ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?) -> [String]? {
     func keyOf(_ k: String) -> String { k.jsSlice(PinnedSync.home.count) }
     let shown = uniqueVisible(visible)
     var incoming = OrderedDict<String, String>()
     for k in changed {
       if let home = syncedHome(shown[k]) { incoming[keyOf(k)] = home }
     }
-    if incoming.isEmpty { return true }
+    if incoming.isEmpty { return nil }
+    var keptHere = Set<JSKey>()
     func wanted(_ key: String, _ current: String?) -> String? {
       guard let home = incoming[key], home != current else { return nil }
       let synced = syncedHome(base("\(PinnedSync.home)\(key)"))
-      return !truthy(current) || synced == nil || synced == current ? home : nil
+      if !truthy(current) || synced == nil || synced == current { return home }
+      keptHere.insert(JSKey("\(PinnedSync.home)\(key)"))
+      return nil
     }
     let s = state
     var tabs: Table<Tab>? = nil
@@ -849,7 +852,8 @@ public extension Session {
       return q
     }
     let parkEdited = park != nil && parked!.enumerated().contains { $0.element != park!.tabs[$0.offset] }
-    if tabs == nil && !parkEdited { return true }
+    let written = changed.filter { !keptHere.contains(JSKey($0)) }
+    if tabs == nil && !parkEdited { return written }
     var next = state
     if let tabs { next.tabs = tabs }
     if parkEdited {
@@ -858,7 +862,7 @@ public extension Session {
       next.parkedPins[profileId] = p
     }
     writeFromSync(next)
-    return true
+    return written
   }
 
   func applySyncedTileFolders(_ profileId: String, _ visible: [(key: String, value: JSONValue)], _ changed: [String]) -> Bool {

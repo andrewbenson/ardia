@@ -508,10 +508,10 @@ func applyAdapter(
   state.applyAs![adapter.prefix] = "joined"
   var shown = JSMap<JSONValue>()
   for (key, value) in view { shown[key] = value }
-  let written: Set<String>? = if writtenKeysOnly, case .written(let keys) = outcome { Set(keys) } else { nil }
+  let written: Set<JSKey>? = if writtenKeysOnly, case .written(let keys) = outcome { Set(keys.map(JSKey.init)) } else { nil }
   var left: [String] = []
   for key in mine {
-    if let written, !written.contains(key) {
+    if let written, !written.contains(JSKey(key)) {
       left.append(key)
     } else if let value = shown[key] {
       state.base[key] = syncCanonical(value)

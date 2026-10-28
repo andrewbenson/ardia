@@ -40,6 +40,8 @@ public final class LegacyNamesAdapter: SyncAdapter {
   public var prefix: String { inner.prefix }
   public var adoptRemoteOnJoin: Bool { inner.adoptRemoteOnJoin }
   public var publishAfterPull: Bool { inner.publishAfterPull }
+  public var publishOnlyAfterPull: Bool { inner.publishOnlyAfterPull }
+  public var ownsItsChanges: Bool { inner.ownsItsChanges }
   public func editedAt(_ value: JSONValue) -> Double? { inner.editedAt(value) }
 
   public func extract(_ context: ExtractContext) async throws -> Extraction? { try await inner.extract(context) }
@@ -48,6 +50,13 @@ public final class LegacyNamesAdapter: SyncAdapter {
     let renamed = visible.map { ($0.key, fromLegacy($0.value)) }
     return try await withoutActuallyEscaping(base) { base in
       try await inner.apply(renamed, changed, { base($0).map(fromLegacy) }, records)
+    }
+  }
+
+  public func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> ApplyOutcome {
+    let renamed = visible.map { ($0.key, fromLegacy($0.value)) }
+    return try await withoutActuallyEscaping(base) { base in
+      try await inner.applyKeys(renamed, changed, { base($0).map(fromLegacy) }, records)
     }
   }
 }
@@ -78,10 +87,10 @@ public class PinnedAreaAdapter {
       })
   }
 
-  func write(_ body: (Session) -> Bool?) async throws -> Bool? {
+  func write<Result>(_ body: (Session) -> Result?) async throws -> Result? {
     while true {
       do {
-        var result: Bool? = nil
+        var result: Result? = nil
         try store.runPinned { result = body($0) }
         return result
       } catch is StoreBusy {
@@ -158,7 +167,12 @@ public final class PinnedHomesAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try await write { $0.applySyncedPinHomes(profileId, visible, changed, base) }
+    try await applyKeys(visible, changed, base, records) != .failed
+  }
+
+  public func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> ApplyOutcome {
+    let written = try await write { $0.applySyncedPinHomes(profileId, visible, changed, base) }
+    return written.map(ApplyOutcome.written) ?? .applied
   }
 }
 

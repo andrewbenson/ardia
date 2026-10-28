@@ -36,19 +36,25 @@ export function expectFocus(windowId: string, destination: string) {
   else awaiting.set(windowId, { generation: running.generation, source: running.source, destinations: new Set([destination]), claimed: false });
 }
 
-export function claimFocusTag(windowId: string, destination: string, tagOf: () => number | null) {
+export function claimFocusTag(windowId: string, destination: string, claimOf: () => number | ((generation: number) => Promise<boolean>) | null) {
   const request = awaiting.get(windowId);
   if (!request?.destinations.has(destination) || request.claimed) return;
   const attempt = (tries: number) => {
     if (awaiting.get(windowId) !== request || request.claimed) return;
-    const tag = tagOf();
-    if (!tag) {
+    const claim = claimOf();
+    if (!claim) {
       if (tries > 1) setTimeout(() => attempt(tries - 1), CLAIM_RETRY_MS);
       return;
     }
     request.claimed = true;
     request.destinations = new Set([destination]);
-    sendClaim?.(request.generation, tag);
+    if (typeof claim === "number") return sendClaim?.(request.generation, claim);
+    const retry = () => {
+      if (awaiting.get(windowId) !== request) return;
+      request.claimed = false;
+      if (tries > 1) setTimeout(() => attempt(tries - 1), CLAIM_RETRY_MS);
+    };
+    void claim(request.generation).then((taken) => taken || retry(), retry);
   };
   setTimeout(() => attempt(CLAIM_TRIES), 0);
 }

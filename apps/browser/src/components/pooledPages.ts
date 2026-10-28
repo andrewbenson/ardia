@@ -3,7 +3,7 @@ import type { TabPool } from "@ardia/settings";
 import { persistEngine } from "../lib/engines";
 import { holdModuleEvent } from "../lib/nativeEvents";
 import { noteGone } from "../lib/tabLifecycle";
-import { webviewRef } from "../lib/webviews";
+import { notePooledPage, webviewRef } from "../lib/webviews";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { setPageProgress } from "../store/pageProgress";
 import { followNavigation, newPageSession, pageEventHandlers, type PageEventHandlers, type PageSession } from "./pageEvents";
@@ -55,6 +55,7 @@ function pageCreated(pool: TabPool, tabId: string, engine: PageEngine, seq: numb
   const session = newPageSession(tabId, engine, peekSource(s, tabId), loadedSeq === undefined ? null : { seq: loadedSeq });
   const register = webviewRef(tabId);
   register(pooledWebViewHandle((method, args) => pool.pageCall(tabId, method, args)));
+  notePooledPage(tabId, true);
   pooled.set(tabId, { session, handlers: pageEventHandlers(session), register, seq: navigation?.seq, followed: null, loadedSeq });
   persistEngine(tabId, engine);
   followLater(tabId);
@@ -64,6 +65,7 @@ function pageGone(tabId: string) {
   const page = pooled.get(tabId);
   if (!page) return;
   pooled.delete(tabId);
+  notePooledPage(tabId, false);
   page.register(null);
   noteGone(tabId);
   setPageProgress(tabId, 0);
@@ -107,5 +109,3 @@ export function startPooledPages(pool: TabPool) {
     for (const tabId of [...pooled.keys()]) pageGone(tabId);
   };
 }
-
-export const isPooledPage = (tabId: string) => pooled.has(tabId);

@@ -1,14 +1,21 @@
+import { tabPool } from "@ardia/settings";
 import { cancelFocusMove, type CommandEvent } from "@ardia/shell";
 import { useBrowser } from "../store/browser";
 import { resolveWindowId } from "../store/model";
 import { peekTabId } from "../store/peek";
 import { cancelAbandonedFocus, claimFocusTag, commandBarFocus, expectFocus, findFocus, heroBarFocus, pageFocus, runFocusMove, urlEditFocus } from "./focusClaims";
 import { useUrlEdit } from "../components/site/developerMode";
-import { webviews } from "./webviews";
+import { isPooledPage, webviews } from "./webviews";
 
 const activeTab = (windowId: string) => {
   const w = useBrowser.getState().windows[windowId];
   return w ? w.activeTabIds[w.profileId] : undefined;
+};
+
+const pageClaim = (tabId: string) => {
+  const pool = tabPool;
+  if (pool && isPooledPage(tabId)) return (generation: number) => pool.claimFocusPage(generation, tabId);
+  return webviews.get(tabId)?.nativeTag() ?? null;
 };
 
 export function settlingCommandFocus(e: CommandEvent, run: (e: CommandEvent) => void) {
@@ -28,7 +35,7 @@ export function settlingCommandFocus(e: CommandEvent, run: (e: CommandEvent) => 
       if (!after || after === before) return;
       if (!useBrowser.getState().tabs[after]?.url) return expectFocus(windowId, heroBarFocus(after));
       expectFocus(windowId, pageFocus(after));
-      claimFocusTag(windowId, pageFocus(after), () => webviews.get(after)?.nativeTag() ?? null);
+      claimFocusTag(windowId, pageFocus(after), () => pageClaim(after));
     });
   } finally {
     if (!expects) cancelFocusMove(generation, activeTab(windowId) === before);

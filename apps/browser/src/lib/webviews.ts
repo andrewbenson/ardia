@@ -26,3 +26,9 @@ const issued = new Map<string, number>();
 export const noteIssued = (tabId: string, seq: number) => void issued.set(tabId, seq);
 
 export const issuedSeq = (tabId: string) => issued.get(tabId);
+
+const pooled = new Set<string>();
+
+export const notePooledPage = (tabId: string, on: boolean) => void (on ? pooled.add(tabId) : pooled.delete(tabId));
+
+export const isPooledPage = (tabId: string) => pooled.has(tabId);

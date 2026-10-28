@@ -85,3 +85,33 @@ test("a claimed request is still cancelled when its tab stops being shown before
   await settle();
   assert.deepEqual(sent, [[12, 120]]);
 });
+
+const until = async (done) => {
+  for (let i = 0; i < 100 && !done(); i++) await settle();
+};
+
+test("a pooled page claims through its own sender, once it exists, with the request's generation", async () => {
+  const sent = [];
+  const pooled = [];
+  setFocusSenders((generation, tag) => sent.push([generation, tag]), () => {});
+  runFocusMove(200, "w", "src", () => expectFocus("w", findFocus("p")));
+  let created = false;
+  claimFocusTag("w", findFocus("p"), () => (created ? async (generation) => (pooled.push(generation), true) : null));
+  await settle();
+  assert.deepEqual(pooled, []);
+  created = true;
+  await until(() => pooled.length > 0);
+  assert.deepEqual(pooled, [200]);
+  assert.deepEqual(sent, []);
+});
+
+test("a pooled claim the page refuses is tried again while the request is current", async () => {
+  const answers = [false, true];
+  const pooled = [];
+  setFocusSenders(() => {}, () => {});
+  runFocusMove(201, "w", "src", () => expectFocus("w", findFocus("q")));
+  claimFocusTag("w", findFocus("q"), () => async (generation) => (pooled.push(generation), answers.shift() ?? false));
+  await until(() => pooled.length > 1);
+  await settle();
+  assert.deepEqual(pooled, [201, 201]);
+});

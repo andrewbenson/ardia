@@ -8,6 +8,7 @@ import { isQuitting } from "../lib/native";
 import { noteDiscarded, noteReady } from "../lib/tabLifecycle";
 import { clearEngineOffer, followSiteChoice, noteWebKitPage, offerWebKit } from "../lib/engines";
 import { noteIssued, webviews } from "../lib/webviews";
+import { handoffLoaded } from "../lib/pageHandoff";
 import { useBrowser } from "../store/browser";
 import { setPageProgress } from "../store/pageProgress";
 import { engineProfile, navigationTo } from "../store/model";
@@ -96,7 +97,7 @@ export function newPageSession(tabId: string, engine: PageEngine, peekOf: string
     lastPage: null,
     adopted: null,
     fromNewTab: pageOf(tabId).wasNewTab && !adoptId,
-    arrived: !!handoff && handoff.seq === navigation?.seq,
+    arrived: handoffLoaded(handoff, navigation?.seq),
     loadsOnCreateSeq: engine === "webkit" && !handoff ? navigation?.seq : undefined,
   };
 }

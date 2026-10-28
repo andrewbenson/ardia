@@ -89,7 +89,7 @@ public func sanitizedTheme(_ value: JSONValue?) -> JSONValue? {
   return .object(out)
 }
 
-let themeTextures: Set<String> = ["grain", "sand", "denim", "tweed"]
+let themeTextures = ["grain", "sand", "denim", "tweed"]
 
 func clamp01(_ v: Double) -> Double { min(1, max(0, v)) }
 
@@ -120,7 +120,7 @@ func sanitizedLook(_ value: JSONValue?) -> JSONValue? {
   if stops.isEmpty { return nil }
   var out: JSONObject = [
     "stops": .array(stops), "intensity": .number(clamp01(finite(t["intensity"], 0.6))), "grain": .number(clamp01(finite(t["grain"], 0))),
-    "texture": .string(t["texture"]?.string.flatMap { themeTextures.contains($0) ? $0 : nil } ?? "grain"),
+    "texture": .string(t["texture"]?.string.flatMap { texture in themeTextures.contains(where: { $0.jsEquals(texture) }) ? texture : nil } ?? "grain"),
     "translucency": .number(clamp01(finite(t["translucency"], 1))),
   ]
   if let angle = t["angle"]?.number, angle.isFinite { out["angle"] = .number(jsModulo360(angle)) }
@@ -201,7 +201,7 @@ public final class ProfilesAdapter: SyncAdapter {
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
     let shown = shown(visible)
-    let changedSet = Set(changed)
+    let changedSet = OrderedSet(changed)
     for (id, link) in linkedProfiles(store, links()) {
       let syncId = syncIdOf(link)
       guard let record = shown["prof:\(syncId)"], record.truthy, changedSet.contains("prof:\(syncId)") else { continue }
@@ -256,7 +256,7 @@ public final class ProfileThemesAdapter: SyncAdapter {
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
     let shown = shown(visible)
-    let changedSet = Set(changed)
+    let changedSet = OrderedSet(changed)
     for (id, link) in linkedProfiles(store, links()) {
       let syncId = syncIdOf(link)
       let key = "pth:\(syncId)"
@@ -324,7 +324,7 @@ public final class DeviceAdapter: SyncAdapter {
 let maxDeviceTabs = 30
 
 func isDeviceTabUrl(_ url: String) -> Bool {
-  url.hasPrefix("http:") || url.hasPrefix("https:") || url.hasPrefix("file:")
+  url.jsStartsWith("http:") || url.jsStartsWith("https:") || url.jsStartsWith("file:")
 }
 
 public final class DeviceTabsAdapter: SyncAdapter {
@@ -366,11 +366,11 @@ public final class DeviceTabsAdapter: SyncAdapter {
 }
 
 let developerModePrefix = "devmode:"
-let defaultDeveloperHosts: Set<String> = ["localhost", "127.0.0.1", "[::1]"]
+let defaultDeveloperHosts = ["localhost", "127.0.0.1", "[::1]"]
 
 func isDefaultDeveloperHost(_ host: String) -> Bool {
   let h = host.lowercased()
-  return defaultDeveloperHosts.contains(h) || h.hasSuffix(".localhost")
+  return defaultDeveloperHosts.contains(where: { $0.jsEquals(h) }) || h.jsEndsWith(".localhost")
 }
 
 func developerHostList(_ value: JSONValue?, _ keep: (String) -> Bool) -> [String] {
@@ -415,10 +415,10 @@ public final class DeveloperModeAdapter: SyncAdapter {
     var off: [JSONValue] = []
     var reload: JSONValue = "reload"
     for (key, value) in visible {
-      let rest = String(key.dropFirst(developerModePrefix.count))
-      if rest.hasPrefix("on:") {
+      let rest = key.jsSlice(developerModePrefix.utf16.count)
+      if rest.jsStartsWith("on:") {
         on.append(.string(String(rest.dropFirst(3))))
-      } else if rest.hasPrefix("off:") {
+      } else if rest.jsStartsWith("off:") {
         off.append(.string(String(rest.dropFirst(4))))
       } else if rest == "reload", value.object != nil || value.array != nil {
         reload = value["r"] ?? .null

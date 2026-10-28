@@ -50,10 +50,10 @@ public final class ScopeState: @unchecked Sendable {
     }
     snapshotAt = json["snapshotAt"]?.number ?? 0
     pending = json["pending"]?.number ?? 0
-    for (key, value) in json.object ?? [:] where !ScopeState.knownKeys.contains(key) { unknown[key] = value }
+    for (key, value) in json.object ?? [:] where !ScopeState.knownKeys.contains(where: { $0.jsEquals(key) }) { unknown[key] = value }
   }
 
-  static let knownKeys: Set<String> = [
+  static let knownKeys = [
     "records", "base", "unapplied", "vv", "extra", "files", "damaged", "pendingSince", "seq", "outbox", "journal", "seen", "joined", "awaitRemote",
     "applyAs", "snapshotAt", "pending",
   ]
@@ -286,7 +286,7 @@ public func ingestSnapshot(_ state: ScopeState, _ file: SnapshotFile, _ clock: C
 }
 
 public func visible(_ state: ScopeState, _ prefix: String) -> [(key: String, value: JSONValue)] {
-  state.records.compactMap { key, record in !record.v.isNull && key.hasPrefix(prefix) ? (key, record.v) : nil }
+  state.records.compactMap { key, record in !record.v.isNull && key.jsStartsWith(prefix) ? (key, record.v) : nil }
 }
 
 func parseBase(_ text: String?) -> JSONValue? {
@@ -354,21 +354,21 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
     put(key, value)
   }
   for key in state.base.keys {
-    if !key.hasPrefix(adapter.prefix) || extracted.contains(JSKey(key)) || (extraction.ignore?(key) ?? false) { continue }
+    if !key.jsStartsWith(adapter.prefix) || extracted.contains(JSKey(key)) || (extraction.ignore?(key) ?? false) { continue }
     state.base.removeValue(forKey: key)
     put(key, .null)
   }
   var removing = OrderedSet<String>()
   for key in extraction.remove { removing.insert(key) }
   for key in removing.elements {
-    if !key.hasPrefix(adapter.prefix) || extracted.contains(JSKey(key)) { continue }
+    if !key.jsStartsWith(adapter.prefix) || extracted.contains(JSKey(key)) { continue }
     guard let record = state.records[key], !record.v.isNull else { continue }
     state.base.removeValue(forKey: key)
     put(key, .null)
   }
   var reapplying = OrderedSet<String>()
   for key in extraction.reapply { reapplying.insert(key) }
-  for key in reapplying.elements where key.hasPrefix(adapter.prefix) && !state.unapplied.contains(key) { state.unapplied.append(key) }
+  for key in reapplying.elements where key.jsStartsWith(adapter.prefix) && !state.unapplied.contains(where: { $0.jsEquals(key) }) { state.unapplied.append(key) }
   if let settle = extraction.published, !published.isEmpty {
     let keys = published.elements
     settleWhenDurable(state) { settle(keys) }
@@ -491,7 +491,7 @@ func applyAdapter(
   _ state: ScopeState, _ adapter: SyncAdapter, _ keys: OrderedSet<String>, _ now: Double, _ horizon: Double, _ writtenKeysOnly: Bool,
   _ beforeApply: (([String]) -> Void)?
 ) async -> [String] {
-  let mine = keys.elements.filter { $0.hasPrefix(adapter.prefix) }
+  let mine = keys.elements.filter { $0.jsStartsWith(adapter.prefix) }
   if mine.isEmpty { return mine }
   let view = visible(state, adapter.prefix)
   if state.applyAs == nil { state.applyAs = JSMap() }
@@ -584,11 +584,11 @@ public func syncScope(
   for adapter in adapters {
     let late = try await publishAdapter(state, adapter, clock, device, now())
     published += late.count
-    for key in state.unapplied where key.hasPrefix(adapter.prefix) { keys.insert(key) }
+    for key in state.unapplied where key.jsStartsWith(adapter.prefix) { keys.insert(key) }
     for key in late.elements { keys.remove(key) }
     unapplied += await applyAdapter(state, adapter, keys, now(), 2 * options.tombstoneTTL, options.writtenKeysOnly, options.beforeApply)
   }
-  state.unapplied = unapplied + keys.elements.filter { key in !adapters.contains { key.hasPrefix($0.prefix) } }
+  state.unapplied = unapplied + keys.elements.filter { key in !adapters.contains { key.jsStartsWith($0.prefix) } }
   if state.awaitRemote != true || state.seen.keys.contains(where: { $0 != device }) {
     state.joined = true
     state.awaitRemote = nil

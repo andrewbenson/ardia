@@ -134,7 +134,7 @@ public final class BookmarksAdapter: SyncAdapter {
       return id
     }
     var values = OrderedDict<String, JSONValue>()
-    var seen = Set<String>()
+    var seen = OrderedSet<String>()
     func walk(_ folderId: String) throws {
       guard let folder = nodes[folderId], folder["kind"] == "folder", !seen.contains(folderId) else { return }
       seen.insert(folderId)
@@ -187,7 +187,7 @@ public final class BookmarksAdapter: SyncAdapter {
       }
     }
     for id in values.keys.sorted(by: jsKeyPrecedes) {
-      var seen: Set<String> = [id]
+      var seen = OrderedSet([id])
       var at = parentOf[id]!
       while let next = parentOf[at] {
         if seen.contains(at) {
@@ -258,7 +258,7 @@ let maxVisitTimes = 50
 
 func keptInHistory(_ url: String) -> Bool {
   let lower = url.lowercased()
-  return lower.hasPrefix("http:") || lower.hasPrefix("https:") || lower.hasPrefix("file:")
+  return lower.jsStartsWith("http:") || lower.jsStartsWith("https:") || lower.jsStartsWith("file:")
 }
 
 func lastVisitOf(_ value: JSONValue?) -> Double { jsMaxNumber([0] + (value?["vt"]?.array ?? []).map { Optional($0) }) }
@@ -268,7 +268,7 @@ func numericOrder(_ a: JSONValue, _ z: JSONValue) -> Double { jsNumber(jsPrimiti
 func closeVisit(_ a: JSONValue?, _ b: JSONValue?) -> Bool { abs(jsNumber(jsPrimitive(a)) - jsNumber(jsPrimitive(b))) <= sameVisitMs }
 
 public func historyExpired(_ key: String, _ value: JSONValue, _ now: Double) -> Bool {
-  key.hasPrefix("h:") && lastVisitOf(value) < now - historyWindowMs
+  key.jsStartsWith("h:") && lastVisitOf(value) < now - historyWindowMs
 }
 
 func sameValueZero(_ a: JSONValue, _ b: JSONValue) -> Bool {
@@ -391,10 +391,10 @@ let passwordReadInterval: Double = 30_000
 
 func loginOrigin(_ login: JSONValue) -> String? {
   var realm = jsText(login["origin"])
-  if realm.hasSuffix("/") { realm.removeLast() }
+  if realm.jsEndsWith("/") { realm.removeLast() }
   let units = Array(realm.utf16)
   let scheme: [UInt16]
-  if realm.hasPrefix("https://") { scheme = Array("https://".utf16) } else if realm.hasPrefix("http://") { scheme = Array("http://".utf16) } else { return nil }
+  if realm.jsStartsWith("https://") { scheme = Array("https://".utf16) } else if realm.jsStartsWith("http://") { scheme = Array("http://".utf16) } else { return nil }
   let rest = units[scheme.count...]
   guard !rest.isEmpty, !rest.contains(where: { $0 == 0x2F || JS.isWhitespace($0) }) else { return nil }
   return realm
@@ -455,7 +455,7 @@ public final class PasswordsAdapter: SyncAdapter {
 
   public func editedAt(_ value: JSONValue) -> Double? {
     let key = Self.keyOf(value["o"], value["u"])
-    guard let created = memory.created.last(where: { $0.0 == key })?.1, created.truthy else { return nil }
+    guard let created = memory.created.last(where: { $0.0.jsEquals(key) })?.1, created.truthy else { return nil }
     return jsNumber(jsPrimitive(created))
   }
 

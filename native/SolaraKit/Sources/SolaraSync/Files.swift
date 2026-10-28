@@ -166,9 +166,9 @@ public struct FileMeta: Sendable, Equatable {
   }
 }
 
-func unknownKeys(_ json: JSONValue, _ known: Set<String>) -> JSONObject {
+func unknownKeys(_ json: JSONValue, _ known: [String]) -> JSONObject {
   var out = JSONObject()
-  for (key, value) in json.object ?? [:] where !known.contains(key) { out[key] = value }
+  for (key, value) in json.object ?? [:] where !known.contains(where: { $0.jsEquals(key) }) { out[key] = value }
   return out
 }
 

@@ -118,10 +118,10 @@ public func extensionKey(_ id: String) -> String { extensionPrefix + id }
 public func extensionApprovalKey(_ id: String) -> String { extensionApprovalPrefix + id }
 
 public func extensionIdOf(_ key: String) -> String {
-  key.hasPrefix(extensionApprovalPrefix) ? String(key.dropFirst(extensionApprovalPrefix.count)) : String(key.dropFirst(extensionPrefix.count))
+  key.jsStartsWith(extensionApprovalPrefix) ? key.jsSlice(extensionApprovalPrefix.utf16.count) : key.jsSlice(extensionPrefix.utf16.count)
 }
 
-func isStateKey(_ key: String) -> Bool { key.hasPrefix(extensionPrefix) && !key.hasPrefix(extensionApprovalPrefix) }
+func isStateKey(_ key: String) -> Bool { key.jsStartsWith(extensionPrefix) && !key.jsStartsWith(extensionApprovalPrefix) }
 
 func jsParseInt10(_ text: Substring) -> Double {
   var units = text.utf16.drop { JS.isWhitespace($0) }
@@ -234,10 +234,8 @@ public final class ExtensionsAdapter: SyncAdapter {
     let intents = host.intents()
     var values = OrderedDict<String, JSONValue>()
     var captured = JSMap<Double>()
-    var installed = Set<String>()
-    var settling = Set(local.pending)
-    settling.formUnion(local.settling ?? [])
-    settling.formUnion(unsettled)
+    var installed = OrderedSet<String>()
+    let settling = OrderedSet(local.pending + (local.settling ?? []) + unsettled.elements)
     for e in local.extensions {
       guard e.syncable, let version = e.version, !version.isEmpty else { continue }
       installed.insert(e.id)
@@ -273,7 +271,7 @@ public final class ExtensionsAdapter: SyncAdapter {
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
     guard let local = try await host.read(), local.ready else { return false }
     let intents = host.intents()
-    let shown = Dictionary(visible.map { ($0.key, $0.value) }, uniquingKeysWith: { $1 })
+    let shown = JSMap(visible.map { ($0.key, $0.value) })
     var ok = true
     for id in OrderedSet(changed.map(extensionIdOf)) {
       ok = try await reconcileOne(id, shown[extensionKey(id)], shown[extensionApprovalKey(id)], local, intents, records.joined) && ok
@@ -284,7 +282,7 @@ public final class ExtensionsAdapter: SyncAdapter {
   public func reconcile(_ visible: [(key: String, value: JSONValue)], _ now: Double) async throws {
     guard let local = try await host.read(), local.ready else { return }
     let intents = host.intents()
-    let shown = Dictionary(visible.map { ($0.key, $0.value) }, uniquingKeysWith: { $1 })
+    let shown = JSMap(visible.map { ($0.key, $0.value) })
     for (key, record) in visible {
       guard isStateKey(key), isExtensionState(record) else { continue }
       let id = extensionIdOf(key)

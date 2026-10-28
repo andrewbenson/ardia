@@ -91,6 +91,23 @@ final class SidebarHoverCardHost {
     card.onPointer = { [weak self] inside in self?.pointer(inside) }
     return card
   }()
+  private lazy var calendarCard: SidebarCalendarCardView = {
+    PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+    let card = SidebarCalendarCardView()
+    card.onEvent = { [weak self, weak card] event in
+      guard let self, let tabId = card?.tabId else { return }
+      switch event {
+      case .activate: NativeSidebarHoverCard.send(self.windowId, tabId, "calendar", ["action": "activate"])
+      case .join(let id, _): NativeSidebarHoverCard.send(self.windowId, tabId, "calendar", ["action": "join", "eventId": id])
+      case .refresh: NativeSidebarHoverCard.send(self.windowId, tabId, "calendar", ["action": "refresh"])
+      case .connect: NativeSidebarHoverCard.send(self.windowId, tabId, "calendar", ["action": "connect"])
+      case .height, .dismiss, .view: break
+      }
+    }
+    card.onPointer = { [weak self] inside in self?.pointer(inside) }
+    card.onResize = { [weak self] in self?.coverChanged() }
+    return card
+  }()
   private var kind: String?
   private var liveCardInput: [String: Any]?
   private var liveObserver: NSObjectProtocol?
@@ -152,6 +169,14 @@ final class SidebarHoverCardHost {
       playerCard.set(state)
       let edge = card["edge"] as? Double ?? anchor[0] + anchor[2]
       return (playerCard, HoverCardMotion.origin(anchor: CGRect(x: anchor[0], y: anchor[1], width: anchor[2], height: anchor[3]), edge: edge))
+    case "calendar":
+      guard let tabId = card["tabId"] as? String, let json = card["state"] as? String, let data = json.data(using: .utf8),
+        let state = try? JSONDecoder().decode(LiveCardModel.State.self, from: data),
+        let lookValue = card["look"] as? [String: Any], let look = Self.decode(SidebarSurfaceLook.self, lookValue),
+        let anchor = card["anchor"] as? [Double], anchor.count == 4
+      else { return nil }
+      calendarCard.set(tabId: tabId, state: state, look: look)
+      return (calendarCard, HoverCardMotion.origin(anchor: CGRect(x: anchor[0], y: anchor[1], width: anchor[2], height: anchor[3])))
     case "live":
       liveCardInput = card
       guard let state = Self.liveState(card) else { return nil }
@@ -200,6 +225,10 @@ final class SidebarHoverCardHost {
       info["buttons"] = buttons
       if kind == "tab", let look = tabCard.state?.look { info["fill"] = look.fill }
       if kind == "group" { info["rows"] = groupCard.state?.rows.map(\.id) ?? [] }
+      if kind == "calendar" {
+        let card = CGRect(x: r.minX, y: root.bounds.height - r.maxY, width: r.width, height: r.height)
+        info["events"] = Dictionary(uniqueKeysWithValues: PageProbe.items.values.filter { $0.label.hasPrefix("event:") && card.contains($0.frame) }.map { ($0.label, [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]) })
+      }
     }
     return info
   }

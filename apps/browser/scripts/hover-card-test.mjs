@@ -5,11 +5,11 @@
 // 160 ms hide delay, its buttons act, and it leaves on hover away, a click in the sidebar and a space switch (a tab
 // switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
 // pull request's card opens the pull request from its comments line. A playing pinned tab's player card goes back to
-// the tab from its artwork.
+// the tab from its artwork. A pinned calendar tab's card lists the fixture's events and a click on one shows the tab.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
@@ -27,9 +27,18 @@ const ids = Array.from({ length: 8 }, (_, i) => `t${i}`);
 const titleOf = (id, i) => (i === 3 ? "Anker USB-C to USB-C Cable (240W, 6 ft), Nylon Braided" : `Tab ${id}`);
 const tabs = ids.map((id, i) => ({ id, url: `data:text/html,<title>${titleOf(id, i)}</title>`, title: titleOf(id, i), lastActiveAt: Date.now() - i * 60_000 }));
 
+mkdirSync(join(scratch, "data"), { recursive: true });
+writeFileSync(join(scratch, "data", "calendar-fixture.json"), JSON.stringify({
+  calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
+  events: [
+    { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: 3, durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }] },
+    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 90, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
+  ],
+}));
+
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
-  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_MEDIA: "1" },
+  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_MEDIA: "1", ARDIA_CALENDAR_FIXTURE: "1" },
   probe: true,
   session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
@@ -187,6 +196,26 @@ try {
     await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
     await until("t0 active", () => run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId] === "t0"`));
     await gone("going back to the tab");
+  });
+
+  await rep.check("a pinned calendar tab's card lists today's events natively, and a click on one shows the tab", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    const tab = await run(`return ac.store.getState().newTab("w1", { url: "https://calendar.google.com/calendar/u/0/r", pinned: true, background: true })`);
+    await until("the fixture's events", async () => (await run(`return ac.pages.calendar.getState().events.length`)) >= 2, 5000);
+    await sleep(800);
+    await onRow(tab);
+    const c = await shown(tab);
+    assert.equal(c.kind, "calendar");
+    assert.equal(c.frame[2], 300);
+    assert.equal(await run(`return acPerf.findFibers("CalendarPreview", 5).length`), 0, "RN draws no calendar preview");
+    const review = await until("the review row", async () => Object.entries((await card())?.events ?? {}).find(([k]) => k.startsWith("event:review"))?.[1]);
+    assert.ok(Object.keys((await card()).events).some((k) => k.startsWith("event:standup")), "the standup row");
+    const [x, y, w, h] = review;
+    await point(x + w / 2, y + h / 2);
+    await sleep(200);
+    await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
+    await until("the calendar tab active", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId]`)) === tab);
   });
 } finally {
   await app.quit();

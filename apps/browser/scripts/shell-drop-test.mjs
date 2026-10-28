@@ -74,7 +74,8 @@ try {
 
   const windowId = await shell.app.eval(`return Object.keys(ac.store.getState().windows)[0]`);
   const card = async () => JSON.parse(await shell.app.eval(`return globalThis.expo.modules.SolaraHosted.sidebarHoverCard(${JSON.stringify(windowId)})`));
-  const pixel = (png, x, y) => [...execFileSync("ffmpeg", ["-v", "error", "-i", png, "-vf", `crop=1:1:${x}:${y}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])];
+  const region = (png, x, y, w, h) => execFileSync("ffmpeg", ["-v", "error", "-i", png, "-vf", `crop=${w}:${h}:${x}:${y}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 64 << 20 });
+  const pixel = (png, x, y) => [...region(png, x, y, 1, 1)];
   const snapshot = async (label) => {
     const png = join(scratch, `card-${label.replace(/\W+/g, "-")}.png`);
     assert.ok(await shell.app.eval(`return ac.shell.devSnapshotWindow(${JSON.stringify(windowId)}, ${JSON.stringify(png)})`), `${label}: window snapshot`);
@@ -90,12 +91,17 @@ try {
     assert.ok(c.onScreen && c.inWindow, `${label}: on screen inside the window`);
     assert.ok((await shell.frameOf("SidebarTabCardView")).found, `${label}: the card view is in the window`);
     const at = [Math.round((c.frame[0] + 8) * 2), Math.round((c.frame[1] + 10) * 2)];
-    const inside = pixel(await snapshot(label), ...at);
-    const under = pixel(bare, ...at);
+    const shot = await snapshot(label);
+    const inside = pixel(shot, ...at);
     const fill = c.fill.match(/[0-9a-f]{2}/gi).slice(0, 3).map((h) => parseInt(h, 16));
-    rep.say(`${label}: card at ${c.frame.map(Math.round)}, pixel ${inside} (fill ${fill}), without the card ${under}`);
-    assert.ok(!near(under, fill, 20), `${label}: the fill shows against what's under the card (${under} vs ${fill})`);
+    const rect = c.frame.map((v) => Math.round(v * 2));
+    const [withCard, without] = [region(shot, ...rect), region(bare, ...rect)];
+    let changed = 0;
+    for (let i = 0; i < withCard.length; i += 3) if (!near([...withCard.subarray(i, i + 3)], [...without.subarray(i, i + 3)], 20)) changed++;
+    const share = changed / (withCard.length / 3);
+    rep.say(`${label}: card at ${c.frame.map(Math.round)}, pixel ${inside} (fill ${fill}), ${(share * 100).toFixed(1)}% of its pixels differ from the window without it`);
     assert.ok(near(inside, fill, 6), `${label}: the card's fill is drawn (${inside} vs ${fill})`);
+    assert.ok(share > 0.02, `${label}: the card changes what the window shows (${(share * 100).toFixed(1)}% of its pixels)`);
     return c;
   };
 

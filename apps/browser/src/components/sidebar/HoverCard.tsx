@@ -26,7 +26,7 @@ import { HoverPlayer, usePlayerEdge, useShowsMiniPlayer } from "../media/HoverPl
 import { useMedia, usePictureInPicture } from "../media/state";
 import { nativeSidebarEnabled } from "./NativeSidebar";
 import { useSidebarWidth } from "./tokens";
-import { bareHost, nativeCardKind, useNativeHoverCard, useNativeHoverCardActive } from "./nativeHoverCard";
+import { bareHost, NativeCalendarCard, nativeCardKind, useNativeHoverCard, useNativeHoverCardActive } from "./nativeHoverCard";
 
 const WIDTH = 264;
 const DIA_WIDTH = 200;
@@ -64,9 +64,11 @@ export function HoverCard({ windowId, width, height }: { windowId: string; width
   const dia = nativeSidebarEnabled() && shown?.kind === "tab" && !player && !calendar;
   const origin = !shown ? null : dia ? diaCardOrigin(shown.anchor, sidebarWidth, diaHeight, height) : hoverCardOrigin(shown.anchor, player ? edge : undefined);
   useHoverCardPlacement(motion, origin, { width, height });
-  const nativeKind = nativeCardKind(useNativeHoverCardActive(windowId), shown, dia, player);
+  const nativeKind = nativeCardKind(useNativeHoverCardActive(windowId), shown, dia, player, calendar);
   useNativeHoverCard(windowId, nativeKind, target, sidebarWidth, height, edge);
-  if (!shown || nativeKind) return null;
+  if (!shown) return null;
+  if (nativeKind === "calendar") return target ? <NativeCalendarCard windowId={windowId} tabId={shown.id} anchor={shown.anchor} /> : null;
+  if (nativeKind) return null;
   return (
     <Animated.View pointerEvents={leaving || entering ? "none" : "box-none"} style={[StyleSheet.absoluteFill, motion.style]}>
       {dia && origin ? (

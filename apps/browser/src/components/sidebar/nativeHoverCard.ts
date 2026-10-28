@@ -16,6 +16,8 @@ import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { openLiveItem } from "../../live/engine";
 import { useLive } from "../../live/store";
 import { useLiveColors } from "../live/colors";
+import { calendarPreviewAction, useCalendarPreviewState } from "../live/CalendarPreview";
+import type { CalendarEvent } from "../../live/meetings";
 import { clickTab, tabTitle } from "./actions";
 import { returnFocusToPage, useGroupRows } from "./GroupPanel";
 import { cardHoverProps, dismissHover, holdHover } from "./hover";
@@ -26,7 +28,7 @@ const TOPIC = "sidebar.hoverCard";
 const cards: Record<string, object> = {};
 let queued = false;
 
-export type NativeCardKind = "tab" | "group" | "live" | "player";
+export type NativeCardKind = "tab" | "group" | "live" | "player" | "calendar";
 
 function publish() {
   if (queued) return;
@@ -57,10 +59,11 @@ export function useNativeHoverCardActive(windowId: string): boolean {
   return active;
 }
 
-export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean, player: boolean): NativeCardKind | null {
+export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean, player: boolean, calendar: boolean): NativeCardKind | null {
   if (!active || !hover) return null;
   if (dia) return "tab";
   if (hover.kind === "tab" && player && nativeMedia("media.hoverPlayer")) return "player";
+  if (hover.kind === "tab" && !player && calendar) return "calendar";
   if (hover.kind === "group") return "group";
   if (hover.kind === "live") return "live";
   return null;
@@ -170,6 +173,31 @@ function useLiveCard(id: string | null, anchor: Anchor | null) {
   };
 }
 
+const calendarTimed: Record<string, CalendarEvent[]> = {};
+
+export function NativeCalendarCard({ windowId, tabId, anchor }: { windowId: string; tabId: string; anchor: Anchor }) {
+  const theme = useTheme();
+  const { state, timed } = useCalendarPreviewState(tabId);
+  calendarTimed[windowId] = timed;
+  const dark = !!theme.dark;
+  const key = JSON.stringify({
+    kind: "calendar",
+    tabId,
+    anchor: frame(anchor),
+    look: { dark, panel: hex(theme.panel), panelBorder: hex(theme.panelBorder), shadowOpacity: theme.panelShadowOpacity },
+    state: JSON.stringify({ card: "calendarPreview", dark, nowColor: dark ? "#E5534B" : "#D1242F", ...state }),
+  });
+  useLayoutEffect(() => setCard(windowId, JSON.parse(key)), [windowId, key]);
+  useLayoutEffect(
+    () => () => {
+      delete calendarTimed[windowId];
+      setCard(windowId, null);
+    },
+    [windowId],
+  );
+  return null;
+}
+
 export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null, target: Hover | null, sidebarWidth: number, windowHeight: number, edge: number) {
   const live = target && kind ? target : null;
   const anchor = live?.anchor ?? null;
@@ -178,13 +206,15 @@ export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null
   const liveCard = useLiveCard(kind === "live" ? (live?.id ?? null) : null, anchor);
   const player = usePlayerCard(kind === "player" ? (live?.id ?? null) : null, anchor, edge);
   const card = tab ?? group ?? liveCard ?? player;
-  const key = card && JSON.stringify(card);
-  useLayoutEffect(() => setCard(windowId, key ? JSON.parse(key) : null), [windowId, key]);
+  const key = kind === "calendar" && live ? "calendar" : card && JSON.stringify(card);
+  useLayoutEffect(() => {
+    if (key !== "calendar") setCard(windowId, key ? JSON.parse(key) : null);
+  }, [windowId, key]);
   useLayoutEffect(() => () => setCard(windowId, null), [windowId]);
 }
 
 addNativeSettingsHandlers({
-  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[]; tabId?: string; url?: string }) => {
+  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[]; tabId?: string; url?: string; action?: string; eventId?: string }) => {
     if (event === "enter") return cardHoverProps.onMouseEnter();
     if (event === "leave") return cardHoverProps.onMouseLeave();
     if (event === "hold") return holdHover(true);
@@ -207,6 +237,10 @@ addNativeSettingsHandlers({
       if (!item) return;
       dismissHover();
       return void openLiveItem(windowId, folderId, item);
+    }
+    if (event === "calendar") {
+      if (!extra?.action) return;
+      return calendarPreviewAction(id, windowId, calendarTimed[windowId] ?? [], { kind: extra.action, id: extra.eventId });
     }
     if (event === "layout") {
       const [x = 0, y = 0, width = 0, height = 0] = extra?.frame ?? [];

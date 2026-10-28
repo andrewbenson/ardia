@@ -1,3 +1,4 @@
+import type { PasswordPromptAnswer } from "@ardia/ardiacore";
 import { publishSettingsTopic } from "@ardia/settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { View } from "react-native";
@@ -45,6 +46,10 @@ addNativeSettingsHandlers({
   },
   "pane.history": (windowId: string, tabId: string, event: PaneHistoryEvent) => handlers.get(`history:${windowId}:${tabId}`)?.current?.(event as never),
   "pane.selection": (windowId: string, tabId: string, click: PaneClick) => handlers.get(`selection:${windowId}:${tabId}`)?.current?.(click as never),
+  "pane.password": (_windowId: string, tabId: string, action: PasswordPromptAnswer, username: string) => {
+    patchPage(tabId, { passwordPrompt: null });
+    void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username } : undefined);
+  },
   "pane.zoom": (_windowId: string, tabId: string, kind: string, step: number) => {
     if (kind === "dismiss") return setPopover(tabId, null);
     if (kind === "step") void webviews.get(tabId)?.zoomStep(Math.sign(Number(step)) as -1 | 0 | 1);
@@ -95,9 +100,17 @@ function publishPrompts() {
   });
 }
 
-export function useNativePanePromptsTheme(active: boolean, windowId: string, theme: Theme) {
-  const { dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } = theme;
-  const key = JSON.stringify({ dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText });
+export function useNativePanePromptsTheme(active: boolean, windowId: string, theme: Theme, form: { accent: string; control: string; controlBorder: string }) {
+  const { dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, toolbarHover, rowHover, icon } = theme;
+  const prompt = {
+    dark: !!dark,
+    theme: { textPrimary, textSecondary, toolbarHover, rowHover, icon, accent: form.accent },
+    control: form.control,
+    controlBorder: form.controlBorder,
+    goButton,
+    goButtonText,
+  };
+  const key = JSON.stringify({ dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, prompt });
   useEffect(() => {
     if (!active) return;
     promptWindows[windowId] = { theme: JSON.parse(key) };

@@ -34,6 +34,7 @@ import { patchPage, useFullscreenTab, usePages } from "./layout/pageState";
 import { useTabDrag } from "./layout/tabDrag";
 import { SadTab, StatusBubble } from "./layout/PaneOverlays";
 import { useNativePanePromptsTheme } from "./layout/nativePaneOverlays";
+import { useFormColors } from "./settings/controls";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
 import { useWindowShell } from "./layout/ShellBackdrop";
@@ -99,7 +100,7 @@ export function ContentCard() {
   const [pooled] = useState(() => pagesPooledIn(windowId));
   const [nativePrompts] = useState(() => panePromptsNativeIn(windowId));
   const cardTheme = useTheme();
-  useNativePanePromptsTheme(nativePrompts, windowId, cardTheme);
+  useNativePanePromptsTheme(nativePrompts, windowId, cardTheme, useFormColors());
   useNativeSplitChrome(windowId, shell, cardTheme, fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
@@ -518,7 +519,7 @@ function PageOverlays({
   popovers = true,
   cliPill = false,
   peek = false,
-  sadTab = true,
+  nativePrompts = false,
 }: {
   tabId: string;
   windowId: string;
@@ -531,7 +532,7 @@ function PageOverlays({
   popovers?: boolean;
   cliPill?: boolean;
   peek?: boolean;
-  sadTab?: boolean;
+  nativePrompts?: boolean;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
@@ -542,10 +543,10 @@ function PageOverlays({
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>
         <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
-      {sadTab && <SadTab tabId={tabId} nativeAllowed={!peek} />}
+      {!nativePrompts && <SadTab tabId={tabId} nativeAllowed={!peek} />}
       {cliPill && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
-      <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
+      {!nativePrompts && <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       {!newTabShown && <ExternalAppPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       {!newTabShown && <EngineOfferPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
@@ -605,7 +606,7 @@ export function PaneContent({ windowId, tabId, shown }: { windowId: string; tabI
           statusStyle={statusStyle}
           popovers={overCard !== tabId}
           cliPill={!peekShown && (fullscreen || focused || !inSplit)}
-          sadTab={!nativePrompts}
+          nativePrompts={nativePrompts}
         />
       )}
     </View>

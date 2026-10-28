@@ -292,6 +292,7 @@ const cef: Modules["ArdiaCEF"] = {
   cancelDownload: (id) => (cancelledDownloads.push(id), Promise.resolve()),
   pauseDownload: () => Promise.resolve(),
   resumeDownload: () => Promise.resolve(),
+  keepDownload: () => Promise.resolve(),
   resolvePermission: () => Promise.resolve(),
   resolveExternalApp: () => Promise.resolve(),
   getExternalAppAllowances: () => Promise.resolve([]),

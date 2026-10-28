@@ -9,6 +9,8 @@ public struct DownloadRowState: Decodable, Equatable, Sendable {
   public var total: Double
   public var speed: Double
   public var paused: Bool
+  public var url: String?
+  public var dangerous: Bool?
 }
 
 public struct DownloadsListState: Decodable, Equatable, Sendable {
@@ -29,6 +31,7 @@ public enum DownloadsEvent: Sendable, Equatable {
   case reveal(String)
   case pause(String)
   case resume(String)
+  case keep(String)
   case cancel(String)
   case menu(String)
   case clear
@@ -55,12 +58,20 @@ public enum DownloadsFormat {
     return "\(Int((seconds / 3600).rounded())) hr left"
   }
 
+  public static func awaitsKeep(_ d: DownloadRowState) -> Bool { d.state == "downloading" && d.dangerous == true }
+
+  public static func dangerWarning(_ d: DownloadRowState, short: Bool = false) -> String {
+    if (d.url ?? "").hasPrefix("http:") { return short ? "Blocked: not secure" : "Insecure download blocked" }
+    return short ? "Blocked: unsafe file type" : "This type of file can harm your computer"
+  }
+
   public static func status(_ d: DownloadRowState, exists: Bool) -> String {
     switch d.state {
     case "finished": return exists ? bytes(d.total > 0 ? d.total : d.received) : "Deleted"
     case "failed": return "Failed to Download"
     case "cancelled": return "Cancelled"
     default:
+      if awaitsKeep(d) { return dangerWarning(d) }
       let progress = d.total > 0 ? "\(bytes(d.received)) of \(bytes(d.total))" : bytes(d.received)
       if d.paused { return "\(progress) — Paused" }
       if d.speed > 0 && d.total > 0 { return "\(progress), \(bytes(d.speed))/s — \(duration((d.total - d.received) / d.speed))" }
@@ -85,6 +96,10 @@ enum DownloadsMetrics {
   static let padBottom: CGFloat = 17 - 12
   static let textButtonPad: CGFloat = 7
   static let clearNudge: CGFloat = 2.5
+
+  static func danger(_ dark: Bool) -> NSColor {
+    dark ? NSColor(srgbRed: 1, green: 0x45 / 255.0, blue: 0x3A / 255.0, alpha: 1) : NSColor(srgbRed: 1, green: 0x3B / 255.0, blue: 0x30 / 255.0, alpha: 1)
+  }
 }
 
 class HoverFillView: NSView {
@@ -163,6 +178,7 @@ final class DownloadRowView: HoverFillView, NSDraggingSource {
   private let track = CALayer()
   private let fill = CALayer()
   private var buttons: [ToolbarButtonView] = []
+  private var textButtons: [DownloadsTextButton] = []
   private var dragStart: NSPoint?
 
   init(row: DownloadRowState, theme: NewTabTheme, dark: Bool) {
@@ -222,10 +238,11 @@ final class DownloadRowView: HoverFillView, NSDraggingSource {
     statusParagraph.minimumLineHeight = 14
     statusParagraph.maximumLineHeight = 14
     statusParagraph.lineBreakMode = .byTruncatingTail
+    let blocked = DownloadsFormat.awaitsKeep(next)
     status.attributedStringValue = NSAttributedString(
-      string: DownloadsFormat.status(next, exists: present),
-      attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: nextTheme.textSecondary.ns, .paragraphStyle: statusParagraph])
-    let downloading = next.state == "downloading"
+      string: blocked ? DownloadsFormat.dangerWarning(next, short: true) : DownloadsFormat.status(next, exists: present),
+      attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: blocked ? DownloadsMetrics.danger(nextDark) : nextTheme.textSecondary.ns, .paragraphStyle: statusParagraph])
+    let downloading = next.state == "downloading" && !blocked
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     track.isHidden = !downloading
@@ -238,9 +255,25 @@ final class DownloadRowView: HoverFillView, NSDraggingSource {
     needsLayout = true
   }
 
+  private func syncTextButtons() {
+    let titles: [(String, DownloadsEvent)] = DownloadsFormat.awaitsKeep(row) ? [("Keep", .keep(row.id)), ("Discard", .cancel(row.id))] : []
+    if textButtons.map(\.label.stringValue) != titles.map(\.0) {
+      textButtons.forEach { $0.removeFromSuperview() }
+      textButtons = titles.map { title, event in
+        let b = DownloadsTextButton(title: title)
+        b.onPress = { [weak self] in self?.onEvent(event) }
+        addSubview(b)
+        return b
+      }
+      needsLayout = true
+    }
+    textButtons.forEach { $0.theme = theme }
+  }
+
   private func syncButtons() {
+    syncTextButtons()
     var specs: [(String, String, DownloadsEvent)] = []
-    if row.state == "downloading" {
+    if row.state == "downloading" && !DownloadsFormat.awaitsKeep(row) {
       specs = [
         (row.paused ? "play.circle.fill" : "pause.circle.fill", row.paused ? "Resume" : "Pause", row.paused ? .resume(row.id) : .pause(row.id)),
         ("xmark.circle.fill", "Cancel", .cancel(row.id)),
@@ -299,15 +332,19 @@ final class DownloadRowView: HoverFillView, NSDraggingSource {
     let x = DownloadsMetrics.rowPadding
     icon.frame = CGRect(x: x, y: (h - DownloadsMetrics.fileIcon) / 2, width: DownloadsMetrics.fileIcon, height: DownloadsMetrics.fileIcon)
     let bearing = (DownloadsMetrics.rowButton - 13) / 2
-    var right = bounds.width - DownloadsMetrics.rowPadding + bearing
+    var right = bounds.width - DownloadsMetrics.rowPadding + (textButtons.isEmpty ? bearing : DownloadsMetrics.textButtonPad)
     for b in buttons.reversed() {
       right -= DownloadsMetrics.rowButton
       b.frame = CGRect(x: right, y: (h - DownloadsMetrics.rowButton) / 2, width: DownloadsMetrics.rowButton, height: DownloadsMetrics.rowButton)
     }
-    let textRight = (buttons.isEmpty ? bounds.width - DownloadsMetrics.rowPadding : right - DownloadsMetrics.iconGap + 0)
+    for b in textButtons.reversed() {
+      right -= b.paddedWidth
+      b.frame = CGRect(x: right, y: (h - 22) / 2, width: b.paddedWidth, height: 22)
+    }
+    let textRight = (buttons.isEmpty && textButtons.isEmpty ? bounds.width - DownloadsMetrics.rowPadding : right - DownloadsMetrics.iconGap + 0)
     let textLeft = x + DownloadsMetrics.fileIcon + DownloadsMetrics.iconGap
     let width = max(0, textRight - textLeft)
-    let downloading = row.state == "downloading"
+    let downloading = row.state == "downloading" && !DownloadsFormat.awaitsKeep(row)
     let column: CGFloat = 16 + (downloading ? 3 + 3 + 2 : 0) + 14
     var y = (h - column) / 2
     name.frame = CGRect(x: textLeft - 2, y: y, width: width + 4, height: 16)
@@ -345,6 +382,7 @@ final class DownloadsTextButton: HoverFillView {
   required init?(coder: NSCoder) { fatalError() }
 
   var width: CGFloat { ceil(label.intrinsicContentSize.width) - 4 + 2 * DownloadsMetrics.textButtonPad }
+  var paddedWidth: CGFloat { ceil(label.attributedStringValue.size().width) + 2 * DownloadsMetrics.textButtonPad }
 
   override func refresh() { layer?.backgroundColor = hovered ? theme.toolbarHover.cg : nil }
 

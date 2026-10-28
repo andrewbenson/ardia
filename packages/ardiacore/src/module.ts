@@ -11,6 +11,7 @@ export type Download = {
   path: string;
   state: DownloadState;
   paused: boolean;
+  dangerous?: boolean;
   received: number;
   total: number;
   speed: number;
@@ -148,6 +149,7 @@ const downloadCommand = (action: "cancel" | "pause" | "resume", id: string) =>
 export const cancelDownload = (id: string) => downloadCommand("cancel", id);
 export const pauseDownload = (id: string) => downloadCommand("pause", id);
 export const resumeDownload = (id: string) => downloadCommand("resume", id);
+export const keepDownload = (id: string) => (isWebKitDownload(id) ? Promise.resolve() : (Cef.keepDownload?.(id) ?? Promise.resolve()));
 
 export type DownloadSettings = { folder: string; askWhereToSave: boolean; managed: boolean };
 export const getDownloadSettings = (profile = "") => engineCall<DownloadSettings>("ac_downloads_settings", profile);

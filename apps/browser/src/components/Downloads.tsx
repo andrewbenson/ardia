@@ -1,4 +1,4 @@
-import { cancelDownload, pauseDownload, resumeDownload, type Download } from "@ardia/ardiacore";
+import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "@ardia/ardiacore";
 import { ContextMenuArea, copyText, fileExists, fileIcon, MouseArea, moveToTrash, openFile, PopoverBubble, popoverBubbleAvailable, revealFile, showMenu, Surface, Symbol, VisualEffect, type MenuItem } from "@ardia/shell";
 import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
@@ -35,10 +35,20 @@ function formatDuration(seconds: number) {
   return `${Math.round(seconds / 3600)} hr left`;
 }
 
+export const awaitsKeep = (d: Download) => d.state === "downloading" && d.dangerous === true;
+
+export function dangerWarning(d: Download, short = false) {
+  if (d.url.startsWith("http:")) return short ? "Blocked: not secure" : "Insecure download blocked";
+  return short ? "Blocked: unsafe file type" : "This type of file can harm your computer";
+}
+
+export const dangerColor = (dark: boolean) => (dark ? "#FF453A" : "#FF3B30");
+
 export function downloadStatus(d: Download, exists = true) {
   if (d.state === "finished") return exists ? formatBytes(d.total > 0 ? d.total : d.received) : "Deleted";
   if (d.state === "failed") return "Failed to Download";
   if (d.state === "cancelled") return "Cancelled";
+  if (awaitsKeep(d)) return dangerWarning(d);
   const progress = d.total > 0 ? `${formatBytes(d.received)} of ${formatBytes(d.total)}` : formatBytes(d.received);
   if (d.paused) return `${progress} — Paused`;
   if (d.speed > 0 && d.total > 0) return `${progress}, ${formatBytes(d.speed)}/s — ${formatDuration((d.total - d.received) / d.speed)}`;
@@ -63,8 +73,12 @@ function toggleOpenWhenDone(id: string) {
 
 export async function downloadMenu(d: Download, windowId: string) {
   const exists = d.state === "finished" && fileExists(d.path);
-  const items: MenuItem[] =
-    d.state === "downloading"
+  const items: MenuItem[] = awaitsKeep(d)
+    ? [
+        { id: "keep", title: "Keep" },
+        { id: "cancel", title: "Discard" },
+      ]
+    : d.state === "downloading"
       ? [
           { id: "whenDone", title: "Open When Done", checked: openWhenDone.has(d.id) },
           { id: d.paused ? "resume" : "pause", title: d.paused ? "Resume" : "Pause" },
@@ -86,6 +100,7 @@ export async function downloadMenu(d: Download, windowId: string) {
   if (choice === "whenDone") toggleOpenWhenDone(d.id);
   if (choice === "pause") void pauseDownload(d.id);
   if (choice === "resume") void resumeDownload(d.id);
+  if (choice === "keep") void keepDownload(d.id);
   if (choice === "cancel") void cancelDownload(d.id);
   if (choice === "open") void openFile(d.path);
   if (choice === "reveal") void revealFile(d.path);
@@ -306,7 +321,7 @@ function NativeDownloadsList({ windowId, ids, clearable, listMax, onClose }: { w
       return d;
     })
     .filter((d): d is Download => !!d)
-    .map((d) => ({ id: d.id, filename: d.filename, path: d.path, state: d.state, received: d.received, total: d.total, speed: d.speed, paused: !!d.paused }));
+    .map((d) => ({ id: d.id, url: d.url, filename: d.filename, path: d.path, state: d.state, received: d.received, total: d.total, speed: d.speed, paused: !!d.paused, dangerous: !!d.dangerous }));
   const [height, setHeight] = useState<number | null>(null);
   const state = JSON.stringify({
     rows,
@@ -330,6 +345,7 @@ function NativeDownloadsList({ windowId, ids, clearable, listMax, onClose }: { w
     else if (e.kind === "reveal") void revealFile(d.path);
     else if (e.kind === "pause") void pauseDownload(d.id);
     else if (e.kind === "resume") void resumeDownload(d.id);
+    else if (e.kind === "keep") void keepDownload(d.id);
     else if (e.kind === "cancel") void cancelDownload(d.id);
     else if (e.kind === "menu") void downloadMenu(d, windowId);
   };
@@ -486,6 +502,7 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
   }, [finishedPath]);
   const progress = d.total > 0 ? d.received / d.total : 0;
   const done = d.state === "finished" && exists;
+  const blocked = awaitsKeep(d);
   return (
     <View {...hoverProps}>
       <MouseArea path={done ? d.path : null}>
@@ -518,18 +535,23 @@ function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
                   >
                     {d.filename || "Preparing…"}
                   </Text>
-                  {d.state === "downloading" ? (
+                  {d.state === "downloading" && !blocked ? (
                     <View style={{ height: 3, borderRadius: 1.5, marginTop: 3, marginBottom: 2, backgroundColor: progressTrack(theme.dark) }}>
                       <View
                         style={{ width: `${Math.max(progress, 0.03) * 100}%`, height: 3, borderRadius: 1.5, backgroundColor: d.paused ? theme.textTertiary : theme.accent }}
                       />
                     </View>
                   ) : null}
-                  <Text numberOfLines={1} style={{ fontSize: PANEL.subtitleSize, lineHeight: PANEL.subtitleLine, color: theme.textSecondary }}>
-                    {downloadStatus(d, exists)}
+                  <Text numberOfLines={1} style={{ fontSize: PANEL.subtitleSize, lineHeight: PANEL.subtitleLine, color: blocked ? dangerColor(!!theme.dark) : theme.textSecondary }}>
+                    {blocked ? dangerWarning(d, true) : downloadStatus(d, exists)}
                   </Text>
                 </View>
-                {d.state === "downloading" ? (
+                {blocked ? (
+                  <View style={{ flexDirection: "row", marginRight: -TEXT_BUTTON_PAD }}>
+                    <TextButton title="Keep" onPress={() => void keepDownload(d.id)} />
+                    <TextButton title="Discard" onPress={() => void cancelDownload(d.id)} />
+                  </View>
+                ) : d.state === "downloading" ? (
                   <View style={{ flexDirection: "row", marginRight: -ROW_BUTTON_BEARING }}>
                     <RowButton
                       icon={d.paused ? "play.circle.fill" : "pause.circle.fill"}

@@ -13,9 +13,10 @@ public struct PageDownload: Decodable, Equatable, Sendable, Identifiable {
   public var total: Double
   public var speed: Double
   public var paused: Bool
+  public var dangerous: Bool?
 
   var row: DownloadRowState {
-    DownloadRowState(id: id, filename: filename, path: path, state: state, received: received, total: total, speed: speed, paused: paused)
+    DownloadRowState(id: id, filename: filename, path: path, state: state, received: received, total: total, speed: speed, paused: paused, url: url, dangerous: dangerous)
   }
 }
 
@@ -24,6 +25,7 @@ public enum DownloadsPageEvent: Equatable, Sendable {
   case reveal(String)
   case pause(String)
   case resume(String)
+  case keep(String)
   case cancel(String)
   case menu(String)
   case remove(String)
@@ -97,6 +99,7 @@ struct DownloadCard: View {
     let d = download
     let done = d.state == "finished" && exists
     let progress = d.total > 0 ? d.received / d.total : 0
+    let blocked = DownloadsFormat.awaitsKeep(d.row)
     HStack(spacing: 14) {
       Image(nsImage: Self.icon(d.path.isEmpty ? d.filename : d.path))
         .resizable()
@@ -114,7 +117,7 @@ struct DownloadCard: View {
           .onTapGesture { onEvent(.source(d.id)) }
           .accessibilityAddTraits(.isButton)
           .accessibilityAction { onEvent(.source(d.id)) }
-        if d.state == "downloading" {
+        if d.state == "downloading" && !blocked {
           GeometryReader { proxy in
             ZStack(alignment: .leading) {
               Capsule(style: .circular).fill(theme.rowHover)
@@ -125,10 +128,15 @@ struct DownloadCard: View {
           .frame(height: 3)
           .padding(.top, 3)
         }
-        OnboardingText(DownloadsFormat.status(d.row, exists: exists), size: 12, color: theme.textSecondary, lines: 1)
+        OnboardingText(DownloadsFormat.status(d.row, exists: exists), size: 12, color: blocked ? theme.destructive : theme.textSecondary, lines: 1)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      if d.state == "downloading" {
+      if blocked {
+        HStack(spacing: 8) {
+          PageButton(title: "Keep") { onEvent(.keep(d.id)) }
+          PageButton(title: "Discard", kind: .destructive) { onEvent(.cancel(d.id)) }
+        }
+      } else if d.state == "downloading" {
         HStack(spacing: 8) {
           PageButton(title: d.paused ? "Resume" : "Pause") { onEvent(d.paused ? .resume(d.id) : .pause(d.id)) }
           PageButton(title: "Cancel") { onEvent(.cancel(d.id)) }

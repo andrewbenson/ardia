@@ -48,6 +48,7 @@ final class NativeDownloadsView: ExpoView {
         case .reveal(let id): ("reveal", id)
         case .pause(let id): ("pause", id)
         case .resume(let id): ("resume", id)
+        case .keep(let id): ("keep", id)
         case .cancel(let id): ("cancel", id)
         case .menu(let id): ("menu", id)
         case .clear: ("clear", nil)

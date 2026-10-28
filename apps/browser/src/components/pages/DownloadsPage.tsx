@@ -1,4 +1,4 @@
-import { cancelDownload, pauseDownload, resumeDownload, type Download } from "@ardia/ardiacore";
+import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "@ardia/ardiacore";
 import { fileExists, MouseArea, openFile, revealFile, Symbol } from "@ardia/shell";
 import { useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
@@ -7,7 +7,7 @@ import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { downloadsIn } from "../../store/ui";
 import { openUrl } from "../bookmarks/actions";
-import { downloadMenu, downloadStatus, FileIcon } from "../Downloads";
+import { awaitsKeep, dangerColor, downloadMenu, downloadStatus, FileIcon } from "../Downloads";
 import { IconButton, useHover } from "../primitives";
 import { Button, useFormColors } from "../settings/controls";
 import { EmptyState, hostLabel, matchesQuery, PAGE_WIDTH, PageHeader } from "./PageLayout";
@@ -52,6 +52,7 @@ function DownloadCard({ d, windowId }: { d: Download; windowId: string }) {
   const exists = d.state !== "finished" || fileExists(d.path);
   const done = d.state === "finished" && exists;
   const progress = d.total > 0 ? d.received / d.total : 0;
+  const blocked = awaitsKeep(d);
   return (
     <View {...hoverProps} style={{ width: PAGE_WIDTH - 32, maxWidth: "100%" }}>
       <MouseArea path={done ? d.path : null}>
@@ -84,16 +85,21 @@ function DownloadCard({ d, windowId }: { d: Download; windowId: string }) {
                 {hostLabel(d.url)}
               </Text>
             </Pressable>
-            {d.state === "downloading" && (
+            {d.state === "downloading" && !blocked && (
               <View style={{ height: 3, borderRadius: 1.5, marginTop: 3, backgroundColor: theme.rowHover }}>
                 <View style={{ width: `${Math.max(progress, 0.03) * 100}%`, height: 3, borderRadius: 1.5, backgroundColor: d.paused ? theme.textTertiary : theme.accent }} />
               </View>
             )}
-            <Text numberOfLines={1} style={{ fontSize: 12, color: theme.textSecondary }}>
+            <Text numberOfLines={1} style={{ fontSize: 12, color: blocked ? dangerColor(!!theme.dark) : theme.textSecondary }}>
               {downloadStatus(d, exists)}
             </Text>
           </View>
-          {d.state === "downloading" ? (
+          {blocked ? (
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Button title="Keep" onPress={() => void keepDownload(d.id)} />
+              <Button title="Discard" kind="destructive" onPress={() => void cancelDownload(d.id)} />
+            </View>
+          ) : d.state === "downloading" ? (
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Button title={d.paused ? "Resume" : "Pause"} onPress={() => void (d.paused ? resumeDownload(d.id) : pauseDownload(d.id))} />
               <Button title="Cancel" onPress={() => void cancelDownload(d.id)} />

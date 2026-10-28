@@ -1,4 +1,4 @@
-import { cancelDownload, pauseDownload, resumeDownload } from "@ardia/ardiacore";
+import { cancelDownload, keepDownload, pauseDownload, resumeDownload } from "@ardia/ardiacore";
 import { NativePage, type NativePageEvent } from "@ardia/settings";
 import { openFile, revealFile } from "@ardia/shell";
 import { StyleSheet } from "react-native";
@@ -16,7 +16,7 @@ export function NativeDownloadsPage({ tabId }: { tabId: string }) {
   const downloads = useBrowser(useShallow((s) => downloadsIn(s, windowId)));
   const state = JSON.stringify({
     ...pageThemeState(theme),
-    downloads: downloads.map((d) => ({ id: d.id, url: d.url, filename: d.filename, path: d.path, state: d.state, received: d.received, total: d.total, speed: d.speed, paused: !!d.paused })),
+    downloads: downloads.map((d) => ({ id: d.id, url: d.url, filename: d.filename, path: d.path, state: d.state, received: d.received, total: d.total, speed: d.speed, paused: !!d.paused, dangerous: !!d.dangerous })),
   });
   const onEvent = (e: NativePageEvent) => {
     const s = useBrowser.getState();
@@ -27,6 +27,7 @@ export function NativeDownloadsPage({ tabId }: { tabId: string }) {
     else if (e.kind === "reveal") void revealFile(d.path);
     else if (e.kind === "pause") void pauseDownload(d.id);
     else if (e.kind === "resume") void resumeDownload(d.id);
+    else if (e.kind === "keep") void keepDownload(d.id);
     else if (e.kind === "cancel") void cancelDownload(d.id);
     else if (e.kind === "menu") void downloadMenu(d, windowId);
     else if (e.kind === "remove") s.removeDownload(d.id);

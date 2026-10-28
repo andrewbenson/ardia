@@ -51,6 +51,7 @@ const CHECKS = {
   "a-crash": "the file keychain seeded with mock_password, a crash after keying, after the update and after keyed, then a relaunch: migrated with an update and no add, or back to A",
   "version-change": "re-key, then a copy with another CFBundleVersion (and a crash at before-cleanup on it): .rekey-old removed, no keychain write, everything reads",
   "rare-points": "the crash points the fixture alone never reaches: after-discard-N (a planted GCM Store), after-restage-keyed (a truncated staged file fails verify) and after-undo-N (the key gone mid-swap), each crashed and recovered",
+  "key-overwrite": "re-key, then the key file overwritten with another valid key, two launches with sealed sync: reports tracked prefs and their encrypted hashes, the off extension, rows on disk, what Chrome reads, the sync pause",
   "off-mode": "a re-key stopped at staged, then a build that can't re-key (mock keychain, no test mode): the quit message, nothing touched; then the test build finishes it",
   "test-refused": "ARDIA_TEST_REKEY=1 without the file keychain, and ARDIA_TEST_REKEY=yes: refused and logged, no re-key, data untouched",
   "rollback": "re-key, then the manual rollback (originals back from .rekey-old, item and journal deleted): the next launch re-keys again",
@@ -1108,6 +1109,66 @@ const CASES = {
       lines.push(...await recoverAndCheck(ctx, run, `crash at ${point}`));
     }
     return lines;
+  },
+  async "key-overwrite"(ctx) {
+    const run = prepare(ctx.root, "key-overwrite", ctx.fixture);
+    run.started = await start(ctx.app, run, REKEY);
+    if (run.started.outcome !== "running") return [{ ok: false, name: "the migrated launch reaches Chrome", detail: run.started.outcome }];
+    await waitWindow(run.started.instance);
+    await run.started.instance.quit();
+    const first = snapshot(run).key;
+    const dirs = ctx.manifest.profiles.map((p) => p.dir);
+    const rowCounts = () => Object.fromEntries(dirs.flatMap((dir) => [["Login Data", "logins"], ["Login Data", "password_notes"], ["Cookies", "cookies"], ["Web Data", "credit_cards"], ["Web Data", "local_ibans"]].map(([file, table]) => {
+      const db = openRead(join(run.udd, dir, file));
+      try { return [`${dir}/${table}`, db.prepare(`SELECT count(*) AS n FROM ${q(table)}`).get().n]; } finally { db.close(); }
+    })));
+    const underFirst = (k) => Object.entries(scan(run.udd, k).hits).filter(([w]) => !w.endsWith(" prefs")).map(([w, n]) => `${w} ${n}`).sort();
+    const rowsBefore = rowCounts();
+    const firstHits = underFirst(first);
+    const trackedBefore = trackedPrefs(run.udd, dirs);
+    const second = randomBytes(16).toString("base64");
+    seedKey(run, second);
+    const folder = join(run.dir, "folder");
+    mkdirSync(folder);
+    const observations = [];
+    for (let launch = 1; launch <= 2; launch++) {
+      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder });
+      if (run.started.outcome !== "running") return [{ ok: false, name: `launch ${launch} over the overwritten key reaches Chrome`, detail: `${run.started.outcome}; dialog ${dialogShown(snapshot(run).appLog)}` }];
+      const app = run.started.instance;
+      let read = null, sync = null;
+      try {
+        await waitWindow(app);
+        await sleep(1500);
+        read = await readBack(app, ctx.origin, ctx.profiles);
+        if (launch === 1) {
+          sync = await app.eval(`return acSync.turnOnSync(${JSON.stringify(folder)})`, { timeout: 90000 });
+          for (let i = 0; i < 2; i++) { await app.eval("return acSync.syncNow()", { timeout: 90000 }); await sleep(1000); }
+        }
+      } finally {
+        await app.quit();
+      }
+      observations.push({ read, sync });
+    }
+    const s = snapshot(run);
+    const rowsAfter = rowCounts();
+    const trackedAfter = trackedPrefs(run.udd, dirs);
+    const prefWrong = trackedChanges(ctx.manifest.tracked ?? {}, trackedAfter);
+    const changedSinceRekey = trackedChanges(trackedBefore, trackedAfter);
+    const prefHits = (k) => Object.entries(scan(run.udd, k).hits).filter(([w]) => w.endsWith(" prefs")).map(([w, n]) => `${w} ${n}`);
+    const lost = compare(observations[1].read, ctx.manifest, null);
+    const paused = /saved passwords didn't decrypt; not syncing passwords now/.test(s.appLog);
+    let ledger = null;
+    try { ledger = JSON.parse(readFileSync(join(run.data, "sync-pw-ledger.json"), "utf8")); } catch {}
+    const ext = ctx.manifest.profiles.map((p) => `${p.name}: ${JSON.stringify(observations.map((o) => o.read?.[p.name]?.extensions))}`);
+    return [
+      { ok: true, name: `observed: tracked prefs after two launches on another key ${prefWrong.length || changedSinceRekey.length ? "RESET" : "kept"} (encrypted pref hashes)`, detail: `vs fixture: ${prefWrong.join("; ") || "none"} | vs after the re-key: ${changedSinceRekey.join("; ") || "none"} | encrypted hashes under the first key ${JSON.stringify(prefHits(first))}, under the second ${JSON.stringify(prefHits(second))}` },
+      { ok: true, name: `observed: the extension the fixture turned off ${lost.some((w) => /extension/.test(w)) ? "LOST" : "kept, still off"}`, detail: ext.join(" | ") },
+      { ok: !Object.keys(rowsBefore).some((k) => !k.endsWith("/cookies") && rowsBefore[k] !== rowsAfter[k]), name: `logins, notes, cards and IBANs stay on disk (row counts); observed: cookies ${Object.keys(rowsBefore).some((k) => k.endsWith("/cookies") && rowsBefore[k] !== rowsAfter[k]) ? "DELETED" : "kept"}`, detail: `${JSON.stringify(rowsBefore)} → ${JSON.stringify(rowsAfter)}` },
+      { ok: JSON.stringify(firstHits.filter((w) => !w.includes("Cookies"))) === JSON.stringify(underFirst(first).filter((w) => !w.includes("Cookies"))), name: "every login, note, card and IBAN on disk still decrypts under the first key (unreadable to Chrome, not rewritten)", detail: `${JSON.stringify(firstHits)} → ${JSON.stringify(underFirst(first))}` },
+      { ok: true, name: "what Chrome reads on the second launch (report)", detail: lost.join("; ") || "everything" },
+      { ok: paused && !Object.keys(ledger?.profiles ?? {}).length, name: "sync pauses passwords, no ledger entry", detail: `turnOnSync ${JSON.stringify(observations[0].sync)}; paused ${paused}; ledger ${JSON.stringify(Object.keys(ledger?.profiles ?? {}))}` },
+      { ok: !dialogShown(s.appLog) && s.journal?.phase === "done" && s.key === second, name: "no Safe Storage dialog, the re-key leaves the item alone", detail: `journal ${s.journal?.phase}, key is the second ${s.key === second}` },
+    ];
   },
   async "off-mode"(ctx) {
     const run = prepare(ctx.root, "off-mode", ctx.fixture);

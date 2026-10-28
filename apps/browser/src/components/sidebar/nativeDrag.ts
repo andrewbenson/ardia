@@ -84,8 +84,17 @@ addNativeSettingsHandlers({
     watchTabDrag();
   },
   "tabDrag.capture": (windowId: string) => captureDragPage(windowId),
-  "tabDrag.move": (_windowId: string, x: number, y: number, outside: boolean, overWindow: string | null, ox: number, oy: number, lifted: boolean | null) =>
-    updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null, lifted),
+  "tabDrag.move": (
+    _windowId: string,
+    x: number,
+    y: number,
+    outside: boolean,
+    overWindow: string | null,
+    ox: number,
+    oy: number,
+    lifted: boolean | null,
+    zoneBefore: string | null | false,
+  ) => updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null, lifted, zoneBefore),
   "tabDrag.end": (_windowId: string, commit: boolean, deadline?: number) => {
     const late = !!deadline && Date.now() > deadline;
     const end = commit && !late ? endNativeTabDrag() : (cancelTabDrag(), { split: false, insert: false, before: null, onPage: false });

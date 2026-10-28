@@ -20,6 +20,7 @@ final class NativeTabDrag {
   private var zoneOnPage = false
   private var onPage: Bool { jsOnPage || zoneOnPage }
   private var insert = false
+  private var zoneInsert: String??
   private var shape = "hidden"
   private var previewShown = false
   private var previewToken = 0
@@ -71,6 +72,7 @@ final class NativeTabDrag {
       session.move(screenPoint: CGPoint(x: window.frame.minX + point.x, y: window.frame.maxY - point.y))
       outside = session.outside
       zoneOnPage = session.aim.map(Self.onPage) ?? false
+      if case .insert(let beforeId) = session.aim { zoneInsert = .some(beforeId) } else { zoneInsert = .none }
       if outside, let id = session.overWindow {
         over = id
         overPoint = session.point(in: id) ?? .zero
@@ -80,7 +82,8 @@ final class NativeTabDrag {
     publish()
     syncPreview(windowId)
     let queued = pendingMove != nil
-    pendingMove = [windowId, point.x, point.y, outside, over ?? NSNull(), overPoint.x, overPoint.y, lifted ?? NSNull()]
+    let zoneBefore: Any = zoneInsert.map { $0.map { $0 as Any } ?? NSNull() } ?? false
+    pendingMove = [windowId, point.x, point.y, outside, over ?? NSNull(), overPoint.x, overPoint.y, lifted ?? NSNull(), zoneBefore]
     if queued { return }
     let previous = chain
     chain = Task { @MainActor in
@@ -177,6 +180,7 @@ final class NativeTabDrag {
     jsOnPage = false
     zoneOnPage = false
     insert = false
+    zoneInsert = .none
     shape = "hidden"
     previewShown = false
     publish()
@@ -200,7 +204,7 @@ final class NativeTabDrag {
 
   private func syncPreview(_ windowId: String) {
     guard session(windowId) != nil else { return }
-    let next = outside ? (overWindow != nil && insert ? "pill" : "card") : ((lifted ?? onPage) ? "card" : "hidden")
+    let next = outside ? (overWindow != nil && (insert || zoneInsert != nil) ? "pill" : "card") : ((lifted ?? onPage) ? "card" : "hidden")
     if next == "hidden" && shape == "hidden" { return }
     if next != "hidden", let picture {
       self.picture = nil

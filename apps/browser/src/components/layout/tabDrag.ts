@@ -53,6 +53,7 @@ let picture: Picture | null = null;
 let sentShape: DragPreviewShape = "hidden";
 let begun = false;
 let nativeOwned = false;
+let zoneInsert = false;
 
 export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : [], native = false): number {
   if (begun) dragPreview.cancel();
@@ -97,11 +98,14 @@ export function updateNativeTabDrag(
   overWindow: string | null,
   overPoint: [number, number] | null,
   lifted: boolean | null = null,
+  zoneBefore: string | null | false = false,
 ) {
   const drag = useTabDrag.getState();
   if (!drag.tabIds.length || !drag.windowId) return;
   if (overWindow && overWindow !== drag.overWindow && useBrowser.getState().settings.tabReorderHaptics) hapticTick();
-  const insert = drag.insert?.windowId === overWindow ? drag.insert : null;
+  const zoned = zoneBefore !== false && !!overWindow;
+  const insert = zoned ? { windowId: overWindow, beforeId: zoneBefore } : !zoneInsert && drag.insert?.windowId === overWindow ? drag.insert : null;
+  zoneInsert = zoned;
   pointer = [x, y];
   if (lifted === false && drag.lifted === false && !outside && !drag.outside) return;
   useTabDrag.setState({ x, y, lifted, outside, overWindow, overPoint, insert });

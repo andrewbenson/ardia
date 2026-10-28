@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SolaraLive
+import SolaraModel
 import SolaraUI
 
 @MainActor
@@ -13,6 +14,7 @@ enum NativeSidebarHoverCard {
     guard NativeWindowShell.enabled, observer == nil else { return }
     observer = SettingsJS.shared.observe(topic) { value in receive(value) }
     receive(SettingsJS.shared.latestValue(topic))
+    NativeSidebarIconPicker.register()
   }
 
   private static func receive(_ value: Any?) {
@@ -278,5 +280,96 @@ final class SidebarHoverCardHost {
       }
     }
     return info
+  }
+}
+
+@MainActor
+enum NativeSidebarIconPicker {
+  static let topic = "sidebar.iconPicker"
+  private static var observer: UUID?
+  private static var hosts: [String: SidebarIconPickerHost] = [:]
+
+  nonisolated static var enabled: Bool {
+    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeIconPicker, defaultOn: false)
+  }
+
+  static func register() {
+    guard enabled, observer == nil else { return }
+    HostedViews.register(topic) { _ in nil }
+    observer = SettingsJS.shared.observe(topic) { value in receive(value) }
+    receive(SettingsJS.shared.latestValue(topic))
+  }
+
+  private static func receive(_ value: Any?) {
+    let windows = ((value as? [String: Any])?["windows"] as? [String: Any]) ?? [:]
+    for (windowId, host) in hosts where windows[windowId] == nil { host.show(nil) }
+    for (windowId, state) in windows {
+      let host = hosts[windowId] ?? SidebarIconPickerHost(windowId: windowId)
+      hosts[windowId] = host
+      host.show(state as? [String: Any])
+    }
+  }
+
+  static func describe(_ windowId: String) -> String {
+    guard let info = hosts[windowId]?.describe(), let data = try? JSONSerialization.data(withJSONObject: info) else { return "null" }
+    return String(data: data, encoding: .utf8) ?? "null"
+  }
+
+  static func devInput(_ windowId: String, _ action: String) { hosts[windowId]?.devInput(action) }
+
+  static func send(_ windowId: String, _ id: String, _ event: String, _ extra: [String: Any] = [:]) {
+    let sendable = MediaPayload(extra)
+    Task { @MainActor in
+      _ = await SettingsAdapters.js(topic, windowId, id, event, sendable.value)
+    }
+  }
+}
+
+@MainActor
+final class SidebarIconPickerHost {
+  let windowId: String
+  private let view = SidebarIconPickerView()
+
+  init(windowId: String) {
+    self.windowId = windowId
+    view.autoresizingMask = [.width, .height]
+    view.onEvent = { [weak self] event in
+      guard let self, let id = self.view.state?.id else { return }
+      switch event {
+      case .choose(let icon): NativeSidebarIconPicker.send(self.windowId, id, "choose", ["icon": icon ?? NSNull()])
+      case .close: NativeSidebarIconPicker.send(self.windowId, id, "close")
+      }
+    }
+  }
+
+  func show(_ input: [String: Any]?) {
+    guard let input, let data = try? JSONSerialization.data(withJSONObject: input),
+      let state = try? JSONDecoder().decode(SidebarIconPickerState.self, from: data),
+      let overlay = NativeWindowShell.overlay(windowId)
+    else { return hide() }
+    let opening = view.superview !== overlay
+    if opening {
+      view.frame = overlay.bounds
+      overlay.addSubview(view)
+    }
+    view.set(state)
+    if opening { view.focus() }
+    NativeWindowShell.host(windowId)?.shell.coverChanged()
+  }
+
+  private func hide() {
+    guard view.superview != nil else { return }
+    let focused = view.isEditing
+    let window = view.window
+    view.removeFromSuperview()
+    if focused { window?.makeFirstResponder(nil) }
+    NativeWindowShell.host(windowId)?.shell.coverChanged()
+  }
+
+  func devInput(_ action: String) { view.devInput(action) }
+
+  func describe() -> [String: Any]? {
+    guard view.superview != nil else { return nil }
+    return view.describe()
   }
 }

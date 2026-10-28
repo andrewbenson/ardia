@@ -14,6 +14,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case shellMainTop = "ARDIA_SHELL_MAIN_TOP"
   case nativeSidebar = "ARDIA_NATIVE_SIDEBAR"
   case nativeTopStrip = "ARDIA_NATIVE_TOP_STRIP"
+  case nativeIconPicker = "ARDIA_NATIVE_ICON_PICKER"
   case nativeMedia = "ARDIA_NATIVE_MEDIA"
   case nativeAutoHide = "ARDIA_NATIVE_AUTOHIDE"
   case nativeSettings = "ARDIA_NATIVE_SETTINGS"

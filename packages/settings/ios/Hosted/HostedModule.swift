@@ -27,6 +27,14 @@ public class HostedModule: Module {
       MainActor.assumeIsolated { NativeSidebarHoverCard.describe(windowId) }
     }.runOnQueue(.main)
 
+    AsyncFunction("sidebarIconPicker") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeSidebarIconPicker.describe(windowId) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("sidebarIconPickerInput") { (windowId: String, action: String) in
+      MainActor.assumeIsolated { NativeSidebarIconPicker.devInput(windowId, action) }
+    }.runOnQueue(.main)
+
     AsyncFunction("presentedAt") { (windowId: String, x: Double, y: Double, width: [Double], height: [Double]) -> String in
       MainActor.assumeIsolated {
         guard width.count == 2, height.count == 2 else { return "null" }

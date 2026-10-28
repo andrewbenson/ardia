@@ -126,7 +126,7 @@ try {
   for (const panes of ["0", "1"]) {
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${panes}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: panes },
+      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: panes, ARDIA_NATIVE_MEDIA: "0" },
       ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acLayout && !!globalThis.acCli",
     });
     const g = got[panes];

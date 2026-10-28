@@ -348,10 +348,90 @@ const isViewMissing = (error: unknown) =>
   (error as { code?: unknown } | null)?.code === "ERR_ARGUMENT_CAST" &&
   /Unable to find the '\w+' view with tag/.test(String((error as { message?: unknown }).message));
 
+type HandleCall = <T>(fallback: T, fn: (view: NativeHandle) => Promise<T>) => Promise<T>;
+
+function webViewHandle(call: HandleCall, nativeTag: () => number | null): WebViewHandle {
+  return {
+    nativeTag,
+    loadUrl: (url, options) =>
+      call(undefined, (n) => n.loadUrl(toEngineUrl(url), options?.userInitiated ?? false)),
+    goBack: () => call(undefined, (n) => n.goBack()),
+    goForward: () => call(undefined, (n) => n.goForward()),
+    goToOffset: (offset) => call(undefined, (n) => n.goToOffset(offset)),
+    reload: () => call(undefined, (n) => n.reload()),
+    forceReload: () => call(undefined, (n) => n.forceReload()),
+    stopLoading: () => call(undefined, (n) => n.stopLoading()),
+    focus: () => call(undefined, (n) => n.focus()),
+    setMuted: (muted) => call(undefined, (n) => n.setMuted(muted)),
+    zoomStep: (direction) => call(undefined, (n) => n.zoomStep(direction)),
+    find: (text, forward, findNext) => call(undefined, (n) => n.find(text, forward, findNext)),
+    stopFinding: (clear) => call(undefined, (n) => n.stopFinding(clear)),
+    print: () => call(undefined, (n) => n.print()),
+    runPageCommand: (name) => call(undefined, (n) => n.runPageCommand(name)),
+    showDevTools: (panel) => call(undefined, (n) => n.showDevTools(panel)),
+    executeJavaScript: (code) => call(undefined, (n) => n.executeJavaScript(code)),
+    evaluate: async <T,>(code: string) => {
+      const json = await call(null, (n) => n.evaluate(code));
+      if (json == null) return null;
+      try {
+        return JSON.parse(json) as T;
+      } catch {
+        return null;
+      }
+    },
+    navigationEntries: async () => (await call([], (n) => n.navigationEntries())).map((e) => ({ ...e, url: toAppUrl(e.url) })),
+    capturePicture: (scale) => call(null, (n) => n.capturePicture(scale)),
+    downloadImage: (url, maxPixels) => call(null, (n) => n.downloadImage(url, maxPixels)),
+    downloadFavicon: (url) => call(null, (n) => n.downloadFavicon(url)),
+    mediaCommand: (action, seconds) => call(undefined, (n) => n.mediaCommand(action, seconds)),
+    requestPictureInPicture: (press) => call(false, (n) => n.requestPictureInPicture(press.clickAt, press.control)),
+    takeControlPress: (press) => call(false, (n) => n.takeControlPress(press.clickAt, press.control)),
+    exitPictureInPicture: () => call(undefined, (n) => n.exitPictureInPicture()),
+    getSecurityInfo: () => call(null, (n) => n.getSecurityInfo()),
+    pageCookies: (urls) => call<PageCookie[]>([], (n) => n.pageCookies(urls)),
+    openBlockedPopup: (id, always) => call(undefined, (n) => n.openBlockedPopup(id, always)),
+    clearSiteData: () => call({ cookies: false, storage: false }, (n) => n.clearSiteData()),
+    resolvePasswordPrompt: (answer, edits) =>
+      call(undefined, (n) => n.resolvePasswordPrompt(answer, edits?.username ?? null, edits?.password ?? null)),
+    resolveAutofillPrompt: (id, answer) => call(undefined, (n) => n.resolveAutofillPrompt(id, answer)),
+    executeExtensionAction: (extensionId) => call(null, (n) => n.executeExtensionAction(extensionId)),
+    resolveDisplayMedia: (id, sourceId, audio = false) => call(undefined, (n) => n.resolveDisplayMedia(id, sourceId, audio)),
+    mediaCaptureSourceId: () => call(null, (n) => n.mediaCaptureSourceId()),
+    notificationAction: (id, action) => call(undefined, (n) => n.notificationAction(id, action)),
+    resolveUnresponsive: (terminate) => call(undefined, (n) => n.resolveUnresponsive(terminate)),
+    discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
+    setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
+  };
+}
+
+export const PAGE_GONE = "ERR_NO_PAGE";
+
+export type PageInvoke = (method: string, args: unknown[]) => Promise<unknown>;
+
+export function pooledWebViewHandle(invoke: PageInvoke): WebViewHandle {
+  const view = new Proxy({} as NativeHandle, {
+    get: (_, method) => (...args: unknown[]) => invoke(String(method), args),
+  });
+  const call: HandleCall = async (fallback, fn) => {
+    try {
+      return await fn(view);
+    } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === PAGE_GONE) return fallback;
+      throw error;
+    }
+  };
+  return webViewHandle(call, () => null);
+}
+
+export type ViewEventName = Handlers;
+
+export const unwrapPageEvent = <K extends Handlers>(name: K, payload: NativeEvents[K]) =>
+  (unwrap[name] as (e: NativeEvents[K]) => unknown[])(payload);
+
 export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(props, ref) {
   const native = useRef<NativeHandle>(null);
   useImperativeHandle(ref, () => {
-    const call = async <T,>(fallback: T, fn: (view: NativeHandle) => Promise<T>): Promise<T> => {
+    const call: HandleCall = async (fallback, fn) => {
       for (let attempt = 0; ; attempt++) {
         const view = native.current;
         if (!view) return fallback;
@@ -364,57 +444,7 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
         }
       }
     };
-    return {
-      nativeTag: () => findNodeHandle(native.current as Parameters<typeof findNodeHandle>[0]),
-      loadUrl: (url, options) =>
-        call(undefined, (n) => n.loadUrl(toEngineUrl(url), options?.userInitiated ?? false)),
-      goBack: () => call(undefined, (n) => n.goBack()),
-      goForward: () => call(undefined, (n) => n.goForward()),
-      goToOffset: (offset) => call(undefined, (n) => n.goToOffset(offset)),
-      reload: () => call(undefined, (n) => n.reload()),
-      forceReload: () => call(undefined, (n) => n.forceReload()),
-      stopLoading: () => call(undefined, (n) => n.stopLoading()),
-      focus: () => call(undefined, (n) => n.focus()),
-      setMuted: (muted) => call(undefined, (n) => n.setMuted(muted)),
-      zoomStep: (direction) => call(undefined, (n) => n.zoomStep(direction)),
-      find: (text, forward, findNext) => call(undefined, (n) => n.find(text, forward, findNext)),
-      stopFinding: (clear) => call(undefined, (n) => n.stopFinding(clear)),
-      print: () => call(undefined, (n) => n.print()),
-      runPageCommand: (name) => call(undefined, (n) => n.runPageCommand(name)),
-      showDevTools: (panel) => call(undefined, (n) => n.showDevTools(panel)),
-      executeJavaScript: (code) => call(undefined, (n) => n.executeJavaScript(code)),
-      evaluate: async <T,>(code: string) => {
-        const json = await call(null, (n) => n.evaluate(code));
-        if (json == null) return null;
-        try {
-          return JSON.parse(json) as T;
-        } catch {
-          return null;
-        }
-      },
-      navigationEntries: async () => (await call([], (n) => n.navigationEntries())).map((e) => ({ ...e, url: toAppUrl(e.url) })),
-      capturePicture: (scale) => call(null, (n) => n.capturePicture(scale)),
-      downloadImage: (url, maxPixels) => call(null, (n) => n.downloadImage(url, maxPixels)),
-      downloadFavicon: (url) => call(null, (n) => n.downloadFavicon(url)),
-      mediaCommand: (action, seconds) => call(undefined, (n) => n.mediaCommand(action, seconds)),
-      requestPictureInPicture: (press) => call(false, (n) => n.requestPictureInPicture(press.clickAt, press.control)),
-      takeControlPress: (press) => call(false, (n) => n.takeControlPress(press.clickAt, press.control)),
-      exitPictureInPicture: () => call(undefined, (n) => n.exitPictureInPicture()),
-      getSecurityInfo: () => call(null, (n) => n.getSecurityInfo()),
-      pageCookies: (urls) => call<PageCookie[]>([], (n) => n.pageCookies(urls)),
-      openBlockedPopup: (id, always) => call(undefined, (n) => n.openBlockedPopup(id, always)),
-      clearSiteData: () => call({ cookies: false, storage: false }, (n) => n.clearSiteData()),
-      resolvePasswordPrompt: (answer, edits) =>
-        call(undefined, (n) => n.resolvePasswordPrompt(answer, edits?.username ?? null, edits?.password ?? null)),
-      resolveAutofillPrompt: (id, answer) => call(undefined, (n) => n.resolveAutofillPrompt(id, answer)),
-      executeExtensionAction: (extensionId) => call(null, (n) => n.executeExtensionAction(extensionId)),
-      resolveDisplayMedia: (id, sourceId, audio = false) => call(undefined, (n) => n.resolveDisplayMedia(id, sourceId, audio)),
-      mediaCaptureSourceId: () => call(null, (n) => n.mediaCaptureSourceId()),
-      notificationAction: (id, action) => call(undefined, (n) => n.notificationAction(id, action)),
-      resolveUnresponsive: (terminate) => call(undefined, (n) => n.resolveUnresponsive(terminate)),
-      discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
-      setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
-    };
+    return webViewHandle(call, () => findNodeHandle(native.current as Parameters<typeof findNodeHandle>[0]));
   });
 
   const nativeProps: Record<string, unknown> = {};

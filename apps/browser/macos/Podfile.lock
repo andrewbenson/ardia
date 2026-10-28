@@ -17,6 +17,7 @@ PODS:
   - ArdiaStore (0.0.0):
     - ExpoModulesCore
   - ArdiaSync (0.0.0):
+    - ArdiaCore
     - ArdiaImport
     - ExpoModulesCore
   - boost (1.84.0)
@@ -2594,7 +2595,7 @@ SPEC CHECKSUMS:
   ArdiaShaders: d8dc0512dec3ed9d4af792579b320249ef035924
   ArdiaShell: 4de45ace9c0e11ff56d51c81cf9ec9a2fd6bac7c
   ArdiaStore: 2243036434998a6828cd026f377b2456b0fc14a2
-  ArdiaSync: e86ddfd6b42b62e7d592cd2487c62d136f6a0db1
+  ArdiaSync: 509d66d89649bd40bcedaf235056c7910e508e2a
   boost: cea1d4f90a3a59537f3deb03ff5656489d7133dd
   DoubleConversion: d31b1eb37f6d6f456530c4fd9124b857d6889cab
   EXConstants: 18ac927605517285307ea8f7ffe6fe7ca538eb5d

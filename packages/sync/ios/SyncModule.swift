@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 import ArdiaImport
 import Security
@@ -7,6 +8,7 @@ public class SyncModule: Module {
   private let state = KeyState()
   private let owner = DeviceOwnerCheck()
   private static let work = DispatchQueue(label: "ardia.sync", qos: .utility)
+  private static let sealed = SealedPasswords()
 
   public func definition() -> ModuleDefinition {
     Name("ArdiaSync")
@@ -101,11 +103,15 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("write") { (folder: String, scope: String, payload: String) throws -> String in
-      try self.vault(folder).write(scope: scope, payload: Data(payload.utf8))
+      let vault = try self.vault(folder)
+      guard Self.sealed.latched else { return try vault.write(scope: scope, payload: Data(payload.utf8)) }
+      return try vault.write(scope: scope, payload: Data(try Self.refusing { try SealedPasswords.folderPayload(payload, keys: vault.keys) }.utf8))
     }.runOnQueue(Self.work)
 
     AsyncFunction("read") { (folder: String, scope: String, known: [String]) throws -> [String: Any] in
-      let listing = try self.vault(folder).read(scope: scope, skipping: Set(known))
+      let vault = try self.vault(folder)
+      let read = vault.read(scope: scope, skipping: Set(known))
+      let listing = Self.sealed.latched ? SealedPasswords.folderListing(read, keys: vault.keys) : read
       return [
         "files": listing.files.map { ["id": $0.id, "payload": String(decoding: $0.payload, as: UTF8.self)] },
         "pending": listing.pending,
@@ -122,15 +128,55 @@ public class SyncModule: Module {
       try self.vault(folder).deleteChain()
     }.runOnQueue(Self.work)
 
-    AsyncFunction("sealLocal") { (text: String) throws -> String in
+    AsyncFunction("sealLocal") { (text: String, kind: String?) throws -> String in
       guard let keys = self.state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
-      return try keys.seal(Data(text.utf8), scopeTag: "local", fileId: "state").base64EncodedString()
+      guard Self.sealed.latched else { return try keys.seal(Data(text.utf8), scopeTag: "local", fileId: "state").base64EncodedString() }
+      guard let kind = kind.flatMap(LocalDocuments.Kind.init(rawValue:)) else { throw Self.refusal("the local document's kind is needed once passwords are sealed") }
+      return try Self.refusing { try LocalDocuments.seal(text, kind, keys: keys) }.base64EncodedString()
     }.runOnQueue(Self.work)
 
-    AsyncFunction("openLocal") { (sealed: String) -> String? in
-      guard let keys = self.state.keys, let data = Data(base64Encoded: sealed),
-            let plain = try? keys.open(data, scopeTag: "local", fileId: "state") else { return nil }
-      return String(decoding: plain, as: UTF8.self)
+    AsyncFunction("openLocal") { (sealed: String, kind: String?) -> String? in
+      guard let keys = self.state.keys, let data = Data(base64Encoded: sealed) else { return nil }
+      guard Self.sealed.latched else { return (try? keys.open(data, scopeTag: "local", fileId: "state")).map { String(decoding: $0, as: UTF8.self) } }
+      guard let kind = kind.flatMap(LocalDocuments.Kind.init(rawValue:)) else { return nil }
+      return LocalDocuments.open(data, kind, keys: keys)
+    }.runOnQueue(Self.work)
+
+    Function("useSealedPasswords") { Self.sealed.latch() }
+
+    AsyncFunction("checkSealed") { (values: [[String: Any]]) -> [Bool] in
+      guard let keys = self.state.keys else { return values.map { _ in false } }
+      return values.map { SealedPasswords.opens($0, keys: keys) }
+    }.runOnQueue(Self.work)
+
+    AsyncFunction("saveSealedPassword") { (engineProfile: String, origin: String, username: String, sealed: String, replacing: Bool, promise: Promise) in
+      guard Self.sealed.latched, let keys = self.state.keys, let password = try? keys.openPassword(sealed, origin: origin, username: username) else {
+        return promise.resolve(false)
+      }
+      let ok = { (result: [String: Any]?) in result != nil && result?["error"] == nil }
+      let save = {
+        ArdiaCoreServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { promise.resolve(ok($0)) }
+      }
+      guard replacing else { return save() }
+      ArdiaCoreServices.deletePassword(profile: engineProfile, origin: origin, username: username) { deleted in
+        guard ok(deleted) else { return promise.resolve(false) }
+        save()
+      }
+    }.runOnQueue(Self.work)
+
+    AsyncFunction("migrateLedger") { (ledger: String, scopes: [String: String], state: String) -> String? in
+      guard Self.sealed.latched, let keys = self.state.keys, LedgerMigration.needsMigration(ledger) else { return nil }
+      var profiles: [String: LedgerMigration.Profile] = [:]
+      for (engineProfile, scope) in scopes {
+        profiles[engineProfile] = LedgerMigration.Profile(
+          logins: Self.loginData(engineProfile).map(LedgerMigration.logins), records: LedgerMigration.records(fromState: state, scope: scope, keys: keys))
+      }
+      do {
+        return try LedgerMigration.migrate(ledger, profiles: profiles, keys: keys)
+      } catch {
+        NSLog("[sync] migrating the password ledger: \(error)")
+        return nil
+      }
     }.runOnQueue(Self.work)
 
     AsyncFunction("recoveryWords") { (promise: Promise) in
@@ -203,15 +249,24 @@ public class SyncModule: Module {
 
     AsyncFunction("readPasswordsWithMark") { (engineProfile: String) -> [String: Any]? in
       do {
+        let sealing = Self.sealed.latched
+        let keys = self.state.keys
+        if sealing && keys == nil { return nil }
         let key = ChromiumCrypto.deriveKey(secret: try Self.safeStorageSecret())
         let read = try ChromiumSecrets.loginsForSync(profile: Self.profileDirectory(engineProfile), key: key)
         if read.undecryptable > 0 {
           NSLog("[sync] \(read.undecryptable) saved passwords didn't decrypt; not syncing passwords now")
           return nil
         }
-        let logins: [[String: Any]] = read.logins.map { l in
+        let logins: [[String: Any]] = try read.logins.compactMap { l in
           let c = l.credential
-          var login: [String: Any] = ["origin": c.realm ?? c.url, "url": c.url, "username": c.username, "password": c.password, "created": c.created ?? 0]
+          var login: [String: Any]
+          if sealing, let keys {
+            guard let origin = SealedPasswords.origin(of: c.realm ?? c.url) else { return nil }
+            login = ["origin": origin, "username": c.username, "s": try keys.sealPassword(c.password, origin: origin, username: c.username), "created": c.created ?? 0]
+          } else {
+            login = ["origin": c.realm ?? c.url, "url": c.url, "username": c.username, "password": c.password, "created": c.created ?? 0]
+          }
           if let modified = l.modified { login["modified"] = modified }
           return login
         }
@@ -225,6 +280,7 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("readPasswords") { (engineProfile: String) -> [[String: Any]]? in
+      guard !Self.sealed.latched else { return nil }
       do {
         let key = ChromiumCrypto.deriveKey(secret: try Self.safeStorageSecret())
         let result = try ChromiumSecrets.logins(profile: Self.profileDirectory(engineProfile), key: key)
@@ -255,6 +311,31 @@ public class SyncModule: Module {
           promise.reject(error)
         }
       }
+    }
+  }
+
+  private static func refusal(_ reason: String) -> Exception {
+    Exception(name: "sealedPasswords", description: reason)
+  }
+
+  private static func refusing<T>(_ body: () throws -> T) throws -> T {
+    do {
+      return try body()
+    } catch let refused as PasswordValues.Refused {
+      throw refusal(refused.description)
+    }
+  }
+
+  private static func loginData(_ engineProfile: String) -> [(realm: String, username: String, password: String)]? {
+    do {
+      let key = ChromiumCrypto.deriveKey(secret: try safeStorageSecret())
+      let read = try ChromiumSecrets.logins(profile: profileDirectory(engineProfile), key: key)
+      guard read.undecryptable == 0 else { return nil }
+      return read.items.map { ($0.realm ?? $0.url, $0.username, $0.password) }
+    } catch ImportError.notFound(_) {
+      return []
+    } catch {
+      return nil
     }
   }
 

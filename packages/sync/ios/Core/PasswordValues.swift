@@ -47,6 +47,14 @@ public enum PasswordValues {
       if members.contains(where: { $0.key == "p" }) { found = true }
     }
     for (key, value) in Context.passwordValues(root, shape) where key.hasPrefix("pw:") { visit(value) }
+    guard shape == .state else { return found }
+    for scope in root.members ?? [] {
+      for base in scope.value.member("base")?.members ?? [] where base.key.hasPrefix("pw:") {
+        guard let inner = base.value.text else { continue }
+        var innerScanner = JSONScanner(Array(inner.utf8))
+        visit(try? innerScanner.document())
+      }
+    }
     return found
   }
 
@@ -72,7 +80,7 @@ public enum PasswordValues {
           batches(scope.value.member("journal"))
         }
       case .journal:
-        for list in root.members ?? [] { batches(list.value) }
+        for list in root.member("journal")?.members ?? [] { batches(list.value) }
       }
       return out
     }
@@ -117,16 +125,21 @@ public enum PasswordValues {
 
     func loginFields(_ value: JSONSpan) -> (o: String, u: String, p: String?, s: String?)? {
       guard let members = value.members, let o = value.member("o")?.text, let u = value.member("u")?.text else { return nil }
-      guard members.allSatisfy({ ["o", "u", "p", "s"].contains($0.key) }) else { return nil }
+      guard members.allSatisfy({ ["o", "u", "p", "s"].contains($0.key) }), Set(members.map { CodeUnits($0.key) }).count == members.count else { return nil }
       return (o, u, value.member("p")?.text, value.member("s")?.text)
     }
 
     func convertCanonical(_ key: String, _ inner: String) throws -> String {
       var scanner = JSONScanner(Array(inner.utf8))
-      guard let value = try? scanner.document(), let fields = loginFields(value) else { return inner }
+      guard let value = try? scanner.document() else { return inner }
+      guard let fields = loginFields(value) else {
+        if value.member("p") != nil { throw Refused(key: key, reason: "a plain password in a value it can't convert") }
+        return inner
+      }
       switch direction {
       case .seal:
-        guard let p = fields.p, fields.s == nil else { return inner }
+        guard value.member("p") != nil else { return inner }
+        guard let p = fields.p, fields.s == nil else { throw Refused(key: key, reason: "a plain password it can't seal") }
         return PasswordText.canonical(origin: fields.o, username: fields.u, sealed: try keys.sealPassword(p, origin: fields.o, username: fields.u))
       case .open:
         if fields.p != nil { throw Refused(key: key, reason: "a plain password where a sealed one belongs") }
@@ -137,10 +150,15 @@ public enum PasswordValues {
     }
 
     func convertValue(_ key: String, _ value: JSONSpan?, _ edits: inout [(Range<Int>, String)]) throws {
-      guard let value, let members = value.members, let fields = loginFields(value) else { return }
+      guard let value, let members = value.members else { return }
+      guard let fields = loginFields(value) else {
+        if value.member("p") != nil { throw Refused(key: key, reason: "a plain password in a value it can't convert") }
+        return
+      }
       switch direction {
       case .seal:
-        guard let p = fields.p, fields.s == nil, let member = members.first(where: { $0.key == "p" }) else { return }
+        guard let member = members.first(where: { $0.key == "p" }) else { return }
+        guard let p = fields.p, fields.s == nil else { throw Refused(key: key, reason: "a plain password it can't seal") }
         let sealed = try keys.sealPassword(p, origin: fields.o, username: fields.u)
         edits.append((member.keyRange, "\"s\""))
         edits.append((member.value.range, PasswordText.jsonString(sealed)))

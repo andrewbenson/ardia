@@ -63,7 +63,7 @@ final class PasswordValuesTests: XCTestCase {
   }
 
   func testTheJournalDocumentSealsToo() throws {
-    let doc = #"{"p:abc":[{"v":1,"kind":"log","device":"dev1","seq":4,"at":5,"ops":[{"k":"pw:https://a.example\nme","h":"1","v":{"o":"https://a.example","u":"me","p":"x"}}]}]}"#
+    let doc = #"{"journal":{"p:abc":[{"v":1,"kind":"log","device":"dev1","seq":4,"at":5,"ops":[{"k":"pw:https://a.example\nme","h":"1","v":{"o":"https://a.example","u":"me","p":"x"}}]}]}}"#
     let after = try PasswordValues.convert(doc, .journal, .seal, keys: keys)
     XCTAssertEqual(after, doc.replacingOccurrences(of: #""p":"x""#, with: #""s":\#(PasswordText.jsonString(try sealed("x")))"#))
   }

@@ -30,17 +30,20 @@ extension DropProbe {
   static func frame(windowNumber: Int, classContains query: String) -> [String: Any] {
     guard let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }), let frameView = window.contentView?.superview else { return ["error": "no window"] }
     let parts = query.split(separator: "^", maxSplits: 1)
-    let needle = String(parts.first ?? "")
+    let picked = parts.first.map { $0.split(separator: "#", maxSplits: 1) } ?? []
+    let needle = String(picked.first ?? "")
+    let index = picked.count > 1 ? Int(picked[1]) ?? 0 : 0
     let levelsUp = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
     let height = frameView.bounds.height
-    var found: NSView?
+    var matches: [NSView] = []
     func walk(_ view: NSView) {
-      guard found == nil, !view.isHiddenOrHasHiddenAncestor else { return }
-      if String(describing: type(of: view)).contains(needle), view.bounds.width > 20, view.bounds.height > 20 { found = view; return }
+      guard matches.count <= index, !view.isHiddenOrHasHiddenAncestor else { return }
+      if String(describing: type(of: view)).contains(needle), view.bounds.width > 20, view.bounds.height > 20 { matches.append(view); return }
       view.subviews.forEach(walk)
     }
     walk(frameView)
-    guard var found else { return ["found": false] }
+    guard matches.count > index else { return ["found": false] }
+    var found = matches[index]
     for _ in 0..<levelsUp { if let parent = found.superview { found = parent } }
     let r = found.convert((found as? PopoverView)?.cardFrame ?? found.bounds, to: nil)
     return ["found": true, "class": String(describing: type(of: found)), "x": r.minX, "y": height - r.maxY, "width": r.width, "height": r.height]

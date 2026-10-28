@@ -4,8 +4,6 @@
 <dict>
 	<key>ACCopyright</key>
 	<string>$(AC_COPYRIGHT)</string>
-	<key>ACUpstreamCredit</key>
-	<string>$(AC_UPSTREAM_CREDIT)</string>
 	<key>ACFeedbackEmail</key>
 	<string></string>
 	<key>ACFeedbackURL</key>
@@ -20,6 +18,8 @@
 	<string>$(AC_TELEMETRY_URL)</string>
 	<key>ACUpdateChannel</key>
 	<string>$(AC_UPDATE_CHANNEL)</string>
+	<key>ACUpstreamCredit</key>
+	<string>$(AC_UPSTREAM_CREDIT)</string>
 	<key>ACVideoTourURL</key>
 	<string></string>
 	<key>CFBundleDevelopmentRegion</key>

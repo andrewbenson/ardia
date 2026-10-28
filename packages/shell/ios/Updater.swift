@@ -332,6 +332,7 @@ enum UpdatePrewarm {
   static let statusRejected = -3
   static let statusStopped = Int(SIGKILL)
   private static var started = Set<String>()
+  private static var warmed = Set<String>()
   private static var runningVersion: String?
   private static var attempt: Attempt?
   private static var generation = 0
@@ -345,7 +346,7 @@ enum UpdatePrewarm {
   }
 
   static func warm(version: String) {
-    guard runningVersion != version, KillSwitch.isOn("updatePrewarm"),
+    guard runningVersion != version, !warmed.contains(version), KillSwitch.isOn("updatePrewarm"),
       let staged = stagedApp(version: version), let executable = staged.executableURL
     else { return }
     stop()
@@ -369,6 +370,7 @@ enum UpdatePrewarm {
     attempt?.stop()
     attempt = nil
     runningVersion = nil
+    afterRun = []
     generation += 1
   }
 
@@ -396,31 +398,62 @@ enum UpdatePrewarm {
     private let lock = NSLock()
     private var settled = false
     private var pid: pid_t = 0
+    private var exit: DispatchSourceProcess?
 
     init(version: String) {
       self.version = version
     }
 
-    func spawn(_ task: Process) throws -> Bool {
+    func spawnSuspended(_ executable: URL, environment: [String: String], ended: @escaping () -> Void) throws -> pid_t? {
       lock.lock()
       defer { lock.unlock() }
-      guard !settled else { return false }
-      try task.run()
-      pid = task.processIdentifier
-      return true
+      guard !settled else { return nil }
+      let child = try VerifiedLaunch.spawnSuspended(executable, environment: environment)
+      pid = child
+      let source = DispatchSource.makeProcessSource(identifier: child, eventMask: .exit, queue: .global(qos: .utility))
+      source.setEventHandler {
+        self.reap(child)
+        ended()
+      }
+      exit = source
+      source.activate()
+      return child
     }
 
-    func stop() {
+    func resume() -> Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      guard !settled, pid != 0 else { return false }
+      return kill(pid, SIGCONT) == 0
+    }
+
+    var running: Bool {
+      lock.lock()
+      defer { lock.unlock() }
+      return !settled && pid != 0
+    }
+
+    func stop(status: Int = UpdatePrewarm.statusStopped) {
       lock.lock()
       defer { lock.unlock() }
       if !settled, pid != 0 { kill(pid, SIGKILL) }
-      settle(status: UpdatePrewarm.statusStopped)
+      settle(status: status)
     }
 
     func record(status: Int) {
       lock.lock()
       defer { lock.unlock() }
       settle(status: status)
+    }
+
+    private func reap(_ child: pid_t) {
+      lock.lock()
+      defer { lock.unlock() }
+      exit?.cancel()
+      exit = nil
+      let status = VerifiedLaunch.reap(child) ?? VerifiedLaunch.reap(child, waiting: true)
+      if pid == child { pid = 0 }
+      settle(status: status ?? UpdatePrewarm.statusStopped)
     }
 
     private func settle(status: Int) {
@@ -444,30 +477,29 @@ enum UpdatePrewarm {
     var env = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("ARDIA_") && !$0.key.hasPrefix("DYLD_") }
     env["ARDIA_PREWARM"] = "1"
     DispatchQueue.global(qos: .utility).async {
-      guard signedLikeThisApp(bundle) else {
+      guard signedLikeThisApp(bundle), let requirement = ownRequirement else {
         tried.record(status: statusRejected)
         NSLog("\(Bundle.main.productName): not prewarming \(bundle.path): its signature isn't this app's")
         return DispatchQueue.main.async { finish(current) }
       }
-      let task = Process()
-      task.executableURL = executable
-      task.environment = env
-      task.standardInput = FileHandle.nullDevice
-      task.standardOutput = FileHandle.nullDevice
-      task.standardError = FileHandle.nullDevice
-      task.terminationHandler = { ended in
-        tried.record(status: Int(ended.terminationStatus))
-        DispatchQueue.main.async { finish(current) }
-      }
+      let child: pid_t
       do {
-        guard try tried.spawn(task) else { return }
+        guard let spawned = try tried.spawnSuspended(executable, environment: env, ended: { DispatchQueue.main.async { finish(current) } })
+        else { return }
+        child = spawned
       } catch {
         tried.record(status: statusSpawnFailed)
         NSLog("\(Bundle.main.productName): couldn't prewarm update \(version): \(error.localizedDescription)")
         return DispatchQueue.main.async { finish(current) }
       }
+      guard VerifiedLaunch.isGenuine(pid: child, requirement: requirement, inside: bundle) else {
+        NSLog("\(Bundle.main.productName): not prewarming \(bundle.path): the process it started isn't this app's code")
+        tried.stop(status: statusRejected)
+        return
+      }
+      guard tried.resume() else { return }
       DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
-        guard attempt === tried, task.isRunning else { return }
+        guard attempt === tried, tried.running else { return }
         NSLog("\(Bundle.main.productName): update prewarm still running after \(Int(timeout)) s; stopping it")
         stop()
       }
@@ -476,6 +508,7 @@ enum UpdatePrewarm {
 
   private static func finish(_ which: Int) {
     guard which == generation else { return }
+    if let runningVersion { warmed.insert(runningVersion) }
     runningVersion = nil
     attempt = nil
     let waiting = afterRun
@@ -534,6 +567,10 @@ final class PendingChoice {
     self.reply = nil
     reply(choice)
   }
+
+  func discard() {
+    reply = nil
+  }
 }
 
 final class ChannelUserDriver: NSObject, SPUUserDriver {
@@ -541,6 +578,7 @@ final class ChannelUserDriver: NSObject, SPUUserDriver {
   private let isOnChannel: (SUAppcastItem) -> Bool
   private var shownItem: SUAppcastItem?
   private var pendingChoice: PendingChoice?
+  private var heldInstall: PendingChoice?
   private var pendingCancellation: (() -> Void)?
 
   init(standard: SPUStandardUserDriver, isOnChannel: @escaping (SUAppcastItem) -> Bool) {
@@ -589,7 +627,9 @@ final class ChannelUserDriver: NSObject, SPUUserDriver {
       guard picked == .install, let self, let item = self.shownItem else { return choice.answer(picked) }
       guard self.isOnChannel(item) else { return self.drop(item, answering: choice.answer) }
       guard staged else { return choice.answer(.install) }
+      self.heldInstall = choice
       UpdatePrewarm.beforeInstall(version: item.versionString) { [weak self] in
+        if self?.heldInstall === choice { self?.heldInstall = nil }
         if let self, !self.isOnChannel(item) { return self.drop(item, answering: choice.answer) }
         choice.answer(.install)
       }
@@ -661,6 +701,8 @@ final class ChannelUserDriver: NSObject, SPUUserDriver {
   }
 
   func dismissUpdateInstallation() {
+    heldInstall?.discard()
+    heldInstall = nil
     shownItem = nil
     pendingChoice = nil
     pendingCancellation = nil

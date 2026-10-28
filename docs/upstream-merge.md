@@ -71,3 +71,17 @@ merge into conflicts.
 - `python3 engine/patches/series.py check` if `engine/` moved, then an incremental engine build. Check that
   `chromium-safe-storage-name.patch` and `chromium-safe-storage-no-silent-reset.patch` came through unchanged.
 - An app build and a hidden launch.
+
+## Upstream changes left out of the hand ports
+
+Since the merge base `c508a9f3`, upstream fixes have been ported by hand, one commit each ("Port upstream <sha>: …").
+These were deliberately left out. Look at them again at the next real merge:
+
+- **Full screen** (47a04f60, 7453d055, f8a678c7, a8ce1f80, da693fe6, 595f29c8, 39bcff72, 9d9066aa, merged in
+  ea46ea91). They add a new traffic-light reveal mechanism to `ArdiaCoreChromeWindow.mm` that depends on upstream's
+  `hostView`, `LiveViews` and `rootViewOfWindow`, which we don't have. Porting it alongside the native shell work in
+  that file is riskier than the fix is worth.
+- **Tab and profile switch re-renders** (18e80d22, 2fd842a8, 5b931ed5, 65893a2a). These are perf changes built on
+  upstream's state-layer refactor (`tabWatch`), which our store doesn't have.
+- **881f2eab's password sealing** (`sealPassword`/`openPassword`, `savePassword` and the `pw:` → `pws:` records) is
+  ported on its own, apart from that commit's recovery-phrase reauth gate.

@@ -19,7 +19,12 @@ every frame while it slides in, where Site Controls must be drawn exactly once o
 the card has measured, in the pane until then). The find bar and CLI pill frames match within half a point, and
 the window snapshots (2x) of each state match pixel for pixel. In a split the find bar's box and the bottom row of the
 left pane (status bubble, CLI pill) are left out of the pixel match: without pane roots the shell draws the main root's
-overlays under the native split pane, dimmed, which pane roots fix; their frames still have to match.`);
+overlays under the native split pane, dimmed, which pane roots fix; their frames still have to match.
+
+Both legs pin the page pool off (ARDIA_TAB_POOL=0), so they compare RN's pages; a leg the pool still serves fails.
+A third instance, pane roots on and the pool on, takes the split and resized-split snapshots with the pool's page
+views, and pooled-same-split(-resized) require them to match the pane-roots leg pixel for pixel: both panes' pages
+placed and painted without a relayout. On a build whose SolaraTabPool doesn't serve pages they are pending (SKIP).`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -107,7 +112,13 @@ const statusShift = () => {
 `;
 
 const STATES = ["split", "split-resized", "auto-hide"];
-const got = { 0: {}, 1: {} };
+const LEGS = [
+  { key: "0", panes: "0", pool: "0" },
+  { key: "1", panes: "1", pool: "0" },
+  { key: "pool", panes: "1", pool: "1" },
+];
+const got = { 0: {}, 1: {}, pool: {} };
+let poolServing = false;
 let app = null;
 const run = (body, timeout = 30000) => app.eval(`${HELPERS}\n${body}`, { timeout });
 const until = async (what, body, ms = 8000) => {
@@ -123,13 +134,16 @@ const until = async (what, body, ms = 8000) => {
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 
 try {
-  for (const panes of ["0", "1"]) {
+  for (const { key: panes, panes: shellPanes, pool } of LEGS) {
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${panes}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: panes, ARDIA_NATIVE_MEDIA: "0" },
+      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: pool, ARDIA_SHELL_PANES: shellPanes, ARDIA_NATIVE_MEDIA: "0" },
       ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acLayout && !!globalThis.acCli",
     });
     const g = got[panes];
+    const serving = await run(`return !!globalThis.expo.modules.SolaraTabPool?.available?.();`);
+    if (pool === "1") poolServing = serving;
+    else if (serving) throw new Error(`leg ${panes}: SolaraTabPool serves pages with ARDIA_TAB_POOL=0, so this leg can't test RN's pages`);
     const snap = async (state) => {
       const path = join(scratch, `${panes}-${state}.png`);
       if (!(await run(`return shot(${JSON.stringify(path)});`))) throw new Error(`no snapshot for ${state}`);
@@ -151,6 +165,12 @@ try {
       await sleep(800);
       return { split: g.split, resized: g["split-resized"] };
     });
+
+    if (pool === "1") {
+      await app.quit().catch(() => {});
+      app = null;
+      continue;
+    }
 
     await rep.check(`${panes}-auto-hide`, async () => {
       await run(`S().updateSettings({ hideToolbarWhileScrolling: true }); return true;`);
@@ -212,6 +232,21 @@ try {
       const d = pixelDiff(off.shot, on.shot, state.startsWith("split") ? [on.find, bottomRow(on.pill)] : []);
       if (d.max > 8) throw new Error(`snapshots differ: ${JSON.stringify(d)}`);
       return { find: on.find, pill: on.pill, pixels: d };
+    });
+  }
+  for (const state of ["split", "split-resized"]) {
+    const name = `pooled-same-${state}`;
+    if (!poolServing) {
+      rep.record(name, { skip: "pending: SolaraTabPool doesn't serve pages in this build, so the pool leg drew RN's" });
+      continue;
+    }
+    await rep.check(name, async () => {
+      const [rn, pooled] = [got[1][state], got.pool[state]];
+      if (!rn?.shot || !pooled?.shot) throw new Error(`missing ${state} snapshots`);
+      for (const key of ["find", "pill"]) if (!(rn[key] === pooled[key] || near(rn[key], pooled[key]))) throw new Error(`${key}: RN pages ${rn[key]}, pooled ${pooled[key]}`);
+      const d = pixelDiff(rn.shot, pooled.shot, []);
+      if (d.max > 8) throw new Error(`snapshots differ: ${JSON.stringify(d)}`);
+      return { pixels: d };
     });
   }
 } catch (e) {

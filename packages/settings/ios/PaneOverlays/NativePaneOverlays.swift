@@ -12,6 +12,10 @@ enum NativePaneOverlays {
     guard NativeWindowShell.enabled, !started else { return }
     started = true
     _ = SettingsJS.shared.observe(topic) { value in apply(value) }
+    NotificationCenter.default.addObserver(forName: PaneOverlays.changed, object: nil, queue: .main) { note in
+      guard let windowId = note.userInfo?["windowId"] as? String else { return }
+      MainActor.assumeIsolated { hosts[windowId]?.relayout() }
+    }
     apply(SettingsJS.shared.latestValue(topic))
   }
 
@@ -21,7 +25,7 @@ enum NativePaneOverlays {
     let windows = ((value as? [String: Any])?["windows"] as? [String: Any]) ?? [:]
     for (windowId, host) in hosts where windows[windowId] == nil {
       host.apply([:])
-      if host.container.superview == nil { hosts[windowId] = nil }
+      hosts[windowId] = nil
     }
     for (windowId, tabs) in windows {
       guard let tabs = tabs as? [String: Any] else { continue }
@@ -46,7 +50,7 @@ enum NativePaneOverlays {
 }
 
 @MainActor
-final class PaneOverlayContainer: NSView {
+final class PanePopoverWrap: NSView {
   override var isFlipped: Bool { true }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
@@ -57,7 +61,7 @@ final class PaneOverlayContainer: NSView {
 
 @MainActor
 final class PanePopover<Body: NSView> {
-  let wrap = PaneOverlayContainer()
+  let wrap = PanePopoverWrap()
   let popover: PopoverView
   let body: Body
   var mark: String?
@@ -71,10 +75,8 @@ final class PanePopover<Body: NSView> {
 
   func setHeight(_ h: CGFloat) { DispatchQueue.main.async { [weak self] in self?.popover.set(bodyHeight: h) } }
 
-  func place(_ rect: CGRect?) {
-    wrap.isHidden = rect == nil
-    guard let rect, wrap.frame != rect else { return }
-    wrap.frame = rect
+  func place(in container: NSView?) {
+    PaneOverlayHost.place(wrap, in: container, bottom: false)
     popover.frame = wrap.bounds
   }
 
@@ -92,30 +94,25 @@ final class PanePopover<Body: NSView> {
 @MainActor
 final class PaneOverlayHost {
   let windowId: String
-  let container = PaneOverlayContainer()
   private var sadTabs: [String: SadTabView] = [:]
   private var zooms: [String: PanePopover<ZoomPanelView>] = [:]
   private var histories: [String: PanePopover<HistoryPanelView>] = [:]
-  private var swipes: [String: (wrap: PaneOverlayContainer, capsule: SwipeCapsuleView)] = [:]
+  private var swipes: [String: (wrap: PanePopoverWrap, capsule: SwipeCapsuleView)] = [:]
   private static let swipeFavicons: SidebarFavicons = {
     let made = SidebarFavicons()
     made.loader = { request in try await NativeSidebar.favicon(request) }
     return made
   }()
-  private var pageFrames: [String: [String: CGRect]] = [:]
 
   init(windowId: String) {
     self.windowId = windowId
   }
 
-  private var card: NSView? { NativeWindowShell.host(windowId)?.shell.card }
+  private func slot(_ tabId: String) -> NSView? { PaneOverlays.shared.container(windowId: windowId, tabId: tabId, layer: .native) }
 
   private func entry(_ value: Any?, kind: String, tabId: String) -> Data? {
-    guard let object = (value as? [String: Any])?[kind] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
-    if let f = object["frame"] as? [Double], f.count == 4, let card, let height = card.window?.contentView?.bounds.height {
-      pageFrames[kind, default: [:]][tabId] = card.convert(CGRect(x: f[0], y: height - f[1] - f[3], width: f[2], height: f[3]), from: nil)
-    }
-    return data
+    guard let object = (value as? [String: Any])?[kind] as? [String: Any] else { return nil }
+    return try? JSONSerialization.data(withJSONObject: object)
   }
 
   func apply(_ tabs: [String: Any]) {
@@ -147,17 +144,14 @@ final class PaneOverlayHost {
     for (tabId, view) in sadTabs where !sad.contains(tabId) {
       view.removeFromSuperview()
       sadTabs[tabId] = nil
-      pageFrames["sadTab"]?[tabId] = nil
     }
     for (tabId, zoom) in zooms where !zoomed.contains(tabId) {
       zoom.wrap.removeFromSuperview()
       zooms[tabId] = nil
-      pageFrames["zoom"]?[tabId] = nil
     }
     for (tabId, history) in histories where !listed.contains(tabId) {
       history.wrap.removeFromSuperview()
       histories[tabId] = nil
-      pageFrames["history"]?[tabId] = nil
     }
     relayout()
   }
@@ -168,7 +162,7 @@ final class PaneOverlayHost {
     view.onAction = { action in
       Task { @MainActor in _ = await SettingsAdapters.js("pane.sadTab", windowId, tabId, action.rawValue) }
     }
-    container.addSubview(view, positioned: .below, relativeTo: nil)
+    view.autoresizingMask = [.width, .height]
     sadTabs[tabId] = view
     return view
   }
@@ -183,7 +177,7 @@ final class PaneOverlayHost {
       case .step(let step): Task { @MainActor in _ = await SettingsAdapters.js("pane.zoom", windowId, tabId, "step", step) }
       }
     }
-    container.addSubview(zoom.wrap)
+    zoom.wrap.autoresizingMask = [.width, .height]
     zooms[tabId] = zoom
     return zoom
   }
@@ -202,7 +196,7 @@ final class PaneOverlayHost {
       }
       Task { @MainActor in _ = await SettingsAdapters.js("pane.history", windowId, tabId, payload) }
     }
-    container.addSubview(history.wrap)
+    history.wrap.autoresizingMask = [.width, .height]
     histories[tabId] = history
     return history
   }
@@ -210,10 +204,8 @@ final class PaneOverlayHost {
   func swipe(_ tabId: String, _ message: [String: Any]) {
     let op = message["op"] as? String
     if op == "show" {
-      guard let card, let height = card.window?.contentView?.bounds.height, let f = message["frame"] as? [Double], f.count == 4 else { return }
-      let rect = card.convert(CGRect(x: f[0], y: height - f[1] - f[3], width: f[2], height: f[3]), from: nil)
       let entry = swipes[tabId] ?? makeSwipe(tabId)
-      entry.wrap.frame = rect
+      Self.place(entry.wrap, in: slot(tabId), bottom: false)
       entry.capsule.frame = entry.wrap.bounds
       let theme = message["theme"] as? [String: Any] ?? [:]
       let direction = SwipeCapsuleDirection(rawValue: message["direction"] as? String ?? "") ?? .back
@@ -236,8 +228,8 @@ final class PaneOverlayHost {
     }
   }
 
-  private func makeSwipe(_ tabId: String) -> (wrap: PaneOverlayContainer, capsule: SwipeCapsuleView) {
-    let wrap = PaneOverlayContainer()
+  private func makeSwipe(_ tabId: String) -> (wrap: PanePopoverWrap, capsule: SwipeCapsuleView) {
+    let wrap = PanePopoverWrap()
     let capsule = SwipeCapsuleView(frame: .zero)
     capsule.favicons = Self.swipeFavicons
     capsule.autoresizingMask = [.width, .height]
@@ -248,30 +240,30 @@ final class PaneOverlayHost {
       self.swipes[tabId] = nil
       self.relayout()
     }
-    container.addSubview(wrap)
+    wrap.autoresizingMask = [.width, .height]
     swipes[tabId] = (wrap, capsule)
     return (wrap, capsule)
   }
 
   func relayout() {
-    guard let card else { return container.removeFromSuperview() }
-    if sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty && swipes.isEmpty {
-      container.removeFromSuperview()
-      return
-    }
-    if container.superview !== card || card.subviews.last !== container {
-      container.removeFromSuperview()
-      card.addSubview(container)
-    }
-    container.frame = card.bounds
-    container.autoresizingMask = [.width, .height]
     for (tabId, view) in sadTabs {
-      let rect = pageFrames["sadTab"]?[tabId]
-      view.isHidden = rect == nil || view.showing == nil
-      if let rect, view.frame != rect { view.frame = rect }
+      Self.place(view, in: slot(tabId), bottom: true)
+      view.isHidden = view.superview == nil || view.showing == nil
     }
-    for (tabId, zoom) in zooms { zoom.place(pageFrames["zoom"]?[tabId]) }
-    for (tabId, history) in histories { history.place(pageFrames["history"]?[tabId]) }
+    for (tabId, zoom) in zooms { zoom.place(in: slot(tabId)) }
+    for (tabId, history) in histories { history.place(in: slot(tabId)) }
+    for (tabId, entry) in swipes {
+      Self.place(entry.wrap, in: slot(tabId), bottom: false)
+      entry.capsule.frame = entry.wrap.bounds
+    }
+  }
+
+  static func place(_ view: NSView, in container: NSView?, bottom: Bool) {
+    guard let container else { return view.removeFromSuperview() }
+    if view.superview !== container {
+      if bottom { container.addSubview(view, positioned: .below, relativeTo: nil) } else { container.addSubview(view) }
+    }
+    if view.frame != container.bounds { view.frame = container.bounds }
   }
 
   func describe() -> [String: Any] {
@@ -292,6 +284,8 @@ final class PaneOverlayHost {
       tabs[tabId, default: [:]]["swipe"] = ["shown": c.shown, "active": c.active, "direction": c.direction.rawValue, "confirmed": c.confirmed, "items": c.items?.map(\.title) ?? NSNull(), "selected": c.selected,
         "frame": inWindow(c, s.frame), "area": inWindow(entry.wrap, entry.wrap.bounds), "radius": s.radius, "opacity": s.opacity, "scale": s.scale, "iconScale": s.iconScale, "list": s.list, "pill": s.pill]
     }
-    return ["top": container.superview?.subviews.last === container, "inCard": container.superview === card, "tabs": tabs]
+    let card = NativeWindowShell.host(windowId)?.shell.card
+    let layer = PaneOverlays.shared.layer(windowId: windowId)
+    return ["top": layer != nil && card?.subviews.last === layer, "inCard": !(sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty && swipes.isEmpty) && layer != nil && layer?.superview === card, "tabs": tabs]
   }
 }

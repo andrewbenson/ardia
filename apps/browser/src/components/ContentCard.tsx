@@ -39,7 +39,7 @@ import { SadTab, StatusBubble } from "./layout/PaneOverlays";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
 import { useWindowShell } from "./layout/ShellBackdrop";
-import { nativeSplitPanes, useNativeSplitChrome } from "./layout/nativeSplitChrome";
+import { nativeSplitPanes, useNativePageTops, useNativeSplitChrome } from "./layout/nativeSplitChrome";
 import { SplitToolbarFeed } from "./layout/NativeSplitToolbars";
 import { pagerFor } from "./layout/profilePager";
 import { openFromPage } from "./layout/openFromPage";
@@ -255,6 +255,21 @@ export function ContentCard() {
   );
 
   const windowToolbar = !split && !fullscreenTab && !addressInSidebar && !small;
+  const pageTops = useBrowser(
+    useShallow((s) => {
+      const tops: Record<string, number> = {};
+      if (!shell) return tops;
+      const autoLayout = hideWhileScrolling && !addressInSidebar && !small;
+      for (const tabId of Object.keys(panes)) {
+        const fullscreen = tabId === fullscreenTab;
+        const inSplit = !!split?.tabIds.includes(tabId);
+        const bar = bookmarksBarShown(barMode, s.tabs[tabId]) && !fullscreen && !inSplit && !small;
+        tops[tabId] = (!addressInSidebar && !small && !fullscreen && !autoLayout ? layout.toolbarHeight : 0) + (!autoLayout && bar ? BOOKMARKS_BAR_HEIGHT : 0);
+      }
+      return tops;
+    }),
+  );
+  useNativePageTops(windowId, shell, pageTops);
   const peekEdge = usePeekEdge(windowId);
   const activeRect = activeId ? panes[activeId] : undefined;
   const popoversOverCard = peekEdge !== undefined && addressInSidebar && !small && !fullscreenTab && origin && activeRect ? activeId : undefined;

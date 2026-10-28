@@ -217,4 +217,9 @@ final class SplitLeafView: NSView {
 @MainActor
 final class SplitPageContainer: NSView {
   override var isFlipped: Bool { true }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
 }

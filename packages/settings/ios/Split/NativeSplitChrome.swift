@@ -16,6 +16,7 @@ enum NativeSplitChrome {
   private static var started = false
   private static var views: [String: SplitChromeView] = [:]
   private static var panes: [String: SplitPanesView] = [:]
+  private static var overlays: [String: PaneOverlaysView] = [:]
   private static var toolbars: [String: [String: String]] = [:]
   private static let favicons: SidebarFavicons = {
     let made = SidebarFavicons()
@@ -47,6 +48,9 @@ enum NativeSplitChrome {
     for (id, view) in views {
       if view.superview == nil { views[id] = nil } else { view.update(state: state) }
     }
+    for (id, view) in overlays {
+      if view.superview == nil { overlays[id] = nil } else { view.update(state: state) }
+    }
     for (id, view) in panes {
       if view.superview == nil { panes[id] = nil } else { view.update(state: state) }
     }
@@ -73,7 +77,7 @@ enum NativeSplitChrome {
     }
     view.onNavigate = { tabId, text in _ = try? NativeStoreHandle.store?.dispatch(Command("navigate", [.string(tabId), .string(text)]), origin: .native) }
     view.onReplace = { tabId, other in _ = try? NativeStoreHandle.store?.dispatch(Command("replaceSplitPane", [.string(tabId), .string(other)]), origin: .native) }
-    card.addSubview(view)
+    if let overlay = overlays[windowId], overlay.superview === card { card.addSubview(view, positioned: .below, relativeTo: overlay) } else { card.addSubview(view) }
     view.setToolbars(toolbars[windowId] ?? [:])
     if let state = NativeStoreHandle.store?.state { view.update(state: state) }
     panes[windowId] = view
@@ -91,9 +95,20 @@ enum NativeSplitChrome {
       if let stack { options["stackSizes"] = .array(stack.map { .number($0) }) }
       _ = try? NativeStoreHandle.store?.dispatch(Command("updateSplit", [.string(splitId), .object(options)]), origin: .native)
     }
-    view.onToastHidden = { id in Task { @MainActor in _ = await SettingsAdapters.js("split.toast", windowId, id, "hidden") } }
+    view.onToastHidden = { [weak shell = host.shell] id in
+      shell?.coverChanged()
+      Task { @MainActor in _ = await SettingsAdapters.js("split.toast", windowId, id, "hidden") }
+    }
     view.onToastAction = { id in Task { @MainActor in _ = await SettingsAdapters.js("split.toast", windowId, id, "action") } }
     host.shell.mount(.splitChrome, view)
+    let overlay = PaneOverlaysView(windowId: windowId)
+    overlay.frame = host.shell.card.bounds
+    overlay.autoresizingMask = [.width, .height]
+    overlay.onCoverChanged = { [weak shell = host.shell] in shell?.coverChanged() }
+    host.shell.card.addSubview(overlay)
+    overlays[windowId]?.removeFromSuperview()
+    overlays[windowId] = overlay
+    if let state = NativeStoreHandle.store?.state { overlay.update(state: state) }
     if let state = NativeStoreHandle.store?.state { view.update(state: state) }
     if let notice = windows(SettingsJS.shared.latestValue(noticeTopic))?[windowId] { view.setNotice(SplitToastSpec(notice)) }
     views[windowId] = view
@@ -112,6 +127,11 @@ enum NativeSplitChrome {
       let theme = SplitChromeTheme(entry["theme"] as? [String: Any] ?? [:])
       let fullscreenTab = entry["fullscreenTab"] as? String
       view.setChrome(theme: theme, fullscreenTab: fullscreenTab, covered: entry["covered"] as? Bool ?? false)
+      if let overlay = overlays[windowId] {
+        overlay.toolbarHeight = entry["toolbar"] as? Bool ?? true ? ShellMetrics.toolbarHeight : 0
+        overlay.setFullscreenTab(fullscreenTab)
+        overlay.pageTops = (entry["pageTops"] as? [String: NSNumber] ?? [:]).mapValues { CGFloat($0.doubleValue) }
+      }
       guard let panes = panesView(windowId) else { continue }
       panes.theme = theme
       panes.cardColor = theme.color("card", dark: "rgba(18,18,18,0.5)", light: "rgba(255,255,255,0.7)")
@@ -131,6 +151,7 @@ enum NativeSplitChrome {
     guard let all = windows(value) else { return }
     for (windowId, entry) in all {
       view(windowId)?.setToast(SplitToastSpec(entry))
+      NativeWindowShell.host(windowId)?.shell.coverChanged()
     }
     for (id, view) in views where all[id] == nil { view.setToast(nil) }
   }
@@ -150,6 +171,7 @@ enum NativeSplitChrome {
   static func sample(_ windowId: String) -> [String: Any]? {
     guard var out = views[windowId]?.sample() else { return nil }
     if let view = panes[windowId], view.window != nil { out["leaves"] = view.sample() }
+    if let view = overlays[windowId], view.window != nil { out["overlays"] = view.sample() }
     return out
   }
 }

@@ -8,6 +8,7 @@ import type { Rect } from "./geometry";
 const VERSION = 1;
 export const nativeSplitPanes = windowPagesPoolActive();
 const themes: Record<string, object> = {};
+const pageTops: Record<string, Record<string, number>> = {};
 let themeQueued = false;
 let toastsStarted = false;
 const actions = new Map<string, () => void>();
@@ -17,7 +18,9 @@ function publishThemes() {
   themeQueued = true;
   queueMicrotask(() => {
     themeQueued = false;
-    publishSettingsTopic("split.theme", { v: VERSION, windows: themes });
+    const windows: Record<string, object> = {};
+    for (const [windowId, entry] of Object.entries(themes)) windows[windowId] = { ...entry, pageTops: pageTops[windowId] ?? {} };
+    publishSettingsTopic("split.theme", { v: VERSION, windows });
   });
 }
 
@@ -37,6 +40,21 @@ export function useNativeSplitChrome(windowId: string, shell: boolean, theme: Th
       publishThemes();
     },
     [shell, windowId],
+  );
+}
+
+export function useNativePageTops(windowId: string, shell: boolean, tops: Record<string, number>) {
+  const key = JSON.stringify(tops);
+  useEffect(() => {
+    if (!shell) return;
+    pageTops[windowId] = JSON.parse(key);
+    publishThemes();
+  }, [shell, windowId, key]);
+  useEffect(
+    () => () => {
+      delete pageTops[windowId];
+    },
+    [windowId],
   );
 }
 

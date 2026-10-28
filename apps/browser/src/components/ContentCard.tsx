@@ -1,29 +1,24 @@
-import { WebView, type OpenWindowRequest, type PageEngine } from "@ardia/ardiacore";
+import { WebView, type PageEngine } from "@ardia/ardiacore";
 import { windowPaneRootsActive } from "@ardia/settings";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
-import { focus, switchToTab } from "../lib/actions";
-import { adoptIconPage, dropOutlivedFavicon, noteFavicon, noteIconPage } from "../lib/favicons";
-import { restoredThemeColor } from "../lib/launchLook";
-import { noteChromeTab } from "../lib/cliControl";
-import { takeStartedNavigation } from "../lib/earlyNavigate";
 import { isQuitting } from "../lib/native";
 import { layout, useTheme } from "../lib/theme";
 import { opaqueCard } from "../lib/opaqueCard";
 import { startChromeTabs } from "../lib/chromeTabs";
 import { handOff, takeHandOff, wantsPage } from "../lib/tabPages";
-import { noteDiscarded, noteGone, noteReady } from "../lib/tabLifecycle";
+import { noteGone } from "../lib/tabLifecycle";
 import { usePrewarm } from "../lib/preload";
-import { clearEngineOffer, followSiteChoice, noteWebKitPage, offerWebKit, persistEngine } from "../lib/engines";
+import { persistEngine } from "../lib/engines";
 import { tabEngine } from "../store/engines";
 import { EngineOfferPrompt } from "./site/EnginePrompt";
-import { noteIssued, webviewRef, webviews } from "../lib/webviews";
+import { webviewRef } from "../lib/webviews";
 import { useBrowser } from "../store/browser";
 import { setPageProgress } from "../store/pageProgress";
 import { shallowEqual, useProfilesValue, useStoreWhile, useTabValue } from "../store/tabWatch";
 import { useActiveTabId, useWindowId } from "../store/hooks";
-import { activeTabId, engineProfile, isIncognitoProfile, navigationTo, wake } from "../store/model";
+import { activeTabId, engineProfile, isIncognitoProfile, wake } from "../store/model";
 import { needsPage } from "../store/pageSession";
 import { removeTabs } from "../store/tabs";
 import { splitOf } from "../store/splits";
@@ -33,8 +28,8 @@ import { CliControlPill } from "./CliControlPill";
 import { FindBar } from "./FindBar";
 import { POPOVER_MARGIN } from "./layout/controls";
 import { NO_TOOLBAR, splitGeometry, toolbarGeometry, type Rect, type ToolbarGeometry } from "./layout/geometry";
-import { dismissPermissions, startPermissionPrompts } from "./site/permissions";
-import { patchPage, pageOf, setBrowserId, setPopover, useFullscreenTab, usePages } from "./layout/pageState";
+import { startPermissionPrompts } from "./site/permissions";
+import { patchPage, useFullscreenTab, usePages } from "./layout/pageState";
 import { useTabDrag } from "./layout/tabDrag";
 import { SadTab, StatusBubble } from "./layout/PaneOverlays";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
@@ -44,39 +39,35 @@ import { dropPaneStatusStyle, dropPopoversOverCard, markPaneRootDrawn, publishPa
 import { nativeSplitPanes, useNativePageTops, useNativeSplitChrome } from "./layout/nativeSplitChrome";
 import { SplitToolbarFeed } from "./layout/NativeSplitToolbars";
 import { pagerFor } from "./layout/profilePager";
-import { openFromPage } from "./layout/openFromPage";
 import { dockMoving, useDockMotion, usePeekEdge } from "./layout/dockMotion";
 import { FrozenPage } from "./layout/frozenPage";
 import { holderOf } from "../store/pinShare";
-import { closeFolderPanelIn } from "./sidebar/tileFolderUi";
 import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useTabLayout, useToolbarExtensionsWidths } from "./layout/windowLayout";
+import { followNavigation, newPageSession, pageEventHandlers } from "./pageEvents";
 import { NewTabPage } from "./NewTabPage";
 import { EmptyCard } from "./EmptyCard";
 import { InternalPage } from "./pages";
-import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, ExternalAppPrompt, PasswordPrompt, PermissionPrompt, answerExternalApp, shouldPromptForPopups, showAutofillPrompt, showPasswordPrompt } from "./site/Prompts";
+import { AutofillPrompt, BLOCKED_POPUPS_WIDTH, BlockedPopupsPrompt, ExternalAppPrompt, PasswordPrompt, PermissionPrompt } from "./site/Prompts";
 import { SiteControls } from "./site/SiteControls";
 import { SITE_PANEL } from "./site/SiteControlsParts";
 import { ZOOM_POPOVER_WIDTH, ZoomPopover } from "./site/ZoomControls";
 import { SelectionPopover } from "./site/SelectionPopover";
-import { copyLinkToSelection, searchSelection, setPageSelection, startSelectionTools, type PageSelection } from "./site/selection";
+import { startSelectionTools } from "./site/selection";
 import { startMedia, useAutoPictureInPicture } from "./media/pip";
-import { SharePicker, requestDisplayMedia } from "./media/SharePicker";
+import { SharePicker } from "./media/SharePicker";
 import { ShareBar } from "./media/ShareBar";
 import { CastPicker } from "./media/CastPicker";
 import { DeviceChooser } from "./site/DeviceChooser";
-import { setNowPlaying, setPictureInPictureState } from "./media/state";
 import { Toolbar, ToolbarBackdrop, urlFieldRight } from "./Toolbar";
 import { AutoHideBackdrop, AutoHideToolbar, useToolbarMode, useToolbarMotion } from "./AutoHideToolbar";
 import { NativeAutoHide, nativeAutoHideAvailable } from "./NativeAutoHide";
 import { publishPaneChrome, WindowToolbar } from "./WindowToolbar";
-import { noteScroll, revealToolbar } from "./layout/toolbarAutoHide";
+import { revealToolbar } from "./layout/toolbarAutoHide";
 import { NavigationOverlays } from "./layout/SwipeOverlay";
 import "./layout/devExpose";
-import { closeWebNotification, showWebNotification } from "../lib/webNotifications";
 import { isSmallWindow } from "../store/small";
-import { closeLittleArdiaOnEscape } from "./littleArdia/actions";
 import { PeekOverlay } from "./peek/PeekOverlay";
-import { closePeekOnEscape, dismissPeek, startPeeks } from "./peek/actions";
+import { dismissPeek, startPeeks } from "./peek/actions";
 
 export function ContentCard() {
   const windowId = useWindowId();
@@ -625,9 +616,7 @@ function PeekPage({ tabId, sourceId, windowId, width, fullscreen }: { tabId: str
 const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "" });
 const webViewTab = (t: Tab | undefined) => ({ navigation: t?.navigation, adoptId: t?.adoptId, profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
 
-const isBlank = (url: string) => !url || url === "about:blank";
 const pageKey = (url: string) => url.replace(/#.*$/, "");
-const hostOf = (url: string) => url.match(/^[a-z][\w+.-]*:\/\/([^/?#]*)/i)?.[1]?.toLowerCase() ?? "";
 
 type TabWebViewProps = { tabId: string; visible: boolean; warm: boolean; peekOf?: string };
 
@@ -641,45 +630,22 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
   const neighbour = useStoreWhile(useBrowser, warm, (s) => warm && s.windows[s.tabs[tabId]?.windowId ?? ""]?.profileId !== profileId);
   const tab = () => useBrowser.getState().tabs[tabId];
   const store = () => useBrowser.getState();
-  const activateSplitPane = () => {
-    const t = tab();
-    if (t && splitOf(store(), tabId) && store().windows[t.windowId]?.activeTabIds[t.profileId] !== tabId) store().activate(tabId);
-  };
   const ref = useMemo(() => webviewRef(tabId), [tabId]);
   const autoPictureInPicture = useAutoPictureInPicture(tabId, visible);
   const pageColor = useProfilesValue(profileId, (profiles) => (isIncognitoProfile(profileId) ? "incognito" : (profiles[profileId]?.color ?? "plum")));
   const theme = useTheme();
   const backdrop = useMemo(() => opaqueCard(theme), [theme.card, theme.windowTint[0], theme.windowTint[1]]);
 
-  const lastPage = useRef<string | null>(null);
-  const pending = useRef<string | null>(navigation?.url ?? (adoptId ? (tab()?.url ?? null) : null));
+  const [session] = useState(() => newPageSession(tabId, engine, peekOf, takeHandOff(tabId, engine)));
+  session.profileId = profileId;
+  session.adoptId = adoptId;
+  session.peekOf = peekOf;
+  const handlers = useMemo(() => pageEventHandlers(session), [session]);
 
   const seq = navigation?.seq;
-  const adopted = useRef<string | null>(null);
-  const [handoff] = useState(() => takeHandOff(tabId, engine));
-  const arrived = useRef(!!handoff && handoff.seq === navigation?.seq);
-  const loadsOnCreate = useRef(engine === "webkit" && !handoff ? navigation?.seq : undefined);
   useEffect(() => {
-    if (!navigation) return;
-    noteIssued(tabId, navigation.seq);
-    if (arrived.current) {
-      arrived.current = false;
-      return;
-    }
-    if (navigation.url === adopted.current) {
-      adopted.current = null;
-      return;
-    }
-    pending.current = navigation.url;
-    if (pageOf(tabId).newTabShown) patchPage(tabId, { newTabShown: null });
-    if (loadsOnCreate.current === navigation.seq) {
-      loadsOnCreate.current = undefined;
-      return;
-    }
-    if (takeStartedNavigation(tabId, navigation.seq)) return;
-    void webviews.get(tabId)?.loadUrl(navigation.url, { userInitiated: !!navigation.userInitiated });
+    followNavigation(session, navigation);
   }, [seq]);
-  const fromNewTab = useRef(pageOf(tabId).wasNewTab && !adoptId);
   useEffect(() => {
     persistEngine(tabId, engine);
     return () => noteGone(tabId);
@@ -694,13 +660,6 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
     },
     [],
   );
-
-  const prewarmOnly = () => !tab()?.navigation && !adoptId;
-
-  const onOpenWindow = (request: OpenWindowRequest) => {
-    const t = tab();
-    if (t) openFromPage(request, { windowId: t.windowId, profileId: t.profileId, tabId });
-  };
 
   return (
     <WebView
@@ -720,138 +679,7 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
       pageColor={pageColor}
       contentsBackgroundColor={backdrop}
       shownUrl={shownUrl}
-      onReady={(browserId, chromeTabId) => {
-        setBrowserId(tabId, browserId);
-        noteChromeTab(tabId, chromeTabId);
-        noteReady(tabId);
-        if (tab()?.muted) void webviews.get(tabId)?.setMuted(true);
-      }}
-      onNavigationChange={({ url: reported, title, canGoBack, canGoForward, isLoading, themeColor, themeColorSource, initialDocumentAccessed, committedInitial, committedUrl }) => {
-        adoptIconPage(tabId);
-        const url = initialDocumentAccessed && committedInitial ? "about:blank" : reported;
-        const untouched = committedInitial === undefined ? reported === "" && !(tab()?.openerId && adoptId) : committedInitial && !initialDocumentAccessed;
-        const target = pending.current ?? (lastPage.current === null ? (tab()?.navigation?.url ?? null) : null);
-        if (target === null && prewarmOnly()) {
-          if (isBlank(url)) return;
-          adopted.current = url;
-          store().updateTab(tabId, { navigation: navigationTo(url) });
-        }
-        if (target !== null && isBlank(url) && !target.startsWith("about:") && untouched) {
-          store().updateLive(tabId, { isLoading: true });
-          return;
-        }
-        const shownTheme = restoredThemeColor(tabId, url, themeColor, isLoading);
-        pending.current = null;
-        const kept = pageOf(tabId).newTabShown;
-        if (kept) {
-          if (url === kept.url) {
-            patchPage(tabId, { newTabShown: { ...kept, title } });
-            store().updateLive(tabId, { isLoading, canGoBack, canGoForward, themeColor: shownTheme });
-            return;
-          }
-          patchPage(tabId, { newTabShown: null });
-        }
-        if (fromNewTab.current && url && !isBlank(url)) patchPage(tabId, { backToNewTab: true });
-        store().navigated(tabId, { url, title }, { isLoading, canGoBack, canGoForward, themeColor: shownTheme });
-        dropOutlivedFavicon(tabId, url, isLoading);
-        if (engine === "webkit") noteWebKitPage(tabId, { url, title, isLoading, committedUrl: committedUrl ?? "" });
-        if (lastPage.current !== null && pageKey(url) !== lastPage.current) {
-          if (pageOf(tabId).externalApp && hostOf(url) !== hostOf(lastPage.current)) answerExternalApp(tabId, false);
-          dismissPermissions(tabId);
-          setPopover(tabId, null);
-          setPageSelection(tabId, null);
-          clearEngineOffer(tabId);
-          patchPage(tabId, { popups: [], passwordPrompt: null, crashed: null, status: "" });
-          revealToolbar(tabId);
-          if (peekOf === undefined) followSiteChoice(tabId, engine, url, lastPage.current);
-        }
-        lastPage.current = pageKey(url);
-        patchPage(tabId, { themeColorSource: themeColorSource ?? null });
-      }}
-      onLoadError={() => {
-        pending.current = null;
-      }}
-      onDownloadNavigation={({ committedUrl, skipped }) => {
-        pending.current = null;
-        const t = tab();
-        if (!t) return;
-        const s = store();
-        store().updateLive(tabId, { isLoading: false });
-        if (committedUrl) {
-          if (t.url !== committedUrl) store().updateTab(tabId, { url: committedUrl });
-          return;
-        }
-        const others = s.windows[t.windowId]?.tabIds.some((id) => id !== tabId && s.tabs[id]?.profileId === t.profileId);
-        const opened = !!(t.openerId || t.adoptId) && !pageOf(tabId).wasNewTab;
-        if (!skipped && opened && !s.live[tabId]?.canGoBack && others) return store().closeTab(tabId);
-        patchPage(tabId, { backToNewTab: false, newTabShown: null });
-        store().updateTab(tabId, { url: "", title: "", favicon: null });
-      }}
-      onProgress={(progress) => !prewarmOnly() && setPageProgress(tabId, progress)}
-      onZoom={({ zoom }) => store().updateTab(tabId, { zoom })}
-      onFindResult={({ count, active }) => store().setFind(tabId, { count, active })}
-      onFavicon={(favicon) => {
-        if (!favicon || !tab()) return;
-        noteIconPage(tabId);
-        store().faviconChanged(tabId, favicon);
-        noteFavicon(tabId, favicon);
-      }}
-      onMedia={({ playing, muted }) => {
-        store().updateLive(tabId, { playingAudio: playing });
-        if (tab()?.muted && !muted) void webviews.get(tabId)?.setMuted(true);
-      }}
-      onNowPlaying={(state) => setNowPlaying(tabId, state)}
-      onPictureInPicture={(state) => setPictureInPictureState(tabId, state)}
-      onDisplayMediaRequest={(request) => requestDisplayMedia(tabId, request)}
-      onOpenWindow={onOpenWindow}
-      onStatus={(status) => patchPage(tabId, { status })}
-      onCrashed={(crashed) => {
-        if (!isQuitting()) patchPage(tabId, { crashed, unresponsive: false, fullscreen: false, status: "" });
-      }}
-      onUnresponsive={() => patchPage(tabId, { unresponsive: true })}
-      onResponsive={() => patchPage(tabId, { unresponsive: false })}
-      onFullscreen={(fullscreen) => patchPage(tabId, { fullscreen })}
-      onMediaAccess={(mediaAccess) => patchPage(tabId, { mediaAccess: mediaAccess.camera || mediaAccess.microphone || mediaAccess.screen ? mediaAccess : null })}
-      onSecurity={(security) => !prewarmOnly() && patchPage(tabId, { security })}
-      onContentBlocked={({ count }) => patchPage(tabId, { blocked: count })}
-      onPopupBlocked={(popup) => {
-        const first = !pageOf(tabId).popups.length;
-        patchPage(tabId, { popups: [...pageOf(tabId).popups, popup] });
-        if (first) void shouldPromptForPopups(engineProfile(profileId), popup.origin).then((ask) => ask && setPopover(tabId, "popups"));
-      }}
-      onPasswordPrompt={(prompt) => showPasswordPrompt(tabId, prompt)}
-      onAutofillPrompt={(prompt, id) => showAutofillPrompt(tabId, prompt, id)}
-      onExternalApp={(externalApp) => patchPage(tabId, { externalApp })}
-      onPageFocus={activateSplitPane}
-      onPagePress={activateSplitPane}
-      onWindowClose={() => !isQuitting() && store().closeTab(tabId)}
-      onNotification={(notification) => showWebNotification(tabId, notification)}
-      onCommand={({ command, text, modifiers }) => {
-        if (command === "search") searchSelection(tabId, text, modifiers);
-        else if (command === "copyLinkToHighlight") void copyLinkToSelection(tabId);
-        else if (command === "escape" && usePages.getState().popover[tabId]) setPopover(tabId, null);
-        else if (command === "escape" && !closeFolderPanelIn(tab()?.windowId) && !closePeekOnEscape(tabId)) closeLittleArdiaOnEscape(tabId);
-      }}
-      onPageMessage={(kind, data) => {
-        if (kind === "selection") setPageSelection(tabId, data as PageSelection | null);
-        else if (kind === "scroll") noteScroll(tabId, data);
-        else if (kind === "drm") offerWebKit(tabId, data);
-      }}
-      onNotificationClose={(id) => closeWebNotification(tabId, id)}
-      onDiscarded={(url) => {
-        pending.current = url;
-        fromNewTab.current = false;
-        patchPage(tabId, { backToNewTab: false, status: "" });
-        store().updateLive(tabId, { isLoading: false, canGoBack: false, canGoForward: false, playingAudio: false });
-        setPageProgress(tabId, 0);
-        noteDiscarded(tabId);
-      }}
-      onActivateRequest={() => {
-        const t = tab();
-        if (!t) return;
-        switchToTab(tabId);
-        focus(t.windowId);
-      }}
+      {...handlers}
     />
   );
 }

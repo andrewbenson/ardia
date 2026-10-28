@@ -107,7 +107,7 @@ const LOOKS = [
     `globalThis.acSwipe.strip("w1").devSimulate(${JSON.stringify(SWIPE)}, { ignorePreference: true });`,
     `globalThis.acSwipe.strip("w1").devSimulate([{ phase: "changed", dx: 60, dy: 0, atMs: 0, timestampMs: 0 }, { phase: "ended", dx: 0, dy: 0, atMs: 16, timestampMs: 16 }], { ignorePreference: true }); st().switchProfile("w1", "default");`,
   ],
-  ["flipped", `st().setAppDark(!st().ui.appDark);`, `st().setAppDark(!st().ui.appDark);`],
+  ["flipped", `st().updateSettings({ appearance: st().ui.appDark ? "light" : "dark" });`, `st().updateSettings({ appearance: "auto" });`],
   [
     "bands",
     `st().updateSettings({ extendWebsiteColor: true }); st().updateLive("t1", { themeColor: "#2b6cb0" }); st().updateLive("g1a", { themeColor: "#f6e05e" }); st().updateLive("t2", { themeColor: "#1a202c" });`,

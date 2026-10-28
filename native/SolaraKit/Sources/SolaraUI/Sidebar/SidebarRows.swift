@@ -381,6 +381,7 @@ final class TabRowView: SidebarRowView {
     TabMediaBadgesView.attach(&badges, to: body, flags: context.flags, tabId: id, host: context.host, palette: palette)
     badges?.frame = icon.frame
     label.text = context.host.renaming == "tab:\(id)" ? "" : context.title(tab)
+    if (context.host.renaming == "tab:\(id)") != (rename != nil) { needsLayout = true }
     if showsAudio {
       let audio = attached(&audio, makeAudio)
       audio.set(tab.muted ? "speaker.slash" : "speaker.wave.2", size: 12, weight: .regular, color: palette.textTab, tooltip: tab.muted ? "Unmute Site" : "Mute Site")
@@ -754,6 +755,7 @@ final class GroupHeaderView: SidebarRowView {
 
   override func render() {
     guard let context, case .groupHeader(let id)? = item?.kind, let group = context.state.groups[id] else { return }
+    if (context.host.renaming == "group:\(id)") != (rename != nil) { needsLayout = true }
     let wasCollapsed = collapsed
     let first = groupId != id
     groupId = id

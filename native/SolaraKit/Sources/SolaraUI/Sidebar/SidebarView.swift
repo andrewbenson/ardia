@@ -561,9 +561,15 @@ public final class SidebarView: NSView {
   }
 
   fileprivate func blankMouseDown(_ event: NSEvent) {
+    endRename()
     if event.modifierFlags.contains(.control) { return onAction(.sidebarMenu) }
     if event.clickCount == 2 { return onAction(.newTabDoubleClick) }
     window?.performDrag(with: event)
+  }
+
+  private func endRename() {
+    guard let window, let editor = window.firstResponder as? NSText, let field = editor.delegate as? SidebarRenameField, field.isDescendant(of: self) else { return }
+    window.makeFirstResponder(nil)
   }
 
   public override func mouseDown(with event: NSEvent) { blankMouseDown(event) }

@@ -108,6 +108,15 @@ final class SidebarHoverCardHost {
     card.onResize = { [weak self] in self?.coverChanged() }
     return card
   }()
+  private lazy var folderPeek: SidebarFolderPeekView = {
+    let card = SidebarFolderPeekView(favicons: NativeSidebar.hosts[windowId]?.view.favicons ?? SidebarFavicons())
+    card.onChoose = { [weak self, weak card] tabId in
+      guard let self, let id = card?.state?.folderId else { return }
+      NativeSidebarHoverCard.send(self.windowId, id, "choose", ["tabId": tabId])
+    }
+    card.onPointer = { [weak self] inside in self?.pointer(inside) }
+    return card
+  }()
   private var kind: String?
   private var liveCardInput: [String: Any]?
   private var liveObserver: NSObjectProtocol?
@@ -182,6 +191,10 @@ final class SidebarHoverCardHost {
       guard let state = Self.liveState(card) else { return nil }
       liveCard.set(state)
       return (liveCard, HoverCardMotion.origin(anchor: state.anchorRect))
+    case "folder":
+      guard let state = Self.decode(SidebarFolderPeekState.self, card) else { return nil }
+      folderPeek.set(state)
+      return (folderPeek, HoverCardMotion.origin(anchor: state.anchorRect))
     default:
       return nil
     }
@@ -228,6 +241,7 @@ final class SidebarHoverCardHost {
         info["titleShown"] = tabCard.titleShown
       }
       if kind == "group" { info["rows"] = groupCard.state?.rows.map(\.id) ?? [] }
+      if kind == "folder" { info["title"] = folderPeek.state?.title ?? ""; info["more"] = folderPeek.state?.more ?? NSNull() }
       if kind == "calendar" {
         let card = CGRect(x: r.minX, y: root.bounds.height - r.maxY, width: r.width, height: r.height)
         info["events"] = Dictionary(uniqueKeysWithValues: PageProbe.items.values.filter { $0.label.hasPrefix("event:") && card.contains($0.frame) }.map { ($0.label, [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height]) })

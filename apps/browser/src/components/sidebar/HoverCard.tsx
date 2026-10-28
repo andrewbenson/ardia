@@ -26,7 +26,7 @@ import { HoverPlayer, usePlayerEdge, useShowsMiniPlayer } from "../media/HoverPl
 import { useMedia, usePictureInPicture } from "../media/state";
 import { nativeSidebarEnabled } from "./NativeSidebar";
 import { useSidebarWidth } from "./tokens";
-import { bareHost, NativeCalendarCard, nativeCardKind, useNativeHoverCard, useNativeHoverCardActive } from "./nativeHoverCard";
+import { bareHost, FOLDER_PEEK_ROWS, NativeCalendarCard, nativeCardKind, useNativeHoverCard, useNativeHoverCardActive } from "./nativeHoverCard";
 
 const WIDTH = 264;
 const DIA_WIDTH = 200;
@@ -322,21 +322,19 @@ function Action({ icon, label, onPress }: { icon: string; label: string; onPress
   );
 }
 
-const PEEK_ROWS = 8;
-
 function FolderPeek({ folderId, windowId, anchor }: { folderId: string; windowId: string; anchor: Anchor }) {
   const theme = useTheme();
   const members = useBrowser(useShallow((s) => folderMembers(s, windowId, folderId)));
   const label = useBrowser((s) => folderLabel(folderIn(s, windowId, folderId)));
   const open = useFolderPanel((u) => u.open?.windowId === windowId && u.open.folderId === folderId);
   if (open || !members.length) return null;
-  const more = members.length - PEEK_ROWS;
+  const more = members.length - FOLDER_PEEK_ROWS;
   return (
     <Card anchor={anchor}>
       <Text style={{ fontSize: 12, fontWeight: "600", color: theme.textSecondary, marginBottom: 4, marginLeft: 4 }}>
         {label} · {plural(members.length, "tab")}
       </Text>
-      {members.slice(0, PEEK_ROWS).map((id) => (
+      {members.slice(0, FOLDER_PEEK_ROWS).map((id) => (
         <PeekRow key={id} tabId={id} windowId={windowId} />
       ))}
       {more > 0 ? <Text style={{ fontSize: 11.5, color: theme.textTertiary, marginTop: 4, marginLeft: 4 }}>and {more} more</Text> : null}

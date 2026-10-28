@@ -6,7 +6,8 @@
 // switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
 // pull request's card opens the pull request from its comments line. A playing pinned tab's player card goes back to
 // the tab from its artwork. A pinned calendar tab's card lists the fixture's events and a click on one shows the tab.
-// Scrolling the sidebar dismisses the card, as RN's does.
+// A pinned folder's peek lists its first eight tabs and a click on one shows it. Scrolling the sidebar dismisses the card,
+// as RN's does.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -33,7 +34,7 @@ writeFileSync(join(scratch, "data", "calendar-fixture.json"), JSON.stringify({
   calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
   events: [
     { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: 3, durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }] },
-    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 90, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
+    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 10, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
   ],
 }));
 
@@ -218,6 +219,36 @@ try {
     await sleep(200);
     await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
     await until("the calendar tab active", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId]`)) === tab);
+  });
+
+  await rep.check("a pinned folder's peek shows natively with its first eight tabs, and a click on one shows the tab", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    const setup = JSON.parse(await run(`const s = ac.store.getState();
+      const ids = Array.from({ length: 10 }, (_, i) => s.newTab("w1", { url: "data:text/html,<title>Peek" + i + "</title>", background: true }));
+      s.pinTabs(ids, true);
+      return new Promise((r) => setTimeout(r, 800)).then(() => JSON.stringify({ ids, folder: ac.pages.tileFolders.make(ids) }))`));
+    assert.ok(setup.folder, "a folder made");
+    await sleep(1200);
+    const tile = JSON.parse(await run(`return ac.pages.tileFolders.measure("w1", ${JSON.stringify(setup.folder)}).then((a) => JSON.stringify(a))`));
+    await point(tile.x + tile.width / 2, tile.y + tile.height / 2);
+    const c = await shown(setup.folder);
+    assert.equal(c.kind, "folder");
+    assert.equal(c.frame[2], 264);
+    assert.equal(c.title, "Folder · 10 tabs");
+    assert.equal(c.more, "and 2 more");
+    assert.equal(await rnCards(), 0, "RN draws no Dia card of its own");
+    assert.equal(await run(`return acPerf.findFibers("FolderPeek", 5).length`), 0, "RN draws no folder peek");
+    const titles = Object.keys(c.buttons);
+    assert.equal(titles.length, 8, `eight rows (${titles})`);
+    const row = titles.find((t) => t.includes("Peek2"));
+    assert.ok(row, `a row for the third tab (${titles})`);
+    const [x, y, w, h] = c.buttons[row];
+    await point(x + w / 2, y + h / 2);
+    await sleep(200);
+    await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
+    await until("Peek 2 active", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId]`)) === setup.ids[2]);
+    await gone("a click on a row");
   });
 
   await rep.check("scrolling the sidebar dismisses it, as RN's does", async () => {

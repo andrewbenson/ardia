@@ -6,7 +6,9 @@ import { hex, useTheme } from "../../lib/theme";
 import { useIsSleeping } from "../../lib/tabLifecycle";
 import { useBrowser } from "../../store/browser";
 import { useIsBookmarked, useTab } from "../../store/hooks";
-import { activeTabId, bookmarkProfileId } from "../../store/model";
+import { activeTabId, bookmarkProfileId, plural } from "../../store/model";
+import { folderIn, folderLabel, folderMembers } from "../../store/tileFolders";
+import { useShallow } from "zustand/react/shallow";
 import { awayFromPin } from "../../store/organize";
 import { openInSplit } from "../layout/splitActions";
 import { useArtwork } from "../media/artwork";
@@ -21,6 +23,7 @@ import type { CalendarEvent } from "../../live/meetings";
 import { clickTab, tabTitle } from "./actions";
 import { returnFocusToPage, useGroupRows } from "./GroupPanel";
 import { cardHoverProps, dismissHover, holdHover } from "./hover";
+import { useFolderPanel } from "./tileFolderUi";
 import { nativeSidebarEnabled } from "./NativeSidebar";
 import type { Anchor, Hover } from "./state";
 
@@ -28,7 +31,9 @@ const TOPIC = "sidebar.hoverCard";
 const cards: Record<string, object> = {};
 let queued = false;
 
-export type NativeCardKind = "tab" | "group" | "live" | "player" | "calendar";
+export type NativeCardKind = "tab" | "group" | "live" | "player" | "calendar" | "folder";
+
+export const FOLDER_PEEK_ROWS = 8;
 
 function publish() {
   if (queued) return;
@@ -66,6 +71,7 @@ export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolea
   if (hover.kind === "tab" && !player && calendar) return "calendar";
   if (hover.kind === "group") return "group";
   if (hover.kind === "live") return "live";
+  if (hover.kind === "folder") return "folder";
   return null;
 }
 
@@ -123,6 +129,29 @@ function useGroupCard(windowId: string, id: string | null, anchor: Anchor | null
     windowHeight,
     dark: theme.dark,
     theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, textTertiary: theme.textTertiary, placeholder: theme.placeholder },
+  };
+}
+
+const NO_IDS: string[] = [];
+
+function useFolderCard(windowId: string, id: string | null, anchor: Anchor | null) {
+  const theme = useTheme();
+  const members = useBrowser(useShallow((s) => (id ? folderMembers(s, windowId, id) : NO_IDS)));
+  const label = useBrowser((s) => (id ? folderLabel(folderIn(s, windowId, id)) : ""));
+  const tabs = useBrowser(useShallow((s) => members.slice(0, FOLDER_PEEK_ROWS).map((m) => s.tabs[m])));
+  const open = useFolderPanel((u) => !!id && u.open?.windowId === windowId && u.open.folderId === id);
+  if (!id || !anchor || open || !members.length) return null;
+  const more = members.length - FOLDER_PEEK_ROWS;
+  return {
+    kind: "folder",
+    folderId: id,
+    title: `${label} · ${plural(members.length, "tab")}`,
+    rows: tabs.flatMap((t) => (t ? [{ id: t.id, title: tabTitle(t), url: t.url, favicon: t.favicon, icon: t.customIcon, profileId: t.profileId }] : [])),
+    more: more > 0 ? `and ${more} more` : null,
+    anchor: frame(anchor),
+    dark: !!theme.dark,
+    shadowOpacity: theme.panelShadowOpacity,
+    theme: { panel: hex(theme.panel), panelBorder: hex(theme.panelBorder), textSecondary: theme.textSecondary, textTertiary: theme.textTertiary, textTab: theme.textTab, rowHover: theme.rowHover },
   };
 }
 
@@ -205,7 +234,8 @@ export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null
   const group = useGroupCard(windowId, kind === "group" ? (live?.id ?? null) : null, anchor, windowHeight);
   const liveCard = useLiveCard(kind === "live" ? (live?.id ?? null) : null, anchor);
   const player = usePlayerCard(kind === "player" ? (live?.id ?? null) : null, anchor, edge);
-  const card = tab ?? group ?? liveCard ?? player;
+  const folder = useFolderCard(windowId, kind === "folder" ? (live?.id ?? null) : null, anchor);
+  const card = tab ?? group ?? liveCard ?? player ?? folder;
   const key = kind === "calendar" && live ? "calendar" : card && JSON.stringify(card);
   useLayoutEffect(() => {
     if (key !== "calendar") setCard(windowId, key ? JSON.parse(key) : null);

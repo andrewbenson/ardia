@@ -53,3 +53,6 @@ scripts/.notary.env
 *.p8
 
 .claude/settings.local.json
+
+__pycache__/
+*.orig

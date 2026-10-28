@@ -11,13 +11,16 @@ for what RN still draws over a page. [architecture.md](architecture.md) › 4.4 
 |---|---|---|---|
 | 0 | `backdrop` | `WindowTreatmentView`: vibrancy, the profile tint and wash, the incognito fill | port-shell |
 | 1 | `card` | `shell.card`, a shell-owned flipped container at the card frame: corner, shadow, slot geometry. Holds the pool's pages (`TabSlots` `card(w)` and `pane(w, tab)`), the native toolbar, `FrozenPageView` | port-shell (frame), port-omnibox (pages), port-sidebar-live (split panes) |
-| 2 | pane surface | one RN root per tab, inside that tab's pane container, above its page and toolbar | port-shell |
+| 2 | pane overlays | `PaneOverlays.shared.container(windowId:tabId:)`, over each pane's page area below its toolbar, bookmarks and share bars. Inside it: the pool's page < the tab's RN pane root < native pane overlays (sad tab, zoom) | port-sidebar-live (container), port-shell (RN root), port-media (native overlays) |
 | 3 | `splitChrome` | dividers, the split toast, the drop hints | port-sidebar-live |
 | 4 | `peek` | Peek's page and frame (`TabSlots` `peek(w)`) | port-omnibox |
 | 5 | `sidebar`, `topStrip` | the native sidebar and the top tab strip | port-sidebar, port-strip |
 | 6 | main root | the window's RN root, full window, `passThroughTouches`, a box-none root in shell mode | port-shell |
-| 7 | `overlay` | native window-level overlays: port-media's popovers and hover cards | port-shell (slot), port-media |
+| 7 | `overlay` | `shell.overlay` (`NativeWindowShell.overlay(w)`), one shared box-none container for window-level native overlays: popovers, hover cards | port-shell (container), port-media, port-sidebar |
 | 8 | foreign | views the shell didn't mount (the PiP overlay) stay above every slot | port-media |
+
+`shell.hiddenPages` (`NativeWindowShell.hiddenPages(w)`) sits under every layer, hidden and at the card's size: the
+pool parks hidden and warm pages there.
 
 ## Where each RN item goes
 
@@ -51,13 +54,16 @@ for what RN still draws over a page. [architecture.md](architecture.md) › 4.4 
 - **Pass-through.** The main root and every pane root set `passThroughTouches`, and their root views are box-none, so
   a click lands on the native view under an empty spot. In shell mode the main root doesn't render `BrowserWindow`
   (its full-size row takes every click).
-- **Hover goes to what's on top.** A React view hovers only when the window's `contentView.hitTest` at the pointer is
-  that view's root view or inside it; a native view stacked above the root blocks it. A `pointerEvents="none"` hover
-  zone over its own root still hovers. Cursor rects follow the same rule: a layer's cursor rects are clipped to the
-  parts of it nothing native covers, or the native view sets its own.
-- **Pane roots** are keyed by tab, never by pane, and move with the tab's container as the pool moves it. Each is
-  created hidden and shown on `RCTContentDidAppear`, keeps its content size across reloads, and runs no first-window,
-  launch-committed or after-first-window effects.
+- **Hover goes to what's on top.** Under a `WindowShellView`, a React view doesn't hover where the window's hit test
+  lands on a native view stacked above its root; views in the same root keep the geometric rule, so a
+  `pointerEvents="none"` hover zone still hovers. Every native layer host returns nil from `hitTest` for itself where
+  it draws nothing, and a layer that shows, hides or moves on its own (Peek, popovers, hover cards) calls
+  `shell.coverChanged()` when it does, so hover updates under a still pointer. Cursor rects are still open: covered
+  views' rects are to be dropped when the cover changes, and native layers set their own cursor.
+- **Pane roots** (behind `ARDIA_SHELL_PANES` until the main root moves to the top) are keyed by tab, never by pane,
+  and live in that tab's PaneOverlays container. Each is created hidden and shown on `RCTContentDidAppear`, keeps its
+  content size across reloads, and runs no first-window, launch-committed or after-first-window effects. A root goes
+  1 s after its tab stops being shown in the window, and at once when the tab closes.
 - **Prompts anchored to the right** ride the pane root and may trail the card by a frame while the dock moves; that is
   accepted for now and measured.
 - **Modals.** While the main root shows a modal (the command panel, a dialog, onboarding), the shell's

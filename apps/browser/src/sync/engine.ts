@@ -53,7 +53,7 @@ import {
 import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
 import { syncRedesign } from "./redesignSwitch";
-import { ledgerFromNewerVersion, ledgerPasswordsAdapter, migrateLedger, type HeldPasswords } from "./ledgerPasswords";
+import { ledgerFromNewerVersion, ledgerPasswordsAdapter, ledgerPauseReason, migrateLedger, type HeldPasswords, type LedgerPause } from "./ledgerPasswords";
 import { editJournal, noteInStep, noteSeen, prunableSeen, pruneSeen } from "./journalHost";
 import { choice, digest } from "./notes";
 import { isObject, readableBatch, readableScope } from "./readable";
@@ -171,6 +171,18 @@ let newerFormat = false;
 const NEWER_FORMAT = "This Mac's sync settings were saved by a newer version of Solara. Update Solara to keep syncing.";
 const PASSWORDS_FROM_NEWER_VERSION = "Passwords aren't syncing: a newer version of Solara saved this Mac's password records. Update Solara to sync passwords again.";
 const passwordsRefused = () => syncRedesign.on && doc.types.passwords && ledgerFromNewerVersion();
+const PASSWORDS_LEDGER_UNREADABLE = "Passwords aren't syncing: Solara can't read this Mac's password sync records. Everything else keeps syncing.";
+const PASSWORDS_LEDGER_OLDER = "Passwords aren't syncing: this Mac's password sync records need updating and the update didn't finish.";
+const PASSWORD_PAUSES: Record<LedgerPause, string> = {
+  newer: PASSWORDS_FROM_NEWER_VERSION,
+  older: PASSWORDS_LEDGER_OLDER,
+  unreadable: PASSWORDS_LEDGER_UNREADABLE,
+  unwritable: PASSWORDS_LEDGER_UNREADABLE,
+};
+const passwordsPause = () => {
+  const reason = syncRedesign.on && doc.types.passwords ? ledgerPauseReason() : null;
+  return reason ? PASSWORD_PAUSES[reason] : null;
+};
 const SEALED_PASSWORD_FAULT = "Sync stopped on an internal fault: a pw: value didn't open with this Mac's sync key, so nothing was sent.";
 const sealedPasswordFault = (error: unknown) => ((error as { code?: unknown } | null)?.code === "ERR_SEALED_PASSWORDS" ? SEALED_PASSWORD_FAULT : null);
 const sealingPasswords = () => syncRedesign.on && !!SyncNative?.useSealedPasswords && !!SyncNative.checkSealed && !!SyncNative.saveSealedPassword && !!SyncNative.migrateLedger;
@@ -530,7 +542,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
     lastSyncedAt: doc.lastSyncedAt,
     ...(doc.enabled ? summarize() : { devices: [], remoteTabs: {}, remoteProfiles: [], pending: 0 }),
     heldPasswords: heldPasswordsByProfile(),
-    passwordsError: passwordsRefused() ? PASSWORDS_FROM_NEWER_VERSION : null,
+    passwordsError: passwordsPause(),
     ...patch,
   });
 }

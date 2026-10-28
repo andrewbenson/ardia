@@ -27,15 +27,24 @@ function ledgerRead() {
 export const ledgerFromNewerVersion = () => ledgerRead() === "newer";
 const ledgerWritable = () => typeof ledgerRead() !== "string";
 
-let warnedUnwritable = false;
+let unwritable = false;
+let migrationTried = false;
+export type LedgerPause = "newer" | "older" | "unreadable" | "unwritable";
+export function ledgerPauseReason(): LedgerPause | null {
+  const doc = ledgerRead();
+  if (doc === "older") return migrationTried ? "older" : null;
+  if (typeof doc === "string") return doc;
+  return unwritable ? "unwritable" : null;
+}
+
 function writeLedgers(doc: LedgerDoc): boolean {
   const text = JSON.stringify(doc);
   if (typeof readLedgerDoc(text) === "string") {
-    if (!warnedUnwritable) console.warn("[sync] the password ledger wasn't written: it wouldn't read back; passwords pause");
-    warnedUnwritable = true;
+    if (!unwritable) console.warn("[sync] the password ledger wasn't written: it wouldn't read back; passwords pause");
+    unwritable = true;
     return false;
   }
-  warnedUnwritable = false;
+  unwritable = false;
   writeDocument(LEDGER_DOC, text);
   return true;
 }
@@ -48,6 +57,7 @@ function readLedgers(): LedgerDoc | null {
 export async function migrateLedger(migrate: (text: string) => Promise<string | null | undefined>) {
   const text = readDocument(LEDGER_DOC);
   if (!text || readLedgerDoc(text) !== "older") return;
+  migrationTried = true;
   const migrated = await migrate(text);
   if (migrated && typeof readLedgerDoc(migrated) !== "string" && readDocument(LEDGER_DOC) === text) writeDocument(LEDGER_DOC, migrated);
 }

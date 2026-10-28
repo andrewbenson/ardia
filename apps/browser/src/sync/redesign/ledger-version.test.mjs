@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { fixedBy } = await import("./switchOn.mjs");
 const shell = await import("../../test-native/index.ts");
-const { ledgerPasswordsAdapter, readLedgerDoc } = await import("../ledgerPasswords.ts");
+const { ledgerPasswordsAdapter, ledgerPauseReason, readLedgerDoc } = await import("../ledgerPasswords.ts");
 const { sealMarked, sealedCalls } = await import("./fakeSeal.mjs");
 
 test("LEDGER-v: a sync-pw-ledger.json from a newer version is refused, not read as absent", fixedBy("step 3"), async () => {
@@ -36,10 +36,17 @@ test("LEDGER-unwritable: a ledger that wouldn't read back isn't written, and the
   const { seal } = await import("./fakeSeal.mjs");
   const key = "pw:https://a.example\nme";
   const value = { o: "https://a.example", u: "me", s: seal("https://a.example", "me", "pw") };
-  const read = async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s }], mark: null });
+  let dated = false;
+  const read = async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s, ...(dated ? { created: 1, modified: 1 } : {}) }], mark: null });
   const adapter = ledgerPasswordsAdapter("default", () => true, read, () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
   const extraction = await adapter.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
   assert.equal(extraction, null, "a cycle whose ledger can't be written sends nothing");
   assert.equal(shell.docs.get("sync-pw-ledger.json"), undefined, "a login with no time would give m: null, so that ledger isn't written");
   assert.notEqual(readLedgerDoc(shell.docs.get("sync-pw-ledger.json") ?? null), "unreadable", "and the next read isn't unreadable");
+  assert.equal(ledgerPauseReason(), "unwritable", "the Sync pane gets a reason for the pause");
+  dated = true;
+  const again = await adapter.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
+  assert.ok(again, "control: once the ledger can be written, the cycle runs");
+  assert.ok(shell.docs.get("sync-pw-ledger.json"), "and the ledger is written");
+  assert.equal(ledgerPauseReason(), null, "and the reason clears");
 });

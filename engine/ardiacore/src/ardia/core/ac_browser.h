@@ -40,6 +40,7 @@
 
 class Browser;
 class BrowserWindow;
+class BrowserWindowInterface;
 class Profile;
 
 namespace extensions {
@@ -110,6 +111,12 @@ class WindowHost : public TabStripModelObserver,
   void ActiveTabChanged(Browser* browser, content::WebContents* contents);
   void DevToolsDockChanged(content::WebContents* inspected,
                            content::WebContents* devtools);
+  void BrowserCloseStarting(BrowserWindowInterface* window_interface);
+  bool KeepsTabOnClose(const BrowserWindowInterface* window_interface,
+                       content::WebContents* contents) const;
+  bool BrowserWillCloseTabs(BrowserWindowInterface* window_interface);
+  void BrowserCloseCancelled(BrowserWindowInterface* window_interface);
+  int KeptOnCloseCount(Profile* profile) const;
   bool OfferPasswordSave(content::WebContents* contents);
   void FullscreenChanged(content::WebContents* contents, bool fullscreen);
   bool acted_fullscreen() const { return acted_fullscreen_; }
@@ -141,6 +148,7 @@ class WindowHost : public TabStripModelObserver,
   void CommitClose();
   void CloseWidget();
   int DownloadsCancelledByClose() const;
+  void AskTabsToKeep(Browser* browser, bool closed_by_chrome);
 
   __weak ArdiaCoreWindow* owner_;
   ArdiaCoreWindow* __strong owner_ref_;
@@ -151,6 +159,10 @@ class WindowHost : public TabStripModelObserver,
   raw_ptr<Profile> active_profile_ = nullptr;
   CloseState close_state_ = CloseState::kOpen;
   raw_ptr<Browser> asking_ = nullptr;
+  std::map<const BrowserWindowInterface*,
+           std::vector<base::WeakPtr<content::WebContents>>>
+      kept_on_close_;
+  std::vector<const BrowserWindowInterface*> asked_by_close_;
   int close_attempt_ = 0;
   bool widget_close_allowed_ = false;
   bool internal_ = false;

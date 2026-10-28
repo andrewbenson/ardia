@@ -2167,6 +2167,278 @@ try {
     }
   });
 
+  await check("chrome-windows-remove", async () => {
+    const installed = await exts(`install(${JSON.stringify(extPath)}, "")`);
+    if (installed?.error) throw new Error(installed.error);
+    const worker = await until("the extension's worker", async () => {
+      for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
+        const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.windows?.remove", returnByValue: true }).catch(() => null);
+        if (r?.result?.value === "function") return t;
+      }
+      return null;
+    }, 15000);
+    const inWorker = async (expression) => {
+      const r = await cdp(worker, "Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
+      if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? JSON.stringify(r.exceptionDetails));
+      return r.result?.value;
+    };
+    const tabIdOf = (m) => until(`the store tab for ${m}`, async () => (await storeTabs()).find((t) => t.url?.includes(`e?${m}`))?.id, 10000);
+    const storeTabs = () => evalApp(`const s = ac.store.getState(); return Object.values(s.tabs).map((t) => ({ id: t.id, url: t.url, windowId: t.windowId, windowOpen: !!s.windows[t.windowId] }))`);
+    const pages = async (marks) => (await targets()).filter((t) => t.type === "page" && marks.some((m) => t.url.includes(m))).map((t) => t.url.split("?")[1]);
+    const before = (await storeTabs()).filter((t) => t.windowId === mainWindow).map((t) => t.id).sort();
+    const made = [];
+    const openWindow = async (marks, beforeunload) => {
+      const id = await inWorker(`chrome.windows.create({ url: ${JSON.stringify(marks.map((m) => `${base}/e?${m}`))} }).then((w) => w.id)`);
+      const appWindow = await until(`the app window for ${marks}`, async () => {
+        const tabs = (await storeTabs()).filter((t) => marks.some((m) => t.url?.includes(`e?${m}`)));
+        return tabs.length === marks.length && new Set(tabs.map((t) => t.windowId)).size === 1 ? tabs[0].windowId : null;
+      }, 15000);
+      made.push(appWindow);
+      if (appWindow === mainWindow) throw new Error("the extension's window landed in the run's window");
+      await until(`${marks} loaded`, async () => (await pages(marks)).length === marks.length, 15000);
+      for (const m of beforeunload) {
+        const page = await pageTarget(`e?${m}`);
+        await cdp(page, "Runtime.evaluate", { expression: "addEventListener('beforeunload', () => {}); true" });
+      }
+      return { id, appWindow };
+    };
+    const remove = async (marks, keep, beforeunload = []) => {
+      const { id, appWindow } = await openWindow(marks, beforeunload);
+      if (keep && (await cef(`devKeepTabsOnClose(${keep})`)) < 0) throw new Error("devKeepTabsOnClose needs a Debug build");
+      await inWorker(`chrome.windows.remove(${id}).then(() => true)`);
+      const kept = marks.slice(0, keep), closed = marks.slice(keep);
+      const live = await until(`windows.remove of ${marks} (keeping ${keep})`, async () => {
+        const now = await pages(marks);
+        return closed.every((m) => !now.includes(m)) ? now : null;
+      }, 15000);
+      await sleep(500);
+      const after = await pages(marks);
+      if (kept.some((m) => !after.includes(m))) throw new Error(`kept pages closed: wanted ${kept}, live ${after}`);
+      const store = (await storeTabs()).filter((t) => t.windowId === appWindow);
+      const left = await inWorker(`chrome.windows.getAll().then((ws) => ws.some((w) => w.id === ${id}))`);
+      if (left) throw new Error(`chrome.windows.getAll still lists window ${id}`);
+      return { marks, keep, beforeunload, live, afterSettle: after, storeTabsLeft: store.map((t) => t.url.split("?")[1]) };
+    };
+    try {
+      const plain = await remove(["rm-a", "rm-b"], 0);
+      const plainStore = await until("the store dropping the removed tabs", async () => {
+        const all = await storeTabs();
+        const left = all.filter((t) => ["e?rm-a", "e?rm-b"].some((m) => t.url?.includes(m)));
+        return left.length ? null : { tabsLeft: 0, windowKept: all.filter((t) => t.windowId === made[0]).map((t) => t.url || "(new tab)") };
+      }, 10000).catch(async (e) => {
+        throw new Error(`${e.message}; store tabs: ${JSON.stringify((await storeTabs()).filter((t) => t.windowId === made[0]))}`);
+      });
+      const unload = await remove(["rm-c", "rm-d"], 0, ["rm-c"]);
+      const keepOne = await remove(["rm-e", "rm-f"], 1, ["rm-f"]);
+      const keepAll = await remove(["rm-g", "rm-h"], 2);
+      const cancelled = await (async () => {
+        const marks = ["rm-i", "rm-j"];
+        const { id, appWindow } = await openWindow(marks, []);
+        const target = await pageTarget("e?rm-i");
+        await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = () => j(new Error("DevTools connection failed")))));
+        let leave = false;
+        const prompts = [];
+        ws.onmessage = (m) => {
+          const msg = JSON.parse(m.data);
+          if (msg.method !== "Page.javascriptDialogOpening") return;
+          prompts.push({ type: msg.params.type, leave });
+          ws.send(JSON.stringify({ id: 100 + prompts.length, method: "Page.handleJavaScriptDialog", params: { accept: leave } }));
+        };
+        ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+        try {
+          await sleep(300);
+          const keptBrowser = await browserOf((await tabIdOf("rm-j")));
+          await evalApp(`ac.actions.switchToTab(${JSON.stringify((await tabIdOf("rm-i")))}); return true`);
+          await sleep(300);
+          await cef(`devKeepBrowsersOnClose([${keptBrowser}], [])`);
+          await inWorker(`chrome.windows.remove(${id}).then(() => true, () => true)`);
+          await until("the beforeunload prompt", async () => prompts.length >= 1, 10000).catch(async (e) => {
+            const listed = await inWorker(`chrome.windows.get(${id}, { populate: true }).then((w) => w.tabs.map((t) => t.url), () => "gone")`);
+            throw new Error(`${e.message}; live ${JSON.stringify(await pages(marks))}; chrome window ${JSON.stringify(listed)}; activation ${JSON.stringify((await cdp(target, "Runtime.evaluate", { expression: "navigator.userActivation.hasBeenActive", returnByValue: true }).catch(() => null))?.result?.value)}`);
+          });
+          await sleep(1000);
+          const inWindow = await inWorker(`chrome.windows.get(${id}, { populate: true }).then((w) => w.tabs.length, () => -1)`);
+          if (inWindow !== 2) throw new Error(`after Stay the window holds ${inWindow} tabs, not 2: the kept tab moved on a cancelled close`);
+          const now = await pages(marks);
+          if (marks.some((m) => !now.includes(m))) throw new Error(`a page closed though beforeunload said Stay: ${now}`);
+          const listed = await inWorker(`chrome.windows.getAll().then((ws) => ws.some((w) => w.id === ${id}))`);
+          if (!listed) throw new Error(`window ${id} closed though beforeunload said Stay`);
+          const store = (await storeTabs()).filter((t) => t.windowId === appWindow).length;
+          if (store !== marks.length) throw new Error(`the store has ${store} of the window's ${marks.length} tabs after Stay`);
+          leave = true;
+          await inWorker(`chrome.windows.remove(${id}).then(() => true)`);
+          await until("the window closing after Leave", async () => (await pages(marks)).length === 0, 15000);
+          return { prompts, tabsInWindowAfterStay: inWindow, storeTabsAfterStay: store };
+        } finally {
+          leave = true;
+          setTimeout(() => { try { ws.close(); } catch {} }, 3000);
+        }
+      })();
+      const main = (await storeTabs()).filter((t) => t.windowId === mainWindow).map((t) => t.id).sort();
+      if (JSON.stringify(main) !== JSON.stringify(before)) throw new Error(`the run's window changed: ${JSON.stringify(before)} → ${JSON.stringify(main)}`);
+      const hostClose = await (async () => {
+        const marks = ["rm-k", "rm-l"];
+        const { appWindow } = await openWindow(marks, []);
+        const target = await pageTarget("e?rm-k");
+        await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = () => j(new Error("DevTools connection failed")))));
+        const prompts = [];
+        ws.onmessage = (m) => {
+          const msg = JSON.parse(m.data);
+          if (msg.method !== "Page.javascriptDialogOpening") return;
+          prompts.push(msg.params.type);
+          ws.send(JSON.stringify({ id: 100 + prompts.length, method: "Page.handleJavaScriptDialog", params: { accept: true } }));
+        };
+        ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+        try {
+          await sleep(300);
+          const windowNumber = await cef(`devWindowNumber(${await browserOf((await tabIdOf("rm-k")))})`);
+          await evalApp(`ac.store.getState().updateSettings({ warnBeforeClosingWindow: false }); return true`);
+          await cef(`devKeepBrowsersOnClose([${await browserOf((await tabIdOf("rm-k")))}], [])`);
+          const clicked = await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until("the window closing", async () => !(await storeTabs()).some((t) => t.windowId === appWindow), 15000);
+          await until("rm-l closing", async () => !(await pages(marks)).includes("rm-l"), 15000);
+          await sleep(1000);
+          const unused = await cef(`devKeepBrowsersOnClose([], [])`);
+          const live = await pages(marks);
+          if (unused !== 0) throw new Error(`the host close never asked which tabs to keep (knobs left ${unused})`);
+          if (!live.includes("rm-k")) throw new Error(`the kept page with beforeunload closed with the window: ${live}`);
+          if (prompts.length) throw new Error(`the kept page got a beforeunload prompt: ${prompts}`);
+          return { clicked, prompts, live };
+        } finally {
+          const kept = await pageTarget("e?rm-k").catch(() => null);
+          if (kept) await fetch(`http://127.0.0.1:${port}/json/close/${kept.id}`).catch(() => null);
+          setTimeout(() => { try { ws.close(); } catch {} }, 3000);
+        }
+      })();
+      const failedMove = await (async () => {
+        const marks = ["rm-m", "rm-n"];
+        const { id } = await openWindow(marks, []);
+        const target = await pageTarget("e?rm-m");
+        await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = () => j(new Error("DevTools connection failed")))));
+        const prompts = [];
+        ws.onmessage = (m) => {
+          const msg = JSON.parse(m.data);
+          if (msg.method !== "Page.javascriptDialogOpening") return;
+          prompts.push(msg.params.type);
+          ws.send(JSON.stringify({ id: 100 + prompts.length, method: "Page.handleJavaScriptDialog", params: { accept: true } }));
+        };
+        ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+        try {
+          await sleep(300);
+          const failingBrowser = await browserOf((await tabIdOf("rm-m")));
+          await cef(`devKeepBrowsersOnClose([${failingBrowser}], [${failingBrowser}])`);
+          await inWorker(`chrome.windows.remove(${id}).then(() => true)`);
+          await until("the window closing after the failed move", async () => (await pages(marks)).length === 0, 15000);
+          const unusedKnobs = await cef(`devKeepBrowsersOnClose([], [])`);
+          if (unusedKnobs !== 0) throw new Error(`the forced failure didn't run (knobs left ${unusedKnobs})`);
+          if (!prompts.includes("beforeunload")) throw new Error(`the tab whose move failed closed without its beforeunload: ${prompts}`);
+          return { prompts };
+        } finally {
+          setTimeout(() => { try { ws.close(); } catch {} }, 3000);
+        }
+      })();
+      const failedMoveStay = await (async () => {
+        const marks = ["rm-o", "rm-p"];
+        await openWindow(marks, []);
+        const target = await pageTarget("e?rm-o");
+        await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = () => j(new Error("DevTools connection failed")))));
+        let leave = false;
+        const prompts = [];
+        ws.onmessage = (m) => {
+          const msg = JSON.parse(m.data);
+          if (msg.method !== "Page.javascriptDialogOpening") return;
+          prompts.push({ type: msg.params.type, leave });
+          ws.send(JSON.stringify({ id: 100 + prompts.length, method: "Page.handleJavaScriptDialog", params: { accept: leave } }));
+        };
+        ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+        try {
+          await sleep(300);
+          const tabId = (await tabIdOf("rm-o"));
+          const windowNumber = await cef(`devWindowNumber(${await browserOf(tabId)})`);
+          await evalApp(`ac.store.getState().updateSettings({ warnBeforeClosingWindow: false }); return true`);
+          const failingBrowser = await browserOf(tabId);
+          await cef(`devKeepBrowsersOnClose([${failingBrowser}], [${failingBrowser}])`);
+          await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until("the beforeunload prompt after the failed move", async () => prompts.length >= 1, 15000);
+          await sleep(1000);
+          const afterStay = await pages(marks);
+          if (!afterStay.includes("rm-o")) throw new Error(`the page closed though beforeunload said Stay: ${afterStay}`);
+          leave = true;
+          const again = await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until("the window closing on the second try", async () => !(await pages(marks)).includes("rm-o"), 15000);
+          return { prompts, afterStay, again };
+        } finally {
+          leave = true;
+          setTimeout(() => { try { ws.close(); } catch {} }, 3000);
+        }
+      })();
+      const twoProfiles = await (async () => {
+        const windowId = await evalApp(`return ac.actions.openWindow({ url: "${base}/e?mp-a" })`);
+        made.push(windowId);
+        const profile = await evalApp(`return ac.store.getState().createProfile({ name: "Close keep" })`);
+        await evalApp(`ac.actions.switchProfile(${JSON.stringify(windowId)}, ${JSON.stringify(profile)}); return true`);
+        await evalApp(`ac.actions.openUrls(["${base}/e?mp-b1", "${base}/e?mp-b3"], ${JSON.stringify(windowId)}); return true`);
+        const marks = ["mp-a", "mp-b1", "mp-b3"];
+        await until("the two profiles' pages", async () => (await pages(marks)).length === 3, 15000);
+        const [a, b1] = await Promise.all(["mp-a", "mp-b1"].map(async (m) => browserOf(await tabIdOf(m))));
+        const personal = await evalApp(`return Object.keys(ac.store.getState().profiles).find((id) => id !== ${JSON.stringify(profile)})`);
+        await until("mp-a shown", async () => {
+          await evalApp(`ac.actions.switchProfile(${JSON.stringify(windowId)}, ${JSON.stringify(personal)}); return true`);
+          return evalApp(`return ac.store.getState().windows[${JSON.stringify(windowId)}]?.profileId === ${JSON.stringify(personal)}`);
+        }, 10000);
+        const pageA = await pageTarget("e?mp-a");
+        await cdp(pageA, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+        const ws = new WebSocket(pageA.webSocketDebuggerUrl);
+        await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = () => j(new Error("DevTools connection failed")))));
+        const prompts = [];
+        ws.onmessage = (m) => {
+          const msg = JSON.parse(m.data);
+          if (msg.method !== "Page.javascriptDialogOpening") return;
+          prompts.push(msg.params.type);
+          ws.send(JSON.stringify({ id: 100 + prompts.length, method: "Page.handleJavaScriptDialog", params: { accept: false } }));
+        };
+        ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+        try {
+          await sleep(300);
+          const windowNumber = await cef(`devWindowNumber(${a})`);
+          await evalApp(`ac.store.getState().updateSettings({ warnBeforeClosingWindow: false }); return true`);
+          await cef(`devKeepBrowsersOnClose([${a}, ${b1}], [${a}])`);
+          await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until("profile A's beforeunload prompt", async () => prompts.length >= 1, 15000);
+          await until("profile B's close finishing", async () => !(await pages(marks)).includes("mp-b3"), 15000);
+          const live = await until("both kept pages settled", async () => {
+            const now = await pages(marks);
+            return now.includes("mp-a") && now.includes("mp-b1") ? now : null;
+          }, 5000).catch(async () => { throw new Error(`a kept page closed: live ${JSON.stringify(await pages(marks))}`); });
+          const left = await cef(`devKeepBrowsersOnClose([], [])`);
+          if (left !== 0) throw new Error(`knobs left ${left}`);
+          return { prompts, live };
+        } finally {
+          for (const m of ["mp-a", "mp-b1"]) {
+            const t = await pageTarget(`e?${m}`).catch(() => null);
+            if (t) await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`).catch(() => null);
+          }
+          setTimeout(() => { try { ws.close(); } catch {} }, 3000);
+          await evalApp(`const s = ac.store.getState(); const p = Object.values(s.profiles ?? {}).find((x) => x.name === "Close keep"); if (p && s.deleteProfile) s.deleteProfile(p.id); return true`).catch(() => null);
+        }
+      })();
+      return { plain: { ...plain, ...plainStore }, unload, keepOne, keepAll, cancelled, hostClose, failedMove, failedMoveStay, twoProfiles, mainTabs: main.length };
+    } finally {
+      await cef(`devKeepTabsOnClose(0)`).catch(() => null);
+      await cef(`devFailKeptMoves(0)`).catch(() => null);
+      for (const w of made) if (w !== mainWindow) await evalApp(`ac.store.getState().closeWindow(${JSON.stringify(w)}); return true`).catch(() => null);
+      await exts(`uninstall("${installed.id}", "")`).catch(() => null);
+    }
+  });
+
   await check("private-windows-create", async () => {
     const installed = await exts(`install(${JSON.stringify(extPath)}, "")`);
     if (installed?.error) throw new Error(installed.error);

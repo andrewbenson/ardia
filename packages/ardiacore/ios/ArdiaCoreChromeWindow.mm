@@ -1360,6 +1360,19 @@ void HandOffTab(ArdiaCoreTab *tab) {
   return controller;
 }
 
+NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *KeeperWindows() {
+  static NSMapTable *windows = [NSMapTable weakToStrongObjectsMapTable];
+  return windows;
+}
+
++ (instancetype)keeperWindowForProfile:(ArdiaCoreProfile *)profile {
+  ArdiaCoreWindowController *keeper = [KeeperWindows() objectForKey:profile];
+  if (keeper.coreWindow && !keeper.coreWindow.closing) return keeper;
+  keeper = [self strayWindowForProfile:profile];
+  if (keeper) [KeeperWindows() setObject:keeper forKey:profile];
+  return keeper;
+}
+
 NSMutableDictionary<NSString *, ArdiaCoreWindowController *> *ChromeMadeWindows() {
   static NSMutableDictionary *windows = [NSMutableDictionary dictionary];
   return windows;
@@ -1574,6 +1587,8 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
       } else if (!c.stray && !c.standalone) {
         return;
       }
+      for (ArdiaCoreProfile *p in KeeperWindows().keyEnumerator.allObjects)
+        if ([KeeperWindows() objectForKey:p] == c) [KeeperWindows() removeObjectForKey:p];
       if (c.standalone) {
         NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *windows = StandaloneWindows();
         for (ArdiaCoreProfile *p in windows.keyEnumerator.allObjects)
@@ -1620,6 +1635,14 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
 
 - (BOOL)windowShouldClose:(ArdiaCoreWindow *)window {
   return [ACChromeWindowHost windowShouldClose:window.window];
+}
+
+- (NSArray<ArdiaCoreTab *> *)window:(ArdiaCoreWindow *)window tabsToKeepOnClose:(NSArray<ArdiaCoreTab *> *)tabs closedByChrome:(BOOL)closedByChrome {
+  return [ArdiaCoreWebView tabsToKeep:tabs closingWindow:window.window closedByChrome:closedByChrome];
+}
+
+- (void)window:(ArdiaCoreWindow *)window moveKeptTabs:(NSArray<ArdiaCoreTab *> *)tabs {
+  [ArdiaCoreWebView moveKeptTabs:tabs closingWindow:window.window];
 }
 
 - (void)windowDidCancelClose:(ArdiaCoreWindow *)window {

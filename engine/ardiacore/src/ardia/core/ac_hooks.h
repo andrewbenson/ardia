@@ -39,6 +39,7 @@ class BrowserCommandController;
 namespace content {
 class BrowserContext;
 class RenderFrameHost;
+class WebContents;
 class WeakDocumentPtr;
 }
 
@@ -79,6 +80,15 @@ extern BrowserWindow* (*g_ardia_browser_window_factory)(Browser*);
 
 extern bool (*g_ardia_keeps_window_without_tabs)(
     const BrowserWindowInterface* browser);
+
+extern void (*g_ardia_browser_close_starting)(BrowserWindowInterface* browser);
+
+extern bool (*g_ardia_keeps_tab_on_close)(const BrowserWindowInterface* browser,
+                                          content::WebContents* contents);
+
+extern bool (*g_ardia_browser_will_close_tabs)(BrowserWindowInterface* browser);
+
+extern void (*g_ardia_browser_close_cancelled)(BrowserWindowInterface* browser);
 
 extern std::unique_ptr<BrowserWebContentsDelegate> (
     *g_ardia_create_web_contents_delegate)(

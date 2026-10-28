@@ -32,6 +32,12 @@ public class CefModule: Module {
     AsyncFunction("devWindowNumber") { (browserId: Int) in ArdiaCoreWebView.devWindowNumber(browserId: Int32(browserId)) }.runOnQueue(.main)
     AsyncFunction("devPictureInPicture") { ArdiaCoreWebView.devPictureInPicture() }.runOnQueue(.main)
     AsyncFunction("devPictureInPictureAction") { (action: String) in ArdiaCoreWebView.devPictureInPictureAction(action) }.runOnQueue(.main)
+    AsyncFunction("devKeepBrowsersOnClose") { (keep: [Int], failing: [Int]) in
+      ArdiaCoreWebView.devKeepBrowsersOnClose(keep.map { NSNumber(value: $0) }, failing: failing.map { NSNumber(value: $0) })
+    }.runOnQueue(.main)
+    AsyncFunction("devKeptOnClose") { (browserId: Int) in ArdiaCoreWebView.devKeptOnClose(browserId: Int32(browserId)) }.runOnQueue(.main)
+    AsyncFunction("devFailKeptMoves") { (count: Int) in ArdiaCoreWebView.devFailKeptMoves(count) }.runOnQueue(.main)
+    AsyncFunction("devKeepTabsOnClose") { (count: Int) in ArdiaCoreWebView.devKeepTabsOnClose(count) }.runOnQueue(.main)
     AsyncFunction("devFocusPage") { (browserId: Int) in ArdiaCoreWebView.devFocusPage(browserId: Int32(browserId)) }.runOnQueue(.main)
     AsyncFunction("devWindow") { (windowNumber: Int, action: String) -> String in
       guard let window = NSApp.window(withWindowNumber: windowNumber) else { return "" }

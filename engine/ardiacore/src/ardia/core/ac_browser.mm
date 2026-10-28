@@ -17,6 +17,7 @@
 #include "chrome/browser/download/download_core_service.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "base/command_line.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -422,6 +423,13 @@ void WindowHost::Close() {
   if (close_state_ != CloseState::kOpen) {
     return;
   }
+  asked_by_close_.clear();
+  for (Browser* browser : browsers()) {
+    if (!UnloadController::From(browser)->is_attempting_to_close_browser()) {
+      AskTabsToKeep(browser, false);
+      asked_by_close_.push_back(browser);
+    }
+  }
   close_state_ = CloseState::kAsking;
   ++close_attempt_;
   ContinueClose();
@@ -483,6 +491,15 @@ void WindowHost::OnBeforeUnloadAnswered(bool proceed) {
 void WindowHost::CancelClose() {
   close_state_ = CloseState::kOpen;
   asking_ = nullptr;
+  static const bool clears_all = base::CommandLine::ForCurrentProcess()->HasSwitch(
+      "ardia-dev-cancel-clears-all");
+  if (clears_all) {
+    kept_on_close_.clear();
+  }
+  for (const BrowserWindowInterface* asked : asked_by_close_) {
+    kept_on_close_.erase(asked);
+  }
+  asked_by_close_.clear();
   ++close_attempt_;
   for (Browser* browser : browsers()) {
     UnloadController::From(browser)->ResetBeforeUnloadForShutdown();
@@ -583,6 +600,8 @@ void WindowHost::ConfirmCloseWithDownloads(int count,
 }
 
 void WindowHost::BrowserWindowDestroyed(ACBrowserWindow* window) {
+  kept_on_close_.erase(window->browser());
+  std::erase(asked_by_close_, window->browser());
   const bool was_asking = asking_ && window->browser() == asking_;
   if (was_asking) {
     asking_ = nullptr;
@@ -770,6 +789,143 @@ void WindowHost::OnTabStripModelChanged(
       }
     }
   }
+}
+
+namespace {
+
+bool ClosesWithoutKeeping(Browser* browser) {
+  Profile* profile = browser->GetProfile();
+  return browser_shutdown::IsTryingToQuit() || IsProfileDying(profile) ||
+         IsProfileDeleting(profile);
+}
+
+}
+
+void WindowHost::AskTabsToKeep(Browser* browser, bool closed_by_chrome) {
+  kept_on_close_.erase(browser);
+  if (ClosesWithoutKeeping(browser)) {
+    return;
+  }
+  ArdiaCoreWindow* owner = owner_;
+  id<ArdiaCoreWindowDelegate> delegate = owner.delegate;
+  if (![delegate respondsToSelector:@selector(window:tabsToKeepOnClose:closedByChrome:)]) {
+    return;
+  }
+  TabStripModel* tab_strip_model = browser->GetTabStripModel();
+  NSMutableArray<ArdiaCoreTab*>* tabs = [NSMutableArray array];
+  for (int i = 0; i < tab_strip_model->count(); ++i) {
+    [tabs addObject:TabBridge::GetOrCreate(tab_strip_model->GetWebContentsAt(i))->tab()];
+  }
+  NSArray<ArdiaCoreTab*>* keep = [delegate window:owner
+                                tabsToKeepOnClose:tabs
+                                   closedByChrome:closed_by_chrome];
+  if (!keep.count) {
+    return;
+  }
+  std::vector<base::WeakPtr<content::WebContents>> kept;
+  for (int i = 0; i < tab_strip_model->count(); ++i) {
+    content::WebContents* contents = tab_strip_model->GetWebContentsAt(i);
+    if ([keep containsObject:TabBridge::GetOrCreate(contents)->tab()]) {
+      kept.push_back(contents->GetWeakPtr());
+    }
+  }
+  if (!kept.empty()) {
+    kept_on_close_[browser] = std::move(kept);
+  }
+}
+
+void WindowHost::BrowserCloseStarting(BrowserWindowInterface* window_interface) {
+  if (close_state_ != CloseState::kOpen) {
+    return;
+  }
+  Browser* browser = static_cast<Browser*>(window_interface);
+  ACBrowserWindow* browser_window =
+      ACBrowserWindow::FromWindow(BrowserWindow::FromBrowser(browser));
+  AskTabsToKeep(browser, browser_window && browser_window->closed_by_chrome());
+}
+
+bool WindowHost::KeepsTabOnClose(const BrowserWindowInterface* window_interface,
+                                 content::WebContents* contents) const {
+  if (browser_shutdown::IsTryingToQuit()) {
+    return false;
+  }
+  auto it = kept_on_close_.find(window_interface);
+  if (it == kept_on_close_.end()) {
+    return false;
+  }
+  for (const auto& kept : it->second) {
+    if (kept.get() == contents) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool WindowHost::BrowserWillCloseTabs(BrowserWindowInterface* window_interface) {
+  auto it = kept_on_close_.find(window_interface);
+  if (it == kept_on_close_.end()) {
+    return true;
+  }
+  std::vector<base::WeakPtr<content::WebContents>> kept = std::move(it->second);
+  kept_on_close_.erase(it);
+  Browser* browser = static_cast<Browser*>(window_interface);
+  TabStripModel* tab_strip_model = browser->GetTabStripModel();
+  auto in_strip = [tab_strip_model](const base::WeakPtr<content::WebContents>& contents) {
+    return contents &&
+           tab_strip_model->GetIndexOfWebContents(contents.get()) != TabStripModel::kNoTab;
+  };
+  NSMutableArray<ArdiaCoreTab*>* tabs = [NSMutableArray array];
+  for (const auto& contents : kept) {
+    if (in_strip(contents)) {
+      [tabs addObject:TabBridge::GetOrCreate(contents.get())->tab()];
+    }
+  }
+  if (!tabs.count) {
+    return true;
+  }
+  if (ClosesWithoutKeeping(browser)) {
+    return false;
+  }
+  ArdiaCoreWindow* owner = owner_;
+  id<ArdiaCoreWindowDelegate> delegate = owner.delegate;
+  if ([delegate respondsToSelector:@selector(window:moveKeptTabs:)]) {
+    [delegate window:owner moveKeptTabs:tabs];
+  }
+  bool all_moved = true;
+  for (const auto& contents : kept) {
+    if (in_strip(contents)) {
+      all_moved = false;
+      LOG(ERROR) << "ArdiaCore: a tab kept on close did not move; it gets its "
+                    "beforeunload now and closes with the window";
+    }
+  }
+  return all_moved;
+}
+
+int WindowHost::KeptOnCloseCount(Profile* profile) const {
+  Browser* browser = ExistingBrowserFor(profile);
+  auto it = browser ? kept_on_close_.find(browser) : kept_on_close_.end();
+  return it == kept_on_close_.end() ? 0 : static_cast<int>(it->second.size());
+}
+
+void WindowHost::BrowserCloseCancelled(BrowserWindowInterface* window_interface) {
+  static const bool clears_all = base::CommandLine::ForCurrentProcess()->HasSwitch(
+      "ardia-dev-cancel-clears-all");
+  static const bool keeps_entries = base::CommandLine::ForCurrentProcess()->HasSwitch(
+      "ardia-dev-cancel-keeps-entries");
+  if (clears_all) {
+    kept_on_close_.clear();
+  } else if (!keeps_entries) {
+    kept_on_close_.erase(window_interface);
+  }
+  std::erase(asked_by_close_, window_interface);
+  if (close_state_ != CloseState::kClosing || browser_shutdown::IsTryingToQuit()) {
+    return;
+  }
+  close_state_ = CloseState::kOpen;
+  asking_ = nullptr;
+  ++close_attempt_;
+  NotifyCloseCancelled();
 }
 
 void WindowHost::DevToolsDockChanged(content::WebContents* inspected,

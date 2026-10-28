@@ -103,7 +103,74 @@
  
  #include <algorithm>
  
-@@ -632,6 +633,12 @@ void UnloadController::OnTabStripModelChanged(
+@@ -169,6 +170,15 @@
+   return false;
+ }
+ 
++void (*g_ardia_browser_close_starting)(BrowserWindowInterface* browser) =
++    nullptr;
++bool (*g_ardia_keeps_tab_on_close)(const BrowserWindowInterface* browser,
++                                   content::WebContents* contents) = nullptr;
++bool (*g_ardia_browser_will_close_tabs)(BrowserWindowInterface* browser) =
++    nullptr;
++void (*g_ardia_browser_close_cancelled)(BrowserWindowInterface* browser) =
++    nullptr;
++
+ void UnloadController::OnWindowClosing() {
+   // There may be situations where async tasks, such as
+   // UnloadController::ProcessPendingTabs, may call into OnWindowClosing() after
+@@ -179,8 +189,27 @@
+     return;
+   }
+ 
++  if (state_ == State::kIdle && g_ardia_browser_close_starting) {
++    g_ardia_browser_close_starting(browser_.get());
++  }
++
+   if (!HandleBeforeClose()) {
++    if (state_ == State::kIdle && g_ardia_browser_close_cancelled) {
++      g_ardia_browser_close_cancelled(browser_.get());
++    }
+     return;
++  }
++
++  if (g_ardia_browser_will_close_tabs &&
++      !browser_->GetTabStripModel()->empty()) {
++    const bool kept_tabs_moved = g_ardia_browser_will_close_tabs(browser_.get());
++    if (is_delete_scheduled_) {
++      return;
++    }
++    if (!kept_tabs_moved) {
++      ProcessPendingTabs(false);
++      return;
++    }
+   }
+ 
+   // Don't use GetForProfileIfExisting here, we want to force creation of the
+@@ -549,6 +578,10 @@
+   for (int i = 0; i < browser_->tab_strip_model()->count(); ++i) {
+     content::WebContents* const contents =
+         browser_->tab_strip_model()->GetWebContentsAt(i);
++    if (g_ardia_keeps_tab_on_close &&
++        g_ardia_keeps_tab_on_close(browser_.get(), contents)) {
++      continue;
++    }
+     const bool should_fire_beforeunload =
+         contents->NeedToFireBeforeUnloadOrUnloadEvents() ||
+         DevToolsWindow::NeedsToInterceptBeforeUnload(contents);
+@@ -586,6 +619,11 @@
+   }
+ 
+   chrome::OnClosingAllBrowsers(false);
++  if (g_ardia_browser_close_cancelled &&
++      (previous_state == State::kRunningBeforeUnloadForWindowClose ||
++       previous_state == State::kUnloadCompleted)) {
++    g_ardia_browser_close_cancelled(browser_.get());
++  }
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////////
+@@ -632,6 +670,12 @@
  }
  
  void UnloadController::TabStripEmpty() {

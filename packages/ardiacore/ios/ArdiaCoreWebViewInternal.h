@@ -12,6 +12,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)devToolsChanged:(nullable NSView *)devToolsView;
 - (void)emit:(NSString *)name payload:(NSDictionary<NSString *, id> *)payload;
 + (void)keepTransfersOfWindow:(NSWindow *)window;
++ (NSArray<ArdiaCoreTab *> *)tabsToKeep:(NSArray<ArdiaCoreTab *> *)tabs closingWindow:(NSWindow *)window closedByChrome:(BOOL)closedByChrome;
++ (void)moveKeptTabs:(NSArray<ArdiaCoreTab *> *)tabs closingWindow:(NSWindow *)window;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -58,6 +58,19 @@ NSHashTable<ArdiaCoreWebView *> *LiveViews() {
   return views;
 }
 
+#if DEBUG
+NSInteger gDevKeepOnClose = 0;
+NSInteger gDevFailKeptMoves = 0;
+NSMutableSet<NSNumber *> *DevKeptBrowsers() {
+  static NSMutableSet *ids = [NSMutableSet set];
+  return ids;
+}
+NSMutableSet<NSNumber *> *DevFailingBrowsers() {
+  static NSMutableSet *ids = [NSMutableSet set];
+  return ids;
+}
+#endif
+
 enum class ACPageFocus { Unknown, Page, DevTools, Elsewhere };
 
 constexpr CFTimeInterval kFocusRestoreWindow = 1;
@@ -783,6 +796,7 @@ static BOOL HeldSelector(SEL selector) {
   BOOL _leaving;
   NSUInteger _leaveGeneration;
   BOOL _handingOff;
+  BOOL _devKeptOnClose;
   BOOL _revealed;
   BOOL _littlePageHeld;
   BOOL _littlePageSettled;
@@ -806,7 +820,7 @@ static BOOL HeldSelector(SEL selector) {
   NSString *key = [transferKey copy];
   dispatch_async(dispatch_get_main_queue(), ^{
     for (ArdiaCoreWebView *view in LiveViews().allObjects)
-      if (view->_tab && [view->_transferKey isEqualToString:key]) view->_handingOff = YES;
+      if (view->_tab && !view.owned && [view->_transferKey isEqualToString:key]) view->_handingOff = YES;
   });
 }
 
@@ -945,7 +959,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
                                                   NSMapTable<NSString *, ArdiaCoreWebView *> *views = [NSMapTable strongToWeakObjectsMapTable];
                                                   NSMutableDictionary<NSString *, ArdiaCoreTab *> *handed = [NSMutableDictionary dictionary];
                                                   for (ArdiaCoreWebView *view in LiveViews().allObjects) {
-                                                    if (!view->_tab || view->_tab.closed || !view->_transferKey.length) continue;
+                                                    if (!view->_tab || view->_tab.closed || !view->_transferKey.length || view.owned) continue;
                                                     view->_handingOff = YES;
                                                     [views setObject:view forKey:view->_transferKey];
                                                     handed[view->_transferKey] = view->_tab;
@@ -986,7 +1000,9 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
 }
 
 - (ArdiaCoreWindowController *)controller {
-  return [ArdiaCoreWindowController forNSWindow:self.window];
+  ArdiaCoreWindowController *controller = [ArdiaCoreWindowController forNSWindow:self.window];
+  if (!controller && self.owned && self.window.parentWindow) controller = [ArdiaCoreWindowController forNSWindow:self.window.parentWindow];
+  return controller;
 }
 
 - (void)viewDidMoveToWindow {
@@ -1000,8 +1016,19 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   _sightObserver = [NSNotificationCenter.defaultCenter addObserverForName:ArdiaCoreWindowSeenDidChange object:self.window queue:nil
                                                                usingBlock:^(NSNotification *) { [weakSelf userSightChanged]; }];
   [self userSightChanged];
+  [self placeInWindow];
+  if (self.owned && !self.controller) {
+    dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf parentWindowDidChange]; });
+  }
+}
+
+- (void)placeInWindow {
   if (_tab) [self adoptIntoWindow];
   else [self ensureTab];
+}
+
+- (void)parentWindowDidChange {
+  if (self.window && self.controller) [self placeInWindow];
 }
 
 - (void)setExtensionHost:(NSString *)extensionHost {
@@ -1134,6 +1161,113 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
     if (view->_handingOff && view->_tab && !view->_tab.closed && [ArdiaCoreWindowController holding:view->_tab] == closing)
       [view closeBrowser];
   [ArdiaCoreTabParking rehomeFromWindow:closing];
+}
+
++ (NSArray<ArdiaCoreTab *> *)tabsToKeep:(NSArray<ArdiaCoreTab *> *)tabs closingWindow:(NSWindow *)window closedByChrome:(BOOL)closedByChrome {
+  NSAssert(NSThread.isMainThread, @"tabsToKeep off main");
+  NSMutableArray<ArdiaCoreTab *> *keep = [NSMutableArray array];
+  for (ArdiaCoreTab *tab in tabs) {
+    if (tab.closed || !tab.profile) continue;
+    BOOL kept = [ArdiaCoreTabs viewForTab:tab].owned && !closedByChrome;
+#if DEBUG
+    BOOL forced = NO;
+    if (!kept && [DevKeptBrowsers() containsObject:@(ardiacore_host::BrowserId(tab))]) {
+      [DevKeptBrowsers() removeObject:@(ardiacore_host::BrowserId(tab))];
+      forced = YES;
+    }
+    if (!kept && !forced && gDevKeepOnClose > 0) {
+      gDevKeepOnClose--;
+      forced = YES;
+    }
+    ArdiaCoreWebView *view = [ArdiaCoreTabs viewForTab:tab];
+    if (forced && view && !view.owned) view->_devKeptOnClose = YES;
+    kept = kept || forced;
+#endif
+    if (kept) [keep addObject:tab];
+  }
+  return keep;
+}
+
++ (void)moveKeptTabs:(NSArray<ArdiaCoreTab *> *)tabs closingWindow:(NSWindow *)window {
+  NSAssert(NSThread.isMainThread, @"moveKeptTabs off main");
+  ArdiaCoreWindowController *closing = [ArdiaCoreWindowController forNSWindow:window];
+  for (ArdiaCoreTab *tab in tabs) {
+    if (tab.closed || !tab.profile) continue;
+    ArdiaCoreWebView *view = [ArdiaCoreTabs viewForTab:tab];
+    ArdiaCoreWindowController *keeper = [ArdiaCoreWindowController keeperWindowForProfile:tab.profile];
+    if (!keeper.coreWindow || keeper == closing) continue;
+#if DEBUG
+    BOOL failing = [DevFailingBrowsers() containsObject:@(ardiacore_host::BrowserId(tab))];
+    if (failing) [DevFailingBrowsers() removeObject:@(ardiacore_host::BrowserId(tab))];
+    if (failing || (gDevFailKeptMoves > 0 && gDevFailKeptMoves--)) {
+      NSLog(@"[ardiacore] a tab kept on close did not move (forced); it gets its beforeunload and closes with the window");
+      continue;
+    }
+#endif
+    keeper.hostChanges++;
+    closing.hostChanges++;
+    [keeper.coreWindow adoptTab:tab];
+    closing.hostChanges--;
+    keeper.hostChanges--;
+    if ([ArdiaCoreWindowController holding:tab] != keeper) {
+      NSAssert(NO, @"moveKeptTabs: adoptTab deferred, so the tab would move later, mid-prompt");
+      NSLog(@"[ardiacore] a tab kept on close did not move (adoptTab deferred); it gets its beforeunload and closes with the window");
+      continue;
+    }
+#if DEBUG
+    NSLog(@"[ardiacore-close] moved kept tab %d at %.3f", ardiacore_host::BrowserId(tab), CACurrentMediaTime());
+#endif
+    if (view.owned) {
+      __weak ArdiaCoreWebView *rehomed = view;
+      dispatch_async(dispatch_get_main_queue(), ^{
+        if (ArdiaCoreWebView *page = rehomed) [NSNotificationCenter.defaultCenter postNotificationName:@"ArdiaCoreOwnedPageRehomed" object:page];
+      });
+    }
+  }
+}
+
++ (NSInteger)devKeepBrowsersOnClose:(NSArray<NSNumber *> *)keep failing:(NSArray<NSNumber *> *)failing {
+#if DEBUG
+  NSAssert(NSThread.isMainThread, @"devKeepBrowsersOnClose off main");
+  NSInteger left = DevKeptBrowsers().count + DevFailingBrowsers().count;
+  [DevKeptBrowsers() setSet:[NSSet setWithArray:keep]];
+  [DevFailingBrowsers() setSet:[NSSet setWithArray:failing]];
+  return left;
+#else
+  return -1;
+#endif
+}
+
++ (NSInteger)devKeptOnCloseForBrowser:(int)browserId {
+#if DEBUG
+  ArdiaCoreTab *tab = ardiacore_host::TabWithBrowserId(browserId);
+  ArdiaCoreWindowController *controller = tab ? [ArdiaCoreWindowController holding:tab] : nil;
+  return controller.coreWindow && tab.profile ? [controller.coreWindow keptOnCloseCountForProfile:tab.profile] : -1;
+#else
+  return -1;
+#endif
+}
+
++ (NSInteger)devFailKeptMoves:(NSInteger)count {
+#if DEBUG
+  NSAssert(NSThread.isMainThread, @"devFailKeptMoves off main");
+  NSInteger left = gDevFailKeptMoves;
+  gDevFailKeptMoves = MAX(count, 0);
+  return left;
+#else
+  return -1;
+#endif
+}
+
++ (NSInteger)devKeepTabsOnClose:(NSInteger)count {
+#if DEBUG
+  NSAssert(NSThread.isMainThread, @"devKeepTabsOnClose off main");
+  NSInteger left = gDevKeepOnClose;
+  gDevKeepOnClose = MAX(count, 0);
+  return left;
+#else
+  return -1;
+#endif
 }
 
 - (BOOL)canTake:(ArdiaCoreTab *)tab {
@@ -1325,6 +1459,13 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   _createGeneration++;
   _creating = NO;
   if (!_tab) return;
+#if DEBUG
+  if (_devKeptOnClose) {
+    _devKeptOnClose = NO;
+    [self detach];
+    return;
+  }
+#endif
   ArdiaCoreTab *tab = _tab;
   if (_handingOff && _transferKey.length && !tab.closed) {
     [self detach];

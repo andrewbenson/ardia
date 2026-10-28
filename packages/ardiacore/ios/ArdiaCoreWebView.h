@@ -29,6 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) BOOL autoPictureInPicture;
 @property (nonatomic, readonly) BOOL discarded;
 @property (nonatomic) BOOL frozen;
+@property (nonatomic) BOOL owned;
 @property (nonatomic, readonly) int browserId;
 
 + (void)prepareTransfer:(NSString *)transferKey;
@@ -58,6 +59,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSArray<NSDictionary<NSString *, id> *> *)devPictureInPicture NS_SWIFT_NAME(devPictureInPicture());
 + (NSString *)devPictureInPictureAction:(NSString *)action NS_SWIFT_NAME(devPictureInPictureAction(_:));
 + (BOOL)devFocusPageOfBrowser:(int)browserId NS_SWIFT_NAME(devFocusPage(browserId:));
++ (NSInteger)devKeepTabsOnClose:(NSInteger)count NS_SWIFT_NAME(devKeepTabsOnClose(_:));
++ (NSInteger)devFailKeptMoves:(NSInteger)count NS_SWIFT_NAME(devFailKeptMoves(_:));
++ (NSInteger)devKeptOnCloseForBrowser:(int)browserId NS_SWIFT_NAME(devKeptOnClose(browserId:));
++ (NSInteger)devKeepBrowsersOnClose:(NSArray<NSNumber *> *)keep failing:(NSArray<NSNumber *> *)failing NS_SWIFT_NAME(devKeepBrowsersOnClose(_:failing:));
 
 - (void)loadURL:(NSString *)url;
 - (void)loadURL:(NSString *)url userInitiated:(BOOL)userInitiated NS_SWIFT_NAME(loadURL(_:userInitiated:));
@@ -117,6 +122,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (void)closeBrowser;
+- (void)parentWindowDidChange;
 
 @end
 

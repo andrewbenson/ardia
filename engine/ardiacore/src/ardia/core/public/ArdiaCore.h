@@ -152,6 +152,11 @@ ARDIACORE_EXPORT
                       origin:(NSString*)origin;
 - (void)window:(ArdiaCoreWindow*)window showRequestedActive:(BOOL)active;
 - (BOOL)windowShouldClose:(ArdiaCoreWindow*)window;
+- (NSArray<ArdiaCoreTab*>*)window:(ArdiaCoreWindow*)window
+                 tabsToKeepOnClose:(NSArray<ArdiaCoreTab*>*)tabs
+                    closedByChrome:(BOOL)closedByChrome;
+- (void)window:(ArdiaCoreWindow*)window
+    moveKeptTabs:(NSArray<ArdiaCoreTab*>*)tabs;
 - (void)windowDidCancelClose:(ArdiaCoreWindow*)window;
 - (void)window:(ArdiaCoreWindow*)window
     confirmCloseWithDownloads:(int)count
@@ -165,6 +170,8 @@ ARDIACORE_EXPORT
 - (instancetype)initWithContentRect:(NSRect)rect;
 @property(readonly) NSWindow* window;
 @property(readonly) NSView* hostView;
+@property(readonly) BOOL closing;
+- (NSInteger)keptOnCloseCountForProfile:(ArdiaCoreProfile*)profile;
 @property(weak, nullable) id<ArdiaCoreWindowDelegate> delegate;
 
 - (ArdiaCoreTab*)openTab:(NSString*)url

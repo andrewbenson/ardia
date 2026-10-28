@@ -57,6 +57,7 @@ ArdiaCoreTab *_Nullable PasswordPromptTab(ArdiaCoreWebView *view, ArdiaCoreTab *
 @property(nonatomic) NSInteger hostChanges;
 @property(nonatomic, copy, nullable) NSString *appWindowId;
 + (ArdiaCoreWindowController *)strayWindowForProfile:(ArdiaCoreProfile *)profile;
++ (ArdiaCoreWindowController *)keeperWindowForProfile:(ArdiaCoreProfile *)profile;
 + (nullable ArdiaCoreWindowController *)chromeMadeWindowForProfile:(ArdiaCoreProfile *)profile;
 @property(nonatomic, readonly) BOOL stray;
 + (ArdiaCoreWindowController *)standaloneWindowForProfile:(ArdiaCoreProfile *)profile;

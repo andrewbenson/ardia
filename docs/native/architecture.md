@@ -658,6 +658,39 @@ the patch applier throws, with the call site, so a missed writer fails the first
 - **Phase 5 flips the window.** The window shell becomes native (sidebar, content card, splits, `TabViewPool`), and
   the RN root of a browser window is removed.
 
+#### Page views: static ownership
+
+Behind `ARDIA_NATIVE_PAGES_POOL` (which needs `ARDIA_NATIVE_SHELL`), `TabViewPool` owns every page view in a
+shell-wrapped window from the moment the window exists, and RN mounts no page view there: no card, no warm or
+neighbour page, no New Tab prewarm. No page moves between RN and the pool while a window is open. Where RN mounts a
+page view today, and what each becomes:
+
+| RN mount today | Becomes |
+|---|---|
+| ContentCard → TabPane → TabWebView (the active tab) | pool card slot |
+| split panes (the same TabPane map) | pool pane slots |
+| warm neighbours (pager profiles' active tabs, the drag successor) | pool, waiting behind the card |
+| the kept-mounted set and the hidden-pane prewarm | pool, in the window's hidden container |
+| New Tab prewarm (`usePrewarm`) | pool hidden tab, or off in shell windows |
+| Peek (`PeekOverlay` → `PeekPage`) | pool peek slot |
+| Little Solara (`LittleArdiaWindow` mounts its own ContentCard) | stays RN: the one boundary |
+| extension popup frame, extension side panel | unchanged: no `transferKey`, so nothing is handed over |
+
+Little Solara is the one boundary. A tab moving between a shell window and a small window crosses it through the
+park path: the pool parks its own view's tab synchronously on main (`-parkForCrossing`: mark handing off, detach,
+park under the key with a bounded hold, clear the view's `transferKey`) before the store drops it, and the small
+window's view takes it from the parking lot. WebKit tabs cross through `WebKitHub` (prepare the key, so `close()`
+parks the web view instead of destroying it). A non-shell to shell move needs nothing new.
+
+When a window closes: on a close the app starts, the pool's pages move synchronously into one
+keeper window per profile and the pool places them where the store says; on a close Chrome starts (an extension's
+`chrome.windows.remove`) nothing is kept, the tabs' closes reach the store, and the store and the live pages agree.
+The engine asks which tabs to keep before any beforeunload runs (`window:tabsToKeepOnClose:closedByChrome:`), leaves
+those tabs out of the beforeunload and unload passes, and moves exactly that set once the close is committed
+(`window:moveKeptTabs:`); a cancelled close moves nothing. A kept tab that fails to move gets its beforeunload then
+and closes with the window. A kept page's own `window.close()` while its window waits on another tab's beforeunload
+is dropped (Chrome refuses closes in that state) and isn't retried after the move.
+
 ### 4.5 Sync during the move
 
 Sync must stay wire-compatible: a Mac on a native build syncs with one still on JS.

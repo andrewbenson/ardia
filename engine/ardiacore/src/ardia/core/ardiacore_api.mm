@@ -1305,6 +1305,10 @@ void WatchTracingStart(std::shared_ptr<TracingStart> start, int checks_left) {
   return _host->host_view();
 }
 
+- (BOOL)closing {
+  return _host && _host->closing();
+}
+
 - (ArdiaCoreTab*)openTab:(NSString*)url
               profile:(ArdiaCoreProfile*)profile
            foreground:(BOOL)foreground {
@@ -1560,6 +1564,10 @@ void WatchTracingStart(std::shared_ptr<TracingStart> start, int checks_left) {
   model->InsertWebContentsAt(model->count(), std::move(copy),
                              foreground ? AddTabTypes::ADD_ACTIVE : AddTabTypes::ADD_NONE);
   return ardiacore::TabBridge::GetOrCreate(raw)->tab();
+}
+
+- (NSInteger)keptOnCloseCountForProfile:(ArdiaCoreProfile*)profile {
+  return profile.chromeProfile ? _host->KeptOnCloseCount(profile.chromeProfile) : 0;
 }
 
 - (void)prepareProfile:(ArdiaCoreProfile*)profile {

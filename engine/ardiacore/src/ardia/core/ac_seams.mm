@@ -71,6 +71,29 @@ bool KeepsWindowWithoutTabs(const BrowserWindowInterface* browser) {
   return host && !host->closing() && !browser_shutdown::IsTryingToQuit();
 }
 
+void BrowserCloseStarting(BrowserWindowInterface* browser) {
+  if (WindowHost* host = WindowHost::ForBrowser(browser)) {
+    host->BrowserCloseStarting(browser);
+  }
+}
+
+bool KeepsTabOnClose(const BrowserWindowInterface* browser,
+                     content::WebContents* contents) {
+  WindowHost* host = WindowHost::ForBrowser(browser);
+  return host && host->KeepsTabOnClose(browser, contents);
+}
+
+bool BrowserWillCloseTabs(BrowserWindowInterface* browser) {
+  WindowHost* host = WindowHost::ForBrowser(browser);
+  return !host || host->BrowserWillCloseTabs(browser);
+}
+
+void BrowserCloseCancelled(BrowserWindowInterface* browser) {
+  if (WindowHost* host = WindowHost::ForBrowser(browser)) {
+    host->BrowserCloseCancelled(browser);
+  }
+}
+
 std::unique_ptr<BrowserWebContentsDelegate> CreateWebContentsDelegate(
     BrowserWindowInterface* browser,
     ExclusiveAccessManager& exclusive_access_manager,
@@ -110,6 +133,10 @@ void InstallChromeHooks() {
   g_ardia_extension_side_panel = &HandleExtensionSidePanel;
   g_ardia_hidden_from_extensions = &IsHiddenFromExtensions;
   g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;
+  g_ardia_browser_close_starting = &BrowserCloseStarting;
+  g_ardia_keeps_tab_on_close = &KeepsTabOnClose;
+  g_ardia_browser_will_close_tabs = &BrowserWillCloseTabs;
+  g_ardia_browser_close_cancelled = &BrowserCloseCancelled;
   g_ardia_devtools_dock_changed = &DevToolsDockChanged;
   g_ardia_create_web_contents_delegate = &CreateWebContentsDelegate;
   g_ardia_initial_main_document_accessed = &InitialMainDocumentAccessed;

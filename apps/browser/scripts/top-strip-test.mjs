@@ -23,8 +23,11 @@ const tab = (id, extra = {}) => ({ id, url: `https://${id}.example/`, title: `Ta
 const fixture = () =>
   session({
     settings: { tabLayout: "top" },
-    windows: [{ id: "w1", activeTabIds: { default: "t1" }, frame: [80, 80, 1600, 800] }],
-    tabs: ["p1", "p2"].map((id) => tab(id, { pinned: true })).concat(["t1", "g1a", "g1b", "g2a", "g2b", "s1a", "s1b", "f0", "fa", "fb"].map((id) => tab(id)), [tab("t2", { muted: true })]),
+    profiles: ["Personal", "Work"],
+    windows: [{ id: "w1", activeTabIds: { default: "t1", work: "k1" }, frame: [80, 80, 1600, 800] }],
+    tabs: ["p1", "p2"]
+      .map((id) => tab(id, { pinned: true }))
+      .concat(["t1", "g1a", "g1b", "g2a", "g2b", "s1a", "s1b", "f0", "fa", "fb"].map((id) => tab(id)), [tab("t2", { muted: true })], ["k1", "k2", "k3"].map((id) => tab(id, { profileId: "work" }))),
     groups: [
       { id: "g1", windowId: "w1", profileId: "default", name: "Work", icon: null, color: "blue", collapsed: false, pinned: false, tabIds: ["g1a", "g1b"], createdAt: 1 },
       { id: "g2", windowId: "w1", profileId: "default", name: "", icon: null, color: null, collapsed: true, pinned: false, tabIds: ["g2a", "g2b"], createdAt: 2 },
@@ -97,7 +100,13 @@ function stripDiff(a, b, top, bottom) {
   return { share: differ / total, worst, hot: hot.length ? `${hot[0]}..${hot.at(-1)} (${hot.length} columns)` : "" };
 }
 
+const SWIPE = [{ phase: "began", dx: 0, dy: 0 }, ...[-30, -30, -30, -30].map((dx) => ({ phase: "changed", dx, dy: 0 }))].map((step, i) => ({ ...step, atMs: i * 16, timestampMs: i * 16 }));
 const LOOKS = [
+  [
+    "paging",
+    `globalThis.acSwipe.strip("w1").devSimulate(${JSON.stringify(SWIPE)}, { ignorePreference: true });`,
+    `globalThis.acSwipe.strip("w1").devSimulate([{ phase: "changed", dx: 60, dy: 0, atMs: 0, timestampMs: 0 }, { phase: "ended", dx: 0, dy: 0, atMs: 16, timestampMs: 16 }], { ignorePreference: true }); st().switchProfile("w1", "default");`,
+  ],
   ["flipped", `st().setAppDark(!st().ui.appDark);`, `st().setAppDark(!st().ui.appDark);`],
   [
     "bands",
@@ -258,7 +267,7 @@ try {
     }
     for (const [look] of LOOKS) {
       if (!rn.looks?.[look] || !native.looks?.[look]) continue;
-      await rep.check(`the strips' pixels match RN's, ${look === "flipped" ? "in the other appearance" : "with website colour bands"}`, async () => {
+      await rep.check(`the strips' pixels match RN's, ${{ paging: "halfway through a swipe to the next profile", flipped: "in the other appearance", bands: "with website colour bands" }[look]}`, async () => {
         const diff = stripDiff(readPng(rn.looks[look]), readPng(native.looks[look]), 0, 42);
         rep.log(`${look} pixel diff ${JSON.stringify(diff)}`);
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);

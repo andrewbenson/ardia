@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import Foundation
 import Observation
 import SolaraUI
@@ -21,20 +22,23 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func listExtensions(profile: String) async throws -> [InstalledExtension] {
-    let list = try await Self.call("extensions.list", profile) as? [[String: Any]] ?? []
-    return list.compactMap(Self.installed)
+    let listed = await EngineCalls.result({ done in ArdiaCoreServices.listExtensions(profile: profile) { done($0) } }) {
+      (error: Self.engineError($0), list: Self.sorted($0.list("extensions").compactMap(Self.installed)))
+    }
+    if let error = listed.error { throw ExtensionServiceError(error) }
+    return listed.list
   }
 
   func setExtensionEnabled(_ id: String, enabled: Bool, profile: String) async throws {
-    try await Self.call("extensions.setEnabled", id, enabled, profile)
+    try await changing(profile) { done in ArdiaCoreServices.setExtension(id, enabled: enabled, profile: profile) { done($0) } }
   }
 
   func uninstallExtension(_ id: String, profile: String) async throws {
-    try await Self.call("extensions.uninstall", id, profile)
+    try await changing(profile) { done in ArdiaCoreServices.uninstallExtension(id, profile: profile) { done($0) } }
   }
 
   func reloadExtension(_ id: String, profile: String) async throws {
-    try await Self.call("extensions.reload", id, profile)
+    try await changing(profile) { done in ArdiaCoreServices.reloadExtension(id, profile: profile) { done($0) } }
   }
 
   func configureExtension(_ id: String, profile: String, options: ExtensionConfiguration) async throws {
@@ -42,7 +46,8 @@ final class ExtensionsAdapter: ExtensionsServices {
     if let pinned = options.pinned { patch["pinned"] = pinned }
     if let incognito = options.incognito { patch["incognito"] = incognito }
     if let siteAccess = options.siteAccess { patch["siteAccess"] = siteAccess.rawValue }
-    try await Self.call("extensions.configure", id, profile, patch)
+    let options = patch
+    try await changing(profile) { done in ArdiaCoreServices.configureExtension(id, profile: profile, options: options) { done($0) } }
   }
 
   func chooseExtensionFolder() async -> String? {
@@ -57,9 +62,8 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func inspectUnpackedExtension(path: String) async throws -> ExtensionPackage {
-    guard let dict = try await Self.call("extensions.inspectUnpacked", path) as? [String: Any] else {
-      throw ExtensionServiceError("That folder couldn't be read as an extension.")
-    }
+    let dict = ArdiaCoreServices.inspectUnpacked(path)
+    if let error = Self.engineError(dict) { throw ExtensionServiceError(error) }
     return ExtensionPackage(
       name: dict.string("name") ?? "Extension",
       version: dict.string("version") ?? "",
@@ -71,7 +75,7 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func installExtension(path: String, profile: String) async throws {
-    try await Self.call("extensions.install", path, profile)
+    try await changing(profile) { done in ArdiaCoreServices.installExtension(path: path, profile: profile) { done($0) } }
   }
 
   func extensionChanges() -> AsyncStream<ExtensionsChange> {
@@ -88,16 +92,21 @@ final class ExtensionsAdapter: ExtensionsServices {
 
   func openInNewTab(_ url: String) { SettingsJS.shared.fire("extensions.openInNewTab", url) }
 
-  @discardableResult
-  private static func call(_ name: String, _ args: Any...) async throws -> Any? {
-    do {
-      return try await SettingsJS.shared.invoke(name, args)
-    } catch let error as SettingsJSError {
-      throw ExtensionServiceError(error.description)
-    }
+  private func changing(_ profile: String, _ start: (@escaping @Sendable ([String: Any]) -> Void) -> Void) async throws {
+    let error = await EngineCalls.result(start) { Self.engineError($0) }
+    SettingsJS.shared.fire("extensions.refresh", profile)
+    if let error { throw ExtensionServiceError(error) }
   }
 
-  static func installed(_ dict: [String: Any]) -> InstalledExtension? {
+  nonisolated static func engineError(_ result: [String: Any]) -> String? {
+    result["error"].map { $0 as? String ?? String(describing: $0) }
+  }
+
+  nonisolated static func sorted(_ list: [InstalledExtension]) -> [InstalledExtension] {
+    list.sorted { $0.name.compare($1.name, options: [.caseInsensitive, .diacriticInsensitive], locale: .current) == .orderedAscending }
+  }
+
+  nonisolated static func installed(_ dict: [String: Any]) -> InstalledExtension? {
     guard let id = dict.string("id") else { return nil }
     let enabled = dict.bool("enabled") ?? false
     return InstalledExtension(

@@ -1361,7 +1361,29 @@ function StripGroup({
 const devGroupSizes = new Map<string, Animated.Value>();
 if (__DEV__) {
   const g = globalThis as { acStrip?: Record<string, unknown> };
-  g.acStrip = { ...g.acStrip, groupSize: (groupId: string) => (devGroupSizes.get(groupId) as unknown as { __getValue(): number } | undefined)?.__getValue() ?? null };
+  const valueOf = (value: Animated.Value) => (value as unknown as { __getValue(): number }).__getValue();
+  let groupSamples: [number, number][] = [];
+  let stopGroupTrace = () => {};
+  g.acStrip = {
+    ...g.acStrip,
+    groupSize: (groupId: string) => {
+      const size = devGroupSizes.get(groupId);
+      return size ? valueOf(size) : null;
+    },
+    traceGroup: (groupId: string) => {
+      const size = devGroupSizes.get(groupId);
+      if (!size) return void (groupSamples = []);
+      const start = performance.now();
+      groupSamples = [[0, valueOf(size)]];
+      const samples = groupSamples;
+      const id = size.addListener(({ value }) => samples.push([performance.now() - start, value]));
+      stopGroupTrace = () => size.removeListener(id);
+    },
+    groupTrace: () => {
+      stopGroupTrace();
+      return groupSamples;
+    },
+  };
 }
 
 function GroupMember({

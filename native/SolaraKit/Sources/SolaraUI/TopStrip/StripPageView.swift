@@ -57,6 +57,8 @@ public final class StripPageView: NSView {
   private var crossOverlay: NSView?
   private var incomingRooms: [StripTimedValue] = []
   private(set) var incomingAt: Int?
+  private var groupTraced: (id: String, start: Double)?
+  private var groupSamples: [[Double]] = []
   weak var dragBridge: StripDragBridge?
   var pageWidth: CGFloat = 0
 
@@ -235,6 +237,7 @@ public final class StripPageView: NSView {
 
   private func tick(_ now: Double) -> Bool {
     for motion in motions.values { motion.step(now: now) }
+    if let (id, start) = groupTraced, let size = motions[id]?.size.value { groupSamples.append([(now - start) * 1000, size]) }
     drag.tick(now)
     for i in incomingRooms.indices { incomingRooms[i].step(now: now) }
     place()
@@ -312,6 +315,13 @@ public final class StripPageView: NSView {
   }
 
   public func groupSize(_ groupId: String) -> Double? { motions[groupId]?.size.value }
+
+  public func traceGroup(_ groupId: String) {
+    groupTraced = (groupId, StripTicker.now)
+    groupSamples = motions[groupId].map { [[0, $0.size.value]] } ?? []
+  }
+
+  public var groupTrace: [[Double]] { groupSamples }
 
   public func incoming(at point: CGPoint?) -> String?? {
     let top = pageLayout.top

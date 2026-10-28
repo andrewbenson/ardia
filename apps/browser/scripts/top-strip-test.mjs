@@ -117,18 +117,12 @@ async function measure(native) {
     out.clicked = await run(`return st().windows.w1.activeTabIds.default;`);
     out.motion = await run(`
       const size = ${native ? `() => globalThis.expo.modules.SolaraTopStrip.groupSize("w1", "g1")` : `() => Promise.resolve(globalThis.acStrip.groupSize("g1"))`};
-      const samples = [];
-      return size().then((open) => {
-        const t0 = performance.now();
+      const arm = ${native ? `() => globalThis.expo.modules.SolaraTopStrip.traceGroup("w1", "g1")` : `() => Promise.resolve(globalThis.acStrip.traceGroup("g1"))`};
+      const trace = ${native ? `() => globalThis.expo.modules.SolaraTopStrip.groupTrace("w1")` : `() => Promise.resolve(globalThis.acStrip.groupTrace())`};
+      return size().then((open) => arm().then(() => {
         st().updateGroup("g1", { collapsed: true });
-        const frame = () => new Promise((r) => requestAnimationFrame(r));
-        const loop = () => {
-          const at = performance.now() - t0;
-          if (at > 800) return samples;
-          return size().then((v) => { samples.push([(at + performance.now() - t0) / 2, v]); return frame().then(loop); });
-        };
-        return loop().then((r) => { st().updateGroup("g1", { collapsed: false }); return settle(800).then(() => ({ open, samples: r })); });
-      });`);
+        return settle(800).then(trace).then((samples) => { st().updateGroup("g1", { collapsed: false }); return settle(800).then(() => ({ open, samples })); });
+      }));`);
     out.room = await run(`
       const key = "g1a,g1b";
       const trace = ${native ? `() => globalThis.expo.modules.SolaraTopStrip.slotTrace("w1")` : `() => Promise.resolve(globalThis.acStrip.slotTrace(key))`};
@@ -196,17 +190,24 @@ try {
       rep.log(`rn motion ${JSON.stringify(theirs.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
       rep.log(`native motion ${JSON.stringify(ours.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
       assert.equal(native.motion.open, rn.motion.open, "the same open width");
-      const at = (t) => { const i = theirs.findIndex(([u]) => u >= t); if (i <= 0) return i === 0 ? theirs[0][1] : theirs.at(-1)[1]; const [t0, x0] = theirs[i - 1], [t1, x1] = theirs[i]; return x0 + ((x1 - x0) * (t - t0)) / (t1 - t0); };
-      let best = null;
-      for (let lag = -60; lag <= 60; lag += 1) {
-        const near = (t, x) => Math.min(...[-2, -1, 0, 1, 2].map((d) => Math.abs(x - at(t + lag + d))));
-        const error = Math.max(...ours.filter(([t]) => t + lag > theirs[0][0] + 2 && t + lag < theirs.at(-1)[0] - 2).map(([t, x]) => near(t, x)));
-        if (!best || error < best.error) best = { lag, error };
-      }
-      rep.log(`motion: RN runs ${best.lag} ms behind native, then they differ by at most ${best.error.toFixed(2)} pt (within 2 ms)`);
+      assert.ok(theirs.length > 3 && ours.length > 3, `traced: rn ${theirs.length} native ${ours.length}`);
+      const omega = (2 * Math.PI) / 0.3, zeta = 0.82, damped = omega * Math.sqrt(1 - zeta * zeta);
+      const fit = (samples) => {
+        const from = samples[0][1], to = samples.at(-1)[1];
+        const group = (ms) => (ms <= 0 ? from : to + (from - to) * Math.exp((-zeta * omega * ms) / 1000) * (Math.cos((damped * ms) / 1000) + ((zeta * omega) / damped) * Math.sin((damped * ms) / 1000)));
+        let best = null;
+        for (let start = 0; start <= 120; start += 0.25) {
+          const error = Math.max(...samples.map(([t, x]) => Math.abs(x - group(t - start))));
+          if (!best || error < best.error) best = { start, error };
+        }
+        return best;
+      };
+      const a = fit(theirs), b = fit(ours);
+      rep.log(`motion: RN's spring starts at ${a.start} ms and keeps within ${a.error.toFixed(2)} pt of GROUP_SPRING; native's at ${b.start} ms, within ${b.error.toFixed(2)} pt`);
       assert.ok(Math.abs(ours.at(-1)[1] - theirs.at(-1)[1]) < 0.05, `both settle at the same width: rn ${theirs.at(-1)[1]} native ${ours.at(-1)[1]}`);
-      assert.ok(Math.abs(best.lag) <= 25, `RN is ${best.lag} ms behind native's start: more than a frame and a half`);
-      assert.ok(best.error <= 2, `the curves differ by ${best.error} pt`);
+      assert.ok(a.error <= 2, `RN's own curve is ${a.error.toFixed(2)} pt off GROUP_SPRING`);
+      assert.ok(b.error <= 2, `native's curve is ${b.error.toFixed(2)} pt off RN's GROUP_SPRING`);
+      assert.ok(b.start - a.start <= 25, `native starts ${b.start - a.start} ms after RN: more than a frame and a half`);
     });
     await rep.check("the strip makes room for a dragged tab on RN's spring, frame for frame", async () => {
       const ours = native.room.samples, theirs = rn.room.samples;

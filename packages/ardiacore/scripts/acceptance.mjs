@@ -479,6 +479,27 @@ async function targets() {
   return res.json();
 }
 
+async function extensionWorker(id, api, timeoutMs = 15000) {
+  const seen = [];
+  const note = (entry) => {
+    const last = seen.at(-1);
+    if (last && JSON.stringify(last.what) === JSON.stringify(entry)) last.times++;
+    else seen.push({ what: entry, times: 1 });
+  };
+  return until("the extension's worker", async () => {
+    const workers = (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(id));
+    if (!workers.length) note("no worker target");
+    for (const t of workers) {
+      const r = await cdp(t, "Runtime.evaluate", { expression: `typeof chrome?.${api.split(".").join("?.")}`, returnByValue: true }).catch((e) => ({ failed: String(e?.message ?? e).slice(0, 120) }));
+      if (r?.result?.value === "function") return t;
+      note({ worker: t.id, url: t.url, answer: r?.failed ?? r?.result?.value ?? r });
+    }
+    return null;
+  }, timeoutMs).catch((e) => {
+    throw new Error(`${e.message}; ${id} chrome.${api} seen: ${JSON.stringify(seen.slice(-6))}`);
+  });
+}
+
 async function cdp(target, method, params = {}) {
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((r, j) => ((ws.onopen = r), (ws.onerror = () => j(new Error(`DevTools connection to ${target.url} failed (${method})`)))));
@@ -1968,13 +1989,7 @@ try {
       }, 10000);
       if (granted !== "true") throw new Error(`permissions.request answered ${granted}`);
       await evalApp(`ac.extensions.closeExtensionPopup(); return true`);
-      const worker = await until("the extension's worker", async () => {
-        for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
-          const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.sidePanel?.open", returnByValue: true }).catch(() => null);
-          if (r?.result?.value === "function") return t;
-        }
-        return null;
-      }, 15000);
+      const worker = await extensionWorker(installed.id, "sidePanel.open");
       await cdp(worker, "Runtime.evaluate", { expression: "chrome.action.setPopup({ popup: '' }); chrome.action.onClicked.addListener((tab) => chrome.sidePanel.open({ tabId: tab.id })); true" });
       await sleep(300);
       await activate();
@@ -2143,13 +2158,7 @@ try {
   await check("chrome-windows-create", async () => {
     const installed = await exts(`install(${JSON.stringify(extPath)}, "")`);
     if (installed?.error) throw new Error(installed.error);
-    const worker = await until("the extension's worker", async () => {
-      for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
-        const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.windows?.create", returnByValue: true }).catch(() => null);
-        if (r?.result?.value === "function") return t;
-      }
-      return null;
-    }, 15000);
+    const worker = await extensionWorker(installed.id, "windows.create");
     const made = await cdp(worker, "Runtime.evaluate", {
       expression: `chrome.windows.create({ url: "${base}/e?window" }).then((w) => JSON.stringify({ id: w.id, tabs: w.tabs?.length }))`,
       awaitPromise: true,
@@ -2175,13 +2184,7 @@ try {
   await check("chrome-windows-remove", async () => {
     const installed = await exts(`install(${JSON.stringify(extPath)}, "")`);
     if (installed?.error) throw new Error(installed.error);
-    const worker = await until("the extension's worker", async () => {
-      for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
-        const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.windows?.remove", returnByValue: true }).catch(() => null);
-        if (r?.result?.value === "function") return t;
-      }
-      return null;
-    }, 15000);
+    const worker = await extensionWorker(installed.id, "windows.remove");
     const inWorker = async (expression) => {
       const r = await cdp(worker, "Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
       if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? JSON.stringify(r.exceptionDetails));
@@ -2451,13 +2454,7 @@ try {
     const privateTabs = () => evalApp(`const s = ac.store.getState(); return Object.values(s.tabs).map((t) => ({ id: t.id, url: t.url, title: t.title, windowId: t.windowId, incognito: !!s.windows[t.windowId]?.incognito, adoptId: t.adoptId }))`);
     const opened = [];
     try {
-      const worker = await until("the extension's worker", async () => {
-        for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
-          const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.windows?.create", returnByValue: true }).catch(() => null);
-          if (r?.result?.value === "function") return t;
-        }
-        return null;
-      }, 15000);
+      const worker = await extensionWorker(installed.id, "windows.create");
       const create = async (tag) => {
         const made = await cdp(worker, "Runtime.evaluate", {
           expression: `chrome.windows.create({ url: "${base}/cookie?${tag}", incognito: true }).then((w) => JSON.stringify({ incognito: w.incognito }), (e) => "error: " + e.message)`,
@@ -2547,13 +2544,7 @@ try {
         }, 15000);
         opened.push(welcome.id);
         if (welcome.windowId !== mainWindow) throw new Error(`the install tab is in ${welcome.windowId}, not the run's window`);
-        const worker = await until("the extension's worker", async () => {
-          for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(id))) {
-            const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.windows?.getAll", returnByValue: true }).catch(() => null);
-            if (r?.result?.value === "function") return t;
-          }
-          return null;
-        }, 15000);
+        const worker = await extensionWorker(id, "windows.getAll");
         const listed = JSON.parse((await cdp(worker, "Runtime.evaluate", { expression: "chrome.windows.getAll().then((ws) => JSON.stringify(ws.map((w) => w.id)))", awaitPromise: true, returnByValue: true })).result.value);
         const strips = new Set((await cef(`tabStrips()`)).strips.map((st) => st.strip));
         const hidden = listed.filter((w) => !strips.has(w));
@@ -4751,13 +4742,7 @@ try {
     const hostManifest = join(dir, "com.ardia.acceptance.echo.json");
     writeFileSync(hostManifest, JSON.stringify({ name: "com.ardia.acceptance.echo", description: "echo", path: host, type: "stdio", allowed_origins: [`chrome-extension://${installed.id}/`] }));
     try {
-      const worker = await until("the extension's worker", async () => {
-        for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
-          const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.runtime?.sendNativeMessage", returnByValue: true }).catch(() => null);
-          if (r?.result?.value === "function") return t;
-        }
-        return null;
-      }, 15000);
+      const worker = await extensionWorker(installed.id, "runtime.sendNativeMessage");
       const reply = await cdp(worker, "Runtime.evaluate", {
         expression: `chrome.runtime.sendNativeMessage("com.ardia.acceptance.echo", { ping: 42 }).then((r) => JSON.stringify(r), (e) => "error: " + e.message)`,
         awaitPromise: true,
@@ -5127,13 +5112,7 @@ try {
     await evalApp(`globalThis.__acTabs = []; globalThis.__acTabsSub?.remove();
       globalThis.__acTabsSub = globalThis.expo.modules.ArdiaExtensions.addListener("onTabs", (e) => globalThis.__acTabs.push(e)); return true`);
     try {
-      const worker = await until("the extension's worker", async () => {
-        for (const t of (await targets()).filter((t) => t.type === "service_worker" && t.url.includes(installed.id))) {
-          const r = await cdp(t, "Runtime.evaluate", { expression: "typeof chrome?.tabs?.create", returnByValue: true }).catch(() => null);
-          if (r?.result?.value === "function") return t;
-        }
-        return null;
-      }, 15000);
+      const worker = await extensionWorker(installed.id, "tabs.create");
       const create = async (url) => {
         const made = await cdp(worker, "Runtime.evaluate", {
           expression: `chrome.tabs.create({ url: "${url}" }).then((t) => JSON.stringify({ id: t.id, windowId: t.windowId }), (e) => "error: " + e.message)`,

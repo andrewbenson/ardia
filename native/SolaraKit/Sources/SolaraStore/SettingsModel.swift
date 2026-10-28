@@ -6,6 +6,10 @@ public struct SettingsProfile: Sendable, Equatable, Identifiable {
   public let id: String
   public let name: String
   public let engineProfile: String
+  public var color: String = "plum"
+  public var icon: String?
+  public var dataId: String?
+  public var theme: JSONValue?
 }
 
 @MainActor
@@ -36,7 +40,9 @@ public final class SettingsModel {
 
   static func profiles(_ state: BrowserState) -> [SettingsProfile] {
     state.profileOrder.compactMap { id in
-      state.profiles[id].map { SettingsProfile(id: $0.id, name: $0.name, engineProfile: state.engineProfile($0.id)) }
+      state.profiles[id].map {
+        SettingsProfile(id: $0.id, name: $0.name, engineProfile: state.engineProfile($0.id), color: $0.color, icon: $0.icon, dataId: $0.dataId, theme: $0.theme)
+      }
     }
   }
 

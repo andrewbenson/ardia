@@ -36,15 +36,6 @@ export const profilesHandlers: Record<string, SettingsHandler> = {
     ),
 };
 
-function listTopic(s: BrowserState) {
-  return {
-    profiles: s.profileOrder.flatMap((id) => {
-      const p = s.profiles[id];
-      return p ? [{ id: p.id, name: p.name, color: p.color, icon: p.icon ?? null, dataId: p.dataId ?? null, theme: p.theme ? sanitizeTheme(p.theme) : null }] : [];
-    }),
-  };
-}
-
 const bookmarkCounts = new WeakMap<BrowserState["bookmarks"], Map<string, number>>();
 
 function bookmarkCount(s: BrowserState, profileId: string): number {
@@ -80,11 +71,9 @@ export function publishProfiles(): void {
     publishSettingsTopic("profiles.stats", stats);
   };
   const initial = useBrowser.getState();
-  publishSettingsTopic("profiles.list", listTopic(initial));
   publishSettingsTopic("profiles.appDark", initial.ui.appDark);
   publishStats(initial);
   useBrowser.subscribe((s, prev) => {
-    if (s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder) publishSettingsTopic("profiles.list", listTopic(s));
     if (s.ui.appDark !== prev.ui.appDark) publishSettingsTopic("profiles.appDark", s.ui.appDark);
     if (s.history !== prev.history || s.bookmarks !== prev.bookmarks || s.profileOrder !== prev.profileOrder) publishStats(s);
   });

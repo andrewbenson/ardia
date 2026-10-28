@@ -4,27 +4,35 @@ import ArdiaShaders
 import Foundation
 import Observation
 import SolaraModel
+import SolaraStore
 import SolaraUI
 import SwiftUI
 
 @MainActor
 @Observable
 final class ProfilesAdapter: ProfilesServices {
-  private(set) var profiles: [ProfileSummary]
   private(set) var appDark: Bool
   private var statsByProfile: [String: ProfileStats]
-  @ObservationIgnored private let store: SettingsStoreSource
+  private var pending: (base: [SolaraStore.SettingsProfile], profiles: [ProfileSummary])?
+  @ObservationIgnored private let store: StoreSettingsSource
   @ObservationIgnored private var observers: [(String, UUID)] = []
 
-  init(store: SettingsStoreSource) {
+  init(store: StoreSettingsSource) {
     self.store = store
     let js = SettingsJS.shared
-    profiles = Self.profiles(js.latestValue("profiles.list"))
     appDark = js.latestValue("profiles.appDark") as? Bool ?? true
     statsByProfile = Self.stats(js.latestValue("profiles.stats"))
-    observers.append(("profiles.list", js.observe("profiles.list") { [weak self] in self?.profiles = Self.profiles($0) }))
     observers.append(("profiles.appDark", js.observe("profiles.appDark") { [weak self] in self?.appDark = $0 as? Bool ?? true }))
     observers.append(("profiles.stats", js.observe("profiles.stats") { [weak self] in self?.statsByProfile = Self.stats($0) }))
+  }
+
+  var profiles: [ProfileSummary] {
+    get {
+      let mirrored = store.model.profiles
+      if let pending, pending.base == mirrored { return pending.profiles }
+      return mirrored.map(Self.summary)
+    }
+    set { pending = (store.model.profiles, newValue) }
   }
 
   func stats(profileId: String) -> ProfileStats {
@@ -57,19 +65,13 @@ final class ProfilesAdapter: ProfilesServices {
   func deleteProfile(_ id: String) {
     guard profiles.count > 1, profiles.contains(where: { $0.id == id }) else { return }
     profiles.removeAll { $0.id == id }
-    Task {
-      await SettingsAdapters.js("profiles.delete", id)
-      resync()
-    }
+    Task { _ = await SettingsAdapters.js("profiles.delete", id) }
   }
 
   func reorderProfiles(_ ids: [String]) {
     let known = ids.compactMap { id in profiles.first { $0.id == id } }
     profiles = known + profiles.filter { !ids.contains($0.id) }
-    Task {
-      await SettingsAdapters.js("profiles.reorder", ids)
-      resync()
-    }
+    Task { _ = await SettingsAdapters.js("profiles.reorder", ids) }
   }
 
   func setDefaultProfile(_ id: String) { store.set("defaultProfileId", id) }
@@ -114,26 +116,19 @@ final class ProfilesAdapter: ProfilesServices {
     NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
   }
 
-  private func resync() {
-    profiles = Self.profiles(SettingsJS.shared.latestValue("profiles.list"))
-  }
-
   static func millis(_ date: Date?) -> Any {
     date.map { ($0.timeIntervalSince1970 * 1000).rounded() } ?? NSNull()
   }
 
-  static func profiles(_ value: Any?) -> [ProfileSummary] {
-    ((value as? [String: Any])?.list("profiles") ?? []).compactMap { profile in
-      guard let id = profile.string("id") else { return nil }
-      return ProfileSummary(
-        id: id,
-        name: profile.string("name") ?? "",
-        color: profile.string("color").flatMap(ProfileColorValue.init(rawValue:)) ?? .plum,
-        icon: profile.string("icon"),
-        dataId: profile.string("dataId"),
-        theme: theme(profile["theme"])
-      )
-    }
+  static func summary(_ profile: SolaraStore.SettingsProfile) -> ProfileSummary {
+    ProfileSummary(
+      id: profile.id,
+      name: profile.name,
+      color: ProfileColorValue(rawValue: profile.color) ?? .plum,
+      icon: profile.icon,
+      dataId: profile.dataId,
+      theme: profile.theme.flatMap { try? JSONDecoder().decode(ProfileThemeValue.self, from: Data($0.text().utf8)) }
+    )
   }
 
   static func stats(_ value: Any?) -> [String: ProfileStats] {

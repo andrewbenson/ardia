@@ -50,6 +50,7 @@ const CHECKS = {
   "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
   "a-crash": "the file keychain seeded with mock_password, a crash after keying, after the update and after keyed, then a relaunch: migrated with an update and no add, or back to A",
   "version-change": "re-key, then a copy with another CFBundleVersion (and a crash at before-cleanup on it): .rekey-old removed, no keychain write, everything reads",
+  "rare-points": "the crash points the fixture alone never reaches: after-discard-N (a planted GCM Store), after-restage-keyed (a truncated staged file fails verify) and after-undo-N (the key gone mid-swap), each crashed and recovered",
   "off-mode": "a re-key stopped at staged, then a build that can't re-key (mock keychain, no test mode): the quit message, nothing touched; then the test build finishes it",
   "test-refused": "ARDIA_TEST_REKEY=1 without the file keychain, and ARDIA_TEST_REKEY=yes: refused and logged, no re-key, data untouched",
   "rollback": "re-key, then the manual rollback (originals back from .rekey-old, item and journal deleted): the next launch re-keys again",
@@ -1050,6 +1051,61 @@ const CASES = {
       const wrong = compare(r, ctx.manifest, state.scanned);
       const ok = !s.old && !s.stagingDir && s.key === first.key && !s.keyLog.slice(first.keyLog.length).some((l) => /add|update/.test(l)) && !state.wrong.length && !wrong.length;
       lines.push({ ok, name: `${label}the first launch of another CFBundleVersion: .rekey-old removed, no keychain write, everything reads`, detail: `old ${s.old}, staging ${s.stagingDir}, keychain ${s.keyLog.slice(first.keyLog.length).join(", ")}; ${[...state.wrong, ...wrong].join("; ")}` });
+    }
+    return lines;
+  },
+  async "rare-points"(ctx) {
+    const lines = [];
+    const plantGcm = (run) => {
+      mkdirSync(join(run.udd, "Default", "GCM Store"), { recursive: true });
+      writeFileSync(join(run.udd, "Default", "GCM Store", "LOG"), "gcm");
+    };
+    const probe = prepare(ctx.root, "rare-discard", ctx.fixture);
+    plantGcm(probe);
+    lines.push(...(await migrateAndCheck(ctx, probe, REKEY)).map((l) => ({ ...l, name: `a GCM Store to discard: ${l.name}` })));
+    const discardPoints = [...new Set(points(snapshot(probe).appLog))].filter((p) => p.startsWith("after-discard-"));
+    lines.push({ ok: discardPoints.length > 0 && existsSync(join(probe.udd, ".rekey-old", "Default", "GCM Store", "LOG")) && !existsSync(join(probe.udd, "Default", "GCM Store", "LOG")), name: "the GCM Store is moved aside into .rekey-old (Chrome makes a new empty one)", detail: discardPoints.join(" ") });
+    for (const point of discardPoints) {
+      const run = prepare(ctx.root, `rare-${point}`, ctx.fixture);
+      plantGcm(run);
+      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: point });
+      if (run.started.outcome !== "exited" || points(snapshot(run).appLog).at(-1) !== point) { lines.push({ ok: false, name: `crash at ${point}`, detail: `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
+      lines.push(...await recoverAndCheck(ctx, run, `crash at ${point}`));
+    }
+    const restage = prepare(ctx.root, "rare-restage", ctx.fixture);
+    restage.started = await start(ctx.app, restage, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-staged" });
+    const staged = join(restage.udd, ".rekey-staging", "Default", "Login Data");
+    if (restage.started.outcome !== "exited" || !existsSync(staged)) lines.push({ ok: false, name: "a staged Login Data to truncate", detail: restage.started.outcome });
+    else {
+      truncateSync(staged, Math.floor(statSync(staged).size / 2));
+      restage.started = await start(ctx.app, restage, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-restage-keyed" });
+      const s = snapshot(restage);
+      const died = restage.started.outcome === "exited" && points(s.appLog).at(-1) === "after-restage-keyed";
+      lines.push({ ok: died && /didn't verify: staging again from the originals/.test(s.rekeyLog), name: "a truncated staged Login Data fails verify and stages again (after-restage-keyed)", detail: `${restage.started.outcome}, last point ${points(s.appLog).at(-1)}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` });
+      if (died) lines.push(...await recoverAndCheck(ctx, restage, "crash at after-restage-keyed"));
+    }
+    const undoRun = async (name, crashAt) => {
+      const run = prepare(ctx.root, name, ctx.fixture);
+      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-aside-4" });
+      if (run.started.outcome !== "exited" || points(snapshot(run).appLog).at(-1) !== "after-aside-4") return { run, failed: `crash at after-aside-4: ${run.started.outcome}` };
+      unlinkSync(join(run.udd, KEY_FILE));
+      run.started = await start(ctx.app, run, crashAt ? { ...REKEY, ARDIA_TEST_REKEY_CRASH: crashAt } : REKEY, crashAt ? {} : { until: "devtools" });
+      return { run };
+    };
+    const first = await undoRun("rare-undo", null);
+    let undoPoints = [];
+    if (first.failed) lines.push({ ok: false, name: "a swap with the key gone, to undo", detail: first.failed });
+    else {
+      const s = snapshot(first.run);
+      undoPoints = [...new Set(points(s.appLog))].filter((p) => /^after-undo-\d+$/.test(p));
+      if (first.run.started.outcome === "running") await first.run.started.instance.quit();
+      const state = intactState(first.run, ctx.manifest, { key: [MOCK] });
+      lines.push({ ok: /the key is gone while swapping: undoing/.test(s.rekeyLog) && s.journal?.phase === "abandoned" && undoPoints.length > 0 && !state.wrong.length, name: "the key gone mid-swap: undone to A, the originals put back one by one (after-undo-N)", detail: `${undoPoints.join(" ")}; journal ${JSON.stringify(s.journal?.phase)}; ${state.wrong.join("; ")}` });
+    }
+    for (const point of undoPoints) {
+      const { run, failed } = await undoRun(`rare-${point}`, point);
+      if (failed || run.started.outcome !== "exited" || points(snapshot(run).appLog).at(-1) !== point) { lines.push({ ok: false, name: `crash at ${point}`, detail: failed ?? `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
+      lines.push(...await recoverAndCheck(ctx, run, `crash at ${point}`));
     }
     return lines;
   },

@@ -734,6 +734,9 @@ final class GroupHeaderView: SidebarRowView {
   private let label = FadeLabel(fontSize: 13, weight: .medium)
   private let chevron = SymbolView()
   private let closeButton = SidebarIconButton()
+  private let titleBox = NSView()
+  private let meetingLabel = NSTextField(labelWithString: "")
+  private var meetingTick: Timer?
   private var groupId = ""
   private var collapsed = false
   private var hasIcon = false
@@ -747,7 +750,12 @@ final class GroupHeaderView: SidebarRowView {
     super.init(frame: frame)
     body.layer?.addSublayer(surface)
     surface.radius = 11.5
-    for view in [icon, label, chevron, closeButton] as [NSView] { body.addSubview(view) }
+    titleBox.wantsLayer = true
+    for view in [label, chevron] as [NSView] { titleBox.addSubview(view) }
+    meetingLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+    meetingLabel.alignment = .right
+    meetingLabel.isHidden = true
+    for view in [icon, titleBox, meetingLabel, closeButton] as [NSView] { body.addSubview(view) }
     chevron.wantsLayer = true
     closeButton.onPress = { [weak self] in
       guard let self else { return }
@@ -756,6 +764,11 @@ final class GroupHeaderView: SidebarRowView {
   }
 
   required init?(coder: NSCoder) { fatalError() }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window == nil { stopMeetingTick() }
+  }
 
   override func render() {
     guard let context, case .groupHeader(let id)? = item?.kind, let group = context.state.groups[id] else { return }
@@ -783,7 +796,39 @@ final class GroupHeaderView: SidebarRowView {
     closeButton.hoverFill = palette.toolbarHover
     closeButton.pressedFill = palette.toolbarPressed
     if first || wasCollapsed != collapsed { rotateChevron(animated: !first) }
+    renderMeeting()
     repaint()
+  }
+
+  private func renderMeeting() {
+    guard let context else { return }
+    let meeting = SidebarLiveFeed.shared.live?.state.meetingGroups[groupId]
+    let countdown = SidebarMeetingCountdown(meeting, now: Date().timeIntervalSince1970 * 1000)
+    let text = countdown.label ?? ""
+    if text != meetingLabel.stringValue {
+      meetingLabel.stringValue = text
+      needsLayout = true
+    }
+    meetingLabel.textColor = countdown.urgent ? SidebarMeetingCountdown.nowColor(dark: context.palette.dark) : context.palette.textSecondary
+    if let left = countdown.minutesLeft {
+      if meetingTick == nil {
+        meetingTick = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+          MainActor.assumeIsolated { self?.renderMeeting() }
+        }
+      }
+      if SidebarMeetingCountdown.dueWiggles(groupId: groupId, minutesLeft: left, done: &SidebarMeetingCountdown.wiggled), let layer = titleBox.layer {
+        layer.add(SidebarMeetingCountdown.wiggle(around: titleBox.bounds.size), forKey: "wiggle")
+      }
+    } else {
+      stopMeetingTick()
+    }
+    let renaming = context.host.renaming == "group:\(groupId)"
+    meetingLabel.isHidden = text.isEmpty || renaming || (hovered && closeable)
+  }
+
+  private func stopMeetingTick() {
+    meetingTick?.invalidate()
+    meetingTick = nil
   }
 
   private func rotateChevron(animated: Bool) {
@@ -811,6 +856,7 @@ final class GroupHeaderView: SidebarRowView {
     let renaming = context.host.renaming == "group:\(groupId)"
     closeButton.isHidden = !(hovered && !renaming && closeable)
     if !closeButton.isHidden { closeButton.syncHover() }
+    meetingLabel.isHidden = meetingLabel.stringValue.isEmpty || renaming || !closeButton.isHidden
   }
 
   override func layoutBody() {
@@ -823,10 +869,14 @@ final class GroupHeaderView: SidebarRowView {
     let x: CGFloat = 9 + 16 + 5
     let right = bounds.width - 6
     closeButton.frame = NSRect(x: right - 22, y: (h - 22) / 2, width: 22, height: 22)
-    let room = max(0, right - 22 - x - 10)
+    let meetingWidth = meetingLabel.stringValue.isEmpty ? 0 : ceil(meetingLabel.fittingSize.width)
+    let slot = max(22, meetingWidth + 4)
+    meetingLabel.frame = NSRect(x: right - 4 - meetingWidth, y: (h - meetingLabel.fittingSize.height) / 2, width: meetingWidth, height: meetingLabel.fittingSize.height)
+    let room = max(0, right - slot - x - 10)
     let textWidth = min(room, label.textWidth + 8)
-    label.frame = NSRect(x: x, y: (h - 18) / 2, width: textWidth, height: 18)
-    chevron.frame = NSRect(x: x + textWidth, y: (h - 10) / 2, width: 10, height: 10)
+    titleBox.frame = NSRect(x: x, y: (h - 18) / 2, width: max(0, right - slot - x), height: 18)
+    label.frame = NSRect(x: 0, y: 0, width: textWidth, height: 18)
+    chevron.frame = NSRect(x: textWidth, y: 4, width: 10, height: 10)
     rotateChevron(animated: false)
     if let context, let group = context.state.groups[groupId] {
       let editing = context.host.renaming == "group:\(groupId)"

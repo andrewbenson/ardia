@@ -21,6 +21,7 @@ function replica(s: LiveState): string {
     status: s.status,
     expandedStacks: s.expandedStacks,
     showAll: s.showAll,
+    meetingGroups: s.meetingGroups,
   });
 }
 
@@ -51,7 +52,8 @@ export function publishNativeLive(): void {
       s.completing === prev.completing &&
       s.status === prev.status &&
       s.expandedStacks === prev.expandedStacks &&
-      s.showAll === prev.showAll
+      s.showAll === prev.showAll &&
+      s.meetingGroups === prev.meetingGroups
     ) {
       return;
     }

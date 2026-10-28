@@ -85,3 +85,23 @@ These were deliberately left out. Look at them again at the next real merge:
   upstream's state-layer refactor (`tabWatch`), which our store doesn't have.
 - **881f2eab's password sealing** (`sealPassword`/`openPassword`, `savePassword` and the `pw:` → `pws:` records) is
   ported on its own, apart from that commit's recovery-phrase reauth gate.
+- **Crash-report redaction** (8ea1c7bb, bbc9acf9, 1a6fb8ed, 5765641c, e6630b53, #504). Solara sends no reports: its
+  `AC_TELEMETRY_URL` is empty, so nothing the redaction protects leaves the Mac. Take them with the rest of the
+  telemetry code if Solara ever sends reports.
+- **Legacy password sealing** (d8e5dcbf, e6697cbc). They seal passwords that older builds stored before JS reads them.
+  The review rated that exposure low, and sealing arrives with the native sync path.
+- **Sync journal parts** (16223045 and its fixes 28b9714b, a3545d94, 09feed54). These cut disk writes (the state is
+  saved hourly instead of each cycle) rather than fix a bug, and they collide with the sync redesign, so they went to
+  the sync work instead of a hand port. 480f3627 and its revert f8772c8a cancel out.
+- **Not applicable to our tree:**
+  - a0a177f9 (sidebar group crash): needs 5b931ed5's shared press and slide style, which we don't have (our rows keep
+    `PressFeedback`).
+  - 48b52711 (address field hover buttons): ours already sit to the left of the indicators and keep their space.
+  - 04e28b95 (video-upscaling-test): our `pageState` still has the `browsers` map the test reads.
+  - fdce59e2 (test stub `unstable_batchedUpdates`): our app tests load without it.
+  - 7233baf1 (`launchEnv.mjs` and the Debug dylib): we don't have `launchEnv.mjs`.
+  - 73878d09 (pinned tab color ring): we don't have `colorRing`.
+- **Features and upstream-only work, not ported:** the layer, file-split and tokens refactors; the site, meadow and demo;
+  dashboards, stats, infra and release bumps; tab sleeping (ae4f421c), onboarding (78254629, 9840b49f, 15094487,
+  12f65f5e, 36269777, 75ba95b1), the Dia import row (e9999df3), Liquid Glass pinned tabs (4ebffc9c), Settings'
+  advanced split (9102987f), sidebar title width (fb9c3ddc, 64bd1be7), and f6d71be3's js-bench change (later).

@@ -70,10 +70,22 @@ import Testing
     view.update(CliPillState(shown: true, command: "solara", product: "Solara", theme: theme))
     view.layoutSubtreeIfNeeded()
     let pill = view.pillFrame
-    #expect(pill.height == 32)
+    #expect(pill.height == 33)
     #expect(abs(pill.maxY - 588) < 0.01)
     #expect(abs(pill.midX - 400) <= 0.5)
     #expect(view.progress == 1)
+  }
+
+  @Test func cliPillStopTitleIsNotTruncated() {
+    let view = CliControlPillView(frame: .zero)
+    view.update(CliPillState(shown: false, command: "solara", product: "Solara", theme: theme))
+    view.frame = NSRect(x: 0, y: 0, width: 1083, height: 746)
+    view.layoutSubtreeIfNeeded()
+    view.update(CliPillState(shown: true, command: "solara", product: "Solara", theme: theme))
+    view.layoutSubtreeIfNeeded()
+    #expect(view.pillFrame.width == 1 + 6 + 20 + 8 + 151 + 8 + view.stopWidth + 4)
+    #expect(view.pillFrame.height == 33)
+    #expect(!view.stopTitleClipped)
   }
 
   @Test func cliPillNeverOverflowsANarrowPane() {

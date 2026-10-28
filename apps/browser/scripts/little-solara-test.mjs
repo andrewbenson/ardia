@@ -77,7 +77,7 @@ let little = null;
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: native ? { ARDIA_NATIVE_MEDIA: "1" } : {},
+    env: { ARDIA_NATIVE_MEDIA: native ? "1" : "0" },
     ready: "return !!ac.store.getState().windows.w1",
   });
 
@@ -190,7 +190,7 @@ try {
       app = null;
       app = await launch(resolve(appArg), {
         data, probe: true, urls: [url("c")],
-        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
+        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0" },
         ready: "return !!ac.store.getState().windows.w1",
       });
       outcomes.push(await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`));
@@ -214,7 +214,7 @@ try {
     app = null;
     app = await launch(resolve(appArg), {
       data, probe: true, urls: [url("c")],
-      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}), ...env },
+      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...env },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const id = await until("Little Solara for the link", `return small()?.id ?? null;`, 15000);
@@ -249,7 +249,7 @@ try {
       app = null;
       app = await launch(resolve(appArg), {
         data, probe: true, urls: [url("c")],
-        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_TEST_EARLY_LINK_IGNORE_SETTING: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
+        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_TEST_EARLY_LINK_IGNORE_SETTING: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0" },
         ready: "return !!ac.store.getState().windows.w1",
       });
       const tab = await until("page C loaded in the main window", `const id = st().windows.w1?.tabIds.find((t) => st().tabs[t]?.url === ${JSON.stringify(url("c"))}); return id && st().tabs[id].title === "C" ? id : null;`, 15000);

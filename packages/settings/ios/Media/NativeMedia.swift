@@ -207,7 +207,7 @@ enum NativeMedia {
       let frame = pill.convert(pill.pillFrame, to: content)
       let presented = pill.subviews.first?.layer?.presentation()
       return [
-        "shown": pill.shown, "progress": pill.progress, "opacity": Double(presented?.opacity ?? 0), "t": CACurrentMediaTime(),
+        "shown": pill.shown, "progress": pill.progress, "opacity": Double(presented?.opacity ?? 0), "t": CACurrentMediaTime(), "stopClipped": pill.stopTitleClipped,
         "frame": [frame.minX, content.bounds.height - frame.maxY, frame.width, frame.height],
       ]
     }

@@ -17,6 +17,7 @@ public final class CliControlPillView: NSView {
   public static let height: CGFloat = 32
   public static let bottom: CGFloat = 12
   public static let sideInset: CGFloat = 12
+  public static let border: CGFloat = 0.5
   static let appear = (duration: 0.16, easing: RNEasing.outCubic)
   static let hide = (duration: 0.2, easing: RNEasing.inQuad)
 
@@ -69,6 +70,8 @@ public final class CliControlPillView: NSView {
   public var shown: Bool { state?.shown ?? false }
   public var progress: Double { tween.value(at: CACurrentMediaTime()) }
   public var pillFrame: CGRect { motion.frame }
+  public var stopTitleClipped: Bool { stop.titleClipped }
+  var stopWidth: CGFloat { stop.frame.width }
 
   public func update(_ next: CliPillState) {
     let first = state == nil
@@ -88,9 +91,9 @@ public final class CliControlPillView: NSView {
   private func paint(_ state: CliPillState) {
     let palette = MediaPalette(state.theme)
     surface.fill = palette.panel
-    surface.radius = Self.height / 2
+    surface.radius = (Self.height + 2 * Self.border) / 2
     surface.borderTint = palette.panelBorder
-    surface.border = 0.5
+    surface.border = Self.border
     surface.glowColor = .black
     surface.glowOpacity = palette.panelShadowOpacity
     surface.glowRadius = 14
@@ -110,22 +113,24 @@ public final class CliControlPillView: NSView {
 
   public override func layout() {
     super.layout()
+    let border = Self.border
     let available = max(0, bounds.width - 2 * Self.sideInset)
     let stopSize = stop.fittingSize
-    let textNatural = ceil(label.attributedStringValue.size().width) + 4
-    let fixed: CGFloat = 6 + 20 + 8 + 8 + stopSize.width + 4
+    let textNatural = MediaText.pointCeil(label.attributedStringValue.size().width)
+    let fixed: CGFloat = 2 * border + 6 + 20 + 8 + 8 + stopSize.width + 4
     let textWidth = max(0, min(textNatural, available - fixed))
     let width = min(available, fixed + textWidth)
-    let frame = CGRect(x: ((bounds.width - width) / 2).rounded(), y: bounds.height - Self.bottom - Self.height, width: width, height: Self.height)
+    let height = Self.height + 2 * border
+    let frame = CGRect(x: MediaText.pointRound((bounds.width - width) / 2), y: bounds.height - Self.bottom - height, width: width, height: height)
     if motion.frame != frame { motion.frame = frame }
     MediaMotion.setInstantly {
       surface.frame = motion.bounds
-      badge.frame = CGRect(x: 6, y: 6, width: 20, height: 20)
+      badge.frame = CGRect(x: border + 6, y: border + 6, width: 20, height: 20)
     }
-    glyph.frame = CGRect(x: 9, y: 9, width: 14, height: 14)
+    glyph.frame = CGRect(x: border + 9, y: border + 9, width: 14, height: 14)
     let labelHeight = ceil(label.intrinsicContentSize.height)
-    label.frame = CGRect(x: 34, y: ((Self.height - labelHeight) / 2).rounded(), width: textWidth, height: labelHeight)
-    stop.frame = CGRect(x: width - 4 - stopSize.width, y: 4, width: stopSize.width, height: Self.height - 8)
+    label.frame = CGRect(x: border + 34 - MediaText.inset, y: border + ((Self.height - labelHeight) / 2).rounded(), width: textWidth + 2 * MediaText.inset, height: labelHeight)
+    stop.frame = CGRect(x: width - border - 4 - stopSize.width, y: border + 4, width: stopSize.width, height: Self.height - 8)
     apply(progress: tween.to)
   }
 
@@ -213,16 +218,18 @@ final class MediaTextButton: NSView {
     }
   }
 
+  var titleClipped: Bool { label.frame.width < label.intrinsicContentSize.width }
+
   override var fittingSize: NSSize {
     let text = label.intrinsicContentSize
-    return NSSize(width: ceil(text.width) + 2 * paddingX, height: ceil(text.height))
+    return NSSize(width: MediaText.pointCeil(label.attributedStringValue.size().width) + 2 * paddingX, height: ceil(text.height))
   }
 
   override func layout() {
     super.layout()
     MediaMotion.setInstantly { plate.frame = bounds }
     let text = label.intrinsicContentSize
-    label.frame = CGRect(x: paddingX, y: ((bounds.height - text.height) / 2).rounded(), width: max(0, bounds.width - 2 * paddingX), height: text.height)
+    label.frame = CGRect(x: paddingX - MediaText.inset, y: ((bounds.height - text.height) / 2).rounded(), width: max(0, bounds.width - 2 * paddingX + 2 * MediaText.inset), height: text.height)
   }
 
   override func updateTrackingAreas() {
@@ -262,4 +269,12 @@ final class MediaTextButton: NSView {
     MediaMotion.setInstantly { plate.backgroundColor = (pressed ? colors.pressed : hovered ? colors.hover : colors.rest).cgColor }
     label.textColor = colors.text
   }
+}
+
+enum MediaText {
+  static let inset: CGFloat = 2
+
+  static func pointCeil(_ width: CGFloat) -> CGFloat { (width * 2).rounded(.up) / 2 }
+
+  static func pointRound(_ value: CGFloat) -> CGFloat { (value * 2).rounded() / 2 }
 }

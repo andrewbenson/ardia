@@ -132,6 +132,7 @@ public final class PopoverView: NSView {
     let x = placement.right.map { bounds.width - CGFloat($0) - width } ?? CGFloat(placement.left ?? 0)
     motion.frame = bounds
     card.frame = CGRect(x: x, y: CGFloat(placement.top), width: width, height: height)
+    if card.layer?.sublayers?.last !== rim { card.layer?.addSublayer(rim) }
     PrimitiveMotion.setInstantly {
       surface.frame = card.bounds
       rim.frame = card.bounds

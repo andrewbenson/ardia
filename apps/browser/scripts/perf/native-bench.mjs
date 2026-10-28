@@ -82,7 +82,7 @@
 //                             for newtabkey and navigate only
 //     --hold <secs>           keep each measured instance alive that long before it quits, its pid and data dir logged
 //                             (lldb -p <pid>, heap <pid>, vmmap --summary <pid>). Ctrl-C quits it and stops.
-//     --port <n>              the instances' CDP port (default 9377). One instance runs at a time.
+//     --port <n>              the instances' CDP port (default: a free one per launch); refused while anything listens on it
 //     --compare <a.json>      print a before/after table against another run's results.json
 //     --report <b.json>       print the table for saved results (with --compare, before/after) without running
 //     Environment: BENCH_ALLOW_APP_NAP=1 leaves App Nap on (the control for the App Nap row); BENCH_DEBUG=1 logs switches;
@@ -150,7 +150,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, freePort, listenerPids } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
 import { frameRows, frameTable, framesLibrary, framesRun, stallTable } from "./frames-phase.mjs";
@@ -170,7 +170,7 @@ const { values: opt } = parseArgs({
     only: { type: "string", default: "launch,session,throttle,sample" },
     compare: { type: "string" },
     report: { type: "string" },
-    port: { type: "string", default: "9377" },
+    port: { type: "string" },
     control: { type: "string" },
     "control-bundle": { type: "string" },
     "control-label": { type: "string" },
@@ -458,7 +458,7 @@ class Instance {
     this.side = side;
     this.app = side.app;
     this.dataDir = dataDir;
-    this.port = +opt.port;
+    this.port = opt.port ? +opt.port : 0;
     this.feed = `${base()}/appcast.xml`;
     this.cdp = new Cdp(this.port);
     this.seq = 0;
@@ -468,6 +468,9 @@ class Instance {
     const exe = join(realpathSync(this.app), "Contents/MacOS", execFileSync("defaults", ["read", join(this.app, "Contents/Info.plist"), "CFBundleExecutable"], { encoding: "utf8" }).trim());
     const main = `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`;
     if (spawnSync("pgrep", ["-f", main]).status === 0) throw new Error("a bench instance is still running");
+    if (!opt.port) this.port = this.cdp.port = await freePort();
+    const holders = listenerPids(this.port);
+    if (holders.length) throw new Error(`CDP port ${this.port} is already taken by pid ${holders.join(", ")}: quit that instance or pass another --port`);
     const extra = [...opt.env, ...this.side.env, ...this.env].filter((e) => !e.startsWith("DYLD_INSERT_LIBRARIES="));
     writeSwitches(this.dataDir, extra.find((e) => e.startsWith("ARDIA_SWITCHES="))?.slice(19));
     const dyld = [markerLibrary(), ...(this.frames ? [framesLibrary(toolDir, here)] : []), ...opt.env.filter((e) => e.startsWith("DYLD_INSERT_LIBRARIES=")).map((e) => e.slice(22))].join(":");

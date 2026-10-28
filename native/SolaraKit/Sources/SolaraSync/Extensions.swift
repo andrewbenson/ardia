@@ -137,8 +137,8 @@ func jsParseInt10(_ text: Substring) -> Double {
 
 public func compareVersions(_ a: String, _ b: String) -> Int {
   func parts(_ text: String) -> [Double] {
-    text.split(separator: ".", omittingEmptySubsequences: false).map { part in
-      let n = jsParseInt10(part)
+    text.jsSplit(".").map { part in
+      let n = jsParseInt10(Substring(part))
       return n.isNaN || n == 0 ? 0 : n
     }
   }
@@ -189,7 +189,7 @@ public final class ExtensionsAdapter: SyncAdapter {
   public let prefix = extensionPrefix
   public var adoptRemoteOnJoin: Bool { true }
   let host: ExtensionsHost
-  var tried: [String: Double] = [:]
+  var tried = JSMap<Double>()
   var unsettled = OrderedSet<String>()
 
   public init(host: ExtensionsHost) {
@@ -205,9 +205,9 @@ public final class ExtensionsAdapter: SyncAdapter {
   func reconcileOne(
     _ id: String, _ record: JSONValue?, _ approvalValue: JSONValue?, _ local: LocalExtensions, _ intents: JSMap<ExtensionIntent>, _ joined: Bool
   ) async throws -> Bool {
-    let e = local.extensions.first { $0.id == id }
-    let pending = local.pending.contains(id)
-    let queued = local.queued?.contains(id) ?? false
+    let e = local.extensions.first { $0.id.jsEquals(id) }
+    let pending = local.pending.contains { $0.jsEquals(id) }
+    let queued = local.queued?.contains { $0.jsEquals(id) } ?? false
     let approval = ExtensionApproval(json: approvalValue)
     if isRemoval(record) {
       if intents[id]?.kind == .installed { return true }
@@ -286,13 +286,13 @@ public final class ExtensionsAdapter: SyncAdapter {
     for (key, record) in visible {
       guard isStateKey(key), isExtensionState(record) else { continue }
       let id = extensionIdOf(key)
-      let e = local.extensions.first { $0.id == id }
+      let e = local.extensions.first { $0.id.jsEquals(id) }
       let approval = shown[extensionApprovalKey(id)]
       if let e {
         if e.syncable && grantable(ExtensionApproval(json: approval), e) { _ = try await reconcileOne(id, record, approval, local, intents, true) }
         continue
       }
-      if local.pending.contains(id) || now - (tried[id] ?? -.infinity) < extensionRetryMs { continue }
+      if local.pending.contains(where: { $0.jsEquals(id) }) || now - (tried[id] ?? -.infinity) < extensionRetryMs { continue }
       tried[id] = now
       _ = try await reconcileOne(id, record, approval, local, intents, true)
     }

@@ -474,7 +474,7 @@ public func pull(_ state: ScopeState, _ transport: SyncTransport, _ scope: Strin
     }
     state.damaged.removeValue(forKey: id)
   }
-  let present = Set(listing.present)
+  let present = OrderedSet(listing.present)
   for id in state.files.keys where !present.contains(id) { state.files.removeValue(forKey: id) }
   for id in state.damaged.keys where !present.contains(id) { state.damaged.removeValue(forKey: id) }
   state.pending = Double(listing.pending.count)

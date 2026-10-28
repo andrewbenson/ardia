@@ -56,10 +56,10 @@ func formatHLC(_ wall: Double, _ counter: Double, _ device: String) -> HLC {
 }
 
 func parseHLC(_ h: HLC) -> (wall: Double, counter: Double, device: String) {
-  let parts = h.split(separator: ".", omittingEmptySubsequences: false)
+  let parts = h.jsSplit(".")
   let wall = parts.count > 0 ? parts[0] : "0"
   let counter = parts.count > 1 ? parts[1] : "0"
-  return (jsParseInt36(wall), jsParseInt36(counter), parts.dropFirst(2).joined(separator: "."))
+  return (jsParseInt36(Substring(wall)), jsParseInt36(Substring(counter)), parts.dropFirst(2).joined(separator: "."))
 }
 
 public func hlcAfter(_ h: HLC, _ device: String) -> HLC {

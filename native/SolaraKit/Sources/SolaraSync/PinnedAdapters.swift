@@ -11,10 +11,10 @@ extension Store: PinnedSyncStore {
   public func runPinnedWhenFree(_ body: @escaping @Sendable (Session) throws -> Void) throws { try transactWhenFree(body) }
 }
 
-let legacyKeys: [String: String] = [
-  "openLinksInSmallYahu": "openLinksInLittleArdia", "smallYahuSize": "littleArdiaSize", "newSmallYahu": "newLittleArdia",
-  "toggleOpenLinksInSmallYahu": "toggleOpenLinksInLittleArdia",
-]
+let legacyKeys = JSMap<String>([
+  ("openLinksInSmallYahu", "openLinksInLittleArdia"), ("smallYahuSize", "littleArdiaSize"), ("newSmallYahu", "newLittleArdia"),
+  ("toggleOpenLinksInSmallYahu", "toggleOpenLinksInLittleArdia"),
+])
 
 public func fromLegacy(_ value: JSONValue) -> JSONValue {
   switch value {
@@ -24,7 +24,7 @@ public func fromLegacy(_ value: JSONValue) -> JSONValue {
     var out = JSONObject()
     for (key, v) in source {
       let name = legacyKeys[key] ?? key
-      if name != key && source.contains(name) { continue }
+      if !name.jsEquals(key) && source.contains(name) { continue }
       out[name] = fromLegacy(v)
     }
     return .object(out)

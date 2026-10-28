@@ -31,7 +31,7 @@ public let syncedSettings = [
   "autoGroupMeetingTabs", "cleanUpInactiveTabsAfterHours", "mutedSites", "autoPictureInPicture", "videoUpscaling", "sidebarMediaControls",
   "showFullUrl", "bookmarksBar", "appearance", "addressBar", "commandBarPlacement", "shortcuts",
 ]
-let syncedSettingSet = Set(syncedSettings)
+let syncedSettingSet = OrderedSet(syncedSettings)
 
 func skipsNull(_ value: JSONValue, _ name: String) -> Bool {
   value.isNull && Settings.defaults.values[name] != .null
@@ -46,8 +46,8 @@ public final class SettingsAdapter: SyncAdapter {
 
   public func extract(_ context: ExtractContext) async throws -> Extraction? {
     let settings = store.state.settings
-    let chosen = Set(settings.chosen ?? [])
-    let inferred = Set(settings.inferred ?? [])
+    let chosen = OrderedSet(settings.chosen ?? [])
+    let inferred = OrderedSet(settings.inferred ?? [])
     func filledIn(_ name: String, _ value: JSONValue) -> Bool {
       guard inferred.contains(name), let fallback = Settings.defaults.values[name], value.text() == fallback.text() else { return false }
       guard let last = context.base("set:\(name)") else { return true }
@@ -65,7 +65,7 @@ public final class SettingsAdapter: SyncAdapter {
     let records = shown(visible)
     var patch = JSONObject()
     for key in changed {
-      let name = String(key.dropFirst(4))
+      let name = key.jsSlice(4)
       guard let record = records[key], record.truthy, syncedSettingSet.contains(name), let value = record["v"], !skipsNull(value, name) else { continue }
       patch[name] = value
     }
@@ -417,10 +417,10 @@ public final class DeveloperModeAdapter: SyncAdapter {
     for (key, value) in visible {
       let rest = key.jsSlice(developerModePrefix.utf16.count)
       if rest.jsStartsWith("on:") {
-        on.append(.string(String(rest.dropFirst(3))))
+        on.append(.string(rest.jsSlice(3)))
       } else if rest.jsStartsWith("off:") {
-        off.append(.string(String(rest.dropFirst(4))))
-      } else if rest == "reload", value.object != nil || value.array != nil {
+        off.append(.string(rest.jsSlice(4)))
+      } else if rest.jsEquals("reload"), value.object != nil || value.array != nil {
         reload = value["r"] ?? .null
       }
     }

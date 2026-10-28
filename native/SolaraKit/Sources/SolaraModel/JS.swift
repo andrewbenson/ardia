@@ -78,6 +78,26 @@ public extension String {
 
   func jsEquals(_ other: String) -> Bool { utf16.elementsEqual(other.utf16) }
 
+  func jsSplit(_ separator: String) -> [String] {
+    let units = Array(utf16)
+    let pin = Array(separator.utf16)
+    if pin.isEmpty { return units.map { String(utf16Units: [$0]) } }
+    var parts: [String] = []
+    var start = 0
+    var i = 0
+    while i + pin.count <= units.count {
+      if Array(units[i..<(i + pin.count)]) == pin {
+        parts.append(String(utf16Units: units[start..<i]))
+        i += pin.count
+        start = i
+      } else {
+        i += 1
+      }
+    }
+    parts.append(String(utf16Units: units[start...]))
+    return parts
+  }
+
   func jsLowercased() -> String { lowercased() }
 
   func jsBeforeFirst(_ unit: Character) -> String {

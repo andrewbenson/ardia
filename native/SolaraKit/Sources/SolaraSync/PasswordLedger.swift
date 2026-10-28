@@ -36,7 +36,7 @@ public struct LedgerEntry: Sendable, Equatable {
     d = json["d"]?.array?.compactMap(\.string) ?? []
     h = json["h"]?.string
     m = json["m"]?.number ?? 0
-    for (key, value) in json.object ?? [:] where !["d", "h", "m"].contains(key) { unknown[key] = value }
+    for (key, value) in json.object ?? [:] where !["d", "h", "m"].contains(where: { $0.jsEquals(key) }) { unknown[key] = value }
   }
 
   public var json: JSONValue {
@@ -64,7 +64,7 @@ public struct Ledger: Sendable, Equatable {
     var keys = JSMap<LedgerEntry>()
     for (key, value) in json["keys"]?.object ?? [:] { keys[key] = LedgerEntry(json: value) }
     self.keys = keys
-    for (key, value) in json.object ?? [:] where !["v", "L", "t", "keys"].contains(key) { unknown[key] = value }
+    for (key, value) in json.object ?? [:] where !["v", "L", "t", "keys"].contains(where: { $0.jsEquals(key) }) { unknown[key] = value }
   }
 
   public var json: JSONValue {
@@ -141,8 +141,8 @@ public struct Judgement: Sendable, Equatable {
 let digestsKept = 4
 
 public func parseMark(_ value: String?) -> Mark? {
-  let parts = (value ?? "").split(separator: "@", maxSplits: 2, omittingEmptySubsequences: false)
-  guard parts.count == 2, let L = asciiDigits(parts[0]), let t = asciiDigits(parts[1]) else { return nil }
+  let parts = (value ?? "").jsSplit("@")
+  guard parts.count == 2, let L = asciiDigits(Substring(parts[0])), let t = asciiDigits(Substring(parts[1])) else { return nil }
   return Mark(L: L, t: t)
 }
 
@@ -244,7 +244,7 @@ public func judge(_ local: OrderedDict<String, LocalLogin>, _ mark: Mark?, _ led
       }
       continue
     }
-    let older = entry.d.dropFirst().contains(mine)
+    let older = entry.d.dropFirst().contains(where: { $0.jsEquals(mine) })
     if older && here.modified <= entry.m {
       if record != nil { apply.insert(key) }
       continue
@@ -263,7 +263,7 @@ public func nextLedger(_ ledger: Ledger?, _ local: OrderedDict<String, LocalLogi
     }
     let digest = digestOf(here.value)
     let was = out.keys[key]?.d ?? []
-    out.keys[key] = LedgerEntry(d: Array(([digest] + was.filter { $0 != digest }).prefix(digestsKept)), h: records[key]?.h, m: jsMin(here.modified, mark.t))
+    out.keys[key] = LedgerEntry(d: Array(([digest] + was.filter { !$0.jsEquals(digest) }).prefix(digestsKept)), h: records[key]?.h, m: jsMin(here.modified, mark.t))
   }
   return out
 }

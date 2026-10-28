@@ -391,7 +391,7 @@ let passwordReadInterval: Double = 30_000
 
 func loginOrigin(_ login: JSONValue) -> String? {
   var realm = jsText(login["origin"])
-  if realm.jsEndsWith("/") { realm.removeLast() }
+  if realm.jsEndsWith("/") { realm = realm.jsSlice(0, -1) }
   let units = Array(realm.utf16)
   let scheme: [UInt16]
   if realm.jsStartsWith("https://") { scheme = Array("https://".utf16) } else if realm.jsStartsWith("http://") { scheme = Array("http://".utf16) } else { return nil }

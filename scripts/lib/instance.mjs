@@ -68,7 +68,7 @@ export function temporaryData(data) {
   return (under(root, path) || under(realRoot, path)) && under(realRoot, real) ? real : null;
 }
 export function removeTemporaryData(data) {
-  const real = process.env.AC_KEEP_DATA === "1" ? null : temporaryData(data);
+  const real = process.env.AC_KEEP_DATA === "1" || process.argv.includes("--keep-data") ? null : temporaryData(data);
   if (!real) return false;
   try {
     rmSync(real, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
@@ -93,8 +93,11 @@ export function wipeRefusal(data) {
 }
 export const quitEnded = ({ how }) => how === "quit" || how === "SIGTERM" || how === "SIGKILL";
 const quitData = new Set();
+const reportDirs = new Map();
 process.on("exit", (code) => {
-  if (code === 0) for (const data of quitData) removeTemporaryData(data);
+  if (code !== 0) return;
+  for (const data of quitData) removeTemporaryData(data);
+  for (const [dir, report] of reportDirs) if (!report.failed.length) removeTemporaryData(dir);
 });
 export function spawnedPids(binary, before, port, dataDirs) {
   const r = spawnSync("ps", ["-ww", "-ax", "-o", "pid=", "-o", "ppid=", "-o", "command="], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 });
@@ -497,6 +500,7 @@ export function reporter(logFile, { name = "run" } = {}) {
       return !failed.length;
     },
   };
+  if (temporaryData(dirname(resolve(logFile)))) reportDirs.set(dirname(resolve(logFile)), r);
   return r;
 }
 

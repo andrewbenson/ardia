@@ -600,7 +600,7 @@ try {
   });
 } finally {
   await app?.quit();
-  if (!keep) for (const dir of [data, files]) rmSync(dir, { recursive: true, force: true });
+  if (!keep && !rep.failed.length) for (const dir of [data, files]) rmSync(dir, { recursive: true, force: true });
   else rep.say(`data: ${data}`);
 }
 
@@ -626,7 +626,7 @@ try {
   });
 } finally {
   await rn?.quit();
-  if (!keep) rmSync(rnData, { recursive: true, force: true });
+  if (!keep && !rep.failed.length) rmSync(rnData, { recursive: true, force: true });
 }
 const shellData = join(scratch, "shell-data");
 mkdirSync(shellData, { recursive: true });
@@ -677,6 +677,6 @@ try {
   });
 } finally {
   await shell?.quit();
-  if (!keep) rmSync(shellData, { recursive: true, force: true });
+  if (!keep && !rep.failed.length) rmSync(shellData, { recursive: true, force: true });
 }
 process.exit(rep.summary() ? 0 : 1);

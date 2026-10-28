@@ -135,6 +135,9 @@ public final class SafeStorageRekeyRun {
       return undoFailed("the journal can't be read: \(error)")
     }
     let keepingOriginals = journal?.phase == .done && journal?.version == appVersion
+    if keepingOriginals && present(stagingDir) {
+      do { try removeIfPresent(stagingDir) } catch { log("can't remove the staging folder: \(error)") }
+    }
     if let journal, journal.phase != .done && journal.phase != .abandoned || leftovers() && !keepingOriginals {
       if let busy = lock() { return busy }
       if let outcome = recover(journal) { return outcome }
@@ -275,6 +278,7 @@ public final class SafeStorageRekeyRun {
     guard writeJournal(RekeyJournal(phase: .done, fromA: fromA, version: appVersion, report: report)) else {
       return .quit(code: Self.otherCopyExitCode, message: "Solara couldn't finish moving your saved passwords and cookies to their new key. Quit and open Solara again.")
     }
+    point("after-done-write")
     do { try removeIfPresent(stagingDir) } catch { log("can't remove the staging folder: \(error)") }
     log("done: \(report.stores.count) stores re-keyed, \(report.discard.count) discarded")
     point("after-done")

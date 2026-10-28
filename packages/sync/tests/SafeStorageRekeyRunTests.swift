@@ -295,6 +295,17 @@ final class SafeStorageRekeyRunTests: XCTestCase {
     assertAllKeyed(secretOnDisk()!, counts: 1)
   }
 
+  func testACrashBetweenDoneAndStagingRemovalClearsStagingOnTheNextLaunch() throws {
+    XCTAssertEqual(crashChild(at: "after-done-write"), SafeStorageRekeyRun.crashExitCode)
+    XCTAssertTrue(present(".rekey-staging"))
+    let secret = secretOnDisk()!
+    XCTAssertEqual(rekey().run(), .proceed)
+    XCTAssertFalse(present(".rekey-staging"))
+    XCTAssertTrue(present(".rekey-old/Default/Cookies"))
+    XCTAssertEqual(journalPhase(), "done")
+    assertAllKeyed(secret)
+  }
+
   func testAMissingKeyWhileOriginalsAreKeptChangesNothing() throws {
     XCTAssertEqual(rekey().run(), .proceed)
     let secret = secretOnDisk()!

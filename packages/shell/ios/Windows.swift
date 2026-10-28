@@ -73,6 +73,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   private var contentShown = Set<String>()
   private var firstContentObservers: [String: NSObjectProtocol] = [:]
   private static let behindTimeout = 1.5
+  private static let typeAheadWait = 2.5
 
   func open(
     id: String, frame: [Double]?, incognito: Bool, title: String, focus: Bool, kind: String = "browser", profile: String? = nil,
@@ -313,7 +314,11 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private func holdTyping(in window: NSWindow) {
     endTypeAhead(send: false)
-    typingMonitor = typingMonitor ?? NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
+    typingMonitor = typingMonitor ?? NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .leftMouseDown, .rightMouseDown]) { [weak self] event in
+      if event.type == .leftMouseDown || event.type == .rightMouseDown {
+        if let self, let held = self.typeAhead, held.keyed, event.window === held.window { self.endTypeAheadSoon(held) }
+        return event
+      }
       guard let self, let held = self.typeAhead, let window = held.window, !held.passing, !held.keyed || event.window === window,
         !held.keys.isEmpty || (event.type == .keyDown && (!held.keyed || !event.modifierFlags.contains(.command)))
       else { return event }
@@ -326,8 +331,8 @@ final class WindowManager: NSObject, NSWindowDelegate {
     }
     let held = TypeAhead(window)
     held.watches.append(window.observe(\.firstResponder) { [weak self, weak held] window, _ in
-      guard held?.keyed == true, Self.takesTyping(window.firstResponder) else { return }
-      DispatchQueue.main.async { if let held, self?.typeAhead === held { self?.endTypeAhead(send: true) } }
+      guard let held, held.keyed, let responder = window.firstResponder, responder !== window else { return }
+      self?.endTypeAheadSoon(held)
     })
     for name in [NSWindow.didResignKeyNotification, NSWindow.willCloseNotification] {
       held.watches.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self, weak held] _ in
@@ -354,6 +359,15 @@ final class WindowManager: NSObject, NSWindowDelegate {
     held.passing = true
     now.forEach { NSApp.sendEvent($0) }
     held.passing = false
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.typeAheadWait) { [weak self, weak held] in
+      if let held, self?.typeAhead === held { self?.endTypeAhead(send: true) }
+    }
+  }
+
+  private func endTypeAheadSoon(_ held: TypeAhead) {
+    DispatchQueue.main.async { [weak self, weak held] in
+      if let held, self?.typeAhead === held { self?.endTypeAhead(send: true) }
+    }
   }
 
   private static func retarget(_ event: NSEvent, to window: NSWindow) -> NSEvent? {

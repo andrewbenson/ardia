@@ -123,6 +123,27 @@ try {
     return { kinds: have, enabled };
   });
 
+  if (prompts) await rep.check("share-picker-escape-at-launch", async () => {
+    const request = { id: "share-at-launch", origin: "https://meet.test", frameOrigin: null, audio: { tab: true, screen: false, window: null },
+      sources: [{ id: "screen:fixture", kind: "screen", name: "Fixture Display", width: 1512, height: 982 }], pageUrl: url("b") };
+    await run(`ac.actions.switchToTab("b"); acMedia.useMedia.setState((m) => ({ displayRequests: { ...m.displayRequests, b: ${JSON.stringify(request)} } })); return true;`);
+    try {
+      await until("share picker focused", `return first("media.sharePicker").then((r) => r && r.opacity > 0.99 && r.focused ? true : null);`, 5000);
+      await run(`globalThis.__shareLog = []; const a = acNativeMedia.actions; globalThis.__shareReal = a.sharePicker; a.sharePicker = (w, t, e) => { __shareLog.push(e.action); }; return true;`);
+      try {
+        await run(`return ac.shell.devKeyEquivalent("w1", { key: "\\r", keyCode: 36, modifiers: [], send: true, asKey: true, wait: 30 }).then(() => true);`);
+        await until("Return reaches the first share picker after launch", `return __shareLog.includes("share") || null;`, 3000);
+      } finally {
+        await run(`acNativeMedia.actions.sharePicker = __shareReal; return true;`);
+      }
+      await run(`return ac.shell.devKeyEquivalent("w1", { key: "\\u001b", keyCode: 53, modifiers: [], send: true, asKey: true, wait: 30 }).then(() => true);`);
+      await until("Escape cancels the first share picker after launch", `return !acMedia.useMedia.getState().displayRequests.b;`, 3000);
+    } finally {
+      await run(`acMedia.useMedia.setState((m) => { const { b, ...rest } = m.displayRequests; return { displayRequests: rest }; }); ac.actions.switchToTab("p"); return true;`);
+    }
+    return true;
+  });
+
   await rep.check("sidebar-player-shows", async () => {
     await until("player page loaded", `return st().tabs.p?.title === "Player" && !st().live.p?.isLoading;`, 15000);
     await inPage("document.getElementById('tone').play().then(() => true)");

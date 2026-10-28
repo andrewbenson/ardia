@@ -203,6 +203,20 @@ async function measure(native) {
         })
         .then((edges) => { st().setDownloadsOpen("w1", false); return settle(600).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => edges); });`);
     if (native) {
+      out.hiddenTop = await run(`
+        const flick = [["began", 0], ["changed", -18], ["changed", -22], ["changed", -22], ["ended", 0]].map(([phase, dx], i) => ({ phase, dx, dy: 0, atMs: i * 16, timestampMs: i * 16, dispatch: "app" }));
+        const points = [[600, 2], [600, 24], [1569, 27]];
+        const seen = { points: [] };
+        st().toggleSidebar("w1");
+        return settle(800).then(() => win("w1")).then((n) => points.reduce((chain, [x, y]) => chain.then(() => {
+            const at = { x, y };
+            return act("w1", "hit:" + x + "," + y).then((hit) => (at.hit = hit))
+              .then(() => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", "move", x, y, { urls: ["https://dropped.example/"] })).then((r) => (at.drag = r))
+              .then(() => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", "cancel", x, y, {}))
+              .then(() => globalThis.expo.modules.ArdiaSwipe.devSimulate(x, y, n, flick, true)).then((r) => (at.swipe = r.where))
+              .then(() => settle(500)).then(() => { at.profile = st().windows.w1.profileId; at.live = globalThis.acLayout.peek["strip:w1"]?.live ?? null; st().switchProfile("w1", "default"); seen.points.push(at); return settle(300); });
+          }), Promise.resolve()))
+          .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
       const live = `globalThis.acLayout.peek["strip:w1"]?.live ?? null`;
       out.peekHover = await run(`
         const seen = {};
@@ -414,6 +428,16 @@ try {
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });
     }
+    await rep.check("with the peek hidden, a drop, a swipe and a click at the top of the window reach what is under it", async () => {
+      for (const at of native.hiddenTop.points) {
+        rep.log(`hidden peek at ${at.x},${at.y}: ${JSON.stringify(at).slice(0, 400)}`);
+        assert.doesNotMatch(at.hit, /StripPeek|SolaraHostedView|FileDropView|SwipeArea/, `the click at ${at.x},${at.y} reaches ${at.hit}`);
+        assert.doesNotMatch(at.drag, /FileDropView/, `the drop at ${at.x},${at.y} goes to ${at.drag}`);
+        assert.doesNotMatch(String(at.swipe?.hit), /StripPeek|SolaraHostedView|FileDropView|SwipeArea/, `the swipe at ${at.x},${at.y} hits ${at.swipe?.hit}`);
+        assert.equal(at.profile, "default", `the swipe at ${at.x},${at.y} paged the strip's profiles`);
+        assert.equal(at.live, false, "the peek stayed hidden");
+      }
+    });
     await rep.check("the peek stays out while the pointer is over its native strip, and slides away once it leaves the panel", async () => {
       const seen = native.peekHover;
       rep.log(`peek hover ${JSON.stringify(seen)}`);

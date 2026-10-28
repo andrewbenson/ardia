@@ -371,6 +371,7 @@ final class CefWebView: ExpoView, ArdiaCoreWebViewDelegate {
     "onWindowClose",
     "onCommand",
     "onPageFocus",
+    "onPagePress",
     "onPageMessage",
     "onReady",
     "onDiscarded",
@@ -410,6 +411,7 @@ final class CefWebView: ExpoView, ArdiaCoreWebViewDelegate {
   let onWindowClose = EventDispatcher()
   let onCommand = EventDispatcher()
   let onPageFocus = EventDispatcher()
+  let onPagePress = EventDispatcher()
   let onPageMessage = EventDispatcher()
   let onReady = EventDispatcher()
   let onDiscarded = EventDispatcher()
@@ -472,6 +474,7 @@ final class CefWebView: ExpoView, ArdiaCoreWebViewDelegate {
     case "windowClose": onWindowClose(payload)
     case "command": onCommand(payload)
     case "focus": onPageFocus(payload)
+    case "pagePress": onPagePress(payload)
     case "pageMessage": onPageMessage(payload)
     case "ready": onReady(payload)
     case "discarded": onDiscarded(payload)

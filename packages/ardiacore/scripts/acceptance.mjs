@@ -58,7 +58,7 @@ const usesPageA = [
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
   "private-windows-create", "extension-installed-bubble", "popup-window", "popup-window-permission", "popup-origin-strip", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
-  "notifications", "now-playing", "media-state", "auto-picture-in-picture", "pip-window", "page-focus",
+  "notifications", "now-playing", "media-state", "auto-picture-in-picture", "pip-window", "page-focus", "page-press-split",
   "fullscreen-tab-switch", "fullscreen-native", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
   "permission-prompt", "popup-blocked", "move-tab-slow-mount", "move-last-tab-slow-mount",
@@ -305,6 +305,11 @@ const server = createServer((req, res) => {
   }
   if (url.pathname === "/login") return res.end(page("Login", `<form action="/b" method="get"><input name="u" id="u" autocomplete="username"><input type="password" name="p" id="p" autocomplete="current-password"><button id="go">Sign in</button></form>`));
   if (url.pathname === "/text") return res.end(page("Text", `<p id="t" style="font: 20px sans-serif; margin: 40px">Hello selection world, select me please</p>`));
+  if (url.pathname === "/drag")
+    return res.end(page("Drag", `<div id="card" draggable="true" style="position: absolute; left: 40px; top: 40px; width: 180px; height: 60px; background: #ccd">card</div>
+      <div id="clicker" style="position: absolute; left: 300px; top: 40px; width: 120px; height: 60px; background: #dcc">click</div>
+      <script>window.__events = []; for (const t of ["mousedown", "click", "dragstart", "dragend"]) addEventListener(t, (e) => __events.push([t, e.target.id || "", e.clientX, e.clientY]), true);
+      card.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", "card"));</script>`));
   if (url.pathname === "/capture-target") return res.end(page("Capture Target", "the tab that tab capture picks"));
   if (url.pathname === "/solid")
     return res.end(page(url.searchParams.get("t") ?? "Solid", "", `<style>html, body { margin: 0; height: 100%; background: #${url.searchParams.get("c") ?? "808080"} }</style>`));
@@ -3768,6 +3773,77 @@ try {
       return { took, focus: focus.name, active: "clicked pane" };
     } finally {
       await closeTab(other.id);
+      await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    }
+  });
+
+  await check("page-drag", async () => {
+    const tab = await freshTab(`${base}/drag`);
+    try {
+      const target = await until("the page", () => pageTarget("/drag"));
+      const n = await cef(`devWindowNumber(${await browserOf(tab)})`);
+      const act = (action) => cef(`devWindow(${n}, ${JSON.stringify(action)})`);
+      const events = async () => (await cdp(target, "Runtime.evaluate", { expression: "window.__events", returnByValue: true })).result.value ?? [];
+      const press = async ([x, y]) => {
+        await act(`mouse:down:${x},${y}`);
+        await sleep(80);
+        await act(`mouse:up:${x},${y}`);
+      };
+      await act("fakeActiveClicks");
+      let spot = null;
+      for (const [x, y] of [[700, 420], [600, 500], [900, 300]])
+        if (!spot && String(await act(`hit:${x},${y}`)).startsWith("RenderWidgetHostViewCocoa")) spot = [x, y];
+      if (!spot) throw new Error("no window point over the page");
+      await press(spot);
+      const down = await until("the calibration press", async () => (await events()).find((e) => e[0] === "mousedown"), 4000);
+      const at = (x, y) => [Math.round(x + spot[0] - down[2]), Math.round(y + spot[1] - down[3])];
+      const [x, y] = at(130, 70);
+      await act(`mouse:down:${x},${y}`);
+      for (let i = 1; i <= 12; i++) {
+        await act(`mouse:dragged:${x + i * 20},${y + i * 10}`);
+        await sleep(30);
+      }
+      await until("dragstart", async () => (await events()).some((e) => e[0] === "dragstart"), 5000);
+      await act(`mouse:up:${x + 240},${y + 120}`);
+      await until("dragend: the drag the page started reached AppKit and ended", async () => (await events()).some((e) => e[0] === "dragend"), 8000);
+      const clickerClicks = async () => (await events()).filter((e) => e[0] === "click" && e[1] === "clicker").length;
+      const clicksBefore = await clickerClicks();
+      await press(at(360, 70));
+      await until("a new click on the page after the drag", async () => (await clickerClicks()) > clicksBefore, 4000);
+      return { spot, events: (await events()).map((e) => `${e[0]}:${e[1]}`) };
+    } finally {
+      await closeTab(tab).catch(() => null);
+    }
+  });
+
+  await check("page-press-split", async () => {
+    const a = await openTab(`${base}/drag?pane=a`, "Drag");
+    const b = await openTab(`${base}/drag?pane=b`, "Drag");
+    try {
+      if (!(await evalApp(`return ac.store.getState().createSplit(["${a.id}", "${b.id}"])`))) throw new Error("no split");
+      await evalApp(`ac.actions.switchToTab("${a.id}"); return true`);
+      await until("the split shown with a active", async () => (await state()).active === a.id && (await evalApp(`return !!ac.webviews.get("${b.id}")`)), 8000);
+      const pageB = await until("b's page", () => pageTarget("/drag?pane=b"));
+      const pageA = await until("a's page", () => pageTarget("/drag?pane=a"));
+      const downs = async (t) => ((await cdp(t, "Runtime.evaluate", { expression: "window.__events", returnByValue: true })).result.value ?? []).filter((e) => e[0] === "mousedown").length;
+      const n = await cef(`devWindowNumber(${await browserOf(a.id)})`);
+      const act = (action) => cef(`devWindow(${n}, ${JSON.stringify(action)})`);
+      await act("fakeActiveClicks");
+      for (let x = 1300; x >= 200; x -= 100) {
+        if (!String(await act(`hit:${x},420`)).startsWith("RenderWidgetHostViewCocoa")) continue;
+        const before = [await downs(pageA), await downs(pageB)];
+        await act(`mouse:down:${x},420`);
+        await sleep(80);
+        await act(`mouse:up:${x},420`);
+        await until("the press reached a page", async () => (await downs(pageA)) > before[0] || (await downs(pageB)) > before[1], 4000);
+        if ((await downs(pageB)) === before[1]) continue;
+        await until("a press on the inactive pane's page activates it", async () => (await state()).active === b.id, 4000);
+        return { x };
+      }
+      throw new Error("no window point over the inactive pane's page");
+    } finally {
+      await closeTab(b.id);
+      await closeTab(a.id);
       await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
     }
   });

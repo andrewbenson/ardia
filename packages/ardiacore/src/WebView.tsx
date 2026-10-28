@@ -188,6 +188,7 @@ export type WebViewProps = ViewProps & {
   onWindowClose?: () => void;
   onCommand?: (command: PageCommand) => void;
   onPageFocus?: () => void;
+  onPagePress?: () => void;
   onPageMessage?: (kind: string, data: unknown) => void;
   onReady?: (browserId: number, chromeTabId: number) => void;
   onDiscarded?: (url: string) => void;
@@ -275,6 +276,7 @@ type NativeEvents = {
   onWindowClose: object;
   onCommand: PageCommand;
   onPageFocus: object;
+  onPagePress: object;
   onPageMessage: { kind: string; data: unknown };
   onReady: { browserId: number; tabId?: number };
   onDiscarded: { url: string };
@@ -314,6 +316,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onWindowClose: () => [],
   onCommand: (e) => [e],
   onPageFocus: () => [],
+  onPagePress: () => [],
   onPageMessage: (e) => [e.kind, e.data],
   onReady: (e) => [e.browserId, e.tabId ?? 0],
   onDiscarded: (e) => [toAppUrl(e.url)],

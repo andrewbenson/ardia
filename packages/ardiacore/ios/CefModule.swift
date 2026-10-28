@@ -2,6 +2,16 @@ import ExpoModulesCore
 import AppKit
 import IOKit.ps
 
+public enum ArdiaCoreEventTaps {
+  @MainActor public static var observers: [(String, [String: Any]) -> Void] = []
+
+  static func send(_ name: String, _ payload: [String: Any]) {
+    nonisolated(unsafe) let body = payload
+    let deliver = { MainActor.assumeIsolated { for observer in observers { observer(name, body) } } }
+    if Thread.isMainThread { deliver() } else { DispatchQueue.main.async(execute: deliver) }
+  }
+}
+
 public class CefModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaCEF")
@@ -12,6 +22,7 @@ public class CefModule: Module {
       ArdiaCoreTabStrip.setHandler { [weak self] tx in self?.sendEvent("onTabStrip", tx) }
       ArdiaCoreServices.downloadsHandler = { [weak self] download in self?.sendEvent("onDownload", download) }
       ArdiaCoreHost.eventHandler = { [weak self] name, payload in
+        ArdiaCoreEventTaps.send(name, payload)
         switch name {
         case "permission": self?.sendEvent("onPermission", payload)
         case "permissionDismissed": self?.sendEvent("onPermissionDismissed", payload)

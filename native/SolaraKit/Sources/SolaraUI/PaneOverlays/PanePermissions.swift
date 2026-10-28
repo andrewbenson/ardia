@@ -1,0 +1,233 @@
+import Foundation
+
+public struct PanePermissionRequest: Equatable, Sendable {
+  public var id: String
+  public var browserId: Int
+  public var origin: String
+  public var permissions: [String]
+
+  public init?(_ payload: [String: Any]) {
+    guard let id = payload["id"] as? String, let browserId = (payload["browserId"] as? NSNumber)?.intValue else { return nil }
+    self.id = id
+    self.browserId = browserId
+    origin = payload["origin"] as? String ?? ""
+    permissions = payload["permissions"] as? [String] ?? []
+  }
+
+  public var key: String { id }
+}
+
+public struct PaneDeviceChooser: Equatable, Sendable {
+  public struct Option: Equatable, Sendable {
+    public var name: String
+    public var connected: Bool
+    public var paired: Bool
+    public var signal: Int
+  }
+
+  public var id: Int
+  public var browserId: Int
+  public var open: Bool
+  public var title: String
+  public var okLabel: String
+  public var cancelLabel: String
+  public var noOptionsText: String
+  public var scanningText: String
+  public var refreshing: Bool
+  public var canRefresh: Bool
+  public var adapterOff: Bool
+  public var unauthorized: Bool
+  public var bothButtonsEnabled: Bool
+  public var showSignal: Bool
+  public var options: [Option]
+
+  public init?(_ payload: [String: Any]) {
+    guard let id = (payload["id"] as? NSNumber)?.intValue, let browserId = (payload["browserId"] as? NSNumber)?.intValue else { return nil }
+    func flag(_ name: String) -> Bool { (payload[name] as? NSNumber)?.boolValue ?? false }
+    func text(_ name: String) -> String { payload[name] as? String ?? "" }
+    self.id = id
+    self.browserId = browserId
+    open = flag("open")
+    title = text("title")
+    okLabel = text("okLabel")
+    cancelLabel = text("cancelLabel")
+    noOptionsText = text("noOptionsText")
+    scanningText = text("scanningText")
+    refreshing = flag("refreshing")
+    canRefresh = flag("canRefresh")
+    adapterOff = flag("adapterOff")
+    unauthorized = flag("unauthorized")
+    bothButtonsEnabled = flag("bothButtonsEnabled")
+    showSignal = flag("showSignal")
+    options = (payload["options"] as? [[String: Any]] ?? []).map {
+      Option(name: $0["name"] as? String ?? "", connected: ($0["connected"] as? NSNumber)?.boolValue ?? false, paired: ($0["paired"] as? NSNumber)?.boolValue ?? false, signal: ($0["signal"] as? NSNumber)?.intValue ?? 0)
+    }
+  }
+
+  public var scanning: Bool { bothButtonsEnabled }
+  public var blocked: Bool { adapterOff || unauthorized }
+
+  public func valid(_ selected: Int?) -> Bool { scanning || (selected.map { $0 < options.count } ?? false) }
+
+  public func choice(_ index: Int?, selected: Int?) -> Int? {
+    if scanning { return -1 }
+    return index ?? selected
+  }
+}
+
+public struct PaneBrowsers: Sendable {
+  public private(set) var tabs: [Int: String] = [:]
+  private var orphans: [PanePermissionRequest] = []
+
+  public init() {}
+
+  public func tab(_ browserId: Int) -> String? { tabs[browserId] }
+
+  public mutating func ready(_ tabId: String, browserId: Int) -> [(tabId: String, request: PanePermissionRequest)] {
+    tabs = tabs.filter { $0.value != tabId }
+    tabs[browserId] = tabId
+    let mapped = orphans.compactMap { request in tabs[request.browserId].map { (tabId: $0, request: request) } }
+    orphans.removeAll { tabs[$0.browserId] != nil }
+    return mapped
+  }
+
+  public mutating func route(_ request: PanePermissionRequest) -> String? {
+    if let tabId = tabs[request.browserId] { return tabId }
+    orphans.append(request)
+    return nil
+  }
+
+  public mutating func dismissed(_ id: String) { orphans.removeAll { $0.id == id } }
+
+  public mutating func gone(_ tabId: String) { tabs = tabs.filter { $0.value != tabId } }
+}
+
+extension PanePromptPage {
+  public var permission: PanePermissionRequest? { permissions.first }
+
+  public mutating func enqueue(_ request: PanePermissionRequest) { permissions.append(request) }
+
+  public mutating func dropPermission(_ id: String) -> Bool {
+    let before = permissions.count
+    permissions.removeAll { $0.id == id }
+    return permissions.count != before
+  }
+
+  public mutating func chooserEvent(_ next: PaneDeviceChooser) -> Bool {
+    let before = self
+    if next.open {
+      if chooser?.id != next.id { chooserSelected = nil }
+      chooser = next
+    } else if chooser?.id == next.id {
+      chooser = nil
+      chooserSelected = nil
+    }
+    return self != before
+  }
+}
+
+extension PanePromptSpecs {
+  public static let permissionWidth: Double = 300
+  public static let deviceChooserWidth: Double = 340
+
+  public static func promptLeft(urlLeft: Double, paneWidth: Double, width: Double) -> Double {
+    max(margin, min(urlLeft, paneWidth - width - margin))
+  }
+
+  public static func originForSecurityDisplay(_ origin: String) -> String {
+    guard let url = URL(string: origin), let scheme = url.scheme, let host = url.host, !host.isEmpty else { return origin }
+    let authority = url.port.map { "\(host):\($0)" } ?? host
+    return scheme == "https" ? authority : "\(scheme)://\(authority)"
+  }
+
+  private struct PermissionKind: Sendable {
+    let icon: String
+    var noun: String?
+    var question: (@Sendable (String) -> String)?
+  }
+
+  private static let permissionKinds: [String: PermissionKind] = [
+    "camera": PermissionKind(icon: "video", noun: "camera"),
+    "microphone": PermissionKind(icon: "mic", noun: "microphone"),
+    "cameraPanTiltZoom": PermissionKind(icon: "video", noun: "camera's pan, tilt and zoom"),
+    "screen": PermissionKind(icon: "rectangle.on.rectangle", question: { "Allow \($0) to share your screen?" }),
+    "location": PermissionKind(icon: "location", noun: "location"),
+    "notifications": PermissionKind(icon: "bell", question: { "Allow \($0) to send you notifications?" }),
+    "clipboard": PermissionKind(icon: "doc.on.clipboard", noun: "clipboard"),
+    "midi": PermissionKind(icon: "pianokeys", noun: "MIDI devices"),
+    "multipleDownloads": PermissionKind(icon: "arrow.down.circle", question: { "Allow \($0) to download multiple files?" }),
+    "localFonts": PermissionKind(icon: "textformat", noun: "fonts"),
+    "idleDetection": PermissionKind(icon: "person.crop.circle.badge.clock", question: { "Allow \($0) to know when you're actively using this device?" }),
+    "storageAccess": PermissionKind(icon: "externaldrive", question: { "Allow \($0) to use cookies and site data while embedded?" }),
+    "diskQuota": PermissionKind(icon: "internaldrive", question: { "Allow \($0) to store files on your device?" }),
+    "windowManagement": PermissionKind(icon: "macwindow.on.rectangle", noun: "displays to open and place windows"),
+    "fileSystem": PermissionKind(icon: "folder", noun: "files"),
+    "keyboardLock": PermissionKind(icon: "keyboard", noun: "keyboard"),
+    "pointerLock": PermissionKind(icon: "cursorarrow", noun: "mouse pointer"),
+    "protectedMedia": PermissionKind(icon: "lock.shield", question: { "Allow \($0) to play protected content?" }),
+    "protocolHandler": PermissionKind(icon: "envelope", question: { "Make \($0) your default mail app?" }),
+    "sensors": PermissionKind(icon: "gyroscope", noun: "motion sensors"),
+    "localNetwork": PermissionKind(icon: "network", noun: "devices on your local network"),
+    "vr": PermissionKind(icon: "visionpro", noun: "virtual reality devices"),
+    "ar": PermissionKind(icon: "visionpro", noun: "augmented reality data"),
+    "handTracking": PermissionKind(icon: "hand.raised", noun: "hand tracking"),
+    "identityProvider": PermissionKind(icon: "person.badge.key", question: { "Allow \($0) to sign you in with an identity provider?" }),
+    "webAppInstallation": PermissionKind(icon: "app.badge", question: { "Allow \($0) to install web apps?" }),
+    "capturedSurfaceControl": PermissionKind(icon: "rectangle.on.rectangle", question: { "Allow \($0) to scroll and zoom the tab you share?" }),
+  ]
+
+  private static func list(_ words: [String]) -> String {
+    words.count < 2 ? (words.first ?? "") : "\(words.dropLast().joined(separator: ", ")) and \(words.last!)"
+  }
+
+  public static func describePermission(_ request: PanePermissionRequest) -> (icons: [String], question: String) {
+    let site = originForSecurityDisplay(request.origin)
+    let kinds = request.permissions.map { permissionKinds[$0] ?? PermissionKind(icon: "questionmark.circle", noun: $0) }
+    var icons: [String] = []
+    for kind in kinds where !icons.contains(kind.icon) { icons.append(kind.icon) }
+    if kinds.count == 1, let question = kinds[0].question { return (icons, question(site)) }
+    let nouns = kinds.compactMap(\.noun)
+    if nouns.count == kinds.count { return (icons, "Allow \(site) to access your \(list(nouns))?") }
+    return (icons, "Allow \(site) to use \(list(request.permissions.map { permissionKinds[$0]?.noun ?? $0 }))?")
+  }
+
+  public static func permission(_ request: PanePermissionRequest, left: Double) -> [String: Any] {
+    let described = describePermission(request)
+    return [
+      "popover": ["width": permissionWidth, "top": margin, "left": left, "modal": false],
+      "icons": described.icons,
+      "title": described.question,
+      "message": "Click the lock to change this any time",
+      "details": [] as [Any],
+      "buttons": [["id": "deny", "title": "Don't Allow"], ["id": "accept", "title": "Allow", "primary": true]],
+      "close": true,
+    ]
+  }
+
+  public static func deviceChooser(_ chooser: PaneDeviceChooser, selected: Int?, product: String, left: Double) -> [String: Any] {
+    let scanning = chooser.scanning
+    return [
+      "popover": ["width": deviceChooserWidth, "top": margin, "left": left, "modal": false],
+      "id": chooser.id,
+      "title": chooser.title,
+      "icon": chooser.showSignal || scanning ? "dot.radiowaves.left.and.right" : "cable.connector",
+      "options": chooser.options.map { option -> [String: Any] in
+        ["name": option.name, "detail": option.connected ? "Connected" : option.paired ? "Paired" : NSNull() as Any, "signal": chooser.showSignal ? option.signal : -1]
+      },
+      "selected": selected ?? NSNull(),
+      "scanning": scanning,
+      "refreshing": chooser.refreshing,
+      "canRefresh": chooser.canRefresh,
+      "scanningText": chooser.scanningText,
+      "noOptionsText": chooser.noOptionsText,
+      "unauthorized": chooser.unauthorized,
+      "adapterOff": chooser.adapterOff,
+      "notice": chooser.unauthorized ? "\(product) needs access to Bluetooth to find devices." : chooser.adapterOff ? "Bluetooth is turned off. Turn it on to find devices." : NSNull() as Any,
+      "noticeIcon": chooser.unauthorized ? "lock" : chooser.adapterOff ? "antenna.radiowaves.left.and.right.slash" : NSNull() as Any,
+      "noticeLink": chooser.unauthorized ? "Open Bluetooth Settings" : NSNull() as Any,
+      "cancelLabel": chooser.cancelLabel.isEmpty ? "Cancel" : chooser.cancelLabel,
+      "okLabel": chooser.okLabel.isEmpty ? "Connect" : chooser.okLabel,
+      "valid": chooser.valid(selected),
+    ]
+  }
+}

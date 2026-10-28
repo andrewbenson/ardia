@@ -87,6 +87,9 @@ public struct PanePromptPage: Equatable, Sendable {
   public var autofill: PaneAutofillPrompt?
   public var externalApp: PaneExternalApp?
   public var alwaysOpen = false
+  public var permissions: [PanePermissionRequest] = []
+  public var chooser: PaneDeviceChooser?
+  public var chooserSelected: Int?
 
   public init() {}
 
@@ -127,6 +130,7 @@ public struct PanePromptPage: Equatable, Sendable {
         crashed = false
         password = nil
         chosenUsername = nil
+        permissions = []
         if externalApp != nil, Self.host(key) != Self.host(pageKey) {
           externalApp = nil
           alwaysOpen = false

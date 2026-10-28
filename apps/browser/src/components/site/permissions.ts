@@ -43,6 +43,7 @@ function next(tabId: string) {
 }
 
 function drop(id: string) {
+  orphans.splice(0, orphans.length, ...orphans.filter((r) => r.id !== id));
   for (const [tabId, page] of Object.entries(usePages.getState().pages)) {
     if (page.permission?.id === id) next(tabId);
   }
@@ -50,13 +51,17 @@ function drop(id: string) {
 }
 
 export function answerPermission(tabId: string, requestId: string, result: PermissionResult) {
-  const request = pageOf(tabId).permission;
-  if (!request || request.id !== requestId) return;
+  const current = pageOf(tabId).permission;
+  const queued = queues.get(tabId)?.find((r) => r.id === requestId) ?? orphans.find((r) => r.id === requestId);
+  const request = current?.id === requestId ? current : queued;
+  if (!request) return;
   void resolvePermission(request.id, result, result !== "dismiss");
   if (result === "accept" && request.permissions.includes("notifications")) {
     void ensureNotificationPermission(useBrowser.getState().tabs[tabId]?.windowId);
   }
-  next(tabId);
+  if (request === current) return next(tabId);
+  orphans.splice(0, orphans.length, ...orphans.filter((r) => r.id !== requestId));
+  for (const [id, queue] of queues) queues.set(id, queue.filter((r) => r.id !== requestId));
 }
 
 export function dismissPermissions(tabId: string) {

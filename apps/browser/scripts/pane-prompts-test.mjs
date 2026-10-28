@@ -19,7 +19,11 @@ as a pool page event draws the 350-wide popover at the top right with its accept
 it and clears the store, and a closed event for a second prompt takes it down. Pop-ups: a window.open without a
 gesture is blocked and brings the 360-wide popover at the top right with Always Deny, Only Once, Always Allow and the
 blocked URL as a row; Only Once opens it as a tab and closes the prompt; a click outside a second one dismisses it and
-keeps the blocked list. With the switch off the RN wrappers still draw each one.`);
+keeps the blocked list. Permission: a notification request and a location request queue; the native popover shows
+the same request as the store's current one, 300 wide 8 points below the pane's top, and Don't Allow denies it in the
+page and moves on to the next; a request goes when the page navigates. Device chooser: Chrome's Bluetooth chooser
+(the DEBUG hook) draws natively at 340 wide, Cancel closes it in the engine and the store, and the unauthorized
+chooser shows its notice. With the switch off the RN wrappers still draw each one.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -68,7 +72,10 @@ const until = async (what, test, ms = 8000) => {
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
 const centre = (f) => [f[0] + f[2] / 2, f[1] + f[3] / 2];
-const POOL = { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" };
+const POOL = {
+  ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1",
+  ARDIA_CHROMIUM_SWITCHES: `--ardia-test-bluetooth-chooser ${process.env.ARDIA_CHROMIUM_SWITCHES ?? ""}`.trim(),
+};
 const LEGS = [
   { tag: "rn", env: { ...POOL, ARDIA_NATIVE_PANE_PROMPTS: "0" } },
   { tag: "native", env: { ...POOL, ARDIA_NATIVE_PANE_PROMPTS: "1" } },
@@ -235,6 +242,86 @@ try {
       await until("a click outside dismisses it", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.popups || null);`, 3000);
       await until("the popover state clears", `return !ac.pageState.getState().popover.a || null;`, 3000);
       if (!(await run(`return ac.pageState.getState().pages.a?.popups.length;`))) throw new Error("dismissing dropped the blocked list");
+      return { card: shown.card };
+    });
+
+    await rep.check(`${tag}-permission`, async () => {
+      const other = `${base.replace("127.0.0.1", "localhost")}/other`;
+      await run(`ac.store.getState().navigate("a", ${JSON.stringify(other)}, { userInitiated: true }); return true;`);
+      await until("the localhost page", `return ac.store.getState().tabs.a?.url === ${JSON.stringify(other)} && !ac.store.getState().live.a?.isLoading || null;`, 10000);
+      const inPage = async (expression) => {
+        const target = await until("its DevTools target", async () => (await app.pageTarget(other)) ?? null, 5000);
+        const cdp = await devtools(target);
+        try {
+          return (await cdp.send("Runtime.evaluate", { expression, userGesture: true, returnByValue: true })).result?.value;
+        } finally {
+          cdp.close();
+        }
+      };
+      const current = `return ac.pageState.getState().pages.a?.permission ?? null;`;
+      await inPage("Notification.requestPermission(); true");
+      await until("the request reaches the store", current, 8000);
+      await inPage("navigator.geolocation.getCurrentPosition(() => {}, () => {}); true");
+      if (!nativePrompts) {
+        await until("RN draws the prompt", `return rnDrawn("PermissionPrompt") || null;`, 4000);
+        await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
+        await until("navigation drops it", `return !ac.pageState.getState().pages.a?.permission || null;`, 8000);
+        return "rn";
+      }
+      const shownFor = (request) =>
+        until(`the native prompt for ${request.permissions}`, `return native().then((d) => { const p = d && d.tabs.a && d.tabs.a.permission; return p && !p.hidden && p.controls["Don't Allow"] && p.key === ${JSON.stringify(request.id)} ? p : null; });`, 6000).catch(async (e) => {
+          throw new Error(`${e.message}; native shows ${await run("return native().then((d) => d.tabs.a && d.tabs.a.permission && d.tabs.a.permission.key);")}`);
+        });
+      const first = await run(current);
+      const shown = await shownFor(first);
+      if (await run(`return rnDrawn("PermissionPrompt");`)) throw new Error("RN still draws the permission prompt");
+      const [fx, fy, fw] = shown.frame;
+      const [cx, cy, cw] = shown.card;
+      if (Math.abs(cw - 300) > 0.5 || Math.abs(fy + 8 - cy) > 0.5 || cx < fx + 8 - 0.5 || cx + cw > fx + fw - 8 + 0.5)
+        throw new Error(`card ${JSON.stringify(shown.card)} in pane ${JSON.stringify(shown.frame)}`);
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["Don't Allow"]))}).then(() => true);`);
+      if (first.permissions.includes("notifications")) await until("the page sees the denial", async () => ((await inPage("Notification.permission")) === "denied" ? true : null), 5000);
+      const second = await until("the store moves on", `const p = ac.pageState.getState().pages.a?.permission; return p && p.id !== ${JSON.stringify(first.id)} ? p : null;`, 6000).catch(() => null);
+      if (second) {
+        const next = await shownFor(second);
+        await sleep(800);
+        await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
+        await until("navigation drops it in the store", `return !ac.pageState.getState().pages.a?.permission || null;`, 8000);
+        await until("and natively", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.permission || null);`, 4000);
+        return { card: shown.card, first: first.permissions, queued: second.permissions, next: next.card };
+      }
+      await until("the native prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.permission || null);`, 4000);
+      return { card: shown.card, first: first.permissions, queued: null };
+    });
+
+    await rep.check(`${tag}-device-chooser`, async () => {
+      const browserId = await run(`return Number(Object.entries(ac.pageState.getState().browsers).find(([, t]) => t === "a")?.[0]);`);
+      const UI = `globalThis.expo.modules.ArdiaChromeUI`;
+      const chooserId = `return globalThis.acDeviceChoosers.useChoosers.getState().byTab.a?.id ?? null;`;
+      if (!(await run(`return ${UI}.devShowBluetoothChooser(${browserId}, false);`))) throw new Error("the DEBUG chooser hook is missing");
+      const id = await until("the chooser reaches JS", chooserId, 6000);
+      if (!nativePrompts) {
+        await until("RN draws the chooser", `return rnDrawn("DeviceChooser") || null;`, 4000);
+        await run(`return globalThis.acDeviceChoosers.cancelDeviceChooser(${id}).then(() => true);`);
+        await until("it closes", `return globalThis.acDeviceChoosers.useChoosers.getState().byTab.a ? null : true;`, 4000);
+        return "rn";
+      }
+      const shown = await until("the native chooser", `return native().then((d) => d && d.tabs.a && d.tabs.a.deviceChooser && !d.tabs.a.deviceChooser.hidden && d.tabs.a.deviceChooser.controls.Cancel && d.tabs.a.deviceChooser.id === ${id} ? d.tabs.a.deviceChooser : null);`, 6000);
+      if (await run(`return rnDrawn("DeviceChooser");`)) throw new Error("RN still draws the device chooser");
+      const [fx, fy] = shown.frame;
+      const [, cy, cw] = shown.card;
+      if (Math.abs(cw - 340) > 0.5 || Math.abs(fy + 8 - cy) > 0.5) throw new Error(`card ${JSON.stringify(shown.card)} in pane ${JSON.stringify(shown.frame)} (x ${fx})`);
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(shown.controls.Cancel))}).then(() => true);`);
+      await until("the engine closes it", `return globalThis.acDeviceChoosers.useChoosers.getState().byTab.a ? null : true;`, 4000);
+      await until("the native chooser goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.deviceChooser || null);`, 3000);
+      await run(`return ${UI}.devShowBluetoothChooser(${browserId}, true);`);
+      const lockedId = await until("the unauthorized chooser in JS", `const c = globalThis.acDeviceChoosers.useChoosers.getState().byTab.a; return c && c.unauthorized ? c.id : null;`, 6000);
+      const locked = await until("the unauthorized chooser", `return native().then((d) => d && d.tabs.a && d.tabs.a.deviceChooser && d.tabs.a.deviceChooser.id === ${lockedId} && d.tabs.a.deviceChooser.controls.Cancel ? d.tabs.a.deviceChooser : null);`, 6000);
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(locked.controls.Cancel))}).then(() => true);`);
+      await until("it closes too", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.deviceChooser || null);`, 3000);
       return { card: shown.card };
     });
 

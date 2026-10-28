@@ -147,9 +147,38 @@ final class PanePromptEntry {
 
   func refit() {
     let width = popover.wrap.bounds.width
-    guard kind == .externalApp, width != fitWidth, var placement, placement.left != nil else { return }
+    guard let leftWidth = kind.leftWidth, width != fitWidth, var placement, placement.left != nil else { return }
     fitWidth = width
-    placement.left = PanePromptSpecs.externalAppLeft(urlLeft: PanePrompts.urlLeft(tabId) ?? 0, paneWidth: Double(width))
+    placement.left = PanePromptSpecs.promptLeft(urlLeft: PanePrompts.urlLeft(tabId) ?? 0, paneWidth: Double(width), width: leftWidth)
+    self.placement = placement
+    popover.popover.set(placement: placement, dark: dark)
+  }
+}
+
+@MainActor
+final class PaneChooserEntry {
+  let id: Int
+  let tabId: String
+  let popover: PanePopover<DeviceChooserView>
+  var placement: PopoverPlacement?
+  var dark = false
+  private var input = PromptInputGuard()
+  private var fitWidth: CGFloat = -1
+
+  init(id: Int, tabId: String, popover: PanePopover<DeviceChooserView>) {
+    self.id = id
+    self.tabId = tabId
+    self.popover = popover
+    input.shown(at: ProcessInfo.processInfo.systemUptime)
+  }
+
+  func allowInput() -> Bool { input.allow(at: ProcessInfo.processInfo.systemUptime, activatedAt: PanePrompts.activatedAt) }
+
+  func refit() {
+    let width = popover.wrap.bounds.width
+    guard width != fitWidth, var placement else { return }
+    fitWidth = width
+    placement.left = PanePromptSpecs.promptLeft(urlLeft: PanePrompts.urlLeft(tabId) ?? 0, paneWidth: Double(width), width: PanePromptSpecs.deviceChooserWidth)
     self.placement = placement
     popover.popover.set(placement: placement, dark: dark)
   }
@@ -168,6 +197,7 @@ final class PaneOverlayHost {
   private var swipes: [String: (wrap: PanePopoverWrap, capsule: SwipeCapsuleView)] = [:]
   private var fromJS: [String: Any] = [:]
   private var prompts: [String: PanePromptEntry] = [:]
+  private var choosers: [String: PaneChooserEntry] = [:]
   private static let swipeFavicons: SidebarFavicons = {
     let made = SidebarFavicons()
     made.loader = { request in try await NativeSidebar.favicon(request) }
@@ -264,6 +294,24 @@ final class PaneOverlayHost {
       entry.popover.wrap.removeFromSuperview()
       prompts[id] = nil
     }
+    var choosing = Set<String>()
+    for found in PanePrompts.choosers(in: windowId, paneWidth: { [weak self] in self?.slot($0).map { Double($0.bounds.width) } }) {
+      guard let state = DeviceChooserState.decode(found.json), let placement = found.json.data(using: .utf8).flatMap(PanelPopover.placement) else { continue }
+      choosing.insert(found.tabId)
+      if choosers[found.tabId]?.id != found.id {
+        choosers[found.tabId]?.popover.wrap.removeFromSuperview()
+        choosers[found.tabId] = PaneChooserEntry(id: found.id, tabId: found.tabId, popover: makeChooser(found.tabId))
+      }
+      let entry = choosers[found.tabId]!
+      entry.placement = placement
+      entry.dark = state.dark
+      entry.popover.popover.set(placement: placement, dark: state.dark)
+      entry.popover.body.update(state)
+    }
+    for (tabId, entry) in choosers where !choosing.contains(tabId) {
+      entry.popover.wrap.removeFromSuperview()
+      choosers[tabId] = nil
+    }
     for (tabId, view) in sadTabs where !sad.contains(tabId) {
       view.removeFromSuperview()
       sadTabs[tabId] = nil
@@ -314,6 +362,16 @@ final class PaneOverlayHost {
     }
     if kind == .popups { prompt.popover.onDismiss = { PanePrompts.promptEvent(windowId, tabId, .popups, .close) } }
     return prompt
+  }
+
+  private func makeChooser(_ tabId: String) -> PanePopover<DeviceChooserView> {
+    let chooser = PanePopover(DeviceChooserView(frame: .zero))
+    chooser.body.onHeight = { [weak chooser] h in chooser?.setHeight(h) }
+    chooser.body.onEvent = { [weak self] event in
+      if case .choose = event, self?.choosers[tabId]?.allowInput() != true { return }
+      PanePrompts.chooserAction(tabId, event)
+    }
+    return chooser
   }
 
   private func makeZoom(_ tabId: String) -> PanePopover<ZoomPanelView> {
@@ -476,6 +534,10 @@ final class PaneOverlayHost {
       entry.popover.place(in: slot(entry.tabId))
       entry.refit()
     }
+    for entry in choosers.values {
+      entry.popover.place(in: slot(entry.tabId))
+      entry.refit()
+    }
     for (tabId, history) in histories { history.place(in: slot(tabId)) }
     for (tabId, pill) in cliPills { Self.place(pill, in: slot(tabId), bottom: false) }
     for (tabId, cast) in casts { cast.popover.place(in: slot(tabId)) }
@@ -512,7 +574,8 @@ final class PaneOverlayHost {
       tabs[tabId, default: [:]]["sadTab"] = ["mode": (view.showing?.rawValue).map { $0 as Any } ?? NSNull(), "hidden": view.isHiddenOrHasHiddenAncestor, "frame": inWindow(view, view.bounds), "controls": view.controlFrames.mapValues { inWindow(view, $0) }]
     }
     for (tabId, zoom) in zooms { tabs[tabId, default: [:]]["zoom"] = zoom.describe(inWindow) }
-    for entry in prompts.values { tabs[entry.tabId, default: [:]][entry.kind.rawValue] = entry.popover.describe(inWindow) }
+    for entry in prompts.values { tabs[entry.tabId, default: [:]][entry.kind.rawValue] = entry.popover.describe(inWindow).merging(["key": entry.key]) { _, key in key } }
+    for entry in choosers.values { tabs[entry.tabId, default: [:]]["deviceChooser"] = entry.popover.describe(inWindow).merging(["id": entry.id]) { _, id in id } }
     for (tabId, history) in histories { tabs[tabId, default: [:]]["history"] = history.describe(inWindow) }
     for (tabId, cast) in casts { tabs[tabId, default: [:]]["castPicker"] = cast.popover.describe(inWindow) }
     for (tabId, pill) in cliPills { tabs[tabId, default: [:]]["cliPill"] = ["frame": inWindow(pill, pill.bounds), "pill": inWindow(pill, pill.pillFrame), "shown": pill.shown, "progress": pill.progress] }

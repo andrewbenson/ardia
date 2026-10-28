@@ -1,4 +1,6 @@
 import AppKit
+import ArdiaCore
+import ArdiaShell
 import Foundation
 import SolaraModel
 import SolaraUI
@@ -17,6 +19,7 @@ enum PanePrompts {
   private static var started = false
   private static var pages: [String: PanePromptPage] = [:]
   private static var windows: [String: [String: Any]] = [:]
+  private static var browsers = PaneBrowsers()
   private(set) static var activatedAt: TimeInterval = 0
 
   nonisolated static var enabled: Bool {
@@ -27,6 +30,7 @@ enum PanePrompts {
     guard enabled, NativeWindowShell.enabled, !started else { return }
     started = true
     TabPoolHost.shared.pageEventObservers.append { tabId, name, payload in pageEvent(tabId, name, payload) }
+    ArdiaCoreEventTaps.observers.append { name, payload in coreEvent(name, payload) }
     for name in [NSApplication.didBecomeActiveNotification, NSWindow.didBecomeKeyNotification] {
       NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
         MainActor.assumeIsolated { activatedAt = ProcessInfo.processInfo.systemUptime }
@@ -47,7 +51,11 @@ enum PanePrompts {
   static func holds(_ windowId: String) -> Bool { !tabs(in: windowId) { $0.shown != PanePromptPage().shown }.isEmpty }
 
   static func pageEvent(_ tabId: String, _ name: String, _ payload: [String: Any]) {
+    if name == "onReady", let browserId = (payload["browserId"] as? NSNumber)?.intValue {
+      for found in browsers.ready(tabId, browserId: browserId) { enqueue(found.tabId, found.request) }
+    }
     if name == "onPageGone" {
+      browsers.gone(tabId)
       guard let gone = pages.removeValue(forKey: tabId), gone.shown != PanePromptPage().shown else { return }
       return refreshAll()
     }
@@ -56,6 +64,58 @@ enum PanePrompts {
     guard page.take(name, payload) else { return pages[tabId] = page }
     pages[tabId] = page
     if page.shown != shown { changed(tabId) }
+  }
+
+  static func coreEvent(_ name: String, _ payload: [String: Any]) {
+    switch name {
+    case "permission":
+      guard let request = PanePermissionRequest(payload), let tabId = browsers.route(request) else { return }
+      enqueue(tabId, request)
+    case "permissionDismissed":
+      guard let id = payload["id"] as? String else { return }
+      browsers.dismissed(id)
+      for tabId in Array(pages.keys) {
+        guard var page = pages[tabId], page.dropPermission(id) else { continue }
+        update(tabId, page)
+      }
+    case "deviceChooser":
+      guard let chooser = PaneDeviceChooser(payload), let tabId = browsers.tab(chooser.browserId) else { return }
+      var page = pages[tabId] ?? PanePromptPage()
+      if page.chooserEvent(chooser) { update(tabId, page) }
+    default: break
+    }
+  }
+
+  private static func enqueue(_ tabId: String, _ request: PanePermissionRequest) {
+    var page = pages[tabId] ?? PanePromptPage()
+    page.enqueue(request)
+    update(tabId, page)
+  }
+
+  static func chooserAction(_ tabId: String, _ event: DeviceChooserEvent) {
+    guard var page = pages[tabId], let chooser = page.chooser else { return }
+    let id = Int32(chooser.id)
+    switch event {
+    case .select(let index):
+      page.chooserSelected = index
+      update(tabId, page)
+    case .choose(let index):
+      if let choice = chooser.choice(index, selected: page.chooserSelected) { ArdiaCoreHost.deviceChooser(id, select: Int32(choice)) }
+    case .cancel: ArdiaCoreHost.deviceChooser(id, action: "cancel")
+    case .refresh: ArdiaCoreHost.deviceChooser(id, action: "refresh")
+    case .openSettings: ArdiaCoreHost.deviceChooser(id, action: "settings")
+    }
+  }
+
+  static func choosers(in windowId: String, paneWidth: (String) -> Double?) -> [(tabId: String, id: Int, json: String)] {
+    guard let window = windows[windowId], let look = (window["theme"] as? [String: Any])?["prompt"] as? [String: Any] else { return [] }
+    let panes = window["panes"] as? [String: [String: Any]] ?? [:]
+    return tabs(in: windowId, where: { $0.chooser != nil }).sorted().compactMap { tabId in
+      guard owns(tabId), let page = pages[tabId], let chooser = page.chooser, panes[tabId]?["newTabShown"] as? Bool != true else { return nil }
+      let left = PanePromptSpecs.promptLeft(urlLeft: urlLeft(tabId) ?? 0, paneWidth: paneWidth(tabId) ?? 0, width: PanePromptSpecs.deviceChooserWidth)
+      let spec = PanePromptSpecs.deviceChooser(chooser, selected: page.chooserSelected, product: Bundle.main.productName, left: left)
+      return encode(spec.merging(look) { _, theme in theme }).map { (tabId, chooser.id, $0) }
+    }
   }
 
   static func sadTabAction(_ windowId: String, _ tabId: String, _ action: SadTabAction) {
@@ -78,7 +138,7 @@ enum PanePrompts {
     guard let window = windows[windowId], let look = (window["theme"] as? [String: Any])?["prompt"] as? [String: Any] else { return [] }
     let panes = window["panes"] as? [String: [String: Any]] ?? [:]
     var shown: [Shown] = []
-    let asking = Set(tabs(in: windowId, where: { $0.password != nil || $0.autofill != nil || $0.externalApp != nil }))
+    let asking = Set(tabs(in: windowId, where: { $0.password != nil || $0.autofill != nil || $0.externalApp != nil || $0.permission != nil }))
     for tabId in asking.union(panes.compactMap { $0.value["popups"] is [String: Any] ? $0.key : nil }).sorted() where owns(tabId) {
       let page = pages[tabId] ?? PanePromptPage()
       let pane = panes[tabId] ?? [:]
@@ -87,9 +147,15 @@ enum PanePrompts {
       }
       if let prompt = page.password { add(.password, prompt.key, PanePromptSpecs.password(prompt, chosen: page.chosenUsername)) }
       if let prompt = page.autofill { add(.autofill, prompt.key, PanePromptSpecs.autofill(prompt)) }
-      if let request = page.externalApp, pane["newTabShown"] as? Bool != true {
-        let left = PanePromptSpecs.externalAppLeft(urlLeft: (pane["urlLeft"] as? NSNumber)?.doubleValue ?? 0, paneWidth: paneWidth(tabId) ?? 0)
-        add(.externalApp, request.key, PanePromptSpecs.externalApp(request, always: page.alwaysOpen, left: left))
+      let newTabShown = pane["newTabShown"] as? Bool == true
+      func left(_ width: Double) -> Double {
+        PanePromptSpecs.promptLeft(urlLeft: (pane["urlLeft"] as? NSNumber)?.doubleValue ?? 0, paneWidth: paneWidth(tabId) ?? 0, width: width)
+      }
+      if let request = page.externalApp, !newTabShown {
+        add(.externalApp, request.key, PanePromptSpecs.externalApp(request, always: page.alwaysOpen, left: left(PanePromptSpecs.externalAppWidth)))
+      }
+      if let request = page.permission, !newTabShown {
+        add(.permission, request.key, PanePromptSpecs.permission(request, left: left(PanePromptSpecs.permissionWidth)))
       }
       if let hint = pane["popups"] as? [String: Any], let popups = PanePromptSpecs.popups(hint) { add(.popups, popups.key, popups.spec) }
     }
@@ -158,6 +224,17 @@ enum PanePrompts {
       page.alwaysOpen = false
       update(tabId, page)
       js("pane.externalApp", windowId, tabId, request.id, open, remember)
+    case .permission:
+      guard let request = page.permission else { return }
+      let result: String
+      switch event {
+      case .button(let id): result = id
+      case .close: result = "dismiss"
+      default: return
+      }
+      _ = page.dropPermission(request.id)
+      update(tabId, page)
+      js("pane.permission", windowId, tabId, request.id, result)
     case .popups:
       return
     }

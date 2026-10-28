@@ -546,7 +546,7 @@ function PageOverlays({
       </Animated.View>
       {!nativePrompts && <SadTab tabId={tabId} nativeAllowed={!peek} />}
       {cliPill && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
-      {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
+      {!newTabShown && !nativePrompts && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       {!nativePrompts && <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       {!nativePrompts && <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       {!newTabShown && !nativePrompts && <ExternalAppPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
@@ -555,7 +555,7 @@ function PageOverlays({
       {popovers && popover === "popups" && !nativePrompts && <BlockedPopupsPrompt tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} />}
       {popovers && popover === "zoom" && <ZoomPopover tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} nativeAllowed={!peek} />}
       <SharePicker tabId={tabId} paneWidth={width} nativeAllowed={!peek} />
-      {!newTabShown && <DeviceChooser tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
+      {!newTabShown && !nativePrompts && <DeviceChooser tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       <CastPicker tabId={tabId} paneWidth={width} nativeAllowed={!peek} />
       <NavigationOverlays tabId={tabId} windowId={windowId} geometry={geometry} peek={peek} />
       <SelectionPopover tabId={tabId} zoom={zoom} nativeAllowed={!peek} />

@@ -7,6 +7,7 @@ public class ChromeUIModule: Module {
 
     OnCreate {
       ArdiaCoreHost.chromeUIHandler = { [weak self] name, payload in
+        ArdiaCoreEventTaps.send(name, payload)
         switch name {
         case "sidePanel": self?.sendEvent("onSidePanel", payload)
         case "actionPopup": self?.sendEvent("onActionPopup", payload)

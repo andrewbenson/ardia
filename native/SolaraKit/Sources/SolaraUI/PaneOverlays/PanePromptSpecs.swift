@@ -59,14 +59,22 @@ public struct PromptInputGuard {
 }
 
 public enum PanePromptKind: String, CaseIterable, Sendable {
-  case password, autofill, externalApp, popups
+  case password, autofill, externalApp, popups, permission
+
+  public var leftWidth: Double? {
+    switch self {
+    case .externalApp: PanePromptSpecs.externalAppWidth
+    case .permission: PanePromptSpecs.permissionWidth
+    default: nil
+    }
+  }
 }
 
 extension PanePromptSpecs {
   public static let externalAppWidth: Double = 340
 
   public static func externalAppLeft(urlLeft: Double, paneWidth: Double) -> Double {
-    max(margin, min(urlLeft, paneWidth - 348))
+    promptLeft(urlLeft: urlLeft, paneWidth: paneWidth, width: externalAppWidth)
   }
 
   public static func autofill(_ prompt: PaneAutofillPrompt) -> [String: Any] {

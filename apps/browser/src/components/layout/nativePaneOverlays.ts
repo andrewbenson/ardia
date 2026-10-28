@@ -1,4 +1,4 @@
-import { resolveExternalApp, type AutofillPromptAnswer, type PasswordPromptAnswer } from "@ardia/ardiacore";
+import { resolveExternalApp, type AutofillPromptAnswer, type PasswordPromptAnswer, type PermissionResult } from "@ardia/ardiacore";
 import { publishSettingsTopic } from "@ardia/settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { View } from "react-native";
@@ -7,6 +7,7 @@ import type { Theme } from "../../lib/theme";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { pageOf, patchPage, setPopover, usePage } from "./pageState";
 import { answerBlockedPopups, openOneBlockedPopup, type BlockedPopupsAnswer } from "../site/Prompts";
+import { answerPermission } from "../site/permissions";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
@@ -59,6 +60,7 @@ addNativeSettingsHandlers({
     if (pageOf(tabId).externalApp?.id === id) patchPage(tabId, { externalApp: null });
     void resolveExternalApp(id, open, remember);
   },
+  "pane.permission": (_windowId: string, tabId: string, id: string, result: PermissionResult) => answerPermission(tabId, id, result),
   "pane.popups": (_windowId: string, tabId: string, action: string, id: string) => {
     if (action === "row") openOneBlockedPopup(tabId, id);
     else answerBlockedPopups(tabId, action as BlockedPopupsAnswer);

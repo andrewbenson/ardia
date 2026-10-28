@@ -3,8 +3,15 @@ import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";
 import { engineProfile } from "../../store/model";
+import { pagerFor } from "./profilePager";
 
 export function WindowProfile() {
+  const windowId = useWindowId();
+  if (pagerFor(windowId).nativeOwned) return null;
+  return <ReactWindowProfile />;
+}
+
+function ReactWindowProfile() {
   const windowId = useWindowId();
   const [profile, neighbours, selection] = useBrowser(
     useShallow((s) => {

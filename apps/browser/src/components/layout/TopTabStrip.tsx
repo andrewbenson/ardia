@@ -1675,7 +1675,7 @@ function NativeTopStripPeek({ windowWidth, enabled }: { windowWidth: number; ena
         onLive={(live, pageWidth) => setLive({ live, pageWidth })}
         style={{ position: "absolute", left: -PEEK_LEFT, top: -PEEK_TOP, width: windowWidth, height: PEEK_TOP + PEEK_HEIGHT + PEEK_SHADOW_ROOM }}
       />
-      {live ? <ProfileSwipeArea surface="strip" style={{ position: "absolute", left: 0, right: 0, top: PEEK_PAD - ITEM_TOP, height: TOP_STRIP_HEIGHT }} pageWidth={pageWidth} /> : null}
+      {live ? <ProfileSwipeArea surface="strip" floating style={{ position: "absolute", left: 0, right: 0, top: PEEK_PAD - ITEM_TOP, height: TOP_STRIP_HEIGHT }} pageWidth={pageWidth} /> : null}
     </StripDropArea>
   );
 }

@@ -88,6 +88,7 @@ final class ShellHost {
   private var contentSizer: NSObjectProtocol?
   private var closing: NSObjectProtocol?
   private var panes: PaneRootsHost?
+  private var profilePager: ProfilePagerHost?
   var onClose: (() -> Void)?
 
   init(windowId: String, root: NSView) {
@@ -106,8 +107,13 @@ final class ShellHost {
         }
       })
     keepContentSized()
-    shell.onWindow = { [weak self] window in self?.watchClose(of: window) }
+    shell.onWindow = { [weak self] window in
+      self?.watchClose(of: window)
+      self?.profilePager?.windowChanged()
+    }
     panes = NativePaneRoots.start(windowId)
+    profilePager = NativeProfilePager.start(shell)
+    shell.onFrames = { [weak self] _ in self?.profilePager?.place() }
   }
 
   private func watchClose(of window: NSWindow?) {
@@ -123,6 +129,8 @@ final class ShellHost {
     NativePeek.windowEnded(shell.windowId)
     if let panes { NativePaneRoots.end(shell.windowId, ifHost: panes) }
     panes = nil
+    profilePager?.stop()
+    profilePager = nil
     for observer in observers { NotificationCenter.default.removeObserver(observer) }
     observers = []
     if let closing { NotificationCenter.default.removeObserver(closing) }

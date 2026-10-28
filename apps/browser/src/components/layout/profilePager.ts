@@ -1,4 +1,5 @@
 import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerStateEvent, type SwipeEvent } from "@ardia/ardiacore";
+import { onProfilePagerPosition, profilePagerNative } from "@ardia/settings";
 import { useEffect, useLayoutEffect, useMemo } from "react";
 import { Animated, unstable_batchedUpdates } from "react-native";
 import { create } from "zustand";
@@ -25,15 +26,18 @@ class ProfilePager {
   private surfaces = 0;
   private switching = false;
   private unsubscribe: () => void;
+  private unfollow: () => void = () => {};
   private lastEvent: object | null = null;
   private wheelState = { sum: 0, last: 0, trigger: 0 };
   private external = 0;
   private externalGeneration = 0;
 
   readonly windowId: string;
+  readonly nativeOwned: boolean;
 
   constructor(windowId: string) {
     this.windowId = windowId;
+    this.nativeOwned = profilePagerNative(windowId);
     this.pos = new Animated.Value(Math.max(0, this.index()), { useNativeDriver: true });
     this.state.setState({ pages: this.warmPages() });
     this.unsubscribe = useBrowser.subscribe((s, prev) => {
@@ -43,8 +47,9 @@ class ProfilePager {
       if (w.profileId !== was?.profileId || w.incognito !== was?.incognito || s.profileOrder !== prev.profileOrder) {
         this.state.setState({ pages: this.warmPages() });
       }
-      if (!this.switching && !w.incognito && w.profileId !== was?.profileId) this.selectExternal(w.profileId, s.profileOrder);
+      if (!this.nativeOwned && !this.switching && !w.incognito && w.profileId !== was?.profileId) this.selectExternal(w.profileId, s.profileOrder);
     });
+    if (this.nativeOwned) this.unfollow = onProfilePagerPosition((id, position) => id === windowId && this.pos.setValue(position));
   }
 
   attach() {
@@ -72,6 +77,7 @@ class ProfilePager {
 
   private commitNative(snapshot: Pick<PagerStateEvent, "sequence" | "selected" | "profileId"> | null, event?: PagerStateEvent) {
     if (!snapshot || snapshot.sequence <= this.state.getState().ack) return;
+    if (this.nativeOwned) return this.state.setState({ ack: snapshot.sequence });
     if (__DEV__) this.lastEvent = { native: event ?? null, snapshot };
     const s = useBrowser.getState();
     const w = s.windows[this.windowId];
@@ -106,7 +112,7 @@ class ProfilePager {
   }
 
   get active() {
-    return this.surfaces > 0 && !!this.current();
+    return (this.nativeOwned || this.surfaces > 0) && !!this.current();
   }
 
   wheel(e: SwipeEvent) {
@@ -151,6 +157,7 @@ class ProfilePager {
     this.external = 0;
     this.externalGeneration++;
     this.unsubscribe();
+    this.unfollow();
     pagers.delete(this.windowId);
   }
 

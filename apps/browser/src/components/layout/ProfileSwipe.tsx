@@ -18,7 +18,13 @@ export function ProfileSwipe({ children }: { children: ReactNode }) {
   );
 }
 
-export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "sidebar" | "strip"; style: StyleProp<ViewStyle>; pageWidth?: number }) {
+export function ProfileSwipeArea(props: { surface: "sidebar" | "strip"; style: StyleProp<ViewStyle>; pageWidth?: number; floating?: boolean }) {
+  const windowId = useWindowId();
+  if (pagerFor(windowId).nativeOwned && !props.floating) return null;
+  return <ReactSwipeArea {...props} />;
+}
+
+function ReactSwipeArea({ surface, style, pageWidth }: { surface: "sidebar" | "strip"; style: StyleProp<ViewStyle>; pageWidth?: number }) {
   const windowId = useWindowId();
   usePagerSurface(windowId);
   const [previous, next, multiple] = useBrowser(
@@ -68,6 +74,12 @@ export function ProfileSwipeArea({ surface, style, pageWidth }: { surface: "side
 }
 
 export function ProfileTint() {
+  const windowId = useWindowId();
+  if (pagerFor(windowId).nativeOwned) return null;
+  return <ReactProfileTint />;
+}
+
+function ReactProfileTint() {
   const windowId = useWindowId();
   const { pages, paging, pager } = usePagerPages(windowId);
   useNativePagerPosition(windowId);

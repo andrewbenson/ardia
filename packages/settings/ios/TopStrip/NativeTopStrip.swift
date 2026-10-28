@@ -204,6 +204,10 @@ final class TopStripHost {
     didSet { if pageWidth != oldValue { render() } }
   }
 
+  var swipeWidth: Double? {
+    hostState.map { (pageWidth ?? $0.pageWidth) + ($0.floating ? 0 : 2 * Double(StripMetrics.flare)) }
+  }
+
   init(windowId: String, takesDrops: Bool = true) {
     self.windowId = windowId
     view = TopStripView(windowId: windowId)

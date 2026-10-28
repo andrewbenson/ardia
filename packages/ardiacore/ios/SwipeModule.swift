@@ -63,7 +63,14 @@ public class SwipeModule: Module {
   }
 }
 
-final class SwipeArea: ExpoView, ACSwipeTarget {
+public protocol ACPagerSurface: AnyObject {
+  var pageWidth: Double { get }
+  var surfaceWindow: NSWindow? { get }
+  func pagerMoved(_ position: Double)
+  func pagerChanged(_ event: [String: Any])
+}
+
+final class SwipeArea: ExpoView, ACSwipeTarget, ACPagerSurface {
   let onSwipe = EventDispatcher()
   let onPagerPosition = EventDispatcher()
   let onPagerState = EventDispatcher()
@@ -78,6 +85,15 @@ final class SwipeArea: ExpoView, ACSwipeTarget {
   @objc var hasNativePager: Bool { pager != nil }
 
   var pageWidth: Double { Double(pagerWidth > 0 ? pagerWidth : bounds.width) }
+  var surfaceWindow: NSWindow? { window }
+
+  func pagerMoved(_ position: Double) {
+    onPagerPosition(["position": position])
+  }
+
+  func pagerChanged(_ event: [String: Any]) {
+    onPagerState(event)
+  }
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -161,12 +177,12 @@ private final class ACPagerFrames: NSObject {
   }
 }
 
-final class ACPager {
+public final class ACPager {
   enum Phase: String { case idle, tracking, holding, settling }
 
   private struct Drag {
     var start = 0.0, lo = 0, hi = 0, home = 0, detent = 0
-    weak var area: SwipeArea?
+    weak var area: AnyObject?
   }
 
   private struct Spring {
@@ -181,23 +197,23 @@ final class ACPager {
   private static var snapshots: [String: [String: Any]] = [:]
   private static var counter = 0
 
-  static func named(_ key: String) -> ACPager {
+  public static func named(_ key: String) -> ACPager {
     if let pager = pagers[key] { return pager }
     let pager = ACPager(key: key)
     pagers[key] = pager
     return pager
   }
 
-  static func existing(_ key: String) -> ACPager? { pagers[key] }
+  public static func existing(_ key: String) -> ACPager? { pagers[key] }
 
-  static func snapshot(_ key: String) -> [String: Any]? {
+  public static func snapshot(_ key: String) -> [String: Any]? {
     lock.lock()
     defer { lock.unlock() }
     return snapshots[key]
   }
 
-  let key: String
-  private let areas = NSHashTable<SwipeArea>.weakObjects()
+  public let key: String
+  private let areas = NSHashTable<AnyObject>.weakObjects()
   private var configured = false
   private var count = 1
   private var order: String?
@@ -223,12 +239,14 @@ final class ACPager {
 
   private init(key: String) { self.key = key }
 
-  func attach(_ area: SwipeArea) {
+  private var surfaces: [ACPagerSurface] { areas.allObjects.compactMap { $0 as? ACPagerSurface } }
+
+  public func attach(_ area: ACPagerSurface) {
     areas.add(area)
-    if configured { area.onPagerPosition(["position": position]) }
+    if configured { area.pagerMoved(position) }
   }
 
-  func detach(_ area: SwipeArea) {
+  public func detach(_ area: ACPagerSurface) {
     areas.remove(area)
     prune()
   }
@@ -242,7 +260,7 @@ final class ACPager {
     ACPager.lock.unlock()
   }
 
-  func configure(selected newSelected: Int, count newCount: Int, ack: Int, order newOrder: String?) {
+  public func configure(selected newSelected: Int, count newCount: Int, ack: Int, order newOrder: String?) {
     let count = max(1, newCount)
     propSelected = min(max(newSelected, 0), count - 1)
     propAck = max(propAck, ack)
@@ -293,7 +311,7 @@ final class ACPager {
     emitPosition()
   }
 
-  func input(from area: SwipeArea, phase input: String, distance: Double, direction: Int, timestamp: TimeInterval) {
+  public func input(from area: ACPagerSurface, phase input: String, distance: Double, direction: Int, timestamp: TimeInterval) {
     #if DEBUG
     lastInput = ["phase": input, "distance": distance, "direction": direction, "timestamp": timestamp]
     #endif
@@ -328,7 +346,7 @@ final class ACPager {
     }
   }
 
-  private func begin(_ area: SwipeArea) {
+  private func begin(_ area: ACPagerSurface) {
     announceActivity()
     stopSpring()
     let home = selected
@@ -345,7 +363,7 @@ final class ACPager {
   }
 
   private func track(_ distance: Double, _ direction: Int, _ timestamp: TimeInterval, sample: Bool) {
-    guard let area = drag.area else { return }
+    guard let area = drag.area as? ACPagerSurface else { return }
     let width = area.pageWidth
     guard width > 0 else { return }
     let raw = drag.start + Double(direction > 0 ? -1 : 1) * distance * trackingScale / width
@@ -376,7 +394,7 @@ final class ACPager {
 
   private func release(velocity v: Double, cancelled: Bool) {
     let home = drag.home
-    let area = drag.area
+    let area = drag.area as? ACPagerSurface
     let width = area?.pageWidth ?? 0
     drag.area = nil
     var target = home
@@ -393,7 +411,7 @@ final class ACPager {
     return d != 0 && v != 0 && (d > 0) == (v > 0) ? v : 0
   }
 
-  func switchTo(_ index: Int, order newOrder: String? = nil) -> Bool {
+  public func switchTo(_ index: Int, order newOrder: String? = nil) -> Bool {
     guard configured else { return false }
     sync(order: newOrder)
     let target = min(max(index, 0), count - 1)
@@ -412,7 +430,7 @@ final class ACPager {
     _ = select(id, order: newOrder)
   }
 
-  func select(_ profileId: String, order newOrder: String) -> Bool {
+  public func select(_ profileId: String, order newOrder: String) -> Bool {
     guard configured else { return false }
     let ids = newOrder.components(separatedBy: "\n")
     guard let index = ids.firstIndex(of: profileId) else { return false }
@@ -424,14 +442,14 @@ final class ACPager {
     return true
   }
 
-  func step(_ delta: Int, wrap: Bool, order newOrder: String? = nil) -> Bool {
+  public func step(_ delta: Int, wrap: Bool, order newOrder: String? = nil) -> Bool {
     guard configured else { return false }
     sync(order: newOrder)
     let target = wrap ? ((selected + delta) % count + count) % count : min(max(selected + delta, 0), count - 1)
     return target == selected || switchTo(target)
   }
 
-  private func settle(to target: Int, velocity v: Double, from origin: SwipeArea? = nil) {
+  private func settle(to target: Int, velocity v: Double, from origin: ACPagerSurface? = nil) {
     announceActivity()
     if target != selected {
       selected = target
@@ -445,7 +463,7 @@ final class ACPager {
     velocity = v
     spring = Spring(from: position, target: target, velocity: v, start: CACurrentMediaTime())
     let generation = self.generation
-    if let screen = origin?.window?.screen ?? areas.allObjects.lazy.compactMap({ $0.window?.screen }).first {
+    if let screen = origin?.surfaceWindow?.screen ?? surfaces.lazy.compactMap({ $0.surfaceWindow?.screen }).first {
       let link = screen.displayLink(target: ACPagerFrames(self, generation: generation), selector: #selector(ACPagerFrames.frame(_:)))
       let fps = Float(max(60, screen.maximumFramesPerSecond))
       link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: fps, preferred: fps)
@@ -518,21 +536,21 @@ final class ACPager {
   }
 
   private func emitPosition() {
-    let area = phase == .tracking ? drag.area : nil
-    let all = areas.allObjects
-    (area ?? all.first { $0.window != nil } ?? all.first)?.onPagerPosition(["position": position])
+    let area = phase == .tracking ? drag.area as? ACPagerSurface : nil
+    let all = surfaces
+    (area ?? all.first { $0.surfaceWindow != nil } ?? all.first)?.pagerMoved(position)
     NotificationCenter.default.post(name: pagerPosition, object: nil, userInfo: ["key": key, "position": position])
   }
 
   private func emitState(_ name: String) {
     var event: [String: Any] = ["phase": name, "sequence": sequence, "position": position, "selected": selected, "velocity": velocity]
     if orderIds != nil { event["profileId"] = selectedId }
-    for area in areas.allObjects { area.onPagerState(event) }
+    for area in surfaces { area.pagerChanged(event) }
   }
 
   private func announceActivity(_ info: [String: Any] = [:]) {
     var windows: [NSWindow] = []
-    for case let window? in areas.allObjects.map(\.window) where !windows.contains(where: { $0 === window }) { windows.append(window) }
+    for case let window? in surfaces.map(\.surfaceWindow) where !windows.contains(where: { $0 === window }) { windows.append(window) }
     for window in windows { NotificationCenter.default.post(name: pagerActivity, object: window, userInfo: info) }
   }
 

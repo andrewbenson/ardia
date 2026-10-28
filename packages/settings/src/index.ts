@@ -80,6 +80,7 @@ export * from "./prompt";
 export * from "./sitePanel";
 export * from "./windowShell";
 export * from "./tabPool";
+export * from "./profilePager";
 export * from "./littleSolara";
 export * from "./topStrip";
 export * from "./pages";

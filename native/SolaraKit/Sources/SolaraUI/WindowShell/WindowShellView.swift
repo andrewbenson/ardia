@@ -4,6 +4,7 @@ import AppKit
 public final class WindowShellView: NSView {
   public enum Slot: String, CaseIterable, Sendable {
     case backdrop
+    case tint
     case react
     case card
     case splitChrome
@@ -12,7 +13,7 @@ public final class WindowShellView: NSView {
     case topStrip
     case overlay
 
-    static let reactOnTop: [Slot] = [.backdrop, .card, .splitChrome, .peek, .sidebar, .topStrip, .react, .overlay]
+    static let reactOnTop: [Slot] = [.backdrop, .tint, .card, .splitChrome, .peek, .sidebar, .topStrip, .react, .overlay]
   }
 
   public static let hoverCoverChanged = Notification.Name("ArdiaHoverCoverChanged")
@@ -181,7 +182,7 @@ public final class WindowShellView: NSView {
   private func place(_ slot: Slot, _ view: NSView) {
     let frame: CGRect
     switch slot {
-    case .backdrop, .react, .overlay: frame = bounds
+    case .backdrop, .tint, .react, .overlay: frame = bounds
     case .card, .splitChrome, .peek: frame = frames.card
     case .sidebar: frame = (frames.sidebar ?? .zero).offsetBy(dx: frames.sidebarShift, dy: 0)
     case .topStrip: frame = frames.topStrip ?? .zero

@@ -29,12 +29,13 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativePanePrompts = "ARDIA_NATIVE_PANE_PROMPTS"
   case nativeStore = "ARDIA_NATIVE_STORE"
   case nativeTabPickers = "ARDIA_NATIVE_TAB_PICKERS"
+  case nativeProfilePager = "ARDIA_NATIVE_PROFILE_PAGER"
   case syncRedesign = "ARDIA_SYNC_REDESIGN"
   case nativeServices = "ARDIA_NATIVE_SERVICES"
 
   public static let experiments: [LaunchSwitch] = [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia]
   static let storedInDevelopment: Set<LaunchSwitch> = [
-    .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers,
+    .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers, .nativeProfilePager,
   ]
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
 
@@ -42,6 +43,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
     switch self {
     case .shellPanes, .nativePagesPool, .nativeAutoHide, .nativeTabPickers: [.nativeShell]
     case .shellMainTop: [.shellPanes, .nativePagesPool]
+    case .nativeProfilePager: [.nativeShell, .nativeSidebar, .nativeTopStrip]
     default: []
     }
   }

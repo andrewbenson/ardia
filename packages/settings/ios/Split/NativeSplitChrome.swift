@@ -17,6 +17,7 @@ enum NativeSplitChrome {
   private static var views: [String: SplitChromeView] = [:]
   private static var panes: [String: SplitPanesView] = [:]
   private static var overlays: [String: PaneOverlaysView] = [:]
+  private static var dropZones: [String: SplitDropZone] = [:]
   private static var toolbars: [String: [String: String]] = [:]
   private static let favicons: SidebarFavicons = {
     let made = SidebarFavicons()
@@ -46,7 +47,12 @@ enum NativeSplitChrome {
 
   static func commit(_ state: BrowserState) {
     for (id, view) in views {
-      if view.superview == nil { views[id] = nil } else { view.update(state: state) }
+      if view.superview == nil {
+        views[id] = nil
+        if let zone = dropZones.removeValue(forKey: id) { TabDragSession.unregister(zone) }
+      } else {
+        view.update(state: state)
+      }
     }
     for (id, view) in overlays {
       if view.superview == nil { overlays[id] = nil } else { view.update(state: state) }
@@ -101,6 +107,15 @@ enum NativeSplitChrome {
     }
     view.onToastAction = { id in Task { @MainActor in _ = await SettingsAdapters.js("split.toast", windowId, id, "action") } }
     host.shell.mount(.splitChrome, view)
+    let zone = SplitDropZone(windowId: windowId, chrome: view)
+    zone.state = { NativeStoreHandle.store?.state }
+    zone.onDrop = { tabId, target, side in
+      let options: JSONObject = ["tabId": .string(tabId), "anchorTabId": .string(target), "side": .string(side.rawValue)]
+      _ = try? NativeStoreHandle.store?.dispatch(Command("openSplitPane", [.string(windowId), .object(options)]), origin: .native)
+    }
+    if let old = dropZones[windowId] { TabDragSession.unregister(old) }
+    dropZones[windowId] = zone
+    TabDragSession.register(zone, windowId: windowId, priority: .split)
     let overlay = PaneOverlaysView(windowId: windowId)
     overlay.frame = host.shell.card.bounds
     overlay.autoresizingMask = [.width, .height]

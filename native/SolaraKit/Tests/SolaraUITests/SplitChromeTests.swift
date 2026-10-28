@@ -203,3 +203,44 @@ private func paneToolbar(_ tabId: String) -> String {
     #expect(list.last?.detail == "C page")
   }
 }
+
+@Suite(.serialized) @MainActor struct SplitDropZoneTests {
+  @Test func candidatesAreTheOtherPanesOrTheRecentTabForASinglePage() throws {
+    var state = try splitState()
+    let panes = ["a": CGRect(x: 0, y: 0, width: 500, height: 700), "b": CGRect(x: 507, y: 0, width: 500, height: 700)]
+    #expect(SplitDropZone.candidates(state, windowId: "w1", dragging: "a", panes: panes).map(\.tabId) == ["b"])
+    state.splits = Table()
+    let single = ["a": CGRect(x: 0, y: 0, width: 1007, height: 700)]
+    let fallback = SplitDropZone.candidates(state, windowId: "w1", dragging: "a", panes: single)
+    #expect(fallback.map(\.tabId) == ["b"])
+    #expect(fallback.first?.rect == single["a"])
+  }
+
+  @Test func aSplitAtItsLimitTakesNoOutsideTab() throws {
+    let text = #"""
+      {"windows": {"w1": {"id": "w1", "profileId": "p", "tabIds": ["a", "b", "c", "d"], "activeTabIds": {"p": "a"}}},
+       "windowOrder": ["w1"],
+       "tabs": {"a": {"id": "a", "windowId": "w1", "profileId": "p", "url": "https://a.example/"},
+                "b": {"id": "b", "windowId": "w1", "profileId": "p", "url": "https://b.example/"},
+                "c": {"id": "c", "windowId": "w1", "profileId": "p", "url": "https://c.example/"},
+                "d": {"id": "d", "windowId": "w1", "profileId": "p", "url": "https://d.example/"}},
+       "splits": {"s1": {"id": "s1", "windowId": "w1", "tabIds": ["a", "b", "c"], "orientation": "horizontal", "sizes": [0.34, 0.33, 0.33]}}}
+      """#
+    let state = try BrowserState(stateJSON: try JSONValue.parse(text).object ?? [:])
+    let panes = ["a": CGRect.zero, "b": CGRect.zero, "c": CGRect.zero]
+    #expect(SplitDropZone.candidates(state, windowId: "w1", dragging: "d", panes: panes).isEmpty)
+    #expect(SplitDropZone.candidates(state, windowId: "w1", dragging: "a", panes: panes).map(\.tabId) == ["b", "c"])
+  }
+
+  @Test func dropRunsTheSplitOnlyForASplitAim() {
+    let zone = SplitDropZone(windowId: "w1", chrome: SplitChromeView(windowId: "w1"))
+    var drops: [String] = []
+    zone.onDrop = { tabId, target, side in drops.append("\(tabId)>\(target):\(side.rawValue)") }
+    let session = TabDragSession.begin(tabIds: ["a"], from: "w1")
+    #expect(!zone.drop(session, .page))
+    #expect(zone.drop(session, .split(tabId: "b", side: .left)))
+    #expect(!zone.drop(session, .split(tabId: "a", side: .left)))
+    #expect(drops == ["a>b:left"])
+    session.cancel()
+  }
+}

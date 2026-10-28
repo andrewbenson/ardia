@@ -353,6 +353,13 @@ Saved passwords are Chrome's (its password manager).
   for its login and JS only holds the sealed value; once sealing is on it stays on until the app quits, and the
   plain read refuses. The guarantee that even a compromised JS can't read a password lands with step 11, which
   removes the plain path.
+- **The switch.** `ARDIA_SYNC_REDESIGN=1` in the environment turns the redesign on, through `LaunchSwitches`. Only an
+  instance with its own data folder (`ARDIA_DATA_DIR`; `ARDIA_BACKGROUND` alone isn't enough, since that launch still
+  opens the real folder) of a build not signed for distribution reads it. A
+  Developer ID build ignores it, and so does any launch on the real data folder, including the owner's ad hoc builds,
+  because turning it on is one-way for that data (the ledger goes to v2, and the state and journal are sealed under
+  ids older builds can't open). It is never stored or shown in Settings › Experimental. JS gets it from the native
+  store's `status()` before the store starts.
 - **Sealed values (switch on).** A pw: value in JS is `{ o, u, s }`, never `{ o, u, p }`.
   - `s` is the password sealed under the chain's password key, bound to its origin and username and padded to 32
     bytes; the same password seals to the same `s`, so JS can still compare and digest it.
@@ -362,9 +369,12 @@ Saved passwords are Chrome's (its password manager).
   - The local state and journal are sealed under new ids (`state.v2`, `journal.v2`); an older build can't open
     them and starts fresh instead of reading sealed values as passwords.
   - The password ledger (sync-pw-ledger.json) is v2, its digests over `s`. A v1 ledger is migrated natively once
-    Login Data reads cleanly and the state is known; until then password sync pauses rather than rebuilding.
+    Login Data reads cleanly and the state is known; until then password sync pauses rather than rebuilding. A
+    journal that exists but doesn't open keeps it paused for the rest of the session, because its unsent batches
+    may hold records the migration would otherwise read as published.
   - Before a login is offered, its `s` is checked against this chain's key. One that doesn't open is left out of
-    the cycle (not published, not removed, not stamped) and offered again next cycle.
+    the cycle (not published, not removed, not stamped, not overwritten by a newer record) and offered again next
+    cycle.
   - Saving opens `s` natively (`saveSealedPassword`); JS never gets the password back.
 
 ## UX (from Dia's binary)

@@ -15,7 +15,7 @@ import Testing
   }
 
   @Test func environmentValuesReadAsTheOldEqualsOneAndNotZeroChecksDid() {
-    for name in LaunchSwitch.allCases {
+    for name in LaunchSwitch.allCases where !LaunchSwitch.developmentOnly.contains(name) {
       let on = Self.defaultOn.contains(name)
       for (text, expected) in [("", on), ("1", true), ("0", false), ("true", on), ("off", on)] {
         let switches = LaunchSwitches(environment: [name.rawValue: text], defaults: nil, distribution: false, skipStored: false)
@@ -24,6 +24,36 @@ import Testing
         #expect(expected == old, "\(name.rawValue)=\(text)")
       }
       #expect(LaunchSwitches(environment: [:], defaults: nil, distribution: false, skipStored: false).isOn(name, defaultOn: on) == on)
+    }
+  }
+
+  @Test func theSyncRedesignIsReadOnlyByInstancesWithTheirOwnDataFolderOfBuildsNotSignedForDistribution() {
+    let on = ["ARDIA_SYNC_REDESIGN": "1", "ARDIA_DATA_DIR": "/tmp/x"]
+    #expect(LaunchSwitches(environment: on, defaults: nil, distribution: false, skipStored: false).isOn(.syncRedesign, defaultOn: false))
+    let distributed = LaunchSwitches(environment: on, defaults: nil, distribution: true, skipStored: false)
+    #expect(!distributed.isOn(.syncRedesign, defaultOn: false))
+    #expect(!distributed.fromEnvironment(.syncRedesign))
+    let ownersAdHocBuild = LaunchSwitches(environment: ["ARDIA_SYNC_REDESIGN": "1"], defaults: nil, distribution: false, skipStored: false)
+    #expect(!ownersAdHocBuild.isolated)
+    #expect(!ownersAdHocBuild.isOn(.syncRedesign, defaultOn: false), "a launch on the real data folder never turns it on")
+    #expect(!ownersAdHocBuild.fromEnvironment(.syncRedesign))
+    let hiddenOnTheRealFolder = LaunchSwitches(environment: ["ARDIA_SYNC_REDESIGN": "1", "ARDIA_BACKGROUND": "1"], defaults: nil, distribution: false, skipStored: false)
+    #expect(hiddenOnTheRealFolder.isolated)
+    #expect(!hiddenOnTheRealFolder.isOn(.syncRedesign, defaultOn: false), "a hidden launch that forgot its data folder still opens the real one")
+    let emptyDataFolder = LaunchSwitches(environment: ["ARDIA_SYNC_REDESIGN": "1", "ARDIA_DATA_DIR": ""], defaults: nil, distribution: false, skipStored: false)
+    #expect(!emptyDataFolder.isOn(.syncRedesign, defaultOn: false), "an empty data folder is the real one, as the host reads it")
+  }
+
+  @Test func theSyncRedesignIsNeverStored() {
+    let defaults = scratchDefaults()
+    defaults.set("1", forKey: "ARDIA_SYNC_REDESIGN")
+    for distribution in [false, true] {
+      #expect(!LaunchSwitch.syncRedesign.storable(distribution: distribution))
+      #expect(!LaunchSwitches(environment: [:], defaults: defaults, distribution: distribution, skipStored: false).isOn(.syncRedesign, defaultOn: false))
+      let stored = StoredLaunchSwitches(defaults: scratchDefaults(), distribution: distribution)
+      stored.set(.syncRedesign, true)
+      #expect(stored.value(.syncRedesign) == nil)
+      #expect(!stored.any)
     }
   }
 

@@ -11,8 +11,11 @@ public class StoreModule: Module {
     Events("onStoreCommit")
 
     Function("status") { () -> [String: Any] in
-      if NativeStore.shared != nil { return ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads"] }
-      var status: [String: Any] = ["active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff]
+      let syncRedesign = LaunchSwitch(rawValue: "ARDIA_SYNC_REDESIGN").map { LaunchSwitches.shared.isOn($0, defaultOn: false) } ?? false
+      if NativeStore.shared != nil { return ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads", "syncRedesign": syncRedesign] }
+      var status: [String: Any] = [
+        "active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff, "syncRedesign": syncRedesign,
+      ]
       if let refusedSession = NativeStore.refusedSession { status["refusedSession"] = refusedSession }
       return status
     }

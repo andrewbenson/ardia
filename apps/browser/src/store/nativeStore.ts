@@ -58,6 +58,7 @@ export function startNativeStore(): { active: boolean; reason?: string } {
   ownsWorkspace = status.active && status.scope === "everything";
   handedOff = !status.active && status.handedOff === true;
   refusedSession = !status.active ? (status.refusedSession ?? null) : null;
+  if (status.syncRedesign !== undefined) syncRedesign.on = status.syncRedesign;
   syncOriginsAtStart = syncRedesign.on;
   taggingSyncOrigins = status.active && syncRedesign.on && useNativeSyncOrigins(true);
   return status.active ? { active: true } : { active: false, reason: status.reason };

@@ -27,11 +27,13 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativeDownloadMagnet = "ARDIA_NATIVE_DOWNLOAD_MAGNET"
   case nativeStore = "ARDIA_NATIVE_STORE"
   case nativeTabPickers = "ARDIA_NATIVE_TAB_PICKERS"
+  case syncRedesign = "ARDIA_SYNC_REDESIGN"
 
   public static let experiments: [LaunchSwitch] = [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia]
   static let storedInDevelopment: Set<LaunchSwitch> = [
     .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers,
   ]
+  static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
 
   public var needs: [LaunchSwitch] {
     switch self {
@@ -70,7 +72,8 @@ public struct LaunchSwitches: Sendable {
     self.distribution = distribution
     self.scope = env[Self.scopeVariable]
     var environment: [LaunchSwitch: Bool] = [:]
-    for name in LaunchSwitch.allCases {
+    let ownDataFolder = env["ARDIA_DATA_DIR"].map { !$0.isEmpty } ?? false
+    for name in LaunchSwitch.allCases where !LaunchSwitch.developmentOnly.contains(name) || (ownDataFolder && !distribution) {
       if let value = env[name.rawValue].flatMap(Self.parse) { environment[name] = value }
     }
     self.environment = environment

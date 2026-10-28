@@ -1286,6 +1286,7 @@ export function startSync() {
       useSync, syncNow, turnOnSync, enterRecoveryPhrase, stopSync, setTypeSynced, setProfileSynced, addRemoteProfile, setSyncFolder, folderInfo,
       doc: () => doc,
       native: SyncNative,
+      sealing: sealingPasswords,
       get menu(): typeof import("./menu") {
         return require("./menu");
       },

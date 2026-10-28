@@ -14,7 +14,8 @@ ARDIA_SHELL_PANES=1 and ARDIA_NATIVE_PAGES_POOL=1), once with the native sidebar
 with RN's: the root is stacked under the overlay and above every other slot;
 no React Native view that draws nothing and handles nothing catches the pointer over the card, the sidebar or the top
 strip (devReactBlockers hit-tests a grid over them and names each RN view there with no background or content; the
-ones whose props handle a press, click, mouse or drop, and text inputs, are controls and pass); a click on the page
+ones with their own mouse enter or leave handler, or a press, click, responder or drop handler on themselves or a
+parent no more than twice their area, are controls and pass, and the report names the parent and prop that made each one); a click on the page
 lands on the page, outside the main root, and focuses it; and file, URL and text drops there go to the web contents.
 The gate for the pool wired into the app: until the pool takes the pages out of the main root, the page is under the
 main root and the click check fails on that.`);
@@ -77,22 +78,28 @@ async function pass(label, env) {
 
   await rep.check(`${label}: no-rn-view-that-draws-and-handles-nothing-catches-the-pointer`, async () => {
     const found = await run(`return W.devReactBlockers("w1", 24).then(JSON.parse).then((views) => views.map((v) => {
+      const press = ${JSON.stringify(PRESS_PROPS)};
       const host = typeof v.reactTag === "number" ? acPerf.hostFiber(v.reactTag) : null;
       const own = (host && host.memoizedProps) || {};
-      const handles = ${JSON.stringify(OWN_PROPS)}.filter((k) => own[k] != null);
-      let owner = null;
-      let input = false;
-      for (let c = host; c; c = c.return) {
-        const name = typeof c.type === "string" ? null : acPerf.nameOf(c.type);
-        if (name === "TextInput") input = true;
-        if (!owner && name && name !== "View" && name !== "Animated(View)") owner = name;
-        if (c.tag === 5 && c.memoizedProps) for (const k of ${JSON.stringify(PRESS_PROPS)}) if (c.memoizedProps[k] != null && !handles.includes(k)) handles.push(k);
+      const ownerOf = (fiber) => { for (let c = fiber && fiber.return; c; c = c.return) { const n = typeof c.type === "string" ? null : acPerf.nameOf(c.type); if (n && n !== "View" && n !== "Animated(View)") return n; } return null; };
+      let by = null;
+      const ownProp = ${JSON.stringify(OWN_PROPS)}.concat(press).find((k) => own[k] != null);
+      if (ownProp) by = { prop: ownProp, depth: 0, tag: v.reactTag, owner: ownerOf(host) };
+      const area = v.frame[2] * v.frame[3];
+      let stoppedAt = null;
+      for (let i = 0; !by && i < (v.ancestors || []).length; i++) {
+        const [tag, w, h] = v.ancestors[i];
+        if (w * h > 2 * area) { stoppedAt = { tag, depth: i + 1, size: [w, h] }; break; }
+        const fiber = acPerf.hostFiber(tag);
+        const props = (fiber && fiber.memoizedProps) || {};
+        const prop = press.find((k) => props[k] != null);
+        if (prop) by = { prop, depth: i + 1, tag, owner: ownerOf(fiber) };
       }
-      return { ...v, owner, handles, control: handles.length > 0 || input, resolved: !!host };
+      return { ...v, ancestors: undefined, owner: ownerOf(host), control: !!by, by, stoppedAt, resolved: !!host };
     }));`);
     const blockers = found.filter((v) => !v.control);
     if (blockers.length) throw new Error(`${blockers.length} RN views draw and handle nothing but catch the pointer: ${JSON.stringify(blockers.slice(0, 8))}`);
-    return { controls: found.length, owners: [...new Set(found.map((v) => v.owner))] };
+    return { controls: found.map((v) => ({ owner: v.owner, by: v.by })) };
   });
 
   await rep.check(`${label}: a-click-on-the-page-lands-outside-the-main-root-and-focuses-it`, async () => {

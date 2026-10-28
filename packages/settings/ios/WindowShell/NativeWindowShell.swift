@@ -196,11 +196,21 @@ extension ShellHost {
             "reactTag": (hit.responds(to: Selector(("reactTag"))) ? hit.value(forKey: "reactTag") : nil) ?? NSNull(),
             "frame": [box.minX, box.minY, box.width, box.height],
             "at": [x, y],
+            "ancestors": Self.reactAncestors(of: hit, below: root),
           ]
         }
       }
     }
     return Array(found.values)
+  }
+
+  private static func reactAncestors(of view: NSView, below root: NSView) -> [[Any]] {
+    var out: [[Any]] = []
+    for ancestor in sequence(first: view.superview, next: { $0?.superview }) {
+      guard let ancestor, ancestor !== root, ancestor.responds(to: Selector(("reactTag"))), let tag = ancestor.value(forKey: "reactTag") as? NSNumber else { break }
+      out.append([tag, ancestor.bounds.width, ancestor.bounds.height])
+    }
+    return out
   }
 
   private static func drawsNothing(_ view: NSView) -> Bool {

@@ -245,6 +245,7 @@ struct LivePullRequestCard: View {
       if pr.conflicting {
         HStack(spacing: 8) {
           LiveStatusLine(line: .init(symbol: "exclamationmark.triangle.fill", tone: "conflict", text: "This branch has conflicts"), look: look)
+            .frame(maxWidth: .infinity)
           LiveSmallButton(title: "Resolve Conflicts", look: look) { model.onEvent(.open("\(state.url)/conflicts")) }
         }
       }
@@ -471,17 +472,18 @@ struct LiveSmallButton: View {
         .foregroundStyle(color(look.textPrimary))
         .padding(.horizontal, 9)
         .frame(height: 24)
-        .background(RoundedRectangle(cornerRadius: 7).fill(hovered ? color(look.toolbarHover) : color(look.urlPill)))
     }
-    .buttonStyle(LivePressStyle(pressed: color(look.toolbarPressed)))
+    .buttonStyle(LiveSmallButtonStyle(look: look, hovered: hovered))
     .onHover { hovered = $0 }
   }
 }
 
-struct LivePressStyle: ButtonStyle {
-  let pressed: Color
+struct LiveSmallButtonStyle: ButtonStyle {
+  let look: SidebarLiveCardState.Look
+  let hovered: Bool
 
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label.overlay(RoundedRectangle(cornerRadius: 7).fill(configuration.isPressed ? pressed : .clear))
+    let fill = configuration.isPressed ? look.toolbarPressed : hovered ? look.toolbarHover : look.urlPill
+    configuration.label.background(RoundedRectangle(cornerRadius: 7).fill(color(fill)))
   }
 }

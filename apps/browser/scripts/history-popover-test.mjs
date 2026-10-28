@@ -18,6 +18,7 @@ page outside the card closes it without navigating.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
+if (keep) process.env.AC_KEEP_DATA = "1";
 const scratch = mkdtempSync(join(tmpdir(), "ac-history-popover-"));
 const rep = reporter(join(scratch, "history-popover-test.log"), { name: "history-popover-test" });
 

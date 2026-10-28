@@ -22,6 +22,7 @@ bar renders under the pane root and not under the main root's ContentCard.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
+if (keep) process.env.AC_KEEP_DATA = "1";
 const scratch = mkdtempSync(join(tmpdir(), "ac-pane-roots-"));
 const rep = reporter(join(scratch, "pane-roots-test.log"), { name: "pane-roots-test" });
 

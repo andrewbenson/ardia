@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
-import { basename, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -53,6 +54,35 @@ export function ownedCandidate(listeners, before, commandOf, binary) {
   return pid;
 }
 export const realPath = (path) => { try { return realpathSync.native(path); } catch { return path; } };
+
+export function temporaryData(data) {
+  const root = tmpdir();
+  const realRoot = realPath(root);
+  if (!isAbsolute(root) || realRoot === "/") return null;
+  const under = (base, path) => {
+    const inside = relative(base, path);
+    return !!inside && !inside.startsWith("..") && !isAbsolute(inside) && inside.split(sep)[0].startsWith("ac-");
+  };
+  const path = resolve(data);
+  const real = realPath(path);
+  return (under(root, path) || under(realRoot, path)) && under(realRoot, real) ? real : null;
+}
+export function removeTemporaryData(data) {
+  const real = process.env.AC_KEEP_DATA === "1" ? null : temporaryData(data);
+  if (!real) return false;
+  try {
+    rmSync(real, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    return true;
+  } catch (e) {
+    process.stderr.write(`warning: couldn't remove ${real}: ${e.message}\n`);
+    return false;
+  }
+}
+export const quitEnded = ({ how }) => how === "quit" || how === "SIGTERM" || how === "SIGKILL";
+const quitData = new Set();
+process.on("exit", (code) => {
+  if (code === 0) for (const data of quitData) removeTemporaryData(data);
+});
 export function spawnedPids(binary, before, port, dataDirs) {
   const r = spawnSync("ps", ["-ww", "-ax", "-o", "pid=", "-o", "ppid=", "-o", "command="], { encoding: "utf8", timeout: 5000, maxBuffer: 64 << 20 });
   if (r.status !== 0) return [];
@@ -270,6 +300,7 @@ class Instance {
 
   async quit(opts = {}) {
     const how = await this.#quit(opts);
+    if (this.exited && quitEnded(how)) quitData.add(this.data);
     const errors = this.jsErrors();
     if (errors) process.stderr.write(`JS errors the app caught and survived (${join(this.data, "js-errors.log")}):\n${errors}`);
     if (this.js?.mode === "pinned" && (processInfo(this.js.pid)?.command ?? "").includes(`--metro-proxy ${this.data} `))
@@ -311,6 +342,7 @@ export async function launch(app, opts = {}) {
     throw new Error("refusing to hand URLs to a hidden instance without ARDIA_ACCEPT_EXTERNAL_URLS=1: it would forward them to the owner's running app");
   app = realPath(app);
   const data = resolve(opts.data ?? join(process.env.TMPDIR ?? "/tmp", `ac-instance-${process.pid}-${Date.now()}`));
+  quitData.delete(data);
   if (opts.fresh) rmSync(data, { recursive: true, force: true });
   mkdirSync(data, { recursive: true });
   let previous = null;
@@ -458,6 +490,22 @@ if (process.argv[1] === here) {
     const bin = "/tmp/Ardia.app/Contents/MacOS/Ardia";
     const cmd = (map) => (pid) => map[pid];
     assert.equal(parsePort("9474"), 9474);
+    const made = mkdtempSync(join(tmpdir(), "ac-self-test-"));
+    const link = join(tmpdir(), `ac-self-test-link-${process.pid}`);
+    try {
+      mkdirSync(join(made, "data"));
+      assert.equal(temporaryData(join(made, "data")), realPath(join(made, "data")));
+      assert.equal(temporaryData(made), realPath(made));
+      symlinkSync(dirname(here), link);
+      assert.equal(temporaryData(link), null);
+      assert.equal(temporaryData(join(link, "..", basename(made))), realPath(made));
+    } finally {
+      rmSync(made, { recursive: true, force: true });
+      rmSync(link, { force: true });
+    }
+    assert.ok(quitEnded({ how: "SIGKILL" }) && !quitEnded({ how: "gone" }));
+    for (const kept of [tmpdir(), join(tmpdir(), "other", "ac-x"), join(tmpdir(), "ac-x", "..", "y"), "/private/tmp/claude-501/scratch/data", "/"])
+      assert.ok(!temporaryData(kept), kept);
     for (const bad of ["0", "65536", "94.5", "-1", "", "9474x", "1e3"]) assert.throws(() => parsePort(bad), /1\.\.65535/, bad);
     assert.deepEqual(pidList("12\n34\n12\n"), [12, 34]);
     assert.deepEqual(pidList(""), []);

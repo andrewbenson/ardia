@@ -14,6 +14,7 @@ if (!appArg) {
 const appPath = resolve(appArg);
 const port = args.find((a) => a.startsWith("--port="))?.slice(7);
 const keep = args.includes("--keep-data");
+if (keep) process.env.AC_KEEP_DATA = "1";
 const scratch = mkdtempSync(join(tmpdir(), "ac-sidebar-click-"));
 const data = join(scratch, "data");
 const rep = reporter(join(scratch, "sidebar-click-test.log"), { name: "sidebar-click-test" });

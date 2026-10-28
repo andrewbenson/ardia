@@ -13,6 +13,7 @@ if (!appArg) {
 const appPath = resolve(appArg);
 const port = args.find((a) => a.startsWith("--port="))?.slice(7);
 const keep = args.includes("--keep-data");
+if (keep) process.env.AC_KEEP_DATA = "1";
 const scratch = mkdtempSync(join(tmpdir(), "ac-sidebar-bulk-"));
 const data = join(scratch, "data");
 const rep = reporter(join(scratch, "sidebar-bulk-test.log"), { name: "sidebar-bulk-test" });

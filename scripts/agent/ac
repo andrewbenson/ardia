@@ -12,6 +12,8 @@
 // launch prints `pid port data log` and records the instance in <data>/instance.json; every other command finds it
 // there, and only ever signals that process (pid, start time and binary). The app runs hidden (ARDIA_BACKGROUND=1,
 // `open -g -n`) with Metro pinned by default (a proxy that refuses reloads: other agents' edits don't restart it).
+// After a quit that ends the app, quit removes a data dir under $TMPDIR/ac-* (AC_KEEP_DATA=1 keeps it); a test
+// run removes those of the instances it quit when it exits 0.
 // Body or expression `-` reads stdin. Exit 1 on a failure, 3 when the instance has gone.
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -19,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const lib = join(dirname(fileURLToPath(import.meta.url)), "../lib/instance.mjs");
-const { attach, launch } = await import(lib);
+const { attach, launch, quitEnded, removeTemporaryData } = await import(lib);
 
 const argv = process.argv.slice(2);
 const help = () => {
@@ -71,7 +73,8 @@ try {
     page.close();
   } else if (command === "quit") {
     const app = found(positional[0]);
-    print(await app.quit({ graceful: !flags.kill }));
+    const how = await app.quit({ graceful: !flags.kill });
+    print(app.exited && quitEnded(how) && removeTemporaryData(app.data) ? { ...how, removed: app.data } : how);
   } else if (command === "status") {
     if (positional[0]) {
       const app = found(positional[0]);

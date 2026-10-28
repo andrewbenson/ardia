@@ -5,7 +5,7 @@ public class HostedModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraHosted")
 
-    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register(); NativeSidebar.register() } } }
+    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register(); NativeSidebar.register(); NativeTabPickers.register() } } }
 
     Function("kinds") { () -> [String] in
       HostedViews.kinds
@@ -32,6 +32,14 @@ public class HostedModule: Module {
         guard width.count == 2, height.count == 2 else { return "null" }
         return NativeSidebarHoverCard.presented(windowId, at: CGPoint(x: x, y: y), width: width[0]...width[1], height: height[0]...height[1])
       }
+    }.runOnQueue(.main)
+
+    Function("takeSwitcherPress") { (windowId: String) -> Int in
+      NativeTabPickers.switcherPresses.take(windowId)
+    }
+
+    AsyncFunction("tabPickers") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeTabPickers.describe(windowId) }
     }.runOnQueue(.main)
 
     AsyncFunction("sidebarPages") { (windowId: String) -> String in

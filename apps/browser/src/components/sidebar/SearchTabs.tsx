@@ -10,6 +10,7 @@ import { isPeekTab } from "../../store/peek";
 import { sharedTabsIn, sharesTabs } from "../../store/tabShare";
 import type { Tab } from "../../store/types";
 import { tabTitle } from "./actions";
+import { useNativeTabPickers, useNativeTabSearch, type NativeSearchRow } from "./nativeTabPickers";
 import { setSidebarUi, useSidebarUi } from "./state";
 import { TabIcon } from "./TabIcon";
 
@@ -71,7 +72,32 @@ const host = (url: string) => {
 
 export function SearchTabs({ windowId, windowWidth }: { windowId: string; windowWidth: number }) {
   const open = useSidebarUi((u) => u.searchTabs === windowId);
-  return open ? <Panel windowId={windowId} windowWidth={windowWidth} /> : null;
+  const native = useNativeTabPickers(windowId);
+  if (!open) return null;
+  return native ? <NativeFeed windowId={windowId} /> : <Panel windowId={windowId} windowWidth={windowWidth} />;
+}
+
+const nativeRow = (row: Row): NativeSearchRow => ({
+  kind: row.kind,
+  id: row.id,
+  title: row.title,
+  url: row.url,
+  favicon: row.favicon,
+  icon: row.icon,
+  profileId: "",
+  detail: (row.kind === "tab" ? (row.current && !row.where ? "Current Tab" : row.where) : row.detail) || null,
+});
+
+function NativeFeed({ windowId }: { windowId: string }) {
+  const tabs = useBrowser((s) => s.tabs);
+  const closedTabs = useBrowser((s) => s.closedTabs);
+  const closedGroups = useBrowser((s) => s.closedGroups);
+  const rows = useMemo(() => {
+    const { open, closed } = candidates(useBrowser.getState(), windowId);
+    return { open: open.map(nativeRow), closed: closed.map(nativeRow) };
+  }, [tabs, closedTabs, closedGroups, windowId]);
+  useNativeTabSearch(windowId, rows);
+  return null;
 }
 
 function Panel({ windowId, windowWidth }: { windowId: string; windowWidth: number }) {

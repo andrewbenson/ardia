@@ -6,6 +6,7 @@ export type HostedViewProps = ViewProps & { kind: string; windowId: string; acti
 
 type HostedModule = {
   kinds(): string[];
+  takeSwitcherPress?(windowId: string): number;
   devHost(kind: string, windowId: string, on: boolean): Promise<Record<string, string>>;
   sidebarRowFrame(windowId: string, key: string): Promise<{ x: number; y: number; width: number; height: number } | null>;
 };
@@ -17,6 +18,15 @@ export function hostedKinds(): string[] {
     return native?.kinds() ?? [];
   } catch {
     return [];
+  }
+}
+
+export function takeSwitcherPress(windowId: string): number | null {
+  try {
+    const index = native?.takeSwitcherPress?.(windowId) ?? -1;
+    return index >= 0 ? index : null;
+  } catch {
+    return null;
   }
 }
 

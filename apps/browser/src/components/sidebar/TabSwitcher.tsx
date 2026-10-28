@@ -5,6 +5,7 @@ import { displayUrl } from "@ardia/core";
 import { hex, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { tabTitle } from "./actions";
+import { useNativeTabPickers, useNativeTabSwitcher } from "./nativeTabPickers";
 import { useSidebarUi } from "./state";
 import { commitSwitcher, hoverSwitcherRow, leaveSwitcherRow } from "./switcher";
 import { TabIcon } from "./TabIcon";
@@ -14,7 +15,19 @@ const WIDTH = 400;
 const ROW = 40;
 const MAX_ROWS = 9;
 
-export function TabSwitcher({ windowId, windowWidth, windowHeight }: { windowId: string; windowWidth: number; windowHeight: number }) {
+export function TabSwitcher(props: { windowId: string; windowWidth: number; windowHeight: number }) {
+  const native = useNativeTabPickers(props.windowId);
+  return native ? <NativeFeed windowId={props.windowId} /> : <Panel {...props} />;
+}
+
+function NativeFeed({ windowId }: { windowId: string }) {
+  const ids = useSidebarUi((u) => (u.switcher?.windowId === windowId && u.switcher.visible ? u.switcher.ids : null));
+  const index = useSidebarUi((u) => (u.switcher?.windowId === windowId && u.switcher.visible ? u.switcher.index : -1));
+  useNativeTabSwitcher(windowId, ids ? { ids, index } : null);
+  return null;
+}
+
+function Panel({ windowId, windowWidth, windowHeight }: { windowId: string; windowWidth: number; windowHeight: number }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const switcher = useSidebarUi((u) => (u.switcher?.windowId === windowId && u.switcher.visible ? u.switcher : null));

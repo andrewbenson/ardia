@@ -6,7 +6,7 @@ import { useBrowser } from "../../store/browser";
 import { changedIds } from "../../store/changes";
 import { dismissHover } from "./hover";
 import { sidebarUi } from "./state";
-import { cancelSwitcher, commitSwitcher, moveSwitcher } from "./switcher";
+import { cancelSwitcher, commitSwitcher, moveSwitcher, releaseSwitcherMouse } from "./switcher";
 
 const AUTO_CLEAN_EVERY_MS = 30 * 60 * 1000;
 let started = false;
@@ -31,7 +31,8 @@ export function startSidebarEffects() {
       useBrowser.getState().closeAbandonedNewTabs();
     }
     if (e.type === "switcherReleased" || e.type === "resignActive") commitSwitcher();
-    if (e.type === "switcherMouseUp" || (e.type === "switcherKey" && e.key === "escape")) cancelSwitcher();
+    if (e.type === "switcherMouseUp") releaseSwitcherMouse();
+    if (e.type === "switcherKey" && e.key === "escape") cancelSwitcher();
     if (e.type === "switcherKey" && e.key !== "escape") moveSwitcher(e.key === "next" ? 1 : -1);
   });
 

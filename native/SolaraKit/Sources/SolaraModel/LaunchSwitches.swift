@@ -24,15 +24,16 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativePages = "ARDIA_NATIVE_PAGES"
   case nativeStatusBubble = "ARDIA_NATIVE_STATUS_BUBBLE"
   case nativeStore = "ARDIA_NATIVE_STORE"
+  case nativeTabPickers = "ARDIA_NATIVE_TAB_PICKERS"
 
   public static let experiments: [LaunchSwitch] = [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia]
   static let storedInDevelopment: Set<LaunchSwitch> = [
-    .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide,
+    .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers,
   ]
 
   public var needs: [LaunchSwitch] {
     switch self {
-    case .shellPanes, .nativePagesPool, .nativeAutoHide: [.nativeShell]
+    case .shellPanes, .nativePagesPool, .nativeAutoHide, .nativeTabPickers: [.nativeShell]
     case .shellMainTop: [.shellPanes, .nativePagesPool]
     default: []
     }

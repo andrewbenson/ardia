@@ -1,3 +1,4 @@
+import { takeSwitcherPress } from "@ardia/settings";
 import { restartSwitcherPointer, setSwitcherCapture, switcherPointerMoved } from "@ardia/shell";
 import { useBrowser } from "../../store/browser";
 import { recentTabIds } from "../../store/organize";
@@ -16,6 +17,7 @@ export function switcherStep(windowId: string, backward: boolean) {
   if (current && current.windowId === windowId) return moveSwitcher(backward ? -1 : 1);
   const ids = recentTabIds(useBrowser.getState(), windowId);
   if (ids.length < 2) return;
+  takeSwitcherPress(windowId);
   setSidebarUi({ switcher: { windowId, ids, index: backward ? ids.length - 1 : 1, visible: false } });
   setSwitcherCapture(true);
   clearTimeout(showTimer);
@@ -82,6 +84,13 @@ export function commitSwitcher(index?: number) {
   endSwitcher();
   const id = s.ids[index ?? pointed ?? s.index];
   if (id && useBrowser.getState().tabs[id]) useBrowser.getState().activate(id);
+}
+
+export function releaseSwitcherMouse() {
+  const s = sidebarUi().switcher;
+  const pressed = s ? takeSwitcherPress(s.windowId) : null;
+  if (pressed !== null) commitSwitcher(pressed);
+  else cancelSwitcher();
 }
 
 export function cancelSwitcher() {

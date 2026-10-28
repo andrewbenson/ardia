@@ -157,10 +157,12 @@ public class SyncModule: Module {
       let save = {
         ArdiaCoreServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { promise.resolve(ok($0)) }
       }
-      guard replacing else { return save() }
-      ArdiaCoreServices.deletePassword(profile: engineProfile, origin: origin, username: username) { deleted in
-        guard ok(deleted) else { return promise.resolve(false) }
-        save()
+      DispatchQueue.main.async {
+        guard replacing else { return save() }
+        ArdiaCoreServices.deletePassword(profile: engineProfile, origin: origin, username: username) { deleted in
+          guard ok(deleted) else { return promise.resolve(false) }
+          save()
+        }
       }
     }.runOnQueue(Self.work)
 

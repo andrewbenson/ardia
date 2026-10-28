@@ -137,6 +137,7 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
 }
 
 + (void)listPasswords:(NSString *)profile completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"listPasswords off main");
   [self call:@"ac_passwords_list" profile:profile args:nil completion:^(NSDictionary *result) {
     NSArray *list = result[@"passwords"];
     if (![list isKindOfClass:NSArray.class]) return completion(result);
@@ -148,21 +149,25 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
 }
 
 + (void)unlockPasswords:(NSString *)profile completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"unlockPasswords off main");
   [self call:@"ac_passwords_unlock" profile:profile args:nil completion:completion];
 }
 
 + (void)password:(NSString *)profile origin:(NSString *)origin username:(NSString *)username completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"password off main");
   [self call:@"ac_passwords_reveal" profile:profile args:Login(origin, username) completion:completion];
 }
 
 + (void)savePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username password:(NSString *)password
           completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"savePassword off main");
   [self call:@"ac_passwords_add" profile:profile args:Login(origin, username) secrets:@{@"password" : password ?: @""}
       completion:completion];
 }
 
 + (void)updatePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username
            newUsername:(NSString *)newUsername newPassword:(NSString *)newPassword completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"updatePassword off main");
   NSMutableDictionary *args = [Login(origin, username) mutableCopy];
   if (newUsername) args[@"newUsername"] = newUsername;
   [self call:@"ac_passwords_update" profile:profile args:args secrets:newPassword ? @{@"newPassword" : newPassword} : @{}
@@ -170,6 +175,7 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
 }
 
 + (void)deletePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"deletePassword off main");
   [self call:@"ac_passwords_remove" profile:profile args:Login(origin, username) completion:completion];
 }
 
@@ -182,6 +188,7 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
 }
 
 + (void)exportPasswords:(NSString *)profile path:(NSString *)path completion:(ArdiaCoreResult)completion {
+  NSAssert(NSThread.isMainThread, @"exportPasswords off main");
   void (^run)(NSString *) = ^(NSString *target) {
     if (!target) return completion(@{@"status" : @"cancelled"});
     [self call:@"ac_passwords_export" profile:profile args:@{@"path" : target} completion:^(NSDictionary *result) {

@@ -42,6 +42,8 @@ const CHECKS = {
   "singleton": "a live process holding SingletonLock: the quit message, nothing changed, no key",
   "unknown-column": "a mock-keyed value in a column the re-key doesn't list, in a listed store: falls back to A (mock_password item), data intact and readable",
   "unlisted-v10": "a v10-looking title in a database the re-key doesn't list: logged, no block, migrated",
+  "undo": "ARDIA_TEST_REKEY_FAIL_AFTER_KEY=1: a failure after the key is undone to A (mock_password item, journal abandoned), data intact and readable",
+  "undo-crash": "every after-undo point the undo run logs, crashed, then a relaunch: undone to A or the abort message, dir intact",
   "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
 };
 
@@ -447,7 +449,18 @@ function prepare(root, name, fixture, { from = "template" } = {}) {
     execFileSync("cp", ["-c", "-R", join(fixture, from), data]);
     execFileSync("chmod", ["-R", "u+w", data]);
   } else mkdirSync(data);
-  return { dir, data, udd: join(data, "Chromium"), logs: [], launches: 0 };
+  const run = { dir, data, udd: join(data, "Chromium"), logs: [], launches: 0 };
+  made.push(run);
+  return run;
+}
+
+const made = [];
+function discard(runs) {
+  for (const run of runs) {
+    if (!existsSync(run.dir)) continue;
+    execFileSync("chmod", ["-R", "u+w", run.dir]);
+    rmSync(run.dir, { recursive: true, force: true });
+  }
 }
 
 function cloneApp(app, root) {
@@ -608,7 +621,9 @@ const CASES = {
       run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: point });
       const died = run.started.outcome === "exited" && points(snapshot(run).appLog).at(-1) === point;
       if (!died) { lines.push({ ok: false, name: `crash at ${point}`, detail: `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
-      lines.push(...(await recoverAndCheck(ctx, run, `crash at ${point}`)));
+      const result = await recoverAndCheck(ctx, run, `crash at ${point}`);
+      lines.push(...result);
+      if (!ctx.keep && result.every((l) => l.ok)) discard([run]);
     }
     return lines;
   },
@@ -698,6 +713,35 @@ const CASES = {
     lines.push({ ok: /History/.test(s.rekeyLog), name: "the v10-looking title in an unlisted database is logged", detail: s.rekeyLog.split("\n").filter((l) => /History|unlisted|preflight/.test(l)).join(" | ") });
     return lines;
   },
+  async undo(ctx) {
+    const run = prepare(ctx.root, "undo", ctx.fixture);
+    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_FAIL_AFTER_KEY: "1" });
+    let r = null;
+    if (run.started.outcome === "running") r = await settle(ctx.app, run, ctx.origin, ctx.profiles).catch((e) => ({ error: String(e.message) }));
+    const s = snapshot(run);
+    ctx.undoPoints = [...new Set(points(s.appLog))].filter((p) => p.startsWith("after-undo"));
+    const state = intactState(run, ctx.manifest, { key: [MOCK] });
+    const wrong = r && !r.error ? compare(r, ctx.manifest, state.scanned) : [r?.error ?? run.started.outcome];
+    return [
+      { ok: s.journal?.phase === "abandoned" && !state.wrong.length, name: "a failure after the key: undone to A, data intact", detail: `journal ${JSON.stringify(s.journal?.phase)}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` },
+      { ok: !wrong.length && !dialogShown(s.appLog), name: "after the undo every planted value reads back", detail: wrong.join("; ") },
+      { ok: ctx.undoPoints.length > 0, name: "the undo names its crash points", detail: ctx.undoPoints.join(" ") },
+    ];
+  },
+  async "undo-crash"(ctx) {
+    if (!ctx.undoPoints?.length) await CASES.undo(ctx);
+    const lines = [];
+    for (const point of ctx.undoPoints ?? []) {
+      const run = prepare(ctx.root, `undo-crash-${point}`, ctx.fixture);
+      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_FAIL_AFTER_KEY: "1", ARDIA_TEST_REKEY_CRASH: point });
+      const died = run.started.outcome === "exited" && points(snapshot(run).appLog).at(-1) === point;
+      if (!died) { lines.push({ ok: false, name: `undo crash at ${point}`, detail: `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
+      const result = await recoverAndCheck(ctx, run, `undo crash at ${point}`, { ARDIA_TEST_REKEY_FAIL_AFTER_KEY: "1" });
+      lines.push(...result);
+      if (!ctx.keep && result.every((l) => l.ok)) discard([run]);
+    }
+    return lines;
+  },
   async "a-then-d"(ctx) {
     const run = prepare(ctx.root, "a-then-d", ctx.fixture);
     seedKey(run, MOCK);
@@ -712,8 +756,8 @@ async function notMigrated(ctx, run, what, decision, keys) {
   return [{ ok: decision.test(s.rekeyLog) && !state.wrong.length && (!s.journal || s.journal.phase === "abandoned"), name: `${what}: not migrating, data and item unchanged`, detail: `${run.started.outcome}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` }];
 }
 
-async function recoverAndCheck(ctx, run, what) {
-  run.started = await start(ctx.app, run, REKEY);
+async function recoverAndCheck(ctx, run, what, extra = {}) {
+  run.started = await start(ctx.app, run, { ...REKEY, ...extra });
   if (run.started.outcome === "running") {
     let r;
     try { r = await settle(ctx.app, run, ctx.origin, ctx.profiles); } catch (e) { await stop(run.started.pid); return [{ ok: false, name: `${what}, then a relaunch reads back`, detail: String(e.message) }]; }
@@ -736,7 +780,7 @@ async function recoverAndCheck(ctx, run, what) {
 async function runChecks(app, fixture, only, keep) {
   const manifest = JSON.parse(readFileSync(join(fixture, "manifest.json"), "utf8"));
   const root = realpathSync(mkdtempSync(join(tmpdir(), "rekey-e2e-")));
-  const ctx = { app: cloneApp(app, root), fixture, manifest, root, only, profiles: manifest.profiles };
+  const ctx = { app: cloneApp(app, root), fixture, manifest, root, only, keep, profiles: manifest.profiles };
   const { server, origin } = await serve();
   ctx.origin = origin;
   const log = join(root, "rekey-e2e.log");
@@ -747,6 +791,7 @@ async function runChecks(app, fixture, only, keep) {
       if (!CASES[name]) { console.log(`FAIL  ${name}: no such check (--list)`); failed++; continue; }
       const t = Date.now();
       let lines;
+      const first = made.length;
       try { lines = await CASES[name](ctx); } catch (e) { lines = [{ ok: false, name, detail: String(e.stack ?? e) }]; }
       for (const l of lines) {
         const line = `${l.ok ? "PASS" : "FAIL"}  ${name}: ${l.name}${l.ok ? "" : `  (${String(l.detail).slice(0, 600)})`}`;
@@ -754,6 +799,7 @@ async function runChecks(app, fixture, only, keep) {
         writeFileSync(log, `${line}\n${l.detail ? `    ${l.detail}\n` : ""}`, { flag: "a" });
         if (!l.ok) failed++;
       }
+      if (!keep && lines.every((l) => l.ok)) discard(made.slice(first));
       console.log(`      ${name}: ${((Date.now() - t) / 1000).toFixed(0)} s`);
     }
   } finally {

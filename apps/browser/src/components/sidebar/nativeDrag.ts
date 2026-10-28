@@ -79,14 +79,14 @@ function stopTabDrag() {
 }
 
 addNativeSettingsHandlers({
-  "tabDrag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
+  "sidebar.drag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
     beginTabDrag(tabId, tabIds, true);
     watchTabDrag();
   },
-  "tabDrag.capture": (windowId: string) => captureDragPage(windowId),
-  "tabDrag.move": (_windowId: string, x: number, y: number, outside: boolean, overWindow: string | null, ox: number, oy: number, lifted: boolean | null) =>
-    updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null, lifted),
-  "tabDrag.end": (_windowId: string, commit: boolean, deadline?: number) => {
+  "sidebar.drag.capture": (windowId: string) => captureDragPage(windowId),
+  "sidebar.drag.move": (_windowId: string, x: number, y: number, outside: boolean, overWindow: string | null, ox: number, oy: number) =>
+    updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null),
+  "sidebar.drag.end": (_windowId: string, commit: boolean, deadline?: number) => {
     const late = !!deadline && Date.now() > deadline;
     const end = commit && !late ? endNativeTabDrag() : (cancelTabDrag(), { split: false, insert: false, before: null, onPage: false });
     stopTabDrag();

@@ -3,6 +3,7 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 type WindowShellModule = {
   active(windowId: string): boolean;
   pagesPool?(): boolean;
+  paneRoots?(windowId: string): boolean;
   setBackdrop(windowId: string, json: string): Promise<void>;
   describe(windowId: string): Promise<string>;
 };
@@ -20,6 +21,14 @@ export function windowShellActive(windowId: string): boolean {
 export function windowPagesPoolActive(): boolean {
   try {
     return native?.pagesPool?.() ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function windowPaneRootsActive(windowId: string): boolean {
+  try {
+    return native?.paneRoots?.(windowId) ?? false;
   } catch {
     return false;
   }

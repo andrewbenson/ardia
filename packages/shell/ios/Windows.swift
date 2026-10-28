@@ -3,6 +3,7 @@ import AppKit
 public enum WindowHost {
   public static var makeWindow: (() -> NSWindow)?
   nonisolated(unsafe) public static var makeContentView: ((_ windowId: String) -> NSView)?
+  nonisolated(unsafe) public static var makeRootView: ((_ module: String, _ props: [String: Any]) -> NSView?)?
   nonisolated(unsafe) public private(set) static var openingKinds: [String: String] = [:]
 
   static func makeContent(_ make: (String) -> NSView, id: String, kind: String) -> NSView {

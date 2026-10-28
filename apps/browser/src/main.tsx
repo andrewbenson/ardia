@@ -3,6 +3,7 @@ import "./lib/nativeEvents";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AppRegistry, unstable_batchedUpdates } from "react-native";
 import { WindowRoot } from "./App";
+import { registerPaneRoot } from "./PaneRoot";
 import { DevErrorBoundary } from "./DevErrorBoundary";
 import { startTranslate } from "./components/site/translate";
 import { afterFirstWindow, firstWindowCommitted } from "./lib/afterFirstWindow";
@@ -72,4 +73,5 @@ function Root({ windowId }: { windowId: string }) {
 }
 
 AppRegistry.registerComponent("main", () => Root);
+registerPaneRoot();
 perfMark("bundleEnd");

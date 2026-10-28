@@ -22,6 +22,10 @@ final class AppDelegate: ExpoAppDelegate {
       (factory?.rootViewFactory as? ExpoReactRootViewFactory)?.superView(
         withModuleName: "main", initialProperties: ["windowId": windowId], launchOptions: nil) ?? NSView()
     }
+    WindowHost.makeRootView = { [weak factory] module, props in
+      (factory?.rootViewFactory as? ExpoReactRootViewFactory)?.superView(
+        withModuleName: module, initialProperties: props, launchOptions: nil)
+    }
     factory.rootViewFactory.initializeReactHost(launchOptions: nil)
 
     super.applicationDidFinishLaunching(notification)

@@ -29,7 +29,10 @@ enum NativeWindowShell {
     NativeSplitChrome.start()
     if let store = NativeStoreHandle.store {
       let sink = commits
-      storeListener = store.subscribe { commit in sink.receive(Set(commit.state.windows.keys)) }
+      storeListener = store.subscribe { commit in
+        sink.receive(Set(commit.state.windows.keys))
+        NativePaneRoots.storeChanged()
+      }
     }
     WindowHost.makeContentView = { windowId in
       guard isBrowserWindow(windowId) else { return make(windowId) }
@@ -78,6 +81,7 @@ final class ShellHost {
   private var observers: [NSObjectProtocol] = []
   private var contentSizer: NSObjectProtocol?
   private var closing: NSObjectProtocol?
+  private var panes: PaneRootsHost?
   var onClose: (() -> Void)?
 
   init(windowId: String, root: NSView) {
@@ -96,6 +100,7 @@ final class ShellHost {
       })
     keepContentSized()
     shell.onWindow = { [weak self] window in self?.watchClose(of: window) }
+    panes = NativePaneRoots.start(windowId)
   }
 
   private func watchClose(of window: NSWindow?) {
@@ -108,6 +113,8 @@ final class ShellHost {
   }
 
   func stop() {
+    if let panes { NativePaneRoots.end(shell.windowId, ifHost: panes) }
+    panes = nil
     for observer in observers { NotificationCenter.default.removeObserver(observer) }
     observers = []
     if let closing { NotificationCenter.default.removeObserver(closing) }
@@ -159,6 +166,7 @@ final class ShellHost {
       "windowFill": shell.window?.backgroundColor.map { String(describing: $0) } ?? NSNull(),
       "appearance": shell.window?.effectiveAppearance.name.rawValue ?? NSNull(),
       "split": NativeSplitChrome.sample(shell.windowId) ?? NSNull(),
+      "paneRoots": NativePaneRoots.sample(shell.windowId) ?? NSNull(),
     ]
   }
 }
@@ -210,6 +218,7 @@ public class WindowShellModule: Module {
     }
 
     Function("pagesPool") { () -> Bool in NativeSplitChrome.panesEnabled }
+    Function("paneRoots") { (windowId: String) -> Bool in NativePaneRoots.active(windowId) }
 
     AsyncFunction("setBackdrop") { (windowId: String, json: String) in
       MainActor.assumeIsolated { NativeWindowShell.setBackdrop(windowId, json) }
@@ -232,6 +241,28 @@ public class WindowShellModule: Module {
           cover.layer?.backgroundColor = NSColor.systemPink.cgColor
           host.shell.overlay.addSubview(cover)
         }
+        return true
+      }
+      #else
+      return false
+      #endif
+    }.runOnQueue(.main)
+
+    AsyncFunction("devRefusePaneRoot") { (tabId: String, refused: Bool) -> Bool in
+      #if DEBUG
+      return MainActor.assumeIsolated {
+        if refused { NativePaneRoots.refusedTabs.insert(tabId) } else { NativePaneRoots.refusedTabs.remove(tabId) }
+        return true
+      }
+      #else
+      return false
+      #endif
+    }.runOnQueue(.main)
+
+    AsyncFunction("devLatePaneTeardown") { (seconds: Double) -> Bool in
+      #if DEBUG
+      return MainActor.assumeIsolated {
+        NativePaneRoots.lateTeardown = seconds
         return true
       }
       #else

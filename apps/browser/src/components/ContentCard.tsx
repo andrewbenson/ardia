@@ -1,4 +1,5 @@
 import { WebView, type OpenWindowRequest, type PageEngine } from "@ardia/ardiacore";
+import { windowPaneRootsActive } from "@ardia/settings";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
@@ -39,6 +40,7 @@ import { SadTab, StatusBubble } from "./layout/PaneOverlays";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
 import { useWindowShell } from "./layout/ShellBackdrop";
+import { dropPaneStatusStyle, dropPopoversOverCard, markPaneRootDrawn, publishPaneStatusStyle, publishPopoversOverCard, usePaneRootDrawn, usePaneStatusStyle, usePopoversOverCard } from "./layout/paneFeed";
 import { nativeSplitPanes, useNativePageTops, useNativeSplitChrome } from "./layout/nativeSplitChrome";
 import { SplitToolbarFeed } from "./layout/NativeSplitToolbars";
 import { pagerFor } from "./layout/profilePager";
@@ -97,6 +99,7 @@ export function ContentCard() {
   const peekId = useBrowser((s) => s.peeks[windowId]?.tabId);
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   const shell = useWindowShell();
+  const [paneRoots] = useState(() => windowPaneRootsActive(windowId));
   useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
@@ -273,6 +276,11 @@ export function ContentCard() {
   const peekEdge = usePeekEdge(windowId);
   const activeRect = activeId ? panes[activeId] : undefined;
   const popoversOverCard = peekEdge !== undefined && addressInSidebar && !small && !fullscreenTab && origin && activeRect ? activeId : undefined;
+  const [feedOwner] = useState(() => ({}));
+  useLayoutEffect(() => {
+    if (paneRoots) publishPopoversOverCard(windowId, feedOwner, popoversOverCard);
+  }, [paneRoots, windowId, popoversOverCard]);
+  useEffect(() => () => dropPopoversOverCard(windowId, feedOwner), [windowId]);
 
   return (
     <View
@@ -312,6 +320,7 @@ export function ContentCard() {
               popovers={tabId !== popoversOverCard}
               peekShown={!!peekId}
               nativePane={shell && nativeSplitPanes && !!split?.tabIds.includes(tabId)}
+              paneRoots={paneRoots}
             />
           );
         })}
@@ -370,6 +379,7 @@ const TabPane = memo(function TabPane({
   popovers,
   peekShown,
   nativePane,
+  paneRoots,
 }: {
   tabId: string;
   windowId: string;
@@ -392,10 +402,13 @@ const TabPane = memo(function TabPane({
   popovers: boolean;
   peekShown: boolean;
   nativePane: boolean;
+  paneRoots: boolean;
 }) {
   const theme = useTheme();
   const visible = !!rect;
   const live = visible || !!warm;
+  const overlays = !paneRoots || !usePaneRootDrawn(tabId);
+  const [feedOwner] = useState(() => ({}));
   const own = useTabValue(tabId, paneTab, shallowEqual);
   const isNewTab = !own.url;
   const emptyCard = useBrowser((s) => isNewTab && s.settings.newTabOpens === "commandBar");
@@ -420,6 +433,10 @@ const TabPane = memo(function TabPane({
   useLayoutEffect(() => {
     if (chromeInWindow) publishPaneChrome(windowId, { tabId, mode, bar: motion.bar, fade: motion.fade });
   });
+  useLayoutEffect(() => {
+    if (paneRoots) publishPaneStatusStyle(tabId, feedOwner, autoLayout ? motion.bottomStyle : undefined);
+  });
+  useEffect(() => () => dropPaneStatusStyle(tabId, feedOwner), [tabId]);
 
   return (
     <View
@@ -454,7 +471,7 @@ const TabPane = memo(function TabPane({
             {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
             {visible && isNewTab && !small && !nativePane && (inSplit ? <SplitEmptyState tabId={tabId} focused={focused} /> : emptyCard ? <EmptyCard windowId={windowId} tabId={tabId} /> : <NewTabPage key={tabId} tabId={tabId} toolbar={toolbar} />)}
             {visible && <InternalPage tabId={tabId} />}
-            {visible && (
+            {visible && overlays && (
               <PageOverlays
                 tabId={tabId}
                 windowId={windowId}
@@ -531,6 +548,55 @@ function PageOverlays({
       <NavigationOverlays tabId={tabId} windowId={windowId} geometry={geometry} peek={peek} />
       <SelectionPopover tabId={tabId} zoom={zoom} nativeAllowed={!peek} />
     </>
+  );
+}
+
+export function PaneContent({ windowId, tabId, shown }: { windowId: string; tabId: string; shown: boolean }) {
+  const [width, setWidth] = useState(0);
+  const split = useBrowser((s) => splitOf(s, tabId));
+  const focused = useActiveTabId() === tabId;
+  const fullscreenTab = useFullscreenTab(windowId);
+  const tabLayout = useTabLayout();
+  const addressInSidebar = useAddressBarInSidebar();
+  const small = useBrowser((s) => isSmallWindow(s.windows[windowId]));
+  const showSidebarButton = useBrowser((s) => s.settings.showSidebarButton !== false);
+  const peekShown = useBrowser((s) => !!s.peeks[windowId]?.tabId);
+  const statusStyle = usePaneStatusStyle(tabId);
+  const overCard = usePopoversOverCard(windowId);
+  const [feedOwner] = useState(() => ({}));
+  const drawing = shown && width > 0;
+  useLayoutEffect(() => {
+    if (!drawing) return;
+    markPaneRootDrawn(tabId, feedOwner, true);
+    return () => markPaneRootDrawn(tabId, feedOwner, false);
+  }, [tabId, drawing]);
+  const newTabShown = usePages((s) => !!s.pages[tabId]?.newTabShown);
+  const fullscreen = fullscreenTab === tabId;
+  const inSplit = !!split && !fullscreen;
+  const leading = useMemo(() => {
+    if (!split || fullscreen) return true;
+    const rect = splitGeometry(split, 1000, 1000).panes[tabId];
+    return !!rect && rect.x === 0 && rect.y === 0;
+  }, [split, fullscreen, tabId]);
+  const toolbar = !addressInSidebar && !small;
+  const geometry = !toolbar ? NO_TOOLBAR : toolbarGeometry({ sidebarButton: leading && tabLayout === "sidebar" && showSidebarButton });
+  return (
+    <View pointerEvents="box-none" style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {width > 0 && (
+        <PageOverlays
+          tabId={tabId}
+          windowId={windowId}
+          width={width}
+          geometry={geometry}
+          toolbar={toolbar}
+          fullscreen={fullscreen}
+          newTabShown={newTabShown}
+          statusStyle={statusStyle}
+          popovers={overCard !== tabId}
+          cliPill={!peekShown && (fullscreen || focused || !inSplit)}
+        />
+      )}
+    </View>
   );
 }
 

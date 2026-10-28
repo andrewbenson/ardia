@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(
-    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with ARDIA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, and the two strips' pixels compared.",
+    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with ARDIA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, the two strips' pixels compared, and the peek over a hidden strip: its slide in and out frame for frame at 30 fps, and its downloads button holding it out.",
   );
   process.exit(2);
 }
@@ -144,6 +144,22 @@ async function measure(native) {
       if (look === "peek") out.peekHit = await run(`return act("w1", "hit:200,22");`);
       await run(`${undo} return settle(600);`);
     }
+    out.peekMotion = await run(`
+      const peek = () => globalThis.acLayout.peek["strip:w1"];
+      st().toggleSidebar("w1");
+      return settle(600).then(() => peek().trace()).then(() => settle(50)).then(() => peek().show()).then(() => settle(500))
+        .then(() => peek().hide()).then(() => settle(600)).then(() => peek().samples())
+        .then((samples) => { st().toggleSidebar("w1"); return settle(600).then(() => samples); });`);
+    out.peekHeld = await run(`
+      const peek = () => globalThis.acLayout.peek["strip:w1"];
+      const seen = {};
+      st().toggleSidebar("w1");
+      return settle(600).then(() => peek().show()).then(() => settle(400))
+        .then(() => act("w1", "hit:1569,27")).then((hit) => (seen.hit = hit))
+        .then(() => act("w1", "click:1569,27")).then(() => settle(400)).then(() => (seen.open = !!st().windowUi.w1?.downloadsOpen))
+        .then(() => peek().hide()).then(() => settle(500)).then(() => (seen.heldLive = peek().live))
+        .then(() => { st().setDownloadsOpen("w1", false); return settle(800); }).then(() => (seen.afterClose = peek().live))
+        .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
     if (native) {
       const live = `globalThis.acLayout.peek["strip:w1"]?.live ?? null`;
       out.peekHover = await run(`
@@ -236,6 +252,51 @@ try {
       assert.deepEqual(off, []);
     });
     await rep.check("a click on a tab selects it on RN too", async () => assert.equal(rn.clicked, "t2"));
+    await rep.check("the peek's downloads button opens the list and holds the peek out until it closes, as on RN", async () => {
+      rep.log(`peek held rn ${JSON.stringify(rn.peekHeld)} native ${JSON.stringify(native.peekHeld)}`);
+      assert.match(native.peekHeld.hit, /^SolaraUI\.StripIconButton < SolaraUI\.StripControlsView/, `the native button is under the pointer: ${native.peekHeld.hit}`);
+      for (const [name, seen] of [["rn", rn.peekHeld], ["native", native.peekHeld]]) {
+        assert.equal(seen.open, true, `${name}: the click opened the downloads list`);
+        assert.equal(seen.heldLive, true, `${name}: the open list holds the peek out`);
+        assert.equal(seen.afterClose, false, `${name}: closing the list lets the peek go`);
+      }
+    });
+    await rep.check("the peek slides in and out on RN's 180 ms out-cubic, frame for frame at 30 fps", async () => {
+      const show = (samples) => JSON.stringify(samples.map(([t, x]) => [Math.round(t), Math.round(x * 1000) / 1000]));
+      rep.log(`rn peek ${show(rn.peekMotion)}`);
+      rep.log(`native peek ${show(native.peekMotion)}`);
+      const phases = (samples) => {
+        const top = samples.findIndex(([, x]) => x >= 0.9999);
+        const last = samples.findLastIndex(([, x]) => x >= 0.9999);
+        return { in: samples.slice(0, top + 1).filter(([, x], i) => i === 0 || x > 0), out: samples.slice(last) };
+      };
+      const cubic = (p) => 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 3);
+      const models = { in: (ms) => cubic(ms / 180), out: (ms) => 1 - cubic(ms / 180) };
+      const fit = (samples, model) => {
+        let best = null;
+        const moving = samples[1][0];
+        for (let start = moving - 200; start <= moving + 20; start += 0.25) {
+          const error = Math.max(...samples.slice(1).map(([t, x]) => Math.abs(x - model(t - start))));
+          if (!best || error < best.error) best = { start, error };
+        }
+        return best;
+      };
+      const at = (samples, t) => {
+        const i = samples.findIndex(([u]) => u >= t);
+        if (i <= 0) return i === 0 ? samples[0][1] : samples.at(-1)[1];
+        const [ta, xa] = samples[i - 1], [tb, xb] = samples[i];
+        return xa + ((xb - xa) * (t - ta)) / (tb - ta);
+      };
+      for (const phase of ["in", "out"]) {
+        const theirs = phases(rn.peekMotion)[phase], ours = phases(native.peekMotion)[phase];
+        assert.ok(theirs.length > 3 && ours.length > 3, `${phase}: traced rn ${theirs.length} native ${ours.length}`);
+        const a = fit(theirs, models[phase]), b = fit(ours, models[phase]);
+        const frames = Array.from({ length: 6 }, (_, k) => Math.abs(at(theirs, a.start + ((k + 1) * 1000) / 30) - at(ours, b.start + ((k + 1) * 1000) / 30)));
+        rep.log(`peek ${phase}: RN within ${a.error.toFixed(3)} of the curve, native within ${b.error.toFixed(3)}; 30 fps frames differ by ${frames.map((d) => d.toFixed(3)).join(" ")}`);
+        assert.ok(b.error <= 0.02, `native's slide ${phase} is ${b.error.toFixed(3)} off RN's 180 ms out-cubic`);
+        assert.ok(Math.max(...frames) <= 0.05, `${phase}: a 30 fps frame differs by ${Math.max(...frames).toFixed(3)} of the slide`);
+      }
+    });
     await rep.check("a collapsing group closes on RN's spring, frame for frame", async () => {
       const ours = native.motion.samples, theirs = rn.motion.samples;
       rep.log(`rn motion ${JSON.stringify(theirs.map(([t, x]) => [Math.round(t), Math.round(x * 10) / 10]))}`);
@@ -298,7 +359,7 @@ try {
       assert.match(seen.hit, /^SolaraUI\.Strip/, `the pointer is over the native strip: ${seen.hit}`);
       assert.equal(seen.overStrip, true, "still out over the native strip");
       assert.equal(seen.away, false, "gone once the pointer left the panel");
-      assert.deepEqual([seen.afterHide, seen.whileOut, seen.afterStripBack, seen.secondOut, seen.afterClose], [0, 1, 0, 1, 0], "one pointer monitor while a peek is out, none after it hides, the strip comes back or its window closes");
+      assert.deepEqual([seen.afterHide, seen.whileOut, seen.afterStripBack, seen.secondOut, seen.afterClose], [1, 1, 0, 1, 0], "one pointer monitor per window while its strip is hidden, none once the strip comes back or its window closes");
     });
     for (const [look, , , bottom = 42] of LOOKS) {
       if (!rn.looks?.[look] || !native.looks?.[look]) continue;

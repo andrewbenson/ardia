@@ -24,7 +24,7 @@ public class TopStripModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("peekMonitors") { () -> Int in
-      MainActor.assumeIsolated { TopStripHost.peekMonitors }
+      MainActor.assumeIsolated { TopStripHost.peekMonitors + TopStripPeekHost.hosts.values.filter(\.view.watching).count }
     }.runOnQueue(.main)
 
     AsyncFunction("traceGroup") { (windowId: String, groupId: String) in
@@ -52,6 +52,26 @@ public class TopStripModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("peekShow") { (windowId: String) in
+      MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.peek.show() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("peekHide") { (windowId: String) in
+      MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.peek.hide() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("tracePeek") { (windowId: String) in
+      MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.traceSlide() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("peekTrace") { (windowId: String) -> [[Double]] in
+      MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.slideTrace ?? [] }
+    }.runOnQueue(.main)
+
+    AsyncFunction("peekState") { (windowId: String) -> String in
+      MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId].flatMap { NativeTopStrip.json($0.describe()) } ?? "null" }
+    }.runOnQueue(.main)
+
     AsyncFunction("endIncoming") { (windowId: String) in
       MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.endIncoming() }
     }.runOnQueue(.main)
@@ -66,6 +86,7 @@ public class TopStripModule: Module {
 enum NativeTopStrip {
   static let kind = "topStrip"
   static let floatingKind = "topStripFloating"
+  static let peekKind = "topStripPeek"
   static var hosts: [String: TopStripHost] = [:]
 
   nonisolated static var enabled: Bool {
@@ -90,6 +111,7 @@ enum NativeTopStrip {
       let host = TopStripHost(windowId: windowId, takesDrops: false)
       return HostedContent(view: host.view, onUnmount: { host.stop() }, takesFocus: false, onState: { [weak host] json in host?.apply(json) })
     }
+    TopStripPeekHost.register()
   }
 
   static func json(_ value: Any) -> String? {
@@ -162,6 +184,9 @@ final class TopStripHost {
   }
   static var peekMonitors = 0
   private var peekInside = true
+  var pageWidth: Double? {
+    didSet { if pageWidth != oldValue { render() } }
+  }
 
   init(windowId: String, takesDrops: Bool = true) {
     self.windowId = windowId
@@ -229,8 +254,9 @@ final class TopStripHost {
   }
 
   private func render() {
-    guard let hostState, let state = state ?? NativeStoreHandle.store?.state else { return }
+    guard var hostState, let state = state ?? NativeStoreHandle.store?.state else { return }
     self.state = state
+    if let pageWidth { hostState.pageWidth = pageWidth }
     view.update(state: state, host: hostState)
   }
 

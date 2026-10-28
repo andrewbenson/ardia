@@ -50,7 +50,13 @@ public enum StripControlsLayout {
   public static func width(indicator: CGFloat) -> CGFloat { (indicator > 0 ? indicator + gap : 0) + downloadsBox }
 
   public static func nameWidth(_ title: String) -> CGFloat {
-    ceil((title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold)]).width)
+    measuredLikeYoga((title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold)]).width)
+  }
+
+  public static func measuredLikeYoga(_ width: CGFloat) -> CGFloat {
+    let pixel: CGFloat = 0.5
+    let text = ceil(width / pixel) * pixel
+    return ceil(text + pixel)
   }
 }
 
@@ -186,4 +192,48 @@ final class StripProfileIndicator: StripHoverView {
 
   override func press(_ mods: SidebarClickMods) { onPress?() }
   override func contextMenu() {}
+}
+
+@MainActor
+public final class StripPeekRow: NSView {
+  public let strip: TopStripView
+  public let controls = StripControlsView()
+  public var onPageWidth: (CGFloat) -> Void = { _ in }
+  public private(set) var pageWidth: CGFloat = 0
+
+  public override var isFlipped: Bool { true }
+
+  public init(strip: TopStripView) {
+    self.strip = strip
+    super.init(frame: .zero)
+    addSubview(strip)
+    addSubview(controls)
+  }
+
+  required init?(coder: NSCoder) { fatalError() }
+
+  public override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+
+  public static func frames(width: CGFloat, controls: CGFloat) -> (strip: CGRect, controls: CGRect) {
+    let left: CGFloat = 8
+    let right = max(84, controls + 8 + 6)
+    let strip = CGRect(x: left, y: 0, width: max(0, width - left - right), height: StripMetrics.height)
+    let row = CGRect(x: width - 8 - controls, y: StripControlsLayout.rowTop, width: controls, height: StripControlsLayout.height + 0.5)
+    return (strip, row)
+  }
+
+  public override func layout() {
+    super.layout()
+    let frames = Self.frames(width: bounds.width, controls: controls.width)
+    strip.frame = frames.strip
+    controls.frame = frames.controls
+    let next = frames.strip.width
+    if next != pageWidth {
+      pageWidth = next
+      onPageWidth(next)
+    }
+  }
 }

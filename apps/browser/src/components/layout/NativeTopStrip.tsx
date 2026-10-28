@@ -1,13 +1,16 @@
-import { endTopStripIncoming, hostedKinds, SolaraHostedView, topStripIncoming } from "@ardia/settings";
+import { endTopStripIncoming, hostedKinds, SolaraHostedView, topStripIncoming, topStripPeek } from "@ardia/settings";
 import { memo, useEffect, useMemo, useRef } from "react";
-import { Image, StyleSheet } from "react-native";
+import { registerDownloadsAnchor } from "../Downloads";
+import { openProfileMenu } from "../ProfileIndicator";
+import { Image, StyleSheet, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { toggleMute } from "../../lib/actions";
-import { shortcutHint } from "../../lib/commandShortcuts";
+import { shortcutHint, useShortcutHint, withShortcut } from "../../lib/commandShortcuts";
 import { PRODUCT } from "../../lib/productName";
 import { useLifecycle } from "../../lib/tabLifecycle";
-import { hex, profileTheme, selectedTabGlow, spaceLookSource, useSelectedTabGlow, useTheme, type Theme } from "../../lib/theme";
+import { hex, profileNameColor, profileTheme, selectedTabGlow, spaceLookSource, useSelectedTabGlow, useTheme, type Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
+import { useIsIncognito, useProfiles, useWindowProfile } from "../../store/hooks";
 import { engineMark, ENGINE_SYMBOLS } from "../../store/engines";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { clickTab } from "../sidebar/actions";
@@ -24,10 +27,31 @@ import { tuckTarget } from "./stripGroups";
 import { beginTabDrag, cancelTabDrag, endTabDrag, EXTERNAL_DRAG, setDragPicture, setInsert, setInsertResolver, updateTabDrag, useTabDrag } from "./tabDrag";
 
 let nativeTopStrip: boolean | undefined;
+let nativePeek: boolean | undefined;
 
 export function nativeTopStripEnabled(): boolean {
   return (nativeTopStrip ??= hostedKinds().includes("topStrip"));
 }
+
+export function nativeStripPeekEnabled(): boolean {
+  return (nativePeek ??= hostedKinds().includes("topStripPeek"));
+}
+
+const peekLive = new Map<string, (live: boolean, pageWidth: number) => void>();
+
+addNativeSettingsHandlers({
+  "topStrip.peek.action": (windowId: string, name: string, extra?: { live?: boolean; pageWidth?: number }) => {
+    const s = useBrowser.getState();
+    switch (name) {
+      case "profileMenu":
+        return void openProfileMenu(windowId);
+      case "toggleDownloads":
+        return s.setDownloadsOpen(windowId, !s.windowUi[windowId]?.downloadsOpen);
+      case "live":
+        return peekLive.get(windowId)?.(!!extra?.live, extra?.pageWidth ?? 0);
+    }
+  },
+});
 
 const NEW_TAB_MARK: number = PRODUCT === "Solara" ? require("../../../assets/solara/new-tab-mark.png") : require("../../../assets/new-tab-mark.png");
 const THEME_KEYS = [
@@ -176,19 +200,7 @@ function useIncomingFile(windowId: string) {
   }, [point, windowId]);
 }
 
-export const NativeTopStrip = memo(function NativeTopStrip({
-  windowId,
-  profileId,
-  floating,
-  pageWidth,
-  peek = null,
-}: {
-  windowId: string;
-  profileId: string;
-  floating: boolean;
-  pageWidth: number;
-  peek?: PeekArea | null;
-}) {
+function useTopStripState(windowId: string, profileId: string, floating: boolean, pageWidth: number, peek: PeekArea | null): string {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
   const bands = useBrowser(
@@ -248,5 +260,85 @@ export const NativeTopStrip = memo(function NativeTopStrip({
     [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, peek, playing, sleeping, engines, bands, closeHint],
   );
 
+  return state;
+}
+
+export const NativeTopStrip = memo(function NativeTopStrip({
+  windowId,
+  profileId,
+  floating,
+  pageWidth,
+  peek = null,
+}: {
+  windowId: string;
+  profileId: string;
+  floating: boolean;
+  pageWidth: number;
+  peek?: PeekArea | null;
+}) {
+  const state = useTopStripState(windowId, profileId, floating, pageWidth, peek);
   return <SolaraHostedView kind={floating ? "topStripFloating" : "topStrip"} windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
+});
+
+export const NativeStripPeek = memo(function NativeStripPeek({
+  windowId,
+  profileId,
+  enabled,
+  bandLeft,
+  style,
+  onLive,
+}: {
+  windowId: string;
+  profileId: string;
+  enabled: boolean;
+  bandLeft: number;
+  style: ViewStyle;
+  onLive(live: boolean, pageWidth: number): void;
+}) {
+  const theme = useTheme();
+  const strip = useTopStripState(windowId, profileId, true, 0, null);
+  const incognito = useIsIncognito();
+  const profiles = useProfiles().length;
+  const profile = useWindowProfile();
+  const downloadsOpen = useBrowser((s) => !!s.windowUi[windowId]?.downloadsOpen);
+  const hint = useShortcutHint("downloads");
+  const latestLive = useRef(onLive);
+  latestLive.current = onLive;
+
+  useEffect(() => {
+    const report = (live: boolean, pageWidth: number) => latestLive.current(live, pageWidth);
+    peekLive.set(windowId, report);
+    return () => void (peekLive.get(windowId) === report && peekLive.delete(windowId));
+  }, [windowId]);
+
+  useEffect(
+    () =>
+      registerDownloadsAnchor(windowId, async () => {
+        const rect = (await topStripPeek(windowId).state())?.downloads;
+        return rect ? { x: rect[0]!, y: rect[1]!, width: rect[2]!, height: rect[3]! } : null;
+      }),
+    [windowId],
+  );
+
+  const state = useMemo(
+    () =>
+      JSON.stringify({
+        strip,
+        controls: {
+          title: incognito ? "Incognito" : profile.name,
+          incognito,
+          profiles,
+          nameColor: incognito ? theme.textPrimary : profileNameColor(profile, theme.dark),
+          downloadsOpen,
+          downloadsTooltip: withShortcut("Downloads", hint),
+        },
+        theme: themeTokens(theme),
+        enabled,
+        held: downloadsOpen,
+        bandLeft,
+        look: { fill: hex(theme.windowTint[0]!), border: hex(theme.panelBorder), shadowOpacity: theme.panelShadowOpacity },
+      }),
+    [strip, incognito, profile, profiles, theme, downloadsOpen, hint, enabled, bandLeft],
+  );
+  return <SolaraHostedView kind="topStripPeek" windowId={windowId} state={state} style={style} />;
 });

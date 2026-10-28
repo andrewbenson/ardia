@@ -3,6 +3,11 @@ import { requireOptionalNativeModule } from "expo-modules-core";
 type TopStripModule = {
   incoming(windowId: string, x: number | null, y: number | null): Promise<string>;
   endIncoming(windowId: string): Promise<void>;
+  peekShow(windowId: string): Promise<void>;
+  peekHide(windowId: string): Promise<void>;
+  peekState(windowId: string): Promise<string>;
+  tracePeek(windowId: string): Promise<void>;
+  peekTrace(windowId: string): Promise<number[][]>;
 };
 
 const native = requireOptionalNativeModule<TopStripModule>("SolaraTopStrip");
@@ -15,4 +20,16 @@ export async function topStripIncoming(windowId: string, point: [number, number]
 
 export function endTopStripIncoming(windowId: string) {
   return native?.endIncoming?.(windowId) ?? Promise.resolve();
+}
+
+export type TopStripPeekState = { live: boolean; slide: number; watching: boolean; panel: number[] | null; downloads: number[] | null; pageWidth: number };
+
+export function topStripPeek(windowId: string) {
+  return {
+    show: () => native?.peekShow?.(windowId) ?? Promise.resolve(),
+    hide: () => native?.peekHide?.(windowId) ?? Promise.resolve(),
+    trace: () => native?.tracePeek?.(windowId) ?? Promise.resolve(),
+    samples: () => native?.peekTrace?.(windowId) ?? Promise.resolve([]),
+    state: async (): Promise<TopStripPeekState | null> => (native?.peekState ? (JSON.parse(await native.peekState(windowId)) as TopStripPeekState | null) : null),
+  };
 }

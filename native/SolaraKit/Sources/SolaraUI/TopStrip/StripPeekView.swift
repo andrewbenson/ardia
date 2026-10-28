@@ -18,7 +18,7 @@ public enum StripPeekMetrics {
   }
 
   public static func row(in panel: CGSize) -> CGRect {
-    CGRect(x: 0, y: pad - StripMetrics.itemTop, width: panel.width, height: StripMetrics.height)
+    CGRect(x: border, y: border + pad - StripMetrics.itemTop, width: max(0, panel.width - border * 2), height: StripMetrics.height)
   }
 
   public static func holds(_ point: CGPoint, windowWidth: CGFloat, bandLeft: CGFloat) -> Bool {
@@ -30,7 +30,7 @@ public enum StripPeekMetrics {
   public static func offset(_ slide: Double) -> CGFloat { -travel * CGFloat(1 - slide) }
 }
 
-public struct StripPeekLook: Equatable, Sendable {
+public struct StripPeekLook: Decodable, Equatable, Sendable {
   public var fill: String
   public var border: String
   public var shadowOpacity: Double
@@ -47,6 +47,7 @@ public final class StripPeekView: NSView {
   public let peek = EdgePeek(enabled: false, arc: false)
   public let panel = StripPeekPanel()
   public var bandLeft: CGFloat = 0
+  public var onLive: (Bool) -> Void = { _ in }
   public var content: NSView? {
     didSet {
       oldValue?.removeFromSuperview()
@@ -62,6 +63,8 @@ public final class StripPeekView: NSView {
   private var settled: (() -> Void)?
   private var monitor: Any?
   private var inside = false
+  public private(set) var slideTrace: [[Double]]?
+  private var tickedAt: CFTimeInterval = 0
 
   public override var isFlipped: Bool { true }
 
@@ -72,7 +75,16 @@ public final class StripPeekView: NSView {
     panel.apply(look)
     panel.isHidden = true
     addSubview(panel)
-    slide.onChange = { [weak self] _ in self?.place() }
+    slide.now = { [weak self] in
+      let now = CACurrentMediaTime()
+      self?.tickedAt = now
+      return now
+    }
+    slide.onChange = { [weak self] value in
+      guard let self else { return }
+      self.slideTrace?.append([self.tickedAt * 1000, value])
+      self.place()
+    }
     slide.onSettle = { [weak self] _ in
       let done = self?.settled
       self?.settled = nil
@@ -87,6 +99,7 @@ public final class StripPeekView: NSView {
     peek.onLive = { [weak self] live in
       self?.panel.isHidden = !live
       self?.place()
+      self?.onLive(live)
     }
   }
 
@@ -103,11 +116,14 @@ public final class StripPeekView: NSView {
 
   public func step(by seconds: Double) { slide.step(by: seconds) }
 
+  public func traceSlide() { slideTrace = [[CACurrentMediaTime() * 1000, slide.value]] }
+
   public override func hitTest(_ point: NSPoint) -> NSView? {
     guard live, let superview else { return nil }
     let local = convert(point, from: superview)
     guard panel.frame.contains(local) else { return nil }
-    return super.hitTest(point)
+    let hit = super.hitTest(point)
+    return hit === self || hit === panel ? nil : hit
   }
 
   public override func layout() {

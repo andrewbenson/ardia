@@ -32,7 +32,8 @@ import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/tileFolders";
 import { usePeek } from "./usePeek";
 import { devPeeks, lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
-import { NativeTopStrip, nativeTopStripEnabled, peekHovers, type PeekArea } from "./NativeTopStrip";
+import { NativeStripPeek, nativeStripPeekEnabled, NativeTopStrip, nativeTopStripEnabled, peekHovers, type PeekArea } from "./NativeTopStrip";
+import { topStripPeek } from "@ardia/settings";
 import {
   aimDrop,
   dockCellOf,
@@ -1615,11 +1616,55 @@ const PEEK_LEFT = 6;
 const PEEK_TOP = 4;
 
 export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
+  return nativeStripPeekEnabled() ? <NativeTopStripPeek windowWidth={windowWidth} enabled={enabled} /> : <ReactTopStripPeek windowWidth={windowWidth} enabled={enabled} />;
+}
+
+const PEEK_SHADOW_ROOM = 64;
+
+function NativeTopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
+  const windowId = useWindowId();
+  const profileId = useWindowProfileId();
+  const [{ live, pageWidth }, setLive] = useState({ live: false, pageWidth: 0 });
+  if (__DEV__) {
+    const peek = topStripPeek(windowId);
+    devPeeks[`strip:${windowId}`] = { show: () => void peek.show(), hide: () => void peek.hide(), live, trace: () => void peek.trace(), samples: () => peek.samples() };
+  }
+  useEffect(() => {
+    if (!enabled) return;
+    void setTrafficLightsCenter(windowId, lightsCenter(layout.sidebarWidth));
+    return () => void setTrafficLightsCenter(windowId, null);
+  }, [enabled, windowId]);
+  return (
+    <StripDropArea style={{ position: "absolute", left: PEEK_LEFT, top: PEEK_TOP, width: live ? windowWidth - PEEK_LEFT * 2 : 0, height: live ? PEEK_HEIGHT : 0 }}>
+      {live ? <WindowDragRegion style={{ position: "absolute", left: 0, right: 0, top: PEEK_PAD - ITEM_TOP, height: TOP_STRIP_HEIGHT }} /> : null}
+      <NativeStripPeek
+        windowId={windowId}
+        profileId={profileId}
+        enabled={enabled}
+        bandLeft={layout.trafficLightsWidth}
+        onLive={(live, pageWidth) => setLive({ live, pageWidth })}
+        style={{ position: "absolute", left: -PEEK_LEFT, top: -PEEK_TOP, width: windowWidth, height: PEEK_TOP + PEEK_HEIGHT + PEEK_SHADOW_ROOM }}
+      />
+      {live ? <ProfileSwipeArea surface="strip" style={{ position: "absolute", left: 0, right: 0, top: PEEK_PAD - ITEM_TOP, height: TOP_STRIP_HEIGHT }} pageWidth={pageWidth} /> : null}
+    </StripDropArea>
+  );
+}
+
+function ReactTopStripPeek({ windowWidth, enabled }: { windowWidth: number; enabled: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const downloadsOpen = useBrowser((s) => !!s.windowUi[windowId]?.downloadsOpen);
   const { slide, live, show, hide, recheck } = usePeek(enabled, false, () => !!useBrowser.getState().windowUi[windowId]?.downloadsOpen);
-  if (__DEV__) devPeeks[`strip:${windowId}`] = { show, hide, live };
+  const slideTrace = useRef<number[][] | null>(null);
+  useEffect(() => {
+    if (!__DEV__) return;
+    const id = slide.addListener(({ value }) => slideTrace.current?.push([performance.now(), value]));
+    return () => slide.removeListener(id);
+  }, [slide]);
+  if (__DEV__) {
+    const trace = () => void (slideTrace.current = [[performance.now(), live ? 1 : 0]]);
+    devPeeks[`strip:${windowId}`] = { show, hide, live, trace, samples: () => slideTrace.current ?? [] };
+  }
   const nativeLeave = nativeTopStripEnabled();
   useEffect(() => {
     if (!nativeLeave) return;

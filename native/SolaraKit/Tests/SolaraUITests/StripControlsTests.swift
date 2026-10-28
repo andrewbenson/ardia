@@ -34,3 +34,20 @@ import Testing
     #expect(actions == [.toggleDownloads, .profileMenu])
   }
 }
+
+@Suite struct StripNameWidthTests {
+  @Test func theNameIsMeasuredAsRNsOnLayoutReportsItThenRoundedUp() {
+    #expect(StripControlsLayout.measuredLikeYoga(54.834) == 56)
+    #expect(StripControlsLayout.measuredLikeYoga(54.3) == 55)
+    #expect(StripControlsLayout.measuredLikeYoga(55) == 56)
+  }
+}
+
+@MainActor @Suite struct StripPeekRowTests {
+  @Test func theStripFillsTheRowUpToTheControlsAsTopTabStripLaysItOut() {
+    let frames = StripPeekRow.frames(width: 1187, controls: 114)
+    #expect(frames.strip == CGRect(x: 8, y: 0, width: 1187 - 8 - 128, height: 42))
+    #expect(frames.controls == CGRect(x: 1187 - 8 - 114, y: 4, width: 114, height: 34.5))
+    #expect(StripPeekRow.frames(width: 1187, controls: 34).strip.width == CGFloat(1095))
+  }
+}

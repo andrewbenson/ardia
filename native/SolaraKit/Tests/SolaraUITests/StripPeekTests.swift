@@ -17,7 +17,7 @@ import Testing
 
   @Test func thePanelSitsUnderTheBandAndSlidesFromAboveIt() {
     #expect(StripPeekMetrics.panel(windowWidth: 1200) == CGRect(x: 6, y: 4, width: 1188, height: 46))
-    #expect(StripPeekMetrics.row(in: CGSize(width: 1188, height: 46)) == CGRect(x: 0, y: 2, width: 1188, height: 42))
+    #expect(StripPeekMetrics.row(in: CGSize(width: 1188, height: 46)) == CGRect(x: 0.5, y: 2.5, width: 1187, height: 42))
     #expect(StripPeekMetrics.offset(0) == -54)
     #expect(StripPeekMetrics.offset(1) == 0)
   }
@@ -50,6 +50,24 @@ import Testing
     view.step(by: 0.2)
     #expect(view.slideValue == 0)
     #expect(!view.live)
+  }
+
+  @Test func onlyTheContentTakesClicksSoTheEmptyPanelFallsThroughToTheDragRegionBelow() {
+    let container = NSView(frame: NSRect(x: 0, y: 0, width: 1200, height: 80))
+    let view = view()
+    container.addSubview(view)
+    let content = StripPeekRow(strip: TopStripView(windowId: "w1"))
+    view.content = content
+    let tab = NSView(frame: NSRect(x: 100, y: 5, width: 50, height: 30))
+    content.strip.addSubview(tab)
+    func hit(_ x: CGFloat, _ y: CGFloat) -> NSView? { view.hitTest(view.convert(NSPoint(x: x, y: y), to: container)) }
+    #expect(hit(120, 20) == nil)
+    view.pointer(at: CGPoint(x: 300, y: 2))
+    view.step(by: 0.2)
+    view.layoutSubtreeIfNeeded()
+    #expect(hit(6.5 + 8 + 120, 4.5 + 2 + 20) === tab)
+    #expect(hit(600, 20) == nil)
+    #expect(hit(600, 70) == nil)
   }
 
   @Test func aHeldPeekStaysOutUntilRechecked() {

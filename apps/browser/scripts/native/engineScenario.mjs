@@ -209,10 +209,8 @@ async function environment(prefix, sharedFolderOps) {
   if (process.env.ORACLE_REDESIGN) {
     const marks = new WeakMap();
     const loginData = () => shell.passwordStores.get(shell.current.device);
-    native.readPasswordsWithMark = async (profile) => {
-      const logins = await native.readPasswords(profile);
-      return logins ? { logins, mark: marks.get(loginData()) ?? null } : null;
-    };
+    const { withSealedPasswords } = await import(pathToFileURL(join(app, "src/sync/redesign/fakeSeal.mjs")).href);
+    withSealedPasswords(native, () => shell.ardiaCoreNativeModules.ArdiaCEF, () => marks.get(loginData()) ?? null);
     globalThis.acTestEngineCall = (name, _profile, args) => {
       if (name !== "ac_passwords_mark") return undefined;
       marks.set(loginData(), args.value);

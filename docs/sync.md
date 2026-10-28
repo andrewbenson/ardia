@@ -346,6 +346,26 @@ Saved passwords are Chrome's (its password manager).
   - Turning sync off, or turning Passwords off, never removes a password. Only a password
     deleted on another Mac is deleted here.
 - **Cadence.** Passwords are read at most every 30 s (and at once with Sync Now).
+- **Plain text in JS, until redesign step 11.** Until redesign step 11, with the redesign switch off, saved
+  passwords pass through the app's JS in plain text during sync and are held in its memory and in the locally
+  sealed sync state (sync-state.nns and sync-journal.nns, encrypted under the sync key in the Keychain); the sync
+  folder holds them only inside chain-encrypted files. With the switch on, the native module seals each password
+  for its login and JS only holds the sealed value; once sealing is on it stays on until the app quits, and the
+  plain read refuses. The guarantee that even a compromised JS can't read a password lands with step 11, which
+  removes the plain path.
+- **Sealed values (switch on).** A pw: value in JS is `{ o, u, s }`, never `{ o, u, p }`.
+  - `s` is the password sealed under the chain's password key, bound to its origin and username and padded to 32
+    bytes; the same password seals to the same `s`, so JS can still compare and digest it.
+  - The folder format doesn't change: native seals pw: values as it reads files and opens them as it writes, so
+    older Macs keep syncing. A write with a plain `p`, or an `s` that doesn't open, is refused, and the cycle
+    stalls with a fault that names only `pw:`.
+  - The local state and journal are sealed under new ids (`state.v2`, `journal.v2`); an older build can't open
+    them and starts fresh instead of reading sealed values as passwords.
+  - The password ledger (sync-pw-ledger.json) is v2, its digests over `s`. A v1 ledger is migrated natively once
+    Login Data reads cleanly and the state is known; until then password sync pauses rather than rebuilding.
+  - Before a login is offered, its `s` is checked against this chain's key. One that doesn't open is left out of
+    the cycle (not published, not removed, not stamped) and offered again next cycle.
+  - Saving opens `s` natively (`saveSealedPassword`); JS never gets the password back.
 
 ## UX (from Dia's binary)
 

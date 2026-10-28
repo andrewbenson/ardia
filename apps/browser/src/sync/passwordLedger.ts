@@ -1,6 +1,6 @@
 import { hlcWall, type HLC } from "@ardia/sync";
 
-export type LedgerValue = { o: string; u: string; p: string };
+export type LedgerValue = { o: string; u: string; s: string };
 export type LedgerEntry = { d: string[]; h: HLC | null; m: number };
 export type Ledger = { v: 1; L: number; t: number; keys: Record<string, LedgerEntry> };
 export type LocalLogin = { value: LedgerValue; modified: number };
@@ -27,7 +27,7 @@ export const formatMark = (mark: Mark) => `${mark.L}@${mark.t}`;
 export function digestOf(value: LedgerValue | null | undefined): string {
   if (!value) return "";
   let h = 0x811c9dc5;
-  const text = `${value.o}\u0000${value.u}\u0000${value.p}`;
+  const text = `${value.o}\u0000${value.u}\u0000${value.s}`;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;

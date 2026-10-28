@@ -4,6 +4,7 @@ syncRedesign.on = process.env.SYNC_REDESIGN !== "off";
 export const fixedBy = (step) => (syncRedesign.on ? {} : { todo: `${step}, with syncRedesign on` });
 
 const shell = await import("../../test-native/index.ts");
+const { withSealedPasswords } = await import("./fakeSeal.mjs");
 const byLoginData = new WeakMap();
 const noLoginData = {};
 const loginData = () => shell.passwordStores.get(shell.current.device) ?? noLoginData;
@@ -36,7 +37,8 @@ const loginDataMark = {
 globalThis.acTestLoginDataMark = loginDataMark;
 const withMarkedRead = (value) => {
   const native = value?.ArdiaSync;
-  if (native && !native.readPasswordsWithMark)
+  if (syncRedesign.on) withSealedPasswords(native, () => globalThis.acTestNativeModules?.ArdiaCEF ?? shell.ardiaCoreNativeModules.ArdiaCEF, () => loginDataMark.value);
+  else if (native && !native.readPasswordsWithMark)
     native.readPasswordsWithMark = async (profile) => {
       const logins = await native.readPasswords(profile);
       return logins ? { logins, mark: loginDataMark.value } : null;

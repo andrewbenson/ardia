@@ -13,6 +13,7 @@ import {
   type Extraction,
   type ExtensionsAdapter,
   type FolderInfo,
+  type LocalKind,
   type LogFile,
   type Op,
   type PhraseResult,
@@ -52,7 +53,7 @@ import {
 import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
 import { syncRedesign } from "./redesignSwitch";
-import { ledgerFromNewerVersion, ledgerPasswordsAdapter, type HeldPasswords } from "./ledgerPasswords";
+import { ledgerFromNewerVersion, ledgerPasswordsAdapter, migrateLedger, type HeldPasswords } from "./ledgerPasswords";
 import { editJournal, noteInStep, noteSeen, prunableSeen, pruneSeen } from "./journalHost";
 import { choice, digest } from "./notes";
 import { isObject, readableBatch, readableScope } from "./readable";
@@ -169,6 +170,11 @@ let newerFormat = false;
 const NEWER_FORMAT = "This Mac's sync settings were saved by a newer version of Solara. Update Solara to keep syncing.";
 const PASSWORDS_FROM_NEWER_VERSION = "Passwords aren't syncing: a newer version of Solara saved this Mac's password records. Update Solara to sync passwords again.";
 const passwordsRefused = () => syncRedesign.on && doc.types.passwords && ledgerFromNewerVersion();
+const SEALED_PASSWORD_FAULT = "Sync stopped on an internal fault: a pw: value didn't open with this Mac's sync key, so nothing was sent.";
+const sealedPasswordFault = (error: unknown) => ((error as { code?: unknown } | null)?.code === "ERR_SEALED_PASSWORDS" ? SEALED_PASSWORD_FAULT : null);
+const sealingPasswords = () => syncRedesign.on && !!SyncNative?.useSealedPasswords && !!SyncNative.checkSealed && !!SyncNative.saveSealedPassword && !!SyncNative.migrateLedger;
+let recordsKnown = false;
+let journalRefused = false;
 const SESSION_UNREADABLE = "Sync is paused because Solara couldn't read its saved session. Nothing from this window is sent to your other Macs.";
 let stopping = false;
 let turningOn = false;
@@ -211,19 +217,22 @@ type Journal = Record<string, LogFile[]>;
 let journal: Journal = {};
 let journalOnDisk = false;
 
-async function openSealed<T>(name: string, fallback: T): Promise<T> {
+async function openSealed<T>(name: string, kind: LocalKind, fallback: T): Promise<{ value: T; opened: boolean; refused: boolean }> {
   const sealed = readDocument(name);
-  const json = sealed ? await SyncNative?.openLocal(sealed) : null;
+  const json = sealed ? await (sealingPasswords() ? SyncNative?.openLocal(sealed, kind) : SyncNative?.openLocal(sealed)) : null;
   try {
-    if (json) return JSON.parse(json) as T;
+    if (json) return { value: JSON.parse(json) as T, opened: true, refused: false };
   } catch {}
-  return fallback;
+  return { value: fallback, opened: false, refused: !!sealed };
 }
 
 async function loadState(loading: number): Promise<boolean> {
-  const saved = await openSealed<unknown>(STATE, {});
-  const savedJournal = (await openSealed<{ journal?: unknown }>(JOURNAL, {})).journal;
+  const { value: saved, opened } = await openSealed<unknown>(STATE, "state", {});
+  const { value: journalDoc, refused: journalUnopened } = await openSealed<{ journal?: unknown }>(JOURNAL, "journal", {});
+  const savedJournal = journalDoc.journal;
   if (loading !== generation) return false;
+  recordsKnown = opened;
+  journalRefused = journalUnopened && sealingPasswords();
   const scopes: SyncDoc["scopes"] = {};
   for (const [name, scope] of Object.entries(isObject(saved) ? saved : {})) if (readableScope(scope)) scopes[name] = scope;
   journal = {};
@@ -272,12 +281,13 @@ async function loadState(loading: number): Promise<boolean> {
 const persistJournal = (scope: string) => async (batches: LogFile[]) => {
   const list = (journal[scope] ??= []);
   for (const file of batches) if (!list.some((f) => f.device === file.device && f.seq === file.seq)) list.push(file);
-  const sealed = await SyncNative!.sealLocal(JSON.stringify({ journal }));
+  const sealed = await (sealingPasswords() ? SyncNative!.sealLocal(JSON.stringify({ journal }), "journal") : SyncNative!.sealLocal(JSON.stringify({ journal })));
   await saveDocument(JOURNAL, sealed);
   journalOnDisk = true;
 };
 
 function pruneJournal(saved: Record<string, number>) {
+  if (journalRefused) return;
   for (const [scope, list] of Object.entries(journal)) {
     if (revivalBatches.has(scope)) continue;
     const left = list.filter((f) => f.seq > (saved[scope] ?? 0));
@@ -288,6 +298,7 @@ function pruneJournal(saved: Record<string, number>) {
 }
 
 function clearJournal() {
+  journalRefused = false;
   journal = {};
   journalOnDisk = false;
   writeDocument(JOURNAL, "");
@@ -317,7 +328,7 @@ function save() {
   sealing = (async () => {
     let landed = false;
     try {
-      const sealed = await SyncNative?.sealLocal(state);
+      const sealed = await (sealingPasswords() ? SyncNative?.sealLocal(state, "state") : SyncNative?.sealLocal(state));
       if (sealed) {
         await saveDocument(STATE, sealed);
         savedState = state;
@@ -390,6 +401,8 @@ function pruneSeenKeys(scopes: Record<string, ScopeState>, now: number) {
   extractedThisCycle.clear();
 }
 
+const ledgerScopes = () => Object.fromEntries(Object.entries(doc.profiles).map(([profileId, link]) => [engineProfile(profileId), `p:${link.syncId}`]));
+
 export const ledgerScopeOf = (profileId: string) => `${doc.folder}\n${doc.deviceId}@${doc.setupAt ?? 0}\n${doc.profiles[profileId]?.syncId ?? ""}`;
 
 function heldPasswordsByProfile(): Record<string, number> {
@@ -433,7 +446,14 @@ function profileAdapters(profileId: string, retiring: boolean, everyType = false
   let passwords = passwordAdapters.get(profileId);
   if (!passwords) {
     const readMarked = SyncNative?.readPasswordsWithMark?.bind(SyncNative);
-    passwords = syncRedesign.on && readMarked ? ledgerPasswordsAdapter(profileId, () => cycleForcesPasswords, readMarked, () => ledgerScopeOf(profileId)) : passwordsAdapter(profileId, () => cycleForcesPasswords);
+    const native = SyncNative;
+    passwords =
+      native && readMarked && sealingPasswords()
+        ? ledgerPasswordsAdapter(profileId, () => cycleForcesPasswords, readMarked, () => ledgerScopeOf(profileId), {
+            check: (values) => native.checkSealed!(values),
+            save: (profile, origin, username, sealed, replacing) => native.saveSealedPassword!(profile, origin, username, sealed, replacing),
+          })
+        : passwordsAdapter(profileId, () => cycleForcesPasswords);
     passwordAdapters.set(profileId, passwords);
   }
   return [
@@ -494,6 +514,7 @@ async function runCycle({ retiring = false } = {}) {
     if (status === "unavailable") return publishUi({ status: "offline", error: null });
     if (status === "missing") return await resetFromElsewhere();
     const transport = folderTransport(native, doc.folder);
+    if (sealingPasswords() && recordsKnown && !journalRefused) await migrateLedger((text) => native.migrateLedger!(text, ledgerScopes(), JSON.stringify(doc.scopes)));
     clock = new Clock(doc.deviceId, doc.clock);
     const device = doc.deviceId;
     const app = (doc.scopes[APP_SCOPE] ??= doc.joining ? { ...emptyScope(), awaitRemote: true } : { ...emptyScope(), joined: true });
@@ -550,10 +571,12 @@ async function runCycle({ retiring = false } = {}) {
     pruneSeenKeys(doc.scopes, doc.lastSyncedAt);
     noteInStep(doc.scopes, doc.lastSyncedAt, (key) => !(key.startsWith("pw:") && passwordsRefused()));
     if (forceRequests === forcedBy) forcePasswords = false;
+    recordsKnown = true;
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
-    console.warn("[sync] cycle failed", error);
-    publishUi({ status: "stalled", error: errorText(error) });
+    const fault = sealedPasswordFault(error);
+    console.warn("[sync] cycle failed", fault ?? error);
+    publishUi({ status: "stalled", error: fault ?? errorText(error) });
   } finally {
     clearTimeout(slow);
     running = false;
@@ -1223,6 +1246,7 @@ function addLinkedProfile(syncId: string, record: ProfileRecord, shareWith: stri
 export function startSync() {
   if (!SyncNative) return;
   if (persistenceRefused()) return publishUi({ status: "unavailable", error: SESSION_UNREADABLE });
+  if (sealingPasswords()) SyncNative.useSealedPasswords!();
   load();
   editJournal();
   if (newerFormat) return publishUi({ status: "unavailable", error: NEWER_FORMAT });

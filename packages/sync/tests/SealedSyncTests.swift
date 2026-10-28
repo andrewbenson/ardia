@@ -67,6 +67,12 @@ final class SealedSyncTests: XCTestCase {
       XCTAssertThrowsError(try PasswordValues.convert(file(value), .folderFile, .seal, keys: keys), value)
     }
     XCTAssertEqual(try PasswordValues.convert(file(#"{"o":"https://a.example","u":"me"}"#), .folderFile, .seal, keys: keys), file(#"{"o":"https://a.example","u":"me"}"#))
+    do {
+      _ = try PasswordValues.convert(file(#"{"o":"https://secret-origin.example","u":"secret-user","s":"c2VjcmV0LXNlYWw="}"#), .folderFile, .open, keys: keys)
+      XCTFail("a seal that doesn't open is refused")
+    } catch {
+      XCTAssertEqual("\(error)", "pw: a sealed password that doesn't open", "a refusal names the key's type, never its origin, username or seal")
+    }
     let base = #"{"s":{"base":{"pw:https://a.example\nme":"{\"o\":\"https://a.example\",\"p\":\"one\",\"u\":\"me\",\"x\":1}"}}}"#
     XCTAssertThrowsError(try PasswordValues.convert(base, .state, .seal, keys: keys))
   }

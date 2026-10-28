@@ -26,7 +26,7 @@ final class LedgerMigrationTests: XCTestCase {
     let text = ledger(v1(la), v1(lb), v1(rc))
     let profiles = ["default": LedgerMigration.Profile(logins: [CodeUnits(a): la, CodeUnits(b): lb], records: [CodeUnits(c): rc])]
     XCTAssertTrue(LedgerMigration.needsMigration(text))
-    let out = try XCTUnwrap(try LedgerMigration.migrate(text, profiles: profiles, keys: keys))
+    let out = try XCTUnwrap(try LedgerMigration.migrate(text, keys: keys) { profiles[$0] })
     let expected = ledger(try v2(la), try v2(lb), try v2(rc)).replacingOccurrences(of: #""v":1,"profiles""#, with: #""v":2,"profiles""#)
       .replacingOccurrences(of: #","old.1"]"#, with: "]")
     XCTAssertEqual(out, expected, "L, t, h, m, scope, held and gated are kept; d[1...] is dropped")
@@ -37,15 +37,15 @@ final class LedgerMigrationTests: XCTestCase {
     let edited = login("https://a.example", "me", "edited here")
     let record = login("https://a.example", "me", "one")
     let text = ledger(v1(login("https://a.example", "me", "before the edit")), "x", "y")
-    let out = try XCTUnwrap(try LedgerMigration.migrate(text, profiles: ["default": .init(logins: [CodeUnits(a): edited], records: [CodeUnits(a): record])], keys: keys))
+    let out = try XCTUnwrap(try LedgerMigration.migrate(text, keys: keys) { $0 == "default" ? .init(logins: [CodeUnits(a): edited], records: [CodeUnits(a): record]) : nil })
     XCTAssertTrue(out.contains(#""pw:https://a.example\nme":{"d":["v1:unmatched"]"#))
   }
 
   func testUnreadableLoginDataLeavesTheLedgerAsItIs() throws {
     let text = ledger("a", "b", "c")
-    XCTAssertNil(try LedgerMigration.migrate(text, profiles: ["default": .init(logins: nil, records: [:])], keys: keys))
-    XCTAssertNil(try LedgerMigration.migrate(text, profiles: [:], keys: keys), "a profile we can't read pauses too")
-    XCTAssertNil(try LedgerMigration.migrate(#"{"v":2,"profiles":{}}"#, profiles: [:], keys: keys), "only a v1 ledger migrates")
+    XCTAssertNil(try LedgerMigration.migrate(text, keys: keys) { $0 == "default" ? .init(logins: nil, records: [:]) : nil })
+    XCTAssertNil(try LedgerMigration.migrate(text, keys: keys) { _ in nil }, "a profile we can't read pauses too")
+    XCTAssertNil(try LedgerMigration.migrate(#"{"v":2,"profiles":{}}"#, keys: keys) { _ in nil }, "only a v1 ledger migrates")
   }
 
   func testAfterACrashBetweenTheStateAndTheLedgerTheSealedStateStillGivesTheRecords() throws {
@@ -54,7 +54,7 @@ final class LedgerMigrationTests: XCTestCase {
     let v2State = try PasswordValues.convert(v1State, .state, .seal, keys: keys)
     XCTAssertEqual(LedgerMigration.records(fromState: v2State, scope: "p:abc", keys: keys), [CodeUnits(c): rc])
     XCTAssertEqual(LedgerMigration.records(fromState: v1State, scope: "p:abc", keys: keys), [CodeUnits(c): rc])
-    let out = try XCTUnwrap(try LedgerMigration.migrate(ledger("a", "b", v1(rc)), profiles: ["default": .init(logins: [:], records: [CodeUnits(c): rc])], keys: keys))
+    let out = try XCTUnwrap(try LedgerMigration.migrate(ledger("a", "b", v1(rc)), keys: keys) { $0 == "default" ? .init(logins: [:], records: [CodeUnits(c): rc]) : nil })
     XCTAssertTrue(out.contains(#"{"d":[\#(PasswordText.jsonString(try v2(rc)))]"#))
   }
 

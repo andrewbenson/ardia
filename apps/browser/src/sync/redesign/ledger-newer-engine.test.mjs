@@ -14,7 +14,7 @@ test("LEDGER-newer: a password ledger from a newer version stops password sync w
   try {
     const engine = await onAndSynced();
     const syncId = engine.useSync.getState().profiles.default.syncId;
-    const newer = JSON.stringify({ v: 2, profiles: {} });
+    const newer = JSON.stringify({ v: 3, profiles: {} });
     shell.docs.set("sync-pw-ledger.json", newer);
     const b = passwordMac(`p:${syncId}`);
     await b.sync();
@@ -37,6 +37,7 @@ test("LEDGER-newer: a password ledger from a newer version stops password sync w
     await engine.syncNow();
     await settle(60);
     assert.equal(engine.useSync.getState().passwordsError, null, "control: with a ledger it can read, the reason goes away");
+    assert.equal(JSON.parse(shell.docs.get("sync-pw-ledger.json")).v, 2, "and the older ledger is migrated to sealed digests");
   } finally {
     native.readPasswords = realReadPasswords;
   }

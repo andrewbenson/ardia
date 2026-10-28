@@ -5,6 +5,7 @@ await import("../../../store/browser.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
 const { ledgerPasswordsAdapter } = await import("../../../sync/ledgerPasswords.ts");
 const stub = await import("../../../test-native/index.ts");
+const { plainOf, sealMarked, sealedCalls } = await import("../fakeSeal.mjs");
 
 let clockNow = 1_800_000_000_000;
 const realNow = Date.now;
@@ -43,7 +44,7 @@ function device(id, transport, slowChrome) {
     const logins = [...stub.passwordStores.get(id).values()].map((l) => ({ ...l }));
     return { logins, mark: marks.get(profile) ?? null };
   };
-  const pw = ledgerPasswordsAdapter(id, () => forced, readMarked, () => "s");
+  const pw = ledgerPasswordsAdapter(id, () => forced, sealMarked(readMarked), () => "s", sealedCalls(() => stub.ardiaCoreNativeModules.ArdiaCEF));
   return {
     state,
     store: () => stub.passwordStores.get(id),
@@ -80,7 +81,7 @@ test("QUIET-forever: one login Chrome never confirms keeps the quiet window open
     a.store().set(LOGIN, login("edited on A"));
     for (let cycle = 0; cycle < 20; cycle++) { clockNow += 15_000; await a.sync(); }
     store.set = realSet;
-    assert.equal(a.state.records[KEY]?.v?.p, "edited on A", `the edit here is published within 5 minutes (record has ${a.state.records[KEY]?.v?.p})`);
+    assert.equal(plainOf(a.state.records[KEY]?.v), "edited on A", `the edit here is published within 5 minutes (record has ${plainOf(a.state.records[KEY]?.v)})`);
   } finally {
     Date.now = realNow;
     globalThis.setTimeout = realTimeout;

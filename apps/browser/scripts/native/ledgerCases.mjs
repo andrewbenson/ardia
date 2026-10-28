@@ -43,13 +43,13 @@ export function randomCase(seed) {
   const T = 1_790_000_000_000;
   const keys = ["pw:https://a.example\nme", "pw:https://b.example\nyou", "pw:https://c.example\n", "pw:https://ü.example\nü", "pw:https://a.example\njos\u00e9", "pw:https://a.example\njose\u0301"];
   const values = [
-    { o: "https://a.example", u: "me", p: "one" },
-    { o: "https://a.example", u: "me", p: "two" },
-    { o: "https://b.example", u: "you", p: "pässwörd" },
-    { o: "https://c.example", u: "", p: "🔑" },
-    { o: "https://a.example", u: "me", p: "" },
-    { o: "https://a.example", u: "jos\u00e9", p: "caf\u00e9" },
-    { o: "https://a.example", u: "jose\u0301", p: "cafe\u0301" },
+    { o: "https://a.example", u: "me", s: "one" },
+    { o: "https://a.example", u: "me", s: "two" },
+    { o: "https://b.example", u: "you", s: "pässwörd" },
+    { o: "https://c.example", u: "", s: "🔑" },
+    { o: "https://a.example", u: "me", s: "" },
+    { o: "https://a.example", u: "jos\u00e9", s: "caf\u00e9" },
+    { o: "https://a.example", u: "jose\u0301", s: "cafe\u0301" },
   ];
   const times = [];
   const time = () => {

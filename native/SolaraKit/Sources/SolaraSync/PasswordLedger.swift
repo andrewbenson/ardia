@@ -4,20 +4,20 @@ import SolaraModel
 public struct LedgerValue: Sendable, Equatable {
   public var o: String
   public var u: String
-  public var p: String
+  public var s: String
 
-  public init(o: String, u: String, p: String) {
+  public init(o: String, u: String, s: String) {
     self.o = o
     self.u = u
-    self.p = p
+    self.s = s
   }
 
   public init?(json: JSONValue) {
-    guard let o = json["o"]?.string, let u = json["u"]?.string, let p = json["p"]?.string else { return nil }
-    self.init(o: o, u: u, p: p)
+    guard let o = json["o"]?.string, let u = json["u"]?.string, let s = json["s"]?.string else { return nil }
+    self.init(o: o, u: u, s: s)
   }
 
-  public var json: JSONValue { ["o": .string(o), "u": .string(u), "p": .string(p)] }
+  public var json: JSONValue { ["o": .string(o), "u": .string(u), "s": .string(s)] }
 }
 
 public struct LedgerEntry: Sendable, Equatable {
@@ -155,7 +155,7 @@ public func formatMark(_ mark: Mark) -> String { "\(jsNumberText(mark.L))@\(jsNu
 
 public func digestOf(_ value: LedgerValue?) -> String {
   guard let value else { return "" }
-  let text = Array("\(value.o)\u{0}\(value.u)\u{0}\(value.p)".utf16)
+  let text = Array("\(value.o)\u{0}\(value.u)\u{0}\(value.s)".utf16)
   var h: UInt32 = 0x811c_9dc5
   for unit in text {
     h ^= UInt32(unit)

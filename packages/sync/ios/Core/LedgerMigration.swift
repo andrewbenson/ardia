@@ -31,7 +31,7 @@ public enum LedgerMigration {
     return String(decoding: bytes[version.range], as: UTF8.self) == "1"
   }
 
-  public static func migrate(_ ledgerText: String, profiles: [String: Profile], keys: SyncKeys) throws -> String? {
+  public static func migrate(_ ledgerText: String, keys: SyncKeys, profile: (String) -> Profile?) throws -> String? {
     let bytes = Array(ledgerText.utf8)
     var scanner = JSONScanner(bytes)
     let root = try scanner.document()
@@ -39,7 +39,7 @@ public enum LedgerMigration {
     var edits: [(Range<Int>, String)] = [(version.range, "2")]
     for entry in root.member("profiles")?.members ?? [] {
       guard let keyed = entry.value.member("keys")?.members, !keyed.isEmpty else { continue }
-      guard let profile = profiles[entry.key], let logins = profile.logins else { return nil }
+      guard let profile = profile(entry.key), let logins = profile.logins else { return nil }
       for key in keyed {
         guard let digests = key.value.member("d"), let first = digests.items?.first?.text else { continue }
         var next = PasswordValues.unmatched

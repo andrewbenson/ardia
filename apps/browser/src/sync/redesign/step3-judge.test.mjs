@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const load = () => import("../passwordLedger.ts");
-const v = (p, u = "me") => ({ o: "https://site.example", u, p });
+const v = (s, u = "me") => ({ o: "https://site.example", u, s });
 const K = "pw:https://site.example\nme";
 const at = (ms, device = "B") => `${Math.floor(ms).toString(36).padStart(9, "0")}.0000.${device}`;
 
@@ -25,12 +25,12 @@ test("JUDGE-equal: a login equal to its record is seeded, never claimed, ledger 
 test("JUDGE-edit-agreed: an edit over the value the folder still holds is stamped after the record", async () => {
   const j = await setup({ ledger: "p1", local: "p2", record: "p1" });
   assert.equal(j.mode, "consistent");
-  assert.deepEqual(j.claims.map((c) => [c.v?.p, c.afterRecord]), [["p2", at(3_000)]]);
+  assert.deepEqual(j.claims.map((c) => [c.v?.s, c.afterRecord]), [["p2", at(3_000)]]);
 });
 
 test("JUDGE-edit-conflict: an edit over a value changed elsewhere is stamped at its own modified time", async () => {
   const j = await setup({ ledger: "p1", local: "p2", record: "p3", modified: 4_000 });
-  assert.deepEqual(j.claims.map((c) => [c.v?.p, c.at, c.afterRecord]), [["p2", 4_000, null]]);
+  assert.deepEqual(j.claims.map((c) => [c.v?.s, c.at, c.afterRecord]), [["p2", 4_000, null]]);
 });
 
 test("JUDGE-rollback: a digest matching an older one, dated at or before the ledger's, takes the folder's value", async () => {
@@ -40,7 +40,7 @@ test("JUDGE-rollback: a digest matching an older one, dated at or before the led
 
 test("JUDGE-revert: the same older digest dated after the ledger's is a deliberate edit", async () => {
   const j = await setup({ ledger: "p2", history: ["p1"], local: "p1", record: "p2", modified: 6_000, ledgerModified: 1_000 });
-  assert.deepEqual(j.claims.map((c) => c.v?.p), ["p1"]);
+  assert.deepEqual(j.claims.map((c) => c.v?.s), ["p1"]);
 });
 
 test("JUDGE-delete-agreed: a ledger key missing here goes out as a deletion when the folder still holds what was agreed", async () => {
@@ -56,7 +56,7 @@ test("JUDGE-delete-conflict: a deletion over a value changed elsewhere is droppe
 test("JUDGE-rebuild: with the row off the ledger, only a login dated after both times is claimed", async () => {
   const late = await setup({ ledger: "p1", local: "p9", record: "p2", mark: { L: 5, t: 4_000 }, modified: 4_500 });
   assert.equal(late.mode, "rebuild");
-  assert.deepEqual(late.claims.map((c) => c.v?.p), ["p9"]);
+  assert.deepEqual(late.claims.map((c) => c.v?.s), ["p9"]);
   const early = await setup({ ledger: "p1", local: "p3", record: "p2", mark: { L: 5, t: 4_000 }, modified: 4_000 });
   assert.deepEqual([early.claims.length, [...early.apply]], [0, [K]], "a date in the same millisecond as t isn't later");
 });
@@ -69,18 +69,18 @@ test("JUDGE-rebuild-restore: Login Data older than the ledger (row below L) clai
 test("JUDGE-addition: a login the folder has no record of is an addition, except in a rebuild when it predates both write times", async () => {
   for (const [ledger, mark] of [[null, "same"], [undefined, "same"]]) {
     const j = await setup({ ledger, local: "new", mark, modified: 100 });
-    assert.deepEqual(j.claims.map((c) => c.v?.p), ["new"], `ledger ${ledger}`);
+    assert.deepEqual(j.claims.map((c) => c.v?.s), ["new"], `ledger ${ledger}`);
   }
   const old = await setup({ ledger: "x", local: "new", mark: { L: 9, t: 9_999 }, modified: 100 });
   assert.deepEqual([old.claims.length, old.apply.size], [0, 0], "a rebuild can't trust that the folder lacks it");
   const late = await setup({ ledger: "x", local: "new", mark: { L: 9, t: 9_999 }, modified: 9_999_999 });
-  assert.deepEqual(late.claims.map((c) => c.v?.p), ["new"]);
+  assert.deepEqual(late.claims.map((c) => c.v?.s), ["new"]);
 });
 
 test("JUDGE-upgrade: no ledger and no row: a login Chrome changed after its record is claimed, an older one takes the folder's", async () => {
   const newer = await setup({ local: "mine", record: "folder", modified: 3_500 });
   assert.equal(newer.mode, "upgrade");
-  assert.deepEqual(newer.claims.map((c) => [c.v?.p, c.at]), [["mine", 3_500]]);
+  assert.deepEqual(newer.claims.map((c) => [c.v?.s, c.at]), [["mine", 3_500]]);
   const older = await setup({ local: "mine", record: "folder", modified: 2_500 });
   assert.deepEqual([older.claims.length, [...older.apply]], [0, [K]]);
 });
@@ -94,5 +94,5 @@ test("JUDGE-marks: the mark is L@t and parses back", async () => {
 
 test("JUDGE-addition-over-tombstone: a login new to the ledger, under a key the folder holds as deleted, goes out after the tombstone", async () => {
   const j = await setup({ ledger: null, local: "renamed", record: null, modified: 100 });
-  assert.deepEqual(j.claims.map((c) => [c.v?.p, c.afterRecord]), [["renamed", at(3_000)]]);
+  assert.deepEqual(j.claims.map((c) => [c.v?.s, c.afterRecord]), [["renamed", at(3_000)]]);
 });

@@ -59,7 +59,7 @@ export function evaluate({ o, u, p, s, extra }) {
     canonicalSealed: canonical(sealed),
     notedPlain: digest(choice(plain)),
     notedSealed: digest(choice(sealed)),
-    ledgerPlain: digestOf(plain),
+    ledgerPlain: digestOf({ o, u, s: p }),
   };
 }
 

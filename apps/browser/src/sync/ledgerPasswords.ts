@@ -1,8 +1,7 @@
-import { deletePassword, engineCall, savePassword } from "@ardia/ardiacore";
+import { deletePassword, engineCall } from "@ardia/ardiacore";
 import { readDocument, writeDocument } from "@ardia/shell";
-import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins } from "@ardia/sync";
+import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins, type SealedValue } from "@ardia/sync";
 import { engineProfile } from "../store/model";
-import { originOf } from "./adapters";
 import { isObject } from "./readable";
 import { digestOf, formatMark, judge, nextLedger, parseMark, type FolderRecord, type Ledger, type LedgerValue, type LocalLogin, type Mark } from "./passwordLedger";
 
@@ -12,24 +11,37 @@ const READ_INTERVAL = 30_000;
 const MASS_CHANGE_AT_LEAST = 5;
 
 type Stored = Ledger & { scope?: string; held?: string[]; gated?: Record<string, number> };
-type LedgerDoc = { v: 1; profiles: Record<string, Stored> };
+type LedgerDoc = { v: 2; profiles: Record<string, Stored> };
 
-export function readLedgerDoc(text: string | null): LedgerDoc | "newer" {
+export function readLedgerDoc(text: string | null): LedgerDoc | "older" | "newer" {
   try {
     const doc = JSON.parse(text ?? "null") as LedgerDoc | null;
-    if (isObject(doc) && "v" in doc && doc.v !== 1) return "newer";
-    return doc?.v === 1 && doc.profiles ? doc : { v: 1, profiles: {} };
+    if (isObject(doc) && "v" in doc && doc.v !== 2) return doc.v === 1 ? "older" : "newer";
+    return doc?.v === 2 && doc.profiles ? doc : { v: 2, profiles: {} };
   } catch {
-    return { v: 1, profiles: {} };
+    return { v: 2, profiles: {} };
   }
 }
 
 export const ledgerFromNewerVersion = () => readLedgerDoc(readDocument(LEDGER_DOC)) === "newer";
+const ledgerWritable = () => typeof readLedgerDoc(readDocument(LEDGER_DOC)) !== "string";
 
 function readLedgers(): LedgerDoc {
   const doc = readLedgerDoc(readDocument(LEDGER_DOC));
-  return doc === "newer" ? { v: 1, profiles: {} } : doc;
+  return typeof doc === "string" ? { v: 2, profiles: {} } : doc;
 }
+
+export async function migrateLedger(migrate: (text: string) => Promise<string | null | undefined>) {
+  const text = readDocument(LEDGER_DOC);
+  if (!text || readLedgerDoc(text) !== "older") return;
+  const migrated = await migrate(text);
+  if (migrated && typeof readLedgerDoc(migrated) !== "string" && readDocument(LEDGER_DOC) === text) writeDocument(LEDGER_DOC, migrated);
+}
+
+export type SealedPasswordCalls = {
+  check: (values: SealedValue[]) => Promise<boolean[]>;
+  save: (engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean) => Promise<boolean>;
+};
 
 type Read = { local: Map<string, LocalLogin>; mark: Mark | null };
 
@@ -40,6 +52,7 @@ export function ledgerPasswordsAdapter(
   forced: () => boolean,
   readMarked: (engineProfile: string) => Promise<MarkedLogins | null | undefined>,
   ledgerScope: () => string,
+  sealed: SealedPasswordCalls,
 ): Adapter & HeldPasswords {
   const profile = () => engineProfile(profileId);
   const keyOf = (origin: string, username: string) => `pw:${origin}\n${username}`;
@@ -58,10 +71,7 @@ export function ledgerPasswordsAdapter(
     const marked = await readMarked(profile());
     if (!marked) return null;
     const local = new Map<string, LocalLogin>();
-    for (const l of marked.logins) {
-      const origin = originOf(l);
-      if (origin) local.set(keyOf(origin, l.username), { value: { o: origin, u: l.username, p: l.password }, modified: l.modified ?? l.created });
-    }
+    for (const l of marked.logins) local.set(keyOf(l.origin, l.username), { value: { o: l.origin, u: l.username, s: l.s }, modified: l.modified ?? l.created });
     return { local, mark: parseMark(marked.mark) };
   };
 
@@ -72,7 +82,7 @@ export function ledgerPasswordsAdapter(
   };
   const ledgerOf = (): Stored | null => (rejoined() ? null : storedOf());
   const saveGated = (gated: Record<string, number>) => {
-    if (ledgerFromNewerVersion()) return;
+    if (!ledgerWritable()) return;
     const doc = readLedgers();
     const stored = doc.profiles[profile()];
     if (!stored || rejoined()) return;
@@ -81,7 +91,7 @@ export function ledgerPasswordsAdapter(
     writeDocument(LEDGER_DOC, JSON.stringify(doc));
   };
   const saveHeld = (keys: Set<string>) => {
-    if (ledgerFromNewerVersion()) return;
+    if (!ledgerWritable()) return;
     const doc = readLedgers();
     const stored = doc.profiles[profile()];
     if (!stored || rejoined()) return;
@@ -101,7 +111,7 @@ export function ledgerPasswordsAdapter(
   const write = (now: Read, records: Map<string, FolderRecord>, keys: Iterable<string>, newest: number) => {
     const list = [...keys];
     writing = writing.then(async () => {
-      if (ledgerFromNewerVersion()) return;
+      if (!ledgerWritable()) return;
       const ledger = ledgerOf();
       const L = Math.max(ledger?.L ?? 0, now.mark?.L ?? 0) + 1;
       const mark = { L, t: Math.max(Date.now(), newest) };
@@ -132,17 +142,25 @@ export function ledgerPasswordsAdapter(
     ownsItsChanges: true,
     extract: async (_base, _queued, _now, _known, remote, stamp, downloading) => {
       const now = Date.now();
-      if (ledgerFromNewerVersion()) return null;
+      if (!ledgerWritable()) return null;
       if ((now < quietUntil || now - lastRead < READ_INTERVAL) && !forced()) return null;
       await writing;
       const here = await read();
       if (!here) return null;
+      const localValues = [...here.local];
+      const opens = await sealed.check(localValues.map(([, l]) => l.value));
+      const unopened = new Set(localValues.filter((_, i) => opens[i] !== true).map(([key]) => key));
       lastRead = now;
       const fresh = rejoined();
       const ledger = ledgerOf();
       const records = new Map<string, FolderRecord>();
       record(records, new Set([...here.local.keys(), ...Object.keys(ledger?.keys ?? {})]), remote, stamp);
       const j = judge(here.local, fresh ? null : here.mark, ledger, records, now);
+      j.claims = j.claims.filter((c) => !unopened.has(c.key));
+      for (const key of unopened) {
+        j.apply.delete(key);
+        j.seed.delete(key);
+      }
       const keptHeld = new Set(ledger?.held ?? []);
       if (j.mode === "rebuild") {
         for (const key of keptHeld) {
@@ -157,7 +175,7 @@ export function ledgerPasswordsAdapter(
       const winning = j.claims.filter((c) => !lost(c));
       for (const c of j.claims) if (lost(c)) j.apply.add(c.key);
       const known = Object.keys(ledger?.keys ?? {}).length;
-      for (const [key, digest] of restoring) if (digestOf(here.local.get(key)?.value) === digest) j.apply.add(key);
+      for (const [key, digest] of restoring) if (!unopened.has(key) && digestOf(here.local.get(key)?.value) === digest) j.apply.add(key);
       restoring = new Map();
       const changes = winning.filter((c) => ledger?.keys[c.key] && !confirmed.has(c.key) && !j.apply.has(c.key));
       confirmed = new Set();
@@ -176,10 +194,10 @@ export function ledgerPasswordsAdapter(
       const gated = new Set(busy ? deletions.filter((key) => now - firstGated[key]! < DOWNLOAD_HOLD_MS) : []);
       saveGated(busy ? Object.fromEntries(Object.entries(firstGated).filter(([key]) => gated.has(key) || ledger?.gated?.[key] !== undefined)) : {});
       const byKey = new Map(live.filter((c) => !gated.has(c.key)).map((c) => [c.key, c]));
-      const seeds = [...j.seed].filter((k) => j.mode !== "consistent" || ledger?.keys[k]?.d[0] !== digestOf(here.local.get(k)?.value));
+      const seeds = [...j.seed].filter((k) => (j.mode !== "consistent" || ledger?.keys[k]?.d[0] !== digestOf(here.local.get(k)?.value)));
       if (j.mode !== "consistent" || seeds.length) await write(here, records, seeds, 0);
       return {
-        values: new Map(live.filter((c) => c.v).map((c) => [c.key, c.v!])),
+        values: new Map([...byKey.values()].filter((c) => c.v).map((c) => [c.key, c.v!])),
         ignore: (key) => !byKey.has(key),
         republish: (key) => byKey.has(key),
         remove: new Set([...byKey.values()].filter((c) => !c.v).map((c) => c.key)),
@@ -196,7 +214,7 @@ export function ledgerPasswordsAdapter(
     },
     editedAt: () => undefined,
     apply: async (visible, changed) => {
-      if (ledgerFromNewerVersion()) return false;
+      if (!ledgerWritable()) return false;
       await writing;
       const before = await read();
       if (!before) return false;
@@ -207,7 +225,10 @@ export function ledgerPasswordsAdapter(
         const entry = ledger?.keys[key];
         return entry ? digestOf(have.value) !== entry.d[0] : digestOf(have.value) !== digestOf(visible.get(key) as LedgerValue | undefined);
       };
-      const kept = new Set([...changed].filter((key) => claimed.has(key) || held.has(key) || changedHere(key)));
+      const haveHere = [...changed].filter((key) => before.local.has(key));
+      const opens = await sealed.check(haveHere.map((key) => before.local.get(key)!.value));
+      const unopened = new Set(haveHere.filter((_, i) => opens[i] !== true));
+      const kept = new Set([...changed].filter((key) => unopened.has(key) || claimed.has(key) || held.has(key) || changedHere(key)));
       const refused = new Set<string>();
       for (const key of changed) {
         if (kept.has(key)) continue;
@@ -216,16 +237,15 @@ export function ledgerPasswordsAdapter(
         const [origin, username] = [key.slice(3, key.indexOf("\n")), key.slice(key.indexOf("\n") + 1)];
         let ok = true;
         if (v) {
-          if (have?.p === v.p) continue;
-          if (have) ok = (await deletePassword(profile(), origin, username)) && ok;
-          ok = (await savePassword(profile(), v.o, v.u, v.p)) && ok;
+          if (have?.s === v.s) continue;
+          ok = await sealed.save(profile(), v.o, v.u, v.s, !!have);
         } else if (have) {
           ok = (await deletePassword(profile(), origin, username)) && ok;
         }
         if (!ok) refused.add(key);
       }
       const wanted = [...changed].filter((k) => !kept.has(k) && !refused.has(k));
-      const confirmed = (now: Read | null, k: string) => !!now && (visible.get(k) as LedgerValue | undefined)?.p === now.local.get(k)?.value.p;
+      const confirmed = (now: Read | null, k: string) => !!now && (visible.get(k) as LedgerValue | undefined)?.s === now.local.get(k)?.value.s;
       let latest: Read | null = null;
       let settled = false;
       for (let i = 0; i < 20 && !settled; i++) {

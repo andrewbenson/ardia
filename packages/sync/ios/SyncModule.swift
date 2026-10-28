@@ -166,13 +166,12 @@ public class SyncModule: Module {
 
     AsyncFunction("migrateLedger") { (ledger: String, scopes: [String: String], state: String) -> String? in
       guard Self.sealed.latched, let keys = self.state.keys, LedgerMigration.needsMigration(ledger) else { return nil }
-      var profiles: [String: LedgerMigration.Profile] = [:]
-      for (engineProfile, scope) in scopes {
-        profiles[engineProfile] = LedgerMigration.Profile(
-          logins: Self.loginData(engineProfile).map(LedgerMigration.logins), records: LedgerMigration.records(fromState: state, scope: scope, keys: keys))
-      }
       do {
-        return try LedgerMigration.migrate(ledger, profiles: profiles, keys: keys)
+        return try LedgerMigration.migrate(ledger, keys: keys) { engineProfile in
+          LedgerMigration.Profile(
+            logins: Self.loginData(engineProfile).map(LedgerMigration.logins),
+            records: scopes[engineProfile].map { LedgerMigration.records(fromState: state, scope: $0, keys: keys) } ?? [:])
+        }
       } catch {
         NSLog("[sync] migrating the password ledger: \(error)")
         return nil

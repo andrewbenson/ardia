@@ -22,7 +22,10 @@ export type PhraseResult =
   | { error: "interrupted" };
 
 export type SavedLogin = { origin: string; url: string; username: string; password: string; created: number; modified?: number };
-export type MarkedLogins = { logins: SavedLogin[]; mark: string | null };
+export type SealedLogin = { origin: string; username: string; s: string; created: number; modified?: number };
+export type MarkedLogins = { logins: SealedLogin[]; mark: string | null };
+export type LocalKind = "state" | "journal";
+export type SealedValue = { o: string; u: string; s: string };
 
 type SyncNative = {
   folderInfo(path: string | null): Promise<FolderInfo>;
@@ -39,8 +42,12 @@ type SyncNative = {
   read(folder: string, scope: string, known: string[]): Promise<Listing>;
   remove(folder: string, scope: string, ids: string[]): Promise<void>;
   deleteChain(folder: string): Promise<void>;
-  sealLocal(text: string): Promise<string>;
-  openLocal(sealed: string): Promise<string | null>;
+  sealLocal(text: string, kind?: LocalKind): Promise<string>;
+  openLocal(sealed: string, kind?: LocalKind): Promise<string | null>;
+  useSealedPasswords?(): void;
+  checkSealed?(values: SealedValue[]): Promise<boolean[]>;
+  saveSealedPassword?(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
+  migrateLedger?(ledger: string, scopes: Record<string, string>, state: string): Promise<string | null>;
   phraseUnavailable(): Promise<"noLoginPassword" | null>;
   recoveryWords(): Promise<string[] | null>;
   qrCode(): Promise<string | null>;

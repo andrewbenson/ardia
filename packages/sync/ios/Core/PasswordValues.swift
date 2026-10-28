@@ -15,7 +15,7 @@ public enum PasswordValues {
   public struct Refused: Error, Equatable, CustomStringConvertible {
     public let key: String
     public let reason: String
-    public var description: String { "\(key): \(reason)" }
+    public var description: String { "\(key.firstIndex(of: ":").map { String(key[...$0]) } ?? key) \(reason)" }
   }
 
   public static let unmatched = "v1:unmatched"

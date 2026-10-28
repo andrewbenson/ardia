@@ -31,6 +31,13 @@ enum NativePaneOverlays {
     }
   }
 
+  static func swipe(_ windowId: String, _ tabId: String, _ json: String) {
+    guard NativeWindowShell.enabled, let data = json.data(using: .utf8), let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+    let host = hosts[windowId] ?? PaneOverlayHost(windowId: windowId)
+    hosts[windowId] = host
+    host.swipe(tabId, message)
+  }
+
   static func describe(_ windowId: String) -> String {
     guard let host = hosts[windowId] else { return "null" }
     let data = try? JSONSerialization.data(withJSONObject: host.describe())
@@ -89,6 +96,12 @@ final class PaneOverlayHost {
   private var sadTabs: [String: SadTabView] = [:]
   private var zooms: [String: PanePopover<ZoomPanelView>] = [:]
   private var histories: [String: PanePopover<HistoryPanelView>] = [:]
+  private var swipes: [String: (wrap: PaneOverlayContainer, capsule: SwipeCapsuleView)] = [:]
+  private static let swipeFavicons: SidebarFavicons = {
+    let made = SidebarFavicons()
+    made.loader = { request in try await NativeSidebar.favicon(request) }
+    return made
+  }()
   private var pageFrames: [String: [String: CGRect]] = [:]
 
   init(windowId: String) {
@@ -194,9 +207,55 @@ final class PaneOverlayHost {
     return history
   }
 
+  func swipe(_ tabId: String, _ message: [String: Any]) {
+    let op = message["op"] as? String
+    if op == "show" {
+      guard let card, let height = card.window?.contentView?.bounds.height, let f = message["frame"] as? [Double], f.count == 4 else { return }
+      let rect = card.convert(CGRect(x: f[0], y: height - f[1] - f[3], width: f[2], height: f[3]), from: nil)
+      let entry = swipes[tabId] ?? makeSwipe(tabId)
+      entry.wrap.frame = rect
+      entry.capsule.frame = entry.wrap.bounds
+      let theme = message["theme"] as? [String: Any] ?? [:]
+      let direction = SwipeCapsuleDirection(rawValue: message["direction"] as? String ?? "") ?? .back
+      entry.capsule.show(direction, theme: SwipeCapsuleTheme(dark: theme["dark"] as? Bool ?? false, textPrimary: theme["textPrimary"] as? String ?? "#000000D9", textSecondary: theme["textSecondary"] as? String ?? "#00000080"), profileId: message["profileId"] as? String ?? "")
+      return relayout()
+    }
+    guard let capsule = swipes[tabId]?.capsule else { return }
+    let number = { (key: String) -> CGFloat? in (message[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
+    switch op {
+    case "move": capsule.move(x: number("x"), nudge: number("nudge"))
+    case "confirm": capsule.setConfirmed(message["confirmed"] as? Bool ?? false)
+    case "list":
+      let items = (message["items"] as? [[String: Any]] ?? []).map { SwipeCapsuleItem(title: $0["title"] as? String ?? "", url: $0["url"] as? String ?? "", favicon: $0["favicon"] as? String, newTab: $0["newTab"] as? Bool ?? false) }
+      capsule.presentList(items)
+    case "select":
+      capsule.move(nudge: number("nudge"))
+      capsule.select(message["index"] as? Int ?? 0)
+    case "dismiss": capsule.dismiss(delay: (message["delay"] as? NSNumber)?.doubleValue ?? 0)
+    default: break
+    }
+  }
+
+  private func makeSwipe(_ tabId: String) -> (wrap: PaneOverlayContainer, capsule: SwipeCapsuleView) {
+    let wrap = PaneOverlayContainer()
+    let capsule = SwipeCapsuleView(frame: .zero)
+    capsule.favicons = Self.swipeFavicons
+    capsule.autoresizingMask = [.width, .height]
+    wrap.addSubview(capsule)
+    capsule.onDismissed = { [weak self, weak capsule] in
+      guard let self, let capsule, self.swipes[tabId]?.capsule === capsule else { return }
+      self.swipes[tabId]?.wrap.removeFromSuperview()
+      self.swipes[tabId] = nil
+      self.relayout()
+    }
+    container.addSubview(wrap)
+    swipes[tabId] = (wrap, capsule)
+    return (wrap, capsule)
+  }
+
   func relayout() {
     guard let card else { return container.removeFromSuperview() }
-    if sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty {
+    if sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty && swipes.isEmpty {
       container.removeFromSuperview()
       return
     }
@@ -227,6 +286,12 @@ final class PaneOverlayHost {
     }
     for (tabId, zoom) in zooms { tabs[tabId, default: [:]]["zoom"] = zoom.describe(inWindow) }
     for (tabId, history) in histories { tabs[tabId, default: [:]]["history"] = history.describe(inWindow) }
+    for (tabId, entry) in swipes {
+      let c = entry.capsule
+      let s = c.sample()
+      tabs[tabId, default: [:]]["swipe"] = ["shown": c.shown, "active": c.active, "direction": c.direction.rawValue, "confirmed": c.confirmed, "items": c.items?.map(\.title) ?? NSNull(), "selected": c.selected,
+        "frame": inWindow(c, s.frame), "area": inWindow(entry.wrap, entry.wrap.bounds), "radius": s.radius, "opacity": s.opacity, "scale": s.scale, "iconScale": s.iconScale, "list": s.list, "pill": s.pill]
+    }
     return ["top": container.superview?.subviews.last === container, "inCard": container.superview === card, "tabs": tabs]
   }
 }

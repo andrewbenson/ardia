@@ -27,6 +27,10 @@ public class MediaModule: Module {
       MainActor.assumeIsolated { NativeLittleSolara.host(windowId)?.setBackdrop(json) }
     }.runOnQueue(.main)
 
+    AsyncFunction("paneSwipe") { (windowId: String, tabId: String, json: String) in
+      MainActor.assumeIsolated { NativePaneOverlays.swipe(windowId, tabId, json) }
+    }.runOnQueue(.main)
+
     AsyncFunction("describePaneOverlays") { (windowId: String) -> String in
       MainActor.assumeIsolated { NativePaneOverlays.describe(windowId) }
     }.runOnQueue(.main)

@@ -1,4 +1,5 @@
 import { SwipeArea, swipeHaptic, type SwipeAreaHandle, type SwipeEvent } from "@ardia/ardiacore";
+import { sendPaneSwipe, windowShellActive } from "@ardia/settings";
 import { Surface, Symbol, VisualEffect } from "@ardia/shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
@@ -8,6 +9,7 @@ import { Favicon, NewTabIcon } from "../primitives";
 import { HistoryPopover } from "./HistoryPopover";
 import { goBack, goForward, goToHistoryItem, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu, type HistoryItem } from "./history";
 import type { ToolbarGeometry } from "./geometry";
+import { usePageFrame } from "./nativePaneOverlays";
 import {
   CAPSULE_INSET,
   CAPSULE_SIZE,
@@ -38,7 +40,7 @@ export function spring(value: Animated.Value, toValue: number, response: number,
 export function NavigationOverlays({ tabId, windowId, geometry, peek = false }: { tabId: string; windowId: string; geometry: ToolbarGeometry; peek?: boolean }) {
   return (
     <>
-      <SwipeOverlay tabId={tabId} />
+      <SwipeOverlay tabId={tabId} windowId={windowId} nativeAllowed={!peek} />
       <HistoryPopover tabId={tabId} windowId={windowId} anchors={{ back: geometry.back, forward: geometry.forward }} nativeAllowed={!peek} />
     </>
   );
@@ -46,8 +48,11 @@ export function NavigationOverlays({ tabId, windowId, geometry, peek = false }: 
 
 type Shown = { direction: "back" | "forward"; confirmed: boolean; list: HistoryItem[] | null; selected: number };
 
-export function SwipeOverlay({ tabId }: { tabId: string }) {
+export function SwipeOverlay({ tabId, windowId, nativeAllowed = true }: { tabId: string; windowId: string; nativeAllowed?: boolean }) {
   const theme = useTheme();
+  const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
+  const page = usePageFrame();
+  const send = (message: object) => inShell && sendPaneSwipe(windowId, tabId, message);
   const history = useHistoryAvailability(tabId);
   const sizeRef = useRef({ width: 0, height: 0 });
   const [shown, setShown] = useState<Shown | null>(null);
@@ -96,6 +101,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     v.fade.setValue(1);
     v.scale.setValue(1);
     Object.assign(g, { active: true, direction, confirmed: false, width: SIZE, list: null, listY: 0, selected: 0 });
+    if (page.frame) send({ op: "show", direction, frame: page.frame, theme: { dark: !!theme.dark, textPrimary: theme.textPrimary, textSecondary: theme.textSecondary }, profileId: useBrowser.getState().tabs[tabId]?.profileId ?? "" });
   };
 
   const layoutTo = (width: number, height: number, top: number, radius: number, response: number, ratio: number) => {
@@ -119,6 +125,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
       spring(v.icon, confirmed ? ICON_CONFIRMED / ICON : 1, 0.18, 0.7, true).start();
     }
     Animated.timing(v.confirm, { toValue: confirmed ? 1 : 0, duration: 180, easing: EASE, useNativeDriver: true }).start();
+    send({ op: "confirm", confirmed });
     setShown((s) => (s ? { ...s, confirmed } : s));
   };
 
@@ -135,12 +142,17 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     swipeHaptic("generic");
     layoutTo(LIST_WIDTH, list.length * ROW + LIST_PAD * 2, height / 2 - LIST_PAD - ROW / 2, LIST_RADIUS, 0.22, 0.77);
     Animated.timing(v.list, { toValue: 1, duration: 220, easing: EASE, useNativeDriver: true }).start();
+    if (inShell) {
+      const favicons = faviconsFor(tabId, list);
+      send({ op: "list", items: list.map((item) => ({ title: item.title, url: item.url, favicon: favicons.get(item.url) ?? null, newTab: item.offset === "newTab" })) });
+    }
     setShown((s) => (s ? { ...s, list, selected: 0 } : s));
   };
 
   const select = (dy: number) => {
     const { index, nudge } = listSelection(dy - g.listY, g.list!.length);
     v.nudge.setValue(nudge);
+    send({ op: "select", index, nudge });
     if (index === g.selected) return;
     g.selected = index;
     swipeHaptic("alignment");
@@ -151,6 +163,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
   const dismiss = (delay = 0) => {
     clearTimeout(g.idle);
     g.active = false;
+    send({ op: "dismiss", delay: delay / 1000 });
     Animated.parallel([
       Animated.timing(v.fade, { toValue: 0, duration: 200, delay, easing: Easing.in(Easing.ease), useNativeDriver: true }),
       Animated.timing(v.scale, { toValue: 0.01, duration: 200, delay, easing: Easing.in(Easing.ease), useNativeDriver: true }),
@@ -168,6 +181,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     if (!g.active) return;
     if (e.phase === "swipe") {
       v.x.setValue(CAPSULE_INSET);
+      send({ op: "move", x: CAPSULE_INSET });
       setConfirmed(true);
       navigate(e.direction, null);
       return dismiss(120);
@@ -183,6 +197,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     if (g.list) select(e.dy);
     else setConfirmed(progress >= 1);
     v.x.setValue(capsuleOffset(progress, g.width));
+    send({ op: "move", x: capsuleOffset(progress, g.width) });
 
     clearTimeout(g.idle);
     if (g.confirmed && !g.list) g.idle = setTimeout(() => void presentList(), LIST_IDLE_MS);
@@ -211,7 +226,8 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
         onSwipe={onSwipe}
         onLayout={(e) => void (sizeRef.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
       />
-      {shown && (
+      {inShell && <View ref={page.ref} pointerEvents="none" collapsable={false} onLayout={page.onLayout} style={StyleSheet.absoluteFill} />}
+      {shown && !inShell && (
         <Animated.View
           pointerEvents="none"
           style={{
@@ -256,13 +272,16 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
   );
 }
 
+function faviconsFor(tabId: string, items: HistoryItem[]) {
+  const profileId = useBrowser.getState().tabs[tabId]?.profileId ?? "";
+  const urls = new Set(items.map((i) => i.url));
+  return new Map((useBrowser.getState().history[profileId] ?? []).filter((h) => urls.has(h.url)).map((h) => [h.url, h.favicon]));
+}
+
 function DestinationList({ tabId, items, selected, appear, pill }: { tabId: string; items: HistoryItem[]; selected: number; appear: Animated.Value; pill: Animated.Value }) {
   const theme = useTheme();
   const profileId = useBrowser((s) => s.tabs[tabId]?.profileId ?? "");
-  const favicons = useMemo(() => {
-    const urls = new Set(items.map((i) => i.url));
-    return new Map((useBrowser.getState().history[profileId] ?? []).filter((h) => urls.has(h.url)).map((h) => [h.url, h.favicon]));
-  }, [items, profileId]);
+  const favicons = useMemo(() => faviconsFor(tabId, items), [items, profileId]);
   return (
     <Animated.View
       style={{

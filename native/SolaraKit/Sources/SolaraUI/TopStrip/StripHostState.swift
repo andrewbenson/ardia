@@ -18,6 +18,7 @@ public struct StripHostState: Decodable, Equatable, Sendable {
   public var newTabMark: String?
   public var pages: [SidebarPageLook]?
   public var selection: [String]?
+  public var peek: StripPeekArea?
 
   public init(profileId: String, dark: Bool = true) {
     self.profileId = profileId
@@ -58,6 +59,31 @@ public struct StripHostState: Decodable, Equatable, Sendable {
     look.sleeping = sleeping
     look.engines = engines
     return look
+  }
+}
+
+public struct StripPeekArea: Decodable, Equatable, Sendable {
+  public var left: Double
+  public var top: Double
+  public var width: Double
+  public var height: Double
+  public var bandLeft: Double
+  public var bandHeight: Double
+
+  public init(left: Double, top: Double, width: Double, height: Double, bandLeft: Double, bandHeight: Double) {
+    self.left = left
+    self.top = top
+    self.width = width
+    self.height = height
+    self.bandLeft = bandLeft
+    self.bandHeight = bandHeight
+  }
+
+  public func holds(_ point: CGPoint) -> Bool {
+    let x = Double(point.x), y = Double(point.y)
+    let panel = x >= left && x < left + width && y >= top && y < top + height
+    let band = y >= 0 && y < bandHeight && x >= bandLeft && x < left + width
+    return panel || band
   }
 }
 

@@ -62,7 +62,7 @@ export function setPeekShown(windowId: string, shown: boolean, rightEdge = 0) {
 export const peekShown = (windowId: string) => windowId in useDockMotion.getState().peeks;
 export const overPeek = (windowId: string, x: number) => x < (useDockMotion.getState().peeks[windowId] ?? -Infinity);
 export const usePeekEdge = (windowId: string): number | undefined => useDockMotion((m) => m.peeks[windowId]);
-export const devPeeks: Record<string, { show(): void; hide(): void }> = {};
+export const devPeeks: Record<string, { show(): void; hide(): void; live?: boolean }> = {};
 
 export const HEADER_TOOLS = { toggleX: 70.75 + 27, pitch: 35, edge: 7, lightsRight: 70.75 + 7 } as const;
 

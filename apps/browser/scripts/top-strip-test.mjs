@@ -144,6 +144,18 @@ async function measure(native) {
       if (look === "peek") out.peekHit = await run(`return act("w1", "hit:200,22");`);
       await run(`${undo} return settle(600);`);
     }
+    if (native) {
+      const live = `globalThis.acLayout.peek["strip:w1"]?.live ?? null`;
+      out.peekHover = await run(`
+        const seen = {};
+        st().toggleSidebar("w1");
+        return settle(500)
+          .then(() => globalThis.acLayout.peek["strip:w1"].show()).then(() => settle(500)).then(() => (seen.shown = ${live}))
+          .then(() => act("w1", "mouse:moved:300,24")).then(() => settle(150)).then(() => act("w1", "mouse:moved:520,30")).then(() => settle(500))
+          .then(() => { seen.overStrip = ${live}; seen.hit = null; return act("w1", "hit:520,30"); }).then((hit) => (seen.hit = hit))
+          .then(() => act("w1", "mouse:moved:520,160")).then(() => settle(600)).then(() => (seen.away = ${live}))
+          .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
+    }
     const t2 = out.spans.filter(([, , k]) => k !== "SolaraUI.StripNewTabButton").at(-1);
     await run(`return act("w1", "click:${t2[0] + 70},21").then(() => settle(400));`);
     out.clicked = await run(`return st().windows.w1.activeTabIds.default;`);
@@ -272,6 +284,14 @@ try {
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });
     }
+    await rep.check("the peek stays out while the pointer is over its native strip, and slides away once it leaves the panel", async () => {
+      const seen = native.peekHover;
+      rep.log(`peek hover ${JSON.stringify(seen)}`);
+      assert.equal(seen.shown, true, "the peek came out");
+      assert.match(seen.hit, /^SolaraUI\.Strip/, `the pointer is over the native strip: ${seen.hit}`);
+      assert.equal(seen.overStrip, true, "still out over the native strip");
+      assert.equal(seen.away, false, "gone once the pointer left the panel");
+    });
     for (const [look, , , bottom = 42] of LOOKS) {
       if (!rn.looks?.[look] || !native.looks?.[look]) continue;
       await rep.check(`the strips' pixels match RN's, ${{ paging: "halfway through a swipe to the next profile", flipped: "in the other appearance", bands: "with website colour bands", peek: "in the peek over a hidden strip" }[look]}`, async () => {

@@ -153,6 +153,8 @@ final class TopStripHost {
   private let commits = TopStripCommits()
   private var markUri: String?
   private var pagerObserver: NSObjectProtocol?
+  private var peekMonitor: Any?
+  private var peekInside = true
 
   init(windowId: String, takesDrops: Bool = true) {
     self.windowId = windowId
@@ -179,12 +181,37 @@ final class TopStripHost {
     listener = nil
     if let pagerObserver { NotificationCenter.default.removeObserver(pagerObserver) }
     pagerObserver = nil
+    watchPeek(false)
+  }
+
+  private func watchPeek(_ on: Bool) {
+    guard on else {
+      if let peekMonitor { NSEvent.removeMonitor(peekMonitor) }
+      peekMonitor = nil
+      return
+    }
+    peekInside = true
+    if peekMonitor != nil { return }
+    peekMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .mouseExited, .leftMouseDragged]) { [weak self] event in
+      MainActor.assumeIsolated { self?.peekPointer(event) }
+      return event
+    }
+  }
+
+  private func peekPointer(_ event: NSEvent) {
+    guard let area = hostState?.peek, let window = view.window, event.window === window, let content = window.contentView else { return }
+    let p = event.locationInWindow
+    let inside = area.holds(CGPoint(x: p.x, y: content.bounds.height - p.y))
+    if inside == peekInside { return }
+    peekInside = inside
+    call(inside ? "peekEnter" : "peekLeave", "")
   }
 
   func apply(_ json: String) {
     guard let next = StripHostState.decode(json) else { return }
     if next == hostState { return }
     hostState = next
+    watchPeek(next.peek != nil)
     loadMark(next.newTabMark)
     render()
   }

@@ -32,7 +32,7 @@ import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/tileFolders";
 import { usePeek } from "./usePeek";
 import { devPeeks, lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
-import { NativeTopStrip, nativeTopStripEnabled } from "./NativeTopStrip";
+import { NativeTopStrip, nativeTopStripEnabled, peekHovers, type PeekArea } from "./NativeTopStrip";
 import {
   aimDrop,
   dockCellOf,
@@ -101,7 +101,19 @@ const PROFILE_ROOM = 140;
 const DOWNLOADS_BOX = 34;
 const CONTROLS_GAP = 2;
 
-export function TopTabStrip({ width, floating = false, hidden = false, swipe = true }: { width: number; floating?: boolean; hidden?: boolean; swipe?: boolean }) {
+export function TopTabStrip({
+  width,
+  floating = false,
+  hidden = false,
+  swipe = true,
+  peek = null,
+}: {
+  width: number;
+  floating?: boolean;
+  hidden?: boolean;
+  swipe?: boolean;
+  peek?: PeekArea | null;
+}) {
   const windowId = useWindowId();
   const current = useWindowProfileId();
   const { pages } = usePagerPages(windowId);
@@ -124,7 +136,7 @@ export function TopTabStrip({ width, floating = false, hidden = false, swipe = t
         <WindowDragRegion style={StyleSheet.absoluteFill} />
         <View pointerEvents={nativeTopStripEnabled() ? "box-none" : "auto"} style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), top: 0, bottom: 0, overflow: "hidden" }}>
           {nativeTopStripEnabled() ? (
-            <NativeTopStrip windowId={windowId} profileId={current} floating={floating} pageWidth={pageWidth} />
+            <NativeTopStrip windowId={windowId} profileId={current} floating={floating} pageWidth={pageWidth} peek={peek} />
           ) : (
             pages.map((page) => <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />)
           )}
@@ -1607,7 +1619,18 @@ export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; en
   const windowId = useWindowId();
   const downloadsOpen = useBrowser((s) => !!s.windowUi[windowId]?.downloadsOpen);
   const { slide, live, show, hide, recheck } = usePeek(enabled, false, () => !!useBrowser.getState().windowUi[windowId]?.downloadsOpen);
-  if (__DEV__) devPeeks[`strip:${windowId}`] = { show, hide };
+  if (__DEV__) devPeeks[`strip:${windowId}`] = { show, hide, live };
+  const nativeLeave = nativeTopStripEnabled();
+  useEffect(() => {
+    if (!nativeLeave) return;
+    const hover = { show, hide };
+    peekHovers.set(windowId, hover);
+    return () => void (peekHovers.get(windowId) === hover && peekHovers.delete(windowId));
+  });
+  const peekArea = useMemo(
+    () => ({ left: PEEK_LEFT, top: PEEK_TOP, width: windowWidth - PEEK_LEFT * 2, height: PEEK_HEIGHT, bandLeft: layout.trafficLightsWidth, bandHeight: HOVER_HEIGHT }),
+    [windowWidth],
+  );
   useEffect(() => {
     if (!downloadsOpen) recheck();
   }, [downloadsOpen]);
@@ -1636,7 +1659,7 @@ export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; en
       <Animated.View
         pointerEvents={live ? "auto" : "none"}
         onMouseEnter={live ? show : undefined}
-        onMouseLeave={live ? leavePanel : undefined}
+        onMouseLeave={live && !nativeLeave ? leavePanel : undefined}
         style={{
           position: "absolute",
           left: PEEK_LEFT,
@@ -1659,7 +1682,7 @@ export function TopStripPeek({ windowWidth, enabled }: { windowWidth: number; en
           style={{ flex: 1 }}
         >
           <View style={{ position: "absolute", left: 0, right: 0, top: PEEK_PAD - ITEM_TOP, height: TOP_STRIP_HEIGHT }}>
-            <TopTabStrip floating swipe={live} width={windowWidth - 12 - PEEK_BORDER * 2} />
+            <TopTabStrip floating swipe={live} peek={live && nativeLeave ? peekArea : null} width={windowWidth - 12 - PEEK_BORDER * 2} />
           </View>
         </Surface>
       </Animated.View>

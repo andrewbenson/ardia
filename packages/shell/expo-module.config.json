@@ -22,7 +22,6 @@
       "AppModule",
       "CalendarModule",
       "KeychainModule",
-      "DockSelectionModule",
       "InlineCompletionModule",
       "TranslateModule",
       "WindowProfileModule",

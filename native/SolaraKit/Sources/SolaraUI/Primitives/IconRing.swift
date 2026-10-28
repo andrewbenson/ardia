@@ -1,59 +1,20 @@
 import AppKit
 import CoreImage
-import ExpoModulesCore
 
-public class DockSelectionModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaDockSelection")
+public struct IconRingSource: Equatable, Sendable {
+  public let uri: String?
+  public let emoji: String?
 
-    AsyncFunction("iconTheme") { (uri: String?, emoji: String?) -> [String: Any]? in
-      guard let image = IconSource(uri: uri, emoji: emoji)?.load() else { return nil }
-      return IconTheme.generate(image)?.json
-    }
-
-    View(DockSelection.self) {
-      Prop("image") { (view: DockSelection, v: String?) in view.source = IconSource(uri: v, emoji: view.source?.emoji) }
-      Prop("emoji") { (view: DockSelection, v: String?) in view.source = IconSource(uri: view.source?.uri, emoji: v) }
-      Prop("theme") { (view: DockSelection, v: String?) in view.kind = v ?? "" }
-      Prop("fill") { (view: DockSelection, hex: String?) in view.fill = hex.flatMap(NSColor.init(hex:)) }
-      Prop("stroke") { (view: DockSelection, hex: String?) in view.stroke = hex.flatMap(NSColor.init(hex:)) }
-      Prop("cornerRadius") { (view: DockSelection, v: Double) in view.cornerRadius = v }
-      Prop("strokeWidth") { (view: DockSelection, v: Double) in view.strokeWidth = v }
-      Prop("dark") { (view: DockSelection, v: Bool) in view.dark = v }
-      Prop("iconSize") { (view: DockSelection, v: Double) in view.iconSize = v }
-      Prop("glass") { (view: DockSelection, v: Bool?) in view.glass = v ?? false }
-    }
-  }
-}
-
-struct IconSource: Equatable {
-  let uri: String?
-  let emoji: String?
-
-  init?(uri: String?, emoji: String?) {
+  public init?(uri: String?, emoji: String?) {
     guard uri?.isEmpty == false || emoji?.isEmpty == false else { return nil }
     self.uri = uri
     self.emoji = emoji
   }
 
-  var key: String { emoji.map { "e:\($0)" } ?? "u:\(uri ?? "")" }
+  public var key: String { emoji.map { "e:\($0)" } ?? "u:\(uri ?? "")" }
 
-  func load() -> CGImage? {
-    if let emoji, !emoji.isEmpty {
-      let bitmap = NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 32, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
-        isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
-      guard let bitmap else { return nil }
-      bitmap.size = NSSize(width: 16, height: 16)
-      guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
-      NSGraphicsContext.saveGraphicsState()
-      NSGraphicsContext.current = context
-      let text = NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: 16)])
-      let size = text.size()
-      text.draw(at: NSPoint(x: (16 - size.width) / 2, y: (16 - size.height) / 2))
-      NSGraphicsContext.restoreGraphicsState()
-      return bitmap.cgImage
-    }
+  @MainActor public func load() -> CGImage? {
+    if let emoji, !emoji.isEmpty { return Self.emojiImage(emoji) }
     guard let uri else { return nil }
     let image: NSImage?
     if uri.hasPrefix("data:") {
@@ -66,24 +27,40 @@ struct IconSource: Equatable {
     }
     return image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
   }
+
+  @MainActor static func emojiImage(_ emoji: String) -> CGImage? {
+    let bitmap = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 32, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+      isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+    guard let bitmap else { return nil }
+    bitmap.size = NSSize(width: 16, height: 16)
+    guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = context
+    let text = NSAttributedString(string: emoji, attributes: [.font: NSFont.systemFont(ofSize: 16)])
+    let size = text.size()
+    text.draw(at: NSPoint(x: (16 - size.width) / 2, y: (16 - size.height) / 2))
+    NSGraphicsContext.restoreGraphicsState()
+    return bitmap.cgImage
+  }
 }
 
-enum IconTheme {
+public enum IconRingTheme: Equatable, @unchecked Sendable {
   case blur
   case template(fill: CGColor, stroke: CGColor?)
 
-  var json: [String: Any] {
+  public var json: [String: String] {
     switch self {
     case .blur:
       return ["kind": "blur"]
     case let .template(fill, stroke):
-      var out: [String: Any] = ["kind": "template", "fill": Self.hexString(fill)]
+      var out: [String: String] = ["kind": "template", "fill": Self.hexString(fill)]
       if let stroke { out["stroke"] = Self.hexString(stroke) }
       return out
     }
   }
 
-  static func generate(_ image: CGImage) -> IconTheme? {
+  public static func generate(_ image: CGImage) -> IconRingTheme? {
     guard let space = image.colorSpace, space.model == .rgb else { return nil }
     let colors = opaquePixels(image, space: space)
     guard !colors.isEmpty else { return nil }
@@ -138,49 +115,75 @@ enum IconTheme {
   }
 }
 
-private final class BlurredIcon {
-  let plain: CGImage
-  let darkRing: CGImage
-
-  private static let cache = NSCache<NSString, BlurredIcon>()
-  private static let context = CIContext()
-
-  private init(plain: CGImage, darkRing: CGImage) {
-    self.plain = plain
-    self.darkRing = darkRing
+final class IconRingCache<Value>: @unchecked Sendable {
+  private final class Box {
+    let value: Value
+    init(_ value: Value) { self.value = value }
   }
+  private let cache = NSCache<NSString, Box>()
 
-  static func of(_ source: IconSource) -> BlurredIcon? {
-    if let cached = cache.object(forKey: source.key as NSString) { return cached }
-    guard let image = source.load(), let plain = blur(image), let darkRing = colorControls(plain) else { return nil }
-    let icon = BlurredIcon(plain: plain, darkRing: darkRing)
-    cache.setObject(icon, forKey: source.key as NSString)
-    return icon
-  }
-
-  private static func blur(_ image: CGImage) -> CGImage? {
-    guard let filter = CIFilter(name: "CIGaussianBlur") else { return nil }
-    filter.setValue(CIImage(cgImage: image), forKey: kCIInputImageKey)
-    filter.setValue(5, forKey: kCIInputRadiusKey)
-    guard let output = filter.outputImage else { return nil }
-    return context.createCGImage(output, from: output.extent)
-  }
-
-  private static func colorControls(_ image: CGImage) -> CGImage? {
-    guard let filter = CIFilter(name: "CIColorControls") else { return nil }
-    filter.setValue(CIImage(cgImage: image), forKey: kCIInputImageKey)
-    filter.setValue(2.0, forKey: kCIInputSaturationKey)
-    filter.setValue(-0.1, forKey: kCIInputBrightnessKey)
-    guard let output = filter.outputImage else { return nil }
-    return context.createCGImage(output, from: output.extent)
+  subscript(key: String) -> Value? {
+    get { cache.object(forKey: key as NSString)?.value }
+    set {
+      if let newValue { cache.setObject(Box(newValue), forKey: key as NSString) } else { cache.removeObject(forKey: key as NSString) }
+    }
   }
 }
 
-private enum GlassGlow {
-  private static let cache = NSCache<NSString, CGImage>()
+@MainActor
+enum IconRingImages {
+  private static let images = IconRingCache<CGImage>()
+  private static let themes = IconRingCache<IconRingTheme?>()
+  private static let blurred = IconRingCache<(plain: CGImage, darkRing: CGImage)>()
+  private static let glows = IconRingCache<CGImage>()
+  private static let templates = IconRingCache<CGImage>()
+  private static let context = CIContext()
 
-  static func of(_ source: IconSource, blurred: CGImage) -> CGImage? {
-    if let cached = cache.object(forKey: source.key as NSString) { return cached }
+  static func remember(_ image: CGImage, for source: IconRingSource) { images[source.key] = image }
+
+  static func image(_ source: IconRingSource) -> CGImage? {
+    if let known = images[source.key] { return known }
+    let image = source.load()
+    if let image { images[source.key] = image }
+    return image
+  }
+
+  static func theme(_ source: IconRingSource) -> IconRingTheme? {
+    if let known = themes[source.key] { return known }
+    let theme = image(source).flatMap(IconRingTheme.generate)
+    themes[source.key] = .some(theme)
+    return theme
+  }
+
+  static func blur(_ source: IconRingSource) -> (plain: CGImage, darkRing: CGImage)? {
+    if let known = blurred[source.key] { return known }
+    guard let image = image(source), let plain = filtered(image, "CIGaussianBlur", [kCIInputRadiusKey: 5]),
+      let darkRing = filtered(plain, "CIColorControls", [kCIInputSaturationKey: 2.0, kCIInputBrightnessKey: -0.1])
+    else { return nil }
+    blurred[source.key] = (plain, darkRing)
+    return (plain, darkRing)
+  }
+
+  static func template(_ source: IconRingSource) -> CGImage? {
+    if let known = templates[source.key] { return known }
+    guard let image = image(source),
+      let context = CGContext(
+        data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return nil }
+    let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+    context.draw(image, in: rect)
+    context.setBlendMode(.sourceIn)
+    context.setFillColor(.white)
+    context.fill(rect)
+    guard let white = context.makeImage() else { return nil }
+    templates[source.key] = white
+    return white
+  }
+
+  static func glow(_ source: IconRingSource) -> CGImage? {
+    if let known = glows[source.key] { return known }
+    guard let blurred = blur(source)?.plain else { return nil }
     let scale = min(1, 64 / Double(max(blurred.width, blurred.height, 1)))
     let w = max(1, Int(Double(blurred.width) * scale)), h = max(1, Int(Double(blurred.height) * scale))
     guard let context = CGContext(
@@ -193,61 +196,51 @@ private enum GlassGlow {
     for i in stride(from: 0, to: w * h * 4, by: 4) {
       let a = Double(bytes[i + 3]) / 255
       guard a > 0 else { continue }
-      let (rgb, strength) = glow(SIMD3(Double(bytes[i]), Double(bytes[i + 1]), Double(bytes[i + 2])) / 255 / a)
+      let (rgb, strength) = glowColor(SIMD3(Double(bytes[i]), Double(bytes[i + 1]), Double(bytes[i + 2])) / 255 / a)
       let alpha = a * strength
       for k in 0..<3 { bytes[i + k] = UInt8((rgb[k] * alpha * 255).rounded()) }
       bytes[i + 3] = UInt8((alpha * 255).rounded())
     }
     guard let image = context.makeImage() else { return nil }
-    cache.setObject(image, forKey: source.key as NSString)
+    glows[source.key] = image
     return image
   }
 
-  static func of(_ color: NSColor) -> CGColor? {
-    guard let c = color.usingColorSpace(.sRGB) else { return nil }
-    let (rgb, strength) = glow(SIMD3(Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent)))
+  static func glow(_ color: CGColor) -> CGColor? {
+    guard let c = NSColor(cgColor: color)?.usingColorSpace(.sRGB) else { return nil }
+    let (rgb, strength) = glowColor(SIMD3(Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent)))
     return strength > 0 ? CGColor(srgbRed: rgb.x, green: rgb.y, blue: rgb.z, alpha: strength) : nil
   }
 
-  private static func glow(_ rgb: SIMD3<Double>) -> (SIMD3<Double>, Double) {
+  private static func glowColor(_ rgb: SIMD3<Double>) -> (SIMD3<Double>, Double) {
     let top = rgb.max(), chroma = top - rgb.min()
     guard top > 0 else { return (.zero, 0) }
     let bright = rgb / top
     return (bright + (SIMD3(repeating: 1) - bright) * 0.35, min(1, chroma * 1.5))
   }
-}
 
-private enum TemplateIcon {
-  private static let cache = NSCache<NSString, CGImage>()
-
-  static func of(_ source: IconSource) -> CGImage? {
-    if let cached = cache.object(forKey: source.key as NSString) { return cached }
-    guard let image = source.load(),
-      let context = CGContext(
-        data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-    else { return nil }
-    let rect = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-    context.draw(image, in: rect)
-    context.setBlendMode(.sourceIn)
-    context.setFillColor(.white)
-    context.fill(rect)
-    guard let white = context.makeImage() else { return nil }
-    cache.setObject(white, forKey: source.key as NSString)
-    return white
+  private static func filtered(_ image: CGImage, _ name: String, _ values: [String: Any]) -> CGImage? {
+    guard let filter = CIFilter(name: name) else { return nil }
+    filter.setValue(CIImage(cgImage: image), forKey: kCIInputImageKey)
+    for (key, value) in values { filter.setValue(value, forKey: key) }
+    guard let output = filter.outputImage else { return nil }
+    return context.createCGImage(output, from: output.extent)
   }
 }
 
-final class DockSelection: ExpoView {
-  var source: IconSource? { didSet { if source != oldValue { apply() } } }
-  var kind = "" { didSet { apply() } }
-  var fill: NSColor? { didSet { apply() } }
-  var stroke: NSColor? { didSet { apply() } }
-  var cornerRadius: Double = 10 { didSet { apply() } }
-  var strokeWidth: Double = 3 { didSet { apply() } }
-  var dark = true { didSet { apply() } }
-  var iconSize: Double = 16 { didSet { apply() } }
-  var glass = false { didSet { if glass != oldValue { apply() } } }
+open class IconRingView: NSView {
+  public var source: IconRingSource? { didSet { if source != oldValue { apply() } } }
+  public var theme: IconRingTheme? { didSet { if theme != oldValue { apply() } } }
+  public var cornerRadius: CGFloat = 10 { didSet { if cornerRadius != oldValue { apply() } } }
+  public var strokeWidth: CGFloat = 3 { didSet { if strokeWidth != oldValue { apply() } } }
+  public var dark = true { didSet { if dark != oldValue { apply() } } }
+  public var iconSize: CGFloat = 16 { didSet { if iconSize != oldValue { apply() } } }
+  public var glass = false { didSet { if glass != oldValue { apply() } } }
+
+  public var drawsTemplateIcon: Bool {
+    if case .template = theme { return !glass }
+    return false
+  }
 
   private let tile = CALayer()
   private let background = CALayer()
@@ -264,8 +257,8 @@ final class DockSelection: ExpoView {
   private let rim = CAGradientLayer()
   private let rimMask = CALayer()
 
-  required init(appContext: AppContext? = nil) {
-    super.init(appContext: appContext)
+  public override init(frame: NSRect) {
+    super.init(frame: frame)
     wantsLayer = true
     layerUsesCoreImageFilters = true
     tile.masksToBounds = true
@@ -290,29 +283,35 @@ final class DockSelection: ExpoView {
     rim.mask = rimMask
   }
 
-  override func hitTest(_ point: NSPoint) -> NSView? { nil }
+  public required init?(coder: NSCoder) { fatalError() }
 
-  override func setFrameSize(_ newSize: NSSize) {
+  public static func remember(_ image: CGImage, for source: IconRingSource) { IconRingImages.remember(image, for: source) }
+
+  public static func theme(of source: IconRingSource) -> IconRingTheme? { IconRingImages.theme(source) }
+
+  open override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+  open override func setFrameSize(_ newSize: NSSize) {
     super.setFrameSize(newSize)
     apply()
   }
 
-  override func layout() {
+  open override func layout() {
     super.layout()
     apply()
   }
 
-  override func updateLayer() {
+  open override func updateLayer() {
     super.updateLayer()
     apply()
   }
 
-  override func viewDidChangeBackingProperties() {
+  open override func viewDidChangeBackingProperties() {
     super.viewDidChangeBackingProperties()
     apply()
   }
 
-  private func apply() {
+  public func apply() {
     guard let layer else { return }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
@@ -343,11 +342,23 @@ final class DockSelection: ExpoView {
     ringImage.frame = big
     ringMask.borderWidth = width
     icon.frame = CGRect(x: (bounds.width - iconSize) / 2, y: (bounds.height - iconSize) / 2, width: iconSize, height: iconSize)
-    icon.contents = kind == "template" ? source.flatMap(TemplateIcon.of) : nil
-
-    let blurred = kind == "blur" ? source.flatMap(BlurredIcon.of) : nil
+    let template: Bool
+    let fill: CGColor?
+    let stroke: CGColor?
+    switch theme {
+    case .template(let f, let s)?:
+      template = true
+      fill = f
+      stroke = s
+    default:
+      template = false
+      fill = nil
+      stroke = nil
+    }
+    icon.contents = template ? source.flatMap(IconRingImages.template) : nil
+    let blurred = theme == .blur ? source.flatMap(IconRingImages.blur) : nil
     if let blurred {
-      background.backgroundColor = glass ? nil : NSColor.white.withAlphaComponent(dark ? 0.2 : 1).cgColor
+      background.backgroundColor = NSColor.white.withAlphaComponent(dark ? 0.2 : 1).cgColor
       tint.contents = blurred.plain
       tint.isHidden = false
       ring.mask = ringMask
@@ -358,13 +369,13 @@ final class DockSelection: ExpoView {
       ringImage.opacity = dark ? 0.75 : 1
       ringImage.isHidden = false
     } else {
-      background.backgroundColor = glass ? nil : fill?.cgColor
+      background.backgroundColor = fill
       tint.contents = nil
       tint.isHidden = true
       ring.mask = nil
       ring.backgroundColor = nil
       ring.borderWidth = width
-      ring.borderColor = (stroke ?? .white).cgColor
+      ring.borderColor = stroke ?? NSColor.white.cgColor
       ring.compositingFilter = stroke == nil ? CIFilter(name: "CISoftLightBlendMode") : nil
       ringImage.contents = nil
       ringImage.isHidden = true
@@ -392,8 +403,9 @@ final class DockSelection: ExpoView {
     liftMask.frame = bounds
     liftMask.path = outside
 
-    let glow = kind == "blur" ? source.flatMap { source in BlurredIcon.of(source).flatMap { GlassGlow.of(source, blurred: $0.plain) } } : nil
-    let color = kind == "template" ? fill.flatMap(GlassGlow.of) : nil
+    let glow = theme == .blur ? source.flatMap(IconRingImages.glow) : nil
+    var color: CGColor?
+    if case .template(let fill, _)? = theme { color = IconRingImages.glow(fill) }
     hueImage.frame = big.offsetBy(dx: -bounds.minX, dy: -bounds.minY)
     hueImage.contents = glow
     hue.backgroundColor = color

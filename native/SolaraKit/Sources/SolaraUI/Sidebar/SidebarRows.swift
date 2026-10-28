@@ -1229,6 +1229,8 @@ final class TileView: SidebarRowView {
   private var selected = false
   private var showsBadge = false
   private var badges: TabMediaBadgesView?
+  private var ring: IconRingView?
+  private var ringRequest: SidebarFaviconRequest?
 
   override var accessibleTitle: String? {
     guard let context else { return nil }
@@ -1286,7 +1288,51 @@ final class TileView: SidebarRowView {
     TabMediaBadgesView.attach(&badges, to: body, flags: context.flags, tabId: folderId == nil ? tab?.id : nil, host: context.host, palette: palette)
     badges?.frame = icon.frame
     glass.dark = palette.dark
+    renderRing(folderId == nil ? tab : nil, context)
     repaint()
+  }
+
+  private func renderRing(_ tab: Tab?, _ context: SidebarContext) {
+    let source = active && context.host.iconRing ? tab.flatMap { ringSource($0, context) } : nil
+    guard let source, let theme = IconRingView.theme(of: source) else {
+      ring?.isHidden = true
+      glass.isHidden = false
+      return
+    }
+    let view = ring ?? IconRingView()
+    if ring == nil {
+      ring = view
+      body.addSubview(view, positioned: .above, relativeTo: glass)
+      view.frame = bounds
+    }
+    view.cornerRadius = SidebarMetrics.tileRadius
+    view.dark = context.palette.dark
+    view.source = source
+    view.theme = theme
+    view.isHidden = false
+    glass.isHidden = true
+    if view.drawsTemplateIcon { icon.isHidden = true }
+  }
+
+  private func ringSource(_ tab: Tab, _ context: SidebarContext) -> IconRingSource? {
+    if let custom = tab.customIcon, !custom.isEmpty {
+      return custom.hasPrefix("symbol:") ? nil : IconRingSource(uri: nil, emoji: custom)
+    }
+    let request = SidebarFaviconRequest(url: tab.url, favicon: tab.favicon, profileId: tab.profileId, dark: context.palette.dark)
+    if let known = context.favicons.cached(request) {
+      guard let picture = known?.cgImage(forProposedRect: nil, context: nil, hints: nil),
+        let source = IconRingSource(uri: "sidebar:\(request.profileId)|\(request.dark)|\(request.url)|\(request.favicon ?? "")", emoji: nil)
+      else { return nil }
+      IconRingView.remember(picture, for: source)
+      return source
+    }
+    guard ringRequest != request else { return nil }
+    ringRequest = request
+    context.favicons.load(request) { [weak self] picture in
+      guard let self, picture != nil, self.ringRequest == request else { return }
+      self.render()
+    }
+    return nil
   }
 
   override func repaint() {
@@ -1300,6 +1346,7 @@ final class TileView: SidebarRowView {
 
   override func layoutBody() {
     glass.frame = bounds
+    ring?.frame = bounds
     icon.frame = NSRect(x: (bounds.width - 16) / 2, y: (bounds.height - 16) / 2, width: 16, height: 16)
     badges?.frame = icon.frame
     let size = FolderMosaicView.side

@@ -264,8 +264,12 @@ bool SignedForDistribution() {
   return distribution;
 }
 
+bool TestHooksAllowed() {
+  return Background() && !SignedForDistribution();
+}
+
 bool ShowAlertSheetsInTests(bool show) {
-  if (!Background() || SignedForDistribution()) return false;
+  if (!TestHooksAllowed()) return false;
   gShowAlertSheets = show;
   return true;
 }

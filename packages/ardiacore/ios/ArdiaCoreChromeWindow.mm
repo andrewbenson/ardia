@@ -2512,12 +2512,12 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     return [action substringFromIndex:12];
   }
   if ([action hasPrefix:@"fakeFullScreenMs:"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     gActedTransition = MAX(0, [action substringFromIndex:17].doubleValue / 1000);
     return [NSString stringWithFormat:@"%.0f", gActedTransition * 1000];
   }
   if ([action hasPrefix:@"pageCover:"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     gPageCoverOff = ![[action substringFromIndex:10] isEqualToString:@"1"];
     return @(!gPageCoverOff).stringValue;
   }
@@ -2528,7 +2528,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
       NSData *json = [NSJSONSerialization dataWithJSONObject:frames ?: @[] options:0 error:nil];
       return json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"[]";
     }
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     ArdiaCoreWindow *coreWindow = [ArdiaCoreWindowController forNSWindow:window].coreWindow;
     ACWindowFullScreen *state = coreWindow ? [ACWindowFullScreen ofWindow:coreWindow create:YES] : nil;
     if (!state) return @"not an ArdiaCore window";
@@ -2549,18 +2549,18 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     return @"started";
   }
   if ([action hasPrefix:@"fakeFullScreenOcclusionMs:"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     const double ms = [action substringFromIndex:26].doubleValue;
     gActedOcclusionGap = ms == -1 ? NAN : ms / 1000;
     return [NSString stringWithFormat:@"%.0f", ms];
   }
   if ([action hasPrefix:@"fakeAppActive:"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     ardiacore_host::SetAppActive([[action substringFromIndex:14] isEqualToString:@"1"]);
     return @(NSApp.isActive).stringValue;
   }
   if ([action hasPrefix:@"postNotification:"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     NSArray<NSString *> *parts = [[action substringFromIndex:17] componentsSeparatedByString:@":"];
     if (parts.count != 2) return @"postNotification:<workspace|app|window|windows>:<name>";
     NSString *center = parts[0], *name = parts[1];
@@ -2573,7 +2573,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     return @"posted";
   }
   if ([action hasPrefix:@"fakeOcclusion:"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     NSString *to = [action substringFromIndex:14];
     ActOcclusion(window, [to isEqualToString:@"off"] ? nil : @([to isEqualToString:@"visible"]));
     return @((window.occlusionState & NSWindowOcclusionStateVisible) != 0).stringValue;
@@ -2583,7 +2583,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     if (!coreWindow) return @"not an ArdiaCore window";
     NSArray<NSString *> *parts = [action componentsSeparatedByString:@":"];
     if (parts.count > 1) {
-      if (!ardiacore_host::Background()) return @"test instances only";
+      if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
       const BOOL enter = [parts[1] isEqualToString:@"1"];
       if (enter != IsWindowFullScreen(window)) ActWindowFullScreen(coreWindow, enter, parts.count > 2 ? parts[2].doubleValue / 1000 : 0);
     }
@@ -2634,7 +2634,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     return out;
   }
   if ([action isEqualToString:@"responderChanges"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     static NSMutableArray<NSString *> *changes;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -2653,7 +2653,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     return out;
   }
   if ([action isEqualToString:@"fakeActiveClicks"]) {
-    if (!ardiacore_host::Background()) return @"test instances only";
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     static dispatch_once_t once;
     dispatch_once(&once, ^{
       NSMutableSet<Class> *classes = [NSMutableSet setWithObject:NSTextView.class];

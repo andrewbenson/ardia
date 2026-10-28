@@ -28,6 +28,7 @@ import {
   withApplier,
 } from "../store/nativeStore";
 import type { StoreCommand } from "@ardia/store";
+import { journalAnchor, journalVersion, onJournalChange } from "../sync/journalHost";
 
 const SAVE_DELAY_MS = 800;
 const VERSION = 2;
@@ -58,7 +59,7 @@ const DOCS: Doc[] = [
   },
   {
     name: "session.json",
-    sources: (s) => [s.profiles, s.profileOrder, s.orphanedProfileData, s.windows, s.windowOrder, s.tabs, s.groups, s.splits, s.closedTabs, s.closedWindows, s.parkedPins, s.pinChoices, s.pinSync, s.settings, s.ui.focusedWindowId, s.ui.lastProfileId, s.ui.appDark, s.closedGroups, s.deletedGroups, s.cleanedTabs],
+    sources: (s) => [journalVersion(), s.profiles, s.profileOrder, s.orphanedProfileData, s.windows, s.windowOrder, s.tabs, s.groups, s.splits, s.closedTabs, s.closedWindows, s.parkedPins, s.pinChoices, s.pinSync, s.settings, s.ui.focusedWindowId, s.ui.lastProfileId, s.ui.appDark, s.closedGroups, s.deletedGroups, s.cleanedTabs],
     json: serialized((s) => {
       const document = sessionDocument(s);
       return nativeStoreActive() ? { ...document, nativeExport: { rev: nativeStoreRev(), at: Date.now(), scope: "settingsAndDownloads" } } : document;
@@ -94,6 +95,7 @@ const sessionDocument = (s: BrowserState) => {
     closedGroups: s.closedGroups.filter((c) => c.tabs.every(publicTab)),
     deletedGroups: s.deletedGroups.filter((c) => c.tabs.every(publicTab)),
     cleanedTabs: s.cleanedTabs.filter((c) => publicTab(c.tab)),
+    ...journalAnchor(),
   };
 };
 
@@ -323,9 +325,11 @@ export function startPersistence() {
   };
   const stopServices = startDerivedServices({ forgetsIncognito: true });
   const stopSession = useBrowser.subscribe((s) => check(s));
+  const stopJournal = onJournalChange(() => check(useBrowser.getState()));
   return () => {
     stopServices();
     stopSession();
+    stopJournal();
   };
 }
 

@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+const { fixedBy } = await import("../switchOn.mjs");
+const shell = await import("../../../test-native/index.ts");
+const host = await import("../../../sync/journalHost.ts");
+const h = (ms) => `${ms.toString(36).padStart(9, "0")}.0000.dev1`;
+const quiet = (vv) => ({ app: { unapplied: [], pending: 0, damaged: {}, outbox: [], vv } });
+const save = (settings) => shell.docs.set("session.json", JSON.stringify({ version: 2, settings, ...host.journalAnchor() }));
+
+test("T-back-nogen: with the gen doc lost and the clock stepped back, a newer T still lands above an older store's journalT", fixedBy("step 4"), () => {
+  shell.docs.clear();
+  host.forgetEditJournal();
+  let j = host.editJournal();
+  j.record("app", "set:theme", { v: "light", h: h(1000), seen: null });
+  host.noteInStep(quiet({ B: 0 }), 1_000_000);
+  save({ theme: "light" });
+  const backup = { journal: shell.docs.get("sync-edits.json"), session: shell.docs.get("session.json") };
+  shell.docs.delete("sync-edits.gen");
+  host.forgetEditJournal();
+  j = host.editJournal();
+  host.noteInStep(quiet({ B: 1 }), 500_000);
+  save({ theme: "dark" });
+  j.record("app", "set:other", { v: 1, h: h(600_000), seen: null });
+  j.record("app", "set:other", { v: 2, h: h(600_001), seen: null });
+  shell.docs.set("sync-edits.json", backup.journal);
+  shell.docs.set("session.json", backup.session);
+  host.forgetEditJournal();
+  const opened = host.editJournal();
+  assert.equal(opened.lost, true, "control: the journal is behind the gen doc");
+  assert.equal(opened.fallback, "nothing", `the store from before the second T (${opened.inStep?.T}) opens with ${opened.fallback}`);
+});
+
+test("T-restored-store: a store restored older under a current journal isn't stamped current by a save before this launch's first in-step cycle", fixedBy("step 4"), () => {
+  shell.docs.clear();
+  host.forgetEditJournal();
+  const j = host.editJournal();
+  j.record("app", "set:theme", { v: "light", h: h(1000), seen: null });
+  host.noteInStep(quiet({ B: 1 }), 10_000);
+  save({ theme: "light" });
+  const older = shell.docs.get("session.json");
+  host.noteInStep(quiet({ B: 2 }), 20_000);
+  save({ theme: "dark" });
+  shell.docs.set("session.json", older);
+  host.forgetEditJournal();
+  const reopened = host.editJournal();
+  assert.equal(reopened.lost, false, "control: the journal is current");
+  save({ theme: "light" });
+  assert.equal(JSON.parse(shell.docs.get("session.json")).journalT, 10_000, "the save keeps the restored store's journalT");
+  shell.docs.set("sync-edits.json", "{broken");
+  host.forgetEditJournal();
+  assert.equal(host.editJournal().fallback, "nothing", "a later journal loss doesn't union over the restored store");
+});

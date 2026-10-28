@@ -18,6 +18,7 @@ import {
   type PhraseResult,
   type ScopeState,
   type Transport,
+  hlcWall,
 } from "@ardia/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
@@ -50,6 +51,7 @@ import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
 import { syncRedesign } from "./redesignSwitch";
 import { ledgerPasswordsAdapter, type HeldPasswords } from "./ledgerPasswords";
+import { editJournal, noteInStep, noteSeen, prunableSeen, pruneSeen } from "./journalHost";
 
 type DataType = "bookmarks" | "history" | "tabs" | "pinned" | "passwords" | "extensions" | "settings";
 
@@ -365,6 +367,49 @@ function publishUi(patch: Partial<SyncUi> = {}) {
   });
 }
 
+const STORE_BACKED = ["set:", "prof:", "pth:", "share:", "devmode:", "pin", "pord:", "pgc:", "pgh:", "tilefold:"];
+const storeBacked = (key: string) => STORE_BACKED.some((p) => key.startsWith(p));
+type Extracted = { keys: Set<string>; ignore: (key: string) => boolean };
+const extractedThisCycle = new Map<string, Map<string, Extracted>>();
+
+function seenHooks(scope: string, state: ScopeState) {
+  if (!syncRedesign.on) return {};
+  return {
+    beforeApply: (keys: Set<string>) => {
+      for (const key of keys) {
+        const record = state.records[key];
+        if (record && storeBacked(key)) noteSeen(scope, key, record.o);
+      }
+    },
+    extracted: (prefix: string, keys: Set<string>, ignore: (key: string) => boolean) => {
+      if (!storeBacked(prefix)) return;
+      const byPrefix = extractedThisCycle.get(scope) ?? new Map<string, Extracted>();
+      byPrefix.set(prefix, { keys, ignore });
+      extractedThisCycle.set(scope, byPrefix);
+    },
+  };
+}
+
+function pruneSeenKeys(scopes: Record<string, ScopeState>, now: number) {
+  if (!syncRedesign.on) return;
+  for (const [scope, state] of Object.entries(scopes)) {
+    const byPrefix = extractedThisCycle.get(scope);
+    pruneSeen(scope, (key) => {
+      const owner = [...(byPrefix?.keys() ?? [])].filter((p) => key.startsWith(p)).sort((a, z) => z.length - a.length)[0];
+      const extracted = owner ? byPrefix!.get(owner) : undefined;
+      const record = state.records[key];
+      return prunableSeen({
+        extractedThisCycle: !!extracted,
+        localHas: !!extracted?.keys.has(key),
+        localIgnored: !!extracted?.ignore(key),
+        record: record && { v: record.v, wall: hlcWall(record.h) },
+        now,
+      });
+    });
+  }
+  extractedThisCycle.clear();
+}
+
 export const ledgerScopeOf = (profileId: string) => `${doc.folder}\n${doc.deviceId}@${doc.setupAt ?? 0}\n${doc.profiles[profileId]?.syncId ?? ""}`;
 
 function heldPasswordsByProfile(): Record<string, number> {
@@ -455,6 +500,7 @@ async function runCycle({ retiring = false } = {}) {
     return;
   }
   running = true;
+  extractedThisCycle.clear();
   cycleForcesPasswords = forcePasswords;
   const forcedBy = forceRequests;
   const cycleDoc = doc;
@@ -481,7 +527,7 @@ async function runCycle({ retiring = false } = {}) {
       adapters: appGuard.adapters,
       clock,
       device,
-      options: { persist: persistJournal(APP_SCOPE), writtenKeysOnly: syncRedesign.on },
+      options: { persist: persistJournal(APP_SCOPE), writtenKeysOnly: syncRedesign.on, ...seenHooks(APP_SCOPE, app) },
     });
     appGuard.settle();
     if (app.joined) linkProfiles(app);
@@ -502,7 +548,7 @@ async function runCycle({ retiring = false } = {}) {
         adapters: scopeGuard.adapters,
         clock,
         device,
-        options: { expired: historyExpired, persist: persistJournal(scope), writtenKeysOnly: syncRedesign.on },
+        options: { expired: historyExpired, persist: persistJournal(scope), writtenKeysOnly: syncRedesign.on, ...seenHooks(scope, state) },
       });
       scopeGuard.settle();
       pending += state.pending;
@@ -520,6 +566,8 @@ async function runCycle({ retiring = false } = {}) {
     doc.clock = clock.last;
     doc.lastSyncedAt = Date.now();
     if (app.joined) doc.joining = false;
+    pruneSeenKeys(doc.scopes, doc.lastSyncedAt);
+    noteInStep(doc.scopes, doc.lastSyncedAt);
     if (forceRequests === forcedBy) forcePasswords = false;
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {
@@ -1204,6 +1252,7 @@ function addLinkedProfile(syncId: string, record: ProfileRecord, shareWith: stri
 export function startSync() {
   if (!SyncNative) return;
   load();
+  editJournal();
   if (newerFormat) return publishUi({ status: "unavailable", error: NEWER_FORMAT });
   publishUi({ status: doc.enabled ? "starting" : "off" });
   void watchExtensions();

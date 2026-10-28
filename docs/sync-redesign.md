@@ -111,6 +111,21 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
     folder lacks is kept, unpublished, only if its key was never seen. An ever-seen key the folder
     lacks is removed. A kept never-seen item stays local and unpublished until the user's next
     command on it journals it.
+  - **A store older than `T`** is the same case (step 4 review 3). Each session save stamps the
+    store with `journalT`, the last `T` this launch reached in step. If the store's `journalT` is
+    below the gen doc's `T`, its docs were written before `T`, so they may hold values sync replaced
+    after a backup while `vv(T)` covers those replacements. That happens when the journal and the
+    store roll back together under a current gen doc. The union fallback would then publish the
+    restored values over the newer ones, so it doesn't run: nothing is published, as with no gen
+    doc. A comparison of journal generations can't see this, since sync applies don't move the
+    journal's `g`.
+    - Until a launch reaches step, its saves keep the `journalT` the store had (or 0), whether or
+      not the journal was lost. A save during a "nothing" launch, or after the store alone was
+      restored from a backup or a copied session.json, can't stamp an older store as current and
+      turn a later loss's fallback into union.
+    - `T` only moves forward: each in-step point is `max(now, floor + 1)`, where the floor starts at
+      the larger of the gen doc's `T` and the store's `journalT`. A wall clock set back, even with
+      the gen doc lost, can't make a store saved earlier pass for one saved later.
 - **Ledger check on each read.** The meta row and the logins are read from the same copy of Login
   Data, one read of the file, so a restore between the two can't mix them.
   - **Row equal to `L@t`:** consistent; detection by ledger, below.

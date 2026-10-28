@@ -115,9 +115,11 @@ export type ScopeOptions = {
   damagedGiveUp?: number;
   persist?: (batches: LogFile[]) => Promise<void>;
   writtenKeysOnly?: boolean;
+  beforeApply?: (keys: Set<string>) => void;
+  extracted?: (prefix: string, keys: Set<string>, ignore: (key: string) => boolean) => void;
 };
 
-const DEFAULTS: Required<Omit<ScopeOptions, "persist">> = {
+const DEFAULTS: Required<Omit<ScopeOptions, "persist" | "beforeApply" | "extracted">> = {
   expired: () => false,
   tombstoneTTL: 45 * 86_400_000,
   compactAfterFiles: 40,
@@ -201,6 +203,7 @@ const parseBase = (json: string | undefined) => (json === undefined ? undefined 
 const settling = new WeakMap<ScopeState, (() => void)[]>();
 const waitingAfterPull = new WeakMap<ScopeState, boolean>();
 const downloadingRecently = new WeakMap<ScopeState, boolean>();
+const extractedHook = new WeakMap<ScopeState, (prefix: string, keys: Set<string>, ignore: (key: string) => boolean) => void>();
 export const DOWNLOAD_HOLD_MS = 10 * 60_000;
 
 function settleWhenDurable(state: ScopeState, settle: () => void) {
@@ -233,6 +236,7 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
   const queued = (key: string) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
   const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, () => downloadingRecently.get(state) !== false);
   if (!extraction) return published;
+  extractedHook.get(state)?.(adapter.prefix, new Set(extraction.values.keys()), (key) => !!extraction.ignore?.(key));
   const put = (key: string, value: unknown) => {
     const known = state.records[key];
     const stamped = extraction.stamp?.(key);
@@ -361,13 +365,14 @@ export async function pull(state: ScopeState, transport: Transport, scope: strin
   return changed;
 }
 
-async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, writtenKeysOnly: boolean): Promise<Set<string>> {
+async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<string>, now: number, horizon: number, writtenKeysOnly: boolean, beforeApply?: (keys: Set<string>) => void): Promise<Set<string>> {
   const mine = new Set([...keys].filter((k) => k.startsWith(adapter.prefix)));
   if (!mine.size) return mine;
   const view = visible(state, adapter.prefix);
   const applyAs = (state.applyAs ??= {});
   applyAs[adapter.prefix] ??= state.joined ? "joined" : "joining";
   let ok: ApplyResult = false;
+  beforeApply?.(mine);
   try {
     ok = await adapter.apply(view, mine, (key) => parseBase(state.base[key]), { known: (key) => key in state.records, now, horizon, joined: applyAs[adapter.prefix] === "joined" });
   } catch (error) {
@@ -432,6 +437,8 @@ export async function syncScope(args: {
   options?: ScopeOptions;
 }): Promise<CycleResult> {
   const { scope, state, transport, adapters, clock, device, options } = args;
+  if (options?.extracted) extractedHook.set(state, options.extracted);
+  else extractedHook.delete(state);
   const now = args.now ?? Date.now;
   let published = (await publish(state, adapters, clock, device, now())).size;
   await flush(state, transport, scope, device, now(), options);
@@ -443,7 +450,7 @@ export async function syncScope(args: {
     published += late.size;
     for (const key of state.unapplied) if (key.startsWith(adapter.prefix)) keys.add(key);
     for (const key of late) keys.delete(key);
-    unapplied.push(...(await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), !!options?.writtenKeysOnly)));
+    unapplied.push(...(await applyAdapter(state, adapter, keys, now(), 2 * (options?.tombstoneTTL ?? DEFAULTS.tombstoneTTL), !!options?.writtenKeysOnly, options?.beforeApply)));
   }
   state.unapplied = [...unapplied, ...[...keys].filter((k) => !adapters.some((a) => k.startsWith(a.prefix)))];
   if (!state.awaitRemote || Object.keys(state.seen).some((d) => d !== device)) {

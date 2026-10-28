@@ -3,6 +3,7 @@ import QuartzCore
 
 public final class SidebarPlayerView: NSView {
   public static let height: CGFloat = 74
+  static let border: CGFloat = 0.5
   public static let gap: CGFloat = 8
 
   public var onAction: ((MediaAction) -> Void)?
@@ -151,7 +152,7 @@ public final class SidebarPlayerView: NSView {
     super.layout()
     let width = bounds.width
     MediaMotion.setInstantly { surface.frame = CGRect(x: 0, y: 0, width: width, height: Self.height) }
-    let pad: CGFloat = 7
+    let pad: CGFloat = 7 + Self.border
     artView.frame = CGRect(x: pad, y: pad, width: 32, height: 32)
     let textX = pad + 32 + 8
     let textWidth = max(0, width - pad - textX)

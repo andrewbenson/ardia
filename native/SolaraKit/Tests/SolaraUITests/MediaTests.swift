@@ -115,9 +115,9 @@ import Testing
       playbackRate: 1, duration: 60, tracks: false, artwork: nil, url: "https://a.test/", favicon: nil, profileId: "p", theme: theme))
     player.layoutSubtreeIfNeeded()
     let f = player.controlFrames
-    #expect(f["art"] == CGRect(x: 7, y: 7, width: 32, height: 32))
-    #expect(f["play"] == CGRect(x: 27, y: 43, width: 24, height: 24))
-    #expect(f["seek"] == CGRect(x: 81, y: 49, width: 132, height: 12))
+    #expect(f["art"] == CGRect(x: 7.5, y: 7.5, width: 32, height: 32))
+    #expect(f["play"] == CGRect(x: 27.5, y: 43.5, width: 24, height: 24))
+    #expect(f["seek"] == CGRect(x: 81.5, y: 49.5, width: 131, height: 12))
     #expect(f["close"] == CGRect(x: 208, y: -6, width: 18, height: 18))
     #expect(abs(player.seekProgress - 0.5) < 0.01)
   }

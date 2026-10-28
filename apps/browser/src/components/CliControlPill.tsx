@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { cliCommand, cliProduct, stopCliControl, useCliIndicator } from "../lib/cliControl";
 import { hex, useTheme } from "../lib/theme";
+import { windowShellActive } from "@ardia/settings";
 import { useWindowId } from "../store/hooks";
+import { useNativePaneOverlay } from "./layout/nativePaneOverlays";
 import { mediaTheme, nativeMedia, NativeMediaView } from "./media/nativeMedia";
 import { useHover } from "./primitives";
 
@@ -12,21 +14,31 @@ const PILL_BOTTOM = 12;
 
 type FollowStyle = Animated.WithAnimatedValue<ViewStyle>;
 
-export function CliControlPill({ style }: { style?: FollowStyle }) {
-  return nativeMedia("media.cliPill") ? (
+export function CliControlPill({ tabId, style, nativeAllowed = true }: { tabId: string; style?: FollowStyle; nativeAllowed?: boolean }) {
+  const windowId = useWindowId();
+  const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
+  if (!nativeMedia("media.cliPill")) return <RNCliControlPill style={style} />;
+  if (inShell && !style) return <PaneCliControlPill windowId={windowId} tabId={tabId} />;
+  return (
     <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
-      <NativeCliControlPill />
+      <NativeCliControlPill windowId={windowId} />
     </Animated.View>
-  ) : (
-    <RNCliControlPill style={style} />
   );
 }
 
-function NativeCliControlPill() {
+function useCliPillState() {
   const shown = useCliIndicator((s) => s.shown);
   const theme = useTheme();
-  const windowId = useWindowId();
-  return <NativeMediaView kind="media.cliPill" windowId={windowId} state={{ shown, command: cliCommand(), product: cliProduct(), theme: mediaTheme(theme) }} />;
+  return { shown, command: cliCommand(), product: cliProduct(), theme: mediaTheme(theme) };
+}
+
+function PaneCliControlPill({ windowId, tabId }: { windowId: string; tabId: string }) {
+  useNativePaneOverlay(true, windowId, tabId, "cliPill", useCliPillState());
+  return null;
+}
+
+function NativeCliControlPill({ windowId }: { windowId: string }) {
+  return <NativeMediaView kind="media.cliPill" windowId={windowId} state={useCliPillState()} />;
 }
 
 function RNCliControlPill({ style }: { style?: FollowStyle }) {

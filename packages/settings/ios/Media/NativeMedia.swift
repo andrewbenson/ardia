@@ -71,14 +71,8 @@ enum NativeMedia {
       var tabId = ""
       popover.onDismiss = { action(windowId, "castPicker", tabId, ["action": "dismiss"]) }
       view.onAction = { [weak popover] event in
-        switch event {
-        case .cast(let id): action(windowId, "castPicker", tabId, ["action": "cast", "sinkId": id])
-        case .stop(let id): action(windowId, "castPicker", tabId, ["action": "stop", "sinkId": id])
-        case .source: action(windowId, "castPicker", tabId, ["action": "source"])
-        case .link: action(windowId, "castPicker", tabId, ["action": "link"])
-        case .done: action(windowId, "castPicker", tabId, ["action": "done"])
-        case .height(let h): popover?.set(bodyHeight: CGFloat(h))
-        }
+        if case .height(let h) = event { popover?.set(bodyHeight: CGFloat(h)); return }
+        castPicker(windowId, tabId, event)
       }
       return content(castPicker, windowId, popover) { json in
         guard let state = CastPickerState.decode(json), let placement = PopoverEnvelope.decode(json) else { return }
@@ -93,13 +87,8 @@ enum NativeMedia {
       var tabId = ""
       popover.onDismiss = { action(windowId, "sharePicker", tabId, ["action": "cancel"]) }
       view.onAction = { [weak popover] event in
-        switch event {
-        case .select(let id): action(windowId, "sharePicker", tabId, ["action": "select", "id": id])
-        case .share(let id): action(windowId, "sharePicker", tabId, ["action": "share", "id": id ?? NSNull()])
-        case .cancel: action(windowId, "sharePicker", tabId, ["action": "cancel"])
-        case .audio(let on): action(windowId, "sharePicker", tabId, ["action": "audio", "value": on])
-        case .height(let h): popover?.set(bodyHeight: CGFloat(h))
-        }
+        if case .height(let h) = event { popover?.set(bodyHeight: CGFloat(h)); return }
+        sharePicker(windowId, tabId, event)
       }
       return content(sharePicker, windowId, popover, takesFocus: true) { json in
         guard let state = SharePickerState.decode(json), let placement = PopoverEnvelope.decode(json) else { return }
@@ -128,6 +117,27 @@ enum NativeMedia {
     return { mounted.removeAll { $0.view === entry } }
   }
 
+  static func castPicker(_ windowId: String, _ tabId: String, _ event: CastPickerAction) {
+    switch event {
+    case .cast(let id): action(windowId, "castPicker", tabId, ["action": "cast", "sinkId": id])
+    case .stop(let id): action(windowId, "castPicker", tabId, ["action": "stop", "sinkId": id])
+    case .source: action(windowId, "castPicker", tabId, ["action": "source"])
+    case .link: action(windowId, "castPicker", tabId, ["action": "link"])
+    case .done: action(windowId, "castPicker", tabId, ["action": "done"])
+    case .height: break
+    }
+  }
+
+  static func sharePicker(_ windowId: String, _ tabId: String, _ event: SharePickerAction) {
+    switch event {
+    case .select(let id): action(windowId, "sharePicker", tabId, ["action": "select", "id": id])
+    case .share(let id): action(windowId, "sharePicker", tabId, ["action": "share", "id": id ?? NSNull()])
+    case .cancel: action(windowId, "sharePicker", tabId, ["action": "cancel"])
+    case .audio(let on): action(windowId, "sharePicker", tabId, ["action": "audio", "value": on])
+    case .height: break
+    }
+  }
+
   static func smallBarAction(_ windowId: String, _ tabId: String, _ event: SmallBarAction) {
     switch event {
     case .button(let id): action(windowId, "smallBar", tabId, ["action": id])
@@ -153,6 +163,7 @@ enum NativeMedia {
   static func probe(kind: String, windowId: String) -> String {
     let views = mounted.filter { $0.kind == kind && $0.windowId == windowId }.compactMap { $0.view.value }
       + (kind == sidebarPlayer ? NativeSidebar.players(windowId: windowId) : [])
+      + (NativePaneOverlays.host(windowId)?.mediaViews(kind) ?? [])
     func frames(_ view: NSView, _ controls: [String: CGRect]) -> [String: [Double]] {
       guard let content = view.window?.contentView else { return [:] }
       return controls.mapValues { rect in

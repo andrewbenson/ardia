@@ -534,7 +534,7 @@ function PageOverlays({
         <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
       <SadTab tabId={tabId} nativeAllowed={!peek} />
-      {cliPill && <CliControlPill style={statusStyle} />}
+      {cliPill && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
@@ -543,9 +543,9 @@ function PageOverlays({
       {popovers && <SiteControls tabId={tabId} open={popover === "siteControls"} {...popoverSide} top={POPOVER_MARGIN} />}
       {popovers && popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} />}
       {popovers && popover === "zoom" && <ZoomPopover tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} nativeAllowed={!peek} />}
-      <SharePicker tabId={tabId} paneWidth={width} />
+      <SharePicker tabId={tabId} paneWidth={width} nativeAllowed={!peek} />
       {!newTabShown && <DeviceChooser tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
-      <CastPicker tabId={tabId} paneWidth={width} />
+      <CastPicker tabId={tabId} paneWidth={width} nativeAllowed={!peek} />
       <NavigationOverlays tabId={tabId} windowId={windowId} geometry={geometry} peek={peek} />
       <SelectionPopover tabId={tabId} zoom={zoom} nativeAllowed={!peek} />
     </>

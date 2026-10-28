@@ -1,8 +1,10 @@
-import { CastMode, preferredCastMode, startCasting, stopCasting, type CastSink } from "@ardia/ardiacore";
+import { CastMode, preferredCastMode, startCasting, stopCasting, type CastDialog, type CastSink } from "@ardia/ardiacore";
 import { openExternalURL, showMenu, Symbol } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
-import { useTheme } from "../../lib/theme";
+import { windowShellActive } from "@ardia/settings";
+import { useTheme, type Theme } from "../../lib/theme";
+import { useNativePaneOverlay } from "../layout/nativePaneOverlays";
 import { PANEL, PanelHeader, Popover, POPOVER_MARGIN, PopoverValue, PromptButton } from "../layout/controls";
 import { useHover } from "../primitives";
 import { closeCastPicker, useCast } from "./cast";
@@ -30,13 +32,14 @@ const pickSource = async (screen: boolean) => {
   return choice ? choice === "screen" : null;
 };
 
-export function CastPicker(props: { tabId: string; paneWidth: number }) {
-  return nativeMedia("media.castPicker") ? <NativeCastPicker {...props} /> : <RNCastPicker {...props} />;
+export function CastPicker({ nativeAllowed = true, ...props }: { tabId: string; paneWidth: number; nativeAllowed?: boolean }) {
+  return nativeMedia("media.castPicker") ? <NativeCastPicker {...props} nativeAllowed={nativeAllowed} /> : <RNCastPicker {...props} />;
 }
 
-function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
+function NativeCastPicker({ tabId, paneWidth, nativeAllowed }: { tabId: string; paneWidth: number; nativeAllowed: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
+  const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
   const dialog = useCast((c) => c.dialogs[tabId]);
   const [screen, setScreen] = useState(false);
   useEffect(() => setScreen(false), [dialog?.id]);
@@ -45,7 +48,9 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
     castHandlers[tabId] = (extra) => handler.current(extra);
     return () => void delete castHandlers[tabId];
   }, [tabId]);
-  if (!dialog) return null;
+  const state = dialog ? castPickerState(tabId, dialog, screen, theme, paneWidth) : null;
+  useNativePaneOverlay(inShell, windowId, tabId, "castPicker", state);
+  if (!dialog || !state) return null;
   const close = () => closeCastPicker(tabId);
   const available = dialog.sinks.filter((s) => s.state !== "unavailable");
   handler.current = (extra) => {
@@ -66,7 +71,13 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
         return close();
     }
   };
-  const state = {
+  if (inShell) return null;
+  return <NativeMediaView key={dialog.id} kind="media.castPicker" windowId={windowId} state={state} />;
+}
+
+function castPickerState(tabId: string, dialog: CastDialog, screen: boolean, theme: Theme, paneWidth: number) {
+  const available = dialog.sinks.filter((s) => s.state !== "unavailable");
+  return {
     dialogId: dialog.id,
     tabId,
     title: screen ? "Cast screen" : dialog.header || "Cast tab",
@@ -85,7 +96,6 @@ function NativeCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: numb
     theme: mediaTheme(theme),
     popover: { width: Math.min(WIDTH, paneWidth - 24), top: POPOVER_MARGIN, right: POPOVER_MARGIN },
   };
-  return <NativeMediaView key={dialog.id} kind="media.castPicker" windowId={windowId} state={state} />;
 }
 
 function RNCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {

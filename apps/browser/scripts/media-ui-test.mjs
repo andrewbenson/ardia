@@ -7,19 +7,21 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error(`usage: node media-ui-test.mjs <Debug Solara.app> [--native] [--keep-data]
+  console.error(`usage: node media-ui-test.mjs <Debug Solara.app> [--native | --shell] [--keep-data]
 
 The media controls on a local tone page: the sidebar player shows for a playing tab that isn't shown, its play
 button pauses and plays, Close Player hides it without pausing or moving to the tab, a new play brings it back, Back
 to Tab shows the tab and ends the player; the pinned tab's hover player scrolls a long title and ticks its time; the
-CLI pill appears and hides with RN's timing; the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls.`);
+CLI pill appears and hides with RN's timing; the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls. --shell adds ARDIA_NATIVE_SHELL=1: the pickers
+and the CLI pill then live in the pane overlay container on the shell's card, with no RN-hosted NativeMediaView.`);
   process.exit(2);
 }
-const native = args.includes("--native");
+const shell = args.includes("--shell");
+const native = shell || args.includes("--native");
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-media-ui-"));
 const data = join(scratch, "data");
-const rep = reporter(join(scratch, "media-ui-test.log"), { name: `media-ui-test${native ? " --native" : ""}` });
+const rep = reporter(join(scratch, "media-ui-test.log"), { name: `media-ui-test${shell ? " --shell" : native ? " --native" : ""}` });
 
 const LONG_TITLE = "A very long fixture track title that has to scroll in the hover player";
 const tone = (() => {
@@ -70,6 +72,8 @@ const first = (kind) => probe(kind).then((rows) => rows[0] || null);
 const session = () => acMedia.useMedia.getState().sessions.p;
 const hostOf = (fiber) => { let f = fiber; while (f && !(f.stateNode && f.stateNode.measureInWindow)) f = f.child; return f && f.stateNode; };
 const measure = (fiber) => new Promise((r) => { const n = hostOf(fiber); return n ? n.measureInWindow((x, y, w, h) => r([x, y, w, h])) : r(null); });
+const pane = (kind) => M.describePaneOverlays("w1").then(JSON.parse).then((d) => ({ top: d.top, inCard: d.inCard, entry: Object.values(d.tabs).map((t) => t[kind]).find(Boolean) ?? null }));
+const hosted = (kind) => acPerf.findFibers("NativeMediaView", 200).filter((f) => f.memoizedProps?.kind === kind).length;
 const surface = () => { const [f] = acPerf.findFibers("PopoverSurface", 5); return f ? measure(f) : Promise.resolve(null); };
 `;
 let app = null;
@@ -101,7 +105,7 @@ const pressPlayer = async (control) => {
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_ALLOW_AUDIO: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
+    env: { ARDIA_ALLOW_AUDIO: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}), ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}) },
     switches: "--disable-audio-output --autoplay-policy=no-user-gesture-required",
     ready: "return !!ac.store.getState().windows.w1",
   });
@@ -187,6 +191,14 @@ try {
     return { overflow: later.titleOverflow, marquee: later.marquee, expected, elapsed: [first.elapsed, later.elapsed] };
   });
 
+  const inPane = async (kind, entry) => {
+    if (!shell) return null;
+    const where = await run(`return pane(${JSON.stringify(entry)}).then((p) => ({ ...p, hosted: hosted(${JSON.stringify(kind)}) }));`);
+    if (!where.entry) throw new Error(`no ${entry} in the pane overlays: ${JSON.stringify(where)}`);
+    if (!where.top || !where.inCard) throw new Error(`the overlay container is not the card's top child: ${JSON.stringify(where)}`);
+    if (where.hosted) throw new Error(`RN still hosts a NativeMediaView for ${kind}`);
+    return { inCard: true };
+  };
   await rep.check("cli-pill-timing", async () => {
     if (!native) return { rn: "drawn by RN" };
     const samples = await run(`
@@ -201,7 +213,16 @@ try {
     const peak = Math.max(...on.map((s) => s.opacity));
     if (peak < 0.99) throw new Error(`never fully shown: ${peak}`);
     if (off.at(-1).opacity > 0.01) throw new Error(`still visible 320 ms after hiding: ${off.at(-1).opacity}`);
-    return { samples: samples.length, frame: on.at(-1).frame, peak };
+    const pane = await (async () => {
+      if (!shell) return null;
+      await run(`globalThis.acCli.indicator.setState({ shown: true }); return true;`);
+      try {
+        return await inPane("media.cliPill", "cliPill");
+      } finally {
+        await run(`globalThis.acCli.indicator.setState({ shown: false }); return true;`);
+      }
+    })();
+    return { samples: samples.length, frame: on.at(-1).frame, peak, pane };
   });
   const RN_CAST = [925, 55, 340, 185];
   const RN_SHARE = [501.5, 55, 460, 423];
@@ -246,7 +267,7 @@ try {
   await rep.check("cast-picker", async () => {
     const opened = await openPopover("media.castPicker", `acCast.useCast.setState({ dialogs: { b: ${JSON.stringify(CAST)} } });`);
     sameRect("cast", opened.rect, RN_CAST);
-    const out = { rect: opened.rect, samples: opened.animatedSamples };
+    const out = { rect: opened.rect, samples: opened.animatedSamples, pane: await inPane("media.castPicker", "castPicker") };
     if (native) {
       await run(`globalThis.__castLog = []; const a = acNativeMedia.actions; globalThis.__castReal = a.castPicker; a.castPicker = (w, t, e) => { __castLog.push(e); }; return true;`);
       await run(`return first("media.castPicker").then((r) => click(centre(r.frames.done))).then(() => true);`);
@@ -273,7 +294,7 @@ try {
   await rep.check("share-picker", async () => {
     const opened = await openPopover("media.sharePicker", openShare);
     sameRect("share", opened.rect, RN_SHARE);
-    const out = { rect: opened.rect, samples: opened.animatedSamples };
+    const out = { rect: opened.rect, samples: opened.animatedSamples, pane: await inPane("media.sharePicker", "sharePicker") };
     if (native) {
       await run(`return first("media.sharePicker").then((r) => click(centre(r.frames["tab:p"]))).then(() => true);`);
       const picked = await until("tab selected", `return first("media.sharePicker").then((r) => r.selected === "tab:p" ? r : null);`, 3000);

@@ -1,5 +1,6 @@
 import { getDisplayMediaSources, type DisplayMediaAudio, type DisplayMediaRequest, type DisplayMediaSource } from "@ardia/ardiacore";
 import { runningAppIcon, Symbol } from "@ardia/shell";
+import { windowShellActive } from "@ardia/settings";
 import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
@@ -7,6 +8,7 @@ import { webviews } from "../../lib/webviews";
 import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
 import { PANEL, PanelHeader, Popover, POPOVER_MARGIN, PromptButton } from "../layout/controls";
+import { useNativePaneOverlay } from "../layout/nativePaneOverlays";
 import { usePages } from "../layout/pageState";
 import { Favicon, useHover } from "../primitives";
 import { Checkbox } from "../settings/controls";
@@ -96,7 +98,12 @@ const hostOf = (origin: string) => {
   }
 };
 
-export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
+function PaneSharePicker({ windowId, tabId, state }: { windowId: string; tabId: string; state: object }) {
+  useNativePaneOverlay(true, windowId, tabId, "sharePicker", state);
+  return null;
+}
+
+export function SharePicker({ tabId, paneWidth, nativeAllowed = true }: { tabId: string; paneWidth: number; nativeAllowed?: boolean }) {
   const theme = useTheme();
   const request = useMedia((m) => m.displayRequests[tabId]);
   const [sources, setSources] = useState<DisplayMediaSource[]>([]);
@@ -106,6 +113,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
   const list = useRef<ScrollView>(null);
   const native = nativeMedia("media.sharePicker");
   const windowId = useWindowId();
+  const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
   const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
   useEffect(() => {
     if (!native) return;
@@ -192,6 +200,7 @@ export function SharePicker({ tabId, paneWidth }: { tabId: string; paneWidth: nu
       theme: mediaTheme(theme),
       popover: { width, top: POPOVER_MARGIN, left: (paneWidth - width) / 2 },
     };
+    if (inShell) return <PaneSharePicker key={request.id} windowId={windowId} tabId={tabId} state={state} />;
     return <NativeMediaView key={request.id} kind="media.sharePicker" windowId={windowId} state={state} />;
   }
 

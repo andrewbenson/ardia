@@ -211,18 +211,17 @@ struct WindowShellViewTests {
   @Test func slotsStackInOrderWhateverOrderTheyMountIn() {
     let shell = WindowShellView(windowId: "w")
     shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
-    let react = NSView(), backdrop = NSView(), sidebar = NSView(), overlay = NSView()
+    let react = NSView(), backdrop = NSView(), sidebar = NSView()
     shell.mount(.react, react)
-    shell.mount(.overlay, overlay)
     shell.mount(.backdrop, backdrop)
     shell.mount(.sidebar, sidebar)
-    #expect(shell.subviews == [backdrop, react, shell.card, sidebar, overlay])
+    #expect(shell.subviews == [shell.hiddenPages, backdrop, react, shell.card, sidebar, shell.overlay])
     #expect(react.frame == shell.bounds)
     #expect(backdrop.frame == shell.bounds)
     #expect(sidebar.frame == CGRect(x: 0, y: 0, width: 190, height: 700))
     let replacement = NSView()
     shell.mount(.backdrop, replacement)
-    #expect(shell.subviews.first === replacement)
+    #expect(shell.subviews[1] === replacement)
     #expect(backdrop.superview == nil)
     shell.mount(.sidebar, nil)
     #expect(sidebar.superview == nil)
@@ -282,9 +281,9 @@ struct WindowShellMountTests {
     let shell = WindowShellView(windowId: "w")
     let view = NSView()
     shell.mount(.peek, view)
-    shell.mount(.overlay, view)
+    shell.mount(.topStrip, view)
     #expect(shell.view(in: .peek) == nil)
-    #expect(shell.slot(of: view) == .overlay)
+    #expect(shell.slot(of: view) == .topStrip)
     shell.mount(.peek, NSView())
     #expect(view.superview === shell)
   }
@@ -313,6 +312,111 @@ struct WindowShellMountTests {
     #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 300)) == .react)
     shell.card.addSubview(NSView(frame: shell.card.bounds))
     #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 300)) == .card)
+  }
+
+  @Test func pagesWithNoSlotParkOutOfSightAtTheCardsSize() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    shell.mount(.react, NSView())
+    shell.mount(.sidebar, NSView())
+    #expect(shell.hiddenPages.isHidden)
+    #expect(shell.hiddenPages.frame == shell.card.frame)
+    #expect(shell.subviews.first === shell.hiddenPages)
+    #expect(shell.slot(of: shell.hiddenPages) == nil)
+    let page = NSView(frame: shell.hiddenPages.bounds)
+    shell.hiddenPages.addSubview(page)
+    #expect(shell.hitTest(NSPoint(x: 400, y: 300)) !== page)
+  }
+
+  @Test func theOverlayIsAShellOwnedContainerOnTop() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    shell.mount(.sidebar, NSView())
+    #expect(shell.view(in: .overlay) === shell.overlay)
+    #expect(shell.subviews.last === shell.overlay)
+    #expect(shell.overlay.frame == shell.bounds)
+    #expect(shell.hitTest(NSPoint(x: 600, y: 300)) == nil)
+    let card = NSView(frame: CGRect(x: 10, y: 325, width: 50, height: 50))
+    shell.overlay.addSubview(card)
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 30, y: 350)) == .overlay)
+  }
+
+  @Test func theOverlayTellsHoverOncePerTurnWhenAChildComesGoesMovesOrHides() async {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    var posts = 0
+    let token = NotificationCenter.default.addObserver(forName: WindowShellView.hoverCoverChanged, object: shell, queue: nil) { _ in posts += 1 }
+    defer { NotificationCenter.default.removeObserver(token) }
+    let nextTurn = { try? await Task.sleep(nanoseconds: 20_000_000) }
+    let card = NSView(frame: CGRect(x: 190.5, y: 40, width: 280, height: 120))
+    shell.overlay.addSubview(card)
+    card.frame.origin.y = 60
+    #expect(posts == 0)
+    await nextTurn()
+    #expect(posts == 1)
+    card.frame.origin.y = 80
+    await nextTurn()
+    #expect(posts == 2)
+    card.isHidden = true
+    await nextTurn()
+    #expect(posts == 3)
+    card.isHidden = false
+    card.frame.origin.y = 90
+    await nextTurn()
+    #expect(posts == 4)
+    card.removeFromSuperview()
+    await nextTurn()
+    #expect(posts == 5)
+    card.isHidden = true
+    await nextTurn()
+    #expect(posts == 5)
+  }
+
+  @Test func emptyNativeLayersLetTheReactRootTakeThePointer() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    let react = NSView()
+    shell.mount(.react, react)
+    shell.mount(.splitChrome, SplitChromeView(windowId: "w"))
+    shell.mount(.peek, PeekOverlayView(frame: .zero))
+    shell.mount(.topStrip, TopStripView(windowId: "w"))
+    shell.update { $0.topTabs = true }
+    let panes = SplitPanesView(windowId: "w")
+    panes.frame = shell.card.bounds
+    shell.card.addSubview(panes)
+    for point in [NSPoint(x: 600, y: 20), NSPoint(x: 600, y: 300), NSPoint(x: 100, y: 300)] {
+      let hit = shell.hitTest(point)
+      #expect(hit == nil || hit === react, "an empty native layer took \(point): \(String(describing: hit))")
+    }
+  }
+
+  @Test func aShellGoesAwayWithAChildInItsOverlay() async {
+    weak var gone: WindowShellView?
+    var posts = 0
+    let token = NotificationCenter.default.addObserver(forName: WindowShellView.hoverCoverChanged, object: nil, queue: nil) { note in
+      if (note.object as? WindowShellView)?.windowId == "freed" { posts += 1 }
+    }
+    defer { NotificationCenter.default.removeObserver(token) }
+    let kept = NSView(frame: CGRect(x: 10, y: 10, width: 50, height: 50))
+    do {
+      let shell = WindowShellView(windowId: "freed")
+      shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+      shell.overlay.addSubview(NSView(frame: CGRect(x: 10, y: 10, width: 50, height: 50)))
+      shell.overlay.addSubview(kept)
+      gone = shell
+    }
+    try? await Task.sleep(nanoseconds: 20_000_000)
+    #expect(gone == nil)
+    #expect(kept.superview == nil)
+    posts = 0
+    kept.frame.origin.y = 80
+    kept.isHidden = true
+    try? await Task.sleep(nanoseconds: 20_000_000)
+    #expect(posts == 0)
+  }
+
+  @Test func theShellGatesHover() {
+    #expect(WindowShellView(windowId: "w").responds(to: NSSelectorFromString("ardia_gatesHover")))
   }
 
   @Test func theCardIsAShellOwnedContainer() {

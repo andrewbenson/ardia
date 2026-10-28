@@ -55,6 +55,12 @@ enum NativeWindowShell {
 
   nonisolated static func active(_ windowId: String) -> Bool { activeIds.withLock { $0.contains(windowId) } }
 
+  nonisolated static var activeWindowIds: Set<String> { activeIds.withLock { $0 } }
+
+  static func overlay(_ windowId: String) -> NSView? { host(windowId)?.shell.overlay }
+
+  static func hiddenPages(_ windowId: String) -> NSView? { host(windowId)?.shell.hiddenPages }
+
   static func setBackdrop(_ windowId: String, _ json: String) {
     host(windowId)?.setBackdrop(json)
   }
@@ -209,20 +215,23 @@ public class WindowShellModule: Module {
       MainActor.assumeIsolated { NativeWindowShell.setBackdrop(windowId, json) }
     }.runOnQueue(.main)
 
-    AsyncFunction("devCover") { (windowId: String, rect: [Double]?) -> Bool in
+    AsyncFunction("devCover") { (windowId: String, rect: [Double]?, hidden: Bool?) -> Bool in
       #if DEBUG
       return MainActor.assumeIsolated {
         guard let host = NativeWindowShell.host(windowId) else { return false }
-        guard let rect, rect.count == 4 else {
-          host.shell.mount(.overlay, nil)
+        let id = NSUserInterfaceItemIdentifier("devCover")
+        if let hidden, let cover = host.shell.overlay.subviews.first(where: { $0.identifier == id }) {
+          cover.isHidden = hidden
           return true
         }
-        let cover = NSView(frame: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
-        cover.wantsLayer = true
-        cover.layer?.backgroundColor = NSColor.systemPink.cgColor
-        let holder = FlippedContainerView()
-        holder.addSubview(cover)
-        host.shell.mount(.overlay, holder)
+        host.shell.overlay.subviews.filter { $0.identifier == id }.forEach { $0.removeFromSuperview() }
+        if let rect, rect.count == 4 {
+          let cover = NSView(frame: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
+          cover.identifier = id
+          cover.wantsLayer = true
+          cover.layer?.backgroundColor = NSColor.systemPink.cgColor
+          host.shell.overlay.addSubview(cover)
+        }
         return true
       }
       #else

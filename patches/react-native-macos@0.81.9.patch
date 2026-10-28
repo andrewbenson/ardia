@@ -972,10 +972,10 @@ index 7f1aeff436b8a51514254b72d1fb1fd1ee3b1553..dd2851fec59498902a78204041d994ed
  
  - (void)setNeedsLayout
 diff --git a/React/Views/RCTView.m b/React/Views/RCTView.m
-index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c45a10d1a3 100644
+index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..9a273f7993e2375ba4e57762f30ac77dd86dedf8 100644
 --- a/React/Views/RCTView.m
 +++ b/React/Views/RCTView.m
-@@ -136,6 +136,25 @@ - (RCTPlatformView *)react_findClipView // [macOS]
+@@ -136,6 +136,29 @@ - (RCTPlatformView *)react_findClipView // [macOS]
    return str;
  }
  
@@ -987,6 +987,10 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
 +// Dev-only overrides stand in for the pointer and the mouse buttons in hidden test instances. Ardia]
 +static NSHashTable *ArdiaHoverViews;
 +static NSHashTable *ArdiaCoveredEnters;
++static NSHashTable *ArdiaShellCursorViews;
++static NSTimeInterval ArdiaEnterHitTime = -1;
++static __weak NSWindow *ArdiaEnterHitWindow;
++static __weak NSView *ArdiaEnterHit;
 +static BOOL ArdiaHoverDirty;
 +static BOOL ArdiaHoverHeld;
 +static BOOL ArdiaHoverInstalled;
@@ -1001,7 +1005,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  @implementation RCTView {
    RCTUIColor *_backgroundColor; // [macOS]
    id<RCTEventDispatcherProtocol> _eventDispatcher; // [macOS]
-@@ -143,6 +162,9 @@ @implementation RCTView {
+@@ -143,6 +166,9 @@ @implementation RCTView {
    NSTrackingArea *_trackingArea;
    BOOL _hasMouseOver;
    BOOL _mouseDownCanMoveWindow;
@@ -1011,7 +1015,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  #endif // macOS]
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsNameMap;
    NSMutableDictionary<NSString *, NSDictionary *> *accessibilityActionsLabelMap;
-@@ -729,11 +751,20 @@ - (NSString *)description
+@@ -729,11 +755,20 @@ - (NSString *)description
  }
  
  #if TARGET_OS_OSX // [macOS
@@ -1033,7 +1037,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
          [self didUpdateShadow];
      }
  }
-@@ -784,60 +815,39 @@ - (void)viewDidMoveToWindow
+@@ -784,60 +819,39 @@ - (void)viewDidMoveToWindow
    // scroll event occurs either due to trackpad/gesture based scrolling or a scrollwheel event
    // both of which would not cause the mouseExited to be invoked.
  
@@ -1112,7 +1116,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  }
  #endif // macOS]
  
-@@ -951,6 +961,9 @@ - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
+@@ -951,6 +965,9 @@ - (void)setRemoveClippedSubviews:(BOOL)removeClippedSubviews
  
  - (void)didUpdateReactSubviews
  {
@@ -1122,7 +1126,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
    if (_removeClippedSubviews) {
      [self updateClippedSubviews];
    } else {
-@@ -1196,10 +1209,18 @@ - (void)reactSetFrame:(CGRect)frame
+@@ -1196,10 +1213,18 @@ - (void)reactSetFrame:(CGRect)frame
    // be rendered as a stretchable image, we'll need to re-render.
    // TODO: detect up-front if re-rendering is necessary
    CGSize oldSize = self.bounds.size;
@@ -1141,7 +1145,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  }
  
  - (void)displayLayer:(CALayer *)layer
-@@ -1248,17 +1269,8 @@ - (void)displayLayer:(CALayer *)layer
+@@ -1248,17 +1273,8 @@ - (void)displayLayer:(CALayer *)layer
    RCTUIColor *backgroundColor = _backgroundColor;
  #endif // macOS]
  
@@ -1161,7 +1165,30 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  
    if (useIOSBorderRendering) {
      layer.cornerRadius = cornerRadii.topLeftHorizontal;
-@@ -1514,6 +1526,20 @@ - (BOOL)acceptsFirstResponder
+@@ -1498,6 +1514,22 @@ - (void)resetCursorRects
+   [self discardCursorRects];
+   if ([self cursor] != RCTCursorAuto)
+   {
++    // [Ardia: hover goes to what's on top, cursors too: under a native window shell a view whose middle a native layer
++    // covers adds no cursor rect, and every such view is looked at again when the cover changes. Ardia]
++    NSView *shellRoot = self.window != nil ? [self ardia_shellRoot] : nil;
++    if (shellRoot != nil) {
++      if (ArdiaShellCursorViews == nil) {
++        ArdiaShellCursorViews = [NSHashTable weakObjectsHashTable];
++      }
++      [ArdiaShellCursorViews addObject:self];
++      [RCTView ardia_observeCoverChanges];
++      NSPoint middle = [self convertPoint:NSMakePoint(NSMidX(self.bounds), NSMidY(self.bounds)) toView:nil];
++      if ([self ardia_isCoveredBy:[RCTView ardia_hitInWindow:self.window at:middle] inRoot:shellRoot]) {
++        return;
++      }
++    } else {
++      [ArdiaShellCursorViews removeObject:self];
++    }
+     NSCursor *cursor = NSCursorFromRCTCursor(self.cursor);
+     [self addCursorRect:self.bounds cursor:cursor];
+   }
+@@ -1514,6 +1546,20 @@ - (BOOL)acceptsFirstResponder
  	return [self focusable] || [super acceptsFirstResponder];
  }
  
@@ -1182,7 +1209,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  - (void)updateTrackingAreas
  {
    BOOL hasMouseHoverEvent = self.onMouseEnter || self.onMouseLeave;
-@@ -1522,6 +1548,13 @@ - (void)updateTrackingAreas
+@@ -1522,6 +1568,13 @@ - (void)updateTrackingAreas
    if (!wouldRecreateIdenticalTrackingArea) {
      if (_trackingArea) {
        [self removeTrackingArea:_trackingArea];
@@ -1196,7 +1223,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
      }
  
      if (hasMouseHoverEvent) {
-@@ -1533,11 +1566,243 @@ - (void)updateTrackingAreas
+@@ -1533,11 +1586,286 @@ - (void)updateTrackingAreas
      }
    }
  
@@ -1213,6 +1240,35 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
    [super updateTrackingAreas];
  }
  
++// [Ardia: once a cover stops changing (a sliding layer settles), not on every frame of its motion. Ardia]
+++ (void)ardia_invalidateShellCursors
++{
++  for (RCTView *view in ArdiaShellCursorViews.allObjects) {
++    [view.window invalidateCursorRectsForView:view];
++  }
++}
++
+++ (void)ardia_observeCoverChanges
++{
++  static dispatch_once_t once;
++  dispatch_once(&once, ^{
++    [[NSNotificationCenter defaultCenter] addObserverForName:@"ArdiaHoverCoverChanged"
++                                                      object:nil
++                                                       queue:nil
++                                                  usingBlock:^(NSNotification *__unused note) {
++                                                    [RCTView ardia_markHoverDirty];
++                                                    if (ArdiaShellCursorViews.count > 0) {
++                                                      [NSObject cancelPreviousPerformRequestsWithTarget:[RCTView class]
++                                                                                               selector:@selector(ardia_invalidateShellCursors)
++                                                                                                 object:nil];
++                                                      [[RCTView class] performSelector:@selector(ardia_invalidateShellCursors)
++                                                                            withObject:nil
++                                                                            afterDelay:0.1];
++                                                    }
++                                                  }];
++  });
++}
++
 +// [Ardia: hover follows layout. The check: the pointer (or the dev override) against the visible frame of each view
 +// with hover handlers, in the window frontmost under the pointer, as AppKit's tracking areas would see it once the
 +// pointer moved. Frames, not layer transforms: hover follows where a view is laid out, where its clicks land, while an
@@ -1221,18 +1277,13 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
 +// button is down, as AppKit's do. Ardia]
 ++ (void)ardia_markHoverDirty
 +{
++  [self ardia_observeCoverChanges];
 +  if (ArdiaHoverDirty || ArdiaHoverViews.count == 0) {
 +    return;
 +  }
 +  ArdiaHoverDirty = YES;
 +  if (!ArdiaHoverInstalled) {
 +    ArdiaHoverInstalled = YES;
-+    [[NSNotificationCenter defaultCenter] addObserverForName:@"ArdiaHoverCoverChanged"
-+                                                      object:nil
-+                                                       queue:nil
-+                                                  usingBlock:^(NSNotification *__unused note) {
-+                                                    [RCTView ardia_markHoverDirty];
-+                                                  }];
 +    [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp
 +                                          handler:^NSEvent *(NSEvent *event) {
 +                                            if (ArdiaHoverHeld) {
@@ -1286,11 +1337,11 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
 +  return [NSApp windowWithWindowNumber:[NSWindow windowNumberAtPoint:screen belowWindowWithWindowNumber:0]];
 +}
 +
-+// [Ardia: hover goes to what's on top. In a window whose content view isn't a React Native root (a native window
-+// shell), a native view stacked above a view's root (the native sidebar over the React Native root) takes the
-+// pointer, so the view under it isn't hovered; views in the same root keep the geometric rule, so a hover zone under a
-+// sibling or with pointerEvents none still hovers. Native layers post ArdiaHoverCoverChanged when the pointer crosses
-+// them or they move, since no tracking area of ours sees that. Windows whose content view is a root are unchanged. Ardia]
++// [Ardia: hover goes to what's on top. Under a native window shell (an ancestor answering ardia_gatesHover), a
++// native view stacked above a view's root (the native sidebar over the React Native root) takes the pointer, so the
++// view under it isn't hovered; views in the same root keep the geometric rule, so a hover zone under a sibling or with
++// pointerEvents none still hovers. Native layers post ArdiaHoverCoverChanged when the pointer crosses them or they
++// move, since no tracking area of ours sees that. Views outside a shell never hit-test and behave as before. Ardia]
 ++ (NSView *)ardia_hitInWindow:(NSWindow *)window at:(NSPoint)inWindow
 +{
 +  NSView *content = window.contentView;
@@ -1298,21 +1349,38 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
 +  return [content hitTest:frame != nil ? [frame convertPoint:inWindow fromView:nil] : inWindow];
 +}
 +
-+- (BOOL)ardia_isCoveredBy:(NSView *)hit
+++ (NSView *)ardia_enterHit:(NSEvent *)event window:(NSWindow *)window
++{
++  if (event.timestamp == 0 || event.timestamp != ArdiaEnterHitTime || window != ArdiaEnterHitWindow) {
++    ArdiaEnterHitTime = event.timestamp;
++    ArdiaEnterHitWindow = window;
++    ArdiaEnterHit = [self ardia_hitInWindow:window at:event.locationInWindow];
++  }
++  return ArdiaEnterHit;
++}
++
++- (NSView *)ardia_shellRoot
 +{
 +  static Class rootClass;
-+  static Class rootViewClass;
++  static SEL gatesHover;
 +  if (rootClass == nil) {
 +    rootClass = NSClassFromString(@"RCTRootContentView");
-+    rootViewClass = NSClassFromString(@"RCTRootView");
-+  }
-+  if (hit == nil || [self.window.contentView isKindOfClass:rootViewClass]) {
-+    return NO;
++    gatesHover = NSSelectorFromString(@"ardia_gatesHover");
 +  }
 +  NSView *root = self;
 +  while (root != nil && ![root isKindOfClass:rootClass]) {
 +    root = root.superview;
 +  }
++  for (NSView *ancestor = root.superview; ancestor != nil; ancestor = ancestor.superview) {
++    if ([ancestor respondsToSelector:gatesHover]) {
++      return root;
++    }
++  }
++  return nil;
++}
++
++- (BOOL)ardia_isCoveredBy:(NSView *)hit inRoot:(NSView *)root
++{
 +  if (hit == nil || root == nil || [hit isDescendantOf:root] || [root isDescendantOf:hit]) {
 +    return NO;
 +  }
@@ -1376,12 +1444,13 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
 +      NSPoint inWindow = [window convertPointFromScreen:screen];
 +      NSPoint local = [view convertPoint:inWindow fromView:nil];
 +      over = NSPointInRect(local, NSIntersectionRect(view.bounds, view.visibleRect));
-+      if (over) {
++      NSView *root = over ? [view ardia_shellRoot] : nil;
++      if (root != nil) {
 +        if (!hitKnown) {
 +          hit = [self ardia_hitInWindow:window at:inWindow];
 +          hitKnown = YES;
 +        }
-+        over = ![view ardia_isCoveredBy:hit];
++        over = ![view ardia_isCoveredBy:hit inRoot:root];
 +      }
 +    }
 +    if (over == view->_hasMouseOver) {
@@ -1429,7 +1498,8 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
  - (void)mouseEntered:(NSEvent *)event
  {
 +  // [Ardia: hover goes to what's on top: a tracking area fires under a native view stacked above the root too. Ardia]
-+  if (self.window != nil && [self ardia_isCoveredBy:[RCTView ardia_hitInWindow:self.window at:event.locationInWindow]]) {
++  NSView *shellRoot = self.window != nil ? [self ardia_shellRoot] : nil;
++  if (shellRoot != nil && [self ardia_isCoveredBy:[RCTView ardia_enterHit:event window:self.window] inRoot:shellRoot]) {
 +    if (ArdiaCoveredEnters == nil) {
 +      ArdiaCoveredEnters = [NSHashTable weakObjectsHashTable];
 +    }
@@ -1440,7 +1510,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
    _hasMouseOver = YES;
    [self sendMouseEventWithBlock:self.onMouseEnter
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1547,6 +1812,13 @@ - (void)mouseEntered:(NSEvent *)event
+@@ -1547,6 +1875,13 @@ - (void)mouseEntered:(NSEvent *)event
  
  - (void)mouseExited:(NSEvent *)event
  {
@@ -1454,7 +1524,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..694141aa48ca14be85e8c86fbfdf41c4
    _hasMouseOver = NO;
    [self sendMouseEventWithBlock:self.onMouseLeave
                     locationInfo:[self locationInfoFromEvent:event]
-@@ -1768,7 +2040,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
+@@ -1768,7 +2103,7 @@ - (BOOL)handleKeyboardEvent:(NSEvent *)event {
    static const char kRCTViewKeyboardEventEmittedKey = 0;
    NSNumber *emitted = objc_getAssociatedObject(event, &kRCTViewKeyboardEventEmittedKey);
    BOOL alreadyEmitted = [emitted boolValue];

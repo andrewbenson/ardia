@@ -16,11 +16,12 @@ for what RN still draws over a page. [architecture.md](architecture.md) › 4.4 
 | 4 | `peek` | Peek's page and frame (`TabSlots` `peek(w)`) | port-omnibox |
 | 5 | `sidebar`, `topStrip` | the native sidebar and the top tab strip | port-sidebar, port-strip |
 | 6 | main root | the window's RN root, full window, `passThroughTouches`, a box-none root in shell mode | port-shell |
-| 7 | `overlay` | `shell.overlay` (`NativeWindowShell.overlay(w)`), one shared box-none container for window-level native overlays: popovers, hover cards | port-shell (container), port-media, port-sidebar |
+| 7 | `overlay` | `shell.overlay` (`NativeWindowShell.overlay(w)`), one shared box-none container for window-level native overlays: popovers, hover cards. It tells hover, once per run-loop turn, when a child is added, removed, moved or hidden; owners call `shell.coverChanged()` only for motion inside a child (a layer animating its own contents) | port-shell (container), port-media, port-sidebar |
 | 8 | foreign | views the shell didn't mount (the PiP overlay) stay above every slot | port-media |
 
 `shell.hiddenPages` (`NativeWindowShell.hiddenPages(w)`) sits under every layer, hidden and at the card's size: the
-pool parks hidden and warm pages there.
+pool parks pages with no slot there. Warm pages (pager neighbours, the drag successor) stay at the bottom of the card,
+behind the active page, since Chrome throttles a page under a hidden view.
 
 ## Where each RN item goes
 
@@ -29,9 +30,9 @@ pool parks hidden and warm pages there.
 | `ShellBackdrop`, `WindowProfile`, `ProfileTint` | App.tsx:65 | 0 | port-shell |
 | `TabPane` → `TabWebView` | :277 | 1, pool slots | port-omnibox |
 | `WindowToolbar`, `Toolbar`, `ToolbarBackdrop`, `BookmarksBar`, `ShareBar` | :304, :427 | 1, native toolbar | phase 4 toolbar |
-| `AutoHideBackdrop`, `AutoHideToolbar` | :459 | 1, native | port-shell |
+| `AutoHideBackdrop`, `AutoHideToolbar` | :459 | 1, native | settings-ui |
 | `FrozenPage` | :307 | 1, `FrozenPageView` | port-shell |
-| `DropTargets`, `fileDrop` (window and file drops) | :320, fileDrop.tsx | 1, the card registers the drag types | port-shell |
+| `DropTargets`, `fileDrop` (window and file drops) | :320, fileDrop.tsx | 1, the card registers the drag types | settings-ui |
 | `NewTabPage`, `EmptyCard`, `InternalPage` | :440 | 2, until each is native | port-shell (hosting) |
 | `SplitEmptyState` | :440 | native split pane, else 2 | port-sidebar-live |
 | `FindBar`, `StatusBubble`, `CliControlPill` | :495 | 2 | port-shell |

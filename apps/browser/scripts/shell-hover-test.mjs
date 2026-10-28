@@ -10,7 +10,8 @@ if (!appArg) {
 
 Hover goes to what's on top in a native window shell (ARDIA_NATIVE_SHELL=1): the RN sidebar's rows hover under the
 pointer; under a native view mounted in the shell's overlay slot they don't; a row under a still pointer leaves when
-the native view arrives and enters again when it goes; finding the layer under the pointer stays under 30 µs.`);
+the native view arrives and enters again when it goes, and the same when the native view is hidden and shown
+without leaving the overlay; finding the layer under the pointer stays under 30 µs.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -53,24 +54,36 @@ try {
   });
 
   await rep.check("covered-rows-dont-hover", async () => {
-    if (!(await run(`return S.devCover("w1", ${JSON.stringify(COVER)});`))) throw new Error("no shell host for w1");
+    if (!(await run(`return S.devCover("w1", ${JSON.stringify(COVER)}, null);`))) throw new Error("no shell host for w1");
     try {
       const enters = [];
       for (const y of ROWS) enters.push(await entersAt(y));
       if (enters.some((n) => n !== 0)) throw new Error(`rows under the native view hovered: ${enters}`);
       return enters;
     } finally {
-      await run(`return S.devCover("w1", null);`);
+      await run(`return S.devCover("w1", null, null);`);
     }
   });
 
   await rep.check("still-pointer-follows-the-cover", async () => {
     await run(`return at(700, 400).then(stats);`);
     const parked = await run(`return at(120, 130).then(stats).then((s) => count(s, "enter"));`);
-    const on = await run(`return S.devCover("w1", ${JSON.stringify(COVER)}).then(() => settle(250)).then(stats).then((s) => [count(s, "leave"), count(s, "enter")]);`);
-    const off = await run(`return S.devCover("w1", null).then(() => settle(250)).then(stats).then((s) => count(s, "enter"));`);
+    const on = await run(`return S.devCover("w1", ${JSON.stringify(COVER)}, null).then(() => settle(250)).then(stats).then((s) => [count(s, "leave"), count(s, "enter")]);`);
+    const off = await run(`return S.devCover("w1", null, null).then(() => settle(250)).then(stats).then((s) => count(s, "enter"));`);
     const out = { parked, coverOn: on, coverOff: off };
     if (!parked || on[0] !== parked || on[1] !== 0 || off !== parked) throw new Error(`hover didn't follow the cover: ${JSON.stringify(out)}`);
+    return out;
+  });
+
+  await rep.check("a-hidden-cover-gives-hover-back", async () => {
+    await run(`return at(700, 400).then(stats);`);
+    const parked = await run(`return at(120, 130).then(stats).then((s) => count(s, "enter"));`);
+    const shown = await run(`return S.devCover("w1", ${JSON.stringify(COVER)}, null).then(() => settle(250)).then(stats).then((s) => count(s, "leave"));`);
+    const hidden = await run(`return S.devCover("w1", null, true).then(() => settle(250)).then(stats).then((s) => count(s, "enter"));`);
+    const again = await run(`return S.devCover("w1", null, false).then(() => settle(250)).then(stats).then((s) => count(s, "leave"));`);
+    await run(`return S.devCover("w1", null, null);`);
+    const out = { parked, shown, hidden, again };
+    if (!parked || shown !== parked || hidden !== parked || again !== parked) throw new Error(`hover didn't follow the cover's isHidden: ${JSON.stringify(out)}`);
     return out;
   });
 

@@ -4,8 +4,12 @@ import type { ViewProps } from "react-native";
 
 export type HostedViewProps = ViewProps & { kind: string; windowId: string; active?: boolean; state?: string };
 
+type HostedEvent = { kind: string; windowId: string; name: string; payload: Record<string, unknown> };
+
 type HostedModule = {
   kinds(): string[];
+  focusPageIfUnclaimed?(windowId: string, tabId: string): Promise<boolean>;
+  addListener?(name: "onHostedEvent", listener: (event: HostedEvent) => void): { remove(): void };
   takeSwitcherPress?(windowId: string): number;
   devHost(kind: string, windowId: string, on: boolean): Promise<Record<string, string>>;
   sidebarRowFrame(windowId: string, key: string): Promise<{ x: number; y: number; width: number; height: number } | null>;
@@ -32,6 +36,21 @@ export function takeSwitcherPress(windowId: string): number | null {
 
 export function sidebarRowFrame(windowId: string, key: string) {
   return native?.sidebarRowFrame(windowId, key) ?? Promise.resolve(null);
+}
+
+export function onHostedEvent(
+  kind: string,
+  windowId: string | null,
+  listener: (name: string, payload: Record<string, unknown>, windowId: string) => void,
+): () => void {
+  const subscription = native?.addListener?.("onHostedEvent", (event) => {
+    if (event.kind === kind && (windowId === null || event.windowId === windowId)) listener(event.name, event.payload, event.windowId);
+  });
+  return () => subscription?.remove();
+}
+
+export function focusPageIfUnclaimed(windowId: string, tabId: string): Promise<boolean> {
+  return native?.focusPageIfUnclaimed?.(windowId, tabId) ?? Promise.resolve(false);
 }
 
 let View: ComponentType<HostedViewProps> | null = null;

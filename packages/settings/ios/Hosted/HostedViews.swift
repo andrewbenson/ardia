@@ -37,6 +37,16 @@ public enum HostedViews {
   }
 
   nonisolated static var kinds: [String] { registered.withLock { $0.sorted() } }
+
+  nonisolated public static func declare(_ kind: String) {
+    registered.withLock { _ = $0.insert(kind) }
+  }
+
+  public static var emit: (([String: Any]) -> Void)?
+
+  public static func send(_ kind: String, windowId: String, _ name: String, _ payload: [String: Any]) {
+    emit?(["kind": kind, "windowId": windowId, "name": name, "payload": payload])
+  }
 }
 
 @MainActor

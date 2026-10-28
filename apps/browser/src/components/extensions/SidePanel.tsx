@@ -1,9 +1,12 @@
-import { WebView } from "@ardia/ardiacore";
+import { unwrapPageEvent, WebView, type OpenWindowRequest } from "@ardia/ardiacore";
+import { toEngineUrl } from "@ardia/core";
+import { focusPageIfUnclaimed, hostedKinds, onHostedEvent, SolaraHostedView } from "@ardia/settings";
 import { Hairline } from "@ardia/shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Image, PanResponder, StyleSheet, Text, View } from "react-native";
 import { layout, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
+import { shownPageId } from "../../store/peek";
 import { useWindowId } from "../../store/hooks";
 import { openFromPage, pageProfileId } from "../layout/openFromPage";
 import { IconButton } from "../primitives";
@@ -21,6 +24,17 @@ function rubberBand(width: number): number {
 }
 const clamp = (w: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, w));
 
+let refocusing = false;
+function refocusActivePageOnPanelLoss() {
+  if (refocusing) return;
+  refocusing = true;
+  onHostedEvent("extensionSidePanel", null, (name, _payload, windowId) => {
+    if (name !== "focusLost") return;
+    const tabId = shownPageId(useBrowser.getState(), windowId);
+    if (tabId) void focusPageIfUnclaimed(windowId, tabId);
+  });
+}
+
 export function ExtensionSidePanel() {
   const windowId = useWindowId();
   const panel = useExtensions((e) => e.sidePanels[windowId]);
@@ -28,6 +42,8 @@ export function ExtensionSidePanel() {
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const appear = useRef(new Animated.Value(0)).current;
   const [shown, setShown] = useState(panel);
+  const [native] = useState(() => hostedKinds().includes("extensionSidePanel"));
+  if (native) refocusActivePageOnPanelLoss();
 
   useEffect(() => {
     if (panel) setShown(panel);
@@ -41,30 +57,38 @@ export function ExtensionSidePanel() {
 
   const width = dragWidth ?? savedWidth;
   const start = useRef(width);
+  const settling = useRef<Animated.CompositeAnimation | null>(null);
+  const settle = useMemo(
+    () => (raw: number) => {
+      const target = clamp(raw);
+      const finish = () => {
+        useBrowser.getState().updateSettings({ extensionSidePanelWidth: target });
+        setDragWidth(null);
+      };
+      if (raw === target) return finish();
+      const value = new Animated.Value(raw);
+      value.addListener(({ value: v }) => setDragWidth(v));
+      const animation = Animated.timing(value, { toValue: target, duration: 260, easing: Easing.out(Easing.back(1.2)), useNativeDriver: false });
+      settling.current = animation;
+      animation.start(({ finished }) => {
+        value.removeAllListeners();
+        if (settling.current === animation) settling.current = null;
+        if (finished) finish();
+      });
+    },
+    [],
+  );
   const responder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
+          settling.current?.stop();
           start.current = useBrowser.getState().settings.extensionSidePanelWidth ?? 360;
           setDragWidth(start.current);
         },
         onPanResponderMove: (_, g) => setDragWidth(rubberBand(start.current - g.dx)),
-        onPanResponderRelease: (_, g) => {
-          const raw = rubberBand(start.current - g.dx);
-          const target = clamp(raw);
-          const finish = () => {
-            useBrowser.getState().updateSettings({ extensionSidePanelWidth: target });
-            setDragWidth(null);
-          };
-          if (raw === target) return finish();
-          const value = new Animated.Value(raw);
-          value.addListener(({ value: v }) => setDragWidth(v));
-          Animated.timing(value, { toValue: target, duration: 260, easing: Easing.out(Easing.back(1.2)), useNativeDriver: false }).start(() => {
-            value.removeAllListeners();
-            finish();
-          });
-        },
+        onPanResponderRelease: (_, g) => settle(rubberBand(start.current - g.dx)),
         onPanResponderTerminate: () => setDragWidth(null),
         onPanResponderTerminationRequest: () => false,
       }),
@@ -73,6 +97,18 @@ export function ExtensionSidePanel() {
 
   if (!shown) return null;
   const room = width + layout.cardInset - 1;
+  if (native)
+    return (
+      <Animated.View style={{ width: appear.interpolate({ inputRange: [0, 1], outputRange: [0, room] }), overflow: "hidden" }}>
+        <Animated.View style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: room, opacity: appear }}>
+          <NativePanelCard windowId={windowId} panel={shown} width={width} onResize={(w, ended) => {
+            if (ended) return settle(w);
+            settling.current?.stop();
+            setDragWidth(w);
+          }} />
+        </Animated.View>
+      </Animated.View>
+    );
   return (
     <Animated.View style={{ width: appear.interpolate({ inputRange: [0, 1], outputRange: [0, room] }), overflow: "hidden" }}>
       <Animated.View style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: width, opacity: appear }}>
@@ -85,6 +121,50 @@ export function ExtensionSidePanel() {
       </Animated.View>
     </Animated.View>
   );
+}
+
+function NativePanelCard({ windowId, panel, width, onResize }: { windowId: string; panel: SidePanel; width: number; onResize: (width: number, ended: boolean) => void }) {
+  const { extensionId, profile, pageProfile, url } = panel;
+  const theme = useTheme();
+  const ext = useExtensions((e) => e.lists[profile]?.find((x) => x.id === extensionId));
+  const key = `${extensionId}|${pageProfile}|${url}`;
+  const live = useRef({ key, onResize });
+  live.current = { key, onResize };
+  useEffect(
+    () =>
+      onHostedEvent("extensionSidePanel", windowId, (name, payload) => {
+        if (payload.key !== live.current.key) return;
+        if (name === "menu") {
+          const found = findExtension(profile, extensionId);
+          if (found) void showExtensionMenu(windowId, found);
+        } else if (name === "close") closeSidePanel(windowId);
+        else if (name === "windowClose") closeSidePanel(windowId, extensionId);
+        else if (name === "openWindow") {
+          const [request] = unwrapPageEvent("onOpenWindow", payload.request as OpenWindowRequest) as [OpenWindowRequest];
+          openFromPage(request, { windowId, profileId: pageProfileId(windowId, pageProfile) });
+        } else if (name === "resize") live.current.onResize(Number(payload.width), !!payload.ended);
+        else if (name === "resetWidth") useBrowser.getState().updateSettings({ extensionSidePanelWidth: 360 });
+      }),
+    [windowId, profile, extensionId, pageProfile],
+  );
+  const state = JSON.stringify({
+    key,
+    pageProfile,
+    url: toEngineUrl(url),
+    title: ext?.actionTitle || ext?.name || "Extension",
+    icon: ext?.actionIcon || ext?.icon || null,
+    width,
+    look: {
+      card: theme.card,
+      text: theme.textPrimary,
+      icon: theme.icon,
+      hover: theme.toolbarHover,
+      pressed: theme.toolbarPressed,
+      hairline: theme.dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)",
+      radius: layout.cardRadius,
+    },
+  });
+  return <SolaraHostedView kind="extensionSidePanel" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 }
 
 function PanelCard({ windowId, panel }: { windowId: string; panel: SidePanel }) {

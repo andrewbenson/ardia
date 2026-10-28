@@ -5,7 +5,22 @@ public class HostedModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraHosted")
 
-    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { NativeStatusBubble.register(); NativeSidebar.register(); NativeDownloadMagnet.register(); NativeTabPickers.register() } } }
+    Events("onHostedEvent")
+
+    OnCreate {
+      if NativeExtensionSidePanel.enabled { HostedViews.declare(NativeExtensionSidePanel.kind) }
+      let sink = HostedSink(self)
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          HostedViews.emit = { body in sink.module?.sendEvent("onHostedEvent", body) }
+          NativeStatusBubble.register(); NativeSidebar.register(); NativeDownloadMagnet.register(); NativeTabPickers.register(); NativeExtensionSidePanel.register()
+        }
+      }
+    }
+
+    AsyncFunction("focusPageIfUnclaimed") { (windowId: String, tabId: String) -> Bool in
+      MainActor.assumeIsolated { SidePanelFocus.focus(windowId: windowId, tabId: tabId) }
+    }.runOnQueue(.main)
 
     Function("kinds") { () -> [String] in
       HostedViews.kinds
@@ -67,6 +82,11 @@ public class HostedModule: Module {
       MainActor.assumeIsolated { DevHost.toggle(kind: kind, windowId: windowId, on: on) }
     }.runOnQueue(.main)
   }
+}
+
+private final class HostedSink: @unchecked Sendable {
+  weak var module: HostedModule?
+  init(_ module: HostedModule) { self.module = module }
 }
 
 @MainActor

@@ -33,5 +33,12 @@ private func all<View: NSView>(_ type: View.Type, in root: NSView) -> [View] {
     let beta = try #require(rows.first { $0.accessibilityLabel() == "Beta" })
     #expect(beta.accessibilityPerformPress())
     #expect(actions.contains { if case .click(let id, let mods) = $0 { id == "b" && mods.none } else { false } })
+
+    var host = SidebarHostState(profileId: "p")
+    host.engines = ["a": "safari"]
+    pager.update(state: state, host: host)
+    pager.layoutSubtreeIfNeeded()
+    let labels = all(TabRowView.self, in: pager).compactMap { $0.accessibilityLabel() }.sorted()
+    #expect(labels == ["Alpha, Opens in WebKit", "Beta"])
   }
 }

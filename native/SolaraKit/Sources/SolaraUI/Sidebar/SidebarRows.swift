@@ -256,7 +256,11 @@ final class TabRowView: SidebarRowView {
   private var spinner: SpinnerView?
   private var subtitle: FadeLabel?
 
-  override var accessibleTitle: String? { tab.flatMap { tab in context?.title(tab) } }
+  override var accessibleTitle: String? {
+    guard let tab, let context else { return nil }
+    let title = context.title(tab)
+    return TabIconSpec.engineName(context.host.engines[tab.id]).map { "\(title), Opens in \($0)" } ?? title
+  }
   private var developerRing: (gap: CAShapeLayer, dash: CAShapeLayer)?
   private var closeLook: (symbol: String, tooltip: String) = ("xmark", "Close Tab")
   private var developer = false

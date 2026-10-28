@@ -59,6 +59,14 @@ struct TabIconSpec: Equatable {
   var dimmed = false
   var engineSymbol: String?
   var direct = false
+
+  static func engineName(_ symbol: String?) -> String? {
+    switch symbol {
+    case "safari": "WebKit"
+    case "globe": "Chromium"
+    default: nil
+    }
+  }
 }
 
 final class TabIconView: NSView {
@@ -219,6 +227,9 @@ final class TabIconView: NSView {
     if mark.superview == nil { holder.addSubview(mark) }
     mark.frame = holder.bounds
     mark.set(name, size: box - 3, weight: .semibold, color: palette.icon)
+    holder.setAccessibilityElement(true)
+    holder.setAccessibilityRole(.image)
+    holder.setAccessibilityLabel(TabIconSpec.engineName(name).map { "Opens in \($0)" })
     if holder.superview == nil { addSubview(holder) }
     badge = holder
   }

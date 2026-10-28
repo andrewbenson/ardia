@@ -3159,15 +3159,49 @@ try {
     }, 8000);
     await cdp(t, "Runtime.evaluate", { expression: "window.__n2 = new Notification('Second'); setTimeout(() => window.__n2.close(), 300); true", userGesture: true });
     const closed = await until("onNotificationClose", async () => (await eventsOf(first.id)).find((x) => x.name === "notificationClose"), 8000);
-    const before = (await eventsOf(first.id)).filter((x) => x.name === "notification").length;
+    await cdp(t, "Runtime.evaluate", { expression: "window.__kept = new Notification('Kept', { tag: 'kept' }); true", userGesture: true });
+    const kept = await until("the kept notification", async () => (await eventsOf(first.id)).findLast((x) => x.name === "notification" && x.payload.title === "Kept"), 8000);
+    const closesOfKept = async () => (await eventsOf(first.id)).filter((x) => x.name === "notificationClose" && x.payload.id === kept.payload.id).length;
+    await cdp(t, "Runtime.evaluate", {
+      expression: `new Promise((done) => { const f = document.createElement("iframe"); f.id = "forger"; f.onload = () => done(true); f.src = "${base}/b?forger"; document.body.appendChild(f); })`,
+      awaitPromise: true,
+    });
+    await sleep(500);
+    const forged = (await cdp(t, "Runtime.evaluate", {
+      expression: `(() => { const w = document.getElementById("forger").contentWindow; return w.eval(${JSON.stringify(`Map.prototype.has = () => true; Notification.prototype.close.call({ _id: ${JSON.stringify(kept.payload.id)} }); "sent"`)}); })()`,
+      returnByValue: true,
+    })).result.value;
+    await sleep(1000);
+    const forgedCloses = await closesOfKept();
+    await cdp(t, "Runtime.evaluate", { expression: `document.getElementById("forger").remove(); window.__kept.close(); true` });
+    if (forgedCloses) throw new Error(`a close forged from another frame (${forged}) closed the main frame's notification`);
+    await until("the owner's own close", async () => ((await closesOfKept()) ? true : null), 8000);
+    const shownCount = async () => (await eventsOf(first.id)).filter((x) => x.name === "notification").length;
+    const nothingShown = async (expression, what) => {
+      const before = await shownCount();
+      await cdp(t, "Runtime.evaluate", { expression, userGesture: true });
+      await sleep(1500);
+      const pagePermission = (await cdp(t, "Runtime.evaluate", { expression: "Notification.permission", returnByValue: true })).result.value;
+      if ((await shownCount()) - before) throw new Error(`a notification went out ${what} (page saw ${pagePermission})`);
+      return pagePermission;
+    };
     await cef(`setSiteSetting("", "${base}", "notifications", "block")`);
-    const permission = (await cdp(t, "Runtime.evaluate", { expression: "Notification.permission", returnByValue: true })).result.value;
-    await cdp(t, "Runtime.evaluate", { expression: "window.__n3 = new Notification('Blocked'); true", userGesture: true });
-    await sleep(1500);
-    const blocked = (await eventsOf(first.id)).filter((x) => x.name === "notification").length - before;
-    if (blocked) throw new Error(`a notification went out after the site was blocked (page saw ${permission})`);
+    const permission = await nothingShown("window.__n3 = new Notification('Blocked'); true", "after the site was blocked");
     await cef(`setSiteSetting("", "${base}", "notifications", "default")`);
-    return { title: e.payload.title, body: e.payload.body, clicked, closed: !!closed, blockedPagePermission: permission };
+    const askPermission = await nothingShown("window.__n4 = new Notification('Unasked'); true", "while the site's setting is Ask");
+    await cdp(t, "Runtime.evaluate", { expression: "window.__asked = 'pending'; Notification.requestPermission().then((r) => (window.__asked = r)); true", userGesture: true });
+    const request = await until("the notification prompt", async () => evalApp(`return ac.pageState.getState().pages["${first.id}"]?.permission ?? null`), 10000);
+    await evalApp(`ac.permissions.answerPermission("${first.id}", "${request.id}", "deny"); return true`);
+    const asked = await until("the page's answer", async () => {
+      const v = (await cdp(t, "Runtime.evaluate", { expression: "window.__asked", returnByValue: true })).result.value;
+      return v !== "pending" ? v : null;
+    }, 10000);
+    const deniedPermission = await nothingShown("window.__n5 = new Notification('Denied'); true", "after the prompt was denied");
+    await cef(`setSiteSetting("", "${base}", "notifications", "default")`);
+    return {
+      title: e.payload.title, body: e.payload.body, clicked, closed: !!closed, forged, blockedPagePermission: permission,
+      askPagePermission: askPermission, deniedAnswer: asked, deniedPagePermission: deniedPermission,
+    };
   });
 
   await check("now-playing", async () => {

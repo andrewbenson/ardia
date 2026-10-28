@@ -13,7 +13,7 @@ import { focus, switchToTab } from "./actions";
 import { webviews } from "./webviews";
 import { PRODUCT } from "./productName";
 
-const shown = new Map<string, string>();
+const shown = new Map<string, { engineId: string; tabId: string }>();
 
 const macId = (n: WebNotification) => (n.tag ? `web:${n.origin}#${n.tag}` : `web:${n.id}`);
 
@@ -37,15 +37,15 @@ export function showWebNotification(tabId: string, n: WebNotification) {
   const window = tab ? s.windows[tab.windowId] : undefined;
   if (!tab || !window || window.incognito) return void webviews.get(tabId)?.notificationAction(n.id, "close");
   const id = macId(n);
-  shown.set(id, n.id);
+  shown.set(id, { engineId: n.id, tabId });
   let site = n.origin;
   try {
     site = new URL(n.origin).host;
   } catch {}
   void ensureNotificationPermission(tab.windowId).then(async (allowed) => {
-    if (!allowed || shown.get(id) !== n.id) return;
+    if (!allowed || shown.get(id)?.engineId !== n.id) return;
     const icon = n.icon ? await iconFor(tabId, n.icon) : undefined;
-    if (shown.get(id) !== n.id) return;
+    if (shown.get(id)?.engineId !== n.id) return;
     void postNotification({
       id,
       title: n.title,
@@ -73,10 +73,10 @@ async function iconFor(tabId: string, url: string): Promise<string | undefined> 
   return image?.uri ?? undefined;
 }
 
-export function closeWebNotification(engineId: string) {
+export function closeWebNotification(tabId: string, engineId: string) {
   if (__DEV__) for (const [id, n] of received) if (n.id === engineId) received.delete(id);
-  for (const [id, shownId] of shown) {
-    if (shownId !== engineId) continue;
+  for (const [id, from] of shown) {
+    if (from.engineId !== engineId || from.tabId !== tabId) continue;
     shown.delete(id);
     void removeNotifications([id]);
   }
@@ -85,7 +85,7 @@ export function closeWebNotification(engineId: string) {
 export function handleWebNotificationResponse({ id, action, tabId, data }: NotificationResponse): boolean {
   if (!id.startsWith("web:")) return false;
   const engineId = (data as { engineId?: string } | null)?.engineId;
-  if (engineId && shown.get(id) === engineId) shown.delete(id);
+  if (engineId && shown.get(id)?.engineId === engineId) shown.delete(id);
   const tab = tabId ? useBrowser.getState().tabs[tabId] : undefined;
   if (!tab) return true;
   if (action === "click") {

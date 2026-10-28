@@ -555,7 +555,7 @@ static void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId,
     if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
     static const BOOL broadThemeObserver = [@(getenv("ARDIA_THEME_OBSERVER") ?: "") isEqualToString:@"broad"];
     if (broadThemeObserver) config[@"broadThemeObserver"] = @YES;
-    if (main && IsWebStoreURL(tab.url)) {
+    if (main && verified && IsWebStoreURL(tab.url) && [OriginOf(tab.url) isEqualToString:verifiedOrigin]) {
       NSString *product = StoreProductName();
       if (product) config[@"storeProduct"] = product;
     }
@@ -2219,7 +2219,7 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
                     frame:(NSString *)frameId
                      main:(BOOL)main
                    origin:(NSString *)verifiedOrigin {
-  NSString *sender = verifiedOrigin.length && ![verifiedOrigin isEqualToString:@"null"] ? verifiedOrigin : main ? OriginOf(tab.url) : nil;
+  NSString *sender = [verifiedOrigin isEqualToString:@"null"] ? nil : verifiedOrigin.length ? verifiedOrigin : main ? OriginOf(tab.url) : nil;
   id data = JSONValue(json);
   NSDictionary *dict = [data isKindOfClass:NSDictionary.class] ? data : nil;
   frameId = frameId ?: @"";
@@ -2312,6 +2312,8 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
     NSString *nid = Text(dict, @"id", 128);
     NSString *origin = sender;
     if (!nid.length || !Text(dict, @"title", 1024) || !origin) return;
+    NSString *owner = _notificationFrames[nid];
+    if (owner && ![owner isEqualToString:frameId]) return;
     if (!_notificationFrames || _notificationFrames.count > 500) _notificationFrames = [NSMutableDictionary dictionary];
     _notificationFrames[nid] = frameId;
     NSDictionary *notification = @{
@@ -2336,7 +2338,7 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
     }];
   } else if ([kind isEqualToString:@"notificationClose"] && dict) {
     NSString *nid = Text(dict, @"id", 128);
-    if (!nid.length) return;
+    if (!nid.length || ![_notificationFrames[nid] isEqualToString:frameId]) return;
     [_notificationFrames removeObjectForKey:nid];
     [self emit:@"notificationClose" payload:@{@"id" : nid}];
   } else if ([kind isEqualToString:@"displayMedia"] && dict) {

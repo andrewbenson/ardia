@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ArdiaShell
 import Foundation
 import Observation
@@ -18,14 +19,21 @@ final class GeneralAdapter: GeneralServices {
   func setAsDefaultBrowser() async -> Bool { await SettingsAdapters.setAsDefaultBrowser() }
 
   func downloadSettings(profile: String) async -> DownloadSettings? {
-    (await SettingsAdapters.js("general.downloadSettings", profile) as? [String: Any]).flatMap(Self.downloads)
+    await Self.downloadsCall("ac_downloads_settings", profile: profile, args: nil)
   }
 
   func setDownloadSettings(folder: String?, askWhereToSave: Bool?, profile: String) async -> DownloadSettings? {
     var patch: [String: Any] = [:]
     if let folder { patch["folder"] = folder }
     if let askWhereToSave { patch["askWhereToSave"] = askWhereToSave }
-    return (await SettingsAdapters.js("general.setDownloadSettings", patch, profile) as? [String: Any]).flatMap(Self.downloads)
+    return await Self.downloadsCall("ac_downloads_set_settings", profile: profile, args: patch)
+  }
+
+  private static func downloadsCall(_ name: String, profile: String, args: [String: Any]?) async -> DownloadSettings? {
+    guard !profile.hasPrefix("incognito") else { return nil }
+    return await EngineCalls.result({ done in ArdiaCoreServices.call(name, profile: profile, args: args) { done($0) } }) {
+      EngineCalls.failed($0, name) ? nil : Self.downloads($0)
+    }
   }
 
   func pickFolder(current: String, prompt: String) async -> String? {
@@ -42,7 +50,7 @@ final class GeneralAdapter: GeneralServices {
 
   func openImport() { SettingsJS.shared.fire("general.openImport") }
 
-  static func downloads(_ dict: [String: Any]) -> DownloadSettings? {
+  nonisolated static func downloads(_ dict: [String: Any]) -> DownloadSettings? {
     guard let folder = dict.string("folder") else { return nil }
     return DownloadSettings(folder: folder, askWhereToSave: dict.bool("askWhereToSave") ?? false, managed: dict.bool("managed") ?? false)
   }

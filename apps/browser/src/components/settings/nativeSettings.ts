@@ -1,11 +1,8 @@
 import {
-  getDownloadSettings,
   getPasskeyAccess,
   listComponents,
   requestPasskeyAccess,
-  setDownloadSettings,
   WIDEVINE_COMPONENT_ID,
-  type DownloadSettings,
   type PageEngine,
 } from "@ardia/ardiacore";
 import { engineHost } from "@ardia/core";
@@ -71,9 +68,6 @@ const coreHandlers: Record<string, SettingsHandler> = {
   "general.setLaunchAtLogin": (on: boolean) => setLaunchAtLogin(on).catch(() => {}),
   "general.isDefaultBrowser": () => isDefaultBrowser().catch(() => false),
   "general.setAsDefaultBrowser": () => setAsDefaultBrowser().catch(() => false),
-  "general.downloadSettings": (profile: string) => getDownloadSettings(profile).catch(() => null),
-  "general.setDownloadSettings": (patch: Partial<Pick<DownloadSettings, "folder" | "askWhereToSave">>, profile: string) =>
-    setDownloadSettings(patch, profile).catch(() => null),
   "general.openImport": () => openImport(),
 
   "tabs.chooseLayout": (layout: "sidebar" | "top") => chooseTabLayout(layout),

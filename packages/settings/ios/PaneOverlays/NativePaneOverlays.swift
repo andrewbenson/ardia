@@ -51,7 +51,30 @@ enum NativePaneOverlays {
 
 @MainActor
 final class PanePopoverWrap: NSView {
+  var onLeave: (() -> Void)?
+  var onReturn: (() -> Void)?
+
   override var isFlipped: Bool { true }
+
+  override func viewWillMove(toWindow newWindow: NSWindow?) {
+    super.viewWillMove(toWindow: newWindow)
+    if newWindow == nil { onLeave?() }
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window != nil, !isHiddenOrHasHiddenAncestor { onReturn?() }
+  }
+
+  override func viewDidHide() {
+    super.viewDidHide()
+    onLeave?()
+  }
+
+  override func viewDidUnhide() {
+    super.viewDidUnhide()
+    if window != nil { onReturn?() }
+  }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
     let hit = super.hitTest(point)
@@ -285,6 +308,8 @@ final class PaneOverlayHost {
       NativeMedia.sharePicker(windowId, tabId, event)
     }
     share.wrap.autoresizingMask = [.width, .height]
+    share.wrap.onLeave = { [weak self] in self?.unfocusShare(tabId) }
+    share.wrap.onReturn = { [weak self] in self?.focusShare(tabId) }
     return share
   }
 
@@ -304,8 +329,13 @@ final class PaneOverlayHost {
     shares[tabId] = nil
   }
 
+  private func unfocusShare(_ tabId: String) {
+    shares[tabId]?.focus?.end()
+    shares[tabId]?.focus = nil
+  }
+
   private func focusShare(_ tabId: String) {
-    guard let share = shares[tabId], share.focus == nil, let window = share.popover.wrap.window else { return }
+    guard let share = shares[tabId], share.focus == nil, let window = share.popover.wrap.window, !share.popover.wrap.isHiddenOrHasHiddenAncestor else { return }
     shares[tabId]?.focus = HostedMount(content: HostedContent(view: share.popover.popover, takesFocus: true), in: share.popover.wrap, window: window)
   }
 

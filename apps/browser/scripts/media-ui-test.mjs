@@ -105,7 +105,7 @@ const pressPlayer = async (control) => {
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_ALLOW_AUDIO: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}), ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}) },
+    env: { ARDIA_ALLOW_AUDIO: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}) },
     switches: "--disable-audio-output --autoplay-policy=no-user-gesture-required",
     ready: "return !!ac.store.getState().windows.w1",
   });
@@ -325,6 +325,17 @@ try {
       out.focused = picked.focused;
       if (!picked.frames.audio) throw new Error("no tab audio checkbox for a tab");
       if (!picked.focused) throw new Error("the share picker doesn't hold focus for Escape and Enter");
+      if (shell) {
+        await run(`ac.actions.switchToTab("p"); return true;`);
+        await until("share picker off screen", `return first("media.sharePicker").then((r) => !r || !r.focused ? true : null);`, 3000);
+        await run(`ac.actions.switchToTab("b"); return true;`);
+        const back = await until("share picker focused again", `return first("media.sharePicker").then((r) => r && r.focused ? r : null);`, 3000);
+        out.refocused = back.focused;
+        await run(`return ac.shell.devKeyEquivalent("w1", { key: "\\u001b", keyCode: 53, modifiers: [], send: true, asKey: true, wait: 30 }).then(() => true);`);
+        await until("Escape cancels after the round trip", `return !acMedia.useMedia.getState().displayRequests.b;`, 3000);
+        await run(`${openShare} return true;`);
+        await until("share picker reopened", `return first("media.sharePicker").then((r) => r && r.opacity > 0.99 && r.focused ? r : null);`, 3000);
+      }
       await run(`return first("media.sharePicker").then((r) => click(centre(r.frames.cancel))).then(() => true);`);
       await until("share request ends", `return !acMedia.useMedia.getState().displayRequests.b;`, 3000);
       await run(`${openShare} return true;`);

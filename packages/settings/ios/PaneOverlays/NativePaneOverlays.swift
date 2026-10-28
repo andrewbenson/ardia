@@ -49,16 +49,36 @@ final class PaneOverlayContainer: NSView {
 }
 
 @MainActor
-final class PaneZoomPopover {
+final class PanePopover<Body: NSView> {
   let wrap = PaneOverlayContainer()
   let popover: PopoverView
-  let body = ZoomPanelView(frame: .zero)
+  let body: Body
+  var mark: String?
 
-  init() {
+  init(_ body: Body) {
+    self.body = body
     popover = PopoverView(body: body)
     popover.autoresizingMask = [.width, .height]
     wrap.addSubview(popover)
-    body.onHeight = { [weak self] h in DispatchQueue.main.async { self?.popover.set(bodyHeight: h) } }
+  }
+
+  func setHeight(_ h: CGFloat) { DispatchQueue.main.async { [weak self] in self?.popover.set(bodyHeight: h) } }
+
+  func place(_ rect: CGRect?) {
+    wrap.isHidden = rect == nil
+    guard let rect, wrap.frame != rect else { return }
+    wrap.frame = rect
+    popover.frame = wrap.bounds
+  }
+
+  func describe(_ inWindow: (NSView, CGRect) -> [Double]) -> [String: Any] {
+    var controls: [String: [Double]] = [:]
+    func walk(_ view: NSView) {
+      if view.accessibilityRole() == .button, let name = view.accessibilityLabel() { controls[name] = inWindow(view, view.bounds) }
+      view.subviews.forEach(walk)
+    }
+    walk(body)
+    return ["hidden": wrap.isHiddenOrHasHiddenAncestor, "frame": inWindow(wrap, wrap.bounds), "card": inWindow(popover, popover.cardFrame), "opacity": popover.presentedOpacity, "progress": popover.progress, "controls": controls]
   }
 }
 
@@ -67,7 +87,8 @@ final class PaneOverlayHost {
   let windowId: String
   let container = PaneOverlayContainer()
   private var sadTabs: [String: SadTabView] = [:]
-  private var zooms: [String: PaneZoomPopover] = [:]
+  private var zooms: [String: PanePopover<ZoomPanelView>] = [:]
+  private var histories: [String: PanePopover<HistoryPanelView>] = [:]
   private var pageFrames: [String: [String: CGRect]] = [:]
 
   init(windowId: String) {
@@ -87,6 +108,7 @@ final class PaneOverlayHost {
   func apply(_ tabs: [String: Any]) {
     var sad = Set<String>()
     var zoomed = Set<String>()
+    var listed = Set<String>()
     for (tabId, value) in tabs {
       if let data = entry(value, kind: "sadTab", tabId: tabId), let json = String(data: data, encoding: .utf8), let state = SadTabState.decode(json), state.mode != nil {
         sad.insert(tabId)
@@ -98,6 +120,16 @@ final class PaneOverlayHost {
         zoom.body.update(state)
         zoom.popover.set(placement: placement, dark: state.dark)
       }
+      if let data = entry(value, kind: "history", tabId: tabId), let state = try? JSONDecoder().decode(HistoryPanelState.self, from: data), let placement = PanelPopover.placement(data) {
+        listed.insert(tabId)
+        let history = histories[tabId] ?? makeHistory(tabId)
+        if let mark = ((value as? [String: Any])?["history"] as? [String: Any])?["newTabMark"] as? String, mark != history.mark {
+          history.mark = mark
+          HistoryPanelMark.load(mark, into: history.body)
+        }
+        history.body.update(state)
+        history.popover.set(placement: placement, dark: state.dark)
+      }
     }
     for (tabId, view) in sadTabs where !sad.contains(tabId) {
       view.removeFromSuperview()
@@ -108,6 +140,11 @@ final class PaneOverlayHost {
       zoom.wrap.removeFromSuperview()
       zooms[tabId] = nil
       pageFrames["zoom"]?[tabId] = nil
+    }
+    for (tabId, history) in histories where !listed.contains(tabId) {
+      history.wrap.removeFromSuperview()
+      histories[tabId] = nil
+      pageFrames["history"]?[tabId] = nil
     }
     relayout()
   }
@@ -123,9 +160,10 @@ final class PaneOverlayHost {
     return view
   }
 
-  private func makeZoom(_ tabId: String) -> PaneZoomPopover {
-    let zoom = PaneZoomPopover()
+  private func makeZoom(_ tabId: String) -> PanePopover<ZoomPanelView> {
+    let zoom = PanePopover(ZoomPanelView(frame: .zero))
     let windowId = windowId
+    zoom.body.onHeight = { [weak zoom] h in zoom?.setHeight(h) }
     zoom.popover.onDismiss = { Task { @MainActor in _ = await SettingsAdapters.js("pane.zoom", windowId, tabId, "dismiss", 0) } }
     zoom.body.onEvent = { event in
       switch event {
@@ -137,9 +175,28 @@ final class PaneOverlayHost {
     return zoom
   }
 
+  private func makeHistory(_ tabId: String) -> PanePopover<HistoryPanelView> {
+    let history = PanePopover(HistoryPanelView(frame: .zero))
+    let windowId = windowId
+    history.body.favicons.loader = { request in try await NativeSidebar.favicon(request) }
+    history.body.onHeight = { [weak history] h in history?.setHeight(h) }
+    history.popover.onDismiss = { Task { @MainActor in _ = await SettingsAdapters.js("pane.history", windowId, tabId, ["kind": "dismiss"]) } }
+    history.body.onEvent = { event in
+      let payload: [String: Any]
+      switch event {
+      case .open(let index, let click): payload = ["kind": "open", "index": index, "metaKey": click.meta, "shiftKey": click.shift, "altKey": click.alt, "middle": click.middle]
+      case .fullHistory: payload = ["kind": "fullHistory"]
+      }
+      Task { @MainActor in _ = await SettingsAdapters.js("pane.history", windowId, tabId, payload) }
+    }
+    container.addSubview(history.wrap)
+    histories[tabId] = history
+    return history
+  }
+
   func relayout() {
     guard let card else { return container.removeFromSuperview() }
-    if sadTabs.isEmpty && zooms.isEmpty {
+    if sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty {
       container.removeFromSuperview()
       return
     }
@@ -154,14 +211,8 @@ final class PaneOverlayHost {
       view.isHidden = rect == nil || view.showing == nil
       if let rect, view.frame != rect { view.frame = rect }
     }
-    for (tabId, zoom) in zooms {
-      let rect = pageFrames["zoom"]?[tabId]
-      zoom.wrap.isHidden = rect == nil
-      if let rect, zoom.wrap.frame != rect {
-        zoom.wrap.frame = rect
-        zoom.popover.frame = zoom.wrap.bounds
-      }
-    }
+    for (tabId, zoom) in zooms { zoom.place(pageFrames["zoom"]?[tabId]) }
+    for (tabId, history) in histories { history.place(pageFrames["history"]?[tabId]) }
   }
 
   func describe() -> [String: Any] {
@@ -174,16 +225,8 @@ final class PaneOverlayHost {
     for (tabId, view) in sadTabs {
       tabs[tabId, default: [:]]["sadTab"] = ["mode": (view.showing?.rawValue).map { $0 as Any } ?? NSNull(), "hidden": view.isHiddenOrHasHiddenAncestor, "frame": inWindow(view, view.bounds), "controls": view.controlFrames.mapValues { inWindow(view, $0) }]
     }
-    for (tabId, zoom) in zooms {
-      let p = zoom.popover
-      var controls: [String: [Double]] = [:]
-      func walk(_ view: NSView) {
-        if view.accessibilityRole() == .button, let name = view.accessibilityLabel() { controls[name] = inWindow(view, view.bounds) }
-        view.subviews.forEach(walk)
-      }
-      walk(zoom.body)
-      tabs[tabId, default: [:]]["zoom"] = ["hidden": zoom.wrap.isHiddenOrHasHiddenAncestor, "frame": inWindow(zoom.wrap, zoom.wrap.bounds), "card": inWindow(p, p.cardFrame), "opacity": p.presentedOpacity, "progress": p.progress, "controls": controls]
-    }
+    for (tabId, zoom) in zooms { tabs[tabId, default: [:]]["zoom"] = zoom.describe(inWindow) }
+    for (tabId, history) in histories { tabs[tabId, default: [:]]["history"] = history.describe(inWindow) }
     return ["top": container.superview?.subviews.last === container, "inCard": container.superview === card, "tabs": tabs]
   }
 }

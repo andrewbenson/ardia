@@ -513,7 +513,7 @@ function PageOverlays({
       <SharePicker tabId={tabId} paneWidth={width} />
       {!newTabShown && <DeviceChooser tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       <CastPicker tabId={tabId} paneWidth={width} />
-      <NavigationOverlays tabId={tabId} windowId={windowId} geometry={geometry} />
+      <NavigationOverlays tabId={tabId} windowId={windowId} geometry={geometry} peek={peek} />
       <SelectionPopover tabId={tabId} zoom={zoom} />
     </>
   );

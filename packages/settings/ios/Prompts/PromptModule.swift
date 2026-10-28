@@ -204,19 +204,7 @@ final class NativePanelView: ExpoView {
   private func loadMark(_ uri: String?, into body: HistoryPanelView) {
     guard let uri, uri != markUri else { return }
     markUri = uri
-    if let image = SettingsAdapters.image(uri) {
-      image.isTemplate = true
-      body.favicons.newTabMark = image
-      return body.rebuildIcons()
-    }
-    guard let url = URL(string: uri) else { return }
-    Task { @MainActor [weak body] in
-      let image = await Task.detached { (try? Data(contentsOf: url)).flatMap(NSImage.init(data:)) }.value
-      guard let body, let image else { return }
-      image.isTemplate = true
-      body.favicons.newTabMark = image
-      body.rebuildIcons()
-    }
+    HistoryPanelMark.load(uri, into: body)
   }
 
   private func make<Body: NSView>(_ build: () -> Body) -> Body {
@@ -241,6 +229,25 @@ final class NativePanelView: ExpoView {
     guard let popover, let placement = PanelPopover.placement(data) else { return }
     popover.set(placement: placement, dark: PanelPopover.dark(data))
     if bodyHeight > 0 { popover.set(bodyHeight: bodyHeight) }
+  }
+}
+
+@MainActor
+enum HistoryPanelMark {
+  static func load(_ uri: String, into body: HistoryPanelView) {
+    if let image = SettingsAdapters.image(uri) {
+      image.isTemplate = true
+      body.favicons.newTabMark = image
+      return body.rebuildIcons()
+    }
+    guard let url = URL(string: uri) else { return }
+    Task { @MainActor [weak body] in
+      let image = await Task.detached { (try? Data(contentsOf: url)).flatMap(NSImage.init(data:)) }.value
+      guard let body, let image else { return }
+      image.isTemplate = true
+      body.favicons.newTabMark = image
+      body.rebuildIcons()
+    }
   }
 }
 

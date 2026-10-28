@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import Foundation
 import Observation
 import SolaraModel
@@ -81,11 +82,17 @@ final class ProfilesAdapter: ProfilesServices {
   }
 
   func clearBrowsingData(engineProfile: String, kinds: [BrowsingDataKind], since: Date?) async {
-    await SettingsAdapters.js("profiles.clearBrowsingData", engineProfile, kinds.map(\.rawValue), Self.millis(since))
+    let types = kinds.map(\.rawValue)
+    let sinceMs = since.map { ($0.timeIntervalSince1970 * 1000).rounded() } ?? 0
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      ArdiaCoreServices.clearBrowsingData(profile: engineProfile, types: types, since: sinceMs) { continuation.resume() }
+    }
   }
 
   func extensionsKeptOnDelete() async -> [String]? {
-    await SettingsAdapters.js("profiles.extensionsKeptOnDelete") as? [String]
+    await EngineCalls.result({ done in ArdiaCoreServices.listExtensions(profile: "") { done($0) } }) {
+      EngineCalls.failed($0, "listExtensions") ? nil : $0.list("extensions").filter { $0.bool("mayModify") == true }.compactMap { $0.string("name") }
+    }
   }
 
   func adoptProfileTheme(_ id: String) { SettingsJS.shared.fire("profiles.adoptTheme", id) }

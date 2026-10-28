@@ -1,14 +1,15 @@
 # Pooled pages: the JS contract
 
-With `windowPagesPoolActive(windowId)` true, `TabViewPool` owns every page view in the window and RN mounts none
+With `pagesPooledIn(windowId)` true, `TabViewPool` owns every page view in the window and RN mounts none
 (architecture.md › Page views: static ownership). Everything the app did through a mounted `EngineWebView` still has
 to happen. This is who does each part. Native side: port-omnibox. JS side: port-shell.
 
 ## Gate
 
-One check, `windowPagesPoolActive(windowId)` in `@ardia/settings`: the shell, `ARDIA_NATIVE_PAGES_POOL=1` and
-`SolaraTabPool.available()`. ContentCard, DockedLayout, Peek and the JS pool session all read it and nothing else, so a
-build where the pool can't serve pages keeps RN's.
+One check, `pagesPooledIn(windowId)` in `apps/browser/src/lib/pagesPool.ts`: the shell, pane roots,
+`ARDIA_NATIVE_PAGES_POOL=1` and `SolaraTabPool.available()`. ContentCard, Peek and the JS pool session read it, so a
+build where the pool can't serve pages keeps RN's. `windowPagesPoolActive()` is the switch alone: native split chrome
+keys off it, and it stays on when `ARDIA_TAB_POOL=0` turns the pool off.
 
 ## Page events
 

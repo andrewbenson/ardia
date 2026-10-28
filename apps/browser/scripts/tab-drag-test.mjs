@@ -680,6 +680,10 @@ try {
     const cells = () => Promise.all([...c.items.values()].filter((i) => i.view && (i.kind === "tile" || i.section === "folder")).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ key: i.key, section: i.section, folder: i.folderId ?? null, id: i.tabIds[0], x, y, w, h }))))).then((l) => l.filter((i) => i.w > 0).sort((a, b) => a.y - b.y || a.x - b.x));
     const folderOf = (id) => st().tabs[id]?.tileFolder?.id ?? null;`;
   const centre = (cell) => [Math.round(cell.x + cell.w / 2), Math.round(cell.y + cell.h / 2)];
+  const panelRows = () => nativeSidebar
+    ? nativeProbe("w1").then((p) => p.items.filter((i) => i.section === "folder" && i.kind === "row").map((i) => ({ id: i.tabIds[0], x: i.x, y: i.y, w: i.w, h: i.h })))
+    : run(`${FOLDERS} return cells();`).then((l) => l.filter((r) => r.section === "folder"));
+  const panelOpen = () => nativeSidebar ? nativeProbe("w1").then((p) => p.folderPanel != null) : run(`return !!globalThis.sidebarDrag.regions.get("folder");`);
   const held = (points, n) => [...points, ...Array(n).fill(points.at(-1))];
   let folderTabs = [];
 
@@ -722,15 +726,15 @@ try {
     for (const id of [a, b]) {
       const tile = (await run(`${FOLDERS} return cells();`)).find((t) => t.folder === folderId);
       await run(`return act("w1", "click:${centre(tile).join(",")}").then(() => settle(700));`);
-      const rows = await run(`${FOLDERS} return cells();`);
-      const member = rows.find((r) => r.section === "folder" && r.id === id);
-      assert.ok(member, `the panel lists it: ${JSON.stringify(rows.filter((r) => r.section === "folder").map((r) => r.id))}`);
-      const below = Math.max(...rows.filter((r) => r.section === "folder").map((r) => r.y + r.h)) + 24;
+      const rows = await panelRows();
+      const member = rows.find((r) => r.id === id);
+      assert.ok(member, `the panel lists it: ${JSON.stringify(rows.map((r) => r.id))}`);
+      const below = Math.max(...rows.map((r) => r.y + r.h)) + 24;
       const second = (await run(`${SIDEBAR_ROWS}`)).find((r) => r.y > below);
       assert.ok(second, "a list row below the panel");
       await drag("w1", [[member.x + 60, member.y + 17], [member.x + 60, member.y + 26], [second.x + 60, second.y + 30], [second.x + 60, second.y + 8], [second.x + 60, second.y + 3]]);
-      const state = await run(`${FOLDERS} const id = ${JSON.stringify(id)}; const w = st().windows.w1.tabIds; return { folder: folderOf(id), pinned: st().tabs[id].pinned, grouped: Object.values(st().groups).some((g) => g.tabIds.includes(id)), next: w[w.indexOf(id) + 1], panel: !!c.regions.get("folder"), order: w.map((x) => [x, st().tabs[x].pinned, st().tabs[x].url.slice(0, 30)]) };`);
-      const { order, ...seen } = state;
+      const state = await run(`${FOLDERS} const id = ${JSON.stringify(id)}; const w = st().windows.w1.tabIds; return { folder: folderOf(id), pinned: st().tabs[id].pinned, grouped: Object.values(st().groups).some((g) => g.tabIds.includes(id)), next: w[w.indexOf(id) + 1], order: w.map((x) => [x, st().tabs[x].pinned, st().tabs[x].url.slice(0, 30)]) };`);
+      const { order, ...seen } = { ...state, panel: await panelOpen() };
       assert.deepEqual(seen, { folder: null, pinned: false, grouped: false, next: second.id, panel: false }, `${id} left the folder for the list, before ${second.id}: ${JSON.stringify(order)}`);
     }
     assert.equal(await run(`${FOLDERS} return folderOf(${JSON.stringify(cc)});`), null, "a folder of one is a tile again");

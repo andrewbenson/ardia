@@ -534,11 +534,7 @@ function PageOverlays({
         <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
       <SadTab tabId={tabId} nativeAllowed={!peek} />
-      {cliPill && (
-        <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, statusStyle]}>
-          <CliControlPill />
-        </Animated.View>
-      )}
+      {cliPill && <CliControlPill style={statusStyle} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
       <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />

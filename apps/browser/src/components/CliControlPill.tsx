@@ -1,6 +1,6 @@
 import { Surface, Symbol } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { cliCommand, cliProduct, stopCliControl, useCliIndicator } from "../lib/cliControl";
 import { hex, useTheme } from "../lib/theme";
 import { useWindowId } from "../store/hooks";
@@ -10,8 +10,16 @@ import { useHover } from "./primitives";
 const PILL_HEIGHT = 32;
 const PILL_BOTTOM = 12;
 
-export function CliControlPill() {
-  return nativeMedia("media.cliPill") ? <NativeCliControlPill /> : <RNCliControlPill />;
+type FollowStyle = Animated.WithAnimatedValue<ViewStyle>;
+
+export function CliControlPill({ style }: { style?: FollowStyle }) {
+  return nativeMedia("media.cliPill") ? (
+    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
+      <NativeCliControlPill />
+    </Animated.View>
+  ) : (
+    <RNCliControlPill style={style} />
+  );
 }
 
 function NativeCliControlPill() {
@@ -21,7 +29,7 @@ function NativeCliControlPill() {
   return <NativeMediaView kind="media.cliPill" windowId={windowId} state={{ shown, command: cliCommand(), product: cliProduct(), theme: mediaTheme(theme) }} />;
 }
 
-function RNCliControlPill() {
+function RNCliControlPill({ style }: { style?: FollowStyle }) {
   const shown = useCliIndicator((s) => s.shown);
   const [mounted, setMounted] = useState(shown);
   const [appearAtOnce, setAppearAtOnce] = useState(shown);
@@ -30,14 +38,16 @@ function RNCliControlPill() {
   }, [shown]);
   if (!mounted && !shown) return null;
   return (
-    <ShownCliControlPill
-      shown={shown}
-      appearAtOnce={appearAtOnce}
-      onHidden={() => {
-        setMounted(false);
-        setAppearAtOnce(false);
-      }}
-    />
+    <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
+      <ShownCliControlPill
+        shown={shown}
+        appearAtOnce={appearAtOnce}
+        onHidden={() => {
+          setMounted(false);
+          setAppearAtOnce(false);
+        }}
+      />
+    </Animated.View>
   );
 }
 

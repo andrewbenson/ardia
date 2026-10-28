@@ -1669,6 +1669,7 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
 namespace {
 
 constexpr CGFloat kPopupOriginStripHeight = 28;
+constexpr double kPermissionInputDelay = 0.5;
 
 NSMutableSet<ArdiaCorePopupWindow *> *PopupWindows() {
   static NSMutableSet *windows = [NSMutableSet set];
@@ -1709,10 +1710,6 @@ NSString *PopupOriginText(NSString *url) {
   return [scheme stringByAppendingString:@":"];
 }
 
-NSString *HostOf(NSString *url) {
-  return [NSURL URLWithString:url ?: @""].host ?: @"";
-}
-
 NSDictionary<NSString *, NSArray<NSString *> *> *PermissionKinds() {
   static NSDictionary *kinds = @{
     @"camera" : @[ @"video", @"camera" ],
@@ -1751,11 +1748,18 @@ NSString *ListOf(NSArray<NSString *> *words) {
   return [NSString stringWithFormat:@"%@ and %@", head, words.lastObject];
 }
 
+NSString *OriginForSecurityDisplay(NSString *origin) {
+  NSURLComponents *parts = [NSURLComponents componentsWithString:origin ?: @""];
+  NSString *scheme = parts.scheme.lowercaseString, *host = parts.host;
+  if (!scheme.length || !host.length) return origin ?: @"";
+  NSString *port = parts.port ? [NSString stringWithFormat:@":%@", parts.port] : @"";
+  if ([scheme isEqualToString:@"https"]) return [host stringByAppendingString:port];
+  return [NSString stringWithFormat:@"%@://%@%@", scheme, host, port];
+}
+
 NSString *PermissionQuestion(NSDictionary *request) {
   NSString *origin = [request[@"origin"] isKindOfClass:NSString.class] ? request[@"origin"] : @"";
-  NSString *site = HostOf(origin);
-  if ([site hasPrefix:@"www."]) site = [site substringFromIndex:4];
-  if (!site.length) site = origin;
+  NSString *site = OriginForSecurityDisplay(origin);
   NSArray<NSString *> *kinds = [request[@"permissions"] isKindOfClass:NSArray.class] ? request[@"permissions"] : @[];
   if (kinds.count == 1 && PermissionKinds()[kinds[0]].count > 2)
     return [NSString stringWithFormat:PermissionKinds()[kinds[0]][2], site];
@@ -1863,6 +1867,9 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   NSMutableArray<NSDictionary *> *_permissionQueue;
   NSDictionary *_shownPermission;
   NSAlert *_permissionAlert;
+  NSButton *_permissionAllow;
+  NSUInteger _permissionArming;
+  NSArray<id> *_permissionWakeObservers;
 }
 
 - (ArdiaCoreTab *)tab {
@@ -1884,21 +1891,84 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   alert.messageText = PermissionQuestion(request);
   alert.informativeText = @"";
   if (NSImage *icon = PermissionIcon(request)) alert.icon = icon;
-  [alert addButtonWithTitle:@"Allow"];
-  [alert addButtonWithTitle:@"Don't Allow"].keyEquivalent = @"\e";
+  NSButton *allow = [alert addButtonWithTitle:@"Allow"];
+  allow.keyEquivalent = @"";
+  NSButton *deny = [alert addButtonWithTitle:@"Don't Allow"];
+  deny.keyEquivalent = @"\e";
+  alert.window.initialFirstResponder = deny;
   _permissionAlert = alert;
-  NSString *requestId = request[@"id"];
+  _permissionAllow = allow;
+  [self armPermissionAllow];
   __weak ArdiaCorePopupWindow *weakSelf = self;
+  _permissionWakeObservers = @[
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidBecomeKeyNotification
+                                                    object:window
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *) { [weakSelf armPermissionAllow]; }],
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidBecomeKeyNotification
+                                                    object:alert.window
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *) { [weakSelf armPermissionAllow]; }],
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidMoveNotification
+                                                    object:window
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *) { [weakSelf armPermissionAllow]; }],
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidResizeNotification
+                                                    object:window
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *) { [weakSelf armPermissionAllow]; }],
+    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowDidChangeOcclusionStateNotification
+                                                    object:window
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *) { [weakSelf armPermissionAllow]; }],
+    [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationDidBecomeActiveNotification
+                                                    object:nil
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *) { [weakSelf armPermissionAllow]; }],
+  ];
+  NSString *requestId = request[@"id"];
   [alert beginSheetModalForWindow:window
                 completionHandler:^(NSModalResponse response) {
                   [weakSelf permission:requestId answered:response];
                 }];
 }
 
-- (void)permission:(NSString *)requestId answered:(NSModalResponse)response {
-  if (![_shownPermission[@"id"] isEqual:requestId]) return;
+- (void)armPermissionAllow {
+  NSButton *allow = _permissionAllow;
+  if (!allow) return;
+  allow.enabled = NO;
+  const NSUInteger arming = ++_permissionArming;
+  __weak ArdiaCorePopupWindow *weakSelf = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kPermissionInputDelay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    ArdiaCorePopupWindow *me = weakSelf;
+    if (me && me->_permissionAllow == allow && me->_permissionArming == arming) allow.enabled = YES;
+  });
+}
+
+- (void)forgetShownPermission {
+  for (id observer in _permissionWakeObservers) [NSNotificationCenter.defaultCenter removeObserver:observer];
+  _permissionWakeObservers = nil;
+  _permissionAllow = nil;
   _shownPermission = nil;
   _permissionAlert = nil;
+}
+
+- (NSDictionary *)permissionState {
+  if (!_shownPermission) return nil;
+  NSButton *allow = _permissionAllow;
+  const NSRect frame = allow ? [allow convertRect:allow.bounds toView:nil] : NSZeroRect;
+  const CGFloat height = _permissionAlert.window.contentView.superview.bounds.size.height;
+  return @{
+    @"question" : _permissionAlert.messageText ?: @"",
+    @"allowEnabled" : @(allow.enabled),
+    @"allowAt" : @[ @(NSMidX(frame)), @(height - NSMidY(frame)) ],
+    @"sheetWindow" : @(_permissionAlert.window.windowNumber),
+  };
+}
+
+- (void)permission:(NSString *)requestId answered:(NSModalResponse)response {
+  if (![_shownPermission[@"id"] isEqual:requestId]) return;
+  [self forgetShownPermission];
   if (response == NSAlertFirstButtonReturn) [ArdiaCoreHost resolvePermission:requestId result:@"accept" remember:YES];
   else if (response == NSAlertSecondButtonReturn) [ArdiaCoreHost resolvePermission:requestId result:@"deny" remember:YES];
   [self showNextPermission];
@@ -1914,8 +1984,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   }
   if (![_shownPermission[@"id"] isEqual:requestId]) return NO;
   NSAlert *alert = _permissionAlert;
-  _shownPermission = nil;
-  _permissionAlert = nil;
+  [self forgetShownPermission];
   if (alert.window.sheetParent) [alert.window.sheetParent endSheet:alert.window returnCode:NSModalResponseAbort];
   [self showNextPermission];
   return YES;
@@ -2005,7 +2074,10 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 }
 
 - (NSDictionary *)originState {
-  return [_strip originState];
+  NSMutableDictionary *state = [[_strip originState] mutableCopy];
+  state[@"window"] = @(_coreWindow.window.windowNumber);
+  if (NSDictionary *permission = [self permissionState]) state[@"permission"] = permission;
+  return state;
 }
 
 - (void)updateOrigin {
@@ -2018,8 +2090,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
   _closeObserver = nil;
   [_permissionQueue removeAllObjects];
   NSAlert *alert = _permissionAlert;
-  _shownPermission = nil;
-  _permissionAlert = nil;
+  [self forgetShownPermission];
   if (alert.window.sheetParent) [alert.window.sheetParent endSheet:alert.window returnCode:NSModalResponseAbort];
   if (_tab.delegate == self) _tab.delegate = nil;
   ArdiaCorePopupWindow *me = self;
@@ -2436,6 +2507,10 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
 
 + (NSString *)devAction:(NSString *)action window:(NSWindow *)window {
   if (!window) return nil;
+  if ([action hasPrefix:@"alertSheets:"]) {
+    if (!ardiacore_host::ShowAlertSheetsInTests([[action substringFromIndex:12] isEqualToString:@"1"])) return @"test instances only";
+    return [action substringFromIndex:12];
+  }
   if ([action hasPrefix:@"fakeFullScreenMs:"]) {
     if (!ardiacore_host::Background()) return @"test instances only";
     gActedTransition = MAX(0, [action substringFromIndex:17].doubleValue / 1000);

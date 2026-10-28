@@ -56,7 +56,7 @@ const usesPageA = [
   "restore-after-close", "discard-outcomes", "capture-picture", "unresponsive", "permission-dismissed",
   "save-page", "activate-request", "extension-popup-and-panel", "print-preview",
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
-  "private-windows-create", "extension-installed-bubble", "popup-window", "popup-origin-strip", "autofill-save-prompts",
+  "private-windows-create", "extension-installed-bubble", "popup-window", "popup-window-permission", "popup-origin-strip", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "pip-window", "page-focus",
   "fullscreen-tab-switch", "fullscreen-native", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
@@ -2652,6 +2652,74 @@ try {
     if (asTab) throw new Error("the popup became a tab");
     if (size !== "480x360" || !hasOpener) throw new Error(`popup page ${page}`);
     return { size, opener: hasOpener, message };
+  });
+
+  await check("popup-window-permission", async () => {
+    await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    const opener = await pageFor(first.id, `${base}/a`);
+    await cdp(opener, "Runtime.evaluate", { expression: `window.open("${base}/popup-page?permission", "perm", "width=480,height=360"); true`, userGesture: true });
+    const t = await until("the popup's page", () => pageTarget("/popup-page?permission"));
+    const popup = await until("the pop-up window", async () => (await cef(`engineInfo()`)).popupOrigins.find((o) => o.origin.startsWith(base)) ?? null, 10000);
+    const answer = async () => (await cdp(t, "Runtime.evaluate", { expression: "String(window.__perm)", returnByValue: true })).result.value;
+    const shown = async () => (await cef(`engineInfo()`)).popupOrigins.find((o) => o.permission)?.permission ?? null;
+    const ask = async () => {
+      await cdp(t, "Runtime.evaluate", {
+        expression: "window.__perm = 'pending'; navigator.geolocation.getCurrentPosition(() => (window.__perm = 'granted'), (e) => (window.__perm = 'error:' + e.code)); true",
+        userGesture: true,
+      });
+      return until("the pop-up window's permission sheet", shown, 10000);
+    };
+    const stillAsking = async (what, detail) => {
+      await sleep(300);
+      const now = { sheet: !!(await shown()), page: await answer() };
+      if (!now.sheet || now.page !== "pending") throw new Error(`${what} answered the sheet: ${JSON.stringify(now)} (${detail})`);
+    };
+    const armed = () => until("Allow enabled after the input delay", async () => ((await shown())?.allowEnabled ? true : null), 3000);
+    const enabled = await cef(`devWindow(${popup.window}, "alertSheets:1")`);
+    if (enabled !== "1") throw new Error(`real sheets unavailable: ${enabled}`);
+    try {
+      const prompt = await ask();
+      const returnKey = () => cef(`devWindow(${prompt.sheetWindow}, "keys:0:\\r:36")`);
+      if (prompt.allowEnabled) throw new Error("Allow took input as soon as the sheet appeared");
+      await stillAsking("Return right after the sheet appeared", await returnKey());
+      await armed();
+      await stillAsking("Return once Allow was enabled", await returnKey());
+      const expected = `${new URL(base).protocol}//${new URL(base).host}`;
+      if (!prompt.question.includes(expected)) throw new Error(`the question doesn't name ${expected}: ${prompt.question}`);
+      const space = await cef(`devWindow(${prompt.sheetWindow}, "keys:0: :49")`);
+      const afterSpace = await until("Space's answer", async () => ((await answer()) !== "pending" ? answer() : null), 5000);
+      if (afterSpace === "granted") throw new Error(`Space granted the permission (${space})`);
+      await cef(`setSiteSetting("", "${base}", "location", "default")`);
+      await until("the sheet gone", async () => ((await shown()) ? null : true), 5000);
+
+      const geo = async () => (await cdp(t, "Runtime.evaluate", { expression: "outerWidth + 'x' + outerHeight + ' at ' + screenX + ',' + screenY", returnByValue: true })).result.value;
+      const second = await ask();
+      const geometryBefore = await geo();
+      await cdp(t, "Runtime.evaluate", { expression: "window.moveBy(25, 15); window.resizeTo(outerWidth + 40, outerHeight + 30); true", userGesture: true });
+      const pageMoves = { before: geometryBefore, after: await geo() };
+      const rearms = {};
+      for (const name of ["NSWindowDidMoveNotification", "NSWindowDidResizeNotification", "NSWindowDidChangeOcclusionStateNotification"]) {
+        await armed();
+        await cef(`devWindow(${popup.window}, "postNotification:window:${name}")`);
+        const now = await shown();
+        if (now.allowEnabled) throw new Error(`Allow stayed enabled after ${name}`);
+        const [x, y] = now.allowAt;
+        await stillAsking(`A click on Allow right after ${name}`, await cef(`devWindow(${second.sheetWindow}, "click:${x},${y}")`));
+        rearms[name] = [x, y];
+      }
+      await armed();
+      const [cx, cy] = (await shown()).allowAt;
+      await cef(`devWindow(${second.sheetWindow}, "click:${cx},${cy}")`);
+      await until("a deliberate click on Allow answers the sheet", async () => ((await shown()) ? null : true), 5000);
+      await sleep(500);
+      const control = await answer();
+      if (control === "error:1") throw new Error("a click on Allow once it was enabled was taken as a denial");
+      return { question: prompt.question, afterSpace, pageMoves, rearms, control };
+    } finally {
+      await cef(`devWindow(${popup.window}, "alertSheets:0")`).catch(() => {});
+      await closeFromPage(t).catch(() => {});
+      await cef(`setSiteSetting("", "${base}", "location", "default")`).catch(() => {});
+    }
   });
 
   await check("popup-origin-strip", async () => {

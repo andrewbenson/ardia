@@ -30,6 +30,7 @@ NSString *AppDisposition(NSString *chromeDisposition);
 void InstallActivationGuardsEarly();
 void InstallActivationGuardsLate();
 bool Background();
+bool ShowAlertSheetsInTests(bool show);
 void LogActivation(NSString *what);
 void SetAppActive(bool active);
 void ActToggleFullScreen(NSWindow *window);

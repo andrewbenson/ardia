@@ -7,6 +7,7 @@
 
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <Security/Security.h>
 
 #include <initializer_list>
 #include <vector>
@@ -225,10 +226,15 @@ NSModalResponse AnswerAlert(NSAlert *alert, NSString *how) {
   return NSAlertFirstButtonReturn + (NSModalResponse)pick;
 }
 
+bool gShowAlertSheets = false;
+
 void InterceptAlerts() {
   Swizzle(NSAlert.class, @selector(runModal), ^NSModalResponse(NSAlert *alert) { return AnswerAlert(alert, @"app-modal"); });
+  auto beginSheet = (void (*)(id, SEL, NSWindow *, void (^)(NSModalResponse)))method_getImplementation(
+      class_getInstanceMethod(NSAlert.class, @selector(beginSheetModalForWindow:completionHandler:)));
   Swizzle(NSAlert.class, @selector(beginSheetModalForWindow:completionHandler:),
-          ^(NSAlert *alert, NSWindow *, void (^handler)(NSModalResponse)) {
+          ^(NSAlert *alert, NSWindow *window, void (^handler)(NSModalResponse)) {
+            if (gShowAlertSheets) return beginSheet(alert, @selector(beginSheetModalForWindow:completionHandler:), window, handler);
             NSModalResponse response = AnswerAlert(alert, @"sheet");
             if (handler) dispatch_async(dispatch_get_main_queue(), ^{ handler(response); });
           });
@@ -239,6 +245,29 @@ void InterceptAlerts() {
 bool Background() {
   static bool background = getenv("ARDIA_BACKGROUND") != nullptr;
   return background;
+}
+
+bool SignedForDistribution() {
+  static const bool distribution = [] {
+    SecCodeRef code = nullptr;
+    if (SecCodeCopySelf(kSecCSDefaultFlags, &code) != errSecSuccess) return true;
+    SecRequirementRef requirement = nullptr;
+    CFStringRef text = CFSTR("anchor apple generic and (certificate leaf[field.1.2.840.113635.100.6.1.9] exists or "
+                             "certificate 1[field.1.2.840.113635.100.6.2.6] exists and "
+                             "certificate leaf[field.1.2.840.113635.100.6.1.13] exists)");
+    bool signedForDistribution = SecRequirementCreateWithString(text, kSecCSDefaultFlags, &requirement) != errSecSuccess ||
+                                 SecCodeCheckValidity(code, kSecCSDefaultFlags, requirement) == errSecSuccess;
+    if (requirement) CFRelease(requirement);
+    CFRelease(code);
+    return signedForDistribution;
+  }();
+  return distribution;
+}
+
+bool ShowAlertSheetsInTests(bool show) {
+  if (!Background() || SignedForDistribution()) return false;
+  gShowAlertSheets = show;
+  return true;
 }
 
 namespace {

@@ -1,5 +1,6 @@
 import AppKit
 import ArdiaShell
+import SolaraModel
 import SolaraStore
 import SolaraUI
 import Synchronization
@@ -7,7 +8,7 @@ import Synchronization
 @MainActor
 enum NativePaneRoots {
   nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && ProcessInfo.processInfo.environment["ARDIA_SHELL_PANES"] == "1"
+    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.shellPanes, defaultOn: false)
   }
 
   nonisolated static var available: Bool { enabled && WindowHost.makeRootView != nil }

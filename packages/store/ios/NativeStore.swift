@@ -10,7 +10,7 @@ public final class NativeStore: Sendable {
   nonisolated(unsafe) public private(set) static var ownsWorkspace = false
 
   static var scope: PersistenceScope {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SCOPE"] == "settingsAndDownloads" ? .settingsAndDownloads : .everything
+    LaunchSwitches.shared.scope == "settingsAndDownloads" ? .settingsAndDownloads : .everything
   }
 
   static func config(_ folder: URL) -> StoreConfig {
@@ -95,12 +95,13 @@ public final class NativeStore: Sendable {
     do {
       guard let lock = try FolderLock.acquire(DataFolder(url: folder)) ?? waitForHolder(folder) else { return false }
       folderLock = lock
+      if LaunchSwitches.countLaunch().countedLaunch { MainActor.assumeIsolated { LaunchSuccessWatch.start() } }
     } catch {
       unavailableReason = "couldn't lock the data folder: \(error)"
       NSLog("[store] %@; running on the JS store", unavailableReason ?? "")
       return false
     }
-    if ProcessInfo.processInfo.environment["ARDIA_NATIVE_STORE"] == "0" {
+    if !LaunchSwitches.shared.isOn(.nativeStore, defaultOn: true) {
       unavailableReason = "ARDIA_NATIVE_STORE=0"
       return false
     }
@@ -143,4 +144,36 @@ public final class NativeStore: Sendable {
   public func flush(timeout: TimeInterval) -> Bool { writer.flush(timeout: timeout) }
 
   public func freeze() { writer.freeze() }
+}
+
+@MainActor
+final class LaunchSuccessWatch {
+  static let settleSeconds = 15.0
+  static var current: LaunchSuccessWatch?
+  var tokens: [NSObjectProtocol] = []
+
+  static func start() {
+    let watch = LaunchSuccessWatch()
+    current = watch
+    for name in [NSWindow.didBecomeMainNotification, NSWindow.didChangeOcclusionStateNotification] {
+      watch.tokens.append(
+        NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { note in
+          let window = note.object as? NSWindow
+          MainActor.assumeIsolated {
+            guard let window, window.isVisible, window.occlusionState.contains(.visible) || window.isMainWindow else { return }
+            current?.windowShown()
+          }
+        })
+    }
+  }
+
+  func windowShown() {
+    tokens.forEach(NotificationCenter.default.removeObserver)
+    tokens = []
+    Self.current = nil
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { LaunchSwitches.launchSucceeded() }
+    _ = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+      LaunchSwitches.launchSucceeded()
+    }
+  }
 }

@@ -1,6 +1,7 @@
 import AppKit
 import ArdiaShell
 import Foundation
+import SolaraModel
 import SolaraUI
 import SwiftUI
 
@@ -9,7 +10,7 @@ enum NativeImportWindow {
   static let kind = "import"
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_IMPORT"] != "0" && NativeSettingsWindow.enabled
+    LaunchSwitches.shared.isOn(.nativeImport, defaultOn: true) && NativeSettingsWindow.enabled
   }
 
   static func makeController() -> NSViewController? {

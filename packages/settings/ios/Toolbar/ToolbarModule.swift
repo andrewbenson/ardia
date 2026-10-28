@@ -1,6 +1,7 @@
 import AppKit
 import ExpoModulesCore
 import Foundation
+import SolaraModel
 import SolaraStore
 import SolaraUI
 
@@ -9,7 +10,7 @@ public class ToolbarModule: Module {
     Name("SolaraToolbar")
 
     Function("available") { () -> Bool in
-      ProcessInfo.processInfo.environment["ARDIA_NATIVE_OMNIBOX"] != "0" && NativeSettingsHandle.active
+      LaunchSwitches.shared.isOn(.nativeOmnibox, defaultOn: true) && NativeSettingsHandle.active
     }
 
     View(NativeToolbarHostView.self) {

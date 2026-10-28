@@ -1,6 +1,7 @@
 import AppKit
 import ExpoModulesCore
 import Foundation
+import SolaraModel
 import SolaraUI
 
 public class AutoHideModule: Module {
@@ -9,7 +10,7 @@ public class AutoHideModule: Module {
 
     Events("onAutoHideEvent")
 
-    Function("available") { () -> Bool in NativeWindowShell.enabled && ProcessInfo.processInfo.environment["ARDIA_NATIVE_AUTOHIDE"] == "1" }
+    Function("available") { () -> Bool in NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeAutoHide, defaultOn: false) }
 
     AsyncFunction("set") { (windowId: String, tabId: String, json: String) in
       let sink = AutoHideSink(self)

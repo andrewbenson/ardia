@@ -1,5 +1,6 @@
 import AppKit
 import ExpoModulesCore
+import SolaraModel
 import SolaraStore
 import SolaraUI
 import SwiftUI
@@ -9,7 +10,7 @@ public class PagesModule: Module {
     Name("SolaraPages")
 
     Function("available") { () -> Bool in
-      ProcessInfo.processInfo.environment["ARDIA_NATIVE_PAGES"] == "1" && NativeSettingsHandle.active
+      LaunchSwitches.shared.isOn(.nativePages, defaultOn: false) && NativeSettingsHandle.active
     }
 
     Events("onMeetingAlertEvent")

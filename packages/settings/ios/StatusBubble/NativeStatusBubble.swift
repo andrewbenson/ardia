@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SolaraModel
 import SolaraUI
 
 @MainActor
@@ -7,7 +8,7 @@ enum NativeStatusBubble {
   static let kind = "statusBubble"
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_STATUS_BUBBLE"] != "0"
+    LaunchSwitches.shared.isOn(.nativeStatusBubble, defaultOn: true)
   }
 
   static func register() {

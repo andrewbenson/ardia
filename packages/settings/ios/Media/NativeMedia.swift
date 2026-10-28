@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SolaraModel
 import SolaraUI
 
 @MainActor
@@ -13,7 +14,7 @@ enum NativeMedia {
   static let smallBar = "littleSolara.bar"
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_MEDIA"] == "1"
+    LaunchSwitches.shared.isOn(.nativeMedia, defaultOn: false)
   }
 
   private static var mounted: [(kind: String, windowId: String, view: WeakMediaView)] = []

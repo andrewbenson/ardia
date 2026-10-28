@@ -11,7 +11,7 @@ enum NativeSplitChrome {
   static let toastTopic = "split.toast"
   static let noticeTopic = "split.notice"
   static let toolbarTopic = "split.toolbar"
-  nonisolated static var panesEnabled: Bool { NativeWindowShell.enabled && ProcessInfo.processInfo.environment["ARDIA_NATIVE_PAGES_POOL"] == "1" }
+  nonisolated static var panesEnabled: Bool { NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativePagesPool, defaultOn: false) }
 
   private static var started = false
   private static var views: [String: SplitChromeView] = [:]

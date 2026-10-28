@@ -10,7 +10,7 @@ enum NativeSidebar {
   static var hosts: [String: SidebarHost] = [:]
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SIDEBAR"] == "1"
+    LaunchSwitches.shared.isOn(.nativeSidebar, defaultOn: false)
   }
 
   static func register() {

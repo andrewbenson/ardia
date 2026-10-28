@@ -53,7 +53,7 @@ enum NativeSettingsWindow {
   private static var context: SettingsContext?
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SETTINGS"] != "0" && NativeSettingsHandle.active
+    LaunchSwitches.shared.isOn(.nativeSettings, defaultOn: true) && NativeSettingsHandle.active
   }
 
   static func install() {

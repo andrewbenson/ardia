@@ -12,7 +12,7 @@ enum NativeOnboarding {
   static let kind = "onboarding"
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_ONBOARDING"] != "0" && NativeSettingsWindow.enabled
+    LaunchSwitches.shared.isOn(.nativeOnboarding, defaultOn: true) && NativeSettingsWindow.enabled
   }
 
   private static var sessions: [OnboardingSession] = []

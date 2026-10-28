@@ -1,6 +1,7 @@
 import AppKit
 import ExpoModulesCore
 import Foundation
+import SolaraModel
 import SolaraOmnibox
 import SolaraStore
 import SolaraUI
@@ -10,7 +11,7 @@ public class NewTabModule: Module {
     Name("SolaraNewTab")
 
     Function("available") { () -> Bool in
-      ProcessInfo.processInfo.environment["ARDIA_NATIVE_NEWTAB"] != "0" && NativeSettingsHandle.active
+      LaunchSwitches.shared.isOn(.nativeNewTab, defaultOn: true) && NativeSettingsHandle.active
     }
 
     AsyncFunction("setTabs") { (profileId: String, json: String) in

@@ -130,7 +130,7 @@ try {
 
   await rep.check("a drop on the zoom popover goes where RN's does", async () => {
     assert.ok(onPopover, "the shell's popover point");
-    rn = await open({ ARDIA_NATIVE_SHELL: "0", ARDIA_NATIVE_TOOLBAR: "0" }, "rn-data");
+    rn = await open({ ARDIA_NATIVE_SHELL: "0" }, "rn-data");
     await rn.zoom(true);
     await sleep(800);
     const rnOnPopover = {};

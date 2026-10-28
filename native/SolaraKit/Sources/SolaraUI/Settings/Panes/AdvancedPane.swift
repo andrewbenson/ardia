@@ -1,3 +1,4 @@
+import AppKit
 import Observation
 import SolaraModel
 import SwiftUI
@@ -59,12 +60,14 @@ public protocol AdvancedServices: AnyObject {
 public final class AdvancedPaneModel: SettingsPaneProvider {
   @ObservationIgnored let services: AdvancedServices
   @ObservationIgnored let store: SettingsStoreSource
+  @ObservationIgnored let experiments: ExperimentsModel?
   var chromium: String??
   var widevine: String???
 
-  public init(services: AdvancedServices, store: SettingsStoreSource) {
+  public init(services: AdvancedServices, store: SettingsStoreSource, experiments: ExperimentsModel? = nil) {
     self.services = services
     self.store = store
+    self.experiments = experiments
   }
 
   public func isLoaded(_ place: SettingsPlace) -> Bool { chromium != nil && widevine != nil }
@@ -185,6 +188,11 @@ struct AdvancedPane: View {
           Button("Show Licenses") { services.openURL("chrome://credits") }
         }
       }
+
+      if let experiments = model.experiments, experiments.revealed {
+        ExperimentsSection(model: experiments)
+      }
     }
+    .onAppear { model.experiments?.reveal(optionHeld: NSEvent.modifierFlags.contains(.option)) }
   }
 }

@@ -97,7 +97,7 @@ enum NativeTopStrip {
   static var hosts: [String: TopStripHost] = [:]
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_TOP_STRIP"] == "1"
+    LaunchSwitches.shared.isOn(.nativeTopStrip, defaultOn: false)
   }
 
   static func register() {

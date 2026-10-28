@@ -3,6 +3,7 @@ import ArdiaShaders
 import ArdiaShell
 import ExpoModulesCore
 import Foundation
+import SolaraModel
 import SolaraStore
 import Synchronization
 import SolaraUI
@@ -20,11 +21,11 @@ enum NativeWindowShell {
   nonisolated private static let activeIds = Mutex<Set<String>>([])
 
   nonisolated static var enabled: Bool {
-    ProcessInfo.processInfo.environment["ARDIA_NATIVE_SHELL"] == "1"
+    LaunchSwitches.shared.isOn(.nativeShell, defaultOn: false)
   }
 
   nonisolated static var mainOnTop: Bool {
-    NativePaneRoots.enabled && NativeSplitChrome.panesEnabled && ProcessInfo.processInfo.environment["ARDIA_SHELL_MAIN_TOP"] == "1"
+    NativePaneRoots.enabled && NativeSplitChrome.panesEnabled && LaunchSwitches.shared.isOn(.shellMainTop, defaultOn: false)
   }
 
   static func install() {

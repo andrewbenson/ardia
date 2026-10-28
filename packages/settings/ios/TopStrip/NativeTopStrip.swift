@@ -72,6 +72,14 @@ public class TopStripModule: Module {
       MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.slideTrace ?? [] }
     }.runOnQueue(.main)
 
+    AsyncFunction("traceGlow") { (windowId: String) in
+      MainActor.assumeIsolated { TopStripGlowHost.hosts[windowId]?.view.startTrace() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("glowTrace") { (windowId: String) -> [[Double]] in
+      MainActor.assumeIsolated { TopStripGlowHost.hosts[windowId]?.view.trace ?? [] }
+    }.runOnQueue(.main)
+
     AsyncFunction("peekState") { (windowId: String) -> String in
       MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId].flatMap { NativeTopStrip.json($0.describe()) } ?? "null" }
     }.runOnQueue(.main)

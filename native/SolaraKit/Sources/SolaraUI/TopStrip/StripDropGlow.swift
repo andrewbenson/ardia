@@ -46,6 +46,7 @@ public final class StripDropGlow: NSView {
     CATransaction.commit()
     guard next != over else { return }
     over = next
+    trace?.append([StripTicker.now, opacity.value])
     opacity.animate(to: next ? 1 : 0, duration: StripDropGlowMetrics.duration, easing: .quad, at: StripTicker.now)
     ticker.start()
   }

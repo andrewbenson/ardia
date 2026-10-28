@@ -269,6 +269,14 @@ async function measure(native) {
       out.dockedShots[look] = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(shot)});`)) ? shot : null;
       await run(`${undo} return settle(600);`);
     }
+    const glowArm = native ? `globalThis.expo.modules.SolaraTopStrip.traceGlow("w1")` : `Promise.resolve(globalThis.acStrip.traceGlow("w1"))`;
+    const glowRead = native ? `globalThis.expo.modules.SolaraTopStrip.glowTrace("w1").then((s) => s.map(([t, x]) => [t * 1000, x]))` : `Promise.resolve(globalThis.acStrip.glowTrace())`;
+    out.glowMotion = {};
+    for (const [name, hold] of [["full", 400], ["cut", 60]]) {
+      out.glowMotion[name] = await run(`
+        return ${glowArm}.then(() => settle(50)).then(() => { globalThis.acTabDrag.setState({ overWindow: "w1" }); return settle(${hold}); })
+          .then(() => { globalThis.acTabDrag.setState({ overWindow: null }); return settle(400); }).then(() => ${glowRead});`);
+    }
     out.dockedDownloadsAt = await run(`
       return act("w1", "click:${W - 25},21").then(() => settle(100)).then(() => st().closePanel("w1")).then(() => settle(600)).then(() => win("w1"))
         .then((n) => {
@@ -459,6 +467,47 @@ try {
       const shown = (edges) => edges.filter((e) => !/^\d+,(60|64) /.test(e)).join("\n");
       assert.ok(rn.dockedDownloadsAt.length > 2, `RN's list shows: ${shown(rn.dockedDownloadsAt)}`);
       assert.equal(shown(native.dockedDownloadsAt), shown(rn.dockedDownloadsAt));
+    });
+    await rep.check("the drop glow fades on RN's 140 ms out-quad, frame for frame at 30 fps, and turns back mid-fade as RN's does", async () => {
+      const quad = (p) => 1 - Math.pow(1 - Math.min(1, Math.max(0, p)), 2);
+      const fit = (samples, model) => {
+        let best = null;
+        const moving = samples[samples.findIndex(([, x]) => x > 0)]?.[0] ?? samples[1][0];
+        for (let start = moving - 160; start <= moving + 20; start += 0.25) {
+          const error = Math.max(...samples.filter(([t]) => t >= moving).map(([t, x]) => Math.abs(x - model(t - start))));
+          if (!best || error < best.error) best = { start, error };
+        }
+        return best;
+      };
+      const at = (samples, t) => {
+        const i = samples.findIndex(([u]) => u >= t);
+        if (i <= 0) return i === 0 ? samples[0][1] : samples.at(-1)[1];
+        const [ta, xa] = samples[i - 1], [tb, xb] = samples[i];
+        return xa + ((xb - xa) * (t - ta)) / (tb - ta);
+      };
+      const show = (samples) => JSON.stringify(samples.map(([t, x]) => [Math.round(t), Math.round(x * 1000) / 1000]));
+      assert.ok(native.glowMotion.full && native.glowMotion.cut, "the native glow can be traced");
+      for (const name of ["full", "cut"]) {
+        rep.log(`rn glow ${name} ${show(rn.glowMotion[name])}`);
+        rep.log(`native glow ${name} ${show(native.glowMotion[name])}`);
+      }
+      const rising = (samples) => samples.slice(0, samples.findIndex(([, x]) => x >= 0.9999) + 1);
+      const falling = (samples) => samples.slice(samples.findLastIndex(([, x]) => x >= 0.9999));
+      const theirs = rn.glowMotion.full, ours = native.glowMotion.full;
+      for (const [phase, pick, model] of [["in", rising, (ms) => quad(ms / 140)], ["out", falling, (ms) => 1 - quad(ms / 140)]]) {
+        const a = fit(pick(theirs), model), b = fit(pick(ours), model);
+        const frames = Array.from({ length: 4 }, (_, k) => Math.abs(at(pick(theirs), a.start + ((k + 1) * 1000) / 30) - at(pick(ours), b.start + ((k + 1) * 1000) / 30)));
+        rep.log(`glow ${phase}: RN within ${a.error.toFixed(3)} of the curve, native within ${b.error.toFixed(3)}; 30 fps frames differ by ${frames.map((d) => d.toFixed(3)).join(" ")}`);
+        assert.ok(pick(ours).length > 3, `${phase}: native traced ${pick(ours).length} samples`);
+        assert.ok(b.error <= 0.02, `native's glow ${phase} is ${b.error.toFixed(3)} off RN's 140 ms out-quad`);
+        assert.ok(Math.max(...frames) <= 0.05, `${phase}: a 30 fps frame differs by ${Math.max(...frames).toFixed(3)}`);
+      }
+      const peak = (samples) => Math.max(...samples.map(([, x]) => x));
+      const cutRn = rn.glowMotion.cut, cutNative = native.glowMotion.cut;
+      rep.log(`glow cut peaks: RN ${peak(cutRn).toFixed(3)} native ${peak(cutNative).toFixed(3)}`);
+      assert.ok(peak(cutRn) < 0.98 && peak(cutNative) < 0.98, "both turned back before reaching full");
+      assert.ok(Math.abs(peak(cutRn) - peak(cutNative)) <= 0.12, `the glow turns back at ${peak(cutNative).toFixed(3)}, RN's at ${peak(cutRn).toFixed(3)}`);
+      assert.equal(cutNative.at(-1)[1], 0, "native's glow ends hidden");
     });
     await rep.check("the peek slides in and out on RN's 180 ms out-cubic, frame for frame at 30 fps", async () => {
       const show = (samples) => JSON.stringify(samples.map(([t, x]) => [Math.round(t), Math.round(x * 1000) / 1000]));

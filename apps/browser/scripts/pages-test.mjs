@@ -13,7 +13,7 @@
 // opens the meeting and Ignore dismisses it. The page prompts (permission, password, autofill, external app, engine
 // offer, device chooser, blocked pop-ups) open in the native popover frame at the card RN draws for them; Esc or a
 // click on the page leaves the first six unanswered and closes the pop-ups list, and a pop-up's row opens just that
-// one, as RN does (a second instance without ARDIA_NATIVE_PAGES gives RN's numbers). A click on the native frame's
+// one, as RN does (a second instance with ARDIA_NATIVE_PAGES=0 gives RN's numbers). A click on the native frame's
 // Allow less than 0.5 s after the prompt shows is ignored (promptGuard) and one 0.8 s later answers it.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
@@ -37,13 +37,14 @@ mkdirSync(files);
 writeFileSync(join(files, "report.pdf"), "report");
 writeFileSync(join(files, "photo.png"), "photo");
 mkdirSync(data, { recursive: true });
-writeFileSync(join(data, "calendar-fixture.json"), JSON.stringify({
+const calendarFixture = JSON.stringify({
   calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
   events: [
     { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: 3, durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }, { name: "Me", email: "me@example.com", me: true }] },
     { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 90, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
   ],
-}));
+});
+writeFileSync(join(data, "calendar-fixture.json"), calendarFixture);
 const rep = reporter(join(scratch, "pages-test.log"), { name: "pages-test" });
 const download = (id, filename, state, extra = {}) => ({
   id, url: `https://example.com/${filename}`, filename, path: join(files, filename), state, paused: false,
@@ -603,7 +604,7 @@ const rnData = join(scratch, "rn-data");
 mkdirSync(rnData, { recursive: true });
 let rn = null;
 try {
-  rn = await launch(resolve(appArg), { data: rnData, onboarded: true, env: {} });
+  rn = await launch(resolve(appArg), { data: rnData, onboarded: true, env: { ARDIA_NATIVE_PAGES: "0" } });
   await rn.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
   await sleep(4000);
   await rep.check("each prompt's native card sits where RN draws it, and Esc and a click on the page answer it as RN does", async () => {
@@ -622,5 +623,56 @@ try {
 } finally {
   await rn?.quit();
   if (!keep) rmSync(rnData, { recursive: true, force: true });
+}
+const shellData = join(scratch, "shell-data");
+mkdirSync(shellData, { recursive: true });
+writeFileSync(join(shellData, "calendar-fixture.json"), calendarFixture);
+let shell = null;
+try {
+  shell = await launch(resolve(appArg), { data: shellData, onboarded: true, env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
+  await shell.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
+  await sleep(4000);
+  await rep.check("under the native shell the meeting alert is in a native frame at RN's spot; Join opens the meeting, ✕ dismisses it", async () => {
+    const win = await shell.eval(`return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
+    const run = (action) => shell.eval(`return globalThis.expo.modules.ArdiaCEF.devWindow(${win}, ${JSON.stringify(action)})`);
+    const press = async (x, y) => {
+      await run(`mouse:down:${x},${y}`);
+      await sleep(60);
+      await run(`mouse:up:${x},${y}`);
+    };
+    await run("fakeActiveClicks");
+    const show = () => shell.eval(`const e = ac.pages.calendar.getState().events.find((x) => x.id === "standup"); ac.store.getState().setFocusedWindow?.(Object.keys(ac.store.getState().windows)[0]); ac.pages.meetingAlert.setState({ event: e }); return !!e`);
+    await until(async () => ({ ok: (await shell.eval(`return ac.pages.calendar.getState().events.length`)) > 0 }), 5000);
+    assert.equal(await show(), true, "fixture event");
+    const frameNow = async () => JSON.parse(await shell.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${win}, "MeetingAlertFrameView")`));
+    const shown = await until(async () => {
+      const f = await frameNow();
+      return { ok: f.found && f.height > 100, f };
+    }, 3000);
+    assert.ok(shown.ok, `a native frame: ${JSON.stringify(shown.f)}`);
+    const width = await shell.eval(`return globalThis.expo.modules.ArdiaCEF.devWindow(${win}, "winfo").then((s) => JSON.parse(s).frame)`);
+    const windowWidth = Number(String(width).replace(/[{}]/g, "").split(",")[2]);
+    assert.equal(shown.f.width, 300);
+    assert.equal(shown.f.y, 52, "52 from the top, as RN");
+    assert.ok(Math.abs(shown.f.x - Math.max(8, windowWidth - 300 - 14)) <= 1, `x ${shown.f.x} for a ${windowWidth} wide window`);
+    const pages = JSON.parse(await shell.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages;
+    assert.ok(!pages.some((p) => p.kind === "meetingAlert"), "no RN-hosted card as well");
+    await sleep(800);
+    await press(shown.f.x + 150, shown.f.y + shown.f.height - 27);
+    const opened = await until(async () => ({ ok: (await shell.eval(`return Object.values(ac.store.getState().tabs).some((t) => (t.url || "").includes("zoom.us"))`)) }), 4000);
+    assert.ok(opened.ok, "Join opened the meeting");
+    await show();
+    const again = await until(async () => {
+      const f = await frameNow();
+      return { ok: f.found && f.height > 100, f };
+    }, 3000);
+    await sleep(800);
+    await press(again.f.x + 283, again.f.y + 19);
+    const gone = await until(async () => ({ ok: (await shell.eval(`return ac.pages.meetingAlert.getState().event === null`)) && !(await frameNow()).found }), 3000);
+    assert.ok(gone.ok, "✕ dismissed it and the frame went away");
+  });
+} finally {
+  await shell?.quit();
+  if (!keep) rmSync(shellData, { recursive: true, force: true });
 }
 process.exit(rep.summary() ? 0 : 1);

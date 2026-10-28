@@ -12,6 +12,19 @@ public class PagesModule: Module {
       ProcessInfo.processInfo.environment["ARDIA_NATIVE_PAGES"] == "1" && NativeSettingsHandle.active
     }
 
+    Events("onMeetingAlertEvent")
+
+    AsyncFunction("showMeetingAlert") { (windowId: String, json: String, left: Double, top: Double) -> Bool in
+      let sink = PagesEventSink(self)
+      return MainActor.assumeIsolated {
+        MeetingAlertHost.show(windowId: windowId, json: json, left: left, top: top) { body in sink.module?.sendEvent("onMeetingAlertEvent", body) }
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("hideMeetingAlert") { (windowId: String) in
+      MainActor.assumeIsolated { MeetingAlertHost.hide(windowId: windowId) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devPages") { () -> String in
       MainActor.assumeIsolated { NativePageView.devState() }
     }.runOnQueue(.main)
@@ -259,4 +272,9 @@ final class NativePageView: ExpoView {
     case .view: onPageEvent(["kind": "view"])
     }
   }
+}
+
+private final class PagesEventSink: @unchecked Sendable {
+  weak var module: PagesModule?
+  init(_ module: PagesModule) { self.module = module }
 }

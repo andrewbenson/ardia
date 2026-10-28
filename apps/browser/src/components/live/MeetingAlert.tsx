@@ -1,6 +1,6 @@
-import { nativePagesAvailable } from "@ardia/settings";
+import { hideNativeMeetingAlert, nativePagesAvailable, onNativeMeetingAlert, showNativeMeetingAlert } from "@ardia/settings";
 import { Surface } from "@ardia/shell";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
 import { dismiss, joinEvent, useMeetingAlert } from "../../live/alerts";
@@ -31,7 +31,7 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
   const sidebarShown = useBrowser((s) => !!s.windows[windowId]?.sidebarOpen);
   const calendarName = useCalendar((s) => s.calendars.find((c) => c.id === event.calendarId)?.title);
   const [anchor, setAnchor] = useState<Anchor | null>(null);
-  const appear = useRef(new Animated.Value(0)).current;
+  const [framed, setFramed] = useState<boolean | null>(nativePagesAvailable() ? null : false);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,9 +41,6 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
       cancelled = true;
     };
   }, [calendarTab, sidebarShown, windowWidth]);
-  useEffect(() => {
-    Animated.spring(appear, { toValue: 1, speed: 14, bounciness: 6, useNativeDriver: true }).start();
-  }, []);
 
   const link = joinLink(event);
   const related = relatedLinks(event);
@@ -51,47 +48,57 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
   const people = event.attendees.filter((a) => !a.me);
   const who = attendeesLabel(event);
   const position = anchor ? { left: anchor.x + anchor.width + 8, top: Math.max(8, anchor.y - 4) } : { left: Math.max(8, windowWidth - WIDTH - 14), top: 52 };
+  const nativeState = JSON.stringify({
+    card: "meetingAlert",
+    dark: !!theme.dark,
+    nowColor: colors.now,
+    alert: {
+      id: event.occurrence,
+      title: event.title || "Untitled event",
+      color: event.color,
+      time: timeRange(event),
+      when: running ? "Now" : relativeTime(event.start, now),
+      running,
+      joinTitle: link ? joinTitle(link.provider) : null,
+      people: people.map((a) => a.name || a.email),
+    },
+    calendarName: calendarName ?? null,
+    who: who || guestsLabel(event),
+    viewEvent: !link && !!calendarTab,
+    openAll: link && related.length ? `Opens ${related.length === 1 ? "1 link" : `${related.length} links`} from the invitation, then joins` : null,
+  });
+  const onNativeEvent = (e: { kind: string; all?: unknown }) => {
+    if (e.kind === "dismiss") dismiss(event);
+    else if (e.kind === "join") joinEvent(event, !!e.all, windowId);
+    else if (e.kind === "view" && calendarTab) {
+      useBrowser.getState().activate(calendarTab);
+      dismiss(event);
+    }
+  };
+  const handler = useRef(onNativeEvent);
+  handler.current = onNativeEvent;
+  useEffect(() => {
+    if (!nativePagesAvailable() || framed === false) return;
+    let live = true;
+    void showNativeMeetingAlert(windowId, nativeState, position.left, position.top).then((shown) => live && setFramed(shown));
+    return () => {
+      live = false;
+    };
+  }, [windowId, nativeState, position.left, position.top, framed]);
+  useEffect(() => {
+    if (!nativePagesAvailable()) return;
+    const sub = onNativeMeetingAlert((e) => e.windowId === windowId && handler.current(e));
+    return () => {
+      sub?.remove();
+      void hideNativeMeetingAlert(windowId);
+    };
+  }, [windowId]);
+  if (framed !== false) return null;
 
   return (
-    <Animated.View
-      style={{
-        position: "absolute",
-        ...position,
-        width: WIDTH,
-        opacity: appear,
-        transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
-      }}
-    >
+    <AlertFrame position={position}>
       {nativePagesAvailable() ? (
-        <NativeCard
-          state={JSON.stringify({
-            card: "meetingAlert",
-            dark: !!theme.dark,
-            nowColor: colors.now,
-            alert: {
-              id: event.occurrence,
-              title: event.title || "Untitled event",
-              color: event.color,
-              time: timeRange(event),
-              when: running ? "Now" : relativeTime(event.start, now),
-              running,
-              joinTitle: link ? joinTitle(link.provider) : null,
-              people: people.map((a) => a.name || a.email),
-            },
-            calendarName: calendarName ?? null,
-            who: who || guestsLabel(event),
-            viewEvent: !link && !!calendarTab,
-            openAll: link && related.length ? `Opens ${related.length === 1 ? "1 link" : `${related.length} links`} from the invitation, then joins` : null,
-          })}
-          onEvent={(e) => {
-            if (e.kind === "dismiss") dismiss(event);
-            else if (e.kind === "join") joinEvent(event, !!e.all, windowId);
-            else if (e.kind === "view" && calendarTab) {
-              useBrowser.getState().activate(calendarTab);
-              dismiss(event);
-            }
-          }}
-        />
+        <NativeCard state={nativeState} onEvent={onNativeEvent} />
       ) : (
       <Surface
         fill={hex(theme.panel)}
@@ -148,6 +155,26 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
         </View>
       </Surface>
       )}
+    </AlertFrame>
+  );
+}
+
+function AlertFrame({ position, children }: { position: { left: number; top: number }; children: ReactNode }) {
+  const appear = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(appear, { toValue: 1, speed: 14, bounciness: 6, useNativeDriver: true }).start();
+  }, []);
+  return (
+    <Animated.View
+      style={{
+        position: "absolute",
+        ...position,
+        width: WIDTH,
+        opacity: appear,
+        transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
+      }}
+    >
+      {children}
     </Animated.View>
   );
 }

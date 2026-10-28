@@ -40,11 +40,12 @@ struct AutoHideState: Decodable {
   let shownTop: Double
   let pane: Rect
   let card: String
-  let band: String
+  let band: String?
   let divider: String
   let secondary: String
   let host: String
   let hasPage: Bool
+  let stripes: String?
 }
 
 @MainActor
@@ -55,26 +56,23 @@ enum AutoHideHost {
 
   static func set(windowId: String, tabId: String, state: AutoHideState, send: @escaping (String, Bool) -> Void) {
     guard let shell = NativeWindowShell.host(windowId)?.shell else { return }
-    let card = shell.card
     let created = strips[key(windowId, tabId)] == nil
     let strip = strips[key(windowId, tabId)] ?? {
       let made = AutoHideStripView(frame: .zero)
-      if let overlays = card.subviews.last(where: { String(describing: type(of: $0)).contains("PaneOverlays") }) {
-        card.addSubview(made, positioned: .below, relativeTo: overlays)
-      } else {
-        card.addSubview(made)
-      }
       strips[key(windowId, tabId)] = made
       return made
     }()
-    strip.frame = CGRect(x: state.pane.x, y: state.pane.y, width: state.pane.width, height: Double(ToolbarAutoHideMetrics.toolbarHeight))
+    keepUnderToolbar(strip, windowId: windowId, tabId: tabId)
     strip.onEvent = { event in
       switch event {
       case .reveal: send("reveal", true)
       case .peek(let on): send("peek", on)
       }
     }
-    strip.onMotion = { [weak shell] _ in shell?.coverChanged() }
+    strip.onMotion = { [weak shell, weak strip] _ in
+      if let strip { keepUnderToolbar(strip, windowId: windowId, tabId: tabId) }
+      shell?.coverChanged()
+    }
     strip.onFrame = { frame in
       PaneOverlays.shared.setLiveTop(CGFloat(frame.liveTop), windowId: windowId, tabId: tabId)
       NativeToolbarHostView.toolbar(windowId: windowId, tabId: tabId)?.setAutoHide(
@@ -82,11 +80,27 @@ enum AutoHideHost {
     }
     let mode = ToolbarAutoHideMode(rawValue: state.mode) ?? .shown
     let style = AutoHideStripStyle(
-      card: CSSColor(state.card) ?? CSSColor("#FFFFFF")!, band: CSSColor(state.band) ?? CSSColor("#FFFFFF")!,
+      card: CSSColor(state.card) ?? CSSColor("#FFFFFF")!, band: state.band.flatMap { CSSColor($0) },
       divider: CSSColor(state.divider) ?? CSSColor("rgba(0,0,0,0.1)")!, secondary: CSSColor(state.secondary) ?? CSSColor("#00000080")!,
-      host: state.host, hasPage: state.hasPage)
+      host: state.host, hasPage: state.hasPage, stripes: state.stripes)
     strip.set(style: style, mode: mode, shownTop: state.shownTop)
     if created { PaneOverlays.shared.setLiveTop(CGFloat(strip.restingTop), windowId: windowId, tabId: tabId) }
+  }
+
+  static func toolbarReady(tabId: String) {
+    for (key, strip) in strips {
+      let parts = key.split(separator: "\u{1}", maxSplits: 1).map(String.init)
+      guard parts.count == 2, parts[1] == tabId else { continue }
+      keepUnderToolbar(strip, windowId: parts[0], tabId: tabId)
+    }
+  }
+
+  private static func keepUnderToolbar(_ strip: AutoHideStripView, windowId: String, tabId: String) {
+    guard let host = NativeToolbarHostView.host(windowId: windowId, tabId: tabId) else { return }
+    strip.frame = CGRect(x: 0, y: 0, width: host.bounds.width, height: Double(ToolbarAutoHideMetrics.toolbarHeight))
+    strip.autoresizingMask = [.width]
+    guard strip.superview !== host || host.subviews.first !== strip else { return }
+    host.addSubview(strip, positioned: .below, relativeTo: nil)
   }
 
   static func remove(windowId: String, tabId: String) {

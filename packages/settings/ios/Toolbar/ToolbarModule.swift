@@ -28,11 +28,13 @@ final class NativeToolbarHostView: ExpoView {
   private var json = ""
   private static let live = NSHashTable<NativeToolbarHostView>.weakObjects()
 
-  static func toolbar(windowId: String, tabId: String) -> ToolbarView? {
+  static func toolbar(windowId: String, tabId: String) -> ToolbarView? { host(windowId: windowId, tabId: tabId)?.toolbar }
+
+  static func host(windowId: String, tabId: String) -> NativeToolbarHostView? {
     let tabWindow = NativeStoreHandle.store?.state.tabs[tabId]?.windowId
     guard tabWindow == nil || tabWindow == windowId else { return nil }
     let hosts = live.allObjects.filter { $0.window != nil && $0.toolbar.state?.tabId == tabId }
-    return (hosts.first { !$0.isHiddenOrHasHiddenAncestor } ?? hosts.first)?.toolbar
+    return hosts.first { !$0.isHiddenOrHasHiddenAncestor } ?? hosts.first
   }
 
   override var isFlipped: Bool { true }
@@ -65,5 +67,11 @@ final class NativeToolbarHostView: ExpoView {
     guard next != json, let state = ToolbarState.decode(next) else { return }
     json = next
     toolbar.update(state)
+    AutoHideHost.toolbarReady(tabId: state.tabId)
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window != nil, let tabId = toolbar.state?.tabId { AutoHideHost.toolbarReady(tabId: tabId) }
   }
 }

@@ -8,19 +8,21 @@ public enum AutoHideStripEvent: Equatable, Sendable {
 
 public struct AutoHideStripStyle: Equatable, Sendable {
   public var card: CSSColor
-  public var band: CSSColor
+  public var band: CSSColor?
   public var divider: CSSColor
   public var secondary: CSSColor
   public var host: String
   public var hasPage: Bool
+  public var stripes: String?
 
-  public init(card: CSSColor, band: CSSColor, divider: CSSColor, secondary: CSSColor, host: String, hasPage: Bool) {
+  public init(card: CSSColor, band: CSSColor?, divider: CSSColor, secondary: CSSColor, host: String, hasPage: Bool, stripes: String? = nil) {
     self.card = card
     self.band = band
     self.divider = divider
     self.secondary = secondary
     self.host = host
     self.hasPage = hasPage
+    self.stripes = stripes
   }
 }
 
@@ -42,6 +44,9 @@ public final class AutoHideStripView: NSView {
 
   private let backdrop = CALayer()
   private let band = CALayer()
+  private let stripes = CALayer()
+  private var bandColor: CGColor?
+  private var stripesUri: String?
   private let divider = CALayer()
   private let label = NSTextField(labelWithString: "")
   private var style: AutoHideStripStyle?
@@ -64,15 +69,20 @@ public final class AutoHideStripView: NSView {
     super.init(frame: frame)
     wantsLayer = true
     layer?.masksToBounds = false
-    for l in [backdrop, band, divider] { l.actions = SurfaceLayer.noActions }
+    for l in [backdrop, band, stripes, divider] { l.actions = SurfaceLayer.noActions }
+    backdrop.masksToBounds = true
+    backdrop.anchorPoint = .zero
     backdrop.addSublayer(band)
+    stripes.anchorPoint = .zero
+    stripes.contentsGravity = .topLeft
+    stripes.isHidden = true
+    backdrop.addSublayer(stripes)
     layer?.addSublayer(backdrop)
     layer?.addSublayer(divider)
     label.font = .systemFont(ofSize: ToolbarAutoHideMetrics.labelSize, weight: .medium)
     label.alignment = .center
-    label.lineBreakMode = .byTruncatingTail
+    label.lineBreakMode = .byTruncatingHead
     label.alphaValue = 0
-    label.toolTip = "Show Toolbar"
     label.setAccessibilityRole(.button)
     label.setAccessibilityLabel("Show Toolbar")
     addSubview(label)
@@ -84,15 +94,21 @@ public final class AutoHideStripView: NSView {
     ToolbarAutoHideCurves.liveTop(laid: laid, page: page.to, collapsed: mode != .shown, shownTop: shownTop)
   }
 
+  public var bandShown: CGColor? { bandColor }
+  public var stripesShown: Bool { !stripes.isHidden }
+  public var bandFrame: CGRect { backdrop.frame }
+
   public func set(style next: AutoHideStripStyle, mode nextMode: ToolbarAutoHideMode, shownTop top: Double) {
+    let first = style == nil
     style = next
     shownTop = top
     PrimitiveMotion.setInstantly {
       backdrop.backgroundColor = next.card.cg
-      band.backgroundColor = next.band.cg
       divider.backgroundColor = next.divider.cg
       divider.isHidden = !next.hasPage
     }
+    applyBand(next.band?.cg, animated: !first)
+    applyStripes(next.stripes)
     label.stringValue = next.host
     label.textColor = next.secondary.ns
     if !configured {
@@ -104,8 +120,41 @@ public final class AutoHideStripView: NSView {
     needsLayout = true
   }
 
-  private func jump(to next: ToolbarAutoHideMode) {
+  private func applyBand(_ color: CGColor?, animated: Bool) {
+    guard color != bandColor else { return }
+    let from = bandColor ?? color?.copy(alpha: 0)
+    let to = color ?? bandColor?.copy(alpha: 0)
+    bandColor = color
+    PrimitiveMotion.setInstantly { band.backgroundColor = to }
+    guard animated, let from, let to else { return }
+    let animation = CABasicAnimation(keyPath: "backgroundColor")
+    animation.fromValue = from
+    animation.toValue = to
+    animation.duration = ToolbarAutoHideMetrics.bandEaseDuration
+    animation.timingFunction = ToolbarView.bandEase
+    band.add(animation, forKey: "backgroundColor")
+  }
+
+  private func applyStripes(_ uri: String?) {
+    guard uri != stripesUri else { return }
+    stripesUri = uri
+    let image = uri.flatMap(ToolbarView.stripesImage)
+    PrimitiveMotion.setInstantly {
+      stripes.contents = image
+      stripes.contentsScale = window?.backingScaleFactor ?? 2
+      stripes.isHidden = image == nil
+    }
+  }
+
+  public var showsToolTip: Bool { label.toolTip != nil }
+
+  private func setMode(_ next: ToolbarAutoHideMode) {
     mode = next
+    label.toolTip = next == .collapsed ? "Show Toolbar" : nil
+  }
+
+  private func jump(to next: ToolbarAutoHideMode) {
+    setMode(next)
     moved = next != .shown
     let collapsed = next != .shown
     page = .resting(collapsed ? 1 : 0)
@@ -118,7 +167,7 @@ public final class AutoHideStripView: NSView {
   private func transition(to next: ToolbarAutoHideMode) {
     let now = CACurrentMediaTime()
     let current = (page: page.value(at: now), bar: bar.value(at: now), fade: fade.value(at: now))
-    defer { mode = next }
+    defer { setMode(next) }
     if next != .shown { moved = true }
     guard let t = ToolbarAutoHideTransition.between(mode, next, current: current, at: now, reduceMotion: reduceMotion) else { return }
     page = t.page
@@ -157,8 +206,10 @@ public final class AutoHideStripView: NSView {
   private func apply(bar b: Double, fade f: Double) {
     let h = Double(ToolbarAutoHideMetrics.toolbarHeight)
     PrimitiveMotion.setInstantly {
-      backdrop.frame = CGRect(x: 0, y: 0, width: bounds.width, height: h)
+      backdrop.bounds = CGRect(x: 0, y: 0, width: bounds.width, height: h)
+      backdrop.position = .zero
       band.frame = backdrop.bounds
+      stripes.frame = CGRect(x: 0, y: 0, width: 2560, height: 50)
       if moved {
         let scale = ToolbarAutoHideCurves.bandScale(bar: b)
         var t = CATransform3DMakeTranslation(0, ToolbarAutoHideCurves.bandLift(bar: b), 0)

@@ -33,6 +33,7 @@ public enum ToolbarAutoHideMetrics {
   public static let show = (duration: 0.2, easing: RNEasing.outCubic)
   public static let peekDelay: TimeInterval = 0.15
   public static let unpeekDelay: TimeInterval = 0.25
+  public static let bandEaseDuration: TimeInterval = 0.18
   public static let shrink: CGFloat = 0.94
   public static let labelSize: CGFloat = 11
   public static let labelPadding: CGFloat = 12

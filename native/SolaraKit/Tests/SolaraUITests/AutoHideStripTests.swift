@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Testing
 @testable import SolaraUI
@@ -50,5 +51,62 @@ struct AutoHideStripTests {
     let reduced = try #require(ToolbarAutoHideTransition.between(.shown, .collapsed, current: (0, 0, 0), at: 10, reduceMotion: true))
     #expect(reduced.page == .resting(1) && reduced.fade.duration == 0.15)
   }
-}
 
+  @MainActor @Test func aSiteWithoutAColorLeavesTheBandClearAndDeveloperSitesGetStripes() throws {
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 600, height: 41))
+    let plain = AutoHideStripStyle(card: try #require(CSSColor("#FFFFFF")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
+    strip.set(style: plain, mode: .collapsed, shownTop: 41)
+    #expect(strip.bandShown == nil)
+    #expect(!strip.stripesShown)
+    var colored = plain
+    colored.band = try #require(CSSColor("#336699"))
+    strip.set(style: colored, mode: .collapsed, shownTop: 41)
+    #expect(strip.bandShown != nil)
+    strip.set(style: plain, mode: .collapsed, shownTop: 41)
+    #expect(strip.bandShown == nil)
+  }
+
+  @MainActor @Test func theCollapsedBandFillsTheStripAndStaysThereAcrossLayouts() throws {
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 600, height: 41))
+    let style = AutoHideStripStyle(card: try #require(CSSColor("#FFFFFF")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    strip.layout()
+    #expect(strip.bandFrame == CGRect(x: 0, y: 0, width: 600, height: 41))
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    strip.reduceMotion = true
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    for _ in 0..<3 { strip.layout() }
+    let band = strip.bandFrame
+    #expect(abs(band.minY) < 0.01 && abs(band.height - 20) < 0.01 && band.width == 600)
+  }
+
+  @MainActor @Test func developerStripesDrawInTheBand() throws {
+    let asset = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../apps/browser/assets/developer-stripes-light@2x.png").standardized
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 200, height: 41))
+    var style = AutoHideStripStyle(card: try #require(CSSColor("#202020")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
+    style.stripes = asset.path
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    strip.layout()
+    #expect(strip.stripesShown)
+    let rep = try #require(strip.bitmapImageRepForCachingDisplay(in: strip.bounds))
+    strip.cacheDisplay(in: strip.bounds, to: rep)
+    var shades = Set<Int>()
+    for x in stride(from: 0, to: rep.pixelsWide, by: 3) {
+      if let c = rep.colorAt(x: x, y: rep.pixelsHigh / 2) { shades.insert(Int((c.redComponent * 255).rounded())) }
+    }
+    #expect(shades.count > 1)
+  }
+
+  @MainActor @Test func theShowToolbarTipOnlyAppliesWhileCollapsed() throws {
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 600, height: 41))
+    strip.reduceMotion = true
+    let style = AutoHideStripStyle(card: try #require(CSSColor("#FFFFFF")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    #expect(!strip.showsToolTip)
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    #expect(strip.showsToolTip)
+    strip.set(style: style, mode: .peek, shownTop: 41)
+    #expect(!strip.showsToolTip)
+  }
+}

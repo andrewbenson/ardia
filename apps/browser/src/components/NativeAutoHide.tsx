@@ -5,7 +5,8 @@ import { layout, useTheme } from "../lib/theme";
 import { useBrowser } from "../store/browser";
 import { revealToolbar, setToolbarPeek, type ToolbarMode } from "./layout/toolbarAutoHide";
 import { toolbarPalette } from "./layout/toolbarColors";
-import { useToolbarSiteColor } from "./site/developerMode";
+import { stripesUri } from "./NativeToolbar";
+import { useTabDeveloperMode, useToolbarSiteColor } from "./site/developerMode";
 
 type AutoHideNative = {
   available(): boolean;
@@ -31,6 +32,7 @@ export function NativeAutoHide({ windowId, tabId, mode, pane, extra }: { windowI
   const theme = useTheme();
   const url = useBrowser((s) => s.tabs[tabId]?.url ?? "");
   const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
+  const developer = useTabDeveloperMode(tabId);
   const host = url.startsWith("file:") ? "File" : breadcrumb(url).host;
   const json = JSON.stringify({
     mode,
@@ -42,6 +44,7 @@ export function NativeAutoHide({ windowId, tabId, mode, pane, extra }: { windowI
     secondary: palette.secondary,
     host,
     hasPage: !!url,
+    stripes: developer ? stripesUri(palette) : null,
   });
   useEffect(() => {
     void native?.set(windowId, tabId, json);

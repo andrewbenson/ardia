@@ -34,7 +34,7 @@ const isWebUrl = (url: string) => /^https?:/i.test(url);
 
 const LIGHT_STRIPES = require("../../assets/developer-stripes-light.png");
 const DARK_STRIPES = require("../../assets/developer-stripes-dark.png");
-const stripesUri = (palette: { text: string }) => {
+export const stripesUri = (palette: { text: string }) => {
   const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(palette.text);
   const onDark = !m || 0.2126 * parseInt(m[1]!, 16) + 0.7152 * parseInt(m[2]!, 16) + 0.0722 * parseInt(m[3]!, 16) > 128;
   return Image.resolveAssetSource(onDark ? LIGHT_STRIPES : DARK_STRIPES)?.uri ?? null;

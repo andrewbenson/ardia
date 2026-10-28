@@ -78,6 +78,20 @@ import Testing
     #expect(StripLayout.pinOutIndex(top: top, dock: dock, dockLeft: dockLeft, from: 0, dx: 74.5 + 36 + 60) == 1)
   }
 
+  @Test func anIncomingTabOpensAGapAtTheNearestSlotEdgePastPinnedGroups() {
+    #expect(StripLayout.incomingIndex(top, x: 80) { _ in false } == 0)
+    #expect(StripLayout.incomingIndex(top, x: 90) { _ in false } == 1)
+    #expect(StripLayout.incomingIndex(top, x: 600) { _ in false } == 3)
+    #expect(StripLayout.incomingIndex(top, x: 10) { $0 == "t0" || $0 == "t1" } == 2)
+  }
+
+  @Test func anOpenGapMovesEverySlotFromItOnByAChipAndAGap() {
+    let rooms = [0, 1, 0, 0.5]
+    #expect(StripLayout.incomingShift(rooms, through: 0, chip: 173, gap: gap) == 0)
+    #expect(StripLayout.incomingShift(rooms, through: 2, chip: 173, gap: gap) == 177)
+    #expect(StripLayout.incomingShift(rooms, through: 3, chip: 173, gap: gap) == 265.5)
+  }
+
   @Test func theHeldTileStopsAtTheDockEnd() {
     #expect(StripLayout.tileHold(dx: -50, limit: -20) == 0)
     #expect(StripLayout.tileHold(dx: 10, limit: -20) == -30)

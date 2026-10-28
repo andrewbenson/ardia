@@ -14,6 +14,7 @@ public final class TopStripView: NSView {
   private var state: BrowserState?
   private var host: StripHostState?
   private var pagerPosition: Double?
+  private lazy var dropZone = StripDropZone(strip: self)
 
   public override var isFlipped: Bool { true }
 
@@ -29,6 +30,15 @@ public final class TopStripView: NSView {
   public override func hitTest(_ point: NSPoint) -> NSView? {
     let hit = super.hitTest(point)
     return hit === self ? nil : hit
+  }
+
+  public override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window == nil {
+      TabDragSession.unregister(dropZone)
+    } else {
+      TabDragSession.register(dropZone, windowId: windowId, priority: .insert)
+    }
   }
 
   public var current: StripPageView? { host.flatMap { pages[$0.profileId] } }

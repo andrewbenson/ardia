@@ -31,6 +31,19 @@ public class TopStripModule: Module {
       MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.slotTrace ?? [] }
     }.runOnQueue(.main)
 
+    AsyncFunction("incoming") { (windowId: String, x: Double?, y: Double?) -> String in
+      MainActor.assumeIsolated {
+        guard let page = NativeTopStrip.hosts[windowId]?.view.current else { return "null" }
+        let point = x.flatMap { x in y.map { CGPoint(x: x, y: $0) } }
+        guard case .some(let beforeId) = page.incoming(at: point) else { return "null" }
+        return NativeTopStrip.json(["beforeId": beforeId.map { $0 as Any } ?? NSNull()]) ?? "null"
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("endIncoming") { (windowId: String) in
+      MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.endIncoming() }
+    }.runOnQueue(.main)
+
     AsyncFunction("keys") { (windowId: String, profileId: String) -> [String] in
       MainActor.assumeIsolated { NativeStoreHandle.store.map { StripQuery($0.state).keys(windowId: windowId, profileId: profileId) } ?? [] }
     }.runOnQueue(.main)
@@ -272,6 +285,14 @@ final class TopStripDrag: StripDragBridge {
 
   func dragEnded(windowId: String, commit: Bool, done: @escaping @MainActor (Bool) -> Void) {
     send("topStrip.drag.end", [windowId, commit]) { result in done((result as? Bool) ?? false) }
+  }
+
+  func land(ids: [String], from source: String, in windowId: String, beforeId: String?) -> Bool {
+    guard let store = NativeStoreHandle.store, !ids.isEmpty else { return false }
+    if source != windowId {
+      guard (try? store.dispatch(Command("moveTabsToWindow", [JSONValue(ids), JSONValue(windowId)]), origin: .native)) != nil else { return false }
+    }
+    return (try? store.dispatch(Command("placeTabs", [JSONValue(ids), ["pinned": false, "beforeId": JSONValue(beforeId)]]), origin: .native)) != nil
   }
 
   func drop(ids: [String], drop: JSONValue) -> Bool {

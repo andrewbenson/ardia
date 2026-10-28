@@ -1,5 +1,5 @@
-import { hostedKinds, SolaraHostedView } from "@ardia/settings";
-import { memo, useMemo } from "react";
+import { endTopStripIncoming, hostedKinds, SolaraHostedView, topStripIncoming } from "@ardia/settings";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Image, StyleSheet } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { toggleMute } from "../../lib/actions";
@@ -21,7 +21,7 @@ import { usePagerPages } from "./profilePager";
 import { openNewTabInSplit } from "./splitActions";
 import { openFolderMenu, openTileFolderStripMenu } from "./stripFolderMenu";
 import { tuckTarget } from "./stripGroups";
-import { beginTabDrag, cancelTabDrag, endTabDrag, setDragPicture, updateTabDrag } from "./tabDrag";
+import { beginTabDrag, cancelTabDrag, endTabDrag, EXTERNAL_DRAG, setDragPicture, setInsert, setInsertResolver, updateTabDrag, useTabDrag } from "./tabDrag";
 
 let nativeTopStrip: boolean | undefined;
 
@@ -143,6 +143,32 @@ function usePageLooks(windowId: string) {
 
 const split = (ids: string) => (ids ? ids.split(",") : NONE);
 
+function useIncomingFile(windowId: string) {
+  const point = useTabDrag((d) => (d.windowId === EXTERNAL_DRAG ? (d.overWindow === windowId && d.overPoint ? d.overPoint.join() : "") : null));
+  const resolved = useRef<string | null | undefined>(undefined);
+  const asked = useRef(0);
+  const dragging = point !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    setInsertResolver(windowId, () => resolved.current);
+    return () => {
+      setInsertResolver(windowId, null);
+      resolved.current = undefined;
+      void endTopStripIncoming(windowId);
+    };
+  }, [dragging, windowId]);
+  useEffect(() => {
+    const ask = ++asked.current;
+    if (point === null) return;
+    const at = point ? (point.split(",").map(Number) as [number, number]) : null;
+    void topStripIncoming(windowId, at).then((beforeId) => {
+      if (ask !== asked.current) return;
+      resolved.current = beforeId;
+      setInsert(windowId, beforeId);
+    });
+  }, [point, windowId]);
+}
+
 export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId, floating, pageWidth }: { windowId: string; profileId: string; floating: boolean; pageWidth: number }) {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
@@ -177,6 +203,7 @@ export const NativeTopStrip = memo(function NativeTopStrip({ windowId, profileId
   );
   const pages = usePageLooks(windowId);
   const selection = useBrowser(useShallow((s) => s.selection[windowId] ?? NONE));
+  useIncomingFile(windowId);
 
   const state = useMemo(
     () =>

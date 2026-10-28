@@ -55,6 +55,8 @@ public final class StripPageView: NSView {
   private weak var draggedView: NSView?
   private var raisedViews: [(view: NSView, below: NSView?)] = []
   private var crossOverlay: NSView?
+  private var incomingRooms: [StripTimedValue] = []
+  private(set) var incomingAt: Int?
   weak var dragBridge: StripDragBridge?
   var pageWidth: CGFloat = 0
 
@@ -180,8 +182,10 @@ public final class StripPageView: NSView {
     let activeId = context?.activeId ?? ""
     var shift: CGFloat = 0
     let collapse = drag.collapse(.top)
+    let rooms = incomingRooms.map(\.value)
+    let room = { (slot: Int) in StripLayout.incomingShift(rooms, through: slot, chip: self.pageLayout.chip, gap: StripMetrics.gap) }
     for item in pageLayout.items {
-      let x = StripLayout.pixel(item.x + shift)
+      let x = StripLayout.pixel(item.x + shift + (item.slot.map(room) ?? 0))
       let lane = item.slot.map { drag.offset(.top, $0) } ?? 0
       switch item.kind {
       case .dock:
@@ -217,7 +221,8 @@ public final class StripPageView: NSView {
         shift += size - g.width
       case .newTab:
         newTab.frame = NSRect(
-          x: x + drag.offset(.top, pageLayout.top.slots.count), y: StripMetrics.itemTop, width: StripMetrics.itemHeight, height: StripMetrics.itemHeight)
+          x: StripLayout.pixel(item.x + shift + room(pageLayout.top.slots.count)) + drag.offset(.top, pageLayout.top.slots.count), y: StripMetrics.itemTop,
+          width: StripMetrics.itemHeight, height: StripMetrics.itemHeight)
       }
       if let collapse, item.slot == collapse.index { shift -= collapse.by }
     }
@@ -225,14 +230,15 @@ public final class StripPageView: NSView {
     fadedView = drag.fadingView
     fadedView?.alphaValue = drag.crossed ? 0 : drag.fadingAlpha
     placeCrossOverlay()
-    document.frame = NSRect(x: 0, y: 0, width: max(pageLayout.contentWidth + shift, scroll.frame.width), height: h)
+    document.frame = NSRect(x: 0, y: 0, width: max(pageLayout.contentWidth + shift + room(pageLayout.top.slots.count), scroll.frame.width), height: h)
   }
 
   private func tick(_ now: Double) -> Bool {
     for motion in motions.values { motion.step(now: now) }
     drag.tick(now)
+    for i in incomingRooms.indices { incomingRooms[i].step(now: now) }
     place()
-    let running = motions.values.contains(where: \.running) || drag.running
+    let running = motions.values.contains(where: \.running) || drag.running || incomingRooms.contains(where: \.running)
     if !running { syncHover() }
     return running
   }
@@ -306,6 +312,31 @@ public final class StripPageView: NSView {
   }
 
   public func groupSize(_ groupId: String) -> Double? { motions[groupId]?.size.value }
+
+  public func incoming(at point: CGPoint?) -> String?? {
+    let top = pageLayout.top
+    if point == nil, incomingAt == nil { return nil }
+    if incomingRooms.count != top.slots.count + 1 { incomingRooms = (0...top.slots.count).map { StripTimedValue($0 == incomingAt ? 1 : 0) } }
+    var at: Int?
+    if let point, point.y <= StripMetrics.height + 24, let state = context?.state {
+      let start = document.convert(NSPoint(x: pageLayout.topStart, y: 0), to: nil).x
+      at = StripLayout.incomingIndex(top, x: point.x - start) { id in state.groups.values.contains { $0.pinned && $0.tabIds.contains(id) } }
+    }
+    if at != incomingAt {
+      incomingAt = at
+      for i in incomingRooms.indices { incomingRooms[i].animate(to: i == at ? 1 : 0, duration: StripMotionTiming.incoming, easing: .cubic) }
+      ticker.start()
+    }
+    guard let at else { return nil }
+    return .some(at < top.slots.count ? top.slots[at].tabIds.first : nil)
+  }
+
+  public func endIncoming() {
+    guard !incomingRooms.isEmpty else { return }
+    incomingRooms = []
+    incomingAt = nil
+    place()
+  }
 
   func slotKey(_ lane: StripLane, _ index: Int) -> String? {
     guard let g = geometry(lane), index < g.slots.count else { return nil }

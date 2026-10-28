@@ -62,4 +62,5 @@ export * from "./prompt";
 export * from "./sitePanel";
 export * from "./windowShell";
 export * from "./littleSolara";
+export * from "./topStrip";
 export * from "./pages";

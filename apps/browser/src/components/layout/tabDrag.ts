@@ -254,7 +254,7 @@ export function cancelTabDrag() {
   sentShape = "hidden";
 }
 
-const EXTERNAL_DRAG = "external";
+export const EXTERNAL_DRAG = "external";
 let externalOwner: { windowId: string; token: number } | null = null;
 const ownsExternal = (windowId: string, token: number) =>
   useTabDrag.getState().windowId === EXTERNAL_DRAG && externalOwner?.windowId === windowId && externalOwner.token === token;

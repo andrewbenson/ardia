@@ -9,6 +9,7 @@ public protocol StripDragBridge: AnyObject {
   func dragMoved(windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat)
   func dragEnded(windowId: String, commit: Bool, done: @escaping @MainActor (Bool) -> Void)
   func drop(ids: [String], drop: JSONValue) -> Bool
+  func land(ids: [String], from source: String, in windowId: String, beforeId: String?) -> Bool
 }
 
 public enum StripLane: Hashable, Sendable {

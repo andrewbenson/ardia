@@ -231,6 +231,7 @@ public enum StripMotionTiming {
   public static let band = 0.18
   public static let lift = 0.15
   public static let onto = 0.1
+  public static let incoming = 0.12
 }
 
 struct StripEasedColor {

@@ -224,6 +224,16 @@ public enum StripLayout {
 
   public static func tileHold(dx: CGFloat, limit: CGFloat) -> CGFloat { -Swift.max(0, dx - limit) }
 
+  public static func incomingIndex(_ top: StripDragGeometry, x: CGFloat, pinned: (String) -> Bool) -> Int {
+    var index = top.slots.indices.filter { top.lefts[$0] + top.slots[$0].width / 2 < x }.count
+    while index < top.slots.count, top.slots[index].tabIds.first.map(pinned) == true { index += 1 }
+    return index
+  }
+
+  public static func incomingShift(_ rooms: [Double], through slot: Int, chip: CGFloat, gap: CGFloat) -> CGFloat {
+    rooms.prefix(slot + 1).reduce(0) { $0 + CGFloat($1) * (chip + gap) }
+  }
+
   public static func dockCell(_ cells: [String], members: (String) -> [String], tabId: String) -> Int? {
     if let own = cells.firstIndex(of: tabId) { return own }
     return cells.firstIndex { members($0).contains(tabId) }

@@ -216,14 +216,21 @@ try {
       assert.ok(theirs.length > 3 && ours.length > 3, `traced: rn ${theirs.length} native ${ours.length}`);
       const far = (samples) => samples.reduce((m, [, x]) => (Math.abs(x) > Math.abs(m) ? x : m), 0);
       assert.ok(Math.abs(far(theirs)) > 100 && Math.abs(far(ours) - far(theirs)) < 0.05, `the same room: rn ${far(theirs)} native ${far(ours)}`);
-      const at = (t) => { const i = theirs.findIndex(([u]) => u >= t); if (i <= 0) return i === 0 ? theirs[0][1] : theirs.at(-1)[1]; const [t0, x0] = theirs[i - 1], [t1, x1] = theirs[i]; return x0 + ((x1 - x0) * (t - t0)) / (t1 - t0); };
-      let best = null;
-      for (let lag = -25; lag <= 25; lag += 0.5) {
-        const error = Math.max(...ours.filter(([t]) => t + lag >= 0 && t + lag <= theirs.at(-1)[0]).map(([t, x]) => Math.abs(x - at(t + lag))));
-        if (!best || error < best.error) best = { lag, error };
-      }
-      rep.log(`room: RN's spring runs ${best.lag} ms behind native's, and they differ by at most ${best.error.toFixed(2)} pt`);
-      assert.ok(best.error <= 2, `the curves differ by ${best.error.toFixed(2)} pt at best (RN ${best.lag} ms behind)`);
+      const room = far(theirs);
+      const slide = (t) => (t <= 0 ? 0 : room * (1 - (1 + 0.09 * t) * Math.exp(-0.09 * t)));
+      const fit = (samples) => {
+        let best = null;
+        for (let start = -30; start <= 30; start += 0.25) {
+          const error = Math.max(...samples.map(([t, x]) => Math.abs(x - slide(t - start))));
+          if (!best || error < best.error) best = { start, error };
+        }
+        return best;
+      };
+      const a = fit(theirs), b = fit(ours);
+      rep.log(`room: RN's spring starts at ${a.start} ms and keeps within ${a.error.toFixed(2)} pt of SLIDE; native's at ${b.start} ms, within ${b.error.toFixed(2)} pt`);
+      assert.ok(a.error <= 2, `RN's own curve is ${a.error.toFixed(2)} pt off SLIDE`);
+      assert.ok(b.error <= 2, `native's curve is ${b.error.toFixed(2)} pt off RN's SLIDE spring`);
+      assert.ok(Math.abs(a.start - b.start) <= 25, `RN starts ${a.start - b.start} ms after native: more than a frame and a half`);
     });
     if (rn.snapshot && native.snapshot) {
       await rep.check("the strips' pixels match RN's", async () => {

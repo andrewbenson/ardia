@@ -312,7 +312,7 @@ export async function launch(app, opts = {}) {
   for (const f of ["dev-eval.js", "dev-eval-result.json", "instance.json"]) rmSync(join(data, f), { force: true });
   if (opts.session) writeFileSync(join(data, "session.json"), JSON.stringify(opts.session));
   if (opts.onboarded) writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
-  if (opts.probe) writeFileSync(join(data, "perf-probe"), "");
+  if (opts.probe || process.env.AC_PROBE === "1") writeFileSync(join(data, "perf-probe"), "");
   for (const [name, text] of Object.entries(opts.files ?? {})) writeFileSync(join(data, name), typeof text === "string" ? text : JSON.stringify(text));
   const runsFrom = opts.runsFrom ? realPath(resolve(opts.runsFrom)) : app;
   const binary = join(runsFrom, "Contents/MacOS", basename(binaryOf(app)));

@@ -3,10 +3,12 @@ import SolaraStore
 
 public protocol PinnedSyncStore: SyncStore {
   func runPinned(_ body: (Session) throws -> Void) throws
+  func runPinnedWhenFree(_ body: @escaping @Sendable (Session) throws -> Void) throws
 }
 
 extension Store: PinnedSyncStore {
   public func runPinned(_ body: (Session) throws -> Void) throws { try transact(origin: .sync, body) }
+  public func runPinnedWhenFree(_ body: @escaping @Sendable (Session) throws -> Void) throws { try transactWhenFree(body) }
 }
 
 let legacyKeys: [String: String] = [
@@ -71,15 +73,21 @@ public class PinnedAreaAdapter {
       published: e.settled.map { settled in
         { keys in
           let published = settled(keys)
-          try? store.runPinned { $0.settlePinChoices(profileId, published) }
+          try? store.runPinnedWhenFree { $0.settlePinChoices(profileId, published) }
         }
       })
   }
 
-  func write(_ body: (Session) -> Bool?) throws -> Bool? {
-    var result: Bool? = nil
-    try store.runPinned { result = body($0) }
-    return result
+  func write(_ body: (Session) -> Bool?) async throws -> Bool? {
+    while true {
+      do {
+        var result: Bool? = nil
+        try store.runPinned { result = body($0) }
+        return result
+      } catch is StoreBusy {
+        try await Task.sleep(for: .milliseconds(50))
+      }
+    }
   }
 }
 
@@ -93,7 +101,7 @@ public final class PinnedAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try write { $0.applySyncedPins(profileId, visible, changed, base, known: records.known, now: records.now, horizon: records.horizon) }
+    try await write { $0.applySyncedPins(profileId, visible, changed, base, known: records.known, now: records.now, horizon: records.horizon) }
   }
 }
 
@@ -107,7 +115,7 @@ public final class PinnedOrderAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try write { $0.applySyncedPinOrder(profileId, visible) }
+    try await write { $0.applySyncedPinOrder(profileId, visible) }
   }
 }
 
@@ -121,7 +129,7 @@ public final class PinnedRowsAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try write { $0.applySyncedPinRows(profileId, visible, changed, base) }
+    try await write { $0.applySyncedPinRows(profileId, visible, changed, base) }
   }
 }
 
@@ -135,7 +143,7 @@ public final class GroupLooksAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try write { $0.applySyncedGroupLooks(profileId, visible, changed) }
+    try await write { $0.applySyncedGroupLooks(profileId, visible, changed) }
   }
 }
 
@@ -150,7 +158,7 @@ public final class PinnedHomesAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try write { $0.applySyncedPinHomes(profileId, visible, changed, base) }
+    try await write { $0.applySyncedPinHomes(profileId, visible, changed, base) }
   }
 }
 
@@ -168,7 +176,7 @@ public final class TileFoldersAdapter: PinnedAreaAdapter, SyncAdapter {
   }
 
   public func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
-    try write { $0.applySyncedTileFolders(profileId, visible, changed) }
+    try await write { $0.applySyncedTileFolders(profileId, visible, changed) }
   }
 }
 

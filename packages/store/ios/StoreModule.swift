@@ -30,6 +30,12 @@ public class StoreModule: Module {
       return JSONValue.object(bridge.catchUp(sinceRev: sinceRev)).text()
     }
 
+    Function("useSyncOrigins") { (on: Bool) -> Bool in
+      guard let store = NativeStore.shared else { return false }
+      store.bridge.store.useSyncOrigins(on)
+      return true
+    }
+
     Function("freeze") { () -> Bool in
       NativeStore.shared?.freeze()
       return NativeStore.shared != nil

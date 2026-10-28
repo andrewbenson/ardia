@@ -13,6 +13,7 @@ public enum Origin: Sendable, Hashable {
 public struct Commit: Sendable {
   public let rev: Int
   public let origin: Origin
+  public let fromSync: Bool
   public let commands: [Command]
   public let changes: ChangeSet
   public let patch: Patch
@@ -21,6 +22,12 @@ public struct Commit: Sendable {
   public let durable: Bool
   public let state: BrowserState
 }
+
+public struct StoreBusy: Error, CustomStringConvertible {
+  public var description: String { "a user transaction is open, so a sync apply has to retry from fresh state" }
+}
+
+typealias QueuedSyncApply = @Sendable (Session) throws -> Void
 
 public final class Store: Sendable {
   public static let ringSize = 1024
@@ -33,6 +40,20 @@ public final class Store: Sendable {
     var ringStart = 0
     var held: Session? = nil
     var heldSince: Double = 0
+    var heldFromSync = false
+    var queuedFromSync: [QueuedSyncApply] = []
+    var replaying = false
+
+    mutating func record(_ patch: Patch, state next: BrowserState) {
+      state = next
+      rev = patch.rev
+      if ring.count < Store.ringSize {
+        ring.append(patch)
+      } else {
+        ring[ringStart] = patch
+        ringStart = (ringStart + 1) % Store.ringSize
+      }
+    }
   }
 
   public static let heldTransactionLimit: Double = 10_000
@@ -48,6 +69,7 @@ public final class Store: Sendable {
   private let delivery = Mutex(Delivery())
   private let listeners = Mutex<[(id: Int, listener: Listener)]>([])
   private let nextListener = Atomic<Int>(0)
+  private let syncOriginsOn: Atomic<Bool>
   private let clock: @Sendable () -> Double
   public let env: WebAddressing
   public let config: StoreConfig
@@ -68,6 +90,7 @@ public final class Store: Sendable {
     self.clock = clock
     self.env = env
     self.config = config
+    syncOriginsOn = Atomic(config.syncOrigins)
     self.checksInvariants = checksInvariants
     let memory = memory ?? StoreMemory(ids: IdSource.random(now: clock()))
     core = Mutex(Core(state: state, memory: memory, rev: rev))
@@ -92,13 +115,13 @@ public final class Store: Sendable {
   public var memory: StoreMemory { core.withLock { $0.memory } }
 
   @discardableResult
-  public func dispatch(_ command: Command, origin: Origin = .native) throws -> Commit {
-    try dispatch([command], origin: origin)
+  public func dispatch(_ command: Command, origin: Origin = .native, fromSync: Bool = false) throws -> Commit {
+    try dispatch([command], origin: origin, fromSync: fromSync)
   }
 
   @discardableResult
-  public func dispatch(_ commands: [Command], origin: Origin = .native) throws -> Commit {
-    try transact(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable)) { session in
+  public func dispatch(_ commands: [Command], origin: Origin = .native, fromSync: Bool = false) throws -> Commit {
+    try transact(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable), fromSync: fromSync, waiting: nil, replaying: false) { session in
       if commands.count == 1 {
         try session.apply(commands[0])
       } else {
@@ -109,13 +132,81 @@ public final class Store: Sendable {
           }
         }
       }
+    }!
+  }
+
+  public var syncOrigins: Bool { syncOriginsOn.load(ordering: .relaxed) }
+
+  public func useSyncOrigins(_ on: Bool) { syncOriginsOn.store(on, ordering: .relaxed) }
+
+  static func closesSyncWindow(_ commands: [Command]) -> Bool {
+    !commands.isEmpty && commands.allSatisfy { $0.name == "endFromSync" }
+  }
+
+  public var queuedFromSyncCount: Int { core.withLock { $0.queuedFromSync.count } }
+
+  private func runQueuedFromSync() {
+    let replayer = core.withLock { core -> Bool in
+      if core.replaying || core.queuedFromSync.isEmpty { return false }
+      core.replaying = true
+      return true
     }
+    guard replayer else { return }
+    while let next = core.withLock({ core -> QueuedSyncApply? in
+      guard core.held == nil || core.heldFromSync else { return nil }
+      return core.queuedFromSync.first
+    }) {
+      do {
+        if try transact(commands: [], origin: .sync, durable: false, fromSync: true, waiting: nil, replaying: true, next) == nil { break }
+      } catch {
+        FileHandle.standardError.write(Data("SolaraStore: a queued sync session failed: \(error)\n".utf8))
+      }
+    }
+    let again = core.withLock { core -> Bool in
+      core.replaying = false
+      return !core.queuedFromSync.isEmpty && (core.held == nil || core.heldFromSync)
+    }
+    if again { runQueuedFromSync() }
   }
 
   @discardableResult
-  public func transact(commands: [Command] = [], origin: Origin = .native, durable: Bool = false, _ body: (Session) throws -> Void) throws -> Commit {
+  public func transact(commands: [Command] = [], origin: Origin = .native, durable: Bool = false, fromSync: Bool = false, _ body: (Session) throws -> Void) throws -> Commit {
+    try transact(commands: commands, origin: origin, durable: durable, fromSync: fromSync, waiting: nil, replaying: false, body)!
+  }
+
+  public func transactWhenFree(_ body: @escaping @Sendable (Session) throws -> Void) throws {
+    _ = try transact(commands: [], origin: .sync, durable: false, fromSync: true, waiting: body, replaying: false, body)
+  }
+
+  private func transact(
+    commands: [Command], origin: Origin, durable: Bool, fromSync: Bool, waiting: QueuedSyncApply?, replaying: Bool, _ body: (Session) throws -> Void
+  ) throws -> Commit? {
     let now = clock()
-    let commit: Commit = try core.withLock { core in
+    let tags = syncOrigins
+    let fromSync = tags && (fromSync || origin == .sync)
+    let commit: Commit? = try core.withLock { core -> Commit? in
+      if tags, let held = core.held, core.heldFromSync != fromSync, now - core.heldSince > Store.heldTransactionLimit {
+        let heldFromSync = core.heldFromSync
+        held.resume(state: core.state, memory: core.memory, now: now)
+        held.closeTransactions()
+        core.held = nil
+        let (_, patch) = try settle(
+          from: core.state, rev: core.rev, settled: true, held, origin: heldFromSync ? .sync : .native, fromSync: heldFromSync, tags: tags, commands: [], durable: false)
+        if let patch { core.record(patch, state: held.state) }
+        core.memory = held.memory
+      }
+      let heldByUser = core.held != nil && !core.heldFromSync
+      if replaying {
+        if heldByUser { return nil }
+        core.queuedFromSync.removeFirst()
+      } else if fromSync && (heldByUser || !core.queuedFromSync.isEmpty) && !Self.closesSyncWindow(commands) {
+        guard let waiting else { throw StoreBusy() }
+        core.queuedFromSync.append(waiting)
+        let patch = Patch(rev: core.rev, changes: ChangeSet(), state: core.state)
+        return Commit(
+          rev: core.rev, origin: origin, fromSync: true, commands: commands, changes: ChangeSet(), patch: patch, effects: [], result: nil, durable: false,
+          state: core.state)
+      }
       let session: Session
       if let held = core.held {
         held.resume(state: core.state, memory: core.memory, now: now)
@@ -124,39 +215,50 @@ public final class Store: Sendable {
       } else {
         session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
       }
-      try body(session)
-      if session.depth > 0 && core.held == nil { core.heldSince = now }
+      if replaying {
+        session.memory.fromSyncDepth += 1
+        defer { session.memory.fromSyncDepth -= 1 }
+        try body(session)
+      } else {
+        try body(session)
+      }
+      if session.depth > 0 && core.held == nil {
+        core.heldSince = now
+        core.heldFromSync = fromSync
+      }
       core.held = session.depth > 0 ? session : nil
-      if checksInvariants && core.held == nil {
-        try Invariants.check(session.state)
-        let found = Invariants.violations(session.state)
-        if !found.isEmpty { invariantHandler(found, commands) }
-      }
-      let changes = ChangeSet(from: core.state, to: session.state)
-      let changed = !changes.isEmpty
-      let rev = changed ? core.rev + 1 : core.rev
-      let patch = Patch(rev: rev, changes: changes, state: session.state)
-      if changed {
-        core.state = session.state
-        core.rev = rev
-        if core.ring.count < Store.ringSize {
-          core.ring.append(patch)
-        } else {
-          core.ring[core.ringStart] = patch
-          core.ringStart = (core.ringStart + 1) % Store.ringSize
-        }
-      }
+      let (commit, patch) = try settle(
+        from: core.state, rev: core.rev, settled: core.held == nil, session, origin: origin, fromSync: fromSync, tags: tags, commands: commands, durable: durable)
+      if let patch { core.record(patch, state: session.state) }
       core.memory = session.memory
-      var seen = Set<Effect>()
-      let effects = session.effects.filter { seen.insert($0).inserted }
-      let commit = Commit(
-        rev: rev, origin: origin, commands: commands, changes: changes, patch: patch, effects: effects, result: session.result, durable: durable,
-        state: core.state)
-      if changed || !effects.isEmpty { delivery.withLock { $0.queue.append(commit) } }
       return commit
     }
     drain()
+    runQueuedFromSync()
     return commit
+  }
+
+  private func settle(
+    from before: BrowserState, rev current: Int, settled: Bool, _ session: Session, origin: Origin, fromSync: Bool, tags: Bool, commands: [Command], durable: Bool
+  ) throws -> (Commit, Patch?) {
+    if checksInvariants && settled {
+      try Invariants.check(session.state)
+      let found = Invariants.violations(session.state)
+      if !found.isEmpty { invariantHandler(found, commands) }
+    }
+    let changes = ChangeSet(from: before, to: session.state)
+    let changed = !changes.isEmpty
+    let rev = changed ? current + 1 : current
+    var patch = Patch(rev: rev, changes: changes, state: session.state)
+    patch.fromBridge = tags && origin == .bridge
+    patch.fromSync = fromSync
+    var seen = Set<Effect>()
+    let effects = session.effects.filter { seen.insert($0).inserted }
+    let commit = Commit(
+      rev: rev, origin: origin, fromSync: fromSync, commands: commands, changes: changes, patch: patch, effects: effects,
+      result: session.result, durable: durable, state: changed ? session.state : before)
+    if changed || !effects.isEmpty { delivery.withLock { $0.queue.append(commit) } }
+    return (commit, changed ? patch : nil)
   }
 
   public func patches(since rev: Int) -> [Patch]? {

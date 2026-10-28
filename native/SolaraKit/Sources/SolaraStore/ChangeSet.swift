@@ -131,6 +131,8 @@ public struct Patch: @unchecked Sendable {
   var lists: [(String, ListValue)] = []
   public var settings: JSONObject? = nil
   public var settingsRemoved: [String] = []
+  public var fromBridge = false
+  public var fromSync = false
 
   public init(rev: Int, changes: ChangeSet, state s: BrowserState) {
     self.rev = rev
@@ -188,6 +190,8 @@ public struct Patch: @unchecked Sendable {
 
   public var json: JSONValue {
     var out: JSONObject = ["rev": JSONValue(rev)]
+    if fromBridge { out["bridge"] = true }
+    if fromSync { out["sync"] = true }
     for (name, table) in tables { out[name] = table.json }
     for (name, value) in lists { out[name] = value.json }
     if settings != nil || !settingsRemoved.isEmpty {

@@ -44,6 +44,7 @@ public struct StoreConfig: Sendable, Equatable {
   public var handOffPinsImmediately = true
   public var earlyLaunchTab = true
   public var listeners: [SettleListener] = SettleListener.app
+  public var syncOrigins = false
 
   public init() {}
 }

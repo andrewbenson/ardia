@@ -81,7 +81,12 @@ NSString *InstalledDataDirectory() {
   return [[support stringByAppendingPathComponent:bundleId] stringByAppendingPathComponent:@"Chromium"];
 }
 
+bool IsDevBuild() {
+  return [[NSBundle.mainBundle objectForInfoDictionaryKey:@"ACDevBuild"] isEqual:@"YES"];
+}
+
 bool IsTeamSigned() {
+  if (IsDevBuild()) return false;
   SecCodeRef code = nullptr;
   if (SecCodeCopySelf(kSecCSDefaultFlags, &code) != errSecSuccess) return false;
   CFDictionaryRef info = nullptr;

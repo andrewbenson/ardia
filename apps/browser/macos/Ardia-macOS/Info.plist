@@ -4,6 +4,8 @@
 <dict>
 	<key>ACCopyright</key>
 	<string>$(AC_COPYRIGHT)</string>
+	<key>ACDevBuild</key>
+	<string>$(AC_DEV_BUILD)</string>
 	<key>ACFeedbackEmail</key>
 	<string></string>
 	<key>ACFeedbackURL</key>

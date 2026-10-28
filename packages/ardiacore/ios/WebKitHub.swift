@@ -161,6 +161,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
 
   static let inspectable: Bool = {
     if !(ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] ?? "").isEmpty { return true }
+    if Bundle.main.object(forInfoDictionaryKey: "ACDevBuild") as? String == "YES" { return true }
     var code: SecCode?
     guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return true }
     var info: CFDictionary?
@@ -572,7 +573,9 @@ enum WebKitPasskeys {
   }
 
   static func requestAccess(_ completion: @escaping ([String: Any]) -> Void) {
-    guard WebKitHub.passkeysEntitled, deviceConfigured() else { return completion(access()) }
+    guard WebKitHub.passkeysEntitled, deviceConfigured(), ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] != "1" else {
+      return completion(access())
+    }
     ASAuthorizationWebBrowserPublicKeyCredentialManager().requestAuthorizationForPublicKeyCredentials { state in
       DispatchQueue.main.async { completion(["entitled": true, "status": Self.status(state)]) }
     }

@@ -151,9 +151,14 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     new derived data compiles everything (a few minutes), and a copy of someone else's does too (its paths differ).
     A JS-only change needs no build: it says so and stops (`--force` builds). A new engine framework is staged
     under the chromium lock: `--release` your chromium take first, or it uses your take (`--as`).
-    It signs with the identity's team when this Mac has a macOS development profile for the bundle id, and ad hoc
-    (`macos/AdHoc.xcconfig`: no entitlements, no hardened runtime, so no iCloud passkeys or keychain groups)
-    when it doesn't, saying so in one line; switching between the two rebuilds.
+    It builds the dev identity (`macos/Dev.xcconfig`): bundle id `com.hill.solara.dev`, so its data dir,
+    preferences, links and macOS permissions are never the owner's, and the app treats it as unsigned (Chrome's mock
+    keychain, test switches). It signs it with this Mac's Apple Development certificate for the team, so a permission
+    macOS asked about once stays answered across rebuilds; no entitlements, no hardened runtime, so no iCloud passkeys
+    or keychain groups; its own keychain items are "Solara Dev …". Sync's default iCloud Drive folder isn't per bundle
+    id, so never turn sync on in a dev build without a scratch dir. `--owner` builds the owner's `com.hill.solara`
+    instead (a preview for the owner), signed with the team when this Mac has a macOS development profile for it, else
+    ad hoc (`macos/AdHoc.xcconfig`). It says which in one line; switching rebuilds.
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
@@ -229,7 +234,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     `-[NSWindow isOccluded]` (`ArdiaCoreHost.mm`), so a covered window shows a tab at once instead of after Chrome's 1 s
     occlusion delay; set `ARDIA_ALLOW_OCCLUSION=1` to test occlusion itself.
   - CDP (`ARDIA_REMOTE_DEBUGGING_PORT`), argv and `ARDIA_CHROMIUM_SWITCHES` only reach Chrome where it runs on its mock
-    keychain: a scratch `ARDIA_DATA_DIR`, or a build without a team signature (ad hoc copies such as carryover.sh's). A
+    keychain: a scratch `ARDIA_DATA_DIR`, a dev build (`ACDevBuild` in its Info.plist), or a build without a team
+    signature (ad hoc copies such as carryover.sh's). A
     team-signed build on its real data dir forwards none of them (`ArdiaCoreHost.mm`), and its browser process removes
     every switch that opens the profile to outside control (remote debugging, unpacked extensions, automation, proxies,
     certificate overrides, net-log), also after chrome://flags have been applied, and unsets `SSLKEYLOGFILE`

@@ -1,13 +1,14 @@
 #!/bin/bash
 # Builds the app into your own derived data, quietly: the full log goes to a file, and you see only what you need.
 #
-#   scripts/agent/build-app [--as NAME] [--config Debug|Release] [--force] [--wait SECS]
+#   scripts/agent/build-app [--as NAME] [--config Debug|Release] [--force] [--owner] [--wait SECS]
 #   scripts/agent/build-app -h | --help
 #
 # --as NAME     your agent name (default: $AC_LOCKED_AS, else "dev"). Builds into apps/browser/build-NAME, and is
 #               passed to `locked` so a chromium take of yours covers the engine staging.
 # --config      Debug (default) or Release.
 # --force       build even when no native file changed.
+# --owner       build the owner's own app (its bundle id, data dir and keychain items) instead of the dev identity.
 # --wait SECS   how long to wait for a pod install, or for another build into the same derived data (default 1500).
 #
 # - Runs `pnpm pods` first (under the pod lock) when a source file in packages/*/ios is on disk but not in the Pods
@@ -21,8 +22,13 @@
 #   "JS-only: Metro reloads it; no build needed" and exits 0. Pass --force to build anyway.
 # - Prints the errors (a failed build script with its last 30 lines), the warnings count, the result, the time and
 #   the .app path. The full log: <derived data>/build-app.log.
-# - Signs with the identity's team when a macOS development profile for its bundle id is installed, else ad hoc
-#   (macos/AdHoc.xcconfig), and says so.
+# - Builds the dev identity (macos/Dev.xcconfig): bundle id <app's>.dev, its own data dir, preferences and TCC
+#   permissions, never the owner's; the app treats it as unsigned, so it stays on Chrome's mock keychain. It signs it
+#   with this Mac's Apple Development certificate for the app's team, so macOS keeps a permission answered once
+#   across rebuilds (no entitlements, no hardened runtime, no profile needed), and ad hoc when there's none or it
+#   can't sign (a locked keychain), saying so.
+# - --owner signs with the identity's team when a macOS development profile for its bundle id is installed, else ad
+#   hoc (macos/AdHoc.xcconfig), and says so.
 # Builds into different derived data run in parallel (scripts/agent/locked --help). Run it with run_in_background.
 # Exits 0 when built (or nothing to build), 1 when the build failed, 75 when a lock stayed busy.
 set -uo pipefail
@@ -36,11 +42,12 @@ usage() {
   exit 64
 }
 
-name=${AC_LOCKED_AS:-dev} config=Debug force="" wait=1500
+name=${AC_LOCKED_AS:-dev} config=Debug force="" owner="" wait=1500
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h | --help) help ;;
     --force) force=1; shift; continue ;;
+    --owner) owner=1; shift; continue ;;
   esac
   [[ $# -ge 2 ]] || { echo "build-app: $1 needs a value" >&2; usage; }
   case "$1" in
@@ -86,12 +93,41 @@ for path in sorted(p for folder in folders for p in glob.glob(os.path.join(os.pa
 sys.exit(1)
 PY
 }
+team_development_identity() {
+  local hash
+  security find-identity -v -p codesigning |
+    sed -n 's/^ *[0-9][0-9]*) \([0-9A-F]\{40\}\) "Apple Development: [^"]*"$/\1/p' |
+    while read -r hash; do
+      security find-certificate -a -Z -p | awk -v h="$hash" '/^SHA-1 hash:/ { keep = ($3 == h) } keep' |
+        sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' | openssl x509 -noout -subject 2>/dev/null |
+        grep -Eq "OU ?= ?$1(,|/|$)" && { echo "$hash"; break; }
+    done
+}
+signs_with() {
+  local probe
+  probe=$(mktemp "${TMPDIR:-/tmp}/build-app-sign.XXXXXX") || return 1
+  cp /usr/bin/true "$probe" && timeout 30 codesign --force --timestamp=none --sign "$1" "$probe" >/dev/null 2>&1
+  local status=$?
+  rm -f "$probe"
+  return $status
+}
 signing=()
 team_id=$(ac_identity AC_TEAM_ID)
 bundle_id=$(ac_identity AC_BUNDLE_ID)
-if ! has_development_profile "$team_id" "$bundle_id"; then
-  signing=(-xcconfig macos/AdHoc.xcconfig)
-  echo "build-app: no macOS development profile for $team_id.$bundle_id on this Mac; signing ad hoc (macos/AdHoc.xcconfig)"
+if [[ -n "$owner" ]]; then
+  if ! has_development_profile "$team_id" "$bundle_id"; then
+    signing=(-xcconfig macos/AdHoc.xcconfig)
+    echo "build-app: no macOS development profile for $team_id.$bundle_id on this Mac; signing ad hoc (macos/AdHoc.xcconfig)"
+  fi
+else
+  signing=(-xcconfig macos/Dev.xcconfig)
+  identity=$(team_development_identity "$team_id")
+  if [[ -n "$identity" ]] && signs_with "$identity"; then
+    signing+=("AC_DEV_SIGN_IDENTITY=$identity")
+    echo "build-app: dev identity $bundle_id.dev, signed with Apple Development $identity (team $team_id)"
+  else
+    echo "build-app: dev identity $bundle_id.dev, signed ad hoc (no usable Apple Development certificate for team $team_id): macOS asks for permissions again after each build"
+  fi
 fi
 stamp_file="$dd/.ac-native-stamp-$config"
 

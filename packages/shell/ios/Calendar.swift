@@ -24,6 +24,7 @@ public class CalendarModule: Module {
     }
 
     AsyncFunction("requestAccess") { (promise: Promise) in
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return promise.resolve(false) }
       self.store.requestFullAccessToEvents { granted, _ in
         DispatchQueue.main.async {
           if granted { self.store = EKEventStore(); self.observe() }

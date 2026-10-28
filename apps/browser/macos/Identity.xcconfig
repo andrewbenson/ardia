@@ -11,6 +11,7 @@ AC_SWITCHES_URL = https:/$()/ardia.dev/switches.json
 AC_APP_ICON = AppIcon
 AC_COPYRIGHT = © 2026 Mantra Patel
 AC_UPSTREAM_CREDIT =
+AC_DEV_BUILD =
 PRODUCT_MODULE_NAME = Ardia
 
 #include? "Fork.xcconfig"

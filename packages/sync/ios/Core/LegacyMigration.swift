@@ -996,6 +996,7 @@ public enum LegacyMigration {
   }
 
   static func teamIdentifier() -> String? {
+    if Bundle.main.object(forInfoDictionaryKey: "ACDevBuild") as? String == "YES" { return nil }
     var code: SecCode?
     guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
     var staticCode: SecStaticCode?

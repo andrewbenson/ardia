@@ -37,6 +37,7 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
   }
 
   func requestPermission(_ completion: @escaping (Bool) -> Void) {
+    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return completion(false) }
     center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
       DispatchQueue.main.async { completion(granted) }
     }

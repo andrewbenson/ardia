@@ -12,6 +12,12 @@ public struct KeychainKeyStore: SyncKeyStore {
 
   public init(service: String = "Ardia Sync Key") { self.service = service }
 
+  public static func service(info: [String: Any]?) -> String {
+    let product = info?["CFBundleName"] as? String ?? "Ardia"
+    let dev = info?["ACDevBuild"] as? String == "YES"
+    return "\(product)\(dev ? " Dev" : "") Sync Key"
+  }
+
   func query(_ account: String) -> [String: Any] {
     [
       kSecClass as String: kSecClassGenericPassword,

@@ -405,7 +405,7 @@ public class SyncModule: Module {
     return folder
   }
 
-  static let keyStore: SyncKeyStore = dataDirectory.map { FileKeyStore(directory: $0) } ?? KeychainKeyStore(service: "\(productName) Sync Key")
+  static let keyStore: SyncKeyStore = dataDirectory.map { FileKeyStore(directory: $0) } ?? KeychainKeyStore(service: KeychainKeyStore.service(info: Bundle.main.infoDictionary))
 
   static func profileDirectory(_ engineProfile: String) -> URL {
     let root = dataDirectory?.appendingPathComponent("Chromium", isDirectory: true)
@@ -421,6 +421,7 @@ public class SyncModule: Module {
   }
 
   static let isTeamSigned: Bool = {
+    if Bundle.main.object(forInfoDictionaryKey: "ACDevBuild") as? String == "YES" { return false }
     var code: SecCode?
     guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
     var staticCode: SecStaticCode?

@@ -119,7 +119,8 @@ public class ImportModule: Module {
     }
 
     AsyncFunction("requestDiaAutomation") { (promise: Promise) in
-      self.run(promise) { try Self.json(DiaAutomation.status(Self.diaBundleId, ask: true)) }
+      let ask = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] != "1"
+      self.run(promise) { try Self.json(DiaAutomation.status(Self.diaBundleId, ask: ask)) }
     }
 
     AsyncFunction("openAutomationSettings") { (promise: Promise) in

@@ -48,9 +48,12 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
 
 public struct LaunchSwitches: Sendable {
   public static let scopeVariable = "ARDIA_NATIVE_SCOPE"
+  public static let defaultsVariable = "ARDIA_LAUNCH_SWITCHES_DEFAULTS"
+  public static let optionVariable = "ARDIA_LAUNCH_SWITCHES_OPTION"
   static let storedPrefixes = ["ARDIA_NATIVE_", "ARDIA_SHELL_"]
 
   public let isolated: Bool
+  public let defaultsSuite: String?
   public let distribution: Bool
   public let skippedStored: Bool
   public var droppedAfterFailedLaunches = false
@@ -62,6 +65,8 @@ public struct LaunchSwitches: Sendable {
   public init(environment env: [String: String], defaults: UserDefaults?, distribution: Bool, skipStored: Bool) {
     let isolated = env["ARDIA_BACKGROUND"] == "1" || env["ARDIA_DATA_DIR"] != nil
     self.isolated = isolated
+    let suite = distribution ? nil : env[Self.defaultsVariable].flatMap { $0.isEmpty ? nil : $0 }
+    self.defaultsSuite = suite
     self.distribution = distribution
     self.scope = env[Self.scopeVariable]
     var environment: [LaunchSwitch: Bool] = [:]
@@ -69,7 +74,7 @@ public struct LaunchSwitches: Sendable {
       if let value = env[name.rawValue].flatMap(Self.parse) { environment[name] = value }
     }
     self.environment = environment
-    let readsDefaults = !isolated && defaults != nil
+    let readsDefaults = (!isolated || suite != nil) && defaults != nil
     self.skippedStored = readsDefaults && skipStored
       && LaunchSwitch.allCases.contains { $0.storable(distribution: distribution) && Self.storedValue($0, in: defaults) != nil }
     var stored: [LaunchSwitch: Bool] = [:]
@@ -80,6 +85,10 @@ public struct LaunchSwitches: Sendable {
     }
     self.stored = stored
   }
+
+  public var usesDefaults: Bool { !isolated || defaultsSuite != nil }
+
+  public static var defaults: UserDefaults { shared.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard }
 
   static let current = Mutex<LaunchSwitches?>(nil)
 
@@ -129,7 +138,7 @@ public struct LaunchSwitches: Sendable {
 
   public static func launching(environment env: [String: String], defaults: UserDefaults, distribution: Bool, optionHeld: () -> Bool) -> LaunchSwitches {
     let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
-    if probe.isolated { return probe }
+    if !probe.usesDefaults { return probe }
     var switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: optionHeld())
     guard !switches.stored.isEmpty else {
       defaults.removeObject(forKey: failedLaunchesKey)
@@ -148,7 +157,7 @@ public struct LaunchSwitches: Sendable {
     return switches
   }
 
-  public static func launchSucceeded(defaults: UserDefaults = .standard, isolated: Bool = shared.isolated) {
+  public static func launchSucceeded(defaults: UserDefaults = LaunchSwitches.defaults, isolated: Bool = !shared.usesDefaults) {
     guard !isolated else { return }
     defaults.removeObject(forKey: failedLaunchesKey)
   }
@@ -156,10 +165,12 @@ public struct LaunchSwitches: Sendable {
   static func system(counting: Bool) -> LaunchSwitches {
     let env = ProcessInfo.processInfo.environment
     let distribution = signedForDistribution()
-    if counting { return launching(environment: env, defaults: .standard, distribution: distribution, optionHeld: optionHeld) }
     let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
-    if probe.isolated { return probe }
-    return LaunchSwitches(environment: env, defaults: .standard, distribution: distribution, skipStored: optionHeld())
+    let defaults = probe.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard
+    let held = { (probe.defaultsSuite != nil && env[optionVariable] == "1") || optionHeld() }
+    if counting { return launching(environment: env, defaults: defaults, distribution: distribution, optionHeld: held) }
+    if !probe.usesDefaults { return probe }
+    return LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: held())
   }
 
   static func optionHeld() -> Bool {
@@ -194,8 +205,8 @@ public struct StoredLaunchSwitches {
     self.distribution = distribution
   }
 
-  public init(_ running: LaunchSwitches, defaults: UserDefaults = .standard) {
-    self.init(defaults: running.isolated ? nil : defaults, distribution: running.distribution)
+  public init(_ running: LaunchSwitches, defaults: UserDefaults = LaunchSwitches.defaults) {
+    self.init(defaults: running.usesDefaults ? defaults : nil, distribution: running.distribution)
   }
 
   public var writable: Bool { defaults != nil }

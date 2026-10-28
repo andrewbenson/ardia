@@ -174,5 +174,28 @@ import Testing
     }
     #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "1")
   }
-}
 
+  @Test func aScratchSuiteLetsAnIsolatedDevelopmentInstanceStoreAndCount() {
+    let defaults = scratchDefaults()
+    defaults.set("1", forKey: "ARDIA_NATIVE_SHELL")
+    let env = ["ARDIA_BACKGROUND": "1", "ARDIA_DATA_DIR": "/tmp/x", LaunchSwitches.defaultsVariable: "scratch"]
+    let switches = LaunchSwitches.launching(environment: env, defaults: defaults, distribution: false, optionHeld: { false })
+    #expect(switches.isolated && switches.usesDefaults && switches.defaultsSuite == "scratch")
+    #expect(switches.isOn(.nativeShell, defaultOn: false))
+    #expect(switches.countedLaunch)
+    #expect(StoredLaunchSwitches(switches, defaults: defaults).writable)
+    _ = LaunchSwitches.launching(environment: env, defaults: defaults, distribution: false, optionHeld: { false })
+    #expect(LaunchSwitches.launching(environment: env, defaults: defaults, distribution: false, optionHeld: { false }).droppedAfterFailedLaunches)
+  }
+
+  @Test func aDistributionBuildRefusesTheScratchSuite() {
+    let defaults = scratchDefaults()
+    defaults.set("1", forKey: "ARDIA_NATIVE_SHELL")
+    let env = ["ARDIA_BACKGROUND": "1", LaunchSwitches.defaultsVariable: "scratch"]
+    let switches = LaunchSwitches.launching(environment: env, defaults: defaults, distribution: true, optionHeld: { false })
+    #expect(switches.defaultsSuite == nil && !switches.usesDefaults)
+    #expect(!switches.isOn(.nativeShell, defaultOn: false))
+    #expect(!StoredLaunchSwitches(switches, defaults: defaults).writable)
+    #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
+  }
+}

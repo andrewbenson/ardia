@@ -79,11 +79,22 @@ function isSqlite(file) {
     return false;
   }
 }
+function filesUnder(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    const st = lstatSync(p);
+    if (st.isDirectory()) filesUnder(p, out);
+    else out.push(p);
+  }
+  return out;
+}
+
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     const st = lstatSync(p);
-    if (st.isSymbolicLink()) continue;
+    if (st.isSymbolicLink() || name.startsWith(".rekey-")) continue;
     if (st.isDirectory()) walk(p, out);
     else if (st.isFile() && st.size >= 512 && isSqlite(p)) out.push(p);
   }
@@ -506,7 +517,8 @@ function snapshot(run) {
     keyLog: (read(join(udd, KEY_LOG)) ?? "").split("\n").filter(Boolean),
     rekeyLog: read(join(udd, ".safe-storage-rekey.log")) ?? "",
     journal,
-    staging: existsSync(join(udd, ".rekey-staging")),
+    staging: filesUnder(join(udd, ".rekey-staging")).length > 0,
+    stagingDir: existsSync(join(udd, ".rekey-staging")),
     old: existsSync(join(udd, ".rekey-old")),
     appLog: run.logs.map((f) => read(f) ?? "").join("\n"),
   };

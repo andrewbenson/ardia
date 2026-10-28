@@ -1,5 +1,6 @@
-import { hostedKinds, SolaraHostedView } from "@ardia/settings";
-import { memo, useMemo } from "react";
+import { hostedKinds, publishSettingsTopic, SolaraHostedView, windowMainOnTop, windowShellActive } from "@ardia/settings";
+import type { DroppedItem } from "@ardia/shell";
+import { memo, useEffect, useMemo } from "react";
 import { Image, StyleSheet } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { closeTab, toggleMute } from "../../lib/actions";
@@ -34,6 +35,9 @@ import { mediaTheme, playerState } from "../media/nativeMedia";
 import { useSidebarPlayerTab } from "../media/SidebarPlayer";
 import { useTab } from "../../store/hooks";
 import { usePages } from "../layout/pageState";
+import { openDroppedItems } from "../layout/fileDrop";
+import { pagerFor } from "../layout/profilePager";
+import type { TabPlacement } from "../../store/organize";
 import { publishNativeLive, runNativeLive } from "./nativeLive";
 import { tidyPins } from "./tidyPinsUi";
 import { closeFolderPanelIn, openTileFolderMenu, toggleFolderPanel } from "./tileFolderUi";
@@ -44,6 +48,40 @@ export function nativeSidebarEnabled(): boolean {
   nativeSidebar ??= hostedKinds().includes("sidebar");
   if (nativeSidebar) publishNativeLive();
   return nativeSidebar;
+}
+
+const SHELL_TOPIC = "sidebar.shell";
+const shellColumns: Record<string, object> = {};
+
+export function nativeSidebarShell(windowId: string): boolean {
+  return nativeSidebarEnabled() && hostedKinds().includes(SHELL_TOPIC) && windowShellActive(windowId) && !windowMainOnTop(windowId) && pagerFor(windowId).nativeOwned;
+}
+
+export function shellColumnFitsAddressBar(addressBar: boolean): boolean {
+  return !addressBar;
+}
+
+function publishShellColumn(windowId: string, column: object | null) {
+  if (column) shellColumns[windowId] = column;
+  else if (shellColumns[windowId]) delete shellColumns[windowId];
+  else return;
+  publishSettingsTopic(SHELL_TOPIC, { windows: shellColumns });
+}
+
+addNativeSettingsHandlers({
+  [SHELL_TOPIC]: (windowId: string, event: string, extra: { items?: DroppedItem[]; placement?: string | null }) => {
+    if (event !== "drop") return;
+    const placement = extra.placement ? (JSON.parse(extra.placement) as TabPlacement) : null;
+    openDroppedItems(windowId, extra.items ?? [], placement);
+  },
+});
+
+export type ShellColumn = { top: number; header: number; bottom: number; clip: boolean };
+
+function ShellColumnState({ windowId, state, top, header, bottom, clip }: ShellColumn & { windowId: string; state: string }) {
+  useEffect(() => publishShellColumn(windowId, { state, top, header, bottom, clip }), [windowId, state, top, header, bottom, clip]);
+  useEffect(() => () => publishShellColumn(windowId, null), [windowId]);
+  return null;
 }
 
 const NEW_TAB_MARK: number = PRODUCT === "Solara" ? require("../../../assets/solara/new-tab-mark.png") : require("../../../assets/new-tab-mark.png");
@@ -207,7 +245,7 @@ function useNativeSidebarPlayer(windowId: string, profileId: string, theme: Them
   );
 }
 
-export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, addressBar }: { windowId: string; profileId: string; addressBar: boolean }) {
+export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, addressBar, column }: { windowId: string; profileId: string; addressBar: boolean; column?: ShellColumn }) {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
   const selection = useBrowser((s) => s.selection[windowId] ?? NONE);
@@ -290,5 +328,6 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
     });
   }, [player, pip, capture, tokens.badge, tokens.badgeGlyph, pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, upsell, engines, developer]);
 
+  if (column) return <ShellColumnState windowId={windowId} state={state} {...column} />;
   return <SolaraHostedView kind="sidebar" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });

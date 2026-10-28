@@ -6,10 +6,12 @@ import { hostedKinds } from "@ardia/settings";
 import { useDragController } from "./dnd";
 import { nativeSidebarDrag } from "./nativeDrag";
 
-export const SidebarDropArea = forwardRef<View, { style?: StyleProp<ViewStyle>; children?: ReactNode }>(function SidebarDropArea({ style, children }, ref) {
+export const SidebarDropArea = forwardRef<View, { style?: StyleProp<ViewStyle>; shellColumn?: boolean; children?: ReactNode }>(function SidebarDropArea({ style, shellColumn, children }, ref) {
   const controller = useDragController();
   const windowId = useWindowId();
-  const target: TabDropTarget = hostedKinds().includes("sidebar")
+  const target: TabDropTarget = shellColumn
+    ? { windowId, enter: () => undefined, move: () => undefined, leave: () => undefined, drop: () => null }
+    : hostedKinds().includes("sidebar")
     ? {
         windowId,
         enter: (count, at) => nativeSidebarDrag.external(windowId, "enter", at, count),

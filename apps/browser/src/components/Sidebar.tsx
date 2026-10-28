@@ -42,7 +42,7 @@ import { ResizeHandle } from "./sidebar/ResizeHandle";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge } from "./sidebar/ScrollEdge";
 import { entriesHeight, firstPaintEntries, rowSpan, startsOffScreen, type Section } from "./sidebar/geometry";
 import { measureRow } from "./sidebar/state";
-import { NativeSidebar, nativeSidebarEnabled } from "./sidebar/NativeSidebar";
+import { NativeSidebar, nativeSidebarEnabled, nativeSidebarShell, shellColumnFitsAddressBar } from "./sidebar/NativeSidebar";
 import { SplitRowItem, TabRowItem } from "./sidebar/TabRow";
 import { closeFolderPanel } from "./sidebar/tileFolderUi";
 import { useSidebarTokens } from "./sidebar/tokens";
@@ -81,6 +81,9 @@ export function Sidebar({ width }: { width: number }) {
   const footerDownloads = addressBar && hasDownloads;
   const footer = dots || footerDownloads ? PROFILE_DOTS_HEIGHT : 0;
   const nothingPinned = useBrowser((s) => sidebarEntries(s, windowId, current).tiles.length === 0);
+  const [shellCapable] = useState(() => nativeSidebarShell(windowId));
+  const shellColumn = shellCapable && shellColumnFitsAddressBar(addressBar);
+  const column = useMemo(() => ({ top: header - GLOW_ROOM, header, bottom: footer, clip: paging }), [header, footer, paging]);
 
   useRevealTabs(windowId, scroll, scrollY, geometry);
   useLayoutEffect(() => dismissHoverIn(windowId), [windowId, current, paging]);
@@ -93,46 +96,51 @@ export function Sidebar({ width }: { width: number }) {
             controller.root = v;
           }}
           style={{ width, height: "100%" }}
+          shellColumn={shellColumn}
         >
-          <View
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              top: header - GLOW_ROOM,
-              bottom: footer,
-              overflow: paging ? "hidden" : "visible",
-            }}
-            onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
-          >
-            {nativeSidebarEnabled() ? (
-              <NativeSidebar windowId={windowId} profileId={current} addressBar={addressBar} />
-            ) : pages.map((page) => (
-              <SidebarPage
-                key={page.id}
-                profileId={page.id}
-                slot={page.slot}
-                width={width}
-                current={page.id === current}
-                resting={!!page.resting}
-                docked={dockedPage(page.id)}
-                height={Math.max(0, available - (addressBar ? GLOW_ROOM : 0))}
-                rows={page.id === current ? undefined : Math.ceil(available / ROW_PITCH) + 1}
-                geometry={page.id === current ? geometry : undefined}
-                onListHeight={onListHeight}
-                onScrollView={(v) => {
-                  scroll.current = v;
-                  controller.scroll = v;
-                }}
-                onScrollY={(y) => {
-                  scrollY.current = y;
-                  controller.scrollY = y;
-                  dismissHover();
-                  closeFolderPanel();
-                }}
-              />
-            ))}
-          </View>
+          {shellColumn ? (
+            <NativeSidebar windowId={windowId} profileId={current} addressBar={addressBar} column={column} />
+          ) : (
+            <View
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: header - GLOW_ROOM,
+                bottom: footer,
+                overflow: paging ? "hidden" : "visible",
+              }}
+              onLayout={(e) => setAvailable(e.nativeEvent.layout.height)}
+            >
+              {nativeSidebarEnabled() ? (
+                <NativeSidebar windowId={windowId} profileId={current} addressBar={addressBar} />
+              ) : pages.map((page) => (
+                <SidebarPage
+                  key={page.id}
+                  profileId={page.id}
+                  slot={page.slot}
+                  width={width}
+                  current={page.id === current}
+                  resting={!!page.resting}
+                  docked={dockedPage(page.id)}
+                  height={Math.max(0, available - (addressBar ? GLOW_ROOM : 0))}
+                  rows={page.id === current ? undefined : Math.ceil(available / ROW_PITCH) + 1}
+                  geometry={page.id === current ? geometry : undefined}
+                  onListHeight={onListHeight}
+                  onScrollView={(v) => {
+                    scroll.current = v;
+                    controller.scroll = v;
+                  }}
+                  onScrollY={(y) => {
+                    scrollY.current = y;
+                    controller.scrollY = y;
+                    dismissHover();
+                    closeFolderPanel();
+                  }}
+                />
+              ))}
+            </View>
+          )}
 
           {footer ? (
             <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: footer }}>

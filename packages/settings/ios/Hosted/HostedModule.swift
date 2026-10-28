@@ -10,6 +10,7 @@ public class HostedModule: Module {
     OnCreate {
       if NativeExtensionSidePanel.enabled { HostedViews.declare(NativeExtensionSidePanel.kind) }
       if PanePrompts.enabled { HostedViews.declare(PanePrompts.kind) }
+      if NativeSidebarShell.enabled { HostedViews.declare(NativeSidebarShell.topic) }
       let sink = HostedSink(self)
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
@@ -49,6 +50,10 @@ public class HostedModule: Module {
 
     AsyncFunction("sidebarIconPickerInput") { (windowId: String, action: String) in
       MainActor.assumeIsolated { NativeSidebarIconPicker.devInput(windowId, action) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("sidebarShell") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeSidebarShell.describe(windowId) }
     }.runOnQueue(.main)
 
     AsyncFunction("presentedAt") { (windowId: String, x: Double, y: Double, width: [Double], height: [Double]) -> String in

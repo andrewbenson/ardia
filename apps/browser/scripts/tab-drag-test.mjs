@@ -851,8 +851,8 @@ try {
     const [, b] = rows;
     const x = Math.round(b.x + b.w / 2), y = Math.round(b.y + 3);
     const out = await fileDrop([[x, y + 8], [x, y + 2], [x, y]], { files: [pdf] });
-    assert.match(out.log[0], /FileDropView 1$/, `the sidebar takes the drag: ${out.log}`);
-    assert.match(out.log.at(-1), /FileDropView performed/, out.log.join(" | "));
+    assert.match(out.log[0], /(FileDropView|SidebarShellColumn) 1$/, `the sidebar takes the drag: ${out.log}`);
+    assert.match(out.log.at(-1), /(FileDropView|SidebarShellColumn) performed/, out.log.join(" | "));
     assert.equal(out.during?.gapKey, b.key, `gap before ${b.key}: ${JSON.stringify(out.during)}`);
     assert.ok(out.during.pitch > 0, "the gap opens");
     assert.equal(out.after, 0, "the drag ended");

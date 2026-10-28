@@ -344,7 +344,9 @@ public class FileDropModule: Module {
   }
 }
 
-enum DroppedLinks {
+@MainActor public protocol DevDropDestination: AnyObject {}
+
+public enum DroppedLinks {
   static let maxItems = 50
   static let linkFileExtensions: Set<String> = ["webloc", "inetloc", "url"]
   private static let maxLinkFileSize = 64 * 1024
@@ -394,7 +396,7 @@ enum DroppedLinks {
     (pasteboard.pasteboardItems ?? []).compactMap { $0.string(forType: .URL).flatMap(webURL) }
   }
 
-  static func items(_ pasteboard: NSPasteboard) -> [[String: String]] {
+  public static func items(_ pasteboard: NSPasteboard) -> [[String: String]] {
     let files = fileURLs(pasteboard)
     if !files.isEmpty {
       return Array(files.prefix(maxItems).compactMap { file -> [String: String]? in
@@ -410,7 +412,7 @@ enum DroppedLinks {
     return []
   }
 
-  static func count(_ pasteboard: NSPasteboard) -> Int {
+  public static func count(_ pasteboard: NSPasteboard) -> Int {
     items(pasteboard).count
   }
 }
@@ -510,7 +512,7 @@ final class DevDraggingInfo: NSObject, NSDraggingInfo {
 
 enum DevDragSession {
   private static var pasteboard: NSPasteboard?
-  private static weak var target: FileDropView?
+  private static weak var target: NSView?
   private static var sequence = 0
 
   static func act(windowId: String, action: String, x: Double, y: Double, payload: [String: Any]) -> String {
@@ -540,7 +542,7 @@ enum DevDragSession {
     let types = Set(board.types ?? [])
     var under = frameView.hitTest(location)
     while let view = under, Set(view.registeredDraggedTypes).isDisjoint(with: types) { under = view.superview }
-    let ours = under as? FileDropView
+    let ours = under.flatMap { $0 is FileDropView || $0 is DevDropDestination ? $0 : nil }
     let name = { (view: NSView?) in view.map { NSStringFromClass(type(of: $0)) } ?? "none" }
     func finish() {
       pasteboard = nil

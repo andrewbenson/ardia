@@ -22,6 +22,10 @@ enum PanePrompts {
   private static var browsers = PaneBrowsers()
   private static var selectionShown: [String: PaneSelection] = [:]
   private static var selectionGeneration = 0
+  private static var cliShown: [String: Bool] = [:]
+  private static var cliRevealed: Set<String> = []
+  private static var cliHideUntil: [String: TimeInterval] = [:]
+  static let cliHideDelay: TimeInterval = 0.25
   private(set) static var activatedAt: TimeInterval = 0
 
   nonisolated static var enabled: Bool {
@@ -316,6 +320,42 @@ enum PanePrompts {
 
   private static func applyWindows(_ value: Any?) {
     windows = ((value as? [String: Any])?["windows"] as? [String: Any] ?? [:]).compactMapValues { $0 as? [String: Any] }
+    for (windowId, window) in windows {
+      let shown = ((window["theme"] as? [String: Any])?["cli"] as? [String: Any])?["shown"] as? Bool == true
+      if shown == (cliShown[windowId] ?? false) { continue }
+      cliShown[windowId] = shown
+      if shown {
+        cliRevealed.remove(windowId)
+        DispatchQueue.main.async {
+          MainActor.assumeIsolated {
+            guard cliShown[windowId] == true else { return }
+            cliRevealed.insert(windowId)
+            NativePaneOverlays.refresh(windowId)
+          }
+        }
+      } else {
+        cliRevealed.remove(windowId)
+        cliHideUntil[windowId] = ProcessInfo.processInfo.systemUptime + cliHideDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + cliHideDelay + 0.01) {
+          MainActor.assumeIsolated { NativePaneOverlays.refresh(windowId) }
+        }
+      }
+    }
+    for windowId in cliShown.keys where windows[windowId] == nil {
+      cliShown[windowId] = nil
+      cliRevealed.remove(windowId)
+      cliHideUntil[windowId] = nil
+    }
     refreshAll()
+  }
+
+  static func cliPills(in windowId: String) -> [(tabId: String, state: CliPillState)] {
+    guard let window = windows[windowId], var cli = (window["theme"] as? [String: Any])?["cli"] as? [String: Any] else { return [] }
+    let shown = cli["shown"] as? Bool == true
+    guard shown || (cliHideUntil[windowId] ?? 0) > ProcessInfo.processInfo.systemUptime else { return [] }
+    cli["shown"] = shown && cliRevealed.contains(windowId)
+    guard let state = encode(cli).flatMap(CliPillState.decode) else { return [] }
+    let panes = window["panes"] as? [String: [String: Any]] ?? [:]
+    return panes.keys.sorted().compactMap { tabId in panes[tabId]?["cliPill"] as? Bool == true && owns(tabId) ? (tabId, state) : nil }
   }
 }

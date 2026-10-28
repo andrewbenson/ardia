@@ -7,21 +7,24 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error(`usage: node media-ui-test.mjs <Debug Solara.app> [--native | --shell] [--keep-data]
+  console.error(`usage: node media-ui-test.mjs <Debug Solara.app> [--native | --shell | --prompts] [--keep-data]
 
 The media controls on a local tone page: the sidebar player shows for a playing tab that isn't shown, its play
 button pauses and plays, Close Player hides it without pausing or moving to the tab, a new play brings it back, Back
 to Tab shows the tab and ends the player; the pinned tab's hover player scrolls a long title and ticks its time; the
 CLI pill appears and hides with RN's timing (and, under --shell, holds still while the toolbar hides and shows); the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls. --shell adds ARDIA_NATIVE_SHELL=1: the pickers
-and the CLI pill then live in the pane overlay container on the shell's card, with no RN-hosted NativeMediaView.`);
+and the CLI pill then live in the pane overlay container on the shell's card, with no RN-hosted NativeMediaView.
+--prompts is --shell with the page pool and ARDIA_NATIVE_PANE_PROMPTS=1: RN mounts no CliControlPill and the pill comes
+from the window's published CLI state.`);
   process.exit(2);
 }
-const shell = args.includes("--shell");
+const prompts = args.includes("--prompts");
+const shell = prompts || args.includes("--shell");
 const native = shell || args.includes("--native");
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-media-ui-"));
 const data = join(scratch, "data");
-const rep = reporter(join(scratch, "media-ui-test.log"), { name: `media-ui-test${shell ? " --shell" : native ? " --native" : ""}` });
+const rep = reporter(join(scratch, "media-ui-test.log"), { name: `media-ui-test${prompts ? " --prompts" : shell ? " --shell" : native ? " --native" : ""}` });
 
 const LONG_TITLE = "A very long fixture track title that has to scroll in the hover player";
 const tone = (() => {
@@ -105,7 +108,8 @@ const pressPlayer = async (control) => {
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_ALLOW_AUDIO: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}) },
+    env: { ARDIA_ALLOW_AUDIO: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}),
+      ...(prompts ? { ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" } : {}) },
     switches: "--disable-audio-output --autoplay-policy=no-user-gesture-required",
     ready: "return !!ac.store.getState().windows.w1",
   });
@@ -220,7 +224,9 @@ try {
       if (!shell) return null;
       await run(`globalThis.acCli.indicator.setState({ shown: true }); return true;`);
       try {
-        return await inPane("media.cliPill", "cliPill");
+        const where = await inPane("media.cliPill", "cliPill");
+        if (prompts && (await run(`return acPerf.findFibers("CliControlPill", 5).length;`))) throw new Error("RN still mounts CliControlPill");
+        return where;
       } finally {
         await run(`globalThis.acCli.indicator.setState({ shown: false }); return true;`);
       }
@@ -237,11 +243,11 @@ try {
       const { frames, tops } = await run(`
         const out = [];
         const tops = [];
-        const page = () => { const f = acPerf.findFibers("TabWebView", 50).find((f) => !!f.child && f.memoizedProps.tabId === shown()); return measure(f).then((r) => tops.push(r[1])); };
+        const page = () => ${prompts} ? Promise.resolve(tops.push(ac.store.getState().tabs[shown()] ? 0 : -1)) : measure(acPerf.findFibers("TabWebView", 50).find((f) => !!f.child && f.memoizedProps.tabId === shown())).then((r) => tops.push(r[1]));
         const sample = (until) => performance.now() >= until ? Promise.resolve() : first("media.cliPill").then((r) => { out.push(r.frame); return settle(8); }).then(() => sample(until));
         return page().then(() => { ac.toolbarAutoHide.noteScroll(shown(), { state: "down" }); return sample(performance.now() + 700); }).then(page)
           .then(() => { ac.toolbarAutoHide.noteScroll(shown(), { state: "up" }); return sample(performance.now() + 700); }).then(page).then(() => ({ frames: out, tops }));`, 10000);
-      if (!(tops[1] < tops[0]) || tops[2] !== tops[0]) throw new Error(`the toolbar never hid and came back: page tops ${JSON.stringify(tops)}`);
+      if (!prompts && (!(tops[1] < tops[0]) || tops[2] !== tops[0])) throw new Error(`the toolbar never hid and came back: page tops ${JSON.stringify(tops)}`);
       const off = frames.filter((f) => f.some((v, i) => Math.abs(v - rest[i]) > 0.5));
       if (off.length) throw new Error(`the pill moved off ${JSON.stringify(rest)} while the toolbar slid: ${JSON.stringify(off.slice(0, 5))}`);
       const slid = await run(`return M.describePaneOverlays("w1").then(JSON.parse).then((d) => d.tabs[shown()].cliPill.frame);`);

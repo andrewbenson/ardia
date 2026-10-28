@@ -270,6 +270,10 @@ final class PaneOverlayHost {
         share.body.update(state)
       }
     }
+    for found in PanePrompts.cliPills(in: windowId) {
+      piloted.insert(found.tabId)
+      (cliPills[found.tabId] ?? makeCliPill(found.tabId)).update(found.state)
+    }
     for found in PanePrompts.selections(in: windowId) {
       selected.insert(found.tabId)
       (selections[found.tabId] ?? makeSelection(found.tabId)).update(found.state)

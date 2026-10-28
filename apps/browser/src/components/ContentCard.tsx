@@ -60,6 +60,7 @@ import { startMedia, useAutoPictureInPicture } from "./media/pip";
 import { SharePicker } from "./media/SharePicker";
 import { ShareBar } from "./media/ShareBar";
 import { CastPicker } from "./media/CastPicker";
+import { nativeMedia } from "./media/nativeMedia";
 import { DeviceChooser } from "./site/DeviceChooser";
 import { Toolbar, ToolbarBackdrop, urlFieldRight } from "./Toolbar";
 import { AutoHideBackdrop, AutoHideToolbar, useToolbarMode, useToolbarMotion } from "./AutoHideToolbar";
@@ -538,7 +539,8 @@ function PageOverlays({
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const popoverSide = toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN };
   useNativePanePopups(nativePrompts, windowId, tabId, popovers && popover === "popups", toolbar ? "right" : "left");
-  useNativePaneHint(nativePrompts, windowId, tabId, { zoom });
+  const nativeCli = nativePrompts && nativeMedia("media.cliPill");
+  useNativePaneHint(nativePrompts, windowId, tabId, { zoom, cliPill: nativeCli && cliPill });
   return (
     <>
       <FindBar tabId={tabId} />
@@ -546,7 +548,7 @@ function PageOverlays({
         <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
       {!nativePrompts && <SadTab tabId={tabId} nativeAllowed={!peek} />}
-      {cliPill && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
+      {cliPill && !nativeCli && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
       {!newTabShown && !nativePrompts && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       {!nativePrompts && <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       {!nativePrompts && <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}

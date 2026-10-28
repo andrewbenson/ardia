@@ -11,6 +11,8 @@ import { answerPermission } from "../site/permissions";
 import { searchSelection, type ClickModifiers } from "../site/selection";
 import { useBrowser } from "../../store/browser";
 import { defaultSearchEngine } from "../../store/settings";
+import { cliCommand, cliProduct, useCliIndicator } from "../../lib/cliControl";
+import { mediaTheme } from "../media/nativeMedia";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
@@ -138,7 +140,9 @@ export function useNativePanePromptsTheme(active: boolean, windowId: string, the
   const engine = useBrowser((s) => defaultSearchEngine(s.settings).name);
   const searchEnabled = useBrowser((s) => !!s.settings.showSelectionSearch);
   const search = { engine, enabled: searchEnabled };
-  const key = JSON.stringify({ dark, textPrimary, textSecondary, icon, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, prompt, search });
+  const cliShown = useCliIndicator((s) => s.shown);
+  const cli = { shown: cliShown, command: cliCommand(), product: cliProduct(), theme: mediaTheme(theme) };
+  const key = JSON.stringify({ dark, textPrimary, textSecondary, icon, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, prompt, search, cli });
   useEffect(() => {
     if (!active) return;
     (promptWindows[windowId] ??= { panes: {} }).theme = JSON.parse(key);

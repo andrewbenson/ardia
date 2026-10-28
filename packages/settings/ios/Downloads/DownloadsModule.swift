@@ -37,7 +37,7 @@ final class NativeDownloadsView: ExpoView {
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    DownloadsHoverShifts.shown.add(self)
+    DownloadsHoverShifts.shown.add(list)
     list.autoresizingMask = [.width, .height]
     list.frame = bounds
     list.onHeight = { [weak self] h in self?.onDownloadsHeight(["height": h]) }
@@ -67,16 +67,15 @@ final class NativeDownloadsView: ExpoView {
 
 @MainActor
 enum DownloadsHoverShifts {
-  static let shown = NSHashTable<NativeDownloadsView>.weakObjects()
+  static let shown = NSHashTable<DownloadsListView>.weakObjects()
 
   static func check() -> String {
     #if DEBUG
     var hosts = 0
     var hovered = 0
     var shifts: [[String: Any]] = []
-    for host in shown.allObjects where host.window != nil {
+    for root in shown.allObjects where root.window != nil {
       hosts += 1
-      let root = host.list
       root.layoutSubtreeIfNeeded()
       for target in descendants(of: root) where target.trackingAreas.contains(where: { $0.owner === target }) {
         guard let enter = event(.mouseEntered, in: target), let exit = event(.mouseExited, in: target) else { continue }

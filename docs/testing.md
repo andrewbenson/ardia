@@ -163,7 +163,7 @@ the app as a person would rather than writing a new helper:
 | `devMenuCommand(command, arg)` | Fires a menu command as if picked from the menu bar |
 | `ArdiaApp.devMenuItems(title, path?)` | A menu bar menu's items as AppKit has them, its own included (Window › Fill, Move & Resize…); `"tiling:<windowId>"` is the window's green-button menu and whether AppKit tiles it; `path` picks an item |
 | `ArdiaApp.devPostKey(windowId, key, keyCode, modifiers)` | Posts one key press to the app's event queue (`"menu:<key>"`: straight to the menu bar's key equivalents). System hot keys (fn-⌃ tiling) can't be posted |
-| `devSnapshotWindow(windowId, path, transparent?)` | Writes the window's layers to a PNG in-process (works with the screen locked; `false` = failed) |
+| `devSnapshotWindow(windowId, path, transparent?)` | Writes the window's layers to a PNG in-process (works with the screen locked; `false` = failed). It goes through `layer.render(in:)`, which, like `cacheDisplay`, draws an `NSTextField`'s translucent text colour as if twice: alpha `a` comes out as `1-(1-a)^2` (0.5 black on white reads 63, not 127), while the real screen and `NSTextView` draw it right. Compare native label pixels against RN with opaque colours, or allow for it |
 | `devRenderIntroMusic(cues, path)` | Renders the onboarding intro music to an audio file, for a video's soundtrack |
 
 ## Hover never moves anything

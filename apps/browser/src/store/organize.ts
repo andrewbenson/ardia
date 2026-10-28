@@ -170,6 +170,12 @@ export function selectedTabIds(s: BrowserState, windowId: string): string[] {
   return active ? [active] : [];
 }
 
+export function multiSelection(s: BrowserState, windowId: string): string[] {
+  if ((s.selection[windowId]?.length ?? 0) < 2) return [];
+  const ids = selectedTabIds(s, windowId);
+  return ids.length > 1 ? ids : [];
+}
+
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");

@@ -25,6 +25,7 @@ import { Appearance } from "react-native";
 import { folderChildren, isBookmarked } from "../store/bookmarks";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { activeTab, bookmarkProfileId, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle } from "../store/model";
+import { multiSelection } from "../store/organize";
 import { canSwitchEngine, tabEngine } from "../store/engines";
 import { setLastTabKeepsWindow } from "../store/newTabBar";
 import { peekTabId } from "../store/peek";
@@ -242,6 +243,8 @@ export function menuState(s: BrowserState): MenuState {
   const sidebar = sidebarMenuState(s, windowId);
   disabled.push(...sidebar.disabled);
   Object.assign(titles, sidebar.titles);
+  const selected = windowId ? multiSelection(s, windowId).length : 0;
+  if (selected) titles.closeTab = `Close ${selected} Tabs`;
   if (peek) {
     titles.openFile = "Open Peek as Tab";
     titles.closeTab = "Close Peek";

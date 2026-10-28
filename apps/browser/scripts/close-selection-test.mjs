@@ -1,0 +1,99 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
+
+const args = process.argv.slice(2);
+const appArg = args.find((a) => !a.startsWith("--"));
+if (!appArg) {
+  console.error(`usage: node close-selection-test.mjs <Debug Solara.app> [--keep-data]
+
+⌘W with several tabs selected in the sidebar, through a real key press on the window: the File menu's item reads
+"Close 3 Tabs", the press closes all 3 selected tabs (not just the active one) and clears the selection, and one
+⇧⌘T brings all 3 back in their places. Run three ways: the RN sidebar, the native sidebar (ARDIA_NATIVE_SIDEBAR=1),
+and the JS store (ARDIA_NATIVE_STORE=0).`);
+  process.exit(2);
+}
+const keep = args.includes("--keep-data");
+const scratch = mkdtempSync(join(tmpdir(), "ac-close-selection-"));
+const rep = reporter(join(scratch, "close-selection-test.log"), { name: "close-selection-test" });
+
+const server = createServer((req, res) => {
+  res.writeHead(200, { "content-type": "text/html" });
+  res.end(`<!doctype html><title>${req.url.slice(1).toUpperCase()}</title><link rel="icon" href="data:,"><body>${req.url.slice(1)}</body>`);
+});
+await new Promise((r) => server.listen(0, "127.0.0.1", r));
+const url = (n) => `http://127.0.0.1:${server.address().port}/${n}`;
+const names = ["a", "b", "c", "d", "e"];
+const fixture = session({
+  windows: [{ id: "w1", frame: [80, 80, 1280, 800], activeTabIds: { default: "c" } }],
+  tabs: names.map((id) => ({ id, url: url(id), title: id.toUpperCase() })),
+  settings: { warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
+});
+
+const K = (key, keyCode, ...modifiers) => ({ key, keyCode, modifiers: ["command", ...modifiers], focus: "window" });
+let app = null;
+const run = (body, timeout = 20000) => app.eval(body, { timeout });
+const press = (key, extra = {}) => run(`return ac.shell.devKeyEquivalent("w1", ${JSON.stringify({ ...key, ...extra })});`);
+const titles = `const s = ac.store.getState(); return s.windows.w1.tabIds.map((id) => s.tabs[id].title || s.tabs[id].url.split("/").pop().toUpperCase());`;
+const until = async (what, body, ms = 8000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await run(body).catch((e) => ({ error: String(e.message ?? e) }));
+    if (last && !last.error) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
+};
+
+const modes = [
+  ["rn-sidebar", {}],
+  ["native-sidebar", { ARDIA_NATIVE_SIDEBAR: "1" }],
+  ["js-store", { ARDIA_NATIVE_STORE: "0" }],
+];
+try {
+  for (const [tag, env] of modes) {
+    app = await launch(resolve(appArg), {
+      data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true, env,
+      ready: "return !!ac.store.getState().windows.w1 && ac.store.getState().windows.w1.tabIds.length === 5",
+    });
+    await until("pages titled", `return (() => { ${titles} })().join() === "A,B,C,D,E" || null;`, 15000);
+    await rep.check(`${tag}-menu-reads-close-3-tabs`, async () => {
+      await run(`ac.store.getState().setSelection("w1", ["b", "c", "e"]); return true;`);
+      await sleep(300);
+      const dry = await press(K("w", 13), { dry: true });
+      const title = dry?.fired?.[0]?.title;
+      if (title !== "Close 3 Tabs") throw new Error(`⌘W's item reads ${JSON.stringify(title)}: ${JSON.stringify(dry)}`);
+      return title;
+    });
+    await rep.check(`${tag}-cmd-w-closes-the-selection`, async () => {
+      await press(K("w", 13));
+      const left = await until("3 closed", `return (() => { ${titles} })().length === 2 ? (() => { ${titles} })() : null;`);
+      if (left.join() !== "A,D") throw new Error(`left ${left}`);
+      const selection = await run(`return ac.store.getState().selection.w1 ?? [];`);
+      if (selection.length) throw new Error(`selection not cleared: ${selection}`);
+      return left;
+    });
+    await rep.check(`${tag}-shift-cmd-t-reopens-all-3`, async () => {
+      await press(K("t", 17, "shift"));
+      const back = await until("5 tabs", `return (() => { ${titles} })().length === 5 ? (() => { ${titles} })() : null;`);
+      if (back.join() !== "A,B,C,D,E") throw new Error(`back ${back}`);
+      const closed = await run(`return ac.store.getState().closedTabs.length;`);
+      if (closed) throw new Error(`${closed} still in Recently Closed`);
+      return back;
+    });
+    await app.quit();
+    app = null;
+  }
+} catch (e) {
+  rep.record("run", { error: e });
+} finally {
+  await app?.quit().catch(() => {});
+  server.close();
+  if (!keep && rep.results.every((r) => r.ok)) rmSync(scratch, { recursive: true, force: true });
+}
+const failed = rep.results.filter((r) => !r.ok);
+console.log(`${rep.results.length - failed.length}/${rep.results.length} passed${failed.length ? `; log ${rep.logFile}` : ""}`);
+process.exit(failed.length ? 1 : 0);

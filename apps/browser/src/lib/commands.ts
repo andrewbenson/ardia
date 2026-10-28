@@ -15,6 +15,7 @@ import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId } from "..
 import {
   closeGroup,
   closeTab,
+  closeTabs,
   createProfile,
   cycleProfile,
   focus,
@@ -49,7 +50,8 @@ import { requestAutofill } from "../components/site/Autofill";
 import { copyPageUrl, jumpToSelection } from "../components/site/selection";
 import { shareTab } from "../components/site/share";
 import { openProfileMenu } from "../components/ProfileIndicator";
-import { groupOf } from "../store/organize";
+import { groupOf, multiSelection } from "../store/organize";
+import { reopenClosedTogether } from "../store/closedTogether";
 import { isSmall, mainWindowFor, originalProfile } from "../store/small";
 import {
   closeLittleArdia,
@@ -155,6 +157,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       if (toggleNewTabBar(windowId)) return;
       return void s.newTab(windowId, { newTabCommand: true });
     case "reopenClosedTab":
+      if (reopenClosedTogether(windowId)) return;
       return s.reopenClosed(windowId);
     case "restoreClosed":
       return arg ? s.restoreClosed(arg, windowId) : undefined;
@@ -179,6 +182,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
         return void closeTab(tabId);
       }
       if (ui?.panel.open) return tabId ? closePanelToHeroBar(windowId, tabId, "closeKey") : s.closePanel(windowId);
+      if (!peekTabId(s, windowId) && multiSelection(s, windowId).length) return void closeTabs(windowId, multiSelection(s, windowId));
       return tabId ? void closeTab(tabId) : undefined;
     case "print":
       return void web?.print();

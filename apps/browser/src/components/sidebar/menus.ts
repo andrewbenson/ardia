@@ -1,5 +1,5 @@
 import { showMenu, type MenuItem } from "@ardia/shell";
-import { closeGroup, closeTab, moveTabToProfile, moveTabToWindow, switchToTab, toggleMute } from "../../lib/actions";
+import { closeGroup, closeTab, closeTabs, moveTabToProfile, moveTabToWindow, switchToTab, toggleMute } from "../../lib/actions";
 import { menuShortcut } from "../../lib/commandShortcuts";
 import { folderChildren } from "../../store/bookmarks";
 import { useBrowser } from "../../store/browser";
@@ -242,7 +242,7 @@ async function openMultiMenu(windowId: string, ids: string[]) {
   else if (choice.startsWith("window:")) {
     const target = store().moveTabsToWindow(ids, choice === "window:new" ? null : choice.slice(7));
     if (target) switchToTab(store().windows[target]?.activeTabIds[tabs[0]!.profileId] ?? ids[0]!);
-  } else if (choice === "close") s.closeTabs(ids);
+  } else if (choice === "close") return void closeTabs(windowId, ids);
   if (choice !== "copy" && choice !== "copyMd") store().setSelection(windowId, []);
 }
 

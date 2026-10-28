@@ -1,5 +1,5 @@
 import { WebView, type PageEngine } from "@ardia/ardiacore";
-import { windowPaneRootsActive } from "@ardia/settings";
+import { tabPool, windowPaneRootsActive } from "@ardia/settings";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
@@ -66,7 +66,9 @@ import { revealToolbar } from "./layout/toolbarAutoHide";
 import { NavigationOverlays } from "./layout/SwipeOverlay";
 import "./layout/devExpose";
 import { isSmallWindow } from "../store/small";
+import { NativePeekMount } from "./peek/NativePeekMount";
 import { PeekOverlay } from "./peek/PeekOverlay";
+import { PooledPageProps } from "./PooledPageProps";
 import { dismissPeek, startPeeks } from "./peek/actions";
 
 export function ContentCard() {
@@ -92,6 +94,7 @@ export function ContentCard() {
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   const shell = useWindowShell();
   const [paneRoots] = useState(() => windowPaneRootsActive(windowId));
+  const pooled = shell && nativeSplitPanes;
   useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
@@ -128,7 +131,8 @@ export function ContentCard() {
     }),
   );
 
-  const mountedIds = useMemo(() => new Set(mounted), [mounted]);
+  const kept = pooled ? NO_TABS : mounted;
+  const mountedIds = useMemo(() => new Set(kept), [kept]);
 
   const { panes, dividers } = useMemo(() => {
     const full: Rect = { x: 0, y: 0, width: size.width, height: size.height };
@@ -168,16 +172,17 @@ export function ContentCard() {
   const warmSplits = useBrowser(useShallow((s) => warm.map((id) => splitOf(s, id)).filter((v): v is SplitView => !!v)));
   const warmPanes = useMemo(() => {
     const out: Record<string, Rect> = {};
+    if (pooled) return out;
     for (const id of warm) out[id] = { x: 0, y: 0, width: size.width, height: size.height };
     for (const v of warmSplits) Object.assign(out, splitGeometry(v, size.width, size.height).panes);
     return out;
-  }, [warm, warmSplits, size.width, size.height]);
+  }, [pooled, warm, warmSplits, size.width, size.height]);
 
   const shownMemo = useRef<{ mounted?: string[]; panes?: object; tabs?: object; keys: string[]; ids: string[]; found: (Tab | undefined)[] }>({ keys: [], ids: [], found: [] });
   const shown = useBrowser(
     useShallow((s) => {
       const memo = shownMemo.current;
-      if (memo.mounted === mounted && memo.panes === panes) {
+      if (memo.mounted === kept && memo.panes === panes) {
         if (memo.tabs === s.tabs) return memo.keys;
         let same = true;
         let found = memo.found;
@@ -196,13 +201,13 @@ export function ContentCard() {
           return memo.keys;
         }
       }
-      const ids = [...new Set([...mounted, ...Object.keys(panes)])];
+      const ids = [...new Set([...kept, ...Object.keys(panes)])];
       const found = ids.map((id) => s.tabs[id]);
       const keys = found
         .filter((t): t is Tab => !!t)
         .sort((a, b) => a.createdAt - b.createdAt)
         .map((t) => `${t.id}|${t.profileId}`);
-      shownMemo.current = { mounted, panes, tabs: s.tabs, keys, ids, found };
+      shownMemo.current = { mounted: kept, panes, tabs: s.tabs, keys, ids, found };
       return keys;
     }),
   );
@@ -277,6 +282,7 @@ export function ContentCard() {
   return (
     <View
       ref={container}
+      pointerEvents={pooled ? "box-none" : "auto"}
       style={{ flex: 1 }}
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout;
@@ -313,6 +319,7 @@ export function ContentCard() {
               peekShown={!!peekId}
               nativePane={shell && nativeSplitPanes && !!split?.tabIds.includes(tabId)}
               paneRoots={paneRoots}
+              pooled={pooled}
             />
           );
         })}
@@ -334,14 +341,15 @@ export function ContentCard() {
         />
       )}
       {!fullscreenTab && <DropTargets panes={panes} origin={origin} windowId={windowId} native={shell} />}
-      {(!fullscreenTab || peekFullscreen) && !small && (
+      {(!fullscreenTab || peekFullscreen) && !small && pooled && <NativePeekMount windowId={windowId} origin={origin} fullscreen={peekFullscreen} />}
+      {(!fullscreenTab || peekFullscreen) && !small && !pooled && (
         <PeekOverlay
           windowId={windowId}
           width={size.width}
           height={size.height}
           origin={origin}
           fullscreen={peekFullscreen}
-          page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} fullscreen={peekFullscreen} />}
+          page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} fullscreen={peekFullscreen} pooled={pooled} />}
         />
       )}
       {!shell && <SplitToast windowId={windowId} />}
@@ -372,6 +380,7 @@ const TabPane = memo(function TabPane({
   peekShown,
   nativePane,
   paneRoots,
+  pooled,
 }: {
   tabId: string;
   windowId: string;
@@ -395,6 +404,7 @@ const TabPane = memo(function TabPane({
   peekShown: boolean;
   nativePane: boolean;
   paneRoots: boolean;
+  pooled: boolean;
 }) {
   const theme = useTheme();
   const visible = !!rect;
@@ -411,7 +421,7 @@ const TabPane = memo(function TabPane({
   useEffect(() => {
     if (visible && isNewTab && !mounted) patchPage(tabId, { wasNewTab: true });
   }, [visible, isNewTab, mounted]);
-  const prewarmed = usePrewarm(visible && isNewTab && !emptyCard && !mounted && !small && !inSplit);
+  const prewarmed = usePrewarm(!pooled && visible && isNewTab && !emptyCard && !mounted && !small && !inSplit);
   const hideBar = autoHide && visible && !fullscreen;
   const mode = useToolbarMode(tabId, windowId, hideBar);
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
@@ -432,7 +442,7 @@ const TabPane = memo(function TabPane({
 
   return (
     <View
-      pointerEvents={visible && !covered ? "auto" : "none"}
+      pointerEvents={!visible || covered ? "none" : pooled ? "box-none" : "auto"}
       onTouchStart={() => {
         if (visible && !focused) useBrowser.getState().activate(tabId);
       }}
@@ -442,7 +452,7 @@ const TabPane = memo(function TabPane({
         borderRadius: fullscreen ? 0 : layout.cardRadius,
         overflow: "hidden",
         opacity: covered ? 0 : 1,
-        backgroundColor: visible && !fullscreen && !nativePane ? theme.card : undefined,
+        backgroundColor: visible && !fullscreen && !nativePane && !pooled ? theme.card : undefined,
       }}
     >
       {!toolbar || fullscreen || autoLayout ? null : nativePane ? (
@@ -455,12 +465,13 @@ const TabPane = memo(function TabPane({
         <View style={{ height: layout.toolbarHeight }} />
       )}
       {!autoLayout && bookmarksBar && <BookmarksBar placeholder={!visible} />}
-      <Animated.View style={autoLayout ? motion.groupStyle : { flex: 1 }}>
+      <Animated.View pointerEvents={pooled ? "box-none" : "auto"} style={autoLayout ? motion.groupStyle : { flex: 1 }}>
         {autoLayout && bookmarksBar && <BookmarksBar placeholder={!visible} />}
-        <View style={autoLayout ? { height: motion.pageHeight } : { flex: 1 }}>
+        <View pointerEvents={pooled ? "box-none" : "auto"} style={autoLayout ? { height: motion.pageHeight } : { flex: 1 }}>
           {visible && !fullscreen && <ShareBar tabId={tabId} />}
-          <View style={{ flex: 1 }}>
-            {(mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
+          <View pointerEvents={pooled ? "box-none" : "auto"} style={{ flex: 1 }}>
+            {pooled && tabPool && <PooledPageProps pool={tabPool} tabId={tabId} visible={visible} />}
+            {!pooled && (mounted || prewarmed) && <TabWebView tabId={tabId} visible={visible && !newTabShown && !isNewTab} warm={!!warm && !newTabShown && !isNewTab} />}
             {visible && isNewTab && !small && !nativePane && (inSplit ? <SplitEmptyState tabId={tabId} focused={focused} /> : emptyCard ? <EmptyCard windowId={windowId} tabId={tabId} /> : <NewTabPage key={tabId} tabId={tabId} toolbar={toolbar} />)}
             {visible && <InternalPage tabId={tabId} />}
             {visible && overlays && (
@@ -604,15 +615,16 @@ function BesidePeekPopovers({ tabId, left, top, room }: { tabId: string; left: n
   );
 }
 
-function PeekPage({ tabId, sourceId, windowId, width, fullscreen }: { tabId: string; sourceId: string; windowId: string; width: number; fullscreen: boolean }) {
+function PeekPage({ tabId, sourceId, windowId, width, fullscreen, pooled }: { tabId: string; sourceId: string; windowId: string; width: number; fullscreen: boolean; pooled: boolean }) {
   return (
     <>
-      <TabWebView tabId={tabId} visible warm={false} peekOf={sourceId} />
+      {!pooled && <TabWebView tabId={tabId} visible warm={false} peekOf={sourceId} />}
       <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} fullscreen={fullscreen} newTabShown={false} cliPill peek />
     </>
   );
 }
 
+const NO_TABS: string[] = [];
 const paneTab = (t: Tab | undefined) => ({ exists: !!t, url: t?.url ?? "" });
 const webViewTab = (t: Tab | undefined) => ({ navigation: t?.navigation, adoptId: t?.adoptId, profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
 

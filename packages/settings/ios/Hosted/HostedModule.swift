@@ -27,6 +27,13 @@ public class HostedModule: Module {
       MainActor.assumeIsolated { NativeSidebarHoverCard.describe(windowId) }
     }.runOnQueue(.main)
 
+    AsyncFunction("presentedAt") { (windowId: String, x: Double, y: Double, width: [Double], height: [Double]) -> String in
+      MainActor.assumeIsolated {
+        guard width.count == 2, height.count == 2 else { return "null" }
+        return NativeSidebarHoverCard.presented(windowId, at: CGPoint(x: x, y: y), width: width[0]...width[1], height: height[0]...height[1])
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("sidebarPages") { (windowId: String) -> String in
       MainActor.assumeIsolated { NativeSidebar.pages(windowId: windowId) ?? "null" }
     }.runOnQueue(.main)

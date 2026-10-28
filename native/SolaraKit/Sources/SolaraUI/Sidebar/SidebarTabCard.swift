@@ -58,7 +58,11 @@ public enum SidebarTabCardMetrics {
   public static func origin(anchor: CGRect, sidebarWidth: CGFloat, cardHeight: CGFloat, windowHeight: CGFloat) -> CGPoint {
     let left = anchor.maxX <= sidebarWidth + 1 ? sidebarWidth + 0.5 : anchor.maxX + 8
     let centred = anchor.midY - cardHeight / 2
-    return CGPoint(x: left, y: max(8, min(centred, windowHeight - cardHeight - 8)))
+    return CGPoint(x: left, y: pixel(max(8, min(centred, windowHeight - cardHeight - 8))))
+  }
+
+  static func pixel(_ value: CGFloat, scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2) -> CGFloat {
+    (value * scale).rounded(.toNearestOrAwayFromZero) / scale
   }
 
   static func pitch(_ count: Int) -> CGFloat { min(maxPitch, (width - 4) / CGFloat(max(1, count))) }
@@ -70,7 +74,7 @@ public final class SidebarTabCardView: NSView {
   public private(set) var state: SidebarTabCardState?
   private let surface = SurfaceLayer()
   private let title = OnboardingTextNSView()
-  private let host = NSTextField(labelWithString: "")
+  private let host = OnboardingTextNSView()
   private let note = NSTextField(labelWithString: "This tab needs to reload")
   private var buttons: [SidebarIconButton] = []
   private var titleLines = 1
@@ -92,12 +96,15 @@ public final class SidebarTabCardView: NSView {
     title.container.maximumNumberOfLines = 2
     title.container.lineBreakMode = .byTruncatingTail
     title.manager.usesFontLeading = false
-    host.lineBreakMode = .byTruncatingTail
+    host.container.maximumNumberOfLines = 1
+    host.container.lineBreakMode = .byTruncatingTail
+    host.manager.usesFontLeading = false
     note.lineBreakMode = .byTruncatingTail
     note.font = .systemFont(ofSize: 11.5)
     note.setAccessibilityLabel("Web content has been discarded")
     addSubview(title)
-    for field in [host, note] { addSubview(field) }
+    addSubview(host)
+    addSubview(note)
     DevPointer.observe(self, #selector(devPointer(_:)))
   }
 
@@ -111,10 +118,11 @@ public final class SidebarTabCardView: NSView {
     surface.fill = color(look.fill)
     surface.borderTint = color(look.border)
     surface.glowOpacity = look.shadowOpacity * 0.8
-    title.storage.setAttributedString(Self.text(next.title, size: 13, weight: .semibold, color: color(look.primary), wraps: true))
+    title.storage.setAttributedString(Self.text(next.title, size: 13, weight: .semibold, color: color(look.primary)))
     title.needsDisplay = true
     host.isHidden = next.host == nil
-    host.attributedStringValue = Self.text(next.host ?? "", size: 13, weight: .regular, color: secondary, wraps: false)
+    host.storage.setAttributedString(Self.text(next.host ?? "", size: 13, weight: .regular, color: secondary))
+    host.needsDisplay = true
     note.isHidden = !next.sleeping
     note.textColor = color(look.tertiary)
     while buttons.count < next.buttons.count {
@@ -142,10 +150,10 @@ public final class SidebarTabCardView: NSView {
   public var height: CGFloat {
     guard let state else { return 0 }
     let m = SidebarTabCardMetrics.self
-    var h = m.top + CGFloat(titleLines) * m.line
+    var h = m.border + m.top + CGFloat(titleLines) * m.line
     if state.host != nil { h += m.line }
     if state.sleeping { h += 2 + Self.lineHeight(note.font ?? .systemFont(ofSize: 11.5)) }
-    return h + m.actionsGap + m.button + m.bottom
+    return h + m.actionsGap + m.button + m.bottom + m.border
   }
 
   public override func layout() {
@@ -157,11 +165,11 @@ public final class SidebarTabCardView: NSView {
     CATransaction.commit()
     let textX = m.inset - m.fieldPadding
     let textWidth = bounds.width - 2 * textX
-    var y = m.top
+    var y = m.border + m.top
     title.frame = NSRect(x: m.inset + m.border, y: y, width: m.titleWidth, height: CGFloat(titleLines) * m.line)
     y += title.frame.height
     if !host.isHidden {
-      host.frame = NSRect(x: textX, y: y, width: textWidth, height: m.line)
+      host.frame = NSRect(x: m.inset + m.border, y: y, width: m.titleWidth, height: m.line)
       y += m.line
     }
     if !note.isHidden {
@@ -211,12 +219,11 @@ public final class SidebarTabCardView: NSView {
 
   public var titleShown: String { title.shownText(width: SidebarTabCardMetrics.titleWidth) }
 
-  private static func text(_ string: String, size: CGFloat, weight: NSFont.Weight, color: NSColor, wraps: Bool) -> NSAttributedString {
+  private static func text(_ string: String, size: CGFloat, weight: NSFont.Weight, color: NSColor) -> NSAttributedString {
     let font = NSFont.systemFont(ofSize: size, weight: weight)
     let paragraph = NSMutableParagraphStyle()
     paragraph.minimumLineHeight = SidebarTabCardMetrics.line
     paragraph.maximumLineHeight = SidebarTabCardMetrics.line
-    paragraph.lineBreakMode = wraps ? .byWordWrapping : .byTruncatingTail
     let offset = (SidebarTabCardMetrics.line - lineHeight(font)) / 2
     return NSAttributedString(string: string, attributes: [.font: font, .foregroundColor: color, .paragraphStyle: paragraph, .baselineOffset: offset])
   }

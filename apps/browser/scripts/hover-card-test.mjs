@@ -6,7 +6,8 @@
 // switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
 // pull request's card opens the pull request from its comments line. A playing pinned tab's player card goes back to
 // the tab from its artwork. A pinned calendar tab's card lists the fixture's events and a click on one shows the tab.
-// A pinned folder's peek lists its first eight tabs and a click on one shows it. Scrolling the sidebar dismisses the card,
+// The card's fade and scale follow RN's curve and springs frame by frame (presentation layers sampled in process). A
+// pinned folder's peek lists its first eight tabs and a click on one shows it. Scrolling the sidebar dismisses the card,
 // as RN's does.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
@@ -30,11 +31,15 @@ const titleOf = (id, i) => (i === 3 ? "Anker USB-C to USB-C Cable (240W, 6 ft), 
 const tabs = ids.map((id, i) => ({ id, url: `data:text/html,<title>${titleOf(id, i)}</title>`, title: titleOf(id, i), lastActiveAt: Date.now() - i * 60_000 }));
 
 mkdirSync(join(scratch, "data"), { recursive: true });
+const midnight = new Date();
+midnight.setHours(24, 0, 0, 0);
+const minutesLeftToday = Math.floor((midnight.getTime() - Date.now()) / 60_000);
+const startToday = (minutes) => Math.min(minutes, minutesLeftToday - 5);
 writeFileSync(join(scratch, "data", "calendar-fixture.json"), JSON.stringify({
   calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
   events: [
-    { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: 3, durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }] },
-    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 10, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
+    { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: startToday(3), durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }] },
+    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: startToday(90), durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
   ],
 }));
 
@@ -219,6 +224,68 @@ try {
     await sleep(200);
     await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
     await until("the calendar tab active", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId]`)) === tab);
+  });
+
+  await rep.check("the card fades in and out over 100 ms on RN's curve and scales on RN's springs, frame by frame", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    const on = await onRow("t5");
+    const [x, y, w, h] = (await shown("t5")).frame;
+    const probe = { x: x + 4, y: Math.round(y + h / 2) };
+    await point(900, 600);
+    await gone("hover away");
+    const sample = (phase, to) => run(`
+      const want = ${JSON.stringify(phase)};
+      let t0 = null;
+      const unsub = ac.sidebarRows.useSidebarUi.subscribe((s) => { if (t0 === null && (want === "in" ? !!s.hover : !s.hover)) t0 = performance.now(); });
+      const out = [];
+      const start = performance.now();
+      const loop = () => {
+        const at = performance.now();
+        return globalThis.expo.modules.SolaraHosted.presentedAt("w1", ${probe.x}, ${probe.y}, [${w * 0.75}, ${w + 1}], [${h * 0.75}, ${h + 1}]).then((j) => {
+          out.push([at, JSON.parse(j)]);
+          if ((t0 !== null && at - t0 > 400) || at - start > 3000) return;
+          return loop();
+        });
+      };
+      return ac.shell.devSetPointer("w1", ${JSON.stringify(to)}).then(loop).then(() => { unsub(); return JSON.stringify(out.map(([at, p]) => [at - t0, p.opacity, p.scale])); });
+    `).then(JSON.parse);
+    const bezier = (x1, y1, x2, y2) => (x) => {
+      let lo = 0, hi = 1, t = 0.5;
+      for (let i = 0; i < 40; i++) {
+        t = (lo + hi) / 2;
+        const bx = 3 * (1 - t) ** 2 * t * x1 + 3 * (1 - t) * t * t * x2 + t ** 3;
+        if (bx < x) lo = t; else hi = t;
+      }
+      return 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t * t * y2 + t ** 3;
+    };
+    const ease = bezier(0.25, 0.46, 0.45, 0.94);
+    const spring = (response, damping, from, to) => (ms) => {
+      const omega = (2 * Math.PI) / response, damped = omega * Math.sqrt(1 - damping * damping), t = Math.max(0, ms) / 1000, x0 = from - to;
+      return to + Math.exp(-damping * omega * t) * (x0 * Math.cos(damped * t) + ((damping * omega * x0) / damped) * Math.sin(damped * t));
+    };
+    const fit = (frames, curve) => {
+      let best = { start: 0, error: Infinity };
+      for (let start = -30; start <= 80; start += 0.1) {
+        const error = Math.max(...frames.map(([t, v]) => Math.abs(curve(t - start) - v)));
+        if (error < best.error) best = { start, error };
+      }
+      return best;
+    };
+    const frames = (samples, index, keep) => samples.filter((s, i) => i > 0 && s[index] !== samples[i - 1][index] && keep(s)).map((s) => [s[0], s[index]]);
+    for (const [phase, to, fade, scale] of [
+      ["in", { x: on.x + 60, y: Math.round(on.y + on.height / 2) }, (t) => ease(Math.min(1, Math.max(0, t / 100))), spring(0.25, 0.75, 0.92, 1)],
+      ["out", { x: 900, y: 600 }, (t) => 1 - ease(Math.min(1, Math.max(0, t / 100))), spring(0.2, 0.6, 1, 0.92)],
+    ]) {
+      const samples = await sample(phase, to);
+      const opacity = fit(frames(samples, 1, (s) => s[1] > 0.001 && s[1] < 0.999), fade);
+      const size = fit(frames(samples, 2, (s) => s[2] > 0.5 && s[1] > 0.02), scale);
+      rep.say(`${phase}: the fade starts ${opacity.start.toFixed(1)} ms after the hover changes, off RN's curve by ${opacity.error.toFixed(3)} at worst; the scale ${size.start.toFixed(1)} ms, off by ${size.error.toFixed(4)}`);
+      assert.ok(opacity.error < 0.04, `${phase} fade on RN's curve (${opacity.error})`);
+      assert.ok(size.error < 0.004, `${phase} scale on RN's spring (${size.error})`);
+      assert.ok(opacity.start < 40 && size.start < 40, `${phase} starts no later than RN's (${opacity.start}, ${size.start} ms)`);
+      await sleep(600);
+    }
   });
 
   await rep.check("a pinned folder's peek shows natively with its first eight tabs, and a click on one shows the tab", async () => {

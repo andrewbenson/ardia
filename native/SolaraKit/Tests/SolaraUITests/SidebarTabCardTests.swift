@@ -19,13 +19,13 @@ import Testing
   @Test func aOneLineCardIsRNsHeight() throws {
     let card = SidebarTabCardView()
     card.set(try state())
-    #expect(card.frame.size == NSSize(width: 200, height: 16.5 + 16 + 16 + 10 + 28 + 6))
+    #expect(card.frame.size == NSSize(width: 200, height: 0.5 + 16.5 + 16 + 16 + 10 + 28 + 6 + 0.5))
   }
 
   @Test func aLongTitleWrapsToTwoLinesAndNoFurther() throws {
     let card = SidebarTabCardView()
     card.set(try state(title: String(repeating: "A very long page title ", count: 8), host: nil))
-    #expect(card.frame.height == 16.5 + 32 + 10 + 28 + 6)
+    #expect(abs(card.frame.height - (0.5 + 16.5 + 32 + 10 + 28 + 6 + 0.5)) < 0.001)
   }
 
   @Test func buttonsShareTheWidthAtRNsPitch() throws {
@@ -37,7 +37,7 @@ import Testing
     let pitch = min(49, 196.0 / 5)
     #expect(abs((buttons[1].frame.minX - buttons[0].frame.minX) - pitch) < 0.001)
     #expect(abs(buttons[0].frame.minX - ((200 - pitch * 5) / 2 + (pitch - 28) / 2)) < 0.001)
-    #expect(buttons.map(\.frame.minY).allSatisfy { $0 == 16.5 + 32 + 10 })
+    #expect(buttons.map(\.frame.minY).allSatisfy { $0 == 0.5 + 16.5 + 32 + 10 })
   }
 
   @Test func theCardSitsAtTheSidebarEdgeCentredOnTheRowAndClamped() {

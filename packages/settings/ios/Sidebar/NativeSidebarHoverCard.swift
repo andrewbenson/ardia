@@ -30,6 +30,36 @@ enum NativeSidebarHoverCard {
     return String(data: data, encoding: .utf8) ?? "null"
   }
 
+  static func presented(_ windowId: String, at point: CGPoint, width: ClosedRange<Double>, height: ClosedRange<Double>) -> String {
+    guard let view = NativeSidebar.hosts[windowId]?.view.window?.contentView, let root = view.layer?.presentation() ?? view.layer else { return "null" }
+    let flipped = view.isFlipped || root.isGeometryFlipped
+    let local = CGPoint(x: point.x, y: flipped ? point.y : root.bounds.height - point.y)
+    func find(_ layer: CALayer) -> CALayer? {
+      for sub in layer.sublayers ?? [] {
+        let rect = sub.convert(sub.bounds, to: root)
+        if rect.contains(local), width.contains(Double(rect.width)), height.contains(Double(rect.height)) { return sub }
+        if let deeper = find(sub) { return deeper }
+      }
+      return nil
+    }
+    guard let hit = find(root) else { return "{\"opacity\":0,\"scale\":0,\"rect\":[0,0,0,0]}" }
+    var opacity = 1.0
+    var layer: CALayer? = hit
+    while let current = layer, current !== root {
+      if current.isHidden { opacity = 0 }
+      opacity *= Double(current.opacity)
+      layer = current.superlayer
+    }
+    let rect = hit.convert(hit.bounds, to: root)
+    let info: [String: Any] = [
+      "opacity": opacity, "scale": hit.bounds.width > 0 ? rect.width / hit.bounds.width : 0,
+      "rect": [rect.minX, flipped ? rect.minY : root.bounds.height - rect.maxY, rect.width, rect.height],
+      "layer": String(describing: type(of: hit)), "delegate": hit.delegate.map { String(describing: type(of: $0)) } ?? "",
+    ]
+    guard let data = try? JSONSerialization.data(withJSONObject: info) else { return "null" }
+    return String(data: data, encoding: .utf8) ?? "null"
+  }
+
   static func send(_ windowId: String, _ id: String, _ event: String, _ extra: [String: Any] = [:]) {
     var payload = extra
     if payload["clickAt"] == nil {

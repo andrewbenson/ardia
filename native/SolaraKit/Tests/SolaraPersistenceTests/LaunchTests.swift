@@ -82,7 +82,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let launch = try open(folder)
     let store = store(for: launch)
     let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
-    let window = store.state.windowOrder[0]
+    let window = try #require(store.state.windowOrder.first, "the launch came back with no windows: \(launch.report)")
     try store.dispatch(Command("newTab", [.string(window), ["url": "https://new.example/"]]))
     try store.dispatch(Command("createGroup", [JSONValue(Array(store.state.windows[window]!.tabIds.suffix(2))), ["name": "G"]]))
     try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
@@ -111,7 +111,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let launch = try open(folder)
     let store = store(for: launch)
     let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
-    let window = store.state.windowOrder[0]
+    let window = try #require(store.state.windowOrder.first, "the launch came back with no windows: \(launch.report)")
     let tabs = store.state.windows[window]!.tabIds
     try store.dispatch(Command("closeTabs", [JSONValue(Array(tabs.prefix(3)))]))
     try store.dispatch(Command("reopenClosed", [.string(window)]))
@@ -448,7 +448,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let launch = try open(folder)
     let store = store(for: launch)
     try store.dispatch(Command("createWindow", [[:]]))
-    let window = store.state.windowOrder[0]
+    let window = try #require(store.state.windowOrder.first, "the launch came back with no windows: \(launch.report)")
     for i in 0..<2000 { try store.dispatch(Command("newTab", [.string(window), ["url": .string("https://site\(i % 50).example/\(i)"), "background": true]])) }
     let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, clock: { 42 })
     #expect(writer.flush(timeout: 30))
@@ -548,7 +548,7 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let folder = try scratchFolder()
     try copyFixture("broken-splits", into: folder)
     let first = try open(folder)
-    let window = first.state.windowOrder[0]
+    let window = try #require(first.state.windowOrder.first, "the launch came back with no windows: \(first.report)")
     let tabs = first.state.windows[window]!.tabIds
     try first.database.pool.write { db in try db.execute(sql: #"UPDATE "window" SET payload = 'not json' WHERE id = ?"#, arguments: [window]) }
     try first.database.close()

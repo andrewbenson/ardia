@@ -2504,6 +2504,8 @@ try {
       const tab = await freshTab(`${base}/b?under-popup`);
       try {
         const windowsBefore = (await cef(`chromeWindows()`)).length;
+        const stripTabs = async () => (await cef(`tabStrips()`)).strips.flatMap((st) => st.tabs.map((x) => ({ strip: st.strip, profile: st.profile, ...x })));
+        const browsersBefore = new Set((await stripTabs()).map((x) => x.browser));
         const opened = await evalApp(`const ext = Object.values(ac.extensions.useExtensions.getState().lists).flat().find((x) => x.id === "${id}");
           return ac.extensions.activateExtension(${JSON.stringify(mainWindow)}, ext, { x: 100, y: 40, width: 20, height: 20 }).then(() => !!ac.extensions.useExtensions.getState().popup)`);
         if (!opened) throw new Error("no popup in the app");
@@ -2518,8 +2520,8 @@ try {
         if (seen.window !== strip?.strip) throw new Error(`the popup's current window is ${seen.window}, the app's is ${strip?.strip}`);
         if (seen.tabs.length !== 1 || seen.tabs[0] !== `${base}/b?under-popup`) throw new Error(`the popup's active tab: ${JSON.stringify(seen.tabs)}`);
         if (seen.popups !== 1) throw new Error(`chrome.extension.getViews({ type: "popup" }): ${seen.popups}`);
-        const strips = await cef(`tabStrips()`);
-        if (strips.strips.some((st) => st.tabs.some((x) => x.key == null))) throw new Error("the popup is a tab in a strip");
+        const added = (await stripTabs()).filter((x) => !browsersBefore.has(x.browser));
+        if (added.length) throw new Error(`the popup is a tab in a strip: ${JSON.stringify(added)}`);
         const windowsWith = (await cef(`chromeWindows()`)).length;
         if (windowsWith !== windowsBefore) throw new Error(`windows ${windowsBefore} → ${windowsWith} with the popup open`);
         for (const type of ["rawKeyDown", "keyUp"])

@@ -2200,6 +2200,13 @@ void ArdiaCoreWebViewsSetFieldTiming(BOOL on) {
   return view.window.windowNumber;
 }
 
++ (NSInteger)devLiveExtensionViews:(NSString *)host {
+  NSInteger count = 0;
+  for (ArdiaCoreWebView *view in LiveViews().allObjects)
+    if ([view.extensionHost isEqualToString:host]) count++;
+  return count;
+}
+
 + (BOOL)devFocusPageOfBrowser:(int)browserId {
 #if DEBUG
   ArdiaCoreTab *tab = ardiacore_host::TabWithBrowserId(browserId);

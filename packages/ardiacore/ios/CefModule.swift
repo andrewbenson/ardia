@@ -30,6 +30,7 @@ public class CefModule: Module {
     AsyncFunction("devExternalLaunches") { ArdiaCoreHost.testExternalLaunches() }.runOnQueue(.main)
     AsyncFunction("devEvents") { (browserId: Int) in ArdiaCoreWebView.devEvents(browserId: Int32(browserId)) }.runOnQueue(.main)
     AsyncFunction("devWindowNumber") { (browserId: Int) in ArdiaCoreWebView.devWindowNumber(browserId: Int32(browserId)) }.runOnQueue(.main)
+    AsyncFunction("devLiveExtensionViews") { (host: String) in ArdiaCoreWebView.devLiveExtensionViews(host) }.runOnQueue(.main)
     AsyncFunction("devPictureInPicture") { ArdiaCoreWebView.devPictureInPicture() }.runOnQueue(.main)
     AsyncFunction("devPictureInPictureAction") { (action: String) in ArdiaCoreWebView.devPictureInPictureAction(action) }.runOnQueue(.main)
     AsyncFunction("devKeepBrowsersOnClose") { (keep: [Int], failing: [Int]) in

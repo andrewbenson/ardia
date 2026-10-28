@@ -30,16 +30,19 @@ RN component uses, and calls the tab's handler from `pageEvents.ts`, the same fu
 The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `WebViewHandle` in `webviews` on
 `onPageCreated` and deletes it on `onPageGone`.
 
-- `SolaraTabPool` exposes each view-manager AsyncFunction with the tab id first: `goBack(tabId)`,
-  `loadUrl(tabId, url, userInitiated)`, `find(tabId, text, forward, findNext)`, `focus(tabId)`, and so on, same
-  argument and result types.
-- `@ardia/ardiacore` builds both handles from one function, so URL conversion, `evaluate`'s JSON and fallbacks match.
+- `SolaraTabPool.pageCall(tabId, method, args)` is the one native entry: `method` is the view manager's AsyncFunction
+  name (`goBack`, `loadUrl`, `find`, `focus`, …) and `args` its arguments, as the RN view's native handle passes them
+  (engine URLs, `loadUrl(url, userInitiated)`). It resolves to what that AsyncFunction resolves to. Both kinds of page
+  run one Swift dispatcher.
+- `@ardia/ardiacore` builds both handles from one typed function over that native handle (`pooledWebViewHandle`), so
+  URL conversion, `evaluate`'s JSON and fallbacks match, and TypeScript checks every method and argument.
 - A call for a tab the pool has no view for rejects with code `ERR_NO_PAGE`; the handle returns the same fallback the
   RN handle returns for a missing view.
 - `nativeTag()` is null for a pooled page. Its one caller, the focus-move claim in `focusHandoff.ts`, claims a pooled
-  page by tab id instead (`claimFocusPage(generation, tabId)`), and the shell resolves the tab's view through the pool.
+  page by tab id instead (`SolaraTabPool.claimFocusPage(generation, tabId)`), which resolves the tab's pooled view and
+  hands it to the shell's focus-move claim.
 - WebKit tabs get a `WebKitTab` view through the same adapter, with the same events and handle.
-- `focus(tabId)` makes the page view first responder in its window. Peek's open, Open as Tab and Split use it.
+- `pageCall(tabId, "focus", [])` makes the page view first responder in its window. Peek's open, Open as Tab and Split use it.
 
 ## What a mounted EngineWebView did besides events
 
@@ -55,7 +58,7 @@ The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `We
 | Discard and resume | shared `onDiscarded` handler sets the session's pending URL; resume goes through the navigation path above |
 | `handOff` / `takeHandOff`, `adoptId` transfers, pin handoffs, peek to tab | not in pooled mode: the pool moves its own view between slots and windows. Crossing to Little Solara is the park path |
 | New Tab prewarm (`usePrewarm`) | off in pooled windows |
-| A page's `onWindowClose` from a close Chrome started (an extension's `chrome.windows.remove`) carries `{ withWindow: true }` | shared handler: `closeTabs([tabId], { lastClosesWindow: true })`, so the app window closes with it |
+| A page's `onWindowClose(withWindow)`: `withWindow` is true when Chrome started the window's close (an extension's `chrome.windows.remove`) | shared handler: `closeTabs([tabId], { lastClosesWindow: true, windowClosedByChrome: withWindow })` |
 | Split-pane activation on a click (`TabPane` `onTouchStart`) | shared `onPageFocus` and `onPagePress` handlers (`activateSplitPane`). A left press on a page no longer reaches RN's touch handler, so `onPagePress` is the only click signal |
 
 ## Checks

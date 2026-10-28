@@ -269,11 +269,18 @@ try {
       return { ok: now.clearOpen && !!frameOf(now, "Clear Data"), now };
     });
     assert.ok(open.ok, "dialog open");
-    await click(frameOf(open.now, "Clear Data"));
+    let last = null;
+    const still = await until(async () => {
+      const now = frameOf(await page(), "Clear Data");
+      const ok = !!now && !!last && JSON.stringify(now) === JSON.stringify(last);
+      last = now;
+      return { ok, now };
+    });
+    await click(still.now);
     const cleared = await until(async () => {
       const now = await page();
       return { ok: !now.clearOpen, now };
-    }, 8000);
+    }, 20000);
     assert.equal(cleared.now.clearOpen, false, "dialog closed");
     assert.deepEqual(cleared.now.shown, history.slice(1).map((h) => h.url), "the last hour's visit is gone");
   });

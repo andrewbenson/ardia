@@ -36,6 +36,7 @@ public final class PersistenceWriter: Sendable {
   let clock: @Sendable () -> Double
   let trouble: @Sendable (String) -> Void
   let scope: PersistenceScope
+  let keepsDownloadsFile: Bool
 
   public init(
     store: Store, database: SolaraDatabase, folder: DataFolder, persisted: PersistedState, scope: PersistenceScope = .everything,
@@ -48,6 +49,7 @@ public final class PersistenceWriter: Sendable {
     self.clock = clock
     self.trouble = trouble
     self.scope = scope
+    keepsDownloadsFile = persisted.keepsDownloadsFile
     pending = Mutex(
       Pending(rows: true, rowsScheduled: true, written: persisted.workspace ?? WorkspaceRows(), settings: persisted.settings, downloads: persisted.downloads))
     let id = store.subscribe { [weak self] commit in self?.note(commit) }
@@ -148,7 +150,7 @@ public final class PersistenceWriter: Sendable {
         try Importer.writeDurably(Data(document.json(marker: marker).text().utf8), to: folder.session)
         pending.withLock { $0.exportedSession = session }
       }
-      if downloads != lastDownloads {
+      if downloads != lastDownloads, !keepsDownloadsFile {
         try Importer.writeDurably(ShadowExport.downloadsJSON(state, marker: marker), to: folder.downloads)
         pending.withLock { $0.exportedDownloads = downloads }
       }

@@ -1,4 +1,5 @@
 import { launchEnvironment, readDocument, systemInfo, writeDocument } from "@ardia/shell";
+import { persistenceRefused } from "../../lib/persistLatch";
 import { create } from "zustand";
 import { PRODUCT } from "../../lib/productName";
 
@@ -60,7 +61,7 @@ const useReleaseNotes = create<State>(() => ({ pending: null, page: null }));
 
 export function trackAppVersion(): boolean {
   const version = systemInfo().appVersion;
-  if (!version) return false;
+  if (!version || persistenceRefused()) return false;
   const saved = readSaved();
   const updated = saved ? saved.lastVersion !== version : !!readDocument("session.json");
   let pending = saved?.pending ?? null;

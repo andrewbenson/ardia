@@ -109,11 +109,30 @@ public enum Importer {
     _ folder: DataFolder, carrying carried: PersistedState?, settings owned: JSONObject? = nil, downloads ownedDownloads: [Download]? = nil,
     context: LoadContext, originalsFallback: Bool = true
   ) -> ImportResult {
+    read(folder, carrying: carried, settings: owned, downloads: ownedDownloads, context: context, originalsFallback: originalsFallback, files: nil)
+  }
+
+  static func read(
+    _ folder: DataFolder, carrying carried: PersistedState?, settings owned: JSONObject? = nil, downloads ownedDownloads: [Download]? = nil,
+    context: LoadContext, originalsFallback: Bool = true, files: LaunchFiles?
+  ) -> ImportResult {
     var notes: [String] = []
     var refusal: String? = nil
     var meta: [String: String] = ["imported_from": "session.json"]
-    let sessionData = folder.read(folder.session) ?? (originalsFallback ? folder.read(folder.preNativeSession) : nil)
-    let downloadsData = folder.read(folder.downloads) ?? (originalsFallback ? folder.read(folder.preNativeDownloads) : nil)
+    func source(_ file: URL, original: URL, read: DataFolder.Contents?) -> DataFolder.Contents {
+      let contents = read ?? folder.contents(file)
+      if case .missing = contents, originalsFallback { return folder.contents(original) }
+      return contents
+    }
+    let sessionSource = source(folder.session, original: folder.preNativeSession, read: files?.session)
+    let downloadsSource = source(folder.downloads, original: folder.preNativeDownloads, read: files?.downloads)
+    let sessionData = sessionSource.data
+    let downloadsData = downloadsSource.data
+    if let failure = sessionSource.failure {
+      refusal = failure
+      notes.append(failure)
+    }
+    if let failure = downloadsSource.failure, ownedDownloads == nil { notes.append(failure) }
     var session: JSONValue? = nil
     if let sessionData {
       meta["source_session_sha256"] = Launcher.sha256(sessionData)
@@ -131,7 +150,7 @@ public enum Importer {
         refusal = "session.json could not be parsed"
         notes.append("session.json could not be parsed: \(error)")
       }
-    } else {
+    } else if case .missing = sessionSource {
       notes.append("no session.json")
     }
     if var object = session?.object {
@@ -213,7 +232,14 @@ public enum Importer {
     _ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope = .everything,
     originalsFallback: Bool = true
   ) throws -> ImportResult {
-    var result = read(folder, carrying: carried, context: context, originalsFallback: originalsFallback)
+    try importFolder(folder, carrying: carried, appVersion: appVersion, now: now, context: context, scope: scope, originalsFallback: originalsFallback, files: nil)
+  }
+
+  static func importFolder(
+    _ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope = .everything,
+    originalsFallback: Bool = true, files: LaunchFiles?
+  ) throws -> ImportResult {
+    var result = read(folder, carrying: carried, context: context, originalsFallback: originalsFallback, files: files)
     if scope == .settingsAndDownloads {
       result.state = settingsAndDownloads(of: result.state)
       result.persisted.workspace = nil

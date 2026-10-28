@@ -53,10 +53,19 @@ function startToasts() {
     }
     publishSettingsTopic("split.toast", { v: VERSION, windows });
   };
+  const publishNotices = (notices: ReturnType<typeof useToasts.getState>["notices"]) => {
+    const windows: Record<string, object> = {};
+    for (const [windowId, notice] of Object.entries(notices)) {
+      if (notice) windows[windowId] = { id: notice.id, title: notice.title, message: notice.message, icon: notice.icon ?? null, action: null, sticky: true };
+    }
+    publishSettingsTopic("split.notice", { v: VERSION, windows });
+  };
   useToasts.subscribe((s, prev) => {
     if (s.toasts !== prev.toasts) publish(s.toasts);
+    if (s.notices !== prev.notices) publishNotices(s.notices);
   });
   publish(useToasts.getState().toasts);
+  publishNotices(useToasts.getState().notices);
 }
 
 export type SplitToolbarHandlers = { onClick: (c: ToolbarClick) => Promise<unknown> | unknown; onAnchors: (anchors: Record<string, [number, number, number, number]>) => void };

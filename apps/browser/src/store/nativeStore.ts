@@ -35,6 +35,7 @@ const UI_KEYS = ["focusedWindowId", "focusOrder", "lastProfileId"] as const;
 let active = false;
 let ownsWorkspace = false;
 let handedOff = false;
+let refusedSession: string | null = null;
 let appliedRev = 0;
 let syncOriginsAtStart = false;
 let taggingSyncOrigins = false;
@@ -48,6 +49,7 @@ let stopListening: (() => void) | null = null;
 export const nativeStoreActive = () => active;
 export const nativeOwnsWorkspace = () => active && ownsWorkspace;
 export const dataFolderHandedOff = () => handedOff;
+export const nativeRefusedSession = () => refusedSession;
 export const nativeStoreRev = () => appliedRev;
 
 export function startNativeStore(): { active: boolean; reason?: string } {
@@ -55,6 +57,7 @@ export function startNativeStore(): { active: boolean; reason?: string } {
   active = status.active;
   ownsWorkspace = status.active && status.scope === "everything";
   handedOff = !status.active && status.handedOff === true;
+  refusedSession = !status.active ? (status.refusedSession ?? null) : null;
   syncOriginsAtStart = syncRedesign.on;
   taggingSyncOrigins = status.active && syncRedesign.on && useNativeSyncOrigins(true);
   return status.active ? { active: true } : { active: false, reason: status.reason };

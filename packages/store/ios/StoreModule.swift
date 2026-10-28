@@ -12,7 +12,9 @@ public class StoreModule: Module {
 
     Function("status") { () -> [String: Any] in
       if NativeStore.shared != nil { return ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads"] }
-      return ["active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff]
+      var status: [String: Any] = ["active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff]
+      if let refusedSession = NativeStore.refusedSession { status["refusedSession"] = refusedSession }
+      return status
     }
 
     Function("snapshot") { () -> String? in

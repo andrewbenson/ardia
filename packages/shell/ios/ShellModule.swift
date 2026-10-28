@@ -196,6 +196,21 @@ public enum DocumentStore {
     return pending ?? (try? String(contentsOf: url, encoding: .utf8))
   }
 
+  public static func readResult(_ name: String) -> [String: String] {
+    guard let url = try? ShellModule.documentURL(name) else { return [:] }
+    lock.lock()
+    let pending = staged[url.lastPathComponent]?.contents
+    lock.unlock()
+    if let pending { return ["contents": pending] }
+    do {
+      return ["contents": try String(contentsOf: url, encoding: .utf8)]
+    } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+      return [:]
+    } catch {
+      return ["path": url.path, "failure": error.localizedDescription]
+    }
+  }
+
   public static func write(_ name: String, _ contents: String, done: Done? = nil) throws {
     _ = flushOnQuit
     let url = try ShellModule.documentURL(name)
@@ -524,6 +539,8 @@ public class ShellModule: Module {
     }.runOnQueue(.main)
 
     Function("readDocument") { (name: String) -> String? in DocumentStore.read(name) }
+
+    Function("readDocumentResult") { (name: String) -> [String: String] in DocumentStore.readResult(name) }
 
     Function("writeDocument") { (name: String, contents: String) in try DocumentStore.write(name, contents) }
 

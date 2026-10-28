@@ -23,6 +23,7 @@ import {
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
 import { nativeBusyWrites } from "../store/nativeStore";
+import { persistenceRefused } from "../lib/persistLatch";
 import { engineProfile, isIncognitoProfile } from "../store/model";
 import { DEFAULT_PROFILE_ID } from "../store/settings";
 import type { Profile } from "../store/types";
@@ -162,6 +163,7 @@ let locked = false;
 let loaded = true;
 let newerFormat = false;
 const NEWER_FORMAT = "This Mac's sync settings were saved by a newer version of Solara. Update Solara to keep syncing.";
+const SESSION_UNREADABLE = "Sync is paused because Solara couldn't read its saved session. Nothing from this window is sent to your other Macs.";
 let stopping = false;
 let turningOn = false;
 let phraseEntry: Promise<PhraseResult> | null = null;
@@ -321,7 +323,7 @@ let savedState = "";
 let sealing: Promise<void> | null = null;
 
 function save() {
-  if (newerFormat) return;
+  if (newerFormat || persistenceRefused()) return;
   const { scopes, ...meta } = doc;
   const json = JSON.stringify(loaded ? { ...meta, seqs: Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)])) } : meta);
   if (json !== savedJson) {
@@ -497,7 +499,7 @@ export async function syncNow() {
 
 async function runCycle({ retiring = false } = {}) {
   const native = SyncNative;
-  if (!native || newerFormat || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
+  if (!native || newerFormat || persistenceRefused() || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
   if (running) {
     again = true;
     return;
@@ -1061,6 +1063,7 @@ export async function turnOnSync(folder: string): Promise<{ ok: true } | { error
   const native = SyncNative;
   if (!native) return { error: "Sync isn’t available in this build." };
   if (newerFormat) return { error: NEWER_FORMAT };
+  if (persistenceRefused()) return { error: SESSION_UNREADABLE };
   if (doc.enabled || turningOn) return { error: "Sync is already on." };
   turningOn = true;
   try {
@@ -1095,7 +1098,7 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
       phraseEntry = null;
     }
   }
-  if (newerFormat || doc.enabled || turningOn) return { error: "unavailable" };
+  if (newerFormat || persistenceRefused() || doc.enabled || turningOn) return { error: "unavailable" };
   turningOn = true;
   try {
     const deviceId = native.newDeviceId();
@@ -1256,6 +1259,7 @@ function addLinkedProfile(syncId: string, record: ProfileRecord, shareWith: stri
 
 export function startSync() {
   if (!SyncNative) return;
+  if (persistenceRefused()) return publishUi({ status: "unavailable", error: SESSION_UNREADABLE });
   load();
   editJournal();
   if (newerFormat) return publishUi({ status: "unavailable", error: NEWER_FORMAT });

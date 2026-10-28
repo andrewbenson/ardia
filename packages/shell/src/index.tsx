@@ -242,6 +242,7 @@ export type ShellNative = {
   pickFiles(): Promise<string[]>;
   pickFolder?(current: string | null, prompt: string | null): Promise<string | null>;
   readDocument(name: string): string | null;
+  readDocumentResult?(name: string): { contents?: string; failure?: string; path?: string };
   writeDocument(name: string, contents: string): void;
   saveDocument(name: string, contents: string): Promise<void>;
   removeDocument(name: string): void;
@@ -275,6 +276,17 @@ export type ShellNative = {
 const Shell = nativeModule("ArdiaShell");
 
 export const readDocument = (name: string) => Shell.readDocument(name);
+export type DocumentRead = { contents: string } | { missing: true } | { failure: string; path: string };
+export function readDocumentResult(name: string): DocumentRead {
+  if (!Shell.readDocumentResult) {
+    const contents = Shell.readDocument(name);
+    return contents === null ? { missing: true } : { contents };
+  }
+  const read = Shell.readDocumentResult(name);
+  if (typeof read.contents === "string") return { contents: read.contents };
+  if (typeof read.failure === "string") return { failure: read.failure, path: read.path ?? name };
+  return { missing: true };
+}
 export const writeDocument = (name: string, contents: string) => Shell.writeDocument(name, contents);
 export const saveDocument = (name: string, contents: string) => Shell.saveDocument(name, contents);
 export const removeDocument = (name: string) => Shell.removeDocument(name);

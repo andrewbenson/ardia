@@ -59,6 +59,21 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     #expect(dividers.first?.frame == CGRect(x: 498, y: 0, width: 11, height: 700))
   }
 
+  @Test func theNoticeKeepsItsOwnSlotAboveALaterToast() throws {
+    let view = SplitChromeView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    view.setNotice(SplitToastSpec(id: 1, title: "Solara couldn't read its saved session", message: "Changes in this window won't be saved."))
+    view.setToast(SplitToastSpec(id: 2, title: "Cannot Add New Pane"))
+    view.layoutSubtreeIfNeeded()
+    let sample = view.sample()
+    let notice = try #require(sample["notice"] as? [String: Any])
+    let toast = try #require(sample["toast"] as? [String: Any])
+    #expect(notice["title"] as? String == "Solara couldn't read its saved session")
+    #expect(toast["title"] as? String == "Cannot Add New Pane")
+    view.setToast(nil)
+    #expect((view.sample()["notice"] as? [String: Any])?["id"] as? Int == 1)
+  }
+
   @Test func aFullscreenTabHidesTheDividers() throws {
     let view = SplitChromeView(windowId: "w1")
     view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)

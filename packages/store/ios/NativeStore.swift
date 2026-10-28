@@ -29,6 +29,7 @@ public final class NativeStore: Sendable {
 
   nonisolated(unsafe) public private(set) static var shared: NativeStore?
   nonisolated(unsafe) public private(set) static var unavailableReason: String?
+  nonisolated(unsafe) public private(set) static var refusedSession: String?
   nonisolated(unsafe) public private(set) static var handedOff = false
   nonisolated(unsafe) static var folderLock: FolderLock?
 
@@ -133,6 +134,7 @@ public final class NativeStore: Sendable {
       return true
     } catch {
       unavailableReason = "\(error)"
+      if error is ImportRefused { refusedSession = DataFolder(url: folder).session.path }
       NSLog("[store] running on the JS store: %@", "\(error)")
       return false
     }

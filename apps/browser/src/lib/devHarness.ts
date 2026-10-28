@@ -56,6 +56,9 @@ export function startDevHarness() {
     get toasts(): typeof import("../components/layout/splitActions").useToasts {
       return require("../components/layout/splitActions").useToasts;
     },
+    get sync(): typeof import("../sync/engine").useSync {
+      return require("../sync/engine").useSync;
+    },
     get extensions(): typeof import("../components/extensions/state") {
       return require("../components/extensions/state");
     },

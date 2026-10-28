@@ -3,6 +3,7 @@ import Foundation
 import GRDB
 import SolaraModel
 import SolaraStore
+import Synchronization
 
 public struct DataFolder: Sendable {
   public let url: URL
@@ -19,8 +20,52 @@ public struct DataFolder: Sendable {
   public var preNativeSession: URL { url.appending(path: "session.json.pre-native") }
   public var preNativeDownloads: URL { url.appending(path: "downloads.json.pre-native") }
 
+  enum Contents {
+    case missing
+    case data(Data)
+    case unreadable(String)
+  }
+
+  func contents(_ file: URL) -> Contents {
+    FileReads.record(file)
+    do {
+      return .data(try Data(contentsOf: file))
+    } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+      return .missing
+    } catch {
+      return .unreadable("\(file.lastPathComponent) exists but could not be read: \(error.localizedDescription)")
+    }
+  }
+
   func read(_ file: URL) -> Data? {
-    try? Data(contentsOf: file)
+    contents(file).data
+  }
+}
+
+extension DataFolder.Contents {
+  var data: Data? { if case .data(let data) = self { data } else { nil } }
+  var failure: String? { if case .unreadable(let failure) = self { failure } else { nil } }
+}
+
+final class FileReads: Sendable {
+  @TaskLocal static var current: FileReads?
+
+  let names = Mutex<[String]>([])
+
+  func count(_ name: String) -> Int { names.withLock { $0.filter { $0 == name }.count } }
+
+  static func record(_ file: URL) {
+    current?.names.withLock { $0.append(file.lastPathComponent) }
+  }
+}
+
+struct LaunchFiles {
+  let session: DataFolder.Contents
+  let downloads: DataFolder.Contents
+
+  init(_ folder: DataFolder) {
+    session = folder.contents(folder.session)
+    downloads = folder.contents(folder.downloads)
   }
 }
 
@@ -46,8 +91,8 @@ public struct Launch: Sendable {
   public let database: SolaraDatabase
   public let state: BrowserState
   public let memory: StoreMemory
-  public let persisted: PersistedState
-  public let report: LaunchReport
+  public var persisted: PersistedState
+  public var report: LaunchReport
 
   public var rows: WorkspaceRows { persisted.workspace ?? WorkspaceRows() }
 }
@@ -61,8 +106,20 @@ public enum Launcher {
   ) throws -> Launch {
     let fm = FileManager.default
     try fm.createDirectory(at: folder.url, withIntermediateDirectories: true)
-    try preserveOriginals(folder)
-    let launch = try openUnpruned(folder, appVersion: appVersion, now: now, context: context, scope: scope)
+    let files = LaunchFiles(folder)
+    if let failure = files.session.failure {
+      Importer.log(["refused the launch: \(failure)"], to: folder, now: now)
+      throw ImportRefused(reason: failure)
+    }
+    try preserveOriginals(folder, files)
+    var launch = try openUnpruned(folder, appVersion: appVersion, now: now, context: context, scope: scope, files: files)
+    if let failure = files.downloads.failure {
+      launch.persisted.keepsDownloadsFile = true
+      if !launch.report.notes.contains(failure) {
+        launch.report.notes.append(failure)
+        Importer.log([failure], to: folder, now: now)
+      }
+    }
     pruneMovedAside(folder)
     return launch
   }
@@ -75,7 +132,7 @@ public enum Launcher {
     return names.contains { $0 == base || ($0.hasPrefix(base + ".") && !$0.hasPrefix(folder.importing.lastPathComponent)) }
   }
 
-  static func openUnpruned(_ folder: DataFolder, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope) throws -> Launch {
+  static func openUnpruned(_ folder: DataFolder, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope, files: LaunchFiles) throws -> Launch {
     let fm = FileManager.default
     let originalsFallback = !everHadDatabase(folder)
     var movedAside: [String] = []
@@ -98,7 +155,7 @@ public enum Launcher {
       }
       if let database = opened {
         do {
-          if let reason = try writtenByOlderBuild(folder, database: database) {
+          if let reason = try writtenByOlderBuild(files, database: database) {
             carried = try? database.load()
             try database.close()
             importReason = reason
@@ -107,7 +164,7 @@ public enum Launcher {
             }
             movedAside.append(try moveAside(folder.database, label: "superseded", now: now))
           } else {
-            return try fromDatabase(database, folder: folder, now: now, context: context, scope: scope)
+            return try fromDatabase(database, folder: folder, now: now, context: context, scope: scope, files: files)
           }
         } catch let refused as ImportRefused {
           try? database.close()
@@ -127,7 +184,7 @@ public enum Launcher {
     }
 
     let imported = try Importer.importFolder(
-      folder, carrying: carried, appVersion: appVersion, now: now, context: context, scope: scope, originalsFallback: originalsFallback)
+      folder, carrying: carried, appVersion: appVersion, now: now, context: context, scope: scope, originalsFallback: originalsFallback, files: files)
     let database = try SolaraDatabase(url: folder.database)
     var report = LaunchReport(source: .imported(reason: importReason ?? "first launch on the native store"))
     report.movedAside = movedAside
@@ -135,7 +192,7 @@ public enum Launcher {
     return Launch(database: database, state: imported.state, memory: imported.memory, persisted: imported.persisted, report: report)
   }
 
-  static func fromDatabase(_ database: SolaraDatabase, folder: DataFolder, now: Date, context: LoadContext, scope: PersistenceScope) throws -> Launch {
+  static func fromDatabase(_ database: SolaraDatabase, folder: DataFolder, now: Date, context: LoadContext, scope: PersistenceScope, files: LaunchFiles) throws -> Launch {
     let persisted = try database.load()
     if scope == .settingsAndDownloads {
       let loader = context.session()
@@ -148,12 +205,12 @@ public enum Launcher {
       baseline.workspace = nil
       return Launch(database: database, state: Importer.settingsAndDownloads(of: loaded.0), memory: loader.memory, persisted: baseline, report: report)
     }
-    let sessionHash = folder.read(folder.session).map(sha256)
+    let sessionHash = files.session.data.map(sha256)
     let importedFrom = try database.meta("workspace_source_sha256")
-    let staleWorkspace = persisted.workspace != nil && markerScope(folder).map { $0 != PersistenceScope.everything.markerName } == true
+    let staleWorkspace = persisted.workspace != nil && markerScope(files.session.data).map { $0 != PersistenceScope.everything.markerName } == true
       && sessionHash != importedFrom
     guard let stored = persisted.workspace, !staleWorkspace else {
-      var result = Importer.read(folder, carrying: nil, settings: persisted.settings, downloads: persisted.downloads, context: context)
+      var result = Importer.read(folder, carrying: nil, settings: persisted.settings, downloads: persisted.downloads, context: context, files: files)
       if let refusal = result.refusal {
         Importer.log(result.notes + ["refused the workspace import: \(refusal)"], to: folder, now: now)
         throw ImportRefused(reason: refusal)
@@ -195,14 +252,14 @@ public enum Launcher {
     return Launch(database: database, state: loaded.0, memory: loader.memory, persisted: baseline, report: report)
   }
 
-  static func preserveOriginals(_ folder: DataFolder) throws {
+  static func preserveOriginals(_ folder: DataFolder, _ files: LaunchFiles) throws {
     let fm = FileManager.default
-    for (source, copy) in [(folder.session, folder.preNativeSession), (folder.downloads, folder.preNativeDownloads)] {
-      guard fm.fileExists(atPath: source.path), !fm.fileExists(atPath: copy.path) else { continue }
-      if marker(in: folder.read(source)) == true { continue }
+    for (contents, copy) in [(files.session, folder.preNativeSession), (files.downloads, folder.preNativeDownloads)] {
+      guard let data = contents.data, !fm.fileExists(atPath: copy.path) else { continue }
+      if marker(in: data) == true { continue }
       let temporary = copy.deletingLastPathComponent().appending(path: ".\(copy.lastPathComponent).copying")
       if fm.fileExists(atPath: temporary.path) { try fm.removeItem(at: temporary) }
-      try fm.copyItem(at: source, to: temporary)
+      try data.write(to: temporary)
       try Importer.fullSync(temporary)
       guard rename(temporary.path, copy.path) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
       try Importer.fullSync(folder.url)
@@ -229,8 +286,8 @@ public enum Launcher {
     }
   }
 
-  static func markerScope(_ folder: DataFolder) -> String? {
-    guard let data = folder.read(folder.session), let marker = (try? JSONValue.parse(data))?[markerKey]?.object else { return nil }
+  static func markerScope(_ session: Data?) -> String? {
+    guard let data = session, let marker = (try? JSONValue.parse(data))?[markerKey]?.object else { return nil }
     return marker["scope"]?.string ?? PersistenceScope.settingsAndDownloads.markerName
   }
 
@@ -239,13 +296,13 @@ public enum Launcher {
     return object[markerKey]?.object != nil
   }
 
-  static func writtenByOlderBuild(_ folder: DataFolder, database: SolaraDatabase) throws -> String? {
-    let session = folder.read(folder.session)
+  static func writtenByOlderBuild(_ files: LaunchFiles, database: SolaraDatabase) throws -> String? {
+    let session = files.session.data
     if let session, marker(in: session) == false {
       let importedHash = try database.meta("source_session_sha256")
       if importedHash != sha256(session) { return "session.json was written by a build without the native store" }
     }
-    let downloads = folder.read(folder.downloads)
+    let downloads = files.downloads.data
     if let downloads, marker(in: downloads) == false {
       let importedHash = try database.meta("source_downloads_sha256")
       if importedHash != sha256(downloads) { return "downloads.json was written by a build without the native store" }

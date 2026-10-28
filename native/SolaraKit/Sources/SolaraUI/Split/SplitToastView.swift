@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class SplitToastView: NSView {
   static let bottom: CGFloat = 22
+  static let noticeLift: CGFloat = 56
   static let maxWidth: CGFloat = 420
   static let hideDuration: CFTimeInterval = 0.22
   static let spring = SpringParams.rn(speed: 18, bounciness: 6)

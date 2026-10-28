@@ -1,5 +1,5 @@
 import { Surface, Symbol, VisualEffect } from "@ardia/shell";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
 import { withAlpha } from "../sidebar/tokens";
@@ -236,7 +236,6 @@ function DropZone({ pane, side, shown, stage, pointerX, onHidden }: { pane: Rect
 }
 
 export const SplitToast = memo(function SplitToast({ windowId }: { windowId: string }) {
-  const theme = useTheme();
   const toast = useToasts((s) => s.toasts[windowId] ?? null);
   const appear = useRef(new Animated.Value(0)).current;
   const [shown, setShown] = useState(toast);
@@ -262,42 +261,55 @@ export const SplitToast = memo(function SplitToast({ windowId }: { windowId: str
     }, toast.action ? 4000 : 2600);
     return () => clearTimeout(timer);
   }, [toast?.id]);
-  if (!shown) return null;
+  const notice = useToasts((s) => s.notices[windowId] ?? null);
+  if (!shown && !notice) return null;
   return (
-    <View pointerEvents={shown.action ? "box-none" : "none"} style={{ position: "absolute", left: 0, right: 0, bottom: 22, alignItems: "center" }}>
-      <Animated.View style={{ opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}>
-        <Surface
-          fill={hex(theme.dark ? "rgba(44,42,43,0.9)" : "rgba(255,255,255,0.92)")}
-          cornerRadius={14}
-          borderColor={hex(theme.dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)")}
-          borderWidth={0.5}
-          shadowColor="#000000"
-          shadowOpacity={theme.dark ? 0.4 : 0.14}
-          shadowRadius={16}
-          shadowOffset={[0, 6]}
-          style={{ paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 420 }}
-        >
-          <VisualEffect material="hudWindow" cornerRadius={14} style={StyleSheet.absoluteFill} />
-          <Symbol name={shown.icon ?? "rectangle.split.3x1"} size={15} color={theme.icon} style={{ width: 20, height: 20 }} />
-          <View style={{ flexShrink: 1 }}>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textPrimary }}>{shown.title}</Text>
-            {shown.message ? <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>{shown.message}</Text> : null}
-          </View>
-          {shown.action ? (
-            <ToastAction
-              title={shown.action.title}
-              onPress={() => {
-                shown.action!.run();
-                setShown(null);
-                hideToast(windowId, shown.id);
-              }}
-            />
-          ) : null}
-        </Surface>
-      </Animated.View>
+    <View pointerEvents={shown?.action ? "box-none" : "none"} style={{ position: "absolute", left: 0, right: 0, bottom: 22, alignItems: "center", gap: 8 }}>
+      {notice ? <ToastCard icon={notice.icon} title={notice.title} message={notice.message} /> : null}
+      {shown ? (
+        <Animated.View style={{ opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}>
+          <ToastCard icon={shown.icon} title={shown.title} message={shown.message}>
+            {shown.action ? (
+              <ToastAction
+                title={shown.action.title}
+                onPress={() => {
+                  shown.action!.run();
+                  setShown(null);
+                  hideToast(windowId, shown.id);
+                }}
+              />
+            ) : null}
+          </ToastCard>
+        </Animated.View>
+      ) : null}
     </View>
   );
 });
+
+function ToastCard({ icon, title, message, children }: { icon?: string; title: string; message?: string; children?: ReactNode }) {
+  const theme = useTheme();
+  return (
+    <Surface
+      fill={hex(theme.dark ? "rgba(44,42,43,0.9)" : "rgba(255,255,255,0.92)")}
+      cornerRadius={14}
+      borderColor={hex(theme.dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.1)")}
+      borderWidth={0.5}
+      shadowColor="#000000"
+      shadowOpacity={theme.dark ? 0.4 : 0.14}
+      shadowRadius={16}
+      shadowOffset={[0, 6]}
+      style={{ paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 420 }}
+    >
+      <VisualEffect material="hudWindow" cornerRadius={14} style={StyleSheet.absoluteFill} />
+      <Symbol name={icon ?? "rectangle.split.3x1"} size={15} color={theme.icon} style={{ width: 20, height: 20 }} />
+      <View style={{ flexShrink: 1 }}>
+        <Text style={{ fontSize: 13, fontWeight: "600", color: theme.textPrimary }}>{title}</Text>
+        {message ? <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>{message}</Text> : null}
+      </View>
+      {children}
+    </Surface>
+  );
+}
 
 function ToastAction({ title, onPress }: { title: string; onPress(): void }) {
   const theme = useTheme();

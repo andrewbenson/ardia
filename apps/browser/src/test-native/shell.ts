@@ -25,6 +25,7 @@ type UserScriptsHost = {
 const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
+export const unreadableDocs = new Map<string, string>();
 export const heldSaves = { on: false, fail: false, only: null as string | null, queue: [] as (() => void)[] };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
 export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", switchesURL: "https://ardia.dev/switches.json", telemetryURL: "https://ardia.dev/otel/v1/logs" };
@@ -52,6 +53,8 @@ const shell: Modules["ArdiaShell"] = {
   startDictation: () => {},
   pickFiles: () => Promise.resolve([]),
   readDocument: (name) => docs.get(name) ?? null,
+  readDocumentResult: (name) =>
+    unreadableDocs.has(name) ? { path: `/data/${name}`, failure: unreadableDocs.get(name)! } : docs.has(name) ? { contents: docs.get(name)! } : {},
   writeDocument: (name, contents) => void docs.set(name, contents),
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {

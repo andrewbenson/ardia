@@ -9,6 +9,7 @@ enum NativeSplitChrome {
   static let themeTopic = "split.theme"
   static let dragTopic = "split.drag"
   static let toastTopic = "split.toast"
+  static let noticeTopic = "split.notice"
   static let toolbarTopic = "split.toolbar"
   nonisolated static var panesEnabled: Bool { NativeWindowShell.enabled && ProcessInfo.processInfo.environment["ARDIA_NATIVE_PAGES_POOL"] == "1" }
 
@@ -30,6 +31,7 @@ enum NativeSplitChrome {
     _ = SettingsJS.shared.observe(themeTopic) { value in applyTheme(value) }
     _ = SettingsJS.shared.observe(dragTopic) { value in applyDrag(value) }
     _ = SettingsJS.shared.observe(toastTopic) { value in applyToast(value) }
+    _ = SettingsJS.shared.observe(noticeTopic) { value in applyNotice(value) }
     if panesEnabled { _ = SettingsJS.shared.observe(toolbarTopic) { value in applyToolbars(value) } }
     #if DEBUG
     _ = SettingsJS.shared.observe("split.dev") { value in SplitChromeDevRun.start(value, views) }
@@ -93,6 +95,7 @@ enum NativeSplitChrome {
     view.onToastAction = { id in Task { @MainActor in _ = await SettingsAdapters.js("split.toast", windowId, id, "action") } }
     host.shell.mount(.splitChrome, view)
     if let state = NativeStoreHandle.store?.state { view.update(state: state) }
+    if let notice = windows(SettingsJS.shared.latestValue(noticeTopic))?[windowId] { view.setNotice(SplitToastSpec(notice)) }
     views[windowId] = view
     return view
   }
@@ -130,6 +133,12 @@ enum NativeSplitChrome {
       view(windowId)?.setToast(SplitToastSpec(entry))
     }
     for (id, view) in views where all[id] == nil { view.setToast(nil) }
+  }
+
+  private static func applyNotice(_ value: Any?) {
+    guard let all = windows(value) else { return }
+    for (windowId, entry) in all { view(windowId)?.setNotice(SplitToastSpec(entry)) }
+    for (id, view) in views where all[id] == nil { view.setNotice(nil) }
   }
 
   private static func applyToolbars(_ value: Any?) {

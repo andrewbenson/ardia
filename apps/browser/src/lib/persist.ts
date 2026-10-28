@@ -1,5 +1,7 @@
 import { cancelDownload, endWebKitPrivateSession, leftDownloadStaging, removeLeftDownloadStaging, type Download } from "@ardia/ardiacore";
-import { readDocument, writeDocument } from "@ardia/shell";
+import { readDocumentResult, writeDocument, type DocumentRead } from "@ardia/shell";
+import { showNotice } from "../components/layout/toasts";
+import { persistenceRefused, refusePersistence } from "./persistLatch";
 import { useBrowser, type BrowserState, type HydrateData } from "../store/browser";
 import { inPinnedContainer, isIncognitoProfile, newId, privateSession, snapshotTab } from "../store/model";
 import { earlyLaunchTabOn, launchTab, linkProfile, type LaunchTab } from "../store/launchTab";
@@ -20,6 +22,7 @@ import {
   dataFolderHandedOff,
   hydrateFromNative,
   nativeOwnedSnapshot,
+  nativeRefusedSession,
   nativeOwnsWorkspace,
   nativeStoreActive,
   nativeStoreRev,
@@ -99,7 +102,9 @@ const sessionDocument = (s: BrowserState) => {
   };
 };
 
-const docsToWrite = () => (nativeOwnsWorkspace() ? [] : nativeStoreActive() ? DOCS.filter((d) => d.name !== "downloads.json") : DOCS);
+const unreadableDocs = new Set<string>();
+const docsToWrite = () =>
+  (nativeOwnsWorkspace() ? [] : nativeStoreActive() ? DOCS.filter((d) => d.name !== "downloads.json") : DOCS).filter((d) => !unreadableDocs.has(d.name));
 
 const focusedForLaunch = (s: BrowserState) => s.ui.focusOrder.find((id) => s.windows[id] && !s.windows[id].incognito && s.windows[id].kind !== "small") ?? null;
 
@@ -117,10 +122,10 @@ function nativeCaches(s: BrowserState): StoreCommand[] {
   ];
 }
 
-function read<T>(name: string): T | null {
+function parsed<T>(name: string, read: DocumentRead | null): T | null {
+  if (!read || !("contents" in read) || !read.contents) return null;
   try {
-    const json = readDocument(name);
-    return json ? (JSON.parse(json) as T) : null;
+    return JSON.parse(read.contents) as T;
   } catch (error) {
     console.warn(`Couldn't read ${name}`, error);
     return null;
@@ -177,10 +182,13 @@ function cleanStaging(downloads: Download[]) {
   for (const d of downloads) if (d.stagingId) void removeLeftDownloadStaging(d).then((removed) => removed && forgetStaging(d.id));
 }
 
-export function loadSession({ downloads: readDownloads = true } = {}): HydrateData | null {
-  const session = read<SessionV2>("session.json");
+export function loadSession(
+  sessionRead: DocumentRead = readDocumentResult("session.json"),
+  downloadsRead: DocumentRead | null = readDocumentResult("downloads.json"),
+): HydrateData | null {
+  const session = parsed<SessionV2>("session.json", sessionRead);
   if (session?.version !== 2) return null;
-  const downloads = readDownloads ? read<{ downloads: Download[] }>("downloads.json") : null;
+  const downloads = parsed<{ downloads: Download[] }>("downloads.json", downloadsRead);
   droppedPrivateDownloads = (downloads?.downloads ?? []).some((d) => downloadSession(d) !== null);
   const data: HydrateData = {
     profiles: session.profiles,
@@ -243,11 +251,12 @@ let frozen = false;
 export function flushPersistence({ final = false } = {}) {
   flush();
   if (final || nativeOwnsWorkspace()) flushNativeStore();
-  if (final && !frozen) saveLaunchLook(useBrowser.getState());
+  if (final && !frozen && !persistenceRefused()) saveLaunchLook(useBrowser.getState());
   if (final) frozen = true;
 }
 
 export function resumePersistence() {
+  if (persistenceRefused()) return;
   frozen = false;
   resume();
 }
@@ -259,6 +268,8 @@ export function startPersistence() {
     console.warn("Another instance is using this data folder; this one saves nothing.");
     return () => {};
   }
+  const refused = nativeRefusedSession();
+  if (refused) return refuseToSave(refused, readDocumentResult("session.json"));
   if (nativeOwnsWorkspace()) {
     if (!hydrateFromNative(useBrowser)) return failClosed();
     attachReplica(useBrowser, nativeCaches);
@@ -267,7 +278,14 @@ export function startPersistence() {
     return startDerivedServices({ forgetsIncognito: false });
   }
   const owned = nativeOwnedSnapshot();
-  const data = loadSession({ downloads: !owned }) ?? {};
+  const sessionRead = readDocumentResult("session.json");
+  if ("failure" in sessionRead) return refuseToSave(sessionRead.path, sessionRead);
+  const downloadsRead = owned ? null : readDocumentResult("downloads.json");
+  if (downloadsRead && "failure" in downloadsRead) {
+    unreadableDocs.add("downloads.json");
+    console.error(`Couldn't read ${downloadsRead.path} (${downloadsRead.failure}), so this launch leaves it as it is.`);
+  }
+  const data = loadSession(sessionRead, downloadsRead) ?? {};
   if (owned) {
     data.settings = owned.settings;
     data.downloads = owned.downloads;
@@ -331,6 +349,25 @@ export function startPersistence() {
     stopSession();
     stopJournal();
   };
+}
+
+function refuseToSave(sessionPath: string, sessionRead: DocumentRead) {
+  refusePersistence(sessionPath);
+  frozen = true;
+  withApplier(() => useBrowser.getState().hydrate(loadSession(sessionRead, null) ?? {}));
+  const title = "Solara couldn't read its saved session";
+  const message = `Changes in this window won't be saved. The saved session is at ${sessionPath}.`;
+  console.error(`${title}. ${message}`);
+  const told = new Set<string>();
+  const tell = (s: BrowserState) => {
+    for (const windowId of s.windowOrder) {
+      if (told.has(windowId)) continue;
+      told.add(windowId);
+      showNotice(windowId, title, message, "exclamationmark.triangle");
+    }
+  };
+  tell(useBrowser.getState());
+  return useBrowser.subscribe(tell);
 }
 
 function failClosed() {

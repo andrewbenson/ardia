@@ -83,6 +83,7 @@ public struct PersistedState: Sendable, Equatable {
   public var workspace: WorkspaceRows?
   public var documents: JSMap<String>
   public var notes: [String]
+  public var keepsDownloadsFile = false
 
   public init(settings: JSONObject?, downloads: [Download], workspace: WorkspaceRows? = nil, documents: JSMap<String> = JSMap(), notes: [String] = []) {
     self.settings = settings

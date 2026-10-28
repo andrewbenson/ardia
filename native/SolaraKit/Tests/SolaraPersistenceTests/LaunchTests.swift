@@ -17,10 +17,18 @@ func write(_ text: String, to url: URL) throws {
 
 let fixtures = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appending(path: "Fixtures/sessions")
 
+struct FixtureCopyFailed: Error, CustomStringConvertible {
+  let description: String
+}
+
 func copyFixture(_ name: String, into folder: DataFolder) throws {
-  for file in ["session.json", "downloads.json"] {
+  let present = Set(try FileManager.default.contentsOfDirectory(atPath: fixtures.appending(path: name).path))
+  guard present.contains("session.json") || name.hasPrefix("no-session") else { throw FixtureCopyFailed(description: "fixture \(name) has no session.json") }
+  for file in ["session.json", "downloads.json"] where present.contains(file) {
     let source = fixtures.appending(path: name).appending(path: file)
-    if FileManager.default.fileExists(atPath: source.path) { try FileManager.default.copyItem(at: source, to: folder.url.appending(path: file)) }
+    let copy = folder.url.appending(path: file)
+    try FileManager.default.copyItem(at: source, to: copy)
+    guard try Data(contentsOf: copy) == Data(contentsOf: source) else { throw FixtureCopyFailed(description: "\(file) of fixture \(name) didn't copy intact") }
   }
 }
 
@@ -61,6 +69,48 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     let source = try Data(contentsOf: folder.session)
     let original = try Data(contentsOf: fixtures.appending(path: "nested-groups-folders-rows/session.json"))
     #expect(source == original)
+    #expect(try Data(contentsOf: folder.preNativeSession) == original)
+    #expect(!FileManager.default.fileExists(atPath: folder.preNativeDownloads.path))
+  }
+
+  @Test func theDownloadsBackupIsTheBytesThatWereImported() throws {
+    let folder = try scratchFolder()
+    try copyFixture("downloads-and-staging", into: folder)
+    let original = try Data(contentsOf: folder.downloads)
+    let launch = try open(folder)
+    guard case .imported = launch.report.source else { Issue.record("expected an import"); return }
+    #expect(try Data(contentsOf: folder.preNativeDownloads) == original)
+    #expect(!FileManager.default.fileExists(atPath: folder.url.appending(path: ".downloads.json.pre-native.copying").path))
+  }
+
+  func reads(_ folder: DataFolder) throws -> (Launch, FileReads) {
+    let reads = FileReads()
+    let launch = try FileReads.$current.withValue(reads) { try open(folder) }
+    return (launch, reads)
+  }
+
+  @Test func eachLaunchReadsSessionJSONOnceAndDownloadsJSONAtMostOnce() throws {
+    let folder = try scratchFolder()
+    try copyFixture("downloads-and-staging", into: folder)
+    let (first, firstReads) = try reads(folder)
+    guard case .imported = first.report.source else { Issue.record("expected an import"); return }
+    #expect(firstReads.count("session.json") == 1)
+    #expect(firstReads.count("downloads.json") <= 1)
+    let store = store(for: first)
+    let writer = PersistenceWriter(store: store, database: first.database, folder: folder, persisted: first.persisted)
+    try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    #expect(writer.flush(timeout: 5))
+    try first.database.close()
+    let (second, secondReads) = try reads(folder)
+    #expect(second.report.source == .database)
+    #expect(secondReads.count("session.json") == 1)
+    #expect(secondReads.count("downloads.json") <= 1)
+    try second.database.close()
+    try write(#"{"version":2,"settings":{"searchEngine":"ecosia","chosen":["searchEngine"],"inferred":[]}}"#, to: folder.session)
+    let (third, thirdReads) = try reads(folder)
+    guard case .imported = third.report.source else { Issue.record("expected a re-import"); return }
+    #expect(thirdReads.count("session.json") == 1)
+    #expect(thirdReads.count("downloads.json") <= 1)
   }
 
   @Test func theDatabaseLoadsTheSameWorkspaceAsTheSessionItCameFrom() throws {
@@ -298,6 +348,94 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(throws: ImportRefused.self) { try open(folder) }
     #expect(!FileManager.default.fileExists(atPath: folder.database.path))
     #expect(String(decoding: contents(folder.importLog) ?? Data(), as: UTF8.self).contains("refused"))
+  }
+
+  func filesIn(_ folder: DataFolder) throws -> [String: Data] {
+    var files: [String: Data] = [:]
+    for name in try FileManager.default.contentsOfDirectory(atPath: folder.url.path) { files[name] = try Data(contentsOf: folder.url.appending(path: name)) }
+    return files
+  }
+
+  func expectRefusalLeavesFilesAlone(_ folder: DataFolder, scope: PersistenceScope = .everything) throws {
+    let before = try filesIn(folder)
+    try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: folder.session.path)
+    #expect(throws: ImportRefused.self) { try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: scope) }
+    try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: folder.session.path)
+    var after = try filesIn(folder)
+    let log = String(decoding: after.removeValue(forKey: folder.importLog.lastPathComponent).map { $0.dropFirst(before[folder.importLog.lastPathComponent]?.count ?? 0) } ?? Data(), as: UTF8.self)
+    #expect(after.keys.sorted() == before.keys.filter { $0 != folder.importLog.lastPathComponent }.sorted())
+    for (name, data) in after { #expect(before[name] == data, "\(name) changed") }
+    #expect(log.contains("session.json exists but could not be read"))
+    #expect(!log.contains("no session.json"))
+  }
+
+  @Test func aFirstLaunchWithAnUnreadableSessionIsRefusedAndTouchesNothing() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    try expectRefusalLeavesFilesAlone(folder)
+    #expect(!FileManager.default.fileExists(atPath: folder.database.path))
+    #expect(!FileManager.default.fileExists(atPath: folder.preNativeSession.path))
+  }
+
+  @Test func anUnreadableSessionNewerThanTheDatabaseIsRefusedAndTouchesNothing() throws {
+    for (first, second) in [(PersistenceScope.everything, PersistenceScope.everything), (.settingsAndDownloads, .everything), (.settingsAndDownloads, .settingsAndDownloads)] {
+      let folder = try scratchFolder()
+      try copyFixture("broken-splits", into: folder)
+      try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: first).database.close()
+      try write(#"{"version":2,"windows":[],"tabs":[]}"#, to: folder.session)
+      try expectRefusalLeavesFilesAlone(folder, scope: second)
+    }
+  }
+
+  func expectUnreadableDownloadsLeftAlone(_ folder: DataFolder, scope: PersistenceScope = .everything) throws {
+    let before = try Data(contentsOf: folder.downloads)
+    let hadOriginal = FileManager.default.fileExists(atPath: folder.preNativeDownloads.path)
+    try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: folder.downloads.path)
+    defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: folder.downloads.path) }
+    let launch = try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: scope)
+    #expect(launch.report.notes.contains { $0.hasPrefix("downloads.json exists but could not be read") })
+    let store = store(for: launch)
+    let writer = PersistenceWriter(store: store, database: launch.database, folder: folder, persisted: launch.persisted, scope: scope, clock: { 42 })
+    try store.dispatch(Command("upsertDownload", [["id": "late", "state": "complete", "profile": ""]]))
+    #expect(writer.flush(timeout: 5))
+    #expect(writer.errors.isEmpty)
+    try launch.database.close()
+    try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: folder.downloads.path)
+    #expect(try Data(contentsOf: folder.downloads) == before)
+    #expect(FileManager.default.fileExists(atPath: folder.preNativeDownloads.path) == hadOriginal)
+  }
+
+  @Test func aFirstLaunchWithUnreadableDownloadsGoesAheadAndLeavesThemAlone() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    try write(#"{"version":2,"downloads":[{"id":"kept","state":"complete","profile":""}]}"#, to: folder.downloads)
+    try expectUnreadableDownloadsLeftAlone(folder)
+  }
+
+  @Test func unreadableDownloadsNewerThanTheDatabaseAreLeftAloneInEitherScope() throws {
+    for scope in [PersistenceScope.everything, .settingsAndDownloads] {
+      let folder = try scratchFolder()
+      try copyFixture("broken-splits", into: folder)
+      try Launcher.open(folder, appVersion: "1.0", now: now, context: context(), scope: scope).database.close()
+      try write(#"{"version":2,"downloads":[{"id":"newer","state":"complete","profile":""}]}"#, to: folder.downloads)
+      try expectUnreadableDownloadsLeftAlone(folder, scope: scope)
+    }
+  }
+
+  @Test func anUnreadableShadowOverAGoodDatabaseIsRefusedAndTheDatabaseStillWinsNextTime() throws {
+    let folder = try scratchFolder()
+    try copyFixture("broken-splits", into: folder)
+    let first = try open(folder)
+    let store = store(for: first)
+    let writer = PersistenceWriter(store: store, database: first.database, folder: folder, persisted: first.persisted, clock: { 42 })
+    let window = try #require(store.state.windowOrder.first, "the launch came back with no windows: \(first.report)")
+    try store.dispatch(Command("newTab", [.string(window), ["url": "https://only-in-the-database.example/"]]))
+    #expect(writer.flush(timeout: 5))
+    try first.database.close()
+    try expectRefusalLeavesFilesAlone(folder)
+    let next = try open(folder)
+    #expect(next.report.source == .database)
+    #expect(next.state.tabs.values.contains { $0.url == "https://only-in-the-database.example/" })
   }
 
   @Test func losingMostWindowsIsRefused() throws {

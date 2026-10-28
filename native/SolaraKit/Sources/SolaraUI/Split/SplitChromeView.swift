@@ -23,6 +23,7 @@ public final class SplitChromeView: NSView {
   private var dividers: [String: SplitDividerView] = [:]
   private let zones = SplitDropZonesView()
   private let toast = SplitToastView()
+  private let notice = SplitToastView()
   private var drag: (splitId: String, kind: SplitDivider.Kind, sizes: [Double], stack: [Double]?, vertical: Bool)?
   private var pending: (splitId: String, sizes: [Double]?, stack: [Double]?)?
   private var link: CADisplayLink?
@@ -35,6 +36,7 @@ public final class SplitChromeView: NSView {
     super.init(frame: .zero)
     wantsLayer = true
     addSubview(zones)
+    addSubview(notice)
     addSubview(toast)
   }
 
@@ -62,6 +64,7 @@ public final class SplitChromeView: NSView {
       theme = next
       zones.theme = next
       toast.theme = next
+      notice.theme = next
       for divider in dividers.values { divider.dark = next.dark }
     }
     if nextFullscreen != fullscreenTab || nextCovered != covered {
@@ -75,10 +78,13 @@ public final class SplitChromeView: NSView {
 
   public func setToast(_ spec: SplitToastSpec?) { toast.show(spec) }
 
+  public func setNotice(_ spec: SplitToastSpec?) { notice.show(spec.map { var sticky = $0; sticky.sticky = true; return sticky }) }
+
   public override func layout() {
     super.layout()
     zones.frame = bounds
     toast.frame = bounds
+    notice.frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(0, bounds.height - SplitToastView.noticeLift))
     relayout()
   }
 
@@ -182,6 +188,7 @@ public final class SplitChromeView: NSView {
       "dividers": dividers.map { ["key": $0.key, "frame": rect($0.value.frame), "hovered": $0.value.hovered, "dragging": $0.value.dragging] },
       "zones": zones.sample(),
       "toast": toast.spec.map { ["id": $0.id, "title": $0.title, "appear": toast.appearValue, "frame": rect(toast.cardFrame)] as [String: Any] } ?? NSNull(),
+      "notice": notice.spec.map { ["id": $0.id, "title": $0.title, "frame": rect(notice.convert(notice.cardFrame, to: self))] as [String: Any] } ?? NSNull(),
       "dispatches": dispatches,
     ]
   }

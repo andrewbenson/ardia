@@ -1,4 +1,5 @@
 import { launchEnvironment, readDocument, stopIntroMusic, writeDocument } from "@ardia/shell";
+import { persistenceRefused } from "../../lib/persistLatch";
 import { create } from "zustand";
 import { telemetryAvailable } from "../../telemetry/client";
 import { useBrowser } from "../../store/browser";
@@ -376,6 +377,7 @@ export function maybeStartOnboarding() {
   const saved = readSaved();
   if (saved?.completedAt) return;
   if (saved?.startedAt) return resumeOnboarding(saved);
+  if (persistenceRefused()) return;
   if (readDocument("session.json")) return markCompleted();
   if (__DEV__ && launchEnvironment("ARDIA_ONBOARDING") !== "1") return;
   save({ startedAt: Date.now() });

@@ -11,7 +11,8 @@ if (!appArg) {
 
 ⌘W with several tabs selected in the sidebar, through a real key press on the window: the File menu's item reads
 "Close 3 Tabs", the press closes all 3 selected tabs (not just the active one) and clears the selection, and one
-⇧⌘T brings all 3 back in their places. Run three ways: the RN sidebar, the native sidebar (ARDIA_NATIVE_SIDEBAR=1),
+⇧⌘T brings all 3 back in their places. Then, with a New Tab among the selection so the close would take the window,
+⌘W asks once (ArdiaShell.confirm, stubbed to count calls and answer Cancel) and cancelling closes nothing. Run three ways: the RN sidebar, the native sidebar (ARDIA_NATIVE_SIDEBAR=1),
 and the JS store (ARDIA_NATIVE_STORE=0).`);
   process.exit(2);
 }
@@ -83,6 +84,19 @@ try {
       const closed = await run(`return ac.store.getState().closedTabs.length;`);
       if (closed) throw new Error(`${closed} still in Recently Closed`);
       return back;
+    });
+    await rep.check(`${tag}-closing-the-window-asks-once`, async () => {
+      await run(`const s = ac.store.getState(); s.updateSettings({ warnBeforeClosingLastTab: true }); s.newTab("w1"); return true;`);
+      const ids = await until("a New Tab", `const s = ac.store.getState(), w = s.windows.w1; return w.tabIds.length === 6 ? w.tabIds : null;`);
+      await run(`const M = globalThis.expo.modules.ArdiaShell; globalThis.__asked = []; M.confirm = (o) => { globalThis.__asked.push(o.title ?? ""); return Promise.resolve({ confirmed: false, suppressed: false }); }; ac.store.getState().setSelection("w1", ${JSON.stringify(ids)}); return true;`);
+      await sleep(300);
+      await press(K("w", 13));
+      await sleep(800);
+      const asked = await run(`return globalThis.__asked;`);
+      if (asked.length !== 1) throw new Error(`asked ${asked.length} times: ${JSON.stringify(asked)}`);
+      const left = await run(`return ac.store.getState().windows.w1?.tabIds.length ?? 0;`);
+      if (left !== 6) throw new Error(`cancel left ${left} tabs`);
+      return asked[0];
     });
     await app.quit();
     app = null;

@@ -20,6 +20,7 @@ import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { toggleNewTabBar } from "../omnibox/newTabBar";
 import { developerModeFor } from "../site/developerMode";
 import { isDeveloperMode } from "../../lib/developerMode";
+import { usePages } from "./pageState";
 import { usePagerPages } from "./profilePager";
 import { openNewTabInSplit } from "./splitActions";
 import { openFolderMenu, openTileFolderStripMenu } from "./stripFolderMenu";
@@ -212,6 +213,16 @@ function useTopStripState(windowId: string, profileId: string, floating: boolean
   );
   const pages = usePageLooks(windowId);
   const selection = useBrowser(useShallow((s) => s.selection[windowId] ?? NONE));
+  const capture = usePages(
+    useShallow((p) => {
+      const out: Record<string, "screen" | "camera"> = {};
+      for (const id of Object.keys(p.pages)) {
+        const access = p.pages[id]?.mediaAccess;
+        if (access) out[id] = access.screen ? "screen" : "camera";
+      }
+      return out;
+    }),
+  );
   useIncomingFile(windowId);
 
   const state = useMemo(
@@ -227,14 +238,14 @@ function useTopStripState(windowId: string, profileId: string, floating: boolean
         playing: split(playing),
         sleeping,
         engines,
-        capture: {},
+        capture,
         bands,
         closeHint,
         newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
         pages,
         selection,
       }),
-    [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, bands, closeHint],
+    [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, capture, bands, closeHint],
   );
 
   return state;

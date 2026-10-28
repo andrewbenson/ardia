@@ -255,6 +255,7 @@ final class StripTabChip: StripHoverView, StripDraggable {
   private let ring = StripOntoRing()
   private let row = CALayer()
   private let icon = TabIconView()
+  private var badges: TabMediaBadgesView?
   private let audio = StripIconButton()
   private let label = FadeLabel(fontSize: 12)
   private let close = StripIconButton()
@@ -328,6 +329,7 @@ final class StripTabChip: StripHoverView, StripDraggable {
     let base = context.base
     icon.favicons = context.sidebar.favicons
     icon.set(context.sidebar.iconSpec(tab), palette: base)
+    TabMediaBadgesView.attach(&badges, to: self, flags: context.sidebar.flags, tabId: tabId, host: context.sidebar.host, palette: base)
     label.text = context.title(tab)
     label.color = band?.text ?? (active ? base.selectedText : base.textTab)
     toolTip = context.tooltip(tab)
@@ -398,6 +400,7 @@ final class StripTabChip: StripHoverView, StripDraggable {
     if onto { renderOnto() }
     var x: CGFloat = 9.5
     icon.frame = NSRect(x: x, y: StripMetrics.mid - 8, width: 16, height: 16)
+    badges?.frame = icon.frame
     x += 16
     if showsAudio {
       x += 5
@@ -425,6 +428,7 @@ final class StripTabChip: StripHoverView, StripDraggable {
 final class StripPinnedCell: StripHoverView {
   private let face = CALayer()
   private let icon = TabIconView()
+  private var badges: TabMediaBadgesView?
   private let mosaic = FolderMosaicView()
   private(set) var cell = ""
   private var active = false
@@ -454,6 +458,7 @@ final class StripPinnedCell: StripHoverView {
       icon.isHidden = true
       mosaic.isHidden = false
       mosaic.render(members: members, context: context.sidebar)
+      badges?.isHidden = true
       active = false
       title = context.query.folderLabel(windowId: context.windowId, folderId: folderId)
       toolTip = "\(title ?? "")\nShow Folder"
@@ -462,6 +467,7 @@ final class StripPinnedCell: StripHoverView {
       mosaic.isHidden = true
       icon.favicons = context.sidebar.favicons
       icon.set(context.sidebar.iconSpec(tab), palette: context.base)
+      TabMediaBadgesView.attach(&badges, to: self, flags: context.sidebar.flags, tabId: cell, host: context.sidebar.host, palette: context.base)
       active = context.activeId == cell
       let title = (tab.customTitle?.isEmpty == false ? tab.customTitle! : !tab.title.isEmpty ? tab.title : tab.url)
       self.title = title
@@ -490,6 +496,7 @@ final class StripPinnedCell: StripHoverView {
     face.frame = bounds.insetBy(dx: inset, dy: inset)
     CATransaction.commit()
     icon.frame = NSRect(x: (bounds.width - 16) / 2, y: (bounds.height - 16) / 2, width: 16, height: 16)
+    badges?.frame = icon.frame
     let side = FolderMosaicView.side
     mosaic.frame = NSRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
   }

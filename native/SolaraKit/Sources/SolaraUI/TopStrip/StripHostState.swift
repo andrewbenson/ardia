@@ -12,7 +12,7 @@ public struct StripHostState: Decodable, Equatable, Sendable {
   public var playing: [String]
   public var sleeping: [String]
   public var engines: [String: String]
-  public var capture: [String: String]
+  public var capture: [String: TabCapture]
   public var bands: [String: String]
   public var closeHint: String?
   public var newTabMark: String?
@@ -57,6 +57,7 @@ public struct StripHostState: Decodable, Equatable, Sendable {
     look.glow = glow
     look.sleeping = sleeping
     look.engines = engines
+    look.capture = capture
     return look
   }
 }

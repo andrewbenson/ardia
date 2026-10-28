@@ -121,6 +121,11 @@ const LOOKS = [
     `st().updateSettings({ extendWebsiteColor: false }); for (const id of ["t1", "g1a", "t2"]) st().updateLive(id, { themeColor: null });`,
   ],
   [
+    "capture",
+    `const pages = ac.pageState.getState().pages; globalThis.acCapturePages = { t1: pages.t1, p1: pages.p1, g1a: pages.g1a }; const media = (id, access) => ac.pageState.setState((s) => ({ pages: { ...s.pages, [id]: { ...(s.pages[id] ?? s.pages.t1), mediaAccess: access } } })); media("t1", { camera: false, microphone: false, screen: true }); media("p1", { camera: true, microphone: true, screen: false }); media("g1a", { camera: true, microphone: false, screen: false });`,
+    `ac.pageState.setState((s) => { const pages = { ...s.pages }; for (const [id, page] of Object.entries(globalThis.acCapturePages)) if (page) pages[id] = page; else delete pages[id]; return { pages }; });`,
+  ],
+  [
     "peek",
     `st().toggleSidebar("w1"); setTimeout(() => globalThis.acLayout.peek["strip:w1"].show(), 450);`,
     `globalThis.acLayout.peek["strip:w1"].hide(); st().toggleSidebar("w1");`,
@@ -679,7 +684,7 @@ try {
     });
     for (const [look, , , bottom = 42] of LOOKS) {
       if (!rn.looks?.[look] || !native.looks?.[look]) continue;
-      await rep.check(`the strips' pixels match RN's, ${{ paging: "halfway through a swipe to the next profile", flipped: "in the other appearance", bands: "with website colour bands", peek: "in the peek over a hidden strip" }[look]}`, async () => {
+      await rep.check(`the strips' pixels match RN's, ${{ paging: "halfway through a swipe to the next profile", flipped: "in the other appearance", bands: "with website colour bands", capture: "with a tab sharing its screen, a pinned tab and a grouped tab on camera", peek: "in the peek over a hidden strip" }[look]}`, async () => {
         if (look === "peek") assert.match(native.peekHit, /^SolaraUI\.Strip/, `the peek holds the native strip: ${native.peekHit}`);
         const diff = stripDiff(readPng(rn.looks[look]), readPng(native.looks[look]), 0, bottom);
         rep.log(`${look} pixel diff ${JSON.stringify(diff)}`);

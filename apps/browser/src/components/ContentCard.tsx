@@ -473,6 +473,7 @@ function PageOverlays({
   statusStyle,
   popovers = true,
   cliPill = false,
+  peek = false,
 }: {
   tabId: string;
   windowId: string;
@@ -484,6 +485,7 @@ function PageOverlays({
   statusStyle?: Animated.WithAnimatedValue<ViewStyle>;
   popovers?: boolean;
   cliPill?: boolean;
+  peek?: boolean;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
@@ -494,7 +496,7 @@ function PageOverlays({
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>
         <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
-      <SadTab tabId={tabId} />
+      <SadTab tabId={tabId} nativeAllowed={!peek} />
       {cliPill && (
         <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, statusStyle]}>
           <CliControlPill />
@@ -533,7 +535,7 @@ function PeekPage({ tabId, sourceId, windowId, width, fullscreen }: { tabId: str
   return (
     <>
       <TabWebView tabId={tabId} visible warm={false} peekOf={sourceId} />
-      <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} fullscreen={fullscreen} newTabShown={false} cliPill />
+      <PageOverlays tabId={tabId} windowId={windowId} width={width} geometry={NO_TOOLBAR} toolbar={false} fullscreen={fullscreen} newTabShown={false} cliPill peek />
     </>
   );
 }

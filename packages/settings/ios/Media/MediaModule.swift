@@ -10,6 +10,7 @@ public class MediaModule: Module {
         MainActor.assumeIsolated {
           NativeMedia.register()
           NativeLittleSolara.install()
+          NativePaneOverlays.start()
         }
       }
     }
@@ -24,6 +25,10 @@ public class MediaModule: Module {
 
     AsyncFunction("setLittleBackdrop") { (windowId: String, json: String) in
       MainActor.assumeIsolated { NativeLittleSolara.host(windowId)?.setBackdrop(json) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("describePaneOverlays") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativePaneOverlays.describe(windowId) }
     }.runOnQueue(.main)
 
     AsyncFunction("describeLittle") { (windowId: String) -> String in

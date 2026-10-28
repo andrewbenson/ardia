@@ -1,4 +1,4 @@
-import { hostedKinds, publishSettingsTopic, SolaraHostedView, windowMainOnTop, windowShellActive } from "@ardia/settings";
+import { hostedKinds, nativeOmniboxAvailable, publishSettingsTopic, sidebarAddressBarAvailable, SolaraHostedView, windowMainOnTop, windowShellActive } from "@ardia/settings";
 import type { DroppedItem } from "@ardia/shell";
 import { memo, useEffect, useMemo } from "react";
 import { Image, StyleSheet } from "react-native";
@@ -58,7 +58,7 @@ export function nativeSidebarShell(windowId: string): boolean {
 }
 
 export function shellColumnFitsAddressBar(addressBar: boolean): boolean {
-  return !addressBar;
+  return !addressBar || (nativeOmniboxAvailable() && sidebarAddressBarAvailable());
 }
 
 function publishShellColumn(windowId: string, column: object | null) {

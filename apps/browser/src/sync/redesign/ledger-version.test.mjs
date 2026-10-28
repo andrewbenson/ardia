@@ -9,7 +9,9 @@ test("LEDGER-v: a sync-pw-ledger.json from a newer version is refused, not read 
   assert.equal(readLedgerDoc(JSON.stringify({ v: 3, profiles: {} })), "newer");
   assert.equal(readLedgerDoc(JSON.stringify({ v: "2", profiles: {} })), "newer");
   assert.equal(readLedgerDoc(JSON.stringify({ v: 1, profiles: {} })), "older", "a ledger over plain digests waits for its migration");
-  assert.deepEqual(readLedgerDoc(JSON.stringify({ v: 2, profiles: { a: { L: 1 } } })), { v: 2, profiles: { a: { L: 1 } } });
+  assert.deepEqual(readLedgerDoc(JSON.stringify({ v: 2, profiles: { a: { L: 1, t: 2, keys: {} } } })), { v: 2, profiles: { a: { L: 1, t: 2, keys: {} } } });
+  assert.equal(readLedgerDoc(JSON.stringify({ v: 2, profiles: { a: { L: 1 } } })), "unreadable", "an entry missing its fields pauses passwords");
+  assert.equal(readLedgerDoc(JSON.stringify({ v: 2, profiles: { a: { L: 1, t: 2, keys: {}, held: "pw:a" } } })), "unreadable", "a held list that isn't one isn't read as its characters");
   assert.equal(readLedgerDoc("{"), "unreadable", "a ledger that doesn't parse isn't read as absent");
   assert.equal(readLedgerDoc(JSON.stringify({ profiles: {} })), "unreadable");
   assert.equal(readLedgerDoc(JSON.stringify({ v: 2 })), "unreadable");

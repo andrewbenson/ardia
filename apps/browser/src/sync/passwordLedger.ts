@@ -12,13 +12,26 @@ export type LedgerDoc = { v: 2; profiles: Record<string, StoredLedger> };
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
+const isString = (v: unknown): v is string => typeof v === "string";
+const isNumber = (v: unknown): v is number => typeof v === "number";
+const isLedgerEntry = (v: unknown) =>
+  isPlainObject(v) && Array.isArray(v.d) && v.d.every(isString) && (v.h === null || isString(v.h)) && (v.m === null || isNumber(v.m));
+const isStoredLedger = (v: unknown) =>
+  isPlainObject(v) &&
+  isNumber(v.L) &&
+  isNumber(v.t) &&
+  isPlainObject(v.keys) &&
+  Object.values(v.keys).every(isLedgerEntry) &&
+  (v.scope === undefined || isString(v.scope)) &&
+  (v.held === undefined || (Array.isArray(v.held) && v.held.every(isString))) &&
+  (v.gated === undefined || (isPlainObject(v.gated) && Object.values(v.gated).every(isNumber)));
 export function readLedgerDoc(text: string | null): LedgerDoc | "older" | "newer" | "unreadable" {
   if (text === null) return { v: 2, profiles: {} };
   try {
     const doc = JSON.parse(text) as unknown;
     if (!isPlainObject(doc)) return "unreadable";
     if (doc.v !== 2) return doc.v === 1 ? "older" : doc.v === undefined ? "unreadable" : "newer";
-    return isPlainObject(doc.profiles) ? (doc as LedgerDoc) : "unreadable";
+    return isPlainObject(doc.profiles) && Object.values(doc.profiles).every(isStoredLedger) ? (doc as LedgerDoc) : "unreadable";
   } catch {
     return "unreadable";
   }

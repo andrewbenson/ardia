@@ -54,6 +54,13 @@ const LEDGER_TEXTS = [
   '"text"',
   "{",
   "",
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{},"held":"pw:a"}}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{},"gated":[5]}}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":["x"]}}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":"3","t":4,"keys":{}}}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{"pw:a\\nb":{"d":"x","h":null,"m":0}}}}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{"pw:a\\nb":{"d":["1.x"],"h":"h1","m":2}},"scope":null}}}',
+  '{"v":2,"profiles":{"":5}}',
 ];
 
 export function randomCase(seed) {

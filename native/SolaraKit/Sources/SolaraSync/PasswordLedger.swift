@@ -88,8 +88,24 @@ public func readLedgerDocument(_ text: String?) -> LedgerDocumentState {
     if object["v"] == .number(1) { return .older }
     return object.contains("v") ? .newer : .unreadable
   }
-  guard object["profiles"]?.object != nil else { return .unreadable }
+  guard let profiles = object["profiles"]?.object, profiles.values.allSatisfy(isStoredLedger) else { return .unreadable }
   return .doc(object)
+}
+
+func isLedgerEntry(_ value: JSONValue) -> Bool {
+  guard let entry = value.object, let d = entry["d"]?.array, d.allSatisfy({ $0.string != nil }) else { return false }
+  guard let h = entry["h"], h == .null || h.string != nil else { return false }
+  guard let m = entry["m"], m == .null || m.number != nil else { return false }
+  return true
+}
+
+func isStoredLedger(_ value: JSONValue) -> Bool {
+  guard let stored = value.object, stored["L"]?.number != nil, stored["t"]?.number != nil else { return false }
+  guard let keys = stored["keys"]?.object, keys.values.allSatisfy(isLedgerEntry) else { return false }
+  if let scope = stored["scope"], scope.string == nil { return false }
+  if let held = stored["held"], !(held.array?.allSatisfy { $0.string != nil } ?? false) { return false }
+  if let gated = stored["gated"], !(gated.object?.values.allSatisfy { $0.number != nil } ?? false) { return false }
+  return true
 }
 
 public func readLedgerDocument(_ read: DocumentRead) -> LedgerDocumentState {

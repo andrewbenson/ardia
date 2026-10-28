@@ -4,7 +4,7 @@ import Testing
 
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
-    .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore,
+    .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
   ]
 
   func scratchDefaults() -> UserDefaults {

@@ -10,7 +10,7 @@ public class PagesModule: Module {
     Name("SolaraPages")
 
     Function("available") { () -> Bool in
-      LaunchSwitches.shared.isOn(.nativePages, defaultOn: false) && NativeSettingsHandle.active
+      LaunchSwitches.shared.isOn(.nativePages, defaultOn: true) && NativeSettingsHandle.active
     }
 
     Events("onMeetingAlertEvent")

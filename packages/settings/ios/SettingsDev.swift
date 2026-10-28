@@ -1,4 +1,5 @@
 import AppKit
+import SolaraStore
 import SolaraUI
 
 @MainActor
@@ -113,6 +114,13 @@ enum SettingsDev {
     case "windows":
       let list = NSApp.windows.map { "\(type(of: $0)) #\($0.windowNumber) '\($0.title)' visible=\($0.isVisible) key=\($0.isKeyWindow)" }
       return json(["windows": list])
+    case "websiteEngine":
+      guard let model = NativeSettingsHandle.model else { return #"{"error":"no store"}"# }
+      let parts = (argument ?? "").split(separator: " ", maxSplits: 1).map(String.init)
+      EnginesAdapter(model: model).setWebsiteEngine(parts.first ?? "", parts.count > 1 ? parts[1] : nil)
+    case "resetDeveloperModeSites":
+      guard let model = NativeSettingsHandle.model else { return #"{"error":"no store"}"# }
+      AdvancedAdapter(model: model).resetDeveloperModeSites()
     default:
       return #"{"error":"unknown action"}"#
     }

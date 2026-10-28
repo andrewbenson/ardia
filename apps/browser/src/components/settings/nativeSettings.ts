@@ -1,20 +1,15 @@
-import type { PageEngine } from "@ardia/ardiacore";
-import { engineHost } from "@ardia/core";
-import { appIcons, currentAppIcon, isDefaultBrowser, launchAtLoginStatus, setAppIcon, setAsDefaultBrowser, setLaunchAtLogin, systemInfo } from "@ardia/shell";
+import { systemInfo } from "@ardia/shell";
 import { nativeSettingsAvailable, publishSettingsTopic, serveNativeSettings, type SettingsHandler } from "@ardia/settings";
 import { openUrls } from "../../lib/actions";
 import { installCliInBackground, useCli } from "../../lib/cliControl";
-import { setWebsiteEngine } from "../../lib/engines";
 import { faviconUri } from "../../lib/favicons";
 import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
-import { controllingSearchExtension, defaultSearchEngine, searchEngines, type Settings } from "../../store/settings";
 import { SHARING_COPY } from "../../telemetry/copy";
 import { trackSettingsSection } from "../../telemetry/track";
 import { setEnabled } from "../extensions/state";
 import { extensionsProfileId } from "../extensions/store";
 import { openInternalPage } from "../pages/urls";
-import { hasDeveloperModeChanges, resetDeveloperModeSites } from "../site/developerMode";
 import { autofillHandlers } from "./native/autofill";
 import { extensionsHandlers, publishExtensions } from "./native/extensions";
 import { importHandlers, publishImport } from "./native/import";
@@ -58,50 +53,15 @@ const coreHandlers: Record<string, SettingsHandler> = {
   "app.openInternalPage": (page: Parameters<typeof openInternalPage>[0]) => openInternalPage(page),
   "app.openUrls": (urls: string[]) => openUrls(urls),
 
-  "general.loginItemStatus": () => launchAtLoginStatus().catch(() => "notRegistered"),
-  "general.setLaunchAtLogin": (on: boolean) => setLaunchAtLogin(on).catch(() => {}),
-  "general.isDefaultBrowser": () => isDefaultBrowser().catch(() => false),
-  "general.setAsDefaultBrowser": () => setAsDefaultBrowser().catch(() => false),
   "general.openImport": () => openImport(),
 
   "tabs.chooseLayout": (layout: "sidebar" | "top") => chooseTabLayout(layout),
 
-  "appearance.appIcons": (size: number) =>
-    Promise.all([appIcons(size), currentAppIcon()]).then(([icons, current]) => ({ icons, current }), () => ({ icons: [], current: null })),
-  "appearance.setAppIcon": (id: string) => setAppIcon(id),
-
-  "search.setEngine": (id: string) => useBrowser.getState().setSearchEngine(id),
-  "search.add": (input: { name: string; keyword: string; url: string }) => {
-    const added = useBrowser.getState().addCustomEngine(input);
-    return "error" in added ? added.error : null;
-  },
-  "search.update": (id: string, input: { name: string; keyword: string; url: string }) => useBrowser.getState().updateCustomEngine(id, input),
-  "search.remove": (id: string) => useBrowser.getState().removeCustomEngine(id),
   "search.manageExtensions": (profile: string) => manageExtensionsOf(profile),
   "search.disableExtension": (profile: string, extensionId: string) => setEnabled(profile, extensionId, false),
 
-  "engines.setWebsiteEngine": (site: string, engine: PageEngine | null) => setWebsiteEngine(site, engine),
-
   "advanced.installCli": () => installCliInBackground("settings"),
-  "advanced.resetDeveloperModeSites": () => resetDeveloperModeSites(),
 };
-
-function engineTopic(settings: Settings) {
-  const controlling = controllingSearchExtension(settings);
-  return {
-    engines: searchEngines(settings).map((e) => ({
-      id: e.id,
-      name: e.name,
-      keyword: e.keyword,
-      url: e.url,
-      host: engineHost(e),
-      custom: !!e.custom,
-      extension: e.extension ? { name: e.extension.name ?? "" } : null,
-    })),
-    selectedId: defaultSearchEngine(settings).id,
-    controlling: controlling ? { extensionId: controlling.extensionId, extensionName: controlling.extensionName ?? "", profile: controlling.profile } : null,
-  };
-}
 
 function cliTopic() {
   const cli = useCli.getState();
@@ -138,10 +98,6 @@ export function startNativeSettings(): boolean {
     onboardingHandlers,
   );
   serveNativeSettings(handlers);
-  const publishSettings = (settings: Settings) => {
-    publishSettingsTopic("search.engines", engineTopic(settings));
-    publishSettingsTopic("advanced.developerModeChanged", hasDeveloperModeChanges(settings));
-  };
   let focusProfile: string | null | undefined;
   const publishFocus = () => {
     const profile = extensionsProfileId(null);
@@ -149,12 +105,10 @@ export function startNativeSettings(): boolean {
     focusProfile = profile;
     publishSettingsTopic("extensions.defaultProfile", profile);
   };
-  publishSettings(useBrowser.getState().settings);
   publishFocus();
   publishSettingsTopic("advanced.cli", cliTopic());
   publishSettingsTopic("about.updateChecksNote", updateChecksNote());
   useBrowser.subscribe((s, prev) => {
-    if (s.settings !== prev.settings) publishSettings(s.settings);
     if (s.ui.focusedWindowId !== prev.ui.focusedWindowId || s.windows !== prev.windows) publishFocus();
   });
   useCli.subscribe(() => publishSettingsTopic("advanced.cli", cliTopic()));

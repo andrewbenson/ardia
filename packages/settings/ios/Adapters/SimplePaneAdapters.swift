@@ -155,16 +155,30 @@ final class SearchEngineAdapter: SearchEngineServices {
 
 @MainActor
 final class EnginesAdapter: EnginesServices {
+  private let model: SettingsModel
+
+  init(model: SettingsModel) {
+    self.model = model
+  }
+
   func setWebsiteEngine(_ site: String, _ engine: String?) {
-    SettingsJS.shared.fire("engines.setWebsiteEngine", site, jsonArg(engine))
+    guard let site = Self.siteOf(site) else { return }
+    var rules = model.settings["websiteEngines"]?.object ?? [:]
+    rules[site] = engine.map(JSONValue.string)
+    model.update(["websiteEngines": .object(rules)])
   }
 
   func site(forTyped address: String) -> String? {
     let typed = address.trimmingCharacters(in: .whitespacesAndNewlines)
     let url = typed.range(of: "^[a-z][\\w+.-]*://", options: [.regularExpression, .caseInsensitive]) != nil ? typed : SolaraOmnibox.resolveInput(typed, search: "")
+    return Self.siteOf(url)
+  }
+
+  nonisolated static func siteOf(_ url: String) -> String? {
     guard let components = URLComponents(string: url), let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
           let host = components.host, !host.isEmpty else { return nil }
-    let port = components.port.map { ":\($0)" } ?? ""
+    let defaultPort = scheme == "https" ? 443 : 80
+    let port = components.port.flatMap { $0 == defaultPort ? nil : ":\($0)" } ?? ""
     return "\(scheme)://\(host)\(port)".lowercased()
   }
 
@@ -189,15 +203,14 @@ final class EnginesAdapter: EnginesServices {
 @MainActor
 @Observable
 final class AdvancedAdapter: AdvancedServices {
+  @ObservationIgnored private let model: SettingsModel
   private var cli: [String: Any]
-  private var developerModeChanged: Bool
   @ObservationIgnored private var observers: [UUID] = []
 
-  init() {
+  init(model: SettingsModel) {
+    self.model = model
     cli = SettingsJS.shared.latestValue("advanced.cli") as? [String: Any] ?? [:]
-    developerModeChanged = SettingsJS.shared.latestValue("advanced.developerModeChanged") as? Bool ?? false
     observers.append(SettingsJS.shared.observe("advanced.cli") { [weak self] in self?.cli = $0 as? [String: Any] ?? [:] })
-    observers.append(SettingsJS.shared.observe("advanced.developerModeChanged") { [weak self] in self?.developerModeChanged = $0 as? Bool ?? false })
   }
 
   func chromiumVersion() async -> String? {
@@ -233,11 +246,33 @@ final class AdvancedAdapter: AdvancedServices {
   func installCli() { SettingsJS.shared.fire("advanced.installCli") }
 
   func hasDeveloperModeChanges(_ developerMode: JSONValue?) -> Bool {
-    _ = developerMode
-    return developerModeChanged
+    Self.hasDeveloperModeChanges(developerMode)
   }
 
-  func resetDeveloperModeSites() { SettingsJS.shared.fire("advanced.resetDeveloperModeSites") }
+  func resetDeveloperModeSites() {
+    guard let all = model.settings["developerMode"]?.object else { return }
+    model.update(["developerMode": .object(all.mapValues(Self.withoutSites))])
+  }
+
+  nonisolated static func hasDeveloperModeChanges(_ developerMode: JSONValue?) -> Bool {
+    (developerMode?.object?.values ?? []).contains { state in
+      hosts(state["on"]).contains { !isDefaultDeveloperHost($0) } || hosts(state["off"]).contains(where: isDefaultDeveloperHost)
+    }
+  }
+
+  nonisolated static func withoutSites(_ state: JSONValue) -> JSONValue {
+    let reload = state["reload"]?.string == "forceReload" ? "forceReload" : "reload"
+    return .object(["on": .array([]), "off": .array([]), "reload": .string(reload)])
+  }
+
+  nonisolated static func hosts(_ list: JSONValue?) -> [String] {
+    (list?.array ?? []).compactMap(\.string).filter { !$0.isEmpty && $0.count <= 253 }.map { $0.lowercased() }
+  }
+
+  nonisolated static func isDefaultDeveloperHost(_ host: String) -> Bool {
+    let host = host.lowercased()
+    return ["localhost", "127.0.0.1", "[::1]"].contains(host) || host.hasSuffix(".localhost")
+  }
 
   func openInternalPage(_ page: String) { SettingsJS.shared.fire("app.openInternalPage", page) }
 

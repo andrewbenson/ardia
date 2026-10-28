@@ -1,7 +1,7 @@
 type Handler = (error: unknown, isFatal?: boolean) => void;
 type ErrorUtilsType = { getGlobalHandler?: () => Handler | undefined; setGlobalHandler?: (handler: Handler) => void };
 type Shell = { readDocument?: (name: string) => string | null; writeDocument?: (name: string, contents: string) => void };
-export type JsErrorKind = "fatal" | "fatal storm" | "error" | "render";
+export type JsErrorKind = "fatal" | `fatal storm (${number} in ${number} s)` | "error" | "render";
 
 const JS_ERROR_LOG = "js-errors.log";
 const JS_ERROR_LOG_PREVIOUS = "js-errors.1.log";
@@ -68,10 +68,10 @@ function install() {
   const utils = (globalThis as { ErrorUtils?: ErrorUtilsType }).ErrorUtils;
   const previous = utils?.getGlobalHandler?.();
   utils?.setGlobalHandler?.((error, isFatal) => {
+    if (stormHandedOff) return;
     const storm = !!isFatal && fatalStorm();
-    recordJsError(error, storm ? "fatal storm" : isFatal ? "fatal" : "error");
+    recordJsError(error, storm ? `fatal storm (${recentFatals.length} in ${STORM_WINDOW_MS / 1000} s)` : isFatal ? "fatal" : "error");
     if (storm && !__DEV__ && windowShown) {
-      if (stormHandedOff) return;
       stormHandedOff = true;
       setTimeout(() => previous?.(error, isFatal), STORM_LOG_FLUSH_MS);
     } else if (__DEV__ || !isFatal || !windowShown) previous?.(error, isFatal);

@@ -43,12 +43,41 @@ export class AreaBoundary extends Component<Props, State> {
   render() {
     if (!this.state.error) return <Fragment key={this.state.mount}>{this.props.children}</Fragment>;
     if (this.state.retries < AUTO_RETRIES || this.props.quiet) return null;
-    const row = <AreaErrorRow fill={this.props.area === "window"} detail={__DEV__ ? this.state.error : null} onReload={this.reload} />;
-    if (!this.props.windowId) return row;
+    const fill = this.props.area === "window";
+    const row = <AreaErrorRow fill={fill} detail={__DEV__ ? this.state.error : null} onReload={this.reload} />;
     return (
-      <WindowContext.Provider value={this.props.windowId}>
-        <ThemeScope>{row}</ThemeScope>
-      </WindowContext.Provider>
+      <PlainFallback fill={fill} onReload={this.reload}>
+        {this.props.windowId ? (
+          <WindowContext.Provider value={this.props.windowId}>
+            <ThemeScope>{row}</ThemeScope>
+          </WindowContext.Provider>
+        ) : (
+          row
+        )}
+      </PlainFallback>
+    );
+  }
+}
+
+class PlainFallback extends Component<{ fill: boolean; onReload: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error) {
+    recordJsError(error, "render", "error row");
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <View style={this.props.fill ? { flex: 1, alignItems: "center", justifyContent: "center", padding: 16 } : { padding: 12 }}>
+        <Text style={{ fontSize: 12, color: "#8e8e93" }} onPress={this.props.onReload}>
+          Something went wrong · Reload
+        </Text>
+      </View>
     );
   }
 }

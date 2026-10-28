@@ -9,7 +9,7 @@ import { Favicon, NewTabIcon } from "../primitives";
 import { HistoryPopover } from "./HistoryPopover";
 import { goBack, goForward, goToHistoryItem, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu, type HistoryItem } from "./history";
 import type { ToolbarGeometry } from "./geometry";
-import { usePageFrame } from "./nativePaneOverlays";
+import type { PageFrame } from "./nativePaneOverlays";
 import {
   CAPSULE_INSET,
   CAPSULE_SIZE,
@@ -51,7 +51,9 @@ type Shown = { direction: "back" | "forward"; confirmed: boolean; list: HistoryI
 export function SwipeOverlay({ tabId, windowId, nativeAllowed = true }: { tabId: string; windowId: string; nativeAllowed?: boolean }) {
   const theme = useTheme();
   const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
-  const page = usePageFrame();
+  const pageView = useRef<View>(null);
+  const pageFrame = useRef<PageFrame | null>(null);
+  const measurePage = () => pageView.current?.measureInWindow((x, y, width, height) => (pageFrame.current = [x, y, width, height]));
   const send = (message: object) => inShell && sendPaneSwipe(windowId, tabId, message);
   const history = useHistoryAvailability(tabId);
   const sizeRef = useRef({ width: 0, height: 0 });
@@ -101,7 +103,7 @@ export function SwipeOverlay({ tabId, windowId, nativeAllowed = true }: { tabId:
     v.fade.setValue(1);
     v.scale.setValue(1);
     Object.assign(g, { active: true, direction, confirmed: false, width: SIZE, list: null, listY: 0, selected: 0 });
-    if (page.frame) send({ op: "show", direction, frame: page.frame, theme: { dark: !!theme.dark, textPrimary: theme.textPrimary, textSecondary: theme.textSecondary }, profileId: useBrowser.getState().tabs[tabId]?.profileId ?? "" });
+    if (pageFrame.current) send({ op: "show", direction, frame: pageFrame.current, theme: { dark: !!theme.dark, textPrimary: theme.textPrimary, textSecondary: theme.textSecondary }, profileId: useBrowser.getState().tabs[tabId]?.profileId ?? "" });
   };
 
   const layoutTo = (width: number, height: number, top: number, radius: number, response: number, ratio: number) => {
@@ -226,7 +228,7 @@ export function SwipeOverlay({ tabId, windowId, nativeAllowed = true }: { tabId:
         onSwipe={onSwipe}
         onLayout={(e) => void (sizeRef.current = { width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
       />
-      {inShell && <View ref={page.ref} pointerEvents="none" collapsable={false} onLayout={page.onLayout} style={StyleSheet.absoluteFill} />}
+      {inShell && <View ref={pageView} pointerEvents="none" collapsable={false} onLayout={measurePage} style={StyleSheet.absoluteFill} />}
       {shown && !inShell && (
         <Animated.View
           pointerEvents="none"

@@ -27,5 +27,10 @@
     "packages/sync/src/hlc.ts": "ecb926f03ea07f95e35d26b1bafafc2c79b9fddcf2f87c09dfb346b06f3ed751",
     "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
     "packages/sync/src/order.ts": "f3ae5d5a3ee10adc89a30dcd35c6ca8353c704638bb6109977c411be3de4d537"
+  },
+  "seal-cases": {
+    "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
+    "apps/browser/src/sync/notes.ts": "b94e9f73af50b9daf91b44ff9b8c43775dd33ba1f92776b13974925656fdaeb6",
+    "apps/browser/src/sync/passwordLedger.ts": "b5ed672eb39a9d1313c4f6fe3a5c366cd3b373febd809acf56d4ce40a1651829"
   }
 }

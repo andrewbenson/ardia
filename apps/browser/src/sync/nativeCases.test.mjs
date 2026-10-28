@@ -32,6 +32,7 @@ for (const [fixture, swift, recorder] of [
   ["Cases/ledger.json.deflate", "PasswordLedger.swift", "ledgerCases.mjs"],
   ["Cases/journal.json.deflate", "EditJournal.swift", "journalCases.mjs"],
   ["Cases/state.json.deflate", "StateDecode.swift", "stateCases.mjs"],
+  ["seal-cases", "PasswordText.swift and PasswordValues.swift (packages/sync/ios/Core)", "sealCases.mjs"],
   ["Adapters", "the adapters in SolaraSync (StoreAdapters, PinnedAdapters, HostedAdapters, Extensions)", "replay.mjs --phase adapters"],
   ["Scenarios/extensions.json.deflate", "SolaraSync's Extensions.swift", "../../../packages/sync/scripts/extensions-scenario.mjs"],
 ]) {
@@ -39,3 +40,11 @@ for (const [fixture, swift, recorder] of [
     assert.deepEqual(changedSources(fixture), [], `look at ${swift} for the same change, then re-record with node --import ./src/test-loader.mjs scripts/native/${recorder}`);
   });
 }
+
+test("canon.ts, notes.ts and passwordLedger.ts still write every value as PasswordText.swift replays it", async () => {
+  const { evaluate } = await import("../../scripts/native/sealCases.mjs");
+  const file = new URL("../../../../packages/sync/tests/fixtures/seal-cases.json.deflate", import.meta.url);
+  const { cases: recorded } = JSON.parse(inflateRawSync(readFileSync(file)).toString());
+  const stale = recorded.filter((c) => JSON.stringify(evaluate(c.input)) !== JSON.stringify(c.output)).length;
+  assert.equal(stale, 0, "port the change to PasswordText.swift, then re-record with node --import ./src/test-loader.mjs scripts/native/sealCases.mjs");
+});

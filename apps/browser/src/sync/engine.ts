@@ -54,6 +54,7 @@ import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watch
 import { syncRedesign } from "./redesignSwitch";
 import { ledgerFromNewerVersion, ledgerPasswordsAdapter, type HeldPasswords } from "./ledgerPasswords";
 import { editJournal, noteInStep, noteSeen, prunableSeen, pruneSeen } from "./journalHost";
+import { choice, digest } from "./notes";
 import { isObject, readableBatch, readableScope } from "./readable";
 
 type DataType = "bookmarks" | "history" | "tabs" | "pinned" | "passwords" | "extensions" | "settings";
@@ -702,18 +703,6 @@ function keepNotes() {
     }
   }
 }
-
-function digest(text: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
-  return (h >>> 0).toString(36);
-}
-
-const choice = (value: unknown) => {
-  if (!isObject(value) || !("pos" in value)) return canonical(value);
-  const { pos: _derived, ...chosen } = value;
-  return canonical(chosen);
-};
 
 const deliveredAs = (value: unknown) => (value === null || value === undefined ? "null" : choice(value));
 

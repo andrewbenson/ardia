@@ -73,6 +73,7 @@ constexpr int kLayoutVersion = 3;
 constexpr double kRecordDelay = 1.0;
 constexpr double kUnclaimedSeconds = 15;
 constexpr double kClaimedSeconds = 5;
+constexpr double kPageLeavesPollSeconds = 0.1;
 constexpr double kUntakenAfterContentSeconds = 2;
 constexpr double kCoverCheckSeconds = 0.016;
 constexpr double kCoveredFailSafeSeconds = 1.5;
@@ -1080,6 +1081,17 @@ void Abandon(ACEarlyShown *s) {
   [ACChromeWindowHost closeWindow:window];
 }
 
+void AbandonOnceThePageLeaves(ACEarlyShown *s, ArdiaCoreTab *page) {
+  if (s.claimed || ![Shown() containsObject:s]) return;
+  NSWindow *window = s.window;
+  if (!page || page.closed || !window || [ArdiaCoreWindowController holding:page] != [ArdiaCoreWindowController forNSWindow:window]) return Abandon(s);
+  if (s.tab) DropCover(s);
+  __weak ArdiaCoreTab *weakPage = page;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kPageLeavesPollSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    AbandonOnceThePageLeaves(s, weakPage);
+  });
+}
+
 NSView *Cover(NSView *host, NSDictionary *layout, NSRect *pageRect) {
   CGFloat page[4], card[4];
   if (!ReadInsets(layout[@"page"], page) || !ReadInsets(layout[@"card"], card) || !Fits(page, host) || !Fits(card, host)) return nil;
@@ -1426,6 +1438,12 @@ CGImageRef TakePrefetched(NSString *windowId) {
   return YES;
 }
 
++ (NSUInteger)unclaimedLittleWindows {
+  NSUInteger count = 0;
+  for (ACEarlyShown *s in Shown()) count += [s.appWindow isEqualToString:kLittleWindow] && !s.claimed ? 1 : 0;
+  return count;
+}
+
 + (NSWindow *)claimLittleWindowForLink:(NSString *)mark profile:(NSString *)profile {
   BOOL pending = NO;
   for (ACEarlyShown *s in Shown())
@@ -1512,7 +1530,7 @@ CGImageRef TakePrefetched(NSString *windowId) {
   for (ACEarlyShown *s in [Shown() copy]) {
     if (s.tab != tab || tab.view.superview == s.cover) continue;
     if (s.claimed) Forget(s);
-    else if (s.expired) Abandon(s);
+    else if (s.expired || [s.appWindow isEqualToString:kLittleWindow]) AbandonOnceThePageLeaves(s, tab);
     else DropCover(s);
   }
 }

@@ -82,6 +82,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       if focus { existing.makeKeyAndOrderFront(nil) }
       return
     }
+    if kind == "small" { ChromeWindows.noteLittleWindowOpening() }
     if let behind, !focus, windows[behind] != nil, !contentShown.contains(behind) {
       if pendingOpens[id] == nil { pendingOrder.append(id) }
       pendingOpens[id] = PendingOpen(

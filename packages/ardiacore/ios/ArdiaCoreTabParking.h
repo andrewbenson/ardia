@@ -35,6 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)dismissLinkTab:(ArdiaCoreTab *)tab;
 + (BOOL)takeDismissedLinkMark:(NSString *)mark;
 + (NSDictionary<NSString *, id> *)routeLinkTabs:(NSArray<NSString *> *)urls;
+@property(class, nonatomic, readonly) BOOL linkTabsRouted;
++ (void)noteLittleWindowOpening;
+@property(class, nonatomic, readonly, nullable) NSString *soleLinkURL;
+@property(class, nonatomic, readonly, nullable) NSString *linkProfile;
 + (nullable ArdiaCoreTab *)parkLinkTab:(NSString *)mark forKey:(nullable NSString *)key;
 + (void)discardTab:(ArdiaCoreTab *)tab forKey:(NSString *)key;
 

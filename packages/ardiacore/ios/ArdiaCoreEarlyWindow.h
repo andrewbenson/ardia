@@ -26,6 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
                        backdrop:(NSDictionary *)backdrop
                            like:(nullable NSString *)windowId;
 + (nullable NSWindow *)claimLittleWindowForLink:(NSString *)mark profile:(nullable NSString *)profile;
+@property(class, nonatomic, readonly) NSUInteger unclaimedLittleWindows;
 + (void)forgetPictures;
 + (void)forgetPicturesNow;
 + (BOOL)holdsPage:(ArdiaCoreTab *)tab;

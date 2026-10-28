@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)recordLaunchLayout;
 + (void)forgetLaunchPictures;
 + (BOOL)takeDismissedAppWindow:(NSString *)appWindow;
++ (void)noteLittleWindowOpening;
 
 + (void)embedRootView:(NSView *)root inWindow:(NSWindow *)window;
 

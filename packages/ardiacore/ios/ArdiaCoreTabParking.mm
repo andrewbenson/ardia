@@ -53,6 +53,7 @@ NSMutableSet<NSString *> *DismissedLinkMarks() {
 }
 NSString *gLinkProfile;
 BOOL gLinkTabsStarted;
+BOOL gLinkTabsRouted;
 
 NSView *ParkingView() {
   static NSView *view = [[NSView alloc] initWithFrame:NSZeroRect];
@@ -246,7 +247,24 @@ void CloseLinkTabs() {
   return YES;
 }
 
++ (BOOL)linkTabsRouted {
+  return gLinkTabsRouted;
+}
+
++ (void)noteLittleWindowOpening {
+  gLinkTabsRouted = YES;
+}
+
++ (NSString *)soleLinkURL {
+  return LinkTabs().count == 1 && LinkURLs().count == 1 && LinkTabs()[@0] ? LinkURLs()[@0] : nil;
+}
+
++ (NSString *)linkProfile {
+  return gLinkTabsStarted ? gLinkProfile : nil;
+}
+
 + (NSDictionary<NSString *, id> *)routeLinkTabs:(NSArray<NSString *> *)urls {
+  gLinkTabsRouted = YES;
   NSMutableArray *marks = [NSMutableArray array];
   NSMutableSet<NSNumber *> *used = [NSMutableSet set];
   NSMutableArray<NSNumber *> *dismissed = [NSMutableArray array];

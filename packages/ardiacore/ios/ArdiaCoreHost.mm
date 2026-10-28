@@ -119,6 +119,7 @@ bool gAppKitWillFinish = false;
 bool gAppKitDidFinish = false;
 NSArray<NSURL *> *gPendingLaunchURLs;
 NSArray<NSURL *> *gLaunchLinks;
+NSArray<NSURL *> *gEarlyLittleLinks;
 bool gLinksHandled = false;
 bool gJSStarted = false;
 void (^gEventHandler)(NSString *, NSDictionary *);
@@ -178,12 +179,14 @@ static bool OutsideLinksForwarded() {
 static void LinksArrived(NSArray<NSURL *> *urls) {
   if (gLinksHandled || !urls.count || OutsideLinksForwarded()) return;
   gLinksHandled = true;
+  gEarlyLittleLinks = [urls copy];
   if (!gJSStarted) {
     gLaunchLinks = [urls copy];
-    return;
+    return TryEarlyLittleWindow();
   }
   NSString *dir = AppDataDirectory();
   ParkLaunchLinks(urls, dir, SavedSession(dir));
+  TryEarlyLittleWindow();
 }
 
 static std::string FeatureEntryName(const std::string &entry) {
@@ -240,6 +243,13 @@ static void ReportLoweredWindowOcclusion() {
     [center addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) { report(note.object); }];
 }
 
+static bool TestBuild() {
+  static const bool testBuild = gScratchDataDir || !IsTeamSigned();
+  return testBuild;
+}
+
+static const char *TestSwitch(const char *name) { return TestBuild() ? getenv(name) : nullptr; }
+
 static void StartLaunchTab() {
   gJSStarted = true;
   NSString *dir = AppDataDirectory();
@@ -247,6 +257,7 @@ static void StartLaunchTab() {
   NSArray<NSURL *> *links = gLaunchLinks;
   gLaunchLinks = nil;
   ParkLaunchLinks(links, dir, session);
+  if (TestSwitch("ARDIA_TEST_EARLY_LINK_AFTER_JS")) TryEarlyLittleWindow();
   NSDictionary *hint = session[@"launchTab"];
   if (![hint isKindOfClass:NSDictionary.class]) return;
   NSString *key = hint[@"id"], *url = hint[@"url"], *profile = hint[@"profile"];
@@ -338,10 +349,14 @@ static NSString *gEarlyLittleOutcome = @"notTried";
 static void SkipEarlyLittle(NSString *reason) { gEarlyLittleOutcome = reason; }
 
 static void TryEarlyLittleWindow() {
-  if (gEarlyLittleTried || !gStarted || gJSStarted || gBootstrap.urls.count != 1) return;
+  if (gEarlyLittleTried || !gStarted) return;
+  if (!gJSStarted && TestSwitch("ARDIA_TEST_EARLY_LINK_AFTER_JS")) return SkipEarlyLittle(@"waitingForJS");
+  if (ArdiaCoreTabParking.linkTabsRouted) return SkipEarlyLittle(@"jsRoutedFirst");
+  NSArray<NSURL *> *links = gBootstrap ? gBootstrap.urls : gEarlyLittleLinks;
+  if (links.count != 1) return SkipEarlyLittle(@"links");
   gEarlyLittleTried = true;
   if (EarlyLittleWindowOff() || ArdiaCoreEarlyWindow.switchedOff || OutsideLinksForwarded()) return SkipEarlyLittle(@"switchedOff");
-  NSURL *link = gBootstrap.urls.firstObject;
+  NSURL *link = links.firstObject;
   NSString *scheme = link.scheme.lowercaseString;
   if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return SkipEarlyLittle(@"scheme");
   NSString *dir = AppDataDirectory();
@@ -349,8 +364,8 @@ static void TryEarlyLittleWindow() {
   if (LaunchTabSwitchedOff(dir) || OnboardingPending(dir)) return SkipEarlyLittle(@"launchTabOrOnboarding");
   NSDictionary *session = SavedSession(dir);
   NSDictionary *settings = [session[@"settings"] isKindOfClass:NSDictionary.class] ? session[@"settings"] : @{};
-  if ([settings[@"openLinksInLittleArdia"] isEqual:@NO]) return SkipEarlyLittle(@"setting");
-  NSString *profile = [session[@"linkProfile"] isKindOfClass:NSString.class] ? session[@"linkProfile"] : nil;
+  if ([settings[@"openLinksInLittleArdia"] isEqual:@NO] && !TestSwitch("ARDIA_TEST_EARLY_LINK_IGNORE_SETTING")) return SkipEarlyLittle(@"setting");
+  NSString *profile = ArdiaCoreTabParking.linkProfile ?: ([session[@"linkProfile"] isKindOfClass:NSString.class] ? session[@"linkProfile"] : nil);
   NSDictionary *backdrop = [session[@"launchBackdrop"] isKindOfClass:NSDictionary.class] ? session[@"launchBackdrop"] : nil;
   const bool dark = [[NSApp.effectiveAppearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameDarkAqua, NSAppearanceNameAqua ]]
       isEqualToString:NSAppearanceNameDarkAqua];
@@ -360,12 +375,15 @@ static void TryEarlyLittleWindow() {
   if (!frame) return SkipEarlyLittle(@"frame");
   NSString *url = link.absoluteString;
   [ArdiaCoreWebView startLinkTabs:@[ url ] profile:profile];
+  if (![ArdiaCoreTabParking.linkProfile isEqualToString:profile] || ![ArdiaCoreTabParking.soleLinkURL isEqualToString:url]) return SkipEarlyLittle(@"tab");
   ArdiaCoreTab *tab = ArdiaCoreTabParking.firstLinkTab;
   NSString *mark = tab ? [ArdiaCoreTabParking linkMarkForTab:tab] : nil;
   NSString *focused = [session[@"focusedWindowId"] isKindOfClass:NSString.class] ? session[@"focusedWindowId"] : nil;
   if (!mark) return SkipEarlyLittle(@"tab");
-  [ArdiaCoreEarlyWindow showLittleWindowForLink:tab mark:mark url:url frame:frame profile:profile backdrop:backdrop like:focused];
-  gEarlyLittleOutcome = @"shown";
+  if (TestSwitch("ARDIA_TEST_EARLY_LINK_FAILS")) return SkipEarlyLittle(@"showFailed");
+  if (![ArdiaCoreEarlyWindow showLittleWindowForLink:tab mark:mark url:url frame:frame profile:profile backdrop:backdrop like:focused])
+    return SkipEarlyLittle(@"showFailed");
+  gEarlyLittleOutcome = gJSStarted ? @"shownAfterJS" : @"shown";
 }
 
 static void StartEarlyWindow() {
@@ -932,7 +950,7 @@ static void StartEarlyWindow() {
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   NSInteger chromeWindows = 0;
   for (ArdiaCoreWindowController *c in ArdiaCoreWindowController.all) chromeWindows += c.coreWindow ? 1 : 0;
-  return @{
+  NSMutableDictionary<NSString *, id> *info = [@{
     @"pid" : @(NSProcessInfo.processInfo.processIdentifier),
     @"dataDirectory" : gDataDirectory ?: @"",
     @"engine" : @"ardiacore",
@@ -943,10 +961,12 @@ static void StartEarlyWindow() {
     @"chromeWindows" : @(chromeWindows),
     @"keepAlive" : engine.keepAliveState ?: @"",
     @"lastUsedProfile" : engine.defaultProfile.name ?: @"",
-#if DEBUG
-    @"earlyLinkWindow" : gEarlyLittleOutcome,
-#endif
-  };
+  } mutableCopy];
+  if (TestBuild()) {
+    info[@"earlyLinkWindow"] = gEarlyLittleOutcome;
+    info[@"unclaimedEarlyLinkWindows"] = @(ArdiaCoreEarlyWindow.unclaimedLittleWindows);
+  }
+  return info;
 }
 
 + (NSArray<NSDictionary<NSString *, id> *> *)chromeWindows {

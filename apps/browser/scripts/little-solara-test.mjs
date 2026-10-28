@@ -183,24 +183,98 @@ try {
 
 
   await rep.check("link-from-another-app", async () => {
-    await sleep(1500);
-    await app.quit();
-    app = null;
-    app = await launch(resolve(appArg), {
-      data, probe: true, urls: [url("c")],
-      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
-      ready: "return !!ac.store.getState().windows.w1",
-    });
+    const outcomes = [];
+    for (;;) {
+      await sleep(1500);
+      await app.quit();
+      app = null;
+      app = await launch(resolve(appArg), {
+        data, probe: true, urls: [url("c")],
+        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
+        ready: "return !!ac.store.getState().windows.w1",
+      });
+      outcomes.push(await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`));
+      if (outcomes.at(-1) !== "jsRoutedFirst" || outcomes.length === 3) break;
+      await until("the link's window before relaunching", `return small()?.id ?? null;`, 15000);
+    }
     const id = await until("Little Solara for the link", `return small()?.id ?? null;`, 15000);
     const tab = await until("page C in it", `const t = st().tabs[st().windows[${JSON.stringify(id)}]?.tabIds[0]]; return t && t.title === "C" ? t.id : null;`, 15000);
     const main = await run(`return st().windows.w1.tabIds.map((t) => st().tabs[t].url);`);
     if (main.includes(url("c"))) throw new Error(`the link opened in the main window too: ${main}`);
     const active = await run(`return !!M && !!M.littleActive && M.littleActive(${JSON.stringify(id)});`);
     if (active !== native) throw new Error(`littleActive ${active} with the switch ${native ? "on" : "off"}`);
-    const early = await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`);
-    if (early !== "shown") throw new Error(`the early link window's outcome is ${early}, so the JS path opened this window, not the early one`);
+    const early = outcomes.at(-1);
+    if (early !== "shown") throw new Error(`the early link window's outcomes were ${outcomes.join(", ")}, so the JS path opened this window, not the early one`);
     const shell = native ? await until("the shell's bar", `return M.describeLittle(${JSON.stringify(id)}).then(JSON.parse).then((d) => d && d.barShown && d.blankBarHit === "SolaraUI.LittleSolaraDragStrip" ? d : null);`) : null;
-    return { id, tab, early, slots: shell?.slots.map(([slot]) => slot) };
+    return { id, tab, early, outcomes, slots: shell?.slots.map(([slot]) => slot) };
+  });
+  const relaunchWithLink = async (env) => {
+    await sleep(1500);
+    await app.quit();
+    app = null;
+    app = await launch(resolve(appArg), {
+      data, probe: true, urls: [url("c")],
+      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}), ...env },
+      ready: "return !!ac.store.getState().windows.w1",
+    });
+    const id = await until("Little Solara for the link", `return small()?.id ?? null;`, 15000);
+    await until("page C in it", `const t = st().tabs[st().windows[${JSON.stringify(id)}]?.tabIds[0]]; return t && t.title === "C" ? t.id : null;`, 15000);
+    await sleep(2000);
+    const windows = await run(`return Object.values(st().windows).filter((w) => w.kind === "small").map((w) => w.id);`);
+    if (windows.length !== 1) throw new Error(`${windows.length} Little Solara windows for one link: ${windows}`);
+    const main = await run(`return st().windows.w1.tabIds.map((t) => st().tabs[t].url);`);
+    if (main.includes(url("c"))) throw new Error(`the link opened in the main window too: ${main}`);
+    const info = await run(`return C.engineInfo();`);
+    if (info.unclaimedEarlyLinkWindows !== 0) throw new Error(`${info.unclaimedEarlyLinkWindows} early link window(s) left unclaimed beside Little Solara`);
+    return { id, outcome: info.earlyLinkWindow };
+  };
+
+  await rep.check("link-when-js-starts-first", async () => {
+    const result = await relaunchWithLink({ ARDIA_TEST_EARLY_LINK_AFTER_JS: "1" });
+    if (result.outcome !== "shownAfterJS") throw new Error(`outcome ${result.outcome}, expected the early window shown after JS started`);
+    return result;
+  });
+
+  await rep.check("link-when-the-early-window-fails", async () => {
+    const result = await relaunchWithLink({ ARDIA_TEST_EARLY_LINK_FAILS: "1" });
+    if (result.outcome !== "showFailed") throw new Error(`outcome ${result.outcome}, expected showFailed`);
+    return result;
+  });
+
+  await rep.check("link-adopted-into-the-main-window-closes-the-early-window", async () => {
+    await run(`st().updateSettings({ openLinksInLittleArdia: false }); return true;`);
+    try {
+      await sleep(1500);
+      await app.quit();
+      app = null;
+      app = await launch(resolve(appArg), {
+        data, probe: true, urls: [url("c")],
+        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_TEST_EARLY_LINK_IGNORE_SETTING: "1", ...(native ? { ARDIA_NATIVE_MEDIA: "1" } : {}) },
+        ready: "return !!ac.store.getState().windows.w1",
+      });
+      const tab = await until("page C loaded in the main window", `const id = st().windows.w1?.tabIds.find((t) => st().tabs[t]?.url === ${JSON.stringify(url("c"))}); return id && st().tabs[id].title === "C" ? id : null;`, 15000);
+      const outcome = await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`);
+      if (outcome !== "shown") throw new Error(`outcome ${outcome}, expected the early window shown before JS adopted the link`);
+      await until("the early window closed", `return C.engineInfo().then((i) => i.unclaimedEarlyLinkWindows === 0 ? true : null);`, 1000);
+      if (await run(`return !!small();`)) throw new Error("a Little Solara window opened for a link the main window took");
+      await sleep(1000);
+      const kept = await run(`return st().windows.w1.tabIds.includes(${JSON.stringify(tab)});`);
+      if (!kept) throw new Error("page C's tab left the main window");
+      const holders = await run(`return C.tabStrips().then((tx) => tx.strips.filter((s) => s.tabs.some((t) => t.key === ${JSON.stringify(tab)})).map((s) => s.appWindow ?? null));`);
+      if (holders.length !== 1 || holders[0] !== "w1") throw new Error(`page C's tab is in the strips of ${JSON.stringify(holders)}, expected only w1's`);
+      const page = await app.page((t) => t.url === url("c"), { timeout: 3000 });
+      try {
+        const sum = await page.eval("1 + 1", { timeout: 3000 });
+        if (sum !== 2) throw new Error(`page C's renderer answered ${sum} to 1 + 1`);
+        const title = await page.eval("document.title", { timeout: 3000 });
+        if (title !== "C") throw new Error(`page C's renderer has the title ${title}`);
+      } finally {
+        page.close();
+      }
+      return { tab, outcome };
+    } finally {
+      if (app) await run(`st().updateSettings({ openLinksInLittleArdia: true }); return true;`).catch((e) => console.error(`could not turn openLinksInLittleArdia back on: ${e.message}`));
+    }
   });
 } catch (e) {
   rep.record("run", { error: e });

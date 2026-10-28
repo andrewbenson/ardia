@@ -34,6 +34,12 @@ enum ChromeWindows {
     (host as AnyObject).setValue(refuses, forKey: "refusesUnhandledKeyHandler")
   }
 
+  static func noteLittleWindowOpening() {
+    let selector = NSSelectorFromString("noteLittleWindowOpening")
+    guard let host, (host as AnyObject).responds(to: selector) else { return }
+    _ = host.perform(selector)
+  }
+
   static func takeDismissed(appWindow: String) -> Bool {
     let selector = NSSelectorFromString("takeDismissedAppWindow:")
     guard let host, (host as AnyObject).responds(to: selector), let take = (host as AnyObject).method(for: selector) else { return false }

@@ -4,6 +4,7 @@
 #import "ArdiaCoreWebView.h"
 #import "ArdiaCoreWebViewInternal.h"
 #import "ArdiaCoreServices.h"
+#import "ArdiaCoreTabParking.h"
 
 #import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
@@ -2203,6 +2204,10 @@ NSView *ACWindowRootView(NSWindow *window) {
 
 + (void)forgetLaunchPictures {
   [ArdiaCoreEarlyWindow forgetPicturesNow];
+}
+
++ (void)noteLittleWindowOpening {
+  [ArdiaCoreTabParking noteLittleWindowOpening];
 }
 
 + (BOOL)takeDismissedAppWindow:(NSString *)appWindow {

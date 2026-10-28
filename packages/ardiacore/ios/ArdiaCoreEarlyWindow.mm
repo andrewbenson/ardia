@@ -854,7 +854,7 @@ BOOL ShowsLaunchOrigin(ArdiaCoreTab *tab, NSString *launchURL) {
   if (!launch) return NO;
   BOOL engineKnows = NO;
   NSString *committed = TabCall(tab, @"committedOrigin", &engineKnows);
-  if (committed && ![committed isEqualToString:launch]) return NO;
+  if (committed.length && ![committed isEqualToString:launch]) return NO;
   NSString *url = tab.url;
   if (!url.length) return YES;
   if ([url isEqualToString:@"about:blank"]) return engineKnows;
@@ -1389,6 +1389,7 @@ CGImageRef TakePrefetched(NSString *windowId) {
     [CATransaction setDisableActions:YES];
     [page removeFromSuperview];
     page.frame = s.pageRect;
+    page.hidden = NO;
     [s.cover addSubview:page];
     [CATransaction commit];
     s.tab = tab;

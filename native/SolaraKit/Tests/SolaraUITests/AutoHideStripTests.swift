@@ -109,4 +109,94 @@ struct AutoHideStripTests {
     strip.set(style: style, mode: .peek, shownTop: 41)
     #expect(!strip.showsToolTip)
   }
+
+  @MainActor @Test func hoverPeeksAfterRNsDelaysAndAClickReveals() throws {
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 600, height: 41), styleMask: [.borderless], backing: .buffered, defer: true)
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 600, height: 41))
+    window.contentView?.addSubview(strip)
+    strip.reduceMotion = true
+    let style = AutoHideStripStyle(card: try #require(CSSColor("#FFFFFF")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
+    var events: [AutoHideStripEvent] = []
+    strip.onEvent = { events.append($0) }
+    func mouse(_ type: NSEvent.EventType, top: CGFloat) throws -> NSEvent {
+      try #require(NSEvent.mouseEvent(with: type, location: CGPoint(x: 300, y: 41 - top), modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0))
+    }
+    func wait(_ seconds: TimeInterval) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
+
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    strip.mouseMoved(with: try mouse(.mouseMoved, top: 6))
+    wait(0.25)
+    #expect(events.isEmpty)
+
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    strip.mouseEntered(with: try mouse(.mouseMoved, top: 6))
+    strip.mouseMoved(with: try mouse(.mouseMoved, top: 30))
+    wait(0.25)
+    #expect(events.isEmpty)
+
+    strip.mouseMoved(with: try mouse(.mouseMoved, top: 6))
+    wait(0.08)
+    #expect(events.isEmpty)
+    wait(0.17)
+    #expect(events == [.peek(true)])
+
+    events.removeAll()
+    strip.set(style: style, mode: .peek, shownTop: 41)
+    strip.mouseExited(with: try mouse(.mouseMoved, top: 50))
+    wait(0.1)
+    strip.mouseEntered(with: try mouse(.mouseMoved, top: 10))
+    wait(0.3)
+    #expect(events.isEmpty)
+    strip.mouseExited(with: try mouse(.mouseMoved, top: 50))
+    wait(0.15)
+    #expect(events.isEmpty)
+    wait(0.2)
+    #expect(events == [.peek(false)])
+
+    events.removeAll()
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    strip.mouseUp(with: try mouse(.leftMouseUp, top: 30))
+    strip.mouseUp(with: try mouse(.leftMouseUp, top: 6))
+    #expect(events == [.reveal])
+  }
+
+  @MainActor @Test func theCollapsedLabelDrawsInTheSecondaryColorOnce() throws {
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 300, height: 41))
+    strip.reduceMotion = true
+    let style = AutoHideStripStyle(card: try #require(CSSColor("#FFFFFF")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "HHHHHHHH", hasPage: true)
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    strip.layout()
+    let rep = try #require(strip.bitmapImageRepForCachingDisplay(in: strip.bounds))
+    strip.cacheDisplay(in: strip.bounds, to: rep)
+    var ink = 0.0
+    for y in 0..<min(rep.pixelsHigh, Int(ToolbarAutoHideMetrics.stripHeight) * rep.pixelsHigh / 41) {
+      for x in 0..<rep.pixelsWide {
+        if let c = rep.colorAt(x: x, y: y) { ink = max(ink, c.alphaComponent * (1 - c.redComponent)) }
+      }
+    }
+    print("label ink", ink)
+    #expect(abs(ink - 0.5) < 0.06)
+  }
+
+  @MainActor @Test func theStripRoundsTheCardsTopCornersOnly() throws {
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 200, height: 41), styleMask: [.borderless], backing: .buffered, defer: false)
+    let host = NSView(frame: CGRect(x: 0, y: 0, width: 200, height: 41))
+    host.wantsLayer = true
+    window.contentView = host
+    let strip = AutoHideStripView(frame: host.bounds)
+    host.addSubview(strip)
+    strip.reduceMotion = true
+    let style = AutoHideStripStyle(card: try #require(CSSColor("#000000")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "", hasPage: true)
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    strip.layout()
+    host.displayIfNeeded()
+    CATransaction.flush()
+    let ctx = try #require(CGContext(data: nil, width: 200, height: 41, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+    try #require(host.layer).render(in: ctx)
+    let pixels = try #require(ctx.data).assumingMemoryBound(to: UInt8.self)
+    func alpha(_ x: Int, fromTop y: Int) -> UInt8 { pixels[(y * ctx.bytesPerRow) + x * 4 + 3] }
+    #expect(alpha(0, fromTop: 0) == 0 && alpha(199, fromTop: 0) == 0)
+    #expect(alpha(0, fromTop: 39) == 255 && alpha(199, fromTop: 39) == 255)
+    #expect(alpha(100, fromTop: 0) == 255)
+  }
 }

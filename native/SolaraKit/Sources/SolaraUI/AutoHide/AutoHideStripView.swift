@@ -42,11 +42,13 @@ public final class AutoHideStripView: NSView {
   public var onFrame: (AutoHideFrame) -> Void = { _ in }
   public var onMotion: (Bool) -> Void = { _ in }
 
+  private let cardCorners = CALayer()
   private let backdrop = CALayer()
   private let band = CALayer()
   private let stripes = CALayer()
   private var bandColor: CGColor?
   private var stripesUri: String?
+  private var labelInk: CGFloat = 1
   private let divider = CALayer()
   private let label = NSTextField(labelWithString: "")
   private var style: AutoHideStripStyle?
@@ -61,7 +63,11 @@ public final class AutoHideStripView: NSView {
   private var link: CADisplayLink?
   private var peekTimer: Timer?
   private var tracking: NSTrackingArea?
-  public var reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+  private var pinnedReduceMotion: Bool?
+  public var reduceMotion: Bool {
+    get { pinnedReduceMotion ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+    set { pinnedReduceMotion = newValue }
+  }
 
   public override var isFlipped: Bool { true }
 
@@ -69,7 +75,9 @@ public final class AutoHideStripView: NSView {
     super.init(frame: frame)
     wantsLayer = true
     layer?.masksToBounds = false
-    for l in [backdrop, band, stripes, divider] { l.actions = SurfaceLayer.noActions }
+    for l in [cardCorners, backdrop, band, stripes, divider] { l.actions = SurfaceLayer.noActions }
+    cardCorners.masksToBounds = true
+    cardCorners.cornerRadius = ShellMetrics.cardRadius
     backdrop.masksToBounds = true
     backdrop.anchorPoint = .zero
     backdrop.addSublayer(band)
@@ -77,7 +85,8 @@ public final class AutoHideStripView: NSView {
     stripes.contentsGravity = .topLeft
     stripes.isHidden = true
     backdrop.addSublayer(stripes)
-    layer?.addSublayer(backdrop)
+    cardCorners.addSublayer(backdrop)
+    layer?.addSublayer(cardCorners)
     layer?.addSublayer(divider)
     label.font = .systemFont(ofSize: ToolbarAutoHideMetrics.labelSize, weight: .medium)
     label.alignment = .center
@@ -110,7 +119,8 @@ public final class AutoHideStripView: NSView {
     applyBand(next.band?.cg, animated: !first)
     applyStripes(next.stripes)
     label.stringValue = next.host
-    label.textColor = next.secondary.ns
+    label.textColor = next.secondary.ns.withAlphaComponent(1)
+    labelInk = next.secondary.ns.alphaComponent
     if !configured {
       configured = true
       jump(to: nextMode)
@@ -206,6 +216,7 @@ public final class AutoHideStripView: NSView {
   private func apply(bar b: Double, fade f: Double) {
     let h = Double(ToolbarAutoHideMetrics.toolbarHeight)
     PrimitiveMotion.setInstantly {
+      cardCorners.frame = CGRect(x: 0, y: 0, width: bounds.width, height: h + ShellMetrics.cardRadius)
       backdrop.bounds = CGRect(x: 0, y: 0, width: bounds.width, height: h)
       backdrop.position = .zero
       band.frame = backdrop.bounds
@@ -222,7 +233,7 @@ public final class AutoHideStripView: NSView {
         divider.frame = CGRect(x: 0, y: h - 1, width: bounds.width, height: 1)
       }
     }
-    label.alphaValue = moved ? ToolbarAutoHideCurves.labelOpacity(fade: f) : 0
+    label.alphaValue = moved ? ToolbarAutoHideCurves.labelOpacity(fade: f) * labelInk : 0
   }
 
   public override func layout() {

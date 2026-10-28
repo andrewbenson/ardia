@@ -10,6 +10,7 @@ import { startChromeTabs } from "../lib/chromeTabs";
 import { handOff, takeHandOff, wantsPage } from "../lib/tabPages";
 import { noteGone } from "../lib/tabLifecycle";
 import { usePrewarm } from "../lib/preload";
+import { pagesPooledIn } from "../lib/pagesPool";
 import { persistEngine } from "../lib/engines";
 import { tabEngine } from "../store/engines";
 import { EngineOfferPrompt } from "./site/EnginePrompt";
@@ -94,7 +95,7 @@ export function ContentCard() {
   const peekFullscreen = !!peekId && fullscreenTab === peekId;
   const shell = useWindowShell();
   const [paneRoots] = useState(() => windowPaneRootsActive(windowId));
-  const pooled = shell && nativeSplitPanes;
+  const [pooled] = useState(() => pagesPooledIn(windowId));
   useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);

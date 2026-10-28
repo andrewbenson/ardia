@@ -1,7 +1,7 @@
 import "./lib/jsErrors";
 import "./lib/productName";
 import "./lib/nativeEvents";
-import { tabPool, windowPagesPoolActive } from "@ardia/settings";
+import { tabPool, tabPoolAvailable, windowPagesPoolActive } from "@ardia/settings";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AppRegistry, unstable_batchedUpdates } from "react-native";
 import { WindowRoot } from "./App";
@@ -36,7 +36,7 @@ setStoreBatching(unstable_batchedUpdates);
 startPersistence();
 startNewTabBar();
 startTabPages();
-if (windowPagesPoolActive() && tabPool) startPooledPages(tabPool);
+if (tabPool && windowPagesPoolActive() && tabPoolAvailable()) startPooledPages(tabPool);
 startTabReveal();
 startNativeSync();
 startAppIntegration();

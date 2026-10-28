@@ -212,7 +212,7 @@ const PLANT = [
   ], cards: [{ name: "Ada Lovelace", number: "4111111111111111", expMonth: "12", expYear: "2031" }],
     ibans: [{ value: "GB82WEST12345698765432", nickname: "Personal IBAN" }],
     keywords: [{ name: "Rekey Search", keyword: "rk", url: "https://rekey.example/search?q={searchTerms}" }],
-    history: ["personal.html", "personal-two.html"], extensionsOff: ["fajbdaomknpkicfjcpipdmcpoamdmilh"] },
+    history: ["personal.html", "personal-two.html"], extensionOff: true },
   { name: "Work", page: "work.html", cookies: [
     { name: "w_persist", value: "persist-work-3f8" },
     { name: "w_session", value: "session-work-d11", session: true },
@@ -221,7 +221,7 @@ const PLANT = [
     cards: [{ name: "Grace Hopper", number: "5555555555554444", expMonth: "06", expYear: "2030" }],
     ibans: [{ value: "DE89370400440532013000", nickname: "Work IBAN" }],
     keywords: [{ name: "Work Search", keyword: "wk", url: "https://work.example/find?q={searchTerms}" }],
-    history: ["work.html"], extensionsOff: [] },
+    history: ["work.html"], extensionOff: false },
 ];
 
 const HELP = `const S = () => ac.store.getState(); const C = globalThis.expo.modules.ArdiaCEF; const X = globalThis.expo.modules.ArdiaExtensions;
@@ -373,6 +373,8 @@ async function makeFixture(app, dir) {
   const env = { ARDIA_TEST_REAUTH: "granted", ARDIA_TEST_KEYCHAIN: null, ARDIA_TEST_REKEY: null };
   const opts = (log) => ({ data, onboarded: true, env, log: join(work, log), switches: "--disable-backgrounding-occluded-windows" });
   const profiles = [];
+  const extension = join(dir, "extension");
+  execFileSync("cp", ["-R", resolve(new URL("../../../packages/ardiacore/scripts/fixtures/ext", import.meta.url).pathname), extension]);
   let instance = await launch(app, opts("make.app.log"));
   try {
     await waitWindow(instance);
@@ -394,8 +396,13 @@ async function makeFixture(app, dir) {
       await inApp(instance, `const p = P(${JSON.stringify(id)});
         return seq(${JSON.stringify(plant.passwords)}, (x) => C.savePassword(p, ${JSON.stringify(origin)}, x.username, x.password).then((r) => { if (!r || !r.ok) throw new Error("savePassword " + JSON.stringify(r)); }))
           .then(() => seq(${JSON.stringify(plant.cards)}, (c) => C.saveCard(p, { name: c.name, expMonth: c.expMonth, expYear: c.expYear }, c.number).then((r) => { if (!r || !r.id) throw new Error("saveCard " + JSON.stringify(r)); })))
-          .then(() => seq(${JSON.stringify(plant.extensionsOff)}, (x) => X.setEnabled(x, p, false)))
           .then(() => "ok");`, 60000);
+      plant.extensionsOff = [];
+      if (plant.extensionOff) {
+        const off = await inApp(instance, `const p = P(${JSON.stringify(id)});
+          return X.install(${JSON.stringify(extension)}, p).then(() => X.list(p)).then((l) => { const e = ((l && l.extensions) || []).find((e) => e.name === "ArdiaCore spike extension"); if (!e) throw new Error("the fixture extension didn't install: " + JSON.stringify(l)); return X.setEnabled(e.id, p, false).then(() => e.id); });`, 60000);
+        plant.extensionsOff.push(off);
+      }
       profiles.push({ id, name: plant.name, page: plant.page, plant });
       console.log(`planted ${plant.name} (${id})`);
     }
@@ -552,7 +559,7 @@ async function start(app, run, env, { until = "devtools", timeout = 120000 } = {
   while (Date.now() < deadline) {
     if (!pid) pid = [...binaryPids(binary)][0] ?? null;
     const text = read(log) ?? "";
-    if (pid && !isAlive(pid)) return { outcome: "exited", pid, ms: Date.now() - launchedAt };
+    if (pid && !isAlive(pid)) return { outcome: dialogShown(read(log) ?? "") ? "dialog" : "exited", pid, ms: Date.now() - launchedAt };
     if (!pid && Date.now() - launchedAt > 15000) return { outcome: "exited", pid: null, ms: Date.now() - launchedAt };
     if (dialogShown(text)) {
       if (pid) await stop(pid);

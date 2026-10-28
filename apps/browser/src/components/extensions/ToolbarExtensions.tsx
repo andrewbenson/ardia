@@ -71,9 +71,9 @@ export type NativeExtensionButton = {
   tooltip: string;
 };
 
-export function useNativeToolbarExtensions(windowId: string, tabId: string) {
+export function useNativeToolbarExtensions(windowId: string, tabId: string, limit = Infinity) {
   const theme = useTheme();
-  const { pinned, overflow, routes } = useToolbarExtensions(windowId, Infinity);
+  const { pinned, overflow, routes } = useToolbarExtensions(windowId, limit);
   const browserId = usePages((p) => {
     for (const [id, tab] of Object.entries(p.browsers)) if (tab === tabId) return Number(id);
     return 0;

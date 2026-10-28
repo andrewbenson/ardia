@@ -75,3 +75,92 @@ final class NativeToolbarHostView: ExpoView {
     if window != nil, let tabId = toolbar.state?.tabId { AutoHideHost.toolbarReady(tabId: tabId) }
   }
 }
+
+public class SidebarAddressBarModule: Module {
+  public func definition() -> ModuleDefinition {
+    Name("SolaraSidebarAddressBar")
+
+    Function("available") { () -> Bool in ToolbarModule.available && ProcessInfo.processInfo.environment["ARDIA_NATIVE_SIDEBAR_ADDRESS"] != "0" }
+
+    OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { SidebarAddressBridge.install() } } }
+
+    AsyncFunction("set") { (windowId: String, json: String?) in
+      MainActor.assumeIsolated {
+        SidebarAddressBridge.install()
+        SidebarAddressBars.shared.set(windowId, json: json)
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("sample") { (windowId: String) -> String? in
+      MainActor.assumeIsolated {
+        guard let view = SidebarAddressBars.shared.existing(windowId) else { return nil }
+        var out = view.sample()
+        out["claimed"] = SidebarAddressBars.shared.claimed(windowId)
+        out["inWindow"] = view.window != nil
+        return (try? JSONSerialization.data(withJSONObject: out)).flatMap { String(data: $0, encoding: .utf8) }
+      }
+    }.runOnQueue(.main)
+
+    View(NativeSidebarAddressHostView.self) {
+      Prop("windowId") { (view: NativeSidebarAddressHostView, v: String) in MainActor.assumeIsolated { view.windowId = v } }
+    }
+  }
+}
+
+@MainActor
+enum SidebarAddressBridge {
+  private static var installed = false
+
+  static func install() {
+    guard !installed else { return }
+    installed = true
+    SidebarAddressBars.shared.onClick = { windowId, click in
+      let payload: [String: Any] = ["id": click.id, "kind": click.kind.rawValue, "meta": click.meta, "alt": click.alt, "shift": click.shift, "text": click.text ?? NSNull()]
+      Task { @MainActor in _ = await SettingsAdapters.js("sidebar.addressClick", windowId, payload) }
+    }
+    SidebarAddressBars.shared.onAnchors = { windowId, anchors in
+      let payload = anchors.mapValues { [$0.minX, $0.minY, $0.width, $0.height] }
+      Task { @MainActor in _ = await SettingsAdapters.js("sidebar.addressAnchors", windowId, payload) }
+    }
+  }
+}
+
+final class NativeSidebarAddressHostView: ExpoView {
+  var windowId = "" {
+    didSet { if windowId != oldValue { adopt() } }
+  }
+
+  override var isFlipped: Bool { true }
+
+  required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+    NotificationCenter.default.addObserver(self, selector: #selector(claimsChanged), name: SidebarAddressBars.claimsChanged, object: nil)
+  }
+
+  @objc private func claimsChanged() { adopt() }
+
+  private func adopt() {
+    guard !windowId.isEmpty else { return }
+    MainActor.assumeIsolated {
+      SidebarAddressBridge.install()
+      let bars = SidebarAddressBars.shared
+      guard !bars.claimed(windowId) else { return }
+      let bar = bars.view(windowId)
+      if bar.superview !== self {
+        bar.frame = bounds
+        bar.autoresizingMask = [.width, .height]
+        addSubview(bar)
+      }
+    }
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    if window != nil { adopt() }
+  }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
+  }
+}

@@ -30,3 +30,35 @@ export function NativeToolbarView(props: NativeToolbarProps) {
   View ??= requireNativeViewManager<NativeToolbarProps>("SolaraToolbar") as ComponentType<NativeToolbarProps>;
   return <View {...props} />;
 }
+
+type SidebarAddressBarModule = { available(): boolean; set(windowId: string, json: string | null): Promise<void>; sample(windowId: string): Promise<string | null> };
+
+const sidebarAddressBar = requireOptionalNativeModule<SidebarAddressBarModule>("SolaraSidebarAddressBar");
+
+let sidebarAddressAvailability: boolean | null = null;
+
+export function sidebarAddressBarAvailable(): boolean {
+  if (sidebarAddressAvailability !== null) return sidebarAddressAvailability;
+  try {
+    sidebarAddressAvailability = !!sidebarAddressBar?.available();
+  } catch {
+    sidebarAddressAvailability = false;
+  }
+  return sidebarAddressAvailability;
+}
+
+export function setSidebarAddressBar(windowId: string, json: string | null): void {
+  void sidebarAddressBar?.set(windowId, json);
+}
+
+export async function sampleSidebarAddressBar(windowId: string): Promise<unknown> {
+  const json = await sidebarAddressBar?.sample(windowId);
+  return json ? JSON.parse(json) : null;
+}
+
+let SidebarAddressHost: ComponentType<ViewProps & { windowId: string }> | null = null;
+
+export function NativeSidebarAddressBarView(props: ViewProps & { windowId: string }) {
+  SidebarAddressHost ??= requireNativeViewManager<ViewProps & { windowId: string }>("SolaraSidebarAddressBar") as ComponentType<ViewProps & { windowId: string }>;
+  return <SidebarAddressHost {...props} />;
+}

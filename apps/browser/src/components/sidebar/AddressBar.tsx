@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { NativeSidebarAddressBarView, setSidebarAddressBar, sidebarAddressBarAvailable, type ToolbarClick } from "@ardia/settings";
 import { FadeLabel } from "@ardia/shell";
 import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShortcutHint, withShortcut } from "../../lib/commandShortcuts";
@@ -15,6 +16,8 @@ import { addressBarInSidebar, setUrlAnchor, SIDEBAR_FIELD } from "../layout/wind
 import { useHover } from "../primitives";
 import { GLYPH, HistoryButton, ReloadButton, UrlField, useToolbarTab } from "../Toolbar";
 import { ARC_LIGHTS_CENTER, HEADER_TOOLS, navButtonsFitting, type HeaderButton } from "../layout/dockMotion";
+import { useNativeToolbarModel } from "../NativeToolbar";
+import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 
 const BUTTON = layout.toolbarButton;
 const { toggleX: TOGGLE_X, edge: EDGE } = HEADER_TOOLS;
@@ -23,6 +26,10 @@ const PLATE = 32;
 const PLATE_RADIUS = 6;
 
 export function SidebarHeaderTools({ width }: { width: number }) {
+  return sidebarAddressBarAvailable() ? <NativeSidebarAddressBar width={width} /> : <ReactSidebarHeaderTools width={width} />;
+}
+
+function ReactSidebarHeaderTools({ width }: { width: number }) {
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const palette = toolbarPalette(useTheme(), null);
@@ -92,6 +99,10 @@ function NavigationButtons({
 }
 
 export function SidebarAddressRow({ width }: { width: number }) {
+  return sidebarAddressBarAvailable() ? null : <ReactSidebarAddressRow width={width} />;
+}
+
+function ReactSidebarAddressRow({ width }: { width: number }) {
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const field = useRef<View>(null);
@@ -164,4 +175,72 @@ function EmptyField({ windowId }: { windowId: string }) {
       </Pressable>
     </View>
   );
+}
+
+type AddressBarHandlers = { onClick: (c: ToolbarClick) => unknown; onAnchors: (anchors: Record<string, [number, number, number, number]>) => void };
+
+const addressBarHandlers = new Map<string, RefObject<AddressBarHandlers>>();
+
+addNativeSettingsHandlers({
+  "sidebar.addressClick": (windowId: string, click: ToolbarClick) => {
+    void addressBarHandlers.get(windowId)?.current?.onClick(click);
+  },
+  "sidebar.addressAnchors": (windowId: string, anchors: Record<string, [number, number, number, number]>) => {
+    addressBarHandlers.get(windowId)?.current?.onAnchors(anchors);
+  },
+});
+
+const noFocusHandle = () => null;
+const SIDEBAR_PLATE = { box: PLATE, radius: PLATE_RADIUS };
+const SIDEBAR_GEOMETRY = (toggle: boolean) => ({ sidebarButton: toggle ? 0 : null, back: 0, forward: 0, reload: 0, urlLeft: 0 });
+
+function NativeSidebarAddressBar({ width }: { width: number }) {
+  const windowId = useWindowId();
+  const tabId = useActiveTabId() ?? "";
+  const theme = useTheme();
+  const toggle = useBrowser((s) => s.settings.showSidebarButton !== false);
+  const sidebarHint = useShortcutHint("toggleSidebar");
+  const extensionLimit = extensionsFitting(width - 2 * layout.sidebarInset - 10 - 3 - HOST_ROOM);
+  const geometry = useMemo(() => SIDEBAR_GEOMETRY(toggle), [toggle]);
+  const model = useNativeToolbarModel({ tabId, geometry, windowId, inSplit: false, focused: true, sidebar: { extensionLimit } }, noFocusHandle);
+  const palette = toolbarPalette(theme, null);
+  const { state } = model;
+  const page = !!model.tab?.url;
+  const json = useMemo(
+    () =>
+      JSON.stringify({
+        palette: state?.palette ?? palette,
+        accent: theme.accent,
+        look: { resting: theme.pinnedResting, stroke: theme.pinnedRestingStroke, hover: theme.tabHover, placeholder: theme.placeholder, prompt: "Search or enter address" },
+        buttons: [
+          ...(toggle ? [{ id: "sidebar", icon: "sidebar.left", size: GLYPH, ...SIDEBAR_PLATE, tooltip: withShortcut("Auto-Hide Tabs", sidebarHint) }] : []),
+          ...(state ? state.left.filter((b) => b.id !== "sidebar").map((b) => ({ ...b, ...SIDEBAR_PLATE })) : []),
+        ],
+        url: page ? state?.url ?? null : null,
+        extensions: page ? state?.extensions ?? [] : [],
+        progress: state?.progress ?? null,
+      }),
+    [state, palette, theme, toggle, sidebarHint, page],
+  );
+  const handlers = useRef<AddressBarHandlers>({ onClick: () => undefined, onAnchors: () => undefined });
+  handlers.current = {
+    onClick: (c) => {
+      if (c.id === "sidebar") return useBrowser.getState().toggleSidebar(windowId);
+      if (c.id === "url" && !page) return c.kind === "press" ? useBrowser.getState().openPanel(windowId, "") : undefined;
+      return model.onClick(c);
+    },
+    onAnchors: ({ field, ...extensions }) => {
+      if (field && field[2] && addressBarInSidebar(useBrowser.getState(), windowId)) setUrlAnchor(windowId, { left: field[0], top: field[1], width: field[2], sidebar: { height: field[3] } });
+      model.onAnchors(extensions);
+    },
+  };
+  useEffect(() => {
+    addressBarHandlers.set(windowId, handlers);
+    return () => {
+      if (addressBarHandlers.get(windowId) === handlers) addressBarHandlers.delete(windowId);
+    };
+  }, [windowId]);
+  useEffect(() => setSidebarAddressBar(windowId, json), [windowId, json]);
+  useEffect(() => () => setSidebarAddressBar(windowId, null), [windowId]);
+  return <NativeSidebarAddressBarView windowId={windowId} style={StyleSheet.absoluteFill} />;
 }

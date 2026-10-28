@@ -68,6 +68,7 @@ type NativeToolbarProps = {
   inSplit: boolean;
   focused: boolean;
   bare?: boolean;
+  sidebar?: { extensionLimit: number };
 };
 
 export function NativeToolbar(props: NativeToolbarProps) {
@@ -91,16 +92,20 @@ export function NativeToolbar(props: NativeToolbarProps) {
   );
 }
 
-export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focused, bare }: NativeToolbarProps, focusHandle: () => number | null) {
+export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focused, bare, sidebar }: NativeToolbarProps, focusHandle: () => number | null) {
   const theme = useTheme();
   const tab = useToolbarTab(tabId);
   const isLoading = useTabLive(tabId, (l) => l.isLoading);
-  const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));
+  const siteColor = useToolbarSiteColor(tabId);
+  const palette = toolbarPalette(theme, sidebar ? null : siteColor);
   const history = useHistoryAvailability(tabId);
-  const extensionsWidth = useToolbarExtensionsWidth(windowId);
-  const extensions = useNativeToolbarExtensions(windowId, tabId);
+  const extensionLimit = sidebar?.extensionLimit ?? Infinity;
+  const extensionsWidth = useToolbarExtensionsWidth(windowId, extensionLimit);
+  const extensions = useNativeToolbarExtensions(windowId, tabId, extensionLimit);
   const extensionsJson = JSON.stringify(extensions.buttons);
-  useEffect(() => setToolbarExtensionsWidth(windowId, extensionsWidth), [windowId, extensionsWidth]);
+  useEffect(() => {
+    if (!sidebar) setToolbarExtensionsWidth(windowId, extensionsWidth);
+  }, [windowId, extensionsWidth, !sidebar]);
   const showFullUrl = useSettings((s) => s.showFullUrl);
   const bookmarked = useIsBookmarked(tab?.url ?? "");
   const insecure = usePage(tabId, insecureLevel);
@@ -177,7 +182,7 @@ export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focu
       height: layout.toolbarHeight,
       bare: !!bare,
       focused,
-      palette: { ...palette, ...DIA_INK[(palette.background ? /^#FFFFFF/i.test(palette.text) : !!theme.dark) ? "dark" : "light"] },
+      palette: sidebar ? palette : { ...palette, ...DIA_INK[(palette.background ? /^#FFFFFF/i.test(palette.text) : !!theme.dark) ? "dark" : "light"] },
       accent: theme.accent,
       geometry: { ...geometry, urlRight: urlFieldRight(inSplit, extensionsWidth) },
       left: [
@@ -204,7 +209,7 @@ export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focu
             pinned: popover === "siteControls",
             hoverButtons: [
               { id: "bookmark", icon: bookmarked ? "bookmark.fill" : "bookmark", ...small, tooltip: bookmarked ? "Remove Bookmark" : withShortcut("Bookmark This Page", hints.bookmark) },
-              ...(!inSplit ? [{ id: "split", icon: "rectangle.split.2x1", ...small, tooltip: withShortcut("Open Split View", hints.split) }] : []),
+              ...(!inSplit && !sidebar ? [{ id: "split", icon: "rectangle.split.2x1", ...small, tooltip: withShortcut("Open Split View", hints.split) }] : []),
               { id: "siteControls", icon: "slider.horizontal.3", ...small, active: popover === "siteControls", tooltip: "Site Controls" },
             ],
             trailing,
@@ -223,7 +228,7 @@ export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focu
       progress: isLoading ? progress : null,
       stripes: developer ? stripesUri(palette) : null,
     };
-  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, developer, editing, editRequest, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split, extensionsJson]);
+  }, [tab, tabId, bare, focused, palette, theme, geometry, inSplit, !sidebar, extensionsWidth, showFullUrl, bookmarked, insecure, popups, capture, popover, progress, translate, isLoading, history, developer, editing, editRequest, hints.sidebar, hints.back, hints.forward, hints.reload, hints.bookmark, hints.split, extensionsJson]);
   const json = useMemo(() => (state ? JSON.stringify(state) : null), [state]);
 
   const focus = () => {
@@ -300,5 +305,5 @@ export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focu
     }
   };
 
-  return { tab, json, onClick, onAnchors: extensions.onAnchors };
+  return { tab, state, json, onClick, onAnchors: extensions.onAnchors };
 }

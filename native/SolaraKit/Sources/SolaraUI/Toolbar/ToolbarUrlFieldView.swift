@@ -8,6 +8,9 @@ final class ToolbarUrlFieldView: NSView {
   static let labelInset: CGFloat = 2
   static let labelRaise: CGFloat = 1
   static let diaTextShift = CGPoint(x: 1.5, y: 0.5)
+  static let sidebarTextLeft: CGFloat = 10
+  static let accessoryGap: CGFloat = 2
+  static let fadeWidth: CGFloat = 14
 
   var onClick: (ToolbarClick) -> Void = { _ in }
   private(set) var state: ToolbarUrlState?
@@ -23,6 +26,11 @@ final class ToolbarUrlFieldView: NSView {
   private var dividers: [CALayer] = []
   private var editor: DeveloperUrlField?
   private var handledEditRequest = 0
+  private(set) var look: SidebarFieldLook?
+  private var accessory: [ToolbarButtonView] = []
+  private let progress = CALayer()
+  private var shownProgress: Double?
+  private let fade = CAGradientLayer()
 
   override var isFlipped: Bool { true }
   override var mouseDownCanMoveWindow: Bool { false }
@@ -32,6 +40,11 @@ final class ToolbarUrlFieldView: NSView {
     wantsLayer = true
     pill.cornerRadius = 8
     layer?.addSublayer(pill)
+    progress.anchorPoint = .zero
+    progress.isHidden = true
+    pill.addSublayer(progress)
+    fade.startPoint = CGPoint(x: 0, y: 0.5)
+    fade.endPoint = CGPoint(x: 1, y: 0.5)
     label.lineBreakMode = .byTruncatingTail
     label.maximumNumberOfLines = 1
     label.cell?.truncatesLastVisibleLine = true
@@ -47,11 +60,17 @@ final class ToolbarUrlFieldView: NSView {
 
   required init?(coder: NSCoder) { fatalError() }
 
-  func update(_ next: ToolbarUrlState, palette nextPalette: ToolbarPaletteState) {
-    let changed = next != state || nextPalette != palette
+  func update(
+    _ next: ToolbarUrlState, palette nextPalette: ToolbarPaletteState, look nextLook: SidebarFieldLook? = nil, accessory nextAccessory: [ToolbarButtonState] = [],
+    progress nextProgress: Double? = nil, accent: String? = nil
+  ) {
+    let changed = next != state || nextPalette != palette || nextLook != look || nextAccessory != accessory.map(\.state)
     state = next
     palette = nextPalette
+    look = nextLook
+    applyProgress(nextProgress, color: toolbarColor(accent))
     guard changed else { return }
+    accessory = sync(accessory, nextAccessory, nextPalette)
     if next.insecure != nil {
       if lock == nil {
         let made = NotSecureBadgeView()
@@ -143,7 +162,15 @@ final class ToolbarUrlFieldView: NSView {
     guard let state, let palette else { return }
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    pill.backgroundColor = shownHover ? toolbarColor(palette.pill)?.cgColor : nil
+    if let look {
+      pill.backgroundColor = toolbarColor(shownHover ? look.hover : look.resting)?.cgColor
+      pill.borderColor = toolbarColor(look.stroke)?.cgColor
+      pill.borderWidth = border
+      pill.cornerRadius = SidebarHeaderMetrics.fieldRadius
+      pill.masksToBounds = true
+    } else {
+      pill.backgroundColor = shownHover ? toolbarColor(palette.pill)?.cgColor : nil
+    }
     CATransaction.commit()
     for b in hoverButtons {
       b.alphaValue = shownHover ? 1 : 0
@@ -157,15 +184,23 @@ final class ToolbarUrlFieldView: NSView {
       return
     }
     label.isHidden = false
+    label.cell?.truncatesLastVisibleLine = look == nil
+    label.cell?.isScrollable = look != nil
+    defer { applyFade() }
+    if let look, state.host.isEmpty {
+      label.lineBreakMode = .byClipping
+      label.attributedStringValue = NSAttributedString(string: look.prompt, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: toolbarColor(look.placeholder) ?? .placeholderTextColor])
+      return
+    }
     let trail = shownHover ? state.hoverTrail : state.restTrail
     let notSecure = state.insecure != nil
     let hostColor = notSecure ? NotSecureBadgeView.red : toolbarColor(palette.urlHost ?? palette.text) ?? .labelColor
     let pathColor = notSecure ? NotSecureBadgeView.red : toolbarColor(palette.urlPath ?? palette.secondary) ?? .secondaryLabelColor
     let hostOnly = hostOverflows
-    label.lineBreakMode = hostOnly ? .byTruncatingHead : .byTruncatingTail
+    label.lineBreakMode = hostOnly ? .byTruncatingHead : look != nil ? .byClipping : .byTruncatingTail
     let headFirst = NSMutableParagraphStyle()
     headFirst.lineBreakMode = .byTruncatingHead
-    var hostAttributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: hostColor]
+    var hostAttributes: [NSAttributedString.Key: Any] = [.font: hostFont, .foregroundColor: hostColor]
     if hostOnly { hostAttributes[.paragraphStyle] = headFirst }
     let text = NSMutableAttributedString(string: state.host, attributes: hostAttributes)
     if !trail.isEmpty && !hostOnly {
@@ -176,15 +211,79 @@ final class ToolbarUrlFieldView: NSView {
 
   private var hostOverflows: Bool {
     guard let state, state.developer == nil, label.frame.width > 0 else { return false }
-    let hostWidth = (state.host as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width
+    let hostWidth = (state.host as NSString).size(withAttributes: [.font: hostFont]).width
     return ceil(hostWidth) > label.frame.width - 2 * ToolbarUrlFieldView.labelInset
+  }
+
+  private var border: CGFloat { look != nil ? 2 / (window?.backingScaleFactor ?? 2) : 0 }
+
+  private var hostFont: NSFont { NSFont.systemFont(ofSize: 13, weight: look != nil ? .medium : .regular) }
+
+  private func applyFade() {
+    let width = label.frame.width
+    let overflows = look != nil && label.lineBreakMode == .byClipping && ceil(label.attributedStringValue.size().width) > width - 2 * ToolbarUrlFieldView.labelInset
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    if overflows, width > 0 {
+      label.wantsLayer = true
+      let edge = ToolbarUrlFieldView.fadeWidth
+      fade.frame = label.bounds
+      fade.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
+      fade.locations = [0, NSNumber(value: Double(max(0, (width - ToolbarUrlFieldView.labelInset - edge) / width))), NSNumber(value: Double((width - ToolbarUrlFieldView.labelInset) / width))]
+      label.layer?.mask = fade
+    } else {
+      label.layer?.mask = nil
+    }
+    CATransaction.commit()
+  }
+
+  var accessoryAnchors: [String: CGRect] {
+    var out: [String: CGRect] = [:]
+    for b in accessory { if let slot = b.state.anchor { out[slot] = b.frame } }
+    return out
+  }
+
+  private func applyProgress(_ value: Double?, color: NSColor?) {
+    guard let value, look != nil else {
+      progress.isHidden = true
+      shownProgress = nil
+      return
+    }
+    let to = max(value, 0.08)
+    let width = bounds.width * to
+    let fromWidth = shownProgress.map { bounds.width * max($0, 0.08) } ?? width
+    shownProgress = value
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    progress.isHidden = false
+    progress.backgroundColor = color?.cgColor
+    progress.opacity = 0.85
+    progress.bounds = CGRect(x: 0, y: 0, width: width, height: 1.5)
+    progress.position = CGPoint(x: 0, y: bounds.height - 1.5)
+    CATransaction.commit()
+    guard fromWidth != width else { return }
+    let animation = CABasicAnimation(keyPath: "bounds.size.width")
+    animation.fromValue = fromWidth
+    animation.toValue = width
+    animation.duration = 0.2
+    animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+    progress.add(animation, forKey: "width")
+  }
+
+  func sample() -> [String: Any] {
+    let rect = { (r: CGRect) in [r.minX, r.minY, r.width, r.height].map { Double($0) } }
+    var out: [String: Any] = ["label": rect(label.frame), "text": label.stringValue, "hover": shownHover, "faded": label.layer?.mask != nil]
+    out["buttons"] = (hoverButtons + trailing + accessory).filter { !$0.isHidden && $0.alphaValue > 0 }.map { ["id": $0.state.id, "frame": rect($0.frame)] as [String: Any] }
+    if let lock { out["lock"] = rect(lock.frame) }
+    if !progress.isHidden { out["progress"] = rect(progress.frame) }
+    return out
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
     let local = convert(point, from: superview)
     guard bounds.contains(local) else { return nil }
     if let editor, editor.frame.contains(local), let hit = editor.hitTest(convert(local, to: editor.superview)) { return hit }
-    for b in hoverButtons + trailing + [lock].compactMap({ $0 }) where b.frame.contains(local) {
+    for b in hoverButtons + trailing + accessory + [lock].compactMap({ $0 }) where b.frame.contains(local) {
       if !shownHover && hoverButtons.contains(where: { $0 === b }) { continue }
       if let hit = b.hitTest(convert(local, to: b.superview)) { return hit }
     }
@@ -213,6 +312,10 @@ final class ToolbarUrlFieldView: NSView {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     pill.frame = bounds
+    if let shownProgress {
+      progress.bounds.size.width = bounds.width * max(shownProgress, 0.08)
+      progress.position = CGPoint(x: 0, y: h - 1.5)
+    }
     CATransaction.commit()
     var x: CGFloat = 0
     if let lock {
@@ -220,9 +323,14 @@ final class ToolbarUrlFieldView: NSView {
       lock.frame = CGRect(x: ToolbarUrlFieldView.badgeLeft, y: (h - size) / 2, width: size, height: size)
       x = ToolbarUrlFieldView.badgeLeft + size + ToolbarUrlFieldView.badgeGap
     } else {
-      x = ToolbarUrlFieldView.textLeft
+      x = look != nil ? ToolbarUrlFieldView.sidebarTextLeft + border : ToolbarUrlFieldView.textLeft
     }
-    var right = bounds.width - 3
+    var right = bounds.width - 3 - border
+    for (i, b) in accessory.reversed().enumerated() {
+      if i > 0 { right -= ToolbarUrlFieldView.accessoryGap }
+      right -= b.box
+      b.frame = backingAlignedRect(CGRect(x: right, y: (h - b.box) / 2, width: b.box, height: b.box), options: .alignAllEdgesNearest)
+    }
     var usedDividers = 0
     let scale = window?.backingScaleFactor ?? 2
     for b in (hoverButtons + trailing).reversed() {
@@ -254,14 +362,16 @@ final class ToolbarUrlFieldView: NSView {
     let size = label.intrinsicContentSize
     let textRight = right
     let developer = state?.developer != nil
-    let shift = developer ? .zero : ToolbarUrlFieldView.diaTextShift
+    let shift = developer || look != nil ? .zero : ToolbarUrlFieldView.diaTextShift
+    let prompt = look != nil && state?.host.isEmpty == true
+    let sidebarY = (h - size.height) / 2 - (prompt ? 0 : 0.5)
     label.frame = CGRect(
       x: x - ToolbarUrlFieldView.labelInset + shift.x,
-      y: developer ? (((h - size.height) / 2 - 0.5) * 2).rounded() / 2 : ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded() + shift.y,
+      y: developer ? (((h - size.height) / 2 - 0.5) * 2).rounded() / 2 : look != nil ? sidebarY : ((h - size.height) / 2 - ToolbarUrlFieldView.labelRaise).rounded() + shift.y,
       width: max(0, textRight - x - shift.x + ToolbarUrlFieldView.labelInset),
       height: size.height)
     if let editor { editor.frame = label.frame.offsetBy(dx: 0, dy: 1) }
-    if !developer && (label.lineBreakMode == .byTruncatingHead) != hostOverflows { applyHover() }
+    if !developer && (label.lineBreakMode == .byTruncatingHead) != hostOverflows { applyHover() } else { applyFade() }
   }
 }
 

@@ -4,6 +4,7 @@ import Foundation
 import Observation
 import SolaraModel
 import SolaraOmnibox
+import SolaraStore
 import SolaraUI
 
 @MainActor
@@ -62,50 +63,64 @@ final class AppearanceAdapter: AppearanceServices {
 }
 
 @MainActor
-@Observable
 final class SearchEngineAdapter: SearchEngineServices {
-  private var latest: [String: Any]
-  @ObservationIgnored private var observer: UUID?
+  private let model: SettingsModel
+  private var engineCounter = 0
 
-  init() {
-    latest = SettingsJS.shared.latestValue("search.engines") as? [String: Any] ?? [:]
-    observer = SettingsJS.shared.observe("search.engines") { [weak self] value in
-      self?.latest = value as? [String: Any] ?? [:]
-    }
+  init(model: SettingsModel) {
+    self.model = model
   }
 
   func engineList() -> SearchEngineList {
-    let engines = latest.list("engines").compactMap { engine -> SearchEngineItem? in
-      guard let id = engine.string("id") else { return nil }
-      let extensionName = engine.dict("extension").map { $0.string("name") ?? "" }
-      return SearchEngineItem(
-        id: id,
-        name: engine.string("name") ?? id,
-        keyword: engine.string("keyword") ?? "",
-        url: engine.string("url") ?? "",
-        host: engine.string("host") ?? "",
-        custom: engine.bool("custom") ?? false,
-        extensionName: extensionName
+    let settings = model.settings
+    let engines = SolaraOmnibox.searchEngines(settings).map { engine in
+      SearchEngineItem(
+        id: engine.id,
+        name: engine.name,
+        keyword: engine.keyword,
+        url: engine.url,
+        host: SolaraOmnibox.engineHost(engine),
+        custom: engine.custom,
+        extensionName: engine.extension.map(\.name)
       )
     }
-    let controlling = latest.dict("controlling").flatMap { c -> ControllingSearchExtension? in
-      guard let id = c.string("extensionId"), let profile = c.string("profile") else { return nil }
-      return ControllingSearchExtension(extensionId: id, extensionName: c.string("extensionName") ?? "", profile: profile)
+    let controlling = SolaraOmnibox.controllingSearchExtension(settings).map {
+      ControllingSearchExtension(extensionId: $0.extensionId, extensionName: $0.extensionName, profile: $0.profile)
     }
-    return SearchEngineList(engines: engines, selectedId: latest.string("selectedId") ?? "", controlling: controlling)
+    return SearchEngineList(engines: engines, selectedId: SolaraOmnibox.defaultSearchEngine(settings).id, controlling: controlling)
   }
 
-  func setSearchEngine(_ id: String) { SettingsJS.shared.fire("search.setEngine", id) }
+  func setSearchEngine(_ id: String) {
+    guard SolaraOmnibox.searchEngines(model.settings).contains(where: { $0.id == id }) else { return }
+    model.update(["searchEngine": .string(id)])
+  }
 
   func addCustomEngine(_ input: SearchEngineInput) async -> String? {
-    await SettingsAdapters.js("search.add", Self.arg(input)) as? String
+    let settings = model.settings
+    let typed = Self.engineInput(input)
+    if let error = SolaraOmnibox.validateCustomEngine(settings, typed) { return error }
+    engineCounter += 1
+    let engine = SolaraOmnibox.makeCustomEngine(typed, id: Self.engineId(engineCounter))
+    model.update(["customSearchEngines": .array(Self.stored(settings) + [Self.json(engine)])])
+    return nil
   }
 
   func updateCustomEngine(_ id: String, _ input: SearchEngineInput) async -> String? {
-    await SettingsAdapters.js("search.update", id, Self.arg(input)) as? String
+    let settings = model.settings
+    guard SolaraOmnibox.customSearchEngines(settings).contains(where: { $0.id == id }) else { return "This search engine no longer exists." }
+    let typed = Self.engineInput(input)
+    if let error = SolaraOmnibox.validateCustomEngine(settings, typed, ignoreId: id) { return error }
+    let replacement = Self.json(SolaraOmnibox.makeCustomEngine(typed, id: id))
+    model.update(["customSearchEngines": .array(Self.stored(settings).map { $0["id"]?.string == id ? replacement : $0 })])
+    return nil
   }
 
-  func removeCustomEngine(_ id: String) { SettingsJS.shared.fire("search.remove", id) }
+  func removeCustomEngine(_ id: String) {
+    let settings = model.settings
+    var patch: JSONObject = ["customSearchEngines": .array(Self.stored(settings).filter { $0["id"]?.string != id })]
+    if settings.string("searchEngine") == id { patch["searchEngine"] = Settings.defaults["searchEngine"] }
+    model.update(patch)
+  }
 
   func manageExtensions(profile: String) { SettingsJS.shared.fire("search.manageExtensions", profile) }
 
@@ -113,8 +128,20 @@ final class SearchEngineAdapter: SearchEngineServices {
     await SettingsAdapters.js("search.disableExtension", profile, extensionId)
   }
 
-  static func arg(_ input: SearchEngineInput) -> [String: Any] {
-    ["name": input.name, "keyword": input.keyword, "url": input.url]
+  static func engineInput(_ input: SearchEngineInput) -> SolaraOmnibox.EngineInput {
+    SolaraOmnibox.EngineInput(name: input.name, keyword: input.keyword, url: input.url)
+  }
+
+  static func stored(_ settings: Settings) -> [JSONValue] {
+    settings["customSearchEngines"]?.array ?? []
+  }
+
+  static func json(_ engine: CustomSearchEngine) -> JSONValue {
+    .object(["id": .string(engine.id), "name": .string(engine.name), "keyword": .string(engine.keyword), "url": .string(engine.url)])
+  }
+
+  static func engineId(_ counter: Int) -> String {
+    "engine-\(String(Int(Date().timeIntervalSince1970 * 1000), radix: 36))-\(String(counter, radix: 36))"
   }
 }
 

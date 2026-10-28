@@ -10,7 +10,7 @@ enum SettingsAdapters {
     context.panes[.general] = GeneralPaneModel(services: GeneralAdapter(), store: store)
     context.panes[.tabs] = TabsPaneModel(store: store)
     context.panes[.appearance] = AppearancePaneModel(services: AppearanceAdapter(), store: store)
-    context.panes[.search] = SearchEnginePaneModel(services: SearchEngineAdapter(), store: store)
+    context.panes[.search] = SearchEnginePaneModel(services: SearchEngineAdapter(model: store.model), store: store)
     context.panes[.engines] = EnginesPaneModel(services: EnginesAdapter(), store: store)
     context.panes[.advanced] = AdvancedPaneModel(services: AdvancedAdapter(), store: store, experiments: ExperimentsModel())
     context.panes[.about] = AboutPaneModel(services: AboutAdapter())

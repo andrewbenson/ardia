@@ -68,14 +68,36 @@ final class NativeOmniboxView: ExpoView {
     if host == nil {
       bar.removeFromSuperview()
       let made = OmniboxPanelHostView(bar: bar)
-      made.frame = bounds
-      made.autoresizingMask = [.width, .height]
       made.onOutside = { [weak self] in self?.onCancel([:]) }
       made.onHeight = { [weak self] h in self?.onBarLayout(["height": h]) }
-      addSubview(made)
       host = made
+      placeHost()
       NotificationCenter.default.addObserver(self, selector: #selector(commandWillDispatch(_:)), name: Notification.Name("SolaraCommandWillDispatch"), object: nil)
     }
+  }
+
+  private func placeHost() {
+    guard let host else { return }
+    let overlay = window == nil ? nil : NativeWindowShell.overlay(windowId).flatMap { $0.window === window ? $0 : nil }
+    let parent = overlay ?? self
+    if host.superview !== parent {
+      host.hide()
+      host.removeFromSuperview()
+      parent.addSubview(host)
+    }
+    host.autoresizingMask = parent === self ? [.width, .height] : []
+    let frame = parent === self ? bounds : parent.convert(bounds, from: self)
+    if host.frame != frame { host.frame = frame }
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    placeHost()
+  }
+
+  override func layout() {
+    super.layout()
+    placeHost()
   }
 
   @objc private func commandWillDispatch(_ note: Notification) {
@@ -129,6 +151,7 @@ final class NativeOmniboxView: ExpoView {
   func propsDidUpdate() {
     bar.theme = NewTabTheme(dark: dark, tokens: themeTokens)
     if host != nil {
+      placeHost()
       if !windowId.isEmpty { NativeOmniboxView.hosts[windowId] = WeakOmniboxHost(view: self) }
       return showPanel(panelJSON)
     }

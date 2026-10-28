@@ -14,7 +14,7 @@ import { markPanelFrame } from "../telemetry/journeys";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
 import { breadcrumb } from "@ardia/core";
-import { nativeOmniboxAvailable, nativeUrlPrefixWidth, showNativePanel } from "@ardia/settings";
+import { nativeOmniboxAvailable, nativeUrlPrefixWidth, showNativePanel, sidebarAddressBarAvailable } from "@ardia/settings";
 import { Omnibox as ReactOmnibox, PANEL_TEXT_LEFT } from "./Omnibox";
 import { NativeOmniboxBar } from "./omnibox/NativeOmniboxBar";
 import { closePanelToHeroBar, type BarDismissal } from "./omnibox/barState";
@@ -90,7 +90,8 @@ function dropdownGeometry(anchor: UrlAnchor, windowWidth: number): PanelGeometry
   return { left, top: anchor.top, width, from };
 }
 
-const nativeDropdown = (windowId: string) => useBrowser.getState().windows[windowId]?.kind === "small";
+const dropdownIsNative = (kind: string | undefined) => kind === "small" || sidebarAddressBarAvailable();
+const nativeDropdown = (windowId: string) => dropdownIsNative(useBrowser.getState().windows[windowId]?.kind);
 
 function nativePanelGeometry(windowId: string, anchor: UrlAnchor, insecure: boolean, windowWidth: number, text: string) {
   if (!anchor.sidebar) return toolbarPanelGeometry(anchor, insecure, true, windowWidth, text, true);
@@ -125,9 +126,9 @@ function NativePanelHost({ windowId, windowWidth }: { windowId: string; windowWi
   const centred = useBrowser((s) => commandBarCentred(s, windowId));
   const peeking = useBrowser((s) => !!peekTabId(s, windowId));
   const developer = useTabDeveloperMode(tabId);
-  const dropdown = useBrowser((s) => s.windows[windowId]?.kind === "small");
+  const dropdown = useBrowser((s) => dropdownIsNative(s.windows[windowId]?.kind));
   panelStyles.set(windowId, { fill: theme.panel, border: theme.panelBorder, shadowOpacity: theme.panelShadowOpacity, radius: PANEL_RADIUS });
-  if (!tabId || !url || !anchor || (anchor.sidebar && !dropdown)) return null;
+  if (!tabId || !anchor || (anchor.sidebar ? !dropdown : !url)) return null;
   const open = panel.open && !panel.newTab && !centred;
   const text = open ? panel.initialText : url;
   const ready = !panel.open && !centred && !peeking && !developer;
@@ -172,7 +173,7 @@ function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
   if (!anchor) return null;
 
   if (anchor.sidebar) {
-    if (nativeOmniboxAvailable() && hasField && nativeDropdown(windowId)) return null;
+    if (nativeOmniboxAvailable() && nativeDropdown(windowId)) return null;
     const { left, width, from } = dropdownGeometry(anchor, windowWidth);
     return (
       <Grow from={from} frame={{ left, top: anchor.top, width }} openHeight={anchor.sidebar.height} radius={DROPDOWN_RADIUS} surface={surface(DROPDOWN_RADIUS)}>

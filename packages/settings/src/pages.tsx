@@ -22,12 +22,14 @@ const native = requireOptionalNativeModule<{
   addListener(event: "onMeetingAlertEvent", listener: (e: MeetingAlertEvent) => void): EventSubscription;
 }>("SolaraPages");
 
+const meetingAlertFrame = typeof native?.showMeetingAlert === "function" ? native : null;
+
 export const showNativeMeetingAlert = (windowId: string, json: string, left: number, top: number) =>
-  native?.showMeetingAlert(windowId, json, left, top) ?? Promise.resolve(false);
+  meetingAlertFrame?.showMeetingAlert(windowId, json, left, top) ?? Promise.resolve(false);
 
-export const hideNativeMeetingAlert = (windowId: string) => native?.hideMeetingAlert(windowId) ?? Promise.resolve();
+export const hideNativeMeetingAlert = (windowId: string) => meetingAlertFrame?.hideMeetingAlert(windowId) ?? Promise.resolve();
 
-export const onNativeMeetingAlert = (listener: (e: MeetingAlertEvent) => void) => native?.addListener("onMeetingAlertEvent", listener);
+export const onNativeMeetingAlert = (listener: (e: MeetingAlertEvent) => void) => meetingAlertFrame?.addListener("onMeetingAlertEvent", listener);
 
 let availability: boolean | null = null;
 

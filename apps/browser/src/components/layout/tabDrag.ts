@@ -177,6 +177,11 @@ export function setTargetResolver(resolver: typeof resolveTarget) {
   resolveTarget = resolver;
 }
 
+let resolvePage: ((x: number, y: number, outside: boolean) => boolean) | null = null;
+export function setPageResolver(resolver: typeof resolvePage) {
+  resolvePage = resolver;
+}
+
 export function setOnPage(onPage: boolean) {
   if (useTabDrag.getState().onPage === onPage) return;
   useTabDrag.setState({ onPage });
@@ -203,7 +208,7 @@ export function endTabDrag(): boolean {
   const resolveInsert = overWindow && overPoint ? insertResolvers.get(overWindow) : undefined;
   const insertBefore = resolveInsert ? resolveInsert(overPoint!) : drag.insert?.windowId === overWindow ? drag.insert?.beforeId : undefined;
   const target = resolveTarget ? resolveTarget(x, y, drag.target, outside) : drag.target;
-  const onPage = !outside && !!(drag.lifted ?? drag.onPage);
+  const onPage = !outside && !!(drag.lifted ?? (resolvePage ? resolvePage(x, y, outside) : drag.onPage));
   useTabDrag.setState({ ...IDLE, tabIds: [] });
   dragSeq++;
   picture = null;
@@ -226,22 +231,23 @@ export function endTabDrag(): boolean {
   return true;
 }
 
-export function endNativeTabDrag(): { split: boolean; insert: boolean; before: string | null } {
+export function endNativeTabDrag(): { split: boolean; insert: boolean; before: string | null; onPage: boolean } {
   const drag = useTabDrag.getState();
   const { tabId, outside, overWindow, overPoint } = drag;
   const [x, y] = pointer;
   const resolveInsert = overWindow && overPoint ? insertResolvers.get(overWindow) : undefined;
   const insertBefore = resolveInsert ? resolveInsert(overPoint!) : drag.insert?.windowId === overWindow ? drag.insert?.beforeId : undefined;
   const target = resolveTarget ? resolveTarget(x, y, drag.target, outside) : drag.target;
+  const onPage = !outside && !!(drag.lifted ?? (resolvePage ? resolvePage(x, y, outside) : drag.onPage));
   useTabDrag.setState({ ...IDLE, tabIds: [] });
   dragSeq++;
   picture = null;
   nativeOwned = false;
   if (target && tabId) {
     dropTabIntoSplit(tabId, target.tabId, target.side);
-    return { split: true, insert: false, before: null };
+    return { split: true, insert: false, before: null, onPage };
   }
-  return { split: false, insert: insertBefore !== undefined, before: insertBefore ?? null };
+  return { split: false, insert: insertBefore !== undefined, before: insertBefore ?? null, onPage };
 }
 
 export function cancelTabDrag() {

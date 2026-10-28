@@ -33,6 +33,12 @@ public enum SidebarDragHub {
     (controllers.objectEnumerator()?.allObjects as? [SidebarDragController])?.first { $0.windowId == windowId && $0.view?.window != nil && $0.view?.isHiddenOrHasHiddenAncestor == false }
   }
 
+  public static func cancel(windowId: String) -> Bool {
+    guard let controller = controller(windowId: windowId), controller.active else { return false }
+    controller.end(commit: false)
+    return true
+  }
+
   public static func escape() {
     for case let controller as SidebarDragController in controllers.objectEnumerator()?.allObjects ?? [] where controller.active {
       controller.end(commit: false)
@@ -357,7 +363,7 @@ public final class SidebarDragController {
   }
 
   func begin(_ key: String, _ at: CGPoint) {
-    guard let view, let state else { return }
+    guard !sourcesEnding, let view, let state else { return }
     collect()
     guard let item = items[key], item.kind != .tail else { return }
     let lead = (item.kind == .row || item.kind == .tile) && item.folderId == nil ? item.tabIds.first : nil
@@ -455,6 +461,7 @@ public final class SidebarDragController {
   }
 
   func move(_ at: CGPoint) {
+    guard !sourcesEnding else { return }
     pointer = at
     if external == 0 { bridge?.dragMoved(windowId: windowId, x: at.x, y: at.y) }
     guard measured, ghost != nil || external > 0 else { return }
@@ -473,7 +480,7 @@ public final class SidebarDragController {
       _ = finishExternal(commit: false)
       return
     }
-    guard !sources.isEmpty else { return }
+    guard !sources.isEmpty, !sourcesEnding else { return }
     let sources = self.sources
     let drop = self.drop
     let sequence = self.sequence

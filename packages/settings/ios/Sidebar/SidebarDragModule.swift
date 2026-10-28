@@ -80,10 +80,14 @@ final class NativeSidebarDrag: SidebarDragBridge {
   private var pointer = CGPoint.zero
   private var outside = false
   private var overWindow: String?
-  private var onPage = false
+  private var jsOnPage = false
+  private var zoneOnPage = false
+  private var onPage: Bool { jsOnPage || zoneOnPage }
   private var insert = false
   private var shape = "hidden"
   private var previewShown = false
+  private var previewToken = 0
+  static let endDeadline: Double = 2
 
   private func send(_ name: String, _ args: [Any], done: (@MainActor (Any?) -> Void)? = nil) {
     let previous = chain
@@ -104,9 +108,13 @@ final class NativeSidebarDrag: SidebarDragBridge {
   func dragBegan(windowId: String, tabId: String?, tabIds: [String]) {
     pendingMove = nil
     clearDrag()
-    TabDragSession.windowIdOf = { ShellDrag.windowId(of: $0) }
+    TabDragSession.windowIdOf = { [weak self] window in
+      guard let id = ShellDrag.windowId(of: window), let source = TabDragSession.current?.sourceWindow else { return nil }
+      return id == source || self?.accepts(id, from: source) == true ? id : nil
+    }
     TabDragSession.windowOf = { ShellDrag.window($0) }
-    TabDragSession.begin(tabIds: tabIds, from: windowId)
+    let session = TabDragSession.begin(tabIds: tabIds, from: windowId)
+    session.sourceClosing = { [weak self] in self?.sourceClosing(windowId) }
     send("sidebar.drag.begin", [windowId, tabId ?? NSNull(), tabIds])
   }
 
@@ -122,7 +130,8 @@ final class NativeSidebarDrag: SidebarDragBridge {
     if let session = session(windowId), let window = ShellDrag.window(windowId) {
       session.move(screenPoint: CGPoint(x: window.frame.minX + x, y: window.frame.maxY - y))
       outside = session.outside
-      if outside, let id = session.overWindow, id != windowId, accepts(id, from: windowId) {
+      zoneOnPage = session.aim.map(Self.onPage) ?? false
+      if outside, let id = session.overWindow {
         over = id
         overPoint = session.point(in: id) ?? .zero
       }
@@ -144,38 +153,70 @@ final class NativeSidebarDrag: SidebarDragBridge {
 
   func dragEnded(windowId: String, commit: Bool, done: @escaping @MainActor (Bool) -> Void) {
     let session = session(windowId)
-    let outside = self.outside
-    let over = overWindow
-    let onPage = self.onPage
-    let shown = previewShown
+    let preview: Int? = previewShown ? previewToken : nil
+    let tabIds = session?.tabIds ?? []
+    let zoned = commit ? session?.end() ?? false : false
+    if !commit { session?.cancel() }
+    let outside = session?.outside ?? self.outside
+    let over = outside ? session?.overWindow : nil
+    let zonePage = session?.endedAim.map(Self.onPage) ?? false
     let screen = session?.pointer
     clearDrag()
-    send("sidebar.drag.end", [windowId, commit]) { [weak self] result in
-      session?.cancel()
-      let end = result as? [String: Any]
+    let reply = EndReply()
+    let finish: @MainActor (_ end: [String: Any]?) -> Void = { [weak self] end in
+      guard let self else { return done(false) }
       guard commit else {
-        if shown { ShellDrag.previewCancel() }
+        self.endPreview(preview, cancel: true)
         return done(false)
       }
-      if end?["split"] as? Bool == true {
-        if shown { ShellDrag.previewEnd(windowId: nil, fallback: nil) }
+      if zoned || end?["split"] as? Bool == true {
+        self.endPreview(preview)
+        if zoned, let over, self.open(over) { self.focus(over) }
         return done(true)
       }
-      guard outside || onPage, let session, let screen else {
-        if shown { ShellDrag.previewEnd(windowId: nil, fallback: nil) }
+      let onPage = !outside && (zonePage || end?["onPage"] as? Bool == true)
+      guard outside || onPage, let screen else {
+        self.endPreview(preview, cancel: end == nil)
         return done(false)
       }
       let before: String?? = end?["insert"] as? Bool == true ? .some(end?["before"] as? String) : .none
-      self?.dropOutside(session.tabIds, from: windowId, at: screen, over: over, before: before)
+      self.dropOutside(tabIds, from: windowId, at: screen, over: over.flatMap { self.open($0) ? $0 : nil }, before: before, preview: preview)
       done(true)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.endDeadline) {
+      MainActor.assumeIsolated {
+        guard reply.open() else { return }
+        finish(nil)
+      }
+    }
+    let deadline = (Date().timeIntervalSince1970 + Self.endDeadline) * 1000
+    send("sidebar.drag.end", [windowId, commit && !zoned, deadline]) { result in
+      guard reply.open() else { return }
+      finish(result as? [String: Any])
     }
   }
 
+  private func sourceClosing(_ windowId: String) {
+    if SidebarDragHub.cancel(windowId: windowId) { return }
+    let preview: Int? = previewShown ? previewToken : nil
+    clearDrag()
+    endPreview(preview, cancel: true)
+    escapeCapture(false)
+    send("sidebar.drag.end", [windowId, false])
+  }
+
   func pageChanged(onPage: Bool, insert: Bool) {
-    self.onPage = onPage
+    jsOnPage = onPage
     self.insert = insert
     publish()
     if let source = TabDragSession.current?.sourceWindow { syncPreview(source) }
+  }
+
+  private static func onPage(_ aim: TabDropAim) -> Bool {
+    switch aim {
+    case .page, .split: true
+    case .insert, .newWindow: false
+    }
   }
 
   private func session(_ windowId: String) -> TabDragSession? {
@@ -186,7 +227,8 @@ final class NativeSidebarDrag: SidebarDragBridge {
     picture = nil
     outside = false
     overWindow = nil
-    onPage = false
+    jsOnPage = false
+    zoneOnPage = false
     insert = false
     shape = "hidden"
     previewShown = false
@@ -201,7 +243,12 @@ final class NativeSidebarDrag: SidebarDragBridge {
 
   private func accepts(_ target: String, from source: String) -> Bool {
     guard let state = NativeStoreHandle.store?.state, let from = state.windows[source], !from.incognito, let to = state.windows[target] else { return false }
-    return !to.incognito && to.kind != "small"
+    return !to.incognito && to.kind != "small" && open(target)
+  }
+
+  private func open(_ windowId: String) -> Bool {
+    guard let store = NativeStoreHandle.store, store.state.windows[windowId] != nil, !store.memory.closingWindows.contains(windowId) else { return false }
+    return ShellDrag.window(windowId)?.isVisible == true
   }
 
   private func syncPreview(_ windowId: String) {
@@ -212,6 +259,7 @@ final class NativeSidebarDrag: SidebarDragBridge {
       self.picture = nil
       previewShown = true
       let chip = NSRect(x: pointer.x - picture.grab.x, y: pointer.y - picture.grab.y, width: picture.size.width, height: picture.size.height)
+      previewToken += 1
       ShellDrag.previewBegin(windowId: windowId, chip: chip, grab: pointer)
       send("sidebar.drag.capture", [windowId])
     }
@@ -219,19 +267,25 @@ final class NativeSidebarDrag: SidebarDragBridge {
     ShellDrag.previewUpdate(next, at: pointer)
   }
 
-  private func dropOutside(_ tabIds: [String], from source: String, at screen: CGPoint, over: String?, before: String??) {
+  private func endPreview(_ token: Int?, windowId: String? = nil, fallback: NSRect? = nil, cancel: Bool = false) {
+    guard let token, token == previewToken else { return }
+    if cancel { ShellDrag.previewCancel() } else { ShellDrag.previewEnd(windowId: windowId, fallback: fallback) }
+  }
+
+  private func dropOutside(_ tabIds: [String], from source: String, at screen: CGPoint, over: String?, before: String??, preview: Int?) {
     guard let store = NativeStoreHandle.store, let from = store.state.windows[source], !from.incognito, !tabIds.isEmpty else {
-      return ShellDrag.previewEnd(windowId: nil, fallback: nil)
+      return endPreview(preview)
     }
     if let over {
-      _ = try? store.dispatch(Command("moveTabsToWindow", [JSONValue(tabIds), JSONValue(over)]), origin: .native)
-      ShellDrag.previewEnd(windowId: nil, fallback: nil)
+      let moved = (try? store.dispatch(Command("moveTabsToWindow", [JSONValue(tabIds), JSONValue(over)]), origin: .native))?.result?.string
+      endPreview(preview)
+      guard moved == over, open(over) else { return }
       if let before {
         _ = try? store.dispatch(Command("placeTabs", [JSONValue(tabIds), ["pinned": false, "beforeId": JSONValue(before)]]), origin: .native)
       }
       return focus(over)
     }
-    guard !from.tabIds.allSatisfy(tabIds.contains) else { return ShellDrag.previewEnd(windowId: nil, fallback: nil) }
+    guard !from.tabIds.allSatisfy(tabIds.contains) else { return endPreview(preview) }
     let size = from.frame.flatMap { $0.count == 4 ? CGSize(width: $0[2], height: $0[3]) : nil } ?? CGSize(width: 1200, height: 800)
     let frame = NSRect(x: (screen.x - 90 + 0.5).rounded(.down), y: (screen.y - size.height + 70 + 0.5).rounded(.down), width: size.width, height: size.height)
     let options: JSONValue = [
@@ -240,8 +294,8 @@ final class NativeSidebarDrag: SidebarDragBridge {
       "frame": [JSONValue(frame.minX), JSONValue(frame.minY), JSONValue(frame.width), JSONValue(frame.height)],
     ]
     let created = (try? store.dispatch(Command("createWindow", [options]), origin: .native))?.result?.string
-    ShellDrag.previewEnd(windowId: created, fallback: frame)
-    if let created { focus(created) }
+    endPreview(preview, windowId: created, fallback: frame)
+    if let created, store.state.windows[created] != nil { focus(created) }
   }
 
   private func focus(_ windowId: String) {
@@ -258,7 +312,12 @@ final class NativeSidebarDrag: SidebarDragBridge {
     }
   }
 
-  func escapeCapture(_ on: Bool) { send("sidebar.drag.escape", [on]) }
+  private(set) var escaping = false
+
+  func escapeCapture(_ on: Bool) {
+    escaping = on
+    send("sidebar.drag.escape", [on])
+  }
 
   func haptic() { send("sidebar.drag.haptic", []) }
 
@@ -309,6 +368,7 @@ final class NativeSidebarDrag: SidebarDragBridge {
     let controller = SidebarDragController.of(page)
     var probe = controller.probe()
     probe["folderPanel"] = controller.foreignFolder
+    probe["escaping"] = shared.escaping
     let json = (try? JSONSerialization.data(withJSONObject: probe)).map { String(decoding: $0, as: UTF8.self) } ?? "null"
     lock.withLock { snapshots[windowId] = json }
     return json
@@ -339,5 +399,15 @@ final class NativeSidebarDrag: SidebarDragBridge {
     guard let page = page(windowId) else { return }
     let controller = SidebarDragController.of(page)
     controller.setFolderPanel(frameJSON.flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) })
+  }
+}
+
+@MainActor
+private final class EndReply {
+  private var taken = false
+
+  func open() -> Bool {
+    defer { taken = true }
+    return !taken
   }
 }

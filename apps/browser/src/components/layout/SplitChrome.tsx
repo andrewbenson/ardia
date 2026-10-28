@@ -10,7 +10,7 @@ import { useHover } from "../primitives";
 import { hideToast, useToasts } from "./splitActions";
 import { overPeek } from "./dockMotion";
 import { zoneHit, zoneRect, type ZoneStage } from "./splitDrop";
-import { setDropTarget, setOnPage, setTargetResolver, useTabDrag } from "./tabDrag";
+import { setDropTarget, setOnPage, setPageResolver, setTargetResolver, useTabDrag } from "./tabDrag";
 import { publishNativeDrop } from "./nativeSplitChrome";
 
 export function SplitDividers({ split, dividers, width, height }: { split: SplitView; dividers: Divider[]; width: number; height: number }) {
@@ -120,18 +120,36 @@ export function DropTargets({ panes, origin, windowId, native = false }: { panes
 
   const hit = shown && grown && overPage ? zoneHit(candidates, px, py, target) : null;
   const preview = shown && overPage;
-  const resolver = useRef({ candidates, origin, panes, ready: false });
-  resolver.current = { candidates, origin, panes, ready: !!dragging && !!origin && !full && candidates.length > 0 && grown && lifted !== false };
+  const resolver = useRef({ candidates, origin, panes, lifted, ready: false, open: false });
+  resolver.current = {
+    candidates,
+    origin,
+    panes,
+    lifted,
+    ready: !!dragging && !!origin && !full && candidates.length > 0 && grown && lifted !== false,
+    open: !!dragging && !!origin && !full && candidates.length > 0,
+  };
   useEffect(() => {
     if (!dragging) return;
-    setTargetResolver((x, y, current, outside) => {
-      const { candidates, origin, panes, ready } = resolver.current;
-      if (!ready || outside || !origin || overPeek(windowId, x)) return null;
+    const pageAt = (x: number, y: number) => {
+      const { origin, panes } = resolver.current;
+      if (!origin || x < 0 || overPeek(windowId, x)) return null;
       const px = x - origin.x, py = y - origin.y;
-      if (!Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height)) return null;
-      return zoneHit(candidates, px, py, current);
+      return Object.values(panes).some((r) => px >= r.x && px <= r.x + r.width && py >= r.y && py <= r.y + r.height) ? { px, py } : null;
+    };
+    setTargetResolver((x, y, current, outside) => {
+      const { candidates, ready } = resolver.current;
+      const at = ready && !outside ? pageAt(x, y) : null;
+      return at ? zoneHit(candidates, at.px, at.py, current) : null;
     });
-    return () => setTargetResolver(null);
+    setPageResolver((x, y, outside) => {
+      const { open, lifted } = resolver.current;
+      return open && !outside && lifted !== false && !!pageAt(x, y);
+    });
+    return () => {
+      setTargetResolver(null);
+      setPageResolver(null);
+    };
   }, [dragging]);
   useEffect(() => setDropTarget(hit), [hit?.tabId, hit?.side]);
   useEffect(() => setOnPage(preview), [preview]);

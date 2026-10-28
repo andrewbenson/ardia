@@ -86,8 +86,9 @@ addNativeSettingsHandlers({
   "sidebar.drag.capture": (windowId: string) => captureDragPage(windowId),
   "sidebar.drag.move": (_windowId: string, x: number, y: number, outside: boolean, overWindow: string | null, ox: number, oy: number) =>
     updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null),
-  "sidebar.drag.end": (_windowId: string, commit: boolean) => {
-    const end = commit ? endNativeTabDrag() : (cancelTabDrag(), { split: false, insert: false, before: null });
+  "sidebar.drag.end": (_windowId: string, commit: boolean, deadline?: number) => {
+    const late = !!deadline && Date.now() > deadline;
+    const end = commit && !late ? endNativeTabDrag() : (cancelTabDrag(), { split: false, insert: false, before: null, onPage: false });
     stopTabDrag();
     return end;
   },

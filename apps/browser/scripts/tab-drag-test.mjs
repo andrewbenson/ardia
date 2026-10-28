@@ -407,6 +407,123 @@ try {
     }
   });
 
+  const nativeSidebar = process.env.ARDIA_NATIVE_SIDEBAR === "1";
+  const twoWindows = (a, b) => run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id);
+      st().updateSettings({ tabLayout: "sidebar" });
+      const page = (n) => "data:text/html,<title>" + n + "</title>" + n;
+      const wa = st().createWindow({ frame: ${JSON.stringify(a)}, url: page("ya1") });
+      const wb = st().createWindow({ frame: ${JSON.stringify(b)}, url: page("yb1") });
+      const ia = st().newTab(wa, { url: page("ya2"), background: true });
+      const ib = st().newTab(wb, { url: page("yb2"), background: true });
+      st().newTab(wb, { url: page("yb3"), background: true });
+      return settle(2000).then(() => [wa, wb, ia, ib]);`);
+  const nativeProbe = (w) => run(`return globalThis.expo.modules.SolaraSidebarDrag?.startProbe(${JSON.stringify(w)}).then((t) => JSON.parse(t)) ?? null;`);
+  const rowIn = (w, id) => nativeSidebar
+    ? nativeProbe(w).then((p) => p.items.filter((i) => i.kind === "row").map((i) => ({ id: i.tabIds[0], x: i.x, y: i.y, w: i.w, h: i.h })).find((r) => r.id === id))
+    : run(`const c = globalThis.sidebarDrags?.[${JSON.stringify(w)}];
+      return Promise.all([...c.items.values()].filter((i) => i.kind === "row" && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], x, y, w, h })))));`)
+      .then((rows) => rows.find((r) => r.id === id));
+  const live = () => run(`const s = st(); return { focused: s.ui.focusedWindowId, windows: Object.keys(s.windows), tabs: Object.fromEntries(Object.entries(s.tabs).map(([id, t]) => [id, t.windowId])), dragging: globalThis.acTabDrag.getState().tabIds.length };`);
+  const closeAll = () => run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); return settle(900);`);
+
+  if (nativeSidebar)
+    await check("sidebar: a row let go over another window that covers its own lands in the window on top", async () => {
+      const [wa, wb, ia] = await twoWindows([100, 60, 560, 420], [400, 100, 560, 420]);
+      try {
+        const row = await rowIn(wa, ia);
+        assert.ok(row && row.w > 0, `a row for ${ia}`);
+        const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+        await run(`return act(${JSON.stringify(wa)}, "drag:${sx},${sy};${sx + 10},${sy + 6};400,200;450,200;452,202;450,200").then(() => settle(1600));`);
+        const after = await live();
+        assert.equal(after.tabs[ia], wb, `${ia} moved into the covering window: ${JSON.stringify(after.tabs)}`);
+      } finally {
+        await closeAll();
+      }
+    });
+
+  await check("sidebar: a drag over a window that closes before the drop leaves the tab in a live window, and focus on one", async () => {
+    const [wa, wb, , ib] = await twoWindows([100, 60, 560, 420], [700, 60, 560, 420]);
+    try {
+      const row = await rowIn(wb, ib);
+      assert.ok(row && row.w > 0, `a row for ${ib}`);
+      const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+      const tx = 90 - 600;
+      await run(`setTimeout(() => st().closeWindow(${JSON.stringify(wa)}), 900);
+        return act(${JSON.stringify(wb)}, "drag:${sx},${sy};${sx + 10},${sy + 6};-60,${sy};${tx},${sy};${tx + 2},${sy + 2};${tx},${sy};${tx + 1},${sy}").then(() => settle(1800));`);
+      const after = await live();
+      assert.ok(!after.windows.includes(wa), "the target closed");
+      assert.ok(after.windows.includes(after.tabs[ib]), `${ib} is in a live window: ${JSON.stringify(after)}`);
+      assert.ok(after.windows.includes(after.focused), `focus is on a live window: ${JSON.stringify(after)}`);
+      assert.equal(after.dragging, 0, "no drag left");
+    } finally {
+      await closeAll();
+    }
+  });
+
+  await check("sidebar: a drag whose own window closes mid-drag ends, and nothing stays captured", async () => {
+    const [, wb, , ib] = await twoWindows([100, 60, 560, 420], [700, 60, 560, 420]);
+    try {
+      const row = await rowIn(wb, ib);
+      assert.ok(row && row.w > 0, `a row for ${ib}`);
+      const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+      await run(`setTimeout(() => st().closeWindow(${JSON.stringify(wb)}), 500);
+        act(${JSON.stringify(wb)}, "drag:${sx},${sy};${sx + 10},${sy + 6};${sx + 10},${sy + 60};${sx + 10},${sy + 120};${sx + 10},${sy + 180}").catch(() => {});
+        return settle(2200);`);
+      const after = await live();
+      assert.ok(!after.windows.includes(wb), "the source closed");
+      assert.equal(after.dragging, 0, "no drag left");
+      const preview = await run(`return globalThis.expo.modules.ArdiaShell.devDragPreviewState();`);
+      assert.equal(preview.visible, false, "no drag picture left");
+      if (nativeSidebar) assert.equal((await nativeProbe("w1"))?.escaping, false, "Esc is no longer captured");
+    } finally {
+      await closeAll();
+    }
+  });
+
+  await check("sidebar: a drag pulled back from the page and let go at once in the sidebar opens no window", async () => {
+    await run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); st().updateSettings({ tabLayout: "sidebar" }); return settle(1200);`);
+    const rows = await run(`return Promise.all([...globalThis.sidebarDrags.w1.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], ids: i.tabIds, x, y, w, h })))));`);
+    const row = rows.filter((r) => r.ids.length === 1).sort((a, b) => a.y - b.y).at(-1);
+    assert.ok(row, JSON.stringify(rows));
+    const before = await live();
+    const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
+    const page = Math.round(row.x + row.w + 200), back = Math.round(row.x + row.w - 10);
+    const seen = await run(`const seen = []; const iv = setInterval(() => { const d = globalThis.acTabDrag.getState(); seen.push([Math.round(d.x), Math.round(d.y), d.outside, d.overWindow, d.onPage].join()); }, 20);
+      return act("w1", "drag:${sx},${sy};${sx + 10},${sy + 6};${page},400;${page + 2},404;${page},406;${back},${sy}").then(() => settle(1600)).then(() => { clearInterval(iv); return [...new Set(seen)]; });`);
+    const after = await live();
+    await closeAll();
+    assert.equal(after.windows.length, before.windows.length, `no new window: ${JSON.stringify({ row, windows: after.windows, seen })}`);
+    assert.equal(after.tabs[row.id], "w1", `${row.id} stayed: ${JSON.stringify(after.tabs)}`);
+    assert.equal(after.dragging, 0, "no drag left");
+  });
+
+  await check("sidebar: Esc and the release in the same moment end the drag once, and the next drag still works", async () => {
+    await run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); for (let i = 0; i < 3; i++) st().newTab("w1", { background: true }); return settle(1500);`);
+    const rows = await run(`return Promise.all([...globalThis.sidebarDrags.w1.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], ids: i.tabIds, x, y, w, h })))));`);
+    const loose = rows.filter((r) => r.ids.length === 1).sort((a, b) => a.y - b.y);
+    assert.ok(loose.length >= 3, JSON.stringify(rows));
+    const [a, b] = loose;
+    const before = await live();
+    const ax = Math.round(a.x + a.w / 2), ay = Math.round(a.y + a.h / 2);
+    const to = Math.round(b.y + b.h * 0.8);
+    await run(`setTimeout(() => ac.shell.devTypeKeys("key", "\\u001b", 0), ${150 + 16 * 12 * 2});
+      return act("w1", "drag:${ax},${ay};${ax},${ay + 10};${ax},${to}").then(() => settle(1600));`);
+    const after = await live();
+    assert.equal(after.windows.length, before.windows.length, "no new window");
+    assert.equal(after.dragging, 0, "no drag left");
+    if (nativeSidebar) {
+      const probe = await nativeProbe("w1");
+      assert.equal(probe?.escaping, false, "Esc is no longer captured");
+      assert.equal(probe?.active, false, "the sidebar isn't dragging");
+    }
+    const order = await run(`return st().windows.w1.tabIds;`);
+    const fresh = await run(`return Promise.all([...globalThis.sidebarDrags.w1.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], ids: i.tabIds, x, y, w, h })))));`);
+    const [c, d] = fresh.filter((r) => r.ids.length === 1).sort((x, y) => x.y - y.y);
+    const cx = Math.round(c.x + c.w / 2), cy = Math.round(c.y + c.h / 2);
+    await run(`return act("w1", "drag:${cx},${cy};${cx},${cy + 10};${cx},${Math.round(d.y + d.h * 0.8)}").then(() => settle(1600));`);
+    assert.notDeepEqual(await run(`return st().windows.w1.tabIds;`), order, "the next drag reordered");
+  });
+
   const sidebarRows = () => run(`return Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], ids: i.tabIds, x, y, w, h })))));`);
   const looseRow = () => run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id);
     for (const v of Object.values(st().splits)) st().separateSplit(v.id);
@@ -503,7 +620,7 @@ try {
         const l = c.landed; const it = l && c.items.get(l.key);
         return new Promise((r) => (it ? it.view.measureInWindow((x, y) => r({ landed: l, row: { x, y } })) : r({ landed: l })));
       });`);
-    assert.equal(out.landed?.key, `t:${row.id}`, JSON.stringify(out));
+    assert.equal(out.landed?.key, `t:${row.id}`, JSON.stringify({ out, row, rows, probe: await nativeProbe("w1").then((p) => p && { active: p.active, escaping: p.escaping, landed: p.landed, n: p.items.length }), live: await live(), keys: await run(`return Object.keys(globalThis.sidebarDrags ?? {});`) }));
     assert.ok(Math.abs(out.landed.x - out.row.x) < 0.5 && Math.abs(out.landed.y - out.row.y) < 0.5, JSON.stringify(out));
   });
 

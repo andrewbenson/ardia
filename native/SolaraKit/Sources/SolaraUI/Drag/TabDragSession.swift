@@ -31,7 +31,10 @@ public final class TabDragSession {
   public private(set) var pointer: CGPoint = .zero
   public private(set) var overWindow: String?
   public private(set) var outside = false
+  public var lifted: Bool?
+  public var sourceClosing: (() -> Void)?
   public private(set) var aim: TabDropAim?
+  public private(set) var endedAim: TabDropAim?
 
   private struct Registered {
     weak var zone: TabDropZone?
@@ -41,6 +44,8 @@ public final class TabDragSession {
 
   private static var zones: [Registered] = []
   private var aimed: TabDropZone?
+  private var asked: [ObjectIdentifier: TabDropZone] = [:]
+  private var closeObserver: NSObjectProtocol?
 
   init(tabIds: [String], sourceWindow: String) {
     self.tabIds = tabIds
@@ -61,6 +66,7 @@ public final class TabDragSession {
     current?.cancel()
     let session = TabDragSession(tabIds: tabIds, sourceWindow: windowId)
     current = session
+    session.watchSource()
     return session
   }
 
@@ -69,15 +75,17 @@ public final class TabDragSession {
   public func move(screenPoint: CGPoint) {
     guard Self.current === self else { return }
     pointer = screenPoint
-    outside = Self.windowOf(sourceWindow).map { !$0.frame.contains(screenPoint) } ?? false
     let window = Self.window(at: screenPoint)
     overWindow = window.map { $0.0 }
+    outside = overWindow != sourceWindow
     var next: (zone: TabDropZone, aim: TabDropAim)?
     if let (windowId, nsWindow) = window {
       let local = Self.windowPoint(screenPoint, in: nsWindow)
       let candidates = Self.zones.filter { $0.windowId == windowId && $0.zone != nil }.sorted { $0.priority < $1.priority }
       for entry in candidates {
-        guard let zone = entry.zone, let found = zone.aim(self, at: local) else { continue }
+        guard let zone = entry.zone else { continue }
+        asked[ObjectIdentifier(zone)] = zone
+        guard let found = zone.aim(self, at: local) else { continue }
         next = (zone, found)
         break
       }
@@ -89,6 +97,8 @@ public final class TabDragSession {
 
   public func end() -> Bool {
     guard Self.current === self else { return false }
+    move(screenPoint: pointer)
+    endedAim = aim
     Self.current = nil
     defer { clearAll() }
     guard let aim else { return false }
@@ -102,8 +112,23 @@ public final class TabDragSession {
     clearAll()
   }
 
+  private func watchSource() {
+    guard let window = Self.windowOf(sourceWindow) else { return }
+    closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, Self.current === self else { return }
+        self.sourceClosing?()
+        self.cancel()
+      }
+    }
+  }
+
   private func clearAll() {
+    if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+    closeObserver = nil
     aimed?.clear()
+    for zone in asked.values where zone !== aimed { zone.clear() }
+    asked = [:]
     aimed = nil
     aim = nil
   }

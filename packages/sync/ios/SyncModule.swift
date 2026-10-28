@@ -422,7 +422,10 @@ public class SyncModule: Module {
   }
 
   static func safeStorageSecret() throws -> Data {
-    if !ArdiaCoreHost.chromeUsesRealKeychain { return Data("mock_password".utf8) }
+    if !ArdiaCoreHost.chromeUsesRealKeychain {
+      return SafeStorageRekeyGate.testKeychainSecret(environment: ProcessInfo.processInfo.environment, chromeUsesRealKeychain: false)
+        ?? Data("mock_password".utf8)
+    }
     return try SafeStorageKeychain.secret(service: "\(productName) Safe Storage", account: productName)
   }
 

@@ -32,6 +32,25 @@ public struct SafeStorageRekeyGate: Equatable {
     return SafeStorageRekeyGate(mode: .test, userDataDir: userDataDir, refusal: nil)
   }
 
+  public static func testKeychainSecret(environment env: [String: String], chromeUsesRealKeychain: Bool) -> Data? {
+    guard !chromeUsesRealKeychain, env["ARDIA_TEST_KEYCHAIN"] == "file" else { return nil }
+    return testKeychainSecret(
+      environment: env, chromeUsesRealKeychain: chromeUsesRealKeychain,
+      signedForDistribution: SafeStorageRekeyRun.buildSignedForDistribution)
+  }
+
+  static func testKeychainSecret(
+    environment env: [String: String], chromeUsesRealKeychain: Bool, signedForDistribution: Bool,
+    currentDirectory: String = FileManager.default.currentDirectoryPath
+  ) -> Data? {
+    guard !chromeUsesRealKeychain, !signedForDistribution, env["ARDIA_TEST_KEYCHAIN"] == "file",
+      let scratch = env["ARDIA_DATA_DIR"], !scratch.isEmpty
+    else { return nil }
+    let key = scratchUserDataDir(scratch, currentDirectory: currentDirectory).appendingPathComponent("Test Safe Storage Key")
+    guard let secret = try? Data(contentsOf: key), !secret.isEmpty else { return nil }
+    return secret
+  }
+
   static func scratchUserDataDir(_ dataDir: String, currentDirectory: String) -> URL {
     let absolute = (dataDir as NSString).isAbsolutePath ? dataDir : (currentDirectory as NSString).appendingPathComponent(dataDir)
     let standard = (absolute as NSString).standardizingPath

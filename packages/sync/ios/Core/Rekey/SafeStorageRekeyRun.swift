@@ -275,6 +275,7 @@ public final class SafeStorageRekeyRun {
     guard writeJournal(RekeyJournal(phase: .done, fromA: fromA, version: appVersion, report: report)) else {
       return .quit(code: Self.otherCopyExitCode, message: "Solara couldn't finish moving your saved passwords and cookies to their new key. Quit and open Solara again.")
     }
+    do { try removeIfPresent(stagingDir) } catch { log("can't remove the staging folder: \(error)") }
     log("done: \(report.stores.count) stores re-keyed, \(report.discard.count) discarded")
     point("after-done")
     return .proceed

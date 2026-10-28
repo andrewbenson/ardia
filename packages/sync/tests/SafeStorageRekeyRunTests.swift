@@ -109,6 +109,7 @@ final class SafeStorageRekeyRunTests: XCTestCase {
     XCTAssertNotEqual(secret, mock)
     assertAllKeyed(secret)
     XCTAssertEqual(journalPhase(), "done")
+    XCTAssertFalse(present(".rekey-staging"))
     XCTAssertTrue(present(".rekey-old/Default/Cookies-wal"))
     XCTAssertTrue(present(".rekey-old/Default/GCM Store/LOG"))
     XCTAssertFalse(present("Default/GCM Store"))
@@ -535,6 +536,28 @@ final class SafeStorageRekeyGateTests: XCTestCase {
     let login = gate([:], real: true).keychain(product: "Solara", environment: [:]) as? RekeyLoginKeychain
     XCTAssertEqual(login?.service, "Solara Safe Storage")
     XCTAssertEqual(login?.account, "Solara")
+  }
+
+  func testSyncReadsTheTestKeyWheneverChromeDoes() throws {
+    let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("rekey-gate-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: scratch) }
+    let chromium = scratch.appendingPathComponent("Chromium")
+    try FileManager.default.createDirectory(at: chromium, withIntermediateDirectories: true)
+    let env = testEnv.merging(["ARDIA_DATA_DIR": scratch.path]) { $1 }
+    func secret(_ env: [String: String], real: Bool = false, distribution: Bool = false) -> Data? {
+      SafeStorageRekeyGate.testKeychainSecret(environment: env, chromeUsesRealKeychain: real, signedForDistribution: distribution, currentDirectory: "/cwd")
+    }
+    XCTAssertNil(secret(env))
+    try Data("bmV3LXNlY3JldC1rZXkxMg==".utf8).write(to: chromium.appendingPathComponent("Test Safe Storage Key"))
+    XCTAssertEqual(secret(env), Data("bmV3LXNlY3JldC1rZXkxMg==".utf8))
+    XCTAssertEqual(secret(env.filter { $0.key != "ARDIA_TEST_REKEY" }), Data("bmV3LXNlY3JldC1rZXkxMg==".utf8))
+    XCTAssertNil(secret(env.filter { $0.key != "ARDIA_DATA_DIR" }))
+    XCTAssertNil(secret(env.merging(["ARDIA_DATA_DIR": ""]) { $1 }))
+    XCTAssertNil(secret(env.filter { $0.key != "ARDIA_TEST_KEYCHAIN" }))
+    XCTAssertNil(secret(env, real: true))
+    XCTAssertNil(secret(env, distribution: true))
+    XCTAssertNil(SafeStorageRekeyGate.testKeychainSecret(environment: env.filter { $0.key != "ARDIA_TEST_KEYCHAIN" }, chromeUsesRealKeychain: false))
+    XCTAssertNil(SafeStorageRekeyGate.testKeychainSecret(environment: env, chromeUsesRealKeychain: true))
   }
 
   func testTheFileKeychainHonoursPlantedFailures() {

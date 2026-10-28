@@ -16,7 +16,8 @@ import { HoverSlot } from "./HoverSlot";
 import { anchorInside, DOWNLOADS_PANEL, downloadsPlacement, type DownloadsPlacement, type Rect, type Size } from "./downloadsPlacement";
 import { PANEL, POPOVER_MOTION, PopoverSeparator, usePopoverPresence } from "./layout/controls";
 import { IconButton, useHover } from "./primitives";
-import { nativeToolbarAvailable, NativeDownloadsView, type NativeDownloadsEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativeDownloadsView, windowShellActive, type NativeDownloadsEvent } from "@ardia/settings";
+import { useNativeDownloadsPanel } from "./nativeDownloadsPanel";
 
 function formatBytes(n: number) {
   if (n < 0) return "";
@@ -160,14 +161,25 @@ function rowFill(dark: boolean, hovered: boolean, pressed: boolean) {
 
 const progressTrack = (dark: boolean) => (dark ? "#717782" : "#CED7E7");
 
-const downloadsButtons = new Map<string, Set<View>>();
+type DownloadsAnchor = () => Promise<Rect | null>;
+const downloadsAnchors = new Map<string, Set<DownloadsAnchor>>();
+
+export function registerDownloadsAnchor(windowId: string, measure: DownloadsAnchor) {
+  const set = downloadsAnchors.get(windowId) ?? new Set<DownloadsAnchor>();
+  downloadsAnchors.set(windowId, set);
+  set.add(measure);
+  return () => {
+    set.delete(measure);
+    if (!set.size && downloadsAnchors.get(windowId) === set) downloadsAnchors.delete(windowId);
+  };
+}
 
 function measureInWindow(view: View): Promise<Rect | null> {
   return new Promise((resolve) => view.measureInWindow((x, y, width, height) => resolve(width > 0 && height > 0 ? { x, y, width, height } : null)));
 }
 
 async function locateDownloadsButton(windowId: string, origin: Rect): Promise<Rect | null> {
-  const rects = await Promise.all([...(downloadsButtons.get(windowId) ?? [])].map(measureInWindow));
+  const rects = await Promise.all([...(downloadsAnchors.get(windowId) ?? [])].map((measure) => measure().catch(() => null)));
   for (const rect of rects) {
     const local = rect && { x: rect.x - origin.x, y: rect.y - origin.y, width: rect.width, height: rect.height };
     if (anchorInside(origin, local)) return local;
@@ -182,13 +194,7 @@ export function DownloadsButton({ windowId }: { windowId: string }) {
   useEffect(() => {
     const node = view.current;
     if (!node) return;
-    const set = downloadsButtons.get(windowId) ?? new Set<View>();
-    downloadsButtons.set(windowId, set);
-    set.add(node);
-    return () => {
-      set.delete(node);
-      if (!set.size && downloadsButtons.get(windowId) === set) downloadsButtons.delete(windowId);
-    };
+    return registerDownloadsAnchor(windowId, () => measureInWindow(node));
   }, [windowId]);
   return (
     <View ref={view} collapsable={false}>
@@ -216,6 +222,7 @@ export function DownloadsPopover() {
 
 function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; closing: boolean; onClosed: () => void }) {
   const theme = useTheme();
+  const [inShell] = useState(() => windowShellActive(windowId));
   const liveIds = useBrowser(useShallow((s) => downloadsIn(s, windowId).map((d) => d.id)));
   const liveClearable = useBrowser((s) => downloadsIn(s, windowId).some((d) => d.state !== "downloading"));
   const shownList = useRef({ ids: liveIds, clearable: liveClearable });
@@ -234,6 +241,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
       if (closing) closed.current();
       return;
     }
+    if (inShell) return;
     const motion = closing ? POPOVER_MOTION.close : POPOVER_MOTION.open;
     Animated.timing(appear, { toValue: closing ? 0 : 1, duration: motion.duration, easing: motion.easing, useNativeDriver: true }).start(
       ({ finished }) => finished && closing && closed.current(),
@@ -243,6 +251,14 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const upward = p?.bottom !== undefined;
   const arrowRoom = p && p.arrow !== "none" ? DOWNLOADS_PANEL.arrowHeight : 0;
   const listMax = p ? Math.max(ROW, Math.min(VISIBLE_ROWS * ROW, p.room - PANEL_CHROME)) : VISIBLE_ROWS * ROW;
+
+  if (inShell) {
+    return (
+      <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {p && <ShellDownloadsPanel windowId={windowId} ids={ids} clearable={clearable} listMax={listMax} placement={p} closing={closing} onClose={() => setOpen(false)} onClosed={() => closed.current()} />}
+      </View>
+    );
+  }
 
   return (
     <View ref={root} collapsable={false} onLayout={onLayout} pointerEvents={closing ? "none" : "auto"} style={StyleSheet.absoluteFill}>
@@ -310,7 +326,28 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   );
 }
 
+function ShellDownloadsPanel({ windowId, ids, clearable, listMax, placement, closing, onClose, onClosed }: { windowId: string; ids: string[]; clearable: boolean; listMax: number; placement: DownloadsPlacement; closing: boolean; onClose: () => void; onClosed: () => void }) {
+  const { state, onEvent } = useDownloadsListFeed(windowId, ids, clearable, listMax, onClose);
+  const { width, left, top, bottom, arrow, arrowX } = placement;
+  useNativeDownloadsPanel(windowId, `{"list":${state},"placement":${JSON.stringify({ width, left, top, bottom, arrow, arrowX })},"closing":${closing}}`, (e) => {
+    if (e.kind === "dismiss") onClose();
+    else if (e.kind === "closed") onClosed();
+    else onEvent(e);
+  });
+  return null;
+}
+
 function NativeDownloadsList({ windowId, ids, clearable, listMax, onClose }: { windowId: string; ids: string[]; clearable: boolean; listMax: number; onClose: () => void }) {
+  const { state, onEvent } = useDownloadsListFeed(windowId, ids, clearable, listMax, onClose);
+  const [height, setHeight] = useState<number | null>(null);
+  return (
+    <View style={{ height: height ?? undefined, minHeight: 1 }}>
+      <NativeDownloadsView style={StyleSheet.absoluteFill} state={state} onDownloadsEvent={(e) => onEvent(e.nativeEvent)} onDownloadsHeight={(e) => setHeight(e.nativeEvent.height)} />
+    </View>
+  );
+}
+
+function useDownloadsListFeed(windowId: string, ids: string[], clearable: boolean, listMax: number, onClose: () => void) {
   const theme = useTheme();
   const downloads = useBrowser((s) => s.downloads);
   const last = useRef(new Map<string, Download>());
@@ -322,7 +359,6 @@ function NativeDownloadsList({ windowId, ids, clearable, listMax, onClose }: { w
     })
     .filter((d): d is Download => !!d)
     .map((d) => ({ id: d.id, url: d.url, filename: d.filename, path: d.path, state: d.state, received: d.received, total: d.total, speed: d.speed, paused: !!d.paused, dangerous: !!d.dangerous }));
-  const [height, setHeight] = useState<number | null>(null);
   const state = JSON.stringify({
     rows,
     clearable,
@@ -349,11 +385,7 @@ function NativeDownloadsList({ windowId, ids, clearable, listMax, onClose }: { w
     else if (e.kind === "cancel") void cancelDownload(d.id);
     else if (e.kind === "menu") void downloadMenu(d, windowId);
   };
-  return (
-    <View style={{ height: height ?? undefined, minHeight: 1 }}>
-      <NativeDownloadsView style={StyleSheet.absoluteFill} state={state} onDownloadsEvent={(e) => onEvent(e.nativeEvent)} onDownloadsHeight={(e) => setHeight(e.nativeEvent.height)} />
-    </View>
-  );
+  return { state, onEvent };
 }
 
 function useDownloadsPlacement(windowId: string, closing: boolean, fallback: { topStrip: boolean; footer: boolean; footerBottom: number }) {

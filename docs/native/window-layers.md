@@ -47,7 +47,8 @@ behind the active page, since Chrome throttles a page under a hidden view.
 | sidebar, `TopTabStrip`, `TopStripPeek` | App.tsx:68 | 5 | port-sidebar, port-strip |
 | `ExtensionSidePanel` | App.tsx:59 | 1, `TabSlots` `sidePanel(w)`; the shell narrows the card | port-omnibox (page), port-shell (frame) |
 | extension popup | ExtensionOverlays.tsx:151 | 6, its page in `TabSlots` `popup` | port-omnibox (page) |
-| `CommandPanel`, `DownloadsPopover`, `DownloadMagnet`, bookmark dialogs, `CreateProfileHost`, `SidebarOverlays`, `OnboardingOverlay` | App.tsx:80 | 6 | their areas |
+| `DownloadsPopover` | App.tsx:81 | native, `DownloadsPanelView` in the shell's overlay container (`downloads.panel` topic) | port-media |
+| `CommandPanel`, `DownloadMagnet`, bookmark dialogs, `CreateProfileHost`, `SidebarOverlays`, `OnboardingOverlay` | App.tsx:80 | 6 | their areas |
 | Little Solara | `LittleArdiaWindow` | not a shell window: stays RN | port-media |
 
 ## Rules

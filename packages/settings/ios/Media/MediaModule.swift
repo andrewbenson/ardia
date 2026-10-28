@@ -11,6 +11,7 @@ public class MediaModule: Module {
           NativeMedia.register()
           NativeLittleSolara.install()
           NativePaneOverlays.start()
+          NativeDownloadsPanel.start()
         }
       }
     }
@@ -33,6 +34,10 @@ public class MediaModule: Module {
 
     AsyncFunction("describePaneOverlays") { (windowId: String) -> String in
       MainActor.assumeIsolated { NativePaneOverlays.describe(windowId) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("describeDownloadsPanel") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeDownloadsPanel.describe(windowId) }
     }.runOnQueue(.main)
 
     AsyncFunction("describeLittle") { (windowId: String) -> String in

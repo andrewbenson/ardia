@@ -204,6 +204,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   Native files there compile into everyone's build: check one pod with `scripts/agent/typecheck-pod <Pod>` before saving more.
 - **Scratch files** go in a subdirectory of the session scratchpad named for your task; clean up only that
   subdirectory, never with globs in the shared root (other agents' files live there).
+  A scratch copy of `native/SolaraKit` needs `packages/sync/ios/Core` beside it: `SolaraSyncCore`'s sources are
+  symlinks into it, so `git archive HEAD native/SolaraKit` alone leaves them dangling and SwiftPM calls the target empty.
 - The store API is documented in `docs/store-api.md` (read it before touching app state).
 - Tests, test-instance variables and what background mode changes: `docs/testing.md`. Benchmarks and the perf gate:
   `docs/perf/README.md`.

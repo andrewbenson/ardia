@@ -1,7 +1,7 @@
 public struct JSMap<Value>: Sequence {
   private var indexKeys: [UInt32] = []
   private var namedKeys: [String] = []
-  private var storage: [String: Value] = [:]
+  private var storage: [JSKey: Value] = [:]
 
   public init() {}
 
@@ -28,24 +28,24 @@ public struct JSMap<Value>: Sequence {
     return indexKeys.map(String.init) + namedKeys
   }
 
-  public var values: [Value] { keys.map { storage[$0]! } }
+  public var values: [Value] { keys.map { storage[JSKey($0)]! } }
 
   public subscript(key: String) -> Value? {
-    get { storage[key] }
+    get { storage[JSKey(key)] }
     set {
       if let newValue {
-        if storage.updateValue(newValue, forKey: key) == nil { insertKey(key) }
-      } else if storage.removeValue(forKey: key) != nil {
+        if storage.updateValue(newValue, forKey: JSKey(key)) == nil { insertKey(key) }
+      } else if storage.removeValue(forKey: JSKey(key)) != nil {
         removeKey(key)
       }
     }
   }
 
-  public func contains(_ key: String) -> Bool { storage[key] != nil }
+  public func contains(_ key: String) -> Bool { storage[JSKey(key)] != nil }
 
   @discardableResult
   public mutating func removeValue(forKey key: String) -> Value? {
-    guard let old = storage.removeValue(forKey: key) else { return nil }
+    guard let old = storage.removeValue(forKey: JSKey(key)) else { return nil }
     removeKey(key)
     return old
   }
@@ -57,7 +57,7 @@ public struct JSMap<Value>: Sequence {
   }
 
   public func makeIterator() -> IndexingIterator<[(key: String, value: Value)]> {
-    keys.map { (key: $0, value: storage[$0]!) }.makeIterator()
+    keys.map { (key: $0, value: storage[JSKey($0)]!) }.makeIterator()
   }
 
   public func mapValues<T>(_ transform: (Value) throws -> T) rethrows -> JSMap<T> {
@@ -70,7 +70,7 @@ public struct JSMap<Value>: Sequence {
 
   public func filter(_ isIncluded: (String, Value) throws -> Bool) rethrows -> JSMap<Value> {
     var out = JSMap<Value>()
-    for key in keys where try isIncluded(key, storage[key]!) { out[key] = storage[key]! }
+    for key in keys where try isIncluded(key, storage[JSKey(key)]!) { out[key] = storage[JSKey(key)]! }
     return out
   }
 
@@ -91,7 +91,7 @@ public struct JSMap<Value>: Sequence {
   private mutating func removeKey(_ key: String) {
     if let index = Self.arrayIndex(key) {
       if let at = indexKeys.firstIndex(of: index) { indexKeys.remove(at: at) }
-    } else if let at = namedKeys.lastIndex(of: key) {
+    } else if let at = namedKeys.lastIndex(where: { $0.utf16.elementsEqual(key.utf16) }) {
       namedKeys.remove(at: at)
     }
   }
@@ -99,14 +99,14 @@ public struct JSMap<Value>: Sequence {
 
 extension JSMap: Equatable where Value: Equatable {
   public static func == (lhs: JSMap, rhs: JSMap) -> Bool {
-    lhs.keys == rhs.keys && lhs.storage == rhs.storage
+    lhs.keys.map(JSKey.init) == rhs.keys.map(JSKey.init) && lhs.storage == rhs.storage
   }
 }
 
 extension JSMap: Hashable where Value: Hashable {
   public func hash(into hasher: inout Hasher) {
-    hasher.combine(keys)
-    for key in keys { hasher.combine(storage[key]) }
+    for key in keys { hasher.combine(JSKey(key)) }
+    for key in keys { hasher.combine(storage[JSKey(key)]) }
   }
 }
 

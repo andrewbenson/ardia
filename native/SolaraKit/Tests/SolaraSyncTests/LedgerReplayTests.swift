@@ -68,4 +68,9 @@ import Testing
     let stored = try JSONValue.parse(#"{"v":1,"L":2,"t":3,"keys":{},"scope":"s","held":["pw:a"],"gated":{"pw:b":5},"later":1}"#)
     #expect(Ledger(json: stored).json.text() == stored.text(), "scope, held, gated and unknown keys are kept")
   }
+
+  @Test func aLedgerEntryKeepsFieldsItDoesntKnow() throws {
+    let stored = try JSONValue.parse(#"{"v":1,"L":1,"t":1,"keys":{"pw:k":{"d":["a"],"h":null,"m":1,"extra":true}}}"#)
+    #expect(Ledger(json: stored).json.text() == stored.text())
+  }
 }

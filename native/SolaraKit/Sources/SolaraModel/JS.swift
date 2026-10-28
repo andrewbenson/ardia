@@ -141,9 +141,42 @@ public extension Array where Element == String {
   }
 }
 
+public struct JSKey: Hashable, Sendable {
+  public let text: String
+
+  public init(_ text: String) { self.text = text }
+
+  public static func == (a: JSKey, b: JSKey) -> Bool { a.text.utf16.elementsEqual(b.text.utf16) }
+
+  public func hash(into hasher: inout Hasher) {
+    for unit in text.utf16 { hasher.combine(unit) }
+  }
+}
+
+struct Identity<Element: Hashable>: Hashable {
+  let element: Element
+
+  init(_ element: Element) { self.element = element }
+
+  static func == (a: Identity, b: Identity) -> Bool {
+    if let x = a.element as? String, let y = b.element as? String { return x.utf16.elementsEqual(y.utf16) }
+    return a.element == b.element
+  }
+
+  func hash(into hasher: inout Hasher) {
+    if let text = element as? String {
+      for unit in text.utf16 { hasher.combine(unit) }
+    } else {
+      hasher.combine(element)
+    }
+  }
+}
+
+extension Identity: Sendable where Element: Sendable {}
+
 public struct OrderedSet<Element: Hashable>: Sequence {
   public private(set) var elements: [Element] = []
-  private var members: Set<Element> = []
+  private var members: Set<Identity<Element>> = []
 
   public init() {}
 
@@ -153,58 +186,60 @@ public struct OrderedSet<Element: Hashable>: Sequence {
 
   public var count: Int { elements.count }
   public var isEmpty: Bool { elements.isEmpty }
-  public func contains(_ item: Element) -> Bool { members.contains(item) }
+  public func contains(_ item: Element) -> Bool { members.contains(Identity(item)) }
 
   @discardableResult
   public mutating func insert(_ item: Element) -> Bool {
-    guard members.insert(item).inserted else { return false }
+    guard members.insert(Identity(item)).inserted else { return false }
     elements.append(item)
     return true
   }
 
   public mutating func remove(_ item: Element) {
-    guard members.remove(item) != nil else { return }
-    elements.removeAll { $0 == item }
+    guard members.remove(Identity(item)) != nil else { return }
+    elements.removeAll { Identity($0) == Identity(item) }
   }
 
   public func makeIterator() -> IndexingIterator<[Element]> { elements.makeIterator() }
 }
 
 extension OrderedSet: Sendable where Element: Sendable {}
-extension OrderedSet: Equatable {}
+extension OrderedSet: Equatable {
+  public static func == (a: OrderedSet, b: OrderedSet) -> Bool { a.elements.map(Identity.init) == b.elements.map(Identity.init) }
+}
 
 public struct OrderedDict<Key: Hashable, Value>: Sequence {
   public private(set) var keys: [Key] = []
-  private var storage: [Key: Value] = [:]
+  private var storage: [Identity<Key>: Value] = [:]
 
   public init() {}
 
   public var count: Int { keys.count }
   public var isEmpty: Bool { keys.isEmpty }
-  public var values: [Value] { keys.map { storage[$0]! } }
+  public var values: [Value] { keys.map { storage[Identity($0)]! } }
 
   public subscript(key: Key) -> Value? {
-    get { storage[key] }
+    get { storage[Identity(key)] }
     set {
       if let newValue {
-        if storage.updateValue(newValue, forKey: key) == nil { keys.append(key) }
-      } else if storage.removeValue(forKey: key) != nil {
-        keys.removeAll { $0 == key }
+        if storage.updateValue(newValue, forKey: Identity(key)) == nil { keys.append(key) }
+      } else if storage.removeValue(forKey: Identity(key)) != nil {
+        keys.removeAll { Identity($0) == Identity(key) }
       }
     }
   }
 
   public subscript(key: Key, default value: @autoclosure () -> Value) -> Value {
-    get { storage[key] ?? value() }
+    get { storage[Identity(key)] ?? value() }
     set { self[key] = newValue }
   }
 
   public func makeIterator() -> IndexingIterator<[(key: Key, value: Value)]> {
-    keys.map { (key: $0, value: storage[$0]!) }.makeIterator()
+    keys.map { (key: $0, value: storage[Identity($0)]!) }.makeIterator()
   }
 }
 
 extension OrderedDict: Sendable where Key: Sendable, Value: Sendable {}
 extension OrderedDict: Equatable where Value: Equatable {
-  public static func == (a: OrderedDict, b: OrderedDict) -> Bool { a.keys == b.keys && a.storage == b.storage }
+  public static func == (a: OrderedDict, b: OrderedDict) -> Bool { a.keys.map(Identity.init) == b.keys.map(Identity.init) && a.storage == b.storage }
 }

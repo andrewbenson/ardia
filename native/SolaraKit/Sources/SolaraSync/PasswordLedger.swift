@@ -24,6 +24,7 @@ public struct LedgerEntry: Sendable, Equatable {
   public var d: [String]
   public var h: HLC?
   public var m: Double
+  public var unknown = JSONObject()
 
   public init(d: [String], h: HLC?, m: Double) {
     self.d = d
@@ -35,9 +36,14 @@ public struct LedgerEntry: Sendable, Equatable {
     d = json["d"]?.array?.compactMap(\.string) ?? []
     h = json["h"]?.string
     m = json["m"]?.number ?? 0
+    for (key, value) in json.object ?? [:] where !["d", "h", "m"].contains(key) { unknown[key] = value }
   }
 
-  public var json: JSONValue { ["d": JSONValue(d), "h": h.map(JSONValue.string) ?? .null, "m": .number(m)] }
+  public var json: JSONValue {
+    var out: JSONObject = ["d": JSONValue(d), "h": h.map(JSONValue.string) ?? .null, "m": .number(m)]
+    for (key, value) in unknown { out[key] = value }
+    return .object(out)
+  }
 }
 
 public struct Ledger: Sendable, Equatable {

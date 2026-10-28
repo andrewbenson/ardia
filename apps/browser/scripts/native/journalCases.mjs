@@ -44,7 +44,7 @@ export function randomScript(seed) {
   const pick = (list) => list[Math.floor(rand() * list.length)];
   const T = 1_790_000_000_000;
   const scopes = ["app", "p:abc", "10"];
-  const keys = ["set:theme", "pin:1", "2", "bm:é", "bm:🔑Ünï"];
+  const keys = ["set:theme", "pin:1", "2", "bm:é", "bm:🔑Ünï", "bm:caf\u00e9", "bm:cafe\u0301"];
   const g = () => pick([0, 1, 2, 3, 5, 8]);
   const time = () => T + pick([0, 1, -1, 1000, -1000, 60_000]);
   const entry = () => ({ v: pick([{ v: "dark" }, null, 1, { b: 1, a: [2] }, { v: "Ünï 🔑" }]), h: hlc(time(), Math.floor(rand() * 3), pick(["dev1", "dev2"])), seen: pick([null, "[\"B\",1]"]) });
@@ -125,7 +125,7 @@ export function runScript(script) {
 export function randomUnion(seed) {
   const rand = mulberry32(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
-  const keys = ["a", "b", "c", "d", "1", "é", "🔑"];
+  const keys = ["a", "b", "c", "d", "1", "é", "🔑", "jos\u00e9", "jose\u0301"];
   const value = () => pick([1, "v", { a: 1, b: 2 }, { b: 2, a: 1 }, null, [1], "Ünï", "🔑"]);
   const local = keys.filter(() => rand() < 0.7).map((k) => [k, value()]);
   const records = keys.filter(() => rand() < 0.6).map((k) => [k, { v: value(), o: [pick(["B", "C"]), Math.floor(rand() * 4)] }]);

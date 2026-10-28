@@ -100,4 +100,25 @@ enum Cases {
       #expect(syncCanonical(back[key] ?? .null) == syncCanonical(object[key] ?? .null), "\(key) keeps its unknown fields")
     }
   }
+
+  @Test func keysThatDifferOnlyInNormalizationStayTwoKeysAsInJS() throws {
+    let composed = "bm:caf\u{e9}"
+    let decomposed = "bm:cafe\u{301}"
+    var map = JSMap<Int>()
+    map[composed] = 1
+    map[decomposed] = 2
+    #expect(map.count == 2 && map[composed] == 1 && map[decomposed] == 2)
+    map[decomposed] = nil
+    #expect(map.keys == [composed])
+    #expect(try JSONValue.parse(#"{"h:caf\u00e9":1,"h:cafe\u0301":2}"#).object?.count == 2)
+    #expect(JSONValue.string(composed) != JSONValue.string(decomposed))
+    #expect(OrderedSet([composed, decomposed]).count == 2)
+    var dict = OrderedDict<String, Int>()
+    dict[composed] = 1
+    dict[decomposed] = 2
+    #expect(dict.count == 2)
+    let state = try JSONValue.parse(
+      #"{"records":{"x:caf\u00e9":{"bad":true},"x:cafe\u0301":{"h":"1","v":1,"o":["d",1]}},"base":{},"unapplied":[],"vv":{},"extra":{},"files":{},"damaged":{},"seq":1,"outbox":[],"seen":{}}"#)
+    #expect(!readableScope(state), "a bad record under one form isn't hidden by a good one under the other")
+  }
 }

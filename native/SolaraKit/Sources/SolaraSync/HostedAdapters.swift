@@ -294,14 +294,14 @@ public final class HistoryAdapter: SyncAdapter {
     guard host.historyReady(profileId) else { return nil }
     let since = now() - historyWindowMs
     var values = OrderedDict<String, JSONValue>()
-    var older = Set<String>()
+    var older = Set<JSKey>()
     let floor = host.historyFloor(profileId) ?? -.infinity
     for e in host.history(profileId) ?? [] {
       let url = jsText(e["url"])
       guard keptInHistory(url) else { continue }
       let key = "h:\(url)"
       if jsNumber(jsPrimitive(e["lastVisit"])) < since {
-        older.insert(key)
+        older.insert(JSKey(key))
         continue
       }
       let times = e["visitTimes"]?.array ?? []
@@ -316,7 +316,7 @@ public final class HistoryAdapter: SyncAdapter {
     }
     let base = context.base
     let ignore: (String) -> Bool = { key in
-      if older.contains(key) || !keptInHistory(key.jsSlice(2)) { return true }
+      if older.contains(JSKey(key)) || !keptInHistory(key.jsSlice(2)) { return true }
       guard let known = base(key), known.truthy else { return false }
       return lastVisitOf(known) < since || lastVisitOf(known) <= floor
     }

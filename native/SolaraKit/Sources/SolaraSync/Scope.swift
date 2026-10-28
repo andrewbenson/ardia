@@ -320,10 +320,10 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
   if beforePull && adapter.publishOnlyAfterPull { return published }
   if adapter.adoptRemoteOnJoin && !state.joined { return published }
   if adapter.publishAfterPull && state.waitingAfterPull != false { return published }
-  var pendingKeys: Set<String>? = nil
+  var pendingKeys: Set<JSKey>? = nil
   let queued: (String) -> Bool = { key in
-    if pendingKeys == nil { pendingKeys = Set((state.outbox + (state.journal ?? []).flatMap(\.ops)).map(\.k)) }
-    return pendingKeys!.contains(key)
+    if pendingKeys == nil { pendingKeys = Set((state.outbox + (state.journal ?? []).flatMap(\.ops)).map { JSKey($0.k) }) }
+    return pendingKeys!.contains(JSKey(key))
   }
   let context = ExtractContext(
     base: { parseBase(state.base[$0]) }, queued: queued, now: now, known: { state.records.contains($0) }, remote: { state.records[$0]?.v },
@@ -344,24 +344,24 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
     state.outbox.append(Op(k: key, h: h, v: value))
     published.insert(key)
   }
-  var extracted = Set<String>()
+  var extracted = Set<JSKey>()
   for (key, value) in extraction.values {
     guard let value, !value.isNull else { throw SyncError(description: "[sync] \(key): a live value can't be null") }
-    extracted.insert(key)
+    extracted.insert(JSKey(key))
     let json = syncCanonical(value)
     if state.base[key] == json && !(extraction.republish?(key) ?? false) { continue }
     state.base[key] = json
     put(key, value)
   }
   for key in state.base.keys {
-    if !key.hasPrefix(adapter.prefix) || extracted.contains(key) || (extraction.ignore?(key) ?? false) { continue }
+    if !key.hasPrefix(adapter.prefix) || extracted.contains(JSKey(key)) || (extraction.ignore?(key) ?? false) { continue }
     state.base.removeValue(forKey: key)
     put(key, .null)
   }
   var removing = OrderedSet<String>()
   for key in extraction.remove { removing.insert(key) }
   for key in removing.elements {
-    if !key.hasPrefix(adapter.prefix) || extracted.contains(key) { continue }
+    if !key.hasPrefix(adapter.prefix) || extracted.contains(JSKey(key)) { continue }
     guard let record = state.records[key], !record.v.isNull else { continue }
     state.base.removeValue(forKey: key)
     put(key, .null)

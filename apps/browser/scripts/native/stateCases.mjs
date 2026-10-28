@@ -88,6 +88,8 @@ export function randomState(seed) {
     () => (state.rebuild = { since: 1, noted: { "pw:": { k: 1 } } }),
     () => (state.rebuild = { since: 1, noted: [] }),
     () => (state.records = { "x:1": null }),
+    () => (state.records = { "x:caf\u00e9": { bad: true }, "x:cafe\u0301": { h: h(), v: 1, o: ["dev1", 1] } }),
+    () => (state.base = { "x:caf\u00e9": "1", "x:cafe\u0301": 1 }),
   ];
   if (rand() < 0.6) pick(breaks)();
   if (rand() < 0.05) return pick([null, [], "state", 3]);

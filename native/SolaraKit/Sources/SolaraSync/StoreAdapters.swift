@@ -14,8 +14,8 @@ public typealias SyncLinks = () -> JSMap<JSONValue>
 
 let fromSyncArgument: JSONValue = ["fromSync": true]
 
-func shown(_ visible: [(key: String, value: JSONValue)]) -> [String: JSONValue] {
-  Dictionary(visible.map { ($0.key, $0.value) }, uniquingKeysWith: { $1 })
+func shown(_ visible: [(key: String, value: JSONValue)]) -> JSMap<JSONValue> {
+  JSMap(visible.map { ($0.key, $0.value) })
 }
 
 func extraction(_ values: OrderedDict<String, JSONValue>, ignoring: Bool = true) -> Extraction {

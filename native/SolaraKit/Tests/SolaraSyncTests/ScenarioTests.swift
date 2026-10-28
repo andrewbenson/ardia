@@ -37,7 +37,7 @@ final class Device: @unchecked Sendable {
   var stamps = OrderedDict<String, Stamped>()
   var removes = OrderedSet<String>()
   var reapplies = OrderedSet<String>()
-  var refused = Set<String>()
+  var refused = Set<JSKey>()
   var redesign: Bool { options["redesign"]?.truthy ?? false }
 
   init(id: String, folder: Folder, options: JSONObject, trace: Trace) {
@@ -94,7 +94,7 @@ final class Device: @unchecked Sendable {
     case "stamp": stamps[key] = Stamped(at: step["at"]?.number ?? 0, after: step["after"]?.string)
     case "remove": _ = removes.insert(key)
     case "reapply": _ = reapplies.insert(key)
-    case "refuse": refused.insert(key)
+    case "refuse": refused.insert(JSKey(key))
     default: return false
     }
     return true
@@ -132,7 +132,7 @@ final class LedgerAdapter: SyncAdapter {
     for (key, value) in visible { shown[key] = value }
     device.trace.push(["apply": .string(device.id), "prefix": "y:", "changed": JSONValue(changed), "visible": .object(shown)])
     var written: [String] = []
-    for key in changed where !device.refused.contains(key) {
+    for key in changed where !device.refused.contains(JSKey(key)) {
       device.ledger[key] = shown[key]
       written.append(key)
     }
@@ -321,7 +321,11 @@ enum Scenarios {
   static func firstDifference(_ expected: [JSONValue], _ got: [JSONValue]) -> (at: Int, ts: String, swift: String)? {
     let firstDiff = (0..<min(expected.count, got.count)).first { expected[$0].text() != got[$0].text() }
     guard let at = firstDiff ?? (expected.count != got.count ? min(expected.count, got.count) : nil) else { return nil }
-    return (at, at < expected.count ? expected[at].text() : "nothing", at < got.count ? got[at].text() : "nothing")
+    let ts = at < expected.count ? Array(expected[at].text().utf16) : []
+    let swift = at < got.count ? Array(got[at].text().utf16) : []
+    let char = (0..<min(ts.count, swift.count)).first { ts[$0] != swift[$0] } ?? min(ts.count, swift.count)
+    let window = { (units: [UInt16]) in String(decoding: units[max(0, char - 300)..<min(units.count, char + 300)], as: UTF16.self) }
+    return (at, at < expected.count ? window(ts) : "nothing", at < got.count ? window(swift) : "nothing")
   }
 }
 

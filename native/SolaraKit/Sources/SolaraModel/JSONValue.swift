@@ -58,6 +58,29 @@ public enum JSONValue: Sendable, Hashable {
   public subscript(key: String) -> JSONValue? {
     object?[key]
   }
+
+  public static func == (a: JSONValue, b: JSONValue) -> Bool {
+    switch (a, b) {
+    case (.null, .null): true
+    case (.bool(let x), .bool(let y)): x == y
+    case (.number(let x), .number(let y)): x == y
+    case (.string(let x), .string(let y)): x.utf16.elementsEqual(y.utf16)
+    case (.array(let x), .array(let y)): x == y
+    case (.object(let x), .object(let y)): x == y
+    default: false
+    }
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    switch self {
+    case .null: hasher.combine(0)
+    case .bool(let x): hasher.combine(x)
+    case .number(let x): hasher.combine(x)
+    case .string(let x): hasher.combine(JSKey(x))
+    case .array(let x): hasher.combine(x)
+    case .object(let x): hasher.combine(x)
+    }
+  }
 }
 
 extension JSONValue: ExpressibleByNilLiteral, ExpressibleByBooleanLiteral, ExpressibleByStringLiteral,

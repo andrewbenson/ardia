@@ -41,13 +41,15 @@ export function randomCase(seed) {
   const rand = mulberry32(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
   const T = 1_790_000_000_000;
-  const keys = ["pw:https://a.example\nme", "pw:https://b.example\nyou", "pw:https://c.example\n", "pw:https://ü.example\nü"];
+  const keys = ["pw:https://a.example\nme", "pw:https://b.example\nyou", "pw:https://c.example\n", "pw:https://ü.example\nü", "pw:https://a.example\njos\u00e9", "pw:https://a.example\njose\u0301"];
   const values = [
     { o: "https://a.example", u: "me", p: "one" },
     { o: "https://a.example", u: "me", p: "two" },
     { o: "https://b.example", u: "you", p: "pässwörd" },
     { o: "https://c.example", u: "", p: "🔑" },
     { o: "https://a.example", u: "me", p: "" },
+    { o: "https://a.example", u: "jos\u00e9", p: "caf\u00e9" },
+    { o: "https://a.example", u: "jose\u0301", p: "cafe\u0301" },
   ];
   const times = [];
   const time = () => {
@@ -78,7 +80,7 @@ export function randomCase(seed) {
         const recordValue = records.find(([k]) => k === key)?.[1].v;
         digests.push(from === "local" ? ledger.digestOf(localValue) : from === "record" ? ledger.digestOf(recordValue) : from === "value" ? ledger.digestOf(pick(values)) : `${i}.junk`);
       }
-      entries[key] = { d: digests, h: rand() < 0.3 ? null : hlc(time(), 0, "dev1"), m: time() };
+      entries[key] = { d: digests, h: rand() < 0.3 ? null : hlc(time(), 0, "dev1"), m: time(), ...(rand() < 0.2 ? { later: { kept: true } } : {}) };
     }
     ledgerValue = { v: 1, L: consistent ? mark.L : Math.floor(rand() * 5), t: consistent ? mark.t : time(), keys: entries };
   }

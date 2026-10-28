@@ -487,7 +487,7 @@ export function randomRedesignScript(seed, steps) {
   const ids = ["a", "b", "c"];
   const T = 1_790_000_000_000;
   const keys = ["x:1", "x:2", "set:theme", "y:1", "y:2", "y:3", "y:é", "y:🔑"];
-  const ledgerKeys = ["y:1", "y:2", "y:3", "y:é", "y:🔑"];
+  const ledgerKeys = ["y:1", "y:2", "y:3", "y:é", "y:🔑", "y:jos\u00e9", "y:jose\u0301"];
   const value = () => pick([1, "v", { n: Math.floor(rand() * 5) }, { o: "https://a.example", u: "me", p: "s" }, "ünïcode", { o: "https://ü.example", u: "Ünï", p: "🔑" }]);
   const options = { compactAfterFiles: 6, compactInterval: 60_000, tombstoneTTL: 5 * 60_000, damagedGiveUp: 10 * 60_000, redesign: true };
   const script = { name: `redesign ${seed}`, devices: Object.fromEntries(ids.map((id) => [id, options])), steps: [{ op: "time", now: T }] };

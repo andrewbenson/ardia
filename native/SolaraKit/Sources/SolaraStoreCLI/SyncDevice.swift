@@ -31,7 +31,7 @@ final class ChannelDevice: @unchecked Sendable {
   var stamps = OrderedDict<String, Stamped>()
   var removes = OrderedSet<String>()
   var reapplies = OrderedSet<String>()
-  var refused = Set<String>()
+  var refused = Set<JSKey>()
   var redesign: Bool { options["redesign"]?.truthy ?? false }
 
   init(id: String, options: JSONObject) {
@@ -88,7 +88,7 @@ final class ChannelDevice: @unchecked Sendable {
     case "stamp": stamps[key] = Stamped(at: step["at"]?.number ?? 0, after: step["after"]?.string)
     case "remove": _ = removes.insert(key)
     case "reapply": _ = reapplies.insert(key)
-    case "refuse": refused.insert(key)
+    case "refuse": refused.insert(JSKey(key))
     default: break
     }
   }
@@ -174,7 +174,7 @@ final class ChannelLedgerAdapter: SyncAdapter {
     device.channel.send(["call": "apply", "prefix": "y:", "changed": JSONValue(changed), "visible": .object(shown)])
     _ = try device.channel.receive()
     var written: [String] = []
-    for key in changed where !device.refused.contains(key) {
+    for key in changed where !device.refused.contains(JSKey(key)) {
       device.ledger[key] = shown[key]
       written.append(key)
     }

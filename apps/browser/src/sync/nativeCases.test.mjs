@@ -32,6 +32,8 @@ for (const [fixture, swift, recorder] of [
   ["Cases/ledger.json.deflate", "PasswordLedger.swift", "ledgerCases.mjs"],
   ["Cases/journal.json.deflate", "EditJournal.swift", "journalCases.mjs"],
   ["Cases/state.json.deflate", "StateDecode.swift", "stateCases.mjs"],
+  ["Adapters", "the adapters in SolaraSync (StoreAdapters, PinnedAdapters, HostedAdapters, Extensions)", "replay.mjs --phase adapters"],
+  ["Scenarios/extensions.json.deflate", "SolaraSync's Extensions.swift", "../../../packages/sync/scripts/extensions-scenario.mjs"],
 ]) {
   test(`the sources behind ${fixture} haven't changed since it was recorded`, () => {
     assert.deepEqual(changedSources(fixture), [], `look at ${swift} for the same change, then re-record with node --import ./src/test-loader.mjs scripts/native/${recorder}`);

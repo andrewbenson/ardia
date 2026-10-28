@@ -150,16 +150,18 @@ public final class EditJournal {
 
 public func unionFallback(
   scope: String, T: Double, vvT: JSONValue, local: [(key: String, value: JSONValue)], records: OrderedDict<String, (v: JSONValue, o: Origin)>,
-  everSeen: Set<String>, tombstoned: Set<String>
+  everSeen: [String], tombstoned: [String]
 ) -> (publish: [(key: String, v: JSONValue, at: Double)], apply: OrderedSet<String>, publishDeletions: Bool) {
   var publish = OrderedDict<String, (v: JSONValue, at: Double)>()
   var apply = OrderedSet<String>()
   func covered(_ o: Origin) -> Bool { (vvT[scope]?[o.device]?.number ?? 0) >= o.seq }
+  let everSeen = Set(everSeen.map(JSKey.init))
+  let tombstoned = Set(tombstoned.map(JSKey.init))
   for (key, value) in local {
     if let record = records[key] {
       if record.v.text() == value.text() { continue }
       if covered(record.o) { publish[key] = (value, T) } else { apply.insert(key) }
-    } else if everSeen.contains(key) || tombstoned.contains(key) {
+    } else if everSeen.contains(JSKey(key)) || tombstoned.contains(JSKey(key)) {
       apply.insert(key)
     } else {
       publish[key] = (value, T)

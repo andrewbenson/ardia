@@ -58,7 +58,7 @@ final class MemoryDisk: JournalDisk {
     let local = (input["local"]?.array ?? []).map { (key: $0.array?.first?.string ?? "", value: $0.array?.last ?? .null) }
     let result = unionFallback(
       scope: input["scope"]?.string ?? "", T: input["T"]?.number ?? 0, vvT: input["vvT"] ?? .null, local: local, records: records,
-      everSeen: Set(input["everSeen"]?.array?.compactMap(\.string) ?? []), tombstoned: Set(input["tombstoned"]?.array?.compactMap(\.string) ?? []))
+      everSeen: input["everSeen"]?.array?.compactMap(\.string) ?? [], tombstoned: input["tombstoned"]?.array?.compactMap(\.string) ?? [])
     return [
       "publish": .array(result.publish.map { .array([.string($0.key), ["v": $0.v, "at": .number($0.at)]]) }),
       "apply": JSONValue(result.apply.elements), "publishDeletions": .bool(result.publishDeletions),

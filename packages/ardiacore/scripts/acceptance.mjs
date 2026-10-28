@@ -4481,6 +4481,8 @@ try {
   });
 
   await check("frozen", async () => {
+    await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    await until("the first tab in front", async () => (await state()).active === first.id, 4000);
     const s = await state();
     const other = s.tabs.find((x) => x.id !== first.id && x.id !== s.active && x.url?.startsWith(`${base}/d`));
     if (!other) throw new Error("no background tab");
@@ -4505,6 +4507,8 @@ try {
   });
 
   await check("discard", async () => {
+    await evalApp(`ac.actions.switchToTab("${first.id}"); return true`);
+    await until("the first tab in front", async () => (await state()).active === first.id, 4000);
     const s = await state();
     let other = null;
     for (const x of s.tabs.filter((x) => x.id !== first.id && x.id !== s.active && x.url?.startsWith(base)))

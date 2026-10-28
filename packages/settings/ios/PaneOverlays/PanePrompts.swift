@@ -78,8 +78,9 @@ enum PanePrompts {
     guard let window = windows[windowId], let look = (window["theme"] as? [String: Any])?["prompt"] as? [String: Any] else { return [] }
     let panes = window["panes"] as? [String: [String: Any]] ?? [:]
     var shown: [Shown] = []
-    for tabId in tabs(in: windowId, where: { $0.password != nil || $0.autofill != nil || $0.externalApp != nil }) where owns(tabId) {
-      guard let page = pages[tabId] else { continue }
+    let asking = Set(tabs(in: windowId, where: { $0.password != nil || $0.autofill != nil || $0.externalApp != nil }))
+    for tabId in asking.union(panes.compactMap { $0.value["popups"] is [String: Any] ? $0.key : nil }).sorted() where owns(tabId) {
+      let page = pages[tabId] ?? PanePromptPage()
       let pane = panes[tabId] ?? [:]
       func add(_ kind: PanePromptKind, _ key: String, _ spec: [String: Any]) {
         if let json = encode(spec.merging(look) { _, theme in theme }) { shown.append(Shown(tabId: tabId, kind: kind, key: key, json: json)) }
@@ -90,6 +91,7 @@ enum PanePrompts {
         let left = PanePromptSpecs.externalAppLeft(urlLeft: (pane["urlLeft"] as? NSNumber)?.doubleValue ?? 0, paneWidth: paneWidth(tabId) ?? 0)
         add(.externalApp, request.key, PanePromptSpecs.externalApp(request, always: page.alwaysOpen, left: left))
       }
+      if let hint = pane["popups"] as? [String: Any], let popups = PanePromptSpecs.popups(hint) { add(.popups, popups.key, popups.spec) }
     }
     return shown
   }
@@ -100,6 +102,15 @@ enum PanePrompts {
   }
 
   static func promptEvent(_ windowId: String, _ tabId: String, _ kind: PanePromptKind, _ event: PromptEvent) {
+    if kind == .popups {
+      switch event {
+      case .button(let id): js("pane.popups", windowId, tabId, id, "")
+      case .row(let id): js("pane.popups", windowId, tabId, "row", id)
+      case .close: js("pane.popups", windowId, tabId, "dismiss", "")
+      default: break
+      }
+      return
+    }
     guard var page = pages[tabId] else { return }
     switch kind {
     case .password:
@@ -147,6 +158,8 @@ enum PanePrompts {
       page.alwaysOpen = false
       update(tabId, page)
       js("pane.externalApp", windowId, tabId, request.id, open, remember)
+    case .popups:
+      return
     }
   }
 

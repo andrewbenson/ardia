@@ -87,25 +87,34 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
 
 export const BLOCKED_POPUPS_WIDTH = 360;
 
+export type BlockedPopupsAnswer = "deny" | "once" | "allow" | "dismiss";
+
+export function answerBlockedPopups(tabId: string, answer: BlockedPopupsAnswer) {
+  const popups = pageOf(tabId).popups;
+  if (answer !== "dismiss" && popups.length) {
+    if (answer === "deny") void setSiteSetting(engineProfile(useBrowser.getState().tabs[tabId]?.profileId ?? ""), popups[0]!.origin, "popups", "block");
+    else for (const p of popups) void webviews.get(tabId)?.openBlockedPopup(p.id, answer === "allow");
+    patchPage(tabId, { popups: [] });
+  }
+  setPopover(tabId, null);
+}
+
+export function openOneBlockedPopup(tabId: string, id: string) {
+  void webviews.get(tabId)?.openBlockedPopup(id, false);
+  const rest = pageOf(tabId).popups.filter((x) => x.id !== id);
+  patchPage(tabId, { popups: rest });
+  if (!rest.length) setPopover(tabId, null);
+}
+
 export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string; right?: number; left?: number; top: number }) {
   const theme = useTheme();
   const popups = usePage(tabId, (p) => p.popups);
   if (!popups.length) return null;
   const origin = popups[0]!.origin;
   const site = hostOf(origin);
-  const web = () => webviews.get(tabId);
-  const close = () => setPopover(tabId, null);
-  const done = () => {
-    patchPage(tabId, { popups: [] });
-    close();
-  };
-  const profile = () => engineProfile(useBrowser.getState().tabs[tabId]?.profileId ?? "");
-  const openOne = (id: string) => {
-    void web()?.openBlockedPopup(id, false);
-    const rest = pageOf(tabId).popups.filter((x) => x.id !== id);
-    patchPage(tabId, { popups: rest });
-    if (!rest.length) close();
-  };
+  const close = () => answerBlockedPopups(tabId, "dismiss");
+  const answer = (id: string) => answerBlockedPopups(tabId, id as BlockedPopupsAnswer);
+  const openOne = (id: string) => openOneBlockedPopup(tabId, id);
   if (nativePromptFrames())
     return (
       <PromptPopover width={BLOCKED_POPUPS_WIDTH} top={top} right={right} left={left} onDismiss={close}>
@@ -119,11 +128,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
             rows: popups.slice(-5).map((p) => ({ id: p.id, icon: "arrow.up.forward.app", title: p.url.replace(/^https?:\/\//, "") || "about:blank" })),
             rowsMore: popups.length > 5 ? `and ${popups.length - 5} more` : null,
           }}
-          onButton={(id) => {
-            if (id === "deny") void setSiteSetting(profile(), origin, "popups", "block");
-            else for (const p of popups) void web()?.openBlockedPopup(p.id, id === "allow");
-            done();
-          }}
+          onButton={answer}
           onRow={openOne}
         />
       </PromptPopover>
@@ -140,11 +145,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
               buttons: [{ id: "deny", title: "Always Deny" }, { id: "once", title: "Only Once" }, { id: "allow", title: "Always Allow", primary: true }],
               close: false,
             }}
-            onButton={(id) => {
-              if (id === "deny") void setSiteSetting(profile(), origin, "popups", "block");
-              else for (const p of popups) void web()?.openBlockedPopup(p.id, id === "allow");
-              done();
-            }}
+            onButton={answer}
           />
         ) : (
         <PromptBody
@@ -152,28 +153,9 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
           title={`Always allow pop-ups from ${site}?`}
           message={`Allow ${site} to always open pop-up windows, choose every time, or always deny pop-ups.`}
         >
-          <PromptButton
-            title="Always Deny"
-            onPress={() => {
-              void setSiteSetting(profile(), origin, "popups", "block");
-              done();
-            }}
-          />
-          <PromptButton
-            title="Only Once"
-            onPress={() => {
-              for (const p of popups) void web()?.openBlockedPopup(p.id, false);
-              done();
-            }}
-          />
-          <PromptButton
-            title="Always Allow"
-            primary
-            onPress={() => {
-              for (const p of popups) void web()?.openBlockedPopup(p.id, true);
-              done();
-            }}
-          />
+          <PromptButton title="Always Deny" onPress={() => answer("deny")} />
+          <PromptButton title="Only Once" onPress={() => answer("once")} />
+          <PromptButton title="Always Allow" primary onPress={() => answer("allow")} />
         </PromptBody>
         )}
         <PopoverSeparator />
@@ -182,12 +164,7 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
             key={p.id}
             icon="arrow.up.forward.app"
             title={p.url.replace(/^https?:\/\//, "") || "about:blank"}
-            onPress={() => {
-              void web()?.openBlockedPopup(p.id, false);
-              const rest = pageOf(tabId).popups.filter((x) => x.id !== p.id);
-              patchPage(tabId, { popups: rest });
-              if (!rest.length) close();
-            }}
+            onPress={() => openOne(p.id)}
           />
         ))}
         {popups.length > 5 ? <Text style={{ fontSize: 11, color: theme.textSecondary, paddingLeft: PANEL.textColumn, paddingTop: 2 }}>{`and ${popups.length - 5} more`}</Text> : null}

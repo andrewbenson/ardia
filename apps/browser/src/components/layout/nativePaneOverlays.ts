@@ -5,7 +5,8 @@ import type { View } from "react-native";
 import { webviews } from "../../lib/webviews";
 import type { Theme } from "../../lib/theme";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { pageOf, patchPage, setPopover } from "./pageState";
+import { pageOf, patchPage, setPopover, usePage } from "./pageState";
+import { answerBlockedPopups, openOneBlockedPopup, type BlockedPopupsAnswer } from "../site/Prompts";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
@@ -58,6 +59,10 @@ addNativeSettingsHandlers({
     if (pageOf(tabId).externalApp?.id === id) patchPage(tabId, { externalApp: null });
     void resolveExternalApp(id, open, remember);
   },
+  "pane.popups": (_windowId: string, tabId: string, action: string, id: string) => {
+    if (action === "row") openOneBlockedPopup(tabId, id);
+    else answerBlockedPopups(tabId, action as BlockedPopupsAnswer);
+  },
   "pane.zoom": (_windowId: string, tabId: string, kind: string, step: number) => {
     if (kind === "dismiss") return setPopover(tabId, null);
     if (kind === "step") void webviews.get(tabId)?.zoomStep(Math.sign(Number(step)) as -1 | 0 | 1);
@@ -96,7 +101,13 @@ export function useNativePaneOverlay(active: boolean, windowId: string, tabId: s
 
 export type PageFrame = [number, number, number, number];
 
-const promptWindows: Record<string, { theme?: object; panes: Record<string, object> }> = {};
+const promptWindows: Record<string, { theme?: object; panes: Record<string, Record<string, unknown>> }> = {};
+
+function setPaneHint(windowId: string, tabId: string, hint: Record<string, unknown>) {
+  const panes = (promptWindows[windowId] ??= { panes: {} }).panes;
+  panes[tabId] = { ...panes[tabId], ...hint };
+  publishPrompts();
+}
 let promptsQueued = false;
 
 function publishPrompts() {
@@ -137,8 +148,7 @@ export function useNativePanePromptsTheme(active: boolean, windowId: string, the
 export function useNativePanePromptsPane(active: boolean, windowId: string, tabId: string, urlLeft: number, newTabShown: boolean) {
   useEffect(() => {
     if (!active) return;
-    (promptWindows[windowId] ??= { panes: {} }).panes[tabId] = { urlLeft, newTabShown };
-    publishPrompts();
+    setPaneHint(windowId, tabId, { urlLeft, newTabShown });
   }, [active, windowId, tabId, urlLeft, newTabShown]);
   useEffect(
     () => () => {
@@ -148,6 +158,15 @@ export function useNativePanePromptsPane(active: boolean, windowId: string, tabI
     },
     [active, windowId, tabId],
   );
+}
+
+export function useNativePanePopups(active: boolean, windowId: string, tabId: string, open: boolean, side: "left" | "right") {
+  const popups = usePage(tabId, (p) => p.popups);
+  const key = active && open && popups.length ? JSON.stringify({ side, list: popups.map(({ id, url, origin }) => ({ id, url, origin })) }) : "";
+  useEffect(() => {
+    if (!active) return;
+    setPaneHint(windowId, tabId, { popups: key ? JSON.parse(key) : null });
+  }, [active, windowId, tabId, key]);
 }
 
 export function useNativeSadTab(active: boolean, windowId: string, tabId: string, mode: "crashed" | "unresponsive" | null, frame: PageFrame | null, theme: Theme) {

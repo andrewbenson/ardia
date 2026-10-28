@@ -312,6 +312,7 @@ final class PaneOverlayHost {
       if case .choice = event {} else if self?.prompts[id]?.allowInput() != true { return }
       PanePrompts.promptEvent(windowId, tabId, kind, event)
     }
+    if kind == .popups { prompt.popover.onDismiss = { PanePrompts.promptEvent(windowId, tabId, .popups, .close) } }
     return prompt
   }
 

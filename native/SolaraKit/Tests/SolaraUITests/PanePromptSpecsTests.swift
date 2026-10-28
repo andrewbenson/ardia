@@ -106,4 +106,25 @@ import Testing
     #expect(PanePromptSpecs.externalAppLeft(urlLeft: 600, paneWidth: 700) == 352)
     #expect(PanePromptSpecs.externalAppLeft(urlLeft: 0, paneWidth: 700) == 8)
   }
+
+  @Test func popupsSpecs() {
+    let list = (1...7).map { ["id": "p\($0)", "url": "https://www.ads.test/\($0)", "origin": "https://www.ads.test"] }
+    let found = PanePromptSpecs.popups(["side": "left", "list": list])!
+    #expect(found.key == "https://www.ads.test\u{1}p1")
+    #expect(found.spec["title"] as? String == "Always allow pop-ups from ads.test?")
+    #expect((found.spec["rows"] as? [[String: Any]])?.compactMap { $0["id"] as? String } == ["p3", "p4", "p5", "p6", "p7"])
+    #expect((found.spec["rows"] as? [[String: Any]])?.first?["title"] as? String == "www.ads.test/3")
+    #expect(found.spec["rowsMore"] as? String == "and 2 more")
+    let popover = found.spec["popover"] as? [String: Any]
+    #expect(popover?["left"] as? Double == 8 && popover?["right"] == nil && popover?["width"] as? Double == 360)
+    #expect(PanePromptSpecs.popups(["side": "right", "list": []]) == nil)
+    let blank = PanePromptSpecs.popups(["list": [["id": "a", "url": "", "origin": "https://b.test"]]])!
+    #expect((blank.spec["popover"] as? [String: Any])?["right"] as? Double == 8)
+    #expect((blank.spec["rows"] as? [[String: Any]])?.first?["title"] as? String == "about:blank")
+    #expect(blank.spec["rowsMore"] is NSNull)
+    let look: [String: Any] = ["dark": false, "theme": [String: String](), "control": "", "controlBorder": "", "goButton": "", "goButtonText": ""]
+    let json = try! JSONSerialization.data(withJSONObject: found.spec.merging(look) { a, _ in a })
+    #expect(PromptState.decode(String(data: json, encoding: .utf8)!)?.rows?.count == 5)
+  }
 }
+

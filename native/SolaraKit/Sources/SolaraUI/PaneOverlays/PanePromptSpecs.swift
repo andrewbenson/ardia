@@ -59,7 +59,7 @@ public struct PromptInputGuard {
 }
 
 public enum PanePromptKind: String, CaseIterable, Sendable {
-  case password, autofill, externalApp
+  case password, autofill, externalApp, popups
 }
 
 extension PanePromptSpecs {
@@ -109,5 +109,33 @@ extension PanePromptSpecs {
       "buttons": request.app != nil ? [["id": "cancel", "title": "Cancel"], ["id": "open", "title": "Open", "primary": true]] : [["id": "ok", "title": "OK", "primary": true]],
       "close": true,
     ]
+  }
+
+  public static let popupsWidth: Double = 360
+
+  public static func popups(_ hint: [String: Any]) -> (key: String, spec: [String: Any])? {
+    let list = (hint["list"] as? [[String: Any]] ?? []).compactMap { row -> (id: String, url: String, origin: String)? in
+      guard let id = row["id"] as? String else { return nil }
+      return (id, row["url"] as? String ?? "", row["origin"] as? String ?? "")
+    }
+    guard let first = list.first else { return nil }
+    let site = site(first.origin)
+    let side: [String: Any] = hint["side"] as? String == "left" ? ["left": margin] : ["right": margin]
+    let rows = list.suffix(5).map { popup -> [String: Any] in
+      let title = popup.url.replacingOccurrences(of: "^https?://", with: "", options: .regularExpression)
+      return ["id": popup.id, "icon": "arrow.up.forward.app", "title": title.isEmpty ? "about:blank" : title]
+    }
+    let spec: [String: Any] = [
+      "popover": ["width": popupsWidth, "top": margin].merging(side) { a, _ in a },
+      "icons": ["macwindow.badge.plus"],
+      "title": "Always allow pop-ups from \(site)?",
+      "message": "Allow \(site) to always open pop-up windows, choose every time, or always deny pop-ups.",
+      "details": [] as [Any],
+      "buttons": [["id": "deny", "title": "Always Deny"], ["id": "once", "title": "Only Once"], ["id": "allow", "title": "Always Allow", "primary": true]],
+      "close": false,
+      "rows": rows,
+      "rowsMore": list.count > 5 ? "and \(list.count - 5) more" : NSNull(),
+    ]
+    return (first.origin + "\u{1}" + first.id, spec)
   }
 }

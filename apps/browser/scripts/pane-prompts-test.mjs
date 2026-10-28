@@ -16,8 +16,10 @@ This Site, Not Now and Save; a click on Save, after the input guard's delay, sav
 submission's prompt goes when the page navigates to another page. External app: a link to a scheme no app handles
 brings the 340-wide popover 8 points below the pane's top with OK, which closes it. Autofill: a save-card prompt sent
 as a pool page event draws the 350-wide popover at the top right with its accept and decline buttons; decline closes
-it and clears the store, and a closed event for a second prompt takes it down. With the switch off the RN wrappers
-still draw each one.`);
+it and clears the store, and a closed event for a second prompt takes it down. Pop-ups: a window.open without a
+gesture is blocked and brings the 360-wide popover at the top right with Always Deny, Only Once, Always Allow and the
+blocked URL as a row; Only Once opens it as a tab and closes the prompt; a click outside a second one dismisses it and
+keeps the blocked list. With the switch off the RN wrappers still draw each one.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -190,6 +192,49 @@ try {
       await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill || null);`, 4000);
       await run(`return pageEvent("onAutofillPrompt", { id: 42, closed: true });`);
       await until("the closed event takes it down", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.autofill || null);`, 3000);
+      return { card: shown.card };
+    });
+
+    await rep.check(`${tag}-popups`, async () => {
+      const blockPopup = async (path) => {
+        const target = await until("its DevTools target", async () => (await app.pageTarget(`${base}/other`)) ?? null, 5000);
+        const cdp = await devtools(target);
+        try {
+          await cdp.send("Runtime.evaluate", { expression: `window.open(${JSON.stringify(path)}, "_blank")` });
+        } finally {
+          cdp.close();
+        }
+        await until("the prompt opens", `return ac.pageState.getState().popover.a === "popups" && ac.pageState.getState().pages.a?.popups.length ? true : null;`, 8000);
+      };
+      const tabs = () => run(`return Object.keys(ac.store.getState().tabs).length;`);
+      await blockPopup("/popped");
+      if (!nativePrompts) {
+        await until("RN draws the prompt", `return rnDrawn("BlockedPopupsPrompt") || null;`, 4000);
+        await run(`ac.pageState.setState((s) => ({ popover: { ...s.popover, a: null }, pages: { ...s.pages, a: { ...s.pages.a, popups: [] } } })); return true;`);
+        return "rn";
+      }
+      const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.popups && !d.tabs.a.popups.hidden && d.tabs.a.popups.controls["Only Once"] ? d.tabs.a.popups : null);`, 6000);
+      if (await run(`return rnDrawn("BlockedPopupsPrompt");`)) throw new Error("RN still draws the pop-ups prompt");
+      const [fx, fy, fw] = shown.frame;
+      const [cx, cy, cw] = shown.card;
+      if (Math.abs(cw - 360) > 0.5 || Math.abs(fx + fw - 8 - (cx + cw)) > 0.5 || Math.abs(fy + 8 - cy) > 0.5)
+        throw new Error(`card ${JSON.stringify(shown.card)} in pane ${JSON.stringify(shown.frame)}`);
+      for (const title of ["Always Deny", "Always Allow", "127.0.0.1:" + new URL(base).port + "/popped"]) if (!shown.controls[title]) throw new Error(`no ${title}: ${Object.keys(shown.controls)}`);
+      const before = await tabs();
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["Only Once"]))}).then(() => true);`);
+      await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.popups || null);`, 3000);
+      await until("the store clears", `return !ac.pageState.getState().popover.a && !ac.pageState.getState().pages.a?.popups.length || null;`, 3000);
+      await until("the pop-up opens as a tab", async () => ((await tabs()) > before ? true : null), 6000);
+      await run(`ac.store.getState().activate("a"); return true;`);
+      await until("page A is shown again", `return native().then((d) => d && d.tabs.a ? true : null);`, 4000).catch(() => {});
+      await blockPopup("/popped-again");
+      const second = await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.popups && !d.tabs.a.popups.hidden ? d.tabs.a.popups : null);`, 6000);
+      await sleep(400);
+      await run(`return click(${number}, ${JSON.stringify([second.frame[0] + 40, second.frame[1] + second.frame[3] - 40])}).then(() => true);`);
+      await until("a click outside dismisses it", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.popups || null);`, 3000);
+      await until("the popover state clears", `return !ac.pageState.getState().popover.a || null;`, 3000);
+      if (!(await run(`return ac.pageState.getState().pages.a?.popups.length;`))) throw new Error("dismissing dropped the blocked list");
       return { card: shown.card };
     });
 

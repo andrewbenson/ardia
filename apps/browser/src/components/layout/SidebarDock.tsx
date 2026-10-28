@@ -7,6 +7,7 @@ import { hex, layout, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";
 import { Sidebar } from "../Sidebar";
+import { AreaBoundary } from "../AreaBoundary";
 import { dismissHoverIn } from "../sidebar/hover";
 import { useSidebarUi } from "../sidebar/state";
 import { peekHeld, watchPeekHolds } from "./peekHold";
@@ -238,9 +239,11 @@ function SidebarDock({
   useTrafficLights(windowId, dock, peek.slide, { width, peeking, fullscreen, lights });
   const sidebar = useMemo(
     () => (
-      <ProfileSwipe>
-        <Sidebar width={width} />
-      </ProfileSwipe>
+      <AreaBoundary area="sidebar">
+        <ProfileSwipe>
+          <Sidebar width={width} />
+        </ProfileSwipe>
+      </AreaBoundary>
     ),
     [width],
   );

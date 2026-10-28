@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppRegistry, View } from "react-native";
+import { AreaBoundary } from "./components/AreaBoundary";
 import { PaneContent } from "./components/ContentCard";
 import { ThemeScope } from "./lib/theme";
 import { useBrowser } from "./store/browser";
@@ -18,13 +19,15 @@ function PaneRoot({ windowId, tabId, shown = false }: { windowId: string; tabId:
   const exists = useBrowser((s) => !!s.windows[windowId]?.tabIds.includes(tabId));
   if (!exists) return null;
   return (
-    <WindowContext.Provider value={windowId}>
-      <ThemeScope>
-        <View pointerEvents="box-none" style={{ flex: 1 }}>
-          <PaneContent windowId={windowId} tabId={tabId} shown={shown} />
-        </View>
-      </ThemeScope>
-    </WindowContext.Provider>
+    <AreaBoundary area="pane" quiet>
+      <WindowContext.Provider value={windowId}>
+        <ThemeScope>
+          <View pointerEvents="box-none" style={{ flex: 1 }}>
+            <PaneContent windowId={windowId} tabId={tabId} shown={shown} />
+          </View>
+        </ThemeScope>
+      </WindowContext.Provider>
+    </AreaBoundary>
   );
 }
 

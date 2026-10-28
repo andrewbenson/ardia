@@ -174,6 +174,11 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
       app, and its dev harness answers every script with that error: rebuild it.
     - A JS exception while modules load (an import cycle, say) opens LogBox over the app. Run
       `pnpm -w typecheck` and relaunch your instance after risky import changes.
+    - A JS error once the first window is up (a throw in a timer, an event handler or a render) doesn't
+      take the app down: `apps/browser/src/lib/jsErrors.ts` writes it with its stack to `js-errors.log` in
+      the data dir (rotated to `js-errors.1.log` past 128 KB) and to os_log as `[js-error]`, and
+      `AreaBoundary` drops only the window, sidebar or pane that threw a render error. Debug still shows
+      the redbox. `instance.quit()` prints the file: treat an entry like a crash report and fix it.
     - Fast Refresh doesn't always apply (and has crashed Hermes' debugger). Relaunch your instance
       before judging a change.
   - `pod install` (after adding/removing native source files, changing a podspec, or adding native

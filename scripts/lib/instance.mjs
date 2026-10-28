@@ -270,6 +270,8 @@ class Instance {
 
   async quit(opts = {}) {
     const how = await this.#quit(opts);
+    const errors = this.jsErrors();
+    if (errors) process.stderr.write(`JS errors the app caught and survived (${join(this.data, "js-errors.log")}):\n${errors}`);
     if (this.js?.mode === "pinned" && (processInfo(this.js.pid)?.command ?? "").includes(`--metro-proxy ${this.data} `))
       try { process.kill(this.js.pid); } catch {}
     return how;
@@ -294,6 +296,10 @@ class Instance {
   }
   kill(signal = "SIGKILL") { if (this.stillOwned()) process.kill(this.pid, signal); }
   output() { return existsSync(this.log) ? readFileSync(this.log, "utf8") : ""; }
+  jsErrors() {
+    const file = join(this.data, "js-errors.log");
+    return existsSync(file) ? readFileSync(file, "utf8") : "";
+  }
 }
 
 export async function launch(app, opts = {}) {

@@ -1,12 +1,14 @@
+import "./lib/jsErrors";
 import "./lib/productName";
 import "./lib/nativeEvents";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AppRegistry, unstable_batchedUpdates } from "react-native";
 import { WindowRoot } from "./App";
 import { registerPaneRoot } from "./PaneRoot";
-import { DevErrorBoundary } from "./DevErrorBoundary";
+import { AreaBoundary } from "./components/AreaBoundary";
 import { startTranslate } from "./components/site/translate";
 import { afterFirstWindow, firstWindowCommitted } from "./lib/afterFirstWindow";
+import { jsErrorsSurvivable } from "./lib/jsErrors";
 import { startAppIntegration } from "./lib/appIntegration";
 import { startCliControl } from "./lib/cliControl";
 import { startUserScripts } from "./lib/userScripts";
@@ -61,14 +63,13 @@ function Root({ windowId }: { windowId: string }) {
     perfMark("firstWindow");
     markFirstWindow();
     firstWindowCommitted();
+    jsErrorsSurvivable();
   }, []);
   if (held) return null;
-  return __DEV__ ? (
-    <DevErrorBoundary>
+  return (
+    <AreaBoundary area="window" windowId={windowId}>
       <WindowRoot windowId={windowId} />
-    </DevErrorBoundary>
-  ) : (
-    <WindowRoot windowId={windowId} />
+    </AreaBoundary>
   );
 }
 

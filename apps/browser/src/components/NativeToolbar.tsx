@@ -132,7 +132,8 @@ export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focu
     const shownHost = isFile ? "File" : url ? breadcrumb(url).host : "";
     const full = isFile ? ` ${safeDecode(url.slice("file://".length))}` : url ? urlForDisplay(url) : "";
     const path = !isFile && full.startsWith(shownHost) ? full.slice(shownHost.length) : full;
-    const scheme = insecure && shownHost ? url.slice(0, url.indexOf("://") + 3) : "";
+    const schemeEnd = url.indexOf("://");
+    const scheme = insecure && shownHost && schemeEnd > 0 ? url.slice(0, schemeEnd + 3) : "";
     const host = scheme + shownHost;
     const restTrail = insecure ? path : showFullUrl ? path.replace(/\/$/, "") : !isWebUrl(url) && appUrlOrigin(url) && tab.title ? ` / ${tab.title}` : "";
     const small = { size: 13, box: 24, radius: 6 };

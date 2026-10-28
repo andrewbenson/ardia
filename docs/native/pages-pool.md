@@ -1,0 +1,65 @@
+# Pooled pages: the JS contract
+
+With `windowPagesPoolActive(windowId)` true, `TabViewPool` owns every page view in the window and RN mounts none
+(architecture.md › Page views: static ownership). Everything the app did through a mounted `EngineWebView` still has
+to happen. This is who does each part. Native side: port-omnibox. JS side: port-shell.
+
+## Gate
+
+One check, `windowPagesPoolActive(windowId)` in `@ardia/settings`: the shell, `ARDIA_NATIVE_PAGES_POOL=1` and
+`SolaraTabPool.available()`. ContentCard, DockedLayout, Peek and the JS pool session all read it and nothing else, so a
+build where the pool can't serve pages keeps RN's.
+
+## Page events
+
+The pool is each page view's delegate and sends every event the `ArdiaCEF` and `ArdiaWebKit` view managers send,
+as one feed: `SolaraTabPool` event `onPageEvent` with `{ tabId, name, payload }`.
+
+- `name` is the view manager's prop name (`onNavigationChange`, `onProgress`, … `onPagePress`, `onReady`), every one.
+- `payload` is the same dictionary the view manager puts in `nativeEvent`: same keys, engine URLs (JS converts them).
+- Per tab, events arrive in the order the page sent them. The feed is one ordered stream, not a task per event.
+- Two more names that only the pool sends: `onPageCreated { engine, seq, url }` when it makes a view for the tab (the
+  navigation `seq` it loaded on create, or -1 for an adopted or transferred page) and `onPageGone {}` when the view is
+  destroyed or leaves the pool (park, crossing to Little Solara).
+
+JS turns `{ name, payload }` into the prop's arguments with `@ardia/ardiacore`'s `unwrapPageEvent`, the same table the
+RN component uses, and calls the tab's handler from `pageEvents.ts`, the same function `EngineWebView` calls.
+
+## The handle
+
+The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `WebViewHandle` in `webviews` on
+`onPageCreated` and deletes it on `onPageGone`.
+
+- `SolaraTabPool` exposes each view-manager AsyncFunction with the tab id first: `goBack(tabId)`,
+  `loadUrl(tabId, url, userInitiated)`, `find(tabId, text, forward, findNext)`, `focus(tabId)`, and so on, same
+  argument and result types.
+- `@ardia/ardiacore` builds both handles from one function, so URL conversion, `evaluate`'s JSON and fallbacks match.
+- A call for a tab the pool has no view for rejects with code `ERR_NO_PAGE`; the handle returns the same fallback the
+  RN handle returns for a missing view.
+- `nativeTag()` is null for a pooled page. Its one caller, the focus-move claim in `focusHandoff.ts`, claims a pooled
+  page by tab id instead (`claimFocusPage(generation, tabId)`), and the shell resolves the tab's view through the pool.
+- WebKit tabs get a `WebKitTab` view through the same adapter, with the same events and handle.
+- `focus(tabId)` makes the page view first responder in its window. Peek's open, Open as Tab and Split use it.
+
+## What a mounted EngineWebView did besides events
+
+| Logic | Owner when pooled |
+|---|---|
+| Navigation: `loadUrl` on a new `navigation.seq`, skipping the seq loaded on create, a started navigation (`takeStartedNavigation`) and an adopted URL | JS pool session, per tab, same code as `EngineWebView` (`pageSession.ts`) |
+| `noteIssued`, `persistEngine`, `noteReady`, `setBrowserId`, `noteChromeTab`, muted on ready | shared handlers (`onReady`, `onPageCreated`) |
+| `noteGone`, progress to 0 | `onPageGone` |
+| Initial page: `url`, `adoptId`, `profile`, `engine`, `transferKey` | pool, from the store (`TabViewWanted`) |
+| `visible`, `warm`, `neighbour` | pool, from where it places the view |
+| `temporary` / `temporarySource` (Peek's source) | pool, from `state.peeks` |
+| `pageColor`, `contentsBackgroundColor`, `autoPictureInPicture`, `shownUrl` | JS computes them as today and pushes them: `SolaraTabPool.setPageProps(tabId, { … })`, only on change |
+| Discard and resume | shared `onDiscarded` handler sets the session's pending URL; resume goes through the navigation path above |
+| `handOff` / `takeHandOff`, `adoptId` transfers, pin handoffs, peek to tab | not in pooled mode: the pool moves its own view between slots and windows. Crossing to Little Solara is the park path |
+| New Tab prewarm (`usePrewarm`) | off in pooled windows |
+| A page's `onWindowClose` from a close Chrome started (an extension's `chrome.windows.remove`) carries `{ withWindow: true }` | shared handler: `closeTabs([tabId], { lastClosesWindow: true })`, so the app window closes with it |
+| Split-pane activation on a click (`TabPane` `onTouchStart`) | shared `onPageFocus` and `onPagePress` handlers (`activateSplitPane`). A left press on a page no longer reaches RN's touch handler, so `onPagePress` is the only click signal |
+
+## Checks
+
+`pool-e2e-test.mjs`, with the pool on: a handle call reaches the page (find, zoom, back, `evaluate`), one event of
+each kind reaches the store (title and favicon, progress, a notification click focuses its tab), a click in the
+unfocused split pane focuses it, and a peek opens and promotes.

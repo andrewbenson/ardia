@@ -49,8 +49,10 @@ enum AppIcons {
     Variant(id: "noir", name: "Noir", plate: (NSColor(srgbRed: 0.16, green: 0.16, blue: 0.16, alpha: 1), NSColor(srgbRed: 0.03, green: 0.03, blue: 0.03, alpha: 1)), mono: true),
   ]
 
+  private static var chosenThisSession: String?
+
   static var current: String {
-    let id = UserDefaults.standard.string(forKey: defaultsKey) ?? "default"
+    let id = chosenThisSession ?? UserDefaults.standard.string(forKey: defaultsKey) ?? "default"
     return variants.contains { $0.id == id } ? id : "default"
   }
 
@@ -58,11 +60,13 @@ enum AppIcons {
     if current != "default" { apply(current) }
   }
 
-  static func set(_ id: String, announce: Bool) {
+  static func set(_ id: String, shared: Bool) {
     guard variants.contains(where: { $0.id == id }) else { return }
-    UserDefaults.standard.set(id, forKey: defaultsKey)
+    chosenThisSession = id
     apply(id)
-    if announce, let bundleId = Bundle.main.bundleIdentifier {
+    guard shared else { return }
+    UserDefaults.standard.set(id, forKey: defaultsKey)
+    if let bundleId = Bundle.main.bundleIdentifier {
       DistributedNotificationCenter.default().postNotificationName(
         changedNotification(bundleId: bundleId), object: nil, userInfo: ["icon": id], deliverImmediately: true)
     }
@@ -146,8 +150,6 @@ enum AppIcons {
 enum DockTile {
   private static let domain = "com.apple.dock" as CFString
   private static let key = "persistent-apps" as CFString
-  private static let background = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
-
   private static var tiles: [[String: Any]] {
     CFPreferencesCopyAppValue(key, domain) as? [[String: Any]] ?? []
   }
@@ -191,10 +193,10 @@ enum DockTile {
   }
 
   @discardableResult
-  static func add() -> Bool {
+  static func add(isolated: Bool) -> Bool {
     guard !isInDock else { return true }
-    if background {
-      NSLog("ArdiaSystem: background instance, not adding to the Dock")
+    if isolated {
+      NSLog("ArdiaSystem: isolated instance, not adding to the Dock")
       return false
     }
     let tile: [String: Any] = [

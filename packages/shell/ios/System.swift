@@ -4,6 +4,11 @@ import UniformTypeIdentifiers
 import ServiceManagement
 
 public enum SystemServices {
+  public static let isolated: Bool = {
+    let env = ProcessInfo.processInfo.environment
+    return env["ARDIA_BACKGROUND"] == "1" || env["ARDIA_DATA_DIR"] != nil
+  }()
+
   public static func isDefaultBrowser() -> Bool {
     guard let probe = URL(string: "https://example.com"),
           let handler = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return false }
@@ -11,8 +16,8 @@ public enum SystemServices {
   }
 
   public static func setAsDefaultBrowser(_ done: @escaping (Bool) -> Void) {
-    if FileDropView.background {
-      NSLog("ArdiaSystem: background instance, not setting the default browser")
+    if isolated {
+      NSLog("ArdiaSystem: isolated instance, not setting the default browser")
       return done(false)
     }
     let app = Bundle.main.bundleURL
@@ -34,8 +39,8 @@ public enum SystemServices {
   }
 
   public static func setLaunchAtLogin(_ enabled: Bool) throws {
-    if FileDropView.background {
-      NSLog("ArdiaSystem: background instance, not changing launch at login")
+    if isolated {
+      NSLog("ArdiaSystem: isolated instance, not changing launch at login")
       return
     }
     if enabled {
@@ -51,12 +56,12 @@ public enum SystemServices {
 
   public static var currentAppIcon: String { AppIcons.current }
 
-  public static func setAppIcon(_ id: String) { AppIcons.set(id, announce: ACIsolatedDataDirectory() == nil) }
+  public static func setAppIcon(_ id: String) { AppIcons.set(id, shared: !isolated) }
 
   public static var isInDock: Bool { DockTile.isInDock }
 
   @discardableResult
-  public static func addToDock() -> Bool { DockTile.add() }
+  public static func addToDock() -> Bool { DockTile.add(isolated: isolated) }
 
   public static func playIntroMusic(cues: [String: Double], muted: Bool) { IntroMusic.shared.play(cues: cues, muted: muted) }
 

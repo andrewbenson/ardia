@@ -208,29 +208,9 @@ final class WebKitTabView: ExpoView, WebKitTabDelegate {
     if Thread.isMainThread { tab.close() } else { DispatchQueue.main.async { tab.close() } }
   }
 
+  private lazy var dispatchers = PageEvents.dispatchers(of: self, as: EventDispatcher.self)
+
   func webKitTab(_ tab: WebKitTab, event name: String, payload: [String: Any]) {
-    switch name {
-    case "navigation": onNavigationChange(payload)
-    case "progress": onProgress(payload)
-    case "favicon": onFavicon(payload)
-    case "media": onMedia(payload)
-    case "nowPlaying": onNowPlaying(payload)
-    case "mediaAccess": onMediaAccess(payload)
-    case "openWindow": onOpenWindow(payload)
-    case "find": onFindResult(payload)
-    case "status": onStatus(payload)
-    case "crashed": onCrashed(payload)
-    case "loadError": onLoadError(payload)
-    case "security": onSecurity(payload)
-    case "zoom": onZoom(payload)
-    case "downloadNavigation": onDownloadNavigation(payload)
-    case "pictureInPicture": onPictureInPicture(payload)
-    case "windowClose": onWindowClose(payload)
-    case "focus": onPageFocus(payload)
-    case "pageMessage": onPageMessage(payload)
-    case "ready": onReady(payload)
-    case "externalApp": onExternalApp(payload)
-    default: break
-    }
+    if let prop = PageEvents.props[name] { dispatchers[prop]?(payload) }
   }
 }

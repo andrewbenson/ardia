@@ -5,6 +5,7 @@ PODS:
     - ArdiaCore
     - ExpoModulesCore
   - ArdiaSettings (0.0.0):
+    - ArdiaCore
     - ArdiaShaders
     - ArdiaShell
     - ArdiaStore
@@ -2591,7 +2592,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   ArdiaCore: 5238364a8669034510574dbc9d447700b1407ba2
   ArdiaImport: 535f03b8bdc5866eb05d6d177597e9583bfe7d47
-  ArdiaSettings: 83585d8bc782db8eb8c958972cfa9ce23f36a3da
+  ArdiaSettings: 6741863d6f15baea02cbf81938347f09aced3ac0
   ArdiaShaders: d8dc0512dec3ed9d4af792579b320249ef035924
   ArdiaShell: 4de45ace9c0e11ff56d51c81cf9ec9a2fd6bac7c
   ArdiaStore: 2243036434998a6828cd026f377b2456b0fc14a2

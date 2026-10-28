@@ -343,44 +343,7 @@ public class CefModule: Module {
 }
 
 final class CefWebView: ExpoView, ArdiaCoreWebViewDelegate {
-  static let events = [
-    "onNavigationChange",
-    "onProgress",
-    "onFavicon",
-    "onMedia",
-    "onNowPlaying",
-    "onMediaAccess",
-    "onOpenWindow",
-    "onPopupBlocked",
-    "onFindResult",
-    "onFullscreen",
-    "onStatus",
-    "onCrashed",
-    "onUnresponsive",
-    "onResponsive",
-    "onLoadError",
-    "onSecurity",
-    "onZoom",
-    "onContentBlocked",
-    "onDownloadNavigation",
-    "onNotification",
-    "onNotificationClose",
-    "onPictureInPicture",
-    "onActivateRequest",
-    "onDisplayMediaRequest",
-    "onWindowClose",
-    "onCommand",
-    "onPageFocus",
-    "onPagePress",
-    "onPageMessage",
-    "onReady",
-    "onDiscarded",
-    "onPasswordPrompt",
-    "onAutofillPrompt",
-    "onTabStrip",
-    "onExternalApp",
-    "onPreferredSize",
-  ]
+  static let events = PageEvents.names
 
   let browser = ArdiaCoreWebView(frame: .zero)
 
@@ -445,46 +408,10 @@ final class CefWebView: ExpoView, ArdiaCoreWebViewDelegate {
     browser.closeBrowser()
   }
 
+  private lazy var dispatchers = PageEvents.dispatchers(of: self, as: EventDispatcher.self)
+
   func webView(_ view: ArdiaCoreWebView, event name: String, payload: [String: Any]) {
-    switch name {
-    case "navigation": onNavigationChange(payload)
-    case "progress": onProgress(payload)
-    case "favicon": onFavicon(payload)
-    case "media": onMedia(payload)
-    case "nowPlaying": onNowPlaying(payload)
-    case "mediaAccess": onMediaAccess(payload)
-    case "openWindow": onOpenWindow(payload)
-    case "popupBlocked": onPopupBlocked(payload)
-    case "find": onFindResult(payload)
-    case "fullscreen": onFullscreen(payload)
-    case "status": onStatus(payload)
-    case "crashed": onCrashed(payload)
-    case "unresponsive": onUnresponsive(payload)
-    case "responsive": onResponsive(payload)
-    case "loadError": onLoadError(payload)
-    case "security": onSecurity(payload)
-    case "zoom": onZoom(payload)
-    case "contentBlocked": onContentBlocked(payload)
-    case "downloadNavigation": onDownloadNavigation(payload)
-    case "notification": onNotification(payload)
-    case "notificationClose": onNotificationClose(payload)
-    case "pictureInPicture": onPictureInPicture(payload)
-    case "activateRequest": onActivateRequest(payload)
-    case "displayMediaRequest": onDisplayMediaRequest(payload)
-    case "windowClose": onWindowClose(payload)
-    case "command": onCommand(payload)
-    case "focus": onPageFocus(payload)
-    case "pagePress": onPagePress(payload)
-    case "pageMessage": onPageMessage(payload)
-    case "ready": onReady(payload)
-    case "discarded": onDiscarded(payload)
-    case "passwordPrompt": onPasswordPrompt(payload)
-    case "autofillPrompt": onAutofillPrompt(payload)
-    case "tabStrip": onTabStrip(payload)
-    case "externalApp": onExternalApp(payload)
-    case "preferredSize": onPreferredSize(payload)
-    default: break
-    }
+    if let prop = PageEvents.props[name] { dispatchers[prop]?(payload) }
   }
 }
 

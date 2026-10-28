@@ -921,6 +921,12 @@ enum WindowMotion {
   }
 }
 
+public enum FocusMoves {
+  @MainActor public static func claim(_ generation: Int, destination: NSView) {
+    FocusHandoff.shared.claim(generation, destination: destination)
+  }
+}
+
 final class FocusHandoff {
   static let shared = FocusHandoff()
   static let outgoingFocus = Notification.Name("ArdiaOutgoingFocus")

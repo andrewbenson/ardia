@@ -12,6 +12,7 @@ Pod::Spec.new do |s|
   s.dependency 'ArdiaStore'
   s.dependency 'ArdiaShell'
   s.dependency 'ArdiaShaders'
+  s.dependency 'ArdiaCore'
   s.frameworks     = 'AppKit', 'SwiftUI'
   s.source_files   = '**/*.swift'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'SWIFT_VERSION' => '6.0' }

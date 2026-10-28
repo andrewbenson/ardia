@@ -3159,8 +3159,15 @@ try {
     }, 8000);
     await cdp(t, "Runtime.evaluate", { expression: "window.__n2 = new Notification('Second'); setTimeout(() => window.__n2.close(), 300); true", userGesture: true });
     const closed = await until("onNotificationClose", async () => (await eventsOf(first.id)).find((x) => x.name === "notificationClose"), 8000);
+    const before = (await eventsOf(first.id)).filter((x) => x.name === "notification").length;
+    await cef(`setSiteSetting("", "${base}", "notifications", "block")`);
+    const permission = (await cdp(t, "Runtime.evaluate", { expression: "Notification.permission", returnByValue: true })).result.value;
+    await cdp(t, "Runtime.evaluate", { expression: "window.__n3 = new Notification('Blocked'); true", userGesture: true });
+    await sleep(1500);
+    const blocked = (await eventsOf(first.id)).filter((x) => x.name === "notification").length - before;
+    if (blocked) throw new Error(`a notification went out after the site was blocked (page saw ${permission})`);
     await cef(`setSiteSetting("", "${base}", "notifications", "default")`);
-    return { title: e.payload.title, body: e.payload.body, clicked, closed: !!closed };
+    return { title: e.payload.title, body: e.payload.body, clicked, closed: !!closed, blockedPagePermission: permission };
   });
 
   await check("now-playing", async () => {

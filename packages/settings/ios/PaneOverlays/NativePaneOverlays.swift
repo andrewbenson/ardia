@@ -123,6 +123,39 @@ final class PanePopover<Body: NSView> {
 }
 
 @MainActor
+final class PanePromptEntry {
+  let key: String
+  let tabId: String
+  let kind: PanePromptKind
+  let popover: PanePopover<PromptBodyView>
+  var placement: PopoverPlacement?
+  var dark = false
+  private var input = PromptInputGuard()
+  private var fitWidth: CGFloat = -1
+
+  static func id(_ tabId: String, _ kind: PanePromptKind) -> String { tabId + "\u{1}" + kind.rawValue }
+
+  init(key: String, tabId: String, kind: PanePromptKind, popover: PanePopover<PromptBodyView>) {
+    self.key = key
+    self.tabId = tabId
+    self.kind = kind
+    self.popover = popover
+    input.shown(at: ProcessInfo.processInfo.systemUptime)
+  }
+
+  func allowInput() -> Bool { input.allow(at: ProcessInfo.processInfo.systemUptime, activatedAt: PanePrompts.activatedAt) }
+
+  func refit() {
+    let width = popover.wrap.bounds.width
+    guard kind == .externalApp, width != fitWidth, var placement, placement.left != nil else { return }
+    fitWidth = width
+    placement.left = PanePromptSpecs.externalAppLeft(urlLeft: PanePrompts.urlLeft(tabId) ?? 0, paneWidth: Double(width))
+    self.placement = placement
+    popover.popover.set(placement: placement, dark: dark)
+  }
+}
+
+@MainActor
 final class PaneOverlayHost {
   let windowId: String
   private var sadTabs: [String: SadTabView] = [:]
@@ -134,7 +167,7 @@ final class PaneOverlayHost {
   private var shares: [String: (id: String, popover: PanePopover<SharePickerView>, focus: HostedMount?)] = [:]
   private var swipes: [String: (wrap: PanePopoverWrap, capsule: SwipeCapsuleView)] = [:]
   private var fromJS: [String: Any] = [:]
-  private var passwords: [String: (key: String, popover: PanePopover<PromptBodyView>, input: PromptInputGuard)] = [:]
+  private var prompts: [String: PanePromptEntry] = [:]
   private static let swipeFavicons: SidebarFavicons = {
     let made = SidebarFavicons()
     made.loader = { request in try await NativeSidebar.favicon(request) }
@@ -213,22 +246,23 @@ final class PaneOverlayHost {
       (sadTabs[tabId] ?? makeSadTab(tabId)).update(state)
     }
     var asking = Set<String>()
-    for tabId in PanePrompts.passwordTabs(in: windowId) {
-      guard let found = PanePrompts.password(windowId, tabId), let state = PromptState.decode(found.json), let placement = found.json.data(using: .utf8).flatMap(PanelPopover.placement) else { continue }
-      asking.insert(tabId)
-      if passwords[tabId]?.key != found.key {
-        passwords[tabId]?.popover.wrap.removeFromSuperview()
-        var input = PromptInputGuard()
-        input.shown(at: ProcessInfo.processInfo.systemUptime)
-        passwords[tabId] = (found.key, makePassword(tabId), input)
+    for found in PanePrompts.prompts(in: windowId, paneWidth: { [weak self] in self?.slot($0).map { Double($0.bounds.width) } }) {
+      guard let state = PromptState.decode(found.json), let placement = found.json.data(using: .utf8).flatMap(PanelPopover.placement) else { continue }
+      let id = PanePromptEntry.id(found.tabId, found.kind)
+      asking.insert(id)
+      if prompts[id]?.key != found.key {
+        prompts[id]?.popover.wrap.removeFromSuperview()
+        prompts[id] = PanePromptEntry(key: found.key, tabId: found.tabId, kind: found.kind, popover: makePrompt(found.tabId, found.kind, id))
       }
-      let prompt = passwords[tabId]!.popover
-      prompt.popover.set(placement: placement, dark: state.dark)
-      prompt.body.update(state)
+      let entry = prompts[id]!
+      entry.placement = placement
+      entry.dark = state.dark
+      entry.popover.popover.set(placement: placement, dark: state.dark)
+      entry.popover.body.update(state)
     }
-    for (tabId, prompt) in passwords where !asking.contains(tabId) {
-      prompt.popover.wrap.removeFromSuperview()
-      passwords[tabId] = nil
+    for (id, entry) in prompts where !asking.contains(id) {
+      entry.popover.wrap.removeFromSuperview()
+      prompts[id] = nil
     }
     for (tabId, view) in sadTabs where !sad.contains(tabId) {
       view.removeFromSuperview()
@@ -270,26 +304,15 @@ final class PaneOverlayHost {
     return view
   }
 
-  private func makePassword(_ tabId: String) -> PanePopover<PromptBodyView> {
+  private func makePrompt(_ tabId: String, _ kind: PanePromptKind, _ id: String) -> PanePopover<PromptBodyView> {
     let prompt = PanePopover(PromptBodyView(frame: .zero))
     let windowId = windowId
     prompt.body.onHeight = { [weak prompt] h in prompt?.setHeight(h) }
     prompt.body.onEvent = { [weak self] event in
-      switch event {
-      case .choice(let name): PanePrompts.choosePassword(tabId, name)
-      case .button(let id): if self?.allowInput(tabId) == true { PanePrompts.answerPassword(windowId, tabId, id) }
-      case .close: if self?.allowInput(tabId) == true { PanePrompts.answerPassword(windowId, tabId, "dismiss") }
-      case .toggle, .row: break
-      }
+      if case .choice = event {} else if self?.prompts[id]?.allowInput() != true { return }
+      PanePrompts.promptEvent(windowId, tabId, kind, event)
     }
     return prompt
-  }
-
-  private func allowInput(_ tabId: String) -> Bool {
-    guard var entry = passwords[tabId] else { return false }
-    let allowed = entry.input.allow(at: ProcessInfo.processInfo.systemUptime, activatedAt: PanePrompts.activatedAt)
-    passwords[tabId] = entry
-    return allowed
   }
 
   private func makeZoom(_ tabId: String) -> PanePopover<ZoomPanelView> {
@@ -448,7 +471,10 @@ final class PaneOverlayHost {
       view.isHidden = view.superview == nil || view.showing == nil
     }
     for (tabId, zoom) in zooms { zoom.place(in: slot(tabId)) }
-    for (tabId, prompt) in passwords { prompt.popover.place(in: slot(tabId)) }
+    for entry in prompts.values {
+      entry.popover.place(in: slot(entry.tabId))
+      entry.refit()
+    }
     for (tabId, history) in histories { history.place(in: slot(tabId)) }
     for (tabId, pill) in cliPills { Self.place(pill, in: slot(tabId), bottom: false) }
     for (tabId, cast) in casts { cast.popover.place(in: slot(tabId)) }
@@ -485,7 +511,7 @@ final class PaneOverlayHost {
       tabs[tabId, default: [:]]["sadTab"] = ["mode": (view.showing?.rawValue).map { $0 as Any } ?? NSNull(), "hidden": view.isHiddenOrHasHiddenAncestor, "frame": inWindow(view, view.bounds), "controls": view.controlFrames.mapValues { inWindow(view, $0) }]
     }
     for (tabId, zoom) in zooms { tabs[tabId, default: [:]]["zoom"] = zoom.describe(inWindow) }
-    for (tabId, prompt) in passwords { tabs[tabId, default: [:]]["password"] = prompt.popover.describe(inWindow) }
+    for entry in prompts.values { tabs[entry.tabId, default: [:]][entry.kind.rawValue] = entry.popover.describe(inWindow) }
     for (tabId, history) in histories { tabs[tabId, default: [:]]["history"] = history.describe(inWindow) }
     for (tabId, cast) in casts { tabs[tabId, default: [:]]["castPicker"] = cast.popover.describe(inWindow) }
     for (tabId, pill) in cliPills { tabs[tabId, default: [:]]["cliPill"] = ["frame": inWindow(pill, pill.bounds), "pill": inWindow(pill, pill.pillFrame), "shown": pill.shown, "progress": pill.progress] }

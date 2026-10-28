@@ -55,3 +55,55 @@ import Testing
     #expect(!allow(&input, 12, 11.8))
   }
 }
+
+@Suite struct PaneMorePromptsTests {
+  private func take(_ page: inout PanePromptPage, _ name: String, _ payload: [String: Any]) -> Bool { page.take(name, payload) }
+  private let address: [String: Any] = ["id": 4, "kind": "saveAddress", "origin": "https://a.test", "title": "Save address?", "message": "", "accept": "Save", "decline": "No thanks", "footer": "", "lines": ["Jane Doe", "1 Meadow Lane"]]
+
+  @Test func autofillClosesOnlyForItsOwnId() {
+    var page = PanePromptPage()
+    #expect(take(&page, "onAutofillPrompt", address))
+    #expect(!take(&page, "onAutofillPrompt", ["id": 3, "closed": true]))
+    #expect(take(&page, "onAutofillPrompt", ["id": 4, "closed": true]))
+    #expect(page.autofill == nil)
+  }
+
+  @Test func autofillSpecs() {
+    let save = PanePromptSpecs.autofill(PaneAutofillPrompt(address)!)
+    #expect(save["message"] is NSNull)
+    #expect((save["icons"] as? [String]) == ["mappin.and.ellipse"])
+    #expect((save["buttons"] as? [[String: Any]])?.compactMap { $0["title"] as? String } == ["No thanks", "Save"])
+    var update = address
+    update["kind"] = "updateAddress"
+    update["newLabel"] = "New"
+    update["oldLabel"] = "Old"
+    update["changes"] = [["field": "email", "from": "", "to": "a@b.c"], ["field": "name", "from": "J", "to": "Jane"]]
+    let sections = ((PanePromptSpecs.autofill(PaneAutofillPrompt(update)!)["details"] as? [[String: Any]])?.first?["sections"] as? [[String: Any]]) ?? []
+    #expect(sections.map { $0["label"] as? String } == ["New", "Old"])
+    #expect(((sections.last?["lines"] as? [[String: Any]]) ?? []).map { $0["text"] as? String } == ["J"])
+  }
+
+  @Test func externalAppStaysOnTheSameHost() {
+    var page = PanePromptPage()
+    _ = take(&page, "onNavigationChange", ["url": "https://a.test/one"])
+    #expect(take(&page, "onExternalApp", ["id": "x1", "title": "Open Zoom?", "app": "Zoom", "remember": "Always allow"]))
+    page.alwaysOpen = true
+    _ = take(&page, "onNavigationChange", ["url": "https://a.test/two"])
+    #expect(page.externalApp != nil)
+    _ = take(&page, "onNavigationChange", ["url": "https://b.test/"])
+    #expect(page.externalApp == nil)
+    #expect(!page.alwaysOpen)
+  }
+
+  @Test func externalAppSpecs() {
+    let open = PanePromptSpecs.externalApp(PaneExternalApp(["id": "x", "title": "Open Zoom?", "app": "Zoom", "remember": "Always"])!, always: true, left: 120)
+    #expect((open["buttons"] as? [[String: Any]])?.compactMap { $0["id"] as? String } == ["cancel", "open"])
+    #expect(((open["details"] as? [[String: Any]])?.first?["value"] as? Bool) == true)
+    #expect((open["popover"] as? [String: Any])?["left"] as? Double == 120)
+    let unknown = PanePromptSpecs.externalApp(PaneExternalApp(["id": "y", "title": "No app"])!, always: false, left: 8)
+    #expect((unknown["icons"] as? [String]) == ["questionmark.app.dashed"])
+    #expect((unknown["buttons"] as? [[String: Any]])?.compactMap { $0["id"] as? String } == ["ok"])
+    #expect(PanePromptSpecs.externalAppLeft(urlLeft: 600, paneWidth: 700) == 352)
+    #expect(PanePromptSpecs.externalAppLeft(urlLeft: 0, paneWidth: 700) == 8)
+  }
+}

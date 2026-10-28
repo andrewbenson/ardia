@@ -33,7 +33,7 @@ import { startPermissionPrompts } from "./site/permissions";
 import { patchPage, useFullscreenTab, usePages } from "./layout/pageState";
 import { useTabDrag } from "./layout/tabDrag";
 import { SadTab, StatusBubble } from "./layout/PaneOverlays";
-import { useNativePanePromptsTheme } from "./layout/nativePaneOverlays";
+import { useNativePanePromptsPane, useNativePanePromptsTheme } from "./layout/nativePaneOverlays";
 import { useFormColors } from "./settings/controls";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
@@ -547,8 +547,8 @@ function PageOverlays({
       {cliPill && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       {!nativePrompts && <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
-      <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
-      {!newTabShown && <ExternalAppPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
+      {!nativePrompts && <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
+      {!newTabShown && !nativePrompts && <ExternalAppPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       {!newTabShown && <EngineOfferPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       {popovers && <SiteControls tabId={tabId} open={popover === "siteControls"} {...popoverSide} top={POPOVER_MARGIN} />}
       {popovers && popover === "popups" && <BlockedPopupsPrompt tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} />}
@@ -592,6 +592,7 @@ export function PaneContent({ windowId, tabId, shown }: { windowId: string; tabI
   }, [split, fullscreen, tabId]);
   const toolbar = !addressInSidebar && !small;
   const geometry = !toolbar ? NO_TOOLBAR : toolbarGeometry({ sidebarButton: leading && tabLayout === "sidebar" && showSidebarButton });
+  useNativePanePromptsPane(nativePrompts, windowId, tabId, geometry.urlLeft, newTabShown);
   return (
     <View pointerEvents="box-none" style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {width > 0 && (

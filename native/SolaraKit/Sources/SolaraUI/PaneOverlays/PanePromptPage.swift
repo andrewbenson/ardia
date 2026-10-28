@@ -21,12 +21,72 @@ public struct PanePasswordPrompt: Equatable, Sendable {
   public var key: String { "\(origin)|\(username)|\(update ? "update" : "save")" }
 }
 
+public struct PaneAutofillPrompt: Equatable, Sendable {
+  public struct Change: Equatable, Sendable {
+    public var from: String
+    public var to: String
+  }
+
+  public var id: Int
+  public var kind: String
+  public var title: String
+  public var message: String
+  public var accept: String
+  public var decline: String
+  public var footer: String
+  public var lines: [String]
+  public var changes: [Change]
+  public var newLabel: String?
+  public var oldLabel: String?
+
+  public init?(_ payload: [String: Any]) {
+    guard payload["closed"] as? Bool != true, let id = (payload["id"] as? NSNumber)?.intValue, let kind = payload["kind"] as? String else { return nil }
+    self.id = id
+    self.kind = kind
+    title = payload["title"] as? String ?? ""
+    message = payload["message"] as? String ?? ""
+    accept = payload["accept"] as? String ?? ""
+    decline = payload["decline"] as? String ?? ""
+    footer = payload["footer"] as? String ?? ""
+    lines = payload["lines"] as? [String] ?? []
+    changes = (payload["changes"] as? [[String: Any]] ?? []).map { Change(from: $0["from"] as? String ?? "", to: $0["to"] as? String ?? "") }
+    newLabel = (payload["newLabel"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    oldLabel = payload["oldLabel"] as? String
+  }
+
+  public var key: String { String(id) }
+}
+
+public struct PaneExternalApp: Equatable, Sendable {
+  public var id: String
+  public var app: String?
+  public var icon: String?
+  public var title: String
+  public var message: String?
+  public var remember: String?
+
+  public init?(_ payload: [String: Any]) {
+    guard let id = payload["id"] as? String, let title = payload["title"] as? String else { return nil }
+    self.id = id
+    self.title = title
+    app = payload["app"] as? String
+    icon = payload["icon"] as? String
+    message = payload["message"] as? String
+    remember = payload["remember"] as? String
+  }
+
+  public var key: String { id }
+}
+
 public struct PanePromptPage: Equatable, Sendable {
   public var crashed = false
   public var unresponsive = false
   public var pageKey: String?
   public var password: PanePasswordPrompt?
   public var chosenUsername: String?
+  public var autofill: PaneAutofillPrompt?
+  public var externalApp: PaneExternalApp?
+  public var alwaysOpen = false
 
   public init() {}
 
@@ -50,6 +110,15 @@ public struct PanePromptPage: Equatable, Sendable {
     case "onPasswordPrompt":
       password = PanePasswordPrompt(payload)
       chosenUsername = nil
+    case "onAutofillPrompt":
+      if let prompt = PaneAutofillPrompt(payload) {
+        autofill = prompt
+      } else if let id = (payload["id"] as? NSNumber)?.intValue, autofill?.id == id {
+        autofill = nil
+      }
+    case "onExternalApp":
+      externalApp = PaneExternalApp(payload)
+      alwaysOpen = false
     case "onNavigationChange":
       guard let reported = payload["url"] as? String else { break }
       let blankInitial = payload["initialDocumentAccessed"] as? Bool == true && payload["committedInitial"] as? Bool == true
@@ -58,6 +127,10 @@ public struct PanePromptPage: Equatable, Sendable {
         crashed = false
         password = nil
         chosenUsername = nil
+        if externalApp != nil, Self.host(key) != Self.host(pageKey) {
+          externalApp = nil
+          alwaysOpen = false
+        }
       }
       pageKey = key
     default: break
@@ -67,5 +140,11 @@ public struct PanePromptPage: Equatable, Sendable {
 
   public static func pageKey(_ url: String) -> String {
     url.firstIndex(of: "#").map { String(url[..<$0]) } ?? url
+  }
+
+  static func host(_ url: String) -> String {
+    guard let scheme = url.range(of: "://"), url[..<scheme.lowerBound].first?.isLetter == true else { return "" }
+    let rest = url[scheme.upperBound...]
+    return String(rest.prefix { !"/?#".contains($0) }).lowercased()
   }
 }

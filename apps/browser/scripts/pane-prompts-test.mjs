@@ -13,7 +13,11 @@ The pooled pane's prompts drawn from pool page events with ARDIA_NATIVE_PANE_PRO
 same page with the switch off. Password: a real form submission brings Chrome's save prompt; with the switch on RN
 mounts no PasswordPrompt and the native popover sits 8 points from the pane's top right at 350 wide, with Never on
 This Site, Not Now and Save; a click on Save, after the input guard's delay, saves the login and closes it; a second
-submission's prompt goes when the page navigates to another page. With the switch off the RN wrapper still draws it.`);
+submission's prompt goes when the page navigates to another page. External app: a link to a scheme no app handles
+brings the 340-wide popover 8 points below the pane's top with OK, which closes it. Autofill: a save-card prompt sent
+as a pool page event draws the 350-wide popover at the top right with its accept and decline buttons; decline closes
+it and clears the store, and a closed event for a second prompt takes it down. With the switch off the RN wrappers
+still draw each one.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -45,7 +49,9 @@ const act = (n, a) => C.devWindow(n, a);
 const click = (n, p) => act(n, "mouse:moved:" + Math.round(p[0]) + "," + Math.round(p[1])).then(() => settle(60))
   .then(() => act(n, "mouse:down:" + Math.round(p[0]) + "," + Math.round(p[1]))).then(() => settle(60)).then(() => act(n, "mouse:up:" + Math.round(p[0]) + "," + Math.round(p[1])));
 const native = () => M.describePaneOverlays("w1").then(JSON.parse);
-const rnPrompt = () => acPerf.findFibers("PasswordPrompt", 5).filter((f) => !!f.child).length;
+const rnDrawn = (name) => acPerf.findFibers(name, 5).filter((f) => !!f.child).length;
+const rnPrompt = () => rnDrawn("PasswordPrompt");
+const pageEvent = (name, payload) => globalThis.expo.modules.SolaraTabPool.devPageEvent("a", name, payload);
 `;
 let app = null;
 const run = (body, timeout = 20000) => app.eval(`${HELPERS}\n${body}`, { timeout });
@@ -130,6 +136,61 @@ try {
       await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.passwordPrompt || null;`, 8000);
       if (nativePrompts) await until("the native prompt goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.password || null);`, 4000);
       return true;
+    });
+
+    await rep.check(`${tag}-external-app`, async () => {
+      const target = await until("its DevTools target", async () => (await app.pageTarget(`${base}/other`)) ?? null, 5000);
+      const cdp = await devtools(target);
+      try {
+        await cdp.send("Runtime.evaluate", { expression: "location.href = 'ardiacore-no-such-app://hello'", userGesture: true });
+      } finally {
+        cdp.close();
+      }
+      await until("the request reaches the store", `return ac.pageState.getState().pages.a?.externalApp || null;`, 8000);
+      if (!nativePrompts) {
+        await until("RN draws the prompt", `return rnDrawn("ExternalAppPrompt") || null;`, 4000);
+        await run(`ac.pageState.setState((s) => ({ pages: { ...s.pages, a: { ...s.pages.a, externalApp: null } } })); return true;`);
+        return "rn";
+      }
+      const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.externalApp && !d.tabs.a.externalApp.hidden && d.tabs.a.externalApp.controls.OK ? d.tabs.a.externalApp : null);`, 6000);
+      if (await run(`return rnDrawn("ExternalAppPrompt");`)) throw new Error("RN still draws the external app prompt");
+      const [fx, fy, fw] = shown.frame;
+      const [cx, cy, cw] = shown.card;
+      if (Math.abs(cw - 340) > 0.5 || Math.abs(fy + 8 - cy) > 0.5 || cx < fx + 8 - 0.5 || cx + cw > fx + fw - 8 + 0.5)
+        throw new Error(`card ${JSON.stringify(shown.card)} in pane ${JSON.stringify(shown.frame)}`);
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(shown.controls.OK))}).then(() => true);`);
+      await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.externalApp || null);`, 3000);
+      await until("the store's request clears", `return !ac.pageState.getState().pages.a?.externalApp || null;`, 3000);
+      return { card: shown.card };
+    });
+
+    await rep.check(`${tag}-autofill`, async () => {
+      const card = (id) => ({ id, kind: "saveCard", origin: base, title: "Save card?", message: "To pay faster next time", accept: "Save", decline: "No thanks", footer: "", lines: ["Visa ending in 1111", "Ada Lovelace"] });
+      await run(`return pageEvent("onAutofillPrompt", ${JSON.stringify(card(41))});`);
+      await until("the prompt reaches the store", `return ac.pageState.getState().pages.a?.autofillPrompt?.id === 41 || null;`, 4000);
+      if (!nativePrompts) {
+        await until("RN draws the prompt", `return rnDrawn("AutofillPrompt") || null;`, 4000);
+        await run(`return pageEvent("onAutofillPrompt", { id: 41, closed: true });`);
+        await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.autofillPrompt || null;`, 3000);
+        return "rn";
+      }
+      const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill && !d.tabs.a.autofill.hidden && d.tabs.a.autofill.controls["No thanks"] ? d.tabs.a.autofill : null);`, 6000);
+      if (await run(`return rnDrawn("AutofillPrompt");`)) throw new Error("RN still draws the autofill prompt");
+      const [fx, fy, fw] = shown.frame;
+      const [cx, cy, cw] = shown.card;
+      if (Math.abs(cw - 350) > 0.5 || Math.abs(fx + fw - 8 - (cx + cw)) > 0.5 || Math.abs(fy + 8 - cy) > 0.5)
+        throw new Error(`card ${JSON.stringify(shown.card)} in pane ${JSON.stringify(shown.frame)}`);
+      if (!shown.controls.Save) throw new Error(`no Save: ${Object.keys(shown.controls)}`);
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["No thanks"]))}).then(() => true);`);
+      await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.autofill || null);`, 3000);
+      await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.autofillPrompt || null;`, 3000);
+      await run(`return pageEvent("onAutofillPrompt", ${JSON.stringify(card(42))});`);
+      await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill || null);`, 4000);
+      await run(`return pageEvent("onAutofillPrompt", { id: 42, closed: true });`);
+      await until("the closed event takes it down", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.autofill || null);`, 3000);
+      return { card: shown.card };
     });
 
     await app.quit();

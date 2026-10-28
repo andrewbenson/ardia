@@ -57,3 +57,57 @@ public struct PromptInputGuard {
     return now >= max(visibleAt, activatedAt) + Self.delay && now - previous >= Self.delay
   }
 }
+
+public enum PanePromptKind: String, CaseIterable, Sendable {
+  case password, autofill, externalApp
+}
+
+extension PanePromptSpecs {
+  public static let externalAppWidth: Double = 340
+
+  public static func externalAppLeft(urlLeft: Double, paneWidth: Double) -> Double {
+    max(margin, min(urlLeft, paneWidth - 348))
+  }
+
+  public static func autofill(_ prompt: PaneAutofillPrompt) -> [String: Any] {
+    func lines(_ texts: [String], ranked: Bool) -> [[String: Any]] {
+      texts.enumerated().map { i, text in
+        ranked ? ["text": text, "strong": i == 0, "tone": i == 0 ? "primary" : "secondary", "maxLines": 2] : ["text": text, "maxLines": 2]
+      }
+    }
+    let to = prompt.changes.map(\.to).filter { !$0.isEmpty }
+    let from = prompt.changes.map(\.from).filter { !$0.isEmpty }
+    let sections: [[String: Any]]
+    if prompt.kind != "updateAddress" {
+      sections = [["lines": lines(prompt.lines, ranked: true)]]
+    } else if let newLabel = prompt.newLabel {
+      sections = [["label": newLabel, "lines": lines(to, ranked: false)], ["label": prompt.oldLabel ?? "", "lines": lines(from, ranked: false)]]
+    } else {
+      sections = [["lines": lines(to, ranked: true)]]
+    }
+    var details: [[String: Any]] = [["kind": "well", "sections": sections]]
+    if !prompt.footer.isEmpty { details.append(["kind": "note", "text": prompt.footer]) }
+    return [
+      "popover": ["width": 350, "top": margin, "right": margin, "modal": false],
+      "icons": [prompt.kind == "saveCard" ? "creditcard.fill" : "mappin.and.ellipse"],
+      "title": prompt.title,
+      "message": prompt.message.isEmpty ? NSNull() : prompt.message,
+      "details": details,
+      "buttons": [["id": "decline", "title": prompt.decline], ["id": "accept", "title": prompt.accept, "primary": true]],
+      "close": true,
+    ]
+  }
+
+  public static func externalApp(_ request: PaneExternalApp, always: Bool, left: Double) -> [String: Any] {
+    [
+      "popover": ["width": externalAppWidth, "top": margin, "left": left, "modal": false],
+      "icons": request.icon != nil ? [] : [request.app != nil ? "app" : "questionmark.app.dashed"],
+      "image": request.icon ?? NSNull(),
+      "title": request.title,
+      "message": request.message ?? NSNull(),
+      "details": request.remember.map { [["kind": "checkbox", "label": $0, "value": always] as [String: Any]] } ?? [],
+      "buttons": request.app != nil ? [["id": "cancel", "title": "Cancel"], ["id": "open", "title": "Open", "primary": true]] : [["id": "ok", "title": "OK", "primary": true]],
+      "close": true,
+    ]
+  }
+}

@@ -58,6 +58,17 @@ final class TabPoolHost {
 
   func windowOf(_ tabId: String) -> String? { state?.tabs[tabId]?.windowId }
 
+  func devPageEvent(_ tabId: String, _ name: String, _ payload: [String: Any]) -> Bool {
+    #if DEBUG
+      guard pages[tabId] != nil else { return false }
+      emit?("onPageEvent", ["tabId": tabId, "name": name, "payload": payload])
+      pageEventObservers.forEach { $0(tabId, name, payload) }
+      return true
+    #else
+      return false
+    #endif
+  }
+
   func setPageProps(_ tabId: String, _ changed: [String: Any]) {
     props[tabId, default: [:]].merge(changed) { _, new in new }
     pages[tabId]?.page.apply(changed)

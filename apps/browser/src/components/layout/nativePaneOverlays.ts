@@ -1,11 +1,11 @@
-import type { PasswordPromptAnswer } from "@ardia/ardiacore";
+import { resolveExternalApp, type AutofillPromptAnswer, type PasswordPromptAnswer } from "@ardia/ardiacore";
 import { publishSettingsTopic } from "@ardia/settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { View } from "react-native";
 import { webviews } from "../../lib/webviews";
 import type { Theme } from "../../lib/theme";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { patchPage, setPopover } from "./pageState";
+import { pageOf, patchPage, setPopover } from "./pageState";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
@@ -50,6 +50,14 @@ addNativeSettingsHandlers({
     patchPage(tabId, { passwordPrompt: null });
     void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username } : undefined);
   },
+  "pane.autofill": (_windowId: string, tabId: string, id: number, action: AutofillPromptAnswer) => {
+    if (pageOf(tabId).autofillPrompt?.id === id) patchPage(tabId, { autofillPrompt: null });
+    void webviews.get(tabId)?.resolveAutofillPrompt(id, action);
+  },
+  "pane.externalApp": (_windowId: string, tabId: string, id: string, open: boolean, remember: boolean) => {
+    if (pageOf(tabId).externalApp?.id === id) patchPage(tabId, { externalApp: null });
+    void resolveExternalApp(id, open, remember);
+  },
   "pane.zoom": (_windowId: string, tabId: string, kind: string, step: number) => {
     if (kind === "dismiss") return setPopover(tabId, null);
     if (kind === "step") void webviews.get(tabId)?.zoomStep(Math.sign(Number(step)) as -1 | 0 | 1);
@@ -88,7 +96,7 @@ export function useNativePaneOverlay(active: boolean, windowId: string, tabId: s
 
 export type PageFrame = [number, number, number, number];
 
-const promptWindows: Record<string, { theme: object }> = {};
+const promptWindows: Record<string, { theme?: object; panes: Record<string, object> }> = {};
 let promptsQueued = false;
 
 function publishPrompts() {
@@ -113,7 +121,7 @@ export function useNativePanePromptsTheme(active: boolean, windowId: string, the
   const key = JSON.stringify({ dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText, prompt });
   useEffect(() => {
     if (!active) return;
-    promptWindows[windowId] = { theme: JSON.parse(key) };
+    (promptWindows[windowId] ??= { panes: {} }).theme = JSON.parse(key);
     publishPrompts();
   }, [active, windowId, key]);
   useEffect(
@@ -123,6 +131,22 @@ export function useNativePanePromptsTheme(active: boolean, windowId: string, the
       publishPrompts();
     },
     [active, windowId],
+  );
+}
+
+export function useNativePanePromptsPane(active: boolean, windowId: string, tabId: string, urlLeft: number, newTabShown: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    (promptWindows[windowId] ??= { panes: {} }).panes[tabId] = { urlLeft, newTabShown };
+    publishPrompts();
+  }, [active, windowId, tabId, urlLeft, newTabShown]);
+  useEffect(
+    () => () => {
+      if (!active || !promptWindows[windowId]) return;
+      delete promptWindows[windowId].panes[tabId];
+      publishPrompts();
+    },
+    [active, windowId, tabId],
   );
 }
 

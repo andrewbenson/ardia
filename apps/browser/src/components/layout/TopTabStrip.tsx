@@ -32,7 +32,7 @@ import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/tileFolders";
 import { usePeek } from "./usePeek";
 import { devPeeks, lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
-import { NativeStripPeek, nativeStripPeekEnabled, NativeTopStrip, nativeTopStripEnabled, peekHovers, type PeekArea } from "./NativeTopStrip";
+import { NativeStripPeek, nativeStripPeekEnabled, NativeTopStrip, nativeTopStripEnabled } from "./NativeTopStrip";
 import { topStripPeek } from "@ardia/settings";
 import {
   aimDrop,
@@ -107,13 +107,11 @@ export function TopTabStrip({
   floating = false,
   hidden = false,
   swipe = true,
-  peek = null,
 }: {
   width: number;
   floating?: boolean;
   hidden?: boolean;
   swipe?: boolean;
-  peek?: PeekArea | null;
 }) {
   const windowId = useWindowId();
   const current = useWindowProfileId();
@@ -137,7 +135,7 @@ export function TopTabStrip({
         <WindowDragRegion style={StyleSheet.absoluteFill} />
         <View pointerEvents={nativeTopStripEnabled() ? "box-none" : "auto"} style={{ position: "absolute", left: left - flare, right: Math.max(right - flare, controls + 8), top: 0, bottom: 0, overflow: "hidden" }}>
           {nativeTopStripEnabled() ? (
-            <NativeTopStrip windowId={windowId} profileId={current} floating={floating} pageWidth={pageWidth} peek={peek} />
+            <NativeTopStrip windowId={windowId} profileId={current} floating={floating} pageWidth={pageWidth} />
           ) : (
             pages.map((page) => <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />)
           )}
@@ -1665,17 +1663,6 @@ function ReactTopStripPeek({ windowWidth, enabled }: { windowWidth: number; enab
     const trace = () => void (slideTrace.current = [[performance.now(), live ? 1 : 0]]);
     devPeeks[`strip:${windowId}`] = { show, hide, live, trace, samples: () => slideTrace.current ?? [] };
   }
-  const nativeLeave = nativeTopStripEnabled();
-  useEffect(() => {
-    if (!nativeLeave) return;
-    const hover = { show, hide };
-    peekHovers.set(windowId, hover);
-    return () => void (peekHovers.get(windowId) === hover && peekHovers.delete(windowId));
-  });
-  const peekArea = useMemo(
-    () => ({ left: PEEK_LEFT, top: PEEK_TOP, width: windowWidth - PEEK_LEFT * 2, height: PEEK_HEIGHT, bandLeft: layout.trafficLightsWidth, bandHeight: HOVER_HEIGHT }),
-    [windowWidth],
-  );
   useEffect(() => {
     if (!downloadsOpen) recheck();
   }, [downloadsOpen]);
@@ -1704,7 +1691,7 @@ function ReactTopStripPeek({ windowWidth, enabled }: { windowWidth: number; enab
       <Animated.View
         pointerEvents={live ? "auto" : "none"}
         onMouseEnter={live ? show : undefined}
-        onMouseLeave={live && !nativeLeave ? leavePanel : undefined}
+        onMouseLeave={live ? leavePanel : undefined}
         style={{
           position: "absolute",
           left: PEEK_LEFT,
@@ -1727,7 +1714,7 @@ function ReactTopStripPeek({ windowWidth, enabled }: { windowWidth: number; enab
           style={{ flex: 1 }}
         >
           <View style={{ position: "absolute", left: 0, right: 0, top: PEEK_PAD - ITEM_TOP, height: TOP_STRIP_HEIGHT }}>
-            <TopTabStrip floating swipe={live} peek={live && nativeLeave ? peekArea : null} width={windowWidth - 12 - PEEK_BORDER * 2} />
+            <TopTabStrip floating swipe={live} width={windowWidth - 12 - PEEK_BORDER * 2} />
           </View>
         </Surface>
       </Animated.View>

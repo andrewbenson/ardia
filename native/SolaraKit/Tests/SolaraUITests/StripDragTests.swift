@@ -111,15 +111,3 @@ import Testing
     #expect(abs(started.value - -56.1) < 0.2)
   }
 }
-
-@Suite struct StripPeekAreaTests {
-  private let area = StripPeekArea(left: 6, top: 4, width: 1588, height: 46, bandLeft: 78, bandHeight: 6)
-
-  @Test func thePanelAndTheBandAboveItHoldThePointer() {
-    #expect(area.holds(CGPoint(x: 300, y: 25)))
-    #expect(area.holds(CGPoint(x: 80, y: 2)))
-    #expect(!area.holds(CGPoint(x: 300, y: 50)))
-    #expect(!area.holds(CGPoint(x: 3, y: 25)))
-    #expect(!area.holds(CGPoint(x: 40, y: 2)))
-  }
-}

@@ -107,10 +107,6 @@ addNativeSettingsHandlers({
         return void openTileFolderStripMenu(windowId, id);
       case "tileFolderMenu":
         return void openTileFolderMenu(windowId, id);
-      case "peekEnter":
-        return peekHovers.get(windowId)?.show();
-      case "peekLeave":
-        return peekHovers.get(windowId)?.hide();
       case "newTab":
         if (extra.split) return openNewTabInSplit(windowId);
         return void (toggleNewTabBar(windowId) || s.newTab(windowId, { newTabCommand: true }));
@@ -171,8 +167,6 @@ function usePageLooks(windowId: string) {
 
 const split = (ids: string) => (ids ? ids.split(",") : NONE);
 
-export type PeekArea = { left: number; top: number; width: number; height: number; bandLeft: number; bandHeight: number };
-export const peekHovers = new Map<string, { show(): void; hide(): void }>();
 
 function useIncomingFile(windowId: string) {
   const point = useTabDrag((d) => (d.windowId === EXTERNAL_DRAG ? (d.overWindow === windowId && d.overPoint ? d.overPoint.join() : "") : null));
@@ -200,7 +194,7 @@ function useIncomingFile(windowId: string) {
   }, [point, windowId]);
 }
 
-function useTopStripState(windowId: string, profileId: string, floating: boolean, pageWidth: number, peek: PeekArea | null): string {
+function useTopStripState(windowId: string, profileId: string, floating: boolean, pageWidth: number): string {
   const theme = useTheme();
   const glow = useSelectedTabGlow();
   const bands = useBrowser(
@@ -246,7 +240,6 @@ function useTopStripState(windowId: string, profileId: string, floating: boolean
         glow: { color: glow.shadowColor, opacity: glow.shadowOpacity, radius: glow.shadowRadius },
         floating,
         pageWidth,
-        peek,
         playing: split(playing),
         sleeping,
         engines,
@@ -257,7 +250,7 @@ function useTopStripState(windowId: string, profileId: string, floating: boolean
         pages,
         selection,
       }),
-    [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, peek, playing, sleeping, engines, bands, closeHint],
+    [pages, selection, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, floating, pageWidth, playing, sleeping, engines, bands, closeHint],
   );
 
   return state;
@@ -268,15 +261,13 @@ export const NativeTopStrip = memo(function NativeTopStrip({
   profileId,
   floating,
   pageWidth,
-  peek = null,
 }: {
   windowId: string;
   profileId: string;
   floating: boolean;
   pageWidth: number;
-  peek?: PeekArea | null;
 }) {
-  const state = useTopStripState(windowId, profileId, floating, pageWidth, peek);
+  const state = useTopStripState(windowId, profileId, floating, pageWidth);
   return <SolaraHostedView kind={floating ? "topStripFloating" : "topStrip"} windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });
 
@@ -296,7 +287,7 @@ export const NativeStripPeek = memo(function NativeStripPeek({
   onLive(live: boolean, pageWidth: number): void;
 }) {
   const theme = useTheme();
-  const strip = useTopStripState(windowId, profileId, true, 0, null);
+  const strip = useTopStripState(windowId, profileId, true, 0);
   const incognito = useIsIncognito();
   const profiles = useProfiles().length;
   const profile = useWindowProfile();

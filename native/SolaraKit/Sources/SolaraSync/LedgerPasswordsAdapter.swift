@@ -28,7 +28,7 @@ struct StoredLedger: Sendable {
 struct LedgerPasswordsState: Sendable {
   var memory = LedgerPasswordsMemory()
   var extracting = false
-  var writing = Task<Void, Never> {}
+  var writing = Task<Bool, Never> { true }
 }
 
 public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
@@ -143,36 +143,36 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
   }
 
   @discardableResult
-  func write(_ here: LedgerRead, _ records: OrderedDict<String, LedgerRecord>, _ keys: [String], _ newest: Double, _ gone: [String] = []) -> Task<Void, Never> {
+  func write(_ here: LedgerRead, _ records: OrderedDict<String, LedgerRecord>, _ keys: [String], _ newest: Double, _ gone: [String] = []) -> Task<Bool, Never> {
     state.withLock { s in
       let previous = s.writing
       let next = Task {
-        await previous.value
-        await self.writeLedger(here, records, keys, newest, gone)
+        _ = await previous.value
+        return await self.writeLedger(here, records, keys, newest, gone)
       }
       s.writing = next
       return next
     }
   }
 
-  func writeLedger(_ here: LedgerRead, _ records: OrderedDict<String, LedgerRecord>, _ keys: [String], _ newest: Double, _ gone: [String]) async {
-    guard let before = state.withLock({ _ in ledgerNow() }) else { return }
+  func writeLedger(_ here: LedgerRead, _ records: OrderedDict<String, LedgerRecord>, _ keys: [String], _ newest: Double, _ gone: [String]) async -> Bool {
+    guard let before = state.withLock({ _ in ledgerNow() }) else { return false }
     let ledger = before.ledger?.ledger
     let mark = Mark(L: jsMax(ledger?.L ?? 0, here.mark?.L ?? 0) + 1, t: jsMax(now(), newest))
     do {
       try await host.writeMark(profile, formatMark(mark))
     } catch {
-      return
+      return false
     }
-    state.withLock { _ in
-      guard let doc = readLedgers() else { return }
+    return state.withLock { _ in
+      guard let doc = readLedgers() else { return false }
       let latest = storedLedger(doc)
       let kept = latest.flatMap { rejoined($0) ? nil : $0 }
       var object = nextLedger(ledger, here.local, records, mark, keys, deletedBeforeUpgrade: gone).json.object ?? JSONObject()
       object["scope"] = .string(ledgerScope())
       object["held"] = kept?.present("held") ?? JSONValue([String]())
       object["gated"] = kept?.present("gated") ?? .object(JSONObject())
-      replaceStored(doc, object)
+      return replaceStored(doc, object)
     }
   }
 
@@ -203,7 +203,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     }
     guard entered else { return nil }
     defer { state.withLock { $0.extracting = false } }
-    await state.withLock { $0.writing }.value
+    _ = await state.withLock { $0.writing }.value
     guard let here = try await read() else { return nil }
     let localValues = Array(here.local)
     let opens = try await host.checkSealed(localValues.map(\.value.value))
@@ -279,7 +279,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     var byKey = OrderedDict<String, Claim>()
     for c in decision.live where !decision.gated.contains(c.key) { byKey[c.key] = c }
     let seeds = j.seed.elements.filter { k in j.mode != .consistent || ledger?.keys[k]?.d.first != digestOf(here.local[k]?.value) }
-    if j.mode != .consistent || !seeds.isEmpty { await write(here, records, seeds, 0, j.deletedBeforeUpgrade.elements).value }
+    if j.mode != .consistent || !seeds.isEmpty, !(await write(here, records, seeds, 0, j.deletedBeforeUpgrade.elements).value) { return nil }
     let claims = byKey
     return Extraction(
       values: claims.values.compactMap { c in c.v.map { (c.key, $0.json) } },
@@ -300,7 +300,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
 
   public func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> ApplyOutcome {
     guard ledgerWritable else { return .failed }
-    await state.withLock { $0.writing }.value
+    _ = await state.withLock { $0.writing }.value
     guard let before = try await read() else { return .failed }
     guard let decided = ledgerNow() else { return .failed }
     let ledger = decided.ledger?.ledger
@@ -358,7 +358,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
       var writtenRecords = OrderedDict<String, LedgerRecord>()
       for key in written { writtenRecords[key] = LedgerRecord(v: wantedValue(key), h: "") }
       let newest = jsMax(0, written.map { latest.local[$0]?.modified ?? 0 }.reduce(-Double.infinity, jsMax))
-      await write(latest, writtenRecords, written, newest).value
+      if !(await write(latest, writtenRecords, written, newest).value) { return .failed }
     }
     return .written(written)
   }

@@ -482,3 +482,22 @@ async function resolveDuringParkedWrite(choice) {
 test("HELD-resolve-during-write: a Confirm made while a ledger write waits on Login Data's mark isn't undone by that write", () => resolveDuringParkedWrite("confirm"));
 
 test("HELD-restore-during-write: a Restore made while a ledger write waits on Login Data's mark isn't undone by that write", () => resolveDuringParkedWrite("restore"));
+
+test("LEDGER-unwritable-cycles: while the ledger can't be written, a cycle sends nothing and doesn't put back a login deleted here", () =>
+  world(async ({ device, now }) => {
+    const a = device("A");
+    const b = device("B");
+    for (const u of users(3)) a.store.set(`${SITE}\n${u}`, userLogin(u, `p-${u}`, now()));
+    await a.sync();
+    await b.sync();
+    await a.sync();
+    assert.equal(b.store.size, 3, "control: B has the three logins");
+    a.store.set(`${SITE}\nundated`, { origin: `${SITE}/`, url: SITE, username: "undated", password: "p-undated" });
+    await a.sync();
+    a.store.delete(`${SITE}\nuser0`);
+    for (let i = 0; i < 3; i++) await a.sync();
+    await b.sync();
+    assert.ok(!a.store.has(`${SITE}\nuser0`), "the login deleted here isn't put back");
+    assert.ok(b.store.has(`${SITE}\nuser0`), "and its deletion isn't sent while the ledger can't record it");
+    assert.equal(stub.docs.get(LEDGER) && JSON.parse(stub.docs.get(LEDGER)).profiles.A.keys[`pw:${SITE}\nundated`], undefined, "control: the ledger never took the undated login");
+  }));

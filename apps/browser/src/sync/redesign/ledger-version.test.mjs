@@ -31,7 +31,7 @@ test("LEDGER-v: a sync-pw-ledger.json from a newer version is refused, not read 
   }
 });
 
-test("LEDGER-unwritable: a ledger that wouldn't read back isn't written, so passwords don't pause on it", async () => {
+test("LEDGER-unwritable: a ledger that wouldn't read back isn't written, and the cycle sends nothing", async () => {
   shell.docs.clear();
   const { seal } = await import("./fakeSeal.mjs");
   const key = "pw:https://a.example\nme";
@@ -39,7 +39,7 @@ test("LEDGER-unwritable: a ledger that wouldn't read back isn't written, so pass
   const read = async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s }], mark: null });
   const adapter = ledgerPasswordsAdapter("default", () => true, read, () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
   const extraction = await adapter.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
-  assert.ok(extraction, "the cycle still runs");
+  assert.equal(extraction, null, "a cycle whose ledger can't be written sends nothing");
   assert.equal(shell.docs.get("sync-pw-ledger.json"), undefined, "a login with no time would give m: null, so that ledger isn't written");
   assert.notEqual(readLedgerDoc(shell.docs.get("sync-pw-ledger.json") ?? null), "unreadable", "and the next read isn't unreadable");
 });

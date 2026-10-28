@@ -31,7 +31,7 @@ let warnedUnwritable = false;
 function writeLedgers(doc: LedgerDoc): boolean {
   const text = JSON.stringify(doc);
   if (typeof readLedgerDoc(text) === "string") {
-    if (!warnedUnwritable) console.warn("[sync] the password ledger wasn't written: it wouldn't read back");
+    if (!warnedUnwritable) console.warn("[sync] the password ledger wasn't written: it wouldn't read back; passwords pause");
     warnedUnwritable = true;
     return false;
   }
@@ -79,7 +79,7 @@ export function ledgerPasswordsAdapter(
   let confirmed = new Set<string>();
   let restoring = new Map<string, string>();
   let judgedForFolder = new Set<string>();
-  let writing: Promise<void> = Promise.resolve();
+  let writing: Promise<boolean> = Promise.resolve(true);
 
   const read = async (): Promise<Read | null> => {
     const marked = await readMarked(profile());
@@ -129,7 +129,7 @@ export function ledgerPasswordsAdapter(
     const list = [...keys];
     writing = writing.then(async () => {
       const before = ledgerNow();
-      if (!before) return;
+      if (!before) return false;
       const ledger = before.ledger;
       const L = Math.max(ledger?.L ?? 0, now.mark?.L ?? 0) + 1;
       const mark = { L, t: Math.max(Date.now(), newest) };
@@ -137,14 +137,14 @@ export function ledgerPasswordsAdapter(
         await engineCall("ac_passwords_mark", profile(), { key: MARK_KEY, value: formatMark(mark) });
       } catch (error) {
         console.warn("[sync] couldn't write Login Data's mark; the ledger waits", error);
-        return;
+        return false;
       }
       const doc = readLedgers();
-      if (!doc) return;
+      if (!doc) return false;
       const latest = doc.profiles[profile()] ?? null;
       const kept = latest && !rejoinedFrom(latest) ? latest : null;
       doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list, gone), scope: ledgerScope(), held: kept?.held ?? [], gated: kept?.gated ?? {} };
-      writeLedgers(doc);
+      return writeLedgers(doc);
     });
     return writing;
   };
@@ -222,7 +222,7 @@ export function ledgerPasswordsAdapter(
       judgedForFolder = new Set(j.apply);
       const byKey = new Map(live.filter((c) => !gated.has(c.key)).map((c) => [c.key, c]));
       const seeds = [...j.seed].filter((k) => (j.mode !== "consistent" || ledger?.keys[k]?.d[0] !== digestOf(here.local.get(k)?.value)));
-      if (j.mode !== "consistent" || seeds.length) await write(here, records, seeds, 0, j.deletedBeforeUpgrade);
+      if ((j.mode !== "consistent" || seeds.length) && !(await write(here, records, seeds, 0, j.deletedBeforeUpgrade))) return null;
       return {
         values: new Map([...byKey.values()].filter((c) => c.v).map((c) => [c.key, c.v!])),
         ignore: (key) => !byKey.has(key),
@@ -291,7 +291,7 @@ export function ledgerPasswordsAdapter(
         const records = new Map<string, FolderRecord>();
         for (const key of written) records.set(key, { v: (visible.get(key) as LedgerValue | undefined) ?? null, h: "" });
         const newest = Math.max(0, ...[...written].map((k) => latest!.local.get(k)?.modified ?? 0));
-        await write(latest, records, written, newest);
+        if (!(await write(latest, records, written, newest))) return false;
       }
       return written;
     },

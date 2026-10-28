@@ -162,7 +162,7 @@ func ledgerMemoryJSON(_ m: LedgerPasswordsMemory) -> JSONValue {
       default:
         problems.append("op \(i): unknown operation \(op["op"]?.text() ?? "")")
       }
-      await adapter.state.withLock { $0.writing }.value
+      _ = await adapter.state.withLock { $0.writing }.value
       let label = "seed \(session["seed"]?.text() ?? "") op \(i) \(op["op"]?.string ?? "")"
       let (hostProblems, left) = host.script.withLock { ($0.problems, $0.calls.count) }
       problems += hostProblems.map { "\(label): \($0)" }

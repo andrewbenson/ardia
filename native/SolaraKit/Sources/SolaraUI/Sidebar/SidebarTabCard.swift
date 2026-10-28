@@ -46,6 +46,8 @@ public enum SidebarTabCardMetrics {
   static let maxPitch: CGFloat = 49
   static let inset: CGFloat = 14
   static let fieldPadding: CGFloat = 1.5
+  static let border: CGFloat = 0.5
+  static var titleWidth: CGFloat { width - 2 * (inset + border) }
   static let top: CGFloat = 16.5
   static let bottom: CGFloat = 6
   static let line: CGFloat = 16
@@ -67,7 +69,7 @@ public final class SidebarTabCardView: NSView {
   public var onPointer: ((Bool) -> Void)?
   public private(set) var state: SidebarTabCardState?
   private let surface = SurfaceLayer()
-  private let title = NSTextField(wrappingLabelWithString: "")
+  private let title = OnboardingTextNSView()
   private let host = NSTextField(labelWithString: "")
   private let note = NSTextField(labelWithString: "This tab needs to reload")
   private var buttons: [SidebarIconButton] = []
@@ -82,19 +84,20 @@ public final class SidebarTabCardView: NSView {
     wantsLayer = true
     layer?.masksToBounds = false
     surface.radius = SidebarTabCardMetrics.radius
-    surface.border = 0.5
+    surface.border = SidebarTabCardMetrics.border
     surface.glowColor = .black
     surface.glowRadius = 16
     surface.glowOffset = CGSize(width: 0, height: 6)
     layer?.addSublayer(surface)
-    title.maximumNumberOfLines = 2
-    title.lineBreakMode = .byTruncatingTail
-    title.cell?.truncatesLastVisibleLine = true
+    title.container.maximumNumberOfLines = 2
+    title.container.lineBreakMode = .byTruncatingTail
+    title.manager.usesFontLeading = false
     host.lineBreakMode = .byTruncatingTail
     note.lineBreakMode = .byTruncatingTail
     note.font = .systemFont(ofSize: 11.5)
     note.setAccessibilityLabel("Web content has been discarded")
-    for field in [title, host, note] { addSubview(field) }
+    addSubview(title)
+    for field in [host, note] { addSubview(field) }
     DevPointer.observe(self, #selector(devPointer(_:)))
   }
 
@@ -108,7 +111,8 @@ public final class SidebarTabCardView: NSView {
     surface.fill = color(look.fill)
     surface.borderTint = color(look.border)
     surface.glowOpacity = look.shadowOpacity * 0.8
-    title.attributedStringValue = Self.text(next.title, size: 13, weight: .semibold, color: color(look.primary), wraps: true)
+    title.storage.setAttributedString(Self.text(next.title, size: 13, weight: .semibold, color: color(look.primary), wraps: true))
+    title.needsDisplay = true
     host.isHidden = next.host == nil
     host.attributedStringValue = Self.text(next.host ?? "", size: 13, weight: .regular, color: secondary, wraps: false)
     note.isHidden = !next.sleeping
@@ -130,7 +134,7 @@ public final class SidebarTabCardView: NSView {
       let action = spec.action
       button.onPress = { [weak self] in self?.onAction?(action) }
     }
-    titleLines = Self.lines(title.attributedStringValue, width: SidebarTabCardMetrics.width - 2 * SidebarTabCardMetrics.inset)
+    titleLines = title.lineCount(width: SidebarTabCardMetrics.titleWidth)
     setFrameSize(NSSize(width: SidebarTabCardMetrics.width, height: height))
     needsLayout = true
   }
@@ -154,7 +158,7 @@ public final class SidebarTabCardView: NSView {
     let textX = m.inset - m.fieldPadding
     let textWidth = bounds.width - 2 * textX
     var y = m.top
-    title.frame = NSRect(x: textX, y: y, width: textWidth, height: CGFloat(titleLines) * m.line)
+    title.frame = NSRect(x: m.inset + m.border, y: y, width: m.titleWidth, height: CGFloat(titleLines) * m.line)
     y += title.frame.height
     if !host.isHidden {
       host.frame = NSRect(x: textX, y: y, width: textWidth, height: m.line)
@@ -205,6 +209,8 @@ public final class SidebarTabCardView: NSView {
 
   public override func mouseDown(with event: NSEvent) {}
 
+  public var titleShown: String { title.shownText(width: SidebarTabCardMetrics.titleWidth) }
+
   private static func text(_ string: String, size: CGFloat, weight: NSFont.Weight, color: NSColor, wraps: Bool) -> NSAttributedString {
     let font = NSFont.systemFont(ofSize: size, weight: weight)
     let paragraph = NSMutableParagraphStyle()
@@ -217,8 +223,4 @@ public final class SidebarTabCardView: NSView {
 
   private static func lineHeight(_ font: NSFont) -> CGFloat { ceil(font.ascender - font.descender + font.leading) }
 
-  private static func lines(_ text: NSAttributedString, width: CGFloat) -> Int {
-    let bounds = text.boundingRect(with: NSSize(width: width, height: 1000), options: [.usesLineFragmentOrigin])
-    return bounds.height > SidebarTabCardMetrics.line * 1.5 ? 2 : 1
-  }
 }

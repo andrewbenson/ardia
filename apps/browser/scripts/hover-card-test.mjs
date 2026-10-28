@@ -80,6 +80,7 @@ try {
     assert.ok(c.inWindow && c.onScreen && c.opacity > 0.99, "on screen and opaque");
     assert.equal(await rnCards(), 0, "RN draws no Dia card of its own");
     assert.deepEqual(Object.keys(c.buttons).sort(), ["Bookmark", "Open in Split View", "Pin"]);
+    assert.equal(c.titleShown, "Anker USB-C to USB-C Cable (240W, 6 ft), Nylo", "the long title truncates where RN's does");
   });
 
   await rep.check("moving from the row onto the card keeps it past the hide delay", async () => {

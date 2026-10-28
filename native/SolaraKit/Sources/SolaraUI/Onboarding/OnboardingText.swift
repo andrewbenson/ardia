@@ -160,6 +160,24 @@ public final class OnboardingTextNSView: NSView {
 
   static func ceilPixel(_ value: CGFloat) -> CGFloat { (value * 2 - 0.01).rounded(.up) / 2 }
 
+  func lineCount(width: CGFloat) -> Int {
+    container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+    var count = 0
+    manager.enumerateLineFragments(forGlyphRange: manager.glyphRange(for: container)) { _, _, _, _, _ in count += 1 }
+    return max(1, count)
+  }
+
+  func shownText(width: CGFloat) -> String {
+    container.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+    let glyphs = manager.glyphRange(for: container)
+    var end = manager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil).upperBound
+    var lastLine = glyphs.location
+    manager.enumerateLineFragments(forGlyphRange: glyphs) { _, _, _, range, _ in lastLine = range.location }
+    let truncated = manager.truncatedGlyphRange(inLineFragmentForGlyphAt: lastLine)
+    if truncated.location != NSNotFound { end = manager.characterIndexForGlyph(at: truncated.location) }
+    return (storage.string as NSString).substring(to: min(end, storage.length))
+  }
+
   override public func layout() {
     super.layout()
     container.size = CGSize(width: bounds.width, height: .greatestFiniteMagnitude)

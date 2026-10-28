@@ -223,7 +223,10 @@ final class SidebarHoverCardHost {
       }
       walk(content)
       info["buttons"] = buttons
-      if kind == "tab", let look = tabCard.state?.look { info["fill"] = look.fill }
+      if kind == "tab", let look = tabCard.state?.look {
+        info["fill"] = look.fill
+        info["titleShown"] = tabCard.titleShown
+      }
       if kind == "group" { info["rows"] = groupCard.state?.rows.map(\.id) ?? [] }
       if kind == "calendar" {
         let card = CGRect(x: r.minX, y: root.bounds.height - r.maxY, width: r.width, height: r.height)

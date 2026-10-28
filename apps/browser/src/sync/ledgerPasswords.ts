@@ -1,5 +1,5 @@
 import { deletePassword, engineCall } from "@ardia/ardiacore";
-import { readDocument, writeDocument } from "@ardia/shell";
+import { readDocument, readDocumentResult, writeDocument } from "@ardia/shell";
 import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins, type SealedValue } from "@ardia/sync";
 import { engineProfile } from "../store/model";
 import { isObject } from "./readable";
@@ -13,21 +13,35 @@ const MASS_CHANGE_AT_LEAST = 5;
 type Stored = Ledger & { scope?: string; held?: string[]; gated?: Record<string, number> };
 type LedgerDoc = { v: 2; profiles: Record<string, Stored> };
 
-export function readLedgerDoc(text: string | null): LedgerDoc | "older" | "newer" {
+export function readLedgerDoc(text: string | null): LedgerDoc | "older" | "newer" | "unreadable" {
+  if (text === null) return { v: 2, profiles: {} };
   try {
-    const doc = JSON.parse(text ?? "null") as LedgerDoc | null;
-    if (isObject(doc) && "v" in doc && doc.v !== 2) return doc.v === 1 ? "older" : "newer";
-    return doc?.v === 2 && doc.profiles ? doc : { v: 2, profiles: {} };
+    const doc = JSON.parse(text) as unknown;
+    if (!isObject(doc)) return "unreadable";
+    if (doc.v !== 2) return doc.v === 1 ? "older" : doc.v === undefined ? "unreadable" : "newer";
+    return isObject(doc.profiles) ? (doc as LedgerDoc) : "unreadable";
   } catch {
-    return { v: 2, profiles: {} };
+    return "unreadable";
   }
 }
 
-export const ledgerFromNewerVersion = () => readLedgerDoc(readDocument(LEDGER_DOC)) === "newer";
-const ledgerWritable = () => typeof readLedgerDoc(readDocument(LEDGER_DOC)) !== "string";
+let warnedUnreadable = false;
+function ledgerRead() {
+  const read = readDocumentResult(LEDGER_DOC);
+  const doc = "failure" in read ? "unreadable" : readLedgerDoc("contents" in read ? read.contents : null);
+  if (doc === "unreadable" && !warnedUnreadable) {
+    warnedUnreadable = true;
+    console.warn("[sync] the password ledger can't be read; passwords pause until it can", "failure" in read ? read.failure : "it doesn't parse");
+  }
+  if (doc !== "unreadable") warnedUnreadable = false;
+  return doc;
+}
+
+export const ledgerFromNewerVersion = () => ledgerRead() === "newer";
+const ledgerWritable = () => typeof ledgerRead() !== "string";
 
 function readLedgers(): LedgerDoc {
-  const doc = readLedgerDoc(readDocument(LEDGER_DOC));
+  const doc = ledgerRead();
   return typeof doc === "string" ? { v: 2, profiles: {} } : doc;
 }
 
@@ -155,7 +169,7 @@ export function ledgerPasswordsAdapter(
       const fresh = rejoined();
       const ledger = ledgerOf();
       const records = new Map<string, FolderRecord>();
-      const firstLedger = !ledger && !(fresh ? null : here.mark);
+      const firstLedger = !ledger;
       record(records, new Set([...here.local.keys(), ...Object.keys(ledger?.keys ?? {}), ...(firstLedger ? (agreedKeys?.() ?? []) : [])]), remote, stamp);
       const j = judge(here.local, fresh ? null : here.mark, ledger, records, now, (key) => base(key) as LedgerValue | undefined, (key) => !!unapplied?.(key));
       const deletedBeforeUpgrade = [...j.deletedBeforeUpgrade];

@@ -175,7 +175,7 @@ public func judge(
   var deletedBeforeUpgrade = OrderedSet<String>()
   func recordDigest(_ key: String) -> String { digestOf(records[key]?.v) }
   let consistent = ledger != nil && mark != nil && mark!.L == ledger!.L && mark!.t == ledger!.t
-  let mode: Judgement.Mode = consistent ? .consistent : ledger == nil && mark == nil ? .upgrade : .rebuild
+  let mode: Judgement.Mode = consistent ? .consistent : ledger == nil ? .upgrade : .rebuild
   let after = mode == .rebuild ? jsMax(mark?.t ?? 0, ledger?.t ?? 0) : 0
   func claim(_ key: String, _ v: LedgerValue?, _ modified: Double) {
     let entry = ledger?.keys[key]

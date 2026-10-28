@@ -8,7 +8,7 @@
     "apps/browser/src/sync/editJournal.ts": "bd7fb6eaf268357831edc3907572b894e7b39c6c2c37b077d2ead5f61c3c5607"
   },
   "Cases/ledger.json.deflate": {
-    "apps/browser/src/sync/passwordLedger.ts": "e978a5e872ef1b974f31932674d2265190322d906d992de37b06f1d80b7819e7"
+    "apps/browser/src/sync/passwordLedger.ts": "074d583218ec1014e8ba846e6c9ec09c581e2f54eaf1bd84ddb1b94d0606231d"
   },
   "Cases/state.json.deflate": {
     "apps/browser/src/sync/readable.ts": "8a2dd478f595499dfc8093d877e2feeeee34709f9dfbea510a2818a61753356e"
@@ -31,6 +31,6 @@
   "seal-cases": {
     "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
     "apps/browser/src/sync/notes.ts": "b94e9f73af50b9daf91b44ff9b8c43775dd33ba1f92776b13974925656fdaeb6",
-    "apps/browser/src/sync/passwordLedger.ts": "e978a5e872ef1b974f31932674d2265190322d906d992de37b06f1d80b7819e7"
+    "apps/browser/src/sync/passwordLedger.ts": "074d583218ec1014e8ba846e6c9ec09c581e2f54eaf1bd84ddb1b94d0606231d"
   }
 }

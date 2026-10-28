@@ -249,3 +249,89 @@ test("JUDGE-upgrade-unapplied: a key still unapplied is applied even when base a
   assert.ok(agreed.deletedBeforeUpgrade.has(KEY), "control: without unapplied it's read as deleted");
   assert.equal(digestOf(value), digestOf(records.get(KEY).v));
 });
+
+test("UPGRADE-crash-after-mark: a crash between Login Data's mark and the first ledger still sends the deletion made before the upgrade", () =>
+  world(async ({ device, now }) => {
+    const a = device("A");
+    const b = device("B");
+    a.store.set(LOGIN, login("p1", now()));
+    a.store.set(`${SITE}\nother`, userLogin("other", "o1", now()));
+    await a.sync();
+    await b.sync();
+
+    a.upgrade();
+    a.store.delete(LOGIN);
+    await a.sync();
+    const ledger = JSON.parse(stub.docs.get("sync-pw-ledger.json"));
+    assert.ok(ledger.profiles.A, "control: the first cycle wrote a ledger");
+    delete ledger.profiles.A;
+    stub.docs.set("sync-pw-ledger.json", JSON.stringify(ledger));
+    for (let i = 0; i < 3; i++) await a.sync();
+    assert.equal(a.state.records[KEY]?.v ?? null, null, "A's deletion is recorded");
+    assert.equal(a.store.has(LOGIN), false, "and A doesn't take the login back");
+    await b.sync();
+    assert.equal(b.store.has(LOGIN), false, "B removes it");
+    assert.equal(b.store.get(`${SITE}\nother`)?.password, "o1", "and keeps the other");
+  }));
+
+const LEDGER = "sync-pw-ledger.json";
+
+async function pausedWhileUnreadable(spoil) {
+  await world(async ({ device, now }) => {
+    const a = device("A");
+    const b = device("B");
+    a.store.set(LOGIN, login("p1", now()));
+    a.store.set(`${SITE}\nother`, userLogin("other", "o1", now()));
+    await a.sync();
+    await b.sync();
+    a.upgrade();
+    await a.sync();
+    await a.sync();
+    assert.ok(JSON.parse(stub.docs.get(LEDGER)).profiles.A, "control: A has a ledger and a mark");
+
+    a.store.delete(LOGIN);
+    spoil();
+    const bytes = stub.docs.get(LEDGER);
+    for (let i = 0; i < 3; i++) await a.sync();
+    assert.equal(plainOf(a.state.records[KEY]?.v), "p1", "no deletion goes out");
+    assert.equal(stub.docs.get(LEDGER), bytes, "the ledger doc isn't written over");
+    assert.equal(a.store.has(LOGIN), false, "nor is the login put back while passwords are paused");
+    await b.sync();
+    assert.equal(b.store.get(LOGIN)?.password, "p1", "and B keeps it");
+  });
+  stub.unreadableDocs.clear();
+}
+
+test("LEDGER-unreadable: a ledger doc that fails to read pauses passwords: no claim, no write", () =>
+  pausedWhileUnreadable(() => stub.unreadableDocs.set(LEDGER, "EIO")));
+
+test("LEDGER-corrupt: a ledger doc that doesn't parse pauses passwords: no claim, no write", () =>
+  pausedWhileUnreadable(() => stub.docs.set(LEDGER, `${stub.docs.get(LEDGER).slice(0, 20)}`)));
+
+test("LEDGER-other-profiles: a profile whose entry is missing writes its first ledger without wiping another profile's", () =>
+  world(async ({ device, now }) => {
+    const a = device("A");
+    const b = device("B");
+    a.store.set(LOGIN, login("p1", now()));
+    await a.sync();
+    await b.sync();
+    await a.sync();
+    const before = JSON.parse(stub.docs.get(LEDGER)).profiles;
+    assert.ok(before.A && before.B, "control: both profiles have ledgers");
+    b.upgrade();
+    await b.sync();
+    const after = JSON.parse(stub.docs.get(LEDGER)).profiles;
+    assert.ok(after.B, "B writes its first ledger again");
+    assert.deepEqual(after.A, before.A, "and A's ledger is untouched");
+  }));
+
+test("JUDGE-modes: only a missing ledger is upgrade mode; a ledger without its mark is still a rebuild", () => {
+  const records = new Map([[KEY, { v: { o: SITE, u: "bob", s: "x" }, h: "0000000001000" }]]);
+  const local = new Map([[keyOf("other"), { value: { o: SITE, u: "other", s: "y" }, modified: 1 }]]);
+  const ledger = { v: 1, L: 2, t: 5, keys: {} };
+  assert.equal(judge(local, null, null, records, 10).mode, "upgrade");
+  assert.equal(judge(local, { L: 2, t: 5 }, null, records, 10).mode, "upgrade", "a mark without its ledger means nothing");
+  assert.equal(judge(local, null, ledger, records, 10).mode, "rebuild");
+  assert.equal(judge(local, { L: 1, t: 5 }, ledger, records, 10).mode, "rebuild");
+  assert.equal(judge(local, { L: 2, t: 5 }, ledger, records, 10).mode, "consistent");
+});

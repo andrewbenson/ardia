@@ -51,7 +51,7 @@ export function judge(
   const deletedBeforeUpgrade = new Set<string>();
   const recordDigest = (key: string) => digestOf(records.get(key)?.v);
   const consistent = !!ledger && !!mark && mark.L === ledger.L && mark.t === ledger.t;
-  const mode: Judgement["mode"] = consistent ? "consistent" : !ledger && !mark ? "upgrade" : "rebuild";
+  const mode: Judgement["mode"] = consistent ? "consistent" : !ledger ? "upgrade" : "rebuild";
   const after = mode === "rebuild" ? Math.max(mark?.t ?? 0, ledger?.t ?? 0) : 0;
   const claim = (key: string, v: LedgerValue | null, modified: number) => {
     const entry = ledger?.keys[key];

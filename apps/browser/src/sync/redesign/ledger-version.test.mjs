@@ -10,7 +10,9 @@ test("LEDGER-v: a sync-pw-ledger.json from a newer version is refused, not read 
   assert.equal(readLedgerDoc(JSON.stringify({ v: "2", profiles: {} })), "newer");
   assert.equal(readLedgerDoc(JSON.stringify({ v: 1, profiles: {} })), "older", "a ledger over plain digests waits for its migration");
   assert.deepEqual(readLedgerDoc(JSON.stringify({ v: 2, profiles: { a: { L: 1 } } })), { v: 2, profiles: { a: { L: 1 } } });
-  assert.deepEqual(readLedgerDoc("{"), { v: 2, profiles: {} }, "control: unreadable is still read as absent");
+  assert.equal(readLedgerDoc("{"), "unreadable", "a ledger that doesn't parse isn't read as absent");
+  assert.equal(readLedgerDoc(JSON.stringify({ profiles: {} })), "unreadable");
+  assert.equal(readLedgerDoc(JSON.stringify({ v: 2 })), "unreadable");
   assert.deepEqual(readLedgerDoc(null), { v: 2, profiles: {} });
   for (const unread of [{ v: 3, profiles: { default: { L: 9, t: 9, keys: {}, sealed: true } } }, { v: 1, profiles: { default: { L: 9, t: 9, keys: { "pw:https://a.example\nme": { d: ["3.x"], h: null, m: 1 } } } } }]) {
     shell.docs.clear();

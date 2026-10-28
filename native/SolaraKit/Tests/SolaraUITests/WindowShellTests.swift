@@ -289,6 +289,32 @@ struct WindowShellMountTests {
     #expect(view.superview === shell)
   }
 
+  @Test func mountsAndMovesTellHoverTheCoverChanged() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    var posts = 0
+    let token = NotificationCenter.default.addObserver(forName: WindowShellView.hoverCoverChanged, object: shell, queue: nil) { _ in posts += 1 }
+    defer { NotificationCenter.default.removeObserver(token) }
+    shell.mount(.sidebar, NSView())
+    #expect(posts == 1)
+    shell.update { $0.dock = 0 }
+    #expect(posts == 2)
+    shell.mount(.sidebar, nil)
+    #expect(posts == 3)
+  }
+
+  @Test func theSlotUnderThePointerIsTheTopmostOneHit() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    let react = NSView()
+    shell.mount(.react, react)
+    shell.mount(.sidebar, NSView())
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 100, y: 300)) == .sidebar)
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 300)) == .react)
+    shell.card.addSubview(NSView(frame: shell.card.bounds))
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 300)) == .card)
+  }
+
   @Test func theCardIsAShellOwnedContainer() {
     let shell = WindowShellView(windowId: "w")
     shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)

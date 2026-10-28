@@ -209,6 +209,43 @@ public class WindowShellModule: Module {
       MainActor.assumeIsolated { NativeWindowShell.setBackdrop(windowId, json) }
     }.runOnQueue(.main)
 
+    AsyncFunction("devCover") { (windowId: String, rect: [Double]?) -> Bool in
+      #if DEBUG
+      return MainActor.assumeIsolated {
+        guard let host = NativeWindowShell.host(windowId) else { return false }
+        guard let rect, rect.count == 4 else {
+          host.shell.mount(.overlay, nil)
+          return true
+        }
+        let cover = NSView(frame: CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]))
+        cover.wantsLayer = true
+        cover.layer?.backgroundColor = NSColor.systemPink.cgColor
+        let holder = FlippedContainerView()
+        holder.addSubview(cover)
+        host.shell.mount(.overlay, holder)
+        return true
+      }
+      #else
+      return false
+      #endif
+    }.runOnQueue(.main)
+
+    AsyncFunction("devHitCost") { (windowId: String, x: Double, y: Double) -> [String: String] in
+      #if DEBUG
+      return MainActor.assumeIsolated {
+        guard let host = NativeWindowShell.host(windowId), host.shell.window != nil else { return [:] }
+        let point = host.shell.convert(NSPoint(x: x, y: y), to: nil)
+        let start = DispatchTime.now().uptimeNanoseconds
+        var slot: WindowShellView.Slot?
+        for _ in 0..<1000 { slot = host.shell.slotUnderPointer(at: point) }
+        let micros = Double(DispatchTime.now().uptimeNanoseconds - start) / 1000 / 1000
+        return ["micros": String(micros), "slot": slot?.rawValue ?? ""]
+      }
+      #else
+      return [:]
+      #endif
+    }.runOnQueue(.main)
+
     AsyncFunction("describe") { (windowId: String) -> String in
       MainActor.assumeIsolated {
         guard let info = NativeWindowShell.describe(windowId), let data = try? JSONSerialization.data(withJSONObject: info) else { return "null" }

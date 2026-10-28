@@ -167,6 +167,23 @@ async function measure(native) {
         .then(() => peek().hide()).then(() => settle(500)).then(() => (seen.heldLive = peek().live))
         .then(() => { st().setDownloadsOpen("w1", false); return settle(800); }).then(() => (seen.afterClose = peek().live))
         .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
+    out.peekPress = await run(`
+      const peek = () => globalThis.acLayout.peek["strip:w1"];
+      const press = (x, y) => act("w1", "mouse:down:" + x + "," + y).then(() => settle(100)).then(() => act("w1", "mouse:up:" + x + "," + y)).then(() => settle(500));
+      const seen = { presses: [] };
+      st().toggleSidebar("w1");
+      return settle(600).then(() => peek().show()).then(() => settle(400))
+        .then(() => [[420, 22, "tab"], [1569, 27, "downloads"]].reduce((chain, [x, y, what]) => chain
+          .then(() => act("w1", "hit:" + x + "," + y)).then((hit) => press(x, y).then(() => {
+            seen.presses.push({ what, hit, panel: !!st().windowUi.w1?.panel.open, active: st().windows.w1.activeTabIds.default, downloads: !!st().windowUi.w1?.downloadsOpen });
+            st().closePanel("w1");
+            st().setDownloadsOpen("w1", false);
+            return settle(500).then(() => peek().show()).then(() => settle(400));
+          })), Promise.resolve()))
+        .then(() => { st().activate("t1"); peek().hide(); return settle(700); })
+        .then(() => act("w1", "hit:600,24")).then((hit) => (seen.fieldHit = hit))
+        .then(() => press(600, 24)).then(() => { seen.field = !!st().windowUi.w1?.panel.open; st().closePanel("w1"); return settle(400); })
+        .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
     out.peekFile = await run(`
       const peek = () => globalThis.acLayout.peek["strip:w1"];
       const drag = (action, x, payload) => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", action, x, 27, payload);
@@ -379,6 +396,17 @@ try {
         assert.equal(seen.open, true, `${name}: the click opened the downloads list`);
         assert.equal(seen.heldLive, true, `${name}: the open list holds the peek out`);
         assert.equal(seen.afterClose, false, `${name}: closing the list lets the peek go`);
+      }
+    });
+    await rep.check("a press on a tab or the downloads button in the peek presses only that, on RN as on native, and the address field still takes its own press", async () => {
+      for (const [name, seen] of [["rn", rn.peekPress], ["native", native.peekPress]]) {
+        rep.log(`peek press ${name} ${JSON.stringify(seen)}`);
+        const [tab, downloads] = seen.presses;
+        assert.equal(tab.active, "g1a", `${name}: the press selected the tab (${tab.hit})`);
+        assert.equal(downloads.downloads, true, `${name}: the press opened the downloads list (${downloads.hit})`);
+        for (const at of seen.presses) assert.equal(at.panel, false, `${name}: the ${at.what} press also pressed the address field under the peek (${at.hit})`);
+        assert.match(seen.fieldHit, /ToolbarUrlFieldView/, `${name}: the field is under the pointer with the peek hidden`);
+        assert.equal(seen.field, true, `${name}: a press on the address field with the peek hidden opens the command panel`);
       }
     });
     await rep.check("a link dropped on the peek opens where RN's peek puts it", async () => {

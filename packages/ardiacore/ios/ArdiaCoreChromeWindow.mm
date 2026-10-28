@@ -2633,6 +2633,18 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     NSPoint p = WindowPoint(window, [action substringFromIndex:4]);
     return Describe([frameView hitTest:p]);
   }
+  if ([action hasPrefix:@"responders:"]) {
+    NSPoint p = WindowPoint(window, [action substringFromIndex:11]);
+    NSMutableArray<NSString *> *chain = [NSMutableArray array];
+    NSEvent *down = Mouse(window, NSEventTypeLeftMouseDown, p);
+    SEL forEvent = NSSelectorFromString(@"_nextResponderForEvent:");
+    for (NSResponder *r = [frameView hitTest:p]; r && chain.count < 80;) {
+      NSResponder *next = [r respondsToSelector:forEvent] ? ((NSResponder * (*)(id, SEL, NSEvent *))objc_msgSend)(r, forEvent, down) : r.nextResponder;
+      [chain addObject:[NSString stringWithFormat:@"%@%@", NSStringFromClass(r.class), next != r.nextResponder ? [NSString stringWithFormat:@" (for the event, next is %@ %p, not %@)", NSStringFromClass(next.class), next, NSStringFromClass(r.nextResponder.class)] : @""]];
+      r = next;
+    }
+    return [chain componentsJoinedByString:@" < "];
+  }
   if ([action isEqualToString:@"windowDrags"]) {
     static NSMutableArray<NSString *> *drags;
     static dispatch_once_t once;

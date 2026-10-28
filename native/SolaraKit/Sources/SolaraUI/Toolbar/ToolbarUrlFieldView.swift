@@ -192,6 +192,7 @@ final class ToolbarUrlFieldView: NSView {
   }
 
   override func mouseDown(with event: NSEvent) {
+    guard isHitBy(event) else { return super.mouseDown(with: event) }
     pressedOnText = true
   }
 
@@ -202,6 +203,7 @@ final class ToolbarUrlFieldView: NSView {
   }
 
   override func rightMouseDown(with event: NSEvent) {
+    guard isHitBy(event) else { return super.rightMouseDown(with: event) }
     onClick(ToolbarClick(id: "url", kind: .menu))
   }
 
@@ -366,6 +368,7 @@ final class NotSecureBadgeView: NSView {
   }
 
   override func mouseDown(with event: NSEvent) {
+    guard isHitBy(event) else { return super.mouseDown(with: event) }
     pressed = true
     alphaValue = 0.8
   }

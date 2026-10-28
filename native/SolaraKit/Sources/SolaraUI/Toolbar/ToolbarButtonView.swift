@@ -1,5 +1,12 @@
 import AppKit
 
+extension NSView {
+  func isHitBy(_ event: NSEvent) -> Bool {
+    guard let frame = window?.contentView?.superview, let hit = frame.hitTest(event.locationInWindow) else { return true }
+    return hit.isDescendant(of: self)
+  }
+}
+
 final class ToolbarButtonView: NSView {
   var state: ToolbarButtonState { didSet { if state != oldValue { apply() } } }
   var palette: ToolbarPaletteState { didSet { if palette != oldValue { apply() } } }
@@ -75,6 +82,7 @@ final class ToolbarButtonView: NSView {
   }
 
   override func mouseDown(with event: NSEvent) {
+    guard isHitBy(event) else { return super.mouseDown(with: event) }
     guard enabled else { return }
     pressed = true
     longPressFired = false
@@ -103,12 +111,12 @@ final class ToolbarButtonView: NSView {
   }
 
   override func rightMouseDown(with event: NSEvent) {
-    guard state.menu == true, enabled else { return super.rightMouseDown(with: event) }
+    guard state.menu == true, enabled, isHitBy(event) else { return super.rightMouseDown(with: event) }
     onClick(ToolbarClick(id: state.id, kind: .menu))
   }
 
   override func otherMouseDown(with event: NSEvent) {
-    guard event.buttonNumber == 2, state.middle == true, enabled else { return super.otherMouseDown(with: event) }
+    guard event.buttonNumber == 2, state.middle == true, enabled, isHitBy(event) else { return super.otherMouseDown(with: event) }
     onClick(ToolbarClick(id: state.id, kind: .middle, flags: event.modifierFlags))
   }
 

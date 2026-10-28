@@ -8,13 +8,20 @@ public struct SettingsJSError: Error, CustomStringConvertible {
 public final class SettingsJS {
   public static let shared = SettingsJS()
 
-  var send: ((_ id: Int, _ name: String, _ argsJSON: String) -> Void)?
+  var send: ((_ id: Int, _ name: String, _ argsJSON: String) -> Void)? {
+    didSet { if send != nil { for listener in connectListeners { listener() } } }
+  }
+  private var connectListeners: [() -> Void] = []
   private var pending: [Int: CheckedContinuation<Any?, Error>] = [:]
   private var nextId = 0
   private var topics: [String: [UUID: (Any?) -> Void]] = [:]
   private(set) var latest: [String: Any] = [:]
 
   var connected: Bool { send != nil }
+
+  public func onConnect(_ listener: @escaping () -> Void) {
+    connectListeners.append(listener)
+  }
 
   public func call(_ name: String, _ args: Any...) async throws -> Any? {
     try await invoke(name, args)

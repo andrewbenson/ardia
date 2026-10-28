@@ -110,6 +110,7 @@ public class SidebarAddressBarModule: Module {
 @MainActor
 enum SidebarAddressBridge {
   private static var installed = false
+  private static var latestAnchors: [String: [String: [CGFloat]]] = [:]
 
   static func install() {
     guard !installed else { return }
@@ -120,8 +121,17 @@ enum SidebarAddressBridge {
     }
     SidebarAddressBars.shared.onAnchors = { windowId, anchors in
       let payload = anchors.mapValues { [$0.minX, $0.minY, $0.width, $0.height] }
-      Task { @MainActor in _ = await SettingsAdapters.js("sidebar.addressAnchors", windowId, payload) }
+      latestAnchors[windowId] = payload
+      sendAnchors(windowId, payload)
     }
+    SettingsJS.shared.onConnect {
+      latestAnchors = latestAnchors.filter { SidebarAddressBars.shared.existing($0.key) != nil }
+      for (windowId, payload) in latestAnchors { sendAnchors(windowId, payload) }
+    }
+  }
+
+  private static func sendAnchors(_ windowId: String, _ payload: [String: [CGFloat]]) {
+    Task { @MainActor in _ = await SettingsAdapters.js("sidebar.addressAnchors", windowId, payload) }
   }
 }
 

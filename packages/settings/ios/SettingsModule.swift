@@ -15,6 +15,10 @@ public class SettingsModule: Module {
       NativeSettingsWindow.enabled
     }
 
+    Function("servicesActive") { () -> Bool in
+      NativeCliControl.active
+    }
+
     AsyncFunction("navigate") { (pane: String?, profileId: String?, detail: String?) in
       MainActor.assumeIsolated { NativeSettingsWindow.navigate(pane: pane, profileId: profileId, detail: detail) }
     }.runOnQueue(.main)

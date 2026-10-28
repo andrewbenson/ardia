@@ -207,13 +207,13 @@ final class EnginesAdapter: EnginesServices {
 @Observable
 final class AdvancedAdapter: AdvancedServices {
   @ObservationIgnored private let model: SettingsModel
-  private var cli: [String: Any]
+  private var jsCli: [String: Any]
   @ObservationIgnored private var observers: [UUID] = []
 
   init(model: SettingsModel) {
     self.model = model
-    cli = SettingsJS.shared.latestValue("advanced.cli") as? [String: Any] ?? [:]
-    observers.append(SettingsJS.shared.observe("advanced.cli") { [weak self] in self?.cli = $0 as? [String: Any] ?? [:] })
+    jsCli = SettingsJS.shared.latestValue("advanced.cli") as? [String: Any] ?? [:]
+    observers.append(SettingsJS.shared.observe("advanced.cli") { [weak self] in self?.jsCli = $0 as? [String: Any] ?? [:] })
   }
 
   func chromiumVersion() async -> String? {
@@ -232,6 +232,8 @@ final class AdvancedAdapter: AdvancedServices {
     list.compactMap { $0 as? [String: Any] }.first { $0.string("id") == "oimompecagnajdejgnnjijobebaeigek" }?.string("version")
   }
 
+  private var cli: [String: Any] { NativeCliControl.active ? NativeCliControl.shared.topic : jsCli }
+
   var cliServer: CliServerStatus? {
     cli.dict("server").map { CliServerStatus(state: $0.string("state") ?? "off", reason: $0.string("reason"), connections: $0.int("connections")) }
   }
@@ -246,7 +248,9 @@ final class AdvancedAdapter: AdvancedServices {
     )
   }
 
-  func installCli() { SettingsJS.shared.fire("advanced.installCli") }
+  func installCli() {
+    if NativeCliControl.active { NativeCliControl.shared.install(reason: "settings") } else { SettingsJS.shared.fire("advanced.installCli") }
+  }
 
   func hasDeveloperModeChanges(_ developerMode: JSONValue?) -> Bool {
     Self.hasDeveloperModeChanges(developerMode)

@@ -60,6 +60,7 @@ enum NativeSettingsWindow {
     SettingsProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
     NativeOnboarding.register()
     SettingsPrewarm.schedule()
+    NativeCliControl.shared.startWhenReady()
     WindowHost.makeAuxController = { id, kind in
       if kind == NativeImportWindow.kind { return NativeImportWindow.makeController() }
       guard kind == "settings" else { return nil }

@@ -17,6 +17,17 @@ public class CliModule: Module {
   }
 }
 
+public enum CliTool {
+  public static var product: String { CliInstaller.product }
+  public static var command: String { CliInstaller.command }
+  public static var appVersion: String { CliInstaller.appVersion }
+  public static func installedVersion() -> String? { CliInstaller.installedVersion() }
+
+  public static func install(onLine: @escaping (String) -> Void, done: @escaping ([String: Any]) -> Void) {
+    CliInstaller.shared.install(onLine: onLine, done: done)
+  }
+}
+
 final class CliInstaller {
   static let shared = CliInstaller()
 

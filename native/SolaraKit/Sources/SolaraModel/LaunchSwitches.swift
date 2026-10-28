@@ -28,6 +28,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativeStore = "ARDIA_NATIVE_STORE"
   case nativeTabPickers = "ARDIA_NATIVE_TAB_PICKERS"
   case syncRedesign = "ARDIA_SYNC_REDESIGN"
+  case nativeServices = "ARDIA_NATIVE_SERVICES"
 
   public static let experiments: [LaunchSwitch] = [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia]
   static let storedInDevelopment: Set<LaunchSwitch> = [

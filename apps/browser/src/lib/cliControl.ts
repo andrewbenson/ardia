@@ -195,4 +195,20 @@ export function startCliControl() {
   afterFirstWindow(() => setTimeout(upgradeIfBehind, UPGRADE_DELAY_MS));
 }
 
+export function startCliActiveTab() {
+  if (started) return;
+  started = true;
+  let newest = 0;
+  const heard = (server: CliControlStatus) => {
+    if ((server.generation ?? newest) < newest) return;
+    newest = Math.max(newest, server.generation ?? 0);
+    useCli.setState({ server });
+  };
+  onCliControlChanged(heard);
+  void cliControlStatus().then(heard, () => {});
+  useBrowser.subscribe(pushActiveTab);
+  useCli.subscribe(pushActiveTab);
+  usePages.subscribe(pushActiveTab);
+}
+
 if (__DEV__) (globalThis as { acCli?: unknown }).acCli = { store: useCli, indicator: useCliIndicator, install: installCliInBackground, upgradeIfBehind };

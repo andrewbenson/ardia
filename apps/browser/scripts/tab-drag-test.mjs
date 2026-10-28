@@ -104,6 +104,7 @@ try {
   app = await launch(appPath, { data, port, session: fixture() });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await sleep(1500);
+  if (!(await run(`return !!globalThis.acTabDrag;`))) throw new Error("tab-drag-test runs on Debug builds only: acTabDrag and the ac.shell hooks are __DEV__-only");
   await run(`return act("w1", "windowDrags");`);
 
   const strip = await run(`return items("w1");`);

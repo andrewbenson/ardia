@@ -76,11 +76,11 @@ async function frames(nativeShell, i) {
     for (const title of labels[i]) controls[title] = await until(`RN's ${title}`, `return button(${JSON.stringify(title)});`);
     return { overlay, controls };
   }
-  const info = await until("the native sad tab", `return native().then((d) => d && d.tabs.a && !d.tabs.a.hidden ? d : null);`);
+  const info = await until("the native sad tab", `return native().then((d) => d && d.tabs.a && d.tabs.a.sadTab && !d.tabs.a.sadTab.hidden ? d : null);`);
   if (!info.top || !info.inCard) throw new Error(`the overlay container is not the card's top child: ${JSON.stringify(info)}`);
   const drawn = await run(`return fibers("PromptButton").length + fibers("Symbol").filter((f) => f.memoizedProps.name === "exclamationmark.triangle").length;`);
   if (drawn) throw new Error("RN still draws the sad tab's icon or buttons with the native one on");
-  return { overlay: info.tabs.a.frame, controls: info.tabs.a.controls, mode: info.tabs.a.mode };
+  return { overlay: info.tabs.a.sadTab.frame, controls: info.tabs.a.sadTab.controls, mode: info.tabs.a.sadTab.mode };
 }
 
 try {

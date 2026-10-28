@@ -1,10 +1,11 @@
 import { Symbol } from "@ardia/shell";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { nativeToolbarAvailable, NativePanelView } from "@ardia/settings";
+import { nativeToolbarAvailable, NativePanelView, windowShellActive } from "@ardia/settings";
 import { useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";
-import { useTab } from "../../store/hooks";
+import { useTab, useWindowId } from "../../store/hooks";
+import { useNativePaneOverlay, usePageFrame } from "../layout/nativePaneOverlays";
 import { PANEL, Popover, PromptButton, ToolbarButton } from "../layout/controls";
 import { setPopover, usePages } from "../layout/pageState";
 import { type ToolbarPalette } from "../layout/toolbarColors";
@@ -32,9 +33,16 @@ export const ZoomIndicator = memo(function ZoomIndicator({ tabId, zoom, palette,
 
 export const ZOOM_POPOVER_WIDTH = 236;
 
-export function ZoomPopover({ tabId, right, left, top }: { tabId: string; right?: number; left?: number; top: number }) {
+export function ZoomPopover({ tabId, right, left, top, nativeAllowed = true }: { tabId: string; right?: number; left?: number; top: number; nativeAllowed?: boolean }) {
   const theme = useTheme();
   const zoom = useTab(tabId)?.zoom ?? 1;
+  const windowId = useWindowId();
+  const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
+  const { frame, ref, onLayout } = usePageFrame();
+  const panelTheme = { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, toolbarHover: theme.toolbarHover, toolbarPressed: theme.toolbarPressed, icon: theme.icon };
+  const popover = { width: ZOOM_POPOVER_WIDTH, top, right: right ?? null, left: left ?? null };
+  useNativePaneOverlay(inShell, windowId, tabId, "zoom", frame ? { zoom, dark: !!theme.dark, theme: panelTheme, popover, frame } : null);
+  if (inShell) return <View ref={ref} pointerEvents="none" collapsable={false} onLayout={onLayout} style={StyleSheet.absoluteFill} />;
   if (nativeToolbarAvailable()) {
     return (
       <NativePanelView
@@ -44,8 +52,8 @@ export function ZoomPopover({ tabId, right, left, top }: { tabId: string; right?
         state={JSON.stringify({
           zoom,
           dark: !!theme.dark,
-          theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, toolbarHover: theme.toolbarHover, toolbarPressed: theme.toolbarPressed, icon: theme.icon },
-          popover: { width: ZOOM_POPOVER_WIDTH, top, right: right ?? null, left: left ?? null },
+          theme: panelTheme,
+          popover,
         })}
         onPanelEvent={(e) => {
           if (e.nativeEvent.kind === "dismiss") return setPopover(tabId, null);

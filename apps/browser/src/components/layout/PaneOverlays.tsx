@@ -7,7 +7,7 @@ import { hex, useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";
 import { PromptButton } from "./controls";
 import { patchPage, usePage } from "./pageState";
-import { type PageFrame, useNativeSadTab } from "./nativePaneOverlays";
+import { useNativeSadTab, usePageFrame } from "./nativePaneOverlays";
 import { useWindowId } from "../../store/hooks";
 
 let nativeStatusBubble = false;
@@ -84,14 +84,9 @@ export function SadTab({ tabId, nativeAllowed = true }: { tabId: string; nativeA
   const crashed = usePage(tabId, (p) => !!p.crashed);
   const unresponsive = usePage(tabId, (p) => p.unresponsive);
   const mode = crashed ? "crashed" : unresponsive ? "unresponsive" : null;
-  const [frame, setFrame] = useState<PageFrame | null>(null);
-  const area = useRef<View>(null);
+  const { frame, ref, onLayout } = usePageFrame();
   useNativeSadTab(native, windowId, tabId, mode, frame, theme);
-  if (native) {
-    if (!mode) return null;
-    const measure = () => area.current?.measureInWindow((x, y, width, height) => setFrame((f) => (f && f.join() === [x, y, width, height].join() ? f : [x, y, width, height])));
-    return <View ref={area} pointerEvents="none" collapsable={false} onLayout={measure} style={StyleSheet.absoluteFill} />;
-  }
+  if (native) return mode ? <View ref={ref} pointerEvents="none" collapsable={false} onLayout={onLayout} style={StyleSheet.absoluteFill} /> : null;
   if (crashed) {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.dark ? "#1C1A1B" : "#F6F5F6", alignItems: "center", justifyContent: "center", padding: 24 }]}>

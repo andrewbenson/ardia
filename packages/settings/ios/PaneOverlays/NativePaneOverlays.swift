@@ -49,11 +49,26 @@ final class PaneOverlayContainer: NSView {
 }
 
 @MainActor
+final class PaneZoomPopover {
+  let wrap = PaneOverlayContainer()
+  let popover: PopoverView
+  let body = ZoomPanelView(frame: .zero)
+
+  init() {
+    popover = PopoverView(body: body)
+    popover.autoresizingMask = [.width, .height]
+    wrap.addSubview(popover)
+    body.onHeight = { [weak self] h in DispatchQueue.main.async { self?.popover.set(bodyHeight: h) } }
+  }
+}
+
+@MainActor
 final class PaneOverlayHost {
   let windowId: String
   let container = PaneOverlayContainer()
   private var sadTabs: [String: SadTabView] = [:]
-  private var pageFrames: [String: CGRect] = [:]
+  private var zooms: [String: PaneZoomPopover] = [:]
+  private var pageFrames: [String: [String: CGRect]] = [:]
 
   init(windowId: String) {
     self.windowId = windowId
@@ -61,42 +76,70 @@ final class PaneOverlayHost {
 
   private var card: NSView? { NativeWindowShell.host(windowId)?.shell.card }
 
-  func apply(_ tabs: [String: Any]) {
-    var seen = Set<String>()
-    for (tabId, value) in tabs {
-      guard let entry = value as? [String: Any], let sad = entry["sadTab"],
-        let data = try? JSONSerialization.data(withJSONObject: sad), let json = String(data: data, encoding: .utf8),
-        let state = SadTabState.decode(json), state.mode != nil
-      else { continue }
-      seen.insert(tabId)
-      if let f = (sad as? [String: Any])?["frame"] as? [Double], f.count == 4, let card, let height = card.window?.contentView?.bounds.height {
-        pageFrames[tabId] = card.convert(CGRect(x: f[0], y: height - f[1] - f[3], width: f[2], height: f[3]), from: nil)
-      }
-      let view = sadTabs[tabId] ?? make(tabId)
-      view.update(state)
+  private func entry(_ value: Any?, kind: String, tabId: String) -> Data? {
+    guard let object = (value as? [String: Any])?[kind] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+    if let f = object["frame"] as? [Double], f.count == 4, let card, let height = card.window?.contentView?.bounds.height {
+      pageFrames[kind, default: [:]][tabId] = card.convert(CGRect(x: f[0], y: height - f[1] - f[3], width: f[2], height: f[3]), from: nil)
     }
-    for (tabId, view) in sadTabs where !seen.contains(tabId) {
+    return data
+  }
+
+  func apply(_ tabs: [String: Any]) {
+    var sad = Set<String>()
+    var zoomed = Set<String>()
+    for (tabId, value) in tabs {
+      if let data = entry(value, kind: "sadTab", tabId: tabId), let json = String(data: data, encoding: .utf8), let state = SadTabState.decode(json), state.mode != nil {
+        sad.insert(tabId)
+        (sadTabs[tabId] ?? makeSadTab(tabId)).update(state)
+      }
+      if let data = entry(value, kind: "zoom", tabId: tabId), let state = try? JSONDecoder().decode(ZoomPanelState.self, from: data), let placement = PanelPopover.placement(data) {
+        zoomed.insert(tabId)
+        let zoom = zooms[tabId] ?? makeZoom(tabId)
+        zoom.body.update(state)
+        zoom.popover.set(placement: placement, dark: state.dark)
+      }
+    }
+    for (tabId, view) in sadTabs where !sad.contains(tabId) {
       view.removeFromSuperview()
       sadTabs[tabId] = nil
-      pageFrames[tabId] = nil
+      pageFrames["sadTab"]?[tabId] = nil
+    }
+    for (tabId, zoom) in zooms where !zoomed.contains(tabId) {
+      zoom.wrap.removeFromSuperview()
+      zooms[tabId] = nil
+      pageFrames["zoom"]?[tabId] = nil
     }
     relayout()
   }
 
-  private func make(_ tabId: String) -> SadTabView {
+  private func makeSadTab(_ tabId: String) -> SadTabView {
     let view = SadTabView(frame: .zero)
     let windowId = windowId
     view.onAction = { action in
       Task { @MainActor in _ = await SettingsAdapters.js("pane.sadTab", windowId, tabId, action.rawValue) }
     }
-    container.addSubview(view)
+    container.addSubview(view, positioned: .below, relativeTo: nil)
     sadTabs[tabId] = view
     return view
   }
 
+  private func makeZoom(_ tabId: String) -> PaneZoomPopover {
+    let zoom = PaneZoomPopover()
+    let windowId = windowId
+    zoom.popover.onDismiss = { Task { @MainActor in _ = await SettingsAdapters.js("pane.zoom", windowId, tabId, "dismiss", 0) } }
+    zoom.body.onEvent = { event in
+      switch event {
+      case .step(let step): Task { @MainActor in _ = await SettingsAdapters.js("pane.zoom", windowId, tabId, "step", step) }
+      }
+    }
+    container.addSubview(zoom.wrap)
+    zooms[tabId] = zoom
+    return zoom
+  }
+
   func relayout() {
     guard let card else { return container.removeFromSuperview() }
-    if sadTabs.isEmpty {
+    if sadTabs.isEmpty && zooms.isEmpty {
       container.removeFromSuperview()
       return
     }
@@ -107,21 +150,39 @@ final class PaneOverlayHost {
     container.frame = card.bounds
     container.autoresizingMask = [.width, .height]
     for (tabId, view) in sadTabs {
-      let rect = pageFrames[tabId]
+      let rect = pageFrames["sadTab"]?[tabId]
       view.isHidden = rect == nil || view.showing == nil
       if let rect, view.frame != rect { view.frame = rect }
+    }
+    for (tabId, zoom) in zooms {
+      let rect = pageFrames["zoom"]?[tabId]
+      zoom.wrap.isHidden = rect == nil
+      if let rect, zoom.wrap.frame != rect {
+        zoom.wrap.frame = rect
+        zoom.popover.frame = zoom.wrap.bounds
+      }
     }
   }
 
   func describe() -> [String: Any] {
-    var tabs: [String: Any] = [:]
+    var tabs: [String: [String: Any]] = [:]
+    func inWindow(_ view: NSView, _ r: CGRect) -> [Double] {
+      let w = view.convert(r, to: nil)
+      let h = view.window?.contentView?.bounds.height ?? 0
+      return [w.minX, h - w.maxY, w.width, w.height]
+    }
     for (tabId, view) in sadTabs {
-      let inWindow = { (r: CGRect) -> [Double] in
-        let w = view.convert(r, to: nil)
-        let h = view.window?.contentView?.bounds.height ?? 0
-        return [w.minX, h - w.maxY, w.width, w.height]
+      tabs[tabId, default: [:]]["sadTab"] = ["mode": (view.showing?.rawValue).map { $0 as Any } ?? NSNull(), "hidden": view.isHiddenOrHasHiddenAncestor, "frame": inWindow(view, view.bounds), "controls": view.controlFrames.mapValues { inWindow(view, $0) }]
+    }
+    for (tabId, zoom) in zooms {
+      let p = zoom.popover
+      var controls: [String: [Double]] = [:]
+      func walk(_ view: NSView) {
+        if view.accessibilityRole() == .button, let name = view.accessibilityLabel() { controls[name] = inWindow(view, view.bounds) }
+        view.subviews.forEach(walk)
       }
-      tabs[tabId] = ["mode": (view.showing?.rawValue).map { $0 as Any } ?? NSNull(), "hidden": view.isHiddenOrHasHiddenAncestor, "frame": inWindow(view.bounds), "controls": view.controlFrames.mapValues(inWindow)]
+      walk(zoom.body)
+      tabs[tabId, default: [:]]["zoom"] = ["hidden": zoom.wrap.isHiddenOrHasHiddenAncestor, "frame": inWindow(zoom.wrap, zoom.wrap.bounds), "card": inWindow(p, p.cardFrame), "opacity": p.presentedOpacity, "progress": p.progress, "controls": controls]
     }
     return ["top": container.superview?.subviews.last === container, "inCard": container.superview === card, "tabs": tabs]
   }

@@ -1,9 +1,10 @@
 import { publishSettingsTopic } from "@ardia/settings";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { View } from "react-native";
 import { webviews } from "../../lib/webviews";
 import type { Theme } from "../../lib/theme";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { patchPage } from "./pageState";
+import { patchPage, setPopover } from "./pageState";
 
 const VERSION = 1;
 const windows: Record<string, Record<string, Record<string, object>>> = {};
@@ -39,16 +40,33 @@ addNativeSettingsHandlers({
       return void webviews.get(tabId)?.resolveUnresponsive(action === "exit");
     }
   },
+  "pane.zoom": (_windowId: string, tabId: string, kind: string, step: number) => {
+    if (kind === "dismiss") return setPopover(tabId, null);
+    if (kind === "step") void webviews.get(tabId)?.zoomStep(Math.sign(Number(step)) as -1 | 0 | 1);
+  },
 });
+
+export function usePageFrame() {
+  const [frame, setFrame] = useState<PageFrame | null>(null);
+  const ref = useRef<View>(null);
+  const onLayout = useCallback(
+    () => ref.current?.measureInWindow((x, y, width, height) => setFrame((f) => (f && f.join() === [x, y, width, height].join() ? f : [x, y, width, height]))),
+    [],
+  );
+  return { frame, ref, onLayout };
+}
+
+export function useNativePaneOverlay(active: boolean, windowId: string, tabId: string, kind: string, state: object | null) {
+  const key = state && JSON.stringify(state);
+  useEffect(() => {
+    if (active) setOverlay(windowId, tabId, kind, state);
+  }, [active, windowId, tabId, kind, key]);
+  useEffect(() => () => void (active && setOverlay(windowId, tabId, kind, null)), [active, windowId, tabId, kind]);
+}
 
 export type PageFrame = [number, number, number, number];
 
 export function useNativeSadTab(active: boolean, windowId: string, tabId: string, mode: "crashed" | "unresponsive" | null, frame: PageFrame | null, theme: Theme) {
   const { dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } = theme;
-  const shown = mode && frame;
-  useEffect(() => {
-    if (!active) return;
-    setOverlay(windowId, tabId, "sadTab", shown ? { mode, frame, dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } : null);
-  }, [active, windowId, tabId, mode, frame?.join(), dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText]);
-  useEffect(() => () => void (active && setOverlay(windowId, tabId, "sadTab", null)), [active, windowId, tabId]);
+  useNativePaneOverlay(active, windowId, tabId, "sadTab", mode && frame ? { mode, frame, dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } : null);
 }

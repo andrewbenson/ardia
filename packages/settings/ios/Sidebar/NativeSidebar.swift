@@ -219,6 +219,7 @@ final class SidebarHost {
     case .tidy: call("tidy", hostState?.profileId ?? "")
     case .clear: call("clear", "")
     case .hover(let kind, let id): call("hover", id ?? "", ["kind": kind ?? NSNull()])
+    case .scrolled: call("scrolled", "")
     case .renamed(let kind, let id, let text): call("renamed", id, ["kind": kind, "text": text ?? NSNull()])
     case .live(let action, let folderId, let id, let meta): call("live", folderId, ["action": action, "item": id ?? NSNull(), "meta": meta])
     case .media(let tabId, let action): NativeMedia.player("sidebarPlayer", windowId, tabId, action)

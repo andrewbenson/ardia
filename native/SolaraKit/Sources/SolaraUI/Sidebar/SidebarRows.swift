@@ -38,6 +38,7 @@ public enum SidebarAction: Sendable {
   case clear
   case renamed(kind: String, id: String, text: String?)
   case hover(kind: String?, id: String?)
+  case scrolled
   case live(action: String, folderId: String, id: String?, meta: Bool)
   case media(tabId: String, action: MediaAction)
 }

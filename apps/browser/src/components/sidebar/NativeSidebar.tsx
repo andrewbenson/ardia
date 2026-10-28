@@ -35,7 +35,7 @@ import { useTab } from "../../store/hooks";
 import { usePages } from "../layout/pageState";
 import { publishNativeLive, runNativeLive } from "./nativeLive";
 import { tidyPins } from "./tidyPinsUi";
-import { openTileFolderMenu, toggleFolderPanel } from "./tileFolderUi";
+import { closeFolderPanelIn, openTileFolderMenu, toggleFolderPanel } from "./tileFolderUi";
 
 let nativeSidebar: boolean | undefined;
 
@@ -133,6 +133,8 @@ addNativeSettingsHandlers({
         return void toggleFolderPanel(windowId, id);
       case "folderMenu":
         return void openTileFolderMenu(windowId, id);
+      case "scrolled":
+        return void closeFolderPanelIn(windowId);
       case "tidy":
         return tidyPins(windowId, id || undefined);
       case "clear":

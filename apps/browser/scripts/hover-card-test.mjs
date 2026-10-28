@@ -6,6 +6,7 @@
 // switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
 // pull request's card opens the pull request from its comments line. A playing pinned tab's player card goes back to
 // the tab from its artwork. A pinned calendar tab's card lists the fixture's events and a click on one shows the tab.
+// Scrolling the sidebar dismisses the card, as RN's does.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -217,6 +218,24 @@ try {
     await sleep(200);
     await run(`return ac.shell.devClick("w1", { x: ${x + w / 2}, y: ${y + h / 2} })`);
     await until("the calendar tab active", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId]`)) === tab);
+  });
+
+  await rep.check("scrolling the sidebar dismisses it, as RN's does", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    const extra = JSON.parse(await run(`const ids = []; for (let i = 0; i < 30; i++) ids.push(ac.store.getState().newTab("w1", { url: "data:text/html,<title>More " + i + "</title>", background: true })); return JSON.stringify(ids);`));
+    try {
+      await run(`return globalThis.expo.modules.SolaraSidebarDrag.scrollTo("w1", 0)`);
+      await sleep(600);
+      await onRow("t6");
+      await shown("t6");
+      const after = await run(`const H = globalThis.expo.modules.SolaraHosted; return globalThis.expo.modules.SolaraSidebarDrag.scrollTo("w1", 120).then(() => { const t0 = Date.now(); return new Promise((done) => setTimeout(done, 250)).then(() => H.sidebarHoverCard("w1")).then((c) => ({ ms: Date.now() - t0, hover: ac.sidebarRows.useSidebarUi.getState().hover, phase: JSON.parse(c)?.phase ?? "hidden" })); })`);
+      assert.ok(after.ms < 450, `sampled before a new hover intent could show (${after.ms} ms)`);
+      assert.equal(after.hover, null, "the hover is dismissed");
+      assert.notEqual(after.phase, "shown", "the native card is leaving or gone");
+    } finally {
+      await run(`ac.store.getState().closeTabs(${JSON.stringify(extra)}); return true`);
+    }
   });
 } finally {
   await app.quit();

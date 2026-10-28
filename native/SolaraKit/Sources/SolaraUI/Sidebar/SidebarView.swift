@@ -411,7 +411,14 @@ public final class SidebarView: NSView {
     motion = .standard
   }
 
+  private var scrolledTop: CGFloat = 0
+
   @objc private func scrolled() {
+    let top = scroll.contentView.bounds.minY
+    if top != scrolledTop {
+      scrolledTop = top
+      onAction(.scrolled)
+    }
     syncEdge()
     syncPill()
     syncPointer()

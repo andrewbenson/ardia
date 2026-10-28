@@ -24,6 +24,7 @@ type TabDrag = {
   overWindow: string | null;
   overPoint: [number, number] | null;
   insert: { windowId: string; beforeId: string | null } | null;
+  owned: boolean;
 };
 
 export const useTabDrag = create<TabDrag>()(() => ({
@@ -39,6 +40,7 @@ export const useTabDrag = create<TabDrag>()(() => ({
   overWindow: null,
   overPoint: null,
   insert: null,
+  owned: false,
 }));
 
 if (__DEV__) (globalThis as { acTabDrag?: typeof useTabDrag }).acTabDrag = useTabDrag;
@@ -55,7 +57,7 @@ let begun = false;
 let nativeOwned = false;
 let zoneInsert = false;
 
-export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : [], native = false): number {
+export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [tabId] : [], native = false, owned = false): number {
   if (begun) dragPreview.cancel();
   begun = false;
   nativeOwned = native;
@@ -63,7 +65,7 @@ export function beginTabDrag(tabId: string | null, tabIds: string[] = tabId ? [t
   sentShape = "hidden";
   pointer = [-1, -1];
   const windowId = useBrowser.getState().tabs[tabIds[0] ?? ""]?.windowId ?? null;
-  useTabDrag.setState({ ...IDLE, tabId, tabIds, windowId, x: -1, y: -1 });
+  useTabDrag.setState({ ...IDLE, tabId, tabIds, windowId, x: -1, y: -1, owned });
   const seq = ++dragSeq;
   liveFrame = null;
   if (windowId && !native)
@@ -99,6 +101,7 @@ export function updateNativeTabDrag(
   overPoint: [number, number] | null,
   lifted: boolean | null = null,
   zoneBefore: string | null | false = false,
+  zone: { onPage: boolean; target: DropTarget | null } | null = null,
 ) {
   const drag = useTabDrag.getState();
   if (!drag.tabIds.length || !drag.windowId) return;
@@ -108,7 +111,7 @@ export function updateNativeTabDrag(
   zoneInsert = zoned;
   pointer = [x, y];
   if (lifted === false && drag.lifted === false && !outside && !drag.outside) return;
-  useTabDrag.setState({ x, y, lifted, outside, overWindow, overPoint, insert });
+  useTabDrag.setState({ x, y, lifted, outside, overWindow, overPoint, insert, ...zone });
 }
 
 const insertResolvers = new Map<string, (point: [number, number]) => string | null | undefined>();
@@ -179,6 +182,7 @@ export function captureDragPage(windowId: string) {
 }
 
 export function setDropTarget(target: DropTarget | null) {
+  if (useTabDrag.getState().owned) return;
   const current = useTabDrag.getState().target;
   if (current?.tabId === target?.tabId && current?.side === target?.side) return;
   useTabDrag.setState({ target });
@@ -195,7 +199,7 @@ export function setPageResolver(resolver: typeof resolvePage) {
 }
 
 export function setOnPage(onPage: boolean) {
-  if (useTabDrag.getState().onPage === onPage) return;
+  if (useTabDrag.getState().owned || useTabDrag.getState().onPage === onPage) return;
   useTabDrag.setState({ onPage });
   syncPreview();
 }
@@ -211,6 +215,7 @@ const IDLE = {
   overWindow: null,
   overPoint: null,
   insert: null,
+  owned: false,
 } as const;
 
 export function endTabDrag(): boolean {

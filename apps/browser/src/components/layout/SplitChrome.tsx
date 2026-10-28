@@ -88,7 +88,7 @@ function DividerHandle({ split, divider, width, height }: { split: SplitView; di
 }
 
 export function DropTargets({ panes, origin, windowId, native = false }: { panes: Record<string, Rect>; origin: { x: number; y: number } | null; windowId: string; native?: boolean }) {
-  const dragging = useTabDrag((s) => (s.windowId === windowId ? s.tabId : null));
+  const dragging = useTabDrag((s) => (s.windowId === windowId && !s.owned ? s.tabId : null));
   const x = useTabDrag((s) => s.x);
   const y = useTabDrag((s) => s.y);
   const lifted = useTabDrag((s) => s.lifted);

@@ -36,9 +36,11 @@ public final class SplitDropZone: TabDropZone {
       shown = true
       grown = false
       timer?.invalidate()
-      timer = Timer.scheduledTimer(withTimeInterval: Self.slide, repeats: false) { [weak self] _ in
+      let grows = Timer(timeInterval: Self.slide, repeats: false) { [weak self] _ in
         MainActor.assumeIsolated { self?.grow() }
       }
+      RunLoop.main.add(grows, forMode: .common)
+      timer = grows
     }
     target = grown ? SplitDrop.zoneHit(next.map { ($0.tabId, $0.rect) }, local.x, local.y, current: target) : nil
     publish()
@@ -69,6 +71,7 @@ public final class SplitDropZone: TabDropZone {
     guard shown else { return }
     grown = true
     publish()
+    TabDragSession.current?.reaim?()
   }
 
   private func hide() -> TabDropAim? {

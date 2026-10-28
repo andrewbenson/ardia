@@ -33,6 +33,7 @@ public final class TabDragSession {
   public private(set) var outside = false
   public var lifted: Bool?
   public var sourceClosing: (() -> Void)?
+  public var reaim: (() -> Void)?
   public private(set) var aim: TabDropAim?
   public private(set) var endedAim: TabDropAim?
 
@@ -64,6 +65,10 @@ public final class TabDragSession {
 
   public static func unregister(_ zone: TabDropZone) {
     zones.removeAll { $0.zone == nil || $0.zone === zone }
+  }
+
+  public static func hasZone(in windowId: String, _ priority: TabDropPriority) -> Bool {
+    zones.contains { $0.windowId == windowId && $0.priority == priority && $0.zone != nil }
   }
 
   @discardableResult

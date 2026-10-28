@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
+import type { SplitSide } from "../../store/splits";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { beginTabDrag, cancelTabDrag, captureDragPage, endNativeTabDrag, updateNativeTabDrag, useTabDrag } from "./tabDrag";
 
@@ -26,9 +27,9 @@ function stopTabDrag() {
 }
 
 addNativeSettingsHandlers({
-  "tabDrag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
-    beginTabDrag(tabId, tabIds, true);
-    watchTabDrag();
+  "tabDrag.begin": (_windowId: string, tabId: string | null, tabIds: string[], owned = false) => {
+    beginTabDrag(tabId, tabIds, true, owned);
+    if (!owned) watchTabDrag();
   },
   "tabDrag.capture": (windowId: string) => captureDragPage(windowId),
   "tabDrag.move": (
@@ -41,7 +42,9 @@ addNativeSettingsHandlers({
     oy: number,
     lifted: boolean | null,
     zoneBefore: string | null | false,
-  ) => updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null, lifted, zoneBefore),
+    onPage: boolean | null = null,
+    target: [string, SplitSide] | null = null,
+  ) => updateNativeTabDrag(x, y, outside, overWindow, overWindow ? [ox, oy] : null, lifted, zoneBefore, onPage === null ? null : { onPage, target: target && { tabId: target[0], side: target[1] } }),
   "tabDrag.end": (_windowId: string, commit: boolean, deadline?: number) => {
     const end = () => {
       const late = !!deadline && Date.now() > deadline;

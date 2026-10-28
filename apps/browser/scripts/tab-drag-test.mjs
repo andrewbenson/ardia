@@ -507,19 +507,19 @@ try {
   if (nativeSidebar)
   await check("sidebar: a split drop whose end reply comes late commits once, or not at all", async () => {
     await run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id); st().updateSettings({ tabLayout: "sidebar" });
-      for (let i = 0; i < 2; i++) st().newTab("w1", { url: "data:text/html,late" + i, background: true });
+      for (let i = 0; i < 3; i++) st().newTab("w1", { url: "data:text/html,late" + i, background: true });
       return settle(1500);`);
     const free = await run(`const s = st(); const w = s.windows.w1; const split = new Set(Object.values(s.splits).flatMap((v) => v.tabIds));
       return w.tabIds.filter((id) => !split.has(id) && id !== w.activeTabIds[w.profileId]);`);
     const probe = await nativeProbe("w1");
     const rows = probe.items.filter((i) => i.kind === "row" && i.tabIds.length === 1 && free.includes(i.tabIds[0]));
-    assert.ok(rows.length >= 2, JSON.stringify({ free, rows: rows.map((r) => r.tabIds) }));
+    assert.ok(rows.length >= 3, JSON.stringify({ free, rows: rows.map((r) => r.tabIds) }));
     const dropLate = async (row, delay) => {
       const before = await live();
       const sx = Math.round(row.x + row.w / 2), sy = Math.round(row.y + row.h / 2);
       const left = Math.round(row.x + row.w + 140);
       await run(`globalThis.acTabDragEndDelay = ${delay};
-        return act("w1", "drag:${sx},${sy};${sx + 40},${sy + 20};${left},380;${left + 4},390;${left + 6},396;${left + 6},398").then(() => settle(2800)).finally(() => { globalThis.acTabDragEndDelay = 0; });`);
+        return act("w1", "drag:${sx},${sy};${sx + 40},${sy + 20};${left},380;${left + 4},390;${left + 6},396;${left + 6},398").then(() => settle(${Math.max(2800, delay + 1200)})).finally(() => { globalThis.acTabDragEndDelay = 0; });`);
       const after = await live();
       const splits = await run(`return Object.values(st().splits).filter((v) => v.tabIds.includes(${JSON.stringify(row.tabIds[0])})).length;`);
       const lastDrop = (await nativeProbe("w1"))?.lastDrop ?? null;
@@ -534,6 +534,11 @@ try {
     assert.equal(late.after.windows.length, late.before.windows.length, `and opens no window: ${JSON.stringify(late)}`);
     assert.equal(late.after.tabs[late.id], "w1");
     assert.equal(late.after.dragging, 0, "no drag left");
+    const timedOut = await dropLate(rows[2], 2600);
+    assert.ok(timedOut.splits <= 1, `a reply after native's deadline splits at most once: ${JSON.stringify(timedOut)}`);
+    assert.equal(timedOut.after.windows.length, timedOut.before.windows.length, `and opens no window: ${JSON.stringify(timedOut)}`);
+    assert.equal(timedOut.after.tabs[timedOut.id], "w1");
+    assert.equal(timedOut.after.dragging, 0, "no drag left");
   });
 
   await check("sidebar: Esc and the release in the same moment end the drag once, and the next drag still works", async () => {

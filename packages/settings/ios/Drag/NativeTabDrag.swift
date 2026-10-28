@@ -26,6 +26,7 @@ final class NativeTabDrag {
   private var previewShown = false
   private var previewToken = 0
   private var closing: (() -> Bool)?
+  private var owned = false
   private(set) var lastDrop: [String: Any] = [:]
 
   func send(_ name: String, _ args: [Any], done: (@MainActor (Any?) -> Void)? = nil) {
@@ -53,9 +54,14 @@ final class NativeTabDrag {
     }
     TabDragSession.windowOf = { ShellDrag.window($0) }
     self.closing = closing
+    owned = Self.ownsDrop(windowId)
     let session = TabDragSession.begin(tabIds: tabIds, from: windowId)
     session.sourceClosing = { [weak self] in self?.sourceClosing(windowId) }
-    send("tabDrag.begin", [windowId, tabId ?? NSNull(), tabIds])
+    session.reaim = { [weak self] in
+      guard let self else { return }
+      self.move(windowId: windowId, at: self.pointer, lifted: self.lifted)
+    }
+    send("tabDrag.begin", [windowId, tabId ?? NSNull(), tabIds, owned])
   }
 
   func picture(windowId: String, chip: @escaping () -> NSRect, grab: CGPoint) {
@@ -84,7 +90,8 @@ final class NativeTabDrag {
     syncPreview(windowId)
     let queued = pendingMove != nil
     let zoneBefore: Any = zoneInsert.map { $0.map { $0 as Any } ?? NSNull() } ?? false
-    pendingMove = [windowId, point.x, point.y, outside, over ?? NSNull(), overPoint.x, overPoint.y, lifted ?? NSNull(), zoneBefore]
+    let zoneTarget: Any = TabDragSession.current.flatMap { if case .split(let tabId, let side) = $0.aim { [tabId, side.rawValue] } else { nil } } ?? NSNull()
+    pendingMove = [windowId, point.x, point.y, outside, over ?? NSNull(), overPoint.x, overPoint.y, lifted ?? NSNull(), zoneBefore, owned ? zoneOnPage : NSNull(), zoneTarget]
     if queued { return }
     let previous = chain
     chain = Task { @MainActor in
@@ -106,10 +113,12 @@ final class NativeTabDrag {
     let zonePage = session?.endedAim.map(Self.onPage) ?? false
     let liftedPage = !outside && lifted == true
     let screen = session?.pointer
+    let owned = self.owned
     clearDrag()
     let reply = EndReply()
     let finish: @MainActor (_ end: [String: Any]?) -> Void = { [weak self] end in
       guard let self else { return done(false) }
+      let unanswered = !owned && end == nil
       guard commit else {
         self.endPreview(preview, cancel: true)
         return done(false)
@@ -122,15 +131,19 @@ final class NativeTabDrag {
       let onPage = !outside && (zonePage || liftedPage || end?["onPage"] as? Bool == true)
       self.lastDrop = [
         "outside": outside, "over": over ?? NSNull(), "zonePage": zonePage, "jsOnPage": end?["onPage"] ?? NSNull(), "jsPointer": end?["pointer"] ?? NSNull(),
-        "timedOut": end == nil, "screen": screen.map { [$0.x, $0.y] } ?? NSNull(), "source": ShellDrag.window(windowId).map { [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height] } ?? NSNull(),
+        "timedOut": unanswered, "owned": owned, "screen": screen.map { [$0.x, $0.y] } ?? NSNull(), "source": ShellDrag.window(windowId).map { [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height] } ?? NSNull(),
       ]
-      guard outside || (onPage && end != nil), let screen else {
-        self.endPreview(preview, cancel: end == nil)
+      guard outside || (onPage && !unanswered), let screen else {
+        self.endPreview(preview, cancel: unanswered)
         return done(false)
       }
       let before: String?? = end?["insert"] as? Bool == true ? .some(end?["before"] as? String) : .none
       self.dropOutside(tabIds, from: windowId, at: screen, over: over.flatMap { self.open($0) ? $0 : nil }, before: before, preview: preview)
       done(true)
+    }
+    if owned {
+      send("tabDrag.end", [windowId, false])
+      return finish(nil)
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.endDeadline) {
       MainActor.assumeIsolated {
@@ -169,12 +182,19 @@ final class NativeTabDrag {
     }
   }
 
+  private static func ownsDrop(_ windowId: String) -> Bool {
+    guard TabDragSession.hasZone(in: windowId, .split), let state = NativeStoreHandle.store?.state else { return false }
+    let layout = state.settings.string("tabLayout")
+    return state.windows.values.allSatisfy { ($0.tabLayout ?? layout) == "top" ? NativeTopStrip.enabled : NativeSidebar.enabled }
+  }
+
   private func session(_ windowId: String) -> TabDragSession? {
     TabDragSession.current.flatMap { $0.sourceWindow == windowId ? $0 : nil }
   }
 
   private func clearDrag() {
     picture = nil
+    owned = false
     lifted = nil
     outside = false
     overWindow = nil

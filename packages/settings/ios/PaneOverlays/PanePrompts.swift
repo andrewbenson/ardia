@@ -21,7 +21,7 @@ enum PanePrompts {
   private static var windows: [String: [String: Any]] = [:]
   private static var browsers = PaneBrowsers()
   private static var selectionShown: [String: PaneSelection] = [:]
-  private static var selectionGeneration = 0
+  private static var selectionGenerations: [String: Int] = [:]
   private static var engineRemember: [String: (site: String, on: Bool)] = [:]
   private static var cliShown: [String: Bool] = [:]
   private static var cliRevealed: Set<String> = []
@@ -64,6 +64,7 @@ enum PanePrompts {
     if name == "onPageGone" {
       browsers.gone(tabId)
       selectionShown[tabId] = nil
+      selectionGenerations[tabId] = nil
       guard let gone = pages.removeValue(forKey: tabId), gone.shown != PanePromptPage().shown else { return }
       return refreshAll()
     }
@@ -81,11 +82,11 @@ enum PanePrompts {
       if selectionShown.removeValue(forKey: tabId) != nil { changed(tabId) }
       return
     }
-    selectionGeneration += 1
-    let generation = selectionGeneration
+    let generation = (selectionGenerations[tabId] ?? 0) + 1
+    selectionGenerations[tabId] = generation
     DispatchQueue.main.asyncAfter(deadline: .now() + PanePromptSpecs.selectionDelay) {
       MainActor.assumeIsolated {
-        guard generation == selectionGeneration, pages[tabId]?.selection == selection else { return }
+        guard generation == selectionGenerations[tabId], pages[tabId]?.selection == selection else { return }
         selectionShown[tabId] = selection
         changed(tabId)
       }

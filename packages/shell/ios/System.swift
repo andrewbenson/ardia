@@ -57,6 +57,12 @@ public enum SystemServices {
 
   @discardableResult
   public static func addToDock() -> Bool { DockTile.add() }
+
+  public static func playIntroMusic(cues: [String: Double], muted: Bool) { IntroMusic.shared.play(cues: cues, muted: muted) }
+
+  public static func setIntroMusicMuted(_ muted: Bool) { IntroMusic.shared.setMuted(muted) }
+
+  public static func stopIntroMusic(fade: Double) { IntroMusic.shared.stop(fade: fade) }
 }
 
 public class SystemModule: Module {

@@ -96,16 +96,16 @@ final class OnboardingAdapter: OnboardingServices {
   func startToolTour(_ windowId: String) { Self.fire("onboarding.startToolTour", windowId) }
 
   func playIntroMusic(_ cues: IntroMusicCues, muted: Bool) {
-    let arg: [String: Any] = [
-      "icon": cues.icon, "letters": cues.letters, "letterStep": cues.letterStep, "letterCount": cues.letterCount,
+    let arg: [String: Double] = [
+      "icon": cues.icon, "letters": cues.letters, "letterStep": cues.letterStep, "letterCount": Double(cues.letterCount),
       "tagline": cues.tagline, "exit": cues.exit, "end": cues.end,
     ]
-    Self.fire("onboarding.playIntroMusic", arg, muted)
+    SystemServices.playIntroMusic(cues: arg, muted: muted)
   }
 
-  func setIntroMusicMuted(_ muted: Bool) { Self.fire("onboarding.setIntroMusicMuted", muted) }
+  func setIntroMusicMuted(_ muted: Bool) { SystemServices.setIntroMusicMuted(muted) }
 
-  func stopIntroMusic(fade: Double) { Self.fire("onboarding.stopIntroMusic", fade) }
+  func stopIntroMusic(fade: Double) { SystemServices.stopIntroMusic(fade: fade) }
 
   func fileExists(_ path: String) -> Bool { FileManager.default.fileExists(atPath: path) }
 

@@ -142,9 +142,9 @@ public class AppModule: Module {
       return NSWorkspace.shared.open(target)
     }.runOnQueue(.main)
 
-    AsyncFunction("playIntroMusic") { (cues: [String: Double], muted: Bool) in IntroMusic.shared.play(cues: cues, muted: muted) }.runOnQueue(.main)
-    AsyncFunction("setIntroMusicMuted") { (muted: Bool) in IntroMusic.shared.setMuted(muted) }.runOnQueue(.main)
-    AsyncFunction("stopIntroMusic") { (fade: Double) in IntroMusic.shared.stop(fade: fade) }.runOnQueue(.main)
+    AsyncFunction("playIntroMusic") { (cues: [String: Double], muted: Bool) in SystemServices.playIntroMusic(cues: cues, muted: muted) }.runOnQueue(.main)
+    AsyncFunction("setIntroMusicMuted") { (muted: Bool) in SystemServices.setIntroMusicMuted(muted) }.runOnQueue(.main)
+    AsyncFunction("stopIntroMusic") { (fade: Double) in SystemServices.stopIntroMusic(fade: fade) }.runOnQueue(.main)
     AsyncFunction("devRenderIntroMusic") { (cues: [String: Double], path: String) -> Double? in
       #if DEBUG
       return IntroMusic.render(cues: cues, to: path)

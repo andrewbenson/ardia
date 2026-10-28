@@ -33,6 +33,15 @@ import Testing
     view.indicator.press(SidebarClickMods(NSEvent.ModifierFlags()))
     #expect(actions == [.toggleDownloads, .profileMenu])
   }
+
+  @Test func theDownloadsButtonCentresOnTheIndicatorsHalfPointMarginOnlyWhenTheIndicatorShows() {
+    let view = StripControlsView(frame: .zero)
+    view.update(StripControlsState(title: "Work", incognito: false, profiles: 2, nameColor: "#FF0000", downloadsOpen: false, downloadsTooltip: nil), theme: [:])
+    #expect(view.downloads.frame.minY == 0.25)
+    view.update(StripControlsState(title: "Work", incognito: false, profiles: 1, nameColor: "#FF0000", downloadsOpen: false, downloadsTooltip: nil), theme: [:])
+    #expect(view.downloads.frame.minY == 0)
+    #expect(view.width == 34)
+  }
 }
 
 @Suite struct StripNameWidthTests {
@@ -49,5 +58,27 @@ import Testing
     #expect(frames.strip == CGRect(x: 8, y: 0, width: 1187 - 8 - 128, height: 42))
     #expect(frames.controls == CGRect(x: 1187 - 8 - 114, y: 4, width: 114, height: 34.5))
     #expect(StripPeekRow.frames(width: 1187, controls: 34).strip.width == CGFloat(1095))
+  }
+}
+
+@MainActor @Suite struct StripDropGlowTests {
+  @Test func theGlowSitsFourPointsOutsideTheStripAndHugsTheItems() {
+    let frame = StripDropGlowMetrics.frame(width: 1280, left: 86, right: 128)
+    #expect(frame == CGRect(x: 82, y: 4, width: 1280 - 82 - 124, height: 34))
+  }
+
+  @Test func theGlowTakesNoMouse() {
+    let glow = StripDropGlow(frame: NSRect(x: 0, y: 0, width: 100, height: 34))
+    #expect(glow.hitTest(NSPoint(x: 50, y: 17)) == nil)
+  }
+
+  @Test func overFlipsTheTargetOnceAndLeavingFlipsItBack() {
+    let glow = StripDropGlow(frame: .zero)
+    #expect(!glow.over)
+    glow.set(over: true, accent: "#3478F6", dark: true)
+    #expect(glow.over)
+    glow.set(over: true, accent: "#3478F6", dark: true)
+    glow.set(over: false, accent: "#3478F6", dark: true)
+    #expect(!glow.over)
   }
 }

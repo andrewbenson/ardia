@@ -77,7 +77,7 @@ test("pages that differ only in their credentials' case aren't the same page", (
   assert.equal(importTabs(P, [{ url: "https://user:secret@EXAMPLE.com/path", title: "c", pinned: true }], null), 0, "the host's case still doesn't matter");
 });
 
-test("renaming the deepest group of a 64-level pinned chain over 2,000 tabs stays quick", () => {
+test("renaming the deepest group of a 64-level pinned chain over 2,000 tabs stays within its CPU budget", () => {
   const { w } = start();
   let draft = null;
   for (let level = 63; level >= 0; level--) {
@@ -89,9 +89,10 @@ test("renaming the deepest group of a 64-level pinned chain over 2,000 tabs stay
   assert.equal(made.length, 1);
   assert.ok(Object.keys(S().tabs).length >= 1985);
   const deepest = Object.values(S().groups).find((g) => g.name === "Level 63" && g.windowId === w);
-  const t0 = performance.now();
+  const before = process.cpuUsage();
   S().updateGroup(deepest.id, { name: "Deepest" });
-  const ms = performance.now() - t0;
+  const { user, system } = process.cpuUsage(before);
+  const cpuMs = (user + system) / 1000;
   assert.equal(S().groups[deepest.id].name, "Deepest");
-  assert.ok(ms < 250, `${ms.toFixed(0)} ms`);
+  assert.ok(cpuMs < 250, `${cpuMs.toFixed(0)} ms of CPU`);
 });

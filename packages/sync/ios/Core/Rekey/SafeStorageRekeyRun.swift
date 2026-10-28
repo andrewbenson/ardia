@@ -135,7 +135,7 @@ public final class SafeStorageRekeyRun {
       return undoFailed("the journal can't be read: \(error)")
     }
     let keepingOriginals = journal?.phase == .done && journal?.version == appVersion
-    if keepingOriginals && present(stagingDir) {
+    if keepingOriginals && present(stagingDir), lock() == nil {
       do { try removeIfPresent(stagingDir) } catch { log("can't remove the staging folder: \(error)") }
     }
     if let journal, journal.phase != .done && journal.phase != .abandoned || leftovers() && !keepingOriginals {

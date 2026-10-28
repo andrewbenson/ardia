@@ -306,6 +306,14 @@ final class SafeStorageRekeyRunTests: XCTestCase {
     assertAllKeyed(secret)
   }
 
+  func testLeftoverStagingIsLeftAloneWhileAnotherCopyOwnsTheDir() throws {
+    XCTAssertEqual(crashChild(at: "after-done-write"), SafeStorageRekeyRun.crashExitCode)
+    XCTAssertEqual(rekey(otherCopy: true).run(), .proceed)
+    XCTAssertTrue(present(".rekey-staging"))
+    XCTAssertEqual(rekey().run(), .proceed)
+    XCTAssertFalse(present(".rekey-staging"))
+  }
+
   func testAMissingKeyWhileOriginalsAreKeptChangesNothing() throws {
     XCTAssertEqual(rekey().run(), .proceed)
     let secret = secretOnDisk()!

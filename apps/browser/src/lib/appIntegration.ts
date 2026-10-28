@@ -1,4 +1,5 @@
 import { beginTracing, endTracing, engineInfo, isTracing, openTaskManager } from "@ardia/ardiacore";
+import { nativeAppServicesActive } from "@ardia/settings";
 import {
   confirm,
   copyText,
@@ -43,7 +44,7 @@ export function startAppIntegration() {
     if (tabId && s.tabs[tabId]) switchToTab(tabId);
     else if (windowId && s.windows[windowId]) focus(windowId);
   });
-  startHandoff();
+  if (!nativeAppServicesActive()) startHandoff();
   startScripting();
   const updated = trackAppVersion();
   maybeStartOnboarding();

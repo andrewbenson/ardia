@@ -61,6 +61,7 @@ enum NativeSettingsWindow {
     NativeOnboarding.register()
     SettingsPrewarm.schedule()
     NativeCliControl.shared.startWhenReady()
+    NativeAppIntegration.shared.startWhenReady()
     WindowHost.makeAuxController = { id, kind in
       if kind == NativeImportWindow.kind { return NativeImportWindow.makeController() }
       guard kind == "settings" else { return nil }

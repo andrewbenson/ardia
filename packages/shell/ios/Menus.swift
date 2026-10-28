@@ -221,6 +221,10 @@ enum SwitcherHold {
   }
 }
 
+public enum NativeMenuCommands {
+  nonisolated(unsafe) public static var handlers: [String: (String?) -> Void] = [:]
+}
+
 final class MenuTarget: NSObject, NSMenuItemValidation {
   static let shared = MenuTarget()
   var handler: ((String, String?, String?) -> Void)?
@@ -229,6 +233,9 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
 
   @objc(commandDispatch:) func performCommand(_ sender: NSMenuItem) {
     guard let item = sender as? CommandItem else { return }
+    if let run = NativeMenuCommands.handlers[item.command] {
+      return run(item.windowless ? nil : WindowManager.shared.keyWindowId)
+    }
     _ = FocusHandoff.shared.takeBegun()
     let settled = !FocusHandoff.shared.gatesKeyWindow
     if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window = NSApp.keyWindow {

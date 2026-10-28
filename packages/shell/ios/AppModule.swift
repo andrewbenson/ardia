@@ -88,46 +88,7 @@ public class AppModule: Module {
       ShellScripting.reply(id, result: result, error: error)
     }.runOnQueue(.main)
 
-    Function("systemInfo") { () -> [String: Any] in
-      let info = Bundle.main.infoDictionary ?? [:]
-      let env = ProcessInfo.processInfo.environment
-      let os = ProcessInfo.processInfo.operatingSystemVersion
-      var model = [CChar](repeating: 0, count: 256)
-      var size = model.count
-      sysctlbyname("hw.model", &model, &size, nil, 0)
-      #if DEBUG
-      let configuration = "Debug"
-      #else
-      let configuration = "Release"
-      #endif
-      return [
-        "appName": Bundle.main.productName,
-        "appVersion": info["CFBundleShortVersionString"] as? String ?? "",
-        "appBuild": info["CFBundleVersion"] as? String ?? "",
-        "bundleId": Bundle.main.bundleIdentifier ?? "",
-        "configuration": configuration,
-        "osVersion": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
-        "osBuild": Self.osBuild,
-        "arch": Self.arch,
-        "model": String(cString: model),
-        "memoryGB": Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824,
-        "locale": Locale.current.identifier,
-        "updates": AppUpdater.shared.isAvailable,
-        "feedbackURL": Self.infoString("ACFeedbackURL") as Any,
-        "feedbackEmail": Self.infoString("ACFeedbackEmail") as Any,
-        "videoTourURL": Self.infoString("ACVideoTourURL") as Any,
-        "releaseNotesURL": Self.infoString("ACReleaseNotesURL") as Any,
-        "updateFeedURL": Self.infoString("SUFeedURL") as Any,
-        "releaseRepo": Self.infoString("ACReleaseRepo") as Any,
-        "telemetryURL": Self.infoString("ACTelemetryURL") as Any,
-        "switchesURL": Self.infoString("ACSwitchesURL") as Any,
-        "isolatedInstance": env["ARDIA_BACKGROUND"] == "1" || env["ARDIA_DATA_DIR"] != nil,
-        "forceReleaseNotes": env["ARDIA_RELEASE_NOTES"] == "1",
-        "processStart": Self.processStart as Any,
-        "bootTime": Self.bootTime as Any,
-        "inApplicationsFolder": Self.inApplicationsFolder,
-      ]
-    }
+    Function("systemInfo") { () -> [String: Any] in Self.systemInfo }
 
     AsyncFunction("crashReports") { (since: Double) -> [[String: Any]] in CrashReports.since(since) }
 
@@ -524,6 +485,47 @@ public class AppModule: Module {
     case typeObjectSpecifier: return "«specifier»"
     default: return d.stringValue ?? "«\(d.descriptorType)»"
     }
+  }
+
+  public static var systemInfo: [String: Any] {
+    let info = Bundle.main.infoDictionary ?? [:]
+    let env = ProcessInfo.processInfo.environment
+    let os = ProcessInfo.processInfo.operatingSystemVersion
+    var model = [CChar](repeating: 0, count: 256)
+    var size = model.count
+    sysctlbyname("hw.model", &model, &size, nil, 0)
+    #if DEBUG
+    let configuration = "Debug"
+    #else
+    let configuration = "Release"
+    #endif
+    return [
+      "appName": Bundle.main.productName,
+      "appVersion": info["CFBundleShortVersionString"] as? String ?? "",
+      "appBuild": info["CFBundleVersion"] as? String ?? "",
+      "bundleId": Bundle.main.bundleIdentifier ?? "",
+      "configuration": configuration,
+      "osVersion": "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)",
+      "osBuild": Self.osBuild,
+      "arch": Self.arch,
+      "model": String(cString: model),
+      "memoryGB": Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824,
+      "locale": Locale.current.identifier,
+      "updates": AppUpdater.shared.isAvailable,
+      "feedbackURL": Self.infoString("ACFeedbackURL") as Any,
+      "feedbackEmail": Self.infoString("ACFeedbackEmail") as Any,
+      "videoTourURL": Self.infoString("ACVideoTourURL") as Any,
+      "releaseNotesURL": Self.infoString("ACReleaseNotesURL") as Any,
+      "updateFeedURL": Self.infoString("SUFeedURL") as Any,
+      "releaseRepo": Self.infoString("ACReleaseRepo") as Any,
+      "telemetryURL": Self.infoString("ACTelemetryURL") as Any,
+      "switchesURL": Self.infoString("ACSwitchesURL") as Any,
+      "isolatedInstance": env["ARDIA_BACKGROUND"] == "1" || env["ARDIA_DATA_DIR"] != nil,
+      "forceReleaseNotes": env["ARDIA_RELEASE_NOTES"] == "1",
+      "processStart": Self.processStart as Any,
+      "bootTime": Self.bootTime as Any,
+      "inApplicationsFolder": Self.inApplicationsFolder,
+    ]
   }
 
   private static var osBuild: String {

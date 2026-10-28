@@ -125,6 +125,21 @@ enum SettingsDev {
       guard let model = NativeSettingsHandle.model, let argument else { return #"{"error":"no store"}"# }
       let parts = argument.split(separator: " ", maxSplits: 1).map(String.init)
       Task { await SearchEngineAdapter(model: model).disableExtension(profile: parts.count > 1 ? parts[1] : "", extensionId: parts[0]) }
+    case "diagnostics":
+      return json(["active": NativeAppIntegration.active, "report": NativeAppIntegration.shared.diagnostics()])
+    case "feedback":
+      switch NativeAppIntegration.shared.feedbackTarget() {
+      case .page(let url): return json(["page": url])
+      case .mail(let draft, _): return json(["mail": draft])
+      }
+    case "sendFeedback":
+      NativeAppIntegration.shared.sendFeedback(argument)
+    case "handoff":
+      let activities = NSApp.windows.compactMap { window -> [String: Any]? in
+        guard let activity = window.userActivity else { return nil }
+        return ["window": window.windowNumber, "url": activity.webpageURL?.absoluteString as Any, "title": activity.title as Any]
+      }
+      return json(["handoff": activities])
     default:
       return #"{"error":"unknown action"}"#
     }

@@ -5,6 +5,7 @@ type SettingsCall = { id: number; name: string; args: string };
 type NativeSettingsModule = {
   available(): boolean;
   servicesActive?(): boolean;
+  appServicesActive?(): boolean;
   navigate(pane: string | null, profileId: string | null, detail: string | null): Promise<void>;
   focusSearch(): Promise<void>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
@@ -26,6 +27,14 @@ export function nativeSettingsAvailable(): boolean {
 export function nativeServicesActive(): boolean {
   try {
     return native?.servicesActive?.() ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function nativeAppServicesActive(): boolean {
+  try {
+    return native?.appServicesActive?.() ?? false;
   } catch {
     return false;
   }

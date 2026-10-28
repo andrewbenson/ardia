@@ -123,6 +123,7 @@ public final class NativeStore: Sendable {
         trouble: { message in NSLog("[store] %@", message) })
       shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch)
       NativeSettingsHandle.active = true
+      NativeStoreHandle.ownsWorkspace = ownsWorkspace
       NativeStoreHandle.opened = true
       DispatchQueue.main.async {
         MainActor.assumeIsolated {

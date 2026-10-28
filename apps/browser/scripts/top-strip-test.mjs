@@ -156,10 +156,52 @@ async function measure(native) {
       st().toggleSidebar("w1");
       return settle(600).then(() => peek().show()).then(() => settle(400))
         .then(() => act("w1", "hit:1569,27")).then((hit) => (seen.hit = hit))
-        .then(() => act("w1", "click:1569,27")).then(() => settle(400)).then(() => (seen.open = !!st().windowUi.w1?.downloadsOpen))
+        .then(() => act("w1", "click:1569,27")).then(() => settle(400)).then(() => { seen.open = !!st().windowUi.w1?.downloadsOpen; seen.panel = !!st().windowUi.w1?.panel.open; st().closePanel("w1"); })
         .then(() => peek().hide()).then(() => settle(500)).then(() => (seen.heldLive = peek().live))
         .then(() => { st().setDownloadsOpen("w1", false); return settle(800); }).then(() => (seen.afterClose = peek().live))
         .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
+    out.peekFile = await run(`
+      const peek = () => globalThis.acLayout.peek["strip:w1"];
+      const drag = (action, x, payload) => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", action, x, 27, payload);
+      const before = st().windows.w1.tabIds.slice();
+      const seen = {};
+      st().toggleSidebar("w1");
+      return settle(600).then(() => peek().show()).then(() => settle(400))
+        .then(() => drag("move", 200, { urls: ["https://dropped.example/"] })).then((r) => (seen.over = r)).then(() => settle(100))
+        .then(() => drag("move", 300)).then(() => settle(300))
+        .then(() => drag("drop", 300)).then((r) => (seen.drop = r)).then(() => settle(800))
+        .then(() => {
+          const ids = st().windows.w1.tabIds;
+          const added = ids.find((id) => !before.includes(id));
+          seen.after = added ? ids[ids.indexOf(added) - 1] ?? null : "none";
+          if (added) st().closeTab(added);
+          st().activate("t1");
+          st().toggleSidebar("w1");
+          return settle(600);
+        }).then(() => seen);`);
+    out.peekFrames = {};
+    for (const value of [0.25, 0.5, 0.75]) {
+      const shot = join(scratch, `${native ? "native" : "rn"}-peek-${value}.png`);
+      await run(`st().toggleSidebar("w1"); return settle(600).then(() => globalThis.acLayout.peek["strip:w1"].show()).then(() => settle(400)).then(() => globalThis.acLayout.peek["strip:w1"].pin(${value})).then(() => settle(200));`);
+      out.peekFrames[value] = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(shot)});`)) ? shot : null;
+      await run(`globalThis.acLayout.peek["strip:w1"].pin(1); globalThis.acLayout.peek["strip:w1"].hide(); return settle(600).then(() => { st().toggleSidebar("w1"); return settle(600); });`);
+    }
+    out.downloadsAt = await run(`
+      const peek = () => globalThis.acLayout.peek["strip:w1"];
+      st().toggleSidebar("w1");
+      return settle(600).then(() => peek().show()).then(() => settle(400))
+        .then(() => act("w1", "click:1569,27")).then(() => settle(100)).then(() => st().closePanel("w1")).then(() => settle(600)).then(() => win("w1"))
+        .then((n) => {
+          const points = [];
+          for (let y = 60; y < 700; y += 4) points.push([1500, y]);
+          for (let x = 1100; x < 1600; x += 4) points.push([x, 140]);
+          return Promise.all(points.map(([x, y]) => C.devWindow(n, "hit:" + x + "," + y))).then((hits) => {
+            const edges = []; let prev = null;
+            hits.forEach((h, i) => { if (i === 160 || h !== prev) edges.push(points[i].join(",") + " " + h); prev = h; });
+            return edges;
+          });
+        })
+        .then((edges) => { st().setDownloadsOpen("w1", false); return settle(600).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => edges); });`);
     if (native) {
       const live = `globalThis.acLayout.peek["strip:w1"]?.live ?? null`;
       out.peekHover = await run(`
@@ -261,6 +303,26 @@ try {
         assert.equal(seen.afterClose, false, `${name}: closing the list lets the peek go`);
       }
     });
+    await rep.check("a link dropped on the peek opens where RN's peek puts it", async () => {
+      rep.log(`peek file rn ${JSON.stringify(rn.peekFile)} native ${JSON.stringify(native.peekFile)}`);
+      assert.match(native.peekFile.over, /FileDropView/, `the drag is over the peek's drop area: ${native.peekFile.over}`);
+      assert.notEqual(rn.peekFile.after, "none", "RN opened the link");
+      assert.equal(native.peekFile.after, rn.peekFile.after, "the link lands after the same tab");
+      assert.notEqual(rn.peekFile.after, "t2", "RN puts it at the pointer, not at the end");
+    });
+    await rep.check("the downloads list opens from the peek's button where RN's does", async () => {
+      const shown = (edges) => edges.filter((e) => !/^\d+,(60|64) /.test(e)).join("\n");
+      assert.ok(rn.downloadsAt.length > 2, `RN's list shows: ${shown(rn.downloadsAt)}`);
+      assert.equal(shown(native.downloadsAt), shown(rn.downloadsAt));
+    });
+    for (const value of [0.25, 0.5, 0.75]) {
+      if (!rn.peekFrames?.[value] || !native.peekFrames?.[value]) continue;
+      await rep.check(`the peek's pixels match RN's ${value * 100}% of the way out, shadow included`, async () => {
+        const diff = stripDiff(readPng(rn.peekFrames[value]), readPng(native.peekFrames[value]), 0, 80);
+        rep.log(`peek at ${value} pixel diff ${JSON.stringify(diff)}`);
+        assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the peek's pixels differ (worst ${diff.worst}, ${diff.hot})`);
+      });
+    }
     await rep.check("the peek slides in and out on RN's 180 ms out-cubic, frame for frame at 30 fps", async () => {
       const show = (samples) => JSON.stringify(samples.map(([t, x]) => [Math.round(t), Math.round(x * 1000) / 1000]));
       rep.log(`rn peek ${show(rn.peekMotion)}`);
@@ -373,7 +435,7 @@ try {
   }
 } finally {
   if (native) await native.app.quit();
-  if (!keep && rep.results.every((r) => r.ok)) for (const name of ["rn", "native", "rn.png", "native.png", ...LOOKS.flatMap(([look]) => [`rn-${look}.png`, `native-${look}.png`])]) rmSync(join(scratch, name), { recursive: true, force: true });
+  if (!keep && rep.results.every((r) => r.ok)) for (const name of ["rn", "native", "rn.png", "native.png", ...LOOKS.flatMap(([look]) => [`rn-${look}.png`, `native-${look}.png`]), ...[0.25, 0.5, 0.75].flatMap((v) => [`rn-peek-${v}.png`, `native-peek-${v}.png`])]) rmSync(join(scratch, name), { recursive: true, force: true });
   else rep.say(`kept ${scratch}`);
 }
 process.exit(rep.summary() ? 0 : 1);

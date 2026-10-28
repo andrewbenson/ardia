@@ -24,7 +24,7 @@ public class TopStripModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("peekMonitors") { () -> Int in
-      MainActor.assumeIsolated { TopStripPeekHost.hosts.values.filter(\.view.watching).count }
+      MainActor.assumeIsolated { StripPeekView.monitors }
     }.runOnQueue(.main)
 
     AsyncFunction("traceGroup") { (windowId: String, groupId: String) in
@@ -45,7 +45,7 @@ public class TopStripModule: Module {
 
     AsyncFunction("incoming") { (windowId: String, x: Double?, y: Double?) -> String in
       MainActor.assumeIsolated {
-        guard let page = NativeTopStrip.hosts[windowId]?.view.current else { return "null" }
+        guard let page = NativeTopStrip.incomingPage(windowId) else { return "null" }
         let point = x.flatMap { x in y.map { CGPoint(x: x, y: $0) } }
         guard case .some(let beforeId) = page.incoming(at: point) else { return "null" }
         return NativeTopStrip.json(["beforeId": beforeId.map { $0 as Any } ?? NSNull()]) ?? "null"
@@ -58,6 +58,10 @@ public class TopStripModule: Module {
 
     AsyncFunction("peekHide") { (windowId: String) in
       MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.peek.hide() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("pinPeek") { (windowId: String, value: Double) in
+      MainActor.assumeIsolated { TopStripPeekHost.hosts[windowId]?.view.pin(value) }
     }.runOnQueue(.main)
 
     AsyncFunction("tracePeek") { (windowId: String) in
@@ -73,7 +77,10 @@ public class TopStripModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("endIncoming") { (windowId: String) in
-      MainActor.assumeIsolated { NativeTopStrip.hosts[windowId]?.view.current?.endIncoming() }
+      MainActor.assumeIsolated {
+        NativeTopStrip.hosts[windowId]?.view.current?.endIncoming()
+        TopStripPeekHost.hosts[windowId]?.strip.view.current?.endIncoming()
+      }
     }.runOnQueue(.main)
 
     AsyncFunction("keys") { (windowId: String, profileId: String) -> [String] in
@@ -112,6 +119,12 @@ enum NativeTopStrip {
       return HostedContent(view: host.view, onUnmount: { host.stop() }, takesFocus: false, onState: { [weak host] json in host?.apply(json) })
     }
     TopStripPeekHost.register()
+  }
+
+  static func incomingPage(_ windowId: String) -> StripPageView? {
+    if let page = hosts[windowId]?.view.current, page.window != nil { return page }
+    guard let peek = TopStripPeekHost.hosts[windowId], peek.view.live else { return nil }
+    return peek.strip.view.current
   }
 
   static func json(_ value: Any) -> String? {
@@ -291,44 +304,24 @@ final class TopStripHost {
 final class TopStripDrag: StripDragBridge {
   static let shared = TopStripDrag()
 
-  private var chain: Task<Void, Never>?
-  private var pendingMove: (windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat)?
-
-  private func send(_ name: String, _ args: [Any], done: (@MainActor (Any?) -> Void)? = nil) {
-    let previous = chain
-    let payload = SidebarPayload(["args": args])
-    chain = Task { @MainActor in
-      await previous?.value
-      let args = payload.value["args"] as? [Any] ?? []
-      let result = try? await SettingsJS.shared.invoke(name, args)
-      done?(result ?? nil)
-    }
-  }
+  private var dx: CGFloat = 0
 
   func dragBegan(windowId: String, tabId: String?, tabIds: [String]) {
-    pendingMove = nil
-    send("topStrip.drag.begin", [windowId, tabId ?? NSNull(), tabIds])
+    dx = 0
+    NativeTabDrag.shared.begin(windowId: windowId, tabId: tabId, tabIds: tabIds) { false }
   }
 
   func dragPicture(windowId: String, rect: CGRect, grab: CGPoint) {
-    send("topStrip.drag.picture", [windowId, rect.minX, rect.minY, rect.width, rect.height, grab.x, grab.y])
+    NativeTabDrag.shared.picture(windowId: windowId, chip: { [weak self] in rect.offsetBy(dx: self?.dx ?? 0, dy: 0) }, grab: CGPoint(x: grab.x - rect.minX, y: grab.y - rect.minY))
   }
 
   func dragMoved(windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat) {
-    let queued = pendingMove != nil
-    pendingMove = (windowId, at, lifted, dx)
-    if queued { return }
-    let previous = chain
-    chain = Task { @MainActor in
-      await previous?.value
-      guard let move = self.pendingMove else { return }
-      self.pendingMove = nil
-      _ = try? await SettingsJS.shared.invoke("topStrip.drag.move", [move.windowId, move.at.x, move.at.y, move.lifted, move.dx])
-    }
+    self.dx = dx
+    NativeTabDrag.shared.move(windowId: windowId, at: at, lifted: lifted)
   }
 
   func dragEnded(windowId: String, commit: Bool, done: @escaping @MainActor (Bool) -> Void) {
-    send("topStrip.drag.end", [windowId, commit]) { result in done((result as? Bool) ?? false) }
+    NativeTabDrag.shared.end(windowId: windowId, commit: commit, done: done)
   }
 
   func land(ids: [String], from source: String, in windowId: String, beforeId: String?) -> Bool {

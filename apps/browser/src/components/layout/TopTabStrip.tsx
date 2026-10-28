@@ -1625,7 +1625,7 @@ function NativeTopStripPeek({ windowWidth, enabled }: { windowWidth: number; ena
   const [{ live, pageWidth }, setLive] = useState({ live: false, pageWidth: 0 });
   if (__DEV__) {
     const peek = topStripPeek(windowId);
-    devPeeks[`strip:${windowId}`] = { show: () => void peek.show(), hide: () => void peek.hide(), live, trace: () => void peek.trace(), samples: () => peek.samples() };
+    devPeeks[`strip:${windowId}`] = { show: () => void peek.show(), hide: () => void peek.hide(), live, trace: () => void peek.trace(), samples: () => peek.samples(), pin: (value) => void peek.pin(value) };
   }
   useEffect(() => {
     if (!enabled) return;
@@ -1661,7 +1661,7 @@ function ReactTopStripPeek({ windowWidth, enabled }: { windowWidth: number; enab
   }, [slide]);
   if (__DEV__) {
     const trace = () => void (slideTrace.current = [[performance.now(), live ? 1 : 0]]);
-    devPeeks[`strip:${windowId}`] = { show, hide, live, trace, samples: () => slideTrace.current ?? [] };
+    devPeeks[`strip:${windowId}`] = { show, hide, live, trace, samples: () => slideTrace.current ?? [], pin: (value) => slide.setValue(value) };
   }
   useEffect(() => {
     if (!downloadsOpen) recheck();

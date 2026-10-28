@@ -6,6 +6,7 @@ type TopStripModule = {
   peekShow(windowId: string): Promise<void>;
   peekHide(windowId: string): Promise<void>;
   peekState(windowId: string): Promise<string>;
+  pinPeek(windowId: string, value: number): Promise<void>;
   tracePeek(windowId: string): Promise<void>;
   peekTrace(windowId: string): Promise<number[][]>;
 };
@@ -28,6 +29,7 @@ export function topStripPeek(windowId: string) {
   return {
     show: () => native?.peekShow?.(windowId) ?? Promise.resolve(),
     hide: () => native?.peekHide?.(windowId) ?? Promise.resolve(),
+    pin: (value: number) => native?.pinPeek?.(windowId, value) ?? Promise.resolve(),
     trace: () => native?.tracePeek?.(windowId) ?? Promise.resolve(),
     samples: () => native?.peekTrace?.(windowId) ?? Promise.resolve([]),
     state: async (): Promise<TopStripPeekState | null> => (native?.peekState ? (JSON.parse(await native.peekState(windowId)) as TopStripPeekState | null) : null),

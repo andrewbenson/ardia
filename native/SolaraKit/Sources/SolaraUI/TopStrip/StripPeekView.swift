@@ -61,7 +61,10 @@ public final class StripPeekView: NSView {
 
   private let slide = DockAnimator(value: 0)
   private var settled: (() -> Void)?
-  private var monitor: Any?
+  private var monitor: Any? {
+    didSet { Self.monitors += (monitor != nil ? 1 : 0) - (oldValue != nil ? 1 : 0) }
+  }
+  public private(set) static var monitors = 0
   private var inside = false
   public private(set) var slideTrace: [[Double]]?
   private var tickedAt: CFTimeInterval = 0
@@ -115,6 +118,8 @@ public final class StripPeekView: NSView {
   }
 
   public func step(by seconds: Double) { slide.step(by: seconds) }
+
+  public func pin(_ value: Double) { slide.jump(to: value) }
 
   public func traceSlide() { slideTrace = [[CACurrentMediaTime() * 1000, slide.value]] }
 

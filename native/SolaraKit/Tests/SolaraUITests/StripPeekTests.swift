@@ -70,6 +70,19 @@ import Testing
     #expect(hit(600, 70) == nil)
   }
 
+  @Test func itWatchesThePointerOnlyWhileEnabledInAWindow() {
+    let before = StripPeekView.monitors
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 80), styleMask: [], backing: .buffered, defer: true)
+    let view = view()
+    window.contentView?.addSubview(view)
+    #expect(StripPeekView.monitors == before + 1)
+    view.setEnabled(false)
+    #expect(StripPeekView.monitors == before)
+    view.setEnabled(true)
+    view.removeFromSuperview()
+    #expect(StripPeekView.monitors == before)
+  }
+
   @Test func aHeldPeekStaysOutUntilRechecked() {
     let view = view()
     var held = true

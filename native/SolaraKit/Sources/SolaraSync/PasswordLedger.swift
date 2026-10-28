@@ -1,23 +1,22 @@
 import Foundation
 import SolaraModel
+import SolaraStore
 
 public struct LedgerValue: Sendable, Equatable {
-  public var o: String
-  public var u: String
-  public var s: String
+  public var json: JSONValue
 
   public init(o: String, u: String, s: String) {
-    self.o = o
-    self.u = u
-    self.s = s
+    json = ["o": .string(o), "u": .string(u), "s": .string(s)]
   }
 
   public init?(json: JSONValue) {
-    guard let o = json["o"]?.string, let u = json["u"]?.string, let s = json["s"]?.string else { return nil }
-    self.init(o: o, u: u, s: s)
+    guard json != .null else { return nil }
+    self.json = json
   }
 
-  public var json: JSONValue { ["o": .string(o), "u": .string(u), "s": .string(s)] }
+  public var o: String { jsText(json["o"]) }
+  public var u: String { jsText(json["u"]) }
+  public var s: String { jsText(json["s"]) }
 }
 
 public struct LedgerEntry: Sendable, Equatable {
@@ -95,7 +94,7 @@ public func readLedgerDocument(_ text: String?) -> LedgerDocumentState {
 func isLedgerEntry(_ value: JSONValue) -> Bool {
   guard let entry = value.object, let d = entry["d"]?.array, d.allSatisfy({ $0.string != nil }) else { return false }
   guard let h = entry["h"], h == .null || h.string != nil else { return false }
-  guard let m = entry["m"], m == .null || m.number != nil else { return false }
+  guard entry["m"]?.number != nil else { return false }
   return true
 }
 
@@ -184,7 +183,7 @@ func asciiDigits(_ text: Substring) -> Double? {
 public func formatMark(_ mark: Mark) -> String { "\(jsNumberText(mark.L))@\(jsNumberText(mark.t))" }
 
 public func digestOf(_ value: LedgerValue?) -> String {
-  guard let value else { return "" }
+  guard let value, value.json.truthy else { return "" }
   let text = Array("\(value.o)\u{0}\(value.u)\u{0}\(value.s)".utf16)
   var h: UInt32 = 0x811c_9dc5
   for unit in text {
@@ -227,7 +226,7 @@ public func judge(
     }
     if mode == .upgrade {
       guard let here else {
-        guard let record, record.v != nil else { continue }
+        guard let record, record.v?.json.truthy == true else { continue }
         if unapplied(key) {
           apply.insert(key)
         } else if digestOf(agreedHere(key)) != recordDigest(key) {
@@ -261,12 +260,12 @@ public func judge(
     }
     guard let here else {
       guard let entry else {
-        if record?.v != nil { apply.insert(key) }
+        if record?.v?.json.truthy == true { apply.insert(key) }
         continue
       }
       if recordDigest(key) == entry.d.first {
         claims.append(Claim(key: key, v: nil, at: now, afterRecord: record?.h))
-      } else if record?.v != nil {
+      } else if record?.v?.json.truthy == true {
         apply.insert(key)
       }
       continue
@@ -303,7 +302,7 @@ public func nextLedger(
 ) -> Ledger {
   var out = Ledger(L: mark.L, t: mark.t, keys: ledger?.keys ?? JSMap())
   for key in deletedBeforeUpgrade {
-    guard let record = records[key], let v = record.v, local[key] == nil else { continue }
+    guard let record = records[key], let v = record.v, v.json.truthy, local[key] == nil else { continue }
     out.keys[key] = LedgerEntry(d: [digestOf(v)], h: record.h, m: 0)
   }
   for key in keys {

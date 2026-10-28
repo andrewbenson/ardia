@@ -11,7 +11,7 @@ public protocol LedgerPasswordsHost: AnyObject, Sendable {
   func engineProfile(_ profileId: String) -> String
   func readMarked(_ engineProfile: String) async throws -> JSONValue?
   func checkSealed(_ values: [LedgerValue]) async throws -> [JSONValue]
-  func saveSealed(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool) async throws -> Bool
+  func saveSealed(_ engineProfile: String, _ value: LedgerValue, _ replacing: Bool) async throws -> Bool
   func deletePassword(_ engineProfile: String, _ origin: String, _ username: String) async throws -> Bool
   func writeMark(_ engineProfile: String, _ value: String) async throws
   func readLedgerDocument() -> DocumentRead

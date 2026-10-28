@@ -124,8 +124,11 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     for login in marked["logins"]?.array ?? [] {
       let origin = jsText(login["origin"])
       let username = jsText(login["username"])
-      let modified = login["modified"]?.number ?? login["created"]?.number ?? 0
-      local[Self.keyOf(origin, username)] = LocalLogin(value: LedgerValue(o: origin, u: username, s: jsText(login["s"])), modified: modified)
+      let modified = login["modified"].flatMap { $0 == .null ? nil : $0 } ?? login["created"]
+      let at = modified?.number ?? .nan
+      var value = JSONObject()
+      for (field, from) in [("o", "origin"), ("u", "username"), ("s", "s")] { value[field] = login[from] }
+      local[Self.keyOf(origin, username)] = LocalLogin(value: LedgerValue(json: .object(value))!, modified: at)
     }
     return LedgerRead(local: local, mark: parseMark(marked["mark"]?.string))
   }
@@ -319,9 +322,9 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
       let have = before.local[key]?.value
       let newline = key.jsIndexOf("\n")
       var ok = true
-      if let v {
-        if have?.s == v.s { continue }
-        ok = try await host.saveSealed(engine, v.o, v.u, v.s, have != nil)
+      if let v, v.json.truthy {
+        if have?.json["s"] == v.json["s"] { continue }
+        ok = try await host.saveSealed(engine, v, have != nil)
       } else if have != nil {
         ok = try await host.deletePassword(engine, key.jsSlice(3, newline), key.jsSlice(newline + 1)) && ok
       }
@@ -330,7 +333,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     let wanted = changed.filter { !kept.contains($0) && !refused.contains($0) }
     func confirmed(_ now: LedgerRead?, _ k: String) -> Bool {
       guard let now else { return false }
-      return wantedValue(k)?.s == now.local[k]?.value.s
+      return wantedValue(k)?.json["s"] == now.local[k]?.value.json["s"]
     }
     var latest: LedgerRead? = nil
     var settled = false

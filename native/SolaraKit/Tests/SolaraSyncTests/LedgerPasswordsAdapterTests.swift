@@ -77,9 +77,9 @@ final class LedgerTestHost: LedgerPasswordsHost {
     }
   }
 
-  func saveSealed(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool) async throws -> Bool {
+  func saveSealed(_ engineProfile: String, _ value: LedgerValue, _ replacing: Bool) async throws -> Bool {
     await passGate("saveSealed")
-    state.withLock { $0.logins[Self.key(origin, username)] = LocalLogin(value: LedgerValue(o: origin, u: username, s: sealed), modified: 2_000) }
+    state.withLock { $0.logins[Self.key(value.o, value.u)] = LocalLogin(value: value, modified: 2_000) }
     return true
   }
 

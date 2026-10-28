@@ -15,7 +15,7 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeo
 const isString = (v: unknown): v is string => typeof v === "string";
 const isNumber = (v: unknown): v is number => typeof v === "number";
 const isLedgerEntry = (v: unknown) =>
-  isPlainObject(v) && Array.isArray(v.d) && v.d.every(isString) && (v.h === null || isString(v.h)) && (v.m === null || isNumber(v.m));
+  isPlainObject(v) && Array.isArray(v.d) && v.d.every(isString) && (v.h === null || isString(v.h)) && isNumber(v.m);
 const isStoredLedger = (v: unknown) =>
   isPlainObject(v) &&
   isNumber(v.L) &&

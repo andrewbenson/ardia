@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { deflateRawSync } from "node:zlib";
 import { pinSources } from "../../../../packages/sync/scripts/pinSources.mjs";
+import { RC_VALUES } from "./ledgerCases.mjs";
 
 const HELP = `usage: node --import ./src/test-loader.mjs scripts/native/ledgerAdapterCases.mjs [--out <file>] [--runs <n>] [--seed <n>]
 
@@ -107,7 +108,7 @@ export async function randomSession(seed) {
       throw error;
     }
   };
-  const loginsNow = () => [...store].map(([key, l]) => ({ origin: valueOf(key).o, username: valueOf(key).u, s: l.s, created: l.created, ...(l.modified === null ? {} : { modified: l.modified }) }));
+  const loginsNow = () => [...store].map(([key, l]) => ({ origin: valueOf(key).o, username: valueOf(key).u, s: l.s, ...(l.created === null ? {} : { created: l.created }), ...(l.modified === null ? {} : { modified: l.modified }) }));
   globalThis.__ledgerHost = {
     deletePassword: async (profile, origin, username) =>
       call("deletePassword", [profile, origin, username], () => {
@@ -163,7 +164,8 @@ export async function randomSession(seed) {
   const remote = new Map();
   for (const key of universe) if (chance(0.5)) remote.set(key, { v: chance(0.8) ? valueOf(key, pick(SECRETS)) : null, h: hlc(Math.floor((now - Math.floor(rand() * 1e8)) / 1), Math.floor(rand() * 3), pick(["dA", "dB"])) });
   const base = new Map();
-  for (const key of universe) if (chance(0.4)) base.set(key, valueOf(key, pick(SECRETS)));
+  for (const key of universe) if (chance(0.4)) base.set(key, chance(0.15) ? pick(RC_VALUES)(key) : valueOf(key, pick(SECRETS)));
+  for (const [key, r] of remote) if (r.v && chance(0.15)) r.v = pick(RC_VALUES)(key);
   const unapplied = new Set(universe.filter(() => chance(0.1)));
   let lastExtraction = null;
   const ops = [];
@@ -180,7 +182,7 @@ export async function randomSession(seed) {
       if (chance(0.1)) for (const key of universe) if (chance(0.9)) store.set(key, { s: `${pick(SECRETS)}m`, created: now, modified: now });
       if (chance(0.2)) {
         const key = pick(universe);
-        remote.set(key, { v: chance(0.75) ? valueOf(key, pick(SECRETS)) : null, h: hlc(now - Math.floor(rand() * 1e6), Math.floor(rand() * 3), pick(["dA", "dB"])) });
+        remote.set(key, { v: chance(0.75) ? (chance(0.15) ? pick(RC_VALUES)(key) : valueOf(key, pick(SECRETS))) : null, h: hlc(now - Math.floor(rand() * 1e6), Math.floor(rand() * 3), pick(["dA", "dB"])) });
       }
       readFailures = chance(0.1) ? 1 + Math.floor(rand() * 3) : 0;
       markThrows = chance(0.08) ? 1 : 0;
@@ -240,7 +242,7 @@ export async function randomSession(seed) {
         op = { op: "extract", context, result };
       } else if (roll < 0.75) {
         const changed = universe.filter(() => chance(0.4));
-        const visible = changed.flatMap((k) => (chance(0.7) ? [[k, valueOf(k, pick(SECRETS))]] : []));
+        const visible = changed.flatMap((k) => (chance(0.7) ? [[k, chance(0.15) ? pick(RC_VALUES)(k) : valueOf(k, pick(SECRETS))]] : []));
         let result;
         try {
           const written = await adapter.apply(new Map(visible), changed);

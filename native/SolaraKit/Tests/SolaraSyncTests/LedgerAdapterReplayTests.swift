@@ -41,8 +41,8 @@ final class ScriptedLedgerHost: LedgerPasswordsHost {
     next("checkSealed", [.array(values.map(\.json))])["r"]?.array ?? []
   }
 
-  func saveSealed(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool) async throws -> Bool {
-    next("saveSealed", [.string(engineProfile), .string(origin), .string(username), .string(sealed), .bool(replacing)])["r"] == .bool(true)
+  func saveSealed(_ engineProfile: String, _ value: LedgerValue, _ replacing: Bool) async throws -> Bool {
+    next("saveSealed", [.string(engineProfile), value.json["o"] ?? .null, value.json["u"] ?? .null, value.json["s"] ?? .null, .bool(replacing)])["r"] == .bool(true)
   }
 
   func deletePassword(_ engineProfile: String, _ origin: String, _ username: String) async throws -> Bool {

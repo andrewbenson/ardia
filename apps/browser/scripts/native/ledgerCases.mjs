@@ -61,6 +61,20 @@ const LEDGER_TEXTS = [
   '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{"pw:a\\nb":{"d":"x","h":null,"m":0}}}}}',
   '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{"pw:a\\nb":{"d":["1.x"],"h":"h1","m":2}},"scope":null}}}',
   '{"v":2,"profiles":{"":5}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{"pw:a\\nb":{"d":["1.x"],"h":null,"m":null}}}}}',
+];
+
+const originOf = (key) => key.slice(3, key.indexOf("\n"));
+const userOf = (key) => key.slice(key.indexOf("\n") + 1);
+export const RC_VALUES = [
+  (key) => ({ o: originOf(key), u: userOf(key), p: "plain" }),
+  (key) => ({ o: originOf(key), u: userOf(key), p: "plain", c: 1_790_000_000_000 }),
+  (key) => ({ o: originOf(key), u: userOf(key), s: "one", p: "plain" }),
+  (key) => ({ o: originOf(key), u: userOf(key), s: 5 }),
+  (key) => ({ o: originOf(key), s: null }),
+  () => ({}),
+  () => "text",
+  () => 0,
 ];
 
 export function randomCase(seed) {
@@ -123,6 +137,8 @@ export function randomCase(seed) {
   const unapplied = keys.filter(() => rand() < 0.2);
   if (rand() < 0.1) local.splice(0);
   const ledgerText = pick(LEDGER_TEXTS);
+  for (const pair of records) if (pair[1].v && rand() < 0.15) pair[1].v = pick(RC_VALUES)(pair[0]);
+  for (const pair of agreed) if (rand() < 0.15) pair[1] = pick(RC_VALUES)(pair[0]);
   return { local, mark, ledger: ledgerValue, records, now, nextKeys, nextMark, agreed, unapplied, ledgerText };
 }
 

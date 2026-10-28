@@ -79,6 +79,19 @@ const frames = (n: number) => new Promise<void>((resolve) => {
 });
 const same = (a: number, b: number) => Math.abs(a - b) <= 0.01;
 const moved = (a: Frame, b: Frame) => a.some((v, i) => !same(v, b[i]!));
+const measureAll = (hosts: Host[]) => Promise.all(hosts.map(measure));
+const anyMoved = (a: (Frame | null)[], b: (Frame | null)[]) => a.some((was, i) => !!was && !!b[i] && moved(was, b[i]!));
+
+async function heldStill(hosts: Host[], maxFrames = 60): Promise<(Frame | null)[]> {
+  let last = await measureAll(hosts);
+  for (let waited = 0; waited < maxFrames; waited += 2) {
+    await frames(2);
+    const now = await measureAll(hosts);
+    if (!anyMoved(last, now)) return now;
+    last = now;
+  }
+  return last;
+}
 
 function ownerName(f: Fiber): string {
   for (let x = f.return; x; x = x.return) {
@@ -121,10 +134,10 @@ export async function check({ scopes, settleFrames = 3 }: { scopes?: string[]; s
     const props = fiber.memoizedProps as { onMouseEnter?: () => void; onMouseLeave?: () => void } | null;
     if (!props?.onMouseEnter || !props.onMouseLeave) continue;
     const views = [...around(fiber)];
-    const before = await Promise.all(views.map(([h]) => measure(h)));
+    const before = await heldStill(views.map(([h]) => h));
     props.onMouseEnter();
     await frames(settleFrames);
-    const after = await Promise.all(views.map(([h]) => measure(h)));
+    const after = await measureAll(views.map(([h]) => h));
     const changes: Change[] = [];
     views.forEach(([, f], i) => {
       const was = before[i];

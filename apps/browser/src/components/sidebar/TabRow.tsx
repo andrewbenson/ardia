@@ -1,4 +1,4 @@
-import { ActivitySpinner, ContextMenuArea, FadeLabel, MouseArea, Surface, Symbol } from "@ardia/shell";
+import { ActivitySpinner, ContextMenuArea, FadeLabel, MouseArea, OutsidePressArea, Surface, Symbol } from "@ardia/shell";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent } from "react-native";
 import { toggleMute } from "../../lib/actions";
@@ -203,21 +203,23 @@ export function RenameField({
     return () => clearTimeout(t);
   }, []);
   return (
-    <TextInput
-      ref={input}
-      value={text}
-      onChangeText={setText}
-      placeholder={placeholder}
-      placeholderTextColor={theme.placeholder}
-      selectionColor={theme.selection}
-      selectTextOnFocus
-      enableFocusRing={false}
-      onSubmitEditing={() => finish(text)}
-      onBlur={() => finish(text)}
-      keyDownEvents={[{ key: "Escape" }]}
-      onKeyDown={(e) => e.nativeEvent.key === "Escape" && finish(null)}
-      style={{ flex: 1, height: 18, marginLeft: 5, fontSize, fontWeight: weight, color, paddingVertical: 0, paddingHorizontal: 0 }}
-    />
+    <OutsidePressArea onOutsidePress={() => finish(text)} style={{ flex: 1, height: 18, marginLeft: 5 }}>
+      <TextInput
+        ref={input}
+        value={text}
+        onChangeText={setText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.placeholder}
+        selectionColor={theme.selection}
+        selectTextOnFocus
+        enableFocusRing={false}
+        onSubmitEditing={() => finish(text)}
+        onBlur={() => finish(text)}
+        keyDownEvents={[{ key: "Escape" }]}
+        onKeyDown={(e) => e.nativeEvent.key === "Escape" && finish(null)}
+        style={{ flex: 1, fontSize, fontWeight: weight, color, paddingVertical: 0, paddingHorizontal: 0 }}
+      />
+    </OutsidePressArea>
   );
 }
 

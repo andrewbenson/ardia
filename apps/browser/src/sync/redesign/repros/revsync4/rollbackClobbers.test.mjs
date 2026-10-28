@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
 import { fake, folder, shell, S, settle, launch, reset, files, otherMac, assertNoSeqReused, onAndSynced } from "./harness.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 test("R-rollback: a rolled-back (but readable) sync state republishes values this Mac took from B since the backup, over B's newer edit", async () => {
   reset();
@@ -44,7 +45,7 @@ test("R-rollback-outbox: a rolled-back state sealed mid-publish (outbox not empt
   S().updateSettings({ searchEngine: "bing" });
   await engine.syncNow();
   await settle();
-  const state = JSON.parse(older.get("sync-state.nns").slice(7));
+  const state = sealedState(older);
   const syncId = engine.useSync.getState().profiles.default.syncId;
   const scope = state[`p:${syncId}`];
   const dev = JSON.parse(older.get("sync.json")).deviceId;

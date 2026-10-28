@@ -128,18 +128,22 @@ public class SyncModule: Module {
       try self.vault(folder).deleteChain()
     }.runOnQueue(Self.work)
 
-    AsyncFunction("sealLocal") { (text: String, kind: String?) throws -> String in
+    AsyncFunction("sealLocal") { (text: String, kind: String?, part: String?) throws -> String in
       guard let keys = self.state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
-      guard Self.sealed.latched else { return try keys.seal(Data(text.utf8), scopeTag: "local", fileId: "state").base64EncodedString() }
+      guard Self.sealed.latched else {
+        return try keys.seal(Data(text.utf8), scopeTag: "local", fileId: LocalDocuments.legacyFileId(part: part)).base64EncodedString()
+      }
       guard let kind = kind.flatMap(LocalDocuments.Kind.init(rawValue:)) else { throw Self.refusal("the local document's kind is needed once passwords are sealed") }
-      return try Self.refusing { try LocalDocuments.seal(text, kind, keys: keys) }.base64EncodedString()
+      return try Self.refusing { try LocalDocuments.seal(text, kind, part: part, keys: keys) }.base64EncodedString()
     }.runOnQueue(Self.work)
 
-    AsyncFunction("openLocal") { (sealed: String, kind: String?) -> String? in
+    AsyncFunction("openLocal") { (sealed: String, kind: String?, part: String?) -> String? in
       guard let keys = self.state.keys, let data = Data(base64Encoded: sealed) else { return nil }
-      guard Self.sealed.latched else { return (try? keys.open(data, scopeTag: "local", fileId: "state")).map { String(decoding: $0, as: UTF8.self) } }
+      guard Self.sealed.latched else {
+        return (try? keys.open(data, scopeTag: "local", fileId: LocalDocuments.legacyFileId(part: part))).map { String(decoding: $0, as: UTF8.self) }
+      }
       guard let kind = kind.flatMap(LocalDocuments.Kind.init(rawValue:)) else { return nil }
-      return LocalDocuments.open(data, kind, keys: keys)
+      return LocalDocuments.open(data, kind, part: part, keys: keys)
     }.runOnQueue(Self.work)
 
     Function("useSealedPasswords") { Self.sealed.latch() }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedBy } from "./switchOn.mjs";
 import { reset, onAndSynced, S, shell, settle, launch, native, sync, rawTransport, realSetTimeout, files } from "./harness.mjs";
+import { sealedState } from "../sealedState.mjs";
 
 function passwordMac(scope) {
   const store = new Map();
@@ -80,7 +81,7 @@ async function scenario(applied, editAfterRelaunch = false, later = "p2") {
       tick();
       await again.syncNow();
       await settle(60);
-      if (i === 0) rebuilding = !!JSON.parse(shell.docs.get("sync-state.nns").slice(7))[`p:${syncId}`].rebuild;
+      if (i === 0) rebuilding = !!sealedState(shell.docs)[`p:${syncId}`].rebuild;
     }
     await b.sync();
     if (process.env.DUMP) console.log("OPS", JSON.stringify(files().flatMap(({ file }) => (file.ops ?? []).filter((op) => op.k === key).map((op) => [file.device, file.seq, op.h, op.v?.p]))));

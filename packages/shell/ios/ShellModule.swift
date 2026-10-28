@@ -182,6 +182,7 @@ public enum DocumentStore {
   private static let queue = DispatchQueue(label: "ardia.documents", qos: .utility)
   private static let lock = NSLock()
   private static var staged: [String: Staged] = [:]
+  private static var removing: [String: Int] = [:]
   private static var generation: UInt64 = 0
   private static var closed = false
   private static let flushOnQuit = NotificationCenter.default.addObserver(
@@ -194,6 +195,18 @@ public enum DocumentStore {
     let pending = staged[url.lastPathComponent]?.contents
     lock.unlock()
     return pending ?? (try? String(contentsOf: url, encoding: .utf8))
+  }
+
+  public static func list(_ prefix: String) -> [String] {
+    guard let dir = try? ShellModule.documentURL(prefix).deletingLastPathComponent() else { return [] }
+    return DocumentListing.names(
+      prefix: prefix,
+      pending: {
+        lock.lock()
+        defer { lock.unlock() }
+        return DocumentListing.Pending(staged: Set(staged.keys), removing: Set(removing.keys))
+      },
+      onDisk: { (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] })
   }
 
   public static func readResult(_ name: String) -> [String: String] {
@@ -233,10 +246,15 @@ public enum DocumentStore {
     lock.lock()
     if closed { return lock.unlock() }
     generation += 1
-    let waiters = staged.removeValue(forKey: url.lastPathComponent)?.waiters ?? []
+    let key = url.lastPathComponent
+    let waiters = staged.removeValue(forKey: key)?.waiters ?? []
+    removing[key, default: 0] += 1
     lock.unlock()
     queue.async {
       try? FileManager.default.removeItem(at: url)
+      lock.lock()
+      removing[key] = removing[key].flatMap { $0 > 1 ? $0 - 1 : nil }
+      lock.unlock()
       for waiter in waiters { waiter(nil) }
     }
   }
@@ -545,6 +563,8 @@ public class ShellModule: Module {
     Function("writeDocument") { (name: String, contents: String) in try DocumentStore.write(name, contents) }
 
     Function("removeDocument") { (name: String) in try DocumentStore.remove(name) }
+
+    Function("listDocuments") { (prefix: String) -> [String] in DocumentStore.list(prefix) }
 
     AsyncFunction("fetchBangList") { (etag: String?, promise: Promise) in
       BangListFetch.start(etag: etag) { result in

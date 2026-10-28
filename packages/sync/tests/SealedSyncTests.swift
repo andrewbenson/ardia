@@ -91,6 +91,46 @@ final class SealedSyncTests: XCTestCase {
     XCTAssertNil(LocalDocuments.open(try keys.seal(Data(#"{"sealedPasswords":"1","body":"{}"}"#.utf8), scopeTag: "local", fileId: "state.v2"), .state, keys: keys))
   }
 
+  func testADeltaOrBatchFileOpensOnlyAsThePartItWasSealedFor() throws {
+    let delta = #"{"s":{"records":{"pw:x":{"h":"1","v":{"o":"https://a.example","u":"me","s":"AQ=="},"o":["d",1]}}}}"#
+    let sealedDelta = try LocalDocuments.seal(delta, .state, part: "d.2.e.3", keys: keys)
+    XCTAssertEqual(LocalDocuments.open(sealedDelta, .state, part: "d.2.e.3", keys: keys), delta)
+    XCTAssertNil(LocalDocuments.open(sealedDelta, .state, part: "d.2.e.4", keys: keys), "not as another g")
+    XCTAssertNil(LocalDocuments.open(sealedDelta, .state, part: "d.3.e.3", keys: keys), "not as another compaction")
+    XCTAssertNil(LocalDocuments.open(sealedDelta, .state, keys: keys), "not as the full state")
+    XCTAssertNil(LocalDocuments.open(try LocalDocuments.seal(delta, .state, keys: keys), .state, part: "d.2.e.3", keys: keys), "and the full state isn't a delta")
+    XCTAssertThrowsError(try LocalDocuments.seal(delta.replacingOccurrences(of: #""s":"AQ==""#, with: #""p":"guess""#), .state, part: "d.2.e.3", keys: keys), "a delta with a plain p is refused")
+    let plainBase = #"{"s":{"base":{"pw:x":"{\"o\":\"https://a.example\",\"p\":\"guess\",\"u\":\"me\"}"}}}"#
+    XCTAssertThrowsError(try LocalDocuments.seal(plainBase, .state, part: "d.2.e.3", keys: keys), "and so is a plain p in a delta's base")
+    let batch = #"{"journal":{"s":[{"v":1,"kind":"log","device":"d","seq":1,"at":1,"ops":[{"k":"pw:https://a.example\nme","h":"1","v":{"o":"https://a.example","u":"me","p":"one"}}]}]}}"#
+    XCTAssertThrowsError(try LocalDocuments.seal(batch, .journal, part: "b.s.1", keys: keys), "a batch file with a plain p is refused")
+    let sealedBatch = try LocalDocuments.seal(batch.replacingOccurrences(of: #""p":"one""#, with: #""s":"AQ==""#), .journal, part: "b.s.1", keys: keys)
+    XCTAssertNil(LocalDocuments.open(sealedBatch, .journal, part: "b.t.1", keys: keys), "a batch can't be read as another scope's")
+    XCTAssertNil(LocalDocuments.open(sealedBatch, .journal, part: "b.s.2", keys: keys), "or another seq")
+  }
+
+  func testTheSavedStatesReservedKeysAndDeltaShapesSealAndOpen() throws {
+    let record = #""pw:x":{"h":"1","v":{"o":"https://a.example","u":"me","s":"AQ=="},"o":["d",1]}"#
+    let full = #"{"s":{"records":{\#(record)},"base":{},"files":{}},"~n":3,"~epoch":"0a1b","~device":"abc"}"#
+    XCTAssertEqual(LocalDocuments.open(try LocalDocuments.seal(full, .state, keys: keys), .state, keys: keys), full)
+    let delta = #"{"s":{"records":{\#(record)},"base":{},"files":{},"unapplied":{"~list":{"drop":["pw:y"],"add":["pw:x"]}},"~gone":{"records":["pw:y"],"rest":["pendingSince"]}}}"#
+    XCTAssertEqual(LocalDocuments.open(try LocalDocuments.seal(delta, .state, part: "d.abc.3.0a1b.1", keys: keys), .state, part: "d.abc.3.0a1b.1", keys: keys), delta)
+    XCTAssertThrowsError(try LocalDocuments.seal(delta.replacingOccurrences(of: #""s":"AQ==""#, with: #""p":"guess""#), .state, part: "d.abc.3.0a1b.1", keys: keys))
+    let v1Delta = #"{"s":{"records":{"pw:https://a.example\nme":{"h":"1","v":{"o":"https://a.example","u":"me","p":"one"},"o":["d",1]}},"base":{},"files":{},"~gone":{"records":["pw:y"]}},"~n":3}"#
+    let unlatched = try keys.seal(Data(v1Delta.utf8), scopeTag: "local", fileId: LocalDocuments.legacyFileId(part: "d.abc.3.0a1b.1"))
+    let seal = PasswordText.jsonString(try sealed("one"))
+    XCTAssertEqual(LocalDocuments.open(unlatched, .state, part: "d.abc.3.0a1b.1", keys: keys), v1Delta.replacingOccurrences(of: #""p":"one""#, with: #""s":\#(seal)"#))
+  }
+
+  func testAPartSealedBeforeTheLatchOpensSealedAfterIt() throws {
+    let v1Delta = #"{"s":{"records":{"pw:https://a.example\nme":{"h":"1","v":{"o":"https://a.example","u":"me","p":"one"},"o":["d",1]}}}}"#
+    let unlatched = try keys.seal(Data(v1Delta.utf8), scopeTag: "local", fileId: LocalDocuments.legacyFileId(part: "d.1.e.1"))
+    let seal = PasswordText.jsonString(try sealed("one"))
+    XCTAssertEqual(LocalDocuments.open(unlatched, .state, part: "d.1.e.1", keys: keys), v1Delta.replacingOccurrences(of: #""p":"one""#, with: #""s":\#(seal)"#))
+    XCTAssertNil(LocalDocuments.open(unlatched, .state, part: "d.1.e.2", keys: keys))
+    XCTAssertNil(try? keys.open(unlatched, scopeTag: "local", fileId: "state"), "switched off, a delta doesn't open as the full state")
+  }
+
   func testAPreUpgradeDocumentOpensSealed() throws {
     let v1State = #"{"s":{"records":{"pw:https://a.example\nme":{"h":"1","v":{"o":"https://a.example","u":"me","p":"one"},"o":["d",1]}}}}"#
     let v1Journal = #"{"journal":{"s":[{"v":1,"kind":"log","device":"d","seq":1,"at":1,"ops":[{"k":"pw:https://a.example\nme","h":"1","v":{"o":"https://a.example","u":"me","p":"one"}}]}]}}"#

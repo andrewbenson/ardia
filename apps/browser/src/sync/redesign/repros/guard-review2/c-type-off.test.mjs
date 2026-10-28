@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
+import { sealedState as sealedDocs } from "../../../sealedState.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -163,7 +164,7 @@ function appMac(prefix) {
   return { store, sync: () => sync.syncScope({ scope: "app", state, transport: rawTransport, adapters: [adapter], clock, device: "appMac" }) };
 }
 
-const sealedState = () => JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+const sealedState = () => sealedDocs(shell.docs);
 
 async function rebuiltWith(type) {
   reset();

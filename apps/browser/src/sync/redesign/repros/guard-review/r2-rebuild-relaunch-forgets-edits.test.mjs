@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
 import { reset, onAndSynced, shell, S, settle, launch, fake, bookmarkOps, titles } from "./harness.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 test("R2a: a deletion made after the loss, while the folder was offline, is undone by a relaunch before the rebuild could publish it", async () => {
   reset();
@@ -22,7 +23,7 @@ test("R2a: a deletion made after the loss, while the folder was offline, is undo
   S().removeBookmark(one.id);
   await lost.syncNow();
   await settle();
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   assert.ok(sealed[`p:${syncId}`]?.rebuild, "control: the rebuild marker is sealed before the relaunch");
   const again = await launch();
   fake.chain = "ok";
@@ -50,7 +51,7 @@ test("R2b: a rename made after the loss, while the folder was offline, is revert
   S().updateBookmark(one.id, { title: "Renamed after the loss" });
   await lost.syncNow();
   await settle();
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   assert.ok(sealed[`p:${syncId}`]?.rebuild, "control: the rebuild marker is sealed before the relaunch");
   const again = await launch();
   fake.chain = "ok";

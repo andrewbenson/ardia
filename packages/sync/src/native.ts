@@ -42,8 +42,8 @@ type SyncNative = {
   read(folder: string, scope: string, known: string[]): Promise<Listing>;
   remove(folder: string, scope: string, ids: string[]): Promise<void>;
   deleteChain(folder: string): Promise<void>;
-  sealLocal(text: string, kind?: LocalKind): Promise<string>;
-  openLocal(sealed: string, kind?: LocalKind): Promise<string | null>;
+  sealLocal(text: string, kind?: LocalKind, part?: string): Promise<string>;
+  openLocal(sealed: string, kind?: LocalKind, part?: string): Promise<string | null>;
   useSealedPasswords?(): void;
   checkSealed?(values: SealedValue[]): Promise<boolean[]>;
   saveSealedPassword?(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;

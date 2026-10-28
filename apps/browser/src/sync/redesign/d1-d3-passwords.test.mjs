@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedBy } from "./switchOn.mjs";
 import { shell, settle, launch, reset, onAndSynced, passwordMac, native, realReadPasswords, realSetTimeout, restoreDocs } from "./harness.mjs";
+import { sealedState } from "../sealedState.mjs";
 
 const SITE = "https://site.example";
 const loginKey = (user) => `${SITE}\n${user}`;
@@ -151,7 +152,7 @@ test("D3: with its state lost, a login B changed meanwhile is applied here and t
     await b.sync();
     assert.equal(w.here.get(loginKey("me"))?.password, "v2-from-B", `B's change is applied here (here: ${w.here.get(loginKey("me"))?.password})`);
     assert.equal(b.store.get(syncKey("me"))?.p, "v2-from-B");
-    const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7))[`p:${syncId}`];
+    const sealed = sealedState(shell.docs)[`p:${syncId}`];
     assert.ok(!sealed.rebuild || sealed.rebuild.settled?.includes("pw:"), `the passwords type settles (${JSON.stringify(sealed.rebuild)})`);
   }));
 

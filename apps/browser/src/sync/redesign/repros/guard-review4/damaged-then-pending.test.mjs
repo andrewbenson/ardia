@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -207,7 +208,7 @@ test("Q1: a rebuild whose damaged file is later only listed as downloading holds
       for (let i = 0; i < 3; i++) await again.syncNow();
       await settle();
     }
-    const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7))[`p:${syncId}`];
+    const sealed = sealedState(shell.docs)[`p:${syncId}`];
     if (process.env.DUMP) console.log(JSON.stringify({ damaged: sealed.damaged, pendingSince: sealed.pendingSince, rebuild: sealed.rebuild && { since: sealed.rebuild.since, settled: sealed.rebuild.settled }, unapplied: sealed.unapplied, reads }));
     assert.ok(titles().includes("One renamed on B"), `100 hours on, B's rename is applied here (this Mac has ${titles()})`);
   } finally {

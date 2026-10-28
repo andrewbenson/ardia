@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
 import { reset, onAndSynced, shell, settle, launch, native, S, otherMac, titles } from "./harness.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 const realNow = Date.now;
 
@@ -33,7 +34,7 @@ async function scenario(flicker) {
       await again.syncNow();
       await settle();
     }
-    const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+    const sealed = sealedState(shell.docs);
     return { here: titles(), rebuilding: sealed[scope].rebuild };
   } finally {
     native.read = realRead;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
 import { reset, onAndSynced, shell, settle, launch, native, files, S, otherMac, titles } from "./harness.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 async function scenario(stuckFile) {
   reset();
@@ -18,7 +19,7 @@ async function scenario(stuckFile) {
     };
     await engine.syncNow();
     await settle();
-    const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+    const sealed = sealedState(shell.docs);
     assert.ok(sealed[scope].pendingSince?.stuck, "control: the stuck file is saved as pending");
     sealed[scope].pendingSince.stuck = Date.now() - 3 * 86_400_000;
     shell.docs.set("sync-state.nns", `sealed:${JSON.stringify(sealed)}`);

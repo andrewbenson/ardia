@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { sealedJournal } from "./sealedState.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -206,8 +207,7 @@ test("B5: a deleted profile's scope is gone for good, and syncing that profile a
   await engine.syncNow();
   await engine.syncNow();
   await settle();
-  const journal = shell.docs.get("sync-journal.nns");
-  assert.ok(!journal || !JSON.parse(journal.slice(7)).journal?.[`p:${syncId}`], "the journal has nothing left for the deleted scope");
+  assert.ok(!sealedJournal(shell.docs)[`p:${syncId}`], "the journal has nothing left for the deleted scope");
   const again = await launch();
   again.startSync();
   await settle();
@@ -276,7 +276,7 @@ test("B9: stopping while the state is being sealed leaves no sealed state behind
   reset();
   const engine = await onAndSynced();
   shell.heldSaves.on = true;
-  shell.heldSaves.only = "sync-state.nns";
+  shell.heldSaves.only = "sync-state";
   S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
   await engine.syncNow();
   await settle();
@@ -363,7 +363,7 @@ test("B12: a journal entry from another device or without changes doesn't keep t
   let journaled = null;
   fake.failWrite = (scope, file) => {
     if (scope !== "app" || file.kind !== "log") return false;
-    const list = JSON.parse(shell.docs.get("sync-journal.nns").slice(7)).journal?.app ?? [];
+    const list = sealedJournal(shell.docs).app ?? [];
     journaled = list.some((f) => f.device === file.device && f.seq === file.seq && f.ops?.length);
     return false;
   };
@@ -499,7 +499,7 @@ test("B16: a seal from before sync was turned off and on again doesn't prune the
   const engine = await onAndSynced();
   S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
   shell.heldSaves.on = true;
-  shell.heldSaves.only = "sync-state.nns";
+  shell.heldSaves.only = "sync-state";
   await engine.syncNow();
   await settle();
   const oldSeal = shell.heldSaves.queue.shift();
@@ -515,8 +515,7 @@ test("B16: a seal from before sync was turned off and on again doesn't prune the
   const fresh = JSON.parse(shell.docs.get("sync.json")).deviceId;
   oldSeal();
   await settle();
-  const journal = shell.docs.get("sync-journal.nns");
-  const kept = journal ? JSON.parse(journal.slice(7)).journal?.app ?? [] : [];
+  const kept = sealedJournal(shell.docs).app ?? [];
   assert.ok(kept.some((f) => f.device === fresh), "the new device's batches stay journaled until its own state lands");
 });
 

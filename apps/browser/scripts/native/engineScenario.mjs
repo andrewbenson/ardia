@@ -33,11 +33,12 @@ must end with the same data; for every key, the value that wins is the latest ch
 counting a write that carries a real edit or a position repair as a choice of its whole record, and
 excusing only edits that never reached the folder before their Mac lost its state, that the same
 Mac replaced or reverted before sending, or saved passwords changed while a rebuilding Mac couldn't
-read them yet. No seq may carry two different batches. ORACLE_KEY=<url,
+read them yet. No seq may carry two different batches, and once a Mac has saved since its launch,
+its saved state and deltas must replay to the last state it wrote whenever it's idle. ORACLE_KEY=<url,
 setting or prof:> prints one key's edits, writes and losses; ORACLE_ENGINE=<file> runs another
 engine.ts; ORACLE_TRACE=1 keeps every step's full trace; ORACLE_STRICT=1 stops counting a position
 repair as a choice; ORACLE_REDESIGN=1 runs with the syncRedesign switch on, over a Login Data with its
-own sync mark.`;
+own sync mark; ORACLE_STATE_FILES=1 also damages the newest state delta or journal batch file.`;
 
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
@@ -184,7 +185,17 @@ async function environment(prefix, sharedFolderOps) {
           "if (profiles.length && (await globalThis.__traceProbe(profiles[0]!, () => probeExtensionSync(profiles[0]!)))) watchExtensionIntents(profiles);",
         );
         source = source.replace("  useBrowser.subscribe((s, prev) => {", "  globalThis.__engineUnsubscribe = useBrowser.subscribe((s, prev) => {");
-        source += `\nglobalThis.__engineMemory = () => ({ loaded, doc, savedJson, savedState, journal, journalOnDisk, forcePasswords, running, again, sealing: !!sealing, passwords: Object.fromEntries([...passwordAdapters].map(([k, a]) => [k, a.__replayMemory?.() ?? null])), extensions: [...extensionAdapters.keys()] });\nglobalThis.__engineUi = useSync;\nglobalThis.__engineBaselines = () => baselines;\n`;
+        if (source.includes("writtenOf(scopes)")) {
+          const anchors = [
+            ["  const snapshot = writtenOf(scopes);", "  const snapshot = writtenOf(scopes);\n  const oracleFull = JSON.stringify(scopes);"],
+            ["          written = snapshot;", "          written = snapshot;\n          globalThis.__stateWritten = oracleFull;\n          globalThis.__freezeWritten(snapshot);"],
+          ];
+          for (const [anchor, replacement] of anchors) {
+            if (!source.includes(anchor)) throw new Error(`the replay oracle's anchor is gone from engine.ts: ${anchor.trim()}`);
+            source = source.replace(anchor, replacement);
+          }
+        }
+        source += `\nglobalThis.__engineMemory = () => ({ loaded, doc, savedJson, stateGeneration: typeof stateGeneration === "undefined" ? null : stateGeneration, written: typeof written !== "undefined" && !!written, compactNext: typeof compactNext !== "undefined" && compactNext, journal, forcePasswords, running, again, sealing: !!sealing, passwords: Object.fromEntries([...passwordAdapters].map(([k, a]) => [k, a.__replayMemory?.() ?? null])), extensions: [...extensionAdapters.keys()] });\nglobalThis.__engineUi = useSync;\nglobalThis.__engineBaselines = () => baselines;\n`;
       } else if (url.endsWith("/src/sync/adapters.ts")) {
         source = source.replace('  return {\n    prefix: "pw:",', '  return {\n    __replayMemory: () => ({ lastRead, quietUntil, created: [...created] }),\n    prefix: "pw:",');
       } else if (url.endsWith("/src/store/model.ts")) {
@@ -197,6 +208,15 @@ async function environment(prefix, sharedFolderOps) {
       return { ...loaded, source };
     },
   });
+  const deepFreeze = (value) => {
+    if (value && typeof value === "object" && !Object.isFrozen(value)) {
+      Object.freeze(value);
+      for (const inner of Object.values(value)) deepFreeze(inner);
+    }
+  };
+  globalThis.__freezeWritten = (snapshot) => {
+    for (const { maps } of snapshot.values()) for (const map of [maps.records, maps.files]) for (const value of Object.values(map)) deepFreeze(value);
+  };
   globalThis.__traceProbe = async (profile, run) => {
     const answer = await run();
     recordCall("probeExtensionSync", [profile], answer);
@@ -259,6 +279,7 @@ async function environment(prefix, sharedFolderOps) {
     staged.delete(name);
     disk.delete(name);
   };
+  shellModule.listDocuments = (prefix) => [...new Set([...disk.keys(), ...staged.keys()])].filter((name) => name.startsWith(prefix)).sort();
   shellFake.journalHolds = (scope, file) => {
     if (file.kind !== "log") return null;
     const holds = (list) => (list ?? []).some((f) => f.device === file.device && f.seq === file.seq);
@@ -271,8 +292,17 @@ async function environment(prefix, sharedFolderOps) {
         return null;
       }
     };
-    return holds(opened("sync-journal.nns")?.journal?.[scope]) || holds(opened("sync-state.nns")?.[scope]?.journal);
+    const batches = [...disk.keys()].filter((name) => name.startsWith("sync-journal-b-")).flatMap((name) => opened(name)?.journal?.[scope] ?? []);
+    const state = (() => {
+      try {
+        return sealedState(disk);
+      } catch {
+        return null;
+      }
+    })();
+    return holds(opened("sync-journal.nns")?.journal?.[scope]) || holds(batches) || holds(state?.[scope]?.journal);
   };
+  const { sealedState } = await import(pathToFileURL(join(app, "src/sync/sealedState.mjs")).href);
   const { useBrowser } = await import(pathToFileURL(join(app, "src/store/browser.ts")).href);
   const { encodeArgs } = await import(pathToFileURL(join(app, "../../packages/store/src/encode.ts")).href);
   const S = () => useBrowser.getState();
@@ -402,9 +432,11 @@ async function environment(prefix, sharedFolderOps) {
           break;
         }
         const damaged = { drop: null, corrupt: "sealed:{\"app\":", foreign: "sealed-elsewhere:{}", malformed: 'sealed:{"journal":{"app":[{"v":1,"kind":"log","device":"x","seq":1}]}}' }[step.how];
-        staged.delete(step.doc);
-        if (damaged === null) disk.delete(step.doc);
-        else disk.set(step.doc, damaged);
+        const doc = step.doc.endsWith("-") ? [...new Set([...disk.keys(), ...staged.keys()])].filter((name) => name.startsWith(step.doc)).sort().at(-1) : step.doc;
+        if (!doc) break;
+        staged.delete(doc);
+        if (damaged === null) disk.delete(doc);
+        else disk.set(doc, damaged);
         break;
       }
       case "holdNative":
@@ -538,6 +570,28 @@ async function environment(prefix, sharedFolderOps) {
         .map(([name, value]) => [name, typeof value === "string" ? value : value.contents]),
     );
   const snapshotDocs = () => ({ disk: sorted(disk), staged: sorted(staged) });
+  const canonical = (value) =>
+    Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => [k, canonical(value[k])])) : value;
+  const replayDiffers = (memory) => {
+    if (!memory.loaded || !memory.doc.enabled || memory.running || memory.sealing || docMode.fail || docMode.hold || retrying.length || !memory.stateGeneration || !memory.written || memory.compactNext) return null;
+    const view = new Map(disk);
+    for (const [name, save] of staged) view.set(name, save.contents);
+    let replayed;
+    try {
+      replayed = JSON.stringify(canonical(sealedState(view)));
+    } catch (error) {
+      return `the saved state doesn't replay: ${error.message}`;
+    }
+    if (!globalThis.__stateWritten) return null;
+    const held = JSON.stringify(canonical(JSON.parse(globalThis.__stateWritten)));
+    if (replayed === held) return null;
+    const a = JSON.parse(replayed);
+    const b = JSON.parse(held);
+    const where = [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((scope) =>
+      [...new Set([...Object.keys(a[scope] ?? {}), ...Object.keys(b[scope] ?? {})])].filter((k) => JSON.stringify(a[scope]?.[k]) !== JSON.stringify(b[scope]?.[k])).map((k) => `${scope}.${k}`),
+    );
+    return `the replayed state differs from the last state written at ${where.join(", ")}`;
+  };
 
   const boundary = () => {
     const s = S();
@@ -597,7 +651,6 @@ async function environment(prefix, sharedFolderOps) {
       await runStep(step);
       await drain();
       const memory = globalThis.__engineMemory();
-      void memory;
       void loadedBefore;
       for (const p of [...inFlight]) {
         const settled = await Promise.race([p.then(() => true, () => true), new Promise((r) => setImmediate(() => r(false)))]);
@@ -605,7 +658,7 @@ async function environment(prefix, sharedFolderOps) {
       }
       const made = calls;
       calls = null;
-      return { calls: made, after: boundary(), edits: stepEdits };
+      return { calls: made, after: boundary(), edits: stepEdits, replay: step.op === "damage" ? null : replayDiffers(memory) };
     },
   };
 }
@@ -854,6 +907,7 @@ async function runScenario(script) {
   let counter = 0;
   const published = new Map();
   const reused = [];
+  const replays = [];
   const history = { at: 0, edits: [], losses: [], writes: [], removed: [], nows: script.steps.map((step, i) => step.now ?? script.steps.slice(0, i).findLast((s) => s.now !== undefined)?.now ?? 0) };
   const hidden = { local: new Map(), other: new Map() };
   const folderOps = async (op, a, mac = "local") => {
@@ -927,11 +981,13 @@ async function runScenario(script) {
     } else if (step.mac === "other") {
       const reply = await ask({ step });
       edits = reply.edits ?? [];
+      if (reply.replay) replays.push(`other at step ${history.at}: ${reply.replay}`);
       trace.steps.push({ other: true, error: reply.error ?? null, folder: [...folder.keys()], ...(reply.result ? { after: reply.result.after, calls: reply.result.calls } : {}) });
     } else {
       try {
         const result = await local.step(step);
         edits = result.edits ?? [];
+        if (result.replay) replays.push(`local at step ${history.at}: ${result.replay}`);
         if (!script.oracle) delete result.edits;
         trace.steps.push(script.oracle && !process.env.ORACLE_TRACE ? { op: step.op } : result);
       } catch (error) {
@@ -940,7 +996,7 @@ async function runScenario(script) {
     }
     for (const edit of edits) history.edits.push({ ...edit, at: history.at, mac: step.mac });
   }
-  if (script.oracle) trace.oracle = oracleVerdict(local.report(), (await ask({ report: true })).report, reused, history);
+  if (script.oracle) trace.oracle = [...replays.slice(0, 3), ...oracleVerdict(local.report(), (await ask({ report: true })).report, reused, history)];
   child.kill();
   return trace;
 }
@@ -1088,6 +1144,8 @@ function oracleVerdict(local, other, reused, history) {
   return problems;
 }
 
+const DAMAGED_DOCS = process.env.ORACLE_STATE_FILES ? ["sync-state.nns", "sync-journal.nns", "sync-state-d-", "sync-journal-b-"] : ["sync-state.nns", "sync-journal.nns"];
+
 export function oracleScript(seed, steps) {
   const rand = mulberry32(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
@@ -1123,7 +1181,7 @@ export function oracleScript(seed, steps) {
     else if (r < 0.62) push(mac, { op: "relaunch" }), push(mac, { op: "start" });
     else if (r < 0.645) push(mac, { op: "snapshot" });
     else if (r < 0.675) push(mac, { op: "crash", snapshot: rand() < 0.4 }), push(mac, { op: "start" });
-    else if (r < 0.7) push(mac, { op: "damage", doc: pick(["sync-state.nns", "sync-journal.nns"]), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    else if (r < 0.7) push(mac, { op: "damage", doc: pick(DAMAGED_DOCS), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
     else if (r < 0.715) push(mac, { op: "damage", doc: "sync-state.nns", how: "newer" }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
     else if (r < 0.75) push(mac, { op: "holdNative", names: [pick(["read", "write", "chainStatus", "unlock", "sealLocal", "openLocal"])] });
     else if (r < 0.785) push(mac, { op: "releaseNative" });
@@ -1185,7 +1243,7 @@ async function other() {
     }
     try {
       const result = await env.step(message.step);
-      process.send({ done: message.id, edits: result.edits, ...(process.env.ORACLE_TRACE ? { result } : {}) });
+      process.send({ done: message.id, edits: result.edits, replay: result.replay, ...(process.env.ORACLE_TRACE ? { result } : {}) });
     } catch (error) {
       process.send({ done: message.id, error: String(error?.message ?? error) });
     }

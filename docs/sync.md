@@ -135,13 +135,17 @@ Writing:
 - A file is written whole in a same-volume temporary folder, then moved in inside a coordinated
   write (`NSFileCoordinator`, `.forReplacing`). The sync client never sees half a file under a
   real name.
-- A log's seq is never reused. A batch gets its seq and is saved, sealed, to `sync-journal.nns` in
-  the app's data folder before it's written (`persist`); a batch whose write fails stays queued
-  with its seq. After a crash, `restoreJournal` puts the journalled batches back into the last
-  saved state and the next cycle writes them again, byte for byte, before anything new. If the
-  first write did land, the folder has the same batch twice, which reads as a no-op on every
-  version. The journal is local only (no format change) and is emptied once the saved state
-  has its batches.
+- A log's seq is never reused. A batch gets its seq and is saved, sealed, to its own
+  `sync-journal-b-<scope in hex>-<seq>.nns` in the app's data folder before it's written (`persist`);
+  a batch whose write fails stays queued with its seq. After a crash, `restoreJournal` puts the
+  journalled batches back into the last saved state and the next cycle writes them again, byte for
+  byte, before anything new. If the first write did land, the folder has the same batch twice, which
+  reads as a no-op on every version. The journal is local only (no format change); a batch file goes
+  once the saved state has its batch. A batch file is sealed for its scope and seq, so it opens as no
+  other; one from another device, or one that won't open, is deleted at load (with the redesign
+  switch on, one that won't open pauses the ledger migration instead, like the old journal). Batches
+  in the older single `sync-journal.nns` are loaded as before, and that file is emptied once the
+  saved state has every one of them.
 
 Reading (`SyncVault.read`) handles files that aren't there in full yet:
 - iCloud placeholders (`.<id>.nns.icloud` stubs, or dataless files whose
@@ -436,7 +440,29 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
    applying per adapter.
 4. Compacts when due.
 5. Saves `sync.json` (in the app's data folder): links, settings of sync and the last seq written
-   per scope; and `sync-state.nns`, sealed: the replica, base, version vectors and known files.
+   per scope; and the sealed state: the replica, base, version vectors and known files.
+
+### The saved state on disk
+
+- `sync-state.nns` is the full state, a compaction. Besides the scopes it holds `~n` (a counter that only goes up),
+  `~epoch` (random, new at every compaction) and `~device`. An older build skips those keys.
+- Each later save writes only what changed since the last one landed, as
+  `sync-state-d-<device>-<n>-<epoch>-<g>.nns` with `g` = 1, 2, ...: per scope, the changed and removed keys of
+  `records`, `base` and `files`, the small fields that changed, and a long list of keys (`unapplied`) as what left
+  and what joined. Each is sealed for its own name, so a delta can't be replayed as another.
+- A compaction happens on the first save after a launch, after 200 deltas or 1 MB of them, after an hour, when a
+  scope is added, removed or replaced, when the device changes (turning on, joining) and after a gap. Its deltas
+  are removed one compaction later, so a power cut that keeps the removal but loses the new full state still finds
+  the previous state's deltas.
+- At load, deltas of the full state's `n` and `epoch` are replayed in order. One from another device, or more than
+  one compaction old, is deleted. A full state with no `~n` (an older build saved it) deletes every delta. A
+  missing `g`, a delta that doesn't open or doesn't apply, a delta of a later `n` or another epoch (a lost
+  compaction), or a name under the delta prefix that doesn't parse (a newer build's) is a gap: replay stops there,
+  every scope rebuilds as after a lost state, the ledger migration waits for a full cycle as it does then, and the
+  next save compacts.
+- An older build reads only `sync-state.nns`, at most one compaction old, and takes the rolled-back path below.
+- Stop clears the full state and every delta; a delta that lands after that belongs to a dead generation and is
+  deleted at the next load.
 
 ### After a load: lost and rolled-back state
 

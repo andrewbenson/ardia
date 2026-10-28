@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { sealedState } from "./sealedState.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -163,7 +164,7 @@ test("B25: a crash after a mid-cycle seal leaves sync.json's clock behind the se
   assert.equal(S().settings.searchEngine, "bing", "the app scope pulled and applied the remote choice");
   first.setTypeSynced("history", true);
   await settle();
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   assert.ok(sealed.app.records["set:searchEngine"].h.startsWith(future), "the sealed state holds the future-stamped record");
   assert.ok((JSON.parse(shell.docs.get("sync.json")).clock ?? "") < `${future}`, "while sync.json's clock is behind it");
   fake.readGate = null;
@@ -189,7 +190,7 @@ test("B25b: same, with no user action: the previous cycle's seal lands during th
   reset();
   const first = await onAndSynced();
   shell.heldSaves.on = true;
-  shell.heldSaves.only = "sync-state.nns";
+  shell.heldSaves.only = "sync-state";
   S().addBookmark({ profileId: "default", url: "https://two.example/", title: "Two" });
   await first.syncNow();
   await settle();
@@ -206,7 +207,7 @@ test("B25b: same, with no user action: the previous cycle's seal lands during th
   shell.heldSaves.on = false;
   for (const land of shell.heldSaves.queue.splice(0)) land();
   await settle();
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   assert.ok(sealed.app.records["set:searchEngine"]?.h.startsWith(future), "the re-seal captured the mid-cycle record");
   fake.readGate = null;
   const again = await launch();
@@ -258,10 +259,12 @@ test("B26: a sealed state that won't open (openLocal returns null, as native doe
 
 test("B26b: same for a state B22 rejects", () =>
   rebuildClobbers(() => {
-    const state = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+    const state = sealedState(shell.docs);
     for (const scope of Object.values(state)) scope.records["junk"] = null;
     shell.docs.set("sync-state.nns", `sealed:${JSON.stringify(state)}`);
   }));
+
+const journalFiles = () => [...shell.docs.keys()].filter((name) => name.startsWith("sync-journal-b-"));
 
 test("B27: a mid-cycle seal prunes a batch that sync.json doesn't count yet; if that sealed state is later unreadable, the rebuild reuses the batch's seq", async () => {
   reset();
@@ -273,7 +276,7 @@ test("B27: a mid-cycle seal prunes a batch that sync.json doesn't count yet; if 
   await settle();
   const before = JSON.parse(shell.docs.get("sync.json")).seqs.app;
   shell.heldSaves.on = true;
-  shell.heldSaves.only = "sync-journal.nns";
+  shell.heldSaves.only = "sync-journal-b-";
   fake.readGate = (scope) => (scope === "app" ? new Promise(() => {}) : null);
   S().updateSettings({ searchEngine: "bing" });
   void engine.syncNow();
@@ -281,12 +284,12 @@ test("B27: a mid-cycle seal prunes a batch that sync.json doesn't count yet; if 
   assert.equal(shell.heldSaves.queue.length, 1, "batch N's journal save is in flight");
   engine.setTypeSynced("history", true);
   await settle();
-  assert.equal(shell.docs.get("sync-journal.nns"), "", "the mid-cycle seal landed and cleared the journal");
+  assert.deepEqual(journalFiles(), [], "the mid-cycle seal landed and cleared the journal");
   assert.equal(JSON.parse(shell.docs.get("sync.json")).seqs.app, before, "sync.json still counts N as unwritten");
   shell.heldSaves.on = false;
   const land = shell.heldSaves.queue.shift();
   land();
-  shell.docs.set("sync-journal.nns", "");
+  for (const name of journalFiles()) shell.docs.delete(name);
   await settle();
   assert.ok(files().some(({ scope, file }) => scope === "app" && file.seq === before + 1), "batch N is in the folder");
   fake.readGate = null;
@@ -310,7 +313,7 @@ test("B27-control: without the mid-cycle seal prunes a batch that sync.json does
   await settle();
   const before = JSON.parse(shell.docs.get("sync.json")).seqs.app;
   shell.heldSaves.on = true;
-  shell.heldSaves.only = "sync-journal.nns";
+  shell.heldSaves.only = "sync-journal-b-";
   fake.readGate = (scope) => (scope === "app" ? new Promise(() => {}) : null);
   S().updateSettings({ searchEngine: "bing" });
   void engine.syncNow();
@@ -336,7 +339,7 @@ test("B27-control: without the mid-cycle seal prunes a batch that sync.json does
 async function stuckAfter(damage) {
   reset();
   await onAndSynced();
-  const state = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const state = sealedState(shell.docs);
   damage(state.app);
   shell.docs.set("sync-state.nns", `sealed:${JSON.stringify(state)}`);
   const engine = await launch();
@@ -716,7 +719,7 @@ test("B42: a rolled-back state sealed mid-publish (outbox not empty) writes its 
   S().updateSettings({ searchEngine: "bing" });
   await engine.syncNow();
   await settle();
-  const state = JSON.parse(older.get("sync-state.nns").slice(7));
+  const state = sealedState(older);
   const syncId = engine.useSync.getState().profiles.default.syncId;
   const scope = state[`p:${syncId}`];
   const dev = JSON.parse(older.get("sync.json")).deviceId;
@@ -974,7 +977,7 @@ test("B51: a deletion made after the loss, while the folder was offline, survive
   S().removeBookmark(one.id);
   await lost.syncNow();
   await settle();
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   assert.ok(sealed[`p:${syncId}`]?.rebuild, "control: the rebuild marker is sealed before the relaunch");
   const again = await launch();
   fake.chain = "ok";
@@ -1002,7 +1005,7 @@ test("B52: a rename made after the loss, while the folder was offline, survives 
   S().updateBookmark(one.id, { title: "Renamed after the loss" });
   await lost.syncNow();
   await settle();
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   assert.ok(sealed[`p:${syncId}`]?.rebuild, "control: the rebuild marker is sealed before the relaunch");
   const again = await launch();
   fake.chain = "ok";
@@ -1635,7 +1638,7 @@ test("B71: a rebuild isn't held up by a damaged entry the saved state kept for a
   const other = otherMac(`p:${syncId}`);
   await other.sync();
   const [key, value] = [...other.store].find(([, v]) => v.t === "One");
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   const scope = sealed[`p:${syncId}`];
   const known = Object.keys(scope.files)[0];
   sealed[`p:${syncId}`] = { ...scope, damaged: { [known]: Date.now() }, rebuild: { since: Date.now() } };

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { world, onAndSynced, passwordMac, loginKey, syncKey, login, SITE, launch, settle, S, shell } from "./world.mjs";
+import { sealedState } from "../../sealedState.mjs";
 
 test("GUARD-rebuild-settles: a sync-state rollback rebuild ends once passwords are read and applied", () =>
   world(async (w) => {
@@ -28,7 +29,7 @@ test("GUARD-rebuild-settles: a sync-state rollback rebuild ends once passwords a
       const opened = [];
       for (let i = 0; i < 6; i++) {
         await w.cycles(again, 1);
-        { const r = JSON.parse(shell.docs.get("sync-state.nns").slice(7))[`p:${syncId}`].rebuild; opened.push(r ? (r.settled ?? []).join("+") || "none" : "closed"); }
+        { const r = sealedState(shell.docs)[`p:${syncId}`].rebuild; opened.push(r ? (r.settled ?? []).join("+") || "none" : "closed"); }
       }
       assert.notEqual(opened[0], "closed", "control: the relaunch opened a rebuild");
       assert.ok(opened.at(-1) === "closed" || opened.at(-1).includes("pw:"), `the rebuild ends (rebuild open per cycle: ${opened}; logged: ${errors.filter((e) => /TypeError|not iterable|sync/.test(e)).slice(0, 3).join(" | ")})`);

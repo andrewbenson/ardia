@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedBy } from "./switchOn.mjs";
 import { shell, settle, reset, onAndSynced, launch, passwordMac, native, realReadPasswords, realSetTimeout, files, loginDataMark } from "./harness.mjs";
+import { sealedState } from "../sealedState.mjs";
 
 const SITE = "https://site.example";
 const loginKey = (user) => `${SITE}\n${user}`;
@@ -128,7 +129,7 @@ test("LEDGER-unconfirmed: an apply Chrome never confirms writes no row and no le
     await w.cycles(engine, 2);
     assert.equal(w.marks.length, marksBefore, "no row was written for the unconfirmed apply");
     assert.equal(shell.docs.get(LEDGER), ledgerBefore, "and the ledger didn't move");
-    const state = JSON.parse(shell.docs.get("sync-state.nns").slice(7))[`p:${syncId}`];
+    const state = sealedState(shell.docs)[`p:${syncId}`];
     assert.ok(state.unapplied.includes(syncKey("me")), "the key is offered again");
     w.thawChrome();
   }),

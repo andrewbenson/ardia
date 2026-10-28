@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../../switchOn.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -176,7 +177,7 @@ test("B-old (EXPECTED RED: accepted one-time migration window, docs/sync-redesig
   await engine.syncNow();
   await settle();
   const saved = JSON.parse(shell.docs.get("sync.json"));
-  const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+  const sealed = sealedState(shell.docs);
   const app = { ...sync.emptyScope(), rebuildBaseline: { "set:appearance": digest(sync.canonical({ v: "dark" })) } };
   const rest = Object.fromEntries(Object.keys(sealed).filter((k) => k !== "app").map((k) => [k, { ...sync.emptyScope(), rebuildBaseline: {} }]));
   shell.docs.set("sync-state.nns", `sealed:${JSON.stringify({ app, ...rest })}`);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedBy } from "../switchOn.mjs";
 import { world, onAndSynced, passwordMac, loginKey, syncKey, login, SITE, shell } from "./world.mjs";
+import { sealedState } from "../../sealedState.mjs";
 
 test("V-failing-save: one login Chrome refuses to save doesn't keep the others unapplied", fixedBy("step 3"), () =>
   world(async (w) => {
@@ -17,7 +18,7 @@ test("V-failing-save: one login Chrome refuses to save doesn't keep the others u
       for (let i = 0; i < 3; i++) b.store.set(syncKey(`ok${i}`), { o: SITE, u: `ok${i}`, p: `y${i}` });
       await b.sync();
       await w.cycles(engine, 4);
-      const state = JSON.parse(shell.docs.get("sync-state.nns").slice(7))[`p:${syncId}`];
+      const state = sealedState(shell.docs)[`p:${syncId}`];
       const stuck = state.unapplied.filter((k) => k.startsWith("pw:") && !k.endsWith("bad"));
       assert.equal(w.here.size, 3, "control: the three good logins are here");
       assert.deepEqual(stuck, [], `only the refused login stays unapplied (unapplied: ${JSON.stringify(state.unapplied)})`);

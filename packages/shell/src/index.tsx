@@ -246,6 +246,7 @@ export type ShellNative = {
   writeDocument(name: string, contents: string): void;
   saveDocument(name: string, contents: string): Promise<void>;
   removeDocument(name: string): void;
+  listDocuments?(prefix: string): string[];
   fetchBangList?(etag: string | null): Promise<BangListReply>;
   openWindow(id: string, options: OpenWindowOptions): Promise<void>;
   closeWindow(id: string): Promise<void>;
@@ -290,6 +291,7 @@ export function readDocumentResult(name: string): DocumentRead {
 export const writeDocument = (name: string, contents: string) => Shell.writeDocument(name, contents);
 export const saveDocument = (name: string, contents: string) => Shell.saveDocument(name, contents);
 export const removeDocument = (name: string) => Shell.removeDocument(name);
+export const listDocuments = (prefix: string): string[] | null => Shell.listDocuments?.(prefix) ?? null;
 
 export type BangListReply = { status: number; etag: string | null; contentType: string | null; body: string | null; bytes: number };
 export const fetchBangList = (etag: string | null): Promise<BangListReply> | null => Shell.fetchBangList?.(etag) ?? null;

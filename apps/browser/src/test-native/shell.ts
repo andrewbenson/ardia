@@ -60,10 +60,11 @@ const shell: Modules["ArdiaShell"] = {
     new Promise((resolve, reject) => {
       if (heldSaves.fail) return reject(new Error("disk full"));
       const land = () => (docs.set(name, contents), resolve());
-      if (heldSaves.on && (!heldSaves.only || heldSaves.only === name)) heldSaves.queue.push(land);
+      if (heldSaves.on && (!heldSaves.only || name.startsWith(heldSaves.only))) heldSaves.queue.push(land);
       else land();
     }),
   removeDocument: (name) => void docs.delete(name),
+  listDocuments: (prefix) => [...docs.keys()].filter((name) => name.startsWith(prefix)).sort(),
   get fetchBangList() {
     return bangListServer.reply ?? undefined;
   },

@@ -1,4 +1,4 @@
-import { readDocument, saveDocument, writeDocument } from "@ardia/shell";
+import { listDocuments, readDocument, removeDocument, saveDocument, writeDocument } from "@ardia/shell";
 import {
   canonical,
   Clock,
@@ -57,6 +57,7 @@ import { ledgerFromNewerVersion, ledgerPasswordsAdapter, migrateLedger, type Hel
 import { editJournal, noteInStep, noteSeen, prunableSeen, pruneSeen } from "./journalHost";
 import { choice, digest } from "./notes";
 import { isObject, readableBatch, readableScope } from "./readable";
+import { applyDelta, BATCH_PREFIX, batchName, batchPart, DELTA_PREFIX, deltaName, deltaOf, deltaPart, newEpoch, parseBatchName, parseDeltaName, writtenOf, type DeltaName, type Written } from "./stateDeltas";
 
 type DataType = "bookmarks" | "history" | "tabs" | "pinned" | "passwords" | "extensions" | "settings";
 
@@ -215,32 +216,136 @@ function load() {
 
 type Journal = Record<string, LogFile[]>;
 let journal: Journal = {};
-let journalOnDisk = false;
+let legacyJournal = new Set<LogFile>();
+let legacyJournalOnDisk = false;
 
-async function openSealed<T>(name: string, kind: LocalKind, fallback: T): Promise<{ value: T; opened: boolean; refused: boolean }> {
+let stateGeneration: DeltaName | null = null;
+let deltasSupported: boolean | null = null;
+const writesDeltas = () => (deltasSupported ??= listDocuments(DELTA_PREFIX) !== null);
+let highestGeneration = 0;
+let written: Written | null = null;
+let deltasWritten = { bytes: 0, files: 0 };
+let compactedAt = 0;
+let compactNext = false;
+let stateCleared = true;
+let stateEra = 0;
+const COMPACT_BYTES = 1_000_000;
+const COMPACT_FILES = 200;
+const COMPACT_MS = 3_600_000;
+
+const sealLocal = (text: string, kind: LocalKind, part?: string) =>
+  sealingPasswords() ? SyncNative!.sealLocal(text, kind, part) : part === undefined ? SyncNative!.sealLocal(text) : SyncNative!.sealLocal(text, undefined, part);
+
+async function openSealed<T>(name: string, kind: LocalKind, fallback: T, part?: string): Promise<Opened<T>> {
   const sealed = readDocument(name);
-  const json = sealed ? await (sealingPasswords() ? SyncNative?.openLocal(sealed, kind) : SyncNative?.openLocal(sealed)) : null;
+  const opening = !sealed ? null : sealingPasswords() ? SyncNative?.openLocal(sealed, kind, part) : part === undefined ? SyncNative?.openLocal(sealed) : SyncNative?.openLocal(sealed, undefined, part);
+  const json = await opening;
   try {
     if (json) return { value: JSON.parse(json) as T, opened: true, refused: false };
   } catch {}
   return { value: fallback, opened: false, refused: !!sealed };
 }
 
+const removeAll = (prefix: string, unless: (name: string) => boolean = () => false) => {
+  for (const name of listDocuments(prefix) ?? []) if (!unless(name)) removeDocument(name);
+};
+
+type Opened<T> = { value: T; opened: boolean; refused: boolean };
+type Listed<Id, T> = { name: string; id: Id | null; read: Opened<T> | null }[];
+
+function replayDeltas(saved: Record<string, unknown>, scopes: SyncDoc["scopes"], opened: boolean, deltas: Listed<DeltaName, unknown> | null) {
+  const n = saved["~n"];
+  const epoch = saved["~epoch"];
+  stateGeneration = null;
+  highestGeneration = typeof n === "number" ? n : 0;
+  deltasSupported = deltas !== null;
+  if (!deltas) return { gap: false };
+  if (!opened || typeof n !== "number" || typeof epoch !== "string" || saved["~device"] !== doc.deviceId || !doc.deviceId) {
+    for (const { name } of deltas) removeDocument(name);
+    return { gap: false };
+  }
+  const ours: { id: DeltaName; read: Opened<unknown> | null }[] = [];
+  let gap = false;
+  for (const { name, id, read } of deltas) {
+    if (!id) gap = true;
+    else if (id.device !== doc.deviceId || id.n < n - 1) removeDocument(name);
+    else if (id.n > n || (id.n === n && id.epoch !== epoch)) {
+      gap = true;
+      highestGeneration = Math.max(highestGeneration, id.n);
+    } else if (id.n === n) ours.push({ id, read });
+  }
+  ours.sort((a, b) => a.id.g - b.id.g);
+  let g = 0;
+  for (const { id, read } of ours) {
+    if (id.g !== g + 1 || !read?.opened || !applyDelta(scopes, read.value)) {
+      gap = true;
+      break;
+    }
+    g = id.g;
+  }
+  stateGeneration = { device: doc.deviceId, n, epoch, g };
+  return { gap };
+}
+
+function journalFiles(listed: Listed<{ scope: string; seq: number }, { journal?: unknown }>): { batches: Journal; refused: boolean } {
+  const batches: Journal = {};
+  let refused = false;
+  for (const { name, id, read } of listed) {
+    if (!id || !read) {
+      removeDocument(name);
+      continue;
+    }
+    if (!read.opened) {
+      if (sealingPasswords()) refused = true;
+      else removeDocument(name);
+      continue;
+    }
+    const list = isObject(read.value.journal) ? read.value.journal[id.scope] : null;
+    const batch = Array.isArray(list) && list.length === 1 ? list[0] : null;
+    if (!readableBatch(batch) || batch.device !== doc.deviceId || batch.seq !== id.seq) {
+      removeDocument(name);
+      continue;
+    }
+    (batches[id.scope] ??= []).push(batch);
+  }
+  return { batches, refused };
+}
+
 async function loadState(loading: number): Promise<boolean> {
-  const { value: saved, opened } = await openSealed<unknown>(STATE, "state", {});
-  const { value: journalDoc, refused: journalUnopened } = await openSealed<{ journal?: unknown }>(JOURNAL, "journal", {});
-  const savedJournal = journalDoc.journal;
+  const deltaNames = listDocuments(DELTA_PREFIX);
+  const deltaIds = (deltaNames ?? []).map((name) => ({ name, id: parseDeltaName(name) }));
+  const batchIds = (listDocuments(BATCH_PREFIX) ?? []).map((name) => ({ name, id: parseBatchName(name) }));
+  const [state, legacy, deltaReads, batchReads] = await Promise.all([
+    openSealed<unknown>(STATE, "state", {}),
+    openSealed<{ journal?: unknown }>(JOURNAL, "journal", {}),
+    Promise.all(deltaIds.map(({ name, id }) => (id && id.device === doc.deviceId ? openSealed<unknown>(name, "state", null, deltaPart(id)) : null))),
+    Promise.all(batchIds.map(({ name, id }) => (id ? openSealed<{ journal?: unknown }>(name, "journal", {}, batchPart(id.scope, id.seq)) : null))),
+  ]);
   if (loading !== generation) return false;
-  recordsKnown = opened;
-  journalRefused = journalUnopened && sealingPasswords();
+  const { value: saved, opened } = state;
+  const savedJournal = legacy.value.journal;
+  const savedScopes = isObject(saved) ? saved : {};
   const scopes: SyncDoc["scopes"] = {};
-  for (const [name, scope] of Object.entries(isObject(saved) ? saved : {})) if (readableScope(scope)) scopes[name] = scope;
+  for (const [name, scope] of Object.entries(savedScopes)) if (readableScope(scope)) scopes[name] = scope;
+  const { gap } = replayDeltas(savedScopes, scopes, opened, deltaNames && deltaIds.map((d, i) => ({ ...d, read: deltaReads[i] ?? null })));
+  const files = journalFiles(batchIds.map((b, i) => ({ ...b, read: batchReads[i] ?? null })));
+  recordsKnown = opened && !gap;
+  journalRefused = (legacy.refused && sealingPasswords()) || files.refused;
+  for (const [name, scope] of Object.entries(scopes)) if (!readableScope(scope)) delete scopes[name];
   journal = {};
+  legacyJournal = new Set();
   for (const [name, list] of Object.entries(isObject(savedJournal) ? savedJournal : {})) {
     const batches = Array.isArray(list) ? list.filter((f): f is LogFile => readableBatch(f) && f.device === doc.deviceId) : [];
-    if (batches.length) journal[name] = batches;
+    if (!batches.length) continue;
+    journal[name] = batches;
+    for (const batch of batches) legacyJournal.add(batch);
   }
-  journalOnDisk = Object.keys(journal).length > 0;
+  legacyJournalOnDisk = legacyJournal.size > 0;
+  for (const [name, batches] of Object.entries(files.batches)) {
+    const list = (journal[name] ??= []);
+    for (const batch of batches) if (!list.some((f) => f.seq === batch.seq)) list.push(batch);
+    list.sort((a, b) => a.seq - b.seq);
+  }
   const clock = new Clock(doc.deviceId ?? "", doc.clock);
   revivalBatches = new Map();
   const revived = new Map<string, number>();
@@ -256,7 +361,7 @@ async function loadState(loading: number): Promise<boolean> {
   const expected = new Set([APP_SCOPE, ...Object.values(doc.profiles).map((l) => `p:${l.syncId}`), ...Object.keys(doc.seqs ?? {}), ...Object.keys(journal)]);
   for (const scope of expected) if (!skipped(scope) && !scopes[scope]) scopes[scope] = { ...emptyScope(), rebuild: openRebuild() } as Guarded;
   for (const [name, scope] of Object.entries(scopes) as [string, Guarded][]) {
-    if ((doc.rebuilding?.includes(name) || scope.rebuildBaseline !== undefined) && !scope.rebuild) scope.rebuild = openRebuild();
+    if ((gap || doc.rebuilding?.includes(name) || scope.rebuildBaseline !== undefined) && !scope.rebuild) scope.rebuild = openRebuild();
     delete scope.rebuildBaseline;
   }
   delete doc.rebuilding;
@@ -271,6 +376,11 @@ async function loadState(loading: number): Promise<boolean> {
   for (const scope of Object.values(scopes)) for (const record of Object.values(scope.records)) clock.observe(record.h);
   if (doc.deviceId) doc.clock = clock.last;
   doc.scopes = scopes;
+  written = null;
+  compactNext = gap;
+  stateCleared = false;
+  compactedAt = Date.now();
+  deltasWritten = { bytes: 0, files: 0 };
   unverified = new Set([...expected, ...Object.keys(scopes)]);
   unverifiedSince = Date.now();
   firstLooks = new Map([...unverified].map((scope) => [scope, new Set<string>()]));
@@ -280,32 +390,75 @@ async function loadState(loading: number): Promise<boolean> {
 
 const persistJournal = (scope: string) => async (batches: LogFile[]) => {
   const list = (journal[scope] ??= []);
-  for (const file of batches) if (!list.some((f) => f.device === file.device && f.seq === file.seq)) list.push(file);
-  const sealed = await (sealingPasswords() ? SyncNative!.sealLocal(JSON.stringify({ journal }), "journal") : SyncNative!.sealLocal(JSON.stringify({ journal })));
-  await saveDocument(JOURNAL, sealed);
-  journalOnDisk = true;
+  for (const file of batches) {
+    if (list.some((f) => f.device === file.device && f.seq === file.seq)) continue;
+    list.push(file);
+    const sealed = await sealLocal(JSON.stringify({ journal: { [scope]: [file] } }), "journal", batchPart(scope, file.seq));
+    await saveDocument(batchName(scope, file.seq), sealed);
+  }
 };
+
+function dropBatches(scope: string, dropped: LogFile[]) {
+  for (const batch of dropped) {
+    if (legacyJournal.delete(batch)) continue;
+    removeDocument(batchName(scope, batch.seq));
+  }
+}
+
+function dropJournal(scope: string) {
+  dropBatches(scope, journal[scope] ?? []);
+  delete journal[scope];
+  settleLegacyJournal();
+}
+
+function settleLegacyJournal() {
+  if (!legacyJournalOnDisk || legacyJournal.size) return;
+  legacyJournalOnDisk = false;
+  writeDocument(JOURNAL, "");
+}
 
 function pruneJournal(saved: Record<string, number>) {
   if (journalRefused) return;
   for (const [scope, list] of Object.entries(journal)) {
     if (revivalBatches.has(scope)) continue;
     const left = list.filter((f) => f.seq > (saved[scope] ?? 0));
+    dropBatches(scope, list.filter((f) => f.seq <= (saved[scope] ?? 0)));
     if (left.length) journal[scope] = left;
     else delete journal[scope];
   }
-  if (journalOnDisk && !Object.keys(journal).length) clearJournal();
+  settleLegacyJournal();
 }
 
 function clearJournal() {
   journalRefused = false;
   journal = {};
-  journalOnDisk = false;
+  legacyJournal = new Set();
+  legacyJournalOnDisk = false;
   writeDocument(JOURNAL, "");
+  removeAll(BATCH_PREFIX);
+  compactNext = true;
 }
 
-let savedState = "";
+function clearState() {
+  stateEra++;
+  stateCleared = true;
+  stateGeneration = null;
+  written = null;
+  compactNext = false;
+  writeDocument(STATE, "");
+  removeAll(DELTA_PREFIX);
+}
+
 let sealing: Promise<void> | null = null;
+
+const compactionDue = () =>
+  compactNext ||
+  !writesDeltas() ||
+  !written ||
+  stateGeneration?.device !== doc.deviceId ||
+  deltasWritten.bytes >= COMPACT_BYTES ||
+  deltasWritten.files >= COMPACT_FILES ||
+  Date.now() - compactedAt >= COMPACT_MS;
 
 function save() {
   if (newerFormat || persistenceRefused()) return;
@@ -315,32 +468,56 @@ function save() {
     savedJson = json;
     writeDocument(DOC, json);
   }
-  if (!loaded) return;
-  const state = doc.enabled ? JSON.stringify(scopes) : "";
-  if (state === savedState || sealing) return;
-  if (!state) {
-    savedState = "";
-    writeDocument(STATE, "");
+  if (!loaded || sealing) return;
+  if (!doc.enabled) {
+    if (!stateCleared) clearState();
     return;
   }
+  const diff = written ? deltaOf(scopes, written) : ({ whole: true } as const);
+  if (!diff.whole && !diff.delta && !compactNext && stateGeneration?.device === doc.deviceId) return;
+  const change = diff.whole || compactionDue() ? ({ whole: true } as const) : diff;
   const seqs = Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)]));
+  const snapshot = writtenOf(scopes);
+  const era = stateEra;
   const sealedDoc = doc;
+  const device = doc.deviceId ?? "";
+  const next: DeltaName = change.whole
+    ? { device, n: Math.max(stateGeneration?.n ?? 0, highestGeneration) + 1, epoch: newEpoch(), g: 0 }
+    : { ...stateGeneration!, g: stateGeneration!.g + 1 };
+  if (change.whole) highestGeneration = Math.max(highestGeneration, next.n);
+  const text = change.whole ? JSON.stringify({ ...scopes, "~n": next.n, "~epoch": next.epoch, "~device": device }) : JSON.stringify(change.delta);
+  const name = change.whole ? STATE : deltaName(next);
   sealing = (async () => {
     let landed = false;
     try {
-      const sealed = await (sealingPasswords() ? SyncNative?.sealLocal(state, "state") : SyncNative?.sealLocal(state));
+      const sealed = await sealLocal(text, "state", change.whole ? undefined : deltaPart(next));
       if (sealed) {
-        await saveDocument(STATE, sealed);
-        savedState = state;
-        if (doc === sealedDoc) pruneJournal(seqs);
+        await saveDocument(name, sealed);
         landed = true;
+        stateCleared = false;
+        if (era === stateEra) {
+          stateGeneration = next;
+          highestGeneration = Math.max(highestGeneration, next.n);
+          written = snapshot;
+          if (change.whole) {
+            compactNext = false;
+            compactedAt = Date.now();
+            deltasWritten = { bytes: 0, files: 0 };
+            removeAll(DELTA_PREFIX, (file) => {
+              const delta = parseDeltaName(file);
+              return !!delta && delta.device === device && delta.n >= next.n - 1;
+            });
+          } else deltasWritten = { bytes: deltasWritten.bytes + sealed.length, files: deltasWritten.files + 1 };
+          if (doc === sealedDoc) pruneJournal(seqs);
+        }
       }
     } catch (error) {
       console.warn("[sync] couldn't save the sync state", error);
     } finally {
       sealing = null;
     }
-    if (doc.enabled ? landed && JSON.stringify(doc.scopes) !== savedState : savedState !== "") save();
+    if (!landed && era === stateEra) compactNext = true;
+    if (landed || !doc.enabled) save();
   })();
 }
 
@@ -560,7 +737,7 @@ async function runCycle({ retiring = false } = {}) {
         if (!exists) {
           doc.retired = { ...doc.retired, [scope]: state.seq };
           delete doc.scopes[scope];
-          delete journal[scope];
+          dropJournal(scope);
           delete doc.profiles[profileId];
         }
       }
@@ -828,7 +1005,7 @@ function resendHeld(state: Guarded, device: string) {
   if (!held?.length) return;
   for (const op of held) {
     const record = state.records[op.k];
-    if (record && record.h === op.h) record.o = [device, state.seq + 1];
+    if (record && record.h === op.h) state.records[op.k] = { ...record, o: [device, state.seq + 1] };
   }
   state.outbox = [...held, ...state.outbox];
 }
@@ -1162,8 +1339,7 @@ async function turnOff(native: NonNullable<typeof SyncNative>, deleteData: boole
   passwordAdapters.clear();
   extensionAdapters.clear();
   clearJournal();
-  savedState = "";
-  writeDocument(STATE, "");
+  clearState();
   save();
   publishUi({ status: "off", error: null });
 }

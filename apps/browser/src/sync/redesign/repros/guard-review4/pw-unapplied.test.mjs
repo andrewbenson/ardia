@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fixedBy } from "../../switchOn.mjs";
+import { sealedState } from "../../../sealedState.mjs";
 
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = () => 0;
@@ -194,7 +195,7 @@ test("Q3: a rolled-back state with a password still unapplied and no base resend
     tick();
     await engine.syncNow();
     await settle(60);
-    const sealed = JSON.parse(shell.docs.get("sync-state.nns").slice(7));
+    const sealed = sealedState(shell.docs);
     assert.ok(sealed[`p:${syncId}`].unapplied.includes(key), "control: v2 is saved as unapplied");
     assert.equal(sealed[`p:${syncId}`].base[key], undefined, "control: and with no base");
     const older = new Map(shell.docs);

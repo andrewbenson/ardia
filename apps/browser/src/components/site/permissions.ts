@@ -101,13 +101,20 @@ const KINDS: Record<PermissionKind, Describe> = {
   capturedSurfaceControl: { icon: "rectangle.on.rectangle", question: (s) => `Allow ${s} to scroll and zoom the tab you share?` },
 };
 
+export function originForSecurityDisplay(origin: string): string {
+  try {
+    const url = new URL(origin);
+    if (!url.host) return origin;
+    return url.protocol === "https:" ? url.host : `${url.protocol}//${url.host}`;
+  } catch {
+    return origin;
+  }
+}
+
 const list = (words: string[]) => (words.length < 2 ? (words[0] ?? "") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`);
 
 export function describePermission(request: PermissionRequest): { icons: string[]; question: string } {
-  let site = request.origin;
-  try {
-    site = new URL(request.origin).hostname.replace(/^www\./, "") || request.origin;
-  } catch {}
+  const site = originForSecurityDisplay(request.origin);
   const kinds = request.permissions.map((k) => KINDS[k] ?? { icon: "questionmark.circle", noun: k });
   const icons = [...new Set(kinds.map((k) => k.icon))];
   const single = kinds.length === 1 ? kinds[0]!.question : undefined;

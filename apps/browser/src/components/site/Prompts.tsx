@@ -13,6 +13,7 @@ import { patchPage, pageOf, setPopover, usePage } from "../layout/pageState";
 import { answerPermission, describePermission } from "./permissions";
 import { nativeToolbarAvailable } from "@ardia/settings";
 import { NativePromptBody, nativePromptFrames, PromptPopover } from "./NativePromptBody";
+import { usePromptInputGuard } from "./promptGuard";
 
 const hostOf = (origin: string) => {
   try {
@@ -60,6 +61,7 @@ export function PromptBody({
 
 export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: number; top: number }) {
   const request = usePage(tabId, (p) => p.permission);
+  const guard = usePromptInputGuard(request?.id);
   if (!request) return null;
   const { icons, question } = describePermission(request);
   return (
@@ -67,16 +69,16 @@ export function PermissionPrompt({ tabId, left, top }: { tabId: string; left: nu
       {nativeToolbarAvailable() ? (
         <NativePromptBody
           spec={{ icons, title: question, message: "Click the lock to change this any time", buttons: [{ id: "deny", title: "Don't Allow" }, { id: "accept", title: "Allow", primary: true }] }}
-          onButton={(id) => answerPermission(tabId, request.id, id as "deny" | "accept")}
-          onClose={() => answerPermission(tabId, request.id, "dismiss")}
+          onButton={guard((id: string) => answerPermission(tabId, request.id, id as "deny" | "accept"))}
+          onClose={guard(() => answerPermission(tabId, request.id, "dismiss"))}
         />
       ) : (
       <View>
         <PromptBody icons={icons} title={question} message="Click the lock to change this any time">
-          <PromptButton title="Don't Allow" onPress={() => answerPermission(tabId, request.id, "deny")} />
-          <PromptButton title="Allow" primary onPress={() => answerPermission(tabId, request.id, "accept")} />
+          <PromptButton title="Don't Allow" onPress={guard(() => answerPermission(tabId, request.id, "deny"))} />
+          <PromptButton title="Allow" primary onPress={guard(() => answerPermission(tabId, request.id, "accept"))} />
         </PromptBody>
-        <PanelCloseButton onPress={() => answerPermission(tabId, request.id, "dismiss")} />
+        <PanelCloseButton onPress={guard(() => answerPermission(tabId, request.id, "dismiss"))} />
       </View>
       )}
     </PromptPopover>
@@ -211,15 +213,16 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   const theme = useTheme();
   const prompt = usePage(tabId, (p) => p.passwordPrompt);
   const [chosen, setChosen] = useState<string | null>(null);
+  const guard = usePromptInputGuard(prompt ? `${prompt.origin}|${prompt.username}|${prompt.state}` : null);
   if (!prompt) return null;
   const site = hostOf(prompt.origin);
   const update = prompt.state === "update";
   const username = chosen ?? prompt.username;
-  const answer = (action: PasswordPromptAnswer) => {
+  const answer = guard((action: PasswordPromptAnswer) => {
     void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username } : undefined);
     setChosen(null);
     patchPage(tabId, { passwordPrompt: null });
-  };
+  });
   const well = theme.dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
   const choices = update && prompt.usernames.length > 1 ? prompt.usernames : [];
   return (
@@ -301,11 +304,12 @@ export function showAutofillPrompt(tabId: string, prompt: ChromeAutofillPrompt |
 export function AutofillPrompt({ tabId, right, top }: { tabId: string; right: number; top: number }) {
   const theme = useTheme();
   const prompt = usePage(tabId, (p) => p.autofillPrompt);
+  const guard = usePromptInputGuard(prompt?.id);
   if (!prompt) return null;
-  const answer = (action: AutofillPromptAnswer) => {
+  const answer = guard((action: AutofillPromptAnswer) => {
     void webviews.get(tabId)?.resolveAutofillPrompt(prompt.id, action);
     patchPage(tabId, { autofillPrompt: null });
-  };
+  });
   const well = theme.dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
   const changes = prompt.changes ?? [];
   const values = (key: "to" | "from") => changes.filter((c) => c[key]).map((c) => c[key]);
@@ -380,11 +384,13 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
   const theme = useTheme();
   const request = usePage(tabId, (p) => p.externalApp);
   const [always, setAlways] = useState(false);
+  const guard = usePromptInputGuard(request?.id);
   if (!request) return null;
-  const answer = (open: boolean) => {
+  const answer = guard((open: boolean) => {
     answerExternalApp(tabId, open, open && always);
     setAlways(false);
-  };
+  });
+  const setAlwaysGuarded = guard(setAlways);
   return (
     <PromptPopover key={request.id} width={340} top={top} left={left} modal={false}>
       {nativeToolbarAvailable() ? (
@@ -398,7 +404,7 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
             buttons: request.app ? [{ id: "cancel", title: "Cancel" }, { id: "open", title: "Open", primary: true }] : [{ id: "ok", title: "OK", primary: true }],
           }}
           onButton={(id) => answer(id === "open")}
-          onToggle={setAlways}
+          onToggle={setAlwaysGuarded}
           onClose={() => answer(false)}
         />
       ) : (
@@ -410,9 +416,9 @@ export function ExternalAppPrompt({ tabId, left, top }: { tabId: string; left: n
           message={request.message}
           detail={
             request.remember ? (
-              <Pressable onPress={() => setAlways(!always)} style={{ flexDirection: "row", alignItems: "flex-start", gap: 7 }}>
+              <Pressable onPress={() => setAlwaysGuarded(!always)} style={{ flexDirection: "row", alignItems: "flex-start", gap: 7 }}>
                 <View style={{ marginTop: 1 }}>
-                  <Checkbox value={always} onChange={setAlways} />
+                  <Checkbox value={always} onChange={setAlwaysGuarded} />
                 </View>
                 <Text style={{ flex: 1, fontSize: 12, lineHeight: 16, color: theme.textPrimary }}>{request.remember}</Text>
               </Pressable>

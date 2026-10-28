@@ -15,6 +15,7 @@ import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { PANEL, Popover, PromptButton } from "../layout/controls";
 import { PromptPopover, usePromptPlacement } from "./NativePromptBody";
+import { usePromptInputGuard } from "./promptGuard";
 import { tabForBrowser } from "../layout/pageState";
 import { useHover } from "../primitives";
 import { PRODUCT } from "../../lib/productName";
@@ -95,14 +96,15 @@ export function DeviceChooser({ tabId, left, top }: { tabId: string; left: numbe
   const chooser = useChoosers((s) => s.byTab[tabId]);
   const [selected, setSelected] = useState<number | null>(null);
   useEffect(() => setSelected(null), [chooser?.id]);
+  const guard = usePromptInputGuard(chooser?.id);
   if (!chooser) return null;
   const scanning = chooser.bothButtonsEnabled;
   const blocked = chooser.adapterOff || chooser.unauthorized;
   const valid = scanning || (selected !== null && selected < chooser.options.length);
-  const choose = (index = selected) => {
+  const choose = guard((index: number | null = selected) => {
     if (scanning) return void selectDevice(chooser.id, -1);
     if (index !== null) void selectDevice(chooser.id, index);
-  };
+  });
   const cancel = () => void cancelDeviceChooser(chooser.id);
 
   if (nativeToolbarAvailable()) {

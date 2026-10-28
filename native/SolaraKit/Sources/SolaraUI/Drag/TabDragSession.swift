@@ -141,10 +141,8 @@ public final class TabDragSession {
   }
 
   private static func window(at screenPoint: CGPoint) -> (String, NSWindow)? {
-    var number = NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0)
-    while number > 0 {
-      if let nsWindow = NSApp.window(withWindowNumber: number), let id = windowIdOf(nsWindow) { return (id, nsWindow) }
-      number = NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: number)
+    for nsWindow in NSApp.orderedWindows where nsWindow.isVisible && nsWindow.frame.contains(screenPoint) {
+      if let id = windowIdOf(nsWindow) { return (id, nsWindow) }
     }
     return nil
   }

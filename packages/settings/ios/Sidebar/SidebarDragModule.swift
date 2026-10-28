@@ -175,6 +175,10 @@ final class NativeSidebarDrag: SidebarDragBridge {
         return done(true)
       }
       let onPage = !outside && (zonePage || end?["onPage"] as? Bool == true)
+      self.lastDrop = [
+        "outside": outside, "over": over ?? NSNull(), "zonePage": zonePage, "jsOnPage": end?["onPage"] ?? NSNull(), "jsPointer": end?["pointer"] ?? NSNull(),
+        "timedOut": end == nil, "screen": screen.map { [$0.x, $0.y] } ?? NSNull(), "source": ShellDrag.window(windowId).map { [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height] } ?? NSNull(),
+      ]
       guard outside || onPage, let screen else {
         self.endPreview(preview, cancel: end == nil)
         return done(false)
@@ -313,6 +317,7 @@ final class NativeSidebarDrag: SidebarDragBridge {
   }
 
   private(set) var escaping = false
+  private(set) var lastDrop: [String: Any] = [:]
 
   func escapeCapture(_ on: Bool) {
     escaping = on
@@ -369,6 +374,7 @@ final class NativeSidebarDrag: SidebarDragBridge {
     var probe = controller.probe()
     probe["folderPanel"] = controller.foreignFolder
     probe["escaping"] = shared.escaping
+    probe["lastDrop"] = shared.lastDrop
     let json = (try? JSONSerialization.data(withJSONObject: probe)).map { String(decoding: $0, as: UTF8.self) } ?? "null"
     lock.withLock { snapshots[windowId] = json }
     return json

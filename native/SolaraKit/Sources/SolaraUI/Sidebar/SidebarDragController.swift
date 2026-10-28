@@ -1100,7 +1100,7 @@ public final class SidebarDragController {
       panelMembers = []
       foreignRegions["folder"] = nil
       regionFrames["folder"] = nil
-      return
+      return changed()
     }
     panelFrame = frame
     foreignRegions["folder"] = frame
@@ -1109,6 +1109,7 @@ public final class SidebarDragController {
       guard let id = m["tabId"] as? String, let f = Self.rect(m) else { return nil }
       return (id, f)
     }
+    changed()
   }
 
   static func rect(_ any: Any?) -> CGRect? {

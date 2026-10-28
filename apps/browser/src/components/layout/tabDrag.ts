@@ -231,7 +231,7 @@ export function endTabDrag(): boolean {
   return true;
 }
 
-export function endNativeTabDrag(): { split: boolean; insert: boolean; before: string | null; onPage: boolean } {
+export function endNativeTabDrag(): { split: boolean; insert: boolean; before: string | null; onPage: boolean; pointer: [number, number] } {
   const drag = useTabDrag.getState();
   const { tabId, outside, overWindow, overPoint } = drag;
   const [x, y] = pointer;
@@ -245,9 +245,9 @@ export function endNativeTabDrag(): { split: boolean; insert: boolean; before: s
   nativeOwned = false;
   if (target && tabId) {
     dropTabIntoSplit(tabId, target.tabId, target.side);
-    return { split: true, insert: false, before: null, onPage };
+    return { split: true, insert: false, before: null, onPage, pointer: [x, y] };
   }
-  return { split: false, insert: insertBefore !== undefined, before: insertBefore ?? null, onPage };
+  return { split: false, insert: insertBefore !== undefined, before: insertBefore ?? null, onPage, pointer: [x, y] };
 }
 
 export function cancelTabDrag() {

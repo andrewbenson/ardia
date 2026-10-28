@@ -491,8 +491,9 @@ try {
     const seen = await run(`const seen = []; const iv = setInterval(() => { const d = globalThis.acTabDrag.getState(); seen.push([Math.round(d.x), Math.round(d.y), d.outside, d.overWindow, d.onPage].join()); }, 20);
       return act("w1", "drag:${sx},${sy};${sx + 10},${sy + 6};${page},400;${page + 2},404;${page},406;${back},${sy}").then(() => settle(1600)).then(() => { clearInterval(iv); return [...new Set(seen)]; });`);
     const after = await live();
+    const lastDrop = (await nativeProbe("w1"))?.lastDrop ?? null;
     await closeAll();
-    assert.equal(after.windows.length, before.windows.length, `no new window: ${JSON.stringify({ row, windows: after.windows, seen })}`);
+    assert.equal(after.windows.length, before.windows.length, `no new window: ${JSON.stringify({ row, windows: after.windows, seen, lastDrop })}`);
     assert.equal(after.tabs[row.id], "w1", `${row.id} stayed: ${JSON.stringify(after.tabs)}`);
     assert.equal(after.dragging, 0, "no drag left");
   });

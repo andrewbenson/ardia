@@ -124,7 +124,7 @@ final class NativeTabDrag {
         "outside": outside, "over": over ?? NSNull(), "zonePage": zonePage, "jsOnPage": end?["onPage"] ?? NSNull(), "jsPointer": end?["pointer"] ?? NSNull(),
         "timedOut": end == nil, "screen": screen.map { [$0.x, $0.y] } ?? NSNull(), "source": ShellDrag.window(windowId).map { [$0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height] } ?? NSNull(),
       ]
-      guard outside || onPage, let screen else {
+      guard outside || (onPage && end != nil), let screen else {
         self.endPreview(preview, cancel: end == nil)
         return done(false)
       }

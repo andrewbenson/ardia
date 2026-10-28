@@ -56,6 +56,15 @@ public class WebKitModule: Module {
     AsyncFunction("requestPasskeyAccess") { (promise: Promise) in
       WebKitPasskeys.requestAccess { promise.resolve($0) }
     }.runOnQueue(.main)
+    #if DEBUG
+    AsyncFunction("devStoreExists") { (profile: String, promise: Promise) in
+      WebKitHub.shared.storeExists(profile) { promise.resolve($0) }
+    }.runOnQueue(.main)
+    AsyncFunction("devHoldStore") { (profile: String) in WebKitHub.shared.holdStoreForTest(profile) }.runOnQueue(.main)
+    AsyncFunction("devTouchStore") { (profile: String, promise: Promise) in
+      WebKitHub.shared.touchStore(profile) { promise.resolve($0) }
+    }.runOnQueue(.main)
+    #endif
 
     View(WebKitTabView.self) {
       Events(CefWebView.events)

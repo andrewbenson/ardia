@@ -514,6 +514,7 @@ const closeFromPage = (target) =>
     if (!String(e?.message).includes("the target closed before replying")) throw e;
   });
 const cef = (call) => evalApp(`return globalThis.expo.modules.ArdiaCEF.${call}`);
+const webKit = (call) => evalApp(`return globalThis.expo.modules.ArdiaWebKit.${call}`);
 const exts = (call) => evalApp(`return globalThis.expo.modules.ArdiaExtensions.${call}`);
 const extPath = join(scratch, "fixture-ext");
 cpSync(resolve(new URL(".", import.meta.url).pathname, "fixtures/ext"), extPath, { recursive: true });
@@ -3001,8 +3002,16 @@ try {
     const folder = join(data, "Chromium", "Profile scratch-delete");
     await cef(`listPasswords("scratch-delete")`);
     await until("the profile loaded", async () => existsSync(folder), 10000);
+    await webKit(`devTouchStore("scratch-delete")`);
+    if (!(await webKit(`devStoreExists("scratch-delete")`))) throw new Error("the profile's WebKit store wasn't made");
     const result = await cef(`deleteProfileData("scratch-delete")`);
     if (result.remaining.length) throw new Error(`remaining ${JSON.stringify(result)}`);
+    if (!(await webKit(`deleteProfileData("scratch-delete")`))) throw new Error("the profile's WebKit store wasn't removed");
+    if (await webKit(`devStoreExists("scratch-delete")`)) throw new Error("the profile's WebKit store is still on disk");
+    await webKit(`devTouchStore("scratch-held")`);
+    await webKit(`devHoldStore("scratch-held")`);
+    if (await webKit(`deleteProfileData("scratch-held")`)) throw new Error("a held WebKit store reported removed");
+    if (!(await webKit(`devStoreExists("scratch-held")`))) throw new Error("a held WebKit store went missing");
     const gone = await until("the folder gone", async () => !existsSync(folder), 15000).catch(() => false);
     if (!gone) throw new Error("the profile's folder is still there");
     await sleep(3000);

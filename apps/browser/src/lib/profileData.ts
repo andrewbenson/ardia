@@ -1,10 +1,13 @@
 import { deleteProfileData } from "@ardia/ardiacore";
 import { useBrowser } from "../store/browser";
+import { engineIdOf } from "../store/profiles";
 
 const CLOSE_DELAY_MS = 1500;
 
 const failed = new Set<string>();
 let running = false;
+
+const inUse = (engine: string) => Object.values(useBrowser.getState().profiles).some((p) => engineIdOf(p) === engine);
 
 async function drain() {
   if (running) return;
@@ -14,6 +17,10 @@ async function drain() {
       const engine = useBrowser.getState().orphanedProfileData.find((e) => !failed.has(e));
       if (engine === undefined) return;
       await new Promise((resolve) => setTimeout(resolve, CLOSE_DELAY_MS));
+      if (inUse(engine)) {
+        useBrowser.getState().profileDataDeleted(engine);
+        continue;
+      }
       const remaining = await deleteProfileData(engine).catch((error: unknown) => [String(error)]);
       if (remaining.length) {
         failed.add(engine);

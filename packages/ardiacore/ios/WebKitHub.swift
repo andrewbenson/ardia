@@ -60,6 +60,10 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
   private var externalAllowances: [String: ExternalGrant] = [:]
   private var lastExternal = 0
   private var resumeHosts: [String: WKWebView] = [:]
+  private var deletedProfileStores: [String: WKWebsiteDataStore] = [:]
+  #if DEBUG
+  private var storesHeldForTest: [String: WKWebsiteDataStore] = [:]
+  #endif
 
   func nextBrowserId() -> Int32 {
     lastBrowserId -= 1
@@ -98,7 +102,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
 
   func dataStore(for profile: String) -> WKWebsiteDataStore {
     if Self.isPrivate(profile) { return session(Self.privateSession(profile)).store }
-    if let store = persistentStores[profile] { return store }
+    if let store = persistentStores[profile] ?? deletedProfileStores[profile] { return store }
     let store = WKWebsiteDataStore(forIdentifier: Self.storeIdentifier(profile))
     persistentStores[profile] = store
     return store
@@ -117,7 +121,12 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     rememberedPermissions = rememberedPermissions.filter { !$0.key.hasPrefix(prefix) }
     zoomByHost = zoomByHost.filter { !$0.key.hasPrefix(prefix) }
     externalAllowances = externalAllowances.filter { !$0.key.hasPrefix(prefix) }
-    let uses = { (view: WKWebView) in view.configuration.websiteDataStore === ended.store }
+    closeViews(using: ended.store)
+    ended.store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {}
+  }
+
+  private func closeViews(using store: WKWebsiteDataStore) {
+    let uses = { (view: WKWebView) in view.configuration.websiteDataStore === store }
     for (key, view) in parked where uses(view) {
       parked.removeValue(forKey: key)
       Self.close(view)
@@ -130,13 +139,12 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
       resumeHosts.removeValue(forKey: key)
       Self.close(view)
     }
-    for (id, pending) in pendingPermissions where pending.store === ended.store {
+    for (id, pending) in pendingPermissions where pending.store === store {
       pendingPermissions.removeValue(forKey: id)
       pending.decide(false)
       events?("onWebKitPermissionDismissed", ["id": id])
     }
     for tab in owners.values.compactMap(\.tab) where tab.webView.map(uses) == true { tab.close() }
-    ended.store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {}
   }
 
   static let safariVersion: String = {
@@ -480,11 +488,61 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
 
   func deleteProfileData(_ profile: String, completion: @escaping (Bool) -> Void) {
     guard !Self.isPrivate(profile) else { return completion(true) }
-    let store = dataStore(for: profile)
-    store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) {
-      self.persistentStores.removeValue(forKey: profile)
-      if let host = self.resumeHosts.removeValue(forKey: profile) { Self.close(host) }
-      WKWebsiteDataStore.remove(forIdentifier: Self.storeIdentifier(profile)) { error in completion(error == nil) }
+    let identifier = Self.storeIdentifier(profile)
+    deletedProfileStores[profile] = .nonPersistent()
+    downloads.cancelAll(profile: profile)
+    if let host = resumeHosts.removeValue(forKey: profile) { Self.close(host) }
+    let removeStore = {
+      WebKitStoreRemovals.exists(identifier) { exists in
+        guard exists else { return completion(true) }
+        WebKitStoreRemovals.remove(identifier, tries: 12, done: completion)
+      }
+    }
+    guard let store = persistentStores.removeValue(forKey: profile) else { return removeStore() }
+    closeViews(using: store)
+    store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast) { DispatchQueue.main.async(execute: removeStore) }
+  }
+
+  #if DEBUG
+  func storeExists(_ profile: String, done: @escaping (Bool) -> Void) {
+    WebKitStoreRemovals.exists(Self.storeIdentifier(profile), done: done)
+  }
+
+  func holdStoreForTest(_ profile: String) { storesHeldForTest[profile] = dataStore(for: profile) }
+
+  func touchStore(_ profile: String, done: @escaping (Bool) -> Void) {
+    let cookies = dataStore(for: profile).httpCookieStore
+    let cookie = HTTPCookie(properties: [.name: "ardia-touch", .value: "1", .domain: "ardia.test", .path: "/", .expires: Date().addingTimeInterval(86400)])
+    cookies.getAllCookies { existing in
+      let touched = existing.contains { $0.name == "ardia-touch" && $0.domain.hasSuffix("ardia.test") }
+      guard let cookie else { return done(touched) }
+      cookies.setCookie(cookie) { done(touched) }
+    }
+  }
+  #endif
+}
+
+enum WebKitStoreRemovals {
+  private static let webKitStarted: Void = { _ = WKWebsiteDataStore.nonPersistent() }()
+
+  static func exists(_ identifier: UUID, done: @escaping (Bool) -> Void) {
+    webKitStarted
+    WKWebsiteDataStore.fetchAllDataStoreIdentifiers { stores in
+      DispatchQueue.main.async { done(stores.contains(identifier)) }
+    }
+  }
+
+  static func remove(_ identifier: UUID, tries: Int, done: @escaping (Bool) -> Void) {
+    webKitStarted
+    WKWebsiteDataStore.remove(forIdentifier: identifier) { error in
+      DispatchQueue.main.async {
+        if error == nil { return done(true) }
+        guard tries > 1 else {
+          NSLog("[webkit] the data store %@ is still in use: %@", identifier.uuidString, error.map { "\($0)" } ?? "")
+          return done(false)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { remove(identifier, tries: tries - 1, done: done) }
+      }
     }
   }
 }
@@ -751,6 +809,10 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
   }
 
   func handles(_ id: String) -> Bool { id.hasPrefix("wk-download-") }
+
+  func cancelAll(profile: String) {
+    for item in items.values where item.profile == profile && item.phase != .done { command("cancel", id: item.id) }
+  }
 
   func command(_ action: String, id: String) {
     guard let item = items[id] else { return }

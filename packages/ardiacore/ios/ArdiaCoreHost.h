@@ -9,6 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
           delegate:(id<NSApplicationDelegate> (^)(void))makeDelegate NS_SWIFT_NAME(run(argc:argv:delegate:));
 
 @property(class, readonly) BOOL isStarted;
+@property(class, readonly) BOOL chromeUsesRealKeychain;
+@property(class, readonly) NSString *installedDataDirectory;
 @property(class, readonly) NSString *dataDirectory;
 @property(class, readonly) NSDictionary<NSString *, id> *engineInfo;
 @property(class, readonly) NSArray<NSDictionary<NSString *, id> *> *chromeWindows;

@@ -98,6 +98,14 @@ bool IsTeamSigned() {
   return team;
 }
 
+bool ChromeUsesRealKeychain() {
+  static const bool real = [] {
+    const char *scratch = getenv("ARDIA_DATA_DIR");
+    return !(scratch && *scratch) && IsTeamSigned();
+  }();
+  return real;
+}
+
 }
 
 @interface ArdiaCoreBootstrapDelegate : NSObject <NSApplicationDelegate>
@@ -249,7 +257,7 @@ static void ReportLoweredWindowOcclusion() {
 }
 
 static bool TestBuild() {
-  static const bool testBuild = gScratchDataDir || !IsTeamSigned();
+  static const bool testBuild = !ChromeUsesRealKeychain();
   return testBuild;
 }
 
@@ -572,6 +580,14 @@ static void StartEarlyWindow() {
 
 @implementation ArdiaCoreHost
 
++ (BOOL)chromeUsesRealKeychain {
+  return ChromeUsesRealKeychain();
+}
+
++ (NSString *)installedDataDirectory {
+  return InstalledDataDirectory();
+}
+
 + (int)runWithArgc:(int)argc argv:(char **)argv delegate:(id<NSApplicationDelegate> (^)(void))makeDelegate {
   const char *dataDir = getenv("ARDIA_DATA_DIR");
   gScratchDataDir = dataDir && *dataDir;
@@ -676,7 +692,7 @@ static void StartEarlyWindow() {
       "--profile-directory=Default",
       "--js-flags=--no-memory-reducer",
   };
-  const bool mockKeychain = gScratchDataDir || !IsTeamSigned();
+  const bool mockKeychain = !ChromeUsesRealKeychain();
   if (mockKeychain) extra.push_back("--use-mock-keychain");
   ardiacore_host::PrepareStartup(gDataDirectory, extra);
   @autoreleasepool {

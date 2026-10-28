@@ -422,21 +422,10 @@ public class SyncModule: Module {
   }
 
   static func safeStorageSecret() throws -> Data {
-    if dataDirectory != nil || !isTeamSigned { return Data("mock_password".utf8) }
+    if !ArdiaCoreHost.chromeUsesRealKeychain { return Data("mock_password".utf8) }
     return try SafeStorageKeychain.secret(service: "\(productName) Safe Storage", account: productName)
   }
 
-  static let isTeamSigned: Bool = {
-    if Bundle.main.object(forInfoDictionaryKey: "ACDevBuild") as? String == "YES" { return false }
-    var code: SecCode?
-    guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
-    var staticCode: SecStaticCode?
-    guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return false }
-    var info: CFDictionary?
-    guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-          let dict = info as? [String: Any] else { return false }
-    return dict[kSecCodeInfoTeamIdentifier as String] != nil
-  }()
 }
 
 private final class KeyState {

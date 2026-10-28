@@ -1,5 +1,15 @@
 import AppKit
 
+public enum ShellWindowEdge {
+  public static func watch(_ id: String, hold: CGFloat?, over: @escaping (Bool) -> Void) {
+    LeftEdgeWatcher.shared.watch(id: id, on: hold != nil, hold: hold ?? 0, listener: hold != nil ? over : nil)
+  }
+
+  public static func setLightsCenter(_ id: String, _ center: CGPoint?) {
+    WindowManager.shared.setTrafficLightsCenter(id: id, center: center)
+  }
+}
+
 final class LeftEdgeWatcher {
   static let shared = LeftEdgeWatcher()
   static let reach: CGFloat = 24
@@ -7,6 +17,7 @@ final class LeftEdgeWatcher {
   var emit: ((String, [String: Any]) -> Void)?
   var pointerOverride: NSPoint?
   private var watched: [String: CGFloat] = [:]
+  private var listeners: [String: (Bool) -> Void] = [:]
   private var over: Set<String> = []
   private var unreported: Set<String> = []
   private var localMonitor: Any?
@@ -25,8 +36,9 @@ final class LeftEdgeWatcher {
     .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .leftMouseUp, .rightMouseUp, .otherMouseUp,
   ]
 
-  func watch(id: String, on: Bool, hold: CGFloat) {
+  func watch(id: String, on: Bool, hold: CGFloat, listener: ((Bool) -> Void)? = nil) {
     watched[id] = on ? max(0, hold) : nil
+    listeners[id] = on ? listener : nil
     if on { unreported.insert(id) } else { over.remove(id) }
     if watched.isEmpty { return stop() }
     start()
@@ -43,6 +55,7 @@ final class LeftEdgeWatcher {
     for (id, hold) in watched {
       guard let window = WindowManager.shared.windows[id] else {
         watched[id] = nil
+        listeners[id] = nil
         over.remove(id)
         unreported.remove(id)
         continue
@@ -54,6 +67,10 @@ final class LeftEdgeWatcher {
       let fresh = unreported.remove(id) != nil
       guard fresh || now != over.contains(id) else { continue }
       if now { over.insert(id) } else { over.remove(id) }
+      if let listener = listeners[id] {
+        listener(now)
+        continue
+      }
       let frame = window.frame
       emit?("onWindowEvent", ["type": "leftEdge", "id": id, "over": now, "point": [point.x - frame.minX, frame.maxY - point.y]])
     }
@@ -192,6 +209,7 @@ final class LeftEdgeWatcher {
 
   func reset() {
     watched = [:]
+    listeners = [:]
     over = []
     unreported = []
     pointerOverride = nil

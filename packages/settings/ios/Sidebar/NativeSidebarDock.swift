@@ -1,0 +1,71 @@
+import AppKit
+import ArdiaShell
+import Foundation
+import SolaraUI
+
+@MainActor
+enum NativeSidebarDock {
+  static let topic = "sidebar.dock"
+  private static var observer: UUID?
+  private static var docks: [String: SidebarDock] = [:]
+
+  nonisolated static var enabled: Bool { NativeSidebarShell.enabled }
+
+  static func register() {
+    guard enabled, observer == nil else { return }
+    HostedViews.register(topic) { _ in nil }
+    observer = SettingsJS.shared.observe(topic) { value in receive(value) }
+    receive(SettingsJS.shared.latestValue(topic))
+  }
+
+  static func dock(_ windowId: String) -> SidebarDock? { docks[windowId] }
+
+  static func describe(_ windowId: String) -> [String: Any]? {
+    guard let dock = docks[windowId] else { return nil }
+    return [
+      "dock": dock.dockValue, "moving": dock.moving, "live": dock.peek.live, "slide": dock.slideValue,
+      "watching": dock.watchingHold.map { Double($0) } ?? NSNull(),
+      "column": dock.panel.content != nil ? "panel" : dock.shell.view(in: .sidebar) == nil ? "none" : "slot",
+    ]
+  }
+
+  private static func receive(_ value: Any?) {
+    let windows = ((value as? [String: Any])?["windows"] as? [String: Any]) ?? [:]
+    for (windowId, dock) in docks where windows[windowId] == nil { remove(windowId, dock) }
+    for (windowId, given) in windows {
+      guard let json = given as? String, let data = json.data(using: .utf8),
+        let state = try? JSONDecoder().decode(SidebarDockState.self, from: data)
+      else { continue }
+      if let dock = docks[windowId] {
+        dock.apply(state)
+      } else {
+        make(windowId, state)
+      }
+    }
+  }
+
+  private static func make(_ windowId: String, _ state: SidebarDockState) {
+    guard let shell = NativeWindowShell.host(windowId)?.shell else { return }
+    let dock = SidebarDock(shell: shell, state: state)
+    dock.column = { NativeSidebarShell.column(windowId) }
+    dock.onWatch = { [weak dock] hold in
+      ShellWindowEdge.watch(windowId, hold: hold) { over in dock?.edge(over: over) }
+    }
+    dock.onLights = { center in ShellWindowEdge.setLightsCenter(windowId, center) }
+    dock.onDock = { value, moving in send(windowId, "dock", ["value": value, "moving": moving]) }
+    dock.onPeek = { live, right in send(windowId, "peek", ["live": live, "right": right]) }
+    dock.onSlideOut = { send(windowId, "slideOut") }
+    docks[windowId] = dock
+    dock.start()
+  }
+
+  private static func remove(_ windowId: String, _ dock: SidebarDock) {
+    docks[windowId] = nil
+    dock.stop()
+  }
+
+  private static func send(_ windowId: String, _ event: String, _ extra: [String: Any] = [:]) {
+    let payload = SidebarPayload(extra)
+    Task { @MainActor in _ = await SettingsAdapters.js(topic, windowId, event, payload.value) }
+  }
+}

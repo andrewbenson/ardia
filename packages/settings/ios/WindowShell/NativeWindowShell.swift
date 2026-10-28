@@ -189,6 +189,7 @@ final class ShellHost {
       "paneRoots": NativePaneRoots.sample(shell.windowId) ?? NSNull(),
       "reactOnTop": shell.reactOnTop,
       "peek": NativePeek.sample(shell.windowId) ?? NSNull(),
+      "sidebarDock": NativeSidebarDock.describe(shell.windowId) ?? NSNull(),
     ]
   }
 }

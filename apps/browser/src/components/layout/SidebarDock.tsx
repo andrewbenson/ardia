@@ -10,6 +10,7 @@ import { useWindowId } from "../../store/hooks";
 import { Sidebar } from "../Sidebar";
 import { AreaBoundary } from "../AreaBoundary";
 import { dismissHoverIn } from "../sidebar/hover";
+import { shellColumnFitsAddressBar } from "../sidebar/NativeSidebar";
 import { useSidebarUi } from "../sidebar/state";
 import { peekHeld, watchPeekHolds } from "./peekHold";
 import { ProfileSwipe } from "./ProfileSwipe";
@@ -33,6 +34,7 @@ import {
   TOP_STRIP_LIGHTS_CENTER,
   useDockMotion,
 } from "./dockMotion";
+import { nativeDockIn, useNativeDock, useNativeDockState } from "./nativeDock";
 import { useTabDrag } from "./tabDrag";
 import { usePeek } from "./usePeek";
 
@@ -47,12 +49,32 @@ const SPRING = springConfig(DOCK_SPRING);
 const STRIP_WIDTH = 8;
 const HOLD_SLACK = 24;
 
-function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: Animated.Value; away: boolean } {
+function useSidebarDock(open: boolean, animate: boolean, arc: boolean, active: boolean): { dock: Animated.Value; away: boolean } {
   const windowId = useWindowId();
   const dock = useRef(new Animated.Value(open ? 1 : 0)).current;
   const was = useRef(open);
   const [away, setAway] = useState(!open);
+  const latestOpen = useRef(open);
+  latestOpen.current = open;
+  const activated = useRef(active);
   useEffect(() => {
+    if (!active) return;
+    if (!activated.current) {
+      activated.current = true;
+      dock.setValue(latestOpen.current ? 1 : 0);
+      setAway(!latestOpen.current);
+    }
+    return () => {
+      activated.current = false;
+      dock.stopAnimation();
+      setDockMoving(windowId, false);
+    };
+  }, [active]);
+  useEffect(() => {
+    if (!active) {
+      was.current = open;
+      return;
+    }
     if (was.current === open) return;
     was.current = open;
     if (!animate || reduceMotion || !switchOn("sidebarSlide")) {
@@ -85,8 +107,7 @@ function useSidebarDock(open: boolean, animate: boolean, arc: boolean): { dock: 
       setDockMoving(windowId, false);
       if (!open) setAway(true);
     });
-  }, [open]);
-  useEffect(() => () => setDockMoving(windowId, false), []);
+  }, [open, active]);
   return { dock, away };
 }
 
@@ -149,8 +170,12 @@ export function DockedLayout({
   const width = useSidebarUi((u) => u.dragWidth[windowId]) ?? savedWidth;
   const arc = addressBar && !topTabs && switchOn("sidebarSlide");
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : LIGHTS_CENTER;
-  const { dock, away } = useSidebarDock(open, !fullscreen, arc);
-  useShellLayoutPush(windowId, dock, { sidebarWidth: width, topTabs, fullscreen, addressBarInSidebar: addressBar, away });
+  const [nativeDockCapable] = useState(() => nativeDockIn(windowId));
+  const nativeDock = nativeDockCapable && shellColumnFitsAddressBar(addressBar);
+  const rnDock = useSidebarDock(open, !fullscreen, arc, !nativeDock);
+  const shellDock = useNativeDock(windowId, open, nativeDock);
+  const { dock, away } = nativeDock ? shellDock : rnDock;
+  useShellLayoutPush(windowId, dock, { sidebarWidth: width, topTabs, fullscreen, addressBarInSidebar: addressBar, away }, nativeDock);
   useShellModal(windowId);
   const left = useMemo(
     () =>
@@ -164,7 +189,7 @@ export function DockedLayout({
   const stripY = useMemo(() => dock.interpolate({ inputRange: [0, 1], outputRange: [-inset.top, 0] }), [dock, inset.top]);
   const stripShown = topTabs && (open || !away);
   const moving = useDockMotion((m) => !!m.moving[windowId]);
-  useTopStripLights(windowId, dock, topTabs && !fullscreen, inset.top, open);
+  useTopStripLights(windowId, dock, !nativeDock && topTabs && !fullscreen, inset.top, open);
   return (
     <>
       <Animated.View
@@ -200,8 +225,71 @@ export function DockedLayout({
           </Animated.View>
         )}
       {topStrip && topTabs && !stripShown && topStrip.peek}
-      {!topTabs && <SidebarDock dock={dock} open={open} width={width} fullscreen={fullscreen} arc={arc} lights={lights} />}
+      {nativeDock && <NativeDockPublisher open={open} arc={arc} fullscreen={fullscreen} topTabs={topTabs} width={width} lights={lights} />}
+      {!topTabs &&
+        (nativeDock ? (
+          <NativeDockedSidebar dock={dock} open={open} away={away} width={width} fullscreen={fullscreen} />
+        ) : (
+          <SidebarDock dock={dock} open={open} width={width} fullscreen={fullscreen} arc={arc} lights={lights} />
+        ))}
     </>
+  );
+}
+
+function NativeDockPublisher({
+  open,
+  arc,
+  fullscreen,
+  topTabs,
+  width,
+  lights,
+}: {
+  open: boolean;
+  arc: boolean;
+  fullscreen: boolean;
+  topTabs: boolean;
+  width: number;
+  lights: readonly [number, number];
+}) {
+  const windowId = useWindowId();
+  const theme = useTheme();
+  const [held, setHeld] = useState(() => peekHeld(windowId));
+  useEffect(() => watchPeekHolds(() => setHeld(peekHeld(windowId))), [windowId]);
+  useNativeDockState(windowId, {
+    open,
+    arc,
+    fullscreen,
+    topTabs,
+    width,
+    held,
+    slideSwitch: switchOn("sidebarSlide"),
+    lights,
+    look: { fill: hex(theme.windowTint[0]), border: hex(theme.panelBorder), shadowOpacity: theme.panelShadowOpacity },
+  });
+  return null;
+}
+
+function NativeDockedSidebar({ dock, open, away, width, fullscreen }: { dock: Animated.Value; open: boolean; away: boolean; width: number; fullscreen: boolean }) {
+  const windowId = useWindowId();
+  const moving = useDockMotion((m) => !!m.moving[windowId]);
+  const slideOut = useMemo(() => dock.interpolate({ inputRange: [0, 1], outputRange: [-width, 0] }), [dock, width]);
+  const sidebar = useMemo(
+    () => (
+      <AreaBoundary area="sidebar">
+        <ProfileSwipe>
+          <Sidebar width={width} />
+        </ProfileSwipe>
+      </AreaBoundary>
+    ),
+    [width],
+  );
+  return (
+    <Animated.View
+      pointerEvents={fullscreen || moving || !open ? "none" : "auto"}
+      style={{ position: "absolute", left: away || fullscreen ? -10_000 : 0, top: 0, bottom: 0, width, transform: [{ translateX: slideOut }] }}
+    >
+      {sidebar}
+    </Animated.View>
   );
 }
 

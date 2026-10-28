@@ -18,15 +18,18 @@ export function nextFrame(push: () => void): () => void {
   };
 }
 
-export function useShellLayoutPush(windowId: string, dock: Animated.Value, layout: ShellLayout) {
+export function useShellLayoutPush(windowId: string, dock: Animated.Value, layout: ShellLayout, nativeDock = false) {
   const [shell] = useState(() => windowShellActive(windowId));
   useEffect(() => {
-    if (!shell) return;
+    if (!shell || nativeDock) return;
     const sub = dock.addListener(nextFrame(() => void setWindowShellLayout(windowId, { dock: current(dock) })));
     return () => dock.removeListener(sub);
-  }, [shell, windowId, dock]);
+  }, [shell, nativeDock, windowId, dock]);
   const { sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away } = layout;
   useEffect(() => {
-    if (shell) requestAnimationFrame(() => void setWindowShellLayout(windowId, { dock: current(dock), sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away }));
-  }, [shell, windowId, dock, sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away]);
+    if (!shell) return;
+    requestAnimationFrame(() =>
+      void setWindowShellLayout(windowId, nativeDock ? { sidebarWidth, topTabs, fullscreen, addressBarInSidebar } : { dock: current(dock), sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away }),
+    );
+  }, [shell, nativeDock, windowId, dock, sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away]);
 }

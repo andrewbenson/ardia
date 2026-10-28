@@ -18,6 +18,7 @@ enum NativeSidebar {
     NativeSidebarLive.start()
     NativeSidebarHoverCard.start()
     NativeSidebarShell.register()
+    NativeSidebarDock.register()
     HostedViews.register(kind) { windowId in
       let host = SidebarHost(windowId: windowId)
       hosts[windowId] = host

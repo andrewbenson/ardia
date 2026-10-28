@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import Foundation
 import Observation
 import SolaraOmnibox
@@ -27,53 +28,76 @@ final class PasswordsAdapter: PasswordsServices {
   }
 
   func passwordAutofill(profile: String) async -> Bool {
-    await SettingsAdapters.js("passwords.autofill", profile) as? Bool ?? true
+    ArdiaCoreServices.boolPreference("credentials_enable_service", profile: profile)
   }
 
   func setPasswordAutofill(_ on: Bool, profile: String) async {
-    await SettingsAdapters.js("passwords.setAutofill", on, profile)
+    ArdiaCoreServices.setBoolPreference("credentials_enable_service", value: on, profile: profile)
   }
 
   func unlockPasswords(profile: String) async -> Bool {
-    await SettingsAdapters.js("passwords.unlock", profile) as? Bool ?? false
+    await EngineCalls.result({ done in ArdiaCoreServices.unlockPasswords(profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "unlockPasswords") ? false : $0["unlocked"] as? Bool ?? false
+    }
   }
 
   func listPasswords(profile: String) async -> [SavedPassword] {
-    let list = await SettingsAdapters.js("passwords.list", profile) as? [[String: Any]] ?? []
-    return list.compactMap { entry in
+    await EngineCalls.result({ done in ArdiaCoreServices.listPasswords(profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "listPasswords") ? [] : Self.passwords($0.list("passwords"))
+    }
+  }
+
+  nonisolated static func passwords(_ list: [[String: Any]]) -> [SavedPassword] {
+    list.compactMap { entry in
       guard let origin = entry.string("origin") else { return nil }
       return SavedPassword(origin: origin, username: entry.string("username") ?? "")
     }
   }
 
   func neverSaveOrigins(profile: String) async -> [String]? {
-    await SettingsAdapters.js("passwords.neverSaveOrigins", profile) as? [String]
+    await EngineCalls.result({ done in ArdiaCoreServices.neverSaveOrigins(profile: profile) { done($0) } }) {
+      EngineCalls.failed($0, "neverSaveOrigins") ? [] : $0.strings("origins")
+    }
   }
 
   func password(profile: String, origin: String, username: String) async -> String? {
-    await SettingsAdapters.js("passwords.password", profile, origin, username) as? String
+    await EngineCalls.result({ done in ArdiaCoreServices.password(profile: profile, origin: origin, username: username) { done($0) } }) {
+      EngineCalls.failed($0, "password") ? nil : $0.string("password")
+    }
   }
 
   func savePassword(profile: String, origin: String, username: String, password: String) async -> Bool {
-    await SettingsAdapters.js("passwords.save", profile, origin, username, password) as? Bool ?? false
+    await EngineCalls.result({ done in
+      ArdiaCoreServices.savePassword(profile: profile, origin: origin, username: username, password: password) { done($0) }
+    }) { !EngineCalls.failed($0, "savePassword") }
   }
 
   func updatePassword(profile: String, origin: String, username: String, newUsername: String?, newPassword: String?) async -> Bool {
-    await SettingsAdapters.js("passwords.update", profile, origin, username, jsonArg(newUsername), jsonArg(newPassword)) as? Bool ?? false
+    await EngineCalls.result({ done in
+      ArdiaCoreServices.updatePassword(profile: profile, origin: origin, username: username, newUsername: newUsername, newPassword: newPassword) {
+        done($0)
+      }
+    }) { !EngineCalls.failed($0, "updatePassword") }
   }
 
   func deletePassword(profile: String, origin: String, username: String) async {
-    await SettingsAdapters.js("passwords.delete", profile, origin, username)
+    await EngineCalls.result({ done in ArdiaCoreServices.deletePassword(profile: profile, origin: origin, username: username) { done($0) } }) {
+      _ = EngineCalls.failed($0, "deletePassword")
+    }
   }
 
   func allowSavingPasswords(profile: String, origin: String) async {
-    await SettingsAdapters.js("passwords.allowSaving", profile, origin)
+    await EngineCalls.result({ done in ArdiaCoreServices.allowSaving(profile: profile, origin: origin) { done($0) } }) {
+      _ = EngineCalls.failed($0, "allowSaving")
+    }
   }
 
   func exportPasswords(profile: String) async -> PasswordExportResult {
-    let result = await SettingsAdapters.js("passwords.export", profile) as? [String: Any] ?? [:]
-    let status = result.string("status").flatMap(PasswordExportStatus.init(rawValue:)) ?? .writeFailed
-    return PasswordExportResult(status: status, path: result.string("path"))
+    await EngineCalls.result({ done in ArdiaCoreServices.exportPasswords(profile: profile, path: nil) { done($0) } }) {
+      if EngineCalls.failed($0, "exportPasswords") { return PasswordExportResult(status: .writeFailed, path: nil) }
+      let status = $0.string("status").flatMap(PasswordExportStatus.init(rawValue:)) ?? .writeFailed
+      return PasswordExportResult(status: status, path: $0.string("path"))
+    }
   }
 
   var passwordsImportAvailable: Bool { importAvailable }

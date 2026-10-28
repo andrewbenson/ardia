@@ -512,6 +512,9 @@ final class SafeStorageRekeyGateTests: XCTestCase {
     XCTAssertEqual(honoured.mode, .test)
     XCTAssertEqual(honoured.userDataDir.path, "/tmp/scratch/a/Chromium")
     XCTAssertEqual(gate(testEnv.merging(["ARDIA_DATA_DIR": "rel"]) { $1 }).userDataDir.path, "/cwd/rel/Chromium")
+    XCTAssertEqual(
+      gate(testEnv.merging(["ARDIA_DATA_DIR": "~/scratch"]) { $1 }).userDataDir.path,
+      (NSHomeDirectory() as NSString).appendingPathComponent("scratch/Chromium"))
     for broken in [
       testEnv.merging(["ARDIA_TEST_REKEY": "yes"]) { $1 }, testEnv.merging(["ARDIA_DATA_DIR": ""]) { $1 },
       testEnv.filter { $0.key != "ARDIA_DATA_DIR" }, testEnv.filter { $0.key != "ARDIA_TEST_KEYCHAIN" },

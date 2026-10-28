@@ -33,7 +33,7 @@ public struct SafeStorageRekeyGate: Equatable {
   }
 
   static func scratchUserDataDir(_ dataDir: String, currentDirectory: String) -> URL {
-    let absolute = dataDir.hasPrefix("/") ? dataDir : (currentDirectory as NSString).appendingPathComponent(dataDir)
+    let absolute = (dataDir as NSString).isAbsolutePath ? dataDir : (currentDirectory as NSString).appendingPathComponent(dataDir)
     let standard = (absolute as NSString).standardizingPath
     return URL(fileURLWithPath: (standard as NSString).appendingPathComponent("Chromium"), isDirectory: true)
   }

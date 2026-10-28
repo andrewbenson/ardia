@@ -37,11 +37,15 @@ mkdirSync(files);
 writeFileSync(join(files, "report.pdf"), "report");
 writeFileSync(join(files, "photo.png"), "photo");
 mkdirSync(data, { recursive: true });
+const midnight = new Date();
+midnight.setHours(24, 0, 0, 0);
+const minutesLeftToday = Math.floor((midnight.getTime() - Date.now()) / 60_000);
+const startToday = (minutes) => Math.min(minutes, minutesLeftToday - 5);
 const calendarFixture = JSON.stringify({
   calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
   events: [
-    { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: 3, durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }, { name: "Me", email: "me@example.com", me: true }] },
-    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 90, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
+    { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: startToday(3), durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }, { name: "Me", email: "me@example.com", me: true }] },
+    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: startToday(90), durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
   ],
 });
 writeFileSync(join(data, "calendar-fixture.json"), calendarFixture);

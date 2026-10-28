@@ -1,6 +1,6 @@
 import { unwrapPageEvent, WebView, type OpenWindowRequest } from "@ardia/ardiacore";
 import { toEngineUrl } from "@ardia/core";
-import { focusPageIfUnclaimed, hostedKinds, onHostedEvent, SolaraHostedView } from "@ardia/settings";
+import { focusPageIfUnclaimed, hostedKinds, onHostedEvent, setWindowShellLayout, SolaraHostedView } from "@ardia/settings";
 import { Hairline } from "@ardia/shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Image, PanResponder, StyleSheet, Text, View } from "react-native";
@@ -8,6 +8,8 @@ import { layout, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { shownPageId } from "../../store/peek";
 import { useWindowId } from "../../store/hooks";
+import { useWindowShell } from "../layout/ShellBackdrop";
+import { current, nextFrame } from "../layout/shellLayout";
 import { openFromPage, pageProfileId } from "../layout/openFromPage";
 import { IconButton } from "../primitives";
 import { closeSidePanel, findExtension, showExtensionMenu, useExtensions, type SidePanel } from "./state";
@@ -56,6 +58,7 @@ export function ExtensionSidePanel() {
   }, [panel?.url, panel?.extensionId]);
 
   const width = dragWidth ?? savedWidth;
+  useShellRoom(windowId, appear, shown ? width + layout.cardInset - 1 : 0);
   const start = useRef(width);
   const settling = useRef<Animated.CompositeAnimation | null>(null);
   const settle = useMemo(
@@ -121,6 +124,23 @@ export function ExtensionSidePanel() {
       </Animated.View>
     </Animated.View>
   );
+}
+
+function useShellRoom(windowId: string, appear: Animated.Value, room: number) {
+  const shell = useWindowShell();
+  const full = useRef(room);
+  full.current = room;
+  const push = useRef(nextFrame(() => void setWindowShellLayout(windowId, { sidePanel: full.current * current(appear) }))).current;
+  const showing = room > 0;
+  useEffect(() => {
+    if (!shell || !showing) return;
+    const sub = appear.addListener(push);
+    return () => appear.removeListener(sub);
+  }, [shell, showing]);
+  useEffect(() => () => void requestAnimationFrame(() => void setWindowShellLayout(windowId, { sidePanel: 0 })), []);
+  useEffect(() => {
+    if (shell) push();
+  }, [shell, room]);
 }
 
 function NativePanelCard({ windowId, panel, width, onResize }: { windowId: string; panel: SidePanel; width: number; onResize: (width: number, ended: boolean) => void }) {

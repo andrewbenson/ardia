@@ -13,6 +13,7 @@ import { dismissHoverIn } from "../sidebar/hover";
 import { useSidebarUi } from "../sidebar/state";
 import { peekHeld, watchPeekHolds } from "./peekHold";
 import { ProfileSwipe } from "./ProfileSwipe";
+import { useShellLayoutPush } from "./shellLayout";
 import {
   ARC_HIDE_MS,
   ARC_LIGHTS_CENTER,
@@ -148,6 +149,7 @@ export function DockedLayout({
   const arc = addressBar && !topTabs && switchOn("sidebarSlide");
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : LIGHTS_CENTER;
   const { dock, away } = useSidebarDock(open, !fullscreen, arc);
+  useShellLayoutPush(windowId, dock, { sidebarWidth: width, topTabs, fullscreen, addressBarInSidebar: addressBar, away });
   const left = useMemo(
     () =>
       dock.interpolate({

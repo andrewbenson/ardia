@@ -9,6 +9,7 @@ type WindowShellModule = {
   peekClose?(windowId: string): Promise<boolean>;
   peekExpand?(windowId: string): Promise<boolean>;
   setBackdrop(windowId: string, json: string): Promise<void>;
+  setLayout?(windowId: string, layout: WindowShellLayout): Promise<void>;
   describe(windowId: string): Promise<string>;
 };
 
@@ -64,6 +65,20 @@ export function expandWindowPeek(windowId: string): Promise<boolean> {
 
 export function setWindowShellBackdrop(windowId: string, json: string) {
   return native?.setBackdrop(windowId, json) ?? Promise.resolve();
+}
+
+export type WindowShellLayout = Partial<{
+  dock: number;
+  sidebarWidth: number;
+  sidePanel: number;
+  topTabs: boolean;
+  fullscreen: boolean;
+  addressBarInSidebar: boolean;
+  away: boolean;
+}>;
+
+export function setWindowShellLayout(windowId: string, layout: WindowShellLayout) {
+  return native?.setLayout?.(windowId, layout) ?? Promise.resolve();
 }
 
 export async function describeWindowShell(windowId: string): Promise<Record<string, unknown> | null> {

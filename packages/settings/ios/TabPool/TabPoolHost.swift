@@ -27,7 +27,9 @@ final class TabPoolHost {
   private var shellWindows: Set<String> = []
 
   func start() {
-    guard Self.available, pool == nil, let store = NativeStoreHandle.store else { return }
+    guard pool == nil else { return }
+    guard Self.available, let store = NativeStoreHandle.store else { return startWhenSlotsChange() }
+    if let slotObserver { NotificationCenter.default.removeObserver(slotObserver) }
     let pool = TabViewPool(make: { [weak self] tabId, windowId in self?.makePage(tabId, windowId) })
     pool.hiddenContainer = { NativeWindowShell.hiddenPages($0) }
     pool.onPlaced = { [weak self] places in self?.emit?("onPlaced", ["places": places]) }
@@ -42,6 +44,13 @@ final class TabPoolHost {
       MainActor.assumeIsolated { self?.followCardPages() }
     }
     receive(store.state)
+  }
+
+  private func startWhenSlotsChange() {
+    guard slotObserver == nil, NativeSplitChrome.panesEnabled, ProcessInfo.processInfo.environment["ARDIA_TAB_POOL"] != "0" else { return }
+    slotObserver = NotificationCenter.default.addObserver(forName: TabSlots.changed, object: TabSlots.shared, queue: nil) { [weak self] _ in
+      MainActor.assumeIsolated { self?.start() }
+    }
   }
 
   func pageView(_ tabId: String) -> NSView? { pages[tabId]?.page.view }

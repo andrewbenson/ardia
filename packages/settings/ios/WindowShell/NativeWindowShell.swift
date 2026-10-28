@@ -230,6 +230,20 @@ extension ShellHost {
 }
 #endif
 
+enum ShellLayoutPush {
+  static func apply(_ given: [String: Any], to input: inout DockedLayoutInput, keepWidth: Bool = false) {
+    let number = { (key: String) in (given[key] as? NSNumber).map { CGFloat($0.doubleValue) } }
+    let flag = { (key: String) in (given[key] as? NSNumber)?.boolValue }
+    if let dock = number("dock") { input.dock = dock }
+    if !keepWidth, let width = number("sidebarWidth") { input.sidebarWidth = width }
+    if let room = number("sidePanel") { input.sidePanel = max(0, room) }
+    if let topTabs = flag("topTabs") { input.topTabs = topTabs }
+    if let fullscreen = flag("fullscreen") { input.fullscreen = fullscreen }
+    if let addressBar = flag("addressBarInSidebar") { input.addressBarInSidebar = addressBar }
+    if let away = flag("away") { input.away = away }
+  }
+}
+
 final class ShellStoreCommits: @unchecked Sendable {
   private let lock = NSLock()
   private var latest: Set<String>?
@@ -282,6 +296,14 @@ public class WindowShellModule: Module {
 
     AsyncFunction("setBackdrop") { (windowId: String, json: String) in
       MainActor.assumeIsolated { NativeWindowShell.setBackdrop(windowId, json) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("setLayout") { (windowId: String, layout: [String: Any]) in
+      nonisolated(unsafe) let given = layout
+      MainActor.assumeIsolated {
+        guard let shell = NativeWindowShell.host(windowId)?.shell else { return }
+        shell.update { ShellLayoutPush.apply(given, to: &$0, keepWidth: shell.widthDragActive) }
+      }
     }.runOnQueue(.main)
 
     AsyncFunction("devCover") { (windowId: String, rect: [Double]?, hidden: Bool?) -> Bool in

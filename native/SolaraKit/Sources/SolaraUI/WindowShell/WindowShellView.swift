@@ -29,6 +29,7 @@ public final class WindowShellView: NSView {
   public let hiddenPages = FlippedContainerView()
   public let cardPage = FlippedContainerView()
   public var cardPageFrame: CGRect? { didSet { if cardPageFrame != oldValue { placeCardPage() } } }
+  public var widthDragActive = false
   private var mounted: [Slot: NSView] = [:]
   private var pointerLayer: ObjectIdentifier?
 

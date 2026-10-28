@@ -110,10 +110,11 @@ public struct DockedLayoutInput: Equatable, Sendable {
   public var peekSlide: CGFloat
   public var addressBarInSidebar: Bool
   public var away: Bool
+  public var sidePanel: CGFloat
 
   public init(
     size: CGSize, dock: CGFloat, sidebarWidth: CGFloat = ShellMetrics.sidebarWidth, topTabs: Bool = false, fullscreen: Bool = false,
-    peeking: Bool = false, peekSlide: CGFloat = 0, addressBarInSidebar: Bool = false, away: Bool = false
+    peeking: Bool = false, peekSlide: CGFloat = 0, addressBarInSidebar: Bool = false, away: Bool = false, sidePanel: CGFloat = 0
   ) {
     self.size = size
     self.dock = dock
@@ -124,6 +125,7 @@ public struct DockedLayoutInput: Equatable, Sendable {
     self.peekSlide = peekSlide
     self.addressBarInSidebar = addressBarInSidebar
     self.away = away
+    self.sidePanel = sidePanel
   }
 
   public var inset: ShellInset { topTabs ? .topTabs : .sidebar }
@@ -147,7 +149,7 @@ public struct DockedLayoutFrames: Equatable, Sendable {
     }
     let top = input.topTabs ? ShellMetrics.cardTop + (inset.top - ShellMetrics.cardTop) * dock : inset.top
     let left = input.topTabs ? inset.left : inset.left + (input.sidebarWidth - inset.left) * dock
-    let card = CGRect(x: left, y: top, width: max(0, size.width - left - inset.right), height: max(0, size.height - top - inset.bottom))
+    let card = CGRect(x: left, y: top, width: max(0, size.width - left - inset.right - max(0, input.sidePanel)), height: max(0, size.height - top - inset.bottom))
     if input.topTabs {
       let strip = CGRect(x: 0, y: -inset.top * (1 - dock), width: size.width, height: inset.top)
       return DockedLayoutFrames(card: card, sidebar: nil, sidebarShift: 0, topStrip: strip, lights: nil)

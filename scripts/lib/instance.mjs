@@ -3,7 +3,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,6 +77,19 @@ export function removeTemporaryData(data) {
     process.stderr.write(`warning: couldn't remove ${real}: ${e.message}\n`);
     return false;
   }
+}
+export function wipeRefusal(data) {
+  const real = realPath(resolve(data));
+  const within = (base, path) => {
+    const inside = relative(base, path);
+    return inside === "" || (!inside.startsWith("..") && !isAbsolute(inside));
+  };
+  const home = realPath(homedir());
+  if (within(real, home)) return "it is the home folder or holds it";
+  if (within(realPath(join(home, "Library", "Application Support")), real)) return "it is inside ~/Library/Application Support";
+  if (within(real, realPath(join(dirname(here), "..", "..")))) return "it is the repo or holds it";
+  if (!existsSync(real) || temporaryData(data) || ["instance.json", "app.out.log"].some((f) => existsSync(join(real, f)))) return null;
+  return "it isn't an instance data dir (no instance.json or app.out.log)";
 }
 export const quitEnded = ({ how }) => how === "quit" || how === "SIGTERM" || how === "SIGKILL";
 const quitData = new Set();
@@ -343,7 +356,11 @@ export async function launch(app, opts = {}) {
   app = realPath(app);
   const data = resolve(opts.data ?? join(process.env.TMPDIR ?? "/tmp", `ac-instance-${process.pid}-${Date.now()}`));
   quitData.delete(data);
-  if (opts.fresh) rmSync(data, { recursive: true, force: true });
+  if (opts.fresh) {
+    const refusal = wipeRefusal(data);
+    if (refusal) throw new Error(`refusing to wipe ${data}: ${refusal}`);
+    rmSync(data, { recursive: true, force: true });
+  }
   mkdirSync(data, { recursive: true });
   let previous = null;
   try { previous = JSON.parse(readFileSync(join(data, "instance.json"), "utf8")); } catch {}
@@ -499,6 +516,10 @@ if (process.argv[1] === here) {
       symlinkSync(dirname(here), link);
       assert.equal(temporaryData(link), null);
       assert.equal(temporaryData(join(link, "..", basename(made))), realPath(made));
+      assert.equal(wipeRefusal(join(made, "data")), null);
+      assert.match(wipeRefusal(link), /isn't an instance data dir/);
+      for (const denied of [homedir(), "/", join(homedir(), "Library", "Application Support", "com.hill.solara"), join(dirname(here), "..", "..")])
+        assert.ok(wipeRefusal(denied), denied);
     } finally {
       rmSync(made, { recursive: true, force: true });
       rmSync(link, { force: true });

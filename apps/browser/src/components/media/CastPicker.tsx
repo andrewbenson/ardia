@@ -10,7 +10,7 @@ import { useHover } from "../primitives";
 import { closeCastPicker, useCast } from "./cast";
 import { PRODUCT } from "../../lib/productName";
 import { useWindowId } from "../../store/hooks";
-import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "./nativeMedia";
+import { addMediaActions, addPickerHandler, callPickerHandler, mediaTheme, nativeMedia, NativeMediaView, type PickerHandlers } from "./nativeMedia";
 
 const WIDTH = 340;
 
@@ -18,8 +18,8 @@ const SINK_ICON: Record<number, string> = { 0: "tv", 1: "hifispeaker.2", 2: "hif
 
 const LOCAL_NETWORK_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork";
 
-const castHandlers: Record<string, (extra: Record<string, unknown>) => void> = {};
-addMediaActions({ castPicker: (_windowId, tabId, extra) => castHandlers[tabId]?.(extra) });
+const castHandlers: PickerHandlers = {};
+addMediaActions({ castPicker: (_windowId, tabId, extra) => callPickerHandler(castHandlers, tabId, extra) });
 
 const castModeFor = (sink: CastSink, screen: boolean) =>
   screen && sink.modes & CastMode.screen ? CastMode.screen : preferredCastMode(sink.modes & ~CastMode.screen) || preferredCastMode(sink.modes);
@@ -45,8 +45,7 @@ function NativeCastPicker({ tabId, paneWidth, nativeAllowed }: { tabId: string; 
   useEffect(() => setScreen(false), [dialog?.id]);
   const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
   useEffect(() => {
-    castHandlers[tabId] = (extra) => handler.current(extra);
-    return () => void delete castHandlers[tabId];
+    return addPickerHandler(castHandlers, tabId, (extra) => handler.current(extra));
   }, [tabId]);
   const state = dialog ? castPickerState(tabId, dialog, screen, theme, paneWidth) : null;
   useNativePaneOverlay(inShell, windowId, tabId, "castPicker", state);

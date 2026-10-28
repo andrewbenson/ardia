@@ -15,10 +15,10 @@ import { Checkbox } from "../settings/controls";
 import { noteTabShare } from "./ShareBar";
 import { useMedia } from "./state";
 import { useWindowId } from "../../store/hooks";
-import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "./nativeMedia";
+import { addMediaActions, addPickerHandler, callPickerHandler, mediaTheme, nativeMedia, NativeMediaView, type PickerHandlers } from "./nativeMedia";
 
-const shareHandlers: Record<string, (extra: Record<string, unknown>) => void> = {};
-addMediaActions({ sharePicker: (_windowId, tabId, extra) => shareHandlers[tabId]?.(extra) });
+const shareHandlers: PickerHandlers = {};
+addMediaActions({ sharePicker: (_windowId, tabId, extra) => callPickerHandler(shareHandlers, tabId, extra) });
 
 const WIDTH = 460;
 const REFRESH_MS = 2500;
@@ -117,8 +117,7 @@ export function SharePicker({ tabId, paneWidth, nativeAllowed = true }: { tabId:
   const handler = useRef<(extra: Record<string, unknown>) => void>(() => {});
   useEffect(() => {
     if (!native) return;
-    shareHandlers[tabId] = (extra) => handler.current(extra);
-    return () => void delete shareHandlers[tabId];
+    return addPickerHandler(shareHandlers, tabId, (extra) => handler.current(extra));
   }, [tabId, native]);
 
   useEffect(() => {

@@ -262,6 +262,14 @@ try {
   const sameRect = (what, rect, want) => {
     if (!rect || rect.some((v, i) => Math.abs(v - want[i]) > 0.5)) throw new Error(`${what} popover at ${JSON.stringify(rect)}, RN draws ${JSON.stringify(want)}`);
   };
+  const staysUp = async (kind) => {
+    const gaps = await run(`
+      const out = [];
+      const sample = (until) => performance.now() >= until ? Promise.resolve() : first(${JSON.stringify(kind)}).then((r) => { if (!r) out.push(Math.round(performance.now())); return settle(50); }).then(() => sample(until));
+      return sample(performance.now() + 2700).then(() => out);`, 10000);
+    if (gaps.length) throw new Error(`${kind} went missing ${gaps.length} times in its first 2.7 s`);
+    return true;
+  };
   const openPopover = async (kind, open) => {
     if (!native) {
       await run(open);
@@ -301,6 +309,7 @@ try {
     const opened = await openPopover("media.castPicker", `acCast.useCast.setState({ dialogs: { b: ${JSON.stringify(CAST)} } });`);
     sameRect("cast", opened.rect, RN_CAST);
     const out = { rect: opened.rect, samples: opened.animatedSamples, pane: await inPane("media.castPicker", "castPicker") };
+    if (shell) out.staysUp = await staysUp("media.castPicker");
     if (native) {
       await run(`globalThis.__castLog = []; const a = acNativeMedia.actions; globalThis.__castReal = a.castPicker; a.castPicker = (w, t, e) => { __castLog.push(e); }; return true;`);
       await run(`return first("media.castPicker").then((r) => click(centre(r.frames.done))).then(() => true);`);
@@ -328,6 +337,7 @@ try {
     const opened = await openPopover("media.sharePicker", openShare);
     sameRect("share", opened.rect, RN_SHARE);
     const out = { rect: opened.rect, samples: opened.animatedSamples, pane: await inPane("media.sharePicker", "sharePicker") };
+    if (shell) out.staysUp = await staysUp("media.sharePicker");
     if (native) {
       await run(`return first("media.sharePicker").then((r) => click(centre(r.frames["tab:p"]))).then(() => true);`);
       const picked = await until("tab selected", `return first("media.sharePicker").then((r) => r.selected === "tab:p" ? r : null);`, 3000);

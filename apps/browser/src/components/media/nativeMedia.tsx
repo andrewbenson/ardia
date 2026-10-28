@@ -94,6 +94,22 @@ const actions: Record<string, MediaActionHandler> = {
   cliStop: () => stopCliControl(),
 };
 
+export type PickerHandler = (extra: Record<string, unknown>) => void;
+export type PickerHandlers = Record<string, PickerHandler[]>;
+
+export function addPickerHandler(handlers: PickerHandlers, tabId: string, handler: PickerHandler) {
+  (handlers[tabId] ??= []).push(handler);
+  return () => {
+    const left = (handlers[tabId] ?? []).filter((h) => h !== handler);
+    if (left.length) handlers[tabId] = left;
+    else delete handlers[tabId];
+  };
+}
+
+export function callPickerHandler(handlers: PickerHandlers, tabId: string, extra: Record<string, unknown>) {
+  handlers[tabId]?.at(-1)?.(extra);
+}
+
 export function addMediaActions(added: Record<string, MediaActionHandler>) {
   Object.assign(actions, added);
 }

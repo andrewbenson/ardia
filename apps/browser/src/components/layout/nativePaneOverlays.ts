@@ -104,12 +104,30 @@ export function usePageFrame() {
   return { frame, ref, onLayout };
 }
 
+type OverlayClaim = { state: object | null };
+const overlayClaims: Record<string, OverlayClaim[]> = {};
+const overlaySlot = (windowId: string, tabId: string, kind: string) => `${windowId}|${tabId}|${kind}`;
+
 export function useNativePaneOverlay(active: boolean, windowId: string, tabId: string, kind: string, state: object | null) {
   const key = state && JSON.stringify(state);
+  const claim = useRef<OverlayClaim>({ state: null }).current;
   useEffect(() => {
-    if (active) setOverlay(windowId, tabId, kind, state);
+    if (!active) return;
+    claim.state = state;
+    const claims = (overlayClaims[overlaySlot(windowId, tabId, kind)] ??= []);
+    if (!claims.includes(claim)) claims.push(claim);
+    if (claims.at(-1) === claim) setOverlay(windowId, tabId, kind, state);
   }, [active, windowId, tabId, kind, key]);
-  useEffect(() => () => void (active && setOverlay(windowId, tabId, kind, null)), [active, windowId, tabId, kind]);
+  useEffect(() => {
+    if (!active) return;
+    const slot = overlaySlot(windowId, tabId, kind);
+    return () => {
+      const left = (overlayClaims[slot] ?? []).filter((c) => c !== claim);
+      if (left.length) overlayClaims[slot] = left;
+      else delete overlayClaims[slot];
+      setOverlay(windowId, tabId, kind, left.at(-1)?.state ?? null);
+    };
+  }, [active, windowId, tabId, kind]);
 }
 
 export type PageFrame = [number, number, number, number];

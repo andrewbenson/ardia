@@ -24,7 +24,8 @@ import { usePagerPages } from "./profilePager";
 import { openNewTabInSplit } from "./splitActions";
 import { openFolderMenu, openTileFolderStripMenu } from "./stripFolderMenu";
 import { tuckTarget } from "./stripGroups";
-import { beginTabDrag, cancelTabDrag, endTabDrag, EXTERNAL_DRAG, setDragPicture, setInsert, setInsertResolver, updateTabDrag, useTabDrag } from "./tabDrag";
+import { EXTERNAL_DRAG, setInsert, setInsertResolver, useTabDrag } from "./tabDrag";
+import "./nativeTabDrag";
 
 let nativeTopStrip: boolean | undefined;
 let nativePeek: boolean | undefined;
@@ -112,23 +113,6 @@ addNativeSettingsHandlers({
         return void (toggleNewTabBar(windowId) || s.newTab(windowId, { newTabCommand: true }));
     }
   },
-});
-
-let dragSeq = 0;
-let dragDx = 0;
-
-addNativeSettingsHandlers({
-  "topStrip.drag.begin": (_windowId: string, tabId: string | null, tabIds: string[]) => {
-    dragDx = 0;
-    dragSeq = beginTabDrag(tabId, tabIds);
-  },
-  "topStrip.drag.picture": (_windowId: string, x: number, y: number, w: number, h: number, gx: number, gy: number) =>
-    setDragPicture(dragSeq, () => [x + dragDx, y, w, h], [gx, gy]),
-  "topStrip.drag.move": (_windowId: string, x: number, y: number, lifted: boolean, dx: number) => {
-    dragDx = dx;
-    updateTabDrag(x, y, lifted);
-  },
-  "topStrip.drag.end": (_windowId: string, commit: boolean) => (commit ? endTabDrag() : (cancelTabDrag(), false)),
 });
 
 function themeTokens(theme: Theme): Record<string, string> {

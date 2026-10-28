@@ -304,44 +304,24 @@ final class TopStripHost {
 final class TopStripDrag: StripDragBridge {
   static let shared = TopStripDrag()
 
-  private var chain: Task<Void, Never>?
-  private var pendingMove: (windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat)?
-
-  private func send(_ name: String, _ args: [Any], done: (@MainActor (Any?) -> Void)? = nil) {
-    let previous = chain
-    let payload = SidebarPayload(["args": args])
-    chain = Task { @MainActor in
-      await previous?.value
-      let args = payload.value["args"] as? [Any] ?? []
-      let result = try? await SettingsJS.shared.invoke(name, args)
-      done?(result ?? nil)
-    }
-  }
+  private var dx: CGFloat = 0
 
   func dragBegan(windowId: String, tabId: String?, tabIds: [String]) {
-    pendingMove = nil
-    send("topStrip.drag.begin", [windowId, tabId ?? NSNull(), tabIds])
+    dx = 0
+    NativeTabDrag.shared.begin(windowId: windowId, tabId: tabId, tabIds: tabIds) { false }
   }
 
   func dragPicture(windowId: String, rect: CGRect, grab: CGPoint) {
-    send("topStrip.drag.picture", [windowId, rect.minX, rect.minY, rect.width, rect.height, grab.x, grab.y])
+    NativeTabDrag.shared.picture(windowId: windowId, chip: { [weak self] in rect.offsetBy(dx: self?.dx ?? 0, dy: 0) }, grab: CGPoint(x: grab.x - rect.minX, y: grab.y - rect.minY))
   }
 
   func dragMoved(windowId: String, at: CGPoint, lifted: Bool, dx: CGFloat) {
-    let queued = pendingMove != nil
-    pendingMove = (windowId, at, lifted, dx)
-    if queued { return }
-    let previous = chain
-    chain = Task { @MainActor in
-      await previous?.value
-      guard let move = self.pendingMove else { return }
-      self.pendingMove = nil
-      _ = try? await SettingsJS.shared.invoke("topStrip.drag.move", [move.windowId, move.at.x, move.at.y, move.lifted, move.dx])
-    }
+    self.dx = dx
+    NativeTabDrag.shared.move(windowId: windowId, at: at, lifted: lifted)
   }
 
   func dragEnded(windowId: String, commit: Bool, done: @escaping @MainActor (Bool) -> Void) {
-    send("topStrip.drag.end", [windowId, commit]) { result in done((result as? Bool) ?? false) }
+    NativeTabDrag.shared.end(windowId: windowId, commit: commit, done: done)
   }
 
   func land(ids: [String], from source: String, in windowId: String, beforeId: String?) -> Bool {

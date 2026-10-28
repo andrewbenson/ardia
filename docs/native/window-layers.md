@@ -15,7 +15,7 @@ for what RN still draws over a page. [architecture.md](architecture.md) › 4.4 
 | 3 | `splitChrome` | dividers, the split toast, the drop hints | port-sidebar-live |
 | 4 | `peek` | Peek's page and frame (`TabSlots` `peek(w)`) | port-omnibox |
 | 5 | `sidebar`, `topStrip` | the native sidebar and the top tab strip | port-sidebar, port-strip |
-| 6 | main root | the window's RN root, full window, `passThroughTouches`, a box-none root in shell mode | port-shell |
+| 6 | main root | the window's RN root, full window, `passThroughTouches`, a box-none root. Here only with `ARDIA_SHELL_MAIN_TOP=1` (which needs `ARDIA_SHELL_PANES=1` and `ARDIA_NATIVE_PAGES_POOL=1`); otherwise it sits between `backdrop` and `card`, since its pages, card fill and toolbar are still RN's and the card's layers draw over them | port-shell |
 | 7 | `overlay` | `shell.overlay` (`NativeWindowShell.overlay(w)`), one shared box-none container for window-level native overlays: popovers, hover cards. It tells hover, once per run-loop turn, when a child is added, removed, moved or hidden; owners call `shell.coverChanged()` only for motion inside a child (a layer animating its own contents) | port-shell (container), port-media, port-sidebar |
 | 8 | foreign | views the shell didn't mount (the PiP overlay) stay above every slot | port-media |
 
@@ -53,9 +53,10 @@ behind the active page, since Chrome throttles a page under a hidden view.
 
 ## Rules
 
-- **Pass-through.** The main root and every pane root set `passThroughTouches`, and their root views are box-none, so
-  a click lands on the native view under an empty spot. In shell mode the main root doesn't render `BrowserWindow`
-  (its full-size row takes every click).
+- **Pass-through.** The main root on top and every pane root set `passThroughTouches`, and their root views are
+  box-none, so a click lands on the native view under an empty spot; the shell's pointer layer asks the main root's own
+  hit test, not its frame. On top, `BrowserWindow`'s full-size row is box-none, and so must be every full-size
+  container under it that draws nothing.
 - **Hover goes to what's on top.** Under a `WindowShellView`, a React view doesn't hover where the window's hit test
   lands on a native view stacked above its root; views in the same root keep the geometric rule, so a
   `pointerEvents="none"` hover zone still hovers. Every native layer host returns nil from `hitTest` for itself where
@@ -68,5 +69,5 @@ behind the active page, since Chrome throttles a page under a hidden view.
   1 s after its tab stops being shown in the window, and at once when the tab closes.
 - **Prompts anchored to the right** ride the pane root and may trail the card by a frame while the dock moves; that is
   accepted for now and measured.
-- **Modals.** While the main root shows a modal (the command panel, a dialog, onboarding), the shell's
-  `accessibilityChildren` lists only the main root, so VoiceOver can't reach the layers under it.
+- **Modals** (not built yet). While the main root shows a modal (the command panel, a dialog, onboarding), the shell's
+  `accessibilityChildren` is to list only the main root, so VoiceOver can't reach the layers under it.

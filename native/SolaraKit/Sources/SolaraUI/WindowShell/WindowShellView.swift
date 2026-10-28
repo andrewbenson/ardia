@@ -11,11 +11,14 @@ public final class WindowShellView: NSView {
     case sidebar
     case topStrip
     case overlay
+
+    static let reactOnTop: [Slot] = [.backdrop, .card, .splitChrome, .peek, .sidebar, .topStrip, .react, .overlay]
   }
 
   public static let hoverCoverChanged = Notification.Name("ArdiaHoverCoverChanged")
 
   public let windowId: String
+  public let reactOnTop: Bool
   public private(set) var input: DockedLayoutInput
   public private(set) var frames: DockedLayoutFrames
   public var onFrames: ((DockedLayoutFrames) -> Void)?
@@ -29,8 +32,9 @@ public final class WindowShellView: NSView {
 
   public override var isFlipped: Bool { true }
 
-  public init(windowId: String) {
+  public init(windowId: String, reactOnTop: Bool = false) {
     self.windowId = windowId
+    self.reactOnTop = reactOnTop
     input = DockedLayoutInput(size: .zero, dock: 1)
     frames = DockedLayoutFrames.of(input)
     super.init(frame: .zero)
@@ -69,11 +73,13 @@ public final class WindowShellView: NSView {
     guard let view else { return }
     view.autoresizingMask = []
     if slot == .react, view.responds(to: Selector(("setBackgroundColor:"))) { view.setValue(nil, forKey: "backgroundColor") }
-    let above = Slot.allCases.drop { $0 != slot }.dropFirst().lazy.compactMap { self.mounted[$0] }.first { $0.superview === self }
+    let above = stack.drop { $0 != slot }.dropFirst().lazy.compactMap { self.mounted[$0] }.first { $0.superview === self }
     let foreign = subviews.first { subview in subview !== view && subview !== hiddenPages && !mounted.values.contains { $0 === subview } }
     if let above = above ?? foreign { addSubview(view, positioned: .below, relativeTo: above) } else { addSubview(view) }
     place(slot, view)
   }
+
+  private var stack: [Slot] { reactOnTop ? Slot.reactOnTop : Slot.allCases }
 
   private func ownedContainer(_ slot: Slot) -> NSView? {
     switch slot {
@@ -133,7 +139,7 @@ public final class WindowShellView: NSView {
   private func layerUnderPointer(at pointInWindow: NSPoint) -> NSView? {
     let point = convert(pointInWindow, from: nil)
     for layer in subviews.reversed() where !layer.isHidden {
-      if layer === mounted[.react] { return layer.frame.contains(point) ? layer : nil }
+      if layer === mounted[.react], !reactOnTop { return layer.frame.contains(point) ? layer : nil }
       if layer.hitTest(point) != nil { return layer }
     }
     return nil

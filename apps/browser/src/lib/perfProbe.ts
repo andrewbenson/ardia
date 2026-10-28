@@ -472,6 +472,19 @@ function findFibers(name: string, limit = 50): Fiber[] {
   return out;
 }
 
+function hostFiber(nativeTag: number): Fiber | null {
+  let found: Fiber | null = null;
+  const visit = (f: Fiber | null) => {
+    for (let c = f; c && !found; c = c.sibling) {
+      const node = c.stateNode as { _nativeTag?: number; canonical?: { nativeTag?: number } } | null;
+      if (c.tag === 5 && node && (node._nativeTag ?? node.canonical?.nativeTag) === nativeTag) found = c;
+      else visit(c.child);
+    }
+  };
+  for (const root of roots) visit(root.current);
+  return found;
+}
+
 if (perfProbeEnabled) {
   marks.bundleStart = Date.now();
   installReactHook();
@@ -501,6 +514,7 @@ if (perfProbeEnabled) {
     now,
     batch: (fn: () => void) => (require("react-native") as typeof import("react-native")).unstable_batchedUpdates(fn),
     findFibers,
+    hostFiber,
     nameOf,
     subscriptions: () => ({ ...subscriptions }),
   };

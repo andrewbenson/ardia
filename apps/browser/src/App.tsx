@@ -1,3 +1,4 @@
+import { windowMainOnTop } from "@ardia/settings";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { CommandPanel } from "./components/CommandPanel";
@@ -53,6 +54,7 @@ function BrowserWindow() {
   const fullscreen = !!useFullscreenTab(windowId);
   const [width, setWidth] = useState(0);
   const shell = useWindowShell();
+  const [onTop] = useState(() => windowMainOnTop(windowId));
   const card = (
     <>
       <ContentCard />
@@ -61,7 +63,7 @@ function BrowserWindow() {
   );
 
   return (
-    <View style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+    <View pointerEvents={onTop ? "box-none" : "auto"} style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       <ShellBackdrop shell={shell} />
       <WindowProfile />
       <ProfileTint />

@@ -227,6 +227,83 @@ struct WindowShellViewTests {
     #expect(sidebar.superview == nil)
   }
 
+  @Test func theReactRootOnTopStacksAboveEveryNativeLayerButTheOverlay() {
+    let shell = WindowShellView(windowId: "w", reactOnTop: true)
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    let react = NSView(), backdrop = NSView(), sidebar = NSView(), peek = NSView(), strip = NSView(), split = NSView()
+    shell.mount(.react, react)
+    shell.mount(.sidebar, sidebar)
+    shell.mount(.backdrop, backdrop)
+    shell.mount(.topStrip, strip)
+    shell.mount(.peek, peek)
+    shell.mount(.splitChrome, split)
+    #expect(shell.subviews == [shell.hiddenPages, backdrop, shell.card, split, peek, sidebar, strip, react, shell.overlay])
+    shell.mount(.react, nil)
+    let replacement = NSView()
+    shell.mount(.react, replacement)
+    #expect(shell.subviews == [shell.hiddenPages, backdrop, shell.card, split, peek, sidebar, strip, replacement, shell.overlay])
+  }
+
+  @Test func theReactRootStaysAboveTheBackdropOnlyByDefault() {
+    for mounts in [[WindowShellView.Slot.react, .sidebar, .backdrop, .topStrip, .peek, .splitChrome], [.splitChrome, .peek, .topStrip, .backdrop, .sidebar, .react]] {
+      let shell = WindowShellView(windowId: "w")
+      shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+      var views: [WindowShellView.Slot: NSView] = [:]
+      for slot in mounts {
+        views[slot] = NSView()
+        shell.mount(slot, views[slot])
+      }
+      #expect(shell.subviews == [shell.hiddenPages, views[.backdrop]!, views[.react]!, shell.card, views[.splitChrome]!, views[.peek]!, views[.sidebar]!, views[.topStrip]!, shell.overlay])
+    }
+  }
+
+  @Test func aPassThroughReactRootOnTopLetsTheLayersUnderItTakeThePointer() {
+    let shell = WindowShellView(windowId: "w", reactOnTop: true)
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    let react = PassThroughRoot()
+    let button = NSView(frame: CGRect(x: 500, y: 330, width: 100, height: 40))
+    react.addSubview(button)
+    shell.mount(.react, react)
+    let sidebar = NSView()
+    shell.mount(.sidebar, sidebar)
+    let page = NSView(frame: shell.card.bounds)
+    shell.card.addSubview(page)
+    #expect(shell.hitTest(NSPoint(x: 100, y: 300)) === sidebar)
+    #expect(shell.hitTest(NSPoint(x: 600, y: 200)) === page)
+    #expect(shell.hitTest(NSPoint(x: 550, y: 350)) === button)
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 100, y: 300)) == .sidebar)
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 200)) == .card)
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 550, y: 350)) == .react)
+    page.removeFromSuperview()
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 200)) == nil)
+  }
+
+  @Test func movingFromTheReactRootOnTopToAnEmptySpotInItTellsHover() {
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled], backing: .buffered, defer: true)
+    window.isReleasedWhenClosed = false
+    let shell = WindowShellView(windowId: "w", reactOnTop: true)
+    window.contentView = shell
+    let react = PassThroughRoot()
+    react.addSubview(NSView(frame: CGRect(x: 500, y: 330, width: 100, height: 40)))
+    shell.mount(.react, react)
+    shell.card.addSubview(NSView(frame: shell.card.bounds))
+    var posts = 0
+    let token = NotificationCenter.default.addObserver(forName: WindowShellView.hoverCoverChanged, object: shell, queue: nil) { _ in posts += 1 }
+    defer { NotificationCenter.default.removeObserver(token) }
+    let move = { (x: CGFloat) in
+      shell.mouseMoved(with: NSEvent.mouseEvent(with: .mouseMoved, location: NSPoint(x: x, y: 350), modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!)
+    }
+    move(550)
+    #expect(posts == 1)
+    move(560)
+    #expect(posts == 1)
+    move(700)
+    #expect(posts == 2)
+    #expect(shell.slotUnderPointer(at: NSPoint(x: 700, y: 350)) == .card)
+    move(550)
+    #expect(posts == 3)
+  }
+
   @Test func framesFollowTheDockAndReportOnlyChanges() {
     let shell = WindowShellView(windowId: "w")
     shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
@@ -567,5 +644,15 @@ final class FilledView: NSView {
     }
     #expect(frames == 6)
     #expect(animator.value == 0)
+  }
+}
+
+@MainActor
+private final class PassThroughRoot: NSView {
+  override var isFlipped: Bool { true }
+
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    let hit = super.hitTest(point)
+    return hit === self ? nil : hit
   }
 }

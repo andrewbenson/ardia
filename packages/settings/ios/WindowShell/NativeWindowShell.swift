@@ -23,6 +23,10 @@ enum NativeWindowShell {
     ProcessInfo.processInfo.environment["ARDIA_NATIVE_SHELL"] == "1"
   }
 
+  nonisolated static var mainOnTop: Bool {
+    NativePaneRoots.enabled && NativeSplitChrome.panesEnabled && ProcessInfo.processInfo.environment["ARDIA_SHELL_MAIN_TOP"] == "1"
+  }
+
   static func install() {
     guard enabled, !installed, let make = WindowHost.makeContentView else { return }
     installed = true
@@ -85,8 +89,9 @@ final class ShellHost {
   var onClose: (() -> Void)?
 
   init(windowId: String, root: NSView) {
-    shell = WindowShellView(windowId: windowId)
+    shell = WindowShellView(windowId: windowId, reactOnTop: NativeWindowShell.mainOnTop)
     self.root = root
+    if shell.reactOnTop, root.responds(to: Selector(("setPassThroughTouches:"))) { root.setValue(true, forKey: "passThroughTouches") }
     shell.mount(.react, root)
     let center = NotificationCenter.default
     let appeared = Notification.Name("RCTContentDidAppearNotification")
@@ -167,9 +172,45 @@ final class ShellHost {
       "appearance": shell.window?.effectiveAppearance.name.rawValue ?? NSNull(),
       "split": NativeSplitChrome.sample(shell.windowId) ?? NSNull(),
       "paneRoots": NativePaneRoots.sample(shell.windowId) ?? NSNull(),
+      "reactOnTop": shell.reactOnTop,
     ]
   }
 }
+
+#if DEBUG
+extension ShellHost {
+  func reactBlockers(step: CGFloat) -> [[String: Any]] {
+    guard shell.reactOnTop, let root = shell.view(in: .react), !root.isHidden, step > 0 else { return [] }
+    let frames = shell.frames
+    let areas = [frames.card, frames.sidebar?.offsetBy(dx: frames.sidebarShift, dy: 0), frames.topStrip].compactMap { $0 }.filter { !$0.isEmpty }
+    var found: [ObjectIdentifier: [String: Any]] = [:]
+    for area in areas {
+      for y in stride(from: area.minY + step / 2, to: area.maxY, by: step) {
+        for x in stride(from: area.minX + step / 2, to: area.maxX, by: step) {
+          guard let hit = root.hitTest(NSPoint(x: x, y: y)), Self.drawsNothing(hit), found[ObjectIdentifier(hit)] == nil else { continue }
+          let box = hit.convert(hit.bounds, to: shell)
+          found[ObjectIdentifier(hit)] = [
+            "class": NSStringFromClass(type(of: hit)),
+            "nativeID": (hit.responds(to: Selector(("nativeID"))) ? hit.value(forKey: "nativeID") as? String : nil) ?? NSNull(),
+            "testID": hit.accessibilityIdentifier(),
+            "reactTag": (hit.responds(to: Selector(("reactTag"))) ? hit.value(forKey: "reactTag") : nil) ?? NSNull(),
+            "frame": [box.minX, box.minY, box.width, box.height],
+            "at": [x, y],
+          ]
+        }
+      }
+    }
+    return Array(found.values)
+  }
+
+  private static func drawsNothing(_ view: NSView) -> Bool {
+    let name = NSStringFromClass(type(of: view))
+    guard name.hasPrefix("RCT"), !name.contains("Text"), !name.contains("Image") else { return false }
+    if view.responds(to: Selector(("backgroundColor"))), let color = view.value(forKey: "backgroundColor") as? NSColor, (color.usingColorSpace(.sRGB)?.alphaComponent ?? 1) > 0 { return false }
+    return view.layer?.contents == nil
+  }
+}
+#endif
 
 final class ShellStoreCommits: @unchecked Sendable {
   private let lock = NSLock()
@@ -219,6 +260,7 @@ public class WindowShellModule: Module {
 
     Function("pagesPool") { () -> Bool in NativeSplitChrome.panesEnabled }
     Function("paneRoots") { (windowId: String) -> Bool in NativePaneRoots.active(windowId) }
+    Function("mainOnTop") { (windowId: String) -> Bool in NativeWindowShell.mainOnTop && NativeWindowShell.active(windowId) }
 
     AsyncFunction("setBackdrop") { (windowId: String, json: String) in
       MainActor.assumeIsolated { NativeWindowShell.setBackdrop(windowId, json) }
@@ -283,6 +325,17 @@ public class WindowShellModule: Module {
       }
       #else
       return [:]
+      #endif
+    }.runOnQueue(.main)
+
+    AsyncFunction("devReactBlockers") { (windowId: String, step: Double) -> String in
+      #if DEBUG
+      return MainActor.assumeIsolated {
+        guard let host = NativeWindowShell.host(windowId), let data = try? JSONSerialization.data(withJSONObject: host.reactBlockers(step: step)) else { return "null" }
+        return String(data: data, encoding: .utf8) ?? "null"
+      }
+      #else
+      return "null"
       #endif
     }.runOnQueue(.main)
 

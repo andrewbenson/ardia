@@ -4,6 +4,7 @@ type WindowShellModule = {
   active(windowId: string): boolean;
   pagesPool?(): boolean;
   paneRoots?(windowId: string): boolean;
+  mainOnTop?(windowId: string): boolean;
   setBackdrop(windowId: string, json: string): Promise<void>;
   describe(windowId: string): Promise<string>;
 };
@@ -29,6 +30,14 @@ export function windowPagesPoolActive(): boolean {
 export function windowPaneRootsActive(windowId: string): boolean {
   try {
     return native?.paneRoots?.(windowId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function windowMainOnTop(windowId: string): boolean {
+  try {
+    return native?.mainOnTop?.(windowId) ?? false;
   } catch {
     return false;
   }

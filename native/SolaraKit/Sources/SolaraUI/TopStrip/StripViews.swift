@@ -108,6 +108,7 @@ final class StripIconButton: StripHoverView {
   private let plate = CALayer()
   private let symbol = SymbolView()
   var radius: CGFloat = 5 { didSet { plate.cornerRadius = radius } }
+  var active = false { didSet { if active != oldValue { repaint() } } }
   var onPress: (() -> Void)?
   private var fills: (hover: NSColor, pressed: NSColor) = (.clear, .clear)
 
@@ -141,7 +142,7 @@ final class StripIconButton: StripHoverView {
   override func repaint() {
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    plate.backgroundColor = (pressed ? fills.pressed : hovered ? fills.hover : .clear).cgColor
+    plate.backgroundColor = (pressed || active ? fills.pressed : hovered ? fills.hover : .clear).cgColor
     CATransaction.commit()
   }
 

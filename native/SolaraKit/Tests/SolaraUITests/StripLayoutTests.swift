@@ -78,6 +78,11 @@ private func aim(_ from: Int, _ pointer: CGFloat, _ target: (Int) -> Bool = { _ 
     #expect(StripLayout.reorderOffsets(tabs, from: 2, to: 0) == [104, 104, -208])
   }
 
+  @Test func reorderOffsetsLeaveAStripThatNoLongerHoldsTheDraggedSlotInPlace() {
+    #expect(StripLayout.reorderOffsets(StripDragGeometry([], gap: 4), from: 0, to: 0) == [])
+    #expect(StripLayout.reorderOffsets(tabs, from: 3, to: 1) == [0, 0, 0])
+  }
+
   @Test func tabWidthSharesTheRoomBetweenMinAndMax() {
     let w = StripLayout.tabWidth(pageWidth: 1000, dockWidth: 0, groups: [], tabUnits: 4, fixed: 0, gap: 4, plus: 32, min: 96, max: 173)
     #expect(w == 173)

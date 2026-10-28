@@ -183,6 +183,7 @@ public enum StripLayout {
 
   public static func reorderOffsets(_ g: StripDragGeometry, from: Int, to: Int) -> [CGFloat] {
     let row = g.slots
+    guard row.indices.contains(from) else { return [CGFloat](repeating: 0, count: row.count) }
     let gap = row.count > 1 ? g.lefts[1] - g.lefts[0] - row[0].width - row[0].marginRight - row[1].marginLeft : 0
     var order = Array(row.indices).filter { $0 != from }
     order.insert(from, at: Swift.min(Swift.max(0, to), order.count))

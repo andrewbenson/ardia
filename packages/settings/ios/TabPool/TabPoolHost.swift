@@ -14,6 +14,7 @@ final class TabPoolHost {
 
   var emit: ((String, [String: Any]) -> Void)?
   var onPageGone: ((String) -> Void)?
+  var pageEventObservers: [@MainActor (String, String, [String: Any]) -> Void] = []
   private var pool: TabViewPool?
   private var listener: Int?
   private var slotObserver: NSObjectProtocol?
@@ -54,6 +55,8 @@ final class TabPoolHost {
   }
 
   func pageView(_ tabId: String) -> NSView? { pages[tabId]?.page.view }
+
+  func windowOf(_ tabId: String) -> String? { state?.tabs[tabId]?.windowId }
 
   func setPageProps(_ tabId: String, _ changed: [String: Any]) {
     props[tabId, default: [:]].merge(changed) { _, new in new }
@@ -112,6 +115,7 @@ final class TabPoolHost {
       adoptId: tab.adoptId, temporarySource: peek?.tabId == tabId ? peek?.sourceId : nil)
     let page = PooledPage(tabId: tabId, spec: spec) { [weak self] name, payload in
       self?.emit?("onPageEvent", ["tabId": tabId, "name": name, "payload": payload])
+      self?.pageEventObservers.forEach { $0(tabId, name, payload) }
     }
     if let given = props[tabId] { page.apply(given) }
     let entry = PoolPage(page: page) { [weak self] in
@@ -119,11 +123,13 @@ final class TabPoolHost {
       self.pages[tabId] = nil
       self.onPageGone?(tabId)
       self.emit?("onPageEvent", ["tabId": tabId, "name": "onPageGone", "payload": [String: Any]()])
+      self.pageEventObservers.forEach { $0(tabId, "onPageGone", [:]) }
     }
     entry.setWarm(warm.contains(tabId), neighbour: Self.neighbour(state, tabId))
     pages[tabId] = entry
     let seq = tab.adoptId == nil ? tab.navigation?.seq ?? -1 : -1
     emit?("onPageEvent", ["tabId": tabId, "name": "onPageCreated", "payload": ["engine": spec.engine, "seq": seq, "url": spec.url ?? ""]])
+    pageEventObservers.forEach { $0(tabId, "onPageCreated", ["engine": spec.engine]) }
     return entry
   }
 

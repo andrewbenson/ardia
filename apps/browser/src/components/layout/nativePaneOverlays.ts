@@ -83,6 +83,36 @@ export function useNativePaneOverlay(active: boolean, windowId: string, tabId: s
 
 export type PageFrame = [number, number, number, number];
 
+const promptWindows: Record<string, { theme: object }> = {};
+let promptsQueued = false;
+
+function publishPrompts() {
+  if (promptsQueued) return;
+  promptsQueued = true;
+  queueMicrotask(() => {
+    promptsQueued = false;
+    publishSettingsTopic("pane.prompts", { v: VERSION, windows: promptWindows });
+  });
+}
+
+export function useNativePanePromptsTheme(active: boolean, windowId: string, theme: Theme) {
+  const { dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } = theme;
+  const key = JSON.stringify({ dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText });
+  useEffect(() => {
+    if (!active) return;
+    promptWindows[windowId] = { theme: JSON.parse(key) };
+    publishPrompts();
+  }, [active, windowId, key]);
+  useEffect(
+    () => () => {
+      if (!active) return;
+      delete promptWindows[windowId];
+      publishPrompts();
+    },
+    [active, windowId],
+  );
+}
+
 export function useNativeSadTab(active: boolean, windowId: string, tabId: string, mode: "crashed" | "unresponsive" | null, frame: PageFrame | null, theme: Theme) {
   const { dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } = theme;
   useNativePaneOverlay(active, windowId, tabId, "sadTab", mode && frame ? { mode, frame, dark, textPrimary, textSecondary, panel, panelBorder, panelShadowOpacity, goButton, goButtonText } : null);

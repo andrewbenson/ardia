@@ -9,6 +9,7 @@ public class HostedModule: Module {
 
     OnCreate {
       if NativeExtensionSidePanel.enabled { HostedViews.declare(NativeExtensionSidePanel.kind) }
+      if PanePrompts.enabled { HostedViews.declare(PanePrompts.kind) }
       let sink = HostedSink(self)
       DispatchQueue.main.async {
         MainActor.assumeIsolated {

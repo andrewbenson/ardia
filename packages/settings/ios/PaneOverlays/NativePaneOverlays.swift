@@ -12,6 +12,7 @@ enum NativePaneOverlays {
     guard NativeWindowShell.enabled, !started else { return }
     started = true
     _ = SettingsJS.shared.observe(topic) { value in apply(value) }
+    PanePrompts.start()
     NotificationCenter.default.addObserver(forName: PaneOverlays.changed, object: nil, queue: .main) { note in
       guard let windowId = note.userInfo?["windowId"] as? String else { return }
       MainActor.assumeIsolated { hosts[windowId]?.relayout() }
@@ -21,11 +22,18 @@ enum NativePaneOverlays {
 
   static func host(_ windowId: String) -> PaneOverlayHost? { hosts[windowId] }
 
+  static func refresh(_ windowId: String) {
+    guard started else { return }
+    let host = hosts[windowId] ?? PaneOverlayHost(windowId: windowId)
+    hosts[windowId] = host
+    host.refresh()
+  }
+
   private static func apply(_ value: Any?) {
     let windows = ((value as? [String: Any])?["windows"] as? [String: Any]) ?? [:]
     for (windowId, host) in hosts where windows[windowId] == nil {
       host.apply([:])
-      hosts[windowId] = nil
+      if PanePrompts.sadTabs(in: windowId).isEmpty { hosts[windowId] = nil }
     }
     for (windowId, tabs) in windows {
       guard let tabs = tabs as? [String: Any] else { continue }
@@ -125,6 +133,7 @@ final class PaneOverlayHost {
   private var casts: [String: (id: String, popover: PanePopover<CastPickerView>)] = [:]
   private var shares: [String: (id: String, popover: PanePopover<SharePickerView>, focus: HostedMount?)] = [:]
   private var swipes: [String: (wrap: PanePopoverWrap, capsule: SwipeCapsuleView)] = [:]
+  private var fromJS: [String: Any] = [:]
   private static let swipeFavicons: SidebarFavicons = {
     let made = SidebarFavicons()
     made.loader = { request in try await NativeSidebar.favicon(request) }
@@ -142,7 +151,10 @@ final class PaneOverlayHost {
     return try? JSONSerialization.data(withJSONObject: object)
   }
 
+  func refresh() { apply(fromJS) }
+
   func apply(_ tabs: [String: Any]) {
+    fromJS = tabs
     var sad = Set<String>()
     var zoomed = Set<String>()
     var listed = Set<String>()
@@ -151,7 +163,7 @@ final class PaneOverlayHost {
     var piloted = Set<String>()
     var sharing = Set<String>()
     for (tabId, value) in tabs {
-      if let data = entry(value, kind: "sadTab", tabId: tabId), let json = String(data: data, encoding: .utf8), let state = SadTabState.decode(json), state.mode != nil {
+      if !PanePrompts.owns(tabId), let data = entry(value, kind: "sadTab", tabId: tabId), let json = String(data: data, encoding: .utf8), let state = SadTabState.decode(json), state.mode != nil {
         sad.insert(tabId)
         (sadTabs[tabId] ?? makeSadTab(tabId)).update(state)
       }
@@ -194,6 +206,11 @@ final class PaneOverlayHost {
         share.body.update(state)
       }
     }
+    for tabId in PanePrompts.sadTabs(in: windowId) {
+      guard let state = PanePrompts.sadTab(windowId, tabId) else { continue }
+      sad.insert(tabId)
+      (sadTabs[tabId] ?? makeSadTab(tabId)).update(state)
+    }
     for (tabId, view) in sadTabs where !sad.contains(tabId) {
       view.removeFromSuperview()
       sadTabs[tabId] = nil
@@ -226,6 +243,7 @@ final class PaneOverlayHost {
     let view = SadTabView(frame: .zero)
     let windowId = windowId
     view.onAction = { action in
+      if PanePrompts.owns(tabId) { return PanePrompts.sadTabAction(windowId, tabId, action) }
       Task { @MainActor in _ = await SettingsAdapters.js("pane.sadTab", windowId, tabId, action.rawValue) }
     }
     view.autoresizingMask = [.width, .height]

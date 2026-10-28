@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
+import { devtools, launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
@@ -16,7 +16,10 @@ overlay, its buttons and RN's are the same frames in the window (within half a p
 crash and a click on Wait clears the hang, and once both are gone the native container leaves the card. A third instance
 serves the page from the pool (ARDIA_NATIVE_PAGES_POOL=1 ARDIA_SHELL_PANES=1): the renderer really crashes
 (chrome://crash through the pooled handle), the crash reaches the store as a page event, the native sad tab sits where
-RN's does, and Reload reloads the pooled page back to A.`);
+RN's does, and Reload reloads the pooled page back to A. A fourth adds ARDIA_NATIVE_PANE_PROMPTS=1: RN no longer mounts
+its SadTab wrapper for the pooled pane at all, the native sad tab comes from the pool's page events alone (a real
+renderer crash, then a real hang: a 40 second busy loop and a key press, so onUnresponsive comes from the engine), it
+stays up while JS publishes an unrelated pane overlay (the zoom popover), and Reload and Wait clear it.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -70,11 +73,12 @@ const modes = [
   { unresponsive: true },
 ];
 const labels = { 0: ["Reload"], 1: ["Exit Page", "Wait"] };
-const measured = { rn: [], native: [], pool: [] };
+const measured = { rn: [], native: [], pool: [], prompts: [] };
 const LEGS = [
   { tag: "rn", env: { ARDIA_NATIVE_SHELL: "0" } },
   { tag: "native", env: { ARDIA_NATIVE_SHELL: "1" } },
   { tag: "pool", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } },
+  { tag: "prompts", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" } },
 ];
 
 async function frames(nativeShell, i) {
@@ -94,7 +98,8 @@ async function frames(nativeShell, i) {
 try {
   for (const { tag, env } of LEGS) {
     const nativeShell = tag !== "rn";
-    const pooled = tag === "pool";
+    const prompts = tag === "prompts";
+    const pooled = tag === "pool" || prompts;
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true, env,
       ready: "return !!ac.store.getState().windows.w1",
@@ -105,6 +110,10 @@ try {
       const served = await run(`return !!globalThis.expo.modules.SolaraTabPool?.available?.() && !!ac.webviews.get("a") && !acPerf.findFibers("TabWebView", 5).length;`);
       if (!served) throw new Error("the pool doesn't serve page A");
     }
+    if (prompts) {
+      const kinds = await run(`return globalThis.expo.modules.SolaraHosted.kinds();`);
+      if (!kinds.includes("panePrompts")) throw new Error(`panePrompts not declared: ${JSON.stringify(kinds)}`);
+    }
 
     for (const [i, state] of modes.entries()) {
       const name = i === 0 ? "crashed" : "unresponsive";
@@ -112,8 +121,26 @@ try {
         if (pooled && i === 0) {
           await run(`ac.webviews.get("a").loadUrl("chrome://crash"); return true;`);
           await until("the crash reaches the store", `return page().crashed || null;`, 8000);
+        } else if (prompts) {
+          const target = await app.pageTarget(pageUrl);
+          if (!target) throw new Error("no DevTools target for page A");
+          const cdp = await devtools(target);
+          await cdp.eval("setTimeout(() => { const end = Date.now() + 40000; while (Date.now() < end); }, 50); true", { awaitPromise: false }).finally(() => cdp.close());
+          await sleep(500);
+          await run(`return ac.shell.devKeyEquivalent("w1", { key: "a", keyCode: 0, modifiers: [], focus: "page" }).then(() => true);`);
         } else await run(`patch(${JSON.stringify(state)}); return true;`);
         await sleep(400);
+        if (prompts) {
+          await until("the native sad tab", `return native().then((d) => d && d.tabs.a && d.tabs.a.sadTab && !d.tabs.a.sadTab.hidden && d.tabs.a.sadTab.mode === ${JSON.stringify(name)} || null);`, 35000);
+          const wrappers = await run(`return acPerf.findFibers("SadTab", 5).length;`);
+          if (wrappers) throw new Error(`RN still mounts ${wrappers} SadTab wrapper(s) with the pane prompts switch on`);
+          await run(`ac.pageState.setState((s) => ({ popover: { ...s.popover, a: "zoom" } })); return true;`);
+          await sleep(600);
+          const kept = await run(`return native().then((d) => !!(d && d.tabs.a && d.tabs.a.sadTab && !d.tabs.a.sadTab.hidden));`);
+          await run(`ac.pageState.setState((s) => ({ popover: { ...s.popover, a: null } })); return true;`);
+          if (!kept) throw new Error("an unrelated pane overlay publish took the native sad tab down");
+          await sleep(300);
+        }
         const got = await frames(nativeShell, i);
         if (nativeShell && got.mode !== name) throw new Error(`native mode ${got.mode}`);
         measured[tag][i] = got;
@@ -121,6 +148,7 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(got.controls[action]))}).then(() => true);`);
         await until(`${action} clears it`, `const p = page(); return !p.crashed && !p.unresponsive || null;`, 3000);
         if (nativeShell) await until("the native overlay goes", `return native().then((d) => !d || (!d.tabs.a && !d.inCard) || null);`, 3000);
+        if (prompts && i === 1) await until("the native model clears the hang", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.sadTab || d.tabs.a.sadTab.hidden || null);`, 3000);
         if (pooled && i === 0) await until("the pooled page reloads to A", `return ac.webviews.get("a") && ac.store.getState().tabs.a?.title === "A" && !ac.store.getState().live.a?.isLoading ? true : null;`, 8000);
         return got;
       });
@@ -129,7 +157,7 @@ try {
     app = null;
   }
 
-  for (const [i] of modes.entries()) for (const tag of ["native", "pool"]) {
+  for (const [i] of modes.entries()) for (const tag of LEGS.map((l) => l.tag).filter((t) => t !== "rn")) {
     await rep.check(`${tag}-matches-rn-${i === 0 ? "crashed" : "unresponsive"}`, async () => {
       const rn = measured.rn[i];
       const nat = measured[tag][i];

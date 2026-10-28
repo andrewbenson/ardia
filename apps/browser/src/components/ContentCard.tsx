@@ -10,7 +10,7 @@ import { startChromeTabs } from "../lib/chromeTabs";
 import { handOff, takeHandOff, wantsPage } from "../lib/tabPages";
 import { noteGone } from "../lib/tabLifecycle";
 import { usePrewarm } from "../lib/preload";
-import { pagesPooledIn } from "../lib/pagesPool";
+import { pagesPooledIn, panePromptsNativeIn } from "../lib/pagesPool";
 import { persistEngine } from "../lib/engines";
 import { tabEngine } from "../store/engines";
 import { EngineOfferPrompt } from "./site/EnginePrompt";
@@ -33,6 +33,7 @@ import { startPermissionPrompts } from "./site/permissions";
 import { patchPage, useFullscreenTab, usePages } from "./layout/pageState";
 import { useTabDrag } from "./layout/tabDrag";
 import { SadTab, StatusBubble } from "./layout/PaneOverlays";
+import { useNativePanePromptsTheme } from "./layout/nativePaneOverlays";
 import { DropTargets, SplitDividers, SplitToast } from "./layout/SplitChrome";
 import { SplitEmptyState } from "./layout/SplitEmptyState";
 import { useWindowShell } from "./layout/ShellBackdrop";
@@ -96,7 +97,10 @@ export function ContentCard() {
   const shell = useWindowShell();
   const [paneRoots] = useState(() => windowPaneRootsActive(windowId));
   const [pooled] = useState(() => pagesPooledIn(windowId));
-  useNativeSplitChrome(windowId, shell, useTheme(), fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
+  const [nativePrompts] = useState(() => panePromptsNativeIn(windowId));
+  const cardTheme = useTheme();
+  useNativePanePromptsTheme(nativePrompts, windowId, cardTheme);
+  useNativeSplitChrome(windowId, shell, cardTheme, fullscreenTab ?? null, !!peekId, !addressInSidebar && !small && !hideWhileScrolling, small);
   useEffect(() => {
     if (fullscreenTab && peekId && !peekFullscreen) dismissPeek(windowId);
   }, [fullscreenTab, peekId, peekFullscreen, windowId]);
@@ -514,6 +518,7 @@ function PageOverlays({
   popovers = true,
   cliPill = false,
   peek = false,
+  sadTab = true,
 }: {
   tabId: string;
   windowId: string;
@@ -526,6 +531,7 @@ function PageOverlays({
   popovers?: boolean;
   cliPill?: boolean;
   peek?: boolean;
+  sadTab?: boolean;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
@@ -536,7 +542,7 @@ function PageOverlays({
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>
         <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
       </Animated.View>
-      <SadTab tabId={tabId} nativeAllowed={!peek} />
+      {sadTab && <SadTab tabId={tabId} nativeAllowed={!peek} />}
       {cliPill && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}
       {!newTabShown && <PermissionPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 308))} top={POPOVER_MARGIN} />}
       <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />
@@ -565,6 +571,7 @@ export function PaneContent({ windowId, tabId, shown }: { windowId: string; tabI
   const small = useBrowser((s) => isSmallWindow(s.windows[windowId]));
   const showSidebarButton = useBrowser((s) => s.settings.showSidebarButton !== false);
   const peekShown = useBrowser((s) => !!s.peeks[windowId]?.tabId);
+  const [nativePrompts] = useState(() => panePromptsNativeIn(windowId));
   const statusStyle = usePaneStatusStyle(tabId);
   const overCard = usePopoversOverCard(windowId);
   const [feedOwner] = useState(() => ({}));
@@ -598,6 +605,7 @@ export function PaneContent({ windowId, tabId, shown }: { windowId: string; tabI
           statusStyle={statusStyle}
           popovers={overCard !== tabId}
           cliPill={!peekShown && (fullscreen || focused || !inSplit)}
+          sadTab={!nativePrompts}
         />
       )}
     </View>

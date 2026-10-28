@@ -24,15 +24,32 @@ public enum ShellScripting {
     let name: String
   }
 
-  static var windowInfos: [WindowInfo] = []
-  static var profileInfos: [ProfileInfo] = []
+  private static var pushedWindows: [WindowInfo] = []
+  private static var pushedProfiles: [ProfileInfo] = []
+  nonisolated(unsafe) public static var refresh: (() -> Void)?
+  nonisolated(unsafe) public private(set) static var loadingTabs: Set<String> = []
+
+  static var windowInfos: [WindowInfo] {
+    refresh?()
+    return pushedWindows
+  }
+
+  static var profileInfos: [ProfileInfo] {
+    refresh?()
+    return pushedProfiles
+  }
+
+  static func setLoading(_ ids: [String]) {
+    loadingTabs = Set(ids)
+  }
 
   static var send: (([String: Any]) -> Void)?
+  nonisolated(unsafe) public static var nativeCommand: (([String: Any], @escaping (Any?, String?) -> Void) -> Bool)?
   private static var pending: [String: (Any?, String?) -> Void] = [:]
   private static var seq = 0
 
-  static func setState(_ d: [String: Any]) {
-    windowInfos = (d["windows"] as? [[String: Any]] ?? []).map { w in
+  public static func setState(_ d: [String: Any]) {
+    pushedWindows = (d["windows"] as? [[String: Any]] ?? []).map { w in
       let id = w["id"] as? String ?? ""
       return WindowInfo(
         id: id,
@@ -46,7 +63,7 @@ public enum ShellScripting {
             loading: t["loading"] as? Bool ?? false, pinned: t["pinned"] as? Bool ?? false)
         })
     }
-    profileInfos = (d["profiles"] as? [[String: Any]] ?? []).map {
+    pushedProfiles = (d["profiles"] as? [[String: Any]] ?? []).map {
       ProfileInfo(id: $0["id"] as? String ?? "", name: $0["name"] as? String ?? "")
     }
   }
@@ -56,6 +73,10 @@ public enum ShellScripting {
     let front = NSApp.orderedWindows.compactMap { WindowManager.shared.id(of: $0) }.compactMap { byId[$0] }
     let seen = Set(front.map(\.id))
     return front + windowInfos.filter { !seen.contains($0.id) }
+  }
+
+  public static func showWindow(_ id: String) {
+    WindowManager.shared.focus(id: id)
   }
 
   static func window(_ id: String) -> WindowInfo? { windowInfos.first { $0.id == id } }
@@ -81,7 +102,7 @@ public enum ShellScripting {
     #if DEBUG
     if !Thread.isMainThread { NSLog("\(Bundle.main.productName): an Apple event is being handled off the main thread") }
     #endif
-    guard let send else {
+    guard send != nil || nativeCommand != nil else {
       NSScriptCommand.current()?.setError("\(Bundle.main.productName) isn't ready yet.")
       return nil
     }
@@ -101,6 +122,13 @@ public enum ShellScripting {
       if let failure = ACTryCatch({ command?.resumeExecution(withResult: value) }) {
         NSLog("\(Bundle.main.productName): AppleScript reply failed: \(failure)")
       }
+    }
+    if let nativeCommand, nativeCommand(body, { result, error in reply(id, result: result, error: error) }) {
+      return nil
+    }
+    guard let send else {
+      reply(id, result: nil, error: "\(Bundle.main.productName) isn't ready yet.")
+      return nil
     }
     var request = body
     request["id"] = id

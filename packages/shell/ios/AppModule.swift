@@ -84,6 +84,7 @@ public class AppModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("setScriptState") { (state: [String: Any]) in ShellScripting.setState(state) }.runOnQueue(.main)
+    AsyncFunction("setScriptLoading") { (ids: [String]) in ShellScripting.setLoading(ids) }.runOnQueue(.main)
     AsyncFunction("replyToScript") { (id: String, result: [String: Any]?, error: String?) in
       ShellScripting.reply(id, result: result, error: error)
     }.runOnQueue(.main)

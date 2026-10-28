@@ -13,6 +13,7 @@ import {
   revealFile,
   saveDocument,
   setAsDefaultBrowser,
+  setScriptLoading,
   setScriptState,
   setWindowActivity,
   systemInfo,
@@ -178,14 +179,20 @@ function scriptState(s: BrowserState): ScriptState {
   };
 }
 
+function loadingTabIds(s: BrowserState): string[] {
+  return Object.keys(s.live).filter((id) => s.live[id]?.isLoading);
+}
+
 function startScripting() {
+  const native = nativeAppServicesActive();
   let lastJson = "";
   const push = () => {
-    const state = scriptState(useBrowser.getState());
+    const s = useBrowser.getState();
+    const state = native ? loadingTabIds(s) : scriptState(s);
     const json = JSON.stringify(state);
     if (json === lastJson) return Promise.resolve();
     lastJson = json;
-    return setScriptState(state);
+    return Array.isArray(state) ? setScriptLoading(state) : setScriptState(state);
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
   useBrowser.subscribe((s, prev) => {

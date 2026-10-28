@@ -17,6 +17,8 @@ final class NativeAppIntegration {
   private var handoff = HandoffTracker()
   private var handoffQueued = false
   private var started = false
+  private var scriptRev = -1
+  private var scriptLoading: Set<String> = []
 
   private init() {}
 
@@ -34,6 +36,19 @@ final class NativeAppIntegration {
       "recordPerformanceIssue": { _ in NativeAppIntegration.shared.recordPerformanceIssue() },
       "taskManager": { _ in ArdiaCoreServices.call("ac_task_manager_open", profile: "", args: nil) { _ in } },
     ]
+    let writer = StoreWorkspaceWriter(store: store, showWindow: ShellScripting.showWindow)
+    let pages = PooledScriptPages()
+    ShellScripting.nativeCommand = { body, done in
+      MainActor.assumeIsolated {
+        ScriptCommandRunner(writer: writer, pages: pages).run(body) { reply in
+          switch reply {
+          case .result(let result): done(result, nil)
+          case .failure(let message): done(nil, message)
+          }
+        }
+      }
+    }
+    ShellScripting.refresh = { MainActor.assumeIsolated { NativeAppIntegration.shared.refreshScriptState() } }
     store.subscribe { _ in
       DispatchQueue.main.async { MainActor.assumeIsolated { NativeAppIntegration.shared.queueHandoff() } }
     }
@@ -52,6 +67,16 @@ final class NativeAppIntegration {
   private func syncHandoff() {
     guard let state = NativeStoreHandle.store?.state else { return }
     for change in handoff.changes(state) { Handoff.setActivity(windowId: change.windowId, url: change.url, title: change.title) }
+  }
+
+  private func refreshScriptState() {
+    guard let store = NativeStoreHandle.store else { return }
+    let (rev, state) = store.snapshot
+    let loading = ShellScripting.loadingTabs
+    guard rev != scriptRev || loading != scriptLoading else { return }
+    scriptRev = rev
+    scriptLoading = loading
+    ShellScripting.setState(ScriptState.build(state, loading: loading))
   }
 
   func diagnostics() -> String {
@@ -115,5 +140,15 @@ final class NativeAppIntegration {
   static func copy(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
+  }
+}
+
+@MainActor
+final class PooledScriptPages: ScriptPages {
+  func has(_ tabId: String) -> Bool { TabPoolHost.shared.pageView(tabId) != nil }
+
+  func call(_ tabId: String, _ method: String, _ args: [Any], done: @escaping (Any?, String?) -> Void) {
+    guard let page = TabPoolHost.shared.pageView(tabId) else { return done(nil, "The tab hasn't loaded yet; focus it first.") }
+    PageCalls.run(page, method, args, resolve: { done($0, nil) }, reject: { _, message in done(nil, message) })
   }
 }

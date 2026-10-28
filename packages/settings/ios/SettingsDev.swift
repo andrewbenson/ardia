@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaShell
 import SolaraStore
 import SolaraUI
 
@@ -134,6 +135,28 @@ enum SettingsDev {
       }
     case "sendFeedback":
       NativeAppIntegration.shared.sendFeedback(argument)
+    #if DEBUG
+    case "script":
+      let env = ProcessInfo.processInfo.environment
+      guard env["ARDIA_BACKGROUND"] == "1", env["ARDIA_DATA_DIR"]?.isEmpty == false else { return #"{"error":"test instances only"}"# }
+      guard let data = argument?.data(using: .utf8), let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+        let run = ShellScripting.nativeCommand
+      else { return #"{"error":"no native scripting"}"# }
+      let frontBefore = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+      var answer: [String: Any] = ["pending": true]
+      let handled = run(body) { result, error in answer = ["result": result ?? NSNull(), "error": error ?? NSNull()] }
+      answer["handled"] = handled
+      answer["windows"] = ShellScripting.windows.count
+      answer["frontBefore"] = frontBefore
+      answer["frontAfter"] = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+      answer["active"] = NSApp.isActive
+      return json(answer)
+    #endif
+    case "front":
+      return json(["front": NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0, "active": NSApp.isActive])
+    case "scriptState":
+      guard let state = NativeStoreHandle.store?.state else { return #"{"error":"no store"}"# }
+      return json(ScriptState.build(state, loading: ShellScripting.loadingTabs))
     case "handoff":
       let activities = NSApp.windows.compactMap { window -> [String: Any]? in
         guard let activity = window.userActivity else { return nil }

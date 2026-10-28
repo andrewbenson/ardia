@@ -133,6 +133,7 @@ export type AppModule = {
   removeNotifications(ids: string[]): Promise<void>;
   openNotificationSettings(): Promise<void>;
   setScriptState(state: ScriptState): Promise<void>;
+  setScriptLoading?(ids: string[]): Promise<void>;
   replyToScript(id: string, result: Record<string, unknown> | null, error: string | null): Promise<void>;
   systemInfo(): SystemInfo;
   openExternalURL(url: string): Promise<boolean>;
@@ -195,6 +196,7 @@ export const openNotificationSettings = () => App.openNotificationSettings();
 export const onNotificationResponse = (listener: (e: NotificationResponse) => void) => App.addListener("onNotificationResponse", listener);
 
 export const setScriptState = (state: ScriptState) => App.setScriptState(state);
+export const setScriptLoading = (ids: string[]) => App.setScriptLoading?.(ids) ?? Promise.resolve();
 export const replyToScript = (id: string, result: Record<string, unknown> | null, error: string | null = null) =>
   App.replyToScript(id, result, error);
 export const onScriptCommand = (listener: (e: ScriptCommand) => void) => App.addListener("onScriptCommand", listener);

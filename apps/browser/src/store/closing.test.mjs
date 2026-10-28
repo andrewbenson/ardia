@@ -46,6 +46,13 @@ test("⌘W on the last tab leaves a New Tab, ⌘W on that closes the window, and
   assert.equal(S().tabs[left[0]].url, "");
 });
 
+test("a window Chrome closes (an extension's chrome.windows.remove) closes, last tab and all", () => {
+  const { w, ids } = windowWith("a", "b");
+  for (const id of ids) S().closeTabs([id], { lastClosesWindow: true, windowClosedByChrome: true });
+  assert.equal(S().windows[w], undefined);
+  for (const id of ids) assert.equal(S().tabs[id], undefined);
+});
+
 test("closing a pinned tab with regular tabs unloads it and closes only those", () => {
   const { w, ids: [a, b, c] } = windowWith("a", "b", "c");
   S().pinTabs([a], true, true);

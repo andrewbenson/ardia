@@ -781,6 +781,8 @@ void WindowHost::OnTabStripModelChanged(
            !(browser_window && browser_window->closed_by_chrome()));
       if (bridge && removed.remove_reason == TabRemovedReason::kDeleted &&
           !browser_closing && !closing() && !browser_shutdown::IsTryingToQuit()) {
+        bridge->set_closing_with_window(
+            browser && UnloadController::From(browser)->is_attempting_to_close_browser());
         bridge->ReportWillClose();
       }
       if (bridge &&

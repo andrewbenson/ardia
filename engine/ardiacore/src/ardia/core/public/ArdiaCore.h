@@ -269,6 +269,7 @@ ARDIACORE_EXPORT
 @property(readonly) BOOL canGoBack;
 @property(readonly) BOOL canGoForward;
 @property(readonly) BOOL closed;
+@property(readonly) BOOL closingWithWindow;
 @property(weak, nullable) id<ArdiaCoreTabDelegate> delegate;
 
 - (void)loadURL:(NSString*)url;

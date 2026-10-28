@@ -247,8 +247,8 @@ export function pageEventHandlers(session: PageSession): PageEventHandlers {
     onExternalApp: (externalApp) => patchPage(tabId, { externalApp }),
     onPageFocus: activateSplitPane,
     onPagePress: activateSplitPane,
-    onWindowClose: () => {
-      if (!isQuitting()) store().closeTab(tabId);
+    onWindowClose: (withWindow) => {
+      if (!isQuitting()) store().closeTabs([tabId], { lastClosesWindow: true, windowClosedByChrome: withWindow });
     },
     onNotification: (notification) => showWebNotification(tabId, notification),
     onCommand: ({ command, text, modifiers }) => {

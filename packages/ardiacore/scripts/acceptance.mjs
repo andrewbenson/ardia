@@ -2226,10 +2226,10 @@ try {
     };
     try {
       const plain = await remove(["rm-a", "rm-b"], 0);
-      const plainStore = await until("the store dropping the removed tabs", async () => {
-        const all = await storeTabs();
-        const left = all.filter((t) => ["e?rm-a", "e?rm-b"].some((m) => t.url?.includes(m)));
-        return left.length ? null : { tabsLeft: 0, windowKept: all.filter((t) => t.windowId === made[0]).map((t) => t.url || "(new tab)") };
+      const plainStore = await until("the app window closing with chrome.windows.remove", async () => {
+        const open = await evalApp(`return !!ac.store.getState().windows[${JSON.stringify(made[0])}]`);
+        const left = (await storeTabs()).filter((t) => t.windowId === made[0] || ["e?rm-a", "e?rm-b"].some((m) => t.url?.includes(m)));
+        return !open && !left.length ? { windowClosed: true, tabsLeft: 0 } : null;
       }, 10000).catch(async (e) => {
         throw new Error(`${e.message}; store tabs: ${JSON.stringify((await storeTabs()).filter((t) => t.windowId === made[0]))}`);
       });

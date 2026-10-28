@@ -2668,8 +2668,9 @@ static NSString *LinkKeyAction(NSString *key) {
 - (void)tabWillClose:(ArdiaCoreTab *)tab {
   [ArdiaCoreEarlyWindow dropPage:tab];
   if (_closing || tab != _tab) return;
+  const BOOL withWindow = [tab respondsToSelector:@selector(closingWithWindow)] && tab.closingWithWindow;
   [self detach];
-  [self emit:@"windowClose" payload:@{}];
+  [self emit:@"windowClose" payload:withWindow ? @{@"withWindow" : @YES} : @{}];
 }
 
 - (void)resetPageMedia {

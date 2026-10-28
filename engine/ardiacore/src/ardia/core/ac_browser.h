@@ -300,6 +300,8 @@ class TabBridge : public content::WebContentsObserver,
   void set_made_ahead() { made_ahead_ = true; }
   bool made_ahead() const { return made_ahead_; }
   void ReportWillClose();
+  bool closing_with_window() const { return closing_with_window_; }
+  void set_closing_with_window(bool closing) { closing_with_window_ = closing; }
   const GURL& favicon_url() const { return favicon_url_; }
 
   void PrimaryMainFrameRenderProcessGone(base::TerminationStatus status) override;
@@ -374,6 +376,7 @@ class TabBridge : public content::WebContentsObserver,
   int blocked_pending_ = 0;
   GURL blocked_last_url_;
   bool will_close_reported_ = false;
+  bool closing_with_window_ = false;
   std::optional<WindowOpenDisposition> open_disposition_;
   base::WeakPtr<content::WebContents> open_source_;
   NSDictionary* __strong popup_features_ = nil;

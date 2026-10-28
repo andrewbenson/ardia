@@ -156,7 +156,9 @@ extension Session {
     case "newTab":
       result = .string(newTab(try a.requireString(0), newTabOptions(a[1]?.object)))
     case "closeTab": closeTab(try a.requireString(0))
-    case "closeTabs": closeTabs(a.strings(0), lastClosesWindow: a[1]?["lastClosesWindow"]?.truthy ?? false)
+    case "closeTabs":
+      closeTabs(a.strings(0), lastClosesWindow: a[1]?["lastClosesWindow"]?.truthy ?? false,
+                windowClosedByChrome: a[1]?["windowClosedByChrome"]?.truthy ?? false)
     case "activate": activate(try a.requireString(0))
     case "handOffPin": handOffPin(try a.requireString(0))
     case "activateIndex": activateIndex(try a.requireString(0), a.int(1))

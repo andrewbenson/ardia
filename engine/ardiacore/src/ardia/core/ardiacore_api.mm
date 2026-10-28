@@ -2437,6 +2437,12 @@ TabSharingInfoBarDelegate* TabSharingDelegateFor(content::WebContents* contents,
   return bridge && bridge->closing_after_unload();
 }
 
+- (BOOL)closingWithWindow {
+  ardiacore::TabBridge* bridge =
+      _contents ? ardiacore::TabBridge::FromWebContents(_contents) : nullptr;
+  return bridge && bridge->closing_with_window();
+}
+
 - (NSView*)view {
   return _contents ? _contents->GetNativeView().GetNativeNSView() : nil;
 }

@@ -312,7 +312,7 @@ extension Session {
     return (next, tab.id)
   }
 
-  public func closingTabs(_ s: BrowserState, _ ids: [String], lastClosesWindow: Bool = false) -> (BrowserState, [String]) {
+  public func closingTabs(_ s: BrowserState, _ ids: [String], lastClosesWindow: Bool = false, windowClosedByChrome: Bool = false) -> (BrowserState, [String]) {
     var next = s
     for id in ids where isPeekTab(next, id) { next = withoutPeek(next, next.tabs[id]!.windowId) }
     let asked = ids.filter { next.tabs[$0] != nil }
@@ -325,7 +325,7 @@ extension Session {
       let shown = view.filter { goneSet.contains($0) }
       if shown.isEmpty || !view.allSatisfy({ goneSet.contains($0) || next.tabs[$0]!.unloaded == true }) { continue }
       let probe = shown.count > 1 ? removeTabs(next, Array(shown.dropFirst()), record: false) : next
-      let keepsWindow = !lastClosesWindow || leavesEmptyWindow(probe, shown[0])
+      let keepsWindow = !windowClosedByChrome && (!lastClosesWindow || leavesEmptyWindow(probe, shown[0]))
       if keepsWindow { next = withNewTab(next, w.id).0 } else { closedWindows.append(w.id) }
     }
     let removed = gone.filter { !closedWindows.contains(next.tabs[$0]!.windowId) }
@@ -374,8 +374,8 @@ extension Session {
     closeTabs([id], lastClosesWindow: true)
   }
 
-  public func closeTabs(_ ids: [String], lastClosesWindow: Bool = false) {
-    let (next, closedWindows) = closingTabs(state, ids, lastClosesWindow: lastClosesWindow)
+  public func closeTabs(_ ids: [String], lastClosesWindow: Bool = false, windowClosedByChrome: Bool = false) {
+    let (next, closedWindows) = closingTabs(state, ids, lastClosesWindow: lastClosesWindow, windowClosedByChrome: windowClosedByChrome)
     set(next)
     for windowId in closedWindows { closeWindow(windowId) }
   }

@@ -82,7 +82,7 @@ export type TabsSlice = {
 
 const MAX_CLOSED_TABS = 50;
 
-export type CloseOptions = { lastClosesWindow?: boolean };
+export type CloseOptions = { lastClosesWindow?: boolean; windowClosedByChrome?: boolean };
 export type CloseKind = "close" | "unload" | "removePin";
 export type CloseIntent = { kind: CloseKind; ids: string[] };
 
@@ -105,7 +105,7 @@ export function closeIntent(s: BrowserState, tabId: string): CloseIntent {
   return { kind, ids: pages.length ? pages : [tabId] };
 }
 
-export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false }: CloseOptions = {}): [BrowserState, string[]] {
+export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow = false, windowClosedByChrome = false }: CloseOptions = {}): [BrowserState, string[]] {
   let next = s;
   for (const id of ids) if (isPeekTab(next, id)) next = withoutPeek(next, next.tabs[id]!.windowId);
   const asked = ids.filter((id) => next.tabs[id]);
@@ -116,7 +116,7 @@ export function closingTabs(s: BrowserState, ids: string[], { lastClosesWindow =
     const view = viewTabIds(next, w.id);
     const shown = view.filter((id) => gone.includes(id));
     if (!shown.length || !view.every((id) => gone.includes(id) || next.tabs[id]!.unloaded)) continue;
-    const keepsWindow = !lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!);
+    const keepsWindow = !windowClosedByChrome && (!lastClosesWindow || leavesEmptyWindow(shown.length > 1 ? removeTabs(next, shown.slice(1), false) : next, shown[0]!));
     if (keepsWindow) next = withNewTab(next, w.id)[0];
     else closedWindows.push(w.id);
   }

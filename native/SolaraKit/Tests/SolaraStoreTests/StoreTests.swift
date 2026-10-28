@@ -68,6 +68,21 @@ func download(_ id: String, _ state: String = "complete", profile: String? = nil
     #expect(Set(seen.values).count == seen.values.count)
   }
 
+  @Test func aWindowChromeClosesClosesLastTabAndAll() throws {
+    for closedByChrome in [false, true] {
+      let store = makeStore()
+      try store.dispatch(Command("createWindow", [["url": "https://main.example/"]]))
+      let window = try store.dispatch(Command("createWindow", [["url": "https://a.example/"]])).result!.string!
+      try store.dispatch(Command("newTab", [.string(window), ["url": "https://b.example/"]]))
+      let ids = store.state.windows[window]!.tabIds
+      for id in ids {
+        try store.dispatch(Command("closeTabs", [.array([.string(id)]), ["lastClosesWindow": true, "windowClosedByChrome": .bool(closedByChrome)]]))
+      }
+      #expect((store.state.windows[window] == nil) == closedByChrome)
+      #expect(ids.allSatisfy { store.state.tabs[$0] == nil })
+    }
+  }
+
   @Test func aFailingCommandLeavesTheStateUntouched() throws {
     #expect(throws: CommandError.self) { try Command(json: ["name": "nope"]) }
     #expect(throws: CommandError.self) { try makeStore().dispatch(Command("closeTab", [])) }

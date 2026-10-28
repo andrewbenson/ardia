@@ -19,8 +19,12 @@ public final class ScopeState: @unchecked Sendable {
   public var snapshotAt: Double = 0
   public var pending: Double = 0
 
+  public var unknown = JSONObject()
+
   var settling: [() -> Void]? = nil
   var waitingAfterPull: Bool? = nil
+  var downloadingRecently: Bool? = nil
+  var extractedHook: ExtractedHook? = nil
 
   public init() {}
 
@@ -46,7 +50,13 @@ public final class ScopeState: @unchecked Sendable {
     }
     snapshotAt = json["snapshotAt"]?.number ?? 0
     pending = json["pending"]?.number ?? 0
+    for (key, value) in json.object ?? [:] where !ScopeState.knownKeys.contains(key) { unknown[key] = value }
   }
+
+  static let knownKeys: Set<String> = [
+    "records", "base", "unapplied", "vv", "extra", "files", "damaged", "pendingSince", "seq", "outbox", "journal", "seen", "joined", "awaitRemote",
+    "applyAs", "snapshotAt", "pending",
+  ]
 
   public var json: JSONValue {
     var out: JSONObject = [
@@ -64,6 +74,7 @@ public final class ScopeState: @unchecked Sendable {
     if let applyAs { out["applyAs"] = .object(applyAs.mapValues(JSONValue.string)) }
     out["snapshotAt"] = .number(snapshotAt)
     out["pending"] = .number(pending)
+    for (key, value) in unknown { out[key] = value }
     return .object(out)
   }
 }
@@ -88,20 +99,36 @@ public struct Listing: Sendable {
   }
 }
 
+public struct Stamped {
+  public var at: Double
+  public var after: HLC?
+
+  public init(at: Double, after: HLC? = nil) {
+    self.at = at
+    self.after = after
+  }
+}
+
 public struct Extraction {
   public var values: [(key: String, value: JSONValue?)]
   public var ignore: ((String) -> Bool)?
   public var republish: ((String) -> Bool)?
   public var published: (([String]) -> Void)?
+  public var stamp: ((String) -> Stamped?)?
+  public var remove: [String]
+  public var reapply: [String]
 
   public init(
     values: [(key: String, value: JSONValue?)], ignore: ((String) -> Bool)? = nil, republish: ((String) -> Bool)? = nil,
-    published: (([String]) -> Void)? = nil
+    published: (([String]) -> Void)? = nil, stamp: ((String) -> Stamped?)? = nil, remove: [String] = [], reapply: [String] = []
   ) {
     self.values = values
     self.ignore = ignore
     self.republish = republish
     self.published = published
+    self.stamp = stamp
+    self.remove = remove
+    self.reapply = reapply
   }
 }
 
@@ -112,10 +139,11 @@ public struct ExtractContext {
   public let known: (String) -> Bool
   public let remote: (String) -> JSONValue?
   public let stamp: (String) -> HLC?
+  public let downloading: () -> Bool
 
   public init(
     base: @escaping (String) -> JSONValue?, queued: @escaping (String) -> Bool, now: Double, known: @escaping (String) -> Bool,
-    remote: @escaping (String) -> JSONValue?, stamp: @escaping (String) -> HLC?
+    remote: @escaping (String) -> JSONValue?, stamp: @escaping (String) -> HLC?, downloading: @escaping () -> Bool = { true }
   ) {
     self.base = base
     self.queued = queued
@@ -123,6 +151,7 @@ public struct ExtractContext {
     self.known = known
     self.remote = remote
     self.stamp = stamp
+    self.downloading = downloading
   }
 }
 
@@ -140,20 +169,39 @@ public struct ApplyRecords {
   }
 }
 
+public enum ApplyOutcome: Sendable, Equatable {
+  case failed
+  case applied
+  case written([String])
+}
+
 public protocol SyncAdapter: AnyObject {
   var prefix: String { get }
   var adoptRemoteOnJoin: Bool { get }
   var publishAfterPull: Bool { get }
+  var publishOnlyAfterPull: Bool { get }
+  var ownsItsChanges: Bool { get }
   func extract(_ context: ExtractContext) async throws -> Extraction?
   func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool?
+  func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> ApplyOutcome
   func editedAt(_ value: JSONValue) -> Double?
 }
 
 public extension SyncAdapter {
   var adoptRemoteOnJoin: Bool { false }
   var publishAfterPull: Bool { false }
+  var publishOnlyAfterPull: Bool { false }
+  var ownsItsChanges: Bool { false }
   func editedAt(_ value: JSONValue) -> Double? { nil }
+
+  func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> ApplyOutcome {
+    try await apply(visible, changed, base, records) == false ? .failed : .applied
+  }
 }
+
+public typealias ExtractedHook = (_ prefix: String, _ keys: [String], _ ignore: (String) -> Bool) -> Void
+
+public let downloadHoldMs: Double = 10 * 60_000
 
 public struct ScopeOptions {
   public var expired: (String, JSONValue, Double) -> Bool = { _, _, _ in false }
@@ -163,6 +211,9 @@ public struct ScopeOptions {
   public var pruneGrace: Double = 60 * 60_000
   public var damagedGiveUp: Double = 86_400_000
   public var persist: (([LogFile]) async throws -> Void)? = nil
+  public var writtenKeysOnly = false
+  public var beforeApply: (([String]) -> Void)? = nil
+  public var extracted: ExtractedHook? = nil
 
   public init() {}
 }
@@ -254,8 +305,19 @@ func settleDurable(_ state: ScopeState) {
   for settle in queue { settle() }
 }
 
-func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock, _ device: String, _ now: Double) async throws -> OrderedSet<String> {
+func stampedHLC(_ clock: Clock, _ device: String, _ stamped: Stamped) -> HLC {
+  let at = clock.at(stamped.at)
+  let after = stamped.after.map { hlcAfter($0, device) }
+  let h = if let after, jsKeyPrecedes(at, after) { after } else { at }
+  clock.observe(h)
+  return h
+}
+
+func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock, _ device: String, _ now: Double, beforePull: Bool = false) async throws
+  -> OrderedSet<String>
+{
   var published = OrderedSet<String>()
+  if beforePull && adapter.publishOnlyAfterPull { return published }
   if adapter.adoptRemoteOnJoin && !state.joined { return published }
   if adapter.publishAfterPull && state.waitingAfterPull != false { return published }
   var pendingKeys: Set<String>? = nil
@@ -265,12 +327,18 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
   }
   let context = ExtractContext(
     base: { parseBase(state.base[$0]) }, queued: queued, now: now, known: { state.records.contains($0) }, remote: { state.records[$0]?.v },
-    stamp: { state.records[$0]?.h })
+    stamp: { state.records[$0]?.h }, downloading: { state.downloadingRecently != false })
   guard let extraction = try await adapter.extract(context) else { return published }
+  if let hook = state.extractedHook {
+    var keys = OrderedSet<String>()
+    for (key, _) in extraction.values { keys.insert(key) }
+    hook(adapter.prefix, keys.elements) { extraction.ignore?($0) ?? false }
+  }
   func put(_ key: String, _ value: JSONValue) {
     let known = state.records[key]
+    let stamped = extraction.stamp?(key)
     let editedAt = known == nil && !value.isNull ? adapter.editedAt(value) : nil
-    let h = editedAt.map(clock.at) ?? clock.tick()
+    let h = if let stamped { stampedHLC(clock, device, stamped) } else { editedAt.map(clock.at) ?? clock.tick() }
     if let known, !jsKeyPrecedes(known.h, h) { return }
     state.records[key] = SyncRecord(h: h, v: value, o: Origin(device, state.seq + 1))
     state.outbox.append(Op(k: key, h: h, v: value))
@@ -290,6 +358,17 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
     state.base.removeValue(forKey: key)
     put(key, .null)
   }
+  var removing = OrderedSet<String>()
+  for key in extraction.remove { removing.insert(key) }
+  for key in removing.elements {
+    if !key.hasPrefix(adapter.prefix) || extracted.contains(key) { continue }
+    guard let record = state.records[key], !record.v.isNull else { continue }
+    state.base.removeValue(forKey: key)
+    put(key, .null)
+  }
+  var reapplying = OrderedSet<String>()
+  for key in extraction.reapply { reapplying.insert(key) }
+  for key in reapplying.elements where key.hasPrefix(adapter.prefix) && !state.unapplied.contains(key) { state.unapplied.append(key) }
   if let settle = extraction.published, !published.isEmpty {
     let keys = published.elements
     settleWhenDurable(state) { settle(keys) }
@@ -299,7 +378,7 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
 
 public func publish(_ state: ScopeState, _ adapters: [SyncAdapter], _ clock: Clock, _ device: String, _ now: Double) async throws -> OrderedSet<String> {
   var published = OrderedSet<String>()
-  for adapter in adapters { for key in try await publishAdapter(state, adapter, clock, device, now).elements { published.insert(key) } }
+  for adapter in adapters { for key in try await publishAdapter(state, adapter, clock, device, now, beforePull: true).elements { published.insert(key) } }
   return published
 }
 
@@ -404,30 +483,43 @@ public func pull(_ state: ScopeState, _ transport: SyncTransport, _ scope: Strin
   state.pendingSince = listing.pending.isEmpty ? nil : pendingSince
   let downloading = pendingSince.values.contains { now - $0 <= damagedGiveUp }
   state.waitingAfterPull = downloading || !state.damaged.isEmpty
+  state.downloadingRecently = (pendingSince.values + state.damaged.values).contains { now - $0 <= downloadHoldMs }
   return changed
 }
 
-func applyAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ keys: OrderedSet<String>, _ now: Double, _ horizon: Double) async -> Bool {
+func applyAdapter(
+  _ state: ScopeState, _ adapter: SyncAdapter, _ keys: OrderedSet<String>, _ now: Double, _ horizon: Double, _ writtenKeysOnly: Bool,
+  _ beforeApply: (([String]) -> Void)?
+) async -> [String] {
   let mine = keys.elements.filter { $0.hasPrefix(adapter.prefix) }
-  if mine.isEmpty { return true }
+  if mine.isEmpty { return mine }
   let view = visible(state, adapter.prefix)
   if state.applyAs == nil { state.applyAs = JSMap() }
   if state.applyAs![adapter.prefix] == nil { state.applyAs![adapter.prefix] = state.joined ? "joined" : "joining" }
   let records = ApplyRecords(known: { state.records.contains($0) }, now: now, horizon: horizon, joined: state.applyAs![adapter.prefix] == "joined")
-  let ok: Bool?
+  beforeApply?(mine)
+  let outcome: ApplyOutcome
   do {
-    ok = try await adapter.apply(view, mine, { parseBase(state.base[$0]) }, records)
+    outcome = try await adapter.applyKeys(view, mine, { parseBase(state.base[$0]) }, records)
   } catch {
-    ok = false
+    outcome = .failed
   }
-  if ok == false { return false }
+  if outcome == .failed { return mine }
   state.applyAs![adapter.prefix] = "joined"
   var shown = JSMap<JSONValue>()
   for (key, value) in view { shown[key] = value }
+  let written: Set<String>? = if writtenKeysOnly, case .written(let keys) = outcome { Set(keys) } else { nil }
+  var left: [String] = []
   for key in mine {
-    if let value = shown[key] { state.base[key] = syncCanonical(value) } else { state.base.removeValue(forKey: key) }
+    if let written, !written.contains(key) {
+      left.append(key)
+    } else if let value = shown[key] {
+      state.base[key] = syncCanonical(value)
+    } else {
+      state.base.removeValue(forKey: key)
+    }
   }
-  return true
+  return left
 }
 
 @discardableResult
@@ -482,6 +574,7 @@ public func syncScope(
   scope: String, state: ScopeState, transport: SyncTransport, adapters: [SyncAdapter], clock: Clock, device: String, now: () -> Double,
   options: ScopeOptions = ScopeOptions()
 ) async throws -> CycleResult {
+  state.extractedHook = options.extracted
   var published = try await publish(state, adapters, clock, device, now()).count
   try await flush(state, transport, scope, device, now(), options)
   let changed = try await pull(state, transport, scope, clock, now(), options)
@@ -491,10 +584,9 @@ public func syncScope(
   for adapter in adapters {
     let late = try await publishAdapter(state, adapter, clock, device, now())
     published += late.count
+    for key in state.unapplied where key.hasPrefix(adapter.prefix) { keys.insert(key) }
     for key in late.elements { keys.remove(key) }
-    if !(await applyAdapter(state, adapter, keys, now(), 2 * options.tombstoneTTL)) {
-      unapplied += keys.elements.filter { $0.hasPrefix(adapter.prefix) }
-    }
+    unapplied += await applyAdapter(state, adapter, keys, now(), 2 * options.tombstoneTTL, options.writtenKeysOnly, options.beforeApply)
   }
   state.unapplied = unapplied + keys.elements.filter { key in !adapters.contains { key.hasPrefix($0.prefix) } }
   if state.awaitRemote != true || state.seen.keys.contains(where: { $0 != device }) {

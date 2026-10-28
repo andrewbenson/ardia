@@ -8,6 +8,7 @@ import { deflateRawSync } from "node:zlib";
 import { canonical } from "../src/canon.ts";
 import { Clock } from "../src/hlc.ts";
 import { compact, emptyScope, restoreJournal, syncScope } from "../src/scope.ts";
+import { pinSources } from "./pinSources.mjs";
 
 const HELP = `usage: node packages/sync/scripts/scenario.mjs [--out <dir>] [--runs <n>] [--steps <n>] [--seed <n>] [--mixed <solara-store>]
 
@@ -17,6 +18,9 @@ state, store, settings and clock. SolaraSyncTests replays the scripts through th
 produce the same trace byte for byte. Scenarios are the named cases below plus seeded random runs of
 three devices with flaky delivery, clock skew, compaction, relaunches and crashes.
 Default out: native/SolaraKit/Tests/SolaraSyncTests/Scenarios.
+--redesign records the redesign's merge options instead, into scope-redesign.json.deflate: a third adapter
+"y:" that publishes only after a pull, stamps, removes and re-queues keys and writes only some of them, on
+devices with writtenKeysOnly and the beforeApply and extracted hooks traced.
 --mixed runs every scenario a second time with device "b" (or the second device) as the Swift merge in
 solara-store sync-device, sharing the folder with the TypeScript devices, and fails unless both runs trace
 the same.`;
@@ -57,6 +61,11 @@ class Device {
   journal = new Map();
   onRead = null;
   failWrite = null;
+  ledger = new Map();
+  stamps = new Map();
+  removes = new Set();
+  reapplies = new Set();
+  refused = new Set();
   constructor(id, folder, options, trace) {
     this.id = id;
     this.folder = folder;
@@ -86,6 +95,7 @@ class Device {
           for (const k of changed) if (visible.has(k)) this.settings.set(k, visible.get(k));
         },
       },
+      ...(this.options.redesign ? [ledgerAdapter(this)] : []),
     ];
   }
   transport(run) {
@@ -125,12 +135,73 @@ class Device {
     for (const f of batches) this.journal.set(f.seq, JSON.parse(JSON.stringify(f)));
   }
   options_() {
-    return { pruneGrace: 0, persist: async (batches) => this.persist(batches), ...this.options };
+    return { pruneGrace: 0, persist: async (batches) => this.persist(batches), ...this.options, ...(this.options.redesign ? redesignOptions(this) : {}) };
   }
   record() {
     const sorted = (m) => Object.fromEntries([...m].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-    return { device: this.id, state: canonical(this.state), store: sorted(this.store), settings: sorted(this.settings), clock: this.clock.last };
+    return { device: this.id, state: canonical(this.state), store: sorted(this.store), settings: sorted(this.settings), clock: this.clock.last, ...(this.options.redesign ? { ledger: sorted(this.ledger) } : {}) };
   }
+}
+
+function ledgerAdapter(d) {
+  return {
+    prefix: "y:",
+    publishOnlyAfterPull: true,
+    ownsItsChanges: true,
+    extract: (_base, _queued, _now, _known, _remote, _stamp, downloading) => {
+      d.trace.push({ extract: d.id, prefix: "y:", downloading: downloading() });
+      const stamps = new Map(d.stamps);
+      const remove = new Set(d.removes);
+      const reapply = new Set(d.reapplies);
+      d.stamps.clear();
+      d.removes.clear();
+      d.reapplies.clear();
+      return { values: new Map(d.ledger), ignore: (key) => key === "y:3", stamp: (key) => stamps.get(key), remove, reapply };
+    },
+    apply: (visible, changed) => {
+      d.trace.push({ apply: d.id, prefix: "y:", changed: [...changed], visible: Object.fromEntries(visible) });
+      const written = new Set();
+      for (const k of changed) {
+        if (d.refused.has(k)) continue;
+        visible.has(k) ? d.ledger.set(k, visible.get(k)) : d.ledger.delete(k);
+        written.add(k);
+      }
+      d.refused.clear();
+      return written;
+    },
+  };
+}
+
+function redesignOptions(d) {
+  return {
+    writtenKeysOnly: true,
+    beforeApply: (keys) => d.trace.push({ beforeApply: d.id, keys: [...keys] }),
+    extracted: (prefix, keys, ignore) => d.trace.push({ extracted: d.id, prefix, keys: [...keys], ignored: [...keys].filter(ignore) }),
+  };
+}
+
+function ledgerStep(d, step) {
+  switch (step.op) {
+    case "ySet":
+      d.ledger.set(step.key, step.value);
+      return true;
+    case "yDelete":
+      d.ledger.delete(step.key);
+      return true;
+    case "stamp":
+      d.stamps.set(step.key, { at: step.at, after: step.after ?? null });
+      return true;
+    case "remove":
+      d.removes.add(step.key);
+      return true;
+    case "reapply":
+      d.reapplies.add(step.key);
+      return true;
+    case "refuse":
+      d.refused.add(step.key);
+      return true;
+  }
+  return false;
 }
 
 class SwiftDevice {
@@ -209,6 +280,9 @@ class SwiftDevice {
       } else if (message.call === "apply") {
         this.trace.push({ apply: this.id, prefix: message.prefix, changed: message.changed, visible: message.visible });
         this.send({});
+      } else if (message.call === "trace") {
+        this.trace.push(message.entry);
+        this.send({});
       } else if (message.call === "remove") {
         this.trace.push({ remove: this.id, ids: message.ids });
         for (const id of message.ids) this.folder.scope(message.scope).delete(id);
@@ -258,6 +332,14 @@ export async function runScenario(script, { swift = null } = {}) {
         break;
       case "awaitRemote":
         d.state.awaitRemote = true;
+        break;
+      case "ySet":
+      case "yDelete":
+      case "stamp":
+      case "remove":
+      case "reapply":
+      case "refuse":
+        ledgerStep(d, step);
         break;
       case "onRead":
         d.onRead = step.steps;
@@ -397,6 +479,121 @@ export function randomScript(seed, steps) {
   return script;
 }
 
+const hlcText = (wall, counter, device) => `${wall.toString(36).padStart(9, "0")}.${counter.toString(36).padStart(4, "0")}.${device}`;
+
+export function randomRedesignScript(seed, steps) {
+  const rand = mulberry32(seed);
+  const pick = (list) => list[Math.floor(rand() * list.length)];
+  const ids = ["a", "b", "c"];
+  const T = 1_790_000_000_000;
+  const keys = ["x:1", "x:2", "set:theme", "y:1", "y:2", "y:3", "y:é", "y:🔑"];
+  const ledgerKeys = ["y:1", "y:2", "y:3", "y:é", "y:🔑"];
+  const value = () => pick([1, "v", { n: Math.floor(rand() * 5) }, { o: "https://a.example", u: "me", p: "s" }, "ünïcode", { o: "https://ü.example", u: "Ünï", p: "🔑" }]);
+  const options = { compactAfterFiles: 6, compactInterval: 60_000, tombstoneTTL: 5 * 60_000, damagedGiveUp: 10 * 60_000, redesign: true };
+  const script = { name: `redesign ${seed}`, devices: Object.fromEntries(ids.map((id) => [id, options])), steps: [{ op: "time", now: T }] };
+  let now = T;
+  if (rand() < 0.5) script.steps.push({ op: "offset", device: pick(ids), ms: Math.floor((rand() - 0.5) * 120_000) });
+  for (let i = 0; i < steps; i++) {
+    const device = pick(ids);
+    const r = rand();
+    if (r < 0.14) script.steps.push({ op: "ySet", device, key: pick(ledgerKeys), value: value() });
+    else if (r < 0.18) script.steps.push({ op: "yDelete", device, key: pick(ledgerKeys) });
+    else if (r < 0.26) script.steps.push({ op: "set", device, key: pick(keys.filter((k) => !k.startsWith("y:"))), value: value() });
+    else if (r < 0.3) {
+      const after = rand() < 0.5 ? null : hlcText(now + Math.floor((rand() - 0.5) * 60_000), pick([0, 5, 36 ** 4 - 1]), pick(ids));
+      script.steps.push({ op: "stamp", device, key: pick(ledgerKeys), at: now + Math.floor((rand() - 0.7) * 600_000), after });
+    } else if (r < 0.34) script.steps.push({ op: "remove", device, key: pick([...ledgerKeys, "x:1"]) });
+    else if (r < 0.37) script.steps.push({ op: "reapply", device, key: pick([...ledgerKeys, "x:2"]) });
+    else if (r < 0.41) script.steps.push({ op: "refuse", device, key: pick(ledgerKeys) });
+    else if (r < 0.62) script.steps.push({ op: "sync", device });
+    else if (r < 0.72) {
+      const ms = Math.floor(rand() * (rand() < 0.2 ? 900_000 : 90_000));
+      now += ms;
+      script.steps.push({ op: "advance", ms });
+    } else if (r < 0.77) script.steps.push({ op: pick(["hide", "partial"]), device, file: "latest" });
+    else if (r < 0.81) script.steps.push({ op: pick(["unhide", "whole"]), device, file: "latest" });
+    else if (r < 0.84) script.steps.push({ op: "save", device });
+    else if (r < 0.86) script.steps.push({ op: "crash", device });
+    else if (r < 0.88) script.steps.push({ op: "relaunch", device });
+    else if (r < 0.9) script.steps.push({ op: "failWrite", device, when: pick(["before", "after"]) });
+    else if (r < 0.93) script.steps.push({ op: "compact", device, force: rand() < 0.5 });
+    else if (r < 0.95) script.steps.push({ op: "onRead", device, steps: [{ op: "set", device, key: "x:1", value: value() }] });
+    else if (r < 0.96) script.steps.push({ op: "drop", file: "latest" });
+    else script.steps.push({ op: "awaitRemote", device });
+  }
+  for (let round = 0; round < 3; round++) for (const device of ids) script.steps.push({ op: "sync", device });
+  return script;
+}
+
+export const namedRedesignScripts = () => {
+  const T = 1_790_000_000_000;
+  const both = { a: { redesign: true }, b: { redesign: true } };
+  return [
+    {
+      name: "a ledger key publishes only after a pull, stamped after the record it replaces",
+      devices: both,
+      steps: [
+        { op: "time", now: T },
+        { op: "ySet", device: "a", key: "y:1", value: "one" },
+        { op: "sync", device: "a" },
+        { op: "sync", device: "b" },
+        { op: "advance", ms: 1000 },
+        { op: "ySet", device: "b", key: "y:1", value: "two" },
+        { op: "stamp", device: "b", key: "y:1", at: T - 60_000, after: hlcText(T, 36 ** 4 - 1, "a") },
+        { op: "sync", device: "b" },
+        { op: "sync", device: "a" },
+      ],
+    },
+    {
+      name: "remove publishes a deletion only for a live record; reapply queues a key again",
+      devices: both,
+      steps: [
+        { op: "time", now: T },
+        { op: "ySet", device: "a", key: "y:1", value: 1 },
+        { op: "ySet", device: "a", key: "y:2", value: 2 },
+        { op: "sync", device: "a" },
+        { op: "sync", device: "b" },
+        { op: "remove", device: "b", key: "y:1" },
+        { op: "remove", device: "b", key: "y:3" },
+        { op: "reapply", device: "b", key: "y:2" },
+        { op: "reapply", device: "b", key: "x:1" },
+        { op: "sync", device: "b" },
+        { op: "sync", device: "a" },
+      ],
+    },
+    {
+      name: "a key the adapter didn't write stays unapplied and is offered again",
+      devices: both,
+      steps: [
+        { op: "time", now: T },
+        { op: "ySet", device: "a", key: "y:1", value: "x" },
+        { op: "ySet", device: "a", key: "y:2", value: "y" },
+        { op: "sync", device: "a" },
+        { op: "refuse", device: "b", key: "y:1" },
+        { op: "sync", device: "b" },
+        { op: "sync", device: "b" },
+      ],
+    },
+    {
+      name: "downloading stays true for ten minutes after a file was last seen pending",
+      devices: both,
+      steps: [
+        { op: "time", now: T },
+        { op: "ySet", device: "a", key: "y:1", value: 1 },
+        { op: "sync", device: "a" },
+        { op: "hide", device: "b", file: "latest" },
+        { op: "sync", device: "b" },
+        { op: "advance", ms: 9 * 60_000 },
+        { op: "sync", device: "b" },
+        { op: "advance", ms: 2 * 60_000 },
+        { op: "sync", device: "b" },
+        { op: "unhide", device: "b", file: "latest" },
+        { op: "sync", device: "b" },
+      ],
+    },
+  ];
+};
+
 export const namedScripts = () => {
   const T = 1_790_000_000_000;
   return [
@@ -524,9 +721,15 @@ export const namedScripts = () => {
   ];
 };
 
+const redesign = args.includes("--redesign");
+const allScripts = () =>
+  redesign
+    ? [...namedRedesignScripts(), ...Array.from({ length: runs }, (_, i) => randomRedesignScript(firstSeed + i, stepsPerRun))]
+    : [...namedScripts(), ...Array.from({ length: runs }, (_, i) => randomScript(firstSeed + i, stepsPerRun))];
+
 if (process.argv[1] === fileURLToPath(import.meta.url) && option("--mixed", null)) {
   const binary = resolve(option("--mixed", null));
-  const scripts = [...namedScripts(), ...Array.from({ length: runs }, (_, i) => randomScript(firstSeed + i, stepsPerRun))];
+  const scripts = allScripts();
   let bad = 0;
   let entries = 0;
   for (const script of scripts) {
@@ -544,10 +747,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url) && option("--mixed", null
   process.exit(bad ? 1 : 0);
 } else if (process.argv[1] === fileURLToPath(import.meta.url)) {
   mkdirSync(out, { recursive: true });
-  const scripts = [...namedScripts(), ...Array.from({ length: runs }, (_, i) => randomScript(firstSeed + i, stepsPerRun))];
+  const scripts = allScripts();
   const cases = [];
   for (const script of scripts) cases.push({ script, trace: await runScenario(script) });
   const text = JSON.stringify({ cases });
-  writeFileSync(join(out, "scope.json.deflate"), deflateRawSync(Buffer.from(text)));
+  const fixture = redesign ? "scope-redesign.json.deflate" : "scope.json.deflate";
+  writeFileSync(join(out, fixture), deflateRawSync(Buffer.from(text)));
+  if (!option("--out", null)) pinSources(`Scenarios/${fixture}`, ["packages/sync/src/scope.ts", "packages/sync/src/hlc.ts", "packages/sync/src/canon.ts", "packages/sync/src/order.ts"]);
   console.log(`${cases.length} scenarios, ${cases.reduce((n, c) => n + c.trace.length, 0)} trace entries, ${(text.length / 1e6).toFixed(1)} MB`);
 }

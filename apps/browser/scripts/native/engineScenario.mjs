@@ -683,8 +683,10 @@ export function randomScript(seed, steps) {
     else if (r < 0.86) push(mac, { op: pick(["turnOn", "join"]), folder: "/sync", phrase: "abandon ability" });
     else if (r < 0.9) push(mac, { op: "holdNative", names: [pick(["read", "write", "chainStatus", "unlock", "sealLocal", "openLocal", "forget", "createPhrase", "enterPhrase"])] });
     else if (r < 0.93) push(mac, { op: "releaseNative" });
-    else if (r < 0.945) push(mac, { op: "damage", doc: pick(["sync-state.nns", "sync-journal.nns"]), how: pick(["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
-    else if (r < 0.955) push(mac, { op: "failDocs", value: rand() < 0.5 });
+    else if (r < 0.945) {
+      const doc = pick(["sync-state.nns", "sync-journal.nns"]);
+      push(mac, { op: "damage", doc, how: pick(doc === "sync-state.nns" ? ["drop", "corrupt", "foreign", "malformed", "newer"] : ["drop", "corrupt", "foreign", "malformed"]) }), push(mac, { op: "relaunch" }), push(mac, { op: "start" });
+    } else if (r < 0.955) push(mac, { op: "failDocs", value: rand() < 0.5 });
     else push(mac, { op: "advance", ms: pick([1000, 60_000, 3_600_000, 91 * 86_400_000]) });
   }
   for (const mac of ["local", "other"]) {

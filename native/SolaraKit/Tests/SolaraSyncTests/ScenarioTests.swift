@@ -33,6 +33,12 @@ final class Device: @unchecked Sendable {
   var onRead: [JSONValue]? = nil
   var failWrite: String? = nil
   var clock: Clock!
+  var ledger = OrderedDict<String, JSONValue>()
+  var stamps = OrderedDict<String, Stamped>()
+  var removes = OrderedSet<String>()
+  var reapplies = OrderedSet<String>()
+  var refused = Set<String>()
+  var redesign: Bool { options["redesign"]?.truthy ?? false }
 
   init(id: String, folder: Folder, options: JSONObject, trace: Trace) {
     self.id = id
@@ -46,6 +52,7 @@ final class Device: @unchecked Sendable {
 
   func adapters() -> [SyncAdapter] {
     [MapAdapter(device: self, prefix: "x:", settings: false), MapAdapter(device: self, prefix: "set:", settings: true)]
+      + (redesign ? [LedgerAdapter(device: self)] : [])
   }
 
   func scopeOptions() -> ScopeOptions {
@@ -58,6 +65,13 @@ final class Device: @unchecked Sendable {
     o.persist = { [unowned self] batches in
       for f in batches { self.journal[f.seq] = LogFile(json: try JSONValue.parse(f.json.text())) }
     }
+    if redesign {
+      o.writtenKeysOnly = true
+      o.beforeApply = { [unowned self] keys in self.trace.push(["beforeApply": .string(self.id), "keys": JSONValue(keys)]) }
+      o.extracted = { [unowned self] prefix, keys, ignore in
+        self.trace.push(["extracted": .string(self.id), "prefix": .string(prefix), "keys": JSONValue(keys), "ignored": JSONValue(keys.filter(ignore))])
+      }
+    }
     return o
   }
 
@@ -67,7 +81,63 @@ final class Device: @unchecked Sendable {
       for key in map.keys.sorted(by: jsKeyPrecedes) { out[key] = map[key]! }
       return .object(out)
     }
-    return ["device": .string(id), "state": .string(syncCanonical(state.json)), "store": sorted(store), "settings": sorted(settings), "clock": .string(clock.last)]
+    var out: JSONObject = ["device": .string(id), "state": .string(syncCanonical(state.json)), "store": sorted(store), "settings": sorted(settings), "clock": .string(clock.last)]
+    if redesign { out["ledger"] = sorted(ledger) }
+    return .object(out)
+  }
+
+  func ledgerStep(_ step: JSONValue) -> Bool {
+    let key = step["key"]?.string ?? ""
+    switch step["op"]?.string ?? "" {
+    case "ySet": ledger[key] = step["value"] ?? .null
+    case "yDelete": ledger[key] = nil
+    case "stamp": stamps[key] = Stamped(at: step["at"]?.number ?? 0, after: step["after"]?.string)
+    case "remove": _ = removes.insert(key)
+    case "reapply": _ = reapplies.insert(key)
+    case "refuse": refused.insert(key)
+    default: return false
+    }
+    return true
+  }
+}
+
+final class LedgerAdapter: SyncAdapter {
+  unowned let device: Device
+  let prefix = "y:"
+  var publishOnlyAfterPull: Bool { true }
+  var ownsItsChanges: Bool { true }
+
+  init(device: Device) { self.device = device }
+
+  func extract(_ context: ExtractContext) async throws -> Extraction? {
+    device.trace.push(["extract": .string(device.id), "prefix": "y:", "downloading": .bool(context.downloading())])
+    let stamps = device.stamps
+    let remove = device.removes.elements
+    let reapply = device.reapplies.elements
+    device.stamps = OrderedDict()
+    device.removes = OrderedSet()
+    device.reapplies = OrderedSet()
+    return Extraction(
+      values: device.ledger.map { ($0.key, $0.value) }, ignore: { $0 == "y:3" }, stamp: { stamps[$0] }, remove: remove, reapply: reapply)
+  }
+
+  func apply(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws -> Bool? {
+    nil
+  }
+
+  func applyKeys(_ visible: [(key: String, value: JSONValue)], _ changed: [String], _ base: (String) -> JSONValue?, _ records: ApplyRecords) async throws
+    -> ApplyOutcome
+  {
+    var shown = JSONObject()
+    for (key, value) in visible { shown[key] = value }
+    device.trace.push(["apply": .string(device.id), "prefix": "y:", "changed": JSONValue(changed), "visible": .object(shown)])
+    var written: [String] = []
+    for key in changed where !device.refused.contains(key) {
+      device.ledger[key] = shown[key]
+      written.append(key)
+    }
+    device.refused = []
+    return .written(written)
   }
 }
 
@@ -178,6 +248,7 @@ func runScenario(_ script: JSONValue) async throws -> [JSONValue] {
       let key = step["key"]?.string ?? ""
       if key.hasPrefix("set:") { d!.settings[key] = nil } else { d!.store[key] = nil }
     case "awaitRemote": d!.state.awaitRemote = true
+    case "ySet", "yDelete", "stamp", "remove", "reapply", "refuse": _ = d!.ledgerStep(step)
     case "onRead": d!.onRead = step["steps"]?.array ?? []
     case "failWrite": d!.failWrite = step["when"]?.string
     case "hide", "unhide", "partial", "whole":
@@ -255,8 +326,8 @@ enum Scenarios {
 }
 
 @Suite struct ScenarioTests {
-  @Test func everyScenarioTracesAsTheTypeScriptMergeDoes() async throws {
-    let cases = try Scenarios.load("scope")
+  @Test(arguments: ["scope", "scope-redesign"]) func everyScenarioTracesAsTheTypeScriptMergeDoes(_ file: String) async throws {
+    let cases = try Scenarios.load(file)
     #expect(!cases.isEmpty)
     var bad = 0
     for item in cases {

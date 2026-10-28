@@ -62,6 +62,11 @@ func parseHLC(_ h: HLC) -> (wall: Double, counter: Double, device: String) {
   return (jsParseInt36(wall), jsParseInt36(counter), parts.dropFirst(2).joined(separator: "."))
 }
 
+public func hlcAfter(_ h: HLC, _ device: String) -> HLC {
+  let (wall, counter, _) = parseHLC(h)
+  return counter + 1 >= pow(36, Double(counterDigits)) ? formatHLC(wall + 1, 0, device) : formatHLC(wall, counter + 1, device)
+}
+
 public func hlcWall(_ h: HLC) -> Double {
   jsParseInt36(Substring(String(h.utf16.prefix(wallDigits)) ?? ""))
 }

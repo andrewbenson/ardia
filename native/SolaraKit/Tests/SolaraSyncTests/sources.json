@@ -1,0 +1,17 @@
+{
+  "Cases/state.json.deflate": {
+    "apps/browser/src/sync/readable.ts": "8a2dd478f595499dfc8093d877e2feeeee34709f9dfbea510a2818a61753356e"
+  },
+  "Scenarios/scope-redesign.json.deflate": {
+    "packages/sync/src/scope.ts": "4b7933df87e1c12f5123ec4d32314034439f67d9aa106db0464842fd88824410",
+    "packages/sync/src/hlc.ts": "ecb926f03ea07f95e35d26b1bafafc2c79b9fddcf2f87c09dfb346b06f3ed751",
+    "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
+    "packages/sync/src/order.ts": "f3ae5d5a3ee10adc89a30dcd35c6ca8353c704638bb6109977c411be3de4d537"
+  },
+  "Scenarios/scope.json.deflate": {
+    "packages/sync/src/scope.ts": "4b7933df87e1c12f5123ec4d32314034439f67d9aa106db0464842fd88824410",
+    "packages/sync/src/hlc.ts": "ecb926f03ea07f95e35d26b1bafafc2c79b9fddcf2f87c09dfb346b06f3ed751",
+    "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
+    "packages/sync/src/order.ts": "f3ae5d5a3ee10adc89a30dcd35c6ca8353c704638bb6109977c411be3de4d537"
+  }
+}

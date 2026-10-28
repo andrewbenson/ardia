@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, statSync, symlinkSync, truncateSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, truncateSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { hostname, tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
@@ -48,6 +48,10 @@ const CHECKS = {
   "sync-pause": "after the re-key, the key file replaced by another key (a reset or Start Over), sync on with ARDIA_SYNC_REDESIGN=1: sync's read is nil, it logs the pause, no login or note is deleted",
   "sync-ledger": "re-key, then the first sealed ledger (ARDIA_SYNC_REDESIGN=1): each profile's Login Data mark equals its ledger L@t, nothing held, Login Data otherwise unchanged, and a second Mac joining gets exactly the fixture's passwords",
   "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
+  "off-mode": "a re-key stopped at staged, then a build that can't re-key (mock keychain, no test mode): the quit message, nothing touched; then the test build finishes it",
+  "test-refused": "ARDIA_TEST_REKEY=1 without the file keychain, and ARDIA_TEST_REKEY=yes: refused and logged, no re-key, data untouched",
+  "rollback": "re-key, then the manual rollback (originals back from .rekey-old, item and journal deleted): the next launch re-keys again",
+  "leftover-old": "a .rekey-old with no journal and no item: logged and left alone, the A item added, everything reads on the mock key",
 };
 
 const IV = Buffer.alloc(16, 0x20);
@@ -540,6 +544,7 @@ async function makeOtherKey(app, dir) {
 const KEY_FILE = "Test Safe Storage Key";
 const KEY_LOG = "Test Safe Storage Log";
 const read = (file) => { try { return readFileSync(file, "utf8"); } catch { return null; } };
+const UNFINISHED = "This copy of Solara can't finish moving your saved passwords and cookies to their new key. Open the installed Solara instead.";
 const isRealSecret = (s) => typeof s === "string" && /^[A-Za-z0-9+/]{22}==$/.test(s);
 
 function snapshot(run) {
@@ -996,6 +1001,67 @@ const CASES = {
     const run = prepare(ctx.root, "a-then-d", ctx.fixture);
     seedKey(run, MOCK);
     return migrateAndCheck(ctx, run, REKEY, { fromA: true });
+  },
+  async "off-mode"(ctx) {
+    const run = prepare(ctx.root, "off-mode", ctx.fixture);
+    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-staged" });
+    const before = snapshot(run);
+    if (run.started.outcome !== "exited" || before.journal?.phase !== "staged") return [{ ok: false, name: "an unfinished journal to open in off mode", detail: `${run.started.outcome}, journal ${JSON.stringify(before.journal?.phase)}` }];
+    run.started = await start(ctx.app, run, {}, { until: "exit", timeout: 60000 });
+    const s = snapshot(run);
+    const mock = scan(run.udd, MOCK);
+    const counts = (h) => JSON.stringify(Object.entries(h).filter(([w]) => !w.endsWith(" prefs")).sort());
+    const quit = run.started.outcome === "exited" && s.appLog.includes(UNFINISHED) && s.journal?.phase === "staged" && s.key === before.key && s.keyLog.length === before.keyLog.length && counts(mock.hits) === counts(ctx.manifest.mockHits) && !dialogShown(s.appLog);
+    const lines = [{ ok: quit, name: "off mode (mock keychain, no test mode) over an unfinished journal: the quit message, journal, data and keychain untouched", detail: `${run.started.outcome}, journal ${JSON.stringify(s.journal?.phase)}, key ${JSON.stringify(s.key)}, mock ${counts(mock.hits)}` }];
+    lines.push(...await recoverAndCheck(ctx, run, "then the test build"));
+    return lines;
+  },
+  async "test-refused"(ctx) {
+    const lines = [];
+    const mock = prepare(ctx.root, "test-refused-mock", ctx.fixture);
+    mock.started = await start(ctx.app, mock, { ARDIA_TEST_REKEY: "1" });
+    if (mock.started.outcome === "running") { await waitWindow(mock.started.instance); await mock.started.instance.quit(); }
+    const a = snapshot(mock);
+    const aState = intactState(mock, ctx.manifest);
+    lines.push({ ok: mock.started.outcome === "running" && /test re-key refused: ARDIA_TEST_KEYCHAIN isn't file/.test(a.appLog) && !a.journal && !a.rekeyLog && !aState.wrong.length && !points(a.appLog).length, name: "ARDIA_TEST_REKEY=1 without the file keychain: refused and logged, no journal, no key, data on the mock key", detail: `${mock.started.outcome}; ${aState.wrong.join("; ")}; journal ${JSON.stringify(a.journal)}` });
+    const word = prepare(ctx.root, "test-refused-word", ctx.fixture);
+    word.started = await start(ctx.app, word, { ...REKEY, ARDIA_TEST_REKEY: "yes" }, { until: "dialog", timeout: 90000 });
+    const b = snapshot(word);
+    const bState = intactState(word, ctx.manifest);
+    lines.push({ ok: word.started.outcome === "dialog" && /test re-key refused: ARDIA_TEST_REKEY isn't 1/.test(b.appLog) && !b.journal && !bState.wrong.length, name: "ARDIA_TEST_REKEY=yes: refused and logged, no re-key (Chrome's dialog), data untouched", detail: `${word.started.outcome}; ${bState.wrong.join("; ")}` });
+    return lines;
+  },
+  async rollback(ctx) {
+    const run = prepare(ctx.root, "rollback", ctx.fixture);
+    const lines = (await migrateAndCheck(ctx, run, REKEY)).map((l) => ({ ...l, name: `first re-key: ${l.name}` }));
+    if (!lines.every((l) => l.ok)) return lines;
+    const old = join(run.udd, ".rekey-old");
+    for (const file of filesUnder(old)) {
+      const to = join(run.udd, relative(old, file));
+      mkdirSync(join(to, ".."), { recursive: true });
+      renameSync(file, to);
+    }
+    for (const p of [old, join(run.udd, KEY_FILE), join(run.udd, KEY_LOG), join(run.udd, ".safe-storage-rekey.json")]) rmSync(p, { recursive: true, force: true });
+    const restored = intactState(run, ctx.manifest);
+    lines.push({ ok: !restored.wrong.length, name: "the manual rollback puts the mock-keyed originals back", detail: restored.wrong.join("; ") });
+    lines.push(...(await migrateAndCheck(ctx, run, REKEY)).map((l) => ({ ...l, name: `after the rollback: ${l.name}` })));
+    return lines;
+  },
+  async "leftover-old"(ctx) {
+    const run = prepare(ctx.root, "leftover-old", ctx.fixture);
+    mkdirSync(join(run.udd, ".rekey-old", "Default"), { recursive: true });
+    writeFileSync(join(run.udd, ".rekey-old", "Default", "Cookies"), "x");
+    run.started = await start(ctx.app, run, REKEY);
+    if (run.started.outcome !== "running") return [{ ok: false, name: "reaches Chrome", detail: `${run.started.outcome}; ${snapshot(run).rekeyLog.trim().split("\n").slice(-2).join(" | ")}` }];
+    const r = await settle(ctx.app, run, ctx.origin, ctx.profiles);
+    const s = snapshot(run);
+    const mock = scan(run.udd, MOCK);
+    const counts = (h) => JSON.stringify(Object.entries(h).filter(([w]) => !w.endsWith(" prefs")).sort());
+    const wrong = compare(r, ctx.manifest, mock);
+    return [
+      { ok: /leftover re-key folders with no journal: leaving the folders alone/.test(s.rekeyLog) && s.key === MOCK && count(s.keyLog, "add created") === 1 && !s.journal && s.old && existsSync(join(run.udd, ".rekey-old", "Default", "Cookies")) && counts(mock.hits) === counts(ctx.manifest.mockHits) && !dialogShown(s.appLog), name: ".rekey-old with no journal: logged, left alone, the A item added, data still on the mock key", detail: `key ${JSON.stringify(s.key)}, keychain ${s.keyLog.join(", ")}, journal ${JSON.stringify(s.journal)}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` },
+      { ok: !wrong.length, name: "every planted value reads back", detail: wrong.join("; ") },
+    ];
   },
 };
 

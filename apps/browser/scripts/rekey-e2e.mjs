@@ -727,7 +727,7 @@ const CASES = {
     const state = intactState(run, ctx.manifest, { key: [MOCK] });
     const wrong = r && !r.error ? compare(r, ctx.manifest, state.scanned) : [r?.error ?? run.started.outcome];
     return [
-      { ok: s.journal?.phase === "abandoned" && !state.wrong.length && count(s.keyLog, "rekey update done") === 1, name: "a failure after the key: undone to A (one update back to mock_password), data intact", detail: `journal ${JSON.stringify(s.journal?.phase)}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` },
+      { ok: s.journal?.phase === "abandoned" && !state.wrong.length && count(s.keyLog, "rekey update done") === 1 && count(s.keyLog, "add created") === 1, name: "a failure after the key: undone to A (one add, one update back to mock_password), data intact", detail: `journal ${JSON.stringify(s.journal?.phase)}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` },
       { ok: !wrong.length && !dialogShown(s.appLog), name: "after the undo every planted value reads back", detail: wrong.join("; ") },
       { ok: ctx.undoPoints.length > 0, name: "the undo names its crash points", detail: ctx.undoPoints.join(" ") },
     ];

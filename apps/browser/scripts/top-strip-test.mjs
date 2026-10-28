@@ -184,6 +184,15 @@ async function measure(native) {
         .then(() => act("w1", "hit:600,24")).then((hit) => (seen.fieldHit = hit))
         .then(() => press(600, 24)).then(() => { seen.field = !!st().windowUi.w1?.panel.open; st().closePanel("w1"); return settle(400); })
         .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
+    out.peekSwipe = await run(`
+      const peek = () => globalThis.acLayout.peek["strip:w1"];
+      const flick = [["began", 0], ["changed", -18], ["changed", -22], ["changed", -22], ["ended", 0]].map(([phase, dx], i) => ({ phase, dx, dy: 0, atMs: i * 16, timestampMs: i * 16, dispatch: "app" }));
+      const seen = {};
+      st().toggleSidebar("w1");
+      return settle(600).then(() => peek().show()).then(() => settle(400)).then(() => win("w1"))
+        .then((n) => globalThis.expo.modules.ArdiaSwipe.devSimulate(700, 22, n, flick, true)).then((r) => (seen.where = r.where))
+        .then(() => settle(700)).then(() => { seen.profile = st().windows.w1.profileId; seen.live = peek().live; st().switchProfile("w1", "default"); return settle(600); })
+        .then(() => { peek().hide(); return settle(600); }).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
     out.peekFile = await run(`
       const peek = () => globalThis.acLayout.peek["strip:w1"];
       const drag = (action, x, payload) => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", action, x, 27, payload);
@@ -427,6 +436,13 @@ try {
         for (const at of seen.presses) assert.equal(at.panel, false, `${name}: the ${at.what} press also pressed the address field under the peek (${at.hit})`);
         assert.match(seen.fieldHit, /ToolbarUrlFieldView/, `${name}: the field is under the pointer with the peek hidden`);
         assert.equal(seen.field, true, `${name}: a press on the address field with the peek hidden opens the command panel`);
+      }
+    });
+    await rep.check("a two-finger swipe on the peek's strip pages to the next profile, as on RN", async () => {
+      rep.log(`peek swipe rn ${JSON.stringify(rn.peekSwipe)} native ${JSON.stringify(native.peekSwipe)}`);
+      for (const [name, seen] of [["rn", rn.peekSwipe], ["native", native.peekSwipe]]) {
+        assert.equal(seen.profile, "work", `${name}: the swipe paged to the next profile (${JSON.stringify(seen.where)})`);
+        assert.equal(seen.live, true, `${name}: the peek stayed out`);
       }
     });
     await rep.check("a link dropped on the peek opens where RN's peek puts it", async () => {

@@ -19,7 +19,7 @@ copies Dia's look and behavior, measured against Dia, with Arc's sidebar for tab
 - **Moves in for you:** bookmarks, history, passwords, cookies and tabs from Chrome, Safari, Firefox, Arc, Dia and
   more.
 
-It needs macOS 14 Sonoma or later on Apple Silicon.
+It needs macOS 26 or later on Apple Silicon.
 
 ## Solara and Ardia
 

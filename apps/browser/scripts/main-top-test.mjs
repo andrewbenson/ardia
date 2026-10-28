@@ -17,8 +17,8 @@ strip (devReactBlockers hit-tests a grid over them and names each RN view there 
 ones with their own mouse enter or leave handler, or a press, click, responder or drop handler on themselves or a
 parent no more than twice their area, are controls and pass, and the report names the parent and prop that made each one); a click on the page
 lands on the page, outside the main root, and focuses it; and file, URL and text drops there go to the web contents.
-The gate for the pool wired into the app: on a build without SolaraTabPool the click check is reported pending
-(SKIP); with it, a page still under the main root fails the check.`);
+The pool must serve the pages: a build where SolaraTabPool isn't available, or a page still under the main root, fails
+the click check.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -103,9 +103,9 @@ async function pass(label, env) {
   });
 
   const clickCheck = `${label}: a-click-on-the-page-lands-outside-the-main-root-and-focuses-it`;
-  const pooled = await run(`return !!globalThis.expo.modules.SolaraTabPool?.available?.();`);
-  if (!pooled) rep.record(clickCheck, { skip: "pending: this build has no SolaraTabPool, so the pages are still RN's" });
-  else await rep.check(clickCheck, async () => {
+  await rep.check(clickCheck, async () => {
+    const pooled = await run(`return !!globalThis.expo.modules.SolaraTabPool?.available?.();`);
+    if (!pooled) throw new Error("SolaraTabPool isn't available, so the pages are still RN's");
     const [x, y] = shell.card;
     const slot = await run(`return W.devHitCost("w1", ${x + 200}, ${y + 300}).then((r) => r.slot);`);
     const r = await run(`return ac.shell.devClick("w1", { in: "page", x: 200, y: 300, wait: 250 });`);

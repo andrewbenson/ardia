@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { switchOn } from "../../lib/killSwitches";
+import { pagesPooledIn } from "../../lib/pagesPool";
 import { hex, layout, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";
@@ -102,6 +103,21 @@ function useTopStripLights(windowId: string, dock: Animated.Value, on: boolean, 
 }
 
 type Inset = { top: number; right: number; bottom: number; left: number };
+type Edge = number | Animated.AnimatedInterpolation<number>;
+
+function DragGutters({ top, left, inset }: { top: Edge; left: Edge; inset: Inset }) {
+  const gutters = [
+    { left: 0, right: 0, top: 0, height: top },
+    { left: 0, right: 0, bottom: 0, height: inset.bottom },
+    { left: 0, top: 0, bottom: 0, width: left },
+    { right: 0, top: 0, bottom: 0, width: inset.right },
+  ];
+  return gutters.map((edge, i) => (
+    <Animated.View key={i} style={[{ position: "absolute" }, edge]}>
+      <WindowDragRegion style={StyleSheet.absoluteFill} />
+    </Animated.View>
+  ));
+}
 
 export function DockedLayout({
   fullscreen,
@@ -117,6 +133,7 @@ export function DockedLayout({
   children: ReactNode;
 }) {
   const windowId = useWindowId();
+  const [pooled] = useState(() => pagesPooledIn(windowId));
   const [open, savedWidth, addressBar] = useBrowser(
     useShallow(
       (s) =>
@@ -147,6 +164,7 @@ export function DockedLayout({
   return (
     <>
       <Animated.View
+        pointerEvents={pooled ? "box-none" : "auto"}
         style={
           fullscreen
             ? { flex: 1 }
@@ -160,7 +178,12 @@ export function DockedLayout({
               }
         }
       >
-        {!fullscreen && <WindowDragRegion style={StyleSheet.absoluteFill} />}
+        {!fullscreen &&
+          (pooled ? (
+            <DragGutters top={topTabs ? top : inset.top} left={topTabs ? inset.left : left} inset={inset} />
+          ) : (
+            <WindowDragRegion style={StyleSheet.absoluteFill} />
+          ))}
         {children}
       </Animated.View>
       {topStrip &&

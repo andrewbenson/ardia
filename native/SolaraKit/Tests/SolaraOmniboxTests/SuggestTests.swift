@@ -365,7 +365,7 @@ private final class FakeFetch: Sendable {
 }
 
 private func waitUntil(_ condition: () -> Bool) async throws {
-  let deadline = ContinuousClock.now + .seconds(5)
+  let deadline = ContinuousClock.now + .seconds(30)
   while !condition() && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
 }
 

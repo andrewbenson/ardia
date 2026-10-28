@@ -61,8 +61,9 @@ struct SettingsSidebar: View {
 }
 
 struct SettingsPaneList: View {
-  static let rowHeight: CGFloat = 32
-  static let highlightHeight: CGFloat = 30
+  static let rowHeight: CGFloat = 30
+  static let highlightHeight: CGFloat = 28
+  static let groupSpacing: CGFloat = 12
 
   @Environment(\.colorScheme) private var scheme
   @FocusState private var focused: Bool
@@ -72,9 +73,12 @@ struct SettingsPaneList: View {
     let selected = context.navigation.pane
     ScrollView(.vertical) {
       LazyVStack(spacing: 0) {
-        ForEach(SettingsPane.allCases) { pane in
-          SettingsPaneRow(pane: pane, selected: pane == selected, scheme: scheme)
-            .onTapGesture { context.goToPane(pane) }
+        ForEach(Array(SettingsPane.sidebarGroups.enumerated()), id: \.offset) { index, group in
+          if index > 0 { Color.clear.frame(height: Self.groupSpacing) }
+          ForEach(group) { pane in
+            SettingsPaneRow(pane: pane, selected: pane == selected, scheme: scheme)
+              .onTapGesture { context.goToPane(pane) }
+          }
         }
       }
       .padding(.horizontal, 10)
@@ -91,7 +95,7 @@ struct SettingsPaneList: View {
   }
 
   private func step(_ offset: Int) -> SwiftUI.KeyPress.Result {
-    let panes = SettingsPane.allCases
+    let panes = SettingsPane.sidebarOrder
     guard let index = panes.firstIndex(of: context.navigation.pane) else { return .ignored }
     let next = min(max(index + offset, 0), panes.count - 1)
     if next != index { context.goToPane(panes[next]) }
@@ -100,28 +104,27 @@ struct SettingsPaneList: View {
 }
 
 struct SettingsPaneRow: View {
+  @Environment(\.controlActiveState) private var activeState
   let pane: SettingsPane
   let selected: Bool
   let scheme: ColorScheme
 
   var body: some View {
-    HStack(spacing: 5) {
-      Image(systemName: pane.symbol)
-        .font(.system(size: 17))
-        .foregroundStyle(scheme == .dark ? Color(red: 152 / 255, green: 153 / 255, blue: 159 / 255) : Color(red: 139 / 255, green: 139 / 255, blue: 144 / 255))
-        .frame(width: 24, height: 22)
+    let emphasized = selected && activeState == .key
+    HStack(spacing: 8) {
+      SettingsPaneTile(pane: pane, scheme: scheme)
       Text(pane.title)
-        .font(.system(size: 13, weight: selected ? .semibold : .regular))
-        .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+        .font(.system(size: 13))
+        .foregroundStyle(emphasized ? Color.white : scheme == .dark ? Color.white : Color.black)
         .lineLimit(1)
       Spacer(minLength: 0)
     }
-    .padding(.leading, 7)
+    .padding(.leading, 6)
     .frame(height: SettingsPaneList.highlightHeight)
     .background {
       if selected {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(scheme == .dark ? Color.white.opacity(0.13) : Color.black.opacity(0.09))
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .fill(emphasized ? Color.accentColor : scheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
       }
     }
     .frame(height: SettingsPaneList.rowHeight)
@@ -246,12 +249,8 @@ struct SettingsDetail: View {
           .disabled(!navigation.canGoForward)
           .help("Forward")
       }
-      ToolbarItem(placement: .navigation) {
-        OnboardingText(context.shown.map(context.title(for:)) ?? "", size: 15, weight: 600, color: Color(nsColor: .labelColor), lines: 1)
-          .padding(.leading, 8)
-      }
-      .sharedBackgroundVisibility(.hidden)
     }
+    .navigationTitle(context.shown.map(context.title(for:)) ?? "")
   }
 
   @ViewBuilder
@@ -319,5 +318,41 @@ struct WindowChromeTrimmer: NSViewRepresentable {
 
   func updateNSView(_ view: Probe, context: Context) {
     DispatchQueue.main.async { view.trim() }
+  }
+}
+
+struct SettingsPaneTile: View {
+  static let size: CGFloat = 20
+  static let radius: CGFloat = 5
+
+  let pane: SettingsPane
+  let scheme: ColorScheme
+
+  var body: some View {
+    Image(systemName: pane.tileSymbol)
+      .font(.system(size: 11, weight: .semibold))
+      .foregroundStyle(.white)
+      .frame(width: Self.size, height: Self.size)
+      .background {
+        RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+          .fill(fill.gradient)
+          .overlay {
+            RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+              .strokeBorder(Color.white.opacity(scheme == .dark && pane.tileColor == .black ? 0.18 : 0), lineWidth: 0.5)
+          }
+      }
+  }
+
+  private var fill: Color {
+    switch pane.tileColor {
+    case .gray: Color(red: 142 / 255, green: 142 / 255, blue: 147 / 255)
+    case .blue: Color(red: 0, green: 122 / 255, blue: 1)
+    case .cyan: Color(red: 50 / 255, green: 173 / 255, blue: 230 / 255)
+    case .indigo: Color(red: 88 / 255, green: 86 / 255, blue: 214 / 255)
+    case .black: Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255)
+    case .green: Color(red: 52 / 255, green: 199 / 255, blue: 89 / 255)
+    case .orange: Color(red: 1, green: 149 / 255, blue: 0)
+    case .red: Color(red: 1, green: 59 / 255, blue: 48 / 255)
+    }
   }
 }

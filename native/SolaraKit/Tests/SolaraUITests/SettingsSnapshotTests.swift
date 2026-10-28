@@ -15,7 +15,7 @@ enum Snapshot {
     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.titlebarAppearsTransparent = true
-    window.titleVisibility = .hidden
+    window.titleVisibility = .visible
     window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
     window.contentView = host
     for _ in 0..<6 {

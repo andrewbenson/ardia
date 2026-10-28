@@ -29,7 +29,7 @@ enum SettingsPrewarm {
     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: true)
     window.isReleasedWhenClosed = false
     window.titlebarAppearsTransparent = true
-    window.titleVisibility = .hidden
+    window.titleVisibility = .visible
     window.contentViewController = controller
     window.setContentSize(size)
     controller.view.layoutSubtreeIfNeeded()

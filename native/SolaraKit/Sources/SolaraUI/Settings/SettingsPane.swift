@@ -41,6 +41,50 @@ public enum SettingsPane: String, CaseIterable, Identifiable, Sendable, Codable 
     }
   }
 
+  public static let sidebarGroups: [[SettingsPane]] = [
+    [.general, .profiles, .sync],
+    [.tabs, .appearance, .search, .engines, .shortcuts],
+    [.privacy, .passwords, .autofill, .extensions],
+    [.liveFolders, .calendar],
+    [.advanced, .about],
+  ]
+
+  public static let sidebarOrder: [SettingsPane] = sidebarGroups.flatMap { $0 }
+
+  public var tileSymbol: String {
+    switch self {
+    case .general: "gearshape.fill"
+    case .profiles: "person.2.fill"
+    case .sync: "arrow.triangle.2.circlepath"
+    case .tabs: "square.on.square.fill"
+    case .appearance: "circle.lefthalf.filled"
+    case .privacy: "hand.raised.fill"
+    case .passwords: "key.fill"
+    case .autofill: "creditcard.fill"
+    case .extensions: "puzzlepiece.extension.fill"
+    case .search: "magnifyingglass"
+    case .engines: "safari.fill"
+    case .shortcuts: "keyboard.fill"
+    case .liveFolders: "dot.radiowaves.left.and.right"
+    case .calendar: "calendar"
+    case .advanced: "gearshape.2.fill"
+    case .about: "info"
+    }
+  }
+
+  public var tileColor: SettingsTileColor {
+    switch self {
+    case .general, .passwords, .search, .shortcuts, .extensions, .advanced, .about: .gray
+    case .profiles, .privacy, .engines: .blue
+    case .sync: .cyan
+    case .tabs: .indigo
+    case .appearance: .black
+    case .autofill: .green
+    case .liveFolders: .orange
+    case .calendar: .red
+    }
+  }
+
   public var symbol: String {
     switch self {
     case .general: "gearshape"
@@ -73,4 +117,8 @@ public struct SettingsPlace: Hashable, Sendable {
     self.profileId = profileId
     self.detail = detail
   }
+}
+
+public enum SettingsTileColor: Sendable {
+  case gray, blue, cyan, indigo, black, green, orange, red
 }

@@ -20,22 +20,13 @@ enum SettingsDev {
 
   static func firstFrame(showing title: String, turns: Int, _ done: @escaping ([String: Any]) -> Void) {
     DispatchQueue.main.async {
-      let header = toolbarTitle(in: NativeSettingsWindow.window?.contentView?.superview) == title
+      let header = NativeSettingsWindow.window?.title == title
       if turns <= 0 || header {
         NativeSettingsWindow.window?.contentView?.layoutSubtreeIfNeeded()
         return done(capture())
       }
       firstFrame(showing: title, turns: turns - 1, done)
     }
-  }
-
-  static func toolbarTitle(in view: NSView?) -> String? {
-    guard let view else { return nil }
-    if let text = view as? OnboardingTextNSView { return text.text }
-    for child in view.subviews {
-      if let found = toolbarTitle(in: child) { return found }
-    }
-    return nil
   }
 
     static func switchPane(_ pane: String, done: @escaping (String) -> Void) {

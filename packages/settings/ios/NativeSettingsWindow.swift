@@ -32,6 +32,7 @@ final class StoreSettingsSource: SettingsStoreSource {
 final class SettingsHostingController: NSHostingController<SettingsWindowView> {
   override func viewWillAppear() {
     super.viewWillAppear()
+    view.window?.titleVisibility = .visible
     guard view.window?.toolbar == nil else { return }
     sceneBridgingOptions = []
     sceneBridgingOptions = [.toolbars]

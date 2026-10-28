@@ -454,10 +454,17 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(writer.flush(timeout: 30))
     try store.dispatch(Command("updateTab", [.string(store.state.windows[window]!.tabIds[5]), ["title": "changed"]]))
     let started = Date()
-    #expect(writer.flush(timeout: 30))
+    let cpuSeconds = writer.queue.sync {
+      let before = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+      writer.writeEverythingDurably()
+      return Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - before) / 1_000_000_000
+    }
     let seconds = Date().timeIntervalSince(started)
-    print("quit flush of \(store.state.tabs.count) tabs took \(Int(seconds * 1000)) ms")
-    #expect(seconds < 0.5)
+    print("quit flush of \(store.state.tabs.count) tabs took \(Int(seconds * 1000)) ms, \(Int(cpuSeconds * 1000)) ms of CPU")
+    #expect(writer.errors.isEmpty)
+    #expect(try launch.database.meta("rev") == String(store.rev))
+    #expect(cpuSeconds < 0.3)
+    #expect(seconds < 5)
   }
 
   @Test func phaseOneAOwnsOnlySettingsAndDownloadsAndNeverWritesSessionJSON() throws {

@@ -188,15 +188,20 @@ public final class PersistenceWriter: Sendable {
   public func flush(timeout: TimeInterval = 0.5) -> Bool {
     let done = DispatchSemaphore(value: 0)
     queue.async {
-      self.pending.withLock {
-        $0.rows = true
-        $0.durable = true
-      }
-      self.flushRows()
-      self.writeShadow()
+      self.writeEverythingDurably()
       done.signal()
     }
     return done.wait(timeout: .now() + timeout) == .success
+  }
+
+  func writeEverythingDurably() {
+    dispatchPrecondition(condition: .onQueue(queue))
+    pending.withLock {
+      $0.rows = true
+      $0.durable = true
+    }
+    flushRows()
+    writeShadow()
   }
 }
 

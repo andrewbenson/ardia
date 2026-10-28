@@ -93,7 +93,7 @@ final class DeviceOwnerCheck {
     environment["ARDIA_DATA_DIR"] != nil && !signedForDistribution
   }
 
-  private static let signedForDistribution: Bool = {
+  static let signedForDistribution: Bool = {
     var code: SecCode?
     guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return true }
     var requirement: SecRequirement?

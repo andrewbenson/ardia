@@ -1,0 +1,87 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
+
+const args = process.argv.slice(2);
+const appArg = args.find((a) => !a.startsWith("--"));
+if (!appArg) {
+  console.error(`usage: node shell-modal-a11y-test.mjs <Debug Solara.app> [--keep-data]
+
+What the accessibility tree reaches in a shell window (ARDIA_NATIVE_SHELL=1 with the main root on top, the pool and
+the pane roots) while the main root shows a modal. The shell's WindowShellAccessibility walks the window's
+accessibilityChildren the way VoiceOver does and counts the elements by the shell layer they live in. At rest and in a
+split the card's native layers are reachable. With the command panel or the Bookmark All Tabs dialog up, only the main
+root and the window's own title-bar buttons are, and closing the panel brings the card back. Without the shell
+switch, the sampler answers null.`);
+  process.exit(2);
+}
+const keep = args.includes("--keep-data");
+const app = resolve(appArg);
+const scratch = mkdtempSync(join(tmpdir(), "ac-shell-modal-a11y-"));
+const rep = reporter(join(scratch, "shell-modal-a11y-test.log"), { name: "shell-modal-a11y-test" });
+const server = createServer((req, res) => {
+  res.writeHead(200, { "content-type": "text/html" });
+  res.end(`<!doctype html><title>${req.url}</title><link rel="icon" href="data:,"><body><button>Inside the page</button></body>`);
+});
+await new Promise((r) => server.listen(0, "127.0.0.1", r));
+const base = `http://127.0.0.1:${server.address().port}`;
+const fixture = session({
+  windows: [{ id: "w1", frame: [80, 80, 1280, 800], activeTabIds: { default: "a" } }],
+  tabs: [
+    { id: "a", url: `${base}/a`, title: "A" },
+    { id: "b", url: `${base}/b`, title: "B" },
+  ],
+  settings: { warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
+});
+const SHELL = { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_MAIN_TOP: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1" };
+const layersOf = (reach) => Object.keys(reach ?? {}).filter((k) => !k.startsWith("outside:") && k !== "truncated");
+
+let instance = null;
+try {
+  for (const leg of ["shell", "rn"]) {
+    instance = await launch(app, { data: join(scratch, `data-${leg}`), fresh: true, session: fixture, onboarded: true, env: leg === "shell" ? SHELL : {} });
+    const run = (body) => instance.eval(body, { timeout: 20000 });
+    const reach = () => run(`return globalThis.expo.modules.SolaraWindowShell.accessibilityReach("w1")`);
+    const settle = () => sleep(1200);
+    const end = Date.now() + 15000;
+    while (Date.now() < end && !(await run(`return ac.store.getState().tabs.a?.title === "/a"`).catch(() => false))) await sleep(200);
+    await settle();
+    if (leg === "rn") {
+      await rep.check("rn: no shell, no sampler", async () => {
+        const got = await reach();
+        if (got !== null) throw new Error(`expected null without the shell, got ${JSON.stringify(got)}`);
+        return got;
+      });
+      break;
+    }
+    const expectLayers = (name, act, want) =>
+      rep.check(name, async () => {
+        if (act) await run(act);
+        await settle();
+        const got = await reach();
+        const layers = layersOf(got).sort();
+        if (JSON.stringify(layers) !== JSON.stringify([...want].sort())) throw new Error(`reached ${JSON.stringify(got)}, want only ${want.join(", ")}`);
+        return got;
+      });
+    await expectLayers("rest: the card is reachable", null, ["react", "card"]);
+    await expectLayers("command panel: only the main root", `ac.store.getState().openPanel("w1"); return true`, ["react"]);
+    await expectLayers("panel closed: the card is back", `ac.store.getState().closePanel("w1"); return true`, ["react", "card"]);
+    await expectLayers("split: the split panes are reachable", `ac.store.getState().createSplit(["a", "b"]); return true`, ["react", "card"]);
+    await expectLayers("split under the command panel: only the main root", `ac.store.getState().openPanel("w1"); return true`, ["react"]);
+    await expectLayers("split, panel closed: the panes are back", `ac.store.getState().closePanel("w1"); return true`, ["react", "card"]);
+    await expectLayers("Bookmark All Tabs dialog: only the main root", `ac.runCommand({ command: "bookmarkAllTabs", windowId: "w1" }); return true`, ["react"]);
+    await instance.quit().catch(() => {});
+    instance = null;
+  }
+} catch (e) {
+  rep.record("run", { error: e });
+} finally {
+  await instance?.quit().catch(() => {});
+  server.close();
+  if (!keep && rep.results.every((r) => r.ok)) rmSync(scratch, { recursive: true, force: true });
+}
+const failed = rep.results.filter((r) => !r.ok);
+console.log(`${rep.results.length - failed.length}/${rep.results.length} passed${failed.length ? `; log ${rep.logFile}` : ""}`);
+process.exit(failed.length ? 1 : 0);

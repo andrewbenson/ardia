@@ -100,6 +100,8 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     return bytes.withUnsafeBufferPointer { NSUUID(uuidBytes: $0.baseAddress!) as UUID }
   }
 
+  static let profileDataRemovalDeadline: TimeInterval = 10
+
   func dataStore(for profile: String) -> WKWebsiteDataStore {
     if Self.isPrivate(profile) { return session(Self.privateSession(profile)).store }
     if let store = persistentStores[profile] ?? deletedProfileStores[profile] { return store }
@@ -127,6 +129,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
 
   private func closeViews(using store: WKWebsiteDataStore) {
     let uses = { (view: WKWebView) in view.configuration.websiteDataStore === store }
+    for tab in owners.values.compactMap(\.tab) where tab.webView.map(uses) == true { tab.close() }
     for (key, view) in parked where uses(view) {
       parked.removeValue(forKey: key)
       Self.close(view)
@@ -144,7 +147,6 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
       pending.decide(false)
       events?("onWebKitPermissionDismissed", ["id": id])
     }
-    for tab in owners.values.compactMap(\.tab) where tab.webView.map(uses) == true { tab.close() }
   }
 
   static let safariVersion: String = {
@@ -492,10 +494,26 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
     deletedProfileStores[profile] = .nonPersistent()
     downloads.cancelAll(profile: profile)
     if let host = resumeHosts.removeValue(forKey: profile) { Self.close(host) }
+    let prefix = profile + "|"
+    rememberedPermissions = rememberedPermissions.filter { !$0.key.hasPrefix(prefix) }
+    zoomByHost = zoomByHost.filter { !$0.key.hasPrefix(prefix) }
+    externalAllowances = externalAllowances.filter { !$0.key.hasPrefix(prefix) }
+    var answered = false
+    let answer = { [weak self] (removed: Bool) in
+      guard !answered else { return }
+      answered = true
+      if removed { self?.deletedProfileStores.removeValue(forKey: profile) }
+      completion(removed)
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.profileDataRemovalDeadline) {
+      guard !answered else { return }
+      NSLog("[webkit] removing the data store %@ didn't finish in %.0f s", identifier.uuidString, Self.profileDataRemovalDeadline)
+      answer(false)
+    }
     let removeStore = {
       WebKitStoreRemovals.exists(identifier) { exists in
-        guard exists else { return completion(true) }
-        WebKitStoreRemovals.remove(identifier, tries: 12, done: completion)
+        guard exists else { return answer(true) }
+        WebKitStoreRemovals.remove(identifier, tries: 12, done: answer)
       }
     }
     guard let store = persistentStores.removeValue(forKey: profile) else { return removeStore() }

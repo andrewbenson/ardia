@@ -11,6 +11,9 @@ import { awayFromPin } from "../../store/organize";
 import { openInSplit } from "../layout/splitActions";
 import { togglePictureInPicture, useMedia } from "../media/state";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
+import { openLiveItem } from "../../live/engine";
+import { useLive } from "../../live/store";
+import { useLiveColors } from "../live/colors";
 import { clickTab, tabTitle } from "./actions";
 import { returnFocusToPage, useGroupRows } from "./GroupPanel";
 import { cardHoverProps, dismissHover, holdHover } from "./hover";
@@ -21,7 +24,7 @@ const TOPIC = "sidebar.hoverCard";
 const cards: Record<string, object> = {};
 let queued = false;
 
-export type NativeCardKind = "tab" | "group";
+export type NativeCardKind = "tab" | "group" | "live";
 
 function publish() {
   if (queued) return;
@@ -56,6 +59,7 @@ export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolea
   if (!active || !hover) return null;
   if (dia) return "tab";
   if (hover.kind === "group") return "group";
+  if (hover.kind === "live") return "live";
   return null;
 }
 
@@ -116,19 +120,58 @@ function useGroupCard(windowId: string, id: string | null, anchor: Anchor | null
   };
 }
 
+function liveItem(id: string): [string, string] {
+  const [, folderId = "", itemId = ""] = id.split("|");
+  return [folderId, itemId];
+}
+
+function useLiveCard(id: string | null, anchor: Anchor | null) {
+  const theme = useTheme();
+  const colors = useLiveColors();
+  const [folderId, itemId] = id ? liveItem(id) : ["", ""];
+  const exists = useLive((s) => !!id && !!s.items[folderId]?.some((i) => i.id === itemId));
+  if (!id || !anchor || !exists) return null;
+  return {
+    kind: "live",
+    id,
+    anchor: frame(anchor),
+    look: {
+      dark: theme.dark,
+      panel: hex(theme.panel),
+      panelBorder: hex(theme.panelBorder),
+      shadowOpacity: theme.panelShadowOpacity,
+      textPrimary: theme.textPrimary,
+      textSecondary: theme.textSecondary,
+      divider: theme.divider,
+      rowHover: theme.rowHover,
+      accent: theme.accent,
+      toolbarHover: theme.toolbarHover,
+      toolbarPressed: theme.toolbarPressed,
+      urlPill: theme.urlPill,
+      success: colors.success,
+      failure: colors.failure,
+      pending: colors.pending,
+      draft: colors.draft,
+      conflict: colors.conflict,
+      ciTrack: colors.ciTrack,
+    },
+  };
+}
+
 export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null, target: Hover | null, sidebarWidth: number, windowHeight: number) {
   const live = target && kind ? target : null;
   const anchor = live?.anchor ?? null;
   const tab = useTabCard(windowId, kind === "tab" ? (live?.id ?? null) : null, anchor, sidebarWidth, windowHeight);
   const group = useGroupCard(windowId, kind === "group" ? (live?.id ?? null) : null, anchor, windowHeight);
-  const card = tab ?? group;
+  const liveCard = useLiveCard(kind === "live" ? (live?.id ?? null) : null, anchor);
+  const card = tab ?? group ?? liveCard;
   const key = card && JSON.stringify(card);
   useLayoutEffect(() => setCard(windowId, key ? JSON.parse(key) : null), [windowId, key]);
   useLayoutEffect(() => () => setCard(windowId, null), [windowId]);
 }
 
 addNativeSettingsHandlers({
-  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[]; tabId?: string }) => {
+  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[]; tabId?: string; url?: string }) => {
     if (event === "enter") return cardHoverProps.onMouseEnter();
     if (event === "leave") return cardHoverProps.onMouseLeave();
     if (event === "hold") return holdHover(true);
@@ -139,6 +182,18 @@ addNativeSettingsHandlers({
       if (!extra?.tabId) return;
       dismissHover();
       return clickTab(windowId, extra.tabId);
+    }
+    if (event === "open") {
+      if (!extra?.url) return;
+      dismissHover();
+      return void useBrowser.getState().newTab(windowId, { url: extra.url });
+    }
+    if (event === "openItem") {
+      const [folderId, itemId] = liveItem(id);
+      const item = useLive.getState().items[folderId]?.find((i) => i.id === itemId);
+      if (!item) return;
+      dismissHover();
+      return void openLiveItem(windowId, folderId, item);
     }
     if (event === "layout") {
       const [x = 0, y = 0, width = 0, height = 0] = extra?.frame ?? [];

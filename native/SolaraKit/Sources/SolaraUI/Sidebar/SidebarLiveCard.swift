@@ -1,4 +1,5 @@
 import AppKit
+import SolaraLive
 import SwiftUI
 
 public struct SidebarLiveCardState: Decodable, Equatable, Sendable {
@@ -79,6 +80,63 @@ public struct SidebarLiveCardState: Decodable, Equatable, Sendable {
   }
 }
 
+extension SidebarLiveCardState {
+  public static func itemKey(_ hoverId: String) -> (folderId: String, itemId: String) {
+    let parts = hoverId.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+    return (parts.count > 1 ? parts[1] : "", parts.count > 2 ? parts[2] : "")
+  }
+
+  public init(id: String, item: LiveItem, anchor: [Double], look: Look, now: Double) {
+    self.id = id
+    url = item.url
+    title = item.title
+    width = item.pr == nil ? 280 : 300
+    self.anchor = anchor
+    profileId = ""
+    self.look = look
+    pr = item.pr.map { Self.pullRequest($0, section: item.section) }
+    doc = item.pr == nil ? Self.document(item, now: now) : nil
+  }
+
+  static func reviewLine(_ review: ReviewDecision?, section: PullRequestSection?) -> Line? {
+    switch review {
+    case nil: nil
+    case .approved: Line(symbol: "checkmark.seal.fill", tone: "success", text: "Approved")
+    case .changesRequested: Line(symbol: "arrow.uturn.backward.circle.fill", tone: "failure", text: "Changes Requested")
+    case .required: Line(symbol: "eye", tone: "secondary", text: section == .authored ? "Review required" : "Needs your review")
+    }
+  }
+
+  static func pullRequest(_ pr: PullRequestInfo, section: PullRequestSection?) -> PullRequest {
+    let summary = GitHub.summarizeChecks(pr.checks).map { summary in
+      let symbol = switch summary.tone {
+      case .success: "checkmark.circle.fill"
+      case .failure: "xmark.circle.fill"
+      default: "clock.fill"
+      }
+      return Line(symbol: symbol, tone: summary.tone.rawValue, text: summary.text)
+    }
+    let failing = pr.checks.filter { $0.state == .failure }
+    let comments = (pr.comments == 1 ? "1 comment" : "\(pr.comments) comments") + (pr.unresolvedThreads > 0 ? " · \(pr.unresolvedThreads) unresolved" : "")
+    return PullRequest(
+      author: pr.author, avatar: pr.authorAvatar, place: "\(pr.repo) #\(pr.number)", draft: pr.draft,
+      success: pr.checks.filter { $0.state == .success || $0.state == .neutral }.count,
+      pending: pr.checks.filter { $0.state == .pending || $0.state == .queued }.count,
+      failure: failing.count, summary: summary, failing: failing.map { Check(name: $0.name, url: $0.url) },
+      conflicting: pr.mergeable == .conflicting, review: reviewLine(pr.review, section: section), comments: comments,
+      additions: pr.additions, deletions: pr.deletions,
+      files: pr.changedFiles > 0 ? "\(pr.changedFiles) \(pr.changedFiles == 1 ? "file" : "files")" : nil)
+  }
+
+  static func document(_ item: LiveItem, now: Double) -> Document {
+    let direct = item.icon.map { $0.hasPrefix("http:") || $0.hasPrefix("https:") } ?? false
+    let place = item.doc?.place ?? item.subtitle
+    let meta = [item.doc?.kind, place].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    let edited = item.updatedAt > 0 ? "Edited \(Meetings.ago(item.updatedAt, now: now))" + (item.doc?.editedBy.flatMap { $0.isEmpty ? nil : " by \($0)" } ?? "") : nil
+    return Document(icon: item.icon, direct: direct, meta: meta, edited: edited)
+  }
+}
+
 public enum SidebarLiveCardEvent: Equatable, Sendable {
   case openItem
   case open(String)
@@ -97,6 +155,7 @@ final class SidebarLiveCardModel {
 public final class SidebarLiveCardView: NSView {
   public var onEvent: ((SidebarLiveCardEvent) -> Void)?
   public var onPointer: ((Bool) -> Void)?
+  public var onResize: (() -> Void)?
   public var state: SidebarLiveCardState? { model.state }
   private let model = SidebarLiveCardModel()
   private let surface = SurfaceLayer()
@@ -124,6 +183,7 @@ public final class SidebarLiveCardView: NSView {
     addSubview(hosting)
     model.onEvent = { [weak self] in self?.onEvent?($0) }
     model.onHeight = { [weak self] height in self?.bodyChanged(height) }
+    DevPointer.observe(self, #selector(devPointer(_:)))
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -152,6 +212,7 @@ public final class SidebarLiveCardView: NSView {
     bodyHeight = height
     setFrameSize(NSSize(width: frame.width, height: height + 24))
     needsLayout = true
+    onResize?()
   }
 
   public override func layout() {
@@ -176,6 +237,8 @@ public final class SidebarLiveCardView: NSView {
     if window == nil { pointer(false) }
   }
 
+  @objc private func devPointer(_ note: Notification) { pointer(DevPointer.inside(self, note)) }
+
   private func pointer(_ on: Bool) {
     guard on != inside else { return }
     inside = on
@@ -183,6 +246,21 @@ public final class SidebarLiveCardView: NSView {
   }
 
   public override func mouseDown(with event: NSEvent) {}
+}
+
+struct LiveLine {
+  static let title = LiveLine(height: 18, font: .systemFont(ofSize: 13.5, weight: .semibold))
+
+  let spacing: CGFloat
+  let above: CGFloat
+  let below: CGFloat
+
+  init(height: CGFloat, font: NSFont) {
+    let natural = font.ascender - font.descender + font.leading
+    spacing = height - natural
+    above = spacing / 2 + 0.5
+    below = spacing / 2
+  }
 }
 
 private func color(_ text: String) -> Color { Color(nsColor: CSSColor(text)?.ns ?? .clear) }
@@ -226,7 +304,9 @@ struct LivePullRequestCard: View {
       }
       Text(state.title)
         .font(.system(size: 13.5, weight: .semibold))
-        .lineSpacing(18 - 16.5)
+        .lineSpacing(LiveLine.title.spacing)
+        .padding(.top, LiveLine.title.above)
+        .padding(.bottom, LiveLine.title.below)
         .foregroundStyle(color(look.textPrimary))
         .lineLimit(3)
         .fixedSize(horizontal: false, vertical: true)

@@ -1,4 +1,5 @@
 import AppKit
+import SolaraLive
 import Testing
 
 @testable import SolaraUI
@@ -47,5 +48,39 @@ import Testing
     #expect(short > 100)
     card.set(try #require(SidebarLiveCardState.decode(pullRequest(failing: 3))))
     #expect(card.frame.height > short)
+  }
+
+  @Test func buildsRNsLinesFromALiveItem() throws {
+    let look = try #require(SidebarLiveCardState.decode(pullRequest(failing: 1))).look
+    let checks = [
+      PullRequestCheck(name: "lint", state: .failure, url: "https://ci/lint"), PullRequestCheck(name: "unit", state: .neutral, url: nil),
+      PullRequestCheck(name: "e2e", state: .queued, url: nil),
+    ]
+    let pr = PullRequestInfo(
+      number: 7, repo: "o/r", author: "octocat", headRef: "a", baseRef: "main", review: .required, mergeable: .conflicting,
+      checks: checks, comments: 1, unresolvedThreads: 2, additions: 3, deletions: 0, changedFiles: 1)
+    let item = LiveItem(id: "1", source: .github, url: "https://github.com/o/r/pull/7", title: "T", subtitle: "", updatedAt: 0, section: .authored, pr: pr)
+    let state = SidebarLiveCardState(id: "live|f|1", item: item, anchor: [0, 0, 10, 10], look: look, now: 0)
+    let card = try #require(state.pr)
+    #expect(state.width == 300)
+    #expect(card.place == "o/r #7")
+    #expect((card.success, card.pending, card.failure) == (1, 1, 1))
+    #expect(card.summary?.tone == "failure")
+    #expect(card.review == SidebarLiveCardState.Line(symbol: "eye", tone: "secondary", text: "Review required"))
+    #expect(card.comments == "1 comment · 2 unresolved")
+    #expect(card.files == "1 file")
+    #expect(card.conflicting)
+    #expect(SidebarLiveCardState.itemKey("live|f|1") == ("f", "1"))
+  }
+
+  @Test func aDocumentKeepsRNsMetaAndEditedLines() throws {
+    let look = try #require(SidebarLiveCardState.decode(pullRequest(failing: 1))).look
+    let item = LiveItem(
+      id: "2", source: .github, url: "https://docs.google.com/d/2", title: "Plan", subtitle: "Drive", icon: "https://x/icon.png",
+      updatedAt: 1_000, doc: DocumentInfo(kind: "Doc", editedBy: "", place: nil))
+    let doc = try #require(SidebarLiveCardState(id: "live|f|2", item: item, anchor: [0, 0, 10, 10], look: look, now: 1_000 + 3 * 3_600_000).doc)
+    #expect(doc.direct)
+    #expect(doc.meta == "Doc · Drive")
+    #expect(doc.edited == "Edited 3 hr ago")
   }
 }

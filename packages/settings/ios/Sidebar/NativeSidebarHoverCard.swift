@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SolaraLive
 import SolaraUI
 
 @MainActor
@@ -68,12 +69,35 @@ final class SidebarHoverCardHost {
     card.onPointer = { [weak self] inside in self?.pointer(inside) }
     return card
   }()
+  private lazy var liveCard: SidebarLiveCardView = {
+    let card = SidebarLiveCardView(favicons: NativeSidebar.hosts[windowId]?.view.favicons)
+    card.onEvent = { [weak self, weak card] event in
+      guard let self, let id = card?.state?.id else { return }
+      switch event {
+      case .openItem: NativeSidebarHoverCard.send(self.windowId, id, "openItem")
+      case .open(let url): NativeSidebarHoverCard.send(self.windowId, id, "open", ["url": url])
+      }
+    }
+    card.onPointer = { [weak self] inside in self?.pointer(inside) }
+    card.onResize = { [weak self] in self?.coverChanged() }
+    return card
+  }()
   private var kind: String?
+  private var liveCardInput: [String: Any]?
+  private var liveObserver: NSObjectProtocol?
 
   init(windowId: String) {
     self.windowId = windowId
     motion.autoresizingMask = [.width, .height]
     motion.onHidden = { [weak self] in self?.coverChanged() }
+    liveObserver = NotificationCenter.default.addObserver(forName: SidebarLiveFeed.changed, object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.liveChanged() }
+    }
+  }
+
+  private func liveChanged() {
+    guard kind == "live", motion.phase != .leaving, motion.phase != .hidden, let card = liveCardInput else { return }
+    show(card)
   }
 
   private func coverChanged() {
@@ -114,9 +138,23 @@ final class SidebarHoverCardHost {
       groupCard.live = true
       groupCard.set(state)
       return (groupCard, SidebarGroupCardMetrics.origin(anchor: state.anchorRect, height: groupCard.frame.height, windowHeight: state.windowHeight))
+    case "live":
+      liveCardInput = card
+      guard let state = Self.liveState(card) else { return nil }
+      liveCard.set(state)
+      return (liveCard, HoverCardMotion.origin(anchor: state.anchorRect))
     default:
       return nil
     }
+  }
+
+  private static func liveState(_ card: [String: Any]) -> SidebarLiveCardState? {
+    guard let id = card["id"] as? String, let anchor = card["anchor"] as? [Double],
+      let lookValue = card["look"] as? [String: Any], let look = decode(SidebarLiveCardState.Look.self, lookValue)
+    else { return nil }
+    let key = SidebarLiveCardState.itemKey(id)
+    guard let item = SidebarLiveFeed.shared.live?.state.items[key.folderId]?.first(where: { $0.id == key.itemId }) else { return nil }
+    return SidebarLiveCardState(id: id, item: item, anchor: anchor, look: look, now: Date().timeIntervalSince1970 * 1000)
   }
 
   private static func decode<T: Decodable>(_ type: T.Type, _ value: [String: Any]) -> T? {

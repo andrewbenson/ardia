@@ -2,7 +2,8 @@
 // The native sidebar's hover cards in the window shell's overlay (ARDIA_NATIVE_SIDEBAR=1, ARDIA_NATIVE_SHELL=1): a
 // card shows after RN's 500 ms intent and not before, RN draws none of its own, moving onto the card keeps it past the
 // 160 ms hide delay, its buttons act, and it leaves on hover away, a click in the sidebar and a space switch (a tab
-// switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return.
+// switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
+// pull request's card opens the pull request from its comments line.
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -135,6 +136,35 @@ try {
     await run(`return ac.shell.devTypeKeys("w1", "\\r", 10)`);
     await until("t3 active", () => run(`const s = ac.store.getState(); return s.windows.w1.activeTabIds[s.windows.w1.profileId] === "t3"`));
     await gone("choosing a row");
+  });
+
+  await rep.check("a live pull request's card shows natively, and its comments line opens the pull request", async () => {
+    await point(900, 600);
+    await gone("hover away");
+    const folder = await run(`
+      const { store } = ac.live;
+      const folder = store.createFolder("default", "pullRequests");
+      const pr = { number: 7, repo: "ardia/app", author: "octocat", authorAvatar: null, draft: false, headRef: "h7", baseRef: "main", review: "approved",
+        mergeable: "mergeable", checks: [{ name: "lint", state: "failure", url: "https://ci.example/lint" }], comments: 2, unresolvedThreads: 0, additions: 4, deletions: 1, changedFiles: 1 };
+      store.applyFetch(folder, [{ id: "pr7", source: "github", url: "https://example.com/pr/7", title: "Pull request 7", subtitle: "", icon: null, updatedAt: Date.now(), section: "authored", pr }], {});
+      store.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null });
+      return folder;`);
+    await sleep(800);
+    const key = `live|${folder}|pr7`;
+    const r = await row(key);
+    assert.ok(r, "the live row is measured");
+    await point(r.x + 60, Math.round(r.y + r.height / 2));
+    const c = await shown(key);
+    assert.equal(c.kind, "live");
+    assert.equal(await run(`return acPerf.findFibers("LiveItemCard", 5).length`), 0, "RN draws no live card");
+    const before = await run(`return ac.store.getState().windows.w1.tabIds.length`);
+    const [x, y, w, h] = c.frame;
+    await point(x + 40, y + h - 20);
+    await sleep(200);
+    await run(`return ac.shell.devClick("w1", { x: ${x + 40}, y: ${y + h - 20} })`);
+    await until("the pull request to open", async () => (await run(`const s = ac.store.getState(); return s.windows.w1.tabIds.map((id) => s.tabs[id].url)`)).includes("https://example.com/pr/7"));
+    await gone("opening the item");
+    assert.ok((await run(`return ac.store.getState().windows.w1.tabIds.length`)) >= before);
   });
 } finally {
   await app.quit();

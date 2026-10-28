@@ -579,7 +579,7 @@ async function migrateAndCheck(ctx, run, env, opts = {}) {
   run.started = await start(ctx.app, run, env);
   if (run.started.outcome === "running") await run.started.instance.quit();
   const after = snapshot(run);
-  lines.push({ ok: run.started.outcome === "running" && !after.staging && !after.old && !dialogShown(after.appLog), name: "the next launch cleans up .rekey-old and .rekey-staging", detail: `${run.started.outcome}, staging ${after.staging}, old ${after.old}` });
+  lines.push({ ok: run.started.outcome === "running" && after.journal?.phase === "done" && !after.staging && after.old && !dialogShown(after.appLog) && isRealSecret(after.key), name: "the next launch of the same version: no dialog, no staging left, the originals kept in .rekey-old", detail: `${run.started.outcome}, journal ${JSON.stringify(after.journal?.phase)}, staging ${after.staging}, old ${after.old}` });
   return lines;
 }
 
@@ -672,7 +672,11 @@ const CASES = {
   },
   async singleton(ctx) {
     const run = prepare(ctx.root, "singleton", ctx.fixture);
-    const holder = spawn("sleep", ["300"], { stdio: "ignore" });
+    const holderApp = join(run.dir, "Holder.app");
+    execFileSync("cp", ["-c", "-R", ctx.app, holderApp]);
+    const holderBinary = join(holderApp, "Contents", "MacOS", "rekey-holder");
+    execFileSync("cp", ["/bin/sleep", holderBinary]);
+    const holder = spawn(holderBinary, ["300"], { stdio: "ignore" });
     try {
       symlinkSync(`${hostname()}-${holder.pid}`, join(run.udd, "SingletonLock"));
       run.started = await start(ctx.app, run, REKEY, { until: "exit", timeout: 60000 });
@@ -723,7 +727,7 @@ const CASES = {
     const state = intactState(run, ctx.manifest, { key: [MOCK] });
     const wrong = r && !r.error ? compare(r, ctx.manifest, state.scanned) : [r?.error ?? run.started.outcome];
     return [
-      { ok: s.journal?.phase === "abandoned" && !state.wrong.length, name: "a failure after the key: undone to A, data intact", detail: `journal ${JSON.stringify(s.journal?.phase)}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` },
+      { ok: s.journal?.phase === "abandoned" && !state.wrong.length && count(s.keyLog, "rekey update done") === 1, name: "a failure after the key: undone to A (one update back to mock_password), data intact", detail: `journal ${JSON.stringify(s.journal?.phase)}; ${state.wrong.join("; ")}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` },
       { ok: !wrong.length && !dialogShown(s.appLog), name: "after the undo every planted value reads back", detail: wrong.join("; ") },
       { ok: ctx.undoPoints.length > 0, name: "the undo names its crash points", detail: ctx.undoPoints.join(" ") },
     ];

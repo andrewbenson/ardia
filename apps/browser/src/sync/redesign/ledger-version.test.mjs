@@ -50,3 +50,24 @@ test("LEDGER-unwritable: a ledger that wouldn't read back isn't written, and the
   assert.ok(shell.docs.get("sync-pw-ledger.json"), "and the ledger is written");
   assert.equal(ledgerPauseReason(), null, "and the reason clears");
 });
+
+test("LEDGER-unwritable-profiles: one profile's good write doesn't clear another profile's unwritable reason", async () => {
+  shell.docs.clear();
+  const { seal } = await import("./fakeSeal.mjs");
+  const key = "pw:https://a.example\nme";
+  const value = { o: "https://a.example", u: "me", s: seal("https://a.example", "me", "pw") };
+  const dated = { default: false, work: true };
+  const adapterFor = (profileId) =>
+    ledgerPasswordsAdapter(profileId, () => true, async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s, ...(dated[profileId] ? { created: 1, modified: 1 } : {}) }], mark: null }), () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
+  const extract = (adapter) => adapter.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
+  const a = adapterFor("default");
+  const b = adapterFor("work");
+  assert.equal(await extract(a), null, "control: the default profile's ledger can't be written");
+  assert.equal(ledgerPauseReason(), "unwritable");
+  assert.ok(await extract(b), "control: the work profile's ledger writes");
+  assert.ok(JSON.parse(shell.docs.get("sync-pw-ledger.json")).profiles.work, "control: and its entry is there");
+  assert.equal(ledgerPauseReason(), "unwritable", "the default profile is still paused, so the reason stays");
+  dated.default = true;
+  assert.ok(await extract(a), "control: once the default profile's ledger can be written, it runs");
+  assert.equal(ledgerPauseReason(), null, "and the reason clears");
+});

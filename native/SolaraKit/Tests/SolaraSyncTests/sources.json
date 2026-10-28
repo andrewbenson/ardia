@@ -11,7 +11,7 @@
     "apps/browser/src/sync/passwordLedger.ts": "6b295a464fb795e47bb90fdcb8bd94823b8b0305322a1d3f110fd9629c64818b"
   },
   "Cases/ledgerAdapter.json.deflate": {
-    "apps/browser/src/sync/ledgerPasswords.ts": "8d0c82d82c1eb304732fed9518cd2307a1e0c487de7baf55188cc8bb81b26192",
+    "apps/browser/src/sync/ledgerPasswords.ts": "39ad9d08f3e1c265f2a63d113c6c9865e178282a9fdee2cf07f52519a1ce15f1",
     "apps/browser/src/sync/passwordLedger.ts": "6b295a464fb795e47bb90fdcb8bd94823b8b0305322a1d3f110fd9629c64818b"
   },
   "Cases/state.json.deflate": {

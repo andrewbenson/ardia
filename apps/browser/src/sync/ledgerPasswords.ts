@@ -27,24 +27,24 @@ function ledgerRead() {
 export const ledgerFromNewerVersion = () => ledgerRead() === "newer";
 const ledgerWritable = () => typeof ledgerRead() !== "string";
 
-let unwritable = false;
+const unwritable = new Set<string>();
 let migrationTried = false;
 export type LedgerPause = "newer" | "older" | "unreadable" | "unwritable";
 export function ledgerPauseReason(): LedgerPause | null {
   const doc = ledgerRead();
   if (doc === "older") return migrationTried ? "older" : null;
   if (typeof doc === "string") return doc;
-  return unwritable ? "unwritable" : null;
+  return unwritable.size ? "unwritable" : null;
 }
 
-function writeLedgers(doc: LedgerDoc): boolean {
+function writeLedgers(doc: LedgerDoc, profile: string): boolean {
   const text = JSON.stringify(doc);
   if (typeof readLedgerDoc(text) === "string") {
-    if (!unwritable) console.warn("[sync] the password ledger wasn't written: it wouldn't read back; passwords pause");
-    unwritable = true;
+    if (!unwritable.has(profile)) console.warn("[sync] the password ledger wasn't written: it wouldn't read back; passwords pause");
+    unwritable.add(profile);
     return false;
   }
-  unwritable = false;
+  unwritable.delete(profile);
   writeDocument(LEDGER_DOC, text);
   return true;
 }
@@ -114,7 +114,7 @@ export function ledgerPasswordsAdapter(
     if (!stored || rejoinedFrom(stored)) return true;
     if (JSON.stringify(stored.gated ?? {}) === JSON.stringify(gated)) return true;
     doc.profiles[profile()] = { ...stored, gated };
-    return writeLedgers(doc);
+    return writeLedgers(doc, profile());
   };
   const saveHeld = (keys: Set<string>): boolean => {
     const doc = readLedgers();
@@ -124,7 +124,7 @@ export function ledgerPasswordsAdapter(
     const next = [...keys].sort();
     if (JSON.stringify(stored.held ?? []) === JSON.stringify(next)) return true;
     doc.profiles[profile()] = { ...stored, held: next };
-    return writeLedgers(doc);
+    return writeLedgers(doc, profile());
   };
 
   const record = (records: Map<string, FolderRecord>, keys: Iterable<string>, remote: (key: string) => unknown, stamp: (key: string) => string | undefined) => {
@@ -154,7 +154,7 @@ export function ledgerPasswordsAdapter(
       const latest = doc.profiles[profile()] ?? null;
       const kept = latest && !rejoinedFrom(latest) ? latest : null;
       doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list, gone), scope: ledgerScope(), held: kept?.held ?? [], gated: kept?.gated ?? {} };
-      return writeLedgers(doc);
+      return writeLedgers(doc, profile());
     });
     return writing;
   };

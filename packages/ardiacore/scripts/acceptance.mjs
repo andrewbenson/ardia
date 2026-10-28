@@ -420,7 +420,7 @@ async function launch(logName = "app.out.log", env = {}, args = [], opts = {}) {
     data, log: join(scratch, logName), args, ready: false,
     env: {
       ARDIA_TEST_REAUTH: "granted", ARDIA_DOWNLOADS_DIR: downloadsDir, ARDIA_ALLOW_AUDIO: "1",
-      ...Object.fromEntries(["ARDIA_ALLOW_OCCLUSION", "ARDIA_TRACE_VISIBILITY", "ARDIA_TRACE_PIP"].filter((k) => process.env[k]).map((k) => [k, process.env[k]])),
+      ...Object.fromEntries(["ARDIA_ALLOW_OCCLUSION", "ARDIA_TRACE_VISIBILITY", "ARDIA_TRACE_PIP", "ARDIA_NATIVE_MEDIA", "ARDIA_NATIVE_SHELL"].filter((k) => process.env[k]).map((k) => [k, process.env[k]])),
       ARDIA_TRAFFIC_LIGHTS_LOG: lightsLog,
       ...env,
     },

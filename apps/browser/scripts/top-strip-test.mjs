@@ -97,6 +97,15 @@ function stripDiff(a, b, top, bottom) {
   return { share: differ / total, worst, hot: hot.length ? `${hot[0]}..${hot.at(-1)} (${hot.length} columns)` : "" };
 }
 
+const LOOKS = [
+  ["flipped", `st().setAppDark(!st().ui.appDark);`, `st().setAppDark(!st().ui.appDark);`],
+  [
+    "bands",
+    `st().updateSettings({ extendWebsiteColor: true }); st().updateLive("t1", { themeColor: "#2b6cb0" }); st().updateLive("g1a", { themeColor: "#f6e05e" }); st().updateLive("t2", { themeColor: "#1a202c" });`,
+    `st().updateSettings({ extendWebsiteColor: false }); for (const id of ["t1", "g1a", "t2"]) st().updateLive(id, { themeColor: null });`,
+  ],
+];
+
 async function measure(native) {
   const data = join(scratch, native ? "native" : "rn", "data");
   const app = await launch(appPath, { data, session: fixture(), env: native ? { ARDIA_NATIVE_TOP_STRIP: "1" } : {} });
@@ -112,6 +121,13 @@ async function measure(native) {
     }
     const png = join(scratch, native ? "native.png" : "rn.png");
     out.snapshot = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(png)});`)) ? png : null;
+    out.looks = {};
+    for (const [look, setup, undo] of LOOKS) {
+      const shot = join(scratch, `${native ? "native" : "rn"}-${look}.png`);
+      await run(`${setup} return settle(900);`);
+      out.looks[look] = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(shot)});`)) ? shot : null;
+      await run(`${undo} return settle(600);`);
+    }
     const t2 = out.spans.filter(([, , k]) => k !== "SolaraUI.StripNewTabButton").at(-1);
     await run(`return act("w1", "click:${t2[0] + 70},21").then(() => settle(400));`);
     out.clicked = await run(`return st().windows.w1.activeTabIds.default;`);
@@ -240,10 +256,18 @@ try {
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });
     }
+    for (const [look] of LOOKS) {
+      if (!rn.looks?.[look] || !native.looks?.[look]) continue;
+      await rep.check(`the strips' pixels match RN's, ${look === "flipped" ? "in the other appearance" : "with website colour bands"}`, async () => {
+        const diff = stripDiff(readPng(rn.looks[look]), readPng(native.looks[look]), 0, 42);
+        rep.log(`${look} pixel diff ${JSON.stringify(diff)}`);
+        assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${diff.worst}, ${diff.hot})`);
+      });
+    }
   }
 } finally {
   if (native) await native.app.quit();
-  if (!keep && rep.results.every((r) => r.ok)) for (const name of ["rn", "native", "rn.png", "native.png"]) rmSync(join(scratch, name), { recursive: true, force: true });
+  if (!keep && rep.results.every((r) => r.ok)) for (const name of ["rn", "native", "rn.png", "native.png", ...LOOKS.flatMap(([look]) => [`rn-${look}.png`, `native-${look}.png`])]) rmSync(join(scratch, name), { recursive: true, force: true });
   else rep.say(`kept ${scratch}`);
 }
 process.exit(rep.summary() ? 0 : 1);

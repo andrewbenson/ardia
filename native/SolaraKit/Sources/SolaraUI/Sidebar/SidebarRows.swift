@@ -617,8 +617,11 @@ final class SplitRowView: SidebarRowView {
       }
       panes.forEach { body.addSubview($0) }
       dividers.forEach { body.layer?.addSublayer($0) }
+      needsLayout = true
     }
+    let wasActive = active
     active = ids.contains(context.activeId ?? "")
+    if active != wasActive { needsLayout = true }
     repaint()
   }
 
@@ -768,7 +771,9 @@ final class GroupHeaderView: SidebarRowView {
     icon.set(
       TabIconSpec(url: firstTab?.url ?? "", favicon: firstTab?.favicon, customIcon: group.icon ?? firstTab?.customIcon, profileId: firstTab?.profileId ?? context.host.profileId),
       palette: palette)
-    label.text = context.host.renaming == "group:\(id)" ? "" : context.query.groupLabel(id)
+    let title = context.host.renaming == "group:\(id)" ? "" : context.query.groupLabel(id)
+    if title != label.text { needsLayout = true }
+    label.text = title
     label.color = palette.groupTitle
     chevron.set("chevron.down", size: 9, weight: .semibold, color: palette.groupTitle.withAlphaComponent(palette.groupTitle.alphaComponent * 0.5))
     let control = context.query.groupClose(id)
@@ -1010,6 +1015,7 @@ final class DividerRowView: SidebarRowView {
 
   override func render() {
     guard let context else { return }
+    if tidyButton.isHidden == context.host.tidy || clearButton.isHidden == context.host.clear { needsLayout = true }
     tidyButton.isHidden = !context.host.tidy
     clearButton.isHidden = !context.host.clear
     for button in [tidyButton, clearButton] { button.palette = context.palette }

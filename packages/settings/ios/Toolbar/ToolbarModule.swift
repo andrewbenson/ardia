@@ -6,12 +6,12 @@ import SolaraStore
 import SolaraUI
 
 public class ToolbarModule: Module {
+  nonisolated static var available: Bool { LaunchSwitches.shared.isOn(.nativeOmnibox, defaultOn: true) && NativeSettingsHandle.active }
+
   public func definition() -> ModuleDefinition {
     Name("SolaraToolbar")
 
-    Function("available") { () -> Bool in
-      LaunchSwitches.shared.isOn(.nativeOmnibox, defaultOn: true) && NativeSettingsHandle.active
-    }
+    Function("available") { () -> Bool in ToolbarModule.available }
 
     View(NativeToolbarHostView.self) {
       Events("onToolbarClick", "onToolbarAnchors")

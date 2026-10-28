@@ -10,7 +10,9 @@ public class AutoHideModule: Module {
 
     Events("onAutoHideEvent")
 
-    Function("available") { () -> Bool in NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeAutoHide, defaultOn: false) }
+    Function("available") { () -> Bool in
+      NativeWindowShell.enabled && ToolbarModule.available && LaunchSwitches.shared.isOn(.nativeAutoHide, defaultOn: false)
+    }
 
     AsyncFunction("set") { (windowId: String, tabId: String, json: String) in
       let sink = AutoHideSink(self)

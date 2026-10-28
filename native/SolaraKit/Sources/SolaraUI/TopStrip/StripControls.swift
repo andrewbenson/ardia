@@ -77,6 +77,7 @@ public final class StripControlsView: NSView {
     addSubview(indicator)
     addSubview(downloads)
     downloads.radius = 10
+    downloads.name = "Downloads"
     indicator.onPress = { [weak self] in self?.onAction(.profileMenu) }
     downloads.onPress = { [weak self] in self?.onAction(.toggleDownloads) }
   }
@@ -140,6 +141,8 @@ final class StripProfileIndicator: StripHoverView {
   private var showName = true
   private var enabled = true
   var onPress: (() -> Void)?
+
+  override var accessibleName: String? { label.stringValue }
 
   override init(frame: NSRect) {
     super.init(frame: frame)

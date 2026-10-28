@@ -34,6 +34,16 @@ import Testing
     #expect(actions == [.toggleDownloads, .profileMenu])
   }
 
+  @Test func voiceOverReadsTheProfileAndTheDownloadsButtonAsButtons() {
+    let view = StripControlsView(frame: .zero)
+    view.update(StripControlsState(title: "Work", incognito: false, profiles: 2, nameColor: "#FF0000", downloadsOpen: true, downloadsTooltip: nil), theme: [:])
+    #expect(view.indicator.isAccessibilityElement())
+    #expect(view.indicator.accessibilityRole() == .button)
+    #expect(view.indicator.accessibilityLabel() == "Work")
+    #expect(view.downloads.accessibilityLabel() == "Downloads")
+    #expect(view.downloads.accessibilityValue() == nil)
+  }
+
   @Test func theDownloadsButtonSitsWhereYogaRoundsItsCentredQuarterPointOnlyWhenTheIndicatorShows() {
     let view = StripControlsView(frame: .zero)
     view.update(StripControlsState(title: "Work", incognito: false, profiles: 2, nameColor: "#FF0000", downloadsOpen: false, downloadsTooltip: nil), theme: [:])

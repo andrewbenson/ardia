@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(
-    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with ARDIA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, the two strips' pixels compared, and the peek over a hidden strip: its slide in and out frame for frame at 30 fps, and its downloads button holding it out.",
+    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with ARDIA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, the two strips' pixels compared, every tooltip and VoiceOver name along the strip, the docked profile and downloads controls and the drop glow (pixels, and the glow's fade frame for frame), and the peek over a hidden strip: its slide in and out frame for frame at 30 fps, its downloads button holding it out, and a press in it reaching only what was pressed, not the address field under it.",
   );
   process.exit(2);
 }
@@ -253,6 +253,18 @@ async function measure(native) {
             return settle(500);
           });
         }).then(() => seen);`);
+    out.labels = await run(`
+      const W = st().windows.w1.frame[2];
+      return win("w1").then((n) => {
+        const xs = [];
+        for (let x = 60; x < W; x += 1) xs.push(x);
+        const runsOf = (prefix) => Promise.all(xs.map((x) => C.devWindow(n, prefix + x + ",21"))).then((all) => {
+          const out = []; let prev = null;
+          all.forEach((v, i) => { if (v !== prev) out.push([xs[i], v]); prev = v; });
+          return out;
+        });
+        return runsOf("tip:").then((tips) => runsOf("ax:").then((ax) => ({ tips, ax })));
+      });`);
     out.dockedShots = {};
     const W = 1600;
     const dockedLooks = [
@@ -437,6 +449,36 @@ try {
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the peek's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });
     }
+    await rep.check("every tooltip along the strip reads and spans as RN's", async () => {
+      const show = (runs) => runs.map(([x, t]) => `${x} ${JSON.stringify(t)}`).join("\n");
+      assert.ok(rn.labels.tips.filter(([, t]) => t).length > 15, `RN shows tooltips:\n${show(rn.labels.tips)}`);
+      assert.deepEqual(native.labels.tips.map(([, t]) => t), rn.labels.tips.map(([, t]) => t), `the same tooltips in order:\nrn\n${show(rn.labels.tips)}\nnative\n${show(native.labels.tips)}`);
+      const off = native.labels.tips.flatMap(([x, t], i) => (Math.abs(x - rn.labels.tips[i][0]) <= 1 ? [] : [`${JSON.stringify(t)} from ${x}, RN's from ${rn.labels.tips[i][0]}`]));
+      assert.deepEqual(off, []);
+    });
+    await rep.check("VoiceOver finds every strip item by its name, the selected tab as selected, and the controls", async () => {
+      const at = (x) => native.labels.ax.findLast(([u]) => u <= x)?.[1] ?? "";
+      const first = (x) => at(x).split(" < ")[0];
+      rep.log(`native ax ${native.labels.ax.map(([x, a]) => `${x} ${a.split(" < ")[0]}`).join(" | ")}`);
+      const expect = [
+        [100, "AXRadioButton|Tab p1|0"],
+        [220, "AXRadioButton|t1.example|1"],
+        [300, "AXButton|Work|"],
+        [420, "AXRadioButton|g1a.example|0"],
+        [615, "AXButton|Close Group|"],
+        [680, "AXButton|2 Tabs|"],
+        [800, "AXRadioButton|Tab s1a|0"],
+        [900, "AXRadioButton|Tab s1b|0"],
+        [1220, "AXButton|Docs|"],
+        [1340, "AXButton|Unmute|"],
+        [1380, "AXRadioButton|t2.example|0"],
+        [1440, "AXButton|New Tab|"],
+        [1500, "AXButton|Personal|"],
+        [1575, "AXButton|Downloads|"],
+      ];
+      const off = expect.flatMap(([x, want]) => (first(x) === want ? [] : [`${x}: ${first(x)}, want ${want}`]));
+      assert.deepEqual(off, []);
+    });
     await rep.check("the docked strip's controls take the same clicks, swipes and drops as RN's", async () => {
       rep.log(`docked rn ${JSON.stringify(rn.docked)}`);
       rep.log(`docked native ${JSON.stringify(native.docked)}`);

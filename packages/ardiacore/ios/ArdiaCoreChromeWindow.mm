@@ -2645,6 +2645,29 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     }
     return [chain componentsJoinedByString:@" < "];
   }
+  if ([action hasPrefix:@"tip:"]) {
+    NSPoint p = WindowPoint(window, [action substringFromIndex:4]);
+    SEL at = NSSelectorFromString(@"devToolTipAt:");
+    for (NSView *v = [frameView hitTest:p]; v; v = v.superview) {
+      NSString *tip = [v respondsToSelector:at] ? ((NSString * (*)(id, SEL, NSValue *))objc_msgSend)(v, at, [NSValue valueWithPoint:p]) : v.toolTip;
+      if (tip.length) return tip;
+    }
+    return @"";
+  }
+  if ([action hasPrefix:@"ax:"]) {
+    NSPoint p = WindowPoint(window, [action substringFromIndex:3]);
+    id element = [window accessibilityHitTest:[window convertPointToScreen:p]];
+    NSMutableArray<NSString *> *chain = [NSMutableArray array];
+    for (id e = element; e && chain.count < 4; e = [e respondsToSelector:@selector(accessibilityParent)] ? [e accessibilityParent] : nil) {
+      if (![e respondsToSelector:@selector(accessibilityRole)]) break;
+      NSString *label = [e accessibilityLabel] ?: [e accessibilityTitle] ?: @"";
+      id value = [e accessibilityValue];
+      [chain addObject:[NSString stringWithFormat:@"%@|%@|%@", [e accessibilityRole] ?: @"", label,
+                                                   [value isKindOfClass:NSString.class] || [value isKindOfClass:NSNumber.class] ? [value description] : @""]];
+      if ([e isKindOfClass:NSWindow.class]) break;
+    }
+    return [chain componentsJoinedByString:@" < "];
+  }
   if ([action isEqualToString:@"windowDrags"]) {
     static NSMutableArray<NSString *> *drags;
     static dispatch_once_t once;

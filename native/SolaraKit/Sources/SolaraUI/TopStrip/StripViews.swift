@@ -66,6 +66,26 @@ class StripHoverView: NSView {
   func press(_ mods: SidebarClickMods) {}
   func contextMenu() {}
 
+  var accessibleName: String? { nil }
+  var accessibleSelected: Bool? { nil }
+
+  @objc(devToolTipAt:) func devToolTip(at point: NSValue) -> String? { toolTip }
+
+  override func isAccessibilityElement() -> Bool { !passive && accessibleName?.isEmpty == false }
+  override func accessibilityRole() -> NSAccessibility.Role? { accessibleSelected == nil ? .button : .radioButton }
+  override func accessibilityLabel() -> String? { accessibleName }
+  override func accessibilityValue() -> Any? { accessibleSelected.map { NSNumber(value: $0) } }
+
+  override func accessibilityPerformPress() -> Bool {
+    press(SidebarClickMods(NSEvent.ModifierFlags()))
+    return true
+  }
+
+  override func accessibilityPerformShowMenu() -> Bool {
+    contextMenu()
+    return true
+  }
+
   private var page: StripPageView? {
     var at = superview
     while let v = at {
@@ -110,7 +130,10 @@ final class StripIconButton: StripHoverView {
   var radius: CGFloat = 5 { didSet { plate.cornerRadius = radius } }
   var active = false { didSet { if active != oldValue { repaint() } } }
   var onPress: (() -> Void)?
+  var name: String?
   private var fills: (hover: NSColor, pressed: NSColor) = (.clear, .clear)
+
+  override var accessibleName: String? { name ?? toolTip }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -287,6 +310,9 @@ final class StripTabChip: StripHoverView, StripDraggable {
 
   var tabId: String? { tab?.id }
 
+  override var accessibleName: String? { tab == nil ? nil : label.text }
+  override var accessibleSelected: Bool? { active }
+
   func update(_ tabId: String, _ context: StripContext) {
     self.context = context
     guard let tab = context.state.tabs[tabId] else { return }
@@ -402,6 +428,10 @@ final class StripPinnedCell: StripHoverView {
   private let mosaic = FolderMosaicView()
   private(set) var cell = ""
   private var active = false
+  private var title: String?
+
+  override var accessibleName: String? { title }
+  override var accessibleSelected: Bool? { folderId == nil ? active : nil }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -425,7 +455,8 @@ final class StripPinnedCell: StripHoverView {
       mosaic.isHidden = false
       mosaic.render(members: members, context: context.sidebar)
       active = false
-      toolTip = "\(context.query.folderLabel(windowId: context.windowId, folderId: folderId))\nShow Folder"
+      title = context.query.folderLabel(windowId: context.windowId, folderId: folderId)
+      toolTip = "\(title ?? "")\nShow Folder"
     } else if let tab = context.state.tabs[cell] {
       icon.isHidden = false
       mosaic.isHidden = true
@@ -433,6 +464,7 @@ final class StripPinnedCell: StripHoverView {
       icon.set(context.sidebar.iconSpec(tab), palette: context.base)
       active = context.activeId == cell
       let title = (tab.customTitle?.isEmpty == false ? tab.customTitle! : !tab.title.isEmpty ? tab.title : tab.url)
+      self.title = title
       toolTip = tab.url.isEmpty ? title : "\(title)\n\(tab.url)"
     }
     repaint()
@@ -656,6 +688,9 @@ final class StripGroupHeader: StripHoverView {
   var expanded = false
   var onHover: ((Bool) -> Void)?
 
+  override var accessibleName: String? { name.stringValue }
+  override func isAccessibilityExpanded() -> Bool { expanded }
+
   override init(frame: NSRect) {
     super.init(frame: frame)
     addSubview(glyph)
@@ -702,6 +737,8 @@ final class StripFolderChip: StripHoverView {
   private var tint: CSSColor?
   private var bare = false
   var groupId = ""
+
+  override var accessibleName: String? { name.stringValue }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -760,12 +797,18 @@ final class StripFolderChip: StripHoverView {
 }
 
 @MainActor
-final class StripSplitPart: StripHoverView {
+final class StripSplitPart: StripHoverView, NSViewToolTipOwner {
   private let divider = CALayer()
   private let icon = TabIconView()
   private let label = FadeLabel(fontSize: 12)
   var first = true
   private(set) var tabId = ""
+  private var focused = false
+  private var tip = ""
+  private var pressStart: CGFloat { first ? 0 : 12.5 }
+
+  override var accessibleName: String? { tabId.isEmpty ? nil : label.text }
+  override var accessibleSelected: Bool? { focused }
 
   override init(frame: NSRect) {
     super.init(frame: frame)
@@ -782,7 +825,7 @@ final class StripSplitPart: StripHoverView {
     self.tabId = tabId
     self.first = first
     guard let tab = context.state.tabs[tabId] else { return }
-    let focused = context.activeId == tabId
+    focused = context.activeId == tabId
     let base = context.base
     icon.favicons = context.sidebar.favicons
     var spec = context.sidebar.iconSpec(tab, size: 14)
@@ -792,9 +835,13 @@ final class StripSplitPart: StripHoverView {
     label.color = ink.map { focused ? $0.text : $0.secondary } ?? (focused ? base.selectedText : base.textTab)
     divider.isHidden = first
     divider.backgroundColor = (ink?.divider ?? base.textTertiary).cgColor
-    toolTip = tab.title.isEmpty ? tab.url : tab.title
+    tip = tab.title.isEmpty ? tab.url : tab.title
     needsLayout = true
   }
+
+  func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String { tip }
+
+  override func devToolTip(at point: NSValue) -> String? { convert(point.pointValue, from: nil).x >= pressStart ? tip : nil }
 
   override func layout() {
     super.layout()
@@ -810,6 +857,8 @@ final class StripSplitPart: StripHoverView {
     icon.frame = NSRect(x: x, y: (h - 14) / 2, width: 14, height: 14)
     x += 14 + 5
     label.frame = NSRect(x: x, y: (h - 16) / 2, width: max(0, bounds.width - x), height: 16)
+    removeAllToolTips()
+    addToolTip(NSRect(x: pressStart, y: 0, width: max(0, bounds.width - pressStart), height: h), owner: self, userData: nil)
   }
 
   override func press(_ mods: SidebarClickMods) { context?.send(.activate(tabId: tabId)) }
@@ -912,6 +961,8 @@ final class StripNewTabButton: StripHoverView {
     addSubview(symbol)
     toolTip = "New Tab (⌘T) — ⌥-click to open in Split View"
   }
+
+  override var accessibleName: String? { "New Tab" }
 
   required init?(coder: NSCoder) { fatalError() }
 

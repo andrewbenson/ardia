@@ -37,6 +37,25 @@ function mulberry32(seed) {
 
 const hlc = (wall, counter, device) => `${wall.toString(36).padStart(9, "0")}.${counter.toString(36).padStart(4, "0")}.${device}`;
 
+const LEDGER_TEXTS = [
+  null,
+  '{"v":2,"profiles":{}}',
+  '{"v":2,"profiles":{"":{"v":1,"L":3,"t":4,"keys":{},"scope":"p:x","held":["pw:a\\nb"],"gated":{"pw:c\\nd":5}}}}',
+  '{"v":1,"profiles":{}}',
+  '{"v":3,"profiles":{}}',
+  '{"v":"2","profiles":{}}',
+  '{"v":null,"profiles":{}}',
+  '{"profiles":{}}',
+  '{"v":2}',
+  '{"v":2,"profiles":[]}',
+  '{"v":2,"profiles":null}',
+  "null",
+  "[]",
+  '"text"',
+  "{",
+  "",
+];
+
 export function randomCase(seed) {
   const rand = mulberry32(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
@@ -96,7 +115,8 @@ export function randomCase(seed) {
   }
   const unapplied = keys.filter(() => rand() < 0.2);
   if (rand() < 0.1) local.splice(0);
-  return { local, mark, ledger: ledgerValue, records, now, nextKeys, nextMark, agreed, unapplied };
+  const ledgerText = pick(LEDGER_TEXTS);
+  return { local, mark, ledger: ledgerValue, records, now, nextKeys, nextMark, agreed, unapplied, ledgerText };
 }
 
 export function evaluate(input) {
@@ -108,6 +128,7 @@ export function evaluate(input) {
   const next = ledger.nextLedger(input.ledger, local, records, input.nextMark, input.nextKeys, judged.deletedBeforeUpgrade);
   const markText = input.mark ? ledger.formatMark(input.mark) : "";
   return {
+    ledgerDoc: ledger.readLedgerDoc(input.ledgerText),
     judge: { mode: judged.mode, claims: judged.claims, apply: [...judged.apply], seed: [...judged.seed], deletedBeforeUpgrade: [...judged.deletedBeforeUpgrade] },
     next,
     digests: input.local.map(([, l]) => ledger.digestOf(l.value)),

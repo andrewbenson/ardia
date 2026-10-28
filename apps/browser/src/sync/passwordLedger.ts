@@ -7,6 +7,23 @@ export type LocalLogin = { value: LedgerValue; modified: number };
 export type FolderRecord = { v: LedgerValue | null; h: HLC };
 export type Mark = { L: number; t: number };
 
+export type StoredLedger = Ledger & { scope?: string; held?: string[]; gated?: Record<string, number> };
+export type LedgerDoc = { v: 2; profiles: Record<string, StoredLedger> };
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+export function readLedgerDoc(text: string | null): LedgerDoc | "older" | "newer" | "unreadable" {
+  if (text === null) return { v: 2, profiles: {} };
+  try {
+    const doc = JSON.parse(text) as unknown;
+    if (!isPlainObject(doc)) return "unreadable";
+    if (doc.v !== 2) return doc.v === 1 ? "older" : doc.v === undefined ? "unreadable" : "newer";
+    return isPlainObject(doc.profiles) ? (doc as LedgerDoc) : "unreadable";
+  } catch {
+    return "unreadable";
+  }
+}
+
 export type Claim = { key: string; v: LedgerValue | null; at: number; afterRecord: HLC | null };
 export type Judgement = {
   mode: "consistent" | "rebuild" | "upgrade";

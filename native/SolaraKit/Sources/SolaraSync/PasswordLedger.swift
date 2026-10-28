@@ -74,17 +74,30 @@ public struct Ledger: Sendable, Equatable {
   }
 }
 
-public enum LedgerDocument: Equatable {
-  case newer
+public enum LedgerDocumentState: Sendable, Equatable {
   case doc(JSONObject)
+  case older
+  case newer
+  case unreadable
 }
 
-public func readLedgerDocument(_ text: String?) -> LedgerDocument {
-  let empty: JSONObject = ["v": 1, "profiles": .object(JSONObject())]
-  guard let text, let value = try? JSONValue.parse(text) else { return .doc(empty) }
-  if let object = value.object, object.contains("v"), object["v"] != .number(1) { return .newer }
-  guard let object = value.object, object["v"] == .number(1), jsTruthy(object["profiles"]) else { return .doc(empty) }
+public func readLedgerDocument(_ text: String?) -> LedgerDocumentState {
+  guard let text else { return .doc(["v": 2, "profiles": .object(JSONObject())]) }
+  guard let value = try? JSONValue.parse(text), let object = value.object else { return .unreadable }
+  guard object["v"] == .number(2) else {
+    if object["v"] == .number(1) { return .older }
+    return object.contains("v") ? .newer : .unreadable
+  }
+  guard object["profiles"]?.object != nil else { return .unreadable }
   return .doc(object)
+}
+
+public func readLedgerDocument(_ read: DocumentRead) -> LedgerDocumentState {
+  switch read {
+  case .contents(let text): readLedgerDocument(text)
+  case .missing: readLedgerDocument(nil as String?)
+  case .failure: .unreadable
+  }
 }
 
 public struct LocalLogin: Sendable, Equatable {

@@ -44,7 +44,16 @@ import Testing
       ledger, local, folder, mark(input["nextMark"])!, input["nextKeys"]?.array?.compactMap(\.string) ?? [],
       deletedBeforeUpgrade: judged.deletedBeforeUpgrade.elements)
     let markText = mark(input["mark"]).map(formatMark) ?? ""
+    let ledgerText = input["ledgerText"].flatMap { $0.isNull ? nil : $0.string }
+    let ledgerDoc: JSONValue =
+      switch readLedgerDocument(ledgerText) {
+      case .doc(let object): .object(object)
+      case .older: "older"
+      case .newer: "newer"
+      case .unreadable: "unreadable"
+      }
     return [
+      "ledgerDoc": ledgerDoc,
       "judge": [
         "mode": .string(judged.mode.rawValue), "claims": .array(judged.claims.map(\.json)), "apply": JSONValue(judged.apply.elements),
         "seed": JSONValue(judged.seed.elements), "deletedBeforeUpgrade": JSONValue(judged.deletedBeforeUpgrade.elements),
@@ -71,10 +80,8 @@ import Testing
   }
 
   @Test func aLedgerFromANewerVersionIsRefusedAndAStoredLedgerKeepsItsOtherKeys() throws {
-    #expect(readLedgerDocument(#"{"v":2,"profiles":{}}"#) == .newer)
-    #expect(readLedgerDocument(#"{"v":"1","profiles":{}}"#) == .newer)
-    #expect(readLedgerDocument("{") == .doc(["v": 1, "profiles": .object(JSONObject())]))
-    #expect(readLedgerDocument(nil) == .doc(["v": 1, "profiles": .object(JSONObject())]))
+    #expect(readLedgerDocument(DocumentRead.failure("EIO")) == .unreadable)
+    #expect(readLedgerDocument(DocumentRead.missing) == .doc(["v": 2, "profiles": .object(JSONObject())]))
     let stored = try JSONValue.parse(#"{"v":1,"L":2,"t":3,"keys":{},"scope":"s","held":["pw:a"],"gated":{"pw:b":5},"later":1}"#)
     #expect(Ledger(json: stored).json.text() == stored.text(), "scope, held, gated and unknown keys are kept")
   }

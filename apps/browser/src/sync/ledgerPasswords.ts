@@ -2,28 +2,15 @@ import { deletePassword, engineCall } from "@ardia/ardiacore";
 import { readDocument, readDocumentResult, writeDocument } from "@ardia/shell";
 import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins, type SealedValue } from "@ardia/sync";
 import { engineProfile } from "../store/model";
-import { isObject } from "./readable";
-import { digestOf, formatMark, judge, nextLedger, parseMark, type FolderRecord, type Ledger, type LedgerValue, type LocalLogin, type Mark } from "./passwordLedger";
+import { digestOf, formatMark, judge, nextLedger, parseMark, readLedgerDoc, type FolderRecord, type LedgerDoc, type LedgerValue, type LocalLogin, type Mark, type StoredLedger } from "./passwordLedger";
 
 const LEDGER_DOC = "sync-pw-ledger.json";
 const MARK_KEY = "solara_sync_ledger";
 const READ_INTERVAL = 30_000;
 const MASS_CHANGE_AT_LEAST = 5;
 
-type Stored = Ledger & { scope?: string; held?: string[]; gated?: Record<string, number> };
-type LedgerDoc = { v: 2; profiles: Record<string, Stored> };
-
-export function readLedgerDoc(text: string | null): LedgerDoc | "older" | "newer" | "unreadable" {
-  if (text === null) return { v: 2, profiles: {} };
-  try {
-    const doc = JSON.parse(text) as unknown;
-    if (!isObject(doc)) return "unreadable";
-    if (doc.v !== 2) return doc.v === 1 ? "older" : doc.v === undefined ? "unreadable" : "newer";
-    return isObject(doc.profiles) ? (doc as LedgerDoc) : "unreadable";
-  } catch {
-    return "unreadable";
-  }
-}
+type Stored = StoredLedger;
+export { readLedgerDoc } from "./passwordLedger";
 
 let warnedUnreadable = false;
 function ledgerRead() {

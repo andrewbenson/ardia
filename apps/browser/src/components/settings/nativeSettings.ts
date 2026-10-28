@@ -1,10 +1,4 @@
-import {
-  getPasskeyAccess,
-  listComponents,
-  requestPasskeyAccess,
-  WIDEVINE_COMPONENT_ID,
-  type PageEngine,
-} from "@ardia/ardiacore";
+import type { PageEngine } from "@ardia/ardiacore";
 import { engineHost } from "@ardia/core";
 import { appIcons, currentAppIcon, isDefaultBrowser, launchAtLoginStatus, setAppIcon, setAsDefaultBrowser, setLaunchAtLogin, systemInfo } from "@ardia/shell";
 import { nativeSettingsAvailable, publishSettingsTopic, serveNativeSettings, type SettingsHandler } from "@ardia/settings";
@@ -87,14 +81,7 @@ const coreHandlers: Record<string, SettingsHandler> = {
   "search.disableExtension": (profile: string, extensionId: string) => setEnabled(profile, extensionId, false),
 
   "engines.setWebsiteEngine": (site: string, engine: PageEngine | null) => setWebsiteEngine(site, engine),
-  "engines.passkeyAccess": () => getPasskeyAccess().catch(() => null),
-  "engines.requestPasskeyAccess": () => requestPasskeyAccess().catch(() => null),
 
-  "advanced.widevineVersion": () =>
-    listComponents().then(
-      (list) => list.find((c) => c.id === WIDEVINE_COMPONENT_ID)?.version ?? null,
-      () => null,
-    ),
   "advanced.installCli": () => installCliInBackground("settings"),
   "advanced.resetDeveloperModeSites": () => resetDeveloperModeSites(),
 };

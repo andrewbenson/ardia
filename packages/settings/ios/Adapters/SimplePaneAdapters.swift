@@ -169,18 +169,18 @@ final class EnginesAdapter: EnginesServices {
   }
 
   func passkeyAccess() async -> PasskeyAccess? {
-    Self.passkeys(await SettingsAdapters.js("engines.passkeyAccess") as? [String: Any])
+    Self.passkeys(ArdiaCoreSettingsBridge.passkeyAccess())
   }
 
   func requestPasskeyAccess() async -> PasskeyAccess? {
-    Self.passkeys(await SettingsAdapters.js("engines.requestPasskeyAccess") as? [String: Any])
+    await EngineCalls.result({ done in ArdiaCoreSettingsBridge.requestPasskeyAccess { done($0) } }) { Self.passkeys($0) }
   }
 
   func openPasskeySystemSettings() {
     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") { NSWorkspace.shared.open(url) }
   }
 
-  static func passkeys(_ dict: [String: Any]?) -> PasskeyAccess? {
+  nonisolated static func passkeys(_ dict: [String: Any]?) -> PasskeyAccess? {
     guard let dict, let status = dict.string("status").flatMap(PasskeyAccessStatus.init(rawValue:)) else { return nil }
     return PasskeyAccess(entitled: dict.bool("entitled") ?? false, status: status)
   }
@@ -202,11 +202,18 @@ final class AdvancedAdapter: AdvancedServices {
 
   func chromiumVersion() async -> String? {
     if let version = AboutInfo.read().chromiumVersion { return version }
-    return await SettingsAdapters.js("advanced.chromiumVersion") as? String
+    return ArdiaCoreHost.engineInfo["chromiumVersion"] as? String
   }
 
   func widevineVersion() async -> String?? {
-    .some(await SettingsAdapters.js("advanced.widevineVersion") as? String)
+    let version = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+      ArdiaCoreServices.components { list in continuation.resume(returning: Self.widevine(list)) }
+    }
+    return .some(version)
+  }
+
+  nonisolated static func widevine(_ list: [Any]) -> String? {
+    list.compactMap { $0 as? [String: Any] }.first { $0.string("id") == "oimompecagnajdejgnnjijobebaeigek" }?.string("version")
   }
 
   var cliServer: CliServerStatus? {

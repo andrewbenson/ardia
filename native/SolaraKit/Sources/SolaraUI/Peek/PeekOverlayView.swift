@@ -359,6 +359,7 @@ final class PeekBarView: NSView {
       f.maximumNumberOfLines = 1
       addSubview(f)
     }
+    host.lineBreakMode = .byTruncatingHead
     host.font = .systemFont(ofSize: 13, weight: .medium)
     title.font = .systemFont(ofSize: 13)
     addSubview(icon)

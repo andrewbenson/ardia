@@ -115,6 +115,7 @@ export function PageLabel({ tab, hovered = false, label }: { tab: Tab; hovered?:
             accessible={!!label}
             accessibilityLabel={label}
             numberOfLines={1}
+            ellipsizeMode="head"
             style={{ flexShrink: 0, maxWidth: "60%", fontSize: 13, fontWeight: "500", color: theme.textPrimary }}
           >
             {host}

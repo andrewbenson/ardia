@@ -180,7 +180,28 @@ private func fixup(_ raw: Units) -> Units? {
   return hasPort || path.last == Unit.slash || parts > 1 ? proto + input : nil
 }
 
-func fixupUrl(_ raw: Units) -> Units? { fixup(raw).map(toAppUrl) }
+func isJavaScriptUrl(_ url: Units) -> Bool {
+  var start = 0
+  while start < url.count && url[start] <= Unit.space { start += 1 }
+  let stripped = url[start...].filter { $0 != 0x09 && $0 != Unit.newline && $0 != Unit.carriageReturn }
+  let afterViewSource = stripped.asciiCaseInsensitivePrefix("view-source:") ? 12 : 0
+  return stripped.asciiCaseInsensitivePrefix("javascript:", at: afterViewSource)
+}
+
+func withoutJavaScriptScheme(_ text: Units) -> Units {
+  var out = text
+  while true {
+    var start = 0
+    while start < out.count && (out[start] <= Unit.space || out[start] == 0x7f) { start += 1 }
+    guard out.asciiCaseInsensitivePrefix("javascript:", at: start) else { return out }
+    out = Array(out[(start + 11)...])
+  }
+}
+
+func fixupUrl(_ raw: Units) -> Units? {
+  guard let url = fixup(raw), !isJavaScriptUrl(url) else { return nil }
+  return toAppUrl(url)
+}
 
 public func fixupUrl(_ raw: String) -> String? { fixupUrl(raw.units)?.string }
 
@@ -219,7 +240,7 @@ public enum PasteAction: Sendable, Equatable {
 }
 
 public func classifyPaste(_ text: String) -> PasteAction? {
-  let trimmed = JS.trim(text.units)
+  let trimmed = JS.trim(withoutJavaScriptScheme(JS.trim(text.units)))
   if trimmed.isEmpty { return nil }
   let url = JS.hasSpace(trimmed) ? nil : fixupUrl(trimmed)
   if let url, !url.asciiCaseInsensitivePrefix("about:"), !url.asciiCaseInsensitivePrefix("data:") {
@@ -250,7 +271,7 @@ public func sanitizePaste(_ text: String) -> String {
   for (i, part) in parts.enumerated() {
     if i % 2 == 0 || !breaksLine(part) { out += part } else if spaced { out.append(Unit.space) }
   }
-  return out.string
+  return JS.trimStart(withoutJavaScriptScheme(out)).string
 }
 
 public struct Breadcrumb: Sendable, Equatable {
@@ -262,6 +283,10 @@ public struct Breadcrumb: Sendable, Equatable {
     self.trail = trail
   }
 }
+
+private let defaultPorts: [Units: Units] = [
+  Units("http"): Units("80"), Units("https"): Units("443"), Units("ws"): Units("80"), Units("wss"): Units("443"), Units("ftp"): Units("21"),
+]
 
 private let crumbSeparators: Set<UInt16> = [0x7c, 0x2f, 0xb7, 0x2013, 0x2014, 0x2d]
 
@@ -291,7 +316,8 @@ public func breadcrumb(_ url: String, title: String? = nil) -> Breadcrumb {
     host = app
   } else if let parsed {
     let shown = displayHost(parsed.host)
-    host = shown.hasPrefix(wwwDot) ? Array(shown[4...]) : shown
+    let port = !parsed.port.isEmpty && parsed.port != defaultPorts[parsed.scheme] ? [Unit.colon] + parsed.port : []
+    host = (shown.hasPrefix(wwwDot) ? Array(shown[4...]) : shown) + port
   } else {
     host = u
   }
@@ -324,6 +350,9 @@ func urlForDisplay(_ url: Units) -> Units {
   var rest = url
   if let scheme = leadingScheme(url), url.hasPrefix(Units("//"), at: scheme.count + 1) {
     rest = Array(url[(scheme.count + 3)...])
+    var end = 0
+    while end < rest.count, !isAuthorityEnd(rest[end]) { end += 1 }
+    if let at = rest[..<end].lastIndex(of: Unit.at) { rest = Array(rest[(at + 1)...]) }
   }
   var hostEnd = 0
   while hostEnd < rest.count, !isAuthorityEnd(rest[hostEnd]), rest[hostEnd] != Unit.colon { hostEnd += 1 }

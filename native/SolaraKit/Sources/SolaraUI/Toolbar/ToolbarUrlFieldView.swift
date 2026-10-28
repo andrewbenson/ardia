@@ -151,6 +151,7 @@ final class ToolbarUrlFieldView: NSView {
     }
     if let dev = state.developer {
       label.isHidden = dev.editing
+      label.lineBreakMode = .byTruncatingTail
       label.attributedStringValue = NSAttributedString(
         string: dev.text, attributes: [.font: NSFont(name: ".AppleSystemUIFontMonospaced-Regular", size: 11) ?? NSFont.monospacedSystemFont(ofSize: 11, weight: .regular), .foregroundColor: toolbarColor(palette.text) ?? .labelColor])
       return
@@ -160,11 +161,23 @@ final class ToolbarUrlFieldView: NSView {
     let notSecure = state.insecure != nil
     let hostColor = notSecure ? NotSecureBadgeView.red : toolbarColor(palette.urlHost ?? palette.text) ?? .labelColor
     let pathColor = notSecure ? NotSecureBadgeView.red : toolbarColor(palette.urlPath ?? palette.secondary) ?? .secondaryLabelColor
-    let text = NSMutableAttributedString(string: state.host, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: hostColor])
-    if !trail.isEmpty {
+    let hostOnly = hostOverflows
+    label.lineBreakMode = hostOnly ? .byTruncatingHead : .byTruncatingTail
+    let headFirst = NSMutableParagraphStyle()
+    headFirst.lineBreakMode = .byTruncatingHead
+    var hostAttributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: hostColor]
+    if hostOnly { hostAttributes[.paragraphStyle] = headFirst }
+    let text = NSMutableAttributedString(string: state.host, attributes: hostAttributes)
+    if !trail.isEmpty && !hostOnly {
       text.append(NSAttributedString(string: trail, attributes: [.font: NSFont.systemFont(ofSize: 13), .foregroundColor: pathColor]))
     }
     label.attributedStringValue = text
+  }
+
+  private var hostOverflows: Bool {
+    guard let state, state.developer == nil, label.frame.width > 0 else { return false }
+    let hostWidth = (state.host as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 13)]).width
+    return ceil(hostWidth) > label.frame.width - 2 * ToolbarUrlFieldView.labelInset
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
@@ -246,6 +259,7 @@ final class ToolbarUrlFieldView: NSView {
       width: max(0, textRight - x - shift.x + ToolbarUrlFieldView.labelInset),
       height: size.height)
     if let editor { editor.frame = label.frame.offsetBy(dx: 0, dy: 1) }
+    if !developer && (label.lineBreakMode == .byTruncatingHead) != hostOverflows { applyHover() }
   }
 }
 

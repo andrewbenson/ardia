@@ -137,6 +137,9 @@ const URL_SAMPLES = [
   "https://0x7f.1/?utm_source=1", "https://1.2.3.4.5/?utm_source=1", "https://256.1/?utm_source=1", "https:example.com/?utm_source=1", "https:\\\\example.com/?utm_source=1", "https://@example.com/?utm_source=1",
   "https://a@/?utm_source=1", "ftp://example.com/?utm_source=1", "HTTPS://YouTube.com/?SI=1", "https://m.youtube.com/?si=1&x=%ZZ", "https://example.com/?%75tm_source=1", "https://example.com/?utm+source=1",
   "https://example.com/?a=1&&b=2", "https://example.com/?&", "https://example.com/?", "https://example.com/#?utm_source=1", " https://example.com/?utm_source=1 ", "https://example.com/?utm_source=1#a\nb",
+  "javascript://x%0Aalert(document.domain)", "JAVASCRIPT://x", "view-source:javascript:alert(1)", " javascript:javascript:alert(1)", "\u0001javascript://x", "java\nscript:alert(1)",
+  "javascript:", "javascript:example.com", "\u007fJavaScript: javascript:x", "https://accounts.google.com@evil.com/", "https://a@b@evil.com:8443/x", "http://localhost:3000/", "https://example.com:443/a",
+  "http://example.com:80/", "ws://example.com:81/", "ftp://example.com:21/", "https://fidélity.com/", "https://schwáb.com/",
 ];
 
 const TITLES = ["", "About Version", "History", "Experiments", "(1) Home / X", "GitHub - facebook/react: The library", "Inbox - me@gmail.com - Gmail", "a | b | a", "x.com / Home", "React – A JavaScript library", "Foo — Bar · Baz", "One - Two -Three", " - ", "Title\u00a0-\u00a0Sub", "İstanbul - istanbul"];

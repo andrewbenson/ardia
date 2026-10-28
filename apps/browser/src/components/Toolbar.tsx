@@ -1,4 +1,4 @@
-import { breadcrumb, urlForDisplay } from "@ardia/core";
+import { appUrlOrigin, breadcrumb, urlForDisplay } from "@ardia/core";
 import { ContextMenuArea, FadeLabel, Hairline, MouseArea, Symbol, WindowDragRegion } from "@ardia/shell";
 import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -323,7 +323,7 @@ export const UrlField = memo(function UrlField({
   const full = isFile ? ` ${safeDecode(tab.url.slice("file://".length))}` : urlForDisplay(tab.url);
   const path = !isFile && full.startsWith(host) ? full.slice(host.length) : full;
   const web = isWebUrl(tab.url);
-  const trail = hovered ? path : showFullUrl ? path.replace(/\/$/, "") : !web && tab.title ? ` / ${tab.title}` : "";
+  const trail = hovered ? path : showFullUrl ? path.replace(/\/$/, "") : !web && appUrlOrigin(tab.url) && tab.title ? ` / ${tab.title}` : "";
 
   return (
     <View
@@ -363,7 +363,7 @@ export const UrlField = memo(function UrlField({
           </Text>
         ) : sidebar ? (
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 13, fontWeight: "500", color: palette.text }}>
+            <Text numberOfLines={1} ellipsizeMode="head" style={{ flexShrink: 1, fontSize: 13, fontWeight: "500", color: palette.text }}>
               {host}
             </Text>
             <FadeLabel
@@ -375,10 +375,12 @@ export const UrlField = memo(function UrlField({
             />
           </View>
         ) : (
-          <Text numberOfLines={1} style={{ fontSize: 13, color: palette.text }}>
-            <Text style={{ fontWeight: "500" }}>{host}</Text>
-            {trail ? <Text style={{ color: palette.secondary }}>{trail}</Text> : null}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text numberOfLines={1} ellipsizeMode="head" style={{ flexShrink: 0, maxWidth: "100%", fontSize: 13, fontWeight: "500", color: palette.text }}>
+              {host}
+            </Text>
+            {trail ? <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 13, color: palette.secondary }}>{trail}</Text> : null}
+          </View>
         )}
       </Pressable>
       </ContextMenuArea>

@@ -90,7 +90,7 @@ final class SmallBarField: NSView {
     addSubview(icon)
     addSubview(symbol)
     host.font = .systemFont(ofSize: 13, weight: .medium)
-    host.lineBreakMode = .byTruncatingTail
+    host.lineBreakMode = .byTruncatingHead
     host.isSelectable = false
     addSubview(host)
     title.fadeWidth = 14

@@ -1,4 +1,4 @@
-import { breadcrumb, urlForDisplay } from "@ardia/core";
+import { appUrlOrigin, breadcrumb, urlForDisplay } from "@ardia/core";
 import { NativeToolbarView, type ToolbarClick } from "@ardia/settings";
 import { translation, WindowDragRegion } from "@ardia/shell";
 import { useEffect, useMemo } from "react";
@@ -134,7 +134,7 @@ export function useNativeToolbarModel({ tabId, geometry, windowId, inSplit, focu
     const path = !isFile && full.startsWith(shownHost) ? full.slice(shownHost.length) : full;
     const scheme = insecure && shownHost ? url.slice(0, url.indexOf("://") + 3) : "";
     const host = scheme + shownHost;
-    const restTrail = insecure ? path : showFullUrl ? path.replace(/\/$/, "") : !isWebUrl(url) && tab.title ? ` / ${tab.title}` : "";
+    const restTrail = insecure ? path : showFullUrl ? path.replace(/\/$/, "") : !isWebUrl(url) && appUrlOrigin(url) && tab.title ? ` / ${tab.title}` : "";
     const small = { size: 13, box: 24, radius: 6 };
     const translated = translate.status !== "idle";
     const trailing = [

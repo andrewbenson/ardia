@@ -249,7 +249,7 @@ export function AutoHideToolbar({
             tooltip="Show Toolbar"
             style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }}
           >
-            <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: "500", color: palette.secondary }}>
+            <Text numberOfLines={1} ellipsizeMode="head" style={{ fontSize: 11, fontWeight: "500", color: palette.secondary }}>
               {host}
             </Text>
           </Pressable>

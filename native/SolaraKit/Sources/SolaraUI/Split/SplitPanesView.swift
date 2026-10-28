@@ -35,6 +35,7 @@ public final class SplitPanesView: NSView {
   private var state: BrowserState?
   private var toolbars: [String: String] = [:]
   private var panes: [String: SplitLeafView] = [:]
+  private var liveTops: [String: CGFloat] = [:]
 
   public override var isFlipped: Bool { true }
 
@@ -74,6 +75,12 @@ public final class SplitPanesView: NSView {
     for (tabId, pane) in panes { pane.setToolbar(next[tabId]) }
   }
 
+  public func setLiveTop(_ top: CGFloat?, tabId: String) {
+    guard liveTops[tabId] != top else { return }
+    liveTops[tabId] = top
+    panes[tabId]?.liveTop = top
+  }
+
   public func container(_ tabId: String) -> NSView? { panes[tabId]?.page }
 
   public func toolbar(_ tabId: String) -> ToolbarView? { panes[tabId]?.toolbar }
@@ -102,6 +109,7 @@ public final class SplitPanesView: NSView {
       pane.isHidden = fullscreenTab != nil && tabId != fullscreenTab
       pane.fullscreen = tabId == fullscreenTab
       pane.toolbarHeight = tabId == fullscreenTab ? 0 : toolbarHeight
+      pane.liveTop = liveTops[tabId]
     }
     for (tabId, pane) in panes where rects[tabId] == nil { drop(tabId, pane) }
     if made { refreshEmpty() }
@@ -168,6 +176,13 @@ final class SplitLeafView: NSView {
   }
   var radius: CGFloat { fullscreen ? 0 : ShellMetrics.cardRadius }
   var toolbarHeight: CGFloat = ShellMetrics.toolbarHeight { didSet { if toolbarHeight != oldValue { needsLayout = true } } }
+  var liveTop: CGFloat? {
+    didSet {
+      guard liveTop != oldValue else { return }
+      needsLayout = true
+      layoutSubtreeIfNeeded()
+    }
+  }
   var fill: NSColor = .windowBackgroundColor { didSet { if !fullscreen { layer?.backgroundColor = fill.cgColor } } }
 
   override var isFlipped: Bool { true }
@@ -209,7 +224,8 @@ final class SplitLeafView: NSView {
     super.layout()
     toolbar.frame = CGRect(x: 0, y: 0, width: bounds.width, height: toolbarHeight)
     toolbar.isHidden = toolbarHeight == 0 || toolbarJson == nil
-    page.frame = CGRect(x: 0, y: toolbarHeight, width: bounds.width, height: max(0, bounds.height - toolbarHeight))
+    let pageTop = liveTop.map { min(max(0, $0), bounds.height) } ?? toolbarHeight
+    page.frame = CGRect(x: 0, y: pageTop, width: bounds.width, height: max(0, bounds.height - pageTop))
     empty?.frame = page.frame
   }
 }

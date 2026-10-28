@@ -76,7 +76,7 @@ enum AutoHideHost {
       shell?.coverChanged()
     }
     strip.onFrame = { frame in
-      PaneOverlays.shared.setLiveTop(CGFloat(frame.liveTop), windowId: windowId, tabId: tabId)
+      setLiveTop(CGFloat(frame.liveTop), windowId: windowId, tabId: tabId)
       NativeToolbarHostView.toolbar(windowId: windowId, tabId: tabId)?.setAutoHide(
         opacity: CGFloat(frame.controlsOpacity), scale: CGFloat(frame.toolbarScale), lift: CGFloat(-frame.toolbarLift), interactive: frame.interactive)
     }
@@ -86,7 +86,12 @@ enum AutoHideHost {
       divider: CSSColor(state.divider) ?? CSSColor("rgba(0,0,0,0.1)")!, secondary: CSSColor(state.secondary) ?? CSSColor("#00000080")!,
       host: state.host, hasPage: state.hasPage, stripes: state.stripes)
     strip.set(style: style, mode: mode, shownTop: state.shownTop)
-    if created { PaneOverlays.shared.setLiveTop(CGFloat(strip.restingTop), windowId: windowId, tabId: tabId) }
+    if created { setLiveTop(CGFloat(strip.restingTop), windowId: windowId, tabId: tabId) }
+  }
+
+  private static func setLiveTop(_ top: CGFloat?, windowId: String, tabId: String) {
+    PaneOverlays.shared.setLiveTop(top, windowId: windowId, tabId: tabId)
+    NativeSplitChrome.setLiveTop(top, windowId: windowId, tabId: tabId)
   }
 
   static func toolbarReady(tabId: String) {
@@ -108,7 +113,7 @@ enum AutoHideHost {
   static func remove(windowId: String, tabId: String) {
     guard let strip = strips.removeValue(forKey: key(windowId, tabId)) else { return }
     strip.removeFromSuperview()
-    PaneOverlays.shared.setLiveTop(nil, windowId: windowId, tabId: tabId)
+    setLiveTop(nil, windowId: windowId, tabId: tabId)
     NativeToolbarHostView.toolbar(windowId: windowId, tabId: tabId)?.setAutoHide(opacity: 1, scale: 1, lift: 0, interactive: true)
   }
 }

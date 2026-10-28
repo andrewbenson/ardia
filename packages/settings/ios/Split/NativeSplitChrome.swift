@@ -64,6 +64,11 @@ enum NativeSplitChrome {
 
   private static func cardContainer(for window: String) -> NSView? { NativeWindowShell.host(window)?.shell.card }
 
+  static func setLiveTop(_ top: CGFloat?, windowId: String, tabId: String) {
+    guard let view = panes[windowId], view.superview != nil else { return }
+    view.setLiveTop(top, tabId: tabId)
+  }
+
   private static func panesView(_ windowId: String) -> SplitPanesView? {
     guard panesEnabled else { return nil }
     if let view = panes[windowId], view.superview != nil { return view }

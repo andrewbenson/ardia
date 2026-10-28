@@ -15,6 +15,7 @@ import { useSettings } from "../../store/hooks";
 import { activeTabId, isIncognitoProfile } from "../../store/model";
 import { cleanedTabsFor } from "../../store/organize";
 import { canTidyPins } from "../../store/tidyPins";
+import { cleanUpUpsellChoice, useCleanUpUpsellCount } from "./cleanUpUpsell";
 import { usePagerPages } from "../layout/profilePager";
 import { openNewTabInSplit } from "../layout/splitActions";
 import { isDeveloperMode } from "../../lib/developerMode";
@@ -139,6 +140,8 @@ addNativeSettingsHandlers({
         return tidyPins(windowId, id || undefined);
       case "clear":
         return closeAllTabs(windowId);
+      case "cleanUp":
+        return cleanUpUpsellChoice(windowId, id);
       case "live":
         return runNativeLive(windowId, id, extra.action ?? "", extra.item ?? null, !!extra.meta);
       case "renamed": {
@@ -217,6 +220,7 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
   const newTabAtTop = useSettings((s) => s.newTabButtonPosition === "top");
   const iconRing = useSettings((s) => s.pinnedTabIconRing);
   const cleaned = useBrowser((s) => cleanedTabsFor(s, windowId).length);
+  const upsell = useCleanUpUpsellCount(windowId, true);
   const closeHint = useBrowser((s) => shortcutHint("closeTab", s) ?? null);
   const developer = useBrowser((s) => {
     let out = "";
@@ -273,6 +277,8 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
       newTabAtTop,
       incognito: isIncognitoProfile(profileId),
       cleaned,
+      upsell: upsell || null,
+      product: PRODUCT,
       engines,
       developer: split(developer),
       newTabMark: Image.resolveAssetSource(NEW_TAB_MARK)?.uri ?? null,
@@ -282,7 +288,7 @@ export const NativeSidebar = memo(function NativeSidebar({ windowId, profileId, 
       capture,
       badge: [tokens.badge, tokens.badgeGlyph],
     });
-  }, [player, pip, capture, tokens.badge, tokens.badgeGlyph, pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, engines, developer]);
+  }, [player, pip, capture, tokens.badge, tokens.badgeGlyph, pages, theme, glow.shadowColor, glow.shadowOpacity, glow.shadowRadius, profileId, selection, loading, playing, sleeping, closeHint, renaming, addressBar, tidy, clear, iconRing, newTabAtTop, cleaned, upsell, engines, developer]);
 
   return <SolaraHostedView kind="sidebar" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
 });

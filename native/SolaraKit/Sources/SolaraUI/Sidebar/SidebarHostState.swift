@@ -45,6 +45,8 @@ public struct SidebarHostState: Decodable, Equatable, Sendable {
   public var pip: [String]?
   public var capture: [String: TabCapture]?
   public var badge: [String]?
+  public var upsell: Int?
+  public var product: String?
 
   public init(profileId: String, dark: Bool = true) {
     self.profileId = profileId
@@ -77,7 +79,10 @@ public struct SidebarHostState: Decodable, Equatable, Sendable {
     out.tidy = look.tidy
     out.incognito = look.incognito
     out.pages = nil
-    if look.profileId != profileId { out.player = nil }
+    if look.profileId != profileId {
+      out.player = nil
+      out.upsell = nil
+    }
     return out
   }
 

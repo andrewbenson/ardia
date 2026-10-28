@@ -41,6 +41,7 @@ public enum SidebarAction: Sendable {
   case scrolled
   case live(action: String, folderId: String, id: String?, meta: Bool)
   case media(tabId: String, action: MediaAction)
+  case cleanUp(SidebarCleanUpChoice)
 }
 
 @MainActor

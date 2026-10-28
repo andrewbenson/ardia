@@ -3,14 +3,13 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type React
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { switchOn } from "../lib/killSwitches";
 import { live } from "../live/store";
-import { everySlowly } from "../lib/slowTimers";
 import { layout, ThemeScope, useTheme } from "../lib/theme";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { PageProfileContext, useSettings, useWindowId, useWindowProfileId } from "../store/hooks";
 import { activeTabId, isIncognitoProfile } from "../store/model";
 import { downloadsIn } from "../store/ui";
 import { ancestorIds } from "../store/groups";
-import { cleanedTabsFor, cleanUpCandidates, groupOf } from "../store/organize";
+import { cleanedTabsFor, groupOf } from "../store/organize";
 import { splitOf } from "../store/splits";
 import { openNewTabInSplit } from "./layout/splitActions";
 import { listTopGap, SIDEBAR_FIELD, SIDEBAR_FOOTER_DOWNLOADS, SIDEBAR_HEADER_WITH_FIELD, useAddressBarInSidebar } from "./layout/windowLayout";
@@ -23,6 +22,7 @@ import { usePageStyle, usePagerPages } from "./layout/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "./profiles/ProfileDots";
 import { SidebarAddressRow, SidebarHeaderTools } from "./sidebar/AddressBar";
 import { ClearDivider } from "./sidebar/ClearDivider";
+import { cleanUpUpsellChoice, useCleanUpUpsellCount } from "./sidebar/cleanUpUpsell";
 import { canTidyPins } from "../store/tidyPins";
 import { DragGhost } from "./sidebar/DragGhost";
 import { DragProvider, DragScope, useDragController, useDragging, useDragItem, usePinnedCount, type Ghost } from "./sidebar/dnd";
@@ -611,27 +611,12 @@ const NewTabRow = memo(function NewTabRow({ windowId, shift = null, clip = null 
   );
 });
 
-const UPSELL_MIN = 10;
-let upsellDeclined = false;
-
 const CleanUpUpsell = memo(function CleanUpUpsell({ windowId, shift }: { windowId: string; shift: Animated.Value | null }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
-  const [count, setCount] = useState(0);
-  const [hidden, setHidden] = useState(upsellDeclined);
-  const daily = useBrowser((s) => s.settings.cleanUpInactiveTabsAfterHours !== null);
-  const tabIds = useBrowser((s) => s.windows[windowId]?.tabIds);
-  const profileId = useBrowser((s) => s.windows[windowId]?.profileId);
-  const activeId = useBrowser((s) => activeTabId(s, windowId));
-  const off = hidden || daily;
-  useEffect(() => {
-    if (off) return;
-    const check = () => setCount(cleanUpCandidates(useBrowser.getState(), windowId).length);
-    check();
-    return everySlowly({ every: 60_000, run: check });
-  }, [windowId, off, tabIds, profileId, activeId]);
+  const count = useCleanUpUpsellCount(windowId, true);
   const [moved, movedRef] = useShift(shift);
-  if (off || count < UPSELL_MIN) return null;
+  if (!count) return null;
   const button = (title: string, onPress: () => void, primary = false) => (
     <Pressable onPress={onPress}>
       {({ pressed }) => (
@@ -650,10 +635,6 @@ const CleanUpUpsell = memo(function CleanUpUpsell({ windowId, shift }: { windowI
       )}
     </Pressable>
   );
-  const dismiss = () => {
-    upsellDeclined = true;
-    setHidden(true);
-  };
   return (
     <View {...moved} ref={movedRef} style={[{ marginTop: 10, borderRadius: 12, padding: 10, backgroundColor: tokens.groupFill, borderWidth: 0.5, borderColor: tokens.groupStroke, gap: 8 }, moved.style as object]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -662,15 +643,9 @@ const CleanUpUpsell = memo(function CleanUpUpsell({ windowId, shift }: { windowI
       </View>
       <Text style={{ fontSize: 12, color: theme.textSecondary }}>{PRODUCT} can tidy up for you. You can always reopen closed tabs from the ⌄ menu.</Text>
       <View style={{ gap: 6 }}>
-        {button("Clean Up Once", () => {
-          useBrowser.getState().cleanUpTabs(windowId);
-          dismiss();
-        }, true)}
-        {button("Clean Up Daily", () => {
-          useBrowser.getState().updateSettings({ cleanUpInactiveTabsAfterHours: 24 });
-          useBrowser.getState().cleanUpTabs(windowId);
-        })}
-        {button("Not Now", dismiss)}
+        {button("Clean Up Once", () => cleanUpUpsellChoice(windowId, "once"), true)}
+        {button("Clean Up Daily", () => cleanUpUpsellChoice(windowId, "daily"))}
+        {button("Not Now", () => cleanUpUpsellChoice(windowId, "dismiss"))}
       </View>
     </View>
   );

@@ -218,6 +218,7 @@ final class SidebarHost {
     case .folderMenu(let folderId): call("folderMenu", folderId)
     case .tidy: call("tidy", hostState?.profileId ?? "")
     case .clear: call("clear", "")
+    case .cleanUp(let choice): call("cleanUp", choice.rawValue)
     case .hover(let kind, let id): call("hover", id ?? "", ["kind": kind ?? NSNull()])
     case .scrolled: call("scrolled", "")
     case .renamed(let kind, let id, let text): call("renamed", id, ["kind": kind, "text": text ?? NSNull()])

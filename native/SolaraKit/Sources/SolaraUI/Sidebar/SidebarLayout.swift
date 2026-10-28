@@ -33,6 +33,7 @@ public enum SidebarMetrics {
   public static let sidebarHeader: CGFloat = 46
   public static let pinnedTop: CGFloat = 54
   public static let addressBarListGap: CGFloat = 6
+  public static let upsellGap: CGFloat = 10
 
   public static func listTopGap(addressBar: Bool) -> CGFloat { addressBar ? addressBarListGap : pinnedTop - sidebarHeader }
 }
@@ -47,6 +48,7 @@ public enum SidebarItemKind: Hashable, Sendable {
   case newTab
   case divider
   case incognito
+  case upsell
   case live(String)
 
   public var key: String {
@@ -60,6 +62,7 @@ public enum SidebarItemKind: Hashable, Sendable {
     case .newTab: "newTab"
     case .divider: "divider"
     case .incognito: "incognito"
+    case .upsell: "upsell"
     case .live(let key): key
     }
   }
@@ -134,6 +137,7 @@ public struct SidebarLayoutInput: Sendable {
   public var divided = false
   public var incognitoBadge = false
   public var playerHeight: CGFloat = 0
+  public var upsellHeight: CGFloat = 0
   public var live: SidebarLiveBlocks?
 
   public init(windowId: String, profileId: String, width: CGFloat, height: CGFloat) {
@@ -239,6 +243,11 @@ public struct SidebarLayout {
       }
     }
     out.rowsHeight = y
+    if input.upsellHeight > 0 {
+      y += M.upsellGap
+      rows.append(SidebarItem(kind: .upsell, frame: CGRect(x: 0, y: y, width: innerWidth, height: input.upsellHeight), region: .scroll, groups: [], section: .chrome))
+      y += input.upsellHeight
+    }
     let pad = M.glowRoom + M.edgeInset
     for i in rows.indices { rows[i].frame.origin.y += pad }
     out.items.append(contentsOf: rows)

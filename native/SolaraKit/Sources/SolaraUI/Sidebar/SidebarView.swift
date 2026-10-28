@@ -225,6 +225,9 @@ public final class SidebarView: NSView {
     input.divided = context.host.tidy || context.host.clear
     input.incognitoBadge = context.host.addressBar && context.host.incognito
     input.playerHeight = context.host.player == nil ? 0 : SidebarPlayerView.height + SidebarPlayerView.gap
+    if context.host.upsell != nil {
+      input.upsellHeight = CleanUpUpsellView.height(width: bounds.width - SidebarMetrics.inset * 2, product: context.host.product ?? "Solara")
+    }
     let next = SidebarLayout(query: context.query, input: input).layout(entries)
     pageLayout = next
     place(next, context, animated: animated)
@@ -400,6 +403,7 @@ public final class SidebarView: NSView {
     case .divider: DividerRowView()
     case .tile, .folder: TileView()
     case .incognito: IncognitoBadgeView()
+    case .upsell: CleanUpUpsellView()
     case .live(let key): SidebarLiveViews.make(key)
     }
   }

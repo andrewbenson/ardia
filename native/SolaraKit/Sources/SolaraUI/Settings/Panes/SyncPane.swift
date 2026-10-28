@@ -161,6 +161,7 @@ public struct SyncState: Sendable, Equatable {
   public var localProfiles: [SyncLocalProfile]
   public var remoteProfiles: [SyncRemoteProfile]
   public var heldPasswords: [SyncHeldPasswords]
+  public var passwordsError: String?
 
   public init(
     status: SyncStatus,
@@ -173,7 +174,8 @@ public struct SyncState: Sendable, Equatable {
     devices: [SyncDevice] = [],
     localProfiles: [SyncLocalProfile] = [],
     remoteProfiles: [SyncRemoteProfile] = [],
-    heldPasswords: [SyncHeldPasswords] = []
+    heldPasswords: [SyncHeldPasswords] = [],
+    passwordsError: String? = nil
   ) {
     self.status = status
     self.enabled = enabled
@@ -186,6 +188,7 @@ public struct SyncState: Sendable, Equatable {
     self.localProfiles = localProfiles
     self.remoteProfiles = remoteProfiles
     self.heldPasswords = heldPasswords
+    self.passwordsError = passwordsError
   }
 }
 
@@ -603,6 +606,18 @@ struct SyncOnSections: View {
       while !Task.isCancelled {
         try? await Task.sleep(for: .seconds(30))
         now = Date()
+      }
+    }
+
+    if let passwordsError = state.passwordsError {
+      Section {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+          Image(systemName: "key.slash")
+            .font(.system(size: 14))
+            .foregroundStyle(.secondary)
+            .frame(width: 28, height: 20)
+          Text(passwordsError).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
       }
     }
 

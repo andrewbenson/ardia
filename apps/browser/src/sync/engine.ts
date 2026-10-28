@@ -52,7 +52,7 @@ import {
 import { pinnedAreaAdapters } from "./pinned";
 import { extensionsAdapterFor, extensionSyncAvailable, probeExtensionSync, watchExtensionIntents } from "./extensions";
 import { syncRedesign } from "./redesignSwitch";
-import { ledgerPasswordsAdapter, type HeldPasswords } from "./ledgerPasswords";
+import { ledgerFromNewerVersion, ledgerPasswordsAdapter, type HeldPasswords } from "./ledgerPasswords";
 import { editJournal, noteInStep, noteSeen, prunableSeen, pruneSeen } from "./journalHost";
 import { isObject, readableBatch, readableScope } from "./readable";
 
@@ -135,6 +135,7 @@ type SyncUi = {
   remoteTabs: Record<string, RemoteTabs[]>;
   remoteProfiles: RemoteProfile[];
   heldPasswords: Record<string, number>;
+  passwordsError: string | null;
 };
 
 export const useSync = create<SyncUi>(() => ({
@@ -150,6 +151,7 @@ export const useSync = create<SyncUi>(() => ({
   remoteTabs: {},
   remoteProfiles: [],
   heldPasswords: {},
+  passwordsError: null,
 }));
 
 let doc: SyncDoc = emptyDoc();
@@ -164,6 +166,8 @@ let locked = false;
 let loaded = true;
 let newerFormat = false;
 const NEWER_FORMAT = "This Mac's sync settings were saved by a newer version of Solara. Update Solara to keep syncing.";
+const PASSWORDS_FROM_NEWER_VERSION = "Passwords aren't syncing: a newer version of Solara saved this Mac's password records. Update Solara to sync passwords again.";
+const passwordsRefused = () => syncRedesign.on && doc.types.passwords && ledgerFromNewerVersion();
 const SESSION_UNREADABLE = "Sync is paused because Solara couldn't read its saved session. Nothing from this window is sent to your other Macs.";
 let stopping = false;
 let turningOn = false;
@@ -337,6 +341,7 @@ function publishUi(patch: Partial<SyncUi> = {}) {
     lastSyncedAt: doc.lastSyncedAt,
     ...(doc.enabled ? summarize() : { devices: [], remoteTabs: {}, remoteProfiles: [], pending: 0 }),
     heldPasswords: heldPasswordsByProfile(),
+    passwordsError: passwordsRefused() ? PASSWORDS_FROM_NEWER_VERSION : null,
     ...patch,
   });
 }
@@ -435,7 +440,7 @@ function profileAdapters(profileId: string, retiring: boolean, everyType = false
     ...(t.bookmarks && ownsData ? [inTodaysNames(bookmarksAdapter(profileId))] : []),
     ...(t.history && ownsData ? [inTodaysNames(historyAdapter(profileId))] : []),
     inTodaysNames(deviceTabsAdapter(profileId, id, deviceName, !t.tabs)),
-    ...(t.passwords && ownsData ? [passwords] : []),
+    ...(t.passwords && ownsData && !passwordsRefused() ? [passwords] : []),
     ...(t.settings ? [developerModeAdapter(profileId)] : []),
     ...(t.extensions && ownsData && extensionSyncAvailable() ? [extensionsOf(profileId)] : []),
   ];
@@ -542,7 +547,7 @@ async function runCycle({ retiring = false } = {}) {
     doc.lastSyncedAt = Date.now();
     if (app.joined) doc.joining = false;
     pruneSeenKeys(doc.scopes, doc.lastSyncedAt);
-    noteInStep(doc.scopes, doc.lastSyncedAt);
+    noteInStep(doc.scopes, doc.lastSyncedAt, (key) => !(key.startsWith("pw:") && passwordsRefused()));
     if (forceRequests === forcedBy) forcePasswords = false;
     publishUi({ status: "updated", error: null, pending });
   } catch (error) {

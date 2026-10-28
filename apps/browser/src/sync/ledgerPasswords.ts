@@ -3,6 +3,7 @@ import { readDocument, writeDocument } from "@ardia/shell";
 import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins } from "@ardia/sync";
 import { engineProfile } from "../store/model";
 import { originOf } from "./adapters";
+import { isObject } from "./readable";
 import { digestOf, formatMark, judge, nextLedger, parseMark, type FolderRecord, type Ledger, type LedgerValue, type LocalLogin, type Mark } from "./passwordLedger";
 
 const LEDGER_DOC = "sync-pw-ledger.json";
@@ -13,13 +14,21 @@ const MASS_CHANGE_AT_LEAST = 5;
 type Stored = Ledger & { scope?: string; held?: string[]; gated?: Record<string, number> };
 type LedgerDoc = { v: 1; profiles: Record<string, Stored> };
 
-function readLedgers(): LedgerDoc {
+export function readLedgerDoc(text: string | null): LedgerDoc | "newer" {
   try {
-    const doc = JSON.parse(readDocument(LEDGER_DOC) ?? "null") as LedgerDoc | null;
+    const doc = JSON.parse(text ?? "null") as LedgerDoc | null;
+    if (isObject(doc) && "v" in doc && doc.v !== 1) return "newer";
     return doc?.v === 1 && doc.profiles ? doc : { v: 1, profiles: {} };
   } catch {
     return { v: 1, profiles: {} };
   }
+}
+
+export const ledgerFromNewerVersion = () => readLedgerDoc(readDocument(LEDGER_DOC)) === "newer";
+
+function readLedgers(): LedgerDoc {
+  const doc = readLedgerDoc(readDocument(LEDGER_DOC));
+  return doc === "newer" ? { v: 1, profiles: {} } : doc;
 }
 
 type Read = { local: Map<string, LocalLogin>; mark: Mark | null };
@@ -63,6 +72,7 @@ export function ledgerPasswordsAdapter(
   };
   const ledgerOf = (): Stored | null => (rejoined() ? null : storedOf());
   const saveGated = (gated: Record<string, number>) => {
+    if (ledgerFromNewerVersion()) return;
     const doc = readLedgers();
     const stored = doc.profiles[profile()];
     if (!stored || rejoined()) return;
@@ -71,6 +81,7 @@ export function ledgerPasswordsAdapter(
     writeDocument(LEDGER_DOC, JSON.stringify(doc));
   };
   const saveHeld = (keys: Set<string>) => {
+    if (ledgerFromNewerVersion()) return;
     const doc = readLedgers();
     const stored = doc.profiles[profile()];
     if (!stored || rejoined()) return;
@@ -90,6 +101,7 @@ export function ledgerPasswordsAdapter(
   const write = (now: Read, records: Map<string, FolderRecord>, keys: Iterable<string>, newest: number) => {
     const list = [...keys];
     writing = writing.then(async () => {
+      if (ledgerFromNewerVersion()) return;
       const ledger = ledgerOf();
       const L = Math.max(ledger?.L ?? 0, now.mark?.L ?? 0) + 1;
       const mark = { L, t: Math.max(Date.now(), newest) };
@@ -120,6 +132,7 @@ export function ledgerPasswordsAdapter(
     ownsItsChanges: true,
     extract: async (_base, _queued, _now, _known, remote, stamp, downloading) => {
       const now = Date.now();
+      if (ledgerFromNewerVersion()) return null;
       if ((now < quietUntil || now - lastRead < READ_INTERVAL) && !forced()) return null;
       await writing;
       const here = await read();
@@ -183,6 +196,7 @@ export function ledgerPasswordsAdapter(
     },
     editedAt: () => undefined,
     apply: async (visible, changed) => {
+      if (ledgerFromNewerVersion()) return false;
       await writing;
       const before = await read();
       if (!before) return false;

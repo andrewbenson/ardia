@@ -115,7 +115,8 @@ final class SyncAdapter: SyncServices {
       devices: dict.list("devices").compactMap(device),
       localProfiles: dict.list("localProfiles").compactMap(localProfile),
       remoteProfiles: dict.list("remoteProfiles").compactMap(remoteProfile),
-      heldPasswords: dict.list("heldPasswords").compactMap(heldPasswords)
+      heldPasswords: dict.list("heldPasswords").compactMap(heldPasswords),
+      passwordsError: dict.string("passwordsError")
     )
   }
 

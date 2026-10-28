@@ -168,6 +168,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   const devices = useSync((s) => s.devices);
   const remoteProfiles = useSync((s) => s.remoteProfiles);
   const heldPasswords = useSync((s) => s.heldPasswords);
+  const passwordsError = useSync((s) => s.passwordsError);
   const profiles = useProfiles();
   const allProfiles = useBrowser((s) => s.profiles);
   const [, tick] = useState(0);
@@ -207,6 +208,11 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         </Row>
         <Row anchor="sync.folder" description={info ? folderLabel(info) : " "} />
       </Group>
+      {passwordsError ? (
+        <Group style={{ marginTop: 12 }}>
+          <Row icon={<Symbol name="key.slash" size={14} color={theme.icon} style={{ width: 24, height: 20 }} />} description={passwordsError} />
+        </Group>
+      ) : null}
       {Object.entries(heldPasswords).map(([profileId, count]) => (
         <Group key={profileId} style={{ marginTop: 12 }}>
           <Row

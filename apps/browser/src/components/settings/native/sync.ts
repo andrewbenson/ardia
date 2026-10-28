@@ -47,6 +47,7 @@ function syncTopic() {
         },
       ];
     }),
+    passwordsError: sync.passwordsError ?? null,
     heldPasswords: Object.entries(sync.heldPasswords ?? {}).map(([profileId, count]) => ({
       profileId,
       profileName: profileOrder.length > 1 ? (profiles[profileId]?.name ?? null) : null,

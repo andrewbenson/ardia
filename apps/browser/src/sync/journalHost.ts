@@ -184,11 +184,11 @@ export function journalAnchor(): Anchor {
   return anchorFields(j, compactSeen((key) => !inNativeStore(key)));
 }
 
-export function noteInStep(scopes: Record<string, ScopeState>, now: number) {
+export function noteInStep(scopes: Record<string, ScopeState>, now: number, waitsFor: (key: string) => boolean = () => true) {
   const j = editJournal();
   if (!j) return;
   const entries = Object.entries(scopes);
-  if (entries.some(([, s]) => s.unapplied.length || s.pending || Object.keys(s.damaged).length || s.outbox.length || s.journal?.length)) return;
+  if (entries.some(([, s]) => s.unapplied.some(waitsFor) || s.pending || Object.keys(s.damaged).length || s.outbox.length || s.journal?.length)) return;
   j.inStepAt(now, Object.fromEntries(entries.map(([scope, s]) => [scope, { ...s.vv }])));
   changed();
 }

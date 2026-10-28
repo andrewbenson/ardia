@@ -1,4 +1,10 @@
 {
+  "Cases/journal.json.deflate": {
+    "apps/browser/src/sync/editJournal.ts": "bd7fb6eaf268357831edc3907572b894e7b39c6c2c37b077d2ead5f61c3c5607"
+  },
+  "Cases/ledger.json.deflate": {
+    "apps/browser/src/sync/passwordLedger.ts": "b5ed672eb39a9d1313c4f6fe3a5c366cd3b373febd809acf56d4ce40a1651829"
+  },
   "Cases/state.json.deflate": {
     "apps/browser/src/sync/readable.ts": "8a2dd478f595499dfc8093d877e2feeeee34709f9dfbea510a2818a61753356e"
   },

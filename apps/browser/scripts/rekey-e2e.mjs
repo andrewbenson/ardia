@@ -46,6 +46,7 @@ const CHECKS = {
   "undo-crash": "every after-undo point the undo run logs, crashed, then a relaunch: undone to A or the abort message, dir intact",
   "sync-reads": "after the re-key, sync's own password read (acSync.native.readPasswords) decrypts every planted password with the key file's bytes",
   "sync-pause": "after the re-key, the key file replaced by another key (a reset or Start Over), sync on with ARDIA_SYNC_REDESIGN=1: sync's read is nil, it logs the pause, no login or note is deleted",
+  "sync-ledger": "re-key, then the first sealed ledger (ARDIA_SYNC_REDESIGN=1): each profile's Login Data mark equals its ledger L@t, nothing held, Login Data otherwise unchanged, and a second Mac joining gets exactly the fixture's passwords",
   "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
 };
 
@@ -149,7 +150,8 @@ function scan(userDataDir, secret = MOCK) {
     try { json = JSON.parse(readFileSync(file, "utf8")); } catch (e) { unreadable.push(`${rel}: ${e.message}`); continue; }
     for (const [path, value] of leaves(json)) {
       if (typeof value !== "string" || value.length < 28 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) continue;
-      if (!decrypt(key, Buffer.from(value, "base64"))) continue;
+      const plain = decrypt(key, Buffer.from(value, "base64"));
+      if (!plain || (plain.length !== 32 && strictUtf8(plain) === null)) continue;
       const where = `${rel} prefs`;
       hits[where] = (hits[where] ?? 0) + 1;
       (values[where] ??= []).push(path);
@@ -187,11 +189,12 @@ function plainRows(file) {
   }
 }
 
-function loginDataChanges(template, udd, dirs) {
+function loginDataChanges(template, udd, dirs, { ignoreMeta = [] } = {}) {
   const wrong = [];
   for (const dir of dirs) {
     const before = plainRows(join(template, "Chromium", dir, "Login Data"));
     const after = plainRows(join(udd, dir, "Login Data"));
+    if (after.meta) after.meta = after.meta.filter((r) => !ignoreMeta.includes(r.key));
     for (const table of new Set([...Object.keys(before), ...Object.keys(after)]))
       if (JSON.stringify(before[table]) !== JSON.stringify(after[table])) wrong.push(`${dir}/Login Data ${table}: ${JSON.stringify(before[table]).slice(0, 200)} → ${JSON.stringify(after[table]).slice(0, 200)}`);
   }
@@ -908,12 +911,84 @@ const CASES = {
     const after = counts();
     const paused = /saved passwords didn't decrypt; not syncing passwords now/.test(s.appLog);
     const sealedFiles = readdirSync(folder, { recursive: true }).map(String);
+    let ledger = null;
+    try { ledger = JSON.parse(readFileSync(join(run.data, "sync-pw-ledger.json"), "utf8")); } catch {}
+    const marked = ctx.manifest.profiles.filter((p) => {
+      const db = openRead(join(run.udd, p.dir, "Login Data"));
+      try { return !!db.prepare("SELECT value FROM meta WHERE key = 'solara_sync_ledger'").get(); } finally { db.close(); }
+    }).map((p) => p.name);
     return [
       { ok: Object.values(read ?? {}).every((v) => v === null), name: "with Chrome's key replaced (a reset or Start Over), sync's read of every profile is nil", detail: JSON.stringify(read) },
-      { ok: paused, name: "sync logs the pause and doesn't sync passwords", detail: JSON.stringify(state) },
+      { ok: paused && !Object.keys(ledger?.profiles ?? {}).length && !marked.length, name: "sync logs the pause and writes no ledger entry and no mark", detail: `${JSON.stringify(state)}; ledger ${JSON.stringify(Object.keys(ledger?.profiles ?? {}))}; marked ${marked}` },
       { ok: JSON.stringify(before) === JSON.stringify(after), name: "no login and no note deleted from Login Data", detail: `${JSON.stringify(before)} → ${JSON.stringify(after)}` },
       { ok: s.journal?.phase === "done" && !/migrating|undoing/.test(s.rekeyLog.split("\n").slice(-3).join(" ")), name: "the re-key leaves a replaced item alone", detail: `${s.journal?.phase}; files ${sealedFiles.length}` },
     ];
+  },
+  async "sync-ledger"(ctx) {
+    const run = prepare(ctx.root, "sync-ledger", ctx.fixture);
+    const folder = join(run.dir, "folder");
+    mkdirSync(folder);
+    const env = { ...REKEY, ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder };
+    run.started = await start(ctx.app, run, env);
+    if (run.started.outcome !== "running") return [{ ok: false, name: "the migrating sealed launch reaches Chrome", detail: run.started.outcome }];
+    const a = run.started.instance;
+    let phrase, heldA;
+    try {
+      await waitWindow(a);
+      const sealing = await a.eval("return acSync.sealing()", { timeout: 20000 });
+      if (sealing !== true) throw new Error(`launched with ARDIA_SYNC_REDESIGN=1 but sealing is ${sealing}`);
+      const on = await a.eval(`return acSync.turnOnSync(${JSON.stringify(folder)})`, { timeout: 90000 });
+      if (JSON.stringify(on) !== '{"ok":true}') throw new Error(`turnOnSync ${JSON.stringify(on)}`);
+      phrase = (await a.eval("return acSync.native.recoveryWords()", { timeout: 20000 })).join(" ");
+      for (let i = 0; i < 4; i++) { await a.eval("return acSync.syncNow()", { timeout: 90000 }); await sleep(1000); }
+      heldA = await a.eval("return acSync.useSync.getState().heldPasswords ?? null", { timeout: 20000 });
+    } finally {
+      await a.quit();
+    }
+    const s = snapshot(run);
+    const lines = [];
+    let ledger = null;
+    try { ledger = JSON.parse(readFileSync(join(run.data, "sync-pw-ledger.json"), "utf8")); } catch {}
+    const marks = {};
+    const wrongMarks = [];
+    for (const p of ctx.manifest.profiles) {
+      const key = p.id === "default" ? "" : p.id;
+      const entry = ledger?.profiles?.[key];
+      const db = openRead(join(run.udd, p.dir, "Login Data"));
+      try { marks[p.dir] = db.prepare("SELECT value FROM meta WHERE key = 'solara_sync_ledger'").get()?.value ?? null; } finally { db.close(); }
+      if (!entry?.L || entry.t === undefined) wrongMarks.push(`${p.name}: no ledger entry`);
+      else if (marks[p.dir] !== `${entry.L}@${entry.t}`) wrongMarks.push(`${p.name}: mark ${marks[p.dir]} ≠ ledger ${entry.L}@${entry.t}`);
+      if (entry && (entry.held ?? []).length) wrongMarks.push(`${p.name}: held ${JSON.stringify(entry.held)}`);
+      const keys = Object.keys(entry?.keys ?? {}).filter((k) => k.startsWith("pw:")).length;
+      if (entry && keys !== ctx.manifest.want[p.name].passwords.length) wrongMarks.push(`${p.name}: ${keys} pw keys in the ledger`);
+    }
+    lines.push({ ok: s.journal?.phase === "done", name: "the re-key ran before sync", detail: s.journal?.phase });
+    lines.push({ ok: !wrongMarks.length, name: "the first sealed ledger: each profile's mark in Login Data's meta equals its ledger L@t, every password keyed, nothing held", detail: `${wrongMarks.join("; ")} held ${JSON.stringify(heldA)}` });
+    const rows = loginDataChanges(join(ctx.fixture, "template"), run.udd, ctx.manifest.profiles.map((p) => p.dir), { ignoreMeta: ["solara_sync_ledger"] });
+    lines.push({ ok: !rows.length, name: "Login Data after the re-key and the ledger: unchanged but for ciphertexts and the mark (dates, notes, rows)", detail: rows.join("; ") });
+    const b = prepare(ctx.root, "sync-ledger-b", ctx.fixture, { from: null });
+    const bApp = join(ctx.root, "B.app");
+    if (!existsSync(bApp)) execFileSync("cp", ["-c", "-R", ctx.app, bApp]);
+    b.started = await start(bApp, b, { ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder });
+    if (b.started.outcome !== "running") return [...lines, { ok: false, name: "a second Mac starts", detail: b.started.outcome }];
+    let seen = null;
+    try {
+      const bi = b.started.instance;
+      await waitWindow(bi);
+      const joined = await bi.eval(`return acSync.enterRecoveryPhrase(${JSON.stringify(folder)}, ${JSON.stringify(phrase)})`, { timeout: 90000 });
+      if (JSON.stringify(joined) !== '{"ok":true}') throw new Error(`enterRecoveryPhrase ${JSON.stringify(joined)}`);
+      const want = ctx.manifest.want.Personal.passwords.map((p) => `${p.username}=${p.password}`).sort();
+      for (let i = 0; i < 20; i++) {
+        await bi.eval("return acSync.syncNow()", { timeout: 90000 });
+        seen = await bi.eval(`const c = globalThis.expo.modules.ArdiaCEF; return c.listPasswords("").then((l) => Promise.all(((l && l.passwords) || []).map((p) => c.getPassword("", p.origin, p.username).then((r) => p.username + "=" + (r && r.password))))).then((all) => all.sort());`, { timeout: 60000 });
+        if (JSON.stringify(seen) === JSON.stringify(want)) break;
+        await sleep(1500);
+      }
+    } finally {
+      await b.started.instance.quit();
+    }
+    lines.push({ ok: JSON.stringify(seen) === JSON.stringify(ctx.manifest.want.Personal.passwords.map((p) => `${p.username}=${p.password}`).sort()), name: "a second Mac joining the folder gets exactly the fixture's Personal passwords: nothing claimed away, nothing deleted", detail: JSON.stringify(seen) });
+    return lines;
   },
   async "a-then-d"(ctx) {
     const run = prepare(ctx.root, "a-then-d", ctx.fixture);

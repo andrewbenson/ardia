@@ -54,6 +54,7 @@ final class NativePageView: ExpoView {
   private let bookmarks = BookmarksPageModel()
   private let bookmarkForm = BookmarkFormModel()
   private let createProfile = CreateProfileFormModel()
+  private let liveCard = LiveCardModel()
 
   override var isFlipped: Bool { true }
 
@@ -66,6 +67,7 @@ final class NativePageView: ExpoView {
     bookmarks.onEvent = { [weak self] event in self?.send(event) }
     bookmarkForm.onEvent = { [weak self] event in self?.send(event) }
     createProfile.onEvent = { [weak self] event in self?.send(event) }
+    liveCard.onEvent = { [weak self] event in self?.send(event) }
     Self.live.add(self)
     PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
   }
@@ -136,6 +138,7 @@ final class NativePageView: ExpoView {
       case "bookmarks": NSHostingView(rootView: BookmarksPageView(model: bookmarks, favicons: PageNetwork.favicons))
       case "bookmarkForm": NSHostingView(rootView: BookmarkFormView(model: bookmarkForm))
       case "createProfile": NSHostingView(rootView: CreateProfileFormView(model: createProfile))
+      case "calendarPreview", "meetingAlert": NSHostingView(rootView: LiveCardView(model: liveCard))
       default: nil
       }
     guard let made else { return }
@@ -169,6 +172,7 @@ final class NativePageView: ExpoView {
     case "bookmarks": bookmarks.apply(json: json)
     case "bookmarkForm": bookmarkForm.apply(json: json)
     case "createProfile": createProfile.apply(json: json)
+    case "calendarPreview", "meetingAlert": liveCard.apply(json: json)
     default: break
     }
   }
@@ -232,6 +236,18 @@ final class NativePageView: ExpoView {
     switch event {
     case .create(let name, let color, let shareWith): onPageEvent(["kind": "create", "name": name, "color": color, "shareWith": shareWith ?? NSNull()])
     case .cancel: onPageEvent(["kind": "cancel"])
+    }
+  }
+
+  private func send(_ event: LiveCardEvent) {
+    switch event {
+    case .height(let height): onPageEvent(["kind": "height", "height": height])
+    case .activate: onPageEvent(["kind": "activate"])
+    case .join(let id, let all): onPageEvent(["kind": "join", "id": id, "all": all])
+    case .refresh: onPageEvent(["kind": "refresh"])
+    case .connect: onPageEvent(["kind": "connect"])
+    case .dismiss: onPageEvent(["kind": "dismiss"])
+    case .view: onPageEvent(["kind": "view"])
     }
   }
 }

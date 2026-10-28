@@ -1,3 +1,4 @@
+import { nativePagesAvailable } from "@ardia/settings";
 import { Surface } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Text, View } from "react-native";
@@ -9,7 +10,7 @@ import { useBrowser } from "../../store/browser";
 import { viewTabIds } from "../../store/model";
 import { IconButton } from "../primitives";
 import { measureRow, type Anchor } from "../sidebar/state";
-import { OverlappingAvatars } from "./CalendarPreview";
+import { NativeCard, OverlappingAvatars } from "./CalendarPreview";
 import { useLiveColors } from "./colors";
 import { SmallButton } from "./LiveItemCard";
 
@@ -61,6 +62,37 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
         transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
       }}
     >
+      {nativePagesAvailable() ? (
+        <NativeCard
+          state={JSON.stringify({
+            card: "meetingAlert",
+            dark: !!theme.dark,
+            nowColor: colors.now,
+            alert: {
+              id: event.occurrence,
+              title: event.title || "Untitled event",
+              color: event.color,
+              time: timeRange(event),
+              when: running ? "Now" : relativeTime(event.start, now),
+              running,
+              joinTitle: link ? joinTitle(link.provider) : null,
+              people: people.map((a) => a.name || a.email),
+            },
+            calendarName: calendarName ?? null,
+            who: who || guestsLabel(event),
+            viewEvent: !link && !!calendarTab,
+            openAll: link && related.length ? `Opens ${related.length === 1 ? "1 link" : `${related.length} links`} from the invitation, then joins` : null,
+          })}
+          onEvent={(e) => {
+            if (e.kind === "dismiss") dismiss(event);
+            else if (e.kind === "join") joinEvent(event, !!e.all, windowId);
+            else if (e.kind === "view" && calendarTab) {
+              useBrowser.getState().activate(calendarTab);
+              dismiss(event);
+            }
+          }}
+        />
+      ) : (
       <Surface
         fill={hex(theme.panel)}
         cornerRadius={14}
@@ -115,6 +147,7 @@ function AlertCard({ event, windowId, windowWidth }: { event: CalendarEvent; win
           ) : null}
         </View>
       </Surface>
+      )}
     </Animated.View>
   );
 }

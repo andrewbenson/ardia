@@ -9,6 +9,8 @@
 // folder picked in its tree with Done, saves on Esc and on a click outside, and Remove deletes; the editor won't
 // save without a URL, saves with Return, and Esc or a click outside cancels. Create a Profile makes the profile named
 // in its field with Return, starts from a preset's name and sharing, and Esc or a click outside creates nothing.
+// The calendar preview lists today's fixture events and a click shows the calendar tab; the meeting alert's Join
+// opens the meeting and Ignore dismisses it.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -30,6 +32,14 @@ const files = join(scratch, "files");
 mkdirSync(files);
 writeFileSync(join(files, "report.pdf"), "report");
 writeFileSync(join(files, "photo.png"), "photo");
+mkdirSync(data, { recursive: true });
+writeFileSync(join(data, "calendar-fixture.json"), JSON.stringify({
+  calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
+  events: [
+    { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: 3, durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }, { name: "Me", email: "me@example.com", me: true }] },
+    { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: 90, durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
+  ],
+}));
 const rep = reporter(join(scratch, "pages-test.log"), { name: "pages-test" });
 const download = (id, filename, state, extra = {}) => ({
   id, url: `https://example.com/${filename}`, filename, path: join(files, filename), state, paused: false,
@@ -54,7 +64,7 @@ const frameOf = (current, label) => current.frames.find((f) => f.label === label
 const click = (frame) => dev(`click:${frame.x + frame.width / 2},${frame.y + frame.height / 2}`);
 
 try {
-  app = await launch(resolve(appArg), { data, onboarded: true, env: { ARDIA_NATIVE_PAGES: "1" } });
+  app = await launch(resolve(appArg), { data, onboarded: true, env: { ARDIA_NATIVE_PAGES: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
   await app.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devPages" });
   await sleep(5000);
   await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; for (const d of ${JSON.stringify(downloads)}) s.upsertDownload(d); s.setDownloadsOpen(w, false); ac.pages.openInternalPage("downloads", w); return true`);
@@ -409,6 +419,49 @@ try {
     const shared = JSON.parse(await app.eval(`const s = ac.store.getState(); const p = s.profiles[globalThis.__created]; return JSON.stringify({ name: p?.name, data: p?.dataId ?? p?.id, head: s.profiles[${JSON.stringify(head)}]?.dataId ?? ${JSON.stringify(head)} })`));
     assert.equal(shared.name, "Shared");
     assert.equal(shared.data, shared.head, "shares the preset's data");
+  });
+  const kindPage = async (kind) => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages.find((p) => p.kind === kind) ?? null;
+
+  await rep.check("the calendar preview lists today's events and a click shows the calendar tab", async () => {
+    const ids = JSON.parse(await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
+      const before = s.windows[w].activeTabIds[s.windows[w].profileId];
+      const tab = s.newTab(w, { url: "https://calendar.google.com/calendar/u/0/r", pinned: true, background: true });
+      return JSON.stringify({ w, tab, before })`));
+    await until(async () => ({ ok: (await app.eval(`return ac.pages.calendar.getState().events.length`)) >= 2 }), 5000);
+    await app.eval(`ac.pages.setSidebarUi({ hover: { windowId: ${JSON.stringify(ids.w)}, kind: "tab", id: ${JSON.stringify(ids.tab)}, anchor: { x: 10, y: 120, width: 240, height: 32 } } }); return true`);
+    const shown = await until(async () => {
+      const now = await kindPage("calendarPreview");
+      return { ok: !!now && now.frames.some((f) => f.label.startsWith("event:standup")), now };
+    });
+    assert.ok(shown.ok, "preview with the standup row");
+    await sleep(800);
+    const row = shown.now.frames.find((f) => f.label.startsWith("event:review"));
+    const hit = await click(row);
+    const active = await until(async () => ({ ok: (await app.eval(`const s = ac.store.getState(); const w = s.windows[${JSON.stringify(ids.w)}]; return w.activeTabIds[w.profileId]`)) === ids.tab }));
+    assert.ok(active.ok, `the calendar tab is shown (clicked ${JSON.stringify(row)} on ${hit})`);
+    await app.eval(`ac.pages.setSidebarUi({ hover: null }); return true`);
+  });
+
+  await rep.check("the meeting alert's Join opens the meeting and Ignore dismisses it", async () => {
+    const show = () => app.eval(`const e = ac.pages.calendar.getState().events.find((x) => x.id === "standup"); ac.store.getState().setFocusedWindow?.(Object.keys(ac.store.getState().windows)[0]); ac.pages.meetingAlert.setState({ event: e }); return !!e`);
+    assert.equal(await show(), true, "fixture event");
+    let shown = await until(async () => {
+      const now = await kindPage("meetingAlert");
+      return { ok: !!now && !!frameOf(now, "Join"), now };
+    });
+    assert.ok(shown.ok, `alert with Join (focused: ${await app.eval("return ac.store.getState().ui.focusedWindowId")})`);
+    const tabsBefore = await app.eval(`return Object.keys(ac.store.getState().tabs).length`);
+    await click(frameOf(shown.now, "Join"));
+    const opened = await until(async () => ({ ok: (await app.eval(`return Object.values(ac.store.getState().tabs).some((t) => (t.url || "").includes("zoom.us"))`)) }), 4000);
+    assert.ok(opened.ok, `a zoom tab (tabs ${tabsBefore} → ${await app.eval("return Object.keys(ac.store.getState().tabs).length")})`);
+    await show();
+    shown = await until(async () => {
+      const now = await kindPage("meetingAlert");
+      return { ok: !!now && !!frameOf(now, "Ignore"), now };
+    });
+    await click(frameOf(shown.now, "Ignore"));
+    const gone = await until(async () => ({ ok: (await app.eval(`return ac.pages.meetingAlert.getState().event === null`)) }));
+    assert.ok(gone.ok, "dismissed");
   });
 } finally {
   await app?.quit();

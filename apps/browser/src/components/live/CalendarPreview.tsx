@@ -1,5 +1,6 @@
+import { NativePage, nativePagesAvailable } from "@ardia/settings";
 import { FadeLabel } from "@ardia/shell";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { joinEvent } from "../../live/alerts";
@@ -38,6 +39,67 @@ export function CalendarPreview({ tabId, windowId, anchor }: { tabId: string; wi
   const timed = upcoming.filter((e) => !e.allDay);
   const date = new Date(now).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 
+  if (nativePagesAvailable()) {
+    const state = JSON.stringify({
+      card: "calendarPreview",
+      dark: !!theme.dark,
+      nowColor: colorsNow(!!theme.dark),
+      date,
+      connected,
+      loading,
+      product: PRODUCT,
+      body: !connected
+        ? access === "denied" || access === "restricted"
+          ? "denied"
+          : "signIn"
+        : !lastFetch && loading
+          ? "loading"
+          : error && !lastFetch
+            ? "error"
+            : !today.length
+              ? "none"
+              : !upcoming.length
+                ? "noMore"
+                : "events",
+      allDay: allDay.map((e) => ({ id: e.occurrence, title: e.title || "Untitled event", color: e.color })),
+      events: timed.map((e) => {
+        const link = joinLink(e);
+        const joinable = !!link && isMeeting(e) && now >= e.start - JOINABLE_BEFORE_MS && now < e.end;
+        return {
+          id: e.occurrence,
+          title: e.title || "Untitled event",
+          color: e.color,
+          time: timeRange(e),
+          when: e.start <= now ? "Now" : relativeTime(e.start, now),
+          running: e.start <= now,
+          past: e.end <= now,
+          joinTitle: joinable ? joinTitle(link!.provider) : null,
+          people: e.attendees.filter((a) => !a.me).map((a) => a.name || a.email),
+        };
+      }),
+    });
+    return (
+      <HoverSurface anchor={anchor} width={300}>
+        <NativeCard
+          state={state}
+          onEvent={(e) => {
+            if (e.kind === "activate") {
+              dismissHover();
+              useBrowser.getState().activate(tabId);
+            } else if (e.kind === "join") {
+              const event = timed.find((x) => x.occurrence === e.id);
+              if (event) {
+                dismissHover();
+                joinEvent(event, false, windowId);
+              }
+            } else if (e.kind === "refresh") void refreshCalendar();
+            else if (e.kind === "connect") void connectCalendar();
+          }}
+        />
+      </HoverSurface>
+    );
+  }
+
   let body: React.ReactNode;
   if (!connected) body = <SignIn denied={access === "denied" || access === "restricted"} />;
   else if (!lastFetch && loading) body = <Empty text="Loading events" />;
@@ -66,6 +128,24 @@ export function CalendarPreview({ tabId, windowId, anchor }: { tabId: string; wi
       </View>
       {body}
     </HoverSurface>
+  );
+}
+
+const colorsNow = (dark: boolean) => (dark ? "#E5534B" : "#D1242F");
+
+export function NativeCard({ state, onEvent }: { state: string; onEvent: (e: { kind: string } & Record<string, unknown>) => void }) {
+  const [height, setHeight] = useState(1);
+  return (
+    <NativePage
+      kind={(JSON.parse(state) as { card: "calendarPreview" | "meetingAlert" }).card}
+      state={state}
+      style={{ height }}
+      onPageEvent={(e) => {
+        const ev = e.nativeEvent;
+        if (ev.kind === "height") setHeight(Math.max(1, Math.ceil(Number(ev.height))));
+        else onEvent(ev);
+      }}
+    />
   );
 }
 

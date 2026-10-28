@@ -2,7 +2,7 @@ import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modu
 import { forwardRef, type ComponentType, type Ref } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
-export type NativePageKind = "downloads" | "history" | "bookmarks" | "bookmarkForm" | "createProfile";
+export type NativePageKind = "downloads" | "history" | "bookmarks" | "bookmarkForm" | "createProfile" | "calendarPreview" | "meetingAlert";
 export type NativePageEvent = { kind: string } & Record<string, unknown>;
 
 export type NativePageProps = ViewProps & {

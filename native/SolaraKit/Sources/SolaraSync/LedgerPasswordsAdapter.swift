@@ -89,12 +89,16 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     return (fresh ? nil : stored, fresh)
   }
 
-  func replaceStored(_ doc: JSONObject, _ object: JSONObject) {
+  @discardableResult
+  func replaceStored(_ doc: JSONObject, _ object: JSONObject) -> Bool {
     var doc = doc
     var profiles = doc["profiles"]?.object ?? JSONObject()
     profiles[profile] = .object(object)
     doc["profiles"] = .object(profiles)
-    host.writeLedgerDocument(JSONValue.object(doc).text())
+    let text = JSONValue.object(doc).text()
+    guard case .doc = readLedgerDocument(text) else { return false }
+    host.writeLedgerDocument(text)
+    return true
   }
 
   func saveGated(_ gated: JSONObject) -> Bool {
@@ -103,8 +107,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     if (stored.present("gated") ?? .object(JSONObject())).text() == JSONValue.object(gated).text() { return true }
     var object = stored.object
     object["gated"] = .object(gated)
-    replaceStored(doc, object)
-    return true
+    return replaceStored(doc, object)
   }
 
   func saveHeld(_ keys: OrderedSet<JSKey>) -> Bool {
@@ -114,8 +117,7 @@ public final class LedgerPasswordsAdapter: SyncAdapter, Sendable {
     if (stored.present("held") ?? JSONValue([String]())).text() == JSONValue(next).text() { return true }
     var object = stored.object
     object["held"] = JSONValue(next)
-    replaceStored(doc, object)
-    return true
+    return replaceStored(doc, object)
   }
 
   func read() async throws -> LedgerRead? {

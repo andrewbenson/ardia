@@ -27,6 +27,19 @@ function ledgerRead() {
 export const ledgerFromNewerVersion = () => ledgerRead() === "newer";
 const ledgerWritable = () => typeof ledgerRead() !== "string";
 
+let warnedUnwritable = false;
+function writeLedgers(doc: LedgerDoc): boolean {
+  const text = JSON.stringify(doc);
+  if (typeof readLedgerDoc(text) === "string") {
+    if (!warnedUnwritable) console.warn("[sync] the password ledger wasn't written: it wouldn't read back");
+    warnedUnwritable = true;
+    return false;
+  }
+  warnedUnwritable = false;
+  writeDocument(LEDGER_DOC, text);
+  return true;
+}
+
 function readLedgers(): LedgerDoc | null {
   const doc = ledgerRead();
   return typeof doc === "string" ? null : doc;
@@ -91,8 +104,7 @@ export function ledgerPasswordsAdapter(
     if (!stored || rejoinedFrom(stored)) return true;
     if (JSON.stringify(stored.gated ?? {}) === JSON.stringify(gated)) return true;
     doc.profiles[profile()] = { ...stored, gated };
-    writeDocument(LEDGER_DOC, JSON.stringify(doc));
-    return true;
+    return writeLedgers(doc);
   };
   const saveHeld = (keys: Set<string>): boolean => {
     const doc = readLedgers();
@@ -102,8 +114,7 @@ export function ledgerPasswordsAdapter(
     const next = [...keys].sort();
     if (JSON.stringify(stored.held ?? []) === JSON.stringify(next)) return true;
     doc.profiles[profile()] = { ...stored, held: next };
-    writeDocument(LEDGER_DOC, JSON.stringify(doc));
-    return true;
+    return writeLedgers(doc);
   };
 
   const record = (records: Map<string, FolderRecord>, keys: Iterable<string>, remote: (key: string) => unknown, stamp: (key: string) => string | undefined) => {
@@ -133,7 +144,7 @@ export function ledgerPasswordsAdapter(
       const latest = doc.profiles[profile()] ?? null;
       const kept = latest && !rejoinedFrom(latest) ? latest : null;
       doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list, gone), scope: ledgerScope(), held: kept?.held ?? [], gated: kept?.gated ?? {} };
-      writeDocument(LEDGER_DOC, JSON.stringify(doc));
+      writeLedgers(doc);
     });
     return writing;
   };

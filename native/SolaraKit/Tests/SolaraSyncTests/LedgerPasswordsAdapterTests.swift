@@ -168,6 +168,15 @@ let sevenGone = ledgerUsers(7).map { LedgerTestHost.key(ledgerSite, $0) }
     #expect(host.count("readMarked") == 2)
   }
 
+  @Test func aLedgerThatWouldNotReadBackIsNotWritten() async throws {
+    let host = LedgerTestHost()
+    let key = LedgerTestHost.key(ledgerSite, "user0")
+    host.state.withLock { $0.logins[key] = LocalLogin(value: ledgerValue("user0"), modified: .nan) }
+    let adapter = LedgerPasswordsAdapter(host: host, profileId: "A", forced: { true }, ledgerScope: { "s" }, now: { ledgerT })
+    #expect(try await adapter.extract(ledgerContext(records: [key: ledgerValue("user0")])) != nil)
+    #expect(host.state.withLock { $0.doc } == nil)
+  }
+
   @Test(arguments: [HeldChoice.confirm, .restore])
   func aChoiceMadeWhileALedgerWriteWaitsOnTheMarkIsNotUndone(_ choice: HeldChoice) async throws {
     let (host, adapter, _) = heldWorld(held: sevenGone)

@@ -29,6 +29,12 @@ public struct PromptDetail: Decodable, Equatable, Sendable {
   public var text: String?
 }
 
+public struct PromptRow: Decodable, Equatable, Sendable {
+  public var id: String
+  public var icon: String
+  public var title: String
+}
+
 public struct PromptButtonSpec: Decodable, Equatable, Sendable {
   public var id: String
   public var title: String
@@ -49,6 +55,8 @@ public struct PromptState: Decodable, Equatable, Sendable {
   public var controlBorder: String
   public var goButton: String
   public var goButtonText: String
+  public var rows: [PromptRow]?
+  public var rowsMore: String?
 
   public static func decode(_ json: String) -> PromptState? {
     guard let data = json.data(using: .utf8) else { return nil }
@@ -61,11 +69,16 @@ public enum PromptEvent: Sendable, Equatable {
   case choice(String)
   case toggle(Bool)
   case close
+  case row(String)
 }
 
 enum PromptMetrics {
   static let inset: CGFloat = 16
   static let gap: CGFloat = 10
+  static let rowInset: CGFloat = 6
+  static let rowHeight: CGFloat = 32
+  static let rowRadius: CGFloat = 6
+  static let listSeparatorGap: CGFloat = 5
 }
 
 final class PromptPressable: HoverFillView {
@@ -175,6 +188,9 @@ public final class PromptBodyView: NSView {
     y += PromptMetrics.gap + 2
     y += buttons(s, at: y, width: inner, theme: theme)
     y += PromptMetrics.inset
+    if let rows = s.rows, !rows.isEmpty {
+      y += list(rows, more: s.rowsMore, at: y, width: w, dark: s.dark, theme: theme)
+    }
     if s.close {
       let offset = PromptMetrics.inset - (22 - 7) / 2
       let close = PromptPressable(frame: CGRect(x: w - offset - 22, y: offset, width: 22, height: 22))
@@ -301,6 +317,51 @@ public final class PromptBodyView: NSView {
       addSubview(f)
       return h
     }
+  }
+
+  private func list(_ rows: [PromptRow], more: String?, at top: CGFloat, width w: CGFloat, dark: Bool, theme: NewTabTheme) -> CGFloat {
+    var y = top + PromptMetrics.listSeparatorGap
+    let line = NSView(frame: CGRect(x: PromptMetrics.inset, y: y, width: w - 2 * PromptMetrics.inset, height: 0.5))
+    line.wantsLayer = true
+    line.layer?.backgroundColor = (dark ? NSColor(white: 1, alpha: 0.12) : NSColor(white: 0, alpha: 0.1)).cgColor
+    addSubview(line)
+    y += 0.5 + PromptMetrics.listSeparatorGap
+    for item in rows {
+      let row = PromptPressable(frame: CGRect(x: PromptMetrics.rowInset, y: y, width: w - 2 * PromptMetrics.rowInset, height: PromptMetrics.rowHeight))
+      row.wantsLayer = true
+      row.layer?.cornerRadius = PromptMetrics.rowRadius
+      row.fill = { hovered, pressed in
+        guard hovered || pressed else { return nil }
+        return NSColor(white: dark ? 1 : 0, alpha: dark ? (pressed ? 0.12 : 0.07) : (pressed ? 0.1 : 0.06)).cgColor
+      }
+      let pad = PromptMetrics.inset - PromptMetrics.rowInset
+      let glyph = NSImageView(frame: CGRect(x: pad, y: (PromptMetrics.rowHeight - 20) / 2, width: 20, height: 20))
+      glyph.image = NSImage(systemSymbolName: item.icon, accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 13, weight: .regular))
+      glyph.imageScaling = .scaleNone
+      glyph.contentTintColor = theme.icon.ns
+      row.addSubview(glyph)
+      let f = label(item.title, size: 13, color: theme.textPrimary.ns, maxLines: 1)
+      let h = f.intrinsicContentSize.height
+      let x = pad + 20 + 10
+      f.frame = CGRect(x: x - 2, y: (PromptMetrics.rowHeight - h) / 2, width: row.frame.width - x - pad + 4, height: h)
+      row.addSubview(f)
+      let id = item.id
+      row.onPress = { [weak self] in self?.onEvent(.row(id)) }
+      row.setAccessibilityRole(.button)
+      row.setAccessibilityLabel(item.title)
+      addSubview(row)
+      y += PromptMetrics.rowHeight
+    }
+    if let more, !more.isEmpty {
+      y += 2
+      let f = label(more, size: 11, color: theme.textSecondary.ns, maxLines: 1)
+      let h = f.intrinsicContentSize.height
+      f.frame = CGRect(x: PromptMetrics.inset + 20 + 10 - 2, y: y, width: w - PromptMetrics.inset - 30 - PromptMetrics.inset + 4, height: h)
+      addSubview(f)
+      y += h
+    }
+    y += PromptMetrics.inset - (PromptMetrics.rowHeight - 20) / 2
+    return y - top
   }
 
   private func buttons(_ s: PromptState, at top: CGFloat, width: CGFloat, theme: NewTabTheme) -> CGFloat {

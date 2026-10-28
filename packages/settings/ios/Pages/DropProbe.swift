@@ -27,8 +27,11 @@ enum DropProbe {
 }
 
 extension DropProbe {
-  static func frame(windowNumber: Int, classContains needle: String) -> [String: Any] {
+  static func frame(windowNumber: Int, classContains query: String) -> [String: Any] {
     guard let window = NSApp.windows.first(where: { $0.windowNumber == windowNumber }), let frameView = window.contentView?.superview else { return ["error": "no window"] }
+    let parts = query.split(separator: "^", maxSplits: 1)
+    let needle = String(parts.first ?? "")
+    let levelsUp = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
     let height = frameView.bounds.height
     var found: NSView?
     func walk(_ view: NSView) {
@@ -37,7 +40,8 @@ extension DropProbe {
       view.subviews.forEach(walk)
     }
     walk(frameView)
-    guard let found else { return ["found": false] }
+    guard var found else { return ["found": false] }
+    for _ in 0..<levelsUp { if let parent = found.superview { found = parent } }
     let r = found.convert((found as? PopoverView)?.cardFrame ?? found.bounds, to: nil)
     return ["found": true, "class": String(describing: type(of: found)), "x": r.minX, "y": height - r.maxY, "width": r.width, "height": r.height]
   }

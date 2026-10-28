@@ -10,9 +10,10 @@
 // save without a URL, saves with Return, and Esc or a click outside cancels. Create a Profile makes the profile named
 // in its field with Return, starts from a preset's name and sharing, and Esc or a click outside creates nothing.
 // The calendar preview lists today's fixture events and a click shows the calendar tab; the meeting alert's Join
-// opens the meeting and Ignore dismisses it. The six page prompts (permission, password, autofill, external app,
-// engine offer, device chooser) open in the native popover frame at the card RN draws for them, and Esc or a click on
-// the page leaves each one unanswered, as RN does (a second instance without ARDIA_NATIVE_PAGES gives RN's numbers).
+// opens the meeting and Ignore dismisses it. The page prompts (permission, password, autofill, external app, engine
+// offer, device chooser, blocked pop-ups) open in the native popover frame at the card RN draws for them; Esc or a
+// click on the page leaves the first six unanswered and closes the pop-ups list, and a pop-up's row opens just that
+// one, as RN does (a second instance without ARDIA_NATIVE_PAGES gives RN's numbers).
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -73,7 +74,8 @@ const PROMPT_FIELDS = {
   externalApp: ["externalApp", `{ id: "probe-ext", url: "zoommtg://x", scheme: "zoommtg", origin: "https://example.com", app: "zoom.us", appPath: null, icon: null, title: "Open zoom.us?", message: "https://example.com wants to open this application.", remember: "Always allow example.com to open links of this type" }`],
 };
 const CHOOSER = `{ id: 991, browserId: 0, open: true, title: "example.com wants to pair", okLabel: "Pair", cancelLabel: "Cancel", noOptionsText: "No devices", scanningText: "Scanning…", refreshing: false, canRefresh: true, adapterOff: false, unauthorized: false, bothButtonsEnabled: false, showSignal: false, options: [{ name: "Keyboard", connected: false, paired: false, signal: 0 }] }`;
-const PROMPT_NAMES = [...Object.keys(PROMPT_FIELDS), "engine", "chooser"];
+const PROMPT_NAMES = [...Object.keys(PROMPT_FIELDS), "engine", "chooser", "popups"];
+const POPUPS = JSON.stringify([1, 2, 3].map((n) => ({ id: `pop${n}`, url: `https://example.com/pop${n}`, origin: "https://example.com" })));
 
 async function promptOutcomes(instance) {
   const run = (action) =>
@@ -89,18 +91,21 @@ async function promptOutcomes(instance) {
     instance.eval(
       name === "engine" ? `ac.pages.engineOffers.setState({ [${tab}]: { site: "https://example.com", host: "example.com", keySystem: "com.widevine.alpha", canRemember: true } }); return true`
       : name === "chooser" ? `globalThis.acDeviceChoosers.useChoosers.setState((s) => ({ byTab: { ...s.byTab, [${tab}]: ${CHOOSER} } })); return true`
+      : name === "popups" ? `ac.pageState.setState((s) => ({ pages: { ...s.pages, [${tab}]: { ...(s.pages[${tab}] || {}), popups: ${POPUPS} } }, popover: { ...s.popover, [${tab}]: "popups" } })); return true`
       : pageField(PROMPT_FIELDS[name][0], PROMPT_FIELDS[name][1]),
     );
   const clear = (name) =>
     instance.eval(
       name === "engine" ? `ac.pages.engineOffers.setState({}, true); return true`
       : name === "chooser" ? `globalThis.acDeviceChoosers.useChoosers.setState({ byTab: {} }); return true`
+      : name === "popups" ? `ac.pageState.setState((s) => ({ pages: { ...s.pages, [${tab}]: { ...(s.pages[${tab}] || {}), popups: [] } }, popover: { ...s.popover, [${tab}]: null } })); return true`
       : pageField(PROMPT_FIELDS[name][0], "null"),
     );
   const present = (name) =>
     instance.eval(
       name === "engine" ? `return !!ac.pages.engineOffers.getState()[${tab}]`
       : name === "chooser" ? `return !!globalThis.acDeviceChoosers.useChoosers.getState().byTab[${tab}]`
+      : name === "popups" ? `const s = ac.pageState.getState(); return s.popover[${tab}] === "popups" ? s.pages[${tab}].popups.map((p) => p.id).join(",") : false`
       : `return !!ac.pageState.getState().pages[${tab}]?.${PROMPT_FIELDS[name][0]}`,
     );
   const viewFrame = async (needle) => JSON.parse(await instance.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${ids.win}, ${JSON.stringify(needle)})`));
@@ -110,7 +115,8 @@ async function promptOutcomes(instance) {
     await sleep(600);
     const popover = await viewFrame("PopoverView");
     const body = await viewFrame(name === "chooser" ? "NativeDeviceChooserView" : "NativePromptView");
-    const card = popover.found ? popover : body.found ? { x: body.x - 0.5, y: body.y - 0.5, width: body.width + 1, height: body.height + 1 } : null;
+    const surface = name === "popups" && !popover.found ? await viewFrame("NativePromptView^3") : null;
+    const card = popover.found ? popover : surface?.class === "Surface" ? surface : body.found ? { x: body.x - 0.5, y: body.y - 0.5, width: body.width + 1, height: body.height + 1 } : null;
     await run("keys:0:\u001b:53");
     await sleep(400);
     const afterEsc = await present(name);
@@ -119,9 +125,18 @@ async function promptOutcomes(instance) {
     await run("click:700,560");
     await sleep(400);
     const afterOutside = await present(name);
+    let afterRow = null;
+    if (name === "popups" && card) {
+      await clear(name);
+      await show(name);
+      await sleep(600);
+      await run(`click:${card.x + card.width / 2},${card.y + card.height - 6 - 16}`);
+      await sleep(400);
+      afterRow = await present(name);
+    }
     await clear(name);
     await sleep(300);
-    out[name] = { native: popover.found, card, afterEsc, afterOutside };
+    out[name] = { native: popover.found, card, afterEsc, afterOutside, afterRow };
   }
   return out;
 }
@@ -527,14 +542,17 @@ try {
     assert.ok(gone.ok, "dismissed");
   });
 
-  await rep.check("the six page prompts open in the native popover frame and stay up on Esc and a click on the page", async () => {
+  await rep.check("the page prompts open in the native popover frame; the six stay up on Esc and a click on the page, blocked pop-ups close on it and open a row's pop-up", async () => {
     nativePrompts = await promptOutcomes(app);
     for (const name of PROMPT_NAMES) {
       const got = nativePrompts[name];
       assert.ok(got.native, `${name}: in a PopoverView`);
+      if (name === "popups") continue;
       assert.equal(got.afterEsc, true, `${name}: still asked after Esc`);
       assert.equal(got.afterOutside, true, `${name}: still asked after a click on the page`);
     }
+    assert.equal(nativePrompts.popups.afterOutside, false, "pop-ups: closed by a click on the page");
+    assert.equal(nativePrompts.popups.afterRow, "pop1,pop2", "pop-ups: the last row opens pop3 and the rest stay listed");
   });
 } finally {
   await app?.quit();
@@ -559,6 +577,7 @@ try {
       for (const key of ["x", "y", "width", "height"]) assert.ok(Math.abs(mine.card[key] - theirs.card[key]) <= 1, `${name}: ${key} ${mine.card[key]} vs RN ${theirs.card[key]}`);
       assert.equal(mine.afterEsc, theirs.afterEsc, `${name}: Esc`);
       assert.equal(mine.afterOutside, theirs.afterOutside, `${name}: a click on the page`);
+      assert.equal(mine.afterRow, theirs.afterRow, `${name}: a click on the last row`);
     }
   });
 } finally {

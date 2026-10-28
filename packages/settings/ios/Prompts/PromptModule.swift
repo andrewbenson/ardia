@@ -41,6 +41,7 @@ final class NativePromptView: ExpoView {
       case .choice(let id): self?.onPromptEvent(["kind": "choice", "id": id])
       case .toggle(let on): self?.onPromptEvent(["kind": "toggle", "value": on])
       case .close: self?.onPromptEvent(["kind": "close"])
+      case .row(let id): self?.onPromptEvent(["kind": "row", "id": id])
       }
     }
   }

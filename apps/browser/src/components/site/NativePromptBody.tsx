@@ -33,6 +33,8 @@ export type PromptSpec = {
   details?: PromptDetail[];
   buttons: { id: string; title: string; primary?: boolean }[];
   close?: boolean;
+  rows?: { id: string; icon: string; title: string }[];
+  rowsMore?: string | null;
 };
 
 export function NativePromptBody({
@@ -41,12 +43,14 @@ export function NativePromptBody({
   onChoice,
   onToggle,
   onClose,
+  onRow,
 }: {
   spec: PromptSpec;
   onButton(id: string): void;
   onChoice?(id: string): void;
   onToggle?(value: boolean): void;
   onClose?(): void;
+  onRow?(id: string): void;
 }) {
   const theme = useTheme();
   const colors = useFormColors();
@@ -61,6 +65,8 @@ export function NativePromptBody({
     details: spec.details ?? [],
     buttons: spec.buttons,
     close: spec.close ?? true,
+    rows: spec.rows ?? null,
+    rowsMore: spec.rowsMore ?? null,
     dark: !!theme.dark,
     theme: { textPrimary: theme.textPrimary, textSecondary: theme.textSecondary, toolbarHover: theme.toolbarHover, rowHover: theme.rowHover, icon: theme.icon, accent: colors.accent },
     control: colors.control,
@@ -73,6 +79,7 @@ export function NativePromptBody({
     else if (e.kind === "choice") onChoice?.(e.id);
     else if (e.kind === "toggle") onToggle?.(e.value);
     else if ((e as { kind: string }).kind === "dismiss") frame?.onDismiss?.();
+    else if ((e as { kind: string }).kind === "row") onRow?.((e as unknown as { id: string }).id);
     else onClose?.();
   };
   if (frame) return <NativePromptView style={StyleSheet.absoluteFill} state={state} onPromptEvent={(e) => onEvent(e.nativeEvent)} />;

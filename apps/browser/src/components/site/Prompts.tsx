@@ -12,7 +12,7 @@ import { Checkbox } from "../settings/controls";
 import { patchPage, pageOf, setPopover, usePage } from "../layout/pageState";
 import { answerPermission, describePermission } from "./permissions";
 import { nativeToolbarAvailable } from "@ardia/settings";
-import { NativePromptBody, PromptPopover } from "./NativePromptBody";
+import { NativePromptBody, nativePromptFrames, PromptPopover } from "./NativePromptBody";
 
 const hostOf = (origin: string) => {
   try {
@@ -98,6 +98,34 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
     close();
   };
   const profile = () => engineProfile(useBrowser.getState().tabs[tabId]?.profileId ?? "");
+  const openOne = (id: string) => {
+    void web()?.openBlockedPopup(id, false);
+    const rest = pageOf(tabId).popups.filter((x) => x.id !== id);
+    patchPage(tabId, { popups: rest });
+    if (!rest.length) close();
+  };
+  if (nativePromptFrames())
+    return (
+      <PromptPopover width={BLOCKED_POPUPS_WIDTH} top={top} right={right} left={left} onDismiss={close}>
+        <NativePromptBody
+          spec={{
+            icons: ["macwindow.badge.plus"],
+            title: `Always allow pop-ups from ${site}?`,
+            message: `Allow ${site} to always open pop-up windows, choose every time, or always deny pop-ups.`,
+            buttons: [{ id: "deny", title: "Always Deny" }, { id: "once", title: "Only Once" }, { id: "allow", title: "Always Allow", primary: true }],
+            close: false,
+            rows: popups.slice(-5).map((p) => ({ id: p.id, icon: "arrow.up.forward.app", title: p.url.replace(/^https?:\/\//, "") || "about:blank" })),
+            rowsMore: popups.length > 5 ? `and ${popups.length - 5} more` : null,
+          }}
+          onButton={(id) => {
+            if (id === "deny") void setSiteSetting(profile(), origin, "popups", "block");
+            else for (const p of popups) void web()?.openBlockedPopup(p.id, id === "allow");
+            done();
+          }}
+          onRow={openOne}
+        />
+      </PromptPopover>
+    );
   return (
     <Popover width={BLOCKED_POPUPS_WIDTH} top={top} right={right} left={left} onDismiss={close}>
       <View style={{ paddingBottom: PANEL.listPadding }}>

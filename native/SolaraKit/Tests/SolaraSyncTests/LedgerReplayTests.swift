@@ -31,13 +31,23 @@ import Testing
     let local = logins(input["local"])
     let folder = records(input["records"])
     let ledger = input["ledger"].flatMap { $0.isNull ? nil : Ledger(json: $0) }
-    let judged = judge(local, mark(input["mark"]), ledger, folder, input["now"]?.number ?? 0)
-    let next = nextLedger(ledger, local, folder, mark(input["nextMark"])!, input["nextKeys"]?.array?.compactMap(\.string) ?? [])
+    var agreed = OrderedDict<String, LedgerValue>()
+    for pair in input["agreed"]?.array ?? [] {
+      guard let key = pair.array?.first?.string, let value = LedgerValue(json: pair.array?.last ?? .null) else { continue }
+      agreed[key] = value
+    }
+    let unapplied = input["unapplied"]?.array?.compactMap(\.string) ?? []
+    let judged = judge(
+      local, mark(input["mark"]), ledger, folder, input["now"]?.number ?? 0, agreedHere: { agreed[$0] },
+      unapplied: { key in unapplied.contains(where: { $0.jsEquals(key) }) })
+    let next = nextLedger(
+      ledger, local, folder, mark(input["nextMark"])!, input["nextKeys"]?.array?.compactMap(\.string) ?? [],
+      deletedBeforeUpgrade: judged.deletedBeforeUpgrade.elements)
     let markText = mark(input["mark"]).map(formatMark) ?? ""
     return [
       "judge": [
         "mode": .string(judged.mode.rawValue), "claims": .array(judged.claims.map(\.json)), "apply": JSONValue(judged.apply.elements),
-        "seed": JSONValue(judged.seed.elements),
+        "seed": JSONValue(judged.seed.elements), "deletedBeforeUpgrade": JSONValue(judged.deletedBeforeUpgrade.elements),
       ],
       "next": next.json,
       "digests": JSONValue(local.values.map { digestOf($0.value) }),

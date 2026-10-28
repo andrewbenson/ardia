@@ -140,10 +140,13 @@ public struct ExtractContext {
   public let remote: (String) -> JSONValue?
   public let stamp: (String) -> HLC?
   public let downloading: () -> Bool
+  public let agreedKeys: () -> [String]
+  public let unapplied: (String) -> Bool
 
   public init(
     base: @escaping (String) -> JSONValue?, queued: @escaping (String) -> Bool, now: Double, known: @escaping (String) -> Bool,
-    remote: @escaping (String) -> JSONValue?, stamp: @escaping (String) -> HLC?, downloading: @escaping () -> Bool = { true }
+    remote: @escaping (String) -> JSONValue?, stamp: @escaping (String) -> HLC?, downloading: @escaping () -> Bool = { true },
+    agreedKeys: @escaping () -> [String] = { [] }, unapplied: @escaping (String) -> Bool = { _ in false }
   ) {
     self.base = base
     self.queued = queued
@@ -152,6 +155,8 @@ public struct ExtractContext {
     self.remote = remote
     self.stamp = stamp
     self.downloading = downloading
+    self.agreedKeys = agreedKeys
+    self.unapplied = unapplied
   }
 }
 
@@ -327,7 +332,9 @@ func publishAdapter(_ state: ScopeState, _ adapter: SyncAdapter, _ clock: Clock,
   }
   let context = ExtractContext(
     base: { parseBase(state.base[$0]) }, queued: queued, now: now, known: { state.records.contains($0) }, remote: { state.records[$0]?.v },
-    stamp: { state.records[$0]?.h }, downloading: { state.downloadingRecently != false })
+    stamp: { state.records[$0]?.h }, downloading: { state.downloadingRecently != false },
+    agreedKeys: { state.base.keys.filter { key in key.jsStartsWith(adapter.prefix) && !state.unapplied.contains(where: { $0.jsEquals(key) }) } },
+    unapplied: { key in state.unapplied.contains(where: { $0.jsEquals(key) }) })
   guard let extraction = try await adapter.extract(context) else { return published }
   if let hook = state.extractedHook {
     var keys = OrderedSet<String>()

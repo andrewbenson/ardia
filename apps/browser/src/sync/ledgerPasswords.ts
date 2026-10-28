@@ -108,7 +108,8 @@ export function ledgerPasswordsAdapter(
     }
   };
 
-  const write = (now: Read, records: Map<string, FolderRecord>, keys: Iterable<string>, newest: number) => {
+  const write = (now: Read, records: Map<string, FolderRecord>, keys: Iterable<string>, newest: number, deletedBeforeUpgrade: Iterable<string> = []) => {
+    const gone = [...deletedBeforeUpgrade];
     const list = [...keys];
     writing = writing.then(async () => {
       if (!ledgerWritable()) return;
@@ -122,7 +123,7 @@ export function ledgerPasswordsAdapter(
         return;
       }
       const doc = readLedgers();
-      doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list), scope: ledgerScope(), held: ledger?.held ?? [], gated: ledger?.gated ?? {} };
+      doc.profiles[profile()] = { ...nextLedger(ledger, now.local, records, mark, list, gone), scope: ledgerScope(), held: ledger?.held ?? [], gated: ledger?.gated ?? {} };
       writeDocument(LEDGER_DOC, JSON.stringify(doc));
     });
     return writing;
@@ -140,7 +141,7 @@ export function ledgerPasswordsAdapter(
     prefix: "pw:",
     publishOnlyAfterPull: true,
     ownsItsChanges: true,
-    extract: async (_base, _queued, _now, _known, remote, stamp, downloading) => {
+    extract: async (base, _queued, _now, _known, remote, stamp, downloading, agreedKeys, unapplied) => {
       const now = Date.now();
       if (!ledgerWritable()) return null;
       if ((now < quietUntil || now - lastRead < READ_INTERVAL) && !forced()) return null;
@@ -154,8 +155,12 @@ export function ledgerPasswordsAdapter(
       const fresh = rejoined();
       const ledger = ledgerOf();
       const records = new Map<string, FolderRecord>();
-      record(records, new Set([...here.local.keys(), ...Object.keys(ledger?.keys ?? {})]), remote, stamp);
-      const j = judge(here.local, fresh ? null : here.mark, ledger, records, now);
+      const firstLedger = !ledger && !(fresh ? null : here.mark);
+      record(records, new Set([...here.local.keys(), ...Object.keys(ledger?.keys ?? {}), ...(firstLedger ? (agreedKeys?.() ?? []) : [])]), remote, stamp);
+      const j = judge(here.local, fresh ? null : here.mark, ledger, records, now, (key) => base(key) as LedgerValue | undefined, (key) => !!unapplied?.(key));
+      const deletedBeforeUpgrade = [...j.deletedBeforeUpgrade];
+      const recordOpens = await sealed.check(deletedBeforeUpgrade.map((key) => records.get(key)!.v!));
+      for (const [i, key] of deletedBeforeUpgrade.entries()) if (recordOpens[i] !== true) j.deletedBeforeUpgrade.delete(key);
       j.claims = j.claims.filter((c) => !unopened.has(c.key));
       for (const key of unopened) {
         j.apply.delete(key);
@@ -195,7 +200,7 @@ export function ledgerPasswordsAdapter(
       saveGated(busy ? Object.fromEntries(Object.entries(firstGated).filter(([key]) => gated.has(key) || ledger?.gated?.[key] !== undefined)) : {});
       const byKey = new Map(live.filter((c) => !gated.has(c.key)).map((c) => [c.key, c]));
       const seeds = [...j.seed].filter((k) => (j.mode !== "consistent" || ledger?.keys[k]?.d[0] !== digestOf(here.local.get(k)?.value)));
-      if (j.mode !== "consistent" || seeds.length) await write(here, records, seeds, 0);
+      if (j.mode !== "consistent" || seeds.length) await write(here, records, seeds, 0, j.deletedBeforeUpgrade);
       return {
         values: new Map([...byKey.values()].filter((c) => c.v).map((c) => [c.key, c.v!])),
         ignore: (key) => !byKey.has(key),

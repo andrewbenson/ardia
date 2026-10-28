@@ -819,10 +819,10 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
     (adapter): Adapter => ({
       ...adapter,
       ...(rebuilding(adapter.prefix) ? { adoptRemoteOnJoin: false } : {}),
-      extract: async (base, queued, now, known, remote, stamp, downloading) => {
+      extract: async (base, queued, now, known, remote, stamp, downloading, agreedKeys, isUnapplied) => {
         if (!pulled || waiting()) return null;
         afterPull();
-        const extraction = await adapter.extract(base, queued, now, known, remote, stamp, downloading);
+        const extraction = await adapter.extract(base, queued, now, known, remote, stamp, downloading, agreedKeys, isUnapplied);
         if (!extraction || retiring) return extraction;
         ready.add(adapter.prefix);
         if (adapter.ownsItsChanges) {

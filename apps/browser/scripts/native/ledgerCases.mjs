@@ -87,17 +87,28 @@ export function randomCase(seed) {
   const now = time();
   const nextKeys = keys.filter(() => rand() < 0.6);
   const nextMark = { L: markL + 1, t: now };
-  return { local, mark, ledger: ledgerValue, records, now, nextKeys, nextMark };
+  const agreed = [];
+  for (const key of keys) {
+    if (rand() < 0.4) continue;
+    const from = pick(["record", "record", "local", "value"]);
+    const value = from === "record" ? records.find(([k]) => k === key)?.[1].v : from === "local" ? local.find(([k]) => k === key)?.[1].value : pick(values);
+    if (value) agreed.push([key, value]);
+  }
+  const unapplied = keys.filter(() => rand() < 0.2);
+  if (rand() < 0.1) local.splice(0);
+  return { local, mark, ledger: ledgerValue, records, now, nextKeys, nextMark, agreed, unapplied };
 }
 
 export function evaluate(input) {
   const local = new Map(input.local);
   const records = new Map(input.records);
-  const judged = ledger.judge(local, input.mark, input.ledger, records, input.now);
-  const next = ledger.nextLedger(input.ledger, local, records, input.nextMark, input.nextKeys);
+  const agreed = new Map(input.agreed);
+  const unapplied = new Set(input.unapplied);
+  const judged = ledger.judge(local, input.mark, input.ledger, records, input.now, (key) => agreed.get(key), (key) => unapplied.has(key));
+  const next = ledger.nextLedger(input.ledger, local, records, input.nextMark, input.nextKeys, judged.deletedBeforeUpgrade);
   const markText = input.mark ? ledger.formatMark(input.mark) : "";
   return {
-    judge: { mode: judged.mode, claims: judged.claims, apply: [...judged.apply], seed: [...judged.seed] },
+    judge: { mode: judged.mode, claims: judged.claims, apply: [...judged.apply], seed: [...judged.seed], deletedBeforeUpgrade: [...judged.deletedBeforeUpgrade] },
     next,
     digests: input.local.map(([, l]) => ledger.digestOf(l.value)),
     mark: { text: markText, parsed: ledger.parseMark(markText), junk: ledger.parseMark(`${markText}x`) },
@@ -113,5 +124,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   writeFileSync(out, deflateRawSync(Buffer.from(text)));
   if (!option("--out", null)) pinSources("Cases/ledger.json.deflate", ["apps/browser/src/sync/passwordLedger.ts"]);
   const modes = cases.reduce((m, c) => ((m[c.output.judge.mode] = (m[c.output.judge.mode] ?? 0) + 1), m), {});
+  const deleted = cases.filter((c) => c.output.judge.deletedBeforeUpgrade.length).length;
+  const emptied = cases.filter((c) => c.output.judge.mode === "upgrade" && !c.input.local.length && c.input.records.some(([, r]) => r.v)).length;
+  console.log(`${deleted} with deletions before upgrade, ${emptied} upgrades with an empty Login Data`);
   console.log(`${cases.length} ledger cases, ${(text.length / 1e6).toFixed(1)} MB, modes ${JSON.stringify(modes)}`);
 }

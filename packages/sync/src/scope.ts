@@ -97,6 +97,8 @@ export interface Adapter {
     remote: (key: string) => unknown,
     stamp: (key: string) => HLC | undefined,
     downloading: () => boolean,
+    agreedKeys?: () => string[],
+    unapplied?: (key: string) => boolean,
   ): Extraction | null | Promise<Extraction | null>;
   apply(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): ApplyResult | Promise<ApplyResult>;
   editedAt?(value: unknown): number | undefined;
@@ -234,7 +236,7 @@ async function publishAdapter(state: ScopeState, adapter: Adapter, clock: Clock,
   if (adapter.publishAfterPull && waitingAfterPull.get(state) !== false) return published;
   let pending: Set<string> | null = null;
   const queued = (key: string) => (pending ??= new Set([...state.outbox, ...(state.journal ?? []).flatMap((f) => f.ops)].map((op) => op.k))).has(key);
-  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, () => downloadingRecently.get(state) !== false);
+  const extraction = await adapter.extract((key) => parseBase(state.base[key]), queued, now, (key) => key in state.records, (key) => state.records[key]?.v, (key) => state.records[key]?.h, () => downloadingRecently.get(state) !== false, () => Object.keys(state.base).filter((key) => key.startsWith(adapter.prefix) && !state.unapplied.includes(key)), (key) => state.unapplied.includes(key));
   if (!extraction) return published;
   extractedHook.get(state)?.(adapter.prefix, new Set(extraction.values.keys()), (key) => !!extraction.ignore?.(key));
   const put = (key: string, value: unknown) => {

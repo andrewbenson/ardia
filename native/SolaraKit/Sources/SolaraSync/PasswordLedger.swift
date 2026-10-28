@@ -136,6 +136,7 @@ public struct Judgement: Sendable, Equatable {
   public var claims: [Claim]
   public var apply: OrderedSet<String>
   public var seed: OrderedSet<String>
+  public var deletedBeforeUpgrade: OrderedSet<String>
 }
 
 let digestsKept = 4
@@ -164,10 +165,14 @@ public func digestOf(_ value: LedgerValue?) -> String {
   return "\(text.count).\(String(h, radix: 36))"
 }
 
-public func judge(_ local: OrderedDict<String, LocalLogin>, _ mark: Mark?, _ ledger: Ledger?, _ records: OrderedDict<String, LedgerRecord>, _ now: Double) -> Judgement {
+public func judge(
+  _ local: OrderedDict<String, LocalLogin>, _ mark: Mark?, _ ledger: Ledger?, _ records: OrderedDict<String, LedgerRecord>, _ now: Double,
+  agreedHere: (String) -> LedgerValue? = { _ in nil }, unapplied: (String) -> Bool = { _ in false }
+) -> Judgement {
   var claims: [Claim] = []
   var apply = OrderedSet<String>()
   var seed = OrderedSet<String>()
+  var deletedBeforeUpgrade = OrderedSet<String>()
   func recordDigest(_ key: String) -> String { digestOf(records[key]?.v) }
   let consistent = ledger != nil && mark != nil && mark!.L == ledger!.L && mark!.t == ledger!.t
   let mode: Judgement.Mode = consistent ? .consistent : ledger == nil && mark == nil ? .upgrade : .rebuild
@@ -193,7 +198,16 @@ public func judge(_ local: OrderedDict<String, LocalLogin>, _ mark: Mark?, _ led
     }
     if mode == .upgrade {
       guard let here else {
-        if record?.v != nil { apply.insert(key) }
+        guard let record, record.v != nil else { continue }
+        if unapplied(key) {
+          apply.insert(key)
+        } else if digestOf(agreedHere(key)) != recordDigest(key) {
+          apply.insert(key)
+        } else if local.count == 0 {
+          apply.insert(key)
+        } else {
+          deletedBeforeUpgrade.insert(key)
+        }
         continue
       }
       if let record {
@@ -251,11 +265,18 @@ public func judge(_ local: OrderedDict<String, LocalLogin>, _ mark: Mark?, _ led
     }
     claim(key, here.value, here.modified)
   }
-  return Judgement(mode: mode, claims: claims, apply: apply, seed: seed)
+  return Judgement(mode: mode, claims: claims, apply: apply, seed: seed, deletedBeforeUpgrade: deletedBeforeUpgrade)
 }
 
-public func nextLedger(_ ledger: Ledger?, _ local: OrderedDict<String, LocalLogin>, _ records: OrderedDict<String, LedgerRecord>, _ mark: Mark, _ keys: [String]) -> Ledger {
+public func nextLedger(
+  _ ledger: Ledger?, _ local: OrderedDict<String, LocalLogin>, _ records: OrderedDict<String, LedgerRecord>, _ mark: Mark, _ keys: [String],
+  deletedBeforeUpgrade: [String] = []
+) -> Ledger {
   var out = Ledger(L: mark.L, t: mark.t, keys: ledger?.keys ?? JSMap())
+  for key in deletedBeforeUpgrade {
+    guard let record = records[key], let v = record.v, local[key] == nil else { continue }
+    out.keys[key] = LedgerEntry(d: [digestOf(v)], h: record.h, m: 0)
+  }
   for key in keys {
     guard let here = local[key] else {
       out.keys.removeValue(forKey: key)

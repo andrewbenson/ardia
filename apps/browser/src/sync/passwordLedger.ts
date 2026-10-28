@@ -13,6 +13,7 @@ export type Judgement = {
   claims: Claim[];
   apply: Set<string>;
   seed: Set<string>;
+  deletedBeforeUpgrade: Set<string>;
 };
 
 const DIGESTS_KEPT = 4;
@@ -35,10 +36,19 @@ export function digestOf(value: LedgerValue | null | undefined): string {
   return `${text.length}.${h.toString(36)}`;
 }
 
-export function judge(local: Map<string, LocalLogin>, mark: Mark | null, ledger: Ledger | null, records: Map<string, FolderRecord>, now: number): Judgement {
+export function judge(
+  local: Map<string, LocalLogin>,
+  mark: Mark | null,
+  ledger: Ledger | null,
+  records: Map<string, FolderRecord>,
+  now: number,
+  agreedHere: (key: string) => LedgerValue | undefined = () => undefined,
+  unapplied: (key: string) => boolean = () => false,
+): Judgement {
   const claims: Claim[] = [];
   const apply = new Set<string>();
   const seed = new Set<string>();
+  const deletedBeforeUpgrade = new Set<string>();
   const recordDigest = (key: string) => digestOf(records.get(key)?.v);
   const consistent = !!ledger && !!mark && mark.L === ledger.L && mark.t === ledger.t;
   const mode: Judgement["mode"] = consistent ? "consistent" : !ledger && !mark ? "upgrade" : "rebuild";
@@ -61,7 +71,11 @@ export function judge(local: Map<string, LocalLogin>, mark: Mark | null, ledger:
     }
     if (mode === "upgrade") {
       if (!here) {
-        if (record?.v) apply.add(key);
+        if (!record?.v) continue;
+        if (unapplied(key)) apply.add(key);
+        else if (digestOf(agreedHere(key)) !== recordDigest(key)) apply.add(key);
+        else if (local.size === 0) apply.add(key);
+        else deletedBeforeUpgrade.add(key);
         continue;
       }
       if (!record) claim(key, here.value, here.modified);
@@ -103,11 +117,23 @@ export function judge(local: Map<string, LocalLogin>, mark: Mark | null, ledger:
     }
     claim(key, here.value, here.modified);
   }
-  return { mode, claims, apply, seed };
+  return { mode, claims, apply, seed, deletedBeforeUpgrade };
 }
 
-export function nextLedger(ledger: Ledger | null, local: Map<string, LocalLogin>, records: Map<string, FolderRecord>, mark: Mark, keys: Iterable<string>): Ledger {
+export function nextLedger(
+  ledger: Ledger | null,
+  local: Map<string, LocalLogin>,
+  records: Map<string, FolderRecord>,
+  mark: Mark,
+  keys: Iterable<string>,
+  deletedBeforeUpgrade: Iterable<string> = [],
+): Ledger {
   const out: Ledger = { v: 1, L: mark.L, t: mark.t, keys: { ...(ledger?.keys ?? {}) } };
+  for (const key of deletedBeforeUpgrade) {
+    const record = records.get(key);
+    if (!record?.v || local.has(key)) continue;
+    out.keys[key] = { d: [digestOf(record.v)], h: record.h, m: 0 };
+  }
   for (const key of keys) {
     const here = local.get(key);
     if (!here) {

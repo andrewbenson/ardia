@@ -11,7 +11,7 @@ import { handOff, takeHandOff, wantsPage } from "../lib/tabPages";
 import { noteGone } from "../lib/tabLifecycle";
 import { usePrewarm } from "../lib/preload";
 import { pagesPooledIn, panePromptsNativeIn } from "../lib/pagesPool";
-import { persistEngine } from "../lib/engines";
+import { persistEngine, useEngineOffers } from "../lib/engines";
 import { tabEngine } from "../store/engines";
 import { EngineOfferPrompt } from "./site/EnginePrompt";
 import { webviewRef } from "../lib/webviews";
@@ -540,7 +540,12 @@ function PageOverlays({
   const popoverSide = toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN };
   useNativePanePopups(nativePrompts, windowId, tabId, popovers && popover === "popups", toolbar ? "right" : "left");
   const nativeCli = nativePrompts && nativeMedia("media.cliPill");
-  useNativePaneHint(nativePrompts, windowId, tabId, { zoom, cliPill: nativeCli && cliPill });
+  const engineOffer = useEngineOffers((offers) => offers[tabId] ?? null);
+  useNativePaneHint(nativePrompts, windowId, tabId, {
+    zoom,
+    cliPill: nativeCli && cliPill,
+    engineOffer: engineOffer && { site: engineOffer.site, host: engineOffer.host, canRemember: engineOffer.canRemember },
+  });
   return (
     <>
       <FindBar tabId={tabId} />
@@ -553,7 +558,7 @@ function PageOverlays({
       {!nativePrompts && <PasswordPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       {!nativePrompts && <AutofillPrompt tabId={tabId} right={POPOVER_MARGIN} top={POPOVER_MARGIN} />}
       {!newTabShown && !nativePrompts && <ExternalAppPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
-      {!newTabShown && <EngineOfferPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
+      {!newTabShown && !nativePrompts && <EngineOfferPrompt tabId={tabId} left={Math.max(POPOVER_MARGIN, Math.min(geometry.urlLeft, width - 348))} top={POPOVER_MARGIN} />}
       {popovers && <SiteControls tabId={tabId} open={popover === "siteControls"} {...popoverSide} top={POPOVER_MARGIN} />}
       {popovers && popover === "popups" && !nativePrompts && <BlockedPopupsPrompt tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} />}
       {popovers && popover === "zoom" && <ZoomPopover tabId={tabId} {...popoverSide} top={POPOVER_MARGIN} nativeAllowed={!peek} />}

@@ -121,5 +121,17 @@ import Testing
     #expect(bar.tooltip == "Search Google for \u{201C}a quick brown fox jumps over the lazy d\u{2026}\u{201D}")
     #expect(PanePromptSpecs.searchTooltip(engine: "Kagi", text: "short") == "Search Kagi for \u{201C}short\u{201D}")
   }
+
+  @Test func engineOfferMatchesRN() {
+    let spec = PanePromptSpecs.engineOffer(host: "tv.test", canRemember: true, remember: true, product: "Solara", left: 30)
+    #expect(spec["title"] as? String == "Play tv.test in WebKit?")
+    #expect(((spec["details"] as? [[String: Any]])?.first?["value"] as? Bool) == true)
+    #expect((spec["popover"] as? [String: Any])?["width"] as? Double == 320)
+    #expect((PanePromptSpecs.engineOffer(host: "a", canRemember: false, remember: false, product: "S", left: 8)["details"] as? [Any])?.isEmpty == true)
+    #expect(PanePromptKind.engineOffer.leftWidth == 340)
+    let look: [String: Any] = ["dark": false, "theme": [String: String](), "control": "", "controlBorder": "", "goButton": "", "goButtonText": ""]
+    let json = try! JSONSerialization.data(withJSONObject: spec.merging(look) { a, _ in a })
+    #expect(PromptState.decode(String(data: json, encoding: .utf8)!)?.buttons.count == 2)
+  }
 }
 

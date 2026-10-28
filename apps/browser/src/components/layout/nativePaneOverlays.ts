@@ -13,6 +13,7 @@ import { useBrowser } from "../../store/browser";
 import { defaultSearchEngine } from "../../store/settings";
 import { cliCommand, cliProduct, useCliIndicator } from "../../lib/cliControl";
 import { mediaTheme } from "../media/nativeMedia";
+import { acceptEngineOffer, stayOnPage } from "../../lib/engines";
 
 const VERSION = 1;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
@@ -64,6 +65,10 @@ addNativeSettingsHandlers({
   "pane.externalApp": (_windowId: string, tabId: string, id: string, open: boolean, remember: boolean) => {
     if (pageOf(tabId).externalApp?.id === id) patchPage(tabId, { externalApp: null });
     void resolveExternalApp(id, open, remember);
+  },
+  "pane.engineOffer": (_windowId: string, tabId: string, action: string, remember: boolean) => {
+    if (action === "webkit") void acceptEngineOffer(tabId);
+    else stayOnPage(tabId, action === "stay" && remember);
   },
   "pane.searchSelection": (_windowId: string, tabId: string, text: string, click: ClickModifiers) => searchSelection(tabId, text, click),
   "pane.permission": (_windowId: string, tabId: string, id: string, result: PermissionResult) => answerPermission(tabId, id, result),

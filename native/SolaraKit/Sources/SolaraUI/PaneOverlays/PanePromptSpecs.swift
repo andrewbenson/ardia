@@ -59,12 +59,13 @@ public struct PromptInputGuard {
 }
 
 public enum PanePromptKind: String, CaseIterable, Sendable {
-  case password, autofill, externalApp, popups, permission
+  case password, autofill, externalApp, popups, permission, engineOffer
 
   public var leftWidth: Double? {
     switch self {
     case .externalApp: PanePromptSpecs.externalAppWidth
     case .permission: PanePromptSpecs.permissionWidth
+    case .engineOffer: PanePromptSpecs.externalAppWidth
     default: nil
     }
   }

@@ -277,3 +277,19 @@ extension PanePromptSpecs {
     value == value.rounded() && abs(value) < 1e15 ? String(Int(value)) : String(value)
   }
 }
+
+extension PanePromptSpecs {
+  public static let engineOfferWidth: Double = 320
+
+  public static func engineOffer(host: String, canRemember: Bool, remember: Bool, product: String, left: Double) -> [String: Any] {
+    [
+      "popover": ["width": engineOfferWidth, "top": margin, "left": left, "modal": false],
+      "icons": ["play.circle.fill", "safari"],
+      "title": "Play \(host) in WebKit?",
+      "message": "This site plays protected video, which Chromium in \(product) can't. The page reloads in WebKit, which keeps its own sign-ins.",
+      "details": canRemember ? [["kind": "checkbox", "label": "Don't ask again for this site", "value": remember] as [String: Any]] : [],
+      "buttons": [["id": "stay", "title": "Stay on Page"], ["id": "webkit", "title": "Open in WebKit", "primary": true]],
+      "close": true,
+    ]
+  }
+}

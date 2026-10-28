@@ -22,6 +22,7 @@ enum PanePrompts {
   private static var browsers = PaneBrowsers()
   private static var selectionShown: [String: PaneSelection] = [:]
   private static var selectionGeneration = 0
+  private static var engineRemember: [String: (site: String, on: Bool)] = [:]
   private static var cliShown: [String: Bool] = [:]
   private static var cliRevealed: Set<String> = []
   private static var cliHideUntil: [String: TimeInterval] = [:]
@@ -188,7 +189,7 @@ enum PanePrompts {
     let panes = window["panes"] as? [String: [String: Any]] ?? [:]
     var shown: [Shown] = []
     let asking = Set(tabs(in: windowId, where: { $0.password != nil || $0.autofill != nil || $0.externalApp != nil || $0.permission != nil }))
-    for tabId in asking.union(panes.compactMap { $0.value["popups"] is [String: Any] ? $0.key : nil }).sorted() where owns(tabId) {
+    for tabId in asking.union(panes.compactMap { $0.value["popups"] is [String: Any] || $0.value["engineOffer"] is [String: Any] ? $0.key : nil }).sorted() where owns(tabId) {
       let page = pages[tabId] ?? PanePromptPage()
       let pane = panes[tabId] ?? [:]
       func add(_ kind: PanePromptKind, _ key: String, _ spec: [String: Any]) {
@@ -207,6 +208,11 @@ enum PanePrompts {
         add(.permission, request.key, PanePromptSpecs.permission(request, left: left(PanePromptSpecs.permissionWidth)))
       }
       if let hint = pane["popups"] as? [String: Any], let popups = PanePromptSpecs.popups(hint) { add(.popups, popups.key, popups.spec) }
+      if let offer = pane["engineOffer"] as? [String: Any], let site = offer["site"] as? String, !newTabShown {
+        let remember = engineRemember[tabId].map { $0.site == site && $0.on } ?? false
+        let spec = PanePromptSpecs.engineOffer(host: offer["host"] as? String ?? site, canRemember: offer["canRemember"] as? Bool == true, remember: remember, product: Bundle.main.productName, left: left(PanePromptSpecs.externalAppWidth))
+        add(.engineOffer, site, spec)
+      }
     }
     return shown
   }
@@ -217,6 +223,19 @@ enum PanePrompts {
   }
 
   static func promptEvent(_ windowId: String, _ tabId: String, _ kind: PanePromptKind, _ event: PromptEvent) {
+    if kind == .engineOffer {
+      let panes = windows[windowId]?["panes"] as? [String: [String: Any]]
+      guard let site = (panes?[tabId]?["engineOffer"] as? [String: Any])?["site"] as? String else { return }
+      switch event {
+      case .toggle(let on):
+        engineRemember[tabId] = (site, on)
+        changed(tabId)
+      case .button(let id): js("pane.engineOffer", windowId, tabId, id, engineRemember[tabId].map { $0.site == site && $0.on } ?? false)
+      case .close: js("pane.engineOffer", windowId, tabId, "dismiss", false)
+      default: break
+      }
+      return
+    }
     if kind == .popups {
       switch event {
       case .button(let id): js("pane.popups", windowId, tabId, id, "")
@@ -284,7 +303,7 @@ enum PanePrompts {
       _ = page.dropPermission(request.id)
       update(tabId, page)
       js("pane.permission", windowId, tabId, request.id, result)
-    case .popups:
+    case .popups, .engineOffer:
       return
     }
   }

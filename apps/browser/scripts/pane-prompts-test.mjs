@@ -23,7 +23,9 @@ keeps the blocked list. Permission: a notification request and a location reques
 the same request as the store's current one, 300 wide 8 points below the pane's top, and Don't Allow denies it in the
 page and moves on to the next; a request goes when the page navigates. Device chooser: Chrome's Bluetooth chooser
 (the DEBUG hook) draws natively at 340 wide, Cancel closes it in the engine and the store, and the unauthorized
-chooser shows its notice. With the switch off the RN wrappers still draw each one.`);
+chooser shows its notice. Engine offer: a protected-video page message brings the 320-wide WebKit offer 8 points
+below the pane's top, and Stay on Page takes it down in JS and natively. With the switch off the RN wrappers still
+draw each one.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -199,6 +201,28 @@ try {
       await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill || null);`, 4000);
       await run(`return pageEvent("onAutofillPrompt", { id: 42, closed: true });`);
       await until("the closed event takes it down", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.autofill || null);`, 3000);
+      return { card: shown.card };
+    });
+
+    await rep.check(`${tag}-engine-offer`, async () => {
+      await run(`return pageEvent("onPageMessage", { kind: "drm", data: { keySystem: "com.widevine.alpha" } });`);
+      if (!nativePrompts) {
+        await until("RN draws the offer", `return rnDrawn("EngineOfferPrompt") || null;`, 4000);
+        return "rn";
+      }
+      const shown = await until("the native offer", `return native().then((d) => d && d.tabs.a && d.tabs.a.engineOffer && !d.tabs.a.engineOffer.hidden && d.tabs.a.engineOffer.controls["Stay on Page"] ? d.tabs.a.engineOffer : null);`, 6000);
+      if (await run(`return rnDrawn("EngineOfferPrompt");`)) throw new Error("RN still draws the engine offer");
+      const [fx, fy, fw] = shown.frame;
+      const [cx, cy, cw] = shown.card;
+      if (Math.abs(cw - 320) > 0.5 || Math.abs(fy + 8 - cy) > 0.5 || cx < fx + 8 - 0.5 || cx + cw > fx + fw - 8 + 0.5)
+        throw new Error(`card ${JSON.stringify(shown.card)} in pane ${JSON.stringify(shown.frame)}`);
+      if (!shown.controls["Open in WebKit"]) throw new Error(`no Open in WebKit: ${Object.keys(shown.controls)}`);
+      await sleep(800);
+      await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["Stay on Page"]))}).then(() => true);`);
+      await until("the offer goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.engineOffer || null);`, 3000);
+      await run(`return pageEvent("onPageMessage", { kind: "drm", data: { keySystem: "com.widevine.alpha" } });`);
+      await sleep(600);
+      if (await run(`return native().then((d) => !!(d && d.tabs.a && d.tabs.a.engineOffer));`)) throw new Error("the declined site was offered again");
       return { card: shown.card };
     });
 

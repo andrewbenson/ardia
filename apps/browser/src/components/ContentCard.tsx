@@ -67,6 +67,7 @@ import { DeviceChooser } from "./site/DeviceChooser";
 import { setNowPlaying, setPictureInPictureState } from "./media/state";
 import { Toolbar, ToolbarBackdrop, urlFieldRight } from "./Toolbar";
 import { AutoHideBackdrop, AutoHideToolbar, useToolbarMode, useToolbarMotion } from "./AutoHideToolbar";
+import { NativeAutoHide, nativeAutoHideAvailable } from "./NativeAutoHide";
 import { publishPaneChrome, WindowToolbar } from "./WindowToolbar";
 import { noteScroll, revealToolbar } from "./layout/toolbarAutoHide";
 import { NavigationOverlays } from "./layout/SwipeOverlay";
@@ -488,7 +489,11 @@ const TabPane = memo(function TabPane({
           </View>
         </View>
       </Animated.View>
-      {hideBar && <AutoHideBackdrop tabId={tabId} mode={mode} motion={motion} />}
+      {hideBar && (nativeAutoHideAvailable() ? (
+        <NativeAutoHide windowId={windowId} tabId={tabId} mode={mode} pane={frame} extra={bookmarksBar ? BOOKMARKS_BAR_HEIGHT : 0} />
+      ) : (
+        <AutoHideBackdrop tabId={tabId} mode={mode} motion={motion} />
+      ))}
       {hideBar && !windowToolbar && <AutoHideToolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} mode={mode} motion={motion} />}
     </View>
   );

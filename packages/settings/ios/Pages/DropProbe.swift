@@ -46,7 +46,7 @@ extension DropProbe {
     var found = matches[index]
     for _ in 0..<levelsUp { if let parent = found.superview { found = parent } }
     let r = found.convert((found as? PopoverView)?.cardFrame ?? found.bounds, to: nil)
-    return ["found": true, "class": String(describing: type(of: found)), "x": r.minX, "y": height - r.maxY, "width": r.width, "height": r.height]
+    return ["found": true, "class": String(describing: type(of: found)), "x": r.minX, "y": height - r.maxY, "width": r.width, "height": r.height, "alpha": found.alphaValue, "transformed": found.layer.map { !CATransform3DIsIdentity($0.sublayerTransform) } ?? false]
   }
 
   static func json(_ value: [String: Any]) -> String {

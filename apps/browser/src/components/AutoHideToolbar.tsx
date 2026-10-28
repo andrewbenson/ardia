@@ -11,6 +11,7 @@ import { useHistoryMenu } from "./layout/history";
 import { usePages } from "./layout/pageState";
 import { useExtensions } from "./extensions/store";
 import { needsBar, revealToolbar, setToolbarPeek, STRIP_HEIGHT, toolbarMode, useToolbarAutoHide, type ToolbarMode } from "./layout/toolbarAutoHide";
+import { nativeAutoHideAvailable } from "./NativeAutoHide";
 import { Toolbar } from "./Toolbar";
 import { DeveloperStripes } from "./site/DeveloperStripes";
 import { useTabDeveloperMode, useToolbarSiteColor } from "./site/developerMode";
@@ -195,6 +196,13 @@ export function AutoHideToolbar({
   mode: ToolbarMode;
   motion: Pick<ToolbarMotion, "bar" | "fade">;
 }) {
+  if (nativeAutoHideAvailable()) {
+    return (
+      <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, top: 0, height: layout.toolbarHeight }}>
+        <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused} bare />
+      </View>
+    );
+  }
   const theme = useTheme();
   const url = useBrowser((s) => s.tabs[tabId]?.url ?? "");
   const palette = toolbarPalette(theme, useToolbarSiteColor(tabId));

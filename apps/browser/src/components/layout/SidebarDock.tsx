@@ -14,6 +14,7 @@ import { useSidebarUi } from "../sidebar/state";
 import { peekHeld, watchPeekHolds } from "./peekHold";
 import { ProfileSwipe } from "./ProfileSwipe";
 import { useShellLayoutPush } from "./shellLayout";
+import { useShellModal } from "./shellModal";
 import {
   ARC_HIDE_MS,
   ARC_LIGHTS_CENTER,
@@ -150,6 +151,7 @@ export function DockedLayout({
   const lights = addressBar && !topTabs ? ARC_LIGHTS_CENTER : LIGHTS_CENTER;
   const { dock, away } = useSidebarDock(open, !fullscreen, arc);
   useShellLayoutPush(windowId, dock, { sidebarWidth: width, topTabs, fullscreen, addressBarInSidebar: addressBar, away });
+  useShellModal(windowId);
   const left = useMemo(
     () =>
       dock.interpolate({

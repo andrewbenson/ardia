@@ -10,6 +10,8 @@ type WindowShellModule = {
   peekExpand?(windowId: string): Promise<boolean>;
   setBackdrop(windowId: string, json: string): Promise<void>;
   setLayout?(windowId: string, layout: WindowShellLayout): Promise<void>;
+  setModal?(windowId: string, owner: string, shown: boolean): Promise<void>;
+  accessibilityReach?(windowId: string): Promise<Record<string, number> | null>;
   describe(windowId: string): Promise<string>;
 };
 
@@ -79,6 +81,14 @@ export type WindowShellLayout = Partial<{
 
 export function setWindowShellLayout(windowId: string, layout: WindowShellLayout) {
   return native?.setLayout?.(windowId, layout) ?? Promise.resolve();
+}
+
+export function setWindowShellModal(windowId: string, owner: string, shown: boolean) {
+  return native?.setModal?.(windowId, owner, shown) ?? Promise.resolve();
+}
+
+export function windowShellAccessibilityReach(windowId: string): Promise<Record<string, number> | null> {
+  return native?.accessibilityReach?.(windowId) ?? Promise.resolve(null);
 }
 
 export async function describeWindowShell(windowId: string): Promise<Record<string, unknown> | null> {

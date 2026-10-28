@@ -1,0 +1,28 @@
+import { setWindowShellModal, windowShellActive } from "@ardia/settings";
+import { useEffect, useState } from "react";
+import { useBrowser } from "../../store/browser";
+import { useBookmarkDialog } from "../bookmarks/actions";
+import { useBookmarkEditor } from "../bookmarks/edit";
+import { useOnboarding } from "../onboarding/state";
+import { useCreateProfileOpen } from "../profiles/CreateProfile";
+
+const MAIN_ROOT = "mainRoot";
+
+export function useMainRootModal(windowId: string): boolean {
+  const panel = useBrowser((s) => !!s.windowUi[windowId]?.panel.open);
+  const bookmark = useBookmarkDialog((d) => d.open?.windowId === windowId);
+  const editor = useBookmarkEditor((e) => e.open?.windowId === windowId);
+  const profile = useCreateProfileOpen(windowId);
+  const onboarding = useOnboarding((o) => o.windowId === windowId);
+  return panel || bookmark || editor || profile || onboarding;
+}
+
+export function useShellModal(windowId: string) {
+  const [shell] = useState(() => windowShellActive(windowId));
+  const modal = useMainRootModal(windowId);
+  useEffect(() => {
+    if (!shell || !modal) return;
+    void setWindowShellModal(windowId, MAIN_ROOT, true);
+    return () => void setWindowShellModal(windowId, MAIN_ROOT, false);
+  }, [shell, windowId, modal]);
+}

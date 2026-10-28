@@ -69,5 +69,10 @@ behind the active page, since Chrome throttles a page under a hidden view.
   1 s after its tab stops being shown in the window, and at once when the tab closes.
 - **Prompts anchored to the right** ride the pane root and may trail the card by a frame while the dock moves; that is
   accepted for now and measured.
-- **Modals** (not built yet). While the main root shows a modal (the command panel, a dialog, onboarding), the shell's
-  `accessibilityChildren` is to list only the main root, so VoiceOver can't reach the layers under it.
+- **Modals.** While the main root shows a modal, the shell's `accessibilityChildren` and `accessibilityHitTest` answer
+  from the main root alone, so VoiceOver can't reach the layers under it. The modals are the command panel, a bookmark
+  dialog or editor, Create Profile, and onboarding. RN reports them per window (`useShellModal`, layout/shellModal.ts)
+  through `setModal(windowId, "mainRoot", shown)`. A native layer that shows its own modal can call
+  `shell.setModal(owner, shown:)` with an owner of its own, and the shell stays modal while any owner is up.
+  `accessibilityReach` (WindowShellAccessibility.swift) counts what the window's accessibility tree reaches, grouped
+  by shell layer.

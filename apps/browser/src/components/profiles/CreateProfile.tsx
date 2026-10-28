@@ -17,6 +17,8 @@ type Request = { windowId: string; preset: CreateProfilePreset; resolve: (id: st
 
 const useRequest = create<{ request: Request | null }>(() => ({ request: null }));
 
+export const useCreateProfileOpen = (windowId: string) => useRequest((r) => r.request?.windowId === windowId);
+
 export function requestCreateProfile(windowId?: string, preset: CreateProfilePreset = {}): Promise<string | null> {
   return new Promise((resolve) => {
     if (windowId && useBrowser.getState().windows[windowId]) {

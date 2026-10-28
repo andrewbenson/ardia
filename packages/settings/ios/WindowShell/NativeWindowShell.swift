@@ -314,6 +314,14 @@ public class WindowShellModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("setModal") { (windowId: String, owner: String, shown: Bool) in
+      MainActor.assumeIsolated { NativeWindowShell.host(windowId)?.shell.setModal(owner, shown: shown) }
+    }.runOnQueue(.main)
+
+    AsyncFunction("accessibilityReach") { (windowId: String) -> [String: Int]? in
+      MainActor.assumeIsolated { NativeWindowShell.host(windowId)?.shell.accessibilityReach() }
+    }.runOnQueue(.main)
+
     AsyncFunction("devCover") { (windowId: String, rect: [Double]?, hidden: Bool?) -> Bool in
       #if DEBUG
       return MainActor.assumeIsolated {

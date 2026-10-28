@@ -33,6 +33,7 @@ public final class WindowShellView: NSView {
   public var widthDragActive = false
   private var mounted: [Slot: NSView] = [:]
   private var pointerLayer: ObjectIdentifier?
+  private var modalOwners: Set<String> = []
 
   public override var isFlipped: Bool { true }
 
@@ -129,6 +130,30 @@ public final class WindowShellView: NSView {
   public override func hitTest(_ point: NSPoint) -> NSView? {
     let hit = super.hitTest(point)
     return hit === self ? nil : hit
+  }
+
+  public var modalShown: Bool { !modalOwners.isEmpty }
+
+  public func setModal(_ owner: String, shown: Bool) {
+    let before = modalShown
+    if shown { modalOwners.insert(owner) } else { modalOwners.remove(owner) }
+    guard modalShown != before else { return }
+    NSAccessibility.post(element: self, notification: .layoutChanged)
+  }
+
+  private var modalRoot: NSView? {
+    guard modalShown, let root = mounted[.react], root.superview === self else { return nil }
+    return root
+  }
+
+  public override func accessibilityChildren() -> [Any]? {
+    guard let modalRoot else { return super.accessibilityChildren() }
+    return NSAccessibility.unignoredChildren(from: [modalRoot])
+  }
+
+  public override func accessibilityHitTest(_ point: NSPoint) -> Any? {
+    guard let modalRoot else { return super.accessibilityHitTest(point) }
+    return modalRoot.accessibilityHitTest(point)
   }
 
   public override func mouseMoved(with event: NSEvent) { notePointer(event.locationInWindow) }

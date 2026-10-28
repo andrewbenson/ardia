@@ -170,6 +170,10 @@ public final class SidebarDock {
     slide.stop()
     peek.stop()
     returnColumn()
+    shell.update {
+      $0.peeking = false
+      $0.peekSlide = 0
+    }
     setWatch(nil)
     onLights(nil)
   }

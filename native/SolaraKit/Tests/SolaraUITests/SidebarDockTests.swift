@@ -169,8 +169,23 @@ struct SidebarDockTests {
     rig.dock.edge(over: true)
     rig.dock.stop()
     #expect(rig.shell.view(in: .sidebar) === rig.column)
+    #expect(!rig.shell.input.peeking)
+    #expect(rig.shell.input.peekSlide == 0)
     #expect(rig.watches.last == .some(nil))
     #expect(rig.lights.last == .some(nil))
+  }
+
+  @Test func aColumnTakenAwayMidPeekIsNotHandedBack() {
+    let rig = Rig()
+    rig.set { $0.open = false }
+    rig.settle()
+    rig.dock.edge(over: true)
+    #expect(rig.column.superview === rig.dock.panel.clip)
+    rig.column.removeFromSuperview()
+    rig.dock.stop()
+    #expect(rig.shell.view(in: .sidebar) == nil)
+    #expect(rig.column.superview == nil)
+    #expect(!rig.shell.input.peeking)
   }
 
   @Test func fullScreenNeverWatchesOrPeeks() {

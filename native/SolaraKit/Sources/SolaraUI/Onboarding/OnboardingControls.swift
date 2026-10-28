@@ -408,6 +408,7 @@ struct OnboardingOptionRow<T: Hashable>: View {
       }
       .padding(2)
       .background(RoundedRectangle(cornerRadius: 8).fill(colors.button))
+      .fixedSize()
       .accessibilityLabel(title)
     }
   }

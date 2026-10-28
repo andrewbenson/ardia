@@ -24,6 +24,8 @@ enum SettingsFormMetrics {
   static let labelMinWidth: CGFloat = 210
   static let stackedSpacing: CGFloat = 8
   static let separatorLeading: CGFloat = 10
+  static let footerNoteSpacing: CGFloat = 4
+  static let readableWidth: CGFloat = 640
 }
 
 struct SettingsLazyForm<Content: View>: View {
@@ -46,6 +48,7 @@ struct SettingsLazyForm<Content: View>: View {
         }
       }
     }
+    .scrollEdgeEffectStyle(.soft, for: .top)
     .labeledContentStyle(SettingsRowStyle())
     .onChange(of: revealing, initial: true) { _, now in
       if now { eager = true }
@@ -64,8 +67,10 @@ struct SettingsLazyForm<Content: View>: View {
 struct SettingsFormInsets: ViewModifier {
   func body(content: Content) -> some View {
     content
+      .frame(maxWidth: SettingsFormMetrics.readableWidth)
       .padding(.horizontal, SettingsFormMetrics.sideInset)
       .padding(.bottom, SettingsFormMetrics.bottomInset)
+      .frame(maxWidth: .infinity)
   }
 }
 
@@ -95,7 +100,44 @@ struct SettingsLazySectionRows: View {
         .padding(.horizontal, SettingsFormMetrics.headerLeading)
         .padding(.top, SettingsFormMetrics.footerTop)
     }
+    let notes = rows.compactMap(\.containerValues.settingsFooterNote)
+    if !notes.isEmpty {
+      SettingsFooterNotes(notes: notes)
+        .padding(.horizontal, SettingsFormMetrics.headerLeading)
+        .padding(.top, SettingsFormMetrics.footerTop)
+    }
   }
+}
+
+struct SettingsFooterNote: Hashable {
+  let title: String
+  let text: String
+}
+
+struct SettingsFooterNotes: View {
+  let notes: [SettingsFooterNote]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: SettingsFormMetrics.footerNoteSpacing) {
+      ForEach(notes, id: \.self) { note in
+        Group {
+          if notes.count == 1 {
+            Text(note.text)
+          } else {
+            Text("\(Text(note.title).fontWeight(.medium)): \(note.text)")
+          }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+    .font(.system(size: 11))
+    .foregroundStyle(.secondary)
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+extension ContainerValues {
+  @Entry var settingsFooterNote: SettingsFooterNote? = nil
 }
 
 struct SettingsLazyRow<Row: View>: View {

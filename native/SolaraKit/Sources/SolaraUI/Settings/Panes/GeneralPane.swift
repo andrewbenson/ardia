@@ -112,9 +112,9 @@ struct GeneralPane: View {
         SettingToggle("general.warnBeforeClosingWindow", key: "warnBeforeClosingWindow")
         SettingRow(
           "general.openLinksFrom",
-          description: store.bool("openLinksInLittleArdia")
+          description: .footer(store.bool("openLinksInLittleArdia")
             ? "A link from Discord, Slack or Mail opens in Little \(app), a small window of its own. ⌘O moves it into \(app); closing it throws it away."
-            : "A link from Discord, Slack or Mail opens as a new tab in the \(app) window you used last."
+            : "A link from Discord, Slack or Mail opens as a new tab in the \(app) window you used last.")
         ) {
           SettingPicker(
             [SettingOption("small", "Little \(app)"), SettingOption("tab", "A new tab")],

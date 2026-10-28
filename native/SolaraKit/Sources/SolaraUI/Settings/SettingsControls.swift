@@ -92,6 +92,7 @@ public enum RowDescription {
   case index
   case none
   case text(String)
+  case footer(String)
 }
 
 public struct SettingRow<Control: View>: View {
@@ -114,14 +115,32 @@ public struct SettingRow<Control: View>: View {
         control
       } label: {
         Text(resolvedTitle)
-        if let text = resolvedDescription {
+        if let text = inlineDescription {
           Text(text)
         }
       }
     }
+    .containerValue(\.settingsFooterNote, footerNote)
   }
 
   private var entry: SettingEntry? { anchor.flatMap { context?.index.entry($0) } }
+
+  private var footerNote: SettingsFooterNote? {
+    switch description {
+    case .index, .footer:
+      guard let text = resolvedDescription, !text.isEmpty else { return nil }
+      return SettingsFooterNote(title: resolvedTitle, text: text)
+    case .none, .text:
+      return nil
+    }
+  }
+
+  private var inlineDescription: String? {
+    switch description {
+    case .index, .footer: nil
+    case .none, .text: resolvedDescription
+    }
+  }
 
   private var resolvedTitle: String { title ?? entry?.title ?? "" }
 
@@ -129,7 +148,7 @@ public struct SettingRow<Control: View>: View {
     switch description {
     case .index: entry?.description
     case .none: nil
-    case .text(let text): text
+    case .text(let text), .footer(let text): text
     }
   }
 }

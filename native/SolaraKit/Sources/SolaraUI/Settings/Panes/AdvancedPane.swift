@@ -132,7 +132,7 @@ struct AdvancedPane: View {
       }
 
       SettingsSection("Performance") {
-        SettingRow("advanced.batterySaver", description: AdvancedPaneModel.batterySaverDescriptions[batterySaver]) {
+        SettingRow("advanced.batterySaver", description: AdvancedPaneModel.batterySaverDescriptions[batterySaver].map(RowDescription.footer) ?? .index) {
           SettingPicker(
             [SettingOption("lowBattery", "When battery is low"), SettingOption("unplugged", "When unplugged"), SettingOption("never", "Never")],
             selection: store.choice("batterySaverWhen")

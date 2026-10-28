@@ -2,6 +2,10 @@ import CoreGraphics
 import Foundation
 
 let args = CommandLine.arguments
+if args.count == 2 && args[1] == "--can-post" {
+  print(CGPreflightPostEventAccess() ? 1 : 0)
+  exit(0)
+}
 guard args.count >= 3, let pid = pid_t(args[1]), let code = CGKeyCode(args[2]) else {
   print("usage: keys <pid> <keyCode> [modifiers]")
   exit(1)

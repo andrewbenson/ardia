@@ -15,6 +15,9 @@ const check = (name, ok, detail = "") => {
 const locked = process.env.SMOKE_LOCKED === "1";
 const checkUnlocked = (name, ok, detail = "") =>
   locked ? console.log(`SKIP  ${name}  (screen locked; ${ok ? "would pass" : "would fail"}${detail ? `: ${detail}` : ""})`) : check(name, ok, detail);
+const canPostKeys = process.env.SMOKE_CAN_POST !== "0";
+const checkKeys = (name, ok, detail = "") =>
+  canPostKeys ? check(name, ok, detail) : console.log(`SKIP  ${name}  (this terminal may not post key events: System Settings › Privacy & Security › Accessibility)`);
 const windows = () =>
   execFileSync(windowsTool, [pid], { encoding: "utf8" }).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
 
@@ -224,7 +227,7 @@ for (const [key, code] of [["⌘2", 19], ["⌘9", 25], ["⌘1", 18]]) {
   numbered.push([key, await shownPage()]);
 }
 const [two, nine, one] = numbered.map(([, url]) => url);
-check("⌘2, ⌘9 and ⌘1 select the sidebar's second, last and first (pinned) tab",
+checkKeys("⌘2, ⌘9 and ⌘1 select the sidebar's second, last and first (pinned) tab",
   /\?pin-a$/.test(one ?? "") && !!two && !!nine && new Set([one, two, nine]).size === 3 && !/\?pin-a$/.test(two),
   numbered.map(([key, url]) => `${key} ${url?.replace(/^.*\//, "") ?? "nothing shown"}`).join(", "));
 
@@ -284,7 +287,7 @@ let homeContext;
 for (const start = Date.now(); !homeContext && Date.now() - start < 8000; await sleep(500)) {
   homeContext = (await browserCall("Target.getTargets")).targetInfos?.find((t) => t.type === "page" && t.url.endsWith("?home"))?.browserContextId;
 }
-check("Personal's pages run in Personal's profile when Work was the last used", !!homeContext && !!workContext && homeContext !== workContext,
+checkKeys("Personal's pages run in Personal's profile when Work was the last used", !!homeContext && !!workContext && homeContext !== workContext,
   `personal ${homeContext}, work ${workContext}`);
 
 const hangEvents = async () =>
@@ -331,7 +334,7 @@ if (newTabId) {
   }
 }
 const newTabBack = newTabId ? await instance.eval(`return !!ac.store.getState().live[${JSON.stringify(newTabId)}]?.canGoBack;`).catch(() => null) : null;
-check("the first page opened from ⌘T has no Back (the prewarmed about:blank isn't in its history)",
+checkKeys("the first page opened from ⌘T has no Back (the prewarmed about:blank isn't in its history)",
   newTabHistory?.length === 1 && newTabBack === false,
   newTabId ? `${newTabHistory ? newTabHistory.map((e) => e.url.replace(/^.*\//, "")).join(" → ") : "page never loaded"}; canGoBack ${newTabBack}` : "⌘T made no tab");
 if (newTabId) await instance.eval(`ac.store.getState().closeTab(${JSON.stringify(newTabId)}); return true;`).catch(() => null);

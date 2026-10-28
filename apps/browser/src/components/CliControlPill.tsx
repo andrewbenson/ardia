@@ -18,7 +18,7 @@ export function CliControlPill({ tabId, style, nativeAllowed = true }: { tabId: 
   const windowId = useWindowId();
   const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
   if (!nativeMedia("media.cliPill")) return <RNCliControlPill style={style} />;
-  if (inShell && !style) return <PaneCliControlPill windowId={windowId} tabId={tabId} />;
+  if (inShell) return <PaneCliControlPill windowId={windowId} tabId={tabId} />;
   return (
     <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, style]}>
       <NativeCliControlPill windowId={windowId} />

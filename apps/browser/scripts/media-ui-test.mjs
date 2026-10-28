@@ -12,7 +12,7 @@ if (!appArg) {
 The media controls on a local tone page: the sidebar player shows for a playing tab that isn't shown, its play
 button pauses and plays, Close Player hides it without pausing or moving to the tab, a new play brings it back, Back
 to Tab shows the tab and ends the player; the pinned tab's hover player scrolls a long title and ticks its time; the
-CLI pill appears and hides with RN's timing; the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls. --shell adds ARDIA_NATIVE_SHELL=1: the pickers
+CLI pill appears and hides with RN's timing (and, under --shell, holds still while the toolbar hides and shows); the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls. --shell adds ARDIA_NATIVE_SHELL=1: the pickers
 and the CLI pill then live in the pane overlay container on the shell's card, with no RN-hosted NativeMediaView.`);
   process.exit(2);
 }
@@ -223,6 +223,30 @@ try {
       }
     })();
     return { samples: samples.length, frame: on.at(-1).frame, peak, pane };
+  });
+  await rep.check("cli-pill-auto-hide", async () => {
+    if (!shell) return { skipped: "RN-hosted: the pill rides RN's native-driver transforms, which its AppKit frame doesn't show" };
+    await run(`ac.store.getState().updateSettings({ hideToolbarWhileScrolling: true }); globalThis.acCli.indicator.setState({ shown: true }); return true;`);
+    try {
+      await until("pill shown", `return first("media.cliPill").then((r) => r && r.opacity > 0.99 ? r : null);`, 3000);
+      await sleep(600);
+      const rest = (await run(`return first("media.cliPill");`)).frame;
+      const { frames, tops } = await run(`
+        const out = [];
+        const tops = [];
+        const page = () => { const f = acPerf.findFibers("TabWebView", 50).find((f) => !!f.child && f.memoizedProps.tabId === shown()); return measure(f).then((r) => tops.push(r[1])); };
+        const sample = (until) => performance.now() >= until ? Promise.resolve() : first("media.cliPill").then((r) => { out.push(r.frame); return settle(8); }).then(() => sample(until));
+        return page().then(() => { ac.toolbarAutoHide.noteScroll(shown(), { state: "down" }); return sample(performance.now() + 700); }).then(page)
+          .then(() => { ac.toolbarAutoHide.noteScroll(shown(), { state: "up" }); return sample(performance.now() + 700); }).then(page).then(() => ({ frames: out, tops }));`, 10000);
+      if (!(tops[1] < tops[0]) || tops[2] !== tops[0]) throw new Error(`the toolbar never hid and came back: page tops ${JSON.stringify(tops)}`);
+      const off = frames.filter((f) => f.some((v, i) => Math.abs(v - rest[i]) > 0.5));
+      if (off.length) throw new Error(`the pill moved off ${JSON.stringify(rest)} while the toolbar slid: ${JSON.stringify(off.slice(0, 5))}`);
+      const slid = await run(`return M.describePaneOverlays("w1").then(JSON.parse).then((d) => d.tabs[shown()].cliPill.frame);`);
+      return { rest, samples: frames.length, pageTops: tops, slot: slid };
+    } finally {
+      await run(`globalThis.acCli.indicator.setState({ shown: false }); ac.store.getState().updateSettings({ hideToolbarWhileScrolling: false }); return true;`);
+      await sleep(400);
+    }
   });
   const RN_CAST = [925, 55, 340, 185];
   const RN_SHARE = [501.5, 55, 460, 423];

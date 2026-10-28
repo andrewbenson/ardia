@@ -71,7 +71,7 @@ import Testing
     intent.onShow = { shown.append($0) }
     intent.enter("a")
     #expect(shown.isEmpty)
-    try await Task.sleep(for: .milliseconds(600))
+    await LiveSettingsWait.until { shown == ["a"] }
     #expect(shown == ["a"])
     intent.enter("b")
     #expect(shown == ["a", "b"])
@@ -80,16 +80,18 @@ import Testing
   @Test func leaveHidesAfterDelayUnlessCardKeeps() async throws {
     let intent = HoverIntent()
     var hidden = 0
-    intent.onShow = { _ in }
+    var shown = false
+    intent.onShow = { _ in shown = true }
     intent.onHide = { hidden += 1 }
     intent.enter("a")
-    try await Task.sleep(for: .milliseconds(600))
+    await LiveSettingsWait.until { shown }
+    #expect(shown)
     intent.leave(from: "a")
     intent.cardEntered()
     try await Task.sleep(for: .milliseconds(250))
     #expect(hidden == 0)
     intent.cardLeft()
-    try await Task.sleep(for: .milliseconds(250))
+    await LiveSettingsWait.until { hidden == 1 }
     #expect(hidden == 1)
   }
 }
@@ -108,7 +110,7 @@ import Testing
     #expect(body.frame.origin == origin)
     #expect(card.phase == .entering)
     #expect(card.hitTest(NSPoint(x: origin.x + 20, y: origin.y + 20)) == nil)
-    try await Task.sleep(for: .milliseconds(200))
+    await LiveSettingsWait.until { card.phase == .shown }
     #expect(card.phase == .shown)
     let inButton = card.convert(NSPoint(x: button.frame.midX, y: button.frame.midY), from: body)
     #expect(card.hitTest(host.convert(inButton, from: card)) === button)
@@ -117,7 +119,7 @@ import Testing
     card.onHidden = { hidden = true }
     card.hide()
     #expect(card.hitTest(host.convert(inButton, from: card)) == nil)
-    try await Task.sleep(for: .milliseconds(200))
+    await LiveSettingsWait.until { hidden && card.content == nil && card.phase == .hidden }
     #expect(hidden && card.content == nil && card.phase == .hidden)
   }
 }
@@ -138,8 +140,10 @@ import Testing
     popover.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
     popover.set(placement: PopoverPlacement(width: 300, top: 8, right: 8), dark: false)
     popover.layoutSubtreeIfNeeded()
-    try await Task.sleep(for: .milliseconds(50))
-    popover.layoutSubtreeIfNeeded()
+    await LiveSettingsWait.until {
+      popover.layoutSubtreeIfNeeded()
+      return popover.cardFrame.height == 121
+    }
     #expect(popover.cardFrame.height == 121)
   }
 }

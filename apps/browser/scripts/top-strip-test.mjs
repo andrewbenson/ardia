@@ -311,6 +311,7 @@ try {
     await rep.check("the peek's downloads button opens the list and holds the peek out until it closes, as on RN", async () => {
       rep.log(`peek held rn ${JSON.stringify(rn.peekHeld)} native ${JSON.stringify(native.peekHeld)}`);
       assert.match(native.peekHeld.hit, /^SolaraUI\.StripIconButton < SolaraUI\.StripControlsView/, `the native button is under the pointer: ${native.peekHeld.hit}`);
+      assert.equal(native.peekHeld.panel, false, "the click presses only the native button, not the address field under it (RN's peek presses both; docs/backlog.md)");
       for (const [name, seen] of [["rn", rn.peekHeld], ["native", native.peekHeld]]) {
         assert.equal(seen.open, true, `${name}: the click opened the downloads list`);
         assert.equal(seen.heldLive, true, `${name}: the open list holds the peek out`);

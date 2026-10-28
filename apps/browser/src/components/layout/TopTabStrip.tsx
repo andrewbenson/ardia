@@ -8,7 +8,7 @@ import { useTileTheme } from "../../lib/tileTheme";
 import { liquidGlass } from "../glass";
 import { useBrowser } from "../../store/browser";
 import { PageProfileContext, useIsActiveTab, usePageProfileId, useSettings, useTab, useTabLive, useWindowId, useWindowProfileId } from "../../store/hooks";
-import { ProfileIndicator, useProfileIndicatorWidth } from "../ProfileIndicator";
+import { ProfileIndicator, ProfileNameMeasure, useProfileIndicatorWidth, useProfileTitle } from "../ProfileIndicator";
 import { HoverSlot } from "../HoverSlot";
 import { IconButton, useHover } from "../primitives";
 import { DownloadsButton } from "../Downloads";
@@ -32,6 +32,7 @@ import { openTileFolderMenu } from "../sidebar/tileFolderUi";
 import { folderCell, folderIdOfCell, folderIn, folderLabel } from "../../store/tileFolders";
 import { usePeek } from "./usePeek";
 import { devPeeks, lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
+import { NativeStripControls, nativeStripControlsEnabled, NativeStripDropGlow } from "./NativeStripControls";
 import { NativeStripPeek, nativeStripPeekEnabled, NativeTopStrip, nativeTopStripEnabled } from "./NativeTopStrip";
 import { topStripPeek } from "@ardia/settings";
 import {
@@ -117,6 +118,7 @@ export function TopTabStrip({
   const current = useWindowProfileId();
   const { pages } = usePagerPages(windowId);
   const profileChip = useProfileIndicatorWidth(PROFILE_ROOM);
+  const profileTitle = useProfileTitle();
   const controls = (profileChip ? profileChip + CONTROLS_GAP : 0) + DOWNLOADS_BOX;
   const left = floating ? 8 : layout.trafficLightsWidth + LIGHTS_GAP;
   const right = Math.max(84, controls + 8 + 6);
@@ -140,12 +142,24 @@ export function TopTabStrip({
             pages.map((page) => <StripPage key={page.id} profileId={page.id} slot={page.slot} pageWidth={pageWidth} current={page.id === current} resting={!!page.resting} />)
           )}
         </View>
-        <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
-          <ProfileIndicator room={PROFILE_ROOM} />
-          <DownloadsButton windowId={windowId} />
-        </View>
+        {nativeStripControlsEnabled() ? (
+          <>
+            <ProfileNameMeasure title={profileTitle} />
+            <NativeStripControls windowId={windowId} indicator={profileChip > 0} style={{ position: "absolute", right: 8, top: MID - 17, width: controls, height: profileChip > 0 ? 34.5 : 34 }} />
+          </>
+        ) : (
+          <View mouseDownCanMoveWindow={false} style={{ position: "absolute", right: 8, top: MID - 17, flexDirection: "row", alignItems: "center", gap: CONTROLS_GAP }}>
+            <ProfileIndicator room={PROFILE_ROOM} />
+            <DownloadsButton windowId={windowId} />
+          </View>
+        )}
         {swipe && <ProfileSwipeArea surface="strip" style={StyleSheet.absoluteFill} pageWidth={pageWidth + flare * 2} />}
-        {!floating && <StripDropHighlight left={left} right={right} />}
+        {!floating &&
+          (nativeStripControlsEnabled() ? (
+            <NativeStripDropGlow windowId={windowId} style={{ position: "absolute", left: left - 4, right: right - 4, top: ITEM_TOP - 1, height: ITEM_HEIGHT + 2 }} />
+          ) : (
+            <StripDropHighlight left={left} right={right} />
+          ))}
       </StripDropArea>
     </FloatingStrip.Provider>
   );
@@ -178,6 +192,11 @@ function StripDropHighlight({ left, right }: { left: number; right: number }) {
   useEffect(() => {
     Animated.timing(glow, { toValue: over ? 1 : 0, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
   }, [over]);
+  useEffect(() => {
+    if (!__DEV__) return;
+    devGlows.set(windowId, glow);
+    return () => void (devGlows.get(windowId) === glow && devGlows.delete(windowId));
+  }, [windowId]);
   return (
     <Animated.View
       pointerEvents="none"
@@ -1370,13 +1389,26 @@ function StripGroup({
 }
 
 const devGroupSizes = new Map<string, Animated.Value>();
+const devGlows = new Map<string, Animated.Value>();
 if (__DEV__) {
   const g = globalThis as { acStrip?: Record<string, unknown> };
   const valueOf = (value: Animated.Value) => (value as unknown as { __getValue(): number }).__getValue();
   let groupSamples: [number, number][] = [];
   let stopGroupTrace = () => {};
+  let glowSamples: [number, number][] = [];
+  let stopGlowTrace = () => {};
   g.acStrip = {
     ...g.acStrip,
+    traceGlow: (windowId: string) => {
+      stopGlowTrace();
+      const glow = devGlows.get(windowId);
+      if (!glow) return void (glowSamples = []);
+      const samples: [number, number][] = [[performance.now(), valueOf(glow)]];
+      glowSamples = samples;
+      const id = glow.addListener(({ value }) => samples.push([performance.now(), value]));
+      stopGlowTrace = () => glow.removeListener(id);
+    },
+    glowTrace: () => glowSamples,
     groupSize: (groupId: string) => {
       const size = devGroupSizes.get(groupId);
       return size ? valueOf(size) : null;

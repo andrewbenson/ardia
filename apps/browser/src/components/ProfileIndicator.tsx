@@ -32,6 +32,26 @@ function useIndicator(room: number) {
 
 export const useProfileIndicatorWidth = (room: number) => useIndicator(room).width;
 
+export function useProfileTitle() {
+  const incognito = useIsIncognito();
+  const profile = useWindowProfile();
+  return incognito ? "Incognito" : profile.name;
+}
+
+export function ProfileNameMeasure({ title }: { title: string }) {
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", width: 1000, height: 0, overflow: "hidden", opacity: 0 }}>
+      <Text
+        numberOfLines={1}
+        style={{ alignSelf: "flex-start", fontSize: 13, fontWeight: "600" }}
+        onLayout={(e) => setMeasuredWidth(`profile-name|${title}`, Math.ceil(e.nativeEvent.layout.width))}
+      >
+        {title}
+      </Text>
+    </View>
+  );
+}
+
 export function ProfileIndicator({ room }: { room: number }) {
   const theme = useTheme();
   const windowId = useWindowId();
@@ -41,15 +61,7 @@ export function ProfileIndicator({ room }: { room: number }) {
 
   return (
     <View {...hoverProps} tooltip={incognito ? undefined : "Switch between profiles"} style={{ marginTop: 0.5 }}>
-      <View pointerEvents="none" style={{ position: "absolute", width: 1000, height: 0, overflow: "hidden", opacity: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{ alignSelf: "flex-start", fontSize: 13, fontWeight: "600" }}
-          onLayout={(e) => setMeasuredWidth(`profile-name|${title}`, Math.ceil(e.nativeEvent.layout.width))}
-        >
-          {title}
-        </Text>
-      </View>
+      <ProfileNameMeasure title={title} />
       <Pressable onPress={() => !incognito && void openProfileMenu(windowId)} disabled={incognito}>
         {({ pressed }) => (
           <View

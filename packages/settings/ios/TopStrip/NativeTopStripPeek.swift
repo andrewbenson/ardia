@@ -96,5 +96,82 @@ final class TopStripPeekHost {
         takesFocus: false,
         onState: { [weak host] json in host?.apply(json) })
     }
+    TopStripControlsHost.register()
+  }
+}
+
+struct StripControlsHostState: Decodable, Equatable {
+  var controls: StripControlsState
+  var theme: [String: String]
+}
+
+struct StripGlowHostState: Decodable, Equatable {
+  var over: Bool
+  var accent: String
+  var dark: Bool
+}
+
+@MainActor
+final class TopStripControlsHost {
+  static let kind = "topStripControls"
+  static var hosts: [String: TopStripControlsHost] = [:]
+
+  let windowId: String
+  let view = StripControlsView()
+  private var state: StripControlsHostState?
+
+  init(windowId: String) {
+    self.windowId = windowId
+    view.onAction = { [weak self] action in self?.handle(action) }
+  }
+
+  func apply(_ json: String) {
+    guard let next = json.data(using: .utf8).flatMap({ try? JSONDecoder().decode(StripControlsHostState.self, from: $0) }), next != state else { return }
+    state = next
+    view.update(next.controls, theme: next.theme)
+  }
+
+  private func handle(_ action: StripControlAction) {
+    let windowId = windowId
+    let name = action == .profileMenu ? "profileMenu" : "toggleDownloads"
+    Task { @MainActor in _ = await SettingsAdapters.js("topStrip.peek.action", windowId, name, SidebarPayload([:]).value) }
+  }
+
+  static func register() {
+    HostedViews.register(kind) { windowId in
+      let host = TopStripControlsHost(windowId: windowId)
+      hosts[windowId] = host
+      return HostedContent(
+        view: host.view,
+        onUnmount: { [weak host] in if hosts[windowId] === host { hosts[windowId] = nil } },
+        takesFocus: false,
+        onState: { [weak host] json in host?.apply(json) })
+    }
+    TopStripGlowHost.register()
+  }
+}
+
+@MainActor
+final class TopStripGlowHost {
+  static let kind = "topStripGlow"
+  static var hosts: [String: TopStripGlowHost] = [:]
+
+  let view = StripDropGlow()
+
+  func apply(_ json: String) {
+    guard let next = json.data(using: .utf8).flatMap({ try? JSONDecoder().decode(StripGlowHostState.self, from: $0) }) else { return }
+    view.set(over: next.over, accent: next.accent, dark: next.dark)
+  }
+
+  static func register() {
+    HostedViews.register(kind) { windowId in
+      let host = TopStripGlowHost()
+      hosts[windowId] = host
+      return HostedContent(
+        view: host.view,
+        onUnmount: { [weak host] in if hosts[windowId] === host { hosts[windowId] = nil } },
+        takesFocus: false,
+        onState: { [weak host] json in host?.apply(json) })
+    }
   }
 }

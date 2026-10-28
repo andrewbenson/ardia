@@ -103,7 +103,7 @@ public final class StripControlsView: NSView {
     let indicatorWidth = layout.shown ? layout.width : 0
     width = StripControlsLayout.width(indicator: indicatorWidth)
     indicator.frame = NSRect(x: 0, y: 0.5, width: indicatorWidth, height: StripControlsLayout.height)
-    downloads.frame = NSRect(x: width - StripControlsLayout.downloadsBox, y: indicatorWidth > 0 ? 0.25 : 0, width: StripControlsLayout.downloadsBox, height: StripControlsLayout.downloadsBox)
+    downloads.frame = NSRect(x: width - StripControlsLayout.downloadsBox, y: indicatorWidth > 0 ? 0.5 : 0, width: StripControlsLayout.downloadsBox, height: StripControlsLayout.downloadsBox)
   }
 
   public override func updateTrackingAreas() {

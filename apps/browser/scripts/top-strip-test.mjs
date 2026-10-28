@@ -82,7 +82,14 @@ function readPng(path) {
   return { width, height, channels, data };
 }
 
-function stripDiff(a, b, top, bottom) {
+function crop(png, left, right) {
+  const width = (right - left) * 2;
+  const data = Buffer.alloc(width * png.height * png.channels);
+  for (let y = 0; y < png.height; y++) png.data.copy(data, y * width * png.channels, (y * png.width + left * 2) * png.channels, (y * png.width + right * 2) * png.channels);
+  return { width, height: png.height, channels: png.channels, data };
+}
+
+function stripDiff(a, b, top, bottom, threshold = 24) {
   let differ = 0, total = 0, worst = 0;
   const columns = [];
   for (let y = top * 2; y < bottom * 2; y++)
@@ -90,7 +97,7 @@ function stripDiff(a, b, top, bottom) {
       const i = (y * a.width + x) * a.channels, j = (y * b.width + x) * b.channels;
       const d = Math.max(Math.abs(a.data[i] - b.data[j]), Math.abs(a.data[i + 1] - b.data[j + 1]), Math.abs(a.data[i + 2] - b.data[j + 2]));
       total++;
-      if (d > 24) {
+      if (d > threshold) {
         differ++;
         columns[x >> 1] = (columns[x >> 1] ?? 0) + 1;
       }
@@ -202,6 +209,62 @@ async function measure(native) {
           });
         })
         .then((edges) => { st().setDownloadsOpen("w1", false); return settle(600).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => edges); });`);
+    out.docked = await run(`
+      const W = st().windows.w1.frame[2];
+      const flick = [["began", 0], ["changed", -18], ["changed", -22], ["changed", -22], ["ended", 0]].map(([phase, dx], i) => ({ phase, dx, dy: 0, atMs: i * 16, timestampMs: i * 16, dispatch: "app" }));
+      const seen = {};
+      return win("w1").then((n) => {
+        const xs = [];
+        for (let x = W - 8 - 110; x < W; x += 0.5) xs.push(x);
+        return Promise.all(xs.map((x) => C.devWindow(n, "hit:" + x + ",21"))).then((hits) => {
+          const edges = []; let prev = null;
+          hits.forEach((h, i) => { const k = /WindowDragRegion/.test(h) ? "drag" : /SwipeArea/.test(h) ? "swipe" : "item"; if (k !== prev) edges.push(xs[i] + " " + k); prev = k; });
+          seen.edges = edges;
+          seen.downloadsHit = hits[xs.indexOf(W - 25)];
+          return globalThis.expo.modules.ArdiaSwipe.devSimulate(W - 25, 21, n, flick, true);
+        });
+      }).then((r) => settle(600).then(() => { seen.swipe = r.where; seen.swipedTo = st().windows.w1.profileId; st().switchProfile("w1", "default"); return settle(600); }))
+        .then(() => {
+          const before = st().windows.w1.tabIds.slice();
+          const drag = (action, payload) => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", action, W - 25, 21, payload);
+          return drag("move", { urls: ["https://dropped.example/"] }).then((r) => (seen.over = r)).then(() => settle(200)).then(() => drag("drop")).then(() => settle(800)).then(() => {
+            const ids = st().windows.w1.tabIds;
+            const added = ids.find((id) => !before.includes(id));
+            seen.dropped = added ? ids[ids.indexOf(added) - 1] ?? null : "none";
+            if (added) st().closeTab(added);
+            st().activate("t1");
+            return settle(500);
+          });
+        }).then(() => seen);`);
+    out.dockedShots = {};
+    const W = 1600;
+    const dockedLooks = [
+      ["rest", ``, ``],
+      ["hoverDownloads", `ac.shell.devSetPointer("w1", { x: ${W - 25}, y: 21 }).then(() => act("w1", "mouse:moved:${W - 25},21"));`, `ac.shell.devSetPointer("w1", { x: 600, y: 400 }).then(() => act("w1", "mouse:moved:600,400")).then(() => ac.shell.devSetPointer("w1", null));`],
+      ["hoverName", `ac.shell.devSetPointer("w1", { x: ${W - 80}, y: 21 }).then(() => act("w1", "mouse:moved:${W - 80},21"));`, `ac.shell.devSetPointer("w1", { x: 600, y: 400 }).then(() => act("w1", "mouse:moved:600,400")).then(() => ac.shell.devSetPointer("w1", null));`],
+      ["pressDownloads", `act("w1", "mouse:down:${W - 25},21");`, `act("w1", "mouse:up:${W - 25},21").then(() => settle(300)).then(() => { st().setDownloadsOpen("w1", false); st().closePanel("w1"); });`],
+      ["downloadsOpen", `st().setDownloadsOpen("w1", true);`, `st().setDownloadsOpen("w1", false);`],
+      ["glow", `globalThis.acTabDrag.setState({ overWindow: "w1" });`, `globalThis.acTabDrag.setState({ overWindow: null });`],
+    ];
+    for (const [look, setup, undo] of dockedLooks) {
+      const shot = join(scratch, `${native ? "native" : "rn"}-docked-${look}.png`);
+      await run(`${setup} return settle(500);`);
+      out.dockedShots[look] = (await run(`return ac.shell.devSnapshotWindow("w1", ${JSON.stringify(shot)});`)) ? shot : null;
+      await run(`${undo} return settle(600);`);
+    }
+    out.dockedDownloadsAt = await run(`
+      return act("w1", "click:${W - 25},21").then(() => settle(100)).then(() => st().closePanel("w1")).then(() => settle(600)).then(() => win("w1"))
+        .then((n) => {
+          const points = [];
+          for (let y = 60; y < 700; y += 4) points.push([1500, y]);
+          for (let x = 1100; x < 1600; x += 4) points.push([x, 140]);
+          return Promise.all(points.map(([x, y]) => C.devWindow(n, "hit:" + x + "," + y))).then((hits) => {
+            const edges = []; let prev = null;
+            hits.forEach((h, i) => { if (i === 160 || h !== prev) edges.push(points[i].join(",") + " " + h); prev = h; });
+            return edges;
+          });
+        })
+        .then((edges) => { st().setDownloadsOpen("w1", false); return settle(600).then(() => edges); });`);
     if (native) {
       out.hiddenTop = await run(`
         const flick = [["began", 0], ["changed", -18], ["changed", -22], ["changed", -22], ["ended", 0]].map(([phase, dx], i) => ({ phase, dx, dy: 0, atMs: i * 16, timestampMs: i * 16, dispatch: "app" }));
@@ -338,6 +401,37 @@ try {
         assert.ok(diff.share < 0.01, `${(diff.share * 100).toFixed(2)}% of the peek's pixels differ (worst ${diff.worst}, ${diff.hot})`);
       });
     }
+    await rep.check("the docked strip's controls take the same clicks, swipes and drops as RN's", async () => {
+      rep.log(`docked rn ${JSON.stringify(rn.docked)}`);
+      rep.log(`docked native ${JSON.stringify(native.docked)}`);
+      assert.match(native.docked.edges[0], / item$/, "the row starts on the profile indicator");
+      assert.match(native.docked.downloadsHit, /^SolaraUI\.StripIconButton < SolaraUI\.StripControlsView/, `the native button is under the pointer: ${native.docked.downloadsHit}`);
+      assert.deepEqual(native.docked.edges, rn.docked.edges, "where the row drags the window, and where it takes clicks");
+      assert.equal(native.docked.swipedTo, rn.docked.swipedTo, "a swipe over the controls pages profiles as on RN");
+      assert.notEqual(rn.docked.swipedTo, "default", "RN pages on a swipe over its controls");
+      assert.equal(native.docked.dropped, rn.docked.dropped, "a link dropped over the controls lands where RN puts it");
+    });
+    for (const look of ["rest", "hoverDownloads", "hoverName", "pressDownloads", "downloadsOpen", "glow"]) {
+      if (!rn.dockedShots?.[look] || !native.dockedShots?.[look]) continue;
+      await rep.check(`the docked strip's ${look} pixels match RN's`, async () => {
+        const a = readPng(rn.dockedShots[look]), b = readPng(native.dockedShots[look]);
+        const right = stripDiff(crop(a, 1440, 1600), crop(b, 1440, 1600), 0, 42, 8);
+        const whole = stripDiff(a, b, 0, 42);
+        rep.log(`docked ${look} controls ${JSON.stringify(right)} strip ${JSON.stringify(whole)}`);
+        assert.ok(right.share < 0.005, `${(right.share * 100).toFixed(2)}% of the controls' pixels differ (worst ${right.worst}, ${right.hot})`);
+        if (look !== "rest") {
+          const rest = readPng(rn.dockedShots.rest);
+          const changed = look === "glow" ? stripDiff(rest, a, 0, 42) : stripDiff(crop(rest, 1440, 1600), crop(a, 1440, 1600), 0, 42, 8);
+          assert.ok(changed.share > 0.002, `RN's ${look} looks like its rest state (${JSON.stringify(changed)}), so this compares nothing`);
+        }
+        assert.ok(whole.share < 0.01, `${(whole.share * 100).toFixed(2)}% of the strip's pixels differ (worst ${whole.worst}, ${whole.hot})`);
+      });
+    }
+    await rep.check("the downloads list opens from the docked button where RN's does", async () => {
+      const shown = (edges) => edges.filter((e) => !/^\d+,(60|64) /.test(e)).join("\n");
+      assert.ok(rn.dockedDownloadsAt.length > 2, `RN's list shows: ${shown(rn.dockedDownloadsAt)}`);
+      assert.equal(shown(native.dockedDownloadsAt), shown(rn.dockedDownloadsAt));
+    });
     await rep.check("the peek slides in and out on RN's 180 ms out-cubic, frame for frame at 30 fps", async () => {
       const show = (samples) => JSON.stringify(samples.map(([t, x]) => [Math.round(t), Math.round(x * 1000) / 1000]));
       rep.log(`rn peek ${show(rn.peekMotion)}`);

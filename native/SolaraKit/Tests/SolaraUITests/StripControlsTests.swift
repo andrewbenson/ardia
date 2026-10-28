@@ -34,10 +34,10 @@ import Testing
     #expect(actions == [.toggleDownloads, .profileMenu])
   }
 
-  @Test func theDownloadsButtonCentresOnTheIndicatorsHalfPointMarginOnlyWhenTheIndicatorShows() {
+  @Test func theDownloadsButtonSitsWhereYogaRoundsItsCentredQuarterPointOnlyWhenTheIndicatorShows() {
     let view = StripControlsView(frame: .zero)
     view.update(StripControlsState(title: "Work", incognito: false, profiles: 2, nameColor: "#FF0000", downloadsOpen: false, downloadsTooltip: nil), theme: [:])
-    #expect(view.downloads.frame.minY == 0.25)
+    #expect(view.downloads.frame.minY == 0.5)
     view.update(StripControlsState(title: "Work", incognito: false, profiles: 1, nameColor: "#FF0000", downloadsOpen: false, downloadsTooltip: nil), theme: [:])
     #expect(view.downloads.frame.minY == 0)
     #expect(view.width == 34)

@@ -13,7 +13,10 @@ The sad tab over a local page, drawn by RN and then natively (ARDIA_NATIVE_SHELL
 container on top of the shell's card, framed to the pane): a crashed tab covers the pane with "This tab needs to
 reload" and a Reload button, an unresponsive one dims it under a 320 wide card with Exit Page and Wait. The native
 overlay, its buttons and RN's are the same frames in the window (within half a point: one pixel of Yoga rounding), a click on Reload clears the
-crash and a click on Wait clears the hang, and once both are gone the native container leaves the card.`);
+crash and a click on Wait clears the hang, and once both are gone the native container leaves the card. A third instance
+serves the page from the pool (ARDIA_NATIVE_PAGES_POOL=1 ARDIA_SHELL_PANES=1): the renderer really crashes
+(chrome://crash through the pooled handle), the crash reaches the store as a page event, the native sad tab sits where
+RN's does, and Reload reloads the pooled page back to A.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -67,7 +70,12 @@ const modes = [
   { unresponsive: true },
 ];
 const labels = { 0: ["Reload"], 1: ["Exit Page", "Wait"] };
-const measured = { rn: [], native: [] };
+const measured = { rn: [], native: [], pool: [] };
+const LEGS = [
+  { tag: "rn", env: { ARDIA_NATIVE_SHELL: "0" } },
+  { tag: "native", env: { ARDIA_NATIVE_SHELL: "1" } },
+  { tag: "pool", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } },
+];
 
 async function frames(nativeShell, i) {
   if (!nativeShell) {
@@ -84,20 +92,27 @@ async function frames(nativeShell, i) {
 }
 
 try {
-  for (const nativeShell of [false, true]) {
-    const tag = nativeShell ? "native" : "rn";
+  for (const { tag, env } of LEGS) {
+    const nativeShell = tag !== "rn";
+    const pooled = tag === "pool";
     app = await launch(resolve(appArg), {
-      data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
+      data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true, env,
       ready: "return !!ac.store.getState().windows.w1",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);
     await until("page A", `return ac.store.getState().tabs.a?.title === "A" || null;`, 15000);
+    if (pooled) {
+      const served = await run(`return !!globalThis.expo.modules.SolaraTabPool?.available?.() && !!ac.webviews.get("a") && !acPerf.findFibers("TabWebView", 5).length;`);
+      if (!served) throw new Error("the pool doesn't serve page A");
+    }
 
     for (const [i, state] of modes.entries()) {
       const name = i === 0 ? "crashed" : "unresponsive";
       await rep.check(`${tag}-${name}`, async () => {
-        await run(`patch(${JSON.stringify(state)}); return true;`);
+        if (pooled && i === 0) {
+          await run(`ac.webviews.get("a").loadUrl("chrome://crash"); return true;`);
+          await until("the crash reaches the store", `return page().crashed || null;`, 8000);
+        } else await run(`patch(${JSON.stringify(state)}); return true;`);
         await sleep(400);
         const got = await frames(nativeShell, i);
         if (nativeShell && got.mode !== name) throw new Error(`native mode ${got.mode}`);
@@ -106,6 +121,7 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(got.controls[action]))}).then(() => true);`);
         await until(`${action} clears it`, `const p = page(); return !p.crashed && !p.unresponsive || null;`, 3000);
         if (nativeShell) await until("the native overlay goes", `return native().then((d) => !d || (!d.tabs.a && !d.inCard) || null);`, 3000);
+        if (pooled && i === 0) await until("the pooled page reloads to A", `return ac.webviews.get("a") && ac.store.getState().tabs.a?.title === "A" && !ac.store.getState().live.a?.isLoading ? true : null;`, 8000);
         return got;
       });
     }
@@ -113,10 +129,10 @@ try {
     app = null;
   }
 
-  for (const [i] of modes.entries()) {
-    await rep.check(`native-matches-rn-${i === 0 ? "crashed" : "unresponsive"}`, async () => {
+  for (const [i] of modes.entries()) for (const tag of ["native", "pool"]) {
+    await rep.check(`${tag}-matches-rn-${i === 0 ? "crashed" : "unresponsive"}`, async () => {
       const rn = measured.rn[i];
-      const nat = measured.native[i];
+      const nat = measured[tag][i];
       if (!rn || !nat) throw new Error("a mode was not measured");
       if (!near(nat.overlay, rn.overlay)) throw new Error(`overlay ${nat.overlay}, RN ${rn.overlay}`);
       for (const title of labels[i]) if (!near(nat.controls[title], rn.controls[title])) throw new Error(`${title} ${nat.controls[title]}, RN ${rn.controls[title]}`);

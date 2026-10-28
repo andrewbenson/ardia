@@ -135,8 +135,12 @@ public final class SafeStorageRekeyRun {
       return undoFailed("the journal can't be read: \(error)")
     }
     let keepingOriginals = journal?.phase == .done && journal?.version == appVersion
-    if keepingOriginals && present(stagingDir), lock() == nil {
-      do { try removeIfPresent(stagingDir) } catch { log("can't remove the staging folder: \(error)") }
+    if keepingOriginals && present(stagingDir) {
+      if takeLock() {
+        do { try removeIfPresent(stagingDir) } catch { log("can't remove the staging folder: \(error)") }
+      } else {
+        log("staging left for the copy that owns the data dir")
+      }
     }
     if let journal, journal.phase != .done && journal.phase != .abandoned || leftovers() && !keepingOriginals {
       if let busy = lock() { return busy }
@@ -496,16 +500,20 @@ public final class SafeStorageRekeyRun {
   }
 
   private func lock() -> SafeStorageRekeyOutcome? {
-    if lockDescriptor >= 0 { return nil }
-    if otherCopyOwns(dir) { return otherCopy() }
+    takeLock() ? nil : otherCopy()
+  }
+
+  private func takeLock() -> Bool {
+    if lockDescriptor >= 0 { return true }
+    if otherCopyOwns(dir) { return false }
     let fd = open(lockURL.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
-    guard fd >= 0 else { return otherCopy() }
+    guard fd >= 0 else { return false }
     guard flock(fd, LOCK_EX | LOCK_NB) == 0 else {
       close(fd)
-      return otherCopy()
+      return false
     }
     lockDescriptor = fd
-    return nil
+    return true
   }
 
   func releaseLock() {

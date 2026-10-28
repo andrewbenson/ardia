@@ -310,6 +310,9 @@ final class SafeStorageRekeyRunTests: XCTestCase {
     XCTAssertEqual(crashChild(at: "after-done-write"), SafeStorageRekeyRun.crashExitCode)
     XCTAssertEqual(rekey(otherCopy: true).run(), .proceed)
     XCTAssertTrue(present(".rekey-staging"))
+    let log = try String(contentsOf: dir.appendingPathComponent(".safe-storage-rekey.log"), encoding: .utf8)
+    XCTAssertTrue(log.contains("staging left for the copy that owns the data dir"))
+    XCTAssertFalse(log.contains("quitting"))
     XCTAssertEqual(rekey().run(), .proceed)
     XCTAssertFalse(present(".rekey-staging"))
   }

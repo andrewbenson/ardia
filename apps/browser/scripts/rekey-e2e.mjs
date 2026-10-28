@@ -178,7 +178,9 @@ function plainRows(file) {
   try {
     const out = {};
     for (const { name: table } of db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()) {
-      out[table] = db.prepare(`SELECT * FROM ${q(table)} ORDER BY rowid`).all().map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => {
+      const rows = db.prepare(`SELECT * FROM ${q(table)} ORDER BY rowid`);
+      rows.setReadBigInts(true);
+      out[table] = rows.all().map((row) => Object.fromEntries(Object.entries(row).map(([k, v]) => {
         const b = v instanceof Uint8Array ? Buffer.from(v) : null;
         return [k, b ? (b.subarray(0, 3).toString("latin1") === "v10" ? "<v10>" : b.toString("base64")) : typeof v === "bigint" ? String(v) : v];
       })));

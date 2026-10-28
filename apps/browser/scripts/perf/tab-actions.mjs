@@ -5,9 +5,10 @@
 //
 //   node tab-actions.mjs run --app <Release Solara.app> --side <label>=<main.jsbundle> [--side <label>=<bundle>]
 //        [--side-env <label>:K=V] [--side-app <label>=<Release Solara.app>] [--launches 4] [--n 5] [--actions a,b] [--out dir] [--port 9317] [--page-port 47917]
+//        [--layout top]
 //       Each launch runs every action --n times; launches alternate between the sides (A B B A ...), so the sides
 //       share the machine. Writes <out>/samples.jsonl, one line per action.
-//   node tab-actions.mjs fixture <session.json> [--page-port 47917]   the session alone; serve: its pages alone
+//   node tab-actions.mjs fixture <session.json> [--page-port 47917] [--layout top]   the session alone; serve: its pages alone
 //   node tab-actions.mjs report <out>
 //       Per side and action: median and p90 of event → last paint, its split, and React renders per action.
 //
@@ -109,7 +110,7 @@ function serve(port) {
   return new Promise((r) => server.listen(port, "127.0.0.1", () => r(server)));
 }
 
-export function fixture(origin) {
+export function fixture(origin, layout) {
   const now = Date.now();
   const tabs = [];
   const groups = [];
@@ -154,7 +155,7 @@ export function fixture(origin) {
     },
     profileOrder: ["default", "work"],
     orphanedProfileData: [],
-    settings: { searchSuggestions: false, warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
+    settings: { searchSuggestions: false, warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false, ...(layout ? { tabLayout: layout } : {}) },
     windows: [
       { id: w1, profileId: "default", incognito: false, tabIds: [...personal, ...work], activeTabIds: { default: at(personal, 20), work: at(work, 12) }, sidebarOpen: true, frame: [60, 60, 1440, 900], createdAt: now },
       { id: w2, profileId: "default", incognito: false, tabIds: second, activeTabIds: { default: at(second, 4) }, sidebarOpen: true, frame: [200, 120, 1100, 760], createdAt: now + 1 },
@@ -439,7 +440,7 @@ async function oneLaunch(side, opts, out) {
   rmSync(data, { recursive: true, force: true });
   mkdirSync(data, { recursive: true });
   const origin = `http://127.0.0.1:${opts.pagePort}`;
-  const fx = fixture(origin);
+  const fx = fixture(origin, opts.layout);
   const instance = await launch(side.app, {
     data, port: opts.port, js: "none", onboarded: true, probe: true, session: fx.session,
     env: { DYLD_INSERT_LIBRARIES: opts.lib, AC_BENCH_TABS: "1", ...side.env },
@@ -500,7 +501,7 @@ async function run() {
     for (let l = 0; l < launches; l++) {
       const order = l % 2 ? [...sides].reverse() : sides;
       for (const side of order)
-        await oneLaunch(side, { launch: l, n: +(flags.n ?? 5), actions, port: +(flags.port ?? 9317), pagePort: +(flags["page-port"] ?? 47917), lib }, out);
+        await oneLaunch(side, { launch: l, n: +(flags.n ?? 5), actions, port: +(flags.port ?? 9317), pagePort: +(flags["page-port"] ?? 47917), lib, layout: flags.layout }, out);
     }
   } finally {
     server.close();
@@ -550,7 +551,7 @@ function isRunning(pid) {
 if (command === "run") await run();
 else if (command === "reap") await reapWhenGone(positional[0], positional[1]);
 else if (command === "report") report();
-else if (command === "fixture") writeFileSync(positional[0], JSON.stringify(fixture(`http://127.0.0.1:${flags["page-port"] ?? 47917}`).session));
+else if (command === "fixture") writeFileSync(positional[0], JSON.stringify(fixture(`http://127.0.0.1:${flags["page-port"] ?? 47917}`, flags.layout).session));
 else if (command === "serve") await serve(+(flags["page-port"] ?? 47917));
 else {
   const header = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1).filter((l) => l.startsWith("//")).map((l) => l.replace(/^\/\/ ?/, ""));

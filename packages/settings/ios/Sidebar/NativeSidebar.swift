@@ -16,6 +16,7 @@ enum NativeSidebar {
   static func register() {
     guard enabled else { return }
     NativeSidebarLive.start()
+    NativeSidebarHoverCard.start()
     HostedViews.register(kind) { windowId in
       let host = SidebarHost(windowId: windowId)
       hosts[windowId] = host

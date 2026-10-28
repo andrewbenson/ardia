@@ -45,6 +45,7 @@ public enum SidebarTabCardMetrics {
   public static let width: CGFloat = 200
   static let maxPitch: CGFloat = 49
   static let inset: CGFloat = 14
+  static let fieldPadding: CGFloat = 1.5
   static let top: CGFloat = 16.5
   static let bottom: CGFloat = 6
   static let line: CGFloat = 16
@@ -94,6 +95,7 @@ public final class SidebarTabCardView: NSView {
     note.font = .systemFont(ofSize: 11.5)
     note.setAccessibilityLabel("Web content has been discarded")
     for field in [title, host, note] { addSubview(field) }
+    DevPointer.observe(self, #selector(devPointer(_:)))
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -149,17 +151,18 @@ public final class SidebarTabCardView: NSView {
     CATransaction.setDisableActions(true)
     surface.frame = bounds
     CATransaction.commit()
-    let textWidth = bounds.width - 2 * m.inset
+    let textX = m.inset - m.fieldPadding
+    let textWidth = bounds.width - 2 * textX
     var y = m.top
-    title.frame = NSRect(x: m.inset, y: y, width: textWidth, height: CGFloat(titleLines) * m.line)
+    title.frame = NSRect(x: textX, y: y, width: textWidth, height: CGFloat(titleLines) * m.line)
     y += title.frame.height
     if !host.isHidden {
-      host.frame = NSRect(x: m.inset, y: y, width: textWidth, height: m.line)
+      host.frame = NSRect(x: textX, y: y, width: textWidth, height: m.line)
       y += m.line
     }
     if !note.isHidden {
       let line = Self.lineHeight(note.font ?? .systemFont(ofSize: 11.5))
-      note.frame = NSRect(x: m.inset, y: y + 2, width: textWidth, height: line)
+      note.frame = NSRect(x: textX, y: y + 2, width: textWidth, height: line)
       y += 2 + line
     }
     y += m.actionsGap
@@ -186,6 +189,8 @@ public final class SidebarTabCardView: NSView {
     super.viewDidMoveToWindow()
     if window == nil { pointer(false) }
   }
+
+  @objc private func devPointer(_ note: Notification) { pointer(DevPointer.inside(self, note)) }
 
   private func pointer(_ on: Bool) {
     guard on != inside else { return }

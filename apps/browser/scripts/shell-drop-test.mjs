@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // With the native window shell on (ARDIA_NATIVE_SHELL=1), a file, link or text dragged over the page still lands on
 // Chromium's web contents: no shell view above the page registers those drag types, as in RN. Checked with the page
-// alone, with the zoom popover open in the pane overlays, with a sidebar hover card shown, and with two tabs in the
-// native split chrome. A drop on the zoom popover's card must go where RN's does: the same point is probed in an RN
+// alone, with the zoom popover open in the pane overlays, with the native sidebar's hover card shown in the shell
+// overlay (ARDIA_NATIVE_SIDEBAR=1; its frame, opacity and pixels are checked before and after the drops), and with two
+// tabs in the native split chrome. A drop on the zoom popover's card must go where RN's does: the same point is probed in an RN
 // instance (shell and native toolbar off), and the shell must hand the drop to the same kind of view.
 //
 //   node apps/browser/scripts/shell-drop-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -44,7 +46,7 @@ async function open(env, dir) {
 let shell = null;
 let rn = null;
 try {
-  shell = await open({ ARDIA_NATIVE_SHELL: "1" }, "shell-data");
+  shell = await open({ ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1" }, "shell-data");
   const { w, h } = shell;
   const page = [Math.round(w * 0.6), Math.round(h * 0.6)];
   const pageGoesToWeb = async (label, at = page) => {
@@ -70,11 +72,44 @@ try {
     await sleep(400);
   });
 
-  await rep.check("with a sidebar hover card shown, a drop on the page still reaches it", async () => {
-    await shell.app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; ac.pages.setSidebarUi({ hover: { windowId: w, kind: "tab", id: ${JSON.stringify(shell.tab)}, anchor: { x: 10, y: 120, width: 240, height: 32 } } }); return true`);
+  const windowId = await shell.app.eval(`return Object.keys(ac.store.getState().windows)[0]`);
+  const card = async () => JSON.parse(await shell.app.eval(`return globalThis.expo.modules.SolaraHosted.sidebarHoverCard(${JSON.stringify(windowId)})`));
+  const pixel = (png, x, y) => [...execFileSync("ffmpeg", ["-v", "error", "-i", png, "-vf", `crop=1:1:${x}:${y}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])];
+  const snapshot = async (label) => {
+    const png = join(scratch, `card-${label.replace(/\W+/g, "-")}.png`);
+    assert.ok(await shell.app.eval(`return ac.shell.devSnapshotWindow(${JSON.stringify(windowId)}, ${JSON.stringify(png)})`), `${label}: window snapshot`);
+    return png;
+  };
+  const near = (a, b, by) => a.every((v, i) => Math.abs(v - b[i]) <= by);
+  let bare = null;
+  const cardOnScreen = async (label) => {
+    const c = await card();
+    assert.equal(c?.kind, "tab", `${label}: the native tab card is mounted (${JSON.stringify(c)})`);
+    assert.equal(c.phase, "shown", `${label}: phase`);
+    assert.ok(c.opacity > 0.99 && Math.abs(c.scale - 1) < 0.001, `${label}: fully faded in (${c.opacity}, ${c.scale})`);
+    assert.ok(c.onScreen && c.inWindow, `${label}: on screen inside the window`);
+    assert.ok((await shell.frameOf("SidebarTabCardView")).found, `${label}: the card view is in the window`);
+    const at = [Math.round((c.frame[0] + 8) * 2), Math.round((c.frame[1] + 10) * 2)];
+    const inside = pixel(await snapshot(label), ...at);
+    const under = pixel(bare, ...at);
+    const fill = c.fill.match(/[0-9a-f]{2}/gi).slice(0, 3).map((h) => parseInt(h, 16));
+    rep.say(`${label}: card at ${c.frame.map(Math.round)}, pixel ${inside} (fill ${fill}), without the card ${under}`);
+    assert.ok(!near(under, fill, 20), `${label}: the fill shows against what's under the card (${under} vs ${fill})`);
+    assert.ok(near(inside, fill, 6), `${label}: the card's fill is drawn (${inside} vs ${fill})`);
+    return c;
+  };
+
+  await rep.check("with the native hover card on screen, a drop on the page still reaches it", async () => {
+    bare = await snapshot("without the card");
+    await shell.app.eval(`const w = ${JSON.stringify(windowId)}; ac.pages.setSidebarUi({ hover: { windowId: w, kind: "tab", id: ${JSON.stringify(shell.tab)}, anchor: { x: 10, y: 120, width: 240, height: 32 } } }); return true`);
     await sleep(800);
+    const before = await cardOnScreen("before the drops");
     await pageGoesToWeb("with a hover card");
+    const after = await cardOnScreen("after the drops");
+    assert.deepEqual(after.frame, before.frame, "the card stayed put through the drops");
     await shell.app.eval(`ac.pages.setSidebarUi({ hover: null }); return true`);
+    await sleep(400);
+    assert.equal((await card())?.phase ?? "hidden", "hidden", "the card leaves once the hover clears");
   });
 
   await rep.check("with two tabs in a split, a drop on either pane reaches the web contents", async () => {

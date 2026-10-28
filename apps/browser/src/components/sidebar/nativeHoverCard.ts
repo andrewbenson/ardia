@@ -1,0 +1,136 @@
+import { displayUrl } from "@ardia/core";
+import { publishSettingsTopic, windowShellActive } from "@ardia/settings";
+import { useLayoutEffect, useState } from "react";
+import type { LayoutChangeEvent } from "react-native";
+import { hex, useTheme } from "../../lib/theme";
+import { useIsSleeping } from "../../lib/tabLifecycle";
+import { useBrowser } from "../../store/browser";
+import { useIsBookmarked } from "../../store/hooks";
+import { activeTabId, bookmarkProfileId } from "../../store/model";
+import { awayFromPin } from "../../store/organize";
+import { openInSplit } from "../layout/splitActions";
+import { togglePictureInPicture, useMedia } from "../media/state";
+import { addNativeSettingsHandlers } from "../settings/nativeSettings";
+import { tabTitle } from "./actions";
+import { cardHoverProps, dismissHover } from "./hover";
+import { nativeSidebarEnabled } from "./NativeSidebar";
+import type { Anchor, Hover } from "./state";
+
+const TOPIC = "sidebar.hoverCard";
+const cards: Record<string, object> = {};
+let queued = false;
+
+export type NativeCardKind = "tab";
+
+function publish() {
+  if (queued) return;
+  queued = true;
+  queueMicrotask(() => {
+    queued = false;
+    publishSettingsTopic(TOPIC, { windows: cards });
+  });
+}
+
+function setCard(windowId: string, card: object | null) {
+  if (card) cards[windowId] = card;
+  else if (cards[windowId]) delete cards[windowId];
+  else return;
+  publish();
+}
+
+export function bareHost(url: string): string {
+  try {
+    const { protocol, hostname } = new URL(url);
+    if ((protocol === "http:" || protocol === "https:") && hostname) return hostname.replace(/^www\./, "");
+  } catch {}
+  return displayUrl(url);
+}
+
+export function useNativeHoverCardActive(windowId: string): boolean {
+  const [active] = useState(() => nativeSidebarEnabled() && windowShellActive(windowId));
+  return active;
+}
+
+export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean): NativeCardKind | null {
+  if (!active || !hover) return null;
+  if (dia) return "tab";
+  return null;
+}
+
+const frame = (anchor: Anchor) => [anchor.x, anchor.y, anchor.width, anchor.height];
+
+type Button = { action: string; icon: string; label: string };
+
+function useTabCard(windowId: string, id: string | null, anchor: Anchor | null, sidebarWidth: number, windowHeight: number) {
+  const theme = useTheme();
+  const tab = useBrowser((s) => (id ? s.tabs[id] : undefined));
+  const isActive = useBrowser((s) => !!id && activeTabId(s, windowId) === id);
+  const bookmarked = useIsBookmarked(tab?.url ?? "");
+  const video = useMedia((m) => !!id && (!!m.sessions[id]?.hasVideo || !!m.pipOpen[id]));
+  const pip = useMedia((m) => !!id && !!m.pipOpen[id]);
+  const sleeping = useIsSleeping(id ?? "");
+  if (!id || !tab || !anchor) return null;
+  const buttons: Button[] = [{ action: "pin", icon: tab.pinned ? "pin.slash" : "pin", label: tab.pinned ? "Unpin" : "Pin" }];
+  if (tab.url) buttons.push({ action: "bookmark", icon: bookmarked ? "bookmark.fill" : "bookmark", label: bookmarked ? "Remove Bookmark" : "Bookmark" });
+  if (!isActive && !tab.pinned) buttons.push({ action: "split", icon: "rectangle.split.2x1", label: "Open in Split View" });
+  if (video) buttons.push({ action: "pip", icon: pip ? "pip.exit" : "pip.enter", label: pip ? "Exit Picture in Picture" : "Picture in Picture" });
+  if (awayFromPin(tab)) buttons.push({ action: "back", icon: "arrow.uturn.backward", label: "Back to Pinned URL" });
+  return {
+    kind: "tab",
+    tabId: id,
+    title: tabTitle(tab),
+    host: tab.url ? bareHost(tab.url) : null,
+    sleeping,
+    buttons,
+    anchor: frame(anchor),
+    sidebarWidth,
+    windowHeight,
+    look: {
+      fill: theme.dark ? "#262626" : hex(theme.panel),
+      border: theme.dark ? "#404040" : hex(theme.panelBorder),
+      primary: theme.dark ? "rgba(255,255,255,0.86)" : theme.textPrimary,
+      secondary: theme.dark ? "rgba(255,255,255,0.585)" : theme.textSecondary,
+      tertiary: theme.textTertiary,
+      hover: theme.toolbarHover,
+      pressed: theme.toolbarPressed,
+      shadowOpacity: theme.panelShadowOpacity,
+    },
+  };
+}
+
+export function useNativeHoverCard(windowId: string, kind: NativeCardKind | null, target: Hover | null, sidebarWidth: number, windowHeight: number) {
+  const live = target && kind ? target : null;
+  const anchor = live?.anchor ?? null;
+  const tab = useTabCard(windowId, kind === "tab" ? (live?.id ?? null) : null, anchor, sidebarWidth, windowHeight);
+  const key = tab && JSON.stringify(tab);
+  useLayoutEffect(() => setCard(windowId, key ? JSON.parse(key) : null), [windowId, key]);
+  useLayoutEffect(() => () => setCard(windowId, null), [windowId]);
+}
+
+addNativeSettingsHandlers({
+  [TOPIC]: (windowId: string, id: string, event: string, extra?: { clickAt?: number; frame?: number[] }) => {
+    if (event === "enter") return cardHoverProps.onMouseEnter();
+    if (event === "leave") return cardHoverProps.onMouseLeave();
+    if (event === "layout") {
+      const [x = 0, y = 0, width = 0, height = 0] = extra?.frame ?? [];
+      return cardHoverProps.onLayout({ nativeEvent: { layout: { x, y, width, height } } } as LayoutChangeEvent);
+    }
+    const s = useBrowser.getState();
+    const tab = s.tabs[id];
+    if (!tab) return;
+    switch (event) {
+      case "pin":
+        return s.togglePin(id);
+      case "bookmark":
+        return s.toggleBookmark(bookmarkProfileId(s, s.windows[windowId]), { url: tab.url, title: tabTitle(tab), favicon: tab.favicon });
+      case "split":
+        dismissHover();
+        return openInSplit(id);
+      case "pip":
+        return void togglePictureInPicture(id, { clickAt: extra?.clickAt ?? 0, control: 0 });
+      case "back":
+        dismissHover();
+        return s.returnToPinnedUrl(id);
+    }
+  },
+});

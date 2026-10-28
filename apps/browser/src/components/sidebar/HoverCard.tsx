@@ -26,6 +26,7 @@ import { HoverPlayer, usePlayerEdge, useShowsMiniPlayer } from "../media/HoverPl
 import { useMedia, usePictureInPicture } from "../media/state";
 import { nativeSidebarEnabled } from "./NativeSidebar";
 import { useSidebarWidth } from "./tokens";
+import { bareHost, nativeCardKind, useNativeHoverCard, useNativeHoverCardActive } from "./nativeHoverCard";
 
 const WIDTH = 264;
 const DIA_WIDTH = 200;
@@ -63,7 +64,9 @@ export function HoverCard({ windowId, width, height }: { windowId: string; width
   const dia = nativeSidebarEnabled() && shown?.kind === "tab" && !player && !calendar;
   const origin = !shown ? null : dia ? diaCardOrigin(shown.anchor, sidebarWidth, diaHeight, height) : hoverCardOrigin(shown.anchor, player ? edge : undefined);
   useHoverCardPlacement(motion, origin, { width, height });
-  if (!shown) return null;
+  const nativeKind = nativeCardKind(useNativeHoverCardActive(windowId), shown, dia);
+  useNativeHoverCard(windowId, nativeKind, target, sidebarWidth, height);
+  if (!shown || nativeKind) return null;
   return (
     <Animated.View pointerEvents={leaving || entering ? "none" : "box-none"} style={[StyleSheet.absoluteFill, motion.style]}>
       {dia && origin ? (
@@ -81,14 +84,6 @@ function HoverContent({ hover, windowId, player, calendar, windowHeight }: { hov
   if (hover.kind === "tab" && calendar) return <CalendarPreview tabId={hover.id} windowId={windowId} anchor={hover.anchor} />;
   if (hover.kind === "folder") return <FolderPeek folderId={hover.id} windowId={windowId} anchor={hover.anchor} />;
   return hover.kind === "tab" ? <TabCard tabId={hover.id} windowId={windowId} anchor={hover.anchor} /> : <GroupPanel key={`${windowId}:${hover.id}`} groupId={hover.id} windowId={windowId} anchor={hover.anchor} windowHeight={windowHeight} />;
-}
-
-function bareHost(url: string): string {
-  try {
-    const { protocol, hostname } = new URL(url);
-    if ((protocol === "http:" || protocol === "https:") && hostname) return hostname.replace(/^www\./, "");
-  } catch {}
-  return displayUrl(url);
 }
 
 function DiaTabCard({ tabId, windowId, origin, onHeight }: { tabId: string; windowId: string; origin: { left: number; top: number }; onHeight: (height: number) => void }) {

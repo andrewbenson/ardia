@@ -11,6 +11,7 @@ type NativeStoreModule = {
   catchUp(sinceRev: number): string | null;
   flush(timeout: number): boolean;
   freeze?(): boolean;
+  useSyncOrigins?(on: boolean): boolean;
   syncAnchor?(): string | null;
   setSyncAnchor?(anchor: string): boolean;
   addListener(event: "onStoreCommit", listener: (payload: { event: string }) => void): EventSubscription;
@@ -20,6 +21,8 @@ export type StoreCommand = { name: string; args: unknown[] };
 
 export type StorePatch = {
   rev: number;
+  bridge?: boolean;
+  sync?: boolean;
   settings?: { set?: Record<string, unknown>; remove?: string[] };
   downloads?: unknown[];
   [slice: string]: unknown;
@@ -32,6 +35,7 @@ export type DispatchResponse = {
   patches?: StorePatch[];
   snapshot?: Record<string, unknown>;
   result?: unknown;
+  busy?: boolean;
   effects?: StoreEffect[];
   error?: string;
 };
@@ -54,8 +58,8 @@ export function nativeSnapshot(): { rev: number; data: Record<string, unknown> }
   return text ? JSON.parse(text) : null;
 }
 
-export function nativeDispatch(commands: StoreCommand | StoreCommand[], sinceRev: number): DispatchResponse {
-  const text = native?.dispatch(JSON.stringify(commands), sinceRev);
+export function nativeDispatch(commands: StoreCommand | StoreCommand[], sinceRev: number, { fromSync = false }: { fromSync?: boolean } = {}): DispatchResponse {
+  const text = native?.dispatch(JSON.stringify(fromSync ? { fromSync: true, commands } : commands), sinceRev);
   if (!text) throw new Error("the native store isn't running");
   return JSON.parse(text);
 }
@@ -63,6 +67,10 @@ export function nativeDispatch(commands: StoreCommand | StoreCommand[], sinceRev
 export function nativeCatchUp(sinceRev: number): DispatchResponse | null {
   const text = native?.catchUp(sinceRev);
   return text ? JSON.parse(text) : null;
+}
+
+export function useNativeSyncOrigins(on: boolean): boolean {
+  return native?.useSyncOrigins?.(on) ?? false;
 }
 
 export function nativeSyncAnchor(): string | null {

@@ -14,6 +14,7 @@ import type { BookmarkNode, HistoryEntry, Profile, ProfileTheme } from "../store
 import { syncRedesign } from "./redesignSwitch";
 
 const store = () => useBrowser.getState();
+const asSyncApply = <T>(apply: () => T): T => (syncRedesign.on ? fromSync(apply) : apply());
 
 export const inTodaysNames = (adapter: Adapter): Adapter => ({
   ...adapter,
@@ -96,7 +97,7 @@ export const settingsAdapter: Adapter = {
       if (value === undefined || (value === null && DEFAULT_SETTINGS[name as keyof Settings] !== null)) continue;
       patch[name] = value;
     }
-    if (Object.keys(patch).length) store().updateSettings(patch as Partial<Settings>, { fromSync: true });
+    if (Object.keys(patch).length) asSyncApply(() => store().updateSettings(patch as Partial<Settings>, { fromSync: true }));
   },
 };
 
@@ -172,7 +173,7 @@ export function profilesAdapter(links: () => Record<string, { syncId: string }>)
         const record = visible.get(`prof:${syncId}`) as ProfileRecord | undefined;
         if (!record || !changed.has(`prof:${syncId}`)) continue;
         const legacy = store().profiles[id]!.theme === undefined && !records.known(`pth:${syncId}`) ? legacyThemeOf(record) : null;
-        store().updateProfile(id, { name: record.n, color: record.c, icon: record.i, ...legacy });
+        asSyncApply(() => store().updateProfile(id, { name: record.n, color: record.c, icon: record.i, ...legacy }));
       }
     },
   };
@@ -211,7 +212,7 @@ export function profileThemesAdapter(
         if (!changed.has(`pth:${syncId}`) && !changed.has(angleKey)) continue;
         const patch = themeFromRecord(visible.get(`pth:${syncId}`), visible.get(angleKey));
         if (!patch) continue;
-        store().updateProfile(id, patch);
+        asSyncApply(() => store().updateProfile(id, patch));
         adopted(id);
       }
     },
@@ -357,7 +358,7 @@ export function bookmarksAdapter(profileId: string): Adapter {
         const folder = nodes[parent];
         if (folder?.kind === "folder") nodes[parent] = { ...folder, children: ids.sort(byPosition) };
       }
-      useBrowser.setState({ bookmarks: { ...b, nodes } });
+      asSyncApply(() => useBrowser.setState({ bookmarks: { ...b, nodes } }));
     },
   };
 }
@@ -437,20 +438,22 @@ export function historyAdapter(profileId: string): Adapter {
       if (!updates.size) return;
       const engine = engineProfile(profileId);
       await Promise.all([addHistoryVisits(engine, add, SAME_VISIT_MS), deleteHistoryUrls(engine, remove)]);
-      useBrowser.setState((s) => {
-        const current = new Map((s.history[profileId] ?? []).map((e) => [e.url, e]));
-        for (const [url, update] of updates) {
-          const now = current.get(url);
-          if (!update) current.delete(url);
-          else if (!now) current.set(url, update);
-          else {
-            const times = [...new Set([...(now.visitTimes ?? []), ...(update.visitTimes ?? [])])].sort((a, z) => a - z).slice(-MAX_VISIT_TIMES);
-            current.set(url, { ...update, visits: Math.max(now.visits, update.visits), lastVisit: times[times.length - 1]!, visitTimes: times });
+      asSyncApply(() =>
+        useBrowser.setState((s) => {
+          const current = new Map((s.history[profileId] ?? []).map((e) => [e.url, e]));
+          for (const [url, update] of updates) {
+            const now = current.get(url);
+            if (!update) current.delete(url);
+            else if (!now) current.set(url, update);
+            else {
+              const times = [...new Set([...(now.visitTimes ?? []), ...(update.visitTimes ?? [])])].sort((a, z) => a - z).slice(-MAX_VISIT_TIMES);
+              current.set(url, { ...update, visits: Math.max(now.visits, update.visits), lastVisit: times[times.length - 1]!, visitTimes: times });
+            }
           }
-        }
-        const list = [...current.values()].sort((a, z) => z.lastVisit - a.lastVisit).slice(0, MAX_HISTORY);
-        return { history: { ...s.history, [profileId]: list } };
-      });
+          const list = [...current.values()].sort((a, z) => z.lastVisit - a.lastVisit).slice(0, MAX_HISTORY);
+          return { history: { ...s.history, [profileId]: list } };
+        }),
+      );
     },
   };
 }
@@ -580,7 +583,7 @@ export function developerModeAdapter(profileId: string): Adapter {
       const next = developerModeOf({ on, off, reload });
       const all = store().settings.developerMode ?? {};
       if (canonical(next) === canonical(developerModeOf(all[profileId]))) return;
-      store().updateSettings({ developerMode: { ...all, [profileId]: next } }, { fromSync: true });
+      asSyncApply(() => store().updateSettings({ developerMode: { ...all, [profileId]: next } }, { fromSync: true }));
     },
   };
 }

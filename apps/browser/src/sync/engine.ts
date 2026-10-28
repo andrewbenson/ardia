@@ -22,6 +22,7 @@ import {
 } from "@ardia/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
+import { nativeBusyWrites } from "../store/nativeStore";
 import { engineProfile, isIncognitoProfile } from "../store/model";
 import { DEFAULT_PROFILE_ID } from "../store/settings";
 import type { Profile } from "../store/types";
@@ -95,6 +96,7 @@ const JOURNAL = "sync-journal.nns";
 const APP_SCOPE = "app";
 const CYCLE_MS = 15_000;
 const AFTER_EDIT_MS = 3_000;
+const AFTER_BUSY_MS = 400;
 
 const defaultTypes = (): Record<DataType, boolean> => ({ bookmarks: true, history: true, tabs: true, pinned: true, passwords: true, extensions: true, settings: true });
 
@@ -153,6 +155,7 @@ let savedJson = "";
 let running = false;
 let again = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let busyBackoff = 0;
 let forcePasswords = false;
 let cycleForcesPasswords = false;
 let locked = false;
@@ -500,6 +503,7 @@ async function runCycle({ retiring = false } = {}) {
     return;
   }
   running = true;
+  const busyBefore = nativeBusyWrites();
   extractedThisCycle.clear();
   cycleForcesPasswords = forcePasswords;
   const forcedBy = forceRequests;
@@ -584,7 +588,8 @@ async function runCycle({ retiring = false } = {}) {
         again = false;
         scheduleSync(0);
       } else {
-        scheduleSync(CYCLE_MS);
+        busyBackoff = nativeBusyWrites() === busyBefore ? 0 : Math.min(busyBackoff ? busyBackoff * 2 : AFTER_BUSY_MS, CYCLE_MS);
+        scheduleSync(busyBackoff || CYCLE_MS);
       }
     }
   }

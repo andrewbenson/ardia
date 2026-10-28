@@ -6,12 +6,15 @@ import {
   nativeSnapshot,
   nativeStoreStatus,
   onForeignCommit,
+  useNativeSyncOrigins,
   type DispatchResponse,
   type StoreCommand,
   type StoreEffect,
   type StorePatch,
 } from "@ardia/store";
 import type { Download } from "@ardia/ardiacore";
+import { syncRedesign } from "../sync/redesignSwitch";
+import { applyingFromSync, asSyncOrigin, asUserChange } from "./syncOrigin";
 import type { BrowserState } from "./browser";
 import type { Settings } from "./settings";
 import { LIVE_PATCH_COMMANDS, runEffects, WORKSPACE_COMMANDS, workspaceFromPatch, workspaceFromSnapshot } from "./nativeWorkspace";
@@ -33,6 +36,11 @@ let active = false;
 let ownsWorkspace = false;
 let handedOff = false;
 let appliedRev = 0;
+let syncOriginsAtStart = false;
+let taggingSyncOrigins = false;
+let busyWrites = 0;
+export const nativeBusyWrites = () => busyWrites;
+export const nativeOriginsKnown = () => !active || taggingSyncOrigins;
 let applying = 0;
 let replica: Replica | null = null;
 let stopListening: (() => void) | null = null;
@@ -47,6 +55,8 @@ export function startNativeStore(): { active: boolean; reason?: string } {
   active = status.active;
   ownsWorkspace = status.active && status.scope === "everything";
   handedOff = !status.active && status.handedOff === true;
+  syncOriginsAtStart = syncRedesign.on;
+  taggingSyncOrigins = status.active && syncRedesign.on && useNativeSyncOrigins(true);
   return status.active ? { active: true } : { active: false, reason: status.reason };
 }
 
@@ -109,10 +119,25 @@ function applySnapshot(data: Record<string, unknown>) {
   withApplier(() => replica!.setState(next));
 }
 
+const BUSY_EFFECT_RETRY_MS = 50;
+
 function afterApplied(effects: StoreEffect[] | undefined) {
   if (!effects?.length || !replica) return;
   const store = replica;
-  withApplier(() => runEffects(effects, () => store.getState(), (partial) => store.setState(partial)));
+  const run = (effect: StoreEffect) => withApplier(() => runEffects([effect], () => store.getState(), (partial) => store.setState(partial)));
+  for (const effect of effects) {
+    try {
+      run(effect);
+    } catch (error) {
+      if (!(error instanceof NativeStoreBusy)) throw error;
+      setTimeout(() => asSyncOrigin(() => afterApplied([effect])), BUSY_EFFECT_RETRY_MS);
+    }
+  }
+}
+
+function inPatchOrigin<T>(patch: StorePatch, apply: () => T): T {
+  if (patch.sync) return asSyncOrigin(apply);
+  return patch.bridge ? apply() : asUserChange(apply);
 }
 
 function applyResponse(response: DispatchResponse | null) {
@@ -125,15 +150,26 @@ function applyResponse(response: DispatchResponse | null) {
   for (const patch of response.patches ?? []) {
     if (patch.rev <= appliedRev) continue;
     appliedRev = patch.rev;
-    applyPatch(patch);
+    inPatchOrigin(patch, () => applyPatch(patch));
   }
   appliedRev = Math.max(appliedRev, response.rev);
 }
 
+export class NativeStoreBusy extends Error {
+  constructor() {
+    super("a user transaction is open in the native store; sync retries from fresh state");
+  }
+}
+
 export function nativeWrite(commands: StoreCommand | StoreCommand[]): DispatchResponse | null {
   if (!active) return null;
-  const response = nativeDispatch(commands, appliedRev);
+  if (syncRedesign.on !== syncOriginsAtStart) throw new Error("syncRedesign changed after startNativeStore; set it before the native store starts");
+  const response = nativeDispatch(commands, appliedRev, { fromSync: taggingSyncOrigins && applyingFromSync() });
   applyResponse(response);
+  if (response.busy) {
+    busyWrites++;
+    throw new NativeStoreBusy();
+  }
   afterApplied(response.effects);
   if (response.error) console.warn("The native store refused", commands, response.error);
   return response;
@@ -218,11 +254,11 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
   const stopCommits = onForeignCommit((commit) => {
     if (commit.rev === appliedRev + 1) {
       appliedRev = commit.rev;
-      applyPatch(commit.patch);
+      inPatchOrigin(commit.patch, () => applyPatch(commit.patch));
     } else if (commit.rev > appliedRev) {
       applyResponse(nativeCatchUp(appliedRev));
     }
-    afterApplied(commit.effects);
+    inPatchOrigin(commit.patch, () => afterApplied(commit.effects));
   });
   const sendProfiles = (s: BrowserState) => nativeWrite({ name: "applyState", args: [{ profiles: s.profiles, profileOrder: s.profileOrder }] });
   if (!ownsWorkspace) sendProfiles(store.getState());
@@ -283,10 +319,18 @@ export function writeState(store: Replica, update: Partial<BrowserState> | ((s: 
       if (ui.appDark !== s.ui.appDark) local.ui = { ...s.ui, appDark: ui.appDark };
     } else local[key] = value;
   }
-  if (Object.keys(local).length) withApplier(() => store.setState(local as Partial<BrowserState>));
-  if (!Object.keys(owned).length) return;
-  nativeWrite({ name: "applyState", args: [owned] });
-  resync(store, Object.keys(owned));
+  const applyLocal = () => {
+    if (!Object.keys(local).length) return;
+    if (local.ui) local.ui = { ...store.getState().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
+    withApplier(() => store.setState(local as Partial<BrowserState>));
+  };
+  const nativeFirst = taggingSyncOrigins && applyingFromSync();
+  if (!nativeFirst) applyLocal();
+  if (Object.keys(owned).length) {
+    nativeWrite({ name: "applyState", args: [owned] });
+    resync(store, Object.keys(owned));
+  }
+  if (nativeFirst) applyLocal();
 }
 
 function resync(store: Replica, keys: string[]) {

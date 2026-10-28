@@ -4,19 +4,18 @@ import { nextPinChoice, orderChoiceKey } from "./organize";
 import { anchorsOf, pinnedAreaKeys } from "./pinnedArea";
 import type { TabGroup } from "./types";
 import { nativeOwnsWorkspace, nativeWrite } from "./nativeStore";
-
-let remote = 0;
+import { applyingFromSync, asSyncOrigin } from "./syncOrigin";
 
 export function fromSync<T>(apply: () => T): T {
-  remote++;
   const native = nativeOwnsWorkspace();
-  if (native) nativeWrite({ name: "beginFromSync", args: [] });
-  try {
-    return apply();
-  } finally {
-    if (native) nativeWrite({ name: "endFromSync", args: [] });
-    remote--;
-  }
+  return asSyncOrigin(() => {
+    if (native) nativeWrite({ name: "beginFromSync", args: [] });
+    try {
+      return apply();
+    } finally {
+      if (native) nativeWrite({ name: "endFromSync", args: [] });
+    }
+  });
 }
 
 function homes(s: BrowserState): Map<string, string> {
@@ -42,7 +41,7 @@ function groupsReordered(s: BrowserState, prev: BrowserState): boolean {
 }
 
 export function noteOrderChoices(s: BrowserState, prev: BrowserState) {
-  if (remote || nativeOwnsWorkspace()) return;
+  if (applyingFromSync() || nativeOwnsWorkspace()) return;
   if (!groupsReordered(s, prev) && Object.values(s.windows).every((w) => w.tabIds === prev.windows[w.id]?.tabIds)) return;
   const homesBefore = homes(prev);
   let pinChoices = s.pinChoices;

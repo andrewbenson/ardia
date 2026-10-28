@@ -12,7 +12,8 @@ const replicaFake = {
     return JSON.stringify({ rev: this.rev, data: { settings: this.settings, downloads: [] } });
   },
   dispatch(json, sinceRev) {
-    const commands = [].concat(JSON.parse(json));
+    const parsed = JSON.parse(json);
+    const commands = [].concat(parsed.commands ?? parsed);
     const patches = [];
     for (const { name, args } of commands) {
       if (name !== "updateSettings") continue;

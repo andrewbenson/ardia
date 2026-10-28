@@ -20,7 +20,9 @@ as one feed: `SolaraTabPool` event `onPageEvent` with `{ tabId, name, payload }`
 - Per tab, events arrive in the order the page sent them. The feed is one ordered stream, not a task per event.
 - Two more names that only the pool sends: `onPageCreated { engine, seq, url }` when it makes a view for the tab (the
   navigation `seq` it loaded on create, or -1 for an adopted or transferred page) and `onPageGone {}` when the view is
-  destroyed or leaves the pool (park, crossing to Little Solara).
+  destroyed or leaves the pool (park, crossing to Little Solara). A second `onPageCreated` for a tab means a new view (an engine
+  switch, a re-create after a crash): JS starts the tab's session over, so the pool never sends one for a view it
+  already reported. A transferred page with `seq` -1 counts whatever navigation the store holds as already loaded.
 
 JS turns `{ name, payload }` into the prop's arguments with `@ardia/ardiacore`'s `unwrapPageEvent`, the same table the
 RN component uses, and calls the tab's handler from `pageEvents.ts`, the same function `EngineWebView` calls.

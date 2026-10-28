@@ -24,6 +24,8 @@ public final class PersistenceWriter: Sendable {
     var failedInARow = 0
     var durable = false
     var frozen = false
+    var syncAnchor: String?
+    var writtenSyncAnchor: String?
   }
 
   let store: Store
@@ -51,7 +53,9 @@ public final class PersistenceWriter: Sendable {
     self.scope = scope
     keepsDownloadsFile = persisted.keepsDownloadsFile
     pending = Mutex(
-      Pending(rows: true, rowsScheduled: true, written: persisted.workspace ?? WorkspaceRows(), settings: persisted.settings, downloads: persisted.downloads))
+      Pending(
+        rows: true, rowsScheduled: true, written: persisted.workspace ?? WorkspaceRows(), settings: persisted.settings, downloads: persisted.downloads,
+        syncAnchor: persisted.syncAnchor, writtenSyncAnchor: persisted.syncAnchor))
     let id = store.subscribe { [weak self] commit in self?.note(commit) }
     subscription.withLock { $0 = id }
     queue.asyncAfter(deadline: .now() + Self.rowDelay) { self.flushRows() }
@@ -67,6 +71,20 @@ public final class PersistenceWriter: Sendable {
     pending.withLock { $0.frozen = true }
   }
   public var flushCount: Int { pending.withLock { $0.flushes } }
+
+  public var syncAnchor: String? { pending.withLock { $0.syncAnchor } }
+
+  public func setSyncAnchor(_ anchor: String) {
+    let schedule = pending.withLock { p -> Bool in
+      guard p.syncAnchor != anchor else { return false }
+      p.syncAnchor = anchor
+      p.rows = true
+      let schedule = !p.rowsScheduled
+      if schedule { p.rowsScheduled = true }
+      return schedule
+    }
+    if schedule { queue.asyncAfter(deadline: .now() + Self.rowDelay) { self.flushRows() } }
+  }
 
   func note(_ commit: Commit) {
     guard !commit.changes.isEmpty else { return }
@@ -89,33 +107,37 @@ public final class PersistenceWriter: Sendable {
   }
 
   func flushRows() {
-    let (dirty, durable) = pending.withLock { p -> (Bool, Bool) in
-      if p.frozen { return (false, false) }
+    let (dirty, durable, anchor) = pending.withLock { p -> (Bool, Bool, String?) in
+      if p.frozen { return (false, false, nil) }
       defer {
         p.rows = false
         p.rowsScheduled = false
         p.durable = false
       }
-      return (p.rows, p.durable)
+      return (p.rows, p.durable, p.syncAnchor)
     }
     guard dirty else { return }
     let (rev, state) = store.snapshot
     let rows = scope == .everything ? WorkspaceRows(store.sessionDocument(of: state)) : WorkspaceRows()
     let settings = state.settings.values
     let downloads = state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }
-    let (previous, previousSettings, previousDownloads) = pending.withLock { ($0.written, $0.settings, $0.downloads) }
-    if rows == previous && settings == previousSettings && downloads == previousDownloads { return }
+    let (previous, previousSettings, previousDownloads, previousAnchor) = pending.withLock {
+      ($0.written, $0.settings, $0.downloads, $0.writtenSyncAnchor)
+    }
+    if rows == previous && settings == previousSettings && downloads == previousDownloads && anchor == previousAnchor { return }
     do {
       try database.write(durable: durable) { db in
         if scope == .everything { try Rows.writeWorkspace(db, rows, previous: previous) }
         if settings != previousSettings { try Rows.writeSettings(db, settings) }
         if downloads != previousDownloads { try Rows.writeDownloads(db, downloads) }
+        if let anchor, anchor != previousAnchor { try Rows.setMeta(db, "sync_anchor", anchor) }
         try Rows.setMeta(db, "rev", String(rev))
       }
       pending.withLock {
         $0.written = rows
         $0.settings = settings
         $0.downloads = downloads
+        $0.writtenSyncAnchor = anchor
         $0.flushes += 1
       }
       succeeded()

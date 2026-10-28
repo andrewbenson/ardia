@@ -36,6 +36,16 @@ public class StoreModule: Module {
       return true
     }
 
+    Function("syncAnchor") { () -> String? in
+      NativeStore.shared?.writer.syncAnchor
+    }
+
+    Function("setSyncAnchor") { (anchor: String) -> Bool in
+      guard let store = NativeStore.shared else { return false }
+      store.writer.setSyncAnchor(anchor)
+      return true
+    }
+
     Function("freeze") { () -> Bool in
       NativeStore.shared?.freeze()
       return NativeStore.shared != nil

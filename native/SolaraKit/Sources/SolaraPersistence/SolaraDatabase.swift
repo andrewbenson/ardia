@@ -84,13 +84,18 @@ public struct PersistedState: Sendable, Equatable {
   public var documents: JSMap<String>
   public var notes: [String]
   public var keepsDownloadsFile = false
+  public var syncAnchor: String?
 
-  public init(settings: JSONObject?, downloads: [Download], workspace: WorkspaceRows? = nil, documents: JSMap<String> = JSMap(), notes: [String] = []) {
+  public init(
+    settings: JSONObject?, downloads: [Download], workspace: WorkspaceRows? = nil, documents: JSMap<String> = JSMap(), notes: [String] = [],
+    syncAnchor: String? = nil
+  ) {
     self.settings = settings
     self.downloads = downloads
     self.workspace = workspace
     self.documents = documents
     self.notes = notes
+    self.syncAnchor = syncAnchor
   }
 
   public func sessionJSON() -> JSONValue? {
@@ -378,6 +383,8 @@ enum Rows {
       }
       workspace = rows
     }
-    return PersistedState(settings: settingRows.isEmpty ? nil : settings, downloads: downloads, workspace: workspace, documents: documents, notes: notes)
+    let syncAnchor = try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'sync_anchor'")
+    return PersistedState(
+      settings: settingRows.isEmpty ? nil : settings, downloads: downloads, workspace: workspace, documents: documents, notes: notes, syncAnchor: syncAnchor)
   }
 }

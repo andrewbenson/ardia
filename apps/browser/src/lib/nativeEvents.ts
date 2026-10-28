@@ -117,6 +117,7 @@ export function afterHeldReports(emitter: Emitter, { flush, batch }: Hold) {
 
 const g = globalThis as unknown as {
   __acApplyHeldReports?: () => void;
+  __acHoldReport?: (run: () => void) => void;
   __fbBatchedBridge?: Bridge;
   expo?: { EventEmitter?: { prototype: Emitter } };
   ErrorUtils?: { reportFatalError(error: unknown): void };
@@ -130,6 +131,12 @@ if (!g.__acApplyHeldReports && bridge && emitter && typeof bridge.__callFunction
   holdPageReports(bridge, held);
   afterHeldReports(emitter, held);
   g.__acApplyHeldReports = held.flush;
+  g.__acHoldReport = held.hold;
 }
 
 export const applyHeldReports = () => g.__acApplyHeldReports?.();
+
+export function holdModuleEvent(name: string, run: () => void) {
+  if (HELD_EVENTS.has(name) && g.__acHoldReport) g.__acHoldReport(run);
+  else run();
+}

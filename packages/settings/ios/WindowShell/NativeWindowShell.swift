@@ -195,6 +195,15 @@ final class ShellHost {
   }
 }
 
+#if SOLARA_PROBES
+@MainActor
+public enum WindowShellRead {
+  public static func accessibilityReach(windowId: String) -> [String: Int]? {
+    NativeWindowShell.host(windowId)?.shell.accessibilityReach()
+  }
+}
+#endif
+
 #if DEBUG
 extension ShellHost {
   func reactBlockers(step: CGFloat) -> [[String: Any]] {

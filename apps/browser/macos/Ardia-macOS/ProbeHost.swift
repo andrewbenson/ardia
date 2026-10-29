@@ -126,6 +126,7 @@ final class ProbeHost {
           "incognito": model.incognito, "order": state.windowOrder.firstIndex(of: id) ?? 0,
           "key": window?.isKeyWindow ?? false, "visible": window?.isVisible ?? false,
           "occluded": NSNull(), "frame": Self.value(frame.map(Self.rectFromWindow)),
+          "accessibilityLayers": Self.value(WindowShellRead.accessibilityReach(windowId: id)),
           "split": Self.value(SplitChromeRead.snapshot(windowId: id)),
           "tour": Self.value(ToolTourRead.snapshot(windowId: id)),
           "folderPanel": Self.value(FolderPanelRead.snapshot(windowId: id)),
@@ -159,7 +160,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.split", "windows.tour", "windows.folderPanel", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.split", "windows.tour", "windows.folderPanel", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

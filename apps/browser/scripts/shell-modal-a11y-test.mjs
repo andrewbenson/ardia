@@ -46,6 +46,16 @@ try {
     const run = (body) => instance.eval(body, { timeout: 20000 });
     const reach = () => run(`return globalThis.expo.modules.SolaraWindowShell.accessibilityReach("w1")`);
     const settle = () => sleep(1200);
+    const untilSnapshot = async (what, accept, ms = 5000) => {
+      const end = Date.now() + ms;
+      let last;
+      while (Date.now() < end) {
+        last = await instance.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+        if (!last.error && accept(last)) return last;
+        await sleep(100);
+      }
+      throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+    };
     const end = Date.now() + 15000;
     while (Date.now() < end && !(await run(`return ac.store.getState().tabs.a?.title === "/a"`).catch(() => false))) await sleep(200);
     await settle();
@@ -64,6 +74,9 @@ try {
         const got = await reach();
         const layers = layersOf(got).sort();
         if (JSON.stringify(layers) !== JSON.stringify([...want].sort())) throw new Error(`reached ${JSON.stringify(got)}, want only ${want.join(", ")}`);
+        const nativeLayers = (state) => layersOf(state.windows.find((window) => window.id === "w1")?.accessibilityLayers).sort();
+        const snapshot = await untilSnapshot(name, (state) => JSON.stringify(nativeLayers(state)) === JSON.stringify(layers));
+        if (JSON.stringify(nativeLayers(snapshot)) !== JSON.stringify(layers)) throw new Error(`native reached ${JSON.stringify(nativeLayers(snapshot))}, JS reached ${JSON.stringify(layers)}`);
         return got;
       });
     const sidebar = (await run(`return globalThis.expo.modules.SolaraHosted.sidebarShell("w1")`)) !== "null" ? ["sidebar"] : [];

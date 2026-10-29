@@ -37,10 +37,38 @@ async function open(env, dir) {
   const info = JSON.parse(await app.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.devWindow(${win}, "winfo")`));
   const [, , w, h] = info.frame.replace(/[{}]/g, "").split(",").map(Number);
   const tab = await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; return s.windows[w].activeTabIds[s.windows[w].profileId]`);
-  const target = async (x, y, type) => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devDropTarget(${win}, ${x}, ${y}, ${JSON.stringify(type)})`));
-  const frameOf = async (needle) => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${win}, ${JSON.stringify(needle)})`));
+  const windowId = await app.eval(`return Object.keys(ac.store.getState().windows)[0]`);
+  const untilSnapshot = async (what, args, accept, ms = 5000) => {
+    const end = Date.now() + ms;
+    let last;
+    while (Date.now() < end) {
+      last = await app.snapshot({ windowId, ...args }).catch((error) => ({ error: error.message }));
+      if (!last.error && accept(last.windows.find((w) => w.id === windowId), last)) return last;
+      await sleep(100);
+    }
+    throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+  };
+  await untilSnapshot("Chrome window and selected tab", {}, (window) =>
+    window?.chromeWindowNumber === win && window.selectedTabId === tab &&
+    Math.abs(window.frame.width - w) <= 0.5 && Math.abs(window.frame.height - h) <= 0.5);
+  const target = async (x, y, type) => {
+    const hit = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devDropTarget(${win}, ${x}, ${y}, ${JSON.stringify(type)})`));
+    await untilSnapshot("drop target", { dropTargets: [{ x, y, type }] }, (window) => {
+      const native = window?.dropTargets?.[0];
+      return native?.view === hit.view && JSON.stringify(native.chain) === JSON.stringify(hit.chain);
+    });
+    return hit;
+  };
+  const frameOf = async (needle) => {
+    const frame = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${win}, ${JSON.stringify(needle)})`));
+    await untilSnapshot("view frame", { viewFrames: [needle] }, (window) => {
+      const native = window?.viewFrames?.[needle];
+      return native?.found === frame.found && (!frame.found || ["x", "y", "width", "height"].every((key) => Math.abs(native[key] - frame[key]) <= 0.5));
+    });
+    return frame;
+  };
   const zoom = (on) => app.eval(`ac.pageState.setState((s) => ({ popover: { ...s.popover, [${JSON.stringify(tab)}]: ${on ? '"zoom"' : "null"} } })); return true`);
-  return { app, w, h, tab, target, frameOf, zoom };
+  return { app, w, h, tab, windowId, target, frameOf, zoom, untilSnapshot };
 }
 
 let shell = null;
@@ -72,7 +100,7 @@ try {
     await sleep(400);
   });
 
-  const windowId = await shell.app.eval(`return Object.keys(ac.store.getState().windows)[0]`);
+  const windowId = shell.windowId;
   const card = async () => JSON.parse(await shell.app.eval(`return globalThis.expo.modules.SolaraHosted.sidebarHoverCard(${JSON.stringify(windowId)})`));
   const region = (png, x, y, w, h) => execFileSync("ffmpeg", ["-v", "error", "-i", png, "-vf", `crop=${w}:${h}:${x}:${y}`, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 64 << 20 });
   const pixel = (png, x, y) => [...region(png, x, y, 1, 1)];
@@ -89,6 +117,12 @@ try {
     assert.equal(c.phase, "shown", `${label}: phase`);
     assert.ok(c.opacity > 0.99 && Math.abs(c.scale - 1) < 0.001, `${label}: fully faded in (${c.opacity}, ${c.scale})`);
     assert.ok(c.onScreen && c.inWindow, `${label}: on screen inside the window`);
+    await shell.untilSnapshot("hover card", {}, (window) => {
+      const native = window?.hoverCard;
+      return native?.kind === c.kind && native.phase === c.phase &&
+        Math.abs(native.opacity - c.opacity) <= 0.01 && Math.abs(native.scale - c.scale) <= 0.01 &&
+        native.frame?.every((value, index) => Math.abs(value - c.frame[index]) <= 0.5);
+    });
     assert.ok((await shell.frameOf("SidebarTabCardView")).found, `${label}: the card view is in the window`);
     const at = [Math.round((c.frame[0] + 8) * 2), Math.round((c.frame[1] + 10) * 2)];
     const shot = await snapshot(label);
@@ -116,12 +150,15 @@ try {
     await shell.app.eval(`ac.pages.setSidebarUi({ hover: null }); return true`);
     await sleep(400);
     assert.equal((await card())?.phase ?? "hidden", "hidden", "the card leaves once the hover clears");
+    await shell.untilSnapshot("hover card hidden", {}, (window) =>
+      !window?.hoverCard || window.hoverCard.phase === "hidden");
   });
 
   await rep.check("with two tabs in a split, a drop on either pane reaches the web contents", async () => {
     await shell.app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; const other = s.newTab(w, { url: "data:text/html,<body>right</body>" }); s.createSplit([${JSON.stringify(shell.tab)}, other]); return true`);
     await sleep(2000);
     assert.ok((await shell.frameOf("SplitChromeView")).found, "the native split chrome shown");
+    await shell.untilSnapshot("split chrome", {}, (window) => window?.split != null);
     await pageGoesToWeb("left pane", [Math.round(w * 0.35), Math.round(h * 0.6)]);
     await pageGoesToWeb("right pane", [Math.round(w * 0.8), Math.round(h * 0.6)]);
   });

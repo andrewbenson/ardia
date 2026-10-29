@@ -127,6 +127,7 @@ final class ShellHost {
 
   func stop() {
     NativePeek.windowEnded(shell.windowId)
+    NativeSidebarDock.setReactPeekRight(shell.windowId, 0)
     if let panes { NativePaneRoots.end(shell.windowId, ifHost: panes) }
     panes = nil
     profilePager?.stop()
@@ -311,7 +312,11 @@ public class WindowShellModule: Module {
       nonisolated(unsafe) let given = layout
       MainActor.assumeIsolated {
         guard let shell = NativeWindowShell.host(windowId)?.shell else { return }
-        if let right = given["peekRight"] as? NSNumber { NativeSidebarDock.setReactPeekRight(windowId, CGFloat(right.doubleValue)) }
+        if let right = given["peekRight"] as? NSNumber {
+          NativeSidebarDock.setReactPeekRight(windowId, CGFloat(right.doubleValue))
+        } else if given["sidebarWidth"] != nil {
+          NativeSidebarDock.setReactPeekRight(windowId, 0)
+        }
         shell.update { ShellLayoutPush.apply(given, to: &$0, keepWidth: shell.widthDragActive) }
       }
     }.runOnQueue(.main)

@@ -2642,6 +2642,35 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     NSPoint p = WindowPoint(window, [action substringFromIndex:4]);
     return Describe([frameView hitTest:p]);
   }
+  if ([action hasPrefix:@"layers:"]) {
+    NSPoint p = WindowPoint(window, [action substringFromIndex:7]);
+    NSView *top = [frameView hitTest:p];
+    for (NSView *v = top; v; v = v.superview)
+      if ([NSStringFromClass(v.class) containsString:@"ArdiaCoreWebView"]) top = v;
+    NSMutableArray<NSString *> *lines = [NSMutableArray array];
+    __block void (^layerLines)(CALayer *, NSUInteger) = nil;
+    void (^dumpLayer)(CALayer *, NSUInteger) = ^(CALayer *layer, NSUInteger depth) {
+      if (lines.count > 400 || depth > 14) return;
+      [lines addObject:[NSString stringWithFormat:@"%@L %@ %@ hidden=%d opacity=%.2f bg=%@ contents=%d", [@"" stringByPaddingToLength:depth * 2 withString:@" " startingAtIndex:0],
+                                                  NSStringFromClass(layer.class), NSStringFromRect(layer.frame), layer.hidden, layer.opacity,
+                                                  layer.backgroundColor ? [NSColor colorWithCGColor:layer.backgroundColor].description : @"-", layer.contents != nil]];
+      for (CALayer *sub in layer.sublayers) layerLines(sub, depth + 1);
+    };
+    layerLines = dumpLayer;
+    __block void (^viewLines)(NSView *, NSUInteger) = nil;
+    void (^dumpView)(NSView *, NSUInteger) = ^(NSView *view, NSUInteger depth) {
+      if (lines.count > 400) return;
+      [lines addObject:[NSString stringWithFormat:@"%@V %@ %@ hidden=%d alpha=%.2f", [@"" stringByPaddingToLength:depth * 2 withString:@" " startingAtIndex:0],
+                                                  NSStringFromClass(view.class), NSStringFromRect(view.frame), view.hidden, view.alphaValue]];
+      if (view.layer) layerLines(view.layer, depth + 1);
+      for (NSView *sub in view.subviews) viewLines(sub, depth + 1);
+    };
+    viewLines = dumpView;
+    if (top) viewLines(top, 0);
+    layerLines = nil;
+    viewLines = nil;
+    return [lines componentsJoinedByString:@"\n"];
+  }
   if ([action hasPrefix:@"responders:"]) {
     NSPoint p = WindowPoint(window, [action substringFromIndex:11]);
     NSMutableArray<NSString *> *chain = [NSMutableArray array];

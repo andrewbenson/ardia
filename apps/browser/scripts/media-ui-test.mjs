@@ -7,7 +7,7 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error(`usage: node media-ui-test.mjs <Debug Solara.app> [--native | --shell | --prompts] [--keep-data]
+  console.error(`usage: node media-ui-test.mjs <Debug Solara.app> [--native | --shell | --sidebar | --prompts] [--keep-data]
 
 The media controls on a local tone page: the sidebar player shows for a playing tab that isn't shown, its play
 button pauses and plays, Close Player hides it without pausing or moving to the tab, a new play brings it back, Back
@@ -15,16 +15,19 @@ to Tab shows the tab and ends the player; the pinned tab's hover player scrolls 
 CLI pill appears and hides with RN's timing (and, under --shell, holds still while the toolbar hides and shows); the cast and share pickers open at RN's size and answer their buttons. --native runs with ARDIA_NATIVE_MEDIA=1 and clicks the native controls. --shell adds ARDIA_NATIVE_SHELL=1: the pickers
 and the CLI pill then live in the pane overlay container on the shell's card, with no RN-hosted NativeMediaView.
 --prompts is --shell with the page pool and ARDIA_NATIVE_PANE_PROMPTS=1: RN mounts no CliControlPill and the pill comes
-from the window's published CLI state.`);
+from the window's published CLI state. --sidebar is --shell with ARDIA_NATIVE_SIDEBAR=1: the sidebar player is the
+native column's own, with no RN-hosted one. Every other mode pins ARDIA_NATIVE_SIDEBAR=0, and every mode but --prompts
+pins ARDIA_NATIVE_PAGES_POOL=0, so the page is RN's TabWebView.`);
   process.exit(2);
 }
 const prompts = args.includes("--prompts");
-const shell = prompts || args.includes("--shell");
+const nativeSidebar = args.includes("--sidebar");
+const shell = prompts || nativeSidebar || args.includes("--shell");
 const native = shell || args.includes("--native");
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-media-ui-"));
 const data = join(scratch, "data");
-const rep = reporter(join(scratch, "media-ui-test.log"), { name: `media-ui-test${prompts ? " --prompts" : shell ? " --shell" : native ? " --native" : ""}` });
+const rep = reporter(join(scratch, "media-ui-test.log"), { name: `media-ui-test${prompts ? " --prompts" : nativeSidebar ? " --sidebar" : shell ? " --shell" : native ? " --native" : ""}` });
 
 const LONG_TITLE = "A very long fixture track title that has to scroll in the hover player";
 const tone = (() => {
@@ -108,8 +111,8 @@ const pressPlayer = async (control) => {
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_ALLOW_AUDIO: "1", ARDIA_NATIVE_SIDEBAR: "0", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}),
-      ...(prompts ? { ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" } : {}) },
+    env: { ARDIA_ALLOW_AUDIO: "1", ARDIA_NATIVE_SIDEBAR: nativeSidebar ? "1" : "0", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...(shell ? { ARDIA_NATIVE_SHELL: "1" } : {}),
+      ...(prompts ? { ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" } : { ARDIA_NATIVE_PAGES_POOL: "0" }) },
     switches: "--disable-audio-output --autoplay-policy=no-user-gesture-required",
     ready: "return !!ac.store.getState().windows.w1",
   });
@@ -152,6 +155,7 @@ try {
     const count = await until("sidebar player", `return playerShown().then((n) => n || null);`, 6000);
     const rows = native ? await run(`return probe("media.sidebarPlayer");`) : null;
     if (native && rows[0].height !== 74) throw new Error(`player height ${rows[0].height}, RN draws 74`);
+    if (nativeSidebar && (await run(`return hosted("media.sidebarPlayer");`))) throw new Error("RN hosts a sidebar player beside the native column's");
     return { count, height: rows?.[0]?.height };
   });
 
@@ -199,6 +203,18 @@ try {
     await run(`ac.actions.switchToTab("b"); return true;`);
     await run(`return Promise.resolve(acMediaHover("w1", "p")).then(() => true);`);
     if (!native) return until("hover player", `return fibers("MiniPlayer").length || null;`, 3000);
+    if (nativeSidebar) {
+      const card = () => `return globalThis.expo.modules.SolaraHosted.sidebarHoverCard("w1").then(JSON.parse)`;
+      const shownCard = await until("the native column's hover player", `${card()}.then((c) => c && c.kind === "player" && c.phase === "shown" ? c : null);`, 3000);
+      if (await run(`return fibers("MiniPlayer").length;`)) throw new Error("RN draws a MiniPlayer beside the native card");
+      await run(`return Promise.resolve(acMediaHover("w1", null)).then(() => true);`);
+      await until("hover player gone", `${card()}.then((c) => !c || c.phase === "hidden");`, 3000);
+      await sleep(300);
+      if (await paused()) throw new Error("hiding the hover player paused playback");
+      const after = await run(`return shown();`);
+      if (after !== "b") throw new Error(`hiding the hover player moved to tab ${after}`);
+      return { frame: shownCard.frame, marquee: "no read: NativeMedia.probe(media.hoverPlayer) doesn't list the hover card's MiniPlayerView" };
+    }
     const first = await until("native hover player", `return first("media.hoverPlayer");`, 3000);
     if (!(first.titleOverflow > 0)) throw new Error(`the long title doesn't overflow: ${JSON.stringify(first)}`);
     await sleep(2600);

@@ -491,3 +491,9 @@ final class SystemState {
     return (providing == kIOPMBatteryPowerKey, level)
   }
 }
+
+#if SOLARA_PROBES
+public enum VideoUpscalingRead {
+  public static func snapshot() -> [String: Any] { ArdiaCoreWebView.videoUpscalingState() as? [String: Any] ?? [:] }
+}
+#endif

@@ -179,9 +179,30 @@ async function openVideo(query, windowId = main.windowId) {
   return { id, page, url };
 }
 const closeTab = (id) => evalApp(`ac.store.getState().closeTab(${JSON.stringify(id)}); return true`);
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await instance.snapshot().catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const windowFacts = (windows) => windows.map((window) => ({
+  key: window.key, visible: window.visible, miniaturized: window.miniaturized,
+  occlusionVisible: window.occlusionVisible, littleArdia: window.littleArdia,
+  internal: window.internal, focusedTab: window.focusedTab || null,
+})).map(JSON.stringify).sort();
 const gate = async (v) => {
   const state = await cef("videoUpscalingState()");
   const tab = state?.tabs?.find((t) => t.url === v.url) ?? null;
+  await untilSnapshot("video upscaling gate", (snapshot) => {
+    const read = snapshot.videoUpscaling;
+    return read?.tabs?.some((item) => item.url === v.url && item.allowed === (tab?.allowed ?? null)) &&
+      ["enabled", "lowPower", "thermalPressure", "appActive"].every((key) => read[key] === state[key]) &&
+      JSON.stringify(windowFacts(read.windows)) === JSON.stringify(windowFacts(state.windows));
+  });
   return { allowed: tab?.allowed ?? null, state };
 };
 

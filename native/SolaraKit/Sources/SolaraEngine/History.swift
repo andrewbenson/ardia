@@ -137,6 +137,7 @@ final class HistoryLibrary {
     var reload = false
     for change in changes {
       if case .deleted(_, true, _) = change { reload = true }
+      else if case .modified(_, let rows) = change, Self.addsUnknown(rows, to: entries) { reload = true }
       else { entries = Self.applying(change, to: entries) }
     }
     update(entries: entries, floor: nil, ready: snapshot.ready)
@@ -148,6 +149,11 @@ final class HistoryLibrary {
     guard entries != snapshot.entries || nextFloor != snapshot.floor || ready != snapshot.ready else { return }
     snapshot = HistorySnapshot(entries: entries, floor: nextFloor, ready: ready, revision: snapshot.revision + 1)
     publish(snapshot)
+  }
+
+  private static func addsUnknown(_ rows: [HistoryModifiedRow], to entries: [HistoryEntry]) -> Bool {
+    let known = Set(entries.map(\.url))
+    return rows.contains { shown($0.url) && !known.contains($0.url) }
   }
 
   private static func shown(_ url: String) -> Bool {

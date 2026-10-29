@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import SolaraEngine
 import SolaraOmnibox
 import SwiftUI
 
@@ -69,6 +70,7 @@ public final class HistoryPageModel {
   public var query = "" { didSet { if query != oldValue { relayout() } } }
   public var theme = PageTheme.fallbackLight
   public var profileId = ""
+  public private(set) var engineProfile = ""
   public var profileName: String?
   public var selected: Set<String> = []
   public var clearOpen = false
@@ -80,8 +82,12 @@ public final class HistoryPageModel {
   @ObservationIgnored public var onEvent: (HistoryPageEvent) -> Void = { _ in }
   @ObservationIgnored private var searchTexts: [String: String] = [:]
   @ObservationIgnored private var seen: State?
+  @ObservationIgnored private let catalog: LibraryCatalog?
+  @ObservationIgnored private var historyObserver: Task<Void, Never>?
 
-  public init() {}
+  public init(catalog: LibraryCatalog? = nil) { self.catalog = catalog }
+
+  deinit { historyObserver?.cancel() }
 
   public var shown: [String] { layout.rows.map(\.url) }
 
@@ -142,7 +148,7 @@ public final class HistoryPageModel {
   }
 
   public struct State: Decodable, Equatable, Sendable {
-    public var history: [PageHistoryEntry]
+    public var engineProfile: String
     public var profileId: String
     public var profileName: String?
     public var initialQuery: String
@@ -154,6 +160,28 @@ public final class HistoryPageModel {
     public var panelShadowOpacity: Double?
   }
 
+  public func apply(snapshot: HistorySnapshot) {
+    let next = snapshot.ready ? snapshot.entries.map { entry in
+      PageHistoryEntry(url: entry.url, title: entry.title, favicon: nil, lastVisit: entry.lastVisit)
+    } : []
+    if entries != next { entries = next }
+    let urls = Set(next.map(\.url))
+    if !selected.isSubset(of: urls) { selected.formIntersection(urls) }
+  }
+
+  private func observeHistory() {
+    historyObserver?.cancel()
+    guard let catalog else { return }
+    let profile = engineProfile
+    apply(snapshot: catalog.history(engineProfile: profile))
+    historyObserver = Task { [weak self] in
+      for await snapshot in catalog.observe(engineProfile: profile) {
+        guard !Task.isCancelled, self?.engineProfile == profile else { return }
+        self?.apply(snapshot: snapshot)
+      }
+    }
+  }
+
   public func apply(json: String) {
     guard let data = json.data(using: .utf8), let state = try? JSONDecoder().decode(State.self, from: data) else { return }
     let previous = seen
@@ -162,7 +190,10 @@ public final class HistoryPageModel {
     if theme != next { theme = next }
     profileId = state.profileId
     profileName = state.profileName
-    if previous?.history != state.history { entries = state.history }
+    if previous?.engineProfile != state.engineProfile {
+      engineProfile = state.engineProfile
+      observeHistory()
+    }
     if previous?.initialQuery != state.initialQuery { query = state.initialQuery }
     if let previous, previous.selectionReset != state.selectionReset { selected = [] }
     if let previous, previous.clearRequest != state.clearRequest { clearOpen = true }
@@ -170,8 +201,6 @@ public final class HistoryPageModel {
       clearBusy = false
       clearOpen = false
     }
-    let urls = Set(state.history.map(\.url))
-    if !selected.isSubset(of: urls) { selected = selected.intersection(urls) }
   }
 }
 

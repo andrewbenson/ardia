@@ -9,11 +9,9 @@ import { perfProbeEnabled } from "../../lib/perfProbe";
 import { bundledSiteIcon } from "../../lib/siteIcons";
 import type { Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
-import { activeTabId, bookmarkProfileId, viewTabIds } from "../../store/model";
-import type { HistoryEntry } from "../../store/types";
+import { activeTabId, bookmarkProfileId, engineProfile, viewTabIds } from "../../store/model";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../lib/perfMarks";
 import { sampleOmniboxLatency } from "../../lib/perfMarks";
-import { historyPatch } from "../ntp/historyPatch";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { currentBarActions } from "./actions";
 import { useOmniboxDriver } from "./devDriver";
@@ -57,29 +55,6 @@ function debounced(run: () => void) {
   };
 }
 
-type HistoryRowJSON = { url: string; title: string; favicon: string | null; visits: number; lastVisit: number };
-
-const historyRow = (h: HistoryEntry): HistoryRowJSON => ({ url: h.url, title: h.title, favicon: h.favicon ?? null, visits: h.visits, lastVisit: h.lastVisit });
-const publishedHistory = new Map<string, { list: HistoryEntry[]; rev: number }>();
-let historyRev = 0;
-let historyQueue = Promise.resolve();
-
-function publishProfileHistory(profileId: string) {
-  historyQueue = historyQueue.then(async () => {
-    const list = useBrowser.getState().history[profileId] ?? [];
-    const last = publishedHistory.get(profileId);
-    if (last?.list === list) return;
-    const rev = ++historyRev;
-    const patch = last ? historyPatch(last.list, list) : null;
-    const patched =
-      !!last &&
-      !!patch &&
-      (await newTabSources.patchHistory(profileId, last.rev, rev, { removed: patch.removed, inserts: patch.inserts.map(([i, h]) => [i, historyRow(h)]) }));
-    if (!patched) await newTabSources.setHistory(profileId, rev, list.map(historyRow));
-    publishedHistory.set(profileId, { list, rev });
-  });
-}
-
 export function usePublishSources(windowId: string, profileId: string) {
   const extensions = useBarExtensions(windowId);
   useEffect(() => {
@@ -88,9 +63,9 @@ export function usePublishSources(windowId: string, profileId: string) {
 
   useEffect(() => {
     let tabs: unknown = null;
-    let history: unknown = null;
     let bookmarks: unknown = null;
     let bookmarkProfile = "";
+    let historyEngine: string | undefined;
     let actions = "";
     const publishTabs = debounced(() => {
       const s = useBrowser.getState();
@@ -99,7 +74,6 @@ export function usePublishSources(windowId: string, profileId: string) {
         .map((t) => ({ id: t.id, url: t.url, title: t.title, favicon: t.favicon ?? null }));
       void newTabSources.setTabs(profileId, rows);
     });
-    const publishHistory = debounced(() => publishProfileHistory(profileId));
     const publishBookmarks = debounced(() => {
       const s = useBrowser.getState();
       void newTabSources.setBookmarks(profileId, profileBookmarks(s.bookmarks, bookmarkProfileId(s, s.windows[windowId])));
@@ -112,14 +86,14 @@ export function usePublishSources(windowId: string, profileId: string) {
     });
     const check = () => {
       const s = useBrowser.getState();
+      const engine = engineProfile(profileId);
+      if (historyEngine !== engine) {
+        historyEngine = engine;
+        void newTabSources.setEngineProfile(profileId, engine);
+      }
       if (s.tabs !== tabs) {
         tabs = s.tabs;
         publishTabs.schedule();
-      }
-      const h = s.history[profileId];
-      if (h !== history) {
-        history = h;
-        publishHistory.schedule();
       }
       const bp = bookmarkProfileId(s, s.windows[windowId]);
       if (s.bookmarks !== bookmarks || bp !== bookmarkProfile) {
@@ -134,7 +108,6 @@ export function usePublishSources(windowId: string, profileId: string) {
     return () => {
       off();
       publishTabs.cancel();
-      publishHistory.cancel();
       publishBookmarks.cancel();
       publishActions.cancel();
     };

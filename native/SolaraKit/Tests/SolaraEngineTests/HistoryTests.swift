@@ -98,6 +98,22 @@ final class FakeEngineClient: EngineClient {
     #expect(catalog.history(engineProfile: "p").entries.isEmpty)
   }
 
+  @Test func importedRowsForUnknownURLsRequery() async {
+    let client = FakeEngineClient()
+    client.rows["p"] = [.init(url: "https://a", title: "A", visits: 1, visitTimes: [10])]
+    let catalog = LibraryCatalog(client: client)
+    await catalog.start(engineProfiles: ["p"])
+    client.rows["p"] = [.init(url: "https://b", title: "B", visits: 2, visitTimes: [20]), .init(url: "https://a", title: "A", visits: 1, visitTimes: [10])]
+    client.emit(.modified(profile: "p", rows: [.init(url: "https://b", title: "B", visits: 2)]))
+    await catalog.flushPending()
+    #expect(client.reads == 2)
+    #expect(catalog.history(engineProfile: "p").entries.map(\.url) == ["https://b", "https://a"])
+    client.emit(.modified(profile: "p", rows: [.init(url: "https://a", title: "A2", visits: 3)]))
+    await catalog.flushPending()
+    #expect(client.reads == 2)
+    #expect(catalog.history(engineProfile: "p").entries.last?.title == "A2")
+  }
+
   @Test func timeRangeDeletionRequeriesWithoutURLList() async {
     let client = FakeEngineClient()
     client.rows["p"] = [.init(url: "file:///a", title: "A", visits: 1, visitTimes: [10])]

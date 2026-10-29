@@ -19,14 +19,8 @@ public class NewTabModule: Module {
       await MainActor.run { NewTabSources.shared.setTabs(rows, profileId: profileId) }
     }
 
-    AsyncFunction("setHistory") { (profileId: String, rev: Int, json: String) in
-      let rows = NewTabRows.history(json)
-      await MainActor.run { NewTabSources.shared.setHistory(rows, profileId: profileId, rev: rev) }
-    }
-
-    AsyncFunction("patchHistory") { (profileId: String, base: Int, rev: Int, json: String) -> Bool in
-      guard let patch = NewTabRows.historyPatch(json) else { return false }
-      return await MainActor.run { NewTabSources.shared.patchHistory(patch, profileId: profileId, base: base, rev: rev) }
+    AsyncFunction("setEngineProfile") { (profileId: String, engineProfile: String) in
+      await MainActor.run { NewTabSources.shared.setEngineProfile(engineProfile, profileId: profileId) }
     }
 
     AsyncFunction("setBookmarks") { (profileId: String, json: String) in
@@ -110,28 +104,6 @@ enum NewTabRows {
 
   static func tabs(_ json: String) -> [TabRow] {
     objects(json).map { TabRow(id: string($0, "id"), url: string($0, "url"), title: string($0, "title"), favicon: optional($0, "favicon")) }
-  }
-
-  static func history(_ json: String) -> [HistoryRow] {
-    objects(json).map(historyRow)
-  }
-
-  private static func historyRow(_ o: [String: Any]) -> HistoryRow {
-    HistoryRow(
-      url: string(o, "url"), title: string(o, "title"), favicon: optional(o, "favicon"), visits: (o["visits"] as? Double) ?? 0,
-      lastVisit: (o["lastVisit"] as? Double) ?? 0)
-  }
-
-  static func historyPatch(_ json: String) -> NewTabSources.HistoryPatch? {
-    guard let data = json.data(using: .utf8), let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      let removed = o["removed"] as? [String], let inserts = o["inserts"] as? [[Any]]
-    else { return nil }
-    var rows: [(index: Int, row: HistoryRow)] = []
-    for entry in inserts {
-      guard entry.count == 2, let index = entry[0] as? Int, let row = entry[1] as? [String: Any] else { return nil }
-      rows.append((index, historyRow(row)))
-    }
-    return NewTabSources.HistoryPatch(removed: removed, inserts: rows)
   }
 
   static func bookmarks(_ json: String) -> [BookmarkRow] {

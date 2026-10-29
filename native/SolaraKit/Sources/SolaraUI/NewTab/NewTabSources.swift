@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SolaraEngine
 import SolaraOmnibox
 
 @MainActor
@@ -15,21 +16,7 @@ public final class NewTabSources {
     var index = SuggestionIndex(history: [], bookmarks: [])
     var historyHosts: [String] = []
     var hosts: [String]?
-    var historyRev: Int?
-  }
-
-  public struct HistoryPatch: Sendable, Equatable {
-    public var removed: [String]
-    public var inserts: [(index: Int, row: HistoryRow)]
-
-    public init(removed: [String], inserts: [(index: Int, row: HistoryRow)]) {
-      self.removed = removed
-      self.inserts = inserts
-    }
-
-    public static func == (a: HistoryPatch, b: HistoryPatch) -> Bool {
-      a.removed == b.removed && a.inserts.elementsEqual(b.inserts) { $0.index == $1.index && $0.row == $1.row }
-    }
+    var engineProfile: String?
   }
 
   public private(set) var revision = 0
@@ -37,8 +24,45 @@ public final class NewTabSources {
   @ObservationIgnored private var actions: [String: ActionIndex<CommandAction>] = [:]
   @ObservationIgnored private var extensions: [String: [ExtensionCandidate]] = [:]
   @ObservationIgnored private var warming: [String: Task<Void, Never>] = [:]
+  @ObservationIgnored private var historyObservers: [String: Task<Void, Never>] = [:]
+  @ObservationIgnored private var historyCatalog: LibraryCatalog?
 
   public init() {}
+
+  public func useHistoryCatalog(_ catalog: LibraryCatalog) {
+    if let historyCatalog, historyCatalog === catalog { return }
+    historyCatalog = catalog
+    for (profileId, profile) in profiles {
+      if let engineProfile = profile.engineProfile { observeHistory(profileId: profileId, engineProfile: engineProfile) }
+    }
+  }
+
+  public func setEngineProfile(_ engineProfile: String, profileId: String) {
+    var profile = profiles[profileId] ?? Profile()
+    guard profile.engineProfile != engineProfile else { return }
+    profile.engineProfile = engineProfile
+    profiles[profileId] = profile
+    observeHistory(profileId: profileId, engineProfile: engineProfile)
+  }
+
+  private func observeHistory(profileId: String, engineProfile: String) {
+    historyObservers[profileId]?.cancel()
+    guard let historyCatalog else { return }
+    applyHistory(historyCatalog.history(engineProfile: engineProfile), profileId: profileId)
+    historyObservers[profileId] = Task { [weak self] in
+      for await snapshot in historyCatalog.observe(engineProfile: engineProfile) {
+        guard !Task.isCancelled, self?.profiles[profileId]?.engineProfile == engineProfile else { return }
+        self?.applyHistory(snapshot, profileId: profileId)
+      }
+    }
+  }
+
+  private func applyHistory(_ snapshot: HistorySnapshot, profileId: String) {
+    let rows = snapshot.ready ? snapshot.entries.map { entry in
+      HistoryRow(url: entry.url, title: entry.title, favicon: nil, visits: Double(entry.visits), lastVisit: entry.lastVisit)
+    } : []
+    if profiles[profileId]?.history != rows { setHistory(rows, profileId: profileId) }
+  }
 
   public func setTabs(_ tabs: [TabRow], profileId: String) {
     var p = profiles[profileId] ?? Profile()
@@ -48,10 +72,9 @@ public final class NewTabSources {
     revision += 1
   }
 
-  public func setHistory(_ history: [HistoryRow], profileId: String, rev: Int? = nil) {
+  func setHistory(_ history: [HistoryRow], profileId: String) {
     var p = profiles[profileId] ?? Profile()
     p.history = history
-    p.historyRev = rev
     var seen = Set<String>()
     var hosts: [String] = []
     for h in history {
@@ -64,19 +87,6 @@ public final class NewTabSources {
     profiles[profileId] = p
     warm(profileId)
     revision += 1
-  }
-
-  @discardableResult
-  public func patchHistory(_ patch: HistoryPatch, profileId: String, base: Int, rev: Int) -> Bool {
-    guard let p = profiles[profileId], p.historyRev == base else { return false }
-    let gone = Set(patch.removed)
-    var next = gone.isEmpty ? p.history : p.history.filter { !gone.contains($0.url) }
-    for (index, row) in patch.inserts {
-      guard index >= 0, index <= next.count else { return false }
-      next.insert(row, at: index)
-    }
-    setHistory(next, profileId: profileId, rev: rev)
-    return true
   }
 
   func history(_ profileId: String) -> [HistoryRow] { profiles[profileId]?.history ?? [] }

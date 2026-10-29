@@ -17,6 +17,7 @@ let package = Package(
     .library(name: "SolaraUI", targets: ["SolaraUI"]),
     .library(name: "SolaraSignposts", targets: ["SolaraSignposts"]),
     .library(name: "SolaraLive", targets: ["SolaraLive"]),
+    .library(name: "SolaraProbes", targets: ["SolaraProbes"]),
     .executable(name: "solara-store", targets: ["SolaraStoreCLI"]),
   ],
   dependencies: [
@@ -35,6 +36,7 @@ let package = Package(
     .target(name: "SolaraUI", dependencies: ["SolaraModel", "SolaraStore", "SolaraOmnibox", "SolaraEngine", "SolaraLive"]),
     .target(name: "SolaraSignposts"),
     .target(name: "SolaraLive", dependencies: ["SolaraModel"]),
+    .target(name: "SolaraProbes"),
     .executableTarget(name: "SolaraStoreCLI", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore", "SolaraSync"]),
     .testTarget(name: "SolaraEngineTests", dependencies: ["SolaraEngine"]),
     .testTarget(name: "SolaraModelTests", dependencies: ["SolaraModel"]),
@@ -43,11 +45,12 @@ let package = Package(
     .testTarget(name: "SolaraBridgeCoreTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraPersistence", "SolaraBridgeCore"]),
     .testTarget(name: "SolaraOmniboxTests", dependencies: ["SolaraOmnibox", "SolaraModel"], exclude: ["Fixtures"]),
     .testTarget(name: "SolaraImportTests", dependencies: ["SolaraImport"], exclude: ["Fixtures"]),
-    .testTarget(name: "SolaraUITests", dependencies: ["SolaraUI", "SolaraStore", "SolaraModel", "SolaraOmnibox"]),
+    .testTarget(name: "SolaraUITests", dependencies: ["SolaraUI", "SolaraEngine", "SolaraStore", "SolaraModel", "SolaraOmnibox"]),
     .testTarget(name: "SolaraSignpostsTests", dependencies: ["SolaraSignposts"]),
     .testTarget(name: "SolaraSyncTests", dependencies: ["SolaraModel", "SolaraStore", "SolaraSync"], exclude: ["Scenarios", "Adapters", "Cases"]),
     .testTarget(name: "SolaraSyncCoreTests", dependencies: ["SolaraSyncCore"]),
     .testTarget(name: "SolaraLiveTests", dependencies: ["SolaraLive"], resources: [.copy("Fixtures")]),
+    .testTarget(name: "SolaraProbesTests", dependencies: ["SolaraProbes"]),
   ],
   swiftLanguageModes: [.v6]
 )

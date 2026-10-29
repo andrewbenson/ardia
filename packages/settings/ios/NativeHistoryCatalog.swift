@@ -1,6 +1,7 @@
 import ArdiaCore
 import Foundation
 import SolaraEngine
+import SolaraUI
 
 @MainActor
 final class ArdiaHistoryClient: EngineClient {
@@ -85,6 +86,7 @@ enum NativeHistoryCatalog {
   static let catalog = LibraryCatalog(client: ArdiaHistoryClient())
 
   static func start(engineProfiles: [String]) async {
+    NewTabSources.shared.useHistoryCatalog(catalog)
     await catalog.start(engineProfiles: engineProfiles)
   }
 

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SolaraEngine
 import SolaraModel
 import SolaraOmnibox
 import Testing
@@ -341,25 +342,59 @@ struct NewTabThemeTests {
 }
 
 @MainActor
-struct NewTabHistoryPatchTests {
-  func row(_ url: String, _ at: Double) -> HistoryRow { HistoryRow(url: url, title: url, favicon: nil, visits: 1, lastVisit: at) }
+final class NewTabHistoryClient: EngineClient {
+  var rows: [String: [EngineHistoryRow]] = [:]
+  var handler: (@MainActor @Sendable (HistoryChange) -> Void)?
 
-  @Test func aPatchOnTheRightBaseApplies() {
+  func observeHistory(_ handler: @escaping @MainActor @Sendable (HistoryChange) -> Void) { self.handler = handler }
+  func watchHistory(engineProfile: String) async throws {}
+  func queryHistory(engineProfile: String, maxUrls: Int, maxVisits: Int) async throws -> [EngineHistoryRow] { rows[engineProfile] ?? [] }
+  func emit(_ change: HistoryChange) { handler?(change) }
+}
+
+@MainActor
+struct NewTabCatalogTests {
+  @Test func profilesUseTheirEngineSnapshotsAndWaitForReadiness() async throws {
+    let client = NewTabHistoryClient()
+    client.rows[""] = [.init(url: "https://personal.example/", title: "Personal", visits: 3, visitTimes: [10, 20])]
+    client.rows["shared"] = [.init(url: "https://shared.example/", title: "Shared", visits: 5, visitTimes: [30])]
+    let catalog = LibraryCatalog(client: client)
     let sources = NewTabSources()
-    sources.setHistory([row("a", 3), row("b", 2), row("c", 1)], profileId: "p", rev: 1)
-    let patch = NewTabSources.HistoryPatch(removed: ["b"], inserts: [(0, row("b", 4)), (3, row("d", 0))])
-    #expect(sources.patchHistory(patch, profileId: "p", base: 1, rev: 2))
-    #expect(sources.history("p").map(\.url) == ["b", "a", "c", "d"])
+    sources.useHistoryCatalog(catalog)
+    sources.setEngineProfile("", profileId: "default")
+    sources.setEngineProfile("shared", profileId: "work")
+    sources.setEngineProfile("shared", profileId: "copy")
+    #expect(sources.history("default").isEmpty)
+    #expect(sources.history("work").isEmpty)
+    await catalog.start(engineProfiles: ["", "shared"])
+    for _ in 0..<100 where sources.history("copy").isEmpty { try await Task.sleep(for: .milliseconds(1)) }
+    #expect(sources.history("default").map(\.url) == ["https://personal.example/"])
+    #expect(sources.history("work").map(\.url) == ["https://shared.example/"])
+    #expect(sources.history("copy").map(\.url) == ["https://shared.example/"])
+    #expect(sources.history("work").first?.visits == 5)
+    #expect(sources.history("work").first?.lastVisit == 30)
+    #expect(sources.history("work").first?.favicon == nil)
+    #expect(sources.knownHosts("work").contains("shared.example"))
+    #expect(sources.index("work").suggest("shared", tabs: []).items.contains { if case .page(let url, _, _, _, _, _) = $0 { return url == "https://shared.example/" }; return false })
   }
 
-  @Test func aPatchOnAnotherBaseIsRefused() {
+  @Test func deletionUpdatesEverySharedViewAndChangingMappingDropsOldRows() async throws {
+    let client = NewTabHistoryClient()
+    client.rows["shared"] = [.init(url: "https://shared.example/", title: "Shared", visits: 2, visitTimes: [10])]
+    let catalog = LibraryCatalog(client: client)
+    await catalog.start(engineProfiles: ["shared", "other"])
     let sources = NewTabSources()
-    sources.setHistory([row("a", 1)], profileId: "p", rev: 5)
-    let patch = NewTabSources.HistoryPatch(removed: [], inserts: [(0, row("z", 2))])
-    #expect(!sources.patchHistory(patch, profileId: "p", base: 4, rev: 6))
-    #expect(!sources.patchHistory(patch, profileId: "q", base: 5, rev: 6))
-    #expect(!sources.patchHistory(NewTabSources.HistoryPatch(removed: [], inserts: [(9, row("z", 2))]), profileId: "p", base: 5, rev: 6))
-    #expect(sources.history("p").map(\.url) == ["a"])
+    sources.useHistoryCatalog(catalog)
+    sources.setEngineProfile("shared", profileId: "one")
+    sources.setEngineProfile("shared", profileId: "two")
+    #expect(sources.history("one").count == 1)
+    client.emit(.deleted(profile: "shared", all: false, urls: ["https://shared.example/"]))
+    await catalog.flushPending()
+    for _ in 0..<100 where !sources.history("two").isEmpty { try await Task.sleep(for: .milliseconds(1)) }
+    #expect(sources.history("one").isEmpty)
+    #expect(sources.history("two").isEmpty)
+    sources.setEngineProfile("other", profileId: "one")
+    #expect(sources.history("one").isEmpty)
   }
 }
 

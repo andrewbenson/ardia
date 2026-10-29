@@ -82,7 +82,6 @@ final class TabPoolHost {
     state = next
     for tabId in props.keys where next.tabs[tabId] == nil { props[tabId] = nil }
     refresh()
-    stateObservers.forEach { $0() }
   }
 
   private func refresh() {

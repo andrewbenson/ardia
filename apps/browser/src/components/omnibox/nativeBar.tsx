@@ -66,6 +66,7 @@ export function usePublishSources(windowId: string, profileId: string) {
     let bookmarks: unknown = null;
     let bookmarkProfile = "";
     let historyEngine: string | undefined;
+    let bookmarkEngine: string | undefined;
     let actions = "";
     const publishTabs = debounced(() => {
       const s = useBrowser.getState();
@@ -74,9 +75,13 @@ export function usePublishSources(windowId: string, profileId: string) {
         .map((t) => ({ id: t.id, url: t.url, title: t.title, favicon: t.favicon ?? null }));
       void newTabSources.setTabs(profileId, rows);
     });
-    const publishBookmarks = debounced(() => {
+    const publishBookmarkIcons = debounced(() => {
       const s = useBrowser.getState();
-      void newTabSources.setBookmarks(profileId, profileBookmarks(s.bookmarks, bookmarkProfileId(s, s.windows[windowId])));
+      const icons: Record<string, string> = {};
+      for (const row of profileBookmarks(s.bookmarks, bookmarkProfileId(s, s.windows[windowId]))) {
+        if (row.favicon) icons[row.url] = row.favicon;
+      }
+      void newTabSources.setBookmarkIcons(profileId, engineProfile(bookmarkProfileId(s, s.windows[windowId])), icons);
     });
     const publishActions = debounced(() => {
       const next = JSON.stringify(currentBarActions(windowId));
@@ -87,9 +92,11 @@ export function usePublishSources(windowId: string, profileId: string) {
     const check = () => {
       const s = useBrowser.getState();
       const engine = engineProfile(profileId);
-      if (historyEngine !== engine) {
+      const bookmark = engineProfile(bookmarkProfileId(s, s.windows[windowId]));
+      if (historyEngine !== engine || bookmarkEngine !== bookmark) {
         historyEngine = engine;
-        void newTabSources.setEngineProfile(profileId, engine);
+        bookmarkEngine = bookmark;
+        void newTabSources.setEngineProfile(profileId, engine, bookmark);
       }
       if (s.tabs !== tabs) {
         tabs = s.tabs;
@@ -99,7 +106,7 @@ export function usePublishSources(windowId: string, profileId: string) {
       if (s.bookmarks !== bookmarks || bp !== bookmarkProfile) {
         bookmarks = s.bookmarks;
         bookmarkProfile = bp;
-        publishBookmarks.schedule();
+        publishBookmarkIcons.schedule();
       }
       publishActions.schedule();
     };
@@ -108,7 +115,7 @@ export function usePublishSources(windowId: string, profileId: string) {
     return () => {
       off();
       publishTabs.cancel();
-      publishBookmarks.cancel();
+      publishBookmarkIcons.cancel();
       publishActions.cancel();
     };
   }, [windowId, profileId]);

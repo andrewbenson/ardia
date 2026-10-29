@@ -19,13 +19,13 @@ public class NewTabModule: Module {
       await MainActor.run { NewTabSources.shared.setTabs(rows, profileId: profileId) }
     }
 
-    AsyncFunction("setEngineProfile") { (profileId: String, engineProfile: String) in
-      await MainActor.run { NewTabSources.shared.setEngineProfile(engineProfile, profileId: profileId) }
+    AsyncFunction("setEngineProfile") { (profileId: String, engineProfile: String, bookmarkEngineProfile: String) in
+      await MainActor.run { NewTabSources.shared.setEngineProfile(engineProfile, bookmarkEngineProfile: bookmarkEngineProfile, profileId: profileId) }
     }
 
-    AsyncFunction("setBookmarks") { (profileId: String, json: String) in
-      let rows = NewTabRows.bookmarks(json)
-      await MainActor.run { NewTabSources.shared.setBookmarks(rows, profileId: profileId) }
+    AsyncFunction("setBookmarkIcons") { (profileId: String, engineProfile: String, json: String) in
+      let icons = NewTabRows.bookmarkIcons(json)
+      await MainActor.run { NewTabSources.shared.setBookmarkIcons(icons, engineProfile: engineProfile, profileId: profileId) }
     }
 
     AsyncFunction("setActions") { (windowId: String, json: String) in
@@ -106,8 +106,9 @@ enum NewTabRows {
     objects(json).map { TabRow(id: string($0, "id"), url: string($0, "url"), title: string($0, "title"), favicon: optional($0, "favicon")) }
   }
 
-  static func bookmarks(_ json: String) -> [BookmarkRow] {
-    objects(json).map { BookmarkRow(url: string($0, "url"), title: string($0, "title"), favicon: optional($0, "favicon")) }
+  static func bookmarkIcons(_ json: String) -> [String: String] {
+    guard let data = json.data(using: .utf8), let icons = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return [:] }
+    return icons
   }
 
   static func actions(_ json: String) -> [CommandAction] {

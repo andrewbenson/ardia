@@ -5,6 +5,7 @@ import { addFolderToSidebar, makesGroup, restorableArcHolder, restoreArcFolders 
 import { useTheme } from "../../lib/theme";
 import type { RemovedBookmarks } from "../../store/bookmarks";
 import { useBrowser } from "../../store/browser";
+import { engineProfile } from "../../store/model";
 import type { BookmarkNode } from "../../store/types";
 import { openFolder, openUrl } from "../bookmarks/actions";
 import { editBookmark } from "../bookmarks/edit";
@@ -15,22 +16,21 @@ type OpenMode = Parameters<typeof openUrl>[2];
 type Bookmarks = ReturnType<typeof useBrowser.getState>["bookmarks"];
 
 function profileNodes(b: Bookmarks, roots: { bar: string; other: string } | undefined) {
-  const out: Record<string, unknown>[] = [];
   const folders: string[] = [];
+  const bookmarkIcons: Record<string, string> = {};
   const walk = (id: string, depth: number) => {
     const node: BookmarkNode | undefined = b.nodes[id];
     if (!node || depth > 64) return;
     if (node.kind === "folder") {
       folders.push(node.id);
-      out.push({ id: node.id, kind: "folder", parentId: node.parentId ?? null, title: node.title, children: node.children });
       node.children.forEach((c) => walk(c, depth + 1));
-    } else out.push({ id: node.id, kind: "url", parentId: node.parentId, title: node.title, url: node.url, favicon: node.favicon });
+    } else if (node.favicon) bookmarkIcons[node.id] = node.favicon;
   };
   if (roots) {
     walk(roots.bar, 0);
     walk(roots.other, 0);
   }
-  return { nodes: out, folders };
+  return { folders, bookmarkIcons };
 }
 
 export function NativeBookmarksPage({ tabId, profileId }: { tabId: string; profileId: string }) {
@@ -45,15 +45,14 @@ export function NativeBookmarksPage({ tabId, profileId }: { tabId: string; profi
     return () => clearTimeout(timer);
   }, [undo]);
 
-  const tree = useMemo(() => {
-    const { nodes, folders } = profileNodes(bookmarks, roots);
+  const actionFlags = useMemo(() => {
+    const { folders, bookmarkIcons } = profileNodes(bookmarks, roots);
     const s = { bookmarks };
     const groupable = folders.filter((id) => makesGroup(s, id));
     const arcRestorable = folders.filter((id) => restorableArcHolder(useBrowser.getState(), id));
-    return JSON.stringify({ nodes, roots: roots ?? null, groupable, arcRestorable });
+    return { groupable, arcRestorable, bookmarkIcons };
   }, [bookmarks, roots]);
-  const rest = JSON.stringify({ ...pageThemeState(theme), profileId, undoCount: undo?.count ?? null });
-  const state = `${tree.slice(0, -1)},${rest.slice(1)}`;
+  const state = JSON.stringify({ ...pageThemeState(theme), profileId, engineProfile: engineProfile(profileId), undoCount: undo?.count ?? null, ...actionFlags });
 
   const onEvent = (e: NativePageEvent) => {
     const s = useBrowser.getState();

@@ -13,10 +13,13 @@ public final class NewTabSources {
     var tabs: [TabRow] = []
     var history: [HistoryRow] = []
     var bookmarks: [BookmarkRow] = []
+    var bookmarkIcons: [String: String] = [:]
+    var bookmarkIconsByEngine: [String: [String: String]] = [:]
     var index = SuggestionIndex(history: [], bookmarks: [])
     var historyHosts: [String] = []
     var hosts: [String]?
     var engineProfile: String?
+    var bookmarkEngineProfile: String?
   }
 
   public private(set) var revision = 0
@@ -26,6 +29,8 @@ public final class NewTabSources {
   @ObservationIgnored private var warming: [String: Task<Void, Never>] = [:]
   @ObservationIgnored private var historyObservers: [String: Task<Void, Never>] = [:]
   @ObservationIgnored private var historyCatalog: LibraryCatalog?
+  @ObservationIgnored private var bookmarkCatalog: LibraryCatalog?
+  @ObservationIgnored private var bookmarkObservers: [String: Task<Void, Never>] = [:]
 
   public init() {}
 
@@ -37,12 +42,26 @@ public final class NewTabSources {
     }
   }
 
-  public func setEngineProfile(_ engineProfile: String, profileId: String) {
+  public func useBookmarkCatalog(_ catalog: LibraryCatalog) {
+    if let bookmarkCatalog, bookmarkCatalog === catalog { return }
+    bookmarkCatalog = catalog
+    for (profileId, profile) in profiles {
+      if let engineProfile = profile.bookmarkEngineProfile { observeBookmarks(profileId: profileId, engineProfile: engineProfile) }
+    }
+  }
+
+  public func setEngineProfile(_ engineProfile: String, bookmarkEngineProfile: String? = nil, profileId: String) {
     var profile = profiles[profileId] ?? Profile()
-    guard profile.engineProfile != engineProfile else { return }
+    let bookmarkProfile = bookmarkEngineProfile ?? engineProfile
+    let historyChanged = profile.engineProfile != engineProfile
+    let bookmarksChanged = profile.bookmarkEngineProfile != bookmarkProfile
+    guard historyChanged || bookmarksChanged else { return }
     profile.engineProfile = engineProfile
+    profile.bookmarkEngineProfile = bookmarkProfile
+    if bookmarksChanged { profile.bookmarkIcons = profile.bookmarkIconsByEngine[bookmarkProfile] ?? [:] }
     profiles[profileId] = profile
-    observeHistory(profileId: profileId, engineProfile: engineProfile)
+    if historyChanged { observeHistory(profileId: profileId, engineProfile: engineProfile) }
+    if bookmarksChanged { observeBookmarks(profileId: profileId, engineProfile: bookmarkProfile) }
   }
 
   private func observeHistory(profileId: String, engineProfile: String) {
@@ -63,6 +82,60 @@ public final class NewTabSources {
     } : []
     if profiles[profileId]?.history != rows { setHistory(rows, profileId: profileId) }
   }
+
+  private func observeBookmarks(profileId: String, engineProfile: String) {
+    bookmarkObservers[profileId]?.cancel()
+    guard let bookmarkCatalog else { return }
+    applyBookmarks(bookmarkCatalog.bookmarks(engineProfile: engineProfile), profileId: profileId)
+    bookmarkObservers[profileId] = Task { [weak self] in
+      for await snapshot in bookmarkCatalog.observeBookmarks(engineProfile: engineProfile) {
+        guard !Task.isCancelled, self?.profiles[profileId]?.bookmarkEngineProfile == engineProfile else { return }
+        self?.applyBookmarks(snapshot, profileId: profileId)
+      }
+    }
+  }
+
+  private func applyBookmarks(_ snapshot: BookmarkSnapshot, profileId: String) {
+    guard snapshot.ready, let roots = snapshot.roots else {
+      if profiles[profileId]?.bookmarks != [] { setBookmarks([], profileId: profileId) }
+      return
+    }
+    var seen = Set<String>()
+    var urls = Set<String>()
+    var rows: [BookmarkRow] = []
+    func walk(_ id: String) {
+      guard seen.insert(id).inserted, let node = snapshot.nodes[id] else { return }
+      if node.isFolder {
+        for child in node.children ?? [] { walk(child) }
+      } else if let url = node.url, urls.insert(url).inserted {
+        rows.append(BookmarkRow(url: url, title: node.title, favicon: profiles[profileId]?.bookmarkIcons[url]))
+      }
+    }
+    walk(roots.bar)
+    walk(roots.other)
+    if profiles[profileId]?.bookmarks != rows { setBookmarks(rows, profileId: profileId) }
+  }
+
+  func bookmarks(_ profileId: String) -> [BookmarkRow] { profiles[profileId]?.bookmarks ?? [] }
+
+  public func setBookmarkIcons(_ icons: [String: String], engineProfile: String, profileId: String) {
+    var profile = profiles[profileId] ?? Profile()
+    profile.bookmarkIconsByEngine[engineProfile] = icons
+    guard profile.bookmarkEngineProfile == engineProfile else {
+      profiles[profileId] = profile
+      return
+    }
+    guard profile.bookmarkIcons != icons else {
+      profiles[profileId] = profile
+      return
+    }
+    profile.bookmarkIcons = icons
+    profiles[profileId] = profile
+    if let bookmarkCatalog {
+      applyBookmarks(bookmarkCatalog.bookmarks(engineProfile: engineProfile), profileId: profileId)
+    }
+  }
+
 
   public func setTabs(_ tabs: [TabRow], profileId: String) {
     var p = profiles[profileId] ?? Profile()

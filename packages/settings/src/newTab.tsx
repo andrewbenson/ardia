@@ -53,8 +53,8 @@ export type NativeNewTabHandle = {
 type NewTabModule = {
   available(): boolean;
   setTabs(profileId: string, json: string): Promise<void>;
-  setEngineProfile(profileId: string, engineProfile: string): Promise<void>;
-  setBookmarks(profileId: string, json: string): Promise<void>;
+  setEngineProfile(profileId: string, engineProfile: string, bookmarkEngineProfile: string): Promise<void>;
+  setBookmarkIcons(profileId: string, engineProfile: string, json: string): Promise<void>;
   setActions(windowId: string, json: string): Promise<void>;
   setExtensions(windowId: string, json: string): Promise<void>;
   forgetWindow(windowId: string): Promise<void>;
@@ -85,8 +85,8 @@ const ignore = () => {};
 
 export const newTabSources = {
   setTabs: (profileId: string, rows: unknown[]) => native?.setTabs(profileId, JSON.stringify(rows)).catch(ignore),
-  setEngineProfile: (profileId: string, engineProfile: string) => native?.setEngineProfile(profileId, engineProfile).catch(ignore),
-  setBookmarks: (profileId: string, rows: unknown[]) => native?.setBookmarks(profileId, JSON.stringify(rows)).catch(ignore),
+  setEngineProfile: (profileId: string, engineProfile: string, bookmarkEngineProfile: string) => native?.setEngineProfile(profileId, engineProfile, bookmarkEngineProfile).catch(ignore),
+  setBookmarkIcons: (profileId: string, engineProfile: string, icons: Record<string, string>) => native?.setBookmarkIcons(profileId, engineProfile, JSON.stringify(icons)).catch(ignore),
   setActions: (windowId: string, rows: unknown[]) => native?.setActions(windowId, JSON.stringify(rows)).catch(ignore),
   setExtensions: (windowId: string, rows: unknown[]) => native?.setExtensions(windowId, JSON.stringify(rows)).catch(ignore),
   forgetWindow: (windowId: string) => native?.forgetWindow(windowId).catch(ignore),

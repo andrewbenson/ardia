@@ -44,6 +44,23 @@ public class SettingsModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("bookmarkWriteComplete") { (profile: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in
+          await NativeHistoryCatalog.bookmarkWriteComplete(engineProfile: profile)
+          reply.resolve(nil)
+        }
+      }
+    }.runOnQueue(.main)
+
+    #if DEBUG
+    AsyncFunction("devBookmarksSnapshot") { (profile: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated { reply.resolve(NativeHistoryCatalog.bookmarksSnapshot(engineProfile: profile)) }
+    }.runOnQueue(.main)
+    #endif
+
     #if DEBUG
     AsyncFunction("devHistorySnapshot") { (profile: String, promise: Promise) in
       nonisolated(unsafe) let reply = promise

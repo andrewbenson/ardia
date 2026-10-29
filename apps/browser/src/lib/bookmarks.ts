@@ -1,5 +1,6 @@
 import { applyBookmarkOps, bookmarkTree, onBookmarksChanged, watchBookmarks, type BookmarkOp, type EngineBookmark } from "@ardia/ardiacore";
 import { readDocument, removeDocument, writeDocument } from "@ardia/shell";
+import { nativeBookmarkWriteComplete } from "@ardia/settings";
 import { bookmarkUuidFor, isBookmarkUuid, rootIdsFor } from "../store/bookmarks";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { engineProfile, isIncognitoProfile } from "../store/model";
@@ -241,6 +242,7 @@ function adopt(engine: string, flat: Flat, { ready = legacyMoved } = {}) {
 async function sendOps(engine: string, ops: BookmarkOp[]): Promise<boolean> {
   try {
     const result = await applyBookmarkOps(engine, ops);
+    void nativeBookmarkWriteComplete(engine);
     return !result.skipped && !result.invalid.length;
   } catch (error) {
     console.warn("[bookmarks] couldn't save to Chrome", error);
@@ -432,6 +434,7 @@ export async function migrateBookmarksFile({ keepMs = LEGACY_KEPT_MS } = {}): Pr
       walk(roots.other, "other");
       if (!ops.length) continue;
       const result = await applyBookmarkOps(engine, ops);
+      void nativeBookmarkWriteComplete(engine);
       if (result.skipped) throw new Error(`${result.skipped} of ${ops.length} bookmarks couldn't be added`);
     }
   } catch (error) {

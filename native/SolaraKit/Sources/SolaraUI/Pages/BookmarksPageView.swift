@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import SolaraEngine
 import SolaraOmnibox
 import SwiftUI
 
@@ -46,9 +47,11 @@ public final class BookmarksPageModel {
   public var roots: PageBookmarkRoots?
   public var groupable: Set<String> = []
   public var arcRestorable: Set<String> = []
+  public var bookmarkIcons: [String: String] = [:]
   public var undoCount: Int?
   public var theme = PageTheme.fallbackLight
   public var profileId = ""
+  public private(set) var engineProfile = ""
   public var folderId: String? { didSet { if folderId != oldValue { selected = [] } } }
   public var query = "" { didSet { if query != oldValue { selected = [] } } }
   public var selected: [String] = []
@@ -62,8 +65,12 @@ public final class BookmarksPageModel {
   @ObservationIgnored var treeFrames: [String: CGRect] = [:]
   @ObservationIgnored public var onEvent: (BookmarksPageEvent) -> Void = { _ in }
   @ObservationIgnored private var seen: State?
+  @ObservationIgnored private let catalog: LibraryCatalog?
+  @ObservationIgnored private var bookmarkObserver: Task<Void, Never>?
 
-  public init() {}
+  public init(catalog: LibraryCatalog? = nil) { self.catalog = catalog }
+
+  deinit { bookmarkObserver?.cancel() }
 
   var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -236,15 +243,48 @@ public final class BookmarksPageModel {
   }
 
   public struct State: Decodable, Equatable, Sendable {
-    public var nodes: [PageBookmark]
-    public var roots: PageBookmarkRoots?
+    public var engineProfile: String
     public var groupable: [String]
     public var arcRestorable: [String]
+    public var bookmarkIcons: [String: String]
     public var undoCount: Int?
     public var profileId: String
     public var dark: Bool
     public var theme: [String: String]
     public var panelShadowOpacity: Double?
+  }
+
+  public func apply(snapshot: BookmarkSnapshot) {
+    let next: [String: PageBookmark] = snapshot.ready ? snapshot.nodes.mapValues { node in
+      PageBookmark(id: node.id, kind: node.kind, parentId: node.parentId, title: node.title,
+        url: node.url, favicon: bookmarkIcons[node.id], children: node.children)
+    } : [:]
+    let nextRoots = snapshot.ready ? snapshot.roots.map { PageBookmarkRoots(bar: $0.bar, other: $0.other) } : nil
+    if nodes != next { nodes = next }
+    if roots != nextRoots {
+      let previous = roots
+      roots = nextRoots
+      if let nextRoots, previous == nil {
+        expanded.formUnion([nextRoots.bar, nextRoots.other])
+        folderId = nextRoots.bar
+      }
+    }
+    if let roots, folderId.flatMap({ nodes[$0] })?.isFolder != true { folderId = roots.bar }
+    let live = Set(nodes.keys)
+    if selected.contains(where: { !live.contains($0) }) { selected = selected.filter { live.contains($0) } }
+  }
+
+  private func observeBookmarks() {
+    bookmarkObserver?.cancel()
+    guard let catalog else { return }
+    let profile = engineProfile
+    apply(snapshot: catalog.bookmarks(engineProfile: profile))
+    bookmarkObserver = Task { [weak self] in
+      for await snapshot in catalog.observeBookmarks(engineProfile: profile) {
+        guard !Task.isCancelled, self?.engineProfile == profile else { return }
+        self?.apply(snapshot: snapshot)
+      }
+    }
   }
 
   public func apply(json: String) {
@@ -254,20 +294,17 @@ public final class BookmarksPageModel {
     let next = PageTheme(dark: state.dark, tokens: state.theme, panelShadowOpacity: state.panelShadowOpacity)
     if theme != next { theme = next }
     profileId = state.profileId
-    if previous?.nodes != state.nodes { nodes = Dictionary(state.nodes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
+    if bookmarkIcons != state.bookmarkIcons {
+      bookmarkIcons = state.bookmarkIcons
+      if previous?.engineProfile == state.engineProfile, let catalog { apply(snapshot: catalog.bookmarks(engineProfile: engineProfile)) }
+    }
+    if previous?.engineProfile != state.engineProfile {
+      engineProfile = state.engineProfile
+      observeBookmarks()
+    }
     if previous?.groupable != state.groupable { groupable = Set(state.groupable) }
     if previous?.arcRestorable != state.arcRestorable { arcRestorable = Set(state.arcRestorable) }
     if undoCount != state.undoCount { undoCount = state.undoCount }
-    if roots != state.roots {
-      roots = state.roots
-      if let roots = state.roots, previous?.roots == nil {
-        expanded.formUnion([roots.bar, roots.other])
-        folderId = roots.bar
-      }
-    }
-    if let roots, folderId.flatMap({ nodes[$0] })?.isFolder != true { folderId = roots.bar }
-    let live = Set(nodes.keys)
-    if selected.contains(where: { !live.contains($0) }) { selected = selected.filter { live.contains($0) } }
   }
 }
 

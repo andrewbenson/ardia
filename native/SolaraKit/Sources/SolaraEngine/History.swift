@@ -75,6 +75,9 @@ public protocol EngineClient: AnyObject {
   func observeHistory(_ handler: @escaping @MainActor @Sendable (HistoryChange) -> Void)
   func watchHistory(engineProfile: String) async throws
   func queryHistory(engineProfile: String, maxUrls: Int, maxVisits: Int) async throws -> [EngineHistoryRow]
+  func observeBookmarks(_ handler: @escaping @MainActor @Sendable (String) -> Void)
+  func watchBookmarks(engineProfile: String) async throws
+  func readBookmarks(engineProfile: String) async throws -> EngineBookmarkTree
 }
 
 @MainActor
@@ -196,8 +199,11 @@ final class HistoryLibrary {
 @Observable
 public final class LibraryCatalog {
   public private(set) var histories: [String: HistorySnapshot] = [:]
+  public private(set) var bookmarkSnapshots: [String: BookmarkSnapshot] = [:]
   @ObservationIgnored private let client: any EngineClient
   @ObservationIgnored private var libraries: [String: HistoryLibrary] = [:]
+  @ObservationIgnored private var bookmarkLibraries: [String: BookmarkLibrary] = [:]
+  @ObservationIgnored private var bookmarkObservers: [String: [UUID: AsyncStream<BookmarkSnapshot>.Continuation]] = [:]
   @ObservationIgnored private var pending: [HistoryChange] = []
   @ObservationIgnored private var flushScheduled = false
   @ObservationIgnored private var observing = false
@@ -206,6 +212,19 @@ public final class LibraryCatalog {
   public init(client: any EngineClient) { self.client = client }
 
   public func history(engineProfile: String) -> HistorySnapshot { histories[engineProfile] ?? HistorySnapshot() }
+
+  public func bookmarks(engineProfile: String) -> BookmarkSnapshot { bookmarkSnapshots[engineProfile] ?? BookmarkSnapshot() }
+
+  public func observeBookmarks(engineProfile: String) -> AsyncStream<BookmarkSnapshot> {
+    let id = UUID()
+    let (stream, continuation) = AsyncStream<BookmarkSnapshot>.makeStream(bufferingPolicy: .bufferingNewest(1))
+    bookmarkObservers[engineProfile, default: [:]][id] = continuation
+    continuation.yield(bookmarks(engineProfile: engineProfile))
+    continuation.onTermination = { [weak self] _ in
+      Task { @MainActor in self?.bookmarkObservers[engineProfile]?[id] = nil }
+    }
+    return stream
+  }
 
   public func observe(engineProfile: String) -> AsyncStream<HistorySnapshot> {
     let id = UUID()
@@ -222,6 +241,7 @@ public final class LibraryCatalog {
     if !observing {
       observing = true
       client.observeHistory { [weak self] change in self?.receive(change) }
+      client.observeBookmarks { [weak self] profile in self?.bookmarkChanged(engineProfile: profile) }
     }
     for profile in Set(engineProfiles).sorted() where !profile.hasPrefix("incognito:") {
       if libraries[profile] == nil {
@@ -233,7 +253,25 @@ public final class LibraryCatalog {
         }
       }
       if libraries[profile]?.snapshot.ready != true { await libraries[profile]?.reload() }
+      if bookmarkLibraries[profile] == nil {
+        bookmarkLibraries[profile] = BookmarkLibrary(engineProfile: profile, client: client) { [weak self] snapshot in
+          self?.bookmarkSnapshots[profile] = snapshot
+          if let continuations = self?.bookmarkObservers[profile]?.values {
+            for continuation in continuations { continuation.yield(snapshot) }
+          }
+        }
+      }
+      if bookmarkLibraries[profile]?.snapshot.ready != true { await bookmarkLibraries[profile]?.reload() }
     }
+  }
+
+  public func reloadBookmarks(engineProfile: String) async {
+    await bookmarkLibraries[engineProfile]?.reload()
+  }
+
+  private func bookmarkChanged(engineProfile: String) {
+    guard let library = bookmarkLibraries[engineProfile] else { return }
+    Task { await library.reload() }
   }
 
   public func reload(engineProfile: String) async {

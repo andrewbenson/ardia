@@ -47,6 +47,27 @@ final class ArdiaHistoryClient: EngineClient {
     }
   }
 
+  func observeBookmarks(_ handler: @escaping @MainActor @Sendable (String) -> Void) {
+    ArdiaCoreEngineBridge.observe("bookmarks.changed") { payload in
+      nonisolated(unsafe) let payload = payload
+      let deliver: @MainActor @Sendable () -> Void = {
+        MainActor.assumeIsolated {
+          if let profile = payload["profile"] as? String { handler(profile) }
+        }
+      }
+      if Thread.isMainThread { MainActor.assumeIsolated { deliver() } } else { DispatchQueue.main.async(execute: deliver) }
+    }
+  }
+
+  func watchBookmarks(engineProfile: String) async throws {
+    _ = try await call("ac_bookmarks_watch", profile: engineProfile)
+  }
+
+  func readBookmarks(engineProfile: String) async throws -> EngineBookmarkTree {
+    let data = try await call("ac_bookmarks_tree", profile: engineProfile)
+    return try JSONDecoder().decode(EngineBookmarkTree.self, from: data)
+  }
+
   func watchHistory(engineProfile: String) async throws {
     _ = try await call("ac_history_watch", profile: engineProfile)
   }
@@ -87,7 +108,18 @@ enum NativeHistoryCatalog {
 
   static func start(engineProfiles: [String]) async {
     NewTabSources.shared.useHistoryCatalog(catalog)
+    NewTabSources.shared.useBookmarkCatalog(catalog)
     await catalog.start(engineProfiles: engineProfiles)
+  }
+
+  static func bookmarkWriteComplete(engineProfile: String) async {
+    await start(engineProfiles: [engineProfile])
+    await catalog.reloadBookmarks(engineProfile: engineProfile)
+  }
+
+  static func bookmarksSnapshot(engineProfile: String) -> [String: Any] {
+    let bookmarks = catalog.bookmarks(engineProfile: engineProfile)
+    return ["count": bookmarks.urlCount, "ready": bookmarks.ready, "revision": bookmarks.revision]
   }
 
   static func snapshot(engineProfile: String) -> [String: Any] {

@@ -73,7 +73,7 @@ final class NativePageView: ExpoView {
   private var host: NSView?
   private let downloads = DownloadsPageModel()
   private let history = HistoryPageModel(catalog: NativeHistoryCatalog.catalog)
-  private let bookmarks = BookmarksPageModel()
+  private let bookmarks = BookmarksPageModel(catalog: NativeHistoryCatalog.catalog)
   private let bookmarkForm = BookmarkFormModel()
   private let createProfile = CreateProfileFormModel()
   private let liveCard = LiveCardModel()

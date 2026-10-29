@@ -345,6 +345,16 @@ struct NewTabThemeTests {
 final class NewTabHistoryClient: EngineClient {
   var rows: [String: [EngineHistoryRow]] = [:]
   var handler: (@MainActor @Sendable (HistoryChange) -> Void)?
+  var bookmarkTrees: [String: EngineBookmarkTree] = [:]
+  var bookmarkHandler: (@MainActor @Sendable (String) -> Void)?
+
+  func observeBookmarks(_ handler: @escaping @MainActor @Sendable (String) -> Void) { bookmarkHandler = handler }
+  func watchBookmarks(engineProfile: String) async throws {}
+  func readBookmarks(engineProfile: String) async throws -> EngineBookmarkTree {
+    guard let tree = bookmarkTrees[engineProfile] else { throw BookmarkReadUnavailable.unsupported }
+    return tree
+  }
+  func emitBookmark(_ profile: String) { bookmarkHandler?(profile) }
 
   func observeHistory(_ handler: @escaping @MainActor @Sendable (HistoryChange) -> Void) { self.handler = handler }
   func watchHistory(engineProfile: String) async throws {}
@@ -376,6 +386,38 @@ struct NewTabCatalogTests {
     #expect(sources.history("work").first?.favicon == nil)
     #expect(sources.knownHosts("work").contains("shared.example"))
     #expect(sources.index("work").suggest("shared", tabs: []).items.contains { if case .page(let url, _, _, _, _, _) = $0 { return url == "https://shared.example/" }; return false })
+  }
+
+  @Test func bookmarkRowsFollowCatalogAndOriginalProfileMapping() async throws {
+    let client = NewTabHistoryClient()
+    func tree(_ title: String) -> EngineBookmarkTree {
+      let link = EngineBookmarkNode(id: "a", kind: "u", title: title, url: "https://a.example/")
+      return EngineBookmarkTree(bar: EngineBookmarkNode(id: "bar", kind: "f", title: "Bar", children: [link]),
+        other: EngineBookmarkNode(id: "other", kind: "f", title: "Other", children: []))
+    }
+    client.bookmarkTrees["shared"] = tree("First")
+    let catalog = LibraryCatalog(client: client)
+    let sources = NewTabSources()
+    sources.useBookmarkCatalog(catalog)
+    sources.setBookmarkIcons(["https://a.example/": "data:image/png;base64,a"], engineProfile: "shared", profileId: "private")
+    sources.setEngineProfile("incognito:w@shared", bookmarkEngineProfile: "shared", profileId: "private")
+    sources.setEngineProfile("shared", profileId: "regular")
+    #expect(sources.bookmarks("private").isEmpty)
+    await catalog.start(engineProfiles: ["shared"])
+    for _ in 0..<100 where sources.bookmarks("private").isEmpty { try await Task.sleep(for: .milliseconds(1)) }
+    #expect(sources.bookmarks("private").map(\.title) == ["First"])
+    #expect(sources.bookmarks("regular").map(\.url) == ["https://a.example/"])
+    #expect(sources.bookmarks("private").first?.favicon == "data:image/png;base64,a")
+    client.bookmarkTrees["shared"] = tree("Updated")
+    client.emitBookmark("shared")
+    for _ in 0..<100 where sources.bookmarks("private").first?.title != "Updated" { try await Task.sleep(for: .milliseconds(1)) }
+    #expect(sources.bookmarks("regular").first?.title == "Updated")
+    client.bookmarkTrees["other"] = tree("Other")
+    sources.setBookmarkIcons(["https://a.example/": "data:image/png;base64,b"], engineProfile: "other", profileId: "private")
+    sources.setEngineProfile("incognito:w@other", bookmarkEngineProfile: "other", profileId: "private")
+    await catalog.start(engineProfiles: ["other"])
+    for _ in 0..<100 where sources.bookmarks("private").first?.title != "Other" { try await Task.sleep(for: .milliseconds(1)) }
+    #expect(sources.bookmarks("private").first?.favicon == "data:image/png;base64,b")
   }
 
   @Test func deletionUpdatesEverySharedViewAndChangingMappingDropsOldRows() async throws {

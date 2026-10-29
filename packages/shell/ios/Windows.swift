@@ -941,6 +941,10 @@ public enum FocusMoves {
   }
 }
 
+@MainActor public protocol FocusHandoffDestination: AnyObject {
+  var focusDestination: NSView { get }
+}
+
 final class FocusHandoff {
   static let shared = FocusHandoff()
   static let outgoingFocus = Notification.Name("ArdiaOutgoingFocus")
@@ -1228,8 +1232,8 @@ final class FocusHandoff {
   }
 
   private func ready(_ gate: Gate) -> (Generation, NSView)? {
-    guard let window = gate.window, let newest = gate.generations.last, newest.claimed, let destination = newest.destination,
-      let responder = window.firstResponder as? NSView, responder === destination || responder.isDescendant(of: destination)
+    guard let window = gate.window, let newest = gate.generations.last, newest.claimed, let claimed = newest.destination,
+      let responder = window.firstResponder as? NSView, Self.holds(responder, claimed)
     else { return nil }
     return (newest, responder)
   }
@@ -1258,12 +1262,17 @@ final class FocusHandoff {
     gates.values.first { $0.generations.contains { $0.id == id } }
   }
 
+  private static func holds(_ responder: NSView, _ claimed: NSView) -> Bool {
+    let destination = MainActor.assumeIsolated { (claimed as? FocusHandoffDestination)?.focusDestination } ?? claimed
+    return responder === destination || responder.isDescendant(of: destination)
+  }
+
   private func replay(_ held: [Held], into destination: NSView, in window: NSWindow) {
     guard !held.isEmpty else { return }
     note("replay \(held.count) into \(type(of: destination))")
     for entry in held { if case .key(let down, _) = entry.input { noteTyped(down, in: window) } }
     for (index, entry) in held.enumerated() {
-      guard let responder = window.firstResponder as? NSView, responder === destination || responder.isDescendant(of: destination) else {
+      guard let responder = window.firstResponder as? NSView, Self.holds(responder, destination) else {
         return beep(Array(held[index...]))
       }
       switch entry.input {

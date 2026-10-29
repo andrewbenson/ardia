@@ -523,6 +523,19 @@ for (const busy of [0, 120]) {
 }
 {
   await resetToPageField("", [0, 0]);
+  const made = await ac(`return ac.store.getState().createWindow({ url: ${JSON.stringify(`${pages}/?t3`)} });`);
+  let bar = null;
+  if (made) {
+    await ac(`return globalThis.expo.modules.ArdiaApp.devPostKeys(${JSON.stringify(made)}, ${JSON.stringify([keyPress("l", 37), keyPress("q", 12, 300, []), keyPress("w", 13, 15, [])])});`);
+    await sleep(1200);
+    bar = await ac(`const b = ac.omnibox.get(${JSON.stringify(`${made}:panel`)}) ?? ac.omnibox.get(${JSON.stringify(`${made}:sidebar`)}); return b ? String(b.state().value ?? "") : null;`);
+    await ac(`ac.store.getState().closeWindow(${JSON.stringify(made)}); return 1;`);
+    await sleep(800);
+  }
+  check("a new window with a page, ⌘L at once, then typing: the letters land in its bar", bar === "qw", `window ${made}, bar ${JSON.stringify(bar)}`);
+}
+{
+  await resetToPageField("", [0, 0]);
   await clipboard.set("ordered");
   await postKeys([keyPress("l", 37), keyPress("v", 9), keyPress("q", 12, 0, [])]);
   await sleep(1200);

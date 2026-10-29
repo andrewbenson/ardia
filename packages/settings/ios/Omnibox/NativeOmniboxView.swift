@@ -1,11 +1,12 @@
 import AppKit
+import ArdiaShell
 import ExpoModulesCore
 import SolaraModel
 import SolaraOmnibox
 import SolaraStore
 import SolaraUI
 
-final class NativeOmniboxView: ExpoView {
+final class NativeOmniboxView: ExpoView, FocusHandoffDestination {
   static let events = [
     "onOpen", "onSwitch", "onAction", "onExtension", "onRemoveHistory", "onChosen", "onOpenChip", "onDictate", "onContextMenu", "onJourney",
     "onLatency", "onBarLayout", "onDriverState", "onDone", "onCancel", "onSiteControls",
@@ -75,6 +76,8 @@ final class NativeOmniboxView: ExpoView {
       NotificationCenter.default.addObserver(self, selector: #selector(commandWillDispatch(_:)), name: Notification.Name("SolaraCommandWillDispatch"), object: nil)
     }
   }
+
+  var focusDestination: NSView { host ?? self }
 
   private func placeHost() {
     guard let host else { return }

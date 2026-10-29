@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { capBanner, liveMaxHold, newSuppressed, orphanMaxHold, overHeld, parseFront, prune, readState, stillNeeded, violation } from "./ui-guard.mjs";
+import { capBanner, joinWouldExtend, liveMaxHold, newSuppressed, orphanMaxHold, overHeld, waitingOthers, parseFront, prune, readState, stillNeeded, violation } from "./ui-guard.mjs";
 
 const lsappinfo = (name, pid, executable) => `"${name}" ASN:0x0-0xb2db2d: (in front) \n    bundleID="x"\n    bundle path="${executable.replace(/\/Contents\/MacOS\/.*$/, "")}"\n    executable path="${executable}"\n    pid = ${pid} token=[sess=1 pid=${pid}] type="Foreground" flavor=3\n`;
 const build = "/Users/me/Developer/Personal/ardia/apps/browser/build-x/Build/Products/Debug/Solara.app/Contents/MacOS/Solara";
@@ -125,4 +125,35 @@ test("an entry from older code (no launch time, no launcher) counts from when th
 test("an unwatched instance is never over-held", () => {
   const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x", at: 0, who: "x", by: 77 }, { unwatch: 500 }]);
   assert.deepEqual(overHeld(s, now, new Map(), dead), []);
+});
+
+test("a join yields only to other agents' live node waiters", () => {
+  const node = "/Users/me/.nvm/versions/node/v24/bin/node";
+  const waiters = [{ pid: 1, key: "test-health" }, { pid: 2, key: "settings-ui" }, { pid: 3, key: "port-core" }, { pid: 4, key: null }, { pid: 5, key: "gone" }, { pid: 6, key: "reused" }];
+  const isAlive = (pid) => pid !== 5;
+  const commandOf = (pid) => (pid === 6 ? "/bin/zsh" : node);
+  assert.deepEqual(waitingOthers(waiters, "test-health", 3, isAlive, commandOf).map((w) => w.pid), [2, 4]);
+  assert.deepEqual(waitingOthers(waiters, "test-health", 99, isAlive, commandOf).map((w) => w.pid), [2, 3, 4]);
+  assert.deepEqual(waitingOthers([{ pid: 1, key: "test-health" }], "test-health", 99, isAlive, commandOf), []);
+  assert.deepEqual(waitingOthers([], "test-health", 99, isAlive, commandOf), []);
+});
+
+test("a join yields only when the hold has no live work left besides the joiner", () => {
+  const isAlive = (pid) => [10, 500, 42].includes(pid);
+  assert.equal(joinWouldExtend(state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x" }]), 42, isAlive), false);
+  assert.equal(joinWouldExtend(state([{ owner: 11 }, { binary: build }, { watch: 500, data: "/tmp/ac-x" }]), 42, isAlive), false);
+  assert.equal(joinWouldExtend(state([{ owner: 10 }, { binary: build }]), 42, isAlive), false);
+  assert.equal(joinWouldExtend(state([{ owner: 11 }, { binary: build }, { watch: 501, data: "/tmp/ac-x" }]), 42, isAlive), true);
+  assert.equal(joinWouldExtend(state([{ owner: 42 }, { binary: build }, { watch: 501 }]), 42, isAlive), true);
+});
+
+test("a second ac launch beside the agent's own live instance still joins while another agent waits", () => {
+  const node = "/Users/me/.nvm/versions/node/v24/bin/node";
+  const isAlive = (pid) => [500, 7].includes(pid);
+  const waiting = waitingOthers([{ pid: 7, key: "settings-ui" }], "port-core", 42, isAlive, () => node);
+  assert.equal(waiting.length, 1);
+  const ownHold = state([{ owner: 11 }, { binary: build }, { watch: 500, data: "/tmp/ac-a" }]);
+  assert.equal(joinWouldExtend(ownHold, 42, isAlive), false);
+  const finished = state([{ owner: 11 }, { binary: build }, { watch: 501, data: "/tmp/ac-a" }]);
+  assert.equal(joinWouldExtend(finished, 42, isAlive), true);
 });

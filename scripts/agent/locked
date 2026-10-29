@@ -10,7 +10,12 @@
 #   - uitest: one instance-launching UI test at a time across all agents. scripts/lib/instance.mjs takes it by
 #     itself on its first launch and holds it until that test and every instance it launched have exited (so after
 #     `ac launch`, until that instance quits); a node process it starts inherits the hold (AC_UITEST_STATE), and a
-#     later launch with the same key joins it: AC_LOCKED_AS (`ac launch --as`), else the app's build-<name> folder.
+#     later launch with the same key joins it: AC_LOCKED_AS (`ac launch --as`), else the app's build-<name> folder,
+#     unless another agent is waiting for uitest (a file per waiter in $TMPDIR/ac-uitest-waiters): then the launch
+#     waits its turn. That only happens when the hold has no live work left (the previous test and its instances
+#     have exited); a join beside a running instance always goes ahead, since the lock is held for it anyway. A
+#     process the test started (AC_UITEST_STATE inherited) always joins, so a runner that holds the gate itself
+#     never yields: split it into separate runs.
 #     A launch with neither (a copy outside build-*, dist/) has no key and waits like any other agent's.
 #     AC_UITEST_WAIT (default 480 s) bounds the wait. The gate quits an instance, naming who launched it, once it has
 #     held the lock 10 minutes after its launcher exited (an `ac launch` left open) or 60 minutes while its launcher

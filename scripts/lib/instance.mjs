@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFront, suppressedLog } from "./ui-guard.mjs";
+import { joinWouldExtend, parseFront, prune, readState, suppressedLog, waitingOthers } from "./ui-guard.mjs";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const here = fileURLToPath(import.meta.url);
@@ -125,10 +125,35 @@ function liveGate(state) {
   const holder = readFileSync(state, "utf8").split("\n").map((l) => { try { return JSON.parse(l).lockHolder; } catch { return null; } }).find(Boolean);
   return !!holder && isAlive(holder) && /\/scripts\/agent\/locked uitest /.test(processInfo(holder)?.command ?? "");
 }
+const uiGateWaiters = join(tmpdir(), "ac-uitest-waiters");
+const ownWaiter = join(uiGateWaiters, `${process.pid}.json`);
+function readWaiters() {
+  let names = [];
+  try { names = readdirSync(uiGateWaiters).filter((n) => /^\d+\.json$/.test(n)); } catch {}
+  const waiters = [];
+  for (const name of names) {
+    const file = join(uiGateWaiters, name);
+    if (!isAlive(Number(name.slice(0, -5)))) { rmSync(file, { force: true }); continue; }
+    try { waiters.push(JSON.parse(readFileSync(file, "utf8"))); } catch {}
+  }
+  return waiters;
+}
+function gateIdle(state) {
+  try { return joinWouldExtend(prune(readState(readFileSync(state, "utf8"))), process.pid, isAlive); } catch { return false; }
+}
+const othersWaiting = (key) => waitingOthers(readWaiters(), key, process.pid, isAlive, (pid) => processInfo(pid)?.command.split(" ")[0] ?? "");
 export async function holdUiGate(key = null) {
   if (uiGate) return uiGate;
   let current = null;
   try { current = key ? readFileSync(uiGateCurrent(key), "utf8").trim() : null; } catch {}
+  if (current && current !== process.env.AC_UITEST_STATE && liveGate(current) && gateIdle(current)) {
+    const others = othersWaiting(key);
+    if (others.length) {
+      process.stderr.write(`not joining ${key}'s uitest hold: ${others.map((w) => w.key ?? `pid ${w.pid}`).join(", ")} ` +
+        `${others.length === 1 ? "is" : "are"} waiting for it; waiting in turn\n`);
+      current = null;
+    }
+  }
   for (const joined of [process.env.AC_UITEST_STATE, current])
     if (liveGate(joined)) {
       gateNote(joined, { owner: process.pid });
@@ -139,6 +164,10 @@ export async function holdUiGate(key = null) {
     }
   const state = join(tmpdir(), `ac-uitest-${process.pid}-${Date.now()}.state`);
   writeFileSync(state, `${JSON.stringify({ owner: process.pid })}\n`);
+  try {
+    mkdirSync(uiGateWaiters, { recursive: true });
+    writeFileSync(ownWaiter, JSON.stringify({ pid: process.pid, key, since: Date.now() }));
+  } catch {}
   const wait = Number(process.env.AC_UITEST_WAIT ?? 480);
   const child = spawn(lockedTool, ["uitest", "--wait", String(wait), "--", process.execPath, uiGuardScript, state],
     { detached: true, stdio: ["ignore", "pipe", "pipe"] });
@@ -160,6 +189,7 @@ export async function holdUiGate(key = null) {
     throw e;
   } finally {
     clearTimeout(notice);
+    rmSync(ownWaiter, { force: true });
   }
   child.removeAllListeners("exit");
   child.stderr.removeAllListeners("data");
@@ -200,6 +230,7 @@ export function reportSuppressedSecureInput(data, when) {
   return true;
 }
 process.on("exit", (code) => {
+  try { rmSync(ownWaiter, { force: true }); } catch {}
   for (const [pid, data] of launched) if (isAlive(pid)) reportSuppressedSecureInput(data, "as the test run exits");
   if (code !== 0) return;
   for (const data of quitData) removeTemporaryData(data);

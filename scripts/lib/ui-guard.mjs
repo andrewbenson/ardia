@@ -58,6 +58,13 @@ export function overHeld(state, now, firstSeen = new Map(), isAlive = alive) {
   return over;
 }
 
+export function waitingOthers(waiters, key, self, isAlive = alive, commandOf = executableOf) {
+  return waiters.filter((w) => w.pid !== self && (!key || w.key !== key) && isAlive(w.pid) && /(^|\/)node$/.test(commandOf(w.pid)));
+}
+
+export const joinWouldExtend = (state, self, isAlive = alive) =>
+  ![...state.owners].some((pid) => pid !== self && isAlive(pid)) && ![...state.watched.keys()].some(isAlive);
+
 export const stillNeeded = (state, isAlive = alive) => [...state.owners, ...state.watched.keys()].some(isAlive);
 export function prune(state, isAlive = alive, programOf = executableOf) {
   const runsOther = (pid, ours) => {

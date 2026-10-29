@@ -13,6 +13,7 @@ type PooledPage = {
   handlers: PageEventHandlers;
   register: ReturnType<typeof webviewRef>;
   seq: number | undefined;
+  windowId: string | undefined;
   followed: number | undefined | null;
   loadedSeq: number | undefined;
 };
@@ -56,7 +57,7 @@ function pageCreated(pool: TabPool, tabId: string, engine: PageEngine, seq: numb
   const register = webviewRef(tabId);
   register(pooledWebViewHandle((method, args) => pool.pageCall(tabId, method, args)));
   notePooledPage(tabId, true);
-  pooled.set(tabId, { session, handlers: pageEventHandlers(session), register, seq: navigation?.seq, followed: null, loadedSeq });
+  pooled.set(tabId, { session, handlers: pageEventHandlers(session), register, seq: navigation?.seq, windowId: s.tabs[tabId]?.windowId, followed: null, loadedSeq });
   persistEngine(tabId, engine);
   followLater(tabId);
 }
@@ -75,14 +76,18 @@ function followStore(s: BrowserState, prev: BrowserState) {
   if (s.tabs === prev.tabs && s.peeks === prev.peeks) return;
   for (const [tabId, page] of pooled) {
     const tab = s.tabs[tabId];
+    const sameProfile = !tab || page.session.profileId === tab.profileId;
     if (tab) {
       page.session.profileId = tab.profileId;
       page.session.adoptId = tab.adoptId;
     }
     page.session.peekOf = peekSource(s, tabId);
+    const moved = !!tab && tab.windowId !== page.windowId;
+    if (tab) page.windowId = tab.windowId;
     const seq = tab?.navigation?.seq;
     if (seq === page.seq) continue;
     page.seq = seq;
+    if (tab && moved && sameProfile) page.session.arrived = true;
     followLater(tabId);
   }
 }
@@ -103,6 +108,14 @@ export function startPooledPages(pool: TabPool) {
     else pageEvent(tabId, name as ViewEventName, payload);
   });
   const stopStore = useBrowser.subscribe(followStore);
+  void pool.livePages?.().then((live) => {
+    for (const { tabId, engine, ready, navigation } of live) {
+      if (pooled.has(tabId)) continue;
+      pageCreated(pool, tabId, engine as PageEngine, -1);
+      if (ready) pageEvent(tabId, "onReady", ready);
+      if (navigation) pageEvent(tabId, "onNavigationChange", navigation);
+    }
+  });
   return () => {
     events.remove();
     stopStore();

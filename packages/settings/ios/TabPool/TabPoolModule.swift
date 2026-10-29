@@ -46,6 +46,11 @@ public class TabPoolModule: Module {
       MainActor.assumeIsolated { TabPoolHost.shared.setPageProps(tabId, changed) }
     }.runOnQueue(.main)
 
+    AsyncFunction("livePages") { (promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated { reply.resolve(TabPoolHost.shared.livePages()) }
+    }.runOnQueue(.main)
+
     AsyncFunction("devPageIds") { () -> [String] in
       MainActor.assumeIsolated { TabPoolHost.shared.devPageIds() }
     }.runOnQueue(.main)

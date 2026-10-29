@@ -5095,8 +5095,13 @@ try {
     await until("the page", async () => (await state()).tabs.find((t) => t.id === id && t.title === "Page B" && !t.loading), 15000);
     await until("its visit", async () => (await visits()).length || null);
     await sleep(2000);
+    const pooled = await evalApp(`return !!globalThis.expo.modules.SolaraTabPool?.available()`);
+    const page = await pageFor(id, path);
+    const expected = pooled ? `${base}${path}-pushed` : `${base}${path}`;
     await evalApp(`setTimeout(() => { try { globalThis.nativeModuleProxy.DevSettings.reload(); } catch {} }, 50); return true`);
-    await sleep(1500);
+    await sleep(300);
+    if (pooled) await cdp(page, "Runtime.evaluate", { expression: `history.pushState(null, "", ${JSON.stringify(`${path}-pushed`)})` });
+    await sleep(1200);
     await until("the reloaded app", async () => {
       try {
         return await evalApp(`const s = ac.store.getState(); return Object.keys(s.windows).length > 0 && !!s.historyReady.default && !!ac.webviews.get(${JSON.stringify(id)})`, 3000);
@@ -5107,7 +5112,7 @@ try {
     }, 60000);
     await sleep(2000);
     const out = { loads: served.get(path), visits: await visits(), url: (await state()).tabs.find((t) => t.id === id)?.url };
-    if (out.loads !== 1 || JSON.stringify(out.visits) !== "[1]" || out.url !== `${base}${path}`) throw new Error(`after the reload: ${JSON.stringify(out)}`);
+    if (out.loads !== 1 || JSON.stringify(out.visits) !== "[1]" || out.url !== expected) throw new Error(`after the reload: ${JSON.stringify(out)}`);
     return out;
   });
 

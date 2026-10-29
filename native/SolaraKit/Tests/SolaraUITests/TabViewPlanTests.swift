@@ -55,6 +55,48 @@ struct TabViewPlanTests {
     #expect(ops == [.hide("a", "w2", adopt: true), .visible("a", false)])
   }
 
+  @Test func aTabMovedToAWindowWithoutAShellParksThenDropsAtTheLimit() {
+    var park = TabViewPark()
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    let moving = [want("a", "w2")]
+    let parked = park.park(moving, now: start)
+    #expect(parked == [want("a", "w2", .none)])
+    #expect(TabViewPlan.plan(wanted: parked, slots: [.card("w1")], current: ["a": .slot(.card("w1"))], visible: ["a": true])
+      == [.hide("a", "w2", adopt: true), .visible("a", false)])
+    #expect(park.park(moving, now: start.addingTimeInterval(1.9)) == [want("a", "w2", .none)])
+    let expired = park.park(moving, now: start.addingTimeInterval(2))
+    #expect(expired.isEmpty)
+    #expect(TabViewPlan.plan(wanted: expired, slots: [.card("w1")], current: ["a": .hidden("w2")], visible: ["a": false]) == [.drop("a")])
+  }
+
+  @Test func aParkedTabWhoseShellArrivesInTimeAttachesWithoutRecreating() {
+    var park = TabViewPark()
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    _ = park.park([want("a", "w2")], now: start)
+    #expect(park.park([], now: start.addingTimeInterval(1.9)).isEmpty)
+    #expect(park.since.isEmpty)
+    #expect(TabViewPlan.plan(wanted: [want("a", "w2")], slots: [.card("w2")], current: ["a": .hidden("w2")], visible: ["a": false])
+      == [.attach("a", .card("w2"), adopt: false), .visible("a", true)])
+  }
+
+  @Test func aTabParkedAgainLaterGetsAFreshLimit() {
+    var park = TabViewPark()
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    _ = park.park([want("a", "w2")], now: start)
+    _ = park.park([], now: start.addingTimeInterval(1))
+    #expect(park.park([want("a", "w3")], now: start.addingTimeInterval(2.5)) == [want("a", "w3", .none)])
+  }
+
+  @Test func theNextRecheckIsTheEarliestUnexpiredLimit() {
+    var park = TabViewPark()
+    let start = Date(timeIntervalSinceReferenceDate: 0)
+    _ = park.park([want("a", "w2")], now: start)
+    _ = park.park([want("a", "w2"), want("b", "w2")], now: start.addingTimeInterval(1.5))
+    #expect(park.nextExpiry(after: start.addingTimeInterval(1.5)) == start.addingTimeInterval(2))
+    #expect(park.nextExpiry(after: start.addingTimeInterval(2)) == start.addingTimeInterval(3.5))
+    #expect(park.nextExpiry(after: start.addingTimeInterval(3.5)) == nil)
+  }
+
   @Test func oneSlotHoldsOneTab() {
     let ops = TabViewPlan.plan(wanted: [want("a"), want("b")], slots: [.card("w1")], current: [:], visible: [:])
     #expect(ops.filter { if case .attach = $0 { return true } else { return false } } == [.attach("a", .card("w1"), adopt: false)])

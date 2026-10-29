@@ -1,3 +1,4 @@
+import Foundation
 import SolaraModel
 
 extension TabViewWanted {
@@ -19,5 +20,23 @@ extension TabViewWanted {
       }
     }
     return out.keys.sorted().map { out[$0]! }
+  }
+}
+
+public struct TabViewPark: Sendable {
+  public static let limit: TimeInterval = 2
+  public private(set) var since: [String: Date] = [:]
+
+  public init() {}
+
+  public mutating func park(_ moving: [TabViewWanted], now: Date, limit: TimeInterval = Self.limit) -> [TabViewWanted] {
+    since = Dictionary(moving.map { ($0.tabId, since[$0.tabId] ?? now) }, uniquingKeysWith: { first, _ in first })
+    return moving
+      .filter { now.timeIntervalSince(since[$0.tabId] ?? now) < limit }
+      .map { TabViewWanted(tabId: $0.tabId, windowId: $0.windowId, shown: .none) }
+  }
+
+  public func nextExpiry(after now: Date, limit: TimeInterval = Self.limit) -> Date? {
+    since.values.map { $0.addingTimeInterval(limit) }.filter { $0 > now }.min()
   }
 }

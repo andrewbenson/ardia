@@ -29,6 +29,9 @@ final class TabPoolHost {
   private var shellWindows: Set<String> = []
   private var wanted: [TabViewWanted] = []
   private var closing: [String: ClosingWindow] = [:]
+  private var park = TabViewPark()
+  private var making: PoolPageToken?
+  private var parkCheckDue: Date?
   private let shellNSWindows = NSMapTable<NSString, NSWindow>.strongToWeakObjects()
 
   func start() {
@@ -100,11 +103,31 @@ final class TabPoolHost {
     }
     let fresh = TabViewWanted.from(state, windows: shellWindows, isInternal: Self.isInternal, frozen: { _ in false })
     let freshIds = Set(fresh.map(\.tabId))
-    wanted = fresh + closing.sorted { $0.key < $1.key }.flatMap { $0.value.tabs.filter { !freshIds.contains($0.tabId) } }
+    let parked = parkAwaitingShell(state, freshIds: freshIds)
+    wanted = fresh + parked + closing.sorted { $0.key < $1.key }.flatMap { $0.value.tabs.filter { !freshIds.contains($0.tabId) } }
     warm = Set(fresh.filter(\.warm).map(\.tabId))
     for page in pages.values { page.setWarm(warm.contains(page.tabId), neighbour: Self.neighbour(state, page.tabId)) }
     pool.update(wanted)
     followCardPages()
+  }
+
+  private func parkAwaitingShell(_ state: BrowserState, freshIds: Set<String>) -> [TabViewWanted] {
+    let awaiting = Set(state.windows.keys).subtracting(shellWindows).filter { NativeWindowShell.enabled && NativeWindowShell.isBrowserWindow($0) }
+    let moving = TabViewWanted.from(state, windows: awaiting, isInternal: Self.isInternal, frozen: { _ in false })
+      .filter { pages[$0.tabId] != nil && !freshIds.contains($0.tabId) }
+    let now = Date()
+    let parked = park.park(moving, now: now)
+    if let due = park.nextExpiry(after: now), parkCheckDue.map({ due < $0 }) ?? true {
+      parkCheckDue = due
+      DispatchQueue.main.asyncAfter(deadline: .now() + due.timeIntervalSince(now) + 0.05) { [weak self] in
+        MainActor.assumeIsolated {
+          guard let self else { return }
+          if self.parkCheckDue == due { self.parkCheckDue = nil }
+          self.refresh()
+        }
+      }
+    }
+    return parked
   }
 
   private func holdUntilClosed(_ windowId: String) {
@@ -144,6 +167,13 @@ final class TabPoolHost {
 
   func devPageIds() -> [String] { pages.keys.sorted() }
 
+  func livePages() -> [[String: Any]] {
+    pages.keys.sorted().compactMap { tabId in
+      guard let entry = pages[tabId] else { return nil }
+      return ["tabId": tabId, "engine": entry.page.spec.engine, "ready": entry.token.ready ?? NSNull(), "navigation": entry.token.navigation ?? NSNull()]
+    }
+  }
+
   func devClosingWindows() -> [String: Int] {
     closing.mapValues { $0.window?.windowNumber ?? -1 }
   }
@@ -181,12 +211,19 @@ final class TabPoolHost {
     let spec = PooledPageSpec(
       engine: store.pageEngine(tabId, in: state), profile: state.engineProfile(tab.profileId), url: url.map(toEngineUrl),
       adoptId: tab.adoptId, temporarySource: peek?.tabId == tabId ? peek?.sourceId : nil)
+    let token = PoolPageToken()
+    making = token
+    defer { if making === token { making = nil } }
     let page = PooledPage(tabId: tabId, spec: spec) { [weak self] name, payload in
-      self?.emit?("onPageEvent", ["tabId": tabId, "name": name, "payload": payload])
-      self?.pageEventObservers.forEach { $0(tabId, name, payload) }
+      guard let self else { return }
+      let current = self.pages[tabId]
+      guard current?.token === token || self.making === token else { return }
+      token.note(name, payload)
+      self.emit?("onPageEvent", ["tabId": tabId, "name": name, "payload": payload])
+      self.pageEventObservers.forEach { $0(tabId, name, payload) }
     }
     if let given = props[tabId] { page.apply(given) }
-    let entry = PoolPage(page: page) { [weak self] in
+    let entry = PoolPage(page: page, token: token) { [weak self] in
       guard let self, self.pages[tabId]?.page === page else { return }
       self.pages[tabId] = nil
       self.onPageGone?(tabId)
@@ -230,16 +267,28 @@ final class ClosingWindow {
 }
 
 @MainActor
+final class PoolPageToken {
+  private(set) var ready: [String: Any]?
+  private(set) var navigation: [String: Any]?
+
+  func note(_ name: String, _ payload: [String: Any]) {
+    if name == "onReady" { ready = payload } else if name == "onNavigationChange" { navigation = payload }
+  }
+}
+
+@MainActor
 final class PoolPage: TabPoolPage {
   let page: PooledPage
+  let token: PoolPageToken
   var tabId: String { page.tabId }
   private var shown = false
   private var warm = false
   private var neighbour = false
   private let onRetire: () -> Void
 
-  init(page: PooledPage, onRetire: @escaping () -> Void) {
+  init(page: PooledPage, token: PoolPageToken, onRetire: @escaping () -> Void) {
     self.page = page
+    self.token = token
     self.onRetire = onRetire
   }
 

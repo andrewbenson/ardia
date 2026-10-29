@@ -2,8 +2,15 @@ import ArdiaShell
 import Foundation
 import SolaraLive
 
+final class RefusingRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
+    nil
+  }
+}
+
 struct NativeLiveHTTP: LiveHTTPClient {
   var session: URLSession = .shared
+  var followsRedirects = true
 
   func send(_ request: LiveHTTPRequest) async throws -> LiveHTTPResponse {
     guard let url = URL(string: request.url) else { throw URLError(.badURL) }
@@ -11,7 +18,7 @@ struct NativeLiveHTTP: LiveHTTPClient {
     task.httpMethod = request.method
     task.httpBody = request.body
     for (name, value) in request.headers { task.setValue(value, forHTTPHeaderField: name) }
-    let (body, response) = try await session.data(for: task)
+    let (body, response) = try await session.data(for: task, delegate: followsRedirects ? nil : RefusingRedirects())
     guard let response = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
     var headers: [String: String] = [:]
     for (name, value) in response.allHeaderFields { headers[String(describing: name)] = String(describing: value) }

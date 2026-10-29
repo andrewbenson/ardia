@@ -92,21 +92,35 @@ final class NativeLiveAuth: LiveAuthPresenter, @unchecked Sendable {
 
   func authorize(url: String, redirectPrefix: String) async throws -> String {
     let requestId = UUID().uuidString
-    return try await withCheckedThrowingContinuation { continuation in
-      lock.lock()
-      pending[requestId] = continuation
-      let event = self.event
-      lock.unlock()
-      guard let event else {
-        resolve(requestId: requestId, redirectURL: nil, error: "Live authorization presenter unavailable")
-        return
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        lock.lock()
+        pending[requestId] = continuation
+        let event = self.event
+        lock.unlock()
+        guard let event else {
+          resolve(requestId: requestId, redirectURL: nil, error: "Live authorization presenter unavailable")
+          return
+        }
+        event(["requestId": requestId, "url": url, "redirectPrefix": redirectPrefix])
+        Task {
+          try? await Task.sleep(nanoseconds: 600_000_000_000)
+          self.abandon(requestId: requestId, error: "Live authorization timed out")
+        }
       }
-      event(["requestId": requestId, "url": url, "redirectPrefix": redirectPrefix])
-      Task {
-        try? await Task.sleep(nanoseconds: 600_000_000_000)
-        resolve(requestId: requestId, redirectURL: nil, error: "Live authorization timed out")
-      }
+    } onCancel: {
+      abandon(requestId: requestId, error: "Live authorization cancelled")
     }
+  }
+
+  private func abandon(requestId: String, error: String) {
+    lock.lock()
+    let waiting = pending[requestId] != nil
+    let event = self.event
+    lock.unlock()
+    guard waiting else { return }
+    resolve(requestId: requestId, redirectURL: nil, error: error)
+    event?(["requestId": requestId, "cancelled": "1"])
   }
 
   func resolve(requestId: String, redirectURL: String?, error: String?) {
@@ -140,7 +154,7 @@ final class NativeLiveEngine: @unchecked Sendable {
     #endif
     let isolated = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] != nil
     engine = LiveEngine(effects: LiveEffects(
-      http: NativeLiveHTTP(), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: NativeLiveCalendar(fixture: fixture, launchedAt: SystemLiveClock().now()),
+      http: NativeLiveHTTP(followsRedirects: !isolated), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: NativeLiveCalendar(fixture: fixture, launchedAt: SystemLiveClock().now()),
       auth: NativeLiveAuth.shared, notifier: NativeLiveNotifier(), documents: NativeLiveDocuments(),
       environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate)))
     let box = self.box
@@ -162,6 +176,7 @@ final class NativeLiveEngine: @unchecked Sendable {
     let wire = try JSONSerialization.data(withJSONObject: ["name": name, "payload": payload], options: .fragmentsAllowed)
     let command = try LiveJSON.decode(LiveCommand.self, from: wire)
     let result = try await engine.perform(command)
+    if let replica = try? await engine.currentReplica() { box.publish(replica) }
     return String(decoding: try LiveJSON.encode(result), as: UTF8.self)
   }
 

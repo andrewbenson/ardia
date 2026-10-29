@@ -2,11 +2,17 @@ import { onLiveAuthRequest, resolveLiveAuth, liveCommand } from "@ardia/settings
 import { useBrowser } from "../store/browser";
 
 let started = false;
+const watching = new Map<string, () => void>();
 
 export function startGoogleAuth() {
   if (started) return;
   started = true;
-  onLiveAuthRequest(({ requestId, url, redirectPrefix }) => {
+  onLiveAuthRequest((request) => {
+    if ("cancelled" in request) {
+      watching.get(request.requestId)?.();
+      return;
+    }
+    const { requestId, url, redirectPrefix } = request;
     const s = useBrowser.getState();
     const windowId = s.ui.focusOrder.find((id) => s.windows[id] && !s.windows[id]!.incognito) ?? s.windowOrder.find((id) => !s.windows[id]!.incognito);
     if (!windowId) {
@@ -14,7 +20,7 @@ export function startGoogleAuth() {
       return;
     }
     const tabId = s.newTab(windowId, { url });
-    const stop = useBrowser.subscribe((state, prev) => {
+    const unsubscribe = useBrowser.subscribe((state, prev) => {
       if (state.tabs === prev.tabs) return;
       const tab = state.tabs[tabId];
       if (!tab) {
@@ -26,6 +32,14 @@ export function startGoogleAuth() {
       stop();
       useBrowser.getState().closeTab(tabId);
       void resolveLiveAuth(requestId, tab.url, null);
+    });
+    const stop = () => {
+      unsubscribe();
+      watching.delete(requestId);
+    };
+    watching.set(requestId, () => {
+      stop();
+      if (useBrowser.getState().tabs[tabId]) useBrowser.getState().closeTab(tabId);
     });
   });
 }

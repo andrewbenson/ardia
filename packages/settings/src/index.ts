@@ -28,7 +28,7 @@ type NativeSettingsModule = {
 
 export type LiveReplica = { revision: number; replicaJSON: string; error?: string };
 export type LiveCommandResult = { revision: number; folderId?: string; deviceFlow?: { id: string; userCode: string; verificationUri: string; expiresAt: number }; boolean?: boolean };
-export type LiveAuthRequest = { requestId: string; url: string; redirectPrefix: string };
+export type LiveAuthRequest = { requestId: string; url: string; redirectPrefix: string } | { requestId: string; cancelled: "1" };
 
 export type LiveShadowSnapshot = {
   folders: { id: string; items: number; hidden: number; completed: number; status: string | null }[];

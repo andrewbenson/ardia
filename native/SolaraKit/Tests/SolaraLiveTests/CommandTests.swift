@@ -231,3 +231,13 @@ import Testing
     #expect(blocked.current == nil)
   }
 }
+
+@Suite struct BlockedDocumentCommandTests {
+  @Test func mutationsAreRefusedWhileLiveJsonCannotBeRead() async throws {
+    let rig = Rig(documents: [LiveState.documentName: "not json"])
+    await #expect(throws: LiveError.self) {
+      _ = try await rig.engine.perform(LiveJSON.decode(LiveCommand.self, from: #"{"name":"createFolder","payload":{"profileId":"p","kind":"documents"}}"#))
+    }
+    #expect(await rig.engine.state.folders.isEmpty)
+  }
+}

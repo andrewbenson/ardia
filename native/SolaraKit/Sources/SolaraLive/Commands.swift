@@ -133,6 +133,15 @@ public enum LiveCommand: Codable, Sendable, Equatable {
     try wire.encode(to: encoder)
   }
 
+  var changesDocument: Bool {
+    switch self {
+    case .refreshFolder, .manualRefresh, .refreshCalendar, .windowFocused, .appResignedActive, .liveTabDeactivated, .connectCalendar,
+      .startGithubDeviceFlow, .cancelGithubDeviceFlow, .offerAlertsForPinnedTab:
+      false
+    default: true
+    }
+  }
+
   struct Wire: Codable {
     var name: String
     var payload: LiveAnyJSON
@@ -221,6 +230,7 @@ private enum Fields {
 
 extension LiveEngine {
   public func perform(_ command: LiveCommand) async throws -> LiveCommandResult {
+    if let loadError, command.changesDocument { throw LiveError(.other, loadError) }
     var folderId: String?
     var deviceFlow: GithubDeviceFlowInfo?
     var boolean: Bool?

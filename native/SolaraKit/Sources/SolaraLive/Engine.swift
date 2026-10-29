@@ -29,7 +29,7 @@ public actor LiveEngine {
   public private(set) var revision: UInt64 = 0
   public internal(set) var state: LiveState
   public private(set) var documentError: String?
-  private let loadError: String?
+  let loadError: String?
   public internal(set) var calendarData = CalendarData()
   public internal(set) var meetingAlert: CalendarEvent?
 

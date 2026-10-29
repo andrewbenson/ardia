@@ -62,6 +62,12 @@ test("replicas apply only increasing revisions, preserve showAll and unchanged f
   assert.equal(documentWrites.includes("live.json"), false);
 });
 
+test("a command's own change is in the store when it resolves, even before its replica event", async () => {
+  current = { revision: 10, replicaJSON: JSON.stringify({ folders: { f: { id: "f", profileId: "p", kind: "pullRequests", name: "Renamed", sources: ["github"] } }, folderOrder: ["f"] }) };
+  await store.updateFolder("f", { name: "Renamed" });
+  assert.equal(store.live().folders.f.name, "Renamed");
+});
+
 test("source tree has no live.json write through a literal or alias", () => {
   const root = fileURLToPath(new URL("../", import.meta.url));
   const visit = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? visit(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]);

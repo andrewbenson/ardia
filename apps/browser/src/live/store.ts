@@ -121,7 +121,13 @@ export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: Li
   documents: { name: "Documents", sources: ["notion"] },
 };
 
-const command = (name: string, payload: Record<string, unknown>) => liveCommand(name, payload);
+const command = async (name: string, payload: Record<string, unknown>) => {
+  const result = await liveCommand(name, payload);
+  if (result.revision > lastRevision) {
+    try { applyLiveReplica(liveInitialReplica()); } catch {}
+  }
+  return result;
+};
 
 export async function createFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): Promise<string> {
   const result = await command("createFolder", { profileId, kind, ...(sources ? { sources } : {}) });

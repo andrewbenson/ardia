@@ -164,14 +164,14 @@ public class SettingsModule: Module {
 
     OnStartObserving {
       let sink = SettingsEventSink(module: self)
+      NativeLiveEngine.shared.setEvent { revision, replicaJSON in
+        DispatchQueue.main.async { sink.module?.sendEvent("onLiveReplica", ["revision": revision, "replicaJSON": replicaJSON]) }
+      }
+      NativeLiveAuth.shared.setEvent { value in
+        DispatchQueue.main.async { sink.module?.sendEvent("onLiveAuthRequest", value) }
+      }
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
-          NativeLiveEngine.shared.setEvent { revision, replicaJSON in
-            DispatchQueue.main.async { sink.module?.sendEvent("onLiveReplica", ["revision": revision, "replicaJSON": replicaJSON]) }
-          }
-          NativeLiveAuth.shared.setEvent { value in
-            DispatchQueue.main.async { sink.module?.sendEvent("onLiveAuthRequest", value) }
-          }
           SettingsJS.shared.send = { id, name, args in
             sink.module?.sendEvent("onSettingsCall", ["id": id, "name": name, "args": args])
           }

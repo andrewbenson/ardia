@@ -58,6 +58,17 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const nativeFrame = (frame) => frame && [frame.x, frame.y, frame.width, frame.height];
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot().catch((e) => ({ error: e.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
 const areas = {};
@@ -84,6 +95,11 @@ try {
       const want = [x + w - 8 - 236, y + 8, 236, 49];
       if (!near(z.frame, areas.native)) throw new Error(`the popover's page area ${z.frame}, RN measures ${areas.native}`);
       if (!near(z.card, want)) throw new Error(`card ${z.card}, RN's Popover puts it at ${want}`);
+      const snapshot = await untilSnapshot("the native zoom", (state) => state.windows.some((w) => w.id === "w1" && w.overlays.some((o) => o.kind === "zoom" && o.tabId === "a" && o.opacity === 1)));
+      const overlay = snapshot.windows.find((w) => w.id === "w1")?.overlays.find((o) => o.kind === "zoom" && o.tabId === "a");
+      if (!overlay.visible || !near(nativeFrame(overlay.frame), z.card) || !near(nativeFrame(overlay.area), z.frame) ||
+        !overlay.controls.some((c) => c.id === "Zoom In (⌘+)" && near(nativeFrame(c.frame), z.controls[c.id])))
+        throw new Error(`native zoom ${JSON.stringify(overlay)} vs ${JSON.stringify(z)}`);
       const hosted = await run(`return acPerf.findFibers("NativePanelView", 50).length;`);
       if (hosted) throw new Error("RN still hosts a NativePanelView for the zoom popover");
       return { card: z.card };
@@ -95,6 +111,8 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(z.controls["Zoom In (⌘+)"]))}).then(() => true);`);
         const zoom = await until("the tab zooms in", `const z = ac.store.getState().tabs.a.zoom; return z > 1 ? z : null;`, 3000);
         if ((await run(`return popover();`)) !== "zoom") throw new Error("Zoom In closed the popover");
+        const snapshot = await untilSnapshot("native tab zoom", (state) => state.tabs.some((t) => t.id === "a" && t.zoom > 1) && state.windows.some((w) => w.overlays.some((o) => o.kind === "zoom" && o.tabId === "a" && o.visible)));
+        if (snapshot.tabs.find((t) => t.id === "a")?.zoom !== zoom) throw new Error(`native zoom disagrees with JS: ${JSON.stringify(snapshot.tabs)}`);
         await until("the label follows", `return native().then((d) => d.tabs.a && d.tabs.a.zoom ? true : null);`, 2000);
         return { zoom };
       });
@@ -107,6 +125,9 @@ try {
         await until("the native popover goes", `return native().then((d) => !d || !d.inCard || null);`, 3000);
         const after = await run(`return { zoom: ac.store.getState().tabs.a.zoom, active: ac.store.getState().windows.w1.activeTabIds.default };`);
         if (after.zoom !== before || after.active !== "a") throw new Error(`click-away changed ${JSON.stringify(after)} (zoom was ${before})`);
+        const snapshot = await untilSnapshot("native zoom dismissed", (state) => !state.windows.some((w) => w.overlays.some((o) => o.kind === "zoom" && o.tabId === "a" && o.visible)));
+        if (snapshot.tabs.find((t) => t.id === "a")?.zoom !== after.zoom || snapshot.windows.find((w) => w.id === "w1")?.selectedTabId !== after.active)
+          throw new Error(`native click-away state ${JSON.stringify(snapshot)}`);
         return after;
       });
     }

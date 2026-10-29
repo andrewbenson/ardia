@@ -123,7 +123,9 @@ final class ProbeHost {
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
           "selectedTabIds": NSNull(), "activeTabIds": NSNull(), "tabIds": model.tabIds,
-          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "overlays": selections,
+          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "overlays": selections + model.tabIds.compactMap { tabId in
+            PaneOverlayRead.zoom(windowId: id, tabId: tabId).map { Self.popover($0, kind: "zoom", tabId: tabId) }
+          },
           "views": NSNull()]
       }
       let allowedIds = Set(ids)
@@ -132,7 +134,7 @@ final class ProbeHost {
         return ["id": id, "windowId": tab.windowId, "profileId": tab.profileId,
           "url": safeURL(tab.url), "title": String(tab.title.prefix(512)),
           "pinned": NSNull(), "loading": NSNull(), "live": Self.value(TabPoolRead.live(id)),
-          "visible": NSNull(), "zoom": NSNull()]
+          "visible": NSNull(), "zoom": tab.zoom]
       }
       final = store.snapshot
       if final.rev == initial.rev || attempt == 1 {
@@ -142,12 +144,21 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "windows.overlays.selection"],
-            "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "tabs.zoom", "profiles"]]]]
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom"],
+            "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final
     }
     throw ProbeFailure.timeout
+  }
+
+  private static func popover(_ source: [String: Any], kind: String, tabId: String) -> [String: Any] {
+    let controls = source["controls"] as? [String: [Double]] ?? [:]
+    let labels = kind == "zoom" ? ["Zoom In (⌘+)"] : controls.keys.sorted()
+    return ["id": "\(kind).\(tabId)", "kind": kind, "tabId": tabId,
+      "visible": !(source["hidden"] as? Bool ?? true), "opacity": source["opacity"] ?? NSNull(),
+      "frame": rect(source["card"]), "area": rect(source["frame"]),
+      "controls": labels.compactMap { label in controls[label].map { ["id": label, "frame": rect($0)] } }]
   }
 
   private func safeURL(_ raw: String) -> Any {

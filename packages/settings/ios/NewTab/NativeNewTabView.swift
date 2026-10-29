@@ -90,7 +90,14 @@ final class NativeNewTabView: ExpoView {
   func driverState() -> [String: Any] {
     guard let m = hero.model else { return [:] }
     func sel(_ s: TextSelection) -> [String: Int] { ["start": s.start, "end": s.end] }
+    let focused = m.field?.hasFocus ?? false
+    let editor = focused ? hero.window?.firstResponder as? NSTextView : nil
+    let range = editor?.isFieldEditor == true ? editor?.selectedRange() : nil
     return [
+      "observationVersion": 2, "mounted": hero.window != nil, "fieldAttached": m.field != nil, "listAway": m.listAway,
+      "windowId": m.windowId, "tabId": m.tabId, "profileId": m.profileId, "variant": m.variant.rawValue, "opensTab": m.opensTab,
+      "focused": focused, "fieldValue": range != nil ? (editor?.string ?? "") as Any : NSNull(),
+      "fieldSelection": range.map { ["start": $0.location, "end": $0.location + $0.length] } as Any? ?? NSNull(),
       "typed": m.typed, "value": m.value, "selection": sel(m.selection), "completion": m.shown, "suggested": m.result.completion,
       "preventInline": m.suppressCompletion, "selected": m.items.isEmpty ? -1 : m.selectedIndex, "scope": m.scope.map(NewTabJSON.scope) ?? NSNull(),
       "scopeFrom": m.scopeFrom, "tabScope": m.tabScope.map(NewTabJSON.scope) ?? NSNull(), "items": m.items.map(NewTabJSON.suggestion),

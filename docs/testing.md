@@ -87,6 +87,7 @@ hand URLs to an instance whose env turns it off; any other way of handing an ins
 | Focus (ArdiaCore) | `node packages/ardiacore/scripts/activation-acceptance.mjs <Debug app> <scratch dir> [check…]` | The panes shown, Chrome's active tab and native focus agree |
 | Native perf | `node apps/browser/scripts/perf/native-bench.mjs --app <Release app> --out <dir>` | Launch, idle, memory, tab and window latency; the release perf gate (`docs/perf/README.md`) |
 | JS perf | `node apps/browser/scripts/perf/js-bench.mjs run --app <Release app> --bundle <main.jsbundle> --label <name>` | What each interaction costs the JS thread (`docs/perf/README.md`) |
+| Option at launch (by hand, before each stable) | Hold Option while opening the candidate stable build on a test account with its own data | The "Turn off the native window and the native tab strip?" alert shows before any window; while it is up nothing hangs or crashes (the switch lock is not held during the question, `theOptionQuestionIsAskedWithoutHoldingTheSwitchLock`); Turn Off opens with the native shell and strip off and Settings › Advanced › Experimental names what was turned off; Open Normally changes nothing. Test instances never show the alert, so no script covers it |
 
 ## Test instances
 

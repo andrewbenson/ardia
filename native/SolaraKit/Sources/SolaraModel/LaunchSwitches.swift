@@ -110,19 +110,22 @@ public struct LaunchSwitches: Sendable {
   static let current = Mutex<LaunchSwitches?>(nil)
 
   public static var shared: LaunchSwitches {
-    current.withLock { current in
-      if let current { return current }
-      let switches = system(counting: false)
-      current = switches
-      return switches
-    }
+    resolve(current, ask: askRecovery) { system(counting: false, recoveryAnswer: $0) }
   }
 
   @discardableResult
   public static func countLaunch() -> LaunchSwitches {
-    current.withLock { current in
+    resolve(current, ask: askRecovery) { system(counting: true, recoveryAnswer: $0) }
+  }
+
+  static func resolve(
+    _ cell: borrowing Mutex<LaunchSwitches?>, ask: () -> Bool?, build: (Bool?) -> LaunchSwitches
+  ) -> LaunchSwitches {
+    if let existing = cell.withLock({ $0 }) { return existing }
+    let recoveryAnswer = ask()
+    return cell.withLock { current in
       if let current { return current }
-      let switches = system(counting: true)
+      let switches = build(recoveryAnswer)
       current = switches
       return switches
     }
@@ -234,16 +237,27 @@ public struct LaunchSwitches: Sendable {
     defaults.removeObject(forKey: failedLaunchesKey)
   }
 
-  static func system(counting: Bool) -> LaunchSwitches {
+  struct Launch {
     let env = ProcessInfo.processInfo.environment
     let distribution = signedForDistribution()
-    let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
-    let defaults = probe.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard
-    let held = { (probe.defaultsSuite != nil && env[optionVariable] == "1") || optionHeld() }
-    let isolated = probe.isolated
-    let confirm: ([LaunchSwitch]) -> Bool = { isolated || confirmRecoveryAlert($0) }
+    var probe: LaunchSwitches { LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false) }
+    var defaults: UserDefaults { probe.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard }
+  }
+
+  static func askRecovery() -> Bool? {
+    let launch = Launch()
+    let probe = launch.probe
+    guard probe.usesDefaults, (probe.defaultsSuite != nil && launch.env[optionVariable] == "1") || optionHeld() else { return nil }
+    let turningOff = LaunchSwitches(environment: launch.env, defaults: launch.defaults, distribution: launch.distribution, skipStored: false)
+      .wouldRecover
+    return turningOff.isEmpty || probe.isolated || confirmRecoveryAlert(turningOff)
+  }
+
+  static func system(counting: Bool, recoveryAnswer: Bool?) -> LaunchSwitches {
+    let launch = Launch()
     let switches = launching(
-      environment: env, defaults: defaults, distribution: distribution, optionHeld: held, counting: counting, confirmRecovery: confirm)
+      environment: launch.env, defaults: launch.defaults, distribution: launch.distribution, optionHeld: { recoveryAnswer != nil },
+      counting: counting, confirmRecovery: { _ in recoveryAnswer ?? false })
     if let report = switches.recoveryReport { NSLog("[launch switches] %@", report) }
     for refusal in switches.refusals { NSLog("[launch switches] %@", refusal) }
     return switches

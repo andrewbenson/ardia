@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import SolaraModel
 
@@ -370,5 +371,31 @@ import Testing
     #expect(!switches.isOn(.nativeShell, defaultOn: false))
     #expect(!StoredLaunchSwitches(switches, defaults: defaults).writable)
     #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
+  }
+
+  @Test func theOptionQuestionIsAskedWithoutHoldingTheSwitchLock() {
+    let cell = Mutex<LaunchSwitches?>(nil)
+    let defaults = scratchDefaults()
+    var lockFreeWhileAsking: [Bool] = []
+    var answers: [Bool?] = []
+    let build: (Bool?) -> LaunchSwitches = { answer in
+      answers.append(answer)
+      return LaunchSwitches.launching(
+        environment: [:], defaults: defaults, distribution: true, optionHeld: { answer != nil }, confirmRecovery: { _ in answer ?? false })
+    }
+    let first = LaunchSwitches.resolve(cell, ask: {
+      lockFreeWhileAsking.append(cell.withLockIfAvailable { _ in true } ?? false)
+      return true
+    }, build: build)
+    #expect(lockFreeWhileAsking == [true])
+    #expect(answers == [true])
+    #expect(first.skippedStored && !first.isOn(.nativeShell))
+    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
+    let again = LaunchSwitches.resolve(cell, ask: {
+      lockFreeWhileAsking.append(false)
+      return false
+    }, build: build)
+    #expect(lockFreeWhileAsking == [true], "once resolved, nothing asks again")
+    #expect(again.skippedStored && answers.count == 1)
   }
 }

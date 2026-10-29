@@ -2,6 +2,7 @@ import type { OpenWindowOptions, WindowEvent } from "@ardia/shell";
 import type { BrowserState } from "../store/browser";
 import { engineProfile, windowTitle } from "../store/model";
 import { windowOpens } from "./windowOpenOrder";
+import { hasPendingCloseSnapshot } from "./windowClose";
 
 export type LightsCenter = [number, number] | null;
 
@@ -28,7 +29,13 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
   const titles = new Map<string, string>();
 
   const releaseIfIncognito = (w: BrowserState["windows"][string] | undefined) => {
-    if (w?.incognito) port.releaseProfile(engineProfile(w.profileId));
+    if (!w?.incognito) return;
+    const profileId = w.profileId;
+    const release = () => {
+      if (!Object.values(getState().windows).some((window) => window.profileId === profileId)) port.releaseProfile(engineProfile(profileId));
+    };
+    if (hasPendingCloseSnapshot(w.id)) setTimeout(release, 30_000);
+    else release();
   };
 
   const listen = () =>

@@ -4,6 +4,7 @@ import { rejoinGroups } from "./groups";
 import {
   findLast,
   IDLE_LIVE,
+  incognitoOriginal,
   incognitoProfileId,
   inPinnedContainer,
   isIncognitoProfile,
@@ -49,6 +50,7 @@ export type WindowsSlice = {
 
   createWindow(options?: CreateWindowOptions): string;
   closeWindow(id: string): void;
+  forgetClosedWindow(id: string): void;
   setWindowFrame(id: string, frame: Frame): void;
   setWindowFullScreen(id: string, on: boolean): void;
   toggleSidebar(windowId: string): void;
@@ -138,14 +140,15 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     const id = newId("w");
     const small = !!o.small && !o.incognito;
     const known = o.profileId && s.profiles[o.profileId] ? o.profileId : undefined;
-    const original = o.incognito ? (known ?? lastActiveProfile(s)) : undefined;
-    const profileId = original !== undefined
+    const restoredPrivate = o.incognito && o.chromeWindow && o.profileId && isIncognitoProfile(o.profileId) && s.profiles[incognitoOriginal(o.profileId)] ? o.profileId : undefined;
+    const original = o.incognito ? (restoredPrivate ? incognitoOriginal(restoredPrivate) : known ?? lastActiveProfile(s)) : undefined;
+    const profileId = restoredPrivate ?? (original !== undefined
       ? incognitoProfileId(id, original)
-      : (known ?? (small ? lastActiveProfile(s) : s.settings.defaultProfileId));
+      : (known ?? (small ? lastActiveProfile(s) : s.settings.defaultProfileId)));
     const w = small ? smallWindow(id, profileId, o.frame ?? null) : emptyWindow(id, profileId, !!o.incognito, o.frame ?? null);
     if (original !== undefined) w.originalProfileId = original;
     if (small && o.linkPointer) w.linkPointer = o.linkPointer;
-    if (o.chromeWindow && !small) w.chromeWindow = o.chromeWindow;
+    if (o.chromeWindow) w.chromeWindow = o.chromeWindow;
     let next = withWindow(s, w);
     if (o.tabIds?.length && !small) next = moveTabsInto(next, o.tabIds, id);
     if (!next.windows[id]!.tabIds.length) next = withNewTab(next, id, { url: o.url, adoptId: o.adoptId })[0];
@@ -202,6 +205,10 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
         lastProfileId: lastProfileAfterClosing(s, id),
       },
     });
+  },
+
+  forgetClosedWindow(id) {
+    set((s) => ({ closedWindows: s.closedWindows.filter((entry) => entry.id !== id) }));
   },
 
   setWindowFrame(id, frame) {

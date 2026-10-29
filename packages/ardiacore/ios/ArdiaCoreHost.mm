@@ -1022,6 +1022,7 @@ static void StartEarlyWindow() {
       @"group" : @"",
       @"hasRoot" : @(c.root != nil),
       @"translucent" : @(!w.opaque),
+      @"stray" : @(c.stray),
     }];
   }
   return list;

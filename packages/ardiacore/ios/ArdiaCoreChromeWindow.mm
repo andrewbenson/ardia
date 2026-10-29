@@ -1648,6 +1648,54 @@ NSMapTable<ArdiaCoreProfile *, ArdiaCoreWindowController *> *StandaloneWindows()
 
 - (void)windowDidCancelClose:(ArdiaCoreWindow *)window {
   NSLog(@"[ardiacore] window close cancelled");
+  __weak ArdiaCoreWindowController *weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    ArdiaCoreWindowController *controller = weakSelf;
+    ArdiaCoreWindow *coreWindow = controller.coreWindow;
+    NSWindow *nsWindow = coreWindow.window;
+    if (!controller || !coreWindow || !nsWindow || nsWindow.isVisible || coreWindow.closing || controller->_awaitingApp) return;
+    NSMutableArray<NSDictionary<NSString *, id> *> *tabs = [NSMutableArray array];
+    for (ArdiaCoreProfile *profile in ardiacore_host::LoadedProfiles()) {
+      for (ArdiaCoreTab *tab in [coreWindow tabsForProfile:profile]) {
+        if (tab.closed || tab.closingWithWindow) continue;
+        [tabs addObject:@{
+          @"adoptId" : [ArdiaCoreTabs offerTab:tab prefix:@"tab"],
+          @"url" : tab.url ?: @"",
+          @"title" : tab.title ?: @"",
+          @"profile" : ardiacore_host::ProfileName(tab.profile),
+          @"incognito" : @(tab.profile.offTheRecord),
+          @"storeTabId" : [ArdiaCoreTabs viewForTab:tab].transferKey ?: @"",
+          @"browserId" : @(ardiacore_host::BrowserId(tab)),
+        }];
+      }
+    }
+    if (!tabs.count || !ArdiaCoreServices.extensionsHandler) return;
+    NSString *previousToken = controller->_chromeToken;
+    const BOOL previousAnnounced = controller->_announced;
+    const BOOL previousShowInactive = controller->_showInactive;
+    NSString *token = NSUUID.UUID.UUIDString;
+    controller->_chromeToken = token;
+    controller->_awaitingApp = YES;
+    controller->_announced = YES;
+    controller->_showInactive = NO;
+    ChromeMadeWindows()[token] = controller;
+    NSArray<NSString *> *offers = [tabs valueForKey:@"adoptId"];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+      for (NSString *offer in offers) [ArdiaCoreTabs takeOffered:offer];
+      ArdiaCoreWindowController *waiting = weakSelf;
+      if (!waiting || !waiting->_awaitingApp || ![waiting->_chromeToken isEqualToString:token]) return;
+      NSLog(@"[ardiacore] close cancel went unanswered; window stays hidden");
+      [ChromeMadeWindows() removeObjectForKey:token];
+      waiting->_awaitingApp = NO;
+      waiting->_chromeToken = previousToken;
+      waiting->_announced = previousAnnounced;
+      waiting->_showInactive = previousShowInactive;
+    });
+    ArdiaCoreServices.extensionsHandler(@"tabs", @{
+      @"action" : @"closeCancelled", @"chromeWindow" : token, @"appWindow" : controller.appWindowId ?: @"",
+      @"focused" : @YES, @"tabs" : tabs,
+    });
+  });
 }
 
 - (void)window:(ArdiaCoreWindow *)window confirmCloseWithDownloads:(int)count completion:(void (^)(BOOL))completion {

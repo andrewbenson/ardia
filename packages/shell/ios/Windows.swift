@@ -105,7 +105,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       return
     }
     if small { smallIds.insert(id) }
-    if let chromeWindow = ChromeWindows.makeWindow(profile: profile, chromeWindow: small ? nil : chromeWindow, appWindow: small ? claim : id) {
+    if let chromeWindow = ChromeWindows.makeWindow(profile: profile, chromeWindow: chromeWindow, appWindow: small ? claim : id) {
       if incognito { chromeWindow.appearance = NSAppearance(named: .darkAqua) }
       let root = WindowHost.makeContent(makeContentView, id: id, kind: small ? "small" : "browser")
       ChromeWindows.embed(root, in: chromeWindow)

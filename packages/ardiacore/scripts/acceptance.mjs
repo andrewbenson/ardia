@@ -69,7 +69,8 @@ const needs = {
   "tab-switch": ["open-url", "target-blank"],
   "tab-keys-from-page": ["open-url", "target-blank"],
   "window-close": ["window-open"],
-  "no-hidden-window-after-stay": ["chrome-windows-remove"],
+  "no-hidden-window-after-stay": ["chrome-windows-remove", "stay-restores-window"],
+  "stay-restores-window": ["open-url"],
   "site-data-clear": ["open-url"],
   "frozen": ["open-url", "cmd-click"],
   "discard": ["open-url", "cmd-click"],
@@ -2482,8 +2483,113 @@ try {
     }
   });
 
+  await check("stay-restores-window", async () => {
+    const previous = await evalApp(`return ac.store.getState().settings.warnBeforeClosingWindow`);
+    const pooled = await evalApp(`return !!globalThis.expo.modules.SolaraTabPool?.available()`);
+    const legs = [];
+    try {
+      for (const kind of pooled ? ["normal"] : ["normal", "private", "small"]) {
+        const lazy = kind === "normal" && !pooled;
+        const marks = kind === "small" ? [`stay-${kind}-a`] : lazy ? ["a", "b", "c", "d"].map((m) => `stay-${kind}-${m}`) : [`stay-${kind}-a`, `stay-${kind}-b`];
+        const url = (mark) => `${base}/e?${mark}`;
+        const oldWindow = await evalApp(`return ac.store.getState().createWindow(${JSON.stringify({ incognito: kind === "private", small: kind === "small", url: url(marks[0]) })})`);
+        for (const mark of marks.slice(1)) await evalApp(`ac.store.getState().newTab(${JSON.stringify(oldWindow)}, { url: ${JSON.stringify(url(mark))}, background: true }); return true`);
+        const before = await until(`${kind} tabs loaded`, async () => {
+          const result = await evalApp(`const s = ac.store.getState(); const w = s.windows[${JSON.stringify(oldWindow)}]; return w && { profileId: w.profileId, ids: w.tabIds, urls: w.tabIds.map((id) => s.tabs[id]?.url) }`);
+          return result?.urls.length === marks.length && marks.every((mark) => result.urls.some((u) => u?.includes(mark))) ? result : null;
+        }, 15000);
+        const split = kind === "normal" ? await evalApp(`return ac.store.getState().createSplit(${JSON.stringify(before.ids.slice(0, 2))}, "vertical")`) : null;
+        const target = await until(`${kind} first page ready`, async () => {
+          const found = await pageTarget(`e?${marks[0]}`).catch(() => null);
+          const ready = found && (await cdp(found, "Runtime.evaluate", { expression: "document.readyState", returnByValue: true }).catch(() => null));
+          return ready?.result?.value === "complete" ? found : null;
+        }, 15000);
+        const token = `stay-${kind}-${Date.now()}`;
+        await cdp(target, "Runtime.evaluate", { expression: `globalThis.stayToken = ${JSON.stringify(token)}; addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+        const ws = new WebSocket(target.webSocketDebuggerUrl);
+        await new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("DevTools connection failed")))));
+        let leave = false;
+        let prompts = 0;
+        ws.onmessage = (message) => {
+          const event = JSON.parse(message.data);
+          if (event.method !== "Page.javascriptDialogOpening") return;
+          prompts++;
+          ws.send(JSON.stringify({ id: 100 + prompts, method: "Page.handleJavaScriptDialog", params: { accept: leave } }));
+        };
+        ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+        try {
+          await sleep(300);
+          const tabId = before.ids[0];
+          const windowNumber = await cef(`devWindowNumber(${await browserOf(tabId)})`);
+          await evalApp(`ac.store.getState().updateSettings({ warnBeforeClosingWindow: false }); return true`);
+          const browsers = await Promise.all(before.ids.map((id) => browserOf(id)));
+          if (!pooled) await cef(`devKeepBrowsersOnClose([${browsers.join(",")}], [${browsers.join(",")}])`);
+          await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until(`${kind} beforeunload prompt`, async () => prompts > 0, 15000);
+          if (pooled) {
+            await sleep(1500);
+            const back = await evalApp(`const s = ac.store.getState(); return Object.values(s.windows).some((w) => w.tabIds.some((id) => s.tabs[id]?.url?.includes(${JSON.stringify(marks[0])})))`);
+            if (back) throw new Error("the pool restored a window; its path is meant to keep today's behaviour until it restores under the original tab ids");
+            const stayed = await cdp(target, "Runtime.evaluate", { expression: "globalThis.stayToken", returnByValue: true });
+            if (stayed.result?.value !== token) throw new Error("the page closed or reloaded though beforeunload said Stay");
+            leave = true;
+            await cef(`devWindow(${windowNumber}, "close-button")`);
+            await until("the hidden window closing after Leave", async () => !(await pageTarget(`e?${marks[0]}`).catch(() => null)), 15000);
+            const holds = await until("the pool letting go of the closed window", async () => {
+              const now = await evalApp(`return globalThis.expo.modules.SolaraTabPool.devClosingWindows()`);
+              return Object.values(now).includes(windowNumber) ? null : now;
+            }, 10000);
+            legs.push({ kind, pool: "unchanged", holds });
+            continue;
+          }
+          const restored = await until(`${kind} window restored`, async () => {
+            const windows = await evalApp(`const s = ac.store.getState(); return Object.values(s.windows).map((w) => ({ id: w.id, profileId: w.profileId, incognito: w.incognito, kind: w.kind, urls: w.tabIds.map((id) => s.tabs[id]?.url), closed: s.closedWindows.some((c) => c.tabs.some((t) => ${JSON.stringify(before.ids)}.includes(t.tabId))) }))`);
+            return windows.find((w) => w.id !== oldWindow && marks.every((mark) => w.urls.some((u) => u?.includes(mark)))) ?? null;
+          }, 15000);
+          if (restored.incognito !== (kind === "private") || (restored.kind === "small") !== (kind === "small")) throw new Error(`${kind} restored with wrong window kind: ${JSON.stringify(restored)}`);
+          if (restored.profileId !== before.profileId) throw new Error(`${kind} profile changed: ${before.profileId} to ${restored.profileId}`);
+          if (restored.closed) throw new Error(`${kind} left a closedWindows entry`);
+          if (split) {
+            const splits = await evalApp(`const s = ac.store.getState(); return Object.values(s.splits).filter((x) => x.windowId === ${JSON.stringify(restored.id)}).map((x) => ({ orientation: x.orientation, urls: x.tabIds.map((id) => s.tabs[id]?.url) }))`);
+            if (!splits.some((x) => x.orientation === "vertical" && marks.slice(0, 2).every((mark) => x.urls.some((u) => u?.includes(mark))))) throw new Error(`${kind} split not restored: ${JSON.stringify(splits)}`);
+          }
+          const visible = await until(`${kind} NSWindow visible`, async () => (await cef(`chromeWindows()`)).find((w) => w.window === windowNumber && w.visible && w.hasRoot) ?? null, 10000).catch(async (e) => {
+            throw new Error(`${e.message}; window ${windowNumber}, restored ${JSON.stringify(restored)}, chrome ${JSON.stringify((await cef(`chromeWindows()`)).map((w) => [w.window, w.visible, w.hasRoot, w.stray, w.frame]))}`);
+          });
+          const kept = await cdp(target, "Runtime.evaluate", { expression: "globalThis.stayToken", returnByValue: true });
+          if (kept.result?.value !== token) throw new Error(`${kind} page reloaded after Stay`);
+          if (lazy) {
+            const last = await until("the unvisited tab's page", () => pageTarget(`e?${marks[3]}`).catch(() => null), 5000);
+            await cdp(last, "Runtime.evaluate", { expression: `globalThis.stayToken = ${JSON.stringify(token)}; true` });
+            await sleep(25000);
+            await evalApp(`const s = ac.store.getState(); const id = s.windows[${JSON.stringify(restored.id)}].tabIds.find((t) => s.tabs[t]?.url?.includes(${JSON.stringify(marks[3])})); s.activate(id); return true`);
+            await sleep(2000);
+            const pages = (await targets()).filter((t) => t.type === "page" && t.url.includes(`e?${marks[3]}`));
+            const tokens = await Promise.all(pages.map(async (t) => (await cdp(t, "Runtime.evaluate", { expression: "globalThis.stayToken ?? null", returnByValue: true }).catch(() => null))?.result?.value ?? null));
+            if (pages.length !== 1 || tokens[0] !== token) throw new Error(`the tab visited 25 s after the restore did not keep its page: ${pages.length} pages, tokens ${JSON.stringify(tokens)}`);
+            const strays = (await cef(`chromeWindows()`)).filter((w) => !w.visible && !w.hasRoot && !w.stray);
+            if (strays.length) throw new Error(`a hidden window is left after visiting the last tab: ${JSON.stringify(strays.map((w) => w.window))}`);
+          }
+          if (!prompts) throw new Error(`${kind} did not prompt beforeunload`);
+          leave = true;
+          await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until(`${kind} window closed after Leave`, async () => !((await evalApp(`return !!ac.store.getState().windows[${JSON.stringify(restored.id)}]`))), 15000);
+          legs.push({ kind, restored: restored.id, window: visible.window, prompts });
+        } finally {
+          leave = true;
+          if (!pooled) await cef(`devKeepBrowsersOnClose([], [])`).catch(() => null);
+          setTimeout(() => { try { ws.close(); } catch {} }, 3000);
+          await evalApp(`const s = ac.store.getState(); const w = Object.values(s.windows).find((w) => w.tabIds.some((id) => s.tabs[id]?.url?.includes(${JSON.stringify(marks[0])}))); if (w) s.closeWindow(w.id); return true`).catch(() => null);
+        }
+      }
+      return legs;
+    } finally {
+      await evalApp(`ac.store.getState().updateSettings({ warnBeforeClosingWindow: ${JSON.stringify(previous)} }); return true`).catch(() => null);
+    }
+  });
+
   await check("no-hidden-window-after-stay", async () => {
-    const hidden = (await cef(`chromeWindows()`)).filter((w) => !w.visible && !w.hasRoot).map((w) => w.window);
+    const hidden = (await cef(`chromeWindows()`)).filter((w) => !w.visible && !w.hasRoot && !w.stray).map((w) => w.window);
     if (hidden.length) throw new Error(`${hidden.length} window(s) still alive but hidden after chrome-windows-remove's Stay cases: ${JSON.stringify(hidden)}`);
     return { hidden: 0 };
   });

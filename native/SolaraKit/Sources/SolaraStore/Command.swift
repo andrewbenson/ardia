@@ -31,7 +31,7 @@ public struct Command: Sendable, Equatable {
 
   public static let known: Set<String> = [
     "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
-    "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
+    "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
     "switchProfile", "moveTabsToWindow", "moveTabToProfile", "mergeAllWindows", "reopenClosed", "reopenClosedTab", "reopenClosedWindow",
     "restoreClosed", "createProfile", "updateProfile", "deleteProfile", "reorderProfiles", "setDefaultProfile", "profileDataDeleted",
     "createGroup", "updateGroup", "addTabsToGroup", "removeTabsFromGroup", "ungroup", "newNestedGroup", "closeGroup", "deleteGroup",
@@ -186,6 +186,7 @@ extension Session {
       options.chromeWindow = optionalString(o, "chromeWindow")
       result = .string(createWindow(options))
     case "closeWindow": closeWindow(try a.requireString(0))
+    case "forgetClosedWindow": forgetClosedWindow(try a.requireString(0))
     case "setWindowFrame": setWindowFrame(try a.requireString(0), a[1]?.array?.compactMap(\.number) ?? [])
     case "setWindowFullScreen": setWindowFullScreen(try a.requireString(0), a.bool(1))
     case "toggleSidebar": toggleSidebar(try a.requireString(0))

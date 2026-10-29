@@ -70,8 +70,18 @@ export type ExtensionsChange = {
   event: "installed" | "uninstalled" | "enabled" | "disabled" | "configured" | "reloaded";
 };
 
+export type CloseCancelledTab = {
+  adoptId: string;
+  url: string;
+  title: string;
+  profile: string;
+  incognito: boolean;
+  storeTabId: string;
+  browserId: number;
+};
+
 export type TabsRequest = {
-  action: "open" | "closeWindow";
+  action: "open" | "closeWindow" | "closeCancelled";
   profile: string;
   extensionId: string;
   window: string | null;
@@ -81,6 +91,8 @@ export type TabsRequest = {
   chromeWindow?: string;
   focused?: boolean;
   tabKey?: string;
+  tabs?: CloseCancelledTab[];
+  appWindow?: string;
 };
 
 export type ExtensionInstallPrompt = {

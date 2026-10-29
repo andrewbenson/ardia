@@ -10,14 +10,17 @@ import {
   watchExtensionActions,
   webStoreExtensionId,
   type TabsRequest,
+  type CloseCancelledTab,
 } from "@ardia/ardiacore";
 import { killSwitchEnvironment } from "@ardia/shell";
 import { AppState } from "react-native";
 import { openWindow } from "../../lib/actions";
 import { webviews } from "../../lib/webviews";
-import { useBrowser, type BrowserState } from "../../store/browser";
+import { storeTransaction, useBrowser, type BrowserState } from "../../store/browser";
+import { snapshotTabId, takeCloseSnapshot } from "../../lib/windowClose";
+import type { Tab, TabSnapshot } from "../../store/types";
 import { changedIds } from "../../store/changes";
-import { activeTabId, engineProfile } from "../../store/model";
+import { activeTabId, engineProfile, incognitoOriginal } from "../../store/model";
 import { shownPageId } from "../../store/peek";
 import { tabForBrowser, usePages } from "../layout/pageState";
 import { refreshActionStates } from "./actions";
@@ -69,6 +72,7 @@ export function startExtensionsBridge() {
 
 function openRequestedTab(request: TabsRequest) {
   if (request.action === "closeWindow") return closeChromeMadeWindow(request.chromeWindow);
+  if (request.action === "closeCancelled") return restoreCancelledClose(request);
   if (request.chromeWindow && request.tabKey) return moveIntoChromeMadeWindow(request, request.chromeWindow, request.tabKey);
   if (request.chromeWindow && request.adoptId) return openChromeMadeTab(request, request.chromeWindow, request.adoptId);
   if (!request.url) return;
@@ -89,6 +93,92 @@ function openRequestedTab(request: TabsRequest) {
   }
   if (windowId) s.newTab(windowId, { url: request.url, background });
   else openWindow({ url: request.url });
+}
+
+function snapshotFields(tab: Tab): Partial<TabSnapshot> {
+  return {
+    title: tab.title, favicon: tab.favicon, pinned: tab.pinned, muted: tab.muted,
+    zoom: tab.zoom, customTitle: tab.customTitle, customIcon: tab.customIcon,
+    pinnedUrl: tab.pinnedUrl, pinnedAsRow: tab.pinnedAsRow, tileFolder: tab.tileFolder,
+  };
+}
+
+function restoreCancelledClose(request: TabsRequest) {
+  const live = request.tabs;
+  if (!request.chromeWindow || !live?.length) return;
+  const snapshot = takeCloseSnapshot(request.appWindow, live);
+  if (!snapshot) return console.warn("[windowClose] no snapshot for cancelled close", request.appWindow);
+  if (snapshot.pooled) return console.warn("[windowClose] a cancelled close on the page pool keeps its window hidden", snapshot.window.id);
+  const s = useBrowser.getState();
+  const old = new Map(snapshot.tabs.map((tab) => [tab.id, tab]));
+  const byId = (tab: CloseCancelledTab) => old.get(snapshotTabId(snapshot, tab) ?? "");
+  const remaining = live.filter((tab) => byId(tab) || snapshot.tabs.some((oldTab) => oldTab.url === tab.url));
+  if (!remaining.length || snapshot.window.incognito && (remaining.some((tab) => !tab.incognito) || !s.profiles[incognitoOriginal(snapshot.window.profileId)])) return;
+  const first = remaining[0]!;
+  const firstOld = byId(first) ?? snapshot.tabs.find((tab) => tab.url === first.url);
+  const original = snapshot.window;
+  const assigned = new Map<string, string>();
+  const small = original.kind === "small";
+  const restoreInto = () => {
+    const windowId = s.createWindow({
+      profileId: original.profileId, incognito: original.incognito, small,
+      frame: original.frame, linkPointer: original.linkPointer, chromeWindow: request.chromeWindow,
+      url: first.url, adoptId: first.adoptId, background: request.focused === false,
+    });
+    const created = useBrowser.getState().windows[windowId];
+    if (!created || created.incognito !== original.incognito || created.profileId !== original.profileId || created.kind !== original.kind) {
+      return console.warn("[windowClose] the restored window doesn't match the closed one", JSON.stringify({ windowId, created: created && { incognito: created.incognito, profileId: created.profileId, kind: created.kind }, original: { incognito: original.incognito, profileId: original.profileId, kind: original.kind } }));
+    }
+    const firstId = created.tabIds[0]!;
+    if (firstOld) {
+      assigned.set(firstOld.id, firstId);
+      s.updateTab(firstId, snapshotFields(firstOld));
+    }
+    for (const tab of remaining.slice(1)) {
+      const saved = byId(tab) ?? snapshot.tabs.find((oldTab) => oldTab.url === tab.url && !assigned.has(oldTab.id));
+      const id = s.newTab(windowId, {
+        url: tab.url, adoptId: tab.adoptId, profileId: saved?.profileId ?? original.profileId,
+        snapshot: saved ? snapshotFields(saved) : { title: tab.title }, background: true,
+        index: saved ? original.tabIds.indexOf(saved.id) : undefined,
+      });
+      if (saved && id) assigned.set(saved.id, id);
+    }
+    if (firstOld?.pinned) s.pinTabs([firstId], true, firstOld.pinnedAsRow === true);
+    if (!small && original.sidebarOpen !== created.sidebarOpen) s.toggleSidebar(windowId);
+    if (!small && original.tabLayout === "top") s.toggleTabLayout(windowId);
+    const groups = new Map<string, string>();
+    for (const group of snapshot.groups) {
+      const ids = group.tabIds.map((id) => assigned.get(id)).filter((id): id is string => !!id);
+      if (!ids.length) continue;
+      const id = s.groupTabs(ids, { pinned: group.pinned, name: group.name });
+      if (!id) continue;
+      groups.set(group.id, id);
+      s.updateGroup(id, { icon: group.icon, color: group.color, collapsed: group.collapsed });
+    }
+    for (const group of snapshot.groups) {
+      const id = groups.get(group.id);
+      const parentId = group.parentId && groups.get(group.parentId);
+      if (id && parentId) s.moveGroup(id, { pinned: group.pinned, parentId });
+    }
+    for (const split of snapshot.splits) {
+      const ids = split.tabIds.map((id) => assigned.get(id)).filter((id): id is string => !!id);
+      if (ids.length < 2) continue;
+      const id = s.createSplit(ids, split.orientation);
+      if (id) s.updateSplit(id, { sizes: split.sizes, stackSizes: split.stack?.sizes });
+    }
+    for (const active of Object.values(original.activeTabIds)) {
+      const id = assigned.get(active);
+      if (id) s.activate(id);
+    }
+    const closed = useBrowser.getState().closedWindows.find((entry) =>
+      entry.closedAt >= snapshot.closedAt && entry.tabs.some((tab) => !!tab.tabId && old.has(tab.tabId)));
+    if (closed) s.forgetClosedWindow(closed.id);
+  };
+  try {
+    storeTransaction(restoreInto);
+  } catch (error) {
+    console.warn("[windowClose] restoring a cancelled close failed", error);
+  }
 }
 
 function openChromeMadeTab(request: TabsRequest, chromeWindow: string, adoptId: string) {

@@ -9,7 +9,7 @@ import { startNavigation } from "../lib/earlyNavigate";
 
 export const WORKSPACE_COMMANDS: ReadonlySet<string> = new Set([
   "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
-  "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
+  "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
   "switchProfile", "moveTabsToWindow", "moveTabToProfile", "mergeAllWindows", "reopenClosed", "reopenClosedTab", "reopenClosedWindow",
   "restoreClosed", "createProfile", "updateProfile", "deleteProfile", "reorderProfiles", "setDefaultProfile", "profileDataDeleted",
   "createGroup", "updateGroup", "addTabsToGroup", "removeTabsFromGroup", "ungroup", "newNestedGroup", "closeGroup", "deleteGroup",

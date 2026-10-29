@@ -88,12 +88,13 @@ extension Session {
     let id = newId("w")
     let small = o.small == true && o.incognito != true
     let known = o.profileId.flatMap { !$0.isEmpty && s.profiles[$0] != nil ? $0 : nil }
-    let original: String? = o.incognito == true ? (known ?? lastActiveProfile(s)) : nil
-    let profileId = original.map { Ids.incognitoProfileId(windowId: id, originalProfileId: $0) } ?? (known ?? (small ? lastActiveProfile(s) : s.settings.defaultProfileId))
+    let restoredPrivate = o.incognito == true && o.chromeWindow != nil ? o.profileId.flatMap { Ids.isIncognitoProfile($0) && s.profiles[Ids.incognitoOriginal($0)] != nil ? $0 : nil } : nil
+    let original: String? = o.incognito == true ? (restoredPrivate.map(Ids.incognitoOriginal) ?? known ?? lastActiveProfile(s)) : nil
+    let profileId = restoredPrivate ?? original.map { Ids.incognitoProfileId(windowId: id, originalProfileId: $0) } ?? (known ?? (small ? lastActiveProfile(s) : s.settings.defaultProfileId))
     var w = small ? smallWindow(id, profileId, o.frame) : emptyWindow(id, profileId, o.incognito == true, o.frame)
     if let original { w.originalProfileId = original }
     if small, let pointer = o.linkPointer { w.linkPointer = pointer }
-    if let chrome = o.chromeWindow, !chrome.isEmpty, !small { w.chromeWindow = chrome }
+    if let chrome = o.chromeWindow, !chrome.isEmpty { w.chromeWindow = chrome }
     var next = withWindow(s, w)
     if let tabIds = o.tabIds, !tabIds.isEmpty, !small { next = moveTabsInto(next, tabIds, id) }
     if next.windows[id]!.tabIds.isEmpty {
@@ -145,6 +146,12 @@ extension Session {
     next.ui.focusOrder = focusOrder.filter { $0 != id }
     next.ui.focusedWindowId = next.ui.focusedWindowId == id ? focusOrder.first { $0 != id } : next.ui.focusedWindowId
     next.ui.lastProfileId = lastProfileAfterClosing(s, id)
+    set(next)
+  }
+
+  public func forgetClosedWindow(_ id: String) {
+    var next = state
+    next.closedWindows = next.closedWindows.filter { $0.id != id }
     set(next)
   }
 

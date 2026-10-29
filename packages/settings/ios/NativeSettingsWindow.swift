@@ -65,8 +65,16 @@ enum NativeSettingsWindow {
     WindowHost.makeAuxController = { id, kind in
       if kind == NativeImportWindow.kind { return NativeImportWindow.makeController() }
       guard kind == "settings" else { return nil }
-      return controller()
+      return controller() ?? unavailableController()
     }
+  }
+
+  static func unavailableController() -> NSViewController? {
+    guard !NativeSettingsHandle.active, let failure = NativeSettingsHandle.unavailable else { return nil }
+    let view = StoreUnavailableView(
+      failure: failure, appName: Bundle.main.productName, quit: { NSApp.terminate(nil) },
+      showDataFolder: { NSWorkspace.shared.activateFileViewerSelecting([$0]) })
+    return NSHostingController(rootView: view)
   }
 
   private static var built: SettingsHostingController?

@@ -31,6 +31,7 @@ public final class ExperimentsModel {
     let title: String
     let detail: String
     let needs: String?
+    let waiting: String?
     let on: Bool
     let enabled: Bool
     let fromEnvironment: Bool
@@ -41,20 +42,26 @@ public final class ExperimentsModel {
       || LaunchSwitch.experiments.contains(where: running.fromEnvironment)
   }
 
-  func next(_ name: LaunchSwitch) -> Bool {
+  func requested(_ name: LaunchSwitch) -> Bool {
     _ = revision
-    if running.fromEnvironment(name) { return running.isOn(name, defaultOn: false) }
+    if running.fromEnvironment(name) { return running.requested(name, defaultOn: false) }
     return stored.value(name) ?? false
+  }
+
+  func next(_ name: LaunchSwitch) -> Bool {
+    requested(name) && name.needs.allSatisfy(next)
   }
 
   var rows: [Row] {
     LaunchSwitch.experiments.map { name in
       let text = Self.titles[name] ?? (name.rawValue, "")
       let needs = name.needs.compactMap { Self.titles[$0]?.title }
+      let unmet = name.needs.filter { !next($0) }.compactMap { Self.titles[$0]?.title }
       let fromEnvironment = running.fromEnvironment(name)
       return Row(
         name: name, title: text.title, detail: text.detail,
         needs: needs.isEmpty ? nil : "Needs \(needs.joined(separator: " and ")).",
+        waiting: requested(name) && !unmet.isEmpty ? "Off until \(unmet.joined(separator: " and ")) is on." : nil,
         on: next(name),
         enabled: !fromEnvironment && stored.writable && name.needs.allSatisfy(next),
         fromEnvironment: fromEnvironment)
@@ -102,7 +109,7 @@ struct ExperimentsSection: View {
             .disabled(!row.enabled)
         } label: {
           Text(row.title)
-          Text([row.detail, row.needs, row.fromEnvironment ? "Set by the environment." : nil].compactMap { $0 }.joined(separator: " "))
+          Text([row.detail, row.waiting ?? row.needs, row.fromEnvironment ? "Set by the environment." : nil].compactMap { $0 }.joined(separator: " "))
             .foregroundStyle(.secondary)
         }
         .opacity(row.enabled || row.fromEnvironment ? 1 : 0.5)

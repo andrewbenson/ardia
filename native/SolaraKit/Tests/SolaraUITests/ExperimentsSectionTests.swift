@@ -45,6 +45,24 @@ import Testing
     #expect(!model.pendingRelaunch)
   }
 
+  @Test func aSwitchSetWithoutItsDependencyShowsOffAndSaysWhy() {
+    let environment = model(environment: ["ARDIA_SHELL_PANES": "1"], defaults: scratchDefaults())
+    #expect(!row(environment, .shellPanes).on)
+    #expect(row(environment, .shellPanes).waiting == "Off until Native window is on.")
+    #expect(row(environment, .nativeAutoHide).waiting == nil)
+    let defaults = scratchDefaults()
+    defaults.set("1", forKey: "ARDIA_NATIVE_AUTOHIDE")
+    let saved = model(defaults: defaults)
+    #expect(!row(saved, .nativeAutoHide).on)
+    #expect(!row(saved, .nativeAutoHide).enabled)
+    #expect(row(saved, .nativeAutoHide).waiting == "Off until Native window is on.")
+    #expect(!saved.pendingRelaunch)
+    saved.set(.nativeShell, true)
+    #expect(row(saved, .nativeAutoHide).on)
+    #expect(row(saved, .nativeAutoHide).waiting == nil)
+    #expect(saved.pendingRelaunch)
+  }
+
   @Test func turnAllOffClearsEverySavedSwitch() {
     let defaults = scratchDefaults()
     defaults.set("1", forKey: "ARDIA_NATIVE_SIDEBAR")

@@ -39,12 +39,17 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
     .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers, .nativeProfilePager,
   ]
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
+  public static let onByDefault: Set<LaunchSwitch> = [
+    .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
+  ]
 
   public var needs: [LaunchSwitch] {
     switch self {
     case .shellPanes, .nativePagesPool, .nativeAutoHide, .nativeTabPickers: [.nativeShell]
     case .shellMainTop: [.shellPanes, .nativePagesPool]
     case .nativeProfilePager: [.nativeShell, .nativeSidebar, .nativeTopStrip]
+    case .nativeIconPicker: [.nativeShell, .nativeSidebar]
+    case .nativePanePrompts: [.nativeShell, .nativePagesPool]
     default: []
     }
   }
@@ -121,7 +126,23 @@ public struct LaunchSwitches: Sendable {
   }
 
   public func isOn(_ name: LaunchSwitch, defaultOn: Bool) -> Bool {
+    requested(name, defaultOn: defaultOn) && unmetNeeds(name).isEmpty
+  }
+
+  public func requested(_ name: LaunchSwitch, defaultOn: Bool) -> Bool {
     environment[name] ?? stored[name] ?? defaultOn
+  }
+
+  public func unmetNeeds(_ name: LaunchSwitch) -> [LaunchSwitch] {
+    name.needs.filter { !isOn($0, defaultOn: LaunchSwitch.onByDefault.contains($0)) }
+  }
+
+  public var refusals: [String] {
+    LaunchSwitch.allCases.compactMap { name in
+      let unmet = unmetNeeds(name)
+      guard !unmet.isEmpty, requested(name, defaultOn: LaunchSwitch.onByDefault.contains(name)) else { return nil }
+      return "\(name.rawValue) is on but stays off: it needs \(unmet.map { "\($0.rawValue)=1" }.joined(separator: " and "))"
+    }
   }
 
   public func fromEnvironment(_ name: LaunchSwitch) -> Bool { environment[name] != nil }
@@ -177,9 +198,16 @@ public struct LaunchSwitches: Sendable {
     let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
     let defaults = probe.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard
     let held = { (probe.defaultsSuite != nil && env[optionVariable] == "1") || optionHeld() }
-    if counting { return launching(environment: env, defaults: defaults, distribution: distribution, optionHeld: held) }
-    if !probe.usesDefaults { return probe }
-    return LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: held())
+    let switches: LaunchSwitches
+    if counting {
+      switches = launching(environment: env, defaults: defaults, distribution: distribution, optionHeld: held)
+    } else if !probe.usesDefaults {
+      switches = probe
+    } else {
+      switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: held())
+    }
+    for refusal in switches.refusals { NSLog("[launch switches] %@", refusal) }
+    return switches
   }
 
   static func optionHeld() -> Bool {

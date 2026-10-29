@@ -308,6 +308,7 @@ enum SecureFieldProbe {
 }
 #endif
 
+#if SOLARA_PROBES
 @MainActor
 public enum SettingsRead {
   public static func snapshot() -> [String: Any]? {
@@ -316,3 +317,4 @@ public enum SettingsRead {
     return ["layout": SettingsDev.lastSwitch ?? NSNull(), "search": search]
   }
 }
+#endif

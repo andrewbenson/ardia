@@ -341,6 +341,7 @@ final class TabPoolCommits: @unchecked Sendable {
   }
 }
 
+#if SOLARA_PROBES
 @MainActor
 public enum TabPoolRead {
   public static func live(_ tabId: String) -> Bool? {
@@ -348,3 +349,4 @@ public enum TabPoolRead {
     return TabPoolHost.shared.pageView(tabId) != nil
   }
 }
+#endif

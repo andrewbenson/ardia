@@ -88,6 +88,7 @@ enum NativeDownloadsPanel {
   }
 }
 
+#if SOLARA_PROBES
 @MainActor
 public enum DownloadsPanelRead {
   public static func panel(windowId: String) -> [String: Any]? {
@@ -97,3 +98,4 @@ public enum DownloadsPanelRead {
     return info
   }
 }
+#endif

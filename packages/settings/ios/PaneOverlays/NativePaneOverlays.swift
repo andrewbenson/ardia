@@ -625,6 +625,7 @@ final class PaneOverlayHost {
   }
 }
 
+#if SOLARA_PROBES
 @MainActor
 public enum PaneOverlayRead {
   public static func selection(windowId: String, tabId: String) -> [String: Any]? {
@@ -639,3 +640,4 @@ public enum PaneOverlayRead {
     (NativePaneOverlays.host(windowId)?.describe()["tabs"] as? [String: [String: Any]])?[tabId]?["history"] as? [String: Any]
   }
 }
+#endif

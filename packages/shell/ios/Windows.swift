@@ -6,7 +6,9 @@ public enum WindowHost {
   nonisolated(unsafe) public static var makeRootView: ((_ module: String, _ props: [String: Any]) -> NSView?)?
   nonisolated(unsafe) public private(set) static var openingKinds: [String: String] = [:]
 
+  #if SOLARA_PROBES
   @MainActor public static func window(id: String) -> NSWindow? { WindowManager.shared.windows[id] }
+  #endif
 
   static func makeContent(_ make: (String) -> NSView, id: String, kind: String) -> NSView {
     openingKinds[id] = kind

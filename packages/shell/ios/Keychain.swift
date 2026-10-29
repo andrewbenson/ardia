@@ -8,18 +8,7 @@ public class KeychainModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaKeychain")
 
-    AsyncFunction("get") { (account: String) -> String? in
-      if let store = IsolatedSecrets.shared { return store.get(account) }
-      var query = Self.query(account)
-      query[kSecReturnData as String] = true
-      query[kSecMatchLimit as String] = kSecMatchLimitOne
-      #if DEBUG
-      query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
-      #endif
-      var item: CFTypeRef?
-      guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
-      return String(data: data, encoding: .utf8)
-    }
+    AsyncFunction("get") { (account: String) -> String? in Self.readSecret(account) }
 
     AsyncFunction("set") { (account: String, secret: String) -> Bool in
       if let store = IsolatedSecrets.shared { return store.set(account, secret) }
@@ -45,6 +34,19 @@ public class KeychainModule: Module {
       let status = SecItemDelete(Self.query(account) as CFDictionary)
       return status == errSecSuccess || status == errSecItemNotFound
     }
+  }
+
+  public static func readSecret(_ account: String) -> String? {
+    if let store = IsolatedSecrets.shared { return store.get(account) }
+    var query = query(account)
+    query[kSecReturnData as String] = true
+    query[kSecMatchLimit as String] = kSecMatchLimitOne
+    #if DEBUG
+    query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+    #endif
+    var item: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+    return String(data: data, encoding: .utf8)
   }
 
   private static func query(_ account: String) -> [String: Any] {

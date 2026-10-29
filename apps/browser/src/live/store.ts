@@ -1,4 +1,5 @@
 import { readDocument, writeDocument } from "@ardia/shell";
+import { reloadNativeLiveShadow } from "@ardia/settings";
 import { create } from "zustand";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 
@@ -108,6 +109,7 @@ useLive.subscribe((s, prev) => {
     const s = live();
     try {
       writeDocument(DOC, JSON.stringify(Object.fromEntries(PERSISTED.map((k) => [k, s[k]]))));
+      void reloadNativeLiveShadow()?.catch(() => {});
     } catch (error) {
       console.warn("Couldn't save live folders", error);
     }

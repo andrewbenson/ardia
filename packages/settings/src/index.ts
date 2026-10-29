@@ -13,10 +13,25 @@ type NativeSettingsModule = {
   devHistorySnapshot?(profile: string): Promise<{ count: number; ready: boolean; floor: number | "-Infinity"; revision: number }>;
   devBookmarksSnapshot?(profile: string): Promise<{ count: number; ready: boolean; revision: number }>;
   devFaviconLookup?(page: string, engineProfile: string): Promise<{ bytes: number; source: string }>;
+  reloadLiveShadow?(): Promise<void>;
+  devLiveSnapshot?(): Promise<LiveShadowSnapshot>;
   libraryCommand?(kind: string, engineProfile: string, payload: Record<string, unknown>): Promise<unknown>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
   publish(topic: string, json: string): Promise<void>;
   addListener(event: "onSettingsCall", listener: (call: SettingsCall) => void): EventSubscription;
+};
+
+export type LiveShadowSnapshot = {
+  folders: { id: string; items: number; hidden: number; completed: number; status: string | null }[];
+  connectedSources: string[];
+  calendar: {
+    alertLead: string;
+    alertCondition: string;
+    showPreview: boolean;
+    showTimeToNext: boolean;
+    hiddenCalendarIds: string[];
+    prompted: boolean;
+  };
 };
 
 const native = requireOptionalNativeModule<NativeSettingsModule>("SolaraSettings");
@@ -55,6 +70,10 @@ export const navigateNativeSettings = (pane: string | null, profileId: string | 
 export const focusNativeSettingsSearch = () => native?.focusSearch().catch(() => {});
 
 export const startNativeHistoryCatalog = (profiles: string[]) => native?.startHistoryCatalog?.(profiles).catch(() => {});
+
+export const reloadNativeLiveShadow = () => native?.reloadLiveShadow?.();
+
+export const devLiveSnapshot = () => native?.devLiveSnapshot?.();
 
 export const devNativeHistorySnapshot = (profile: string) => native?.devHistorySnapshot?.(profile);
 

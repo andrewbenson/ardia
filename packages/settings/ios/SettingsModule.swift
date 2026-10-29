@@ -8,6 +8,7 @@ public class SettingsModule: Module {
     Events("onSettingsCall")
 
     OnCreate {
+      _ = NativeLiveEngine.shared
       DispatchQueue.main.async { MainActor.assumeIsolated { NativeSettingsWindow.install() } }
     }
 
@@ -120,6 +121,25 @@ public class SettingsModule: Module {
     AsyncFunction("reply") { (id: Int, resultJSON: String?, error: String?) in
       MainActor.assumeIsolated { SettingsJS.shared.reply(id, resultJSON: resultJSON, error: error) }
     }.runOnQueue(.main)
+
+    AsyncFunction("reloadLiveShadow") { (promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in
+          await NativeLiveEngine.shared.reload()
+          reply.resolve(nil)
+        }
+      }
+    }.runOnQueue(.main)
+
+    #if DEBUG
+    AsyncFunction("devLiveSnapshot") { (promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in reply.resolve(await NativeLiveEngine.shared.devSnapshot()) }
+      }
+    }.runOnQueue(.main)
+    #endif
 
     AsyncFunction("publish") { (topic: String, json: String) in
       MainActor.assumeIsolated { SettingsJS.shared.publish(topic, json: json) }

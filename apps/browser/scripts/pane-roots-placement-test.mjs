@@ -14,7 +14,7 @@ The page overlays land in the same place whether the main root draws them or the
 instances under the native shell (ARDIA_NATIVE_SHELL=1 ARDIA_NATIVE_PAGES_POOL=1), ARDIA_SHELL_PANES=0 and then =1,
 each in turn: a two-pane split with the find bar, a link's status and the CLI pill up on the left pane; the same
 after the split is resized; one pane with the toolbar hidden while scrolling, scrolled down and then up (as the page reports it), where the status
-bubble's offset follows the toolbar's slide frame by frame as far with pane roots as without; and the dock peek over a closed sidebar with the address bar in the sidebar, sampled
+bubble's offset follows the toolbar's slide frame by frame as far with pane roots as without; and the dock peek (RN's, or the native dock's shown from the window's left edge when the native sidebar column is on) over a closed sidebar with the address bar in the sidebar, sampled
 every frame while it slides in, where Site Controls must be drawn exactly once on every frame (beside the peek once
 the card has measured, in the pane until then). The find bar and CLI pill frames match within half a point, and
 the window snapshots (2x) of each state match pixel for pixel. In a split the find bar's box and the bottom row of the
@@ -195,12 +195,14 @@ try {
       await until("site controls open", `return openControls() >= 1 || null;`);
       const counts = await run(`
         const out = [];
-        const peek = acLayout.peek.w1;
-        if (!peek) throw new Error("no dock peek for w1");
-        peek.show();
+        const rnPeek = acLayout.peek.w1;
+        const edge = ac.shell.devLeftEdgePointer;
+        if (!rnPeek && !edge) throw new Error("no dock peek for w1");
+        const show = () => (rnPeek ? Promise.resolve(rnPeek.show()) : edge("w1", { x: 2, y: 300 }));
+        const hide = () => (rnPeek ? Promise.resolve(rnPeek.hide()) : edge("w1", null));
         const beside = () => acPerf.findFibers("BesidePeekPopovers", 10).length;
         const sample = (n) => n ? frame().then(() => { out.push([openControls(), beside()]); return sample(n - 1); }) : Promise.resolve(out);
-        return sample(30).then((o) => { peek.hide(); return o; });`);
+        return show().then(() => sample(rnPeek ? 30 : 90)).then((o) => hide().then(() => o));`);
       await run(`acLayout.pages.setState((s) => ({ popover: { ...s.popover, a: null } })); return true;`);
       const bad = counts.filter(([n]) => n !== 1);
       if (bad.length) throw new Error(`Site Controls drawn ${JSON.stringify(counts.map(([n]) => n))} times per frame`);

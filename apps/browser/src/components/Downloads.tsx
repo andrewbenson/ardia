@@ -18,6 +18,7 @@ import { PANEL, POPOVER_MOTION, PopoverSeparator, usePopoverPresence } from "./l
 import { IconButton, useHover } from "./primitives";
 import { hostedKinds, nativeToolbarAvailable, NativeDownloadsView, SolaraHostedView, windowShellActive, type NativeDownloadsEvent } from "@ardia/settings";
 import { useNativeDownloadsPanel } from "./nativeDownloadsPanel";
+import { usePages } from "./layout/pageState";
 
 function formatBytes(n: number) {
   if (n < 0) return "";
@@ -236,6 +237,15 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
   const appear = useRef(new Animated.Value(0)).current;
   const closed = useRef(onClosed);
   closed.current = onClosed;
+  useEffect(
+    () =>
+      usePages.subscribe((s, prev) => {
+        if (s.popover === prev.popover) return;
+        const tabs = useBrowser.getState().tabs;
+        if (Object.entries(s.popover).some(([tabId, popover]) => popover && !prev.popover[tabId] && tabs[tabId]?.windowId === windowId)) setOpen(false);
+      }),
+    [windowId],
+  );
   useEffect(() => {
     if (!placed) {
       if (closing) closed.current();

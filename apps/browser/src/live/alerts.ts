@@ -1,38 +1,22 @@
-import { onAppEvent, onWindowEvent, postNotification, removeNotifications } from "@ardia/shell";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
-import { useCalendar } from "./calendar";
 import { joinMeeting } from "./meetingGroups";
-import { ALERT_LEADS, dueAlerts, joinLink, joinTitle, relativeTime, type CalendarEvent } from "./meetings";
-import { everySlowly } from "../lib/slowTimers";
-import { dismissAlert, live } from "./store";
+import { joinLink, type CalendarEvent } from "./meetings";
+import { onLiveSnapshot, dismissAlert } from "./store";
 
 export const useMeetingAlert = create<{ event: CalendarEvent | null }>()(() => ({ event: null }));
 
-let appActive = true;
-const notified = new Set<string>();
+let alertJSON = "null";
 
-export function alertEvent(now = Date.now()): CalendarEvent | null {
-  const lead = ALERT_LEADS.find((l) => l.value === live().calendar.alertLead)?.minutes;
-  if (lead === null || lead === undefined) return null;
-  return dueAlerts(useCalendar.getState().events, now, lead, new Set(live().dismissedAlerts))[0] ?? null;
+export function applyMeetingAlertReplica(meetingAlertJSON: string): void {
+  if (meetingAlertJSON === alertJSON) return;
+  alertJSON = meetingAlertJSON;
+  useMeetingAlert.setState({ event: JSON.parse(meetingAlertJSON) as CalendarEvent | null });
 }
 
-function check() {
-  const event = alertEvent();
-  const current = useMeetingAlert.getState().event;
-  if (event?.occurrence !== current?.occurrence) useMeetingAlert.setState({ event });
-  if (!event || appActive || live().calendar.alertCondition !== "always" || notified.has(event.occurrence)) return;
-  notified.add(event.occurrence);
-  const link = joinLink(event);
-  const when = relativeTime(event.start, Date.now());
-  void postNotification({
-    id: `meeting:${event.occurrence}`,
-    title: event.title || "Untitled event",
-    body: `${when === "Now" ? "Starting now" : event.start < Date.now() ? `Started ${when}` : `Starts ${when}`}${link ? ` · ${joinTitle(link.provider)}` : ""}`,
-    data: { meeting: event.occurrence },
-  });
-}
+onLiveSnapshot((replica) => { if (replica.meetingAlertJSON) applyMeetingAlertReplica(replica.meetingAlertJSON); });
+
+export const alertEvent = (): CalendarEvent | null => useMeetingAlert.getState().event;
 
 export function joinEvent(event: CalendarEvent, openAll = false, windowId = frontWindow()) {
   const link = joinLink(event);
@@ -42,10 +26,10 @@ export function joinEvent(event: CalendarEvent, openAll = false, windowId = fron
 }
 
 export function dismiss(event: CalendarEvent) {
-  void dismissAlert(event.occurrence);
-  void removeNotifications([`meeting:${event.occurrence}`]);
   if (useMeetingAlert.getState().event?.occurrence === event.occurrence) useMeetingAlert.setState({ event: null });
-  check();
+  void dismissAlert(event.occurrence).catch(() => {
+    if (useMeetingAlert.getState().event === null) useMeetingAlert.setState({ event });
+  });
 }
 
 const frontWindow = () => {
@@ -53,28 +37,3 @@ const frontWindow = () => {
   const id = s.ui.focusedWindowId;
   return id && s.windows[id] && !s.windows[id]!.incognito ? id : s.windowOrder.find((w) => !s.windows[w]!.incognito);
 };
-
-let started = false;
-
-export function startMeetingAlerts() {
-  if (started) return;
-  started = true;
-  onAppEvent((e) => {
-    if (e.type === "resignActive") appActive = false;
-  });
-  onWindowEvent((e) => {
-    if (e.type === "focus") appActive = true;
-  });
-  useCalendar.subscribe((s, prev) => s.events !== prev.events && check());
-  everySlowly({
-    every: 10_000,
-    run: check,
-    needed: () => useCalendar.getState().events.length > 0 || !!useMeetingAlert.getState().event,
-    watch: (changed) => {
-      const calendar = useCalendar.subscribe(changed);
-      const alert = useMeetingAlert.subscribe(changed);
-      return () => (calendar(), alert());
-    },
-  });
-  check();
-}

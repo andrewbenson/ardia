@@ -1,7 +1,50 @@
 import Foundation
 
-public struct MeetingBrowserSnapshot: Sendable, Equatable {
-  public struct Group: Sendable, Equatable {
+
+public final class MeetingBrowserSnapshotBox: LiveMeetingHost, @unchecked Sendable {
+  private let lock = NSLock()
+  private var snapshot: MeetingBrowserSnapshot?
+  private var close: (@Sendable (String) -> Void)?
+  private var pendingCloses: [String] = []
+
+  public init() {}
+
+  public func replace(_ value: MeetingBrowserSnapshot) {
+    lock.lock()
+    snapshot = value
+    lock.unlock()
+  }
+
+  public func setCloseGroup(_ action: (@Sendable (String) -> Void)?) {
+    lock.lock()
+    close = action
+    let waiting = action == nil ? [] : pendingCloses
+    if action != nil { pendingCloses = [] }
+    lock.unlock()
+    for id in waiting { action?(id) }
+  }
+
+  public func meetingSnapshot() async -> MeetingBrowserSnapshot? { currentSnapshot() }
+
+  public func closeGroup(_ groupId: String) async { sendClose(groupId) }
+
+  private func currentSnapshot() -> MeetingBrowserSnapshot? {
+    lock.lock()
+    defer { lock.unlock() }
+    return snapshot
+  }
+
+  private func sendClose(_ groupId: String) {
+    lock.lock()
+    let action = close
+    if action == nil { pendingCloses.append(groupId) }
+    lock.unlock()
+    action?(groupId)
+  }
+}
+
+public struct MeetingBrowserSnapshot: Codable, Sendable, Equatable {
+  public struct Group: Codable, Sendable, Equatable {
     public var id: String
     public var windowId: String
     public var tabIds: [String]
@@ -13,7 +56,7 @@ public struct MeetingBrowserSnapshot: Sendable, Equatable {
     }
   }
 
-  public struct Tab: Sendable, Equatable {
+  public struct Tab: Codable, Sendable, Equatable {
     public var id: String
     public var url: String
     public var lastActiveAt: Double?
@@ -39,7 +82,7 @@ public struct MeetingBrowserSnapshot: Sendable, Equatable {
 }
 
 public protocol LiveMeetingHost: Sendable {
-  func meetingSnapshot() async -> MeetingBrowserSnapshot
+  func meetingSnapshot() async -> MeetingBrowserSnapshot?
   func closeGroup(_ groupId: String) async
 }
 

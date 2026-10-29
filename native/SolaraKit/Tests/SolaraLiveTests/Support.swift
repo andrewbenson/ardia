@@ -215,7 +215,12 @@ final class FakeAuth: LiveAuthPresenter, @unchecked Sendable {
 final class RecordingNotifier: LiveNotifier, @unchecked Sendable {
   let posted = Locked<[LiveNotification]>([])
   let removed = Locked<[String]>([])
-  func post(_ notification: LiveNotification) async { posted.with { $0.append(notification) } }
+  let failing = Locked<Bool>(false)
+  func post(_ notification: LiveNotification) async -> Bool {
+    if failing.current { return false }
+    posted.with { $0.append(notification) }
+    return true
+  }
   func remove(ids: [String]) async { removed.with { $0 += ids } }
 }
 

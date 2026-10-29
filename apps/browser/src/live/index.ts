@@ -9,9 +9,7 @@ import * as store from "./store";
 export function startLive() {
   googleAuth.startGoogleAuth();
   engine.startLiveEngine();
-  calendar.startCalendar();
   meetingGroups.startMeetingGroups();
-  alerts.startMeetingAlerts();
   if (__DEV__) {
     const hover = require("../components/sidebar/hover") as typeof import("../components/sidebar/hover");
     const settings = require("../components/settings/windows") as typeof import("../components/settings/windows");

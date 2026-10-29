@@ -81,7 +81,7 @@ public struct LiveNotification: Sendable, Equatable {
 }
 
 public protocol LiveNotifier: Sendable {
-  func post(_ notification: LiveNotification) async
+  func post(_ notification: LiveNotification) async -> Bool
   func remove(ids: [String]) async
 }
 

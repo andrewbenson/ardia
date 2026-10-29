@@ -109,7 +109,7 @@ public class CalendarModule: Module {
   }
 
   @MainActor public static func observeLiveChanges(_ changed: @escaping @Sendable () -> Void) -> NSObjectProtocol {
-    NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: liveStore, queue: .main) { _ in changed() }
+    NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { _ in changed() }
   }
 
   private func observe() {

@@ -136,7 +136,7 @@ public enum LiveCommand: Codable, Sendable, Equatable {
   var changesDocument: Bool {
     switch self {
     case .refreshFolder, .manualRefresh, .refreshCalendar, .windowFocused, .appResignedActive, .liveTabDeactivated, .connectCalendar,
-      .startGithubDeviceFlow, .cancelGithubDeviceFlow, .offerAlertsForPinnedTab:
+      .startGithubDeviceFlow, .cancelGithubDeviceFlow:
       false
     default: true
     }

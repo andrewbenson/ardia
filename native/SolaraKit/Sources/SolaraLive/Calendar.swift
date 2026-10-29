@@ -13,6 +13,35 @@ public struct CalendarData: Sendable, Equatable {
   public var connected: Bool { access == .fullAccess || access == .fixture }
 }
 
+
+public struct CalendarDataWire: Codable, Sendable, Equatable {
+  public var access: CalendarAuthorization
+  public var calendars: [SystemCalendar]
+  public var events: [CalendarEvent]
+  public var loading: Bool
+  public var error: String?
+  public var lastFetch: Double?
+
+  public init(_ data: CalendarData) {
+    access = data.access
+    calendars = data.calendars
+    events = data.events
+    loading = data.loading
+    error = data.error
+    lastFetch = data.lastFetch
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(access, forKey: .access)
+    try c.encode(calendars, forKey: .calendars)
+    try c.encode(events, forKey: .events)
+    try c.encode(loading, forKey: .loading)
+    if let error { try c.encode(error, forKey: .error) } else { try c.encodeNil(forKey: .error) }
+    if let lastFetch { try c.encode(lastFetch, forKey: .lastFetch) } else { try c.encodeNil(forKey: .lastFetch) }
+  }
+}
+
 public struct CalendarFixture: Codable, Sendable, Equatable {
   public struct Event: Codable, Sendable, Equatable {
     public var id: String

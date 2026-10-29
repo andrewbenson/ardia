@@ -4,7 +4,7 @@ public struct CalendarParticipant: Codable, Sendable, Equatable {
   public enum Status: String, Codable, Sendable { case accepted, declined, tentative, pending }
   public var name: String
   public var email: String
-  public var status: Status
+  public var status: Status?
   public var me: Bool
 
   public init(name: String, email: String, status: Status, me: Bool) {

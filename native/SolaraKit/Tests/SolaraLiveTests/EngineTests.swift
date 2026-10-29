@@ -7,7 +7,7 @@ final class FakeMeetingHost: LiveMeetingHost, @unchecked Sendable {
   let browser: Locked<MeetingBrowserSnapshot>
   let closed = Locked<[String]>([])
   init(_ browser: MeetingBrowserSnapshot) { self.browser = Locked(browser) }
-  func meetingSnapshot() async -> MeetingBrowserSnapshot { browser.current }
+  func meetingSnapshot() async -> MeetingBrowserSnapshot? { browser.current }
   func closeGroup(_ groupId: String) async { closed.with { $0.append(groupId) } }
 }
 

@@ -6,7 +6,7 @@ public class SettingsModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraSettings")
 
-    Events("onSettingsCall", "onLiveReplica", "onLiveAuthRequest")
+    Events("onSettingsCall", "onLiveReplica", "onLiveAuthRequest", "onLiveCloseGroup")
 
     OnCreate {
       _ = NativeLiveEngine.shared
@@ -135,6 +135,15 @@ public class SettingsModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("liveMeetingBrowser") { (snapshotJSON: String, promise: Promise) in
+      do {
+        try NativeLiveEngine.shared.meetingBrowser(snapshotJSON)
+        promise.resolve(nil)
+      } catch {
+        promise.reject("ERR_LIVE_MEETING_BROWSER", String(describing: error))
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("liveStart") { (promise: Promise) in
       nonisolated(unsafe) let reply = promise
       MainActor.assumeIsolated {
@@ -164,8 +173,11 @@ public class SettingsModule: Module {
 
     OnStartObserving {
       let sink = SettingsEventSink(module: self)
-      NativeLiveEngine.shared.setEvent { revision, replicaJSON in
-        DispatchQueue.main.async { sink.module?.sendEvent("onLiveReplica", ["revision": revision, "replicaJSON": replicaJSON]) }
+      NativeLiveEngine.shared.setEvent { revision, replicaJSON, calendarJSON, meetingAlertJSON in
+        DispatchQueue.main.async { sink.module?.sendEvent("onLiveReplica", ["revision": revision, "replicaJSON": replicaJSON, "calendarJSON": calendarJSON, "meetingAlertJSON": meetingAlertJSON]) }
+      }
+      NativeLiveEngine.shared.setCloseGroupEvent { groupId in
+        DispatchQueue.main.async { sink.module?.sendEvent("onLiveCloseGroup", ["groupId": groupId]) }
       }
       NativeLiveAuth.shared.setEvent { value in
         DispatchQueue.main.async { sink.module?.sendEvent("onLiveAuthRequest", value) }
@@ -183,6 +195,7 @@ public class SettingsModule: Module {
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
           NativeLiveEngine.shared.setEvent(nil)
+          NativeLiveEngine.shared.setCloseGroupEvent(nil)
           NativeLiveAuth.shared.setEvent(nil)
           SettingsJS.shared.send = nil
           SettingsJS.shared.failAll("JS stopped listening for Settings calls")

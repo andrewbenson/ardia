@@ -77,6 +77,14 @@ const initial = (() => {
 const parseReplica = (replica: LiveReplica): Partial<LiveState> => JSON.parse(replica.replicaJSON) as Partial<LiveState>;
 const saved = parseReplica(initial);
 let lastRevision = initial.revision;
+let latestReplica = initial;
+const snapshotListeners = new Set<(replica: LiveReplica) => void>();
+
+export function onLiveSnapshot(listener: (replica: LiveReplica) => void): () => void {
+  snapshotListeners.add(listener);
+  listener(latestReplica);
+  return () => snapshotListeners.delete(listener);
+}
 let fieldJSON: Partial<Record<keyof LiveState, string>> = {};
 
 export const useLive = create<LiveState>()(() => ({
@@ -110,7 +118,9 @@ export function applyLiveReplica(replica: LiveReplica): void {
     (changed as Record<string, unknown>)[key] = key === "folders" ? withOptionDefaults(value as LiveState["folders"]) : value;
   }
   lastRevision = replica.revision;
+  latestReplica = replica;
   if (Object.keys(changed).length) useLive.setState({ ...changed, showAll: before.showAll });
+  for (const listener of snapshotListeners) listener(replica);
 }
 
 onLiveReplica(applyLiveReplica);
@@ -150,3 +160,8 @@ export const updateCalendarSettings = (patch: Partial<CalendarSettings>) => comm
 export const setCalendarHidden = (id: string, hidden: boolean) => command("setCalendarHidden", { id, hidden });
 export const dismissAlert = (occurrence: string) => command("dismissAlert", { occurrence });
 export const setMeetingGroup = (group: MeetingGroup | null, groupId?: string) => command("setMeetingGroup", { group, ...(groupId ? { groupId } : {}) });
+
+export const refreshCalendarCommand = () => command("refreshCalendar", {});
+export const connectCalendarCommand = () => command("connectCalendar", {});
+export const offerAlertsForPinnedTab = (url: string) => command("offerAlertsForPinnedTab", { url });
+export const answerAlertOffer = (confirmed: boolean) => command("answerAlertOffer", { confirmed });

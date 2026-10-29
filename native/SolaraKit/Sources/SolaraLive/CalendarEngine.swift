@@ -93,16 +93,20 @@ extension LiveEngine {
       meetingAlert = event
       emit()
     }
-    guard let event, !appActive, state.calendar.alertCondition == .always, !notified.contains(event.occurrence) else { return }
-    notified.insert(event.occurrence)
+    guard let event, !appActive, state.calendar.alertCondition == .always, !state.notifiedAlerts.contains(event.occurrence), !postingAlerts.contains(event.occurrence) else { return }
+    postingAlerts.insert(event.occurrence)
+    defer { postingAlerts.remove(event.occurrence) }
     let link = Meetings.joinLink(event)
     let now = effects.clock.now()
     let when = Meetings.relativeTime(event.start, now: now)
     let lead = when == "Now" ? "Starting now" : event.start < now ? "Started \(when)" : "Starts \(when)"
-    await effects.notifier.post(
+    let delivered = await effects.notifier.post(
       LiveNotification(
         id: "meeting:\(event.occurrence)", title: event.title.isEmpty ? "Untitled event" : event.title,
         body: lead + (link.map { " · \(Meetings.joinTitle($0.provider))" } ?? ""), data: ["meeting": event.occurrence]))
+    guard delivered else { return }
+    mutate { $0.markNotified(event.occurrence) }
+    try? flush()
   }
 
   public func dismissAlert(_ event: CalendarEvent) async {

@@ -1,19 +1,8 @@
-import {
-  calendarAuthorization,
-  launchEnvironment,
-  onCalendarChanged,
-  readDocument,
-  requestCalendarAccess,
-  systemCalendarEvents,
-  systemCalendars,
-  type CalendarAuthorization,
-  type SystemCalendar,
-} from "@ardia/shell";
+import type { CalendarAuthorization, SystemCalendar } from "@ardia/shell";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
-import { everySlowly } from "../lib/slowTimers";
 import type { CalendarEvent } from "./meetings";
-import { live, setCalendarHidden as setCalendarHiddenCommand, useLive } from "./store";
+import { connectCalendarCommand, onLiveSnapshot, refreshCalendarCommand, setCalendarHidden as setCalendarHiddenCommand } from "./store";
 
 type CalendarData = {
   access: CalendarAuthorization | "fixture";
@@ -33,104 +22,29 @@ export const useCalendar = create<CalendarData>()(() => ({
   lastFetch: null,
 }));
 
-const HORIZON_MS = 36 * 3_600_000;
+let fieldJSON: Partial<Record<keyof CalendarData, string>> = {};
+for (const [key, value] of Object.entries(useCalendar.getState())) fieldJSON[key as keyof CalendarData] = JSON.stringify(value);
 
-type Fixture = {
-  calendars: SystemCalendar[];
-  events: (Omit<CalendarEvent, "start" | "end" | "occurrence"> & { startInMinutes: number; durationMinutes: number })[];
-};
-
-const fixtureMode = (() => {
-  try {
-    return typeof __DEV__ !== "undefined" && __DEV__ && launchEnvironment("ARDIA_CALENDAR_FIXTURE") === "1";
-  } catch {
-    return false;
+export function applyCalendarReplica(calendarJSON: string): void {
+  const data = JSON.parse(calendarJSON) as CalendarData;
+  const changed: Partial<CalendarData> = {};
+  for (const key of Object.keys(data) as (keyof CalendarData)[]) {
+    const json = JSON.stringify(data[key]);
+    if (json === fieldJSON[key]) continue;
+    fieldJSON[key] = json;
+    (changed as Record<string, unknown>)[key] = data[key];
   }
-})();
-const launchedAt = Date.now();
-
-function loadFixture(): { calendars: SystemCalendar[]; events: CalendarEvent[] } {
-  const raw = JSON.parse(readDocument("calendar-fixture.json") ?? '{"calendars":[],"events":[]}') as Fixture;
-  const base = Math.floor(launchedAt / 60_000) * 60_000;
-  const events = raw.events.map(({ startInMinutes, durationMinutes, ...e }) => {
-    const start = base + startInMinutes * 60_000;
-    return { ...e, start, end: start + durationMinutes * 60_000, occurrence: `${e.id}@${start}` };
-  });
-  return { calendars: raw.calendars, events };
+  if (Object.keys(changed).length) useCalendar.setState(changed);
 }
 
-const visible = (calendars: SystemCalendar[]) => {
-  const hidden = new Set(live().calendar.hiddenCalendarIds);
-  return calendars.filter((c) => !hidden.has(c.id)).map((c) => c.id);
-};
+onLiveSnapshot((replica) => { if (replica.calendarJSON) applyCalendarReplica(replica.calendarJSON); });
 
-let inflight: Promise<void> | null = null;
-
-export function refreshCalendar(): Promise<void> {
-  if (inflight) return inflight;
-  const run = async () => {
-    useCalendar.setState({ loading: true });
-    try {
-      if (fixtureMode) {
-        const { calendars, events } = loadFixture();
-        const ids = new Set(visible(calendars));
-        useCalendar.setState({ access: "fixture", calendars, events: events.filter((e) => ids.has(e.calendarId)), error: null, lastFetch: Date.now() });
-        return;
-      }
-      const access = calendarAuthorization();
-      if (access !== "fullAccess") {
-        useCalendar.setState({ access, calendars: [], events: [], error: null });
-        return;
-      }
-      const calendars = await systemCalendars();
-      const ids = visible(calendars);
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const events = ids.length ? await systemCalendarEvents(start.getTime(), Date.now() + HORIZON_MS, ids) : [];
-      useCalendar.setState({ access, calendars, events: events.sort((a, b) => a.start - b.start), error: null, lastFetch: Date.now() });
-    } catch (error) {
-      useCalendar.setState({ error: String((error as Error)?.message ?? error) });
-    } finally {
-      useCalendar.setState({ loading: false });
-    }
-  };
-  inflight = run().finally(() => (inflight = null));
-  return inflight;
-}
-
-export async function connectCalendar(): Promise<boolean> {
-  if (fixtureMode) {
-    await refreshCalendar();
-    return true;
-  }
-  const granted = await requestCalendarAccess();
-  await refreshCalendar();
-  return granted;
-}
-
+export const refreshCalendar = async (): Promise<void> => { await refreshCalendarCommand(); };
+export const connectCalendar = async (): Promise<boolean> => (await connectCalendarCommand()).boolean ?? false;
 export const calendarConnected = () => {
   const access = useCalendar.getState().access;
   return access === "fullAccess" || access === "fixture";
 };
-
-let started = false;
-
-export function startCalendar() {
-  if (started) return;
-  started = true;
-  void refreshCalendar();
-  onCalendarChanged(() => void refreshCalendar());
-  everySlowly({
-    every: 5 * 60_000,
-    run: () => void refreshCalendar(),
-    needed: calendarConnected,
-    watch: (changed) => useCalendar.subscribe((s, prev) => s.access !== prev.access && changed()),
-  });
-  useLive.subscribe((s, prev) => {
-    if (s.calendar.hiddenCalendarIds !== prev.calendar.hiddenCalendarIds) void refreshCalendar();
-  });
-}
-
 export const setCalendarHidden = (id: string, hidden: boolean) => setCalendarHiddenCommand(id, hidden);
 
 export function useNow(intervalMs = 15_000, enabled = true): number {

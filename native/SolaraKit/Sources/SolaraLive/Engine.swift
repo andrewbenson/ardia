@@ -56,7 +56,7 @@ public actor LiveEngine {
   var persistedTextSink: (@Sendable (String) -> Void)?
   var calendarInflight: Task<Void, Never>?
   var appActive = true
-  var notified = Set<String>()
+  var postingAlerts = Set<String>()
   var googlePending: Task<Void, Error>?
   var meetingHost: (any LiveMeetingHost)?
 
@@ -97,13 +97,14 @@ public actor LiveEngine {
 
   public var snapshot: LiveSnapshot { LiveSnapshot(revision: revision, live: state, calendar: calendarData, meetingAlert: meetingAlert) }
 
-  public func currentReplica() throws -> (revision: UInt64, replicaJSON: String) {
-    (revision, try state.replicaJSON())
+  public func currentReplica() throws -> (revision: UInt64, replicaJSON: String, calendarJSON: String, meetingAlertJSON: String) {
+    (revision, try state.replicaJSON(), String(decoding: try LiveJSON.encode(CalendarDataWire(calendarData)), as: UTF8.self),
+      String(decoding: try LiveJSON.encode(meetingAlert), as: UTF8.self))
   }
 
-  public nonisolated static func initialReplica(documentText: String?) throws -> (revision: UInt64, replicaJSON: String) {
+  public nonisolated static func initialReplica(documentText: String?) throws -> (revision: UInt64, replicaJSON: String, calendarJSON: String, meetingAlertJSON: String) {
     let state = try documentText.map { try LiveJSON.decode(LiveState.self, from: $0) } ?? LiveState()
-    return (0, try state.replicaJSON())
+    return (0, try state.replicaJSON(), String(decoding: try LiveJSON.encode(CalendarDataWire(CalendarData())), as: UTF8.self), "null")
   }
 
   public func setPersistedTextSink(_ sink: (@Sendable (String) -> Void)?) {
@@ -545,7 +546,7 @@ public actor LiveEngine {
 
   public func meetingTick() async {
     guard let host = meetingHost else { return }
-    let browser = await host.meetingSnapshot()
+    guard let browser = await host.meetingSnapshot() else { return }
     let result = MeetingGroups.tick(state.meetingGroups, browser: browser, now: effects.clock.now())
     mutate { $0.meetingGroups = result.state }
     for id in result.close { await host.closeGroup(id) }

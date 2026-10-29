@@ -109,6 +109,6 @@ struct NativeLiveNotifier: LiveNotifier {
     removeEffect = remove
   }
 
-  func post(_ notification: LiveNotification) async { _ = await postEffect(notification) }
+  func post(_ notification: LiveNotification) async -> Bool { await postEffect(notification) }
   func remove(ids: [String]) async { await removeEffect(ids) }
 }

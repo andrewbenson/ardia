@@ -1,16 +1,15 @@
 import { confirm } from "@ardia/shell";
+import { liveMeetingBrowser, onLiveCloseGroup } from "@ardia/settings";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { changedIds } from "../store/changes";
 import { activeTabId } from "../store/model";
 import { groupOf } from "../store/organize";
-import { everySlowly } from "../lib/slowTimers";
-import { connectCalendar, useCalendar } from "./calendar";
+import { useCalendar } from "./calendar";
 import { eventForCall, isCalendarUrl, meetingOf, relatedLinks, type CalendarEvent } from "./meetings";
-import { live, setMeetingGroup, updateCalendarSettings, useLive } from "./store";
+import { answerAlertOffer, live, offerAlertsForPinnedTab, setMeetingGroup, useLive } from "./store";
 import { PRODUCT } from "../lib/productName";
 
 export const MEETING_FALLBACK_TITLE = "Meeting";
-const CLEANUP_IDLE_MS = 30 * 60_000;
 
 const store = () => useBrowser.getState();
 
@@ -69,21 +68,46 @@ export function startMeetingGroups() {
         const opener = groupOf(s, tab.openerId);
         if (opener && live().meetingGroups[opener.id] && !live().meetingGroups[opener.id]!.endedAt) store().addTabsToGroup(opener.id, [id]);
       }
-      if (tab.pinned && isCalendarUrl(tab.url) && (!before || !before.pinned) && !live().calendar.prompted) void offerAlerts(tab.windowId);
+      if (tab.pinned && isCalendarUrl(tab.url) && (!before || !before.pinned) && !live().calendar.prompted) void offerAlerts(tab.windowId, tab.url);
     }
   });
 
-  everySlowly({
-    every: 30_000,
-    separateEvery: 20_000,
-    run: () => tick(store(), Date.now()),
-    needed: () => Object.keys(live().meetingGroups).length > 0,
-    watch: (changed) => useLive.subscribe((s, prev) => s.meetingGroups !== prev.meetingGroups && changed()),
-  });
+  const changed = (s: BrowserState, prev: BrowserState) => {
+    if (s.groups !== prev.groups || s.tabs !== prev.tabs || s.windows !== prev.windows || s.live !== prev.live) scheduleSnapshot();
+  };
+  useBrowser.subscribe(changed);
+  useLive.subscribe((s, prev) => { if (s.meetingGroups !== prev.meetingGroups) scheduleSnapshot(); });
+  onLiveCloseGroup((groupId) => { if (store().groups[groupId]) store().closeGroup(groupId); });
+  scheduleSnapshot();
 }
 
-async function offerAlerts(windowId: string) {
-  updateCalendarSettings({ prompted: true });
+let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSnapshot() {
+  if (snapshotTimer) return;
+  snapshotTimer = setTimeout(() => {
+    snapshotTimer = null;
+    const s = store();
+    const groups: Record<string, { id: string; windowId: string; tabIds: string[] }> = {};
+    const tabs: Record<string, { id: string; url: string; lastActiveAt: number | null; playingAudio: boolean }> = {};
+    const activeTabByWindow: Record<string, string | null> = {};
+    for (const m of Object.values(live().meetingGroups)) {
+      const g = s.groups[m.groupId];
+      if (!g) continue;
+      groups[g.id] = { id: g.id, windowId: g.windowId, tabIds: g.tabIds };
+      for (const id of new Set([...g.tabIds, m.callTabId])) {
+        const tab = s.tabs[id];
+        if (tab) tabs[id] = { id, url: tab.url, lastActiveAt: tab.lastActiveAt ?? null, playingAudio: !!s.live[id]?.playingAudio };
+      }
+      activeTabByWindow[g.windowId] = activeTabId(s, g.windowId) ?? null;
+    }
+    void liveMeetingBrowser({ groups, tabs, activeTabByWindow });
+  }, 100);
+}
+
+async function offerAlerts(windowId: string, url: string) {
+  const result = await offerAlertsForPinnedTab(url);
+  if (!result.boolean) return;
   const { confirmed } = await confirm({
     title: "Would you like to see meeting alerts for this calendar?",
     message: `${PRODUCT} can alert you when a new meeting is about to begin. You can hide these alerts or manage how close to a meeting start they show up.`,
@@ -91,30 +115,5 @@ async function offerAlerts(windowId: string) {
     cancelTitle: "Don't Show These Alerts",
     windowId,
   });
-  if (confirmed) await connectCalendar();
-  else updateCalendarSettings({ alertLead: "never" });
-}
-
-export function tick(s: BrowserState, now: number) {
-  for (const m of Object.values(live().meetingGroups)) {
-    const g = s.groups[m.groupId];
-    if (!g) {
-      setMeetingGroup(null, m.groupId);
-      continue;
-    }
-    if (!m.endedAt) {
-      const callTab = s.tabs[m.callTabId];
-      const leftCall = !callTab || !meetingOf(callTab.url);
-      if ((m.end !== null && now >= m.end) || (m.end === null && leftCall)) setMeetingGroup({ ...m, endedAt: now });
-      continue;
-    }
-    const w = s.windows[g.windowId];
-    const active = w ? activeTabId(s, w.id) : undefined;
-    const busy = g.tabIds.some((id) => id === active || s.live[id]?.playingAudio);
-    const lastUse = Math.max(m.endedAt, ...g.tabIds.map((id) => s.tabs[id]?.lastActiveAt ?? 0));
-    if (!busy && now - lastUse >= CLEANUP_IDLE_MS) {
-      setMeetingGroup(null, m.groupId);
-      store().closeGroup(m.groupId);
-    }
-  }
+  await answerAlertOffer(confirmed);
 }

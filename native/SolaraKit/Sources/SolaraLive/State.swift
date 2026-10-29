@@ -113,6 +113,7 @@ public struct LiveState: Codable, Sendable, Equatable {
   public var calendar: CalendarSettings = .defaults
   public var meetingGroups: [String: MeetingGroup] = [:]
   public var dismissedAlerts: [String] = []
+  public var notifiedAlerts: [String] = []
   public var extra: [String: LiveAnyJSON] = [:]
   var originalKnown: [String: LiveAnyJSON]?
   var decodedKnown: [String: LiveAnyJSON]?
@@ -121,12 +122,12 @@ public struct LiveState: Codable, Sendable, Equatable {
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case folders, folderOrder, items, known, unread, hidden, completed, completing, status, expandedStacks, showAll, accounts, config,
-      calendar, meetingGroups, dismissedAlerts
+      calendar, meetingGroups, dismissedAlerts, notifiedAlerts
   }
 
   static let persisted: [CodingKeys] = [
     .folders, .folderOrder, .items, .known, .unread, .hidden, .completed, .expandedStacks, .accounts, .config, .calendar, .meetingGroups,
-    .dismissedAlerts,
+    .dismissedAlerts, .notifiedAlerts,
   ]
 
   static let entryMaps: Set<String> = [
@@ -158,6 +159,7 @@ public struct LiveState: Codable, Sendable, Equatable {
     calendar = field(.calendar, .defaults)
     meetingGroups = map(.meetingGroups)
     dismissedAlerts = (try? c.decodeIfPresent(LossyList<String>.self, forKey: .dismissedAlerts))?.values ?? []
+    notifiedAlerts = (try? c.decodeIfPresent(LossyList<String>.self, forKey: .notifiedAlerts))?.values ?? []
     extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue))
     let raw = try decoder.container(keyedBy: LiveAnyKey.self)
     originalKnown = [:]
@@ -205,6 +207,7 @@ public struct LiveState: Codable, Sendable, Equatable {
     try c.encode(calendar, forKey: .calendar)
     try c.encode(meetingGroups, forKey: .meetingGroups)
     try c.encode(dismissedAlerts, forKey: .dismissedAlerts)
+    if !notifiedAlerts.isEmpty { try c.encode(notifiedAlerts, forKey: .notifiedAlerts) }
   }
 
   public static func load(_ text: String?) -> LiveState {
@@ -236,7 +239,7 @@ public struct LiveState: Codable, Sendable, Equatable {
     PersistedPart(
       folders: folders, folderOrder: folderOrder, items: items, known: known, unread: unread, hidden: hidden, completed: completed,
       expandedStacks: expandedStacks, accounts: accounts, config: config, calendar: calendar, meetingGroups: meetingGroups,
-      dismissedAlerts: dismissedAlerts)
+      dismissedAlerts: dismissedAlerts, notifiedAlerts: notifiedAlerts)
   }
 
   struct PersistedPart: Equatable {
@@ -253,6 +256,7 @@ public struct LiveState: Codable, Sendable, Equatable {
     var calendar: CalendarSettings
     var meetingGroups: [String: MeetingGroup]
     var dismissedAlerts: [String]
+    var notifiedAlerts: [String]
   }
 
   public static func folderDefaults(_ kind: LiveFolderKind) -> (name: String, sources: [LiveSourceId]) {
@@ -408,6 +412,11 @@ public struct LiveState: Codable, Sendable, Equatable {
   public mutating func dismissAlert(_ occurrence: String) {
     if dismissedAlerts.contains(occurrence) { return }
     dismissedAlerts = Array((dismissedAlerts + [occurrence]).suffix(LiveState.maxDismissedAlerts))
+  }
+
+  public mutating func markNotified(_ occurrence: String) {
+    if notifiedAlerts.contains(occurrence) { return }
+    notifiedAlerts = Array((notifiedAlerts + [occurrence]).suffix(LiveState.maxDismissedAlerts))
   }
 
   public mutating func setMeetingGroup(_ group: MeetingGroup?, groupId: String? = nil) {

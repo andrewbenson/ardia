@@ -1,3 +1,4 @@
+import AppKit
 import ArdiaShell
 import Foundation
 import SolaraLive
@@ -17,17 +18,24 @@ final class NativeLiveReplicaBox: @unchecked Sendable {
   private let lock = NSLock()
   private var revision: UInt64 = 0
   private var replicaJSON: String
+  private var calendarJSON: String
+  private var meetingAlertJSON: String
   private var error: String?
   private var persistedText: String?
-  private var event: (@Sendable (UInt64, String) -> Void)?
+  private var event: (@Sendable (UInt64, String, String, String) -> Void)?
 
   init(text: String?, failure: String?) {
     persistedText = text
     do {
       let initial = try LiveEngine.initialReplica(documentText: text)
       replicaJSON = initial.replicaJSON
+      calendarJSON = initial.calendarJSON
+      meetingAlertJSON = initial.meetingAlertJSON
     } catch {
-      replicaJSON = (try? LiveEngine.initialReplica(documentText: nil).replicaJSON) ?? "{}"
+      let fallback = try? LiveEngine.initialReplica(documentText: nil)
+      replicaJSON = fallback?.replicaJSON ?? "{}"
+      calendarJSON = fallback?.calendarJSON ?? "{}"
+      meetingAlertJSON = fallback?.meetingAlertJSON ?? "null"
       self.error = "Cannot decode live.json: \(error)"
     }
     if let failure { error = "Cannot read live.json: \(failure)" }
@@ -36,12 +44,12 @@ final class NativeLiveReplicaBox: @unchecked Sendable {
   func current() -> [String: Any] {
     lock.lock()
     defer { lock.unlock() }
-    var value: [String: Any] = ["revision": revision, "replicaJSON": replicaJSON]
+    var value: [String: Any] = ["revision": revision, "replicaJSON": replicaJSON, "calendarJSON": calendarJSON, "meetingAlertJSON": meetingAlertJSON]
     if let error { value["error"] = error }
     return value
   }
 
-  func publish(_ snapshot: (revision: UInt64, replicaJSON: String)) {
+  func publish(_ snapshot: (revision: UInt64, replicaJSON: String, calendarJSON: String, meetingAlertJSON: String)) {
     lock.lock()
     if snapshot.revision <= revision {
       lock.unlock()
@@ -49,11 +57,15 @@ final class NativeLiveReplicaBox: @unchecked Sendable {
     }
     revision = snapshot.revision
     replicaJSON = snapshot.replicaJSON
+    calendarJSON = snapshot.calendarJSON
+    meetingAlertJSON = snapshot.meetingAlertJSON
     let event = self.event
     let revision = self.revision
     let replicaJSON = self.replicaJSON
+    let calendarJSON = self.calendarJSON
+    let meetingAlertJSON = self.meetingAlertJSON
     lock.unlock()
-    event?(revision, replicaJSON)
+    event?(revision, replicaJSON, calendarJSON, meetingAlertJSON)
   }
 
   func setPersistedText(_ text: String) {
@@ -71,7 +83,7 @@ final class NativeLiveReplicaBox: @unchecked Sendable {
     }
   }
 
-  func setEvent(_ event: (@Sendable (UInt64, String) -> Void)?) {
+  func setEvent(_ event: (@Sendable (UInt64, String, String, String) -> Void)?) {
     lock.lock()
     self.event = event
     lock.unlock()
@@ -139,6 +151,9 @@ final class NativeLiveEngine: @unchecked Sendable {
 
   let engine: LiveEngine
   private let box: NativeLiveReplicaBox
+  private let meetingBox = MeetingBrowserSnapshotBox()
+  private let calendarProvider: NativeLiveCalendar
+  private var calendarObserver: NSObjectProtocol?
 
   private init() {
     let result = DocumentStore.readResult("live.json")
@@ -153,8 +168,9 @@ final class NativeLiveEngine: @unchecked Sendable {
     let separate = false
     #endif
     let isolated = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] != nil
+    calendarProvider = NativeLiveCalendar(fixture: fixture, launchedAt: SystemLiveClock().now())
     engine = LiveEngine(effects: LiveEffects(
-      http: NativeLiveHTTP(followsRedirects: !isolated), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: NativeLiveCalendar(fixture: fixture, launchedAt: SystemLiveClock().now()),
+      http: NativeLiveHTTP(followsRedirects: !isolated), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: calendarProvider,
       auth: NativeLiveAuth.shared, notifier: NativeLiveNotifier(), documents: NativeLiveDocuments(),
       environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate)))
     let box = self.box
@@ -169,7 +185,13 @@ final class NativeLiveEngine: @unchecked Sendable {
 
   func initialReplica() -> [String: Any] { box.current() }
 
-  func setEvent(_ event: (@Sendable (UInt64, String) -> Void)?) { box.setEvent(event) }
+  func setEvent(_ event: (@Sendable (UInt64, String, String, String) -> Void)?) { box.setEvent(event) }
+
+  func setCloseGroupEvent(_ event: (@Sendable (String) -> Void)?) { meetingBox.setCloseGroup(event) }
+
+  func meetingBrowser(_ snapshotJSON: String) throws {
+    meetingBox.replace(try LiveJSON.decode(MeetingBrowserSnapshot.self, from: snapshotJSON))
+  }
 
   func command(name: String, payloadJSON: String) async throws -> String {
     let payload = try JSONSerialization.jsonObject(with: Data(payloadJSON.utf8), options: .fragmentsAllowed)
@@ -180,7 +202,13 @@ final class NativeLiveEngine: @unchecked Sendable {
     return String(decoding: try LiveJSON.encode(result), as: UTF8.self)
   }
 
-  func start() async { await engine.start(jobs: [.folders]) }
+  @MainActor func start() async {
+    if calendarObserver == nil {
+      calendarObserver = calendarProvider.observeChanges { [engine] in Task { await engine.calendarChanged() } }
+    }
+    if !NSApp.isActive { await engine.appResignedActive() }
+    await engine.start(jobs: Set(LiveJob.allCases), meetingHost: meetingBox)
+  }
 
   #if DEBUG
   func devSnapshot() async -> [String: Any] {

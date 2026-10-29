@@ -11,7 +11,7 @@ public class NewTabModule: Module {
     Name("SolaraNewTab")
 
     Function("available") { () -> Bool in
-      LaunchSwitches.shared.isOn(.nativeNewTab, defaultOn: true) && NativeSettingsHandle.active
+      NativeSettingsHandle.active
     }
 
     AsyncFunction("setTabs") { (profileId: String, json: String) in

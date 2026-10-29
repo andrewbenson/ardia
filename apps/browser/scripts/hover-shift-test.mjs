@@ -1,8 +1,6 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
 
 const [appArg, port] = process.argv.slice(2);
@@ -10,20 +8,7 @@ if (!appArg) {
   console.error("usage: node hover-shift-test.mjs <Debug Solara.app> [cdpPort]");
   process.exit(2);
 }
-const passes = {
-  rn: { ARDIA_NATIVE_OMNIBOX: "0", ARDIA_NATIVE_NEWTAB: "0" },
-  native: { ARDIA_NATIVE_OMNIBOX: "1", ARDIA_NATIVE_NEWTAB: "1" },
-};
-const pass = process.env.HOVER_SHIFT_PASS;
-if (!pass) {
-  const failed = Object.keys(passes).filter((name) =>
-    spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: "inherit", env: { ...process.env, HOVER_SHIFT_PASS: name } }).status !== 0);
-  process.exit(failed.length ? 1 : 0);
-}
-if (!passes[pass]) {
-  console.error(`HOVER_SHIFT_PASS is ${Object.keys(passes).join(" or ")}`);
-  process.exit(2);
-}
+const pass = "native";
 const scratch = mkdtempSync(join(tmpdir(), "ac-hover-shift-"));
 const data = join(scratch, "data");
 mkdirSync(data);
@@ -44,7 +29,6 @@ try {
     data, port,
     session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t2" } }], tabs: ids.map(tab) }),
     ready: "return !!ac.hoverShift",
-    env: passes[pass],
   });
   const ac = (body) => app.eval(body, { timeout: 120000 });
   const nativeDownloadShifts = async () => {
@@ -87,7 +71,7 @@ try {
       await sleep(1200);
       const native = name === "sidebar" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("sidebar");`));
       const nativeStrip = name === "tab strip" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("topStrip");`));
-      const nativeDownloads = name === "downloads" && (pass === "native" || !!JSON.parse(await ac(`return globalThis.expo.modules.SolaraDownloads.devHoverShifts();`)).hosts);
+      const nativeDownloads = name === "downloads" && (!!JSON.parse(await ac(`return globalThis.expo.modules.SolaraDownloads.devHoverShifts();`)).hosts);
       const { hovered, shifts } = nativeDownloads
         ? await nativeDownloadShifts()
         : native

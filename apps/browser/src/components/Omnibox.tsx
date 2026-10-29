@@ -25,7 +25,8 @@ import { useInlineCompletion } from "./omnibox/useInlineCompletion";
 import { keywordScope, offeredScope, useSuggestions } from "./omnibox/useSuggestions";
 import { setPopover } from "./layout/pageState";
 import { IconButton, useHover } from "./primitives";
-import { INCOGNITO_ICON } from "./ntp/IncognitoHeading";
+
+const INCOGNITO_ICON = "eyeglasses";
 
 type Variant = "panel" | "hero" | "sidebar";
 

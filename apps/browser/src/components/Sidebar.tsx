@@ -48,7 +48,7 @@ import { closeFolderPanel } from "./sidebar/tileFolderUi";
 import { useSidebarTokens } from "./sidebar/tokens";
 import { toggleNewTabBar } from "./omnibox/newTabBar";
 import { PRODUCT } from "../lib/productName";
-import { INCOGNITO_ICON } from "./ntp/IncognitoHeading";
+const INCOGNITO_ICON = "eyeglasses";
 
 const GLOW_ROOM = 24;
 const ROW_PITCH = layout.rowHeight + layout.rowGap;

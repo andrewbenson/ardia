@@ -5,7 +5,7 @@ import Testing
 
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
-    .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
+    .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
     .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]

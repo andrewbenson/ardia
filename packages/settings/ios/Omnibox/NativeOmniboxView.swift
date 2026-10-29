@@ -223,6 +223,19 @@ final class NativeOmniboxView: ExpoView, FocusHandoffDestination {
   }
 }
 
+#if SOLARA_PROBES
+public enum OmniboxRead {
+  @MainActor public static func focusedURL(windowId: String) -> [String: Any]? {
+    guard let view = NativeOmniboxView.hosts[windowId]?.view,
+      view.bar.model?.field?.hasFocus == true,
+      let editor = view.window?.firstResponder as? NSTextView, editor.isFieldEditor else { return nil }
+    let selection = editor.selectedRange()
+    return ["field": "url", "value": editor.string,
+      "selection": ["start": selection.location, "end": selection.location + selection.length]]
+  }
+}
+#endif
+
 enum FieldTimingMarks {
   static func now(_ key: String, _ kind: String) {
     NotificationCenter.default.post(name: Notification.Name("ACFieldMarkAtPresent"), object: [key, kind, "now"] as NSArray)

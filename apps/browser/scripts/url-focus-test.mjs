@@ -11,7 +11,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
-import { launch } from "../../../scripts/lib/instance.mjs";
+import { launch, sleep } from "../../../scripts/lib/instance.mjs";
 
 const argv = process.argv.slice(2);
 if (!argv.length || argv.includes("-h") || argv.includes("--help")) {
@@ -95,6 +95,16 @@ const cases = [
 
 const instance = await launch(app, { data: join(scratch, "data"), fresh: true, onboarded: true });
 const inApp = (body) => instance.eval(body, { timeout: 30000 });
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await instance.snapshot().catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 let failed = 0;
 try {
   const w = await inApp(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; s.setWindowFrame(w, [80, 80, 1280, 800]); return w;`);
@@ -111,16 +121,19 @@ try {
         .then(() => s.openPanel(w, ${JSON.stringify(c.url)}))
         .then(() => sleep(900))
         .then(() => ac.shell.devSnapshotWindow(w, ${JSON.stringify(shots[1])}))
-        .then(() => ({ value: String(ac.omnibox.get(w + ":panel")?.state().value ?? ""), frame: ac.store.getState().windows[w].frame }));`);
+        .then(() => ({ value: String(ac.omnibox.get(w + ":panel")?.state().value ?? ""), selection: ac.omnibox.get(w + ":panel")?.state().selection, frame: ac.store.getState().windows[w].frame }));`);
+    const native = await untilSnapshot(`${c.name} native URL field`, (state) => state.windows.some((entry) => entry.id === w && entry.focusedURL?.field === "url" && entry.focusedURL.value === r.value));
+    const field = native.windows.find((entry) => entry.id === w).focusedURL;
+    const sameSelection = field.selection.start === r.selection?.start && field.selection.end === r.selection?.end;
     const rest = readPng(shots[0]), focused = readPng(shots[1]);
     const scale = Math.round(rest.width / r.frame[2]);
     const dark = c.appearance === "dark";
     const box = inkBox(rest, dark, [Math.round(330 * scale), Math.round(14 * scale), Math.round(rest.width - 160 * scale), Math.round(30 * scale)]);
     const found = box && locate(rest, focused, box, dark);
     const dx = found ? found.dx / scale : NaN, dy = found ? found.dy / scale : NaN;
-    const ok = !!found && Math.abs(dx) <= 0.5 && Math.abs(dy) <= 0.5 && r.value.startsWith(c.scheme);
+    const ok = !!found && Math.abs(dx) <= 0.5 && Math.abs(dy) <= 0.5 && r.value.startsWith(c.scheme) && sameSelection;
     if (!ok) failed++;
-    console.log(`${ok ? "PASS" : "FAIL"} ${c.name}: host moved ${dx} pt, ${dy} pt; field starts "${r.value.slice(0, 12)}"`);
+    console.log(`${ok ? "PASS" : "FAIL"} ${c.name}: host moved ${dx} pt, ${dy} pt; field starts "${r.value.slice(0, 12)}"; selection ${field.selection.start}-${field.selection.end}`);
   }
 } finally {
   await instance.quit();

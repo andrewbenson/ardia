@@ -122,6 +122,10 @@ final class ProbeHost {
           if let sadTab = PaneOverlayRead.sadTab(windowId: id, tabId: tabId) { overlays.append(Self.sadTabOverlay(sadTab, tabId: tabId)) }
         }
         if let downloads = DownloadsPanelRead.panel(windowId: id) { overlays.append(Self.downloadsOverlay(downloads)) }
+        let focusedURL = OmniboxRead.focusedURL(windowId: id).map { source -> [String: Any] in
+          ["field": source["field"] ?? NSNull(), "value": safeURL(source["value"] as? String ?? ""),
+            "selection": source["selection"] ?? NSNull()]
+        }
         return ["id": id, "kind": model.fields.kind ?? "browser", "profileId": model.profileId,
           "incognito": model.incognito, "order": state.windowOrder.firstIndex(of: id) ?? 0,
           "key": window?.isKeyWindow ?? false, "visible": window?.isVisible ?? false,
@@ -134,7 +138,7 @@ final class ProbeHost {
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
           "selectedTabIds": NSNull(), "activeTabIds": NSNull(), "tabIds": model.tabIds,
-          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "overlays": overlays,
+          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "focusedURL": Self.value(focusedURL), "overlays": overlays,
           "views": NSNull()]
       }
       if wanted == nil || wanted == "settings", let settingsWindow = WindowHost.window(id: "settings"),
@@ -160,7 +164,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.split", "windows.tour", "windows.folderPanel", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

@@ -27,6 +27,7 @@ try { port = portArg && parsePort(portArg); } catch (error) {
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
+const nativePager = process.env.ARDIA_NATIVE_PROFILE_PAGER === "1";
 const stale = args.includes("--stale-window");
 const only = args.find((a) => a.startsWith("--only="))?.slice("--only=".length).toLowerCase();
 let matched = 0;
@@ -113,6 +114,9 @@ function alternatingGestures(count, gapMs = 112) {
     ...step, atMs: step.atMs + n * gapMs, timestampMs: step.timestampMs + n * gapMs,
   }))).flat();
 }
+const PAGER_DEBUG = nativePager
+  ? 'globalThis.expo.modules.SolaraProfilePager.describe("w1").then(JSON.parse)'
+  : 'Promise.resolve(globalThis.acPager("w1").debug())';
 async function nativeBatch(steps, blockedMs = 0) {
   return ac(`
     const simulation=globalThis.acSwipe.sidebar("w1").devSimulate(${JSON.stringify(steps)}, {ignorePreference:true});
@@ -120,8 +124,8 @@ async function nativeBatch(steps, blockedMs = 0) {
       const until=performance.now()+${blockedMs}; while(performance.now()<until){}
     },20);
     return simulation.then(result=>new Promise(resolve=>setTimeout(()=>{
-      globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then(state=>resolve({result,state,
-        profile:ac.store.getState().windows.w1.profileId,pager:globalThis.acPager("w1").debug()}));
+      globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then(state=>${PAGER_DEBUG}.then(pager=>resolve({result,state,
+        profile:ac.store.getState().windows.w1.profileId,pager})));
     },650)));
   `, 15000);
 }
@@ -161,8 +165,17 @@ try {
     data, port, session: fixture,
     switches: "--disable-backgrounding-occluded-windows",
     ...(bundlePort ? { js: `127.0.0.1:${bundlePort}` } : {}),
-    ready: 'return !!globalThis.acSwipe?.sidebar("w1");',
+    ready: nativePager ? 'return !!globalThis.acPager?.("w1") && !!globalThis.acSwipe;' : 'return !!globalThis.acSwipe?.sidebar("w1");',
   });
+  if (nativePager) await ac(`
+    const at = (x, y) => () => ({ devSimulate: (steps) => Promise.resolve(globalThis.expo.modules.ArdiaCEF.chromeWindows())
+      .then((all) => (all.find((w) => w.hasRoot && w.profile === "" && w.group) ?? all.find((w) => w.hasRoot)).window)
+      .then((n) => globalThis.expo.modules.ArdiaSwipe.devSimulate(x, y, n, steps, true)) });
+    const strip = at(700, 22);
+    globalThis.acSwipe.sidebar = at(120, 400);
+    globalThis.acSwipe.strip = () => ac.store.getState().settings.tabLayout === "top" ? strip() : null;
+    return true;
+  `);
   evidence.owner = { pid: owned.pid, port: owned.port, binary: owned.binary, started: owned.started, js: owned.js };
   appendFileSync(rep.logFile, `instance pid ${owned.pid}, DevTools port ${owned.port}, data ${data}\n`);
   if (bundlePort) {

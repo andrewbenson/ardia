@@ -262,7 +262,8 @@ NSView<ACSwipeTarget> *MisroutedRendererTarget(NSWindow *window, NSPoint locatio
     NSView *container = target.superview;
     if (target.window != window || !container || target.isHiddenOrHasHiddenAncestor || !IsPager(target)) continue;
     if (!NSPointInRect([target convertPoint:location fromView:nil], target.bounds)) continue;
-    if (ReactRoot(target, window) != root) continue;
+    NSView *targetRoot = ReactRoot(target, window);
+    if (targetRoot != root && ![root isDescendantOf:targetRoot]) continue;
     if (!best || [container isDescendantOf:best.superview]) best = target;
   }
   return best;
@@ -300,7 +301,8 @@ NSView<ACSwipeTarget> *PageTarget(NSWindow *window, NSPoint location, NSView *hi
 NSView *ResolveHit(NSWindow *window, NSPoint location, NSView<ACSwipeTarget> *__strong *target, BOOL *fallback) {
   NSView *hit = HitView(window, location);
   if (gTrace && gWrongRendererHit) hit = FirstRenderer(window.contentView) ?: hit;
-  *target = TargetAt(window, location, hit) ?: PageTarget(window, location, hit);
+  BOOL misrouted = IsRenderWidgetView(hit) && !NSPointInRect([hit convertPoint:location fromView:nil], hit.bounds) && !(gTrace && gLegacyHitRouting);
+  *target = misrouted ? nil : (TargetAt(window, location, hit) ?: PageTarget(window, location, hit));
   *fallback = NO;
   if (*target || (gTrace && gLegacyHitRouting)) return hit;
   NSView<ACSwipeTarget> *pager = MisroutedRendererTarget(window, location, hit);

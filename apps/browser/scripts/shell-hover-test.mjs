@@ -41,7 +41,7 @@ const entersAt = (y) => run(`return at(700, 400).then(stats).then(() => at(120, 
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true,
-    env: { ARDIA_NATIVE_SHELL: "1" },
+    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "0" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.expo.modules.SolaraWindowShell.devCover",
   });
   await sleep(2000);

@@ -70,6 +70,16 @@ const until = async (what, body, ms = 8000) => {
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot().catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const bar = (id) => run(`return bar(${JSON.stringify(id)});`);
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 
@@ -92,6 +102,9 @@ try {
     const frame = await run(`return win(${number}).then((w) => w.frame);`);
     const [, , w, h] = frame.match(/[-\d.]+/g).map(Number);
     little = { id, tab, number, width: w, height: h };
+    const nativeWindow = await untilSnapshot("native Little Solara window", (state) => state.windows.some((entry) => entry.id === id && entry.kind === "small" && entry.tabIds.includes(tab)) && state.tabs.some((entry) => entry.id === tab && entry.url === url("b")));
+    const frameSize = nativeWindow.windows.find((entry) => entry.id === id)?.frame;
+    if (Math.abs(frameSize.width - w) > 0.5 || Math.abs(frameSize.height - h) > 0.5) throw new Error(`native little window ${JSON.stringify(frameSize)}, JS ${w}x${h}`);
     return little;
   });
 
@@ -178,6 +191,7 @@ try {
     }
     await until("the small window closes", `return !st().windows[${JSON.stringify(little.id)}] || null;`, 5000);
     const moved = await until("the tab in the main window", `return st().windows.w1.tabIds.includes(${JSON.stringify(little.tab)}) || null;`, 5000);
+    await untilSnapshot("native tab moved to main", (state) => !state.windows.some((entry) => entry.id === little.id) && state.windows.some((entry) => entry.id === "w1" && entry.tabIds.includes(little.tab)) && state.tabs.some((entry) => entry.id === little.tab && entry.windowId === "w1"));
     return { moved };
   });
 

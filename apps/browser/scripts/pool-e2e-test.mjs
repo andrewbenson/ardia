@@ -64,6 +64,16 @@ const until = async (what, body, ms = 10000) => {
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
 const json = JSON.stringify;
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 
 try {
   app = await launch(resolve(appArg), {
@@ -97,8 +107,11 @@ try {
   await rep.check("zoom in reaches the page and its zoom reaches the store; reset brings it back", async () => {
     await run(`return page("a").zoomStep(1).then(() => true);`);
     const zoomed = await until("zoomed in", `const z = S().tabs.a.zoom; return z && z > 1 ? z : null;`);
+    const nativeZoomed = await untilSnapshot("native zoom", (state) => state.tabs.some((tab) => tab.id === "a" && Math.abs(tab.zoom - zoomed) <= 0.001));
+    if (Math.abs(nativeZoomed.tabs.find((tab) => tab.id === "a").zoom - zoomed) > 0.001) throw new Error("native zoom differs from JS");
     await run(`return page("a").zoomStep(0).then(() => true);`);
     const reset = await until("zoom reset", `const z = S().tabs.a.zoom; return !z || z === 1 ? { z: z ?? 1 } : null;`);
+    await untilSnapshot("native zoom reset", (state) => state.tabs.some((tab) => tab.id === "a" && Math.abs(tab.zoom - reset.z) <= 0.001));
     return { zoomed, reset: reset.z };
   });
 
@@ -106,7 +119,9 @@ try {
     await run(`return page("a").loadUrl(${json(url("three"))}).then(() => true);`);
     await until("THREE", `return S().tabs.a.title === "THREE" && S().live.a?.canGoBack ? true : null;`);
     await run(`return page("a").goBack().then(() => true);`);
-    return until("back to ONE", `const t = S().tabs.a; return t.title === "ONE" && t.url === ${json(url("one"))} ? t.url : null;`);
+    const landed = await until("back to ONE", `const t = S().tabs.a; return t.title === "ONE" && t.url === ${json(url("one"))} ? t.url : null;`);
+    await untilSnapshot("native back navigation", (state) => state.tabs.some((tab) => tab.id === "a" && tab.title === "ONE" && tab.url === landed));
+    return landed;
   });
 
   await rep.check("the favicon event reaches the store", async () =>
@@ -157,6 +172,8 @@ try {
     const click = await run(`return ac.shell.devClick("w1", { x: ${x}, y: ${y}, wait: 250 });`);
     if (!/RenderWidgetHostViewCocoa|WebContentsViewCocoa/.test(String(click.hit))) throw new Error(`the click at ${x},${y} landed on ${click.hit}`);
     await until("b focused", `return active() === "b" || null;`, 3000);
+    const native = await untilSnapshot("native split focus", (state) => state.windows[0]?.selectedTabId === "b" && ["a", "b"].every((id) => state.windows[0]?.split?.leaves?.[id]));
+    if (native.windows[0].selectedTabId !== "b") throw new Error(`native selected ${native.windows[0].selectedTabId}`);
     return { at: [x, y], hit: click.hit };
   });
 } catch (e) {

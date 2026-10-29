@@ -11,6 +11,7 @@ of its time in `swift test`'s first build. Each package also runs its own:
 | `packages/import` | `pnpm --filter @ardia/import test` (`swift test`) | 26 |
 | `packages/ardiacore` | `pnpm --filter @ardia/ardiacore test` (`tests/pip-zoom.test.cc`, compiled with `clang++`) | 1 program |
 | `extras/raycast-solara` | `node --test extras/raycast-solara/src/scripts.test.ts` | 6 |
+| `native/SolaraKit` | `swift test -Xswiftc -DSOLARA_PROBES` in `native/SolaraKit` (without the define `SolaraProbesTests` compiles to nothing and is skipped silently) | every suite |
 
 `apps/browser` runs its TypeScript under plain Node, with the real `@ardia/shell` and `@ardia/ardiacore` code:
 `src/test-loader.mjs` swaps only the native side. `expo-modules-core` becomes `src/test-native/expo.ts`, which hands

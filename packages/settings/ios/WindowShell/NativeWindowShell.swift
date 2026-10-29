@@ -25,7 +25,7 @@ enum NativeWindowShell {
   }
 
   nonisolated static var mainOnTop: Bool {
-    TabPoolHost.available && LaunchSwitches.shared.isOn(.shellMainTop, defaultOn: false)
+    TabPoolHost.available && LaunchSwitches.shared.isOn(.shellMainTop)
   }
 
   static func install() {

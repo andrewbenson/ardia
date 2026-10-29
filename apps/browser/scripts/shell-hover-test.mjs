@@ -134,7 +134,7 @@ try {
   await rep.check("layer-lookup-cost", async () => {
     const costs = [await run(`return S.devHitCost("w1", 120, 130);`), await run(`return S.devHitCost("w1", 700, 400);`)];
     const micros = costs.map((c) => Number(c.micros));
-    const mainTop = process.env.ARDIA_SHELL_MAIN_TOP === "1";
+    const mainTop = process.env.ARDIA_SHELL_MAIN_TOP !== "0";
     if (micros.some((m) => !(m < (mainTop ? 120 : 40)))) throw new Error(`layer lookup ${micros} µs`);
     if (!mainTop) return micros;
     const points = Array.from({ length: 240 }, (_, i) => (i % 2 ? [700 + (i % 7), 400] : [120, 130 + (i % 5)]));

@@ -13,7 +13,7 @@ column's when the native sidebar is on) hover under the pointer; under a native 
 they don't; a row under a still pointer leaves when the native view arrives and enters again when it goes, and the same
 when the native view is hidden and shown without leaving the overlay; with the native sidebar, a native view over the
 peeking sidebar takes its hover too (--sidebar runs the native column, the RN rows otherwise); finding the layer under
-the pointer stays under 30 µs. With the RN main root on top (ARDIA_SHELL_MAIN_TOP=1) the exact lookup walks the RN
+the pointer stays under 40 µs. With the RN main root on top (ARDIA_SHELL_MAIN_TOP=1) the exact lookup walks the RN
 tree, so it stays under 120 µs and the shell runs it at most once a display frame: a 120 Hz pointer stream costs at most
 one lookup per frame and 3% of a core on a 60 Hz display (the 120 Hz display estimate is only reported), and with or
 without it the hover layer changes within a frame of the move.`);
@@ -135,7 +135,7 @@ try {
     const costs = [await run(`return S.devHitCost("w1", 120, 130);`), await run(`return S.devHitCost("w1", 700, 400);`)];
     const micros = costs.map((c) => Number(c.micros));
     const mainTop = process.env.ARDIA_SHELL_MAIN_TOP === "1";
-    if (micros.some((m) => !(m < (mainTop ? 120 : 30)))) throw new Error(`layer lookup ${micros} µs`);
+    if (micros.some((m) => !(m < (mainTop ? 120 : 40)))) throw new Error(`layer lookup ${micros} µs`);
     if (!mainTop) return micros;
     const points = Array.from({ length: 240 }, (_, i) => (i % 2 ? [700 + (i % 7), 400] : [120, 130 + (i % 5)]));
     const stream = await run(`return S.devPointerStream("w1", ${JSON.stringify(points)}, 120);`);

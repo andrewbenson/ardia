@@ -77,8 +77,6 @@ function updateIndicator({ server }: CliState) {
   }, INDICATOR_HOLD_MS);
 }
 
-useCli.subscribe(updateIndicator);
-
 let running: Promise<CliInstallResult> | null = null;
 
 export function installCliInBackground(reason: CliInstallReason): Promise<CliInstallResult> {
@@ -159,6 +157,7 @@ let started = false;
 export function startCliControl() {
   if (started) return;
   started = true;
+  useCli.subscribe(updateIndicator);
   let latest = 0;
   let inFlight = 0;
   let newest = 0;

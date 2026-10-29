@@ -24,7 +24,9 @@ final class NativeCliControl {
   private(set) var installedVersion: String?
   private(set) var binPath: String?
   private(set) var error: String?
-  private(set) var indicatorShown = false
+  private(set) var indicatorShown = false {
+    didSet { showPill() }
+  }
 
   var topic: [String: Any] {
     var out: [String: Any] = ["installing": installing != nil]
@@ -65,6 +67,8 @@ final class NativeCliControl {
     guard Self.active, !started else { return }
     started = true
     self.model = model
+    CliPillIndicator.shared.onStop = { NativeCliControl.shared.stop() }
+    showPill()
     ArdiaCoreEngineBridge.observe("cliControl") { payload in
       let status = CliControlServer(payload)
       Task { @MainActor in NativeCliControl.shared.heard(status) }
@@ -109,6 +113,10 @@ final class NativeCliControl {
 
   func stop() {
     model?.update(["cliControl": .bool(false)])
+  }
+
+  private func showPill() {
+    CliPillIndicator.shared.set(shown: indicatorShown, product: CliTool.product, command: CliTool.command)
   }
 
   private func updateIndicator() {

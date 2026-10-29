@@ -87,7 +87,8 @@ try {
       await sleep(1200);
       const native = name === "sidebar" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("sidebar");`));
       const nativeStrip = name === "tab strip" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("topStrip");`));
-      const { hovered, shifts } = name === "downloads" && pass === "native"
+      const nativeDownloads = name === "downloads" && (pass === "native" || !!JSON.parse(await ac(`return globalThis.expo.modules.SolaraDownloads.devHoverShifts();`)).hosts);
+      const { hovered, shifts } = nativeDownloads
         ? await nativeDownloadShifts()
         : native
         ? await ac(`return globalThis.expo.modules.SolaraHosted.sidebarHoverShifts("w1").then((json) => JSON.parse(json)).then((r) => ({ hovered: r.hovered, shifts: r.shifts.map((s) => ({ hovered: s, view: "native row", before: [], after: [] })) }));`)

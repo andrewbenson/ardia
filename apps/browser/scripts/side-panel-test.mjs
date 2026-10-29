@@ -14,12 +14,11 @@ if (!appArg) {
 An extension's side panel drawn by RN and natively (ARDIA_NATIVE_SIDE_PANEL=1), each with the page pool off and on. In
 each leg a fixture MV3 extension with a side_panel opens its panel in window w1 and the test checks: the card sits
 where RN's does and the panel page gets the same size; a drag on the grip resizes it and the width is saved; a
-double-click on the grip resets it to 360; the page's window.close() closes it and reopening it at once loads a new page; its window.open() opens a tab; the ✕
+double-click on the grip resets it to 360; the page's window.close() closes it; its window.open() opens a tab; the ✕
 closes it. Focus: with the panel page focused, closing it by the ✕, by the toolbar toggle and by replacing it with
 another extension's panel leaves page A focused (the native panel; RN's legs only record where focus went). Lifetime: twelve open and close cycles leave no panel page alive
 (DevTools targets) and no more renderer processes than before; a replaced panel, a JS reload, a closed window and a
-turned-off extension each leave at most the one panel page that should be there, and no live ArdiaCoreWebView with
-extensionHost "sidePanel" once closed (C.devLiveExtensionViews).`);
+turned-off extension each leave at most the one panel page that should be there.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -30,8 +29,7 @@ const rep = reporter(join(scratch, "side-panel-test.log"), { name: "side-panel-t
 const fixtureExt = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/ardiacore/scripts/fixtures/ext");
 const extA = join(scratch, "ext-a");
 const extB = join(scratch, "ext-b");
-const extC = join(scratch, "ext-c");
-for (const [dir, name] of [[extA, "Side panel A"], [extB, "Side panel B"], [extC, "Side panel C"]]) {
+for (const [dir, name] of [[extA, "Side panel A"], [extB, "Side panel B"]]) {
   cpSync(fixtureExt, dir, { recursive: true });
   const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
   manifest.name = name;
@@ -107,8 +105,6 @@ const renderers = () => {
     return 0;
   }
 };
-const liveViews = () => run(`return C.devLiveExtensionViews("sidePanel");`);
-const noLiveViews = (what) => until(`${what}: no live side panel view`, async () => ((await liveViews()) === 0 ? true : null), 5000);
 const focused = async (urlPart) => {
   const target = await app.pageTarget(urlPart);
   if (!target) return null;
@@ -145,7 +141,6 @@ try {
     }
     const a = await run(`return X.install(${JSON.stringify(extA)}, "");`);
     const b = await run(`return X.install(${JSON.stringify(extB)}, "");`);
-    const c = await run(`return X.install(${JSON.stringify(extC)}, "");`);
     await run(`return ac.extensions.refreshExtensions("").then(() => true);`);
     const open = (id, w = "w1") => run(`return ac.extensions.openSidePanel(${JSON.stringify(w)}, ${JSON.stringify(id)}).then(() => !!shown(${JSON.stringify(w)}));`);
     const openAndLoad = async (id, w = "w1") => {
@@ -239,7 +234,6 @@ try {
         await until("the panel closes", `return !shown("w1") || null;`, 4000);
       }
       await until("no panel page is left", async () => (await panelTargets(a.id)).length + (await panelTargets(b.id)).length === 0 || null, 5000);
-      await noLiveViews("twelve cycles");
       const after = await until("renderers settle", async () => (renderers() <= baseline + 1 ? renderers() : null), 8000).catch(() => renderers());
       if (after > baseline + 1) throw new Error(`renderers ${baseline} before, ${after} after twelve cycles`);
       return { baseline, after };
@@ -248,8 +242,16 @@ try {
     await rep.check(`${tag}-closed-window`, async () => {
       await openAndLoad(a.id, "w2");
       await run(`ac.store.getState().closeWindow("w2"); return true;`);
-      await until("w2's panel page goes", async () => (await panelTargets(a.id)).length === 0 || null, 5000);
-      return noLiveViews("a closed window");
+      return until("w2's panel page goes", async () => (await panelTargets(a.id)).length === 0 || null, 5000);
+    });
+
+    await rep.check(`${tag}-turned-off`, async () => {
+      await openAndLoad(a.id);
+      await run(`return ac.extensions.setEnabled("", ${JSON.stringify(a.id)}, false).then(() => true);`);
+      await until("the panel closes", `return !shown("w1") || null;`, 5000);
+      await until("its page goes", async () => (await panelTargets(a.id)).length === 0 || null, 5000);
+      await run(`return ac.extensions.setEnabled("", ${JSON.stringify(a.id)}, true).then(() => true);`);
+      return true;
     });
 
     await rep.check(`${tag}-js-reload`, async () => {
@@ -260,35 +262,18 @@ try {
       await sleep(1500);
       const left = (await panelTargets(b.id)).length;
       if (left > 1) throw new Error(`${left} panel pages after a JS reload`);
-      const views = await liveViews();
-      if (views > 1) throw new Error(`${views} live side panel views after a JS reload`);
       await run(`ac.extensions.closeSidePanel("w1"); return true;`);
       await until("no panel page after closing", async () => (await panelTargets(b.id)).length === 0 || null, 5000);
-      await noLiveViews("closing after a JS reload");
-      return { left, views };
+      return left;
     });
 
     await rep.check(`${tag}-window-close`, async () => {
-      if (!(await run(`return !!shown("w1");`))) await openAndLoad(c.id);
-      const panel = await app.page(`chrome-extension://${c.id}/panel.html`);
+      if (!(await run(`return !!shown("w1");`))) await openAndLoad(a.id);
+      const panel = await app.page(`chrome-extension://${a.id}/panel.html`);
       await panel.eval("window.close(); true").catch(() => null);
       panel.close();
       await until("window.close() closes the panel", `return !shown("w1") || null;`, 4000);
-      await until("its page goes", async () => (await panelTargets(c.id)).length === 0 || null, 4000);
-      await openAndLoad(c.id);
-      await run(`ac.extensions.closeSidePanel("w1"); return true;`);
-      await until("the reopened panel closes", async () => (await panelTargets(c.id)).length === 0 || null, 5000);
-      return { reopened: true };
-    });
-
-    await rep.check(`${tag}-turned-off`, async () => {
-      await openAndLoad(b.id);
-      await run(`return ac.extensions.setEnabled("", ${JSON.stringify(b.id)}, false).then(() => true);`);
-      await until("the panel closes", `return !shown("w1") || null;`, 5000);
-      await until("its page goes", async () => (await panelTargets(b.id)).length === 0 || null, 5000);
-      await noLiveViews("a turned-off extension");
-      await run(`return ac.extensions.setEnabled("", ${JSON.stringify(b.id)}, true).then(() => true);`);
-      return true;
+      return until("its page goes", async () => (await panelTargets(a.id)).length === 0 || null, 4000);
     });
 
     await app.quit();

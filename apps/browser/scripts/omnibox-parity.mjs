@@ -86,6 +86,7 @@ async function start(native) {
     s.importHistory(s.windows[w].profileId, ${JSON.stringify(history)});
     s.updateSettings({ searchSuggestions: false });
     s.newTab(w, { url: "https://example.com/", background: true });
+    s.newTab(w, { url: "https://open.example.net/", background: true });
     return 1;`);
   await sleep(1500);
   return instance;
@@ -147,6 +148,11 @@ try {
     try {
       const [a, b] = await Promise.all([run(rn, script), run(native, script)]);
       const diffs = [];
+      if (name === "the new tab bar lists open tabs") {
+        const row = "page:https://open.example.net/ (tab)";
+        if (!a[0]?.items.includes(row)) diffs.push(`step 1 missing open tab in rn: ${JSON.stringify(a[0]?.items)}`);
+        if (!b[0]?.items.includes(row)) diffs.push(`step 1 missing open tab in native: ${JSON.stringify(b[0]?.items)}`);
+      }
       a.forEach((sa, i) => {
         const sb = b[i];
         for (const key of Object.keys(sa ?? {})) {

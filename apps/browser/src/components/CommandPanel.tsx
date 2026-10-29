@@ -136,7 +136,7 @@ function NativePanelHost({ windowId, windowWidth }: { windowId: string; windowWi
   const json = JSON.stringify({ open, ready, tabId, text, ...panelStyles.get(windowId), ...geometry });
   const onCancel = () => useBrowser.getState().closePanel(windowId);
   const onDone = (reason?: BarDismissal) => closePanelToHeroBar(windowId, tabId, reason);
-  return <NativeOmniboxBar variant="panel" tabId={tabId} initialText={text} panel={json} idle={!open} onCancel={onCancel} onDone={onDone} />;
+  return <NativeOmniboxBar variant={anchor.sidebar ? "sidebar" : "panel"} tabId={tabId} initialText={text} panel={json} idle={!open} onCancel={onCancel} onDone={onDone} />;
 }
 
 function CommandPanelBody({ windowWidth }: { windowWidth: number }) {

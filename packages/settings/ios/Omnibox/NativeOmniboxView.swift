@@ -165,6 +165,7 @@ final class NativeOmniboxView: ExpoView, FocusHandoffDestination {
         FieldTimingMarks.now("panel", "configured")
         FieldTimingMarks.atPresent("panel", "content")
       }
+      if driven { DispatchQueue.main.async { [weak self] in if let self, self.driven { self.onDriverState(["json": self.driverStateJSON()]) } } }
     }
   }
 

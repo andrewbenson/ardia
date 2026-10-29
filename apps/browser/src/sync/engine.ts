@@ -1482,9 +1482,6 @@ export function startSync() {
       get menu(): typeof import("./menu") {
         return require("./menu");
       },
-      get sheets(): typeof import("../components/settings/panes/SyncSheets") {
-        return require("../components/settings/panes/SyncSheets");
-      },
     };
   }
 }

@@ -31,7 +31,7 @@ Code:
     the pins.
   - `engine.ts`: state, setup flows, the cycle.
   - `menu.ts`: the overflow menu's synced devices.
-- `apps/browser/src/components/settings/panes/Sync.tsx` and `SyncSheets.tsx`: Settings › Sync.
+- `native/SolaraKit/Sources/SolaraUI/Settings/Panes/SyncPane.swift` and `SyncSheets.swift`: Settings › Sync.
 
 ## Threat model
 

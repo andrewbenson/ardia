@@ -783,7 +783,7 @@ Timings in frames are measured from 30 fps recordings.
 ### 5.4 Settings inventory (phase 2)
 
 `PANES` (`settingsIndex.ts:5`) has **15** panes, not 17. The other surfaces are Profile details
-(`ProfileDetailsPane`), the Theme editor (`ThemeEditor.tsx`, 571 lines), Sync sheets (`SyncSheets.tsx`) and Share
+(`ProfileDetailsPane`), the Theme editor (`ThemeEditor.tsx`, 571 lines), Sync sheets (`SyncSheets.swift`) and Share
 diagnostics. In all, 6,337 lines across 29 files and 110 indexed rows.
 
 | Pane | Lines | Kind | Native data source |

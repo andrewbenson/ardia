@@ -158,7 +158,7 @@ try {
 
 let rn;
 try {
-  rn = await start("rn", {});
+  rn = await start("rn", { ARDIA_NATIVE_ICON_PICKER: "0" });
   const { run } = rn;
   await sleep(2500);
   await rep.check("without the switch RN's picker shows and the native one stays hidden", async () => {

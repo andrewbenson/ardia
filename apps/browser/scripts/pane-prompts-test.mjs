@@ -7,7 +7,7 @@ import { devtools, launch, reporter, session, sleep } from "../../../scripts/lib
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error(`usage: node pane-prompts-test.mjs <Debug Solara.app> [--keep-data]
+  console.error(`usage: node pane-prompts-test.mjs <Debug Solara.app> [--defaults] [--keep-data]
 
 The pooled pane's prompts drawn from pool page events with ARDIA_NATIVE_PANE_PROMPTS=1 (page pool on), against the
 same page with the switch off. Password: a real form submission brings Chrome's save prompt; with the switch on RN
@@ -25,7 +25,7 @@ page and moves on to the next; a request goes when the page navigates. Device ch
 (the DEBUG hook) draws natively at 340 wide, Cancel closes it in the engine and the store, and the unauthorized
 chooser shows its notice. Engine offer: a protected-video page message brings the 320-wide WebKit offer 8 points
 below the pane's top, and Stay on Page takes it down in JS and natively. With the switch off the RN wrappers still
-draw each one.`);
+draw each one. --defaults runs only the native leg at the app's own switch defaults, with no switch env.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -79,7 +79,7 @@ const POOL = {
   ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1",
   ARDIA_CHROMIUM_SWITCHES: `--ardia-test-bluetooth-chooser ${process.env.ARDIA_CHROMIUM_SWITCHES ?? ""}`.trim(),
 };
-const LEGS = [
+const LEGS = args.includes("--defaults") ? [{ tag: "native", env: { ARDIA_CHROMIUM_SWITCHES: POOL.ARDIA_CHROMIUM_SWITCHES } }] : [
   { tag: "rn", env: { ...POOL, ARDIA_NATIVE_PANE_PROMPTS: "0" } },
   { tag: "native", env: { ...POOL, ARDIA_NATIVE_PANE_PROMPTS: "1" } },
 ];

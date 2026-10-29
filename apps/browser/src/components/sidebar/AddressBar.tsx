@@ -195,6 +195,16 @@ const SIDEBAR_PLATE = { box: PLATE, radius: PLATE_RADIUS };
 const SIDEBAR_GEOMETRY = (toggle: boolean) => ({ sidebarButton: toggle ? 0 : null, back: 0, forward: 0, reload: 0, urlLeft: 0 });
 
 function NativeSidebarAddressBar({ width }: { width: number }) {
+  const windowId = usePublishedSidebarAddressBar(width);
+  return <NativeSidebarAddressBarView windowId={windowId} style={StyleSheet.absoluteFill} />;
+}
+
+export function SidebarAddressBarState({ width }: { width: number }) {
+  usePublishedSidebarAddressBar(width);
+  return null;
+}
+
+function usePublishedSidebarAddressBar(width: number): string {
   const windowId = useWindowId();
   const tabId = useActiveTabId() ?? "";
   const theme = useTheme();
@@ -242,5 +252,5 @@ function NativeSidebarAddressBar({ width }: { width: number }) {
   }, [windowId]);
   useEffect(() => setSidebarAddressBar(windowId, json), [windowId, json]);
   useEffect(() => () => setSidebarAddressBar(windowId, null), [windowId]);
-  return <NativeSidebarAddressBarView windowId={windowId} style={StyleSheet.absoluteFill} />;
+  return windowId;
 }

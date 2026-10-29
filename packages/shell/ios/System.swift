@@ -346,6 +346,12 @@ public class FileDropModule: Module {
 
 @MainActor public protocol DevDropDestination: AnyObject {}
 
+public enum WindowTitlebar {
+  @MainActor public static func doubleClick(_ window: NSWindow, _ modifiers: NSEvent.ModifierFlags) {
+    WindowDragRegion.doubleClick(window, modifiers)
+  }
+}
+
 public enum DroppedLinks {
   static let maxItems = 50
   static let linkFileExtensions: Set<String> = ["webloc", "inetloc", "url"]

@@ -638,7 +638,7 @@ class DragController {
 
 const DragContext = createContext<DragController | null>(null);
 
-export function DragProvider({ children }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode }) {
+export function DragProvider({ children, nativeGlow }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode; nativeGlow?: boolean }) {
   const controller = useMemo(() => new DragController(), []);
   const windowId = useWindowId();
   if (__DEV__ && !nativeSidebar()) {
@@ -665,7 +665,7 @@ export function DragProvider({ children }: { children: (ghost: Ghost | null, con
   return (
     <DragContext.Provider value={controller}>
       {children(ghost, controller)}
-      <WindowDropHighlight />
+      {nativeGlow ? null : <WindowDropHighlight />}
     </DragContext.Provider>
   );
 }

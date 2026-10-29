@@ -32,6 +32,8 @@ enum NativeSidebarHoverCard {
     return String(data: data, encoding: .utf8) ?? "null"
   }
 
+  static func players(windowId: String) -> [NSView] { hosts[windowId]?.shownPlayers ?? [] }
+
   static func presented(_ windowId: String, at point: CGPoint, width: ClosedRange<Double>, height: ClosedRange<Double>) -> String {
     guard let view = NativeSidebar.hosts[windowId]?.view.window?.contentView, let root = view.layer?.presentation() ?? view.layer else { return "null" }
     let flipped = view.isFlipped || root.isGeometryFlipped
@@ -150,6 +152,8 @@ final class SidebarHoverCardHost {
     return card
   }()
   private var kind: String?
+
+  var shownPlayers: [NSView] { kind == "player" && motion.phase != .hidden ? [playerCard.player] : [] }
   private var liveCardInput: [String: Any]?
   private var liveObserver: NSObjectProtocol?
 

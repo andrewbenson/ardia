@@ -181,9 +181,10 @@ enum NativeMedia {
   }
 
   static func probe(kind: String, windowId: String) -> String {
-    let views = mounted.filter { $0.kind == kind && $0.windowId == windowId }.compactMap { $0.view.value }
-      + (kind == sidebarPlayer ? NativeSidebar.players(windowId: windowId) : [])
-      + (NativePaneOverlays.host(windowId)?.mediaViews(kind) ?? [])
+    var views: [NSView] = mounted.filter { $0.kind == kind && $0.windowId == windowId }.compactMap { $0.view.value }
+    if kind == sidebarPlayer { views += NativeSidebar.players(windowId: windowId) }
+    if kind == hoverPlayer { views += NativeSidebarHoverCard.players(windowId: windowId) }
+    views += NativePaneOverlays.host(windowId)?.mediaViews(kind) ?? []
     func frames(_ view: NSView, _ controls: [String: CGRect]) -> [String: [Double]] {
       guard let content = view.window?.contentView else { return [:] }
       return controls.mapValues { rect in

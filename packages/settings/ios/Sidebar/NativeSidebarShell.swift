@@ -1,6 +1,8 @@
 import AppKit
 import ArdiaShell
 import Foundation
+import SolaraModel
+import SolaraStore
 import SolaraUI
 
 @MainActor
@@ -40,7 +42,8 @@ enum NativeSidebarShell {
       let number = { (key: String) in CGFloat((given[key] as? NSNumber)?.doubleValue ?? 0) }
       column.apply(
         state: state,
-        layout: SidebarShellColumn.Layout(top: number("top"), header: number("header"), bottom: number("bottom"), clip: (given["clip"] as? Bool) ?? false))
+        layout: SidebarShellColumn.Layout(top: number("top"), header: number("header"), bottom: number("bottom"), clip: (given["clip"] as? Bool) ?? false),
+        chrome: (given["chrome"] as? String).flatMap(SidebarChromeState.decode))
     }
   }
 
@@ -58,14 +61,18 @@ enum NativeSidebarShell {
     columns[windowId] = nil
     if let shell = NativeWindowShell.host(windowId)?.shell, shell.view(in: .sidebar) === column { shell.mount(.sidebar, nil) }
     column.removeFromSuperview()
-    column.host.stop()
+    column.stop()
     if NativeSidebar.hosts[windowId] === column.host { NativeSidebar.hosts[windowId] = nil }
   }
 
   static func dropped(_ windowId: String, items: [[String: String]], placement: String?) {
-    let payload = SidebarPayload(["items": items, "placement": placement ?? NSNull()])
+    send(windowId, "drop", ["items": items, "placement": placement ?? NSNull()])
+  }
+
+  static func send(_ windowId: String, _ event: String, _ extra: [String: Any] = [:]) {
+    let payload = SidebarPayload(extra)
     Task { @MainActor in
-      _ = await SettingsAdapters.js(topic, windowId, "drop", payload.value)
+      _ = await SettingsAdapters.js(topic, windowId, event, payload.value)
     }
   }
 }
@@ -79,11 +86,11 @@ final class SidebarShellColumn: NSView, DevDropDestination {
     var clip = false
   }
 
-  static let resizeStrip: CGFloat = 4
-
   let windowId: String
   let host: SidebarHost
+  let chrome = SidebarChromeView()
   private let list = FlippedContainerView()
+  private var pagerObserver: NSObjectProtocol?
   private var given = Layout()
   private var dropCount = 0
 
@@ -98,12 +105,32 @@ final class SidebarShellColumn: NSView, DevDropDestination {
     host.view.autoresizingMask = [.width, .height]
     list.addSubview(host.view)
     addSubview(list)
+    chrome.autoresizingMask = [.width, .height]
+    chrome.isHidden = true
+    chrome.onAction = { [weak self] action in self?.chromeAction(action) }
+    chrome.onBlankMouseDown = { event in Self.blankMouseDown(event) }
+    addSubview(chrome)
+    pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) {
+      [weak self] note in
+      guard note.userInfo?["key"] as? String == windowId, let position = note.userInfo?["position"] as? Double else { return }
+      MainActor.assumeIsolated { self?.chrome.setPagerPosition(position) }
+    }
     registerForDraggedTypes([.fileURL, .URL, .string])
   }
 
   required init?(coder: NSCoder) { fatalError() }
 
-  func apply(state: String, layout: Layout) {
+  func stop() {
+    if let pagerObserver { NotificationCenter.default.removeObserver(pagerObserver) }
+    pagerObserver = nil
+    syncAddress(false)
+    host.stop()
+  }
+
+  func apply(state: String, layout: Layout, chrome look: SidebarChromeState?) {
+    chrome.isHidden = look == nil
+    if let look { chrome.update(look) }
+    syncAddress(look?.addressBar == true)
     if layout != given {
       given = layout
       list.layer?.masksToBounds = layout.clip
@@ -120,11 +147,15 @@ final class SidebarShellColumn: NSView, DevDropDestination {
   private func placeList() {
     list.frame = CGRect(x: 0, y: given.top, width: bounds.width, height: max(0, bounds.height - given.top - given.bottom))
     host.view.frame = list.bounds
+    chrome.frame = bounds
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
     let local = convert(point, from: superview)
-    guard local.y >= given.header, local.y < bounds.height - given.bottom, local.x < bounds.width - Self.resizeStrip else { return nil }
+    guard bounds.contains(local) else { return nil }
+    if chrome.isHidden, local.y < given.header || local.y >= bounds.height - given.bottom || local.x >= bounds.width - SidebarChromeMetrics.resizeStrip {
+      return nil
+    }
     let hit = super.hitTest(point)
     return hit === self ? nil : hit
   }
@@ -139,6 +170,7 @@ final class SidebarShellColumn: NSView, DevDropDestination {
       "slot": (superview as? WindowShellView)?.slot(of: self)?.rawValue ?? NSNull(), "hidden": isHiddenOrHasHiddenAncestor,
       "hover": host.view.current?.hoverKey ?? NSNull(),
       "reactUnder": reactUnderList().map { [$0.0, $0.1.minX, height - $0.1.maxY, $0.1.width, $0.1.height] },
+      "chrome": chrome.isHidden ? NSNull() : chrome.describe(), "downloads": chrome.downloadsRect.map(rect) ?? NSNull(),
     ]
   }
 
@@ -165,6 +197,48 @@ final class SidebarShellColumn: NSView, DevDropDestination {
     guard name.hasPrefix("RCT"), !name.contains("Text"), !name.contains("Image") else { return true }
     if view.responds(to: Selector(("backgroundColor"))), let color = view.value(forKey: "backgroundColor") as? NSColor, (color.usingColorSpace(.sRGB)?.alphaComponent ?? 1) > 0 { return true }
     return view.layer?.contents != nil || (view.layer?.backgroundColor?.alpha ?? 0) > 0
+  }
+
+  private func syncAddress(_ shown: Bool) {
+    let bars = SidebarAddressBars.shared
+    guard shown else {
+      if let bar = bars.existing(windowId), bar.superview === chrome.addressSlot { bar.removeFromSuperview() }
+      return bars.release(windowId)
+    }
+    bars.claim(windowId)
+    let bar = bars.view(windowId)
+    guard bar.superview !== chrome.addressSlot else { return }
+    bar.removeFromSuperview()
+    bar.frame = chrome.addressSlot.bounds
+    bar.autoresizingMask = [.width, .height]
+    chrome.addressSlot.addSubview(bar)
+  }
+
+  private func chromeAction(_ action: SidebarChromeAction) {
+    let shell = NativeWindowShell.host(windowId)?.shell
+    switch action {
+    case .profileMenu: NativeSidebarShell.send(windowId, "profileMenu")
+    case .toggleDownloads: NativeSidebarShell.send(windowId, "toggleDownloads")
+    case .switchProfile(let id):
+      _ = try? NativeStoreHandle.store?.dispatch(Command("switchProfile", [.string(windowId), .string(id)]), origin: .native)
+    case .liveWidth(let width):
+      shell?.widthDragActive = width != nil
+      if let width { shell?.update { $0.sidebarWidth = CGFloat(width) } }
+      NativeSidebarShell.send(windowId, "liveWidth", ["width": width ?? NSNull()])
+    case .commitWidth(let width): NativeSidebarShell.send(windowId, "commitWidth", ["width": width])
+    case .resetWidth:
+      shell?.update { $0.sidebarWidth = CGFloat(SidebarChromeMetrics.defaultWidth) }
+      NativeSidebarShell.send(windowId, "commitWidth", ["width": SidebarChromeMetrics.defaultWidth])
+    }
+  }
+
+  private static func blankMouseDown(_ event: NSEvent) {
+    guard let window = event.window else { return }
+    var key = NSApp.keyWindow
+    while let k = key, k !== window { key = k.parent }
+    if key == nil, window.canBecomeKey, !event.modifierFlags.contains(.command) { window.makeKeyAndOrderFront(nil) }
+    if event.clickCount == 2 { return WindowTitlebar.doubleClick(window, event.modifierFlags) }
+    window.performDrag(with: event)
   }
 
   private func windowPoint(_ info: NSDraggingInfo) -> CGPoint {

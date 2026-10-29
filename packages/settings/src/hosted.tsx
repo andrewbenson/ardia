@@ -13,6 +13,7 @@ type HostedModule = {
   takeSwitcherPress?(windowId: string): number;
   devHost(kind: string, windowId: string, on: boolean): Promise<Record<string, string>>;
   sidebarRowFrame(windowId: string, key: string): Promise<{ x: number; y: number; width: number; height: number } | null>;
+  sidebarShell?(windowId: string): Promise<string>;
 };
 
 const native = requireOptionalNativeModule<HostedModule>("SolaraHosted");
@@ -51,6 +52,10 @@ export function onHostedEvent(
 
 export function focusPageIfUnclaimed(windowId: string, tabId: string): Promise<boolean> {
   return native?.focusPageIfUnclaimed?.(windowId, tabId) ?? Promise.resolve(false);
+}
+
+export function hostedSidebarShell(windowId: string): Promise<string> {
+  return native?.sidebarShell?.(windowId) ?? Promise.resolve("null");
 }
 
 let View: ComponentType<HostedViewProps> | null = null;

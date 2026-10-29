@@ -187,6 +187,7 @@ public final class SidebarAddressBars {
   public func set(_ windowId: String, json: String?) {
     guard let json, let state = SidebarAddressBarState.decode(json) else {
       states[windowId] = nil
+      if claims.contains(windowId) { return }
       views[windowId]?.removeFromSuperview()
       views[windowId] = nil
       return
@@ -202,6 +203,10 @@ public final class SidebarAddressBars {
 
   public func release(_ windowId: String) {
     guard claims.remove(windowId) != nil else { return }
+    if states[windowId] == nil {
+      views[windowId]?.removeFromSuperview()
+      views[windowId] = nil
+    }
     NotificationCenter.default.post(name: SidebarAddressBars.claimsChanged, object: self, userInfo: ["windowId": windowId])
   }
 

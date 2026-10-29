@@ -44,6 +44,10 @@ export type ForeignCommit = { rev: number; patch: StorePatch; effects?: StoreEff
 
 const native = requireOptionalNativeModule<NativeStoreModule>("ArdiaStore");
 
+export function nativeStoreModulePresent(): boolean {
+  return native != null;
+}
+
 export function nativeStoreStatus(): StoreStatus {
   if (!native) return { active: false, reason: "the ArdiaStore module isn't in this build" };
   try {

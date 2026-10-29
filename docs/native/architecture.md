@@ -576,8 +576,8 @@ over. A marker whose `rev` is
   database, and imports the shadow `session.json`. Nothing is lost, because the shadow is always current.
 - **Moved-aside copies.** Each label (`corrupt`, `newer`, `superseded`, `unreadable`, `orphan`) keeps its newest
   three copies; older ones are deleted at launch. The `.pre-native` originals are never pruned.
-- **Kill switch.** For the first nightly, `ARDIA_NATIVE_STORE=0` (environment, Debug and nightly only) makes the app
-  run on the JS store and `session.json` as today. Remove it once the phase ships stable.
+- **No kill switch.** `ARDIA_NATIVE_STORE` is gone: the store is the only one. When it can't open, the app saves
+  nothing that launch and Settings shows why (`StoreUnavailable`).
 
 ---
 
@@ -709,7 +709,7 @@ Things the code that wires a native module into the app must do. Each one fails 
 |---|---|---|
 | `SolaraOmnibox` | Launch, before the first URL is parsed or shown | Call `setAppScheme(productName)` (or `AppScheme.set(productName:)`) with the product identity, the same name `setAppScheme` gets in JS today. Until then `appUrlOrigin`, `toAppUrl`, `fixupUrl` and `urlForDisplay` use upstream's `ardia://`. |
 | `SolaraOmnibox` | Remote suggestions, Chrome's engine list | Parse the raw JSON text with `SolaraModel.JSONValue.parse`, which keeps JS key order. A `JSONSerialization` dictionary loses it, and `extensionEnginesFromChrome` keeps the first engine per extension in that order. |
-| `SolaraPersistence` | Launch | Call `Launcher.open` in `main.swift` before Chrome starts. If it throws `ImportRefused` (or anything else), run on the JS store and `session.json` as today, as `ARDIA_NATIVE_STORE=0` does, and log the reason; never start the native store on a partial import. |
+| `SolaraPersistence` | Launch | Call `Launcher.open` in `main.swift` before Chrome starts. If it throws `ImportRefused`, show the saved session read-only and save nothing; if anything else fails, save nothing that launch. Log the reason either way; never start the native store on a partial import. |
 | `SolaraPersistence` | The writer | Build `PersistenceWriter` from `Launch.persisted`, never from the store's state, so a launch-time repair committed before the writer exists still reaches the database. Wire its `trouble` callback to the log and an error report. Call `flush` from `willTerminate`. |
 | `persist.ts` | Phase 1a | Keep writing `session.json`, with `"nativeExport": {"rev", "at"}` added, and stop writing `downloads.json` (the native writer's shadow does). Without the marker, every launch would take a re-import as if an older build had run. |
 | `persist.ts` | Phase 1b | With the native store on, never write `session.json` or `downloads.json`. The shadow export owns both, and a JS write would look like a downgrade and re-import at every launch. |
@@ -845,8 +845,7 @@ view updates and store commits per action) replaces the JS one in phase 6.
 Each has a recommendation.
 
 1. **The core port is large** (114 actions, a settle chain whose order matters, 7.5k lines of store logic).
-   → Golden replay before any surface work (§5.2). Port by slice (1a, then 1b), and ship each slice as a nightly
-   with `ARDIA_NATIVE_STORE=0` as the escape hatch.
+   → Golden replay before any surface work (§5.2). Port by slice (1a, then 1b), and ship each slice as a nightly.
 2. **The main thread stays Chrome's.** Native won't remove stalls Chrome causes.
    → The baseline's stall attribution (§6) splits main-thread time between Chrome, RN and app before we promise a
    number. The target is per interaction: no app work over 1 ms on main.

@@ -100,12 +100,7 @@ public final class NativeStore: Sendable {
     } catch {
       unavailableReason = "couldn't lock the data folder: \(error)"
       NativeSettingsHandle.unavailable = StoreUnavailable(cause: .openFailed, detail: unavailableReason ?? "", dataFolder: folder)
-      NSLog("[store] %@; running on the JS store", unavailableReason ?? "")
-      return false
-    }
-    if !LaunchSwitches.shared.isOn(.nativeStore, defaultOn: true) {
-      unavailableReason = "ARDIA_NATIVE_STORE=0"
-      NativeSettingsHandle.unavailable = StoreUnavailable(cause: .switchedOff, detail: "ARDIA_NATIVE_STORE=0", dataFolder: folder)
+      NSLog("[store] %@; store unavailable", unavailableReason ?? "")
       return false
     }
     let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
@@ -142,7 +137,7 @@ public final class NativeStore: Sendable {
       unavailableReason = "\(error)"
       if error is ImportRefused { refusedSession = DataFolder(url: folder).session.path }
       NativeSettingsHandle.unavailable = StoreUnavailable(cause: error is ImportRefused ? .refused : .openFailed, detail: "\(error)", dataFolder: folder)
-      NSLog("[store] running on the JS store: %@", "\(error)")
+      NSLog("[store] unavailable: %@", "\(error)")
       return false
     }
   }

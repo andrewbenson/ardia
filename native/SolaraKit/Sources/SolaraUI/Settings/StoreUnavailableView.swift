@@ -56,16 +56,11 @@ public struct StoreUnavailableView: View {
   }
 
   var title: String {
-    switch failure.cause {
-    case .switchedOff: "Settings are off for this launch"
-    case .refused, .openFailed: "\(appName) couldn't open its settings"
-    }
+    "\(appName) couldn't open its settings"
   }
 
   var explanation: String {
     switch failure.cause {
-    case .switchedOff:
-      "\(appName) was started with its settings store switched off, so there are no settings to show. Quit and open \(appName) again without that switch."
     case .refused:
       "\(appName) couldn't safely read the file that holds your windows, tabs and settings, so it left the file as it was instead of risking your data. If a newer version of \(appName) wrote it, update \(appName) and open it again."
     case .openFailed:

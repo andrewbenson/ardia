@@ -2,7 +2,6 @@ import Foundation
 
 public struct StoreUnavailable: Equatable, Sendable {
   public enum Cause: Equatable, Sendable {
-    case switchedOff
     case refused
     case openFailed
   }

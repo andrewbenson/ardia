@@ -4,6 +4,7 @@ import {
   nativeCatchUp,
   nativeDispatch,
   nativeSnapshot,
+  nativeStoreModulePresent,
   nativeStoreStatus,
   onForeignCommit,
   useNativeSyncOrigins,
@@ -52,7 +53,7 @@ export const dataFolderHandedOff = () => handedOff;
 export const nativeRefusedSession = () => refusedSession;
 export const nativeStoreRev = () => appliedRev;
 
-export function startNativeStore(): { active: boolean; reason?: string } {
+export function startNativeStore(): { active: boolean; reason?: string; modulePresent: boolean } {
   const status = nativeStoreStatus();
   active = status.active;
   ownsWorkspace = status.active && status.scope === "everything";
@@ -61,7 +62,8 @@ export function startNativeStore(): { active: boolean; reason?: string } {
   if (status.syncRedesign !== undefined) syncRedesign.on = status.syncRedesign;
   syncOriginsAtStart = syncRedesign.on;
   taggingSyncOrigins = status.active && syncRedesign.on && useNativeSyncOrigins(true);
-  return status.active ? { active: true } : { active: false, reason: status.reason };
+  const modulePresent = nativeStoreModulePresent();
+  return status.active ? { active: true, modulePresent } : { active: false, reason: status.reason, modulePresent };
 }
 
 export function nativeOwnedSnapshot(): Partial<OwnedSlices> | null {

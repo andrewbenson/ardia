@@ -12,8 +12,7 @@ if (!appArg) {
 ⌘W with several tabs selected in the sidebar, through a real key press on the window: the File menu's item reads
 "Close 3 Tabs", the press closes all 3 selected tabs (not just the active one) and clears the selection, and one
 ⇧⌘T brings all 3 back in their places. Then, with a New Tab among the selection so the close would take the window,
-⌘W asks once (ArdiaShell.confirm, stubbed to count calls and answer Cancel) and cancelling closes nothing. Run three ways: the RN sidebar, the native sidebar (ARDIA_NATIVE_SIDEBAR=1),
-and the JS store (ARDIA_NATIVE_STORE=0).`);
+⌘W asks once (ArdiaShell.confirm, stubbed to count calls and answer Cancel) and cancelling closes nothing. Run two ways: the RN sidebar and the native sidebar (ARDIA_NATIVE_SIDEBAR=1).`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -52,7 +51,6 @@ const until = async (what, body, ms = 8000) => {
 const modes = [
   ["rn-sidebar", {}],
   ["native-sidebar", { ARDIA_NATIVE_SIDEBAR: "1" }],
-  ["js-store", { ARDIA_NATIVE_STORE: "0" }],
 ];
 try {
   for (const [tag, env] of modes) {

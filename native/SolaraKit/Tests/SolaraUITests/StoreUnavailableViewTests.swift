@@ -8,7 +8,6 @@ import Testing
 struct StoreUnavailableViewTests {
   static let folder = URL(fileURLWithPath: "/Users/someone/Library/Application Support/app.solara.browser", isDirectory: true)
   static let cases: [(String, StoreUnavailable)] = [
-    ("switched-off", StoreUnavailable(cause: .switchedOff, detail: "ARDIA_NATIVE_STORE=0", dataFolder: folder)),
     ("refused", StoreUnavailable(cause: .refused, detail: "the native store refused to import: session.json has version 99", dataFolder: folder)),
     ("open-failed", StoreUnavailable(cause: .openFailed, detail: "SQLite error 14: unable to open database file", dataFolder: folder)),
     ("open-failed-no-folder", StoreUnavailable(cause: .openFailed, detail: "no data folder", dataFolder: nil)),
@@ -19,11 +18,10 @@ struct StoreUnavailableViewTests {
   }
 
   @Test func eachCauseSaysWhichOneHappened() {
-    let texts = Self.cases.prefix(3).map { view($0.1).title + " " + view($0.1).explanation }
-    #expect(texts[0].contains("switched off"))
-    #expect(texts[1].contains("safely read"))
-    #expect(texts[2].contains("couldn't open its data folder"))
-    #expect(Set(texts).count == 3)
+    let texts = Self.cases.prefix(2).map { view($0.1).title + " " + view($0.1).explanation }
+    #expect(texts[0].contains("safely read"))
+    #expect(texts[1].contains("couldn't open its data folder"))
+    #expect(Set(texts).count == 2)
   }
 
   @Test func noCauseClaimsAReset() {

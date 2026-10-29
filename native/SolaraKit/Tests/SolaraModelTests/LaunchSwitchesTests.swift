@@ -5,7 +5,6 @@ import Testing
 
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
-    .nativeStore,
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
     .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]
@@ -107,7 +106,7 @@ import Testing
 
   @Test func theKillSwitchTheShippedSurfacesAndTheScopeAreNeverReadFromDefaults() {
     let defaults = scratchDefaults()
-    #expect(Self.shippedSurfaces.contains(.nativeStore) && !Self.shippedSurfaces.contains(.nativeShell))
+    #expect(Self.shippedSurfaces.contains(.nativeDownloadMagnet) && !Self.shippedSurfaces.contains(.nativeShell))
     for name in Self.shippedSurfaces { defaults.set("0", forKey: name.rawValue) }
     defaults.set("settingsAndDownloads", forKey: LaunchSwitches.scopeVariable)
     for distribution in [false, true] {
@@ -140,7 +139,7 @@ import Testing
     let nothingStored = LaunchSwitches(environment: [:], defaults: scratchDefaults(), distribution: false, skipStored: true)
     #expect(!nothingStored.skippedStored)
     let unstorable = scratchDefaults()
-    unstorable.set("0", forKey: "ARDIA_NATIVE_STORE")
+    unstorable.set("0", forKey: "ARDIA_NATIVE_DOWNLOAD_MAGNET")
     #expect(!LaunchSwitches(environment: [:], defaults: unstorable, distribution: false, skipStored: true).skippedStored)
   }
 
@@ -151,10 +150,10 @@ import Testing
     defaults.set("1", forKey: "ARDIA_SHELL_MAIN_TOP")
     let stored = StoredLaunchSwitches(defaults: defaults, distribution: true)
     stored.set(.nativeShell, true)
-    stored.set(.nativeStore, false)
+    stored.set(.nativeDownloadMagnet, false)
     stored.set(.nativePagesPool, true)
     #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "1")
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_STORE") == nil)
+    #expect(defaults.object(forKey: "ARDIA_NATIVE_DOWNLOAD_MAGNET") == nil)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_PAGES_POOL") == nil)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_GONE") == nil)
     #expect(defaults.string(forKey: "ARDIA_TEST_REAUTH") == "1")

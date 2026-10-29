@@ -262,7 +262,7 @@ export function resumePersistence() {
 }
 
 export function startPersistence() {
-  startNativeStore();
+  const store = startNativeStore();
   if (dataFolderHandedOff()) {
     frozen = true;
     console.warn("Another instance is using this data folder; this one saves nothing.");
@@ -270,6 +270,7 @@ export function startPersistence() {
   }
   const refused = nativeRefusedSession();
   if (refused) return refuseToSave(refused, readDocumentResult("session.json"));
+  if (!store.active && store.modulePresent) return failClosed(store.reason);
   if (nativeOwnsWorkspace()) {
     if (!hydrateFromNative(useBrowser)) return failClosed();
     attachReplica(useBrowser, nativeCaches);
@@ -370,10 +371,12 @@ function refuseToSave(sessionPath: string, sessionRead: DocumentRead) {
   return useBrowser.subscribe(tell);
 }
 
-function failClosed() {
+function failClosed(reason?: string) {
   frozen = true;
   standDown();
-  const message = "The native store opened but returned no workspace, so this window saves nothing. Quit and relaunch; your data is unchanged.";
+  const message = reason
+    ? `The native store could not open (${reason}), so this window saves nothing. Quit and relaunch; your data is unchanged.`
+    : "The native store opened but returned no workspace, so this window saves nothing. Quit and relaunch; your data is unchanged.";
   console.error(message);
   try {
     (require("react-native") as typeof import("react-native")).Alert?.alert?.("Your tabs couldn't load", message);

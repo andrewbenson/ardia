@@ -91,4 +91,12 @@ import Testing
     glow.set(over: false, accent: "#3478F6", dark: true)
     #expect(!glow.over)
   }
+
+  @Test func leavingBetweenFramesTurnsBackFromWhereTheGlowIsNow() {
+    let glow = StripDropGlow(frame: .zero)
+    glow.set(over: true, accent: "#3478F6", dark: true)
+    Thread.sleep(forTimeInterval: StripDropGlowMetrics.duration / 2)
+    glow.set(over: false, accent: "#3478F6", dark: true)
+    #expect(glow.value > 0.5 && glow.value < 1)
+  }
 }

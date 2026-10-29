@@ -196,7 +196,7 @@ public final class AutoHideStripView: NSView {
     let made = displayLink(target: self, selector: #selector(step))
     made.add(to: .main, forMode: .common)
     link = made
-    let timer = Timer(timeInterval: DockMotion.stalledFrame / 2, repeats: true) { [weak self] timer in
+    let timer = Timer(timeInterval: DockMotion.stallCheck, repeats: true) { [weak self] timer in
       guard let self else { return timer.invalidate() }
       MainActor.assumeIsolated { self.tickIfStalled() }
     }

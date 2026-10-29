@@ -24,7 +24,8 @@ public enum DockMotion {
   public static let restDisplacement: Double = 0.001
   public static let restSpeed: Double = 0.01
   public static let maxStep: Double = 0.064
-  public static let stalledFrame: Double = 0.1
+  public static let stalledFrame: Double = 1.5 / 60
+  public static let stallCheck: Double = 1.0 / 60
 
   public static func springAt(_ t: Double, _ spring: ShellSpring = .dock) -> Double {
     if t <= 0 { return 0 }

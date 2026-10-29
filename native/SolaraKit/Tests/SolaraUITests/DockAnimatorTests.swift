@@ -70,7 +70,7 @@ struct DockAnimatorLifetimeTests {
     clock += DockMotion.stalledFrame / 2
     animator.tickIfStalled()
     #expect(animator.value == 1)
-    for _ in 0..<10 where animator.moving {
+    for _ in 0..<40 where animator.moving {
       clock += DockMotion.stalledFrame
       animator.tickIfStalled()
     }

@@ -123,3 +123,9 @@ enum NewTabRows {
     }
   }
 }
+
+#if SOLARA_PROBES
+public enum NewTabRead {
+  public static var available: Bool { NativeSettingsHandle.active }
+}
+#endif

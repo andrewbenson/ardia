@@ -493,6 +493,17 @@ final class SystemState {
 }
 
 #if SOLARA_PROBES
+@MainActor
+public enum WindowAccessibilityRead {
+  public static func textFieldCount(windowNumber: Int) -> Int? {
+    guard let window = NSApp.window(withWindowNumber: windowNumber),
+      let listing = ACChromeWindowHost.devAction("ax", window: window) else { return nil }
+    return listing.split(separator: "\n").filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("AXTextField") }.count
+  }
+}
+#endif
+
+#if SOLARA_PROBES
 public enum VideoUpscalingRead {
   public static func snapshot() -> [String: Any] { ArdiaCoreWebView.videoUpscalingState() as? [String: Any] ?? [:] }
 }

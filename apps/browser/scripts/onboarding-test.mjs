@@ -88,6 +88,7 @@ try {
   const native = await run("return nativeOverlay();");
   const newTab = await run("return nativeNewTab();");
   rep.log(`New Tab page: ${newTab ? "native" : "RN"}`);
+  await untilSnapshot("New Tab availability", (snapshot) => snapshot.newTabAvailable === newTab);
 
   await rep.check("the home step has no text field behind its card", async () => {
     const r = await run(`return goStep("home").then(() => settle(1200)).then(() => Promise.all([act("ax"), act("type:"), nativeOverlay().then((n) => (n ? S.devOnboarding("state").then(JSON.parse) : null))]))`);
@@ -100,6 +101,8 @@ try {
     else assert.match(ax, defaultBrowserAx, "the step is on screen");
     if (newTab) assert.ok(!isField(responder), `a text field behind the card takes the first row's keys and clicks: ${responder}`);
     else assert.deepEqual(textFields(ax), [], "a text field behind the card takes the first row's cursor and clicks");
+    await untilSnapshot("home accessibility text fields", (snapshot) =>
+      snapshot.windows.some((window) => window.textFieldCount === textFields(ax).length));
     return responder;
   });
 
@@ -119,8 +122,8 @@ try {
   });
 
   await rep.check("another window keeps its New Tab field during onboarding", async () => {
-    const r = await run(`return rootWindow().then((first) => { const id = ac.store.getState().createWindow(); return settle(1500).then(() => C.chromeWindows()).then((ws) => { const other = ws.find((w) => w.hasRoot && w.window !== first)?.window; return Promise.all([windowsAx(), focusOf(first), other ? focusOf(other) : ""]); }).then((out) => [...out, id]); })`);
-    const [axes, onboardingFocus, otherFocus, otherId] = r;
+    const r = await run(`return rootWindow().then((first) => { const id = ac.store.getState().createWindow(); return settle(1500).then(() => C.chromeWindows()).then((ws) => { const other = ws.find((w) => w.hasRoot && w.window !== first)?.window; return Promise.all([windowsAx(), focusOf(first), other ? focusOf(other) : "", C.devWindow(first, "ax"), other ? C.devWindow(other, "ax") : ""]); }).then((out) => [...out, id]); })`);
+    const [axes, onboardingFocus, otherFocus, onboardingAx, otherAx, otherId] = r;
     try {
       assert.equal(axes.length, 2, "two windows");
       if (newTab) {
@@ -131,6 +134,10 @@ try {
         assert.deepEqual(textFields(onboarding), [], "the onboarding window");
         assert.equal(textFields(other).length, 1, "the other window's New Tab field");
       }
+
+      await untilSnapshot("onboarding window accessibility text fields", (snapshot) =>
+        snapshot.windows.some((window) => window.id === otherId && window.textFieldCount === textFields(otherAx).length) &&
+        snapshot.windows.some((window) => window.id !== otherId && window.textFieldCount === textFields(onboardingAx).length));
       await untilSnapshot("onboarding keeps another window focused", (snapshot) =>
         snapshot.windows.some((w) => w.id === otherId && isField(w.firstResponder) === isField(otherFocus)) &&
         snapshot.windows.some((w) => w.id !== otherId && isField(w.firstResponder) === isField(onboardingFocus)));
@@ -154,6 +161,8 @@ try {
     assert.equal(r.after, r.during, "the bar's height");
     await untilSnapshot("New Tab focus after onboarding", (snapshot) =>
       snapshot.windows.some((w) => isField(w.firstResponder)));
+    await untilSnapshot("New Tab accessibility text field after onboarding", (snapshot) =>
+      snapshot.windows.some((window) => window.textFieldCount === textFields(r.ax).length));
     return `${r.focus}, bar ${r.during} -> ${r.after}`;
   });
 

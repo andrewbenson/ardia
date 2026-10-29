@@ -45,6 +45,16 @@ const setFullscreen = (id, on) => acLayout.pages.setState((s) => ({ pages: { ...
 `;
 let app = null;
 const run = (body, timeout = 20000) => app.eval(`${HELPERS}\n${body}`, { timeout });
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const until = async (what, body, ms = 8000) => {
   const end = Date.now() + ms;
   let last;
@@ -90,12 +100,20 @@ try {
     const mid = await until("b shown, a retiring", `return roots().then((r) => (r.native.b && !r.native.b.hidden && r.native.a && r.native.a.retiring && r.native.a.hidden) ? r : { waiting: true, r });`);
     const retiringShown = await until("a's pane told it's hidden", `const f = acPerf.findFibers("PaneContent", 20).find((f) => f.memoizedProps.tabId === "a"); return f ? (f.memoizedProps.shown === false ? "hidden" : { waiting: true }) : null;`, 900);
     const after = await until("only b", shownOnly(["b"]), 4000);
+    const native = await untilSnapshot("b selected in native store", (state) => state.windows.some((w) => w.id === "w1" && w.selectedTabId === "b"));
+    if (native.windows[0].selectedTabId !== "b") throw new Error(`native selected tab ${native.windows[0].selectedTabId}`);
     return { mid, retiringShown, after };
   });
 
   await rep.check("a-split-gives-each-pane-a-root", async () => {
     await run(`S().createSplit(["a", "b"]); S().activate("a"); return true;`);
-    return until("a and b", shownOnly(["a", "b"]));
+    const roots = await until("a and b", shownOnly(["a", "b"]));
+    const native = await untilSnapshot("native split slots", (state) => ["a", "b"].every((id) => state.windows[0]?.split?.overlays?.[id] && !state.windows[0].split.overlays[id].hidden));
+    for (const id of ["a", "b"]) {
+      const frame = native.windows[0].split.overlays[id].window;
+      if (Math.abs(frame[2] - roots.native[id].size[0]) > 0.5 || Math.abs(frame[3] - roots.native[id].size[1]) > 0.5) throw new Error(`${id}: native slot ${frame}, pane root ${roots.native[id].size}`);
+    }
+    return roots;
   });
 
   await rep.check("fullscreen-retires-the-other-panes-root", async () => {
@@ -114,6 +132,7 @@ try {
     const t0 = Date.now();
     await run(`S().closeTab("b"); return true;`);
     const r = await until("b ended", `return roots().then((r) => (!r.native.b && r.mounted === Object.keys(r.native).length) ? r : { waiting: true, r });`, 900);
+    await untilSnapshot("b removed from native store", (state) => !state.tabs.some((tab) => tab.id === "b") && !state.windows[0]?.tabIds.includes("b"));
     return { ms: Date.now() - t0, r };
   });
 

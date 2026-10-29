@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "${1:-}" = --help ] || [ "${1:-}" = -h ]; then
+  echo 'usage: scripts/agent/probe-scan <Solara.app>'
+  echo 'Fails if any Mach-O anywhere in the bundle carries the native probe host: its marker symbol or its command strings.'
+  exit 0
+fi
+app="${1:?usage: scripts/agent/probe-scan <Solara.app>}"
+[ -d "$app/Contents" ] || { echo "error: no app at $app" >&2; exit 1; }
+found=0
+checked=0
+while IFS= read -r -d '' binary; do
+  kind=$(file -b "$binary") || { echo "error: can't inspect $binary" >&2; exit 1; }
+  case "$kind" in *Mach-O*) ;; *) continue ;; esac
+  checked=$((checked + 1))
+  symbols=$(nm -aj "$binary" 2>/dev/null || true)
+  if grep -q 'SolaraProbeHostMarker' <<<"$symbols"; then
+    echo "error: probe marker in $binary" >&2
+    found=1
+  fi
+  text=$(strings -a "$binary") || { echo "error: can't read strings from $binary" >&2; exit 1; }
+  if grep -qE 'probe\.hello|state\.snapshot|\[solara-probe\]|\.solara-probe-scratch|SolaraProbeHostMarker' <<<"$text"; then
+    echo "error: probe command or protocol string in $binary" >&2
+    found=1
+  fi
+done < <(find "$app/Contents" -type f -print0)
+[ "$checked" -gt 0 ] || { echo "error: no Mach-O found in $app" >&2; exit 1; }
+[ "$found" = 0 ] || exit 1
+echo "probe-scan: $checked Mach-O files clean"

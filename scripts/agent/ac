@@ -68,7 +68,14 @@ try {
     process.exit(0);
   } else if (command === "eval") {
     const app = found(positional[0]);
-    print(await app.eval(input(positional[1] ?? "-"), { timeout: Number(flags.timeout ?? 20000) }));
+    const body = input(positional[1] ?? "-");
+    const timeout = Number(flags.timeout ?? 20000);
+    let typed;
+    try { typed = JSON.parse(body); } catch {}
+    if (typed && typeof typed === "object" && typed.protocol === 1 && typeof typed.command === "string")
+      print(await app.probe(typed.command, typed.args ?? {}, { timeout, ...(typed.id ? { id: typed.id } : {}),
+        ...(typed.expiresAtMs ? { expiresAtMs: typed.expiresAtMs } : {}) }));
+    else print(await app.eval(body, { timeout }));
   } else if (command === "page") {
     const app = found(positional[0]);
     const page = await app.page(positional[1]);
@@ -82,7 +89,8 @@ try {
     if (positional[0]) {
       const app = found(positional[0]);
       const harness = await app.eval("return true", { timeout: 2000 }).then(() => "answers", (e) => `no answer (${e.message})`);
-      print({ pid: app.pid, port: app.port, data: app.data, app: app.app, log: app.log, started: app.started, harness });
+      const probe = await app.probe("probe.hello", {}, { timeout: 1000 }).then(() => "answers", (e) => `no answer (${e.message})`);
+      print({ pid: app.pid, port: app.port, data: app.data, app: app.app, log: app.log, started: app.started, harness, probe });
     } else {
       // Every running instance of any build, by its data dir (the browser process: helpers carry --type=).
       const ps = spawnSync("ps", ["-E", "-ww", "-ax", "-o", "pid=,command="], { encoding: "utf8" }).stdout.split("\n");

@@ -106,6 +106,12 @@ framework_src="${ARDIACORE_FRAMEWORK:-$chromium_src/out/Release_GN_arm64/Chromiu
 framework_engine="${ARDIACORE_FRAMEWORK_ENGINE:-}"
 provisioning_profile="${RELEASE_PROVISIONING_PROFILE:-}"
 read -r -a extra_build_settings <<<"${RELEASE_BUILD_SETTINGS:-}"
+case "${RELEASE_BUILD_SETTINGS:-}" in
+  *SOLARA_PROBES* | *-xcconfig* | *SWIFT_ACTIVE_COMPILATION_CONDITIONS* | *OTHER_SWIFT_FLAGS* | *GCC_PREPROCESSOR_DEFINITIONS*)
+    echo "error: RELEASE_BUILD_SETTINGS may not set compile conditions or xcconfig files" >&2
+    exit 1
+    ;;
+esac
 build_input="${RELEASE_BUILD_INPUT:-}"
 if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   archive="$build_input/Ardia.xcarchive"
@@ -139,6 +145,7 @@ launch_check() {
 }
 if [ "$phase" = check ]; then
   [ -d "$app" ] || die "no $app: run --phase sign first"
+  "$root/scripts/agent/probe-scan" "$app"
   launch_check
   echo "Launch check passed: $app"
   exit 0
@@ -264,6 +271,7 @@ if [ "$phase" != sign ]; then
     die "archive failed ($dist/archive.log)"
   }
 fi
+"$root/scripts/agent/probe-scan" "$archive/Products/Applications/$app_name"
 if [ "$phase" = sign ] && [ -n "$build_input" ]; then
   rm -rf "$dist"
   mkdir -p "$dist"
@@ -309,6 +317,7 @@ else
     sleep 10
   done
 fi
+"$root/scripts/agent/probe-scan" "$app"
 [ "$(lipo -archs "$app/Contents/MacOS/$executable")" = arm64 ] || die "the app's executable is $(lipo -archs "$app/Contents/MacOS/$executable"), not arm64"
 
 if [ "$phase" = all ]; then

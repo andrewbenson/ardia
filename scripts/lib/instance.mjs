@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { joinWouldExtend, parseFront, prune, readState, suppressedLog, waitingOthers } from "./ui-guard.mjs";
@@ -396,6 +397,46 @@ class Instance {
     return this;
   }
 
+  async probe(command, args = {}, { timeout = 20000, id = randomUUID(), expiresAtMs = Date.now() + Math.min(timeout, 60000) } = {}) {
+    if (!this.stillOwned()) throw new Error(`the app (pid ${this.pid}) exited`);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error("probe id must be a UUID");
+    if (typeof command !== "string" || !command || typeof args !== "object" || args === null || Array.isArray(args))
+      throw new Error("probe needs a command and object args");
+    const request = JSON.stringify({ protocol: 1, id, command, args, expiresAtMs });
+    if (Buffer.byteLength(request) > 65536) throw new Error("probe request exceeds 64 KiB");
+    const root = this.probeData ?? this.data;
+    const inbox = join(root, "probes", "inbox");
+    const outbox = join(root, "probes", "outbox", `${id}.json`);
+    const temp = join(inbox, `${id}.json.tmp`);
+    const file = join(inbox, `${id}.json`);
+    const deadline = Date.now() + timeout;
+    while (!existsSync(inbox) && Date.now() < deadline) {
+      if (!this.stillOwned()) throw new Error(`the app (pid ${this.pid}) exited`);
+      await sleep(25);
+    }
+    if (!existsSync(inbox)) throw new Error("native probes unavailable");
+    writeFileSync(temp, request, { flag: "wx", mode: 0o600 });
+    renameSync(temp, file);
+    try {
+      while (Date.now() < deadline) {
+        if (!this.stillOwned()) throw new Error(`the app (pid ${this.pid}) exited`);
+        if (existsSync(outbox)) {
+          const reply = JSON.parse(readFileSync(outbox, "utf8"));
+          rmSync(outbox, { force: true });
+          if (reply.id !== id || reply.protocol !== 1) throw new Error("mismatched native probe reply");
+          if (reply.error) throw Object.assign(new Error(reply.error.code), { code: reply.error.code });
+          return reply.result;
+        }
+        await sleep(25);
+      }
+      throw new Error(`native probe timed out after ${timeout} ms (${command})`);
+    } finally {
+      rmSync(temp, { force: true });
+      rmSync(file, { force: true });
+    }
+  }
+  snapshot(args = {}, options = {}) { return this.probe("state.snapshot", args, options); }
+
   eval(body, { timeout = 20000 } = {}) {
     const run = this.evalQueue.then(() => this.#eval(body, timeout));
     this.evalQueue = run.catch(() => {});
@@ -517,7 +558,13 @@ export async function launch(app, opts = {}) {
     if (refusal) throw new Error(`refusing to wipe ${data}: ${refusal}`);
     rmSync(data, { recursive: true, force: true });
   }
-  mkdirSync(data, { recursive: true });
+  const created = !existsSync(data);
+  mkdirSync(data, { recursive: true, mode: 0o700 });
+  if (created) {
+    chmodSync(data, 0o700);
+    if (opts.scratchMarker !== false) writeFileSync(join(data, ".solara-probe-scratch"), "", { flag: "wx", mode: 0o600 });
+  }
+  const canonicalData = realpathSync.native(data);
   let previous = null;
   try { previous = JSON.parse(readFileSync(join(data, "instance.json"), "utf8")); } catch {}
   for (const f of ["dev-eval.js", "dev-eval-result.json", "instance.json", "ui-gate-violation.log", "secure-input-suppressed.log"]) rmSync(join(data, f), { force: true });
@@ -541,7 +588,7 @@ export async function launch(app, opts = {}) {
   const location = jsMode === "pinned" ? `localhost:${js.port}` : jsMode === "live" ? `localhost:${metroPort}` : jsMode === "none" ? null : jsMode;
   const switches = [opts.switches].flat().filter(Boolean).join(" ");
   const env = appEnv(app, {
-    ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: data, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
+    ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: canonicalData, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...(location ? { ARDIA_JS_LOCATION: location } : {}),
     ...(switches ? { ARDIA_CHROMIUM_SWITCHES: switches } : {}),
     ...(process.env.ARDIA_NATIVE_SIDEBAR ? { ARDIA_NATIVE_SIDEBAR: process.env.ARDIA_NATIVE_SIDEBAR } : {}),
@@ -572,7 +619,7 @@ export async function launch(app, opts = {}) {
     throw e;
   }
   gateNote(gate.state, { watch: owned.pid, data, ...holdNote(gate.key) });
-  const instance = new Instance({ app: runsFrom, binary, data, port, log, launchedAt, js, ...owned, meta: opts.meta ?? {} }).save();
+  const instance = new Instance({ app: runsFrom, binary, data, probeData: canonicalData, port, log, launchedAt, js, ...owned, meta: opts.meta ?? {} }).save();
   launched.set(instance.pid, data);
   if (opts.ready !== false)
     try {

@@ -1,14 +1,11 @@
 import {
   engineInfo,
-  getAutofillSettings,
   getContentBlocker,
   getDownloadSettings,
   getExternalAppAllowances,
   getPasswordAutofill,
   getSiteSettingsOrigins,
   getZoomLevels,
-  listAddresses,
-  listCards,
   listComponents,
   WIDEVINE_COMPONENT_ID,
 } from "@ardia/ardiacore";
@@ -19,7 +16,8 @@ import { engineProfile } from "../../store/model";
 import { folderInfo } from "../../sync/engine";
 import { useSync } from "../../sync/engine";
 import { extensionsProfileId, refreshExtensions } from "../extensions/state";
-import { load, loadAll, need, resource, useAllLoaded, type Needed } from "./resources";
+import { addresses, autofillEnabled, cards } from "./native/autofill";
+import { loadAll, need, resource, useAllLoaded, type Needed } from "./native/resources";
 import type { SettingsPane } from "./windows";
 
 export const APP_ICON_SIZE = 56;
@@ -36,11 +34,6 @@ export const siteOrigins = resource("siteOrigins", (profile: string) => getSiteS
 export const appLinks = resource("appLinks", (profile: string) => getExternalAppAllowances(profile).catch(() => []));
 export const zoomLevels = resource("zoomLevels", (profile: string) => getZoomLevels(profile).catch((): Record<string, number> => ({})));
 export const passwordAutofill = resource("passwordAutofill", (profile: string) => getPasswordAutofill(profile).catch(() => true));
-export const addresses = resource("addresses", (profile: string) => listAddresses(profile).catch(() => []));
-export const cards = resource("cards", (profile: string) => listCards(profile).catch(() => []));
-export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
-  load(addresses, [profile]).then(() => getAutofillSettings(profile).catch(() => ({ addresses: true, cards: true }))),
-);
 export const downloadSettings = resource("downloadSettings", (profile: string) => getDownloadSettings(profile).catch(() => null));
 export const extensionList = resource("extensions", (profile: string) => refreshExtensions(profile));
 export const shortcutItems = resource("menuShortcuts", () =>

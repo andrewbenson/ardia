@@ -19,8 +19,8 @@ import { engineProfile } from "../../../store/model";
 import { IconButton } from "../../primitives";
 import { NetworkBadge } from "../../site/Autofill";
 import { Button, Group, PopUp, Row, SectionHeader, Sheet, TextField, Toggle, type Option } from "../controls";
-import { addresses as addressList, autofillEnabled, cards as cardList } from "../paneData";
-import { store, useResource } from "../resources";
+import { addresses as addressList, autofillEnabled, cards as cardList } from "../native/autofill";
+import { store, useResource } from "../native/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../sheet";
 
 export function AutofillPane({ profileId: initial }: { profileId?: string | null }) {

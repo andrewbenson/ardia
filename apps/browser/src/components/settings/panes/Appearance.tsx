@@ -7,7 +7,7 @@ import type { Settings } from "../../../store/settings";
 import { useHover } from "../../primitives";
 import { Group, PopUp, Row, SectionHeader, Toggle, useFormColors } from "../controls";
 import { APP_ICON_SIZE, appIconChoices } from "../paneData";
-import { store, useResource } from "../resources";
+import { store, useResource } from "../native/resources";
 
 const MODES: { value: Settings["appearance"]; title: string; description: string }[] = [
   { value: "auto", title: "Automatic", description: "Follow the system appearance setting" },

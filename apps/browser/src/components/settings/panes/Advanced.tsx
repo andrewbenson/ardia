@@ -8,7 +8,7 @@ import { openInternalPage } from "../../pages/urls";
 import type { BatterySaverWhen } from "../../../store/settings";
 import { Button, Group, PopUp, Row, SectionHeader, Toggle, useFormColors } from "../controls";
 import { engineVersion, widevine as widevineComponent } from "../paneData";
-import { useResource } from "../resources";
+import { useResource } from "../native/resources";
 import { hasDeveloperModeChanges, resetDeveloperModeSites } from "../../site/developerMode";
 import { PRODUCT } from "../../../lib/productName";
 

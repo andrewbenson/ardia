@@ -23,7 +23,7 @@ import { hostLabel, matchesQuery } from "../../pages/PageLayout";
 import { Favicon, IconButton } from "../../primitives";
 import { Button, Group, PopUp, Row, SearchField, SectionHeader, Sheet, TextField, Toggle } from "../controls";
 import { passwordAutofill } from "../paneData";
-import { store, useResource } from "../resources";
+import { store, useResource } from "../native/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../sheet";
 import { PRODUCT } from "../../../lib/productName";
 

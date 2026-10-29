@@ -31,10 +31,9 @@ import { PROFILE_COLORS, spaceLookSource, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { choosePresetColor, setProfileTheme } from "../../lib/profileThemeActions";
 import type { ProfileColor, ProfileTheme, ThemeMode, ThemeTexture } from "../../store/types";
-import { parseArcTheme } from "../import/arcTheme";
-import { importModule } from "../import/module";
 import { useHover } from "../primitives";
 import { Button, Group, PopUp, Row, SectionHeader, useFormColors } from "./controls";
+import { arcThemeChoices } from "./native/profiles";
 
 const PAD = 172;
 const KNOB = 22;
@@ -540,19 +539,6 @@ function Track({
         ) : null}
       </View>
     </View>
-  );
-}
-
-export async function arcThemeChoices(): Promise<{ id: string; name: string; emoji?: string; color?: string; theme: ProfileTheme }[]> {
-  const api = importModule();
-  if (!api) return [];
-  const browsers = await api.listBrowsers().catch(() => []);
-  const arc = browsers.find((b) => b.id === "arc");
-  return (arc?.profiles ?? []).flatMap((p) =>
-    (p.spaces ?? []).flatMap((s) => {
-      const theme = s.theme ? parseArcTheme(s.theme) : null;
-      return theme ? [{ id: s.id, name: s.name, emoji: s.emoji, color: s.color, theme }] : [];
-    }),
   );
 }
 

@@ -8,7 +8,7 @@ import { IconButton, useHover } from "../../primitives";
 import { matchesQuery } from "../../pages/PageLayout";
 import { Anchor, Button, Group, PopUp, Row, SearchField, SectionHeader, Toggle, useFormColors } from "../controls";
 import { shortcutItems } from "../paneData";
-import { useResource } from "../resources";
+import { useResource } from "../native/resources";
 import { PRODUCT } from "../../../lib/productName";
 import { resolvedShortcuts, useMenuBarRevision } from "../../../lib/commandShortcuts";
 import { formatShortcut, sameShortcut, type Shortcut } from "../../../lib/shortcuts";

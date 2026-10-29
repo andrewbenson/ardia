@@ -1,7 +1,23 @@
-import { deleteCard, revealCardNumber, saveAddress, saveCard, setAutofillSettings, type AddressInput, type CardInput } from "@ardia/ardiacore";
+import {
+  deleteCard,
+  getAutofillSettings,
+  listAddresses,
+  listCards,
+  revealCardNumber,
+  saveAddress,
+  saveCard,
+  setAutofillSettings,
+  type AddressInput,
+  type CardInput,
+} from "@ardia/ardiacore";
 import type { SettingsHandler } from "@ardia/settings";
-import { addresses, autofillEnabled, cards } from "../paneData";
-import { load, store } from "../resources";
+import { load, resource, store } from "./resources";
+
+export const addresses = resource("addresses", (profile: string) => listAddresses(profile).catch(() => []));
+export const cards = resource("cards", (profile: string) => listCards(profile).catch(() => []));
+export const autofillEnabled = resource("autofillEnabled", (profile: string) =>
+  load(addresses, [profile]).then(() => getAutofillSettings(profile).catch(() => ({ addresses: true, cards: true }))),
+);
 
 export const autofillHandlers: Record<string, SettingsHandler> = {
   "autofill.settings": (profile: string) => load(autofillEnabled, [profile], { fresh: true }),

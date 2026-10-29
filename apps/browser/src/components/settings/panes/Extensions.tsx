@@ -19,7 +19,7 @@ import {
 } from "../../extensions/state";
 import { Button, Group, PopUp, Row, SectionHeader, TextField, Toggle } from "../controls";
 import { extensionList } from "../paneData";
-import { useResource } from "../resources";
+import { useResource } from "../native/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../sheet";
 import { SETTINGS_WINDOW_ID, useSettingsNav } from "../windows";
 import { PRODUCT } from "../../../lib/productName";

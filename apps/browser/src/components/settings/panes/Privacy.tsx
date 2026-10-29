@@ -26,7 +26,7 @@ import { engineProfile } from "../../../store/model";
 import { Favicon } from "../../primitives";
 import { Button, Checkbox, Group, PopUp, Row, SectionHeader, Sheet, Toggle } from "../controls";
 import { appLinks, contentBlocker, siteOrigins, zoomLevels } from "../paneData";
-import { useResource } from "../resources";
+import { useResource } from "../native/resources";
 import { closeSettingsSheet, showSettingsSheet } from "../sheet";
 import { ShareDiagnosticsSection } from "./ShareDiagnostics";
 import { PRODUCT } from "../../../lib/productName";

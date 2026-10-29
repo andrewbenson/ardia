@@ -109,7 +109,15 @@ function failUiGate(found) {
   for (const pid of new Set([...launched.keys(), ...gated])) if (pid !== found.pid) try { process.kill(pid, "SIGTERM"); } catch {}
   process.exit(1);
 }
+function failUiGateCapped(held) {
+  process.stderr.write(`\n!!! UI GATE: failing this run: test instance pid ${held.pid} held the uitest lock for ${held.heldMinutes} min, ` +
+    `past the ${held.maxHold} min backstop for a running test (launched by ${held.who}); it was quit.\n` +
+    `!!! If this test really needs longer, set AC_UITEST_MAX_HOLD=<minutes> before it launches.\n\n`);
+  for (const pid of new Set([...launched.keys(), ...gated])) if (pid !== held.pid) try { process.kill(pid, "SIGTERM"); } catch {}
+  process.exit(1);
+}
 function gateNote(state, entry) { appendFileSync(state, `${JSON.stringify(entry)}\n`); }
+const holdNote = (key) => ({ at: Date.now(), who: key ?? `pid ${process.pid}`, by: process.pid, ...(Number(process.env.AC_UITEST_MAX_HOLD) > 0 ? { maxHold: Number(process.env.AC_UITEST_MAX_HOLD) } : {}) });
 export const uiGateKey = (path) => process.env.AC_LOCKED_AS || /\/build-([^/]+)\/Build\/Products\//.exec(path ?? "")?.[1] || null;
 const uiGateCurrent = (key) => join(tmpdir(), `ac-uitest-${key.replace(/[^A-Za-z0-9_.-]/g, "_")}.current`);
 function liveGate(state) {
@@ -127,7 +135,7 @@ export async function holdUiGate(key = null) {
       await sleep(1200);
       if (!liveGate(joined)) continue;
       process.env.AC_UITEST_STATE = joined;
-      return (uiGate = { state: joined });
+      return (uiGate = { state: joined, key });
     }
   const state = join(tmpdir(), `ac-uitest-${process.pid}-${Date.now()}.state`);
   writeFileSync(state, `${JSON.stringify({ owner: process.pid })}\n`);
@@ -160,8 +168,10 @@ export async function holdUiGate(key = null) {
   child.stdout.on("data", (d) => {
     lines += d;
     for (let i; (i = lines.indexOf("\n")) >= 0; lines = lines.slice(i + 1)) {
-      const m = /^violation (.*)$/.exec(lines.slice(0, i));
+      const line = lines.slice(0, i);
+      const m = /^violation (.*)$/.exec(line), capped = /^capped (.*)$/.exec(line);
       if (m) failUiGate(JSON.parse(m[1]));
+      if (capped) failUiGateCapped(JSON.parse(capped[1]));
     }
   });
   child.unref();
@@ -170,7 +180,7 @@ export async function holdUiGate(key = null) {
   gateNote(state, { lockHolder: child.pid });
   process.env.AC_UITEST_STATE = state;
   if (key) writeFileSync(uiGateCurrent(key), state);
-  return (uiGate = { state });
+  return (uiGate = { state, key });
 }
 export async function uiGateLaunching(binary, { allowFront = false } = {}) {
   const gate = await holdUiGate(uiGateKey(binary));
@@ -179,7 +189,7 @@ export async function uiGateLaunching(binary, { allowFront = false } = {}) {
 export function uiGateWatch(pid, data = null, { allowFront = false } = {}) {
   if (!uiGate) throw new Error("uiGateWatch before uiGateLaunching: take the uitest lock before launching the app");
   gated.add(pid);
-  gateNote(uiGate.state, { watch: pid, data, ...(allowFront ? { allowFront } : {}) });
+  gateNote(uiGate.state, { watch: pid, data, ...holdNote(uiGate.key), ...(allowFront ? { allowFront } : {}) });
 }
 export function reportSuppressedSecureInput(data, when) {
   let text = "";
@@ -523,7 +533,7 @@ export async function launch(app, opts = {}) {
     await killSpawned(spawned);
     throw e;
   }
-  gateNote(gate.state, { watch: owned.pid, data });
+  gateNote(gate.state, { watch: owned.pid, data, ...holdNote(gate.key) });
   const instance = new Instance({ app: runsFrom, binary, data, port, log, launchedAt, js, ...owned, meta: opts.meta ?? {} }).save();
   launched.set(instance.pid, data);
   if (opts.ready !== false)

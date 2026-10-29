@@ -12,7 +12,9 @@
 #     `ac launch`, until that instance quits); a node process it starts inherits the hold (AC_UITEST_STATE), and a
 #     later launch with the same key joins it: AC_LOCKED_AS (`ac launch --as`), else the app's build-<name> folder.
 #     A launch with neither (a copy outside build-*, dist/) has no key and waits like any other agent's.
-#     AC_UITEST_WAIT (default 480 s) bounds the wait.
+#     AC_UITEST_WAIT (default 480 s) bounds the wait. The gate quits an instance, naming who launched it, once it has
+#     held the lock 10 minutes after its launcher exited (an `ac launch` left open) or 60 minutes while its launcher
+#     still runs (a hung test, which then fails); AC_UITEST_MAX_HOLD=<minutes>, set before the launch, raises both.
 #   - xcodebuild is one lock per derived data: builds with different -derivedDataPath run in parallel (the Podfile and
 #     the build phases keep each build's writes in its own folder); two into the same one take turns. A command
 #     without -derivedDataPath (one run through `sh -c`, say) takes the single shared xcodebuild lock.

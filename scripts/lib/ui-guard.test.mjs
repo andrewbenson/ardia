@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { newSuppressed, parseFront, prune, readState, stillNeeded, violation } from "./ui-guard.mjs";
+import { capBanner, liveMaxHold, newSuppressed, orphanMaxHold, overHeld, parseFront, prune, readState, stillNeeded, violation } from "./ui-guard.mjs";
 
 const lsappinfo = (name, pid, executable) => `"${name}" ASN:0x0-0xb2db2d: (in front) \n    bundleID="x"\n    bundle path="${executable.replace(/\/Contents\/MacOS\/.*$/, "")}"\n    executable path="${executable}"\n    pid = ${pid} token=[sess=1 pid=${pid}] type="Foreground" flavor=3\n`;
 const build = "/Users/me/Developer/Personal/ardia/apps/browser/build-x/Build/Products/Debug/Solara.app/Contents/MacOS/Solara";
@@ -82,4 +82,47 @@ test("a live pid whose program can't be read (ps failed or timed out) is kept, n
 test("state keeps the first frontBefore and skips lines it can't read", () => {
   const s = readState(`${JSON.stringify({ frontBefore: { pid: 1 } })}\nnot json\n${JSON.stringify({ frontBefore: { pid: 2 } })}\n`);
   assert.equal(s.frontBefore.pid, 1);
+});
+
+const minute = 60000, now = 1000 * minute;
+const dead = () => false;
+const liveOnly = (...pids) => (pid) => pids.includes(pid);
+
+test("a left-open instance whose launcher exited is over-held past 10 min, named by who launched it", () => {
+  const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x", at: now - (orphanMaxHold + 1) * minute, who: "settings-ui", by: 77 },
+    { watch: 501, data: "/tmp/ac-y", at: now - 2 * minute, who: "port-core", by: 78 }]);
+  assert.deepEqual(overHeld(s, now, new Map(), dead),
+    [{ pid: 500, data: "/tmp/ac-x", who: "settings-ui", by: 77, launcherAlive: false, heldMinutes: orphanMaxHold + 1, maxHold: orphanMaxHold }]);
+  assert.match(capBanner(overHeld(s, now, new Map(), dead)[0]), /launcher \(pid 77\) has exited.*10 min cap/);
+});
+
+test("an instance whose launcher still runs is not over-held at 30 min, and is past the 60 min backstop", () => {
+  const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x", at: now - 30 * minute, who: "acceptance", by: 77 }]);
+  assert.deepEqual(overHeld(s, now, new Map(), liveOnly(77)), []);
+  const late = overHeld(s, now + 31 * minute, new Map(), liveOnly(77));
+  assert.equal(late.length, 1);
+  assert.equal(late[0].maxHold, liveMaxHold);
+  assert.equal(late[0].launcherAlive, true);
+  assert.match(capBanner(late[0]), /still running.*60 min backstop/);
+});
+
+test("AC_UITEST_MAX_HOLD raises both caps", () => {
+  const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x", at: now - 50 * minute, who: "bench", by: 77, maxHold: 90 }]);
+  assert.deepEqual(overHeld(s, now, new Map(), dead), []);
+  assert.deepEqual(overHeld(s, now + 30 * minute, new Map(), liveOnly(77)), []);
+  assert.equal(overHeld(s, now + 41 * minute, new Map(), liveOnly(77))[0].maxHold, 90);
+});
+
+test("an entry from older code (no launch time, no launcher) counts from when the guard first saw it, under the 10 min cap", () => {
+  const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x" }]);
+  assert.deepEqual(overHeld(s, now, new Map(), dead), []);
+  const over = overHeld(s, now, new Map([[500, now - 11 * minute]]), dead);
+  assert.equal(over[0].who, "unknown");
+  assert.equal(over[0].maxHold, orphanMaxHold);
+  assert.deepEqual(overHeld(s, now, new Map([[500, now - 9 * minute]]), dead), []);
+});
+
+test("an unwatched instance is never over-held", () => {
+  const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x", at: 0, who: "x", by: 77 }, { unwatch: 500 }]);
+  assert.deepEqual(overHeld(s, now, new Map(), dead), []);
 });

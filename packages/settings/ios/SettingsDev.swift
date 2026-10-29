@@ -10,6 +10,7 @@ import SolaraUI
 @MainActor
 enum SettingsDev {
   private static var awaiting: (pane: String, asked: Date, done: (String) -> Void)?
+  static private(set) var lastSwitch: [String: Any]?
 
   static func paneAppeared(_ pane: String) {
     guard let waiting = awaiting, waiting.pane == pane else { return }
@@ -19,6 +20,13 @@ enum SettingsDev {
       let shownAfter = Date().timeIntervalSince(waiting.asked) * 1000
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
         let settled = capture()
+        let firstFrames = first["frames"] as? [[Any]] ?? []
+        let settledFrames = settled["frames"] as? [[Any]] ?? []
+        let firstSwitches = first["switches"] as? [[Any]] ?? []
+        let settledSwitches = settled["switches"] as? [[Any]] ?? []
+        lastSwitch = ["pane": waiting.pane, "firstViewCount": firstFrames.count,
+          "settledViewCount": settledFrames.count, "firstSwitchCount": firstSwitches.count,
+          "settledSwitchCount": settledSwitches.count]
         waiting.done(json(["shownAfter": shownAfter, "first": first, "settled": settled]))
       }
     }
@@ -299,3 +307,12 @@ enum SecureFieldProbe {
   }
 }
 #endif
+
+@MainActor
+public enum SettingsRead {
+  public static func snapshot() -> [String: Any]? {
+    guard NativeSettingsWindow.window != nil else { return nil }
+    let search = SettingsDev.search().filter { ["query", "results", "pane", "flash", "anchor", "viewport"].contains($0.key) }
+    return ["layout": SettingsDev.lastSwitch ?? NSNull(), "search": search]
+  }
+}

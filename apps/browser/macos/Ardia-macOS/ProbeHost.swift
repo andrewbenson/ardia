@@ -86,13 +86,13 @@ final class ProbeHost {
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
     guard let store = NativeStoreHandle.store else { throw ProbeFailure.notReady }
     let wanted = request.args["windowId"] as? String
-    if let wanted, store.state.windows[wanted] == nil { throw ProbeFailure.windowGone }
+    if let wanted, wanted != "settings", store.state.windows[wanted] == nil { throw ProbeFailure.windowGone }
     var initial = store.snapshot
     var final = initial
     for attempt in 0..<2 {
       let state = initial.state
-      let ids = wanted.map { [$0] } ?? state.windowOrder
-      let windows: [[String: Any]] = ids.compactMap { id in
+      let ids = wanted == "settings" ? [] : wanted.map { [$0] } ?? state.windowOrder
+      var windows: [[String: Any]] = ids.compactMap { id in
         guard let model = state.windows[id] else { return nil }
         let window = WindowHost.window(id: id)
         let chrome = ArdiaCoreHost.chromeWindows.first { entry in
@@ -130,6 +130,12 @@ final class ProbeHost {
           } + (DownloadsPanelRead.panel(windowId: id).map { [Self.downloadsOverlay($0)] } ?? []),
           "views": NSNull()]
       }
+      if wanted == nil || wanted == "settings", let settingsWindow = WindowHost.window(id: "settings"),
+        let settings = SettingsRead.snapshot() {
+        windows.append(["id": "settings", "kind": "settings", "visible": settingsWindow.isVisible,
+          "frame": Self.rectFromWindow(NSRect(origin: .zero, size: settingsWindow.frame.size)),
+          "overlays": [], "settings": settings])
+      }
       let allowedIds = Set(ids)
       let tabs: [[String: Any]] = state.tabs.keys.sorted().compactMap { id in
         guard let tab = state.tabs[id], allowedIds.contains(tab.windowId) else { return nil }
@@ -146,7 +152,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "downloads.count", "downloads.finished"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

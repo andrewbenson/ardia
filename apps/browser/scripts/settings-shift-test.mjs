@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { attach, launch, reporter } from "../../../scripts/lib/instance.mjs";
+import { attach, launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 
 const HELP = `usage: node settings-shift-test.mjs <Debug Solara.app> [--port N] [--attach <data dir>] [--panes a,b] [--keep]
 
@@ -28,10 +28,10 @@ if (flags.help || (!positionals[0] && !flags.attach)) {
 
 const PANES = (flags.panes ?? "general,profiles,sync,tabs,appearance,privacy,passwords,autofill,extensions,search,shortcuts,liveFolders,calendar,advanced").split(",");
 const SETTLE_MS = 1200;
+const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 
 const scratch = flags.attach ? null : mkdtempSync(join(tmpdir(), "ac-settings-shift-"));
 const data = flags.attach ? resolve(flags.attach) : join(scratch, "data");
-if (scratch) mkdirSync(data);
 const rep = reporter(join(flags.attach ?? scratch, "settings-shift-test.log"), { name: "settings-shift-test" });
 
 function compare({ first, settled }) {
@@ -80,13 +80,20 @@ return wait(400)
   })
   .then(({ results, s }) => {
     if (!s) throw new Error("${id} wasn't highlighted");
-    return ac.shell.devKeyEquivalent("settings", { key: "\\u001b", keyCode: 53, modifiers: [], send: true, asKey: true, wait: 30 })
-      .then(() => wait(200))
-      .then(state)
-      .then((after) => ({ results, nav: s.pane, frame: s.anchor, viewport: s.viewport, cleared: after.query === "" }));
+    return { results, nav: s.pane, frame: s.anchor, viewport: s.viewport };
   });`;
 
 let app;
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot().catch((e) => ({ error: e.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 try {
   app = flags.attach
     ? attach(data)
@@ -110,6 +117,10 @@ try {
       if (result.error) throw new Error(result.error);
       const problems = compare(result);
       if (problems.length) throw new Error([`${problems.length} changes after the first frame (shown ${result.shownAfter} ms after the click)`, ...problems.slice(0, 15)].join("\n"));
+      const snapshot = await untilSnapshot(`native settings ${pane}`, (state) => state.windows.some((w) => w.kind === "settings" && w.settings?.layout?.pane === pane));
+      const layout = snapshot.windows.find((w) => w.kind === "settings")?.settings.layout;
+      if (layout.firstViewCount !== result.first.frames.length || layout.settledViewCount !== result.settled.frames.length ||
+        layout.firstSwitchCount !== result.first.switches.length || layout.settledSwitchCount !== result.settled.switches.length) throw new Error(`native settings layout ${JSON.stringify(layout)}`);
       return `${result.first.frames.length} views, ${result.first.switches.length} switches, shown after ${result.shownAfter} ms, nothing changed`;
     });
     from = pane;
@@ -122,7 +133,17 @@ try {
       if (out.nav !== id.split(".")[0]) throw new Error(`opened ${out.nav}`);
       const [top, bottom] = [out.viewport[1], out.viewport[1] + out.viewport[3]];
       if (!(y >= top && y + h <= bottom)) throw new Error(`row isn't in view: y ${y}, height ${h}, view ${top}–${bottom}`);
-      if (!out.cleared) throw new Error("Escape didn't clear the field");
+      const snapshot = await untilSnapshot(`native settings row ${id}`, (state) => state.windows.some((w) => w.kind === "settings" && w.settings?.search?.flash === id && w.settings.search.anchor));
+      const search = snapshot.windows.find((w) => w.kind === "settings")?.settings.search;
+      if (search.query !== query || search.pane !== out.nav || search.results.length !== out.results.length ||
+        search.results.some((value, index) => value !== out.results[index]) || !near(search.anchor, out.frame) || !near(search.viewport, out.viewport))
+        throw new Error(`native settings search ${JSON.stringify(search)} vs ${JSON.stringify(out)}`);
+      const cleared = await ac(`return ac.shell.devKeyEquivalent("settings", { key: "\\u001b", keyCode: 53, modifiers: [], send: true, asKey: true, wait: 30 })
+        .then(() => new Promise((r) => setTimeout(r, 200)))
+        .then(() => globalThis.expo.modules.SolaraSettings.devSettings("search"))
+        .then((text) => JSON.parse(text).query === "");`);
+      if (!cleared) throw new Error("Escape didn't clear the field");
+      await untilSnapshot("native settings search cleared", (state) => state.windows.some((w) => w.kind === "settings" && w.settings?.search?.query === ""));
       return `${out.results.length} results, row at y ${y}`;
     });
   }

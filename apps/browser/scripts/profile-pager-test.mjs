@@ -60,9 +60,26 @@ const SIDEBAR = [120, 400];
 const STRIP = [420, 20];
 const pagerState = (id) => run(`return S.devPagerState(${JSON.stringify(id)});`);
 const profileOf = (id) => run(`return st().windows[${JSON.stringify(id)}].profileId;`);
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot().catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const nativeProfile = async (id, profileId) => {
+  const state = await untilSnapshot(`native ${id} profile ${profileId}`, (state) => state.windows.some((window) => window.id === id && window.profileId === profileId));
+  const window = state.windows.find((entry) => entry.id === id);
+  if (!window.tabIds.every((tabId) => state.tabs.some((tab) => tab.id === tabId && tab.windowId === id))) throw new Error(`native ${id} tab ownership changed`);
+};
 const reset = async () => {
   for (const id of ["w1", "w2"]) await run(`st().switchProfile(${JSON.stringify(id)}, "default"); return true;`);
   await until("the pagers rest at Personal", `return Promise.all([S.devPagerState("w1"), S.devPagerState("w2")]).then((s) => s.every((p) => p && p.phase === "idle" && p.position === 0) || null);`);
+  await nativeProfile("w1", "default");
+  await nativeProfile("w2", "default");
 };
 const release = async (id, point) => {
   await run(`return swipe(${JSON.stringify(id)}, ${point[0]}, ${point[1]}, ${JSON.stringify([{ phase: "ended", dx: 0, dy: 0, atMs: 0, timestampMs: 2000 }])});`);
@@ -133,6 +150,7 @@ try {
       const trace = await traced(`return swipe("w1", ${SIDEBAR}, ${JSON.stringify(flick(-1))});`, 900);
       await until("Work", `return st().windows.w1.profileId === "work" || null;`, 1800);
       const engine = await until("the window's engine profile", `return win("w1").then((w) => w.profile === "work" ? w.profile : null);`, 2000);
+      await nativeProfile("w1", engine);
       const t0 = trace[0][0];
       mine.flick = trace.map(([t, p, tint]) => [t - t0, p, tint]);
       if (Math.abs(trace.at(-1)[1] - 1) > 1e-9) throw new Error(`ended at ${trace.at(-1)[1]}`);
@@ -160,6 +178,7 @@ try {
       await until("the pager settles", `return S.devPagerState("w1").then((p) => p.phase === "idle" || null);`);
       await sleep(300);
       mine.reverse = [await profileOf("w1"), (await pagerState("w1")).position];
+      await nativeProfile("w1", mine.reverse[0]);
       if (native && JSON.stringify(mine.reverse) !== JSON.stringify(rn.reverse)) throw new Error(`native ${mine.reverse}, RN ${rn.reverse}`);
       return mine.reverse;
     });
@@ -168,12 +187,14 @@ try {
       await reset();
       await run(`st().switchProfile("w1", "play"); return true;`);
       const jumped = await until("the pager jumps to Play", `return S.devPagerState("w1").then((p) => p.selected === 2 && p.position === 2 && p.phase === "idle" ? p : null);`);
+      await nativeProfile("w1", "play");
       if (native) {
         const d = JSON.parse(await run(`return P.describe("w1");`));
         if (d.tint.pages.map((p) => p.opacity).join() !== "1,1,1") throw new Error(JSON.stringify(d.tint));
       }
       const trace = await traced(`ac.actions.switchProfile("w1", "default", true); return true;`, 900);
       await until("Personal", `return st().windows.w1.profileId === "default" || null;`, 1800);
+      await nativeProfile("w1", "default");
       if (trace.length < 5 || trace.at(-1)[1] !== 0) throw new Error(`animated switch: ${trace.length} frames, ending at ${trace.at(-1)?.[1]}`);
       return { jumped: jumped.position, frames: trace.length };
     });
@@ -206,6 +227,7 @@ try {
       mine.peek = seen;
       if (!seen.live || seen.profile !== "work" || seen.phase !== "idle" || seen.position !== 1 || JSON.stringify(seen.profiles) !== '["work"]') throw new Error(JSON.stringify(seen));
       if (native && seen.calls.length !== 0) throw new Error(`JS switched too: ${JSON.stringify(seen)}`);
+      await nativeProfile("w2", seen.profile);
       return seen;
     });
 

@@ -329,6 +329,20 @@ enum NativeSidebarIconPicker {
   }
 }
 
+#if SOLARA_PROBES
+@MainActor
+public enum SidebarIconPickerRead {
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let data = NativeSidebarIconPicker.describe(windowId).data(using: .utf8),
+      let source = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return ["panel": source["panel"] ?? NSNull(), "tab": source["tab"] ?? NSNull(),
+      "focused": source["focused"] ?? NSNull(), "items": source["items"] ?? NSNull(),
+      "first": source["first"] ?? NSNull(), "hovered": source["hovered"] ?? NSNull(),
+      "footer": source["footer"] ?? NSNull()]
+  }
+}
+#endif
+
 @MainActor
 final class SidebarIconPickerHost {
   let windowId: String

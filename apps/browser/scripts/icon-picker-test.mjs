@@ -38,6 +38,19 @@ async function start(name, env) {
   return { app, run: (body) => app.eval(body, { timeout: 30000 }) };
 }
 
+const untilSnapshot = async (app, what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const nativePicker = (state) => state.windows.find((window) => window.id === "w1")?.iconPicker;
+const nativeIcon = async (app, id, icon) => untilSnapshot(app, `native icon for ${id}`, (state) => state.tabs.find((tab) => tab.id === id)?.customIcon === icon);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const until = async (what, test, ms = 3000) => {
   const end = Date.now() + ms;
   for (;;) {
@@ -61,9 +74,18 @@ try {
   const point = (x, y) => run(`return ac.shell.devSetPointer("w1", { x: ${x}, y: ${y} })`);
   const open = async (kind, id) => {
     await openPicker(run, kind, id);
-    return until("the picker shows", async () => ((await picker())?.panel ? picker() : null));
+    const p = await until("the picker shows", async () => ((await picker())?.panel ? picker() : null));
+    await untilSnapshot(native.app, "native picker frame and labels", (state) => {
+      const read = nativePicker(state);
+      return read && same(read.panel, p.panel) && read.tab === p.tab && read.focused === p.focused &&
+        read.items === p.items && read.first === p.first && same(read.footer, p.footer);
+    });
+    return p;
   };
-  const closed = () => until("the picker closes", async () => (await picker()) === null && (await run(`return ac.sidebarRows.useSidebarUi.getState().iconPicker`)) === null);
+  const closed = async () => {
+    await until("the picker closes", async () => (await picker()) === null && (await run(`return ac.sidebarRows.useSidebarUi.getState().iconPicker`)) === null);
+    await untilSnapshot(native.app, "native picker dismissed", (state) => nativePicker(state) === null);
+  };
   const icon = (id) => run(`return ac.store.getState().tabs[${JSON.stringify(id)}].customIcon ?? null`);
   const cellCenter = (panel, index) => [panel[0] + INSET + (index % 7) * CELL + CELL / 2, panel[1] + INSET + 26 + 8 + Math.floor(index / 7) * CELL + CELL / 2];
   const footerCenter = (panel) => [panel[0] + 128, panel[1] + panel[3] - INSET - 13];
@@ -83,9 +105,11 @@ try {
     await input("type:pizza");
     const p = await until("one match", async () => ((await picker())?.items === 1 ? picker() : null));
     assert.equal(p.first, "🍕");
+    await untilSnapshot(native.app, "native filtered picker", (state) => nativePicker(state)?.items === p.items && nativePicker(state)?.first === p.first);
     await input("return");
     await closed();
     assert.equal(await icon("t3"), "🍕");
+    await nativeIcon(native.app, "t3", "🍕");
   });
 
   await rep.check("Escape closes it without a change, and a typed miss shows No matches", async () => {
@@ -95,6 +119,7 @@ try {
     await input("type:zzzz");
     p = await until("no matches", async () => ((await picker())?.items === 0 ? picker() : null));
     assert.equal(p.panel[3], 82 + 34);
+    await untilSnapshot(native.app, "native no-match picker", (state) => nativePicker(state)?.items === 0 && same(nativePicker(state)?.panel, p.panel));
     await input("escape");
     await closed();
     assert.equal(await icon("t3"), "🍕");
@@ -105,11 +130,13 @@ try {
     const [x, y] = cellCenter(p.panel, 2);
     await point(x, y);
     await until("the third cell hovered", async () => (await picker())?.hovered === "❤️");
+    await untilSnapshot(native.app, "native hovered icon", (state) => nativePicker(state)?.hovered === "❤️");
     await point(900, 600);
     await until("the hover leaves", async () => (await picker())?.hovered === null);
     await click(x, y);
     await closed();
     assert.equal(await icon("t3"), "❤️");
+    await nativeIcon(native.app, "t3", "❤️");
   });
 
   await rep.check("the Icons tab lists symbols, a click there sets one, and a symbol icon reopens on it", async () => {
@@ -118,10 +145,12 @@ try {
     p = await until("the Icons tab", async () => ((await picker())?.tab === "symbols" ? picker() : null));
     assert.equal(p.items, 78);
     assert.equal(p.first, "symbol:star");
+    await untilSnapshot(native.app, "native symbols tab", (state) => nativePicker(state)?.tab === p.tab && nativePicker(state)?.items === p.items && nativePicker(state)?.first === p.first);
     const [x, y] = cellCenter(p.panel, 1);
     await click(x, y);
     await closed();
     assert.equal(await icon("t4"), "symbol:heart");
+    await nativeIcon(native.app, "t4", "symbol:heart");
     p = await open("tab", "t4");
     assert.equal(p.tab, "symbols");
     await input("escape");
@@ -133,6 +162,7 @@ try {
     await click(...footerCenter(p.panel));
     await closed();
     assert.equal(await icon("t3"), null);
+    await nativeIcon(native.app, "t3", null);
   });
 
   await rep.check("a group gets No Icon from its footer", async () => {
@@ -166,6 +196,7 @@ try {
     await sleep(800);
     assert.equal(await run(`return acPerf.findFibers("PickerPanel", 5).length`), 1, "RN draws its picker");
     assert.equal(await run(`return globalThis.expo.modules.SolaraHosted.sidebarIconPicker("w1")`), "null");
+    await untilSnapshot(rn.app, "native picker remains absent", (state) => nativePicker(state) === null);
   });
 } finally {
   await rn?.app.quit();

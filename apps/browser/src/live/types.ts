@@ -72,12 +72,4 @@ export type FolderStatus = {
   error: { kind: LiveErrorKind; message: string; source: LiveSourceId } | null;
 };
 
-export class LiveError extends Error {
-  kind: LiveErrorKind;
-  constructor(kind: LiveErrorKind, message: string) {
-    super(message);
-    this.kind = kind;
-  }
-}
-
 export type LiveAccount = { login: string; name: string | null; avatar: string | null; connectedAt: number };

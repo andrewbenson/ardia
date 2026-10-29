@@ -126,11 +126,6 @@ export function applyLiveReplica(replica: LiveReplica): void {
 onLiveReplica(applyLiveReplica);
 try { applyLiveReplica(liveInitialReplica()); } catch {}
 
-export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
-  pullRequests: { name: "Pull Requests", sources: ["github"] },
-  documents: { name: "Documents", sources: ["notion"] },
-};
-
 const command = async (name: string, payload: Record<string, unknown>) => {
   const result = await liveCommand(name, payload);
   if (result.revision > lastRevision) {
@@ -153,9 +148,7 @@ export const setStatus = (folderId: string, status: Partial<FolderStatus>) => co
 export const markRead = (folderId: string, itemIds?: string[]) => command("markRead", { folderId, ...(itemIds ? { itemIds } : {}) });
 export const markUnread = (folderId: string, itemId: string) => command("markUnread", { folderId, itemId });
 export const hideItems = (folderId: string, items: LiveItem[]) => command("hideItems", { folderId, items });
-export const unhide = (folderId: string) => command("unhide", { folderId });
 export const setExpandedStack = (key: string, expanded: boolean) => command("setExpandedStack", { key, expanded });
-export const updateConfig = (patch: Partial<LiveConfig>) => command("updateConfig", { patch });
 export const updateCalendarSettings = (patch: Partial<CalendarSettings>) => command("updateCalendarSettings", { patch });
 export const setCalendarHidden = (id: string, hidden: boolean) => command("setCalendarHidden", { id, hidden });
 export const dismissAlert = (occurrence: string) => command("dismissAlert", { occurrence });

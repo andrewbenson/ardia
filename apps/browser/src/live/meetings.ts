@@ -180,9 +180,3 @@ export const ALERT_LEADS: { value: string; title: string; minutes: number | null
   { value: "10", title: "Ten Minutes Before", minutes: 10 },
 ];
 
-export function dueAlerts(events: CalendarEvent[], now: number, leadMinutes: number, dismissed: Set<string>): CalendarEvent[] {
-  return events
-    .filter(isMeeting)
-    .filter((e) => !dismissed.has(e.occurrence) && now >= e.start - leadMinutes * MINUTE && now < Math.min(e.end, e.start + 5 * MINUTE))
-    .sort((a, b) => a.start - b.start);
-}

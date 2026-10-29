@@ -16,8 +16,6 @@ export function applyMeetingAlertReplica(meetingAlertJSON: string): void {
 
 onLiveSnapshot((replica) => { if (replica.meetingAlertJSON) applyMeetingAlertReplica(replica.meetingAlertJSON); });
 
-export const alertEvent = (): CalendarEvent | null => useMeetingAlert.getState().event;
-
 export function joinEvent(event: CalendarEvent, openAll = false, windowId = frontWindow()) {
   const link = joinLink(event);
   if (!link || !windowId) return;

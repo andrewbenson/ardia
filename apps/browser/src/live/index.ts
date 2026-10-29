@@ -1,18 +1,9 @@
-import * as alerts from "./alerts";
-import * as calendar from "./calendar";
-import * as engine from "./engine";
-import * as googleAuth from "./googleAuth";
-import * as meetingGroups from "./meetingGroups";
-import * as sources from "./sources";
-import * as store from "./store";
+import { startLiveEngine } from "./engine";
+import { startGoogleAuth } from "./googleAuth";
+import { startMeetingGroups } from "./meetingGroups";
 
 export function startLive() {
-  googleAuth.startGoogleAuth();
-  engine.startLiveEngine();
-  meetingGroups.startMeetingGroups();
-  if (__DEV__) {
-    const hover = require("../components/sidebar/hover") as typeof import("../components/sidebar/hover");
-    const settings = require("../components/settings/windows") as typeof import("../components/settings/windows");
-    (globalThis as { acLive?: object }).acLive = { alerts, calendar, engine, googleAuth, meetingGroups, sources, store, hover, settings };
-  }
+  startGoogleAuth();
+  startLiveEngine();
+  startMeetingGroups();
 }

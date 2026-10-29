@@ -4,7 +4,7 @@ import { useBrowser } from "../store/browser";
 import { activeTabId, viewTabIds } from "../store/model";
 import { SOURCES } from "./sources";
 import { live, markRead, removeFolder, useLive } from "./store";
-import { LiveError, type LiveFolderKind, type LiveItem, type LiveSourceId } from "./types";
+import type { LiveErrorKind, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 
 export const COMPLETION_MS = 2600;
 export const refreshFolder = (folderId: string): Promise<void> => liveCommand("refreshFolder", { folderId }).then(() => undefined);
@@ -25,7 +25,7 @@ function fetchText(folderId: string, now: number): string {
   return min < 1 ? "Updated just now" : min < 60 ? `Updated ${min} min ago` : `Updated ${Math.floor(min / 60)} hr ago`;
 }
 
-export function errorText(kind: LiveError["kind"], source: LiveSourceId): string {
+export function errorText(kind: LiveErrorKind, source: LiveSourceId): string {
   const name = SOURCES[source].name;
   switch (kind) {
     case "notConfigured": return `Connect ${name} in Settings`;

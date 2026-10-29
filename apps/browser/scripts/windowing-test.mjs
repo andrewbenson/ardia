@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -57,7 +57,7 @@ const closeWindowsBut = (ids) =>
   run(`const keep = ${JSON.stringify(ids)}; Object.keys(st().windows).filter((id) => !keep.includes(id)).forEach((id) => st().closeWindow(id)); return settle(500);`);
 
 const recorderSource = join(dirname(fileURLToPath(import.meta.url)), "windowing-rec.swift");
-const recorder = join(data, "windowing-rec");
+const recorder = join(scratch, "windowing-rec");
 let noScreen = null;
 
 const screenLocked = () =>
@@ -193,6 +193,16 @@ async function newWindowInProcess(ids) {
   assert.ok(off < 6, `opaque ${shown.at} ms after opening, its sidebar ${off.toFixed(1)} levels from the settled window`);
 }
 
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot().catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 async function check(name, fn) {
   const t0 = Date.now();
   try {
@@ -204,12 +214,15 @@ async function check(name, fn) {
 }
 
 try {
-  mkdirSync(data, { recursive: true });
   const built = spawnSync("swiftc", ["-O", recorderSource, "-o", recorder], { encoding: "utf8" });
   if (built.status !== 0) rep.log(`(no recorder: ${built.stderr.trim().split("\n")[0]})`);
   app = await launch(appPath, { data, port, session: fixture(), onboarded: true, probe: true, env: { ARDIA_DRAW_WINDOWS: "1" } });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await sleep(2500);
+  const initial = await untilSnapshot("initial native windows", (state) => ["w1", "w2"].every((id) => state.windows.some((w) => w.id === id)));
+  const initialTabs = Object.fromEntries(initial.windows.map((w) => [w.id, w.tabIds]));
+  assert.deepEqual(initialTabs.w1, ["n1", "g1", "b1", "n2"], "native w1 tab order");
+  assert.deepEqual(initialTabs.w2, ["m1"], "native w2 tab order");
   let probe = null;
   if (!existsSync(recorder)) noScreen = "no frame recorder (swiftc failed)";
   else if (screenLocked()) noScreen = "needs unlocked screen: it is locked, WindowServer records nothing";
@@ -303,6 +316,8 @@ try {
     const after = await run(`return Object.values(st().windows).map((w) => [w.id, w.tabIds]);`);
     assert.deepEqual(after.find(([id]) => id === "w2"), undefined, `w2 closed: ${JSON.stringify(after)}`);
     assert.ok(after.find(([id]) => id === "w1")[1].includes("m1"), `m1 in w1: ${JSON.stringify(after)}`);
+    const native = await untilSnapshot("native drop ownership", (state) => !state.windows.some((w) => w.id === "w2") && state.windows.some((w) => w.id === "w1" && w.tabIds.includes("m1")) && state.tabs.some((t) => t.id === "m1" && t.windowId === "w1"));
+    assert.equal(native.windows.find((w) => w.id === "w1")?.tabIds.includes("m1"), true, "native w1 owns m1");
     await sleep(800);
     assert.deepEqual(await strips(), [browser], "the same live tab, not a new one");
   });

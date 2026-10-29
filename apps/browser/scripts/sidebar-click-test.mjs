@@ -77,16 +77,33 @@ const run = (body) => app.eval(`${HELPERS}\n${body}`, { timeout: 20000 });
 const press = (key, keyCode) => run(`return ac.shell.devKeyEquivalent("w1", ${JSON.stringify({ key, keyCode, modifiers: ["command"] })});`);
 const clickTab = (id) => run(`return clickTab(${JSON.stringify(id)});`);
 
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const selectedByNative = async (id) => {
+  const state = await untilSnapshot(`native selected tab ${id}`, (state) => state.windows[0]?.selectedTabId === id);
+  assert.ok(state.windows[0].tabIds.includes(id), `${id} belongs to the native window`);
+};
+
 async function asCardMounts(hoverId, clickId, rounds) {
   const misses = [];
   let clicked = 0;
   for (let tries = 0; clicked < rounds && tries < rounds * 4; tries++) {
     assert.equal(await clickTab("c"), "c", "c opens before each round");
+    await selectedByNative("c");
     const r = await run(`return clickAsCardMounts(${JSON.stringify(hoverId)}, ${JSON.stringify(clickId)});`);
     rep.log(`${hoverId} -> ${clickId}: ${JSON.stringify(r)}`);
     if (r.card !== hoverId || r.before === clickId || !r.fading) continue;
     clicked++;
     if (r.shown !== clickId) misses.push(r.shown);
+    if (r.shown === clickId) await selectedByNative(clickId);
   }
   assert.equal(clicked, rounds, `a click reached ${clickId} while ${hoverId}'s card faded in on ${clicked} of ${rounds} rounds`);
   assert.deepEqual(misses, [], `${misses.length} of ${rounds} clicks on ${clickId} did nothing`);
@@ -107,17 +124,24 @@ try {
     await clickTab("a");
     await press("t", 17);
     await sleep(600);
-    for (const id of ["b", "a", "p1", "pr", "c"]) assert.equal(await clickTab(id), id, `${id} after a New Tab`);
+    for (const id of ["b", "a", "p1", "pr", "c"]) {
+      assert.equal(await clickTab(id), id, `${id} after a New Tab`);
+      await selectedByNative(id);
+    }
   });
 
   await rep.check("a closed pinned tab opens on its first click", async () => {
     for (const id of ["p1", "pr"]) {
       assert.equal(await clickTab(id), id);
+      await selectedByNative(id);
       await press("w", 13);
       await sleep(600);
       assert.notEqual(await run("return shown();"), id, `${id} closed`);
+      await untilSnapshot(`native ${id} closed`, (state) => state.windows[0]?.selectedTabId !== id && state.windows[0]?.tabIds.includes(id));
       assert.equal(await clickTab("b"), "b");
+      await selectedByNative("b");
       assert.equal(await clickTab(id), id, `${id} after closing it`);
+      await selectedByNative(id);
     }
   });
 } finally {

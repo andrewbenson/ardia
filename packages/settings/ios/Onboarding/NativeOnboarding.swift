@@ -132,3 +132,18 @@ struct OnboardingPowerUp: NSViewRepresentable {
 
   func updateNSView(_ view: NSView, context: Context) {}
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum OnboardingRead {
+  public static func snapshot() -> [String: Any] {
+    func object(_ raw: String) -> [String: Any] {
+      guard let data = raw.data(using: .utf8) else { return [:] }
+      return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+    let label = "Set \(Bundle.main.productName) as default browser"
+    return ["state": object(NativeOnboarding.drive("state", nil)),
+      "defaultBrowserRow": object(NativeOnboarding.drive("find", label))]
+  }
+}
+#endif

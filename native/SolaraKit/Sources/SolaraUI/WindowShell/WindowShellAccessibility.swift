@@ -19,6 +19,9 @@ extension WindowShellView {
   }
 
   private func reachedLayer(_ element: NSObject) -> String {
+    for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+      if let button = window?.standardWindowButton(kind), element === button || element === button.cell { return "titlebar" }
+    }
     var cursor: Any? = (element as? NSCell)?.controlView ?? element
     while let current = cursor {
       if let view = current as? NSView {

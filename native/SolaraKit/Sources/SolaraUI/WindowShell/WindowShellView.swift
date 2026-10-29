@@ -41,6 +41,8 @@ public final class WindowShellView: NSView {
   public private(set) var devPointerLookupNanos: UInt64 = 0
   #endif
   private var modalOwners: Set<String> = []
+  private weak var titlebarWindow: NSWindow?
+  private var titlebarAccessibility: [(button: NSButton, cell: NSCell, accessible: Bool, children: [Any]?)] = []
 
   public override var isFlipped: Bool { true }
 
@@ -127,6 +129,7 @@ public final class WindowShellView: NSView {
     super.viewDidMoveToWindow()
     if window == nil { TabSlots.shared.remove(.card(windowId), container: cardPage) } else { TabSlots.shared.set(.card(windowId), container: cardPage) }
     if window == nil { stopPointerLink() }
+    syncTitlebarAccessibility()
     onWindow?(window)
   }
 
@@ -146,7 +149,27 @@ public final class WindowShellView: NSView {
     let before = modalShown
     if shown { modalOwners.insert(owner) } else { modalOwners.remove(owner) }
     guard modalShown != before else { return }
+    syncTitlebarAccessibility()
     NSAccessibility.post(element: self, notification: .layoutChanged)
+  }
+
+  private func syncTitlebarAccessibility() {
+    for entry in titlebarAccessibility {
+      entry.cell.setAccessibilityElement(entry.accessible)
+      entry.button.setAccessibilityChildren(entry.children)
+    }
+    if let titlebarWindow { NSAccessibility.post(element: titlebarWindow, notification: .layoutChanged) }
+    titlebarAccessibility.removeAll()
+    titlebarWindow = nil
+    guard modalShown, let window else { return }
+    titlebarWindow = window
+    for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+      guard let button = window.standardWindowButton(kind), let cell = button.cell else { continue }
+      titlebarAccessibility.append((button, cell, cell.isAccessibilityElement(), button.accessibilityChildren()))
+      cell.setAccessibilityElement(false)
+      button.setAccessibilityChildren([])
+    }
+    NSAccessibility.post(element: window, notification: .layoutChanged)
   }
 
   private var modalRoot: NSView? {

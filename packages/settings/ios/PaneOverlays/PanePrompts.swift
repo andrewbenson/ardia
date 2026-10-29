@@ -31,7 +31,7 @@ enum PanePrompts {
   private(set) static var activatedAt: TimeInterval = 0
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativePanePrompts, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativePanePrompts)
   }
 
   static func start() {

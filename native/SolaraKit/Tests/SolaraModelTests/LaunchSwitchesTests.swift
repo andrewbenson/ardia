@@ -7,7 +7,7 @@ import Testing
   static let defaultOn: Set<LaunchSwitch> = [
     .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
-    .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool,
+    .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts,
   ]
   static let shippedSurfaces = defaultOn.filter { !$0.storable(distribution: false) && !$0.storable(distribution: true) }
 
@@ -202,9 +202,9 @@ import Testing
       environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_MAIN_TOP": "1", "ARDIA_SHELL_PANES": "1", "ARDIA_NATIVE_PAGES_POOL": "1", "ARDIA_NATIVE_TAB_PICKERS": "0"], defaults: nil, distribution: false, skipStored: false)
     #expect(!noShell.isOn(.shellMainTop, defaultOn: false))
     #expect(noShell.unmetNeeds(.shellMainTop) == [.shellPanes, .nativePagesPool])
-    #expect(noShell.refusals.count == 6)
+    #expect(noShell.refusals.count == 7)
     #expect(LaunchSwitches(environment: [:], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
-    #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0", "ARDIA_NATIVE_TAB_PICKERS": "0", "ARDIA_NATIVE_ICON_PICKER": "0", "ARDIA_NATIVE_AUTOHIDE": "0", "ARDIA_NATIVE_PROFILE_PAGER": "0", "ARDIA_NATIVE_PAGES_POOL": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
+    #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0", "ARDIA_NATIVE_TAB_PICKERS": "0", "ARDIA_NATIVE_ICON_PICKER": "0", "ARDIA_NATIVE_AUTOHIDE": "0", "ARDIA_NATIVE_PROFILE_PAGER": "0", "ARDIA_NATIVE_PAGES_POOL": "0", "ARDIA_NATIVE_PANE_PROMPTS": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
   }
 
   @Test func theOneArgumentReadUsesTheSwitchsOwnDefault() {
@@ -230,6 +230,7 @@ import Testing
       "ARDIA_NATIVE_PAGES_POOL is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
       "ARDIA_NATIVE_ICON_PICKER is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
       "ARDIA_NATIVE_AUTOHIDE is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
+      "ARDIA_NATIVE_PANE_PROMPTS is on but stays off: it needs ARDIA_NATIVE_SHELL=1 and ARDIA_NATIVE_PAGES_POOL=1",
       "ARDIA_NATIVE_TAB_PICKERS is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
       "ARDIA_NATIVE_PROFILE_PAGER is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
     ])
@@ -246,7 +247,7 @@ import Testing
     let switches = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(!switches.isOn(.shellPanes, defaultOn: false))
     #expect(!switches.isOn(.nativeTabPickers, defaultOn: false))
-    #expect(switches.refusals.count == 6)
+    #expect(switches.refusals.count == 7)
     defaults.set("1", forKey: "ARDIA_NATIVE_SHELL")
     let withShell = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(withShell.isOn(.shellPanes, defaultOn: false))

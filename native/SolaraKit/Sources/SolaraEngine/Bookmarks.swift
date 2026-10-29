@@ -106,6 +106,7 @@ final class BookmarkLibrary {
   private(set) var snapshot = BookmarkSnapshot()
   private var loading = false
   private var again = false
+  private var reloadWaiters: [CheckedContinuation<Void, Never>] = []
 
   init(engineProfile: String, client: any EngineClient, publish: @escaping @MainActor (BookmarkSnapshot) -> Void) {
     self.engineProfile = engineProfile
@@ -116,10 +117,16 @@ final class BookmarkLibrary {
   func reload() async {
     if loading {
       again = true
+      await withCheckedContinuation { reloadWaiters.append($0) }
       return
     }
     loading = true
-    defer { loading = false }
+    defer {
+      loading = false
+      let waiters = reloadWaiters
+      reloadWaiters = []
+      for waiter in waiters { waiter.resume() }
+    }
     repeat {
       again = false
       do {

@@ -1,4 +1,4 @@
-import { deleteHistoryUrls, importHistoryRows } from "@ardia/ardiacore";
+import { nativeDeleteHistoryUrls, nativeImportHistoryRows } from "@ardia/settings";
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "./browser";
 import { engineProfile, isIncognitoProfile } from "./model";
@@ -35,7 +35,7 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
   removeHistory(profileId, urls) {
     if (!urls.length || isIncognitoProfile(profileId)) return;
     set((s) => ({ history: { ...s.history, [profileId]: (s.history[profileId] ?? []).filter((h) => !urls.includes(h.url)) } }));
-    void deleteHistoryUrls(engineProfile(profileId), urls).catch(failed("delete"));
+    void nativeDeleteHistoryUrls(engineProfile(profileId), urls).catch(failed("delete"));
   },
 
   importHistory(profileId, entries) {
@@ -53,7 +53,7 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
       const merged = [...byUrl.values()].sort((a, b) => b.lastVisit - a.lastVisit).slice(0, MAX_HISTORY);
       return { history: { ...s.history, [profileId]: merged } };
     });
-    void importHistoryRows(engineProfile(profileId), rows).catch(failed("import"));
+    void nativeImportHistoryRows(engineProfile(profileId), rows).catch(failed("import"));
     return added;
   },
 

@@ -1,4 +1,5 @@
-import { faviconsFor, fetchFavicon, onHistoryChanged, storeFavicon } from "@ardia/ardiacore";
+import { faviconsFor, fetchFavicon, onHistoryChanged } from "@ardia/ardiacore";
+import { nativeStoreFavicon } from "@ardia/settings";
 import { iconTheme, readDocument, removeDocument, type IconTheme } from "@ardia/shell";
 import { useEffect } from "react";
 import { create } from "zustand";
@@ -195,7 +196,7 @@ export function adoptFavicons(profileId: string, known: KnownFavicon[]) {
     return { ...icons, pages };
   }, true);
   void (async () => {
-    for (const [page, f] of found) await storeFavicon(key, page, f.icon, f.png).catch(() => null);
+    for (const [page, f] of found) await nativeStoreFavicon(key, page, f.icon, f.png).catch(() => null);
   })();
 }
 
@@ -206,8 +207,12 @@ function fetchMissing(profileId: string, url: string, src: string) {
   if (isIncognitoProfile(profileId) || !/^https?:/i.test(src)) return;
   const id = `${key}|${src}`;
   if (inflight.has(id) || failedFetches.has(id)) return;
-  const pending = fetchFavicon(src, key, pageKey(url))
-    .then((image) => image?.uri ?? null)
+  const pending = fetchFavicon(src, key)
+    .then(async (image) => {
+      const uri = image?.uri ?? null;
+      if (uri?.startsWith("data:image/png;base64,")) await nativeStoreFavicon(key, pageKey(url), src, uri.slice(22)).catch(() => null);
+      return uri;
+    })
     .catch(() => null);
   inflight.set(id, pending);
   void pending.then((uri) => {

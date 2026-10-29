@@ -13,7 +13,7 @@ type NativeSettingsModule = {
   devHistorySnapshot?(profile: string): Promise<{ count: number; ready: boolean; floor: number | "-Infinity"; revision: number }>;
   devBookmarksSnapshot?(profile: string): Promise<{ count: number; ready: boolean; revision: number }>;
   devFaviconLookup?(page: string, engineProfile: string): Promise<{ bytes: number; source: string }>;
-  bookmarkWriteComplete?(profile: string): Promise<void>;
+  libraryCommand?(kind: string, engineProfile: string, payload: Record<string, unknown>): Promise<unknown>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
   publish(topic: string, json: string): Promise<void>;
   addListener(event: "onSettingsCall", listener: (call: SettingsCall) => void): EventSubscription;
@@ -62,7 +62,37 @@ export const devNativeBookmarksSnapshot = (profile: string) => native?.devBookma
 
 export const devFaviconLookup = (page: string, engineProfile: string) => native?.devFaviconLookup?.(page, engineProfile);
 
-export const nativeBookmarkWriteComplete = (profile: string) => native?.bookmarkWriteComplete?.(profile).catch(() => {});
+const libraryCommand = <T>(kind: string, engineProfile: string, payload: Record<string, unknown>): Promise<T> =>
+  native?.libraryCommand ? native.libraryCommand(kind, engineProfile, payload) as Promise<T> : Promise.reject(new Error("native library commands unavailable"));
+
+export const nativeDeleteHistoryUrls = (engineProfile: string, urls: string[]): Promise<void> =>
+  urls.length ? libraryCommand("deleteHistory", engineProfile, { urls }) : Promise.resolve();
+
+export const nativeImportHistoryRows = (engineProfile: string, rows: { url: string; title: string; visits: number; lastVisit: number }[]): Promise<void> =>
+  rows.length ? libraryCommand("importHistory", engineProfile, { rows }) : Promise.resolve();
+
+const addingHistory = new Map<string, Promise<unknown>>();
+
+export function nativeAddHistoryVisits(engineProfile: string, pages: { url: string; title: string; visitTimes: number[] }[], toleranceMs = 1000): Promise<number> {
+  if (!pages.length) return Promise.resolve(0);
+  const run = (addingHistory.get(engineProfile) ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => libraryCommand<number>("addHistoryVisits", engineProfile, { pages, toleranceMs }));
+  addingHistory.set(engineProfile, run);
+  return run;
+}
+
+export type LibraryBookmarkOp =
+  | { op: "add"; id: string; k: "u" | "f"; t: string; u?: string; a: number; key?: string; parent: string; index?: number; ifAbsent?: boolean }
+  | { op: "move"; id: string; parent: string; index: number }
+  | { op: "update"; id: string; t?: string; u?: string }
+  | { op: "remove"; id: string };
+
+export const nativeApplyBookmarkOps = (engineProfile: string, ops: LibraryBookmarkOp[]): Promise<{ applied: number; skipped: number; invalid: string[] }> =>
+  libraryCommand("applyBookmarks", engineProfile, { ops });
+
+export const nativeStoreFavicon = (engineProfile: string, page: string, icon: string, png: string): Promise<void> =>
+  libraryCommand("storeFavicon", engineProfile, { page, icon, png });
 
 export const publishSettingsTopic = (topic: string, value: unknown) =>
   native?.publish(topic, JSON.stringify(value ?? null)).catch(() => {});

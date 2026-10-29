@@ -1,4 +1,5 @@
-import { addHistoryVisits, deleteHistoryUrls, deletePassword, savePassword } from "@ardia/ardiacore";
+import { deletePassword, savePassword } from "@ardia/ardiacore";
+import { nativeAddHistoryVisits, nativeDeleteHistoryUrls } from "@ardia/settings";
 import { assignPositions, canonical, SyncNative, type Adapter, type SavedLogin, type SyncRecord } from "@ardia/sync";
 import { bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../store/bookmarks";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "../store/history";
@@ -437,7 +438,7 @@ export function historyAdapter(profileId: string): Adapter {
       }
       if (!updates.size) return;
       const engine = engineProfile(profileId);
-      await Promise.all([addHistoryVisits(engine, add, SAME_VISIT_MS), deleteHistoryUrls(engine, remove)]);
+      await Promise.all([nativeAddHistoryVisits(engine, add, SAME_VISIT_MS), nativeDeleteHistoryUrls(engine, remove)]);
       asSyncApply(() =>
         useBrowser.setState((s) => {
           const current = new Map((s.history[profileId] ?? []).map((e) => [e.url, e]));

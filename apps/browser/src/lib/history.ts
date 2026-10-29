@@ -1,6 +1,6 @@
-import { addHistoryVisits, onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "@ardia/ardiacore";
+import { onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "@ardia/ardiacore";
 import { readDocument, removeDocument } from "@ardia/shell";
-import { startNativeHistoryCatalog } from "@ardia/settings";
+import { nativeAddHistoryVisits, startNativeHistoryCatalog } from "@ardia/settings";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { afterFirstWindow } from "./afterFirstWindow";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "../store/history";
@@ -204,7 +204,7 @@ export async function migrateHistoryFile(now = Date.now(), { keepMs = LEGACY_KEP
           visitTimes: (e.visitTimes?.length ? e.visitTimes : [e.lastVisit]).filter((t) => typeof t === "number" && t > now - CHROME_KEEPS_MS),
         }))
         .filter((p) => p.visitTimes.length);
-      for (let i = 0; i < pages.length; i += CHUNK) await addHistoryVisits(engine, pages.slice(i, i + CHUNK), LEGACY_TOLERANCE_MS);
+      for (let i = 0; i < pages.length; i += CHUNK) await nativeAddHistoryVisits(engine, pages.slice(i, i + CHUNK), LEGACY_TOLERANCE_MS);
     }
   } catch (error) {
     console.warn(`[history] moving ${LEGACY_FILE} into Chrome failed; trying again next launch`, error);

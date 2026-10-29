@@ -8,11 +8,13 @@ globalThis.__DEV__ = false;
 const native = import.meta.resolve("@ardia/ardiacore");
 const stub = `export * from ${JSON.stringify(native)};
 export const faviconsFor = (profile, pages) => globalThis.faviconsForTest(profile, pages);
-export const storeFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve({ stored: true }));`;
+`;
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === "@ardia/ardiacore" && context.parentURL?.endsWith("/lib/favicons.ts"))
       return { url: `data:text/javascript,${encodeURIComponent(stub)}`, shortCircuit: true };
+    if (specifier === "@ardia/settings" && context.parentURL?.endsWith("/lib/favicons.ts"))
+      return { url: `data:text/javascript,${encodeURIComponent(`export const nativeStoreFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve());`)}`, shortCircuit: true };
     return next(specifier, context);
   },
 });

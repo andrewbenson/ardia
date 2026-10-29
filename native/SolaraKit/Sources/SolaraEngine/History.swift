@@ -72,6 +72,10 @@ public struct HistorySnapshot: Sendable, Equatable {
 
 @MainActor
 public protocol EngineClient: AnyObject {
+  func deleteHistory(urls: [String], engineProfile: String) async throws
+  func importHistory(rows: [HistoryImportRow], engineProfile: String) async throws
+  func addHistoryVisits(pages: [HistoryVisitPage], toleranceMs: Double, engineProfile: String) async throws -> Int
+  func applyBookmarks(ops: [BookmarkOperation], engineProfile: String) async throws -> BookmarkApplyResult
   func observeHistory(_ handler: @escaping @MainActor @Sendable (HistoryChange) -> Void)
   func watchHistory(engineProfile: String) async throws
   func queryHistory(engineProfile: String, maxUrls: Int, maxVisits: Int) async throws -> [EngineHistoryRow]
@@ -204,10 +208,10 @@ final class HistoryLibrary {
 public final class LibraryCatalog {
   public private(set) var histories: [String: HistorySnapshot] = [:]
   public private(set) var bookmarkSnapshots: [String: BookmarkSnapshot] = [:]
-  @ObservationIgnored private let client: any EngineClient
+  @ObservationIgnored let client: any EngineClient
   @ObservationIgnored public private(set) var favicons: FaviconLibrary?
   @ObservationIgnored private var libraries: [String: HistoryLibrary] = [:]
-  @ObservationIgnored private var bookmarkLibraries: [String: BookmarkLibrary] = [:]
+  @ObservationIgnored var bookmarkLibraries: [String: BookmarkLibrary] = [:]
   @ObservationIgnored private var bookmarkObservers: [String: [UUID: AsyncStream<BookmarkSnapshot>.Continuation]] = [:]
   @ObservationIgnored private var pending: [HistoryChange] = []
   @ObservationIgnored private var flushScheduled = false

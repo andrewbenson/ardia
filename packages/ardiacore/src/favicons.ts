@@ -20,9 +20,6 @@ export function storeFavicon(profile: string, page: string, icon: string, png: s
   return engineCall<{ stored: boolean }>("ac_favicons_set", profile, { page, icon, png });
 }
 
-export async function fetchFavicon(url: string, profile: string, page?: string): Promise<FaviconImage | null> {
-  const image = await Cef.fetchFavicon(url, profile);
-  const png = image?.uri.startsWith("data:image/png;base64,") ? image.uri.slice(22) : null;
-  if (page && png) await storeFavicon(profile, page, url, png).catch(() => null);
-  return image;
+export async function fetchFavicon(url: string, profile: string): Promise<FaviconImage | null> {
+  return Cef.fetchFavicon(url, profile);
 }

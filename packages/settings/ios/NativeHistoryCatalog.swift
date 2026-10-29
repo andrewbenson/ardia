@@ -61,6 +61,28 @@ final class ArdiaHistoryClient: EngineClient {
     }
   }
 
+  func deleteHistory(urls: [String], engineProfile: String) async throws {
+    _ = try await call("ac_history_delete_urls", profile: engineProfile, args: ["urls": urls])
+  }
+
+  func importHistory(rows: [HistoryImportRow], engineProfile: String) async throws {
+    let values: [[String: Any]] = rows.map { ["u": $0.url, "t": $0.title, "n": $0.visits, "l": $0.lastVisit] }
+    _ = try await call("ac_history_import", profile: engineProfile, args: ["rows": values])
+  }
+
+  func addHistoryVisits(pages: [HistoryVisitPage], toleranceMs: Double, engineProfile: String) async throws -> Int {
+    let values: [[String: Any]] = pages.map { ["u": $0.url, "t": $0.title, "v": $0.visitTimes] }
+    let data = try await call("ac_history_add", profile: engineProfile, args: ["pages": values, "toleranceMs": toleranceMs])
+    guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any], let added = object["added"] as? Int else { throw Failure.invalidReply }
+    return added
+  }
+
+  func applyBookmarks(ops: [BookmarkOperation], engineProfile: String) async throws -> BookmarkApplyResult {
+    let values = try JSONSerialization.jsonObject(with: JSONEncoder().encode(ops))
+    let data = try await call("ac_bookmarks_apply", profile: engineProfile, args: ["ops": values])
+    return try JSONDecoder().decode(BookmarkApplyResult.self, from: data)
+  }
+
   func watchBookmarks(engineProfile: String) async throws {
     _ = try await call("ac_bookmarks_watch", profile: engineProfile)
   }
@@ -165,10 +187,37 @@ enum NativeHistoryCatalog {
     await catalog.start(engineProfiles: engineProfiles)
   }
 
-  static func bookmarkWriteComplete(engineProfile: String) async {
-    await start(engineProfiles: [engineProfile])
-    await catalog.reloadBookmarks(engineProfile: engineProfile)
+  static func command(kind: String, engineProfile: String, payload: [String: Any]) async throws -> Any {
+    let data = try JSONSerialization.data(withJSONObject: payload)
+    switch kind {
+    case "deleteHistory":
+      guard let urls = payload["urls"] as? [String] else { throw ArdiaHistoryClient.Failure.invalidReply }
+      try await catalog.deleteHistory(urls: urls, engineProfile: engineProfile)
+      return NSNull()
+    case "importHistory":
+      let rows = try JSONDecoder().decode(HistoryRowsPayload.self, from: data).rows
+      try await catalog.importHistory(rows: rows, engineProfile: engineProfile)
+      return NSNull()
+    case "addHistoryVisits":
+      let input = try JSONDecoder().decode(HistoryVisitsPayload.self, from: data)
+      return try await catalog.addHistoryVisits(pages: input.pages, toleranceMs: input.toleranceMs, engineProfile: engineProfile)
+    case "applyBookmarks":
+      let ops = try JSONDecoder().decode(BookmarkOpsPayload.self, from: data).ops
+      let result = try await catalog.applyBookmarks(ops: ops, engineProfile: engineProfile)
+      return ["applied": result.applied, "skipped": result.skipped, "invalid": result.invalid]
+    case "storeFavicon":
+      guard let page = payload["page"] as? String, let source = payload["icon"] as? String,
+        let png = payload["png"] as? String, let bytes = Data(base64Encoded: png) else { throw ArdiaHistoryClient.Failure.invalidReply }
+      try await catalog.storeFavicon(page: page, source: source, data: bytes, engineProfile: engineProfile)
+      return ["stored": true]
+    default:
+      throw ArdiaHistoryClient.Failure.invalidReply
+    }
   }
+
+  private struct HistoryRowsPayload: Decodable { var rows: [HistoryImportRow] }
+  private struct HistoryVisitsPayload: Decodable { var pages: [HistoryVisitPage]; var toleranceMs: Double }
+  private struct BookmarkOpsPayload: Decodable { var ops: [BookmarkOperation] }
 
   static func bookmarksSnapshot(engineProfile: String) -> [String: Any] {
     let bookmarks = catalog.bookmarks(engineProfile: engineProfile)

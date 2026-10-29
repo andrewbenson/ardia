@@ -1,4 +1,5 @@
-import { addHistoryVisits, type PageEngine } from "@ardia/ardiacore";
+import type { PageEngine } from "@ardia/ardiacore";
+import { nativeAddHistoryVisits } from "@ardia/settings";
 import { confirm } from "@ardia/shell";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
@@ -168,7 +169,7 @@ export function followSiteChoice(tabId: string, engine: PageEngine, url: string,
 }
 
 const visits = visitRecorder(
-  (profile, visit) => void addHistoryVisits(profile, [{ url: visit.url, title: visit.title, visitTimes: [visit.at] }]).catch(() => {}),
+  (profile, visit) => void nativeAddHistoryVisits(profile, [{ url: visit.url, title: visit.title, visitTimes: [visit.at] }]).catch(() => {}),
   { set: (run, ms) => setTimeout(run, ms), clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
   Date.now,
 );

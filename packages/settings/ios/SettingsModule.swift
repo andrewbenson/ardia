@@ -44,12 +44,16 @@ public class SettingsModule: Module {
       }
     }.runOnQueue(.main)
 
-    AsyncFunction("bookmarkWriteComplete") { (profile: String, promise: Promise) in
+    AsyncFunction("libraryCommand") { (kind: String, engineProfile: String, payload: [String: Any], promise: Promise) in
       nonisolated(unsafe) let reply = promise
+      nonisolated(unsafe) let body = payload
       MainActor.assumeIsolated {
         Task { @MainActor in
-          await NativeHistoryCatalog.bookmarkWriteComplete(engineProfile: profile)
-          reply.resolve(nil)
+          do {
+            reply.resolve(try await NativeHistoryCatalog.command(kind: kind, engineProfile: engineProfile, payload: body))
+          } catch {
+            reply.reject("ERR_LIBRARY_COMMAND", String(describing: error))
+          }
         }
       }
     }.runOnQueue(.main)

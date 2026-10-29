@@ -235,6 +235,7 @@ const engineCalls: Record<string, (profile: string, args: never) => unknown> = {
   ac_history_delete_urls: deleteHistoryUrls,
   ac_history_watch: (profile: string) => (historyWatches.push(profile), { ok: true }),
   ac_favicons_get: faviconsFor,
+  ac_favicons_set: (profile: string, args: { page: string; png: string }) => (chromeFavicons.set(`${profile}|${args.page}`, `${PNG_URI}${args.png}`), { stored: true }),
   ac_bookmarks_tree: (profile: string) => ({ bar: treeOf(chromeBookmarks(profile), "bar"), other: treeOf(chromeBookmarks(profile), "other") }),
   ac_bookmarks_apply: applyBookmarkOps,
   ac_bookmarks_watch: () => ({ ok: true }),

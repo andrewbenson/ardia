@@ -62,7 +62,13 @@ enum NativeDownloadsPanel {
   }
 
   static func describe(_ windowId: String) -> String {
-    guard let panel = panels[windowId], panel.superview != nil else { return "null" }
+    guard let info = read(windowId) else { return "null" }
+    let data = try? JSONSerialization.data(withJSONObject: info)
+    return data.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+  }
+
+  static func read(_ windowId: String) -> [String: Any]? {
+    guard let panel = panels[windowId], panel.superview != nil else { return nil }
     func inWindow(_ view: NSView, _ r: CGRect) -> [Double] {
       let w = view.convert(r, to: nil)
       let h = view.window?.contentView?.bounds.height ?? 0
@@ -78,7 +84,16 @@ enum NativeDownloadsPanel {
       "card": panel.cardFrame.map { inWindow(panel, $0) } ?? NSNull(), "list": inWindow(panel.list, panel.list.bounds), "opacity": panel.presentedOpacity,
       "progress": panel.progress, "closing": panel.isClosing, "controls": controls,
     ]
-    let data = try? JSONSerialization.data(withJSONObject: info)
-    return data.flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+    return info
+  }
+}
+
+@MainActor
+public enum DownloadsPanelRead {
+  public static func panel(windowId: String) -> [String: Any]? {
+    guard var info = NativeDownloadsPanel.read(windowId) else { return nil }
+    let controls = info["controls"] as? [String: [Double]] ?? [:]
+    info["controls"] = controls.filter { ["View all downloads", "Clear"].contains($0.key) }
+    return info
   }
 }

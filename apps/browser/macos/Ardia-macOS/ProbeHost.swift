@@ -127,7 +127,7 @@ final class ProbeHost {
             PaneOverlayRead.zoom(windowId: id, tabId: tabId).map { Self.popover($0, kind: "zoom", tabId: tabId) }
           } + model.tabIds.compactMap { tabId in
             PaneOverlayRead.history(windowId: id, tabId: tabId).map { Self.popover($0, kind: "history", tabId: tabId) }
-          },
+          } + (DownloadsPanelRead.panel(windowId: id).map { [Self.downloadsOverlay($0)] } ?? []),
           "views": NSNull()]
       }
       let allowedIds = Set(ids)
@@ -145,8 +145,8 @@ final class ProbeHost {
           "consistent": final.rev == initial.rev,
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
-          "windows": windows, "tabs": tabs, "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history"],
+          "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "downloads.count", "downloads.finished"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final
@@ -161,6 +161,14 @@ final class ProbeHost {
       "visible": !(source["hidden"] as? Bool ?? true), "opacity": source["opacity"] ?? NSNull(),
       "frame": rect(source["card"]), "area": rect(source["frame"]),
       "controls": labels.compactMap { label in controls[label].map { ["id": label, "frame": rect($0)] } }]
+  }
+
+  private static func downloadsOverlay(_ source: [String: Any]) -> [String: Any] {
+    let controls = source["controls"] as? [String: [Double]] ?? [:]
+    return ["id": "downloads", "kind": "downloads", "visible": true,
+      "opacity": source["opacity"] ?? NSNull(), "frame": rect(source["card"]),
+      "list": rect(source["list"]),
+      "controls": controls.keys.sorted().map { ["id": $0, "frame": rect(controls[$0])] }]
   }
 
   private func safeURL(_ raw: String) -> Any {

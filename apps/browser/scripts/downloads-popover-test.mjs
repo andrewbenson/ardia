@@ -55,6 +55,17 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const nativeFrame = (frame) => frame && [frame.x, frame.y, frame.width, frame.height];
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot().catch((e) => ({ error: e.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
 const seed = files.map((path, i) => ({ id: `dl-${i}`, url: `https://example.com/${i}`, filename: path.split("/").pop(), path, state: "finished", paused: false, received: 10, total: 10, speed: 0, mimeType: "application/zip" }));
@@ -94,6 +105,11 @@ try {
         card = d.card;
         list = d.list[3];
         got.controls = d.controls;
+        const snapshot = await untilSnapshot("native downloads card", (state) => state.windows.some((w) => w.id === "w1" && w.overlays.some((o) => o.kind === "downloads" && o.opacity === 1)));
+        const overlay = snapshot.windows.find((w) => w.id === "w1")?.overlays.find((o) => o.kind === "downloads");
+        if (!overlay.visible || !near(nativeFrame(overlay.frame), d.card) || !near(nativeFrame(overlay.list), d.list) ||
+          ["View all downloads", "Clear"].some((id) => d.controls[id] && !overlay.controls.some((c) => c.id === id && near(nativeFrame(c.frame), d.controls[id]))) ||
+          snapshot.downloads.finished !== 2) throw new Error(`native downloads ${JSON.stringify(overlay)} vs ${JSON.stringify(d)}`);
       } else {
         await sleep(400);
         const f = await run(`return Promise.all([measure(fiber("PanelBackground")), measure(fiber("NativeDownloadsList"))]);`);
@@ -111,6 +127,7 @@ try {
     if (nativeShell) {
       await rep.check("native-gone-after-close", async () => {
         await until("the panel goes", `return native().then((d) => d === null || null);`, 3000);
+        await untilSnapshot("native downloads closed", (state) => !state.windows.some((w) => w.overlays.some((o) => o.kind === "downloads" && o.visible)));
         return true;
       });
 
@@ -120,6 +137,8 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(d.controls["View all downloads"]))}).then(() => true);`);
         const page = await until("the downloads page", `return Object.values(st().tabs).map((t) => t.url).find((u) => /downloads/.test(u)) || null;`, 5000);
         await until("the popover closes", `return !st().windowUi.w1?.downloadsOpen && native().then((d) => d === null || null);`, 3000);
+        await untilSnapshot("native downloads page", (state) => state.tabs.some((t) => t.url && /downloads/.test(t.url)) &&
+          !state.windows.some((w) => w.overlays.some((o) => o.kind === "downloads" && o.visible)));
         return { page };
       });
 
@@ -132,6 +151,9 @@ try {
         await until("the popover closes", `return !st().windowUi.w1?.downloadsOpen && native().then((d) => d === null || null);`, 3000);
         const after = await run(`return [st().windows.w1.tabIds.length, st().downloads.length];`);
         if (after[0] !== tabs || after[1] !== 2) throw new Error(`tabs ${tabs} -> ${after[0]}, downloads ${after[1]}`);
+        const snapshot = await untilSnapshot("native downloads click-away", (state) => state.downloads.count === 2 &&
+          !state.windows.some((w) => w.overlays.some((o) => o.kind === "downloads" && o.visible)));
+        if (snapshot.windows.find((w) => w.id === "w1")?.tabIds.length !== after[0]) throw new Error(`native tab count ${JSON.stringify(snapshot.windows)}`);
         return { away };
       });
 
@@ -141,6 +163,8 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(d.controls.Clear))}).then(() => true);`);
         await until("the list empties", `return !st().windowUi.w1?.downloadsOpen && st().downloads.filter((x) => x.state === "finished").length === 0 || null;`, 3000);
         await until("the panel goes", `return native().then((d) => d === null || null);`, 3000);
+        await untilSnapshot("native downloads cleared", (state) => state.downloads.finished === 0 &&
+          !state.windows.some((w) => w.overlays.some((o) => o.kind === "downloads" && o.visible)));
         return true;
       });
     }

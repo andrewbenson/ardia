@@ -1,7 +1,7 @@
 import { SwipeArea, swipeHaptic, type SwipeAreaHandle, type SwipeEvent } from "@ardia/ardiacore";
 import { sendPaneSwipe, windowShellActive } from "@ardia/settings";
 import { Surface, Symbol, VisualEffect } from "@ardia/shell";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
@@ -37,14 +37,14 @@ export function spring(value: Animated.Value, toValue: number, response: number,
   return Animated.spring(value, { toValue, ...springParams(response, dampingRatio), useNativeDriver: native });
 }
 
-export function NavigationOverlays({ tabId, windowId, geometry, peek = false }: { tabId: string; windowId: string; geometry: ToolbarGeometry; peek?: boolean }) {
+export const NavigationOverlays = memo(function NavigationOverlays({ tabId, windowId, geometry, peek = false }: { tabId: string; windowId: string; geometry: ToolbarGeometry; peek?: boolean }) {
   return (
     <>
       <SwipeOverlay tabId={tabId} windowId={windowId} nativeAllowed={!peek} />
       <HistoryPopover tabId={tabId} windowId={windowId} anchors={{ back: geometry.back, forward: geometry.forward }} nativeAllowed={!peek} />
     </>
   );
-}
+});
 
 type Shown = { direction: "back" | "forward"; confirmed: boolean; list: HistoryItem[] | null; selected: number };
 

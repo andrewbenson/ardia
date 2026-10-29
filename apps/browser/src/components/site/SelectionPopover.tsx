@@ -1,6 +1,6 @@
 import { windowShellActive } from "@ardia/settings";
 import { Surface, Symbol, VisualEffect } from "@ardia/shell";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
@@ -14,7 +14,7 @@ const HEIGHT = 32;
 const GAP = 6;
 const SHOW_DELAY = 150;
 
-export function SelectionPopover({ tabId, zoom, nativeAllowed = true }: { tabId: string; zoom: number; nativeAllowed?: boolean }) {
+export const SelectionPopover = memo(function SelectionPopover({ tabId, zoom, nativeAllowed = true }: { tabId: string; zoom: number; nativeAllowed?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
@@ -52,7 +52,7 @@ export function SelectionPopover({ tabId, zoom, nativeAllowed = true }: { tabId:
       {shown && area.width > 0 && <Bar key={`${shown.rect.x},${shown.rect.y}`} tabId={tabId} selection={shown} zoom={zoom} area={area} />}
     </View>
   );
-}
+});
 
 function Bar({ tabId, selection, zoom, area }: { tabId: string; selection: PageSelection; zoom: number; area: { width: number; height: number } }) {
   const theme = useTheme();

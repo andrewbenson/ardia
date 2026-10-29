@@ -1,7 +1,7 @@
 import { toAppUrl, urlForDisplay } from "@ardia/core";
 import { hostedKinds, SolaraHostedView, windowShellActive } from "@ardia/settings";
 import { Surface, Symbol } from "@ardia/shell";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";
@@ -77,7 +77,7 @@ function displayUrl(url: string) {
   return out;
 }
 
-export function SadTab({ tabId, nativeAllowed = true }: { tabId: string; nativeAllowed?: boolean }) {
+export const SadTab = memo(function SadTab({ tabId, nativeAllowed = true }: { tabId: string; nativeAllowed?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const [native] = useState(() => nativeAllowed && windowShellActive(windowId));
@@ -142,4 +142,4 @@ export function SadTab({ tabId, nativeAllowed = true }: { tabId: string; nativeA
       </Surface>
     </View>
   );
-}
+});

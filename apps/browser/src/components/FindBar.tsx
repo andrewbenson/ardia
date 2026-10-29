@@ -1,7 +1,7 @@
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
 import { claimFocusTag, findFocus } from "../lib/focusClaims";
 import { Surface, Symbol } from "@ardia/shell";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, findNodeHandle, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { hex, useTheme } from "../lib/theme";
 import { webviews } from "../lib/webviews";
@@ -12,12 +12,12 @@ import { IconButton, useHover } from "./primitives";
 import { replaceInField } from "./site/selection";
 import { nativeToolbarAvailable, NativeFindBarView, type NativeFindEvent } from "@ardia/settings";
 
-export function FindBar({ tabId }: { tabId: string }) {
+export const FindBar = memo(function FindBar({ tabId }: { tabId: string }) {
   const hasPage = useBrowser((s) => !!s.tabs[tabId]?.url);
   const find = useFind(tabId);
   if (!find.open || !hasPage) return null;
   return <FindBarPanel key={tabId} tabId={tabId} find={find} />;
-}
+});
 
 const handledFocus = new Map<string, number>();
 const FIND_KEYS = [

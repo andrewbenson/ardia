@@ -600,7 +600,8 @@ export function PaneContent({ windowId, tabId, shown }: { windowId: string; tabI
     return !!rect && rect.x === 0 && rect.y === 0;
   }, [split, fullscreen, tabId]);
   const toolbar = !addressInSidebar && !small;
-  const geometry = !toolbar ? NO_TOOLBAR : toolbarGeometry({ sidebarButton: leading && tabLayout === "sidebar" && showSidebarButton });
+  const sidebarButton = leading && tabLayout === "sidebar" && showSidebarButton;
+  const geometry = useMemo(() => (!toolbar ? NO_TOOLBAR : toolbarGeometry({ sidebarButton })), [toolbar, sidebarButton]);
   useNativePanePromptsPane(nativePrompts, windowId, tabId, geometry.urlLeft, newTabShown);
   return (
     <View pointerEvents="box-none" style={{ flex: 1 }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>

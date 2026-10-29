@@ -361,6 +361,11 @@ static NSString *gEarlyLittleOutcome = @"notTried";
 
 static void SkipEarlyLittle(NSString *reason) { gEarlyLittleOutcome = reason; }
 
+static bool HiddenByTheUser() {
+  if (!NSApp.isHidden) return false;
+  return !(ardiacore_host::TestHooksAllowed() && NSApp.activationPolicy == NSApplicationActivationPolicyProhibited);
+}
+
 static void TryEarlyLittleWindow() {
   if (gEarlyLittleTried || !gStarted) return;
   if (!gJSStarted && TestSwitch("ARDIA_TEST_EARLY_LINK_AFTER_JS")) return SkipEarlyLittle(@"waitingForJS");
@@ -373,7 +378,7 @@ static void TryEarlyLittleWindow() {
   NSString *scheme = link.scheme.lowercaseString;
   if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return SkipEarlyLittle(@"scheme");
   NSString *dir = AppDataDirectory();
-  if (gLaunchedHidden || NSApp.isHidden) return SkipEarlyLittle(@"hidden");
+  if (gLaunchedHidden || HiddenByTheUser()) return SkipEarlyLittle(@"hidden");
   if (LaunchTabSwitchedOff(dir) || OnboardingPending(dir)) return SkipEarlyLittle(@"launchTabOrOnboarding");
   NSDictionary *session = SavedSession(dir);
   NSDictionary *settings = [session[@"settings"] isKindOfClass:NSDictionary.class] ? session[@"settings"] : @{};

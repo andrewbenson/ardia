@@ -37,6 +37,16 @@ let app = null;
 const run = (body, timeout = 20000) => app.eval(body, { timeout });
 const press = (key, extra = {}) => run(`return ac.shell.devKeyEquivalent("w1", ${JSON.stringify({ ...key, ...extra })});`);
 const titles = `const s = ac.store.getState(); return s.windows.w1.tabIds.map((id) => s.tabs[id].title || s.tabs[id].url.split("/").pop().toUpperCase());`;
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const until = async (what, body, ms = 8000) => {
   const end = Date.now() + ms;
   let last;
@@ -65,6 +75,13 @@ try {
       const dry = await press(K("w", 13), { dry: true });
       const title = dry?.fired?.[0]?.title;
       if (title !== "Close 3 Tabs") throw new Error(`⌘W's item reads ${JSON.stringify(title)}: ${JSON.stringify(dry)}`);
+      const native = await untilSnapshot("native selection before close", (state) => {
+        const window = state.windows.find((entry) => entry.id === "w1");
+        return window?.tabIds.join() === names.join() && state.tabs.length === names.length &&
+          window.tabIds.map((id) => state.tabs.find((tab) => tab.id === id)?.title).join() === names.map((id) => id.toUpperCase()).join();
+      });
+      const window = native.windows.find((entry) => entry.id === "w1");
+      if (window.selectedTabId !== "c") throw new Error(`native selected tab ${window.selectedTabId}`);
       return title;
     });
     await rep.check(`${tag}-cmd-w-closes-the-selection`, async () => {
@@ -73,6 +90,13 @@ try {
       if (left.join() !== "A,D") throw new Error(`left ${left}`);
       const selection = await run(`return ac.store.getState().selection.w1 ?? [];`);
       if (selection.length) throw new Error(`selection not cleared: ${selection}`);
+      const native = await untilSnapshot("native three tabs closed", (state) => {
+        const window = state.windows.find((entry) => entry.id === "w1");
+        return window?.tabIds.join() === "a,d" && state.tabs.map((tab) => tab.id).join() === "a,d" &&
+          window.tabIds.map((id) => state.tabs.find((tab) => tab.id === id)?.title).join() === left.join();
+      });
+      const nativeTitles = native.windows[0].tabIds.map((id) => native.tabs.find((tab) => tab.id === id)?.title);
+      if (nativeTitles.join() !== left.join()) throw new Error(`native titles ${nativeTitles} vs JS ${left}`);
       return left;
     });
     await rep.check(`${tag}-shift-cmd-t-reopens-all-3`, async () => {
@@ -81,6 +105,10 @@ try {
       if (back.join() !== "A,B,C,D,E") throw new Error(`back ${back}`);
       const closed = await run(`return ac.store.getState().closedTabs.length;`);
       if (closed) throw new Error(`${closed} still in Recently Closed`);
+      const backIds = await run(`return ac.store.getState().windows.w1.tabIds;`);
+      const native = await untilSnapshot("native tabs restored in order", (state) => state.windows[0]?.tabIds.join() === backIds.join() && state.windows[0].tabIds.map((id) => state.tabs.find((tab) => tab.id === id)?.title).join() === back.join());
+      const nativeTitles = native.windows[0].tabIds.map((id) => native.tabs.find((tab) => tab.id === id)?.title);
+      if (nativeTitles.join() !== back.join()) throw new Error(`native titles ${nativeTitles} vs JS ${back}`);
       return back;
     });
     await rep.check(`${tag}-closing-the-window-asks-once`, async () => {
@@ -94,6 +122,7 @@ try {
       if (asked.length !== 1) throw new Error(`asked ${asked.length} times: ${JSON.stringify(asked)}`);
       const left = await run(`return ac.store.getState().windows.w1?.tabIds.length ?? 0;`);
       if (left !== 6) throw new Error(`cancel left ${left} tabs`);
+      await untilSnapshot("native cancel keeps every tab", (state) => state.windows[0]?.tabIds.join() === ids.join() && state.tabs.length === left);
       return asked[0];
     });
     await app.quit();

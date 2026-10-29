@@ -174,3 +174,16 @@ final class NativeSidebarAddressHostView: ExpoView {
     return hit === self ? nil : hit
   }
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum SidebarAddressBarRead {
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let view = SidebarAddressBars.shared.existing(windowId) else { return nil }
+    let source = view.sample()
+    return ["frame": source["frame"] ?? NSNull(), "field": source["field"] ?? NSNull(),
+      "buttons": source["buttons"] ?? [], "claimed": SidebarAddressBars.shared.claimed(windowId),
+      "inWindow": view.window != nil]
+  }
+}
+#endif

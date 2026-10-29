@@ -323,15 +323,20 @@ function DestinationList({ tabId, items, selected, appear, pill }: { tabId: stri
   );
 }
 
-const devPanes = new Map<string, React.RefObject<SwipeAreaHandle | null>>();
+const devPanes = new Map<string, React.RefObject<SwipeAreaHandle | null>[]>();
 function useSwipeDevHandle(tabId: string, area: React.RefObject<SwipeAreaHandle | null>) {
   useEffect(() => {
     if (!__DEV__) return;
-    devPanes.set(tabId, area);
-    return () => void (devPanes.get(tabId) === area && devPanes.delete(tabId));
+    devPanes.set(tabId, [...(devPanes.get(tabId) ?? []), area]);
+    return () => {
+      const rest = (devPanes.get(tabId) ?? []).filter((a) => a !== area);
+      if (rest.length) devPanes.set(tabId, rest);
+      else devPanes.delete(tabId);
+    };
   }, [tabId]);
 }
+const devPane = (tabId: string) => [...(devPanes.get(tabId) ?? [])].reverse().find((a) => a.current)?.current ?? null;
 if (__DEV__) {
   const g = globalThis as { acSwipe?: Record<string, unknown> };
-  g.acSwipe = { ...g.acSwipe, pane: (tabId: string) => devPanes.get(tabId)?.current ?? null, history: { items: historyItems, open: openHistoryMenu, menu: useHistoryMenu, go: goToHistoryItem } };
+  g.acSwipe = { ...g.acSwipe, pane: devPane, history: { items: historyItems, open: openHistoryMenu, menu: useHistoryMenu, go: goToHistoryItem } };
 }

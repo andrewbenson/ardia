@@ -631,7 +631,7 @@ NSEvent *HandleScroll(NSEvent *event, NSWindow *window, NSPoint location, BOOL i
 BOOL HandleDiscreteSwipe(NSWindow *window, NSPoint location, CGFloat deltaX) {
   if (fabs(deltaX) < 0.5) return NO;
   NSView *hit = HitView(window, location);
-  NSView<ACSwipeTarget> *target = TargetAt(window, location, hit);
+  NSView<ACSwipeTarget> *target = TargetAt(window, location, hit) ?: PageTarget(window, location, hit);
   if (!target) return NO;
   BOOL back = deltaX > 0;
   if (!(back ? target.canSwipeBack : target.canSwipeForward)) return NO;

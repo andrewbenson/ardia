@@ -17,7 +17,7 @@ nowhere; one held still past the threshold turns into the 200 wide destination l
 below, its first row centred on the page), and ending it goes back one entry. The native frames match RN's within
 half a point, RN draws no capsule with the switch on, and the native container leaves the card once it fades.
 With pane roots and the page pool on (ARDIA_SHELL_PANES=1 ARDIA_NATIVE_PAGES_POOL=1), a back swipe on the page goes
-back, and the same swipe over the native extension side panel or over docked DevTools starts nothing and stays put.`);
+back (a tracked one and a discrete one), and the same swipe over the native extension side panel or over docked\nDevTools starts nothing and stays put.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -170,6 +170,15 @@ try {
 
   await rep.check("pool-page-swipe-goes-back", async () => {
     const where = await swipe(300, 400);
+    await until("back to ONE", `return title() === "ONE" || null;`, 4000);
+    return where;
+  });
+
+  await rep.check("pool-discrete-page-swipe-goes-back", async () => {
+    await run(`ac.store.getState().navigate("a", ${JSON.stringify(url("two"))}, { userInitiated: true }); return true;`);
+    await until("page TWO again", `return title() === "TWO" || null;`, 15000);
+    await sleep(500);
+    const where = await swipe(300, 400, [{ phase: "swipe", dx: 3, atMs: 0 }]);
     await until("back to ONE", `return title() === "ONE" || null;`, 4000);
     return where;
   });

@@ -44,8 +44,9 @@ public final class ExperimentsModel {
 
   func requested(_ name: LaunchSwitch) -> Bool {
     _ = revision
-    if running.fromEnvironment(name) { return running.requested(name, defaultOn: false) }
-    return stored.value(name) ?? false
+    let byDefault = LaunchSwitch.onByDefault.contains(name)
+    if running.fromEnvironment(name) { return running.requested(name, defaultOn: byDefault) }
+    return stored.value(name) ?? byDefault
   }
 
   func next(_ name: LaunchSwitch) -> Bool {
@@ -69,11 +70,11 @@ public final class ExperimentsModel {
   }
 
   var pendingRelaunch: Bool {
-    LaunchSwitch.experiments.contains { next($0) != running.isOn($0, defaultOn: false) }
+    LaunchSwitch.experiments.contains { next($0) != running.isOn($0) }
   }
 
   func set(_ name: LaunchSwitch, _ on: Bool) {
-    stored.set(name, on ? true : nil)
+    stored.set(name, on == LaunchSwitch.onByDefault.contains(name) ? nil : on)
     revision += 1
   }
 
@@ -92,7 +93,7 @@ public final class ExperimentsModel {
   var recovery: String? {
     guard stored.writable else { return nil }
     let domain = Bundle.main.bundleIdentifier ?? "com.hill.solara"
-    return "If Solara won't open with one on, hold Option while it opens to skip them, or turn one off in Terminal with defaults delete \(domain) <NAME>, for example defaults delete \(domain) \(LaunchSwitch.nativeShell.rawValue)."
+    return "If Solara won't open with one on, hold Option while it opens to skip them, or turn one off in Terminal with defaults write \(domain) <NAME> 0, for example defaults write \(domain) \(LaunchSwitch.nativeShell.rawValue) 0."
   }
 }
 

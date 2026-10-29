@@ -129,12 +129,16 @@ public struct LaunchSwitches: Sendable {
     requested(name, defaultOn: defaultOn) && unmetNeeds(name).isEmpty
   }
 
+  public func isOn(_ name: LaunchSwitch) -> Bool {
+    isOn(name, defaultOn: LaunchSwitch.onByDefault.contains(name))
+  }
+
   public func requested(_ name: LaunchSwitch, defaultOn: Bool) -> Bool {
     environment[name] ?? stored[name] ?? defaultOn
   }
 
   public func unmetNeeds(_ name: LaunchSwitch) -> [LaunchSwitch] {
-    name.needs.filter { !isOn($0, defaultOn: LaunchSwitch.onByDefault.contains($0)) }
+    name.needs.filter { !isOn($0) }
   }
 
   public var refusals: [String] {

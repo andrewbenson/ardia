@@ -107,9 +107,9 @@ import Testing
     let model = model(defaults: scratchDefaults())
     let recovery = model.recovery ?? ""
     #expect(recovery.contains("hold Option"))
-    #expect(recovery.contains("defaults delete "))
-    #expect(recovery.contains("<NAME>"))
-    #expect(recovery.contains("ARDIA_NATIVE_SHELL"))
+    #expect(recovery.contains("defaults write "))
+    #expect(recovery.contains("<NAME> 0"))
+    #expect(recovery.contains("ARDIA_NATIVE_SHELL 0"))
   }
 
   @Test func theNoteSaysWhenSavedSwitchesWereDroppedAfterFailedLaunches() {

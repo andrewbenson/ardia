@@ -199,6 +199,15 @@ import Testing
     #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
   }
 
+  @Test func theOneArgumentReadUsesTheSwitchsOwnDefault() {
+    let empty = LaunchSwitches(environment: [:], defaults: nil, distribution: false, skipStored: false)
+    for name in LaunchSwitch.allCases where !LaunchSwitch.developmentOnly.contains(name) {
+      #expect(empty.isOn(name) == (LaunchSwitch.onByDefault.contains(name) && empty.unmetNeeds(name).isEmpty), "\(name.rawValue)")
+    }
+    let off = LaunchSwitches(environment: LaunchSwitch.onByDefault.reduce(into: [:]) { $0[$1.rawValue] = "0" }, defaults: nil, distribution: false, skipStored: false)
+    #expect(LaunchSwitch.onByDefault.allSatisfy { !off.isOn($0) })
+  }
+
   @Test func aSavedSwitchWhoseNeedsWereTurnedOffStaysOff() {
     let defaults = scratchDefaults()
     defaults.set("1", forKey: "ARDIA_SHELL_PANES")

@@ -634,4 +634,8 @@ public enum PaneOverlayRead {
   public static func zoom(windowId: String, tabId: String) -> [String: Any]? {
     (NativePaneOverlays.host(windowId)?.describe()["tabs"] as? [String: [String: Any]])?[tabId]?["zoom"] as? [String: Any]
   }
+
+  public static func history(windowId: String, tabId: String) -> [String: Any]? {
+    (NativePaneOverlays.host(windowId)?.describe()["tabs"] as? [String: [String: Any]])?[tabId]?["history"] as? [String: Any]
+  }
 }

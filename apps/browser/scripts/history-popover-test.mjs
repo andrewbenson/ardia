@@ -60,6 +60,17 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const nativeFrame = (frame) => frame && [frame.x, frame.y, frame.width, frame.height];
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot().catch((e) => ({ error: e.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
 const seen = {};
@@ -97,6 +108,12 @@ try {
       const want = [rn.area[0] + rn.popover.left, rn.area[1] + rn.popover.top, rn.popover.width];
       if (!near(h.card.slice(0, 3), want) || !(h.card[3] > 0)) throw new Error(`card ${h.card}, the hosted panel is placed at ${want}`);
       for (const t of rn.titles) if (!h.controls[t]) throw new Error(`no row ${t} in ${Object.keys(h.controls)}`);
+      const snapshot = await untilSnapshot("the native history", (state) => state.windows.some((w) => w.id === "w1" && w.overlays.some((o) => o.kind === "history" && o.tabId === "a" && o.opacity === 1)));
+      const overlay = snapshot.windows.find((w) => w.id === "w1")?.overlays.find((o) => o.kind === "history" && o.tabId === "a");
+      if (!overlay.visible || !near(nativeFrame(overlay.frame), h.card) || !near(nativeFrame(overlay.area), h.frame) ||
+        rn.titles.some((title) => !overlay.controls.some((c) => c.id === title && near(nativeFrame(c.frame), h.controls[title]))))
+        throw new Error(`native history ${JSON.stringify(overlay)} vs ${JSON.stringify(h)}`);
+      if (snapshot.tabs.find((t) => t.id === "a")?.title !== "THREE") throw new Error(`native tab ${JSON.stringify(snapshot.tabs)}`);
       if ((await run(`return acPerf.findFibers("NativePanelView", 50).filter((p) => p.memoizedProps.kind === "history").length;`)) > 0) throw new Error("RN still hosts the history panel");
       seen.native = h;
       return { card: h.card, rows: rn.titles };
@@ -108,6 +125,9 @@ try {
         await until("back to ONE", `return title() === "ONE" || null;`, 5000);
         await until("the popover closes", `return !menu() || null;`, 2000);
         await until("the native popover goes", `return native().then((d) => !d || !d.inCard || null);`, 2000);
+        const snapshot = await untilSnapshot("native history landing", (state) => state.tabs.some((t) => t.id === "a" && t.title === "ONE" && t.url === url("one")) &&
+          !state.windows.some((w) => w.overlays.some((o) => o.kind === "history" && o.tabId === "a" && o.visible)));
+        if (snapshot.windows.find((w) => w.id === "w1")?.selectedTabId !== "a") throw new Error(`native active tab ${JSON.stringify(snapshot.windows)}`);
         return true;
       });
       await rep.check("native-click-away", async () => {
@@ -116,11 +136,15 @@ try {
         await sleep(300);
         if (!(await openMenu())) throw new Error("no back history");
         const d = await until("the native popover again", `return native().then((d) => d && d.tabs.a && d.tabs.a.history && d.tabs.a.history.opacity === 1 ? d : null);`, 3000);
+        const reopened = await untilSnapshot("native history reopened", (state) => state.windows.some((w) => w.overlays.some((o) => o.kind === "history" && o.tabId === "a" && o.opacity === 1)));
+        if (reopened.tabs.find((t) => t.id === "a")?.title !== "FOUR") throw new Error(`native tab ${JSON.stringify(reopened.tabs)}`);
         const [x, y, w, h] = d.tabs.a.history.frame;
         await run(`return click(${number}, [${Math.round(x + w * 0.75)}, ${Math.round(y + h * 0.75)}]).then(() => true);`);
         await until("the popover dismisses", `return !menu() || null;`, 3000);
         await sleep(400);
         if ((await run(`return title();`)) !== "FOUR") throw new Error("click-away navigated");
+        await untilSnapshot("native history dismissed", (state) => state.tabs.some((t) => t.id === "a" && t.title === "FOUR" && t.url === url("four")) &&
+          !state.windows.some((w) => w.overlays.some((o) => o.kind === "history" && o.tabId === "a" && o.visible)));
         return true;
       });
     }

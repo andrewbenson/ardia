@@ -125,6 +125,8 @@ final class ProbeHost {
           "selectedTabIds": NSNull(), "activeTabIds": NSNull(), "tabIds": model.tabIds,
           "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "overlays": selections + model.tabIds.compactMap { tabId in
             PaneOverlayRead.zoom(windowId: id, tabId: tabId).map { Self.popover($0, kind: "zoom", tabId: tabId) }
+          } + model.tabIds.compactMap { tabId in
+            PaneOverlayRead.history(windowId: id, tabId: tabId).map { Self.popover($0, kind: "history", tabId: tabId) }
           },
           "views": NSNull()]
       }
@@ -144,7 +146,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final
@@ -154,7 +156,7 @@ final class ProbeHost {
 
   private static func popover(_ source: [String: Any], kind: String, tabId: String) -> [String: Any] {
     let controls = source["controls"] as? [String: [Double]] ?? [:]
-    let labels = kind == "zoom" ? ["Zoom In (⌘+)"] : controls.keys.sorted()
+    let labels = kind == "zoom" ? ["Zoom In (⌘+)"] : controls.keys.filter { $0 != "Show Full History" }.sorted()
     return ["id": "\(kind).\(tabId)", "kind": kind, "tabId": tabId,
       "visible": !(source["hidden"] as? Bool ?? true), "opacity": source["opacity"] ?? NSNull(),
       "frame": rect(source["card"]), "area": rect(source["frame"]),

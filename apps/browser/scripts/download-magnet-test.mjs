@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { launch, reporter, session } from "../../../scripts/lib/instance.mjs";
+import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
@@ -59,6 +59,16 @@ const magnet = () => H.downloadMagnet("w1").then(JSON.parse);
 
 let app = null;
 const run = (body, timeout = 20000) => app.eval(`${HELPERS}\n${body}`, { timeout });
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 
 try {
   for (const native of legs) {
@@ -128,6 +138,8 @@ async function magnetChecks(native, downloads) {
   assert.ok(got, `the download reached the store (${JSON.stringify(download)})`);
   assert.ok(!got.path || got.path.startsWith(downloads), `downloaded to ${got.path}, not the scratch folder`);
   assert.ok(readdirSync(downloads).some((f) => f.startsWith("magnet-test")) || got.state !== "finished", "the finished file is in the scratch folder");
+  const snapshot = await untilSnapshot("download in native store", (state) => state.downloads.count === download.length && state.downloads.finished === download.filter((item) => item.state === "finished").length);
+  assert.equal(snapshot.downloads.count, download.length, "native and JS download counts agree");
 
   if (!native) {
     const flying = samples.filter((s) => s.rn);

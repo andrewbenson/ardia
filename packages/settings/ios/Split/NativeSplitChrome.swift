@@ -197,6 +197,24 @@ enum NativeSplitChrome {
   }
 }
 
+#if SOLARA_PROBES
+@MainActor
+public enum SplitChromeRead {
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let source = NativeSplitChrome.sample(windowId) else { return nil }
+    func entries(_ key: String) -> [String: [String: Any]] {
+      let source = source[key] as? [String: [String: Any]] ?? [:]
+      return source.mapValues { entry in
+        var result: [String: Any] = ["window": entry["window"] ?? NSNull(), "hidden": entry["hidden"] ?? NSNull()]
+        if key == "leaves" { result["covered"] = entry["covered"] ?? NSNull() }
+        return result
+      }
+    }
+    return ["overlays": entries("overlays"), "leaves": entries("leaves")]
+  }
+}
+#endif
+
 final class SplitChromeCommits: @unchecked Sendable {
   private let lock = NSLock()
   private var latest: BrowserState?

@@ -52,6 +52,17 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const splitFrom = (state) => state.windows.find((window) => window.id === "w1")?.split;
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 const shown = (s, id) => s.overlays && s.overlays[id] && !s.overlays[id].hidden;
 const hidden = (s, id) => !s.overlays || !s.overlays[id] || s.overlays[id].hidden;
@@ -68,6 +79,11 @@ try {
   await rep.check("split-slots-over-page-areas", async () => {
     const s = await until("two shown slots", `return split().then((s) => (s.overlays && s.overlays.a && s.overlays.b && !s.overlays.a.hidden && !s.overlays.b.hidden && s.leaves && s.leaves.a && s.leaves.b) ? s : null);`);
     for (const id of ["a", "b"]) if (!near(s.overlays[id].window, s.leaves[id].window)) throw new Error(`${id}: slot ${s.overlays[id].window}, page ${s.leaves[id].window}`);
+    const native = splitFrom(await untilSnapshot("two native slots", (state) => ["a", "b"].every((id) => splitFrom(state)?.overlays?.[id] && splitFrom(state)?.leaves?.[id])));
+    for (const id of ["a", "b"]) {
+      if (native.overlays[id].hidden || !near(native.overlays[id].window, s.overlays[id].window) || !near(native.leaves[id].window, s.leaves[id].window))
+        throw new Error(`${id}: native slot ${JSON.stringify(native.overlays[id])}, JS ${JSON.stringify(s.overlays[id])}`);
+    }
     return { a: s.overlays.a.window, b: s.overlays.b.window };
   });
 
@@ -81,6 +97,9 @@ try {
     const [, , cw, ch] = card;
     const [, , bw, bh] = full.overlays.b.window;
     if (Math.abs(bw - cw) > 0.5 || Math.abs(bh - ch) > 0.5) throw new Error(`fullscreen slot ${full.overlays.b.window}, card ${card}`);
+    const native = splitFrom(await untilSnapshot("native fullscreen slot", (state) => splitFrom(state)?.overlays?.a?.hidden && !splitFrom(state)?.overlays?.b?.hidden));
+    if (!native.leaves.a.covered || native.leaves.a.hidden || native.leaves.b.covered || native.leaves.b.hidden ||
+      !near(native.overlays.b.window, full.overlays.b.window)) throw new Error(`native fullscreen ${JSON.stringify(native)}`);
     return { a: full.overlays.a, b: full.overlays.b.window };
   });
 
@@ -89,12 +108,17 @@ try {
     const s = await until("both shown", `return split().then((s) => (s.leaves && !s.leaves.a.hidden && !s.leaves.b.hidden && !s.leaves.a.covered && !s.leaves.b.covered) ? s : null);`);
     for (const id of ["a", "b"]) if (!shown(s, id)) throw new Error(`${id}'s slot is hidden: ${JSON.stringify(s.overlays)}`);
     for (const id of ["a", "b"]) if (!near(s.overlays[id].window, s.leaves[id].window)) throw new Error(`${id}: slot ${s.overlays[id].window}, page ${s.leaves[id].window}`);
+    const native = splitFrom(await untilSnapshot("native split restored", (state) => ["a", "b"].every((id) => splitFrom(state)?.overlays?.[id] && !splitFrom(state).overlays[id].hidden)));
+    for (const id of ["a", "b"]) if (!near(native.overlays[id].window, s.overlays[id].window) || !near(native.leaves[id].window, s.leaves[id].window))
+      throw new Error(`${id}: native slot ${JSON.stringify(native.overlays[id])}, JS ${JSON.stringify(s.overlays[id])}`);
     return true;
   });
 
   await rep.check("separated-leaves-one-slot", async () => {
     await run(`for (const id of Object.keys(S().splits)) S().separateSplit(id); S().activate("a"); return true;`);
     const s = await until("one slot", `return split().then((s) => (s.overlays && s.overlays.a && !s.overlays.a.hidden && (!s.overlays.b || s.overlays.b.hidden)) ? s : null);`);
+    const native = splitFrom(await untilSnapshot("one native slot", (state) => splitFrom(state)?.overlays?.a && !splitFrom(state).overlays.a.hidden && !splitFrom(state).overlays.b));
+    if (!near(native.overlays.a.window, s.overlays.a.window)) throw new Error(`native slot ${JSON.stringify(native.overlays.a)}, JS ${JSON.stringify(s.overlays.a)}`);
     return Object.keys(s.overlays);
   });
 } catch (e) {

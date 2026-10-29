@@ -75,6 +75,33 @@ const until = async (what, test, ms = 8000) => {
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
 const centre = (f) => [f[0] + f[2] / 2, f[1] + f[3] / 2];
+const nearRect = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
+const untilSnapshot = async (what, accept, windowId = "w1", ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId }).catch((error) => ({ error: error.message }));
+    if (!last.error && await accept(last.windows.find((w) => w.id === windowId), last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const crossPrompt = (windowId, kind, shown) => {
+  let current;
+  return untilSnapshot(`${kind} snapshot`, async (window) => {
+    current = await run(`return promptIn(${JSON.stringify(windowId)}, ${JSON.stringify(kind)});`);
+    if (!current || current.progress !== 1 || current.opacity < 0.99 ||
+      (shown.key !== undefined && current.key !== shown.key) || (shown.id !== undefined && current.id !== shown.id)) return false;
+    const read = window?.paneOverlays?.tabs?.a?.[kind];
+    return read && read.hidden === current.hidden && nearRect(read.frame, current.frame) && nearRect(read.card, current.card) &&
+      Object.keys({ ...shown.controls, ...current.controls }).every((label) => nearRect(read.controls?.[label], current.controls?.[label])) &&
+      (current.key === undefined || read.key === current.key) && (current.id === undefined || read.id === current.id);
+  }, windowId).catch((error) => {
+    throw new Error(`${error.message}; initial JS ${JSON.stringify(shown)}; last JS ${JSON.stringify(current)}`);
+  });
+};
+const promptGone = (windowId, kind) => untilSnapshot(`${kind} gone`, (window) =>
+  !window?.paneOverlays?.tabs?.a?.[kind], windowId);
 const POOL = {
   ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1",
   ARDIA_CHROMIUM_SWITCHES: `--ardia-test-bluetooth-chooser ${process.env.ARDIA_CHROMIUM_SWITCHES ?? ""}`.trim(),
@@ -116,16 +143,21 @@ try {
     if (!served) throw new Error(`${tag}: the pool doesn't serve page A`);
     const kinds = await run(`return globalThis.expo.modules.SolaraHosted.kinds();`);
     if (kinds.includes("panePrompts") !== nativePrompts) throw new Error(`${tag}: hosted kinds ${JSON.stringify(kinds)}`);
+    await untilSnapshot("page pool and hosted prompts", (window, state) =>
+      state.poolAvailable === served && window?.chromeWindowNumber === number &&
+      window.mediaKinds.includes("panePrompts") === kinds.includes("panePrompts"));
 
     await rep.check(`${tag}-password-save`, async () => {
       await submit("ada", "s3cret-pass");
       await until("the prompt reaches the store", `return ac.pageState.getState().pages.a?.passwordPrompt?.state === "save" || null;`, 10000);
       if (!nativePrompts) {
         await until("RN draws the prompt", `return rnPrompt() || null;`, 4000);
+        await promptGone("w1", "password");
         await run(`ac.pageState.setState((s) => ({ pages: { ...s.pages, a: { ...s.pages.a, passwordPrompt: null } } })); return true;`);
         return "rn";
       }
       const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.password && !d.tabs.a.password.hidden && d.tabs.a.password.controls.Save ? d.tabs.a.password : null);`, 6000);
+      await crossPrompt("w1", "password", shown);
       if (await run(`return rnPrompt();`)) throw new Error("RN still draws the password prompt");
       const [fx, fy, fw] = shown.frame;
       const [cx, cy, cw] = shown.card;
@@ -135,6 +167,7 @@ try {
       await sleep(800);
       await run(`return click(${number}, ${JSON.stringify(centre(shown.controls.Save))}).then(() => true);`);
       await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.password || null);`, 3000);
+      await promptGone("w1", "password");
       await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.passwordPrompt || null;`, 3000);
       const saved = await until("the saved login", `return C.listPasswords("").then((l) => (l.passwords || []).find((x) => x.username === "ada") || null);`, 8000);
       return { card: shown.card, saved: !!saved };
@@ -148,6 +181,7 @@ try {
       await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
       await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.passwordPrompt || null;`, 8000);
       if (nativePrompts) await until("the native prompt goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.password || null);`, 4000);
+      await promptGone("w1", "password");
       return true;
     });
 
@@ -162,10 +196,12 @@ try {
       await until("the request reaches the store", `return ac.pageState.getState().pages.a?.externalApp || null;`, 8000);
       if (!nativePrompts) {
         await until("RN draws the prompt", `return rnDrawn("ExternalAppPrompt") || null;`, 4000);
+        await promptGone("w1", "externalApp");
         await run(`ac.pageState.setState((s) => ({ pages: { ...s.pages, a: { ...s.pages.a, externalApp: null } } })); return true;`);
         return "rn";
       }
       const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.externalApp && !d.tabs.a.externalApp.hidden && d.tabs.a.externalApp.controls.OK ? d.tabs.a.externalApp : null);`, 6000);
+      await crossPrompt("w1", "externalApp", shown);
       if (await run(`return rnDrawn("ExternalAppPrompt");`)) throw new Error("RN still draws the external app prompt");
       const [fx, fy, fw] = shown.frame;
       const [cx, cy, cw] = shown.card;
@@ -174,6 +210,7 @@ try {
       await sleep(800);
       await run(`return click(${number}, ${JSON.stringify(centre(shown.controls.OK))}).then(() => true);`);
       await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.externalApp || null);`, 3000);
+      await promptGone("w1", "externalApp");
       await until("the store's request clears", `return !ac.pageState.getState().pages.a?.externalApp || null;`, 3000);
       return { card: shown.card };
     });
@@ -184,11 +221,13 @@ try {
       await until("the prompt reaches the store", `return ac.pageState.getState().pages.a?.autofillPrompt?.id === 41 || null;`, 4000);
       if (!nativePrompts) {
         await until("RN draws the prompt", `return rnDrawn("AutofillPrompt") || null;`, 4000);
+        await promptGone("w1", "autofill");
         await run(`return pageEvent("onAutofillPrompt", { id: 41, closed: true });`);
         await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.autofillPrompt || null;`, 3000);
         return "rn";
       }
       const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill && !d.tabs.a.autofill.hidden && d.tabs.a.autofill.controls["No thanks"] ? d.tabs.a.autofill : null);`, 6000);
+      await crossPrompt("w1", "autofill", shown);
       if (await run(`return rnDrawn("AutofillPrompt");`)) throw new Error("RN still draws the autofill prompt");
       const [fx, fy, fw] = shown.frame;
       const [cx, cy, cw] = shown.card;
@@ -198,11 +237,14 @@ try {
       await sleep(800);
       await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["No thanks"]))}).then(() => true);`);
       await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.autofill || null);`, 3000);
+      await promptGone("w1", "autofill");
       await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.autofillPrompt || null;`, 3000);
       await run(`return pageEvent("onAutofillPrompt", ${JSON.stringify(card(42))});`);
-      await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill || null);`, 4000);
+      const secondAutofill = await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.autofill || null);`, 4000);
+      await crossPrompt("w1", "autofill", secondAutofill);
       await run(`return pageEvent("onAutofillPrompt", { id: 42, closed: true });`);
       await until("the closed event takes it down", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.autofill || null);`, 3000);
+      await promptGone("w1", "autofill");
       return { card: shown.card };
     });
 
@@ -210,9 +252,11 @@ try {
       await run(`return pageEvent("onPageMessage", { kind: "drm", data: { keySystem: "com.widevine.alpha" } });`);
       if (!nativePrompts) {
         await until("RN draws the offer", `return rnDrawn("EngineOfferPrompt") || null;`, 4000);
+        await promptGone("w1", "engineOffer");
         return "rn";
       }
       const shown = await until("the native offer", `return native().then((d) => d && d.tabs.a && d.tabs.a.engineOffer && !d.tabs.a.engineOffer.hidden && d.tabs.a.engineOffer.controls["Stay on Page"] ? d.tabs.a.engineOffer : null);`, 6000);
+      await crossPrompt("w1", "engineOffer", shown);
       if (await run(`return rnDrawn("EngineOfferPrompt");`)) throw new Error("RN still draws the engine offer");
       const [fx, fy, fw] = shown.frame;
       const [cx, cy, cw] = shown.card;
@@ -222,6 +266,7 @@ try {
       await sleep(800);
       await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["Stay on Page"]))}).then(() => true);`);
       await until("the offer goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.engineOffer || null);`, 3000);
+      await promptGone("w1", "engineOffer");
       await run(`return pageEvent("onPageMessage", { kind: "drm", data: { keySystem: "com.widevine.alpha" } });`);
       await sleep(600);
       if (await run(`return native().then((d) => !!(d && d.tabs.a && d.tabs.a.engineOffer));`)) throw new Error("the declined site was offered again");
@@ -243,10 +288,12 @@ try {
       await blockPopup("/popped");
       if (!nativePrompts) {
         await until("RN draws the prompt", `return rnDrawn("BlockedPopupsPrompt") || null;`, 4000);
+        await promptGone("w1", "popups");
         await run(`ac.pageState.setState((s) => ({ popover: { ...s.popover, a: null }, pages: { ...s.pages, a: { ...s.pages.a, popups: [] } } })); return true;`);
         return "rn";
       }
       const shown = await until("the native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.popups && !d.tabs.a.popups.hidden && d.tabs.a.popups.controls["Only Once"] ? d.tabs.a.popups : null);`, 6000);
+      await crossPrompt("w1", "popups", shown);
       if (await run(`return rnDrawn("BlockedPopupsPrompt");`)) throw new Error("RN still draws the pop-ups prompt");
       const [fx, fy, fw] = shown.frame;
       const [cx, cy, cw] = shown.card;
@@ -257,15 +304,18 @@ try {
       await sleep(800);
       await run(`return click(${number}, ${JSON.stringify(centre(shown.controls["Only Once"]))}).then(() => true);`);
       await until("the prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.popups || null);`, 3000);
+      await promptGone("w1", "popups");
       await until("the store clears", `return !ac.pageState.getState().popover.a && !ac.pageState.getState().pages.a?.popups.length || null;`, 3000);
       await until("the pop-up opens as a tab", async () => ((await tabs()) > before ? true : null), 6000);
       await run(`ac.store.getState().activate("a"); return true;`);
       await until("page A is shown again", `return native().then((d) => d && d.tabs.a ? true : null);`, 4000).catch(() => {});
       await blockPopup("/popped-again");
       const second = await until("a second native prompt", `return native().then((d) => d && d.tabs.a && d.tabs.a.popups && !d.tabs.a.popups.hidden ? d.tabs.a.popups : null);`, 6000);
+      await crossPrompt("w1", "popups", second);
       await sleep(400);
       await run(`return click(${number}, ${JSON.stringify([second.frame[0] + 40, second.frame[1] + second.frame[3] - 40])}).then(() => true);`);
       await until("a click outside dismisses it", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.popups || null);`, 3000);
+      await promptGone("w1", "popups");
       await until("the popover state clears", `return !ac.pageState.getState().popover.a || null;`, 3000);
       if (!(await run(`return ac.pageState.getState().pages.a?.popups.length;`))) throw new Error("dismissing dropped the blocked list");
       return { card: shown.card };
@@ -290,6 +340,7 @@ try {
       await inPage("navigator.geolocation.getCurrentPosition(() => {}, () => {}); true");
       if (!nativePrompts) {
         await until("RN draws the prompt", `return rnDrawn("PermissionPrompt") || null;`, 4000);
+        await promptGone("w1", "permission");
         await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
         await until("navigation drops it", `return !ac.pageState.getState().pages.a?.permission || null;`, 8000);
         return "rn";
@@ -300,6 +351,7 @@ try {
         });
       const first = await run(current);
       const shown = await shownFor(first);
+      await crossPrompt("w1", "permission", shown);
       if (await run(`return rnDrawn("PermissionPrompt");`)) throw new Error("RN still draws the permission prompt");
       const [fx, fy, fw] = shown.frame;
       const [cx, cy, cw] = shown.card;
@@ -311,13 +363,16 @@ try {
       const second = await until("the store moves on", `const p = ac.pageState.getState().pages.a?.permission; return p && p.id !== ${JSON.stringify(first.id)} ? p : null;`, 6000).catch(() => null);
       if (second) {
         const next = await shownFor(second);
+        await crossPrompt("w1", "permission", next);
         await sleep(800);
         await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
         await until("navigation drops it in the store", `return !ac.pageState.getState().pages.a?.permission || null;`, 8000);
         await until("and natively", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.permission || null);`, 4000);
+        await promptGone("w1", "permission");
         return { card: shown.card, first: first.permissions, queued: second.permissions, next: next.card };
       }
       await until("the native prompt closes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.permission || null);`, 4000);
+      await promptGone("w1", "permission");
       return { card: shown.card, first: first.permissions, queued: null };
     });
 
@@ -329,11 +384,13 @@ try {
       const id = await until("the chooser reaches JS", chooserId, 6000);
       if (!nativePrompts) {
         await until("RN draws the chooser", `return rnDrawn("DeviceChooser") || null;`, 4000);
+        await promptGone("w1", "deviceChooser");
         await run(`return globalThis.acDeviceChoosers.cancelDeviceChooser(${id}).then(() => true);`);
         await until("it closes", `return globalThis.acDeviceChoosers.useChoosers.getState().byTab.a ? null : true;`, 4000);
         return "rn";
       }
       const shown = await until("the native chooser", `return native().then((d) => d && d.tabs.a && d.tabs.a.deviceChooser && !d.tabs.a.deviceChooser.hidden && d.tabs.a.deviceChooser.controls.Cancel && d.tabs.a.deviceChooser.id === ${id} ? d.tabs.a.deviceChooser : null);`, 6000);
+      await crossPrompt("w1", "deviceChooser", shown);
       if (await run(`return rnDrawn("DeviceChooser");`)) throw new Error("RN still draws the device chooser");
       const [fx, fy] = shown.frame;
       const [, cy, cw] = shown.card;
@@ -342,12 +399,15 @@ try {
       await run(`return click(${number}, ${JSON.stringify(centre(shown.controls.Cancel))}).then(() => true);`);
       await until("the engine closes it", `return globalThis.acDeviceChoosers.useChoosers.getState().byTab.a ? null : true;`, 4000);
       await until("the native chooser goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.deviceChooser || null);`, 3000);
+      await promptGone("w1", "deviceChooser");
       await run(`return ${UI}.devShowBluetoothChooser(${browserId}, true);`);
       const lockedId = await until("the unauthorized chooser in JS", `const c = globalThis.acDeviceChoosers.useChoosers.getState().byTab.a; return c && c.unauthorized ? c.id : null;`, 6000);
       const locked = await until("the unauthorized chooser", `return native().then((d) => d && d.tabs.a && d.tabs.a.deviceChooser && d.tabs.a.deviceChooser.id === ${lockedId} && d.tabs.a.deviceChooser.controls.Cancel ? d.tabs.a.deviceChooser : null);`, 6000);
+      await crossPrompt("w1", "deviceChooser", locked);
       await sleep(800);
       await run(`return click(${number}, ${JSON.stringify(centre(locked.controls.Cancel))}).then(() => true);`);
       await until("it closes too", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.deviceChooser || null);`, 3000);
+      await promptGone("w1", "deviceChooser");
       return { card: shown.card };
     });
 
@@ -356,18 +416,23 @@ try {
       await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/login`)}, { userInitiated: true }); return true;`);
       await submit("hopper", "th1rd-pass");
       await until("a password prompt", `return ac.pageState.getState().pages.a?.passwordPrompt || null;`, 10000);
-      await until("drawn in w1", `return promptIn("w1", "password");`, 6000);
+      const sourcePrompt = await until("drawn in w1", `return promptIn("w1", "password");`, 6000);
+      await crossPrompt("w1", "password", sourcePrompt);
       await run(`ac.store.getState().newTab("w1"); return true;`);
       const to = await run(`return ac.store.getState().moveTabsToWindow(["a"], null) ?? null;`);
       if (!to) throw new Error("no new window");
       await until("the password prompt leaves w1", `return promptIn("w1", "password").then((p) => !p || null);`, 5000);
-      await until("and shows in the new window", `return promptIn(${JSON.stringify(to)}, "password");`, 5000).catch(async (e) => {
+      await promptGone("w1", "password");
+      const movedPassword = await until("and shows in the new window", `return promptIn(${JSON.stringify(to)}, "password");`, 5000).catch(async (e) => {
         const seen = await run(`return native(${JSON.stringify(to)}).then((d) => ({ overlays: d, prompt: !!ac.pageState.getState().pages.a?.passwordPrompt, window: ac.store.getState().tabs.a?.windowId }));`).catch((x) => String(x));
         throw new Error(`${e.message}; ${JSON.stringify(seen)}`);
       });
+      await crossPrompt(to, "password", movedPassword);
+      await untilSnapshot("password prompt tab ownership", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.windowId === to), to);
       const other = `${base.replace("127.0.0.1", "localhost")}/other`;
       await run(`ac.store.getState().navigate("a", ${JSON.stringify(other)}, { userInitiated: true }); return true;`);
       await until("navigation drops the password prompt", `return promptIn(${JSON.stringify(to)}, "password").then((p) => !p || null);`, 8000);
+      await promptGone(to, "password");
       await until("the localhost page", `return ac.store.getState().tabs.a?.url === ${JSON.stringify(other)} && !ac.store.getState().live.a?.isLoading || null;`, 10000);
       const target = await until("its DevTools target", async () => (await app.pageTarget(other)) ?? null, 5000);
       const cdp = await devtools(target);
@@ -376,13 +441,17 @@ try {
       } finally {
         cdp.close();
       }
-      await until("a permission prompt in the new window", `return promptIn(${JSON.stringify(to)}, "permission");`, 8000);
+      const movedPermission = await until("a permission prompt in the new window", `return promptIn(${JSON.stringify(to)}, "permission");`, 8000);
+      await crossPrompt(to, "permission", movedPermission);
       await run(`ac.store.getState().moveTabsToWindow(["a"], "w1"); return true;`);
-      await until("the permission prompt follows it back to w1", `return promptIn("w1", "permission");`, 5000);
+      const returnedPermission = await until("the permission prompt follows it back to w1", `return promptIn("w1", "permission");`, 5000);
+      await crossPrompt("w1", "permission", returnedPermission);
+      await untilSnapshot("permission prompt tab ownership", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.windowId === "w1"));
       const left = await run(`return native(${JSON.stringify(to)}).then((d) => !!(d && d.tabs && d.tabs.a));`);
       if (left) throw new Error("the old window still draws tab a's prompts");
       await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
       await until("navigation drops it", `return promptIn("w1", "permission").then((p) => !p || null);`, 8000);
+      await promptGone("w1", "permission");
       return { to };
     });
 

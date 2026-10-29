@@ -99,6 +99,7 @@ const launched = new Map();
 const uiGuardScript = join(dirname(here), "ui-guard.mjs");
 const lockedTool = join(dirname(here), "..", "agent", "locked");
 let uiGate = null;
+let uiGateTaking = null;
 const gated = new Set();
 export function frontApp() {
   const asn = spawnSync("lsappinfo", ["front"], { encoding: "utf8", timeout: 3000 }).stdout?.trim();
@@ -144,6 +145,12 @@ function gateIdle(state) {
 const othersWaiting = (key) => waitingOthers(readWaiters(), key, process.pid, isAlive, (pid) => processInfo(pid)?.command.split(" ")[0] ?? "");
 export async function holdUiGate(key = null) {
   if (uiGate) return uiGate;
+  uiGateTaking ??= takeUiGate(key).finally(() => {
+    uiGateTaking = null;
+  });
+  return uiGateTaking;
+}
+async function takeUiGate(key) {
   let current = null;
   try { current = key ? readFileSync(uiGateCurrent(key), "utf8").trim() : null; } catch {}
   if (current && current !== process.env.AC_UITEST_STATE && liveGate(current) && gateIdle(current)) {

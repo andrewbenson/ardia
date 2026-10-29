@@ -385,6 +385,91 @@ public class WindowShellModule: Module {
       #endif
     }.runOnQueue(.main)
 
+    AsyncFunction("devLayerHitCosts") { (windowId: String, x: Double, y: Double) -> [[String: String]] in
+      #if DEBUG
+      return MainActor.assumeIsolated {
+        guard let host = NativeWindowShell.host(windowId), host.shell.window != nil else { return [] }
+        let shell = host.shell
+        let point = NSPoint(x: x, y: y)
+        return shell.subviews.reversed().filter { !$0.isHidden }.map { layer in
+          let start = DispatchTime.now().uptimeNanoseconds
+          var hit: NSView?
+          for _ in 0..<1000 { hit = layer.hitTest(point) }
+          let micros = Double(DispatchTime.now().uptimeNanoseconds - start) / 1000 / 1000
+          var views = 0
+          func count(_ view: NSView) {
+            views += 1
+            view.subviews.forEach(count)
+          }
+          count(layer)
+          return [
+            "layer": shell.slot(of: layer)?.rawValue ?? NSStringFromClass(type(of: layer)), "micros": String(micros),
+            "hit": hit.map { NSStringFromClass(type(of: $0)) } ?? "", "frame": NSStringFromRect(layer.frame), "views": String(views),
+          ]
+        }
+      }
+      #else
+      return []
+      #endif
+    }.runOnQueue(.main)
+
+    AsyncFunction("devPointerStream") { (windowId: String, points: [[Double]], hz: Double, promise: Promise) in
+      #if DEBUG
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        guard let host = NativeWindowShell.host(windowId), let window = host.shell.window else { return reply.resolve([String: Double]()) }
+        let shell = host.shell
+        let inWindow = points.map { shell.convert(NSPoint(x: $0[0], y: $0[1]), to: nil) }
+        shell.devResetPointerStats()
+        let start = DispatchTime.now().uptimeNanoseconds
+        Task { @MainActor in
+          for point in inWindow {
+            shell.devNotePointer(point)
+            try? await Task.sleep(nanoseconds: UInt64(1e9 / hz))
+          }
+          try? await Task.sleep(nanoseconds: 50_000_000)
+          let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+          reply.resolve([
+            "moves": Double(inWindow.count), "lookups": Double(shell.devPointerLookups), "seconds": seconds,
+            "frame": 1 / Double(window.screen?.maximumFramesPerSecond ?? 60),
+            "lookupMicros": Double(shell.devPointerLookupNanos) / 1000, "coreShare": Double(shell.devPointerLookupNanos) / 1e9 / seconds,
+          ])
+        }
+      }
+      #else
+      promise.resolve([String: Double]())
+      #endif
+    }.runOnQueue(.main)
+
+    AsyncFunction("devPointerLatency") { (windowId: String, x: Double, y: Double, promise: Promise) in
+      #if DEBUG
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        guard let host = NativeWindowShell.host(windowId), let window = host.shell.window else { return reply.resolve([String: Any]()) }
+        let shell = host.shell
+        let start = DispatchTime.now().uptimeNanoseconds
+        var answered = false
+        let finish: (Bool) -> Void = { changed in
+          guard !answered else { return }
+          answered = true
+          shell.devPointerResolved = nil
+          reply.resolve([
+            "changed": changed, "slot": x < 0 ? "" : shell.slotUnderPointer(at: shell.convert(NSPoint(x: x, y: y), to: nil))?.rawValue ?? "",
+            "ms": Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6, "frameMs": 1000 / Double(window.screen?.maximumFramesPerSecond ?? 60),
+          ])
+        }
+        shell.devPointerResolved = { changed in finish(changed) }
+        Task { @MainActor in
+          try? await Task.sleep(nanoseconds: 1_000_000_000)
+          finish(false)
+        }
+        shell.devNotePointer(x < 0 ? nil : shell.convert(NSPoint(x: x, y: y), to: nil))
+      }
+      #else
+      promise.resolve([String: Any]())
+      #endif
+    }.runOnQueue(.main)
+
     Function("peekNative") { (windowId: String) -> Bool in NativePeek.enabled && NativeWindowShell.active(windowId) }
 
     AsyncFunction("peekClose") { (windowId: String) -> Bool in

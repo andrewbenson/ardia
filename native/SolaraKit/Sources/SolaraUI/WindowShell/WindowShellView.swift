@@ -33,6 +33,13 @@ public final class WindowShellView: NSView {
   public var widthDragActive = false
   private var mounted: [Slot: NSView] = [:]
   private var pointerLayer: ObjectIdentifier?
+  private var pendingPointer: NSPoint??
+  private var pointerLink: CADisplayLink?
+  #if DEBUG
+  public var devPointerResolved: ((_ changed: Bool) -> Void)?
+  public private(set) var devPointerLookups = 0
+  public private(set) var devPointerLookupNanos: UInt64 = 0
+  #endif
   private var modalOwners: Set<String> = []
 
   public override var isFlipped: Bool { true }
@@ -119,6 +126,7 @@ public final class WindowShellView: NSView {
   public override func viewDidMoveToWindow() {
     super.viewDidMoveToWindow()
     if window == nil { TabSlots.shared.remove(.card(windowId), container: cardPage) } else { TabSlots.shared.set(.card(windowId), container: cardPage) }
+    if window == nil { stopPointerLink() }
     onWindow?(window)
   }
 
@@ -178,11 +186,57 @@ public final class WindowShellView: NSView {
   }
 
   private func notePointer(_ pointInWindow: NSPoint?) {
-    let layer = pointInWindow.flatMap(layerUnderPointer(at:)).map(ObjectIdentifier.init)
-    guard layer != pointerLayer else { return }
-    pointerLayer = layer
-    coverChanged()
+    guard reactOnTop, window != nil else { return resolvePointer(pointInWindow) }
+    if let pointerLink, !pointerLink.isPaused {
+      pendingPointer = .some(pointInWindow)
+      return
+    }
+    resolvePointer(pointInWindow)
+    if let pointerLink { pointerLink.isPaused = false; return }
+    let made = displayLink(target: self, selector: #selector(pointerFrame(_:)))
+    made.add(to: .main, forMode: .common)
+    pointerLink = made
   }
+
+  @objc private func pointerFrame(_ link: CADisplayLink) {
+    guard let pending = pendingPointer else { link.isPaused = true; return }
+    pendingPointer = nil
+    resolvePointer(pending)
+  }
+
+  private func stopPointerLink() {
+    pointerLink?.invalidate()
+    pointerLink = nil
+    pendingPointer = nil
+  }
+
+  private func resolvePointer(_ pointInWindow: NSPoint?) {
+    #if DEBUG
+    let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
+    #endif
+    let layer = pointInWindow.flatMap(layerUnderPointer(at:)).map(ObjectIdentifier.init)
+    let changed = layer != pointerLayer
+    #if DEBUG
+    devPointerLookups += 1
+    devPointerLookupNanos += clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start
+    #endif
+    if changed {
+      pointerLayer = layer
+      coverChanged()
+    }
+    #if DEBUG
+    devPointerResolved?(changed)
+    #endif
+  }
+
+  #if DEBUG
+  public func devNotePointer(_ pointInWindow: NSPoint?) { notePointer(pointInWindow) }
+
+  public func devResetPointerStats() {
+    devPointerLookups = 0
+    devPointerLookupNanos = 0
+  }
+  #endif
 
   private func relayout() {
     input.size = bounds.size

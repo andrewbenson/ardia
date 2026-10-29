@@ -11,7 +11,11 @@ if (!appArg) {
 Hover goes to what's on top in a native window shell (ARDIA_NATIVE_SHELL=1): the RN sidebar's rows hover under the
 pointer; under a native view mounted in the shell's overlay slot they don't; a row under a still pointer leaves when
 the native view arrives and enters again when it goes, and the same when the native view is hidden and shown
-without leaving the overlay; finding the layer under the pointer stays under 30 µs.`);
+without leaving the overlay; finding the layer under the pointer stays under 30 µs. With the RN main root on top
+(ARDIA_SHELL_MAIN_TOP=1) the exact lookup is too deep for that, so the shell runs it at most once a display frame: a
+120 Hz pointer stream costs at most one lookup per frame and 3% of a core on a 60 Hz display (the per-call cost and
+the 120 Hz display estimate are only reported), and with or without it the hover layer changes within a frame of the
+move.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -90,8 +94,26 @@ try {
   await rep.check("layer-lookup-cost", async () => {
     const costs = [await run(`return S.devHitCost("w1", 120, 130);`), await run(`return S.devHitCost("w1", 700, 400);`)];
     const micros = costs.map((c) => Number(c.micros));
-    if (micros.some((m) => !(m < 30))) throw new Error(`layer lookup ${micros} µs`);
-    return micros;
+    if (process.env.ARDIA_SHELL_MAIN_TOP !== "1") {
+      if (micros.some((m) => !(m < 30))) throw new Error(`layer lookup ${micros} µs`);
+      return micros;
+    }
+    const points = Array.from({ length: 240 }, (_, i) => (i % 2 ? [700 + (i % 7), 400] : [120, 130 + (i % 5)]));
+    const stream = await run(`return S.devPointerStream("w1", ${JSON.stringify(points)}, 120);`);
+    const frames = stream.seconds / stream.frame;
+    if (!(stream.lookups <= frames + 1) || !(stream.coreShare <= 0.03)) throw new Error(`pointer stream ${JSON.stringify(stream)} over ${frames.toFixed(0)} frames`);
+    return { perCall: micros, stream, frames, coreShareAt120Hz: stream.coreShare * 120 * stream.frame };
+  });
+
+  await rep.check("hover-within-a-frame", async () => {
+    const moves = [];
+    for (const [x, y] of [[120, 130], [-1, -1], [700, 400], [-1, -1], [120, 130], [-1, -1]]) {
+      const moved = await run(`return S.devPointerLatency("w1", ${x}, ${y});`);
+      moves.push([x, y, moved]);
+      if (!moved.changed || !(moved.ms <= moved.frameMs + 1)) throw new Error(`hover took ${JSON.stringify(moves)}`);
+      await sleep(50);
+    }
+    return moves;
   });
 } catch (e) {
   rep.record("run", { error: e });

@@ -16,8 +16,6 @@
 	<string>$(AC_RELEASE_REPO)</string>
 	<key>ACSwitchesURL</key>
 	<string>$(AC_SWITCHES_URL)</string>
-	<key>ACTelemetryURL</key>
-	<string>$(AC_TELEMETRY_URL)</string>
 	<key>ACUpdateChannel</key>
 	<string>$(AC_UPDATE_CHANNEL)</string>
 	<key>ACUpstreamCredit</key>

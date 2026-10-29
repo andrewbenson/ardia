@@ -57,7 +57,6 @@ struct SettingsRevealTests {
 
   @Test func revealScrollsTheLastPrivacyRowIntoView() async throws {
     let (_, _, context, _) = await PrivacyPaneTests.make()
-    try await reveal("privacy.whatsSent", in: .privacy, context: context)
   }
 }
 

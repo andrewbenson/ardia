@@ -101,7 +101,6 @@ enum NativeSettingsWindow {
       if current.pane == .extensions, let profile = current.profileId { return profile }
       return SettingsJS.shared.latestValue("extensions.defaultProfile") as? String
     }
-    made.onPaneChange = { pane in if !SettingsPrewarm.warming { SettingsJS.shared.fire("settings.paneShown", pane.rawValue) } }
     made.onPaneAppear = { place in
       guard !SettingsPrewarm.warming else { return }
       SettingsTimings.paneAppeared(place.pane.rawValue)

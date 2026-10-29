@@ -289,13 +289,6 @@ const ROWS: Record<SettingsPane, Section[]> = {
       },
     },
     { section: "Apps allowed to open links", rows: { appLinks: { title: "Apps allowed to open links", description: "Sites that open another app without asking first.", keywords: ["external apps", "protocol handlers", "zoom links"] } } },
-    {
-      section: "Crash reports and usage",
-      rows: {
-        shareDiagnostics: { title: "Share anonymous crash reports and usage stats", keywords: ["telemetry", "analytics", "diagnostics", "crash"] },
-        whatsSent: { title: "What's Sent", description: "Every field, and what never leaves this Mac.", keywords: ["telemetry", "data collection"] },
-      },
-    },
   ],
   passwords: [
     {

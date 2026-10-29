@@ -21,9 +21,6 @@
 //     --only <a,b>            phases (default: all but drag), in this order:
 //                               js          the bench bundles from each build's commit (see --js-commit); not timed
 //                               prepare     signed copies with the bench bundle (native-bench --only prepare)
-//                               netcheck    one journeys run per build with telemetry sharing on, the instances' sockets
-//                                           listed every 0.5 s: it fails if any connects to ardia.dev's addresses or if
-//                                           the journeys guard wasn't answered by bench-offline.js; not timed
 //                               launch      M7 warm: 8 launches, one tab then the seed
 //                               coldlaunch  M7 cold: 6 launches from fresh APFS clones, one tab then the seed
 //                               journeys    M2, M3, J4: ⌘T, keystroke → suggestions, Enter → page (seed, 10 × 3 runs)
@@ -97,9 +94,9 @@ if (opt.help) {
   process.exit(0);
 }
 
-const PHASES = ["js", "prepare", "netcheck", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
+const PHASES = ["js", "prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "suggest", "drag"];
 const NEEDS_DISPLAY = new Set(["journeys", "tabactions", "frames", "framecounts", "drag"]);
-const LOCKED = new Set(["prepare", "netcheck", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
+const LOCKED = new Set(["prepare", "launch", "coldlaunch", "journeys", "tabactions", "frames", "framecounts", "session", "memslope", "drag"]);
 const out = resolve(opt.out);
 const stateFile = join(out, "baseline.json");
 const log = (...a) => console.error(`[baseline ${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -144,37 +141,6 @@ function machine() {
   return { load: loadavg().map((x) => Math.round(x * 10) / 10), display: disp, at: new Date().toISOString() };
 }
 
-class ConnectionWatch {
-  constructor(every = 2000) {
-    this.seen = new Map();
-    this.samples = 0;
-    this.ardia = new Set();
-    for (const type of ["A", "AAAA"]) {
-      const r = spawnSync("dig", ["+short", type, "ardia.dev"], { encoding: "utf8", timeout: 5000 });
-      for (const ip of (r.stdout ?? "").split("\n").map((l) => l.trim()).filter((l) => /^[\d.:a-f]+$/i.test(l))) this.ardia.add(ip);
-    }
-    this.timer = setInterval(() => this.sample(), every);
-  }
-  sample() {
-    const ps = spawnSync("ps", ["-ax", "-o", "pid=", "-o", "command="], { encoding: "utf8", maxBuffer: 64 << 20 });
-    const pids = (ps.stdout ?? "").split("\n").map((l) => /^\s*(\d+)\s+(.*)$/.exec(l)).filter((m) => m && m[2].includes(out)).map((m) => m[1]);
-    if (!pids.length) return;
-    this.samples++;
-    const r = spawnSync("lsof", ["-nP", "-a", "-i", "-p", pids.join(",")], { encoding: "utf8", maxBuffer: 64 << 20, timeout: 10_000 });
-    for (const line of (r.stdout ?? "").split("\n").slice(1)) {
-      const remote = /->(\S+)/.exec(line)?.[1];
-      if (!remote || /^(127\.0\.0\.1|\[::1\]|localhost)[:\]]/.test(remote)) continue;
-      const ip = remote.replace(/^\[/, "").replace(/\]?:\d+$/, "");
-      this.seen.set(remote, { count: (this.seen.get(remote)?.count ?? 0) + 1, ardia: this.ardia.has(ip) });
-    }
-  }
-  stop() {
-    clearInterval(this.timer);
-    const remotes = [...this.seen].map(([remote, v]) => ({ remote, ...v }));
-    return { samples: this.samples, ardiaAddresses: [...this.ardia], toArdia: remotes.filter((r) => r.ardia).length, remotes };
-  }
-}
-
 class InputWatch {
   constructor() {
     this.secs = 0;
@@ -206,10 +172,6 @@ function run(cmd, args, { locked = false, cwd = repoRoot, env = {}, log: file } 
 }
 
 let dragPid = 0;
-const journeyCopies = () => {
-  if (!state.meta.preparedJourneys?.app) throw new Error("no journeys copies (prepare makes them, with --telemetry-sink): rerun --only prepare");
-  return state.meta.preparedJourneys;
-};
 const nb = join(here, "native-bench.mjs");
 const labelOfPrepared = (path) => basename(dirname(dirname(path)));
 function dsymOf(app) {
@@ -227,7 +189,6 @@ function originalOf(label) {
   return null;
 }
 const node = process.execPath;
-const TELEMETRY_SINK = "https://bench-telemetry.invalid/v1/logs";
 const preparedArgs = (copies = state.meta.prepared) => [
   "--app", copies.app, "--prepared", "--port", String(port),
   ...(copies.control ? ["--control", copies.control] : []),
@@ -315,33 +276,12 @@ const phases = {
     const apps = [...said.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
     if (!apps.length) throw new Error("native-bench prepare named no copies");
     state.meta.prepared = { app: apps[0], control: apps[1] ?? null };
-    const jdir = join(out, "prepare-journeys");
-    const jsaid = await run(node, [nb, "--out", jdir, "--app", resolve(opt.app), "--only", "prepare", "--port", String(port), "--telemetry-sink", TELEMETRY_SINK,
-      ...(opt.label ? ["--label", opt.label] : []), ...(opt["control-label"] ? ["--control-label", opt["control-label"]] : []),
-      "--bundle", bundles.app.bundle, ...(opt.control ? ["--control", resolve(opt.control), "--control-bundle", bundles.control.bundle] : [])]);
-    const japps = [...jsaid.matchAll(/^prepared (.+?) \(rerun/gm)].map((m) => m[1]);
-    state.meta.preparedJourneys = { app: japps[0], control: japps[1] ?? null };
     const pre = await bench("preflight", ["--only", "launch", "--launch-runs", "1"]);
     for (const [label, r] of Object.entries(pre)) {
       const ok = (r.launch ?? []).some((x) => Number.isFinite(x.js));
       if (!ok || r.errors?.length) throw new Error(`preflight on ${label} failed (a native API skew answers every command with an error): ${JSON.stringify(r.errors ?? r.launch).slice(0, 400)}`);
     }
     return { copies: apps, bundles };
-  },
-  async netcheck() {
-    const watch = new ConnectionWatch(500);
-    let results, net;
-    try {
-      results = await bench("netcheck", ["--only", "newtabkey", "--runs", "1", "--journey-n", "2", "--seed", "big"], { copies: journeyCopies() });
-    } finally {
-      net = watch.stop();
-    }
-    const guards = Object.fromEntries(Object.entries(results).map(([label, r]) => [label, (r.journeys ?? []).map((j) => j.guard)]));
-    for (const [label, g] of Object.entries(guards))
-      if (!g.length || g.some((x) => x?.blocked !== "1")) throw new Error(`netcheck ${label}: the journeys guard wasn't answered by bench-offline.js: ${JSON.stringify(g)}`);
-    if (net.toArdia) throw new Error(`netcheck: ${net.toArdia} socket(s) to ardia.dev's addresses: ${JSON.stringify(net.remotes.filter((r) => r.ardia))}`);
-    if (!net.samples) throw new Error("netcheck: the socket sampler never saw an instance");
-    return { net, guards };
   },
   async launch() {
     return {
@@ -356,7 +296,7 @@ const phases = {
     };
   },
   async journeys() {
-    return bench("journeys", ["--only", "newtabkey,navigate", "--journey-n", "10", "--runs", runs, "--seed", "big"], { copies: journeyCopies() });
+    return bench("journeys", ["--only", "newtabkey,navigate", "--journey-n", "10", "--runs", runs, "--seed", "big"]);
   },
   async tabactions() {
     const dir = join(out, "tabactions");
@@ -564,13 +504,9 @@ function render() {
   if (skipped.length) md.push(`**Left for a run with the display awake and unlocked:** ${skipped.join(", ")}.`, "");
   const lost = PHASES.filter((n) => P[n]?.partial || P[n]?.error);
   if (lost.length) md.push(`**Phases that failed or lost runs (their rows hold fewer samples):** ${lost.map((n) => `${n} (${(P[n].partial ?? [P[n].error]).join("; ").slice(0, 300)})`).join("; ")}.`, "");
-  md.push(`The journeys (M2, M3, J4) and netcheck phases run on copies whose empty telemetry URL is filled with \`${TELEMETRY_SINK}\`: a build without one keeps sharing off, and the field timing those rows read only runs while it's on. Uploads go to bench-offline.js's answered fetch, and the host can't resolve. Every other phase runs the copies as built.`, "");
+  md.push("The journeys (M2, M3, J4) use in-memory perf marks in the prepared copies.", "");
   md.push("Where this run departs from [baseline.md](baseline.md): the one-tab and seed launches run as two interleaved series (app and control interleaved within each), not interleaved with each other; acsample.c samples only in the framecounts runs, so the frames runs' timing carries no sampling cost.", "");
   md.push("Medians with p75, p95, min–max and n. A later phase regresses a row only when the ranges separate or the regression reproduces in a second interleaved round.", "");
-  const nc = P.netcheck?.result;
-  if (nc) md.push(`**No upstream traffic:** the netcheck phase ran a journeys pass per build with telemetry sharing on and listed the instances' sockets every 0.5 s (${nc.net.samples} samples): none to ardia.dev (${nc.net.ardiaAddresses.join(", ")}); the guard's post to bench-guard.invalid was answered by bench-offline.js on every run (${Object.keys(nc.guards).join(", ")}). Remote endpoints seen: ${nc.net.remotes.map((r) => `${r.remote} ×${r.count}`).join(", ") || "none"}.`, "");
-  const c = state.meta.connections;
-  if (c) md.push(`**Network:** the instances' sockets were listed every 2 s (${c.samples} samples, \`lsof\`): ${c.toArdia ? `**${c.toArdia} remote endpoint(s) at ardia.dev's addresses**` : "none to ardia.dev's addresses"} (${c.ardiaAddresses.join(", ") || "ardia.dev didn't resolve"}); every remote endpoint seen: ${c.remotes.length ? c.remotes.map((r) => `${r.remote} ×${r.count}`).join(", ") : "none"}.`, "");
   md.push("## Machine", "", "| Phase | Started | Load (1/5/15 min) before → after | Display | HID input during the phase (s) | Took (min) |", "|---|---|---|---|---|---|");
   for (const name of PHASES) {
     const p = P[name];
@@ -754,7 +690,6 @@ const dark = disp.asleep || disp.locked;
 if (dark && !opt["locked-ok"]) fail(`the display is ${disp.asleep ? "asleep" : "locked"}: macOS gives no display-link frames then; wake and unlock it first, or pass --locked-ok to run only what doesn't need them`);
 
 const caffeinate = spawn("caffeinate", ["-d", "-w", String(process.pid)], { stdio: "ignore" });
-const connections = new ConnectionWatch();
 let held = false;
 const release = () => {
   if (held) spawnSync(join(repoRoot, "scripts/agent/locked"), ["perflab", "--release", opt.who]);
@@ -805,7 +740,6 @@ try {
     save();
   }
 } finally {
-  state.meta.connections = connections.stop();
   save();
   release();
   caffeinate.kill();

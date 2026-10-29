@@ -97,29 +97,12 @@ final class OnboardingFakeServices: OnboardingServices {
 }
 
 @MainActor
-final class OnboardingFakeDiagnostics: DiagnosticsSharingServices {
-  var available = true
-  var sharing = false
-  var sources: [String] = []
-  var telemetryHost = "telemetry.solara.example"
-  let updateHost = "updates.solara.example"
-  let switchFile = "updates.solara.example/switches.json"
-
-  func setSharing(_ on: Bool, source: String) {
-    sharing = on
-    sources.append(source)
-  }
-}
-
-@MainActor
 enum OnboardingFixture {
-  static func make(diagnostics available: Bool = true) -> (OnboardingModel, OnboardingFakeServices, OnboardingFakeStore, OnboardingFakeDiagnostics) {
+  static func make() -> (OnboardingModel, OnboardingFakeServices, OnboardingFakeStore) {
     let store = OnboardingFakeStore()
     let services = OnboardingFakeServices(store: store)
-    let diagnostics = OnboardingFakeDiagnostics()
-    diagnostics.available = available
-    let model = OnboardingModel(services: services, store: store, diagnostics: diagnostics, appName: "Solara")
-    return (model, services, store, diagnostics)
+    let model = OnboardingModel(services: services, store: store, appName: "Solara")
+    return (model, services, store)
   }
 
   static func saved(_ services: OnboardingFakeServices) -> JSONObject {

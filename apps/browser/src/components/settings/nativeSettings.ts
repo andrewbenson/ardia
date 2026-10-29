@@ -1,12 +1,9 @@
-import { systemInfo } from "@ardia/shell";
 import { nativeSettingsAvailable, publishSettingsTopic, serveNativeSettings, type SettingsHandler } from "@ardia/settings";
 import { openUrls } from "../../lib/actions";
 import { installCliInBackground, useCli } from "../../lib/cliControl";
 import { faviconUri } from "../../lib/favicons";
 import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
-import { SHARING_COPY } from "../../telemetry/copy";
-import { trackSettingsSection } from "../../telemetry/track";
 import { extensionsProfileId } from "../extensions/store";
 import { openInternalPage } from "../pages/urls";
 import { autofillHandlers } from "./native/autofill";
@@ -19,7 +16,7 @@ import { privacyHandlers, publishPrivacy } from "./native/privacy";
 import { profilesHandlers, publishProfiles } from "./native/profiles";
 import { shortcutsHandlers } from "./native/shortcuts";
 import { publishSync, syncHandlers } from "./native/sync";
-import { openImport, openSettings, type SettingsPane } from "./windows";
+import { openImport, openSettings } from "./windows";
 
 const handlers: Record<string, SettingsHandler> = {};
 const publishers: (() => void)[] = [];
@@ -47,7 +44,6 @@ function manageExtensionsOf(profile: string) {
 }
 
 const coreHandlers: Record<string, SettingsHandler> = {
-  "settings.paneShown": (pane: SettingsPane) => trackSettingsSection(pane),
   "favicon.uri": (url: string, profileId: string | null) => faviconUri(url, profileId ?? undefined),
   "app.openInternalPage": (page: Parameters<typeof openInternalPage>[0]) => openInternalPage(page),
   "app.openUrls": (urls: string[]) => openUrls(urls),
@@ -74,7 +70,7 @@ function cliTopic() {
 }
 
 function updateChecksNote() {
-  return systemInfo().switchesURL ? `${SHARING_COPY.updateChecks} ${SHARING_COPY.switchFile}` : null;
+  return null;
 }
 
 export function startNativeSettings(): boolean {

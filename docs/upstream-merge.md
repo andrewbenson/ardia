@@ -85,9 +85,7 @@ These were deliberately left out. Look at them again at the next real merge:
   upstream's state-layer refactor (`tabWatch`), which our store doesn't have.
 - **881f2eab's password sealing** (`sealPassword`/`openPassword`, `savePassword` and the `pw:` → `pws:` records) is
   ported on its own, apart from that commit's recovery-phrase reauth gate.
-- **Crash-report redaction** (8ea1c7bb, bbc9acf9, 1a6fb8ed, 5765641c, e6630b53, #504). Solara sends no reports: its
-  `AC_TELEMETRY_URL` is empty, so nothing the redaction protects leaves the Mac. Take them with the rest of the
-  telemetry code if Solara ever sends reports.
+- **Crash-report redaction** (8ea1c7bb, bbc9acf9, 1a6fb8ed, 5765641c, e6630b53, #504). Solara does not ship telemetry or its collector code.
 - **Legacy password sealing** (d8e5dcbf, e6697cbc). They seal passwords that older builds stored before JS reads them.
   The review rated that exposure low, and sealing arrives with the native sync path.
 - **Sync journal parts** (16223045 and its fixes 28b9714b, a3545d94, 09feed54). These cut disk writes (the state is

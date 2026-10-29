@@ -1,5 +1,5 @@
 import { showNativePanelNow } from "../components/CommandPanel";
-import { markPanelFrame } from "../telemetry/journeys";
+import { markPanelFrame } from "./perfMarks";
 import {
   closeWindow as closeNativeWindow,
   copyText,

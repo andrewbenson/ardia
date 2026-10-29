@@ -20,7 +20,6 @@ function urlOf(url: string | null | undefined): URL | null {
 }
 
 const info = readInfo();
-const telemetry = urlOf(info.telemetryURL);
 const feed = urlOf(info.updateFeedURL);
 const switches = urlOf(info.switchesURL);
 
@@ -29,7 +28,6 @@ export const PRODUCT = info.appName?.trim() || DEFAULT_PRODUCT;
 export const APP_SCHEME = setAppScheme(PRODUCT);
 
 export const SERVICES = {
-  telemetryHost: telemetry?.host || null,
   updateHost: feed?.host || null,
   switchFile: switches?.host ? `${switches.host}${switches.pathname === "/" ? "" : switches.pathname}` : null,
 };

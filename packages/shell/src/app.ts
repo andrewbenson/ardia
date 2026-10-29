@@ -65,7 +65,6 @@ export type SystemInfo = {
   releaseNotesURL?: string | null;
   updateFeedURL?: string | null;
   releaseRepo?: string | null;
-  telemetryURL?: string | null;
   switchesURL?: string | null;
   isolatedInstance?: boolean;
   forceReleaseNotes?: boolean;
@@ -73,20 +72,6 @@ export type SystemInfo = {
   bootTime?: number | null;
   inApplicationsFolder?: boolean;
 };
-
-export type CrashReport = {
-  incidentId?: string;
-  time: number;
-  appVersion?: string;
-  build?: string;
-  exceptionType?: string;
-  signal?: string;
-  frames: NativeFrame[];
-  exceptionName?: string;
-  exceptionFrames?: NativeFrame[];
-};
-
-type NativeFrame = { image: string; symbol?: string; offset?: number };
 
 export type ScriptState = {
   windows: {
@@ -154,8 +139,6 @@ export type AppModule = {
   devTypeKeys(windowId: string, text: string, interval: number): Promise<KeyTiming[]>;
   devKeyEquivalent(windowId: string, press: KeyPress): Promise<KeyPressResult>;
   devClick(windowId: string, click: Click): Promise<ClickResult>;
-  crashReports(since: number): Promise<CrashReport[]>;
-  devCrash(kind?: "exception"): Promise<void>;
 };
 
 
@@ -187,8 +170,6 @@ export const setAppIcon = (id: string) => App.setAppIcon(id);
 
 export const notificationPermission = () => App.notificationPermission();
 
-export const crashReports = (since: number): Promise<CrashReport[]> => App.crashReports(since);
-export const devCrash = (kind?: "exception") => App.devCrash(kind);
 export const requestNotificationPermission = () => App.requestNotificationPermission();
 export const postNotification = (options: NotificationOptions) => App.postNotification(options);
 export const removeNotifications = (ids: string[]) => App.removeNotifications(ids);

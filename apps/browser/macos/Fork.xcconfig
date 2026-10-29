@@ -6,7 +6,6 @@ AC_PUBLIC_ED_KEY = hzKidH98MRGTWByMi7iIVQfsNWaCWaEq0ZMNWWgmNH8=
 AC_SPARKLE_ACCOUNT = solara
 AC_RELEASE_REPO = andrewbenson/solara
 AC_NOTES_URL = https:/$()/github.com/andrewbenson/solara/releases
-AC_TELEMETRY_URL =
 AC_SWITCHES_URL =
 AC_APP_ICON = SolaraIcon
 AC_COPYRIGHT = © 2026 Andrew Benson

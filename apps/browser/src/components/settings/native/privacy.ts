@@ -17,8 +17,6 @@ import {
   type SiteSettingValue,
 } from "@ardia/ardiacore";
 import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
-import { SERVICES } from "../../../lib/productName";
-import { setSharing, useTelemetry } from "../../../telemetry/client";
 
 export const privacyHandlers: Record<string, SettingsHandler> = {
   "privacy.contentBlocker": () => getContentBlocker().catch(() => null),
@@ -35,7 +33,6 @@ export const privacyHandlers: Record<string, SettingsHandler> = {
   "privacy.removeExternalAppAllowance": (profile: string, origin: string, scheme: string) => removeExternalAppAllowance(profile, origin, scheme),
   "privacy.zoomLevels": (profile: string) => getZoomLevels(profile).catch((): Record<string, number> => ({})),
   "privacy.setZoom": (profile: string, host: string, zoom: number) => setZoom(profile, host, zoom),
-  "privacy.setSharing": (on: boolean, source: "settings") => setSharing(on, source),
 };
 
 let started = false;
@@ -46,15 +43,4 @@ export function publishPrivacy(): void {
   let changes = 0;
   publishSettingsTopic("privacy.contentBlockerChanged", changes);
   onContentBlockerChange(() => void publishSettingsTopic("privacy.contentBlockerChanged", ++changes));
-  const diagnostics = (s: { available: boolean; sharing: boolean }) => ({
-    available: s.available,
-    sharing: s.sharing,
-    telemetryHost: SERVICES.telemetryHost ?? "",
-    updateHost: SERVICES.updateHost ?? "",
-    switchFile: SERVICES.switchFile ?? "",
-  });
-  publishSettingsTopic("privacy.diagnostics", diagnostics(useTelemetry.getState()));
-  useTelemetry.subscribe((s, prev) => {
-    if (s.available !== prev.available || s.sharing !== prev.sharing) publishSettingsTopic("privacy.diagnostics", diagnostics(s));
-  });
 }

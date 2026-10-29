@@ -1,4 +1,3 @@
-import "./src/telemetry/jsStart";
 import "./src/lib/perfProbe";
 import { LogBox } from "react-native";
 import { nativeApiSkew, startSkewed } from "./src/nativeApi";

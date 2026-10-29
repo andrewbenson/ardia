@@ -31,8 +31,8 @@ Once a launch, after the first window, and only where the update check runs too 
 checks on: `killSwitchesLaunch.ts`). A plain GET of the static file: no cookies (`credentials: "omit"`), no headers of ours,
 no query string, no ID, a 5 s timeout, 4 KB at most. The answer is cached in the data dir (`switches-cache.json`) and used
 offline; a failed or odd answer leaves the cache as it was. The same file goes to everyone, so it can't tell one Mac from
-another. Disclosed in Settings › What's Sent (“Even with sharing off”) and next to the update check in Settings › General
-(`telemetry/copy.ts`, `switchFile`).
+another. Solara's `AC_SWITCHES_URL` is empty, so it fetches nothing. Settings no longer discloses the file, so a build
+that sets it needs a disclosure first.
 
 ## For a bench or a test instance
 

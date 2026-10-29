@@ -151,13 +151,11 @@ struct BlockerCategory: Identifiable {
 enum PrivacySheet: Identifiable {
   case filterLists
   case site(PrivacySiteModel)
-  case whatsSent
 
   var id: String {
     switch self {
     case .filterLists: "filterLists"
     case .site(let site): "site \(site.profile) \(site.origin)"
-    case .whatsSent: "whatsSent"
     }
   }
 }
@@ -166,7 +164,6 @@ enum PrivacySheet: Identifiable {
 @Observable
 public final class PrivacyPaneModel: SettingsPaneProvider {
   @ObservationIgnored let services: PrivacyServices
-  @ObservationIgnored let diagnostics: DiagnosticsSharingServices?
   @ObservationIgnored let store: SettingsStoreSource
   var blockerLoaded = false
   var blocker: ContentBlockerState?
@@ -176,27 +173,23 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
   var sitePermissionsProfileId: String
   var appLinksProfileId: String
   var zoomProfileId: String
-  var sharing = false
   var sheet: PrivacySheet?
   var confirmingAdsOff = false
   @ObservationIgnored private var watchingBlocker: Task<Void, Never>?
 
-  public init(services: PrivacyServices, diagnostics: DiagnosticsSharingServices?, store: SettingsStoreSource) {
+  public init(services: PrivacyServices, store: SettingsStoreSource) {
     self.services = services
-    self.diagnostics = diagnostics
     self.store = store
     let profile = store.string("defaultProfileId")
     sitePermissionsProfileId = profile
     appLinksProfileId = profile
     zoomProfileId = profile
-    sharing = diagnostics?.sharing ?? false
   }
 
   var defaultEngineProfile: String { store.engineProfile(store.string("defaultProfileId")) }
   var sitePermissionsProfile: String { store.engineProfile(sitePermissionsProfileId) }
   var appLinksProfile: String { store.engineProfile(appLinksProfileId) }
   var zoomProfile: String { store.engineProfile(zoomProfileId) }
-  var diagnosticsAvailable: Bool { diagnostics?.available ?? false }
 
   public func isLoaded(_ place: SettingsPlace) -> Bool {
     let profile = defaultEngineProfile
@@ -214,7 +207,6 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
     await origins.value
     await appLinks.value
     await zoom.value
-    sharing = diagnostics?.sharing ?? false
   }
 
   public func view(_ place: SettingsPlace) -> AnyView {
@@ -309,11 +301,6 @@ public final class PrivacyPaneModel: SettingsPaneProvider {
     await loadZoom(profile)
   }
 
-  func setSharing(_ on: Bool) {
-    diagnostics?.setSharing(on, source: "settings")
-    sharing = diagnostics?.sharing ?? on
-  }
-
   static func withoutScheme(_ origin: String) -> String {
     origin.replacingOccurrences(of: "^https?://", with: "", options: .regularExpression)
   }
@@ -360,7 +347,6 @@ struct PrivacyPane: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
-      ShareDiagnosticsSection(model: model)
     }
     .task {
       model.watchBlocker()
@@ -379,7 +365,6 @@ struct PrivacyPane: View {
       switch sheet {
       case .filterLists: FilterListsSheet(model: model)
       case .site(let site): SiteSheet(model: site)
-      case .whatsSent: WhatsSentSheet(copy: DiagnosticsCopy(appName: app, services: model.diagnostics)) { model.sheet = nil }
       }
     }
   }

@@ -11,8 +11,8 @@ import type { Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { activeTabId, bookmarkProfileId, viewTabIds } from "../../store/model";
 import type { HistoryEntry } from "../../store/types";
-import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../telemetry/journeys";
-import { sampleOmniboxLatency, trackSuggestionChosen } from "../../telemetry/track";
+import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../lib/perfMarks";
+import { sampleOmniboxLatency } from "../../lib/perfMarks";
 import { historyPatch } from "../ntp/historyPatch";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { currentBarActions } from "./actions";
@@ -240,7 +240,6 @@ export function useNativeBar({
     onAction: (e: Event<{ id: string }>) => runBarAction(e.nativeEvent.id, windowId),
     onExtension: (e: Event<{ suggestion: unknown }>) => runBarExtension(e.nativeEvent.suggestion as Extract<Suggestion, { kind: "extension" }>, windowId),
     onRemoveHistory: (e: Event<{ url: string }>) => useBrowser.getState().removeHistory(profileId, [e.nativeEvent.url]),
-    onChosen: (e: Event<{ suggestion: unknown }>) => trackSuggestionChosen((e.nativeEvent.suggestion ?? undefined) as Suggestion | undefined),
     onOpenChip: () => void openChip(),
     onDictate: () => startDictation(),
     onContextMenu: (e: Event<{ hasSelection: boolean; hasValue: boolean }>) => void contextMenu(e.nativeEvent.hasSelection, e.nativeEvent.hasValue),

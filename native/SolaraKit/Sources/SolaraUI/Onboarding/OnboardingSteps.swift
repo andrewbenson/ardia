@@ -38,11 +38,7 @@ struct QuestionStepView: View {
     } actions: {
       OnboardingStepActions(model: model) { model.confirmCurrent() }
     } preview: {
-      if question == .crash {
-        OnboardingMockPanel(settings: model.mockSettings, accent: model.accent, focus: nil, overlay: Receipt(product: model.copy.product, on: model.share))
-      } else {
-        OnboardingMockPanel(settings: model.mockSettings, accent: model.accent, focus: mock.focus, overlay: nil as Receipt?)
-      }
+      OnboardingMockPanel(settings: model.mockSettings, accent: model.accent, focus: mock.focus, overlay: nil as EmptyView?)
     }
     .onChange(of: question) { _, _ in mock.reset() }
     .onDisappear { mock.clear() }
@@ -95,8 +91,6 @@ struct QuestionStepView: View {
       }
       .accessibilityElement(children: .contain)
       .accessibilityLabel("Search engine")
-    case .crash:
-      OnboardingCheckRow(title: model.copy.sharingToggle, subtitle: model.copy.sharingRow, value: model.share, icon: "stethoscope") { on in model.setExtras { $0.share = on } }
     default:
       OnboardingChoiceList(model: model, question: question, mock: mock)
     }
@@ -120,68 +114,6 @@ struct EngineTile: View {
     }
     .accessibilityLabel(engine.name)
     .accessibilityAddTraits(selected ? .isSelected : [])
-  }
-}
-
-struct Receipt: View {
-  @Environment(\.colorScheme) private var scheme
-  let product: String
-  let on: Bool
-
-  static let sent = ["Crash reports", "Error types", "Feature counts", "Speed and memory"]
-  static let always = ["Daily open count"]
-  static let never = ["Sites you visit", "What you type", "Your tabs", "Your name"]
-
-  func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .custom("Menlo", size: size).weight(weight) }
-
-  func line(_ label: String, _ mark: String, dim: Bool, _ colors: OnboardingColors) -> some View {
-    HStack(spacing: 6) {
-      Text(label).font(mono(11)).foregroundStyle(colors.title).fixedSize()
-      Color.clear.frame(maxWidth: .infinity, maxHeight: 13).overlay(alignment: .leading) { Text(String(repeating: ".", count: 40)).font(mono(11)).foregroundStyle(colors.steps).fixedSize() }.clipped()
-      Text(mark).font(mono(11)).foregroundStyle(colors.title).fixedSize()
-    }
-    .opacity(dim ? 0.35 : 1)
-  }
-
-  func rule(_ colors: OnboardingColors) -> some View {
-    Line().stroke(colors.rowBorder, style: StrokeStyle(lineWidth: 1, dash: [3, 2])).frame(height: 1).padding(.vertical, 10)
-  }
-
-  var body: some View {
-    let colors = OnboardingColors.of(scheme)
-    let green = PreviewColor.color("#2F9E5B")
-    VStack(spacing: 0) {
-      Text(product.uppercased()).font(mono(11, .bold)).kerning(1).foregroundStyle(colors.title)
-      Text("ITEMIZED. UNLIKE SOME EXPENSES.").font(mono(9.5)).kerning(0.6).foregroundStyle(colors.subtitle).padding(.top, 3)
-      rule(colors)
-      VStack(spacing: 6) {
-        ForEach(Self.sent, id: \.self) { line($0, on ? "SENT" : "—", dim: !on, colors) }
-        ForEach(Self.always, id: \.self) { line($0, "SENT", dim: false, colors) }
-      }
-      rule(colors)
-      VStack(spacing: 6) { ForEach(Self.never, id: \.self) { line($0, "NEVER", dim: false, colors) } }
-      rule(colors)
-      HStack {
-        Text("PERSONAL DATA").font(mono(11, .bold))
-        Spacer()
-        Text("0.00").font(mono(11, .bold))
-      }
-      .foregroundStyle(colors.title)
-      Text(on ? "THANK YOU" : "NOT SHARED")
-        .font(mono(10, .bold)).kerning(1)
-        .foregroundStyle(on ? green : colors.steps)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(on ? green : colors.steps, lineWidth: 1.5))
-        .rotationEffect(.degrees(-6))
-        .padding(.top, 14)
-    }
-    .padding(.horizontal, 18)
-    .padding(.vertical, 16)
-    .frame(width: 250)
-    .background(RoundedRectangle(cornerRadius: 4).fill(colors.card))
-    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(colors.rowBorder, lineWidth: 1))
-    .rotationEffect(.degrees(2))
   }
 }
 

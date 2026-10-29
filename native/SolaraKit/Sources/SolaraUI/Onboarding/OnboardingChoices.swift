@@ -221,7 +221,6 @@ public extension OnboardingModel {
     case .lookMore: OnboardingPageText(title: "A few finishing touches", subtitle: "All of these live in Settings too.")
     case .engine: OnboardingPageText(title: "Search with what?", subtitle: "For anything that isn't a website.")
     case .typed: OnboardingPageText(title: "Type a word. What happens?", subtitle: "When what you type could be a site.")
-    case .crash: OnboardingPageText(title: copy.sharingTitle, subtitle: copy.sharingSubtitle(telemetryHost: diagnostics?.telemetryHost ?? ""))
     case .pins: OnboardingPageText(title: "Keep your favorite apps handy", subtitle: copy.pinnedSubtitle)
     case .defaultBrowser: OnboardingPageText(title: copy.systemTitle, subtitle: "Links from everywhere open here.")
     case .links: OnboardingPageText(title: "Where do links from other apps open?", subtitle: "From Mail, Slack, Notes and the rest.")
@@ -249,7 +248,7 @@ public extension OnboardingModel {
       var out: JSONObject = [:]
       for key in Self.tabsMoreKeys { out[key] = value(key) }
       return out
-    case .source, .color, .crash, .pins, .defaultBrowser, .outro:
+    case .source, .color, .pins, .defaultBrowser, .outro:
       return [:]
     default:
       return resolve(question.keys)
@@ -271,7 +270,6 @@ public extension OnboardingModel {
     case .appearance:
       return ["Appearance \(["auto": "automatic", "light": "always light", "dark": "always dark"][string("appearance")] ?? "automatic")"]
     case .engine: return ["Search with \(selectedEngine?.name ?? "your engine")"]
-    case .crash: return share ? ["Sharing crash reports"] : []
     case .links: return [bool("openLinksInLittleArdia") ? copy.linksInLittleWindow : "Links from other apps open in a tab"]
     case .pins:
       let n = selectedPins.count
@@ -288,8 +286,6 @@ public extension OnboardingModel {
     switch question {
     case .lookMore:
       if let icon = extras.appIcon, icon != currentIcon { Task { await services.setAppIcon(icon) } }
-    case .crash:
-      diagnostics?.setSharing(share, source: "onboarding")
     case .pins:
       if let windowId, !selectedPins.isEmpty { pinSelected(windowId) }
     case .defaultBrowser:
@@ -319,8 +315,6 @@ public extension OnboardingModel {
     guard let windowId else { return false }
     return currentColor != nil && !services.isIncognito(windowId)
   }
-
-  var share: Bool { extras.share ?? diagnostics?.sharing ?? false }
 
   var engines: [SearchEngine] {
     _ = settingsRevision

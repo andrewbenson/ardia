@@ -1,4 +1,3 @@
-import "./bench-offline";
 import "../../index";
 import { answerWithSkew, nativeApiSkew } from "../../src/nativeApi";
 

@@ -5,8 +5,7 @@ import { runCommand } from "../../src/lib/commands";
 import { webviews } from "../../src/lib/webviews";
 import { usePages } from "../../src/components/layout/pageState";
 import { useBrowser } from "../../src/store/browser";
-import { devJourneys } from "../../src/telemetry/journeys";
-import { devState as telemetryState } from "../../src/telemetry/client";
+import { devJourneys } from "../../src/lib/perfMarks";
 
 writeDocument("bench-boot.json", JSON.stringify({ jsStart: Date.now() }));
 
@@ -20,8 +19,6 @@ const ac = {
   shell,
   now: () => Date.now(),
   journeys: devJourneys,
-  telemetry: telemetryState,
-  blockedFetches: () => globalThis.__acBlockedFetches?.() ?? [],
   get preload() {
     return require("../../src/lib/preload");
   },

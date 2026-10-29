@@ -54,7 +54,7 @@ page reports for one batch) → store → React → mount.
 | History, bookmarks, favicons, passwords, autofill, extensions, site settings, zoom, cookies | **Chrome** (`Chromium/` in the data folder), reached through `ac_*` calls and `ArdiaCoreServices` | Chrome's profile. JS keeps views of them (`history[profileId]`, `bookmarks`), plus `bookmarks-cache.json` for display only. |
 | Sync | JS (`sync/engine.ts`, `adapters.ts`, `packages/sync/src` merge). Crypto, vault and keychain are Swift (`ArdiaSyncCore`). | `sync.json`, `sync-state.nns`, `sync-journal.nns`, the Keychain service `Ardia Sync Key` |
 | Live Folders and Calendar | JS (`live/`) | `live.json` |
-| Small documents | JS | `onboarding.json`, `release-notes.json`, `ardia-cli.json`, `launch-look.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json`, telemetry and kill-switch caches |
+| Small documents | JS | `onboarding.json`, `release-notes.json`, `ardia-cli.json`, `launch-look.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json` and kill-switch caches |
 | Launch picture | Native (`ArdiaCoreEarlyWindow.mm`) | `launch-layout.json`, `launch-picture-*.png` |
 
 The owner's live data folder (`~/Library/Application Support/com.hill.solara`) holds only `session.json` (21 KB),
@@ -119,7 +119,6 @@ Lines of code, from `wc -l` on 2026-10-26.
 | `apps/browser/src/lib` | 7,678 | 3,673 |
 | `apps/browser/src/sync` | 2,941 | 4,749 |
 | `apps/browser/src/live` | 1,994 | 244 |
-| `apps/browser/src/telemetry` | 1,714 | 391 |
 | `apps/browser/src/components` | 42,384 | 2,017 |
 | ↳ sidebar / layout / settings / onboarding / site / extensions / media / import / omnibox / pages | 6,906 / 5,695 / 6,337 / 5,074 / 2,744 / 1,594 / 1,610 / 1,548 / 1,356 / 1,312 | |
 | `packages/core` (omnibox): logic, plus `bangList.ts` data | about 3,000 + 10,706 | 1,079 |
@@ -180,7 +179,6 @@ SolaraModel        value types, ids, invariants                      (Foundation
        ├─ SolaraSync         ArdiaSyncCore (moved as-is) + the merge (port of packages/sync/src) + adapters
        ├─ SolaraImport       packages/import/ios/Core (already plain Swift with a Package.swift), moved
        ├─ SolaraBridgeCore   the bridge's logic in plain Swift (snapshot, dispatch, catch-up, foreign commits), tested without Expo
-       └─ SolaraTelemetry    deferred by the owner: no target until telemetry is decided
 SolaraSignposts      the fixed perf endpoints and counters of docs/native/baseline.md (Foundation + os)
 SolaraEngine (macOS)  typed Swift over ArdiaCoreEngineBridge, ArdiaCoreServices, ArdiaCoreTabStrip,
                       ArdiaCoreWebView, ArdiaCoreHost; EngineClient, TabViewPool, LiveTabs
@@ -201,7 +199,6 @@ All targets build for macOS 26 and iOS 26, the owner's minimum.
 | SolaraImport | Model | macOS (it reads other Mac browsers) |
 | SolaraBridgeCore | Model, Store, Persistence | macOS, iOS |
 | SolaraSignposts | — | macOS, iOS |
-| SolaraTelemetry | deferred; no target | — |
 | SolaraEngine | Store, Omnibox; ArdiaCore headers (pod until phase 6) | macOS |
 | SolaraUI | Model for now; Engine, Store, Omnibox, Sync, Import and `ArdiaShaders` as its surfaces need them | macOS |
 
@@ -493,7 +490,6 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 | `sync.json`, `sync-state.nns`, `sync-journal.nns`, Keychain `Ardia Sync Key` | **Untouched.** The sync engine keeps reading them in every phase. Only the record source changes (§4.5). |
 | `live.json` | Imported into `document` when Live Folders port (phase 2). |
 | `onboarding.json`, `ardia-cli.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json`, `release-notes.json` | Imported into `document` when their owner ports. |
-| `telemetry.json` (opt-in choice, ids), `telemetry-queue.json`, `telemetry-daily.json` | Imported into `document` when `SolaraTelemetry` lands; the opt-in choice must carry over. |
 | `launch-layout.json`, `launch-picture-*.png`, `bookmarks-cache.json`, `switches-cache.json` | Caches. Not migrated: rebuilt or deleted. |
 | `Chromium/` (history, bookmarks, passwords, autofill, extensions, cookies, site settings) | **Chrome's. Never touched.** The engine reads it as it does today. |
 
@@ -741,7 +737,6 @@ metrics (§6) are re-run.
 | **3. New Tab + internal pages** | New Tab (`NewTabPage.tsx`, `ntp/`, the sun hero, shader backdrop), `ardia://history`, `bookmarks`, `downloads` pages | Native New Tab hosted in the RN window | ⌘T → typeable, ⌘T → painted | 3–4k |
 | **4. Toolbar + omnibox** | `SolaraOmnibox` (port of `packages/core`, property tests against the frozen reference); toolbar, URL field, command bar, Developer Mode, find bar, downloads popover, site prompts, extension toolbar and overlays | Native toolbar and omnibox in the RN window | Keystroke → suggestions, compute per key, ⌘L, J4 | 8–10k |
 | **5. Sidebar + window shell + sync port** | Sidebar (rows, tiles, groups, splits, Live Folders, DnD, list motion, swipes), top tab strip, content card, splits, Peek, media/PiP controls, Little Solara, `TabViewPool`; drag via `ServerWindowDrag`; sync merge to Swift | Browser windows with no RN; the early window reads the store | Tab switch, hover frames, drag pacing, stalls, memory per window, launch | 15–18k |
-| **6. Removal** | Port the remaining JS services first (§7 item 12), including telemetry to `SolaraTelemetry`; delete kill switches. Then delete RN, Expo, Hermes, Metro, pnpm app build, `SolaraRNBridge`, `NATIVE_API_VERSION`, the JS ratchet; ArdiaCore from pod to SwiftPM / Xcode target; plain Xcode project; stop the shadow `session.json` two stable releases later | An app with no JS runtime | Launch (no Hermes), memory, binary size | −70k TS |
 
 Phase 2 can start after 1a, while 1b is in progress. Its Profiles pane (fourth in the port order, §5.4) waits for
 1b. Numbering: the brief calls Settings "phase 1's surface". Here phase 1 is the core with no surface, and Settings
@@ -783,8 +778,7 @@ Timings in frames are measured from 30 fps recordings.
 ### 5.4 Settings inventory (phase 2)
 
 `PANES` (`settingsIndex.ts:5`) has **15** panes, not 17. The other surfaces are Profile details
-(`ProfileDetailsPane`), the Theme editor (`ThemeEditor.tsx`, 571 lines), Sync sheets (`SyncSheets.swift`) and Share
-diagnostics. In all, 6,337 lines across 29 files and 110 indexed rows.
+(`ProfileDetailsPane`), the Theme editor (`ThemeEditor.tsx`, 571 lines) and Sync sheets (`SyncSheets.swift`).
 
 | Pane | Lines | Kind | Native data source |
 |---|---|---|---|
@@ -794,8 +788,8 @@ diagnostics. In all, 6,337 lines across 29 files and 110 indexed rows.
 | Search Engine | 165 | Medium | `SettingsModel` + custom engine add/edit sheet (`addCustomEngine` validation from `SolaraOmnibox`); extension-controlled engine from `ac_search_engines` |
 | Engines | 154 | Simple | `SettingsModel` (`pageEngine`, `websiteEngines`, `protectedVideoInWebKit`) |
 | Advanced | 155 | Simple + info | `SettingsModel`; CLI install and control (`CliInstaller.swift`, `ac_cli_control`); `ArdiaCoreHost.engineInfo`; Widevine from `ArdiaCoreServices.components` |
+| Privacy & Security | 366 | Data-heavy | Content blocker, site permissions, external app allowances, zoom levels and clear browsing data |
 | Keyboard Shortcuts | 197 | Medium | Menu item list from `Menus.swift` (direct), `settings.shortcuts` remaps, recorder control |
-| Privacy & Security | 366 | Data-heavy | `ArdiaCoreContentBlocker` (state, lists, allow-list), `ArdiaCoreServices.siteSettings*`, `externalAppAllowances`, `zoomLevels` / `setZoom`, `clearBrowsingData`; the sharing toggle and the "What's Sent" sheet (Share diagnostics) read `SolaraTelemetry` |
 | Passwords | 250 | Data-heavy, secrets | `ArdiaCoreServices.listPasswords` / `unlockPasswords` (reauth) / `password` / `save` / `update` / `delete` / `neverSaveOrigins` / `exportPasswords`; CSV import via `SolaraImport` (`PasswordsCSV.swift`); password-autofill toggle via `boolPreference` |
 | Autofill | 308 | Data-heavy, secrets | `ArdiaCoreServices.addresses` / `saveAddress` / `cards` / `saveCard` / `deleteAutofillEntry` / `revealCardNumber`; enable toggles |
 | Extensions | 213 | Data-heavy, live | `ArdiaCoreServices.listExtensions` / `setExtension` / `uninstall` / `reload` / `configure`, `extensionsHandler` events; Web Store link, load unpacked (`inspectUnpacked`) |
@@ -833,8 +827,7 @@ display awake.
 | Launch → first window | Process start → window shown → content → first frame → FCP; warm, cold (`--fresh-copy`), 1 tab and seed | `native-bench --only launch` | A "core ready" mark to replace "JS running" |
 | Memory per window | Δ `phys_footprint` (browser) and Δ total (with helpers) per extra window, k = 1..4, settled | `native-bench` memory / newwindow | Slope variant |
 
-The JS-side lab marks (`perfProbe`) and the ratchet's React counts disappear with RN; the field journeys move to `SolaraTelemetry`. The baseline
-therefore defines every metric from native endpoints (AppKit event time, Core Animation commit, the page's frame).
+The baseline defines every metric from native endpoints (AppKit event time, Core Animation commit, the page's frame).
 `SolaraSignposts` (`os_signpost`) mark the same points in RN-era and native code, and a native ratchet (layout passes,
 view updates and store commits per action) replaces the JS one in phase 6.
 
@@ -878,18 +871,9 @@ Each has a recommendation.
     → Recommendation: `native/SolaraKit`, outside `packages/` (Expo's workspace), so phase 6 deletes `packages/*`
     except ArdiaCore without moving the core. *Open question if the owner prefers `packages/solara-core`.*
 12. **Hermes-side services nobody sees.** `main.tsx` starts: translate, user scripts, CLI control, memory trim, tab
-    lifecycle, app integration (AppleScript), kill switches, telemetry.
+    lifecycle, app integration (AppleScript), kill switches.
     → Each gets a row in phase 6's checklist and is ported, except kill switches, which are deleted (Solara has no
     switches URL).
-    - **Telemetry is ported, not deleted.** The owner wants Solara's own telemetry on PostHog. `SolaraTelemetry`
-      posts to PostHog's capture API: events and `$exception`, with the project key and host configured from the
-      fork identity (`Identity.xcconfig` / `Fork.xcconfig`, replacing `AC_TELEMETRY_URL`).
-    - It keeps today's rules: opt-in as now, the same sanitizing as `telemetry/`, and the "What's Sent" sheet
-      showing exactly what would be sent.
-    - Journeys J1–J4 stay as the in-field perf signal, timed from the same native endpoints as the baseline
-      (`SolaraSignposts`, [baseline.md](baseline.md)).
-    - It can land before phase 6, as soon as the Privacy pane is native in phase 2. The queue and opt-in state move
-      from `telemetry*.json` into `document`.
 13. **GRDB as a dependency.**
     → Pin the exact version and checksum in `Package.resolved`, and add it to the supply-chain review. Owner's choice
     already; noted only for the pin.

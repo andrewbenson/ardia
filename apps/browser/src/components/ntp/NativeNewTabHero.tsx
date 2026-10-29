@@ -4,7 +4,7 @@ import { StyleSheet } from "react-native";
 import { heroBarFocus } from "../../lib/focusClaims";
 import type { Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
-import { journeyNavigate } from "../../telemetry/journeys";
+import { journeyNavigate } from "../../lib/perfMarks";
 import { registerHeroBar } from "../omnibox/barState";
 import { openFromBar, useNativeBar, useThemeTokens } from "../omnibox/nativeBar";
 import type { Disposition } from "../omnibox/open";

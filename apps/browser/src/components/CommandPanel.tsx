@@ -10,7 +10,7 @@ import { pageOf, usePage } from "./layout/pageState";
 import { dismissHover, setRowsCovered } from "./sidebar/hover";
 import { commandBarCentred, useCardAnchors, useUrlAnchors } from "./layout/windowLayout";
 import { barWidth } from "./NewTabPage";
-import { markPanelFrame } from "../telemetry/journeys";
+import { markPanelFrame } from "../lib/perfMarks";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
 import { breadcrumb } from "@ardia/core";

@@ -58,7 +58,7 @@ public enum BrowserSourceId: String, CaseIterable, Sendable, Hashable {
 
 public enum OnboardingQuestion: String, CaseIterable, Sendable, Hashable {
   case source, tabs, address, cmdl, newTab, newTabPosition, tidy, quit, windows, tabsMore
-  case color, appearance, siteColor, lookMore, engine, typed, crash, pins
+  case color, appearance, siteColor, lookMore, engine, typed, pins
   case defaultBrowser = "default"
   case links, outro
 
@@ -79,7 +79,7 @@ public enum OnboardingQuestion: String, CaseIterable, Sendable, Hashable {
     case .engine: ["searchEngine"]
     case .typed: ["commandBarPreference"]
     case .links: ["openLinksInLittleArdia"]
-    case .source, .color, .crash, .pins, .defaultBrowser, .outro: []
+    case .source, .color, .pins, .defaultBrowser, .outro: []
     }
   }
 
@@ -90,7 +90,7 @@ public enum OnboardingQuestion: String, CaseIterable, Sendable, Hashable {
     case .layout: [.tabs, .address, .cmdl]
     case .tabs: [.newTab, .newTabPosition, .tidy, .quit, .windows, .tabsMore]
     case .look: [.color, .appearance, .siteColor, .lookMore]
-    case .searchPrivacy: [.engine, .typed, .crash]
+    case .searchPrivacy: [.engine, .typed]
     case .pins: [.pins]
     case .home: [.defaultBrowser, .links]
     case .outro: [.outro]
@@ -102,7 +102,6 @@ public enum OnboardingQuestion: String, CaseIterable, Sendable, Hashable {
 
 public struct OnboardingExtras: Equatable, Sendable {
   public var appIcon: String?
-  public var share: Bool?
   public var pins: [String]?
   public var setDefault: Bool?
   public var trial: Bool?
@@ -309,13 +308,4 @@ public struct OnboardingCopy: Sendable {
   public var startsFresh: String { "\(product) starts fresh each launch" }
   public var pinnedSubtitle: String { "Pin the apps you use most. They stay put when you open \(product)." }
 
-  public let sharingToggle = "Share anonymous crash reports and usage stats"
-  public let sharingTitle = "Help us fix what breaks"
-  public let sharingRow = "Crashes, errors, feature counts and speed. Never your sites, typing or tabs."
-
-  public func sharingSubtitle(telemetryHost: String) -> String {
-    telemetryHost.isEmpty
-      ? "\(product) sends nothing: no crash reports, no usage stats, no daily count."
-      : "Off unless you turn it on; change it any time in Settings › Privacy & Security. Either way, \(product) sends one anonymous “opened today” count a day, with its version and macOS version and no persistent ID."
-  }
 }

@@ -18,7 +18,7 @@ All of them are in `apps/browser/scripts/perf/`.
 | `tab-actions.mjs`, `actabs.m` | native | Tab actions from the AppKit event to the last paint, on a session that looks like a real one (60 tabs, 2 profiles, pinned tiles and rows, groups, audible and loading tabs, 2 windows): sidebar click, ⌃Tab, ⌘1–9, ⌘T, ⌘-click, ⌘W, the row's ✕, pin and unpin, ⌃⇧PgDn. Sides (a bundle each, `--side-env` for extra environment) alternate launch by launch. Each action is split into event → store, React's commit, layout, the UI blocks on the main thread and AppKit's display + Core Animation commit, plus the shown page's frame, with React renders and commits per action. `actabs.m` is injected like `acmark.m`: it posts the key, mouse and menu events in-process and times every UI-manager flush to its Core Animation commit. |
 | `launch-trace.mjs` | native | Where the engine's start goes, two sides compared: Chrome's startup traces (`native-bench.mjs --only launch --trace-startup <categories>`), milestones from the process's creation (ChromeMain, BrowserMain, each process's first event) and the browser main thread's slices by name. |
 | `acsample.c`, `launch-samples.mjs` | native | The stretch the trace doesn't cover (ChromeMain → BrowserMain, ~100 ms): `acsample.c`, injected with `--env DYLD_INSERT_LIBRARIES`, samples the main thread every ~1 ms from before `main`; `launch-samples.mjs` symbolizes the samples against the unstripped framework (`dist/<v>/symbols`) and compares the functions in a window of two sides. How to run: its header. It found 0.2.31's +20 ms: the platform policy loader waiting on `/usr/bin/profiles`. |
-| `bench-entry.js`, `bench-channel.js`, `bench-offline.js` | native | The JS entry of the bench bundle: the app's `index.js` plus the command channel (`ac.journeys()` is the field timing's own view). `bench-offline.js` answers every non-local `fetch` itself when the data folder holds a `bench-offline` file, so nothing is uploaded while sharing is on. |
+| `bench-entry.js`, `bench-channel.js` | native | The JS entry of the bench bundle: the app's `index.js` plus the command channel (`ac.journeys()` reads in-memory timing marks). |
 | `js-bench.mjs` | JS | React commits, renders, store updates and JS tasks per interaction, on a production bundle. |
 | `bench-app.js` | JS, render | The scenarios js-bench and render-bench run inside the app. **Not** part of native-bench. |
 | `seed.mjs` | JS, render | The big profile those runs start from: 200 tabs, 5000 history entries, 1000 bookmarks. |
@@ -39,8 +39,8 @@ Each bench drives the app through files in the instance's `ARDIA_DATA_DIR`:
 | `bench-cmd.js` → `bench-result.json` | native-bench | bench-channel.js (first line `// <id>`; the result carries the same id) |
 | `bench-boot.json` | native-bench | bench-channel.js as it loads (the "JS running" mark) |
 | `bench-marks.jsonl` | native-bench | acmark.m (`content`/`committed` epoch ms per window; `keydown`/`made`/`window`/`char` per key with `AC_BENCH_KEYLOG`) |
-| `telemetry.json`, `bench-offline` | native-bench `newtabkey`, `navigate` | the phase: diagnostics sharing on (the app times journeys only then) and the file that makes `bench-offline.js` guard `fetch` |
 | `dev-eval.js` → `dev-eval-result.json` | js-bench, render-bench | the dev harness (`src/lib/devHarness.ts`) |
+| `bench-perf` | native-bench `newtabkey`, `navigate` | the phase; enables in-memory marks for that local run |
 | `perf-probe` | js-bench, render-bench | the seed. Its contents turn on the probe's options: `selectors`, `renders`, `listeners` |
 
 ## Gating a release
@@ -317,7 +317,7 @@ a special case, cache or deferral that saves under 0.5 ms an action isn't worth 
 | `7184f7e8`, `e261559a` deferred sidebar rows | +146 −90 | first commit mounts 2757 → 1150 | keep; `scripts/layout-shift-test.mjs` holds the no-shift rule |
 | `d7e6372a`, `bdee6047` legacy-file launch work | +69 −10 | 400 ms of bundle evaluation, but only on a launch with an old history.json / bookmarks.json | see below |
 | `be2ca8f7` update prewarm | +94 | 130–190 ms on an update's first launch | keep |
-| `9947002f` field timing listener only when sharing | +9 −2 | µs per store update | keep (also correct: off means off) |
+| `9947002f` field timing listener | +9 −2 | µs per store update | historical; local perf marks now own the listener |
 
 **The big seed measures a migration users don't run.** `seed.mjs` writes the session plus a legacy `history.json` and
 `bookmarks.json`, and native-bench's `--seed big` template is written without launching, so every big-seed launch (js-bench,

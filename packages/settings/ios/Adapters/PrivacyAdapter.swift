@@ -125,29 +125,3 @@ final class PrivacyAdapter: PrivacyServices {
   }
 }
 
-@MainActor
-@Observable
-final class DiagnosticsSharingAdapter: DiagnosticsSharingServices {
-  private var latest: [String: Any]
-  @ObservationIgnored private var observer: UUID?
-
-  init() {
-    latest = SettingsJS.shared.latestValue("privacy.diagnostics") as? [String: Any] ?? [:]
-    observer = SettingsJS.shared.observe("privacy.diagnostics") { [weak self] value in
-      self?.latest = value as? [String: Any] ?? [:]
-    }
-  }
-
-  var available: Bool { latest.bool("available") ?? false }
-  var sharing: Bool { latest.bool("sharing") ?? false }
-
-  func setSharing(_ on: Bool, source: String) {
-    guard !on || available else { return }
-    latest["sharing"] = on
-    SettingsJS.shared.fire("privacy.setSharing", on, source)
-  }
-
-  var telemetryHost: String { latest.string("telemetryHost") ?? "" }
-  var updateHost: String { latest.string("updateHost") ?? "" }
-  var switchFile: String { latest.string("switchFile") ?? "" }
-}

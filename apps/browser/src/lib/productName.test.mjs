@@ -3,19 +3,16 @@ import { test } from "node:test";
 const { appInfo } = await import("../test-native/index.ts");
 
 appInfo.appName = "Solara";
-appInfo.telemetryURL = "https://stats.example.com/otel/v1/logs";
 appInfo.switchesURL = "https://stats.example.com/flags.json";
 appInfo.updateFeedURL = "https://github.com/example/solara/releases/latest/download/appcast.xml";
 
 const { PRODUCT, SERVICES } = await import("./productName.ts");
 const { SETTINGS, setting } = await import("../components/settings/settingsIndex.ts");
-const { SHARING_COPY } = await import("../telemetry/copy.ts");
 
 test("the bundle's product name names the app everywhere", () => {
   assert.equal(PRODUCT, "Solara");
   assert.equal(setting("general.openAtLogin").title, "Open Solara at login");
   assert.equal(setting("general.autoUpdate").title, "Automatically update Solara");
-  assert.equal(SHARING_COPY.ask.title, "Help fix Solara?");
   assert.equal(SETTINGS.find((e) => e.id.endsWith(".cliControl")).title, "Let the solara command control Solara");
   assert.equal(SETTINGS.find((e) => e.id.endsWith(".cliInstall")).title, "The solara command");
 });
@@ -23,15 +20,12 @@ test("the bundle's product name names the app everywhere", () => {
 test("no product-facing copy still names Ardia", () => {
   const strings = [
     ...SETTINGS.flatMap((e) => [e.title, e.section, e.description ?? ""]),
-    JSON.stringify(SHARING_COPY),
   ];
   assert.deepEqual(strings.filter((s) => /Ardia/.test(s)), []);
 });
 
-test("sharing copy names the servers this build talks to", () => {
-  assert.deepEqual(SERVICES, { telemetryHost: "stats.example.com", updateHost: "github.com", switchFile: "stats.example.com/flags.json" });
-  assert.match(SHARING_COPY.footnote, /^Sent to stats\.example\.com /);
-  assert.match(SHARING_COPY.switchFile, /reads stats\.example\.com\/flags\.json:/);
+test("service copy names the servers this build talks to", () => {
+  assert.deepEqual(SERVICES, { updateHost: "github.com", switchFile: "stats.example.com/flags.json" });
 });
 
 test("a fork opens its own pages under its scheme and still knows ardia:// ones", async () => {

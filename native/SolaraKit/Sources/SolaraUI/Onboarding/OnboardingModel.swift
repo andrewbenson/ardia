@@ -9,7 +9,6 @@ import SwiftUI
 public final class OnboardingModel {
   @ObservationIgnored public let services: OnboardingServices
   @ObservationIgnored public let store: SettingsStoreSource
-  @ObservationIgnored public let diagnostics: DiagnosticsSharingServices?
   @ObservationIgnored public var powerUpView: ((PowerUpSpec) -> AnyView)?
   public let copy: OnboardingCopy
   public var appIcon: NSImage?
@@ -36,10 +35,9 @@ public final class OnboardingModel {
   public var importing: BrowserSourceId?
   public var introMuted = false
 
-  public init(services: OnboardingServices, store: SettingsStoreSource, diagnostics: DiagnosticsSharingServices?, appName: String, appIcon: NSImage? = nil) {
+  public init(services: OnboardingServices, store: SettingsStoreSource, appName: String, appIcon: NSImage? = nil) {
     self.services = services
     self.store = store
-    self.diagnostics = diagnostics
     copy = OnboardingCopy(product: appName)
     self.appIcon = appIcon
   }
@@ -50,7 +48,6 @@ public final class OnboardingModel {
   public func questions(for step: OnboardingStep) -> [OnboardingQuestion] {
     _ = settingsRevision
     let list = OnboardingQuestion.all(in: step)
-    if step == .searchPrivacy && !(diagnostics?.available ?? false) { return list.filter { $0 != .crash } }
     if step != .layout { return list }
     return resolve(["tabLayout"])["tabLayout"]?.string == "top" ? list.filter { $0 != .address } : list
   }

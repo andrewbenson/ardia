@@ -39,7 +39,7 @@ struct OnboardingSnapshotTests {
 
   @Test(.enabled(if: Snapshot.directory != nil))
   func rendersEveryStep() async throws {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     services.visits = [OnboardingHistoryVisit(url: "https://github.com/", visits: 8), OnboardingHistoryVisit(url: "https://www.figma.com/", visits: 4)]
     model.start()
     try await Self.page(model, "00-intro")
@@ -54,7 +54,6 @@ struct OnboardingSnapshotTests {
       for (sub, question) in model.questions(for: step).enumerated() {
         model.go(step, sub: sub)
         if question == .tidy { model.choose(.tidy, "tidy") }
-        if question == .crash { model.setExtras { $0.share = true } }
         try await Self.page(model, "\(step.rawValue)-\(sub)-\(question.rawValue)")
       }
     }

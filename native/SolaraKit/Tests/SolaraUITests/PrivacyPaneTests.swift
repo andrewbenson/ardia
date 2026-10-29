@@ -115,26 +115,11 @@ final class FakePrivacyServices: PrivacyServices {
 }
 
 @MainActor
-final class FakeDiagnostics: DiagnosticsSharingServices {
-  var available = true
-  var sharing = false
-  var sources: [String] = []
-  let telemetryHost = "telemetry.solara.example"
-  let updateHost = "updates.solara.example"
-  let switchFile = "updates.solara.example/switches.json"
-
-  func setSharing(_ on: Bool, source: String) {
-    sharing = on
-    sources.append(source)
-  }
-}
-
-@MainActor
 struct PrivacyPaneTests {
-  static func make(diagnostics: DiagnosticsSharingServices? = FakeDiagnostics()) async -> (PrivacyPaneModel, FakePrivacyServices, SettingsContext, FakeSettingsStore) {
+  static func make() async -> (PrivacyPaneModel, FakePrivacyServices, SettingsContext, FakeSettingsStore) {
     let (context, store) = SettingsFixture.context()
     let services = FakePrivacyServices()
-    let model = PrivacyPaneModel(services: services, diagnostics: diagnostics, store: store)
+    let model = PrivacyPaneModel(services: services, store: store)
     context.panes[.privacy] = model
     await model.prepare(SettingsPlace(pane: .privacy))
     return (model, services, context, store)
@@ -155,7 +140,7 @@ struct PrivacyPaneTests {
 
   @Test func notLoadedBeforePrepare() {
     let (_, store) = SettingsFixture.context()
-    let model = PrivacyPaneModel(services: FakePrivacyServices(), diagnostics: nil, store: store)
+    let model = PrivacyPaneModel(services: FakePrivacyServices(), store: store)
     #expect(!model.isLoaded(SettingsPlace(pane: .privacy)))
   }
 
@@ -379,38 +364,6 @@ struct PrivacyPaneTests {
     #expect(PrivacyImages.dataURI("https://x") == nil)
   }
 
-  @Test func diagnosticsSectionNeedsTelemetry() async {
-    let (absent, _, _, _) = await Self.make(diagnostics: nil)
-    #expect(!absent.diagnosticsAvailable)
-    absent.setSharing(true)
-    let off = FakeDiagnostics()
-    off.available = false
-    let (unavailable, _, _, _) = await Self.make(diagnostics: off)
-    #expect(!unavailable.diagnosticsAvailable)
-  }
-
-  @Test func sharingToggleGoesThroughTheService() async {
-    let diagnostics = FakeDiagnostics()
-    let (model, _, _, _) = await Self.make(diagnostics: diagnostics)
-    #expect(model.diagnosticsAvailable)
-    #expect(!model.sharing)
-    model.setSharing(true)
-    #expect(diagnostics.sharing)
-    #expect(diagnostics.sources == ["settings"])
-    #expect(model.sharing)
-  }
-
-  @Test func diagnosticsCopyUsesTheAppAndHosts() {
-    let copy = DiagnosticsCopy(appName: "Solara", services: FakeDiagnostics())
-    #expect(copy.dailyCountShort.hasPrefix("Either way, Solara sends"))
-    #expect(copy.footnote.hasPrefix("Sent to telemetry.solara.example with"))
-    #expect(copy.updateChecks.hasPrefix("updates.solara.example counts"))
-    #expect(copy.switchFileNote.contains("reads updates.solara.example/switches.json:"))
-    #expect(copy.groups.map(\.title) == ["With everything", "Crashes and errors", "Usage", "Speed", "Even with sharing off", "Never"])
-    #expect(copy.groups[4].items == [copy.dailyCount, copy.updateChecks, copy.switchFileNote])
-    #expect(copy.sheetSubtitle == "Only while “Share anonymous crash reports and usage stats” is on, except what’s under “Even with sharing off”.")
-  }
-
   @Test(.enabled(if: Snapshot.directory != nil))
   func rendersPrivacy() async throws {
     let (_, _, context, _) = await Self.make()
@@ -426,7 +379,7 @@ struct PrivacyPaneTests {
     services.allowances = [:]
     services.zoom = [:]
     services.blocker?.allowedHosts = []
-    let model = PrivacyPaneModel(services: services, diagnostics: nil, store: store)
+    let model = PrivacyPaneModel(services: services, store: store)
     context.panes[.privacy] = model
     await model.prepare(SettingsPlace(pane: .privacy))
     try await Snapshot.renderPanes(context, [.privacy], named: { _ in "privacy-empty" })
@@ -439,12 +392,10 @@ struct PrivacyPaneTests {
     let site = PrivacySiteModel(services: services, profile: "default", origin: "https://meet.google.com") {}
     await site.load()
     await site.clearData()
-    let copy = DiagnosticsCopy(appName: context.appName, services: model.diagnostics)
     for dark in [false, true] {
       let scheme = dark ? "dark" : "light"
       try await Snapshot.render(FilterListsSheet(model: model).environment(\.settingsContext, context), size: NSSize(width: 500, height: 560), dark: dark, to: directory.appendingPathComponent("privacy-filterLists-\(scheme).png"))
       try await Snapshot.render(SiteSheet(model: site).environment(\.settingsContext, context), size: NSSize(width: 460, height: 520), dark: dark, to: directory.appendingPathComponent("privacy-site-\(scheme).png"))
-      try await Snapshot.render(WhatsSentSheet(copy: copy) {}.environment(\.settingsContext, context), size: NSSize(width: 500, height: 580), dark: dark, to: directory.appendingPathComponent("privacy-whatsSent-\(scheme).png"))
     }
   }
 }

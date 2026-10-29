@@ -75,7 +75,7 @@ final class OnboardingSession {
     self.windowId = windowId
     adapter = OnboardingAdapter(windowId: windowId, settings: settings)
     model = OnboardingModel(
-      services: adapter, store: StoreSettingsSource(model: settings), diagnostics: DiagnosticsSharingAdapter(),
+      services: adapter, store: StoreSettingsSource(model: settings),
       appName: Bundle.main.productName, appIcon: NSApp.applicationIconImage)
     model.powerUpView = { spec in AnyView(OnboardingPowerUp(spec: spec)) }
     adapter.onWindowChange = { [weak model] in model?.refreshSettings() }

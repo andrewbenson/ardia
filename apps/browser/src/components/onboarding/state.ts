@@ -2,7 +2,6 @@ import { hostedKinds } from "@ardia/settings";
 import { launchEnvironment, readDocument, stopIntroMusic, writeDocument } from "@ardia/shell";
 import { persistenceRefused } from "../../lib/persistLatch";
 import { create } from "zustand";
-import { telemetryAvailable } from "../../telemetry/client";
 import { useBrowser } from "../../store/browser";
 import { resolveWindowId, tabLayoutOf } from "../../store/model";
 import type { Settings } from "../../store/settings";
@@ -61,7 +60,6 @@ export type QuestionId =
   | "lookMore"
   | "engine"
   | "typed"
-  | "crash"
   | "pins"
   | "default"
   | "links"
@@ -93,7 +91,6 @@ const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   searchPrivacy: [
     { id: "engine", keys: ["searchEngine"] },
     { id: "typed", keys: ["commandBarPreference"] },
-    { id: "crash", keys: [] },
   ],
   pins: [{ id: "pins", keys: [] }],
   home: [
@@ -108,7 +105,6 @@ export const QUESTION_ORDER: QuestionId[] = Object.values(QUESTIONS).flatMap((li
 export function questionsFor(step: OnboardingStep): Question[] {
   if (step === "intro") return [];
   const list = QUESTIONS[step];
-  if (step === "searchPrivacy" && !telemetryAvailable()) return list.filter((q) => q.id !== "crash");
   if (step !== "layout") return list;
   const { windowId, draft, preset } = useOnboarding.getState();
   const b = useBrowser.getState();
@@ -121,7 +117,6 @@ export const presetFor = (source: BrowserSourceId | null): Preset => (source ===
 export type Extras = {
   color: ProfileColor;
   appIcon: string;
-  share: boolean;
   pins: string[];
   setDefault: boolean;
   trial: boolean;

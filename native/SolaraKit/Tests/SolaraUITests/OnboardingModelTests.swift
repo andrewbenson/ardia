@@ -9,12 +9,12 @@ struct OnboardingModelTests {
     #expect(OnboardingStep.order.map(\.rawValue) == ["intro", "source", "layout", "tabs", "look", "searchPrivacy", "pins", "home", "outro"])
     #expect(OnboardingQuestion.order.map(\.rawValue) == [
       "source", "tabs", "address", "cmdl", "newTab", "newTabPosition", "tidy", "quit", "windows", "tabsMore",
-      "color", "appearance", "siteColor", "lookMore", "engine", "typed", "crash", "pins", "default", "links", "outro",
+      "color", "appearance", "siteColor", "lookMore", "engine", "typed", "pins", "default", "links", "outro",
     ])
   }
 
   @Test func startWritesTheDocumentAndEndsTheTour() {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     model.start()
     #expect(model.windowId == "w1")
     #expect(model.step == .intro)
@@ -29,7 +29,7 @@ struct OnboardingModelTests {
   }
 
   @Test func nextWalksQuestionsThenSteps() {
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     model.start()
     model.go(.source)
     #expect(model.isFirstPage)
@@ -43,7 +43,7 @@ struct OnboardingModelTests {
   }
 
   @Test func backGoesToTheLastQuestionOfThePreviousStepButNeverToIntro() {
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     model.start()
     model.go(.tabs)
     model.back()
@@ -54,22 +54,15 @@ struct OnboardingModelTests {
   }
 
   @Test func topTabsHideTheAddressQuestion() {
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     model.start(step: .layout)
     #expect(model.questions(for: .layout) == [.tabs, .address, .cmdl])
     model.choose(.tabs, "top")
     #expect(model.questions(for: .layout) == [.tabs, .cmdl])
   }
 
-  @Test func crashQuestionOnlyWhenDiagnosticsAreAvailable() {
-    let (with, _, _, _) = OnboardingFixture.make(diagnostics: true)
-    #expect(with.questions(for: .searchPrivacy) == [.engine, .typed, .crash])
-    let (without, _, _, _) = OnboardingFixture.make(diagnostics: false)
-    #expect(without.questions(for: .searchPrivacy) == [.engine, .typed])
-  }
-
   @Test func sourcePicksThePreset() {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     model.start()
     model.chooseSource(.zen)
     #expect(model.preset == .arc)
@@ -83,7 +76,7 @@ struct OnboardingModelTests {
   }
 
   @Test func chosenSettingsBeatThePreset() {
-    let (model, _, store, _) = OnboardingFixture.make()
+    let (model, _, store) = OnboardingFixture.make()
     store.updateSettings(["addressBar": "toolbar"])
     model.start()
     model.chooseSource(.arc)
@@ -92,7 +85,7 @@ struct OnboardingModelTests {
   }
 
   @Test func livePreviewsNeverMarkChosenAndRevertOnSkip() {
-    let (model, services, store, _) = OnboardingFixture.make()
+    let (model, services, store) = OnboardingFixture.make()
     model.start(step: .layout)
     model.chooseSource(.arc)
     model.choose(.tabs, "top")
@@ -106,7 +99,7 @@ struct OnboardingModelTests {
   }
 
   @Test func confirmWritesThroughTheStoreAndKeepsTheChoice() {
-    let (model, services, store, _) = OnboardingFixture.make()
+    let (model, services, store) = OnboardingFixture.make()
     model.start(step: .layout)
     model.chooseSource(.arc)
     model.choose(.address, "sidebar")
@@ -122,7 +115,7 @@ struct OnboardingModelTests {
   }
 
   @Test func layoutStepPreviewsAllItsKeysOnEntry() async {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     model.start(step: .layout)
     model.chooseSource(.arc)
     await model.enter(.layout)
@@ -134,7 +127,7 @@ struct OnboardingModelTests {
   }
 
   @Test func styleTag() {
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     model.start(step: .layout)
     #expect(model.styleTag == "Dia-style")
     model.choose(.cmdl, "centred")
@@ -145,7 +138,7 @@ struct OnboardingModelTests {
   }
 
   @Test func eachLayoutAndTabChoiceWritesWhatTheJSWrites() {
-    let (model, _, store, _) = OnboardingFixture.make()
+    let (model, _, store) = OnboardingFixture.make()
     model.start(step: .tabs)
     model.choose(.newTab, "commandBar")
     model.confirmCurrent()
@@ -178,7 +171,7 @@ struct OnboardingModelTests {
     #expect(OnboardingModel.hoursLabel(24) == "1 day")
     #expect(OnboardingModel.hoursLabel(168) == "1 week")
     #expect(OnboardingModel.hoursLabel(48) == "48 hours")
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     #expect(model.tidyOptions(48).map(\.title) == ["12 h", "1 day", "1 week", "48 hours"])
     model.start(step: .tabs)
     model.go(.tabs, sub: 2)
@@ -188,7 +181,7 @@ struct OnboardingModelTests {
   }
 
   @Test func newTabPositionTitlesFollowTheLayout() {
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     model.start(step: .tabs)
     #expect(model.choices(.newTabPosition).map(\.title) == ["At the bottom", "At the top"])
     model.previewLive(["tabLayout": "top"])
@@ -196,7 +189,7 @@ struct OnboardingModelTests {
   }
 
   @Test func lookStep() async {
-    let (model, services, store, _) = OnboardingFixture.make()
+    let (model, services, store) = OnboardingFixture.make()
     model.start(step: .look)
     await model.enter(.look)
     #expect(services.previews.last == ["appearance": "auto", "extendWebsiteColor": true])
@@ -225,15 +218,15 @@ struct OnboardingModelTests {
   }
 
   @Test func unconfirmedColorRevertsOnFinish() {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     model.start(step: .look)
     model.previewColor(.red)
     model.finish()
     #expect(services.colors["w1"] == .plum)
   }
 
-  @Test func searchAndCrash() {
-    let (model, _, store, diagnostics) = OnboardingFixture.make()
+  @Test func searchPreferences() {
+    let (model, _, store) = OnboardingFixture.make()
     model.start(step: .searchPrivacy)
     #expect(model.shownEngines.map(\.id).contains("duckduckgo"))
     model.setDraft(["searchEngine": "duckduckgo"])
@@ -243,16 +236,11 @@ struct OnboardingModelTests {
     model.choose(.typed, "search")
     model.confirmCurrent()
     #expect(store.patches.last == ["commandBarPreference": "search"])
-    model.setExtras { $0.share = true }
-    model.confirmCurrent()
-    #expect(diagnostics.sources == ["onboarding"])
-    #expect(diagnostics.sharing)
-    #expect(model.picked[.crash] == ["Sharing crash reports"])
     #expect(model.step == .pins)
   }
 
   @Test func pinsPreselectFromHistoryAndPinOnlyNewOnes() {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     services.visits = [
       OnboardingHistoryVisit(url: "https://github.com/a", visits: 5),
       OnboardingHistoryVisit(url: "https://www.figma.com/file", visits: 9),
@@ -272,7 +260,7 @@ struct OnboardingModelTests {
   }
 
   @Test func defaultBrowserApply() async {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     model.start(step: .home)
     await model.loadSystem()
     #expect(model.setDefaultChoice && model.dockChoice && !model.loginChoice)
@@ -286,7 +274,7 @@ struct OnboardingModelTests {
   }
 
   @Test func defaultBrowserTrialIsRecorded() async {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     services.inDock = true
     model.start(step: .home)
     await model.loadSystem()
@@ -302,7 +290,7 @@ struct OnboardingModelTests {
   }
 
   @Test func backgroundInstanceDoesNotOfferDefaultByDefault() async {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     services.backgroundInstance = true
     model.start(step: .home)
     await model.loadSystem()
@@ -312,7 +300,7 @@ struct OnboardingModelTests {
   }
 
   @Test func linksAndOutroThenTourHandOff() {
-    let (model, services, store, _) = OnboardingFixture.make()
+    let (model, services, store) = OnboardingFixture.make()
     model.start(step: .home)
     model.go(.home, sub: 1)
     model.choose(.links, false)
@@ -332,7 +320,7 @@ struct OnboardingModelTests {
   }
 
   @Test func sourceStep() async {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     model.start(step: .source)
     await model.loadSources()
     #expect(model.sourceTiles.map(\.name) == ["Arc", "Dia", "Chrome", "Safari", "Firefox", "Zen or Zen Twilight", "Brave Beta"])
@@ -355,25 +343,25 @@ struct OnboardingModelTests {
   }
 
   @Test func skipFromTheLastStepFinishes() {
-    let (model, _, _, _) = OnboardingFixture.make()
+    let (model, _, _) = OnboardingFixture.make()
     model.start(step: .outro)
     model.skip()
     #expect(model.leaving)
   }
 
   @Test func maybeStartGates() {
-    let (fresh, services, _, _) = OnboardingFixture.make()
+    let (fresh, services, _) = OnboardingFixture.make()
     fresh.maybeStart()
     #expect(fresh.windowId == "w1")
     #expect(OnboardingFixture.saved(services)["startedAt"] == .number(services.clock))
 
-    let (existing, existingServices, _, _) = OnboardingFixture.make()
+    let (existing, existingServices, _) = OnboardingFixture.make()
     existingServices.session = true
     existing.maybeStart()
     #expect(existing.windowId == nil)
     #expect(existing.completedAt == existingServices.clock)
 
-    let (gated, gatedServices, _, _) = OnboardingFixture.make()
+    let (gated, gatedServices, _) = OnboardingFixture.make()
     gatedServices.startsOnFirstLaunch = false
     gated.maybeStart()
     #expect(gated.windowId == nil)
@@ -381,7 +369,7 @@ struct OnboardingModelTests {
   }
 
   @Test func resumeRestoresStepSubSourceAndPicks() {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     services.document = #"{"version":1,"startedAt":1,"completedAt":null,"step":"layout","sub":7,"source":"arc","picked":{"source":["Coming from Arc"]}}"#
     model.maybeStart()
     #expect(model.step == .layout)
@@ -391,14 +379,14 @@ struct OnboardingModelTests {
     #expect(model.picked[.source] == ["Coming from Arc"])
     #expect(model.pickedLines == ["Coming from Arc"])
 
-    let (intro, introServices, _, _) = OnboardingFixture.make()
+    let (intro, introServices, _) = OnboardingFixture.make()
     introServices.document = #"{"version":1,"startedAt":1,"completedAt":null,"step":"intro"}"#
     intro.maybeStart()
     #expect(intro.step == .source)
   }
 
   @Test func documentRoundTripKeepsJSKeysAndOrder() {
-    let (model, services, _, _) = OnboardingFixture.make()
+    let (model, services, _) = OnboardingFixture.make()
     services.document = #"{"version":1,"startedAt":1700000000000,"completedAt":null,"defaultBrowserCheckInDoneAt":5,"introMusicMuted":true}"#
     #expect(model.introMusicMuted)
     model.introMuted = model.introMusicMuted

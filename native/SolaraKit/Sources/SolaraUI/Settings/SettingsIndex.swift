@@ -312,10 +312,6 @@ public struct SettingsIndex: Sendable {
         Section(section: "Apps allowed to open links", rows: [
           Row(key: "appLinks", title: "Apps allowed to open links", description: "Sites that open another app without asking first.", keywords: ["external apps", "protocol handlers", "zoom links"]),
         ]),
-        Section(section: "Crash reports and usage", rows: [
-          Row(key: "shareDiagnostics", title: "Share anonymous crash reports and usage stats", keywords: ["telemetry", "analytics", "diagnostics", "crash"]),
-          Row(key: "whatsSent", title: "What's Sent", description: "Every field, and what never leaves this Mac.", keywords: ["telemetry", "data collection"]),
-        ]),
       ],
       .passwords: [
         Section(section: "Passwords", rows: [

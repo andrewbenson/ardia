@@ -75,11 +75,6 @@
 //                             (`--trace-startup`, 4 s, JSON) into <out>/<label>/traces/launch-<i>.json, named in its
 //                             result's `trace`; launch-trace.mjs compares two sides'. Tracing slows the launch:
 //                             compare traced launches with traced launches only.
-//     --telemetry-sink <url>  prepare: fill the copies' empty ACTelemetryURL with this https URL on a .invalid host. A
-//                             build with no telemetry URL forces sharing off, and the field timing newtabkey and navigate
-//                             read (journeys.ts) only runs while sharing is on. Every upload then goes through
-//                             bench-offline.js's answered fetch, and the host can't resolve if it didn't. Use these copies
-//                             for newtabkey and navigate only
 //     --hold <secs>           keep each measured instance alive that long before it quits, its pid and data dir logged
 //                             (lldb -p <pid>, heap <pid>, vmmap --summary <pid>). Ctrl-C quits it and stops.
 //     --port <n>              the instances' CDP port (default: a free one per launch); refused while anything listens on it
@@ -90,7 +85,7 @@
 //     on a loaded Mac where scripts/agent/cpu-cap pauses the instance. Timings taken meanwhile are invalid).
 //
 // Results: <out>/<label>/results.json (every sample, rewritten after each run; a run that throws is logged, kept in
-// `errors`, and the next run goes on; the exit status is then 3. A refused guard, a native API skew or a
+// `errors`, and the next run goes on; the exit status is then 3. A native API skew or a
 // still-running instance stops the bench) and a summary table (median, min–max over runs) on stdout.
 // Needs: Node 22+, swiftc (builds scripts/perf/acperf.swift), clang (builds scripts/perf/acmark.m, loaded into the copy
 // of the app to mark when a window's content appears), the app signed with an identity in the keychain.
@@ -135,13 +130,9 @@
 //                                                        alpha > 0). 3 per session run (newwindow), 8 per windows run
 //   new window → on screen with its content newWindow   the later of that and acmark's commit for that window
 //   new window → first paint / first frame  newWindow   the window's page's FCP / first rAF
-//   ⌘T → …, keystroke → suggestions         journeyRun  newtabkey: acperf postkeys (CGEventPostToPid into this pid) → the app's field timing
-//                                                        (journeys.ts + ArdiaCoreFieldTiming.mm; sharing on in the bench's data folder,
-//                                                        every non-local fetch answered by bench-offline.js so nothing is uploaded; the
-//                                                        guard that checks this posts to bench-guard.invalid, a name that never
-//                                                        resolves, so it can't reach a server even if the guard is missing)
+//   ⌘T → …, keystroke → suggestions         journeyRun  newtabkey: posted keys → in-memory perf marks
 //   Enter → engine asked / started / committed / first contentful paint
-//                                           journeyRun  navigate: the same, from a real Enter; also the page's own FCP over CDP
+//                                           journeyRun  navigate: posted Enter, in-memory marks and page FCP over CDP
 // Also printed: "Hidden tabs" (throttleRun), the browser process after each churn round, main-thread sample summaries.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -189,7 +180,6 @@ const { values: opt } = parseArgs({
     "frames-stalls": { type: "boolean" },
     "mem-windows": { type: "string", default: "4" },
     hold: { type: "string", default: "0" },
-    "telemetry-sink": { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -408,14 +398,6 @@ function prepareApp(app, out, bundle) {
   mkdirSync(out, { recursive: true });
   execFileSync("cp", ["-Rc", app, copy]);
   cpSync(bundle, join(copy, "Contents/Resources/main.jsbundle"));
-  const sink = opt["telemetry-sink"];
-  if (sink) {
-    if (!/^https:\/\/[a-z0-9.-]+\.invalid(\/|$)/i.test(sink)) throw new Error(`--telemetry-sink must be an https URL on a .invalid host (it can never resolve), got ${sink}`);
-    const plist = join(copy, "Contents/Info.plist");
-    const current = spawnSync("plutil", ["-extract", "ACTelemetryURL", "raw", plist], { encoding: "utf8" }).stdout.trim();
-    if (current) throw new Error(`${app} already has a telemetry URL (${current}); --telemetry-sink only fills an empty one`);
-    execFileSync("plutil", ["-replace", "ACTelemetryURL", "-string", sink, plist]);
-  }
   const info = spawnSync("codesign", ["-dvv", app], { encoding: "utf8" }).stderr;
   const identity = info.match(/^Authority=(.+)$/m)?.[1] ?? "-";
   const entitlements = join(out, "entitlements.plist");
@@ -424,7 +406,7 @@ function prepareApp(app, out, bundle) {
     .filter((key) => !granted.includes(`<key>${key}</key>`)).map((key) => `<key>${key}</key><true/>`).join("");
   writeFileSync(entitlements, granted.replace(/<\/dict>\s*<\/plist>\s*$/, `${marker}</dict></plist>`));
   execFileSync("codesign", ["--force", "--sign", identity, "--timestamp=none", "--options", "runtime", "--entitlements", entitlements, copy], { stdio: "inherit" });
-  writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, telemetrySink: sink ?? null, date: new Date().toISOString() }));
+  writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, date: new Date().toISOString() }));
   return copy;
 }
 
@@ -754,7 +736,6 @@ async function windowsRun(side, i) {
   }
 }
 
-const TELEMETRY_ON = { version: 1, sharing: true, decidedAt: 1, askDoneAt: 1, installId: "00000000-0000-4000-8000-0000000000b0", lastVersion: null, sessionOpen: false };
 
 async function recover(app) {
   await app.run(`const s = ac.store.getState(); const w = ${WINDOW};
@@ -905,12 +886,11 @@ async function navigateByEnter(app, side, id, from) {
 
 async function journeyRun(side, i, parts) {
   const dir = freshDir(side, `journeys-${i}`);
-  writeFileSync(join(dir, "telemetry.json"), JSON.stringify({ ...TELEMETRY_ON, crashCursor: Date.now() }));
-  writeFileSync(join(dir, "bench-offline"), "1");
+  writeFileSync(join(dir, "bench-perf"), "1");
   const n = +opt["journey-n"];
   const app = new Instance(side, dir);
   app.env.push("AC_BENCH_KEYLOG=1");
-  const r = { j2: [], j4new: [], j4page: [], lost: { j2: [], j4new: [], j4page: [] }, guard: null, load: [Math.round(loadavg()[0])] };
+  const r = { j2: [], j4new: [], j4page: [], lost: { j2: [], j4new: [], j4page: [] }, load: [Math.round(loadavg()[0])] };
   const note = async (kind, x, k) => {
     if (!x.lost) return void r[kind].push(x);
     r.lost[kind].push(x.lost);
@@ -921,12 +901,8 @@ async function journeyRun(side, i, parts) {
     await app.launch();
     await app.pageState("id=seed", 30_000, (s) => s.fcp);
     await sleep(6000);
-    r.guard = await app.run(`return fetch("https://bench-guard.invalid/otel/v1/logs", { method: "POST", body: "{}" }).then((res) => res.headers.get("x-bench-blocked"), () => "unreachable").then((blocked) => {
-      const j = ac.journeys();
-      return { blocked, on: j.on, native: j.native, sharing: ac.telemetry().saved.sharing };
-    });`);
-    if (r.guard.blocked !== "1") throw new FatalError("bench-offline.js isn't guarding fetch: refusing to run with sharing on");
-    if (!r.guard.on || !r.guard.native) throw new Error(`field timing isn't on in the app: ${JSON.stringify(r.guard)}`);
+    const timing = await app.run(`const j = ac.journeys(); return { on: j.on, native: j.native };`);
+    if (!timing.on || !timing.native) throw new Error(`perf timing is unavailable: ${JSON.stringify(timing)}`);
     const closeTab = (tab) => tab && app.run(`ac.store.getState().closeTab(${JSON.stringify(tab)}); return true;`);
     if (parts.has("newtabkey")) {
       for (let k = 0; k < n; k++) {
@@ -953,7 +929,6 @@ async function journeyRun(side, i, parts) {
       }
       log(`${side.tag}journeys ${i} j4:`, JSON.stringify([r.j4new.map((x) => Math.round(x.fcp)), r.j4page.map((x) => Math.round(x.fcp))]));
     }
-    r.blocked = (await app.run(`return ac.blockedFetches();`)).length;
     r.load.push(Math.round(loadavg()[0]));
     side.results.journeys.push(r);
   } finally {
@@ -1252,7 +1227,6 @@ function summary(res) {
     }
     const loads = J.flatMap((r) => r.load ?? []);
     if (loads.length) rows.push({ name: "journeys: 1-minute load average at each run's start and end", median: median(loads), min: Math.min(...loads), max: Math.max(...loads), n: loads.length, unit: "", digits: 0 });
-    rows.push({ name: "journeys: fetches the guard answered (nothing left the machine)", median: J.reduce((n, r) => n + (r.blocked ?? 0), 0), min: 0, max: 0, n: J.length, unit: "", digits: 0 });
   }
   rows.push(...frameRows(res));
   return rows;

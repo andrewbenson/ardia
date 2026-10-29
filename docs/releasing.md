@@ -226,7 +226,6 @@ so any machine releases the same app.
 | `AC_SPARKLE_ACCOUNT` | the keychain account release.sh finds the Sparkle key under | `ardia` |
 | `AC_RELEASE_REPO` | release.sh and the release skill's scripts (`gh`, the feed, download URLs, the Source line), About's and Settings' source links, Send Feedback, where the CLI's installer downloads | `mantrakp04/ardia` |
 | `AC_NOTES_URL` | the page opened after an update, Help › Release Notes, the appcast's notes link | `https://ardia.dev/release-notes` |
-| `AC_TELEMETRY_URL` | where shared diagnostics go; empty turns sharing off and hides its prompt, onboarding step and setting | `https://ardia.dev/otel/v1/logs` |
 | `AC_SWITCHES_URL` | the kill-switch file read at launch; empty never fetches, so every switch stays on | `https://ardia.dev/switches.json` |
 | `AC_APP_ICON` | `ASSETCATALOG_COMPILER_APPICON_NAME`, so the `.appiconset` in `Assets.xcassets` that becomes the bundle's icon (`CFBundleIconName`, `<name>.icns`), the DMG's volume icon and the Dock tile plug-in's artwork. Any other name than `AppIcon` also hides Settings › Appearance › App Icon, whose variants are drawn from upstream's hills, and the in-app copy of the icon (onboarding, What's New, the check-in banner) comes from `apps/browser/src/lib/appIcon.ts`, keyed by `AC_PRODUCT_NAME` | `AppIcon` |
 
@@ -244,8 +243,7 @@ digest into the app; the app's installer passes its own product and repo. So Sol
 `publish.sh` reads the repo from the identity.
 
 This fork is **Solara**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Solara`, `com.hill.solara`, team
-`33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/solara`, its GitHub feed and releases page, telemetry and
-switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) and committed as `apps/browser/macos/Fork.xcconfig`, so this checkout always builds Solara. Its Sparkle key was
+`33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/solara`, its GitHub feed and releases page, switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) and committed as `apps/browser/macos/Fork.xcconfig`, so this checkout always builds Solara. Its Sparkle key was
 generated on 2026-10-24 (account `solara` in the login keychain, public half in `AC_PUBLIC_ED_KEY`); release.sh
 refuses to run with a placeholder key, which is what the steps below are for in another fork.
 
@@ -260,9 +258,8 @@ To turn it on:
 3. `git mv apps/browser/macos/Fork.xcconfig.example apps/browser/macos/Fork.xcconfig` and commit it, so every machine
    builds Solara. Check what it resolves to:
    `xcodebuild -showBuildSettings -project apps/browser/macos/Ardia.xcodeproj -target Ardia-macOS -configuration Release | grep ' AC_'`.
-   Keep `AC_TELEMETRY_URL` and `AC_SWITCHES_URL` empty unless the fork runs its own: a fork must never post into
-   upstream's telemetry or obey upstream's kill switches. release.sh refuses to sign with a Sparkle key whose public
-   half isn't `AC_PUBLIC_ED_KEY`.
+   Keep `AC_SWITCHES_URL` empty unless the fork runs its own: a fork must never obey upstream's kill switches.
+   release.sh refuses to sign with a Sparkle key whose public half isn't `AC_PUBLIC_ED_KEY`.
 
 Then, once per release machine:
 

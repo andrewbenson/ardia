@@ -62,7 +62,11 @@ async function main(stateFile, interval) {
   for (let tick = 0; ; tick++) {
     const state = readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : "");
     for (const pid of state.watched.keys()) if (!alive(pid)) state.watched.delete(pid);
-    if (tick > 0 && !stillNeeded(state)) break;
+    if (tick > 0 && !stillNeeded(state)) {
+      await new Promise((r) => setTimeout(r, interval));
+      if (!stillNeeded(readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : ""))) break;
+      continue;
+    }
     const front = parseFront(run("lsappinfo", ["info", run("lsappinfo", ["front"]).trim()]));
     const securePid = secureInputPid(run("ioreg", ["-l", "-w", "0", "-d", "1", "-k", "IOConsoleUsers"]));
     const found = violation(state, front, securePid ? { pid: securePid, executable: executableOf(securePid) } : null);

@@ -9,7 +9,9 @@
 # <name> is xcodebuild, pod, chromium, perflab (any timing measurement: benches, profiles; one at a time) or uitest.
 #   - uitest: one instance-launching UI test at a time across all agents. scripts/lib/instance.mjs takes it by
 #     itself on its first launch and holds it until that test and every instance it launched have exited (so after
-#     `ac launch`, until that instance quits); a node process it starts inherits the hold (AC_UITEST_STATE).
+#     `ac launch`, until that instance quits); a node process it starts inherits the hold (AC_UITEST_STATE), and a
+#     later launch with the same key joins it: AC_LOCKED_AS (`ac launch --as`), else the app's build-<name> folder.
+#     A launch with neither (a copy outside build-*, dist/) has no key and waits like any other agent's.
 #     AC_UITEST_WAIT (default 480 s) bounds the wait.
 #   - xcodebuild is one lock per derived data: builds with different -derivedDataPath run in parallel (the Podfile and
 #     the build phases keep each build's writes in its own folder); two into the same one take turns. A command

@@ -2,7 +2,7 @@
 // Hidden test instances from the shell (scripts/lib/instance.mjs): launch one, run JS in the app or a page, quit it.
 //
 //   scripts/agent/ac launch <app> [--data DIR] [--port N] [--js pinned|live|none|host:port] [--env K=V]…
-//                               [--switch S]… [--session FILE.json] [--onboarded] [--no-wait] [--runs-from APP]
+//                               [--switch S]… [--session FILE.json] [--onboarded] [--no-wait] [--runs-from APP] [--as NAME]
 //   scripts/agent/ac eval   <data dir> '<body>' [--timeout MS]   the dev harness: `return …` (a promise is awaited)
 //   scripts/agent/ac page   <data dir> <url part> '<expression>'  a page's DevTools Runtime.evaluate (awaited, by value)
 //   scripts/agent/ac quit   <data dir> [--kill]                   the app's quit, then SIGTERM, then SIGKILL
@@ -14,6 +14,8 @@
 // `open -g -n`) with Metro pinned by default (a proxy that refuses reloads: other agents' edits don't restart it).
 // After a quit that ends the app, quit removes a data dir under $TMPDIR/ac-* (AC_KEEP_DATA=1 keeps it); a test
 // run removes those of the instances it quit when it exits 0.
+// Launches take turns with other agents' UI tests (the uitest lock, scripts/agent/locked); your own launches share
+// one hold when they have the same key: --as NAME (or AC_LOCKED_AS), else the build-<name> folder of the app.
 // Body or expression `-` reads stdin. Exit 1 on a failure, 3 when the instance has gone.
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -55,6 +57,7 @@ const found = (dir) => {
 try {
   if (command === "launch") {
     if (!positional[0]) throw new Error("usage: ac launch <app> [--data DIR] …");
+    if (flags.as) process.env.AC_LOCKED_AS = flags.as;
     const env = Object.fromEntries((flags.env ?? []).map((kv) => [kv.slice(0, kv.indexOf("=")), kv.slice(kv.indexOf("=") + 1)]));
     const app = await launch(positional[0], {
       data: flags.data, port: flags.port, js: flags.js, env, switches: flags.switch, onboarded: flags.onboarded,

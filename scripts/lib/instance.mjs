@@ -120,7 +120,7 @@ const uiGateCurrent = (key) => join(tmpdir(), `ac-uitest-${key.replace(/[^A-Za-z
 function liveGate(state) {
   if (!state || !existsSync(state)) return false;
   const holder = readFileSync(state, "utf8").split("\n").map((l) => { try { return JSON.parse(l).lockHolder; } catch { return null; } }).find(Boolean);
-  return !!holder && isAlive(holder);
+  return !!holder && isAlive(holder) && /\/scripts\/agent\/locked uitest /.test(processInfo(holder)?.command ?? "");
 }
 export async function holdUiGate(key = null) {
   if (uiGate) return uiGate;
@@ -129,6 +129,8 @@ export async function holdUiGate(key = null) {
   for (const joined of [process.env.AC_UITEST_STATE, current])
     if (liveGate(joined)) {
       gateNote(joined, { owner: process.pid });
+      await sleep(1200);
+      if (!liveGate(joined)) continue;
       process.env.AC_UITEST_STATE = joined;
       return (uiGate = { state: joined });
     }

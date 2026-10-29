@@ -11,9 +11,8 @@
 // in its field with Return, starts from a preset's name and sharing, and Esc or a click outside creates nothing.
 // The calendar preview lists today's fixture events and a click shows the calendar tab; the meeting alert's Join
 // opens the meeting and Ignore dismisses it. The page prompts (permission, password, autofill, external app, engine
-// offer, device chooser, blocked pop-ups) open in a native frame at the card RN draws for them; Esc or a click on the
-// page leaves the first six unanswered and closes the pop-ups list, and a pop-up's row opens just that one, as RN does
-// (a second instance with ARDIA_NATIVE_PAGES=0 and ARDIA_NATIVE_PAGES_POOL=0 gives RN's numbers). The native frame is
+// offer, device chooser, blocked pop-ups) open in a native frame; Esc or a click on the page leaves the first six
+// unanswered and closes the pop-ups list, and a pop-up's row opens just that one. The native frame is
 // the PopoverView, or the pane prompts when ARDIA_NATIVE_PANE_PROMPTS hosts them: those read only what the engine and
 // the page send, so the page really asks for the permission and the pool's page events bring the password, autofill
 // and external app prompts. The pane prompts have no test input for the device chooser; it is reported unmeasured. A
@@ -697,31 +696,6 @@ try {
   else rep.say(`data: ${data}`);
 }
 
-const rnData = join(scratch, "rn-data");
-mkdirSync(rnData, { recursive: true });
-let rn = null;
-try {
-  rn = await launch(resolve(appArg), { data: rnData, onboarded: true, env: { ARDIA_NATIVE_PAGES: "0", ARDIA_NATIVE_PAGES_POOL: "0" } });
-  await rn.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
-  await sleep(4000);
-  await rep.check("each prompt's native card sits where RN draws it, and Esc and a click on the page answer it as RN does", async () => {
-    const rnPrompts = await promptOutcomes(rn);
-    for (const name of PROMPT_NAMES) {
-      const mine = nativePrompts?.[name];
-      const theirs = rnPrompts[name];
-      if (mine?.native === null) continue;
-      assert.ok(mine && theirs.card, `${name}: measured in both`);
-      assert.equal(theirs.native, false, `${name}: RN draws its own frame`);
-      for (const key of ["x", "y", "width", "height"]) assert.ok(Math.abs(mine.card[key] - theirs.card[key]) <= 1, `${name}: ${key} ${mine.card[key]} vs RN ${theirs.card[key]}`);
-      assert.equal(mine.afterEsc, theirs.afterEsc, `${name}: Esc`);
-      assert.equal(mine.afterOutside, theirs.afterOutside, `${name}: a click on the page`);
-      assert.equal(mine.afterRow, theirs.afterRow, `${name}: a click on the last row`);
-    }
-  });
-} finally {
-  await rn?.quit();
-  if (!keep && !rep.failed.length) rmSync(rnData, { recursive: true, force: true });
-}
 const shellData = join(scratch, "shell-data");
 mkdirSync(shellData, { recursive: true });
 writeFileSync(join(shellData, "calendar-fixture.json"), calendarFixture);

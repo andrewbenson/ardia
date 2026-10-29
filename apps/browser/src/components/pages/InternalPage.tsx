@@ -1,12 +1,8 @@
-import { nativePagesAvailable } from "@ardia/settings";
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { useBrowser } from "../../store/browser";
 import { bookmarkProfileId } from "../../store/model";
 import { setPageProgress } from "../../store/pageProgress";
-import { BookmarksPage } from "./BookmarksPage";
-import { DownloadsPage } from "./DownloadsPage";
-import { HistoryPage } from "./HistoryPage";
 import { NativeBookmarksPage } from "./NativeBookmarksPage";
 import { NativeDownloadsPage } from "./NativeDownloadsPage";
 import { NativeHistoryPage } from "./NativeHistoryPage";
@@ -33,9 +29,9 @@ export function InternalPage({ tabId }: { tabId: string }) {
   if (!page) return null;
   return (
     <View style={StyleSheet.absoluteFill}>
-      {page === "history" && (nativePagesAvailable() ? <NativeHistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} /> : <HistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} />)}
-      {page === "bookmarks" && (nativePagesAvailable() ? <NativeBookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} /> : <BookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} />)}
-      {page === "downloads" && (nativePagesAvailable() ? <NativeDownloadsPage tabId={tabId} /> : <DownloadsPage tabId={tabId} />)}
+      {page === "history" && <NativeHistoryPage tabId={tabId} profileId={profileId} initialQuery={internalQuery(url)} />}
+      {page === "bookmarks" && <NativeBookmarksPage key={bookmarkProfile} tabId={tabId} profileId={bookmarkProfile} />}
+      {page === "downloads" && <NativeDownloadsPage tabId={tabId} />}
     </View>
   );
 }

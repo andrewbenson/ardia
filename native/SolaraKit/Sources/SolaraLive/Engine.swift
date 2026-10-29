@@ -15,12 +15,15 @@ public actor LiveEngine {
   public static let nudgeThrottleMs: Double = 20_000
   public static let nudgeDelayMs: Double = 3000
   public static let saveDebounceMs: Double = 800
+  public static let gridSlackMs: Double = 50
   public static let calendarPollEvery: Double = 5 * 60_000
   public static let alertPollEvery: Double = 10_000
 
   static let sectionOrder: [PullRequestSection: Int] = [.authored: 0, .review: 1, .team: 2]
 
   public internal(set) var state: LiveState
+  public private(set) var documentError: String?
+  private let loadError: String?
   public internal(set) var calendarData = CalendarData()
   public internal(set) var meetingAlert: CalendarEvent?
 
@@ -36,7 +39,10 @@ public actor LiveEngine {
   var idCounter = 0
   var started = false
   var jobs: [Task<Void, Never>] = []
-  var wakers: [CheckedContinuation<Void, Never>] = []
+  var slowEntries: [SlowJob: SlowEntry] = [:]
+  var slowTimer: Task<Void, Never>?
+  var slowTimerAt = Double.infinity
+  var slowFiring = false
   var saveTask: Task<Void, Never>?
   var observers: [UUID: AsyncStream<LiveSnapshot>.Continuation] = [:]
   var calendarInflight: Task<Void, Never>?
@@ -48,8 +54,35 @@ public actor LiveEngine {
   public init(effects: LiveEffects, state: LiveState? = nil) {
     self.effects = effects
     self.endpoints = LiveEndpoints(mock: effects.environment.mockBase)
-    self.requester = LiveRequester(http: effects.http)
-    self.state = state ?? LiveState.load(effects.documents.read(LiveState.documentName))
+    self.requester = LiveRequester(http: effects.http, environment: effects.environment)
+    if let state {
+      self.state = state
+      self.documentError = nil
+      self.loadError = nil
+    } else {
+      switch effects.documents.readStatus(LiveState.documentName) {
+      case .missing:
+        self.state = LiveState()
+        self.documentError = nil
+        self.loadError = nil
+      case .contents(let text):
+        do {
+          self.state = try LiveJSON.decode(LiveState.self, from: text)
+          self.documentError = nil
+          self.loadError = nil
+        } catch {
+          self.state = LiveState()
+          let message = "Cannot decode live.json: \(error)"
+          self.documentError = message
+          self.loadError = message
+        }
+      case .failure(let message):
+        self.state = LiveState()
+        let error = "Cannot read live.json: \(message)"
+        self.documentError = error
+        self.loadError = error
+      }
+    }
     self.launchedAt = effects.clock.now()
   }
 
@@ -69,7 +102,7 @@ public actor LiveEngine {
   func emit() {
     let snap = snapshot
     for continuation in observers.values { continuation.yield(snap) }
-    wakeJobs()
+    rescheduleSlowJobs()
   }
 
   public func update(_ body: @Sendable (inout LiveState) -> Void) {
@@ -104,13 +137,26 @@ public actor LiveEngine {
         return
       }
       if Task.isCancelled { return }
-      self.save()
+      do { try self.save() } catch { NSLog("Live Folders save failed: %@", String(describing: error)) }
     }
   }
 
-  public func save() {
-    guard let text = try? state.persistedJSON() else { return }
-    try? effects.documents.write(LiveState.documentName, text)
+  public func save() throws {
+    if let loadError { throw LiveError(.other, loadError) }
+    do {
+      let text = try state.persistedJSON()
+      try effects.documents.write(LiveState.documentName, text)
+      documentError = nil
+    } catch {
+      documentError = "Cannot save live.json: \(error)"
+      throw error
+    }
+  }
+
+  public func flush() throws {
+    saveTask?.cancel()
+    saveTask = nil
+    try save()
   }
 
   public func source(_ id: LiveSourceId) -> LiveSource { sources[id]! }
@@ -325,11 +371,13 @@ public actor LiveEngine {
         do { try await clock.sleep(milliseconds: LiveEngine.firstRefreshDelayMs) } catch { return }
         for id in self.state.folderOrder { self.refreshFolder(id) }
       })
-    jobs.append(Task { await self.slowly(.folders) })
+    if effects.environment.separateSlowTimers {
+      for job in SlowJob.allCases { jobs.append(Task { await self.slowlySeparate(job) }) }
+    } else {
+      for job in SlowJob.allCases { slowEntries[job] = SlowEntry(next: slotAfter(effects.clock.now(), every(job)), armed: false) }
+      rescheduleSlowJobs()
+    }
     refreshCalendar()
-    jobs.append(Task { await self.slowly(.calendar) })
-    jobs.append(Task { await self.slowly(.meetings) })
-    jobs.append(Task { await self.slowly(.alerts) })
     Task { await self.checkAlerts() }
   }
 
@@ -337,7 +385,10 @@ public actor LiveEngine {
     started = false
     for job in jobs { job.cancel() }
     jobs = []
-    wakeJobs()
+    slowTimer?.cancel()
+    slowTimer = nil
+    slowTimerAt = .infinity
+    slowEntries = [:]
   }
 
   public func windowFocused() {
@@ -362,13 +413,17 @@ public actor LiveEngine {
     for f in state.folders.values where !existing.contains(f.profileId) { removeFolder(f.id) }
   }
 
-  enum SlowJob { case folders, calendar, meetings, alerts }
+  enum SlowJob: CaseIterable { case folders, calendar, meetings, alerts }
+
+  struct SlowEntry { var next: Double; var armed: Bool }
+
+  func slotAfter(_ time: Double, _ every: Double) -> Double { ((time / every).rounded(.down) + 1) * every }
 
   func every(_ job: SlowJob) -> Double {
     switch job {
     case .folders: LiveEngine.folderPollEvery
     case .calendar: LiveEngine.calendarPollEvery
-    case .meetings: MeetingGroups.tickEvery
+    case .meetings: effects.environment.separateSlowTimers ? 20_000 : MeetingGroups.tickEvery
     case .alerts: LiveEngine.alertPollEvery
     }
   }
@@ -383,6 +438,7 @@ public actor LiveEngine {
   }
 
   func runJob(_ job: SlowJob) async {
+    guard started else { return }
     switch job {
     case .folders:
       for id in state.folderOrder {
@@ -395,26 +451,59 @@ public actor LiveEngine {
     }
   }
 
-  func slowly(_ job: SlowJob) async {
+  func slowlySeparate(_ job: SlowJob) async {
     let clock = effects.clock
-    let every = every(job)
     while !Task.isCancelled {
-      if !needed(job) {
-        await withCheckedContinuation { wakers.append($0) }
-        continue
-      }
-      let now = clock.now()
-      let next = ((now / every).rounded(.down) + 1) * every
-      do { try await clock.sleep(milliseconds: next - now) } catch { return }
+      do { try await clock.sleep(milliseconds: every(job)) } catch { return }
       if Task.isCancelled { return }
-      if needed(job) { await runJob(job) }
+      if needed(job) { Task { await self.runJob(job) } }
     }
   }
 
-  func wakeJobs() {
-    let waiting = wakers
-    wakers = []
-    for w in waiting { w.resume() }
+  func rescheduleSlowJobs() {
+    guard started, !effects.environment.separateSlowTimers, !slowFiring else { return }
+    let now = effects.clock.now()
+    var next = Double.infinity
+    for job in SlowJob.allCases {
+      guard var entry = slowEntries[job] else { continue }
+      if !needed(job) {
+        entry.armed = false
+      } else {
+        if !entry.armed, entry.next <= now { entry.next = slotAfter(now, every(job)) }
+        entry.armed = true
+        next = min(next, entry.next)
+      }
+      slowEntries[job] = entry
+    }
+    if next == slowTimerAt { return }
+    slowTimer?.cancel()
+    slowTimer = nil
+    slowTimerAt = next
+    guard next.isFinite else { return }
+    let clock = effects.clock
+    let deadline = next
+    slowTimer = Task {
+      do { try await clock.sleep(milliseconds: max(0, deadline - clock.now())) } catch { return }
+      if Task.isCancelled { return }
+      self.fireSlowJobs()
+    }
+  }
+
+  func fireSlowJobs() {
+    slowTimer = nil
+    slowTimerAt = .infinity
+    let now = effects.clock.now()
+    var due: [SlowJob] = []
+    for job in SlowJob.allCases {
+      guard var entry = slowEntries[job], entry.armed, entry.next <= now + LiveEngine.gridSlackMs else { continue }
+      entry.next = slotAfter(max(now, entry.next), every(job))
+      slowEntries[job] = entry
+      due.append(job)
+    }
+    slowFiring = true
+    for job in due where needed(job) { Task { await self.runJob(job) } }
+    slowFiring = false
+    rescheduleSlowJobs()
   }
 
   public func meetingTick() async {

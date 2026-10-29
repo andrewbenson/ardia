@@ -53,12 +53,14 @@ public enum LiveNet {
 
 struct LiveRequester: Sendable {
   let http: any LiveHTTPClient
+  var environment = LiveEnvironment()
 
   func data(_ request: LiveHTTPRequest) async throws -> Data {
     var request = request
     if !request.headers.keys.contains(where: { $0.lowercased() == "accept" }) {
       request.headers["Accept"] = "application/json"
     }
+    try environment.checkRequest(request.url)
     let response: LiveHTTPResponse
     do {
       response = try await http.send(request)

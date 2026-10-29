@@ -10,30 +10,8 @@ public class KeychainModule: Module {
 
     AsyncFunction("get") { (account: String) -> String? in Self.readSecret(account) }
 
-    AsyncFunction("set") { (account: String, secret: String) -> Bool in
-      if let store = IsolatedSecrets.shared { return store.set(account, secret) }
-      let data = Data(secret.utf8)
-      let update: [String: Any] = [kSecValueData as String: data]
-      var status = SecItemUpdate(Self.query(account) as CFDictionary, update as CFDictionary)
-      if status == errSecItemNotFound {
-        var add = Self.query(account)
-        add[kSecValueData as String] = data
-        add[kSecAttrLabel as String] = "\(Bundle.main.productName): \(account)"
-        status = SecItemAdd(add as CFDictionary, nil)
-      } else if status != errSecSuccess {
-        SecItemDelete(Self.query(account) as CFDictionary)
-        var add = Self.query(account)
-        add[kSecValueData as String] = data
-        status = SecItemAdd(add as CFDictionary, nil)
-      }
-      return status == errSecSuccess
-    }
-
-    AsyncFunction("delete") { (account: String) -> Bool in
-      if let store = IsolatedSecrets.shared { return store.set(account, nil) }
-      let status = SecItemDelete(Self.query(account) as CFDictionary)
-      return status == errSecSuccess || status == errSecItemNotFound
-    }
+    AsyncFunction("set") { (account: String, secret: String) -> Bool in Self.writeSecret(account, secret) }
+    AsyncFunction("delete") { (account: String) -> Bool in Self.deleteSecret(account) }
   }
 
   public static func readSecret(_ account: String) -> String? {
@@ -47,6 +25,31 @@ public class KeychainModule: Module {
     var item: CFTypeRef?
     guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
     return String(data: data, encoding: .utf8)
+  }
+
+  public static func writeSecret(_ account: String, _ secret: String) -> Bool {
+    if let store = IsolatedSecrets.shared { return store.set(account, secret) }
+    let data = Data(secret.utf8)
+    let update: [String: Any] = [kSecValueData as String: data]
+    var status = SecItemUpdate(query(account) as CFDictionary, update as CFDictionary)
+    if status == errSecItemNotFound {
+      var add = query(account)
+      add[kSecValueData as String] = data
+      add[kSecAttrLabel as String] = "\(Bundle.main.productName): \(account)"
+      status = SecItemAdd(add as CFDictionary, nil)
+    } else if status != errSecSuccess {
+      SecItemDelete(query(account) as CFDictionary)
+      var add = query(account)
+      add[kSecValueData as String] = data
+      status = SecItemAdd(add as CFDictionary, nil)
+    }
+    return status == errSecSuccess
+  }
+
+  public static func deleteSecret(_ account: String) -> Bool {
+    if let store = IsolatedSecrets.shared { return store.set(account, nil) }
+    let status = SecItemDelete(query(account) as CFDictionary)
+    return status == errSecSuccess || status == errSecItemNotFound
   }
 
   private static func query(_ account: String) -> [String: Any] {

@@ -151,16 +151,32 @@ final class FakeHTTP: LiveHTTPClient, @unchecked Sendable {
 final class MemorySecrets: LiveSecretStore, @unchecked Sendable {
   let values = Locked<[String: String]>([:])
   func secret(account: String) async -> String? { values.current[account] }
-  func setSecret(_ secret: String, account: String) async { values.with { $0[account] = secret } }
-  func deleteSecret(account: String) async { _ = values.with { $0.removeValue(forKey: account) } }
+  let allowWrite = Locked(true)
+  @discardableResult func setSecret(_ secret: String, account: String) async -> Bool {
+    guard allowWrite.current else { return false }
+    values.with { $0[account] = secret }
+    return true
+  }
+  @discardableResult func deleteSecret(account: String) async -> Bool {
+    guard allowWrite.current else { return false }
+    _ = values.with { $0.removeValue(forKey: account) }
+    return true
+  }
 }
 
 final class MemoryDocuments: LiveDocumentStore, @unchecked Sendable {
   let docs = Locked<[String: String]>([:])
   let writes = Locked<Int>(0)
+  let readFailure = Locked<String?>(nil)
+  let writeFailure = Locked<Bool>(false)
   init(_ docs: [String: String] = [:]) { self.docs.with { $0 = docs } }
   func read(_ name: String) -> String? { docs.current[name] }
+  func readStatus(_ name: String) -> LiveDocumentRead {
+    if let failure = readFailure.current { return .failure(failure) }
+    return docs.current[name].map(LiveDocumentRead.contents) ?? .missing
+  }
   func write(_ name: String, _ text: String) throws {
+    if writeFailure.current { throw LiveError(.other, "disk full") }
     docs.with { $0[name] = text }
     writes.with { $0 += 1 }
   }

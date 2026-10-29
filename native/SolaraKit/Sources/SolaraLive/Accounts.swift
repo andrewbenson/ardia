@@ -61,8 +61,10 @@ extension LiveEngine {
     return value
   }
 
-  func setSecret(_ source: LiveSourceId, _ value: String) async {
-    await effects.secrets.setSecret(value, account: endpoints.secretAccount(source))
+  func setSecret(_ source: LiveSourceId, _ value: String) async throws {
+    guard await effects.secrets.setSecret(value, account: endpoints.secretAccount(source)) else {
+      throw LiveError(.other, "Could not save account secret")
+    }
   }
 
   nonisolated func githubGraphql<T: Decodable, V: Encodable & Sendable>(_ type: T.Type, token: String, query: String, variables: V) async throws -> T {
@@ -97,7 +99,7 @@ extension LiveEngine {
     var next = stored
     next.access_token = json.access_token
     next.expires_at = effects.clock.now() + json.expires_in * 1000
-    await setSecret(.gdrive, try LiveJSON.text(next))
+    try await setSecret(.gdrive, try LiveJSON.text(next))
     return json.access_token
   }
 
@@ -111,7 +113,7 @@ extension LiveEngine {
     let token = LiveEngine.trimmed(token)
     let json = try await githubGraphql(GithubViewerResponse.self, token: token, query: GitHubQueries.viewer, variables: [String: String]())
     guard let viewer = json.data?.viewer else { throw LiveError(.signedOut, "GitHub didn't accept the token") }
-    await setSecret(.github, token)
+    try await setSecret(.github, token)
     setAccount(.github, account(viewer.login, viewer.name, viewer.avatarUrl))
   }
 
@@ -158,7 +160,7 @@ extension LiveEngine {
     let token = LiveEngine.trimmed(token)
     let me = try await requester.json(
       BitbucketMe.self, LiveHTTPRequest(url: "\(endpoints.bitbucket)/user", headers: ["Authorization": LiveNet.basic(user, token)]))
-    await setSecret(.bitbucket, token)
+    try await setSecret(.bitbucket, token)
     updateConfig(ConfigPatch(bitbucketUser: user))
     setAccount(.bitbucket, account(me.account_id, me.display_name, me.links?.avatar?.href))
   }
@@ -166,7 +168,7 @@ extension LiveEngine {
   public func connectNotion(token: String) async throws {
     let token = LiveEngine.trimmed(token)
     let me = try await requester.json(NotionMe.self, LiveHTTPRequest(url: "\(endpoints.notion)/users/me", headers: LiveSource.notionHeaders(token)))
-    await setSecret(.notion, token)
+    try await setSecret(.notion, token)
     let workspace = me.bot?.workspace_name
     setAccount(.notion, account(workspace ?? me.name ?? "Notion", workspace, nil))
   }
@@ -185,7 +187,7 @@ extension LiveEngine {
     let me = try await requester.json(
       ConfluenceMe.self,
       LiveHTTPRequest(url: "\(endpoints.confluence(base))/wiki/rest/api/user/current", headers: ["Authorization": LiveNet.basic(email, token)]))
-    await setSecret(.confluence, token)
+    try await setSecret(.confluence, token)
     updateConfig(ConfigPatch(confluenceSite: base, confluenceEmail: email))
     setAccount(.confluence, account(me.accountId, me.displayName, nil))
   }
@@ -203,7 +205,7 @@ extension LiveEngine {
     guard let refresh = json.refresh_token, !refresh.isEmpty else { throw LiveError(.signedOut, "Google didn't return a refresh token") }
     let tokens = GoogleTokens(
       access_token: json.access_token, refresh_token: refresh, expires_at: effects.clock.now() + json.expires_in * 1000, client_secret: clientSecret)
-    await setSecret(.gdrive, try LiveJSON.text(tokens))
+    try await setSecret(.gdrive, try LiveJSON.text(tokens))
     let about = try? await requester.json(
       DriveAbout.self, LiveHTTPRequest(url: "\(endpoints.drive)/about?fields=user", headers: ["Authorization": "Bearer \(json.access_token)"]))
     updateConfig(ConfigPatch(googleClientId: clientId))
@@ -237,8 +239,10 @@ extension LiveEngine {
     try await task.value
   }
 
-  public func disconnect(_ source: LiveSourceId) async {
-    await effects.secrets.deleteSecret(account: endpoints.secretAccount(source))
+  public func disconnect(_ source: LiveSourceId) async throws {
+    guard await effects.secrets.deleteSecret(account: endpoints.secretAccount(source)) else {
+      throw LiveError(.other, "Could not delete account secret")
+    }
     setAccount(source, nil)
   }
 }

@@ -52,6 +52,23 @@ public enum LiveAnyJSON: Codable, Sendable, Equatable {
   }
 }
 
+extension LiveAnyJSON {
+  static func reconciled(original: LiveAnyJSON, baseline: LiveAnyJSON, current: LiveAnyJSON, keepsDroppedEntries: Bool) -> LiveAnyJSON {
+    guard case .object(let old) = original, case .object(let before) = baseline, case .object(let now) = current else {
+      return current == baseline ? original : current
+    }
+    var result = now
+    for (key, value) in now {
+      guard let raw = old[key], let prior = before[key] else { continue }
+      result[key] = reconciled(original: raw, baseline: prior, current: value, keepsDroppedEntries: false)
+    }
+    if keepsDroppedEntries {
+      for (key, raw) in old where before[key] == nil && now[key] == nil { result[key] = raw }
+    }
+    return .object(result)
+  }
+}
+
 struct LiveAnyKey: CodingKey {
   var stringValue: String
   var intValue: Int? { nil }

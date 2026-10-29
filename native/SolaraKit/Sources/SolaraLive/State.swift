@@ -114,6 +114,8 @@ public struct LiveState: Codable, Sendable, Equatable {
   public var meetingGroups: [String: MeetingGroup] = [:]
   public var dismissedAlerts: [String] = []
   public var extra: [String: LiveAnyJSON] = [:]
+  var originalKnown: [String: LiveAnyJSON]?
+  var decodedKnown: [String: LiveAnyJSON]?
 
   public init() {}
 
@@ -125,6 +127,10 @@ public struct LiveState: Codable, Sendable, Equatable {
   static let persisted: [CodingKeys] = [
     .folders, .folderOrder, .items, .known, .unread, .hidden, .completed, .expandedStacks, .accounts, .config, .calendar, .meetingGroups,
     .dismissedAlerts,
+  ]
+
+  static let entryMaps: Set<String> = [
+    "folders", "items", "known", "unread", "hidden", "completed", "expandedStacks", "accounts", "meetingGroups",
   ]
 
   public init(from decoder: Decoder) throws {
@@ -153,9 +159,37 @@ public struct LiveState: Codable, Sendable, Equatable {
     meetingGroups = map(.meetingGroups)
     dismissedAlerts = (try? c.decodeIfPresent(LossyList<String>.self, forKey: .dismissedAlerts))?.values ?? []
     extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue))
+    let raw = try decoder.container(keyedBy: LiveAnyKey.self)
+    originalKnown = [:]
+    let persistedKeys = Set(LiveState.persisted.map(\.rawValue))
+    for key in raw.allKeys where persistedKeys.contains(key.stringValue) {
+      originalKnown?[key.stringValue] = try raw.decode(LiveAnyJSON.self, forKey: key)
+    }
+    decodedKnown = nil
+    var clean = self
+    clean.originalKnown = nil
+    let normalized = try LiveJSON.encode(clean)
+    decodedKnown = try LiveJSON.decode([String: LiveAnyJSON].self, from: normalized)
   }
 
   public func encode(to encoder: Encoder) throws {
+    if let originalKnown, let decodedKnown {
+      var clean = self
+      clean.originalKnown = nil
+      clean.decodedKnown = nil
+      let current = try LiveJSON.decode([String: LiveAnyJSON].self, from: LiveJSON.encode(clean))
+      var merged = current
+      for (key, original) in originalKnown {
+        if let baseline = decodedKnown[key], let value = current[key] {
+          merged[key] = LiveAnyJSON.reconciled(original: original, baseline: baseline, current: value, keepsDroppedEntries: LiveState.entryMaps.contains(key))
+        } else if decodedKnown[key] == nil {
+          merged[key] = original
+        }
+      }
+      var c = encoder.container(keyedBy: LiveAnyKey.self)
+      for (key, value) in merged { try c.encode(value, forKey: LiveAnyKey(key)) }
+      return
+    }
     try UnknownKeys.write(extra, to: encoder)
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(folders, forKey: .folders)

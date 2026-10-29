@@ -39,8 +39,8 @@ public protocol LiveHTTPClient: Sendable {
 
 public protocol LiveSecretStore: Sendable {
   func secret(account: String) async -> String?
-  func setSecret(_ secret: String, account: String) async
-  func deleteSecret(account: String) async
+  func setSecret(_ secret: String, account: String) async -> Bool
+  func deleteSecret(account: String) async -> Bool
 }
 
 public protocol LiveClock: Sendable {
@@ -85,18 +85,42 @@ public protocol LiveNotifier: Sendable {
   func remove(ids: [String]) async
 }
 
+public enum LiveDocumentRead: Sendable, Equatable {
+  case missing
+  case contents(String)
+  case failure(String)
+}
+
 public protocol LiveDocumentStore: Sendable {
   func read(_ name: String) -> String?
+  func readStatus(_ name: String) -> LiveDocumentRead
   func write(_ name: String, _ text: String) throws
+}
+
+public extension LiveDocumentStore {
+  func readStatus(_ name: String) -> LiveDocumentRead { read(name).map(LiveDocumentRead.contents) ?? .missing }
 }
 
 public struct LiveEnvironment: Sendable, Equatable {
   public var mockBase: String?
+  public var isolatedDataDirectory: Bool
+  public var separateSlowTimers: Bool
   public var calendarFixture: Bool
 
-  public init(mockBase: String? = nil, calendarFixture: Bool = false) {
+  public func checkRequest(_ url: String) throws {
+    guard isolatedDataDirectory else { return }
+    guard let mockBase, let mock = URLComponents(string: mockBase), mock.scheme == "http",
+      ["127.0.0.1", "::1", "localhost"].contains(mock.host ?? ""), mock.user == nil, mock.password == nil,
+      let target = URLComponents(string: url), target.host == mock.host, target.port == mock.port, target.scheme == mock.scheme else {
+      throw LiveError(.network, "Isolated Live Folders requires a loopback ARDIA_LIVE_MOCK URL")
+    }
+  }
+
+  public init(mockBase: String? = nil, calendarFixture: Bool = false, isolatedDataDirectory: Bool = false, separateSlowTimers: Bool = false) {
     self.mockBase = mockBase
     self.calendarFixture = calendarFixture
+    self.isolatedDataDirectory = isolatedDataDirectory
+    self.separateSlowTimers = separateSlowTimers
   }
 }
 

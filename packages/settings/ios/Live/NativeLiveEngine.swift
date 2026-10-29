@@ -8,20 +8,26 @@ private enum NativeLiveShadowUnavailable: Error {
 
 private struct NativeLiveDocuments: LiveDocumentStore {
   func read(_ name: String) -> String? { DocumentStore.read(name) }
+  func readStatus(_ name: String) -> LiveDocumentRead {
+    let result = DocumentStore.readResult(name)
+    if let text = result["contents"] { return .contents(text) }
+    if let failure = result["failure"] { return .failure(failure) }
+    return .missing
+  }
   func write(_ name: String, _ text: String) throws { throw NativeLiveShadowUnavailable.readOnly }
 }
 
-private struct NativeLiveSecrets: LiveSecretStore {
+private struct ShadowLiveSecrets: LiveSecretStore {
   func secret(account: String) async -> String? { KeychainModule.readSecret(account) }
-  func setSecret(_ secret: String, account: String) async {}
-  func deleteSecret(account: String) async {}
+  func setSecret(_ secret: String, account: String) async -> Bool { false }
+  func deleteSecret(account: String) async -> Bool { false }
 }
 
-private struct NativeLiveHTTP: LiveHTTPClient {
+private struct ShadowLiveHTTP: LiveHTTPClient {
   func send(_ request: LiveHTTPRequest) async throws -> LiveHTTPResponse { throw NativeLiveShadowUnavailable.readOnly }
 }
 
-private struct NativeLiveCalendar: LiveCalendarProvider {
+private struct ShadowLiveCalendar: LiveCalendarProvider {
   func authorization() async -> CalendarAuthorization { .notDetermined }
   func requestAccess() async -> Bool { false }
   func calendars() async throws -> [SystemCalendar] { [] }
@@ -32,7 +38,7 @@ private struct NativeLiveAuth: LiveAuthPresenter {
   func authorize(url: String, redirectPrefix: String) async throws -> String { throw NativeLiveShadowUnavailable.readOnly }
 }
 
-private struct NativeLiveNotifier: LiveNotifier {
+private struct ShadowLiveNotifier: LiveNotifier {
   func post(_ notification: LiveNotification) async {}
   func remove(ids: [String]) async {}
 }
@@ -45,12 +51,18 @@ final class NativeLiveEngine: @unchecked Sendable {
   private init() {
     #if DEBUG
     let mockBase = ProcessInfo.processInfo.environment["ARDIA_LIVE_MOCK"]
+    let isolated = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] != nil
+    let fixture = ProcessInfo.processInfo.environment["ARDIA_CALENDAR_FIXTURE"] == "1"
+    let separate = ProcessInfo.processInfo.environment["ARDIA_SLOW_TIMERS"] == "separate"
     #else
     let mockBase: String? = nil
+    let isolated = false
+    let fixture = false
+    let separate = false
     #endif
     shadow = LiveShadow(effects: LiveEffects(
-      http: NativeLiveHTTP(), secrets: NativeLiveSecrets(), calendar: NativeLiveCalendar(), auth: NativeLiveAuth(),
-      notifier: NativeLiveNotifier(), documents: NativeLiveDocuments(), environment: LiveEnvironment(mockBase: mockBase)))
+      http: ShadowLiveHTTP(), secrets: ShadowLiveSecrets(), calendar: ShadowLiveCalendar(), auth: NativeLiveAuth(),
+      notifier: ShadowLiveNotifier(), documents: NativeLiveDocuments(), environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate)))
   }
 
   func reload() async { await shadow.reload() }

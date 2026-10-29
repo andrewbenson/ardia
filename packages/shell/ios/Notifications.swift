@@ -115,3 +115,15 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
 private extension String {
   var nonEmpty: String? { isEmpty ? nil : self }
 }
+
+@MainActor public enum ShellLiveNotifications {
+  public static func post(id: String, title: String, body: String, data: [String: String]) async -> Bool {
+    await withCheckedContinuation { continuation in
+      NotificationHub.shared.post(["id": id, "title": title, "body": body, "data": data]) { value in
+        continuation.resume(returning: value != nil)
+      }
+    }
+  }
+
+  public static func remove(ids: [String]) { NotificationHub.shared.remove(ids) }
+}

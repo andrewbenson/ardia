@@ -185,9 +185,18 @@ public enum DocumentStore {
   private static var removing: [String: Int] = [:]
   private static var generation: UInt64 = 0
   private static var closed = false
+  private static var beforeQuitFlush: (() -> Void)?
   private static let flushOnQuit = NotificationCenter.default.addObserver(
     forName: NSApplication.willTerminateNotification, object: nil, queue: nil
-  ) { _ in flush() }
+  ) { _ in
+    beforeQuitFlush?()
+    flush()
+  }
+
+  public static func registerBeforeQuitFlush(_ callback: @escaping () -> Void) {
+    _ = flushOnQuit
+    beforeQuitFlush = callback
+  }
 
   public static func read(_ name: String) -> String? {
     guard let url = try? ShellModule.documentURL(name) else { return nil }

@@ -61,6 +61,57 @@ public class CalendarModule: Module {
     }.runOnQueue(.main)
   }
 
+  @MainActor private static var liveStore = EKEventStore()
+
+  @MainActor public static func liveAuthorization() -> String { status() }
+
+  @MainActor public static func liveRequestAccess() async -> Bool {
+    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return false }
+    return await withCheckedContinuation { continuation in
+      liveStore.requestFullAccessToEvents { granted, _ in
+        Task { @MainActor in
+          if granted { liveStore = EKEventStore() }
+          continuation.resume(returning: granted)
+        }
+      }
+    }
+  }
+
+  @MainActor public static func liveCalendars() -> [[String: Any]] {
+    guard status() == "fullAccess" else { return [] }
+    return liveStore.calendars(for: .event).map { cal in
+      [
+        "id": cal.calendarIdentifier,
+        "title": cal.title,
+        "color": hex(cal.color),
+        "account": cal.source?.title ?? "",
+        "accountType": sourceType(cal.source?.sourceType),
+        "owned": cal.allowsContentModifications && cal.type != .subscription && cal.type != .birthday,
+      ]
+    }
+  }
+
+  @MainActor public static func liveEvents(start: Double, end: Double, calendarIds: [String]) -> [[String: Any]] {
+    guard status() == "fullAccess" else { return [] }
+    let all = liveStore.calendars(for: .event)
+    let calendars = calendarIds.isEmpty ? all : all.filter { calendarIds.contains($0.calendarIdentifier) }
+    guard !calendars.isEmpty else { return [] }
+    let predicate = liveStore.predicateForEvents(
+      withStart: Date(timeIntervalSince1970: start / 1000),
+      end: Date(timeIntervalSince1970: end / 1000),
+      calendars: calendars
+    )
+    return liveStore.events(matching: predicate).map { event in
+      var value = serialize(event)
+      if event.organizer == nil { value["organizer"] = NSNull() }
+      return value
+    }
+  }
+
+  @MainActor public static func observeLiveChanges(_ changed: @escaping @Sendable () -> Void) -> NSObjectProtocol {
+    NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: liveStore, queue: .main) { _ in changed() }
+  }
+
   private func observe() {
     if let observer { NotificationCenter.default.removeObserver(observer) }
     observer = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self] _ in

@@ -135,7 +135,7 @@ import Testing
     mock.model.with { $0.bitbucketState = "MERGED" }
     await rig.engine.refreshFolder(id).value
     #expect(await rig.engine.state.completed[id]?.first?.state == .merged)
-    await rig.engine.disconnect(.bitbucket)
+    try await rig.engine.disconnect(.bitbucket)
     #expect(await rig.engine.state.accounts[.bitbucket] == nil)
     #expect(await rig.secrets.secret(account: "mock:bitbucket") == nil)
   }

@@ -1,5 +1,6 @@
 import { addHistoryVisits, onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "@ardia/ardiacore";
 import { readDocument, removeDocument } from "@ardia/shell";
+import { startNativeHistoryCatalog } from "@ardia/settings";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { afterFirstWindow } from "./afterFirstWindow";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "../store/history";
@@ -219,7 +220,9 @@ export async function migrateHistoryFile(now = Date.now(), { keepMs = LEGACY_KEP
 export function startHistory() {
   const events = onHistoryChanged(changed);
   const loadAll = (s: Pick<BrowserState, "profiles">) => {
-    for (const engine of engineProfiles(s)) if (!loaded.has(engine) && !loads.has(engine)) void load(engine);
+    const engines = engineProfiles(s);
+    void startNativeHistoryCatalog(engines);
+    for (const engine of engines) if (!loaded.has(engine) && !loads.has(engine)) void load(engine);
   };
   let moving = readDocument(LEGACY_FILE) !== null;
   let stopped = false;

@@ -9,6 +9,8 @@ type NativeSettingsModule = {
   installCli?(reason: string): Promise<Record<string, unknown>>;
   navigate(pane: string | null, profileId: string | null, detail: string | null): Promise<void>;
   focusSearch(): Promise<void>;
+  startHistoryCatalog?(profiles: string[]): Promise<void>;
+  devHistorySnapshot?(profile: string): Promise<{ count: number; ready: boolean; floor: number | "-Infinity"; revision: number }>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
   publish(topic: string, json: string): Promise<void>;
   addListener(event: "onSettingsCall", listener: (call: SettingsCall) => void): EventSubscription;
@@ -48,6 +50,10 @@ export const navigateNativeSettings = (pane: string | null, profileId: string | 
   native?.navigate(pane, profileId, detail).catch(() => {});
 
 export const focusNativeSettingsSearch = () => native?.focusSearch().catch(() => {});
+
+export const startNativeHistoryCatalog = (profiles: string[]) => native?.startHistoryCatalog?.(profiles).catch(() => {});
+
+export const devNativeHistorySnapshot = (profile: string) => native?.devHistorySnapshot?.(profile);
 
 export const publishSettingsTopic = (topic: string, value: unknown) =>
   native?.publish(topic, JSON.stringify(value ?? null)).catch(() => {});

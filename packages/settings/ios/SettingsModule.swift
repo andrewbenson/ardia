@@ -34,6 +34,23 @@ public class SettingsModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("startHistoryCatalog") { (profiles: [String], promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in
+          await NativeHistoryCatalog.start(engineProfiles: profiles)
+          reply.resolve(nil)
+        }
+      }
+    }.runOnQueue(.main)
+
+    #if DEBUG
+    AsyncFunction("devHistorySnapshot") { (profile: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated { reply.resolve(NativeHistoryCatalog.snapshot(engineProfile: profile)) }
+    }.runOnQueue(.main)
+    #endif
+
     AsyncFunction("navigate") { (pane: String?, profileId: String?, detail: String?) in
       MainActor.assumeIsolated { NativeSettingsWindow.navigate(pane: pane, profileId: profileId, detail: detail) }
     }.runOnQueue(.main)

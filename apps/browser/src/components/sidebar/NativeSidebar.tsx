@@ -1,4 +1,4 @@
-import { hostedKinds, hostedSidebarShell, nativeOmniboxAvailable, publishSettingsTopic, sidebarAddressBarAvailable, SolaraHostedView, windowMainOnTop, windowShellActive } from "@ardia/settings";
+import { hostedKinds, hostedSidebarShell, nativeOmniboxAvailable, publishSettingsTopic, sidebarAddressBarAvailable, SolaraHostedView, windowShellActive } from "@ardia/settings";
 import type { DroppedItem } from "@ardia/shell";
 import { memo, useEffect, useMemo } from "react";
 import { Image, StyleSheet } from "react-native";
@@ -61,7 +61,7 @@ const SHELL_TOPIC = "sidebar.shell";
 const shellColumns: Record<string, object> = {};
 
 export function nativeSidebarShell(windowId: string): boolean {
-  return nativeSidebarEnabled() && hostedKinds().includes(SHELL_TOPIC) && windowShellActive(windowId) && !windowMainOnTop(windowId) && pagerFor(windowId).nativeOwned;
+  return nativeSidebarEnabled() && hostedKinds().includes(SHELL_TOPIC) && windowShellActive(windowId) && pagerFor(windowId).nativeOwned;
 }
 
 export function shellColumnFitsAddressBar(addressBar: boolean): boolean {

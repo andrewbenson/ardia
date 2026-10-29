@@ -129,11 +129,11 @@ function useTopStripLights(windowId: string, dock: Animated.Value, on: boolean, 
 type Inset = { top: number; right: number; bottom: number; left: number };
 type Edge = number | Animated.AnimatedInterpolation<number>;
 
-function DragGutters({ top, left, inset }: { top: Edge; left: Edge; inset: Inset }) {
+function DragGutters({ top, left, inset, nativeColumn }: { top: Edge; left: Edge; inset: Inset; nativeColumn: number }) {
   const gutters = [
-    { left: 0, right: 0, top: 0, height: top },
-    { left: 0, right: 0, bottom: 0, height: inset.bottom },
-    { left: 0, top: 0, bottom: 0, width: left },
+    { left: nativeColumn, right: 0, top: 0, height: top },
+    { left: nativeColumn, right: 0, bottom: 0, height: inset.bottom },
+    ...(nativeColumn ? [] : [{ left: 0, top: 0, bottom: 0, width: left }]),
     { right: 0, top: 0, bottom: 0, width: inset.right },
   ];
   return gutters.map((edge, i) => (
@@ -211,7 +211,7 @@ export function DockedLayout({
       >
         {!fullscreen &&
           (pooled ? (
-            <DragGutters top={topTabs ? top : inset.top} left={topTabs ? inset.left : left} inset={inset} />
+            <DragGutters top={topTabs ? top : inset.top} left={topTabs ? inset.left : left} inset={inset} nativeColumn={nativeDock && !topTabs && open ? width : 0} />
           ) : (
             <WindowDragRegion style={StyleSheet.absoluteFill} />
           ))}
@@ -278,16 +278,14 @@ function NativeDockedSidebar({ dock, open, away, width, fullscreen }: { dock: An
   const sidebar = useMemo(
     () => (
       <AreaBoundary area="sidebar">
-        <ProfileSwipe>
-          <Sidebar width={width} />
-        </ProfileSwipe>
+        <Sidebar width={width} />
       </AreaBoundary>
     ),
     [width],
   );
   return (
     <Animated.View
-      pointerEvents={fullscreen || moving || !open ? "none" : "auto"}
+      pointerEvents={fullscreen || moving || !open ? "none" : "box-none"}
       style={{ position: "absolute", left: away || fullscreen ? -10_000 : 0, top: 0, bottom: 0, width, transform: [{ translateX: slideOut }] }}
     >
       {sidebar}

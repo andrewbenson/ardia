@@ -39,11 +39,25 @@ try {
   const run = (body) => app.eval(body, { timeout: 60000 });
   await sleep(1500);
 
+  const untilSnapshot = async (what, accept, ms = 5000) => {
+    const deadline = Date.now() + ms;
+    let last;
+    while (Date.now() < deadline) {
+      last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+      if (!last.error && last.consistent && accept(last)) return last;
+      await sleep(100);
+    }
+    throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+  };
+
   const settled = async (what) => {
     await sleep(1200);
     const { list, rows, moving, clipped } = await run(SETTLED);
     assert.deepEqual(moving, [], `${what}: rows left part way through their slide`);
     assert.deepEqual(clipped, [], `${what}: rows left clipped`);
+    const native = await untilSnapshot(`${what} native tab order`, (state) => state.windows[0]?.tabIds.join() === list.join());
+    assert.deepEqual(native.windows[0].tabIds, list, `${what}: native store order differs from the measured rows`);
+    assert.deepEqual(native.tabs.map((tab) => tab.id).sort(), [...list].sort(), `${what}: native tab IDs differ from JS`);
     const shown = rows.filter((r) => r.f);
     const placed = [...shown].sort((a, b) => a.f.y - b.f.y);
     assert.deepEqual(placed.map((r) => r.id), shown.map((r) => r.id), `${what}: rows out of store order`);

@@ -6,7 +6,7 @@
 //
 //   node apps/browser/scripts/folder-panel-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
@@ -23,7 +23,6 @@ const rep = reporter(join(scratch, "folder-panel-test.log"), { name: "folder-pan
 
 async function run(native) {
   const data = join(scratch, native ? "native" : "rn");
-  mkdirSync(data, { recursive: true });
   const app = await launch(resolve(appArg), { data, onboarded: true, env: native ? { ARDIA_NATIVE_SIDEBAR: "1" } : {} });
   try {
     await app.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame && !!ac.pages.tileFolders" });
@@ -40,6 +39,20 @@ async function run(native) {
     const q = JSON.stringify;
     const anchor = async () => JSON.parse(await app.eval(`return ac.pages.tileFolders.measure(${q(setup.w)}, ${q(setup.folder)}).then((a) => JSON.stringify(a))`));
     const isOpen = () => app.eval(`return !!ac.pages.tileFolders.panel.getState().open`);
+    const nativePanel = (state) => state.windows.find((window) => window.id === setup.w)?.folderPanel;
+    const untilSnapshot = async (what, accept, ms = 5000) => {
+      const end = Date.now() + ms;
+      let last;
+      while (Date.now() < end) {
+        last = await app.snapshot({ windowId: setup.w }).catch((error) => ({ error: error.message }));
+        if (!last.error && accept(last)) return last;
+        await sleep(100);
+      }
+      throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+    };
+    const nativeClosed = async (what) => {
+      if (native) await untilSnapshot(what, (state) => !nativePanel(state));
+    };
     const active = () => app.eval(`const s = ac.store.getState(); const w = s.windows[${q(setup.w)}]; return w.activeTabIds[w.profileId]`);
     const tile = await anchor();
     assert.ok(tile, "the folder tile is laid out");
@@ -65,27 +78,46 @@ async function run(native) {
     out.opened = await isOpen();
     out.rows = await rowFrames();
     out.native = native ? JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${win}, "SidebarFolderPanelView")`)).found : false;
+    if (native) {
+      const panel = nativePanel(await untilSnapshot("native folder panel", (state) => nativePanel(state)?.folderId === setup.folder && nativePanel(state)?.rows.length === out.rows.length));
+      assert.equal(panel.visible, out.opened, "native panel visibility matches JS");
+      assert.equal(panel.rows.length, out.rows.length, "native member row count matches JS");
+      const window = (await untilSnapshot("folder panel window", (state) => state.windows.some((item) => item.id === setup.w))).windows.find((item) => item.id === setup.w);
+      const titlebar = window.frame.height - window.contentFrame.height;
+      for (let i = 0; i < panel.rows.length; i++) for (const [index, key] of ["x", "y", "width", "height"].entries()) {
+        const legacy = out.rows[i][key] - (key === "y" ? titlebar : 0);
+        assert.ok(Math.abs(panel.rows[i][index] - legacy) <= 0.5, `native row ${i} ${key} differs from JS`);
+      }
+    }
     if (out.rows[1]) await press(out.rows[1].x + out.rows[1].width / 2, out.rows[1].y + out.rows[1].height / 2);
     await sleep(500);
     out.rowShows = (await active()) === setup.ids[1];
     out.rowCloses = !(await isOpen());
+    if (native) {
+      const snapshot = await untilSnapshot("row selects a tab and closes the native panel", (state) =>
+        !nativePanel(state) && state.windows.find((window) => window.id === setup.w)?.selectedTabId === setup.ids[1]);
+      assert.equal(snapshot.windows.find((window) => window.id === setup.w)?.selectedTabId, setup.ids[1]);
+    }
     await clickTile();
     await sleep(700);
     out.openedAgain = await isOpen();
     await press(800, 500);
     await sleep(500);
     out.pageCloses = !(await isOpen());
+    await nativeClosed("page click closes the native panel");
     await clickTile();
     await sleep(700);
     const reopened = await isOpen();
     await clickTile();
     await sleep(700);
     out.tileCloses = reopened && !(await isOpen());
+    await nativeClosed("tile click closes the native panel");
     await clickTile();
     await sleep(700);
     await dev("keys:0:\u001b:53");
     await sleep(500);
     out.escCloses = !(await isOpen());
+    await nativeClosed("Escape closes the native panel");
     rep.say(`${native ? "native" : "RN"}: ${JSON.stringify(out)}`);
     return out;
   } finally {

@@ -52,3 +52,26 @@ private final class FolderPanelSink: @unchecked Sendable {
   weak var module: FolderPanelModule?
   init(_ module: FolderPanelModule) { self.module = module }
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum FolderPanelRead {
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let page = NativeSidebar.hosts[windowId]?.view.current,
+      let panel = SidebarFolderPanelHost.panel(on: page), let window = panel.window else { return nil }
+    let height = window.contentView?.bounds.height ?? 0
+    func rect(_ view: NSView) -> [Double] {
+      let frame = view.convert(view.bounds, to: nil)
+      return [frame.minX, height - frame.maxY, frame.width, frame.height].map(Double.init)
+    }
+    var rows: [NSView] = []
+    func collect(_ view: NSView) {
+      if String(describing: type(of: view)).hasSuffix("FolderPanelRow"), !view.isHiddenOrHasHiddenAncestor { rows.append(view) }
+      for child in view.subviews { collect(child) }
+    }
+    collect(panel)
+    return ["folderId": panel.folderId, "visible": !panel.isHiddenOrHasHiddenAncestor,
+      "rows": rows.sorted { rect($0)[1] < rect($1)[1] }.map(rect)]
+  }
+}
+#endif

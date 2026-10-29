@@ -8,6 +8,7 @@ enum NativeSidebarDock {
   static let topic = "sidebar.dock"
   private static var observer: UUID?
   private static var docks: [String: SidebarDock] = [:]
+  private static var reactPeekRight: [String: CGFloat] = [:]
 
   nonisolated static var enabled: Bool { NativeSidebarShell.enabled }
 
@@ -20,7 +21,12 @@ enum NativeSidebarDock {
 
   static func dock(_ windowId: String) -> SidebarDock? { docks[windowId] }
 
+  static func setReactPeekRight(_ windowId: String, _ right: CGFloat) {
+    reactPeekRight[windowId] = right > 0 ? right : nil
+  }
+
   static func peekCovers(_ windowId: String, x: CGFloat) -> Bool {
+    if let right = reactPeekRight[windowId], x < right { return true }
     guard let dock = docks[windowId], dock.peek.live, !dock.state.open, !dock.state.fullscreen else { return false }
     return x < ShellMetrics.peekOrigin.x + CGFloat(dock.state.width)
   }

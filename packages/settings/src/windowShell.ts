@@ -77,6 +77,7 @@ export type WindowShellLayout = Partial<{
   fullscreen: boolean;
   addressBarInSidebar: boolean;
   away: boolean;
+  peekRight: number;
 }>;
 
 export function setWindowShellLayout(windowId: string, layout: WindowShellLayout) {

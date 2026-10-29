@@ -33,6 +33,7 @@ import {
   springConfig,
   TOP_STRIP_LIGHTS_CENTER,
   useDockMotion,
+  usePeekEdge,
 } from "./dockMotion";
 import { nativeDockIn, useNativeDock, useNativeDockState } from "./nativeDock";
 import { useTabDrag } from "./tabDrag";
@@ -175,7 +176,8 @@ export function DockedLayout({
   const rnDock = useSidebarDock(open, !fullscreen, arc, !nativeDock);
   const shellDock = useNativeDock(windowId, open, nativeDock);
   const { dock, away } = nativeDock ? shellDock : rnDock;
-  useShellLayoutPush(windowId, dock, { sidebarWidth: width, topTabs, fullscreen, addressBarInSidebar: addressBar, away }, nativeDock);
+  const peekRight = usePeekEdge(windowId);
+  useShellLayoutPush(windowId, dock, { sidebarWidth: width, topTabs, fullscreen, addressBarInSidebar: addressBar, away, peekRight }, nativeDock);
   useShellModal(windowId);
   const left = useMemo(
     () =>

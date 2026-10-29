@@ -2,7 +2,7 @@ import { setWindowShellLayout, windowShellActive } from "@ardia/settings";
 import { useEffect, useState } from "react";
 import type { Animated } from "react-native";
 
-type ShellLayout = { sidebarWidth: number; topTabs: boolean; fullscreen: boolean; addressBarInSidebar: boolean; away: boolean };
+type ShellLayout = { sidebarWidth: number; topTabs: boolean; fullscreen: boolean; addressBarInSidebar: boolean; away: boolean; peekRight?: number };
 
 export const current = (value: Animated.Value) => (value as unknown as { __getValue(): number }).__getValue();
 
@@ -26,10 +26,11 @@ export function useShellLayoutPush(windowId: string, dock: Animated.Value, layou
     return () => dock.removeListener(sub);
   }, [shell, nativeDock, windowId, dock]);
   const { sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away } = layout;
+  const peekRight = layout.peekRight ?? 0;
   useEffect(() => {
     if (!shell) return;
     requestAnimationFrame(() =>
-      void setWindowShellLayout(windowId, nativeDock ? { sidebarWidth, topTabs, fullscreen, addressBarInSidebar } : { dock: current(dock), sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away }),
+      void setWindowShellLayout(windowId, nativeDock ? { sidebarWidth, topTabs, fullscreen, addressBarInSidebar } : { dock: current(dock), sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away, peekRight }),
     );
-  }, [shell, nativeDock, windowId, dock, sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away]);
+  }, [shell, nativeDock, windowId, dock, sidebarWidth, topTabs, fullscreen, addressBarInSidebar, away, peekRight]);
 }

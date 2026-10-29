@@ -311,6 +311,7 @@ public class WindowShellModule: Module {
       nonisolated(unsafe) let given = layout
       MainActor.assumeIsolated {
         guard let shell = NativeWindowShell.host(windowId)?.shell else { return }
+        if let right = given["peekRight"] as? NSNumber { NativeSidebarDock.setReactPeekRight(windowId, CGFloat(right.doubleValue)) }
         shell.update { ShellLayoutPush.apply(given, to: &$0, keepWidth: shell.widthDragActive) }
       }
     }.runOnQueue(.main)

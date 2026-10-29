@@ -2483,6 +2483,7 @@ try {
     }
   });
 
+  let poolStayHidden = null;
   await check("stay-restores-window", async () => {
     const previous = await evalApp(`return ac.store.getState().settings.warnBeforeClosingWindow`);
     const pooled = await evalApp(`return !!globalThis.expo.modules.SolaraTabPool?.available()`);
@@ -2532,6 +2533,7 @@ try {
             if (back) throw new Error("the pool restored a window; its path is meant to keep today's behaviour until it restores under the original tab ids");
             const stayed = await cdp(target, "Runtime.evaluate", { expression: "globalThis.stayToken", returnByValue: true });
             if (stayed.result?.value !== token) throw new Error("the page closed or reloaded though beforeunload said Stay");
+            poolStayHidden = (await cef(`chromeWindows()`)).find((w) => w.window === windowNumber && !w.visible) ?? null;
             leave = true;
             await cef(`devWindow(${windowNumber}, "close-button")`);
             await until("the hidden window closing after Leave", async () => !(await pageTarget(`e?${marks[0]}`).catch(() => null)), 15000);
@@ -2589,6 +2591,7 @@ try {
   });
 
   await check("no-hidden-window-after-stay", async () => {
+    if (poolStayHidden) throw new Error(`known red, pool Stay restore: A pending. On the page pool, window ${poolStayHidden.window} stayed hidden after Stay (stray ${poolStayHidden.stray}, root ${poolStayHidden.hasRoot}) until Leave closed it`);
     const hidden = (await cef(`chromeWindows()`)).filter((w) => !w.visible && !w.hasRoot && !w.stray).map((w) => w.window);
     if (hidden.length) throw new Error(`${hidden.length} window(s) still alive but hidden after chrome-windows-remove's Stay cases: ${JSON.stringify(hidden)}`);
     return { hidden: 0 };

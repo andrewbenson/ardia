@@ -123,15 +123,18 @@ const RECORDED_ADAPTERS = new Map([
 ]);
 const HOSTED_ADAPTERS = new Set(["bookmarksAdapter", "historyAdapter", "passwordsAdapter"]);
 
-const HOST_IMPORT = 'import { addHistoryVisits, deleteHistoryUrls, deletePassword, savePassword } from "@ardia/ardiacore";';
+const HOST_IMPORTS = [
+  ['import { deletePassword, savePassword } from "@ardia/ardiacore";', "@ardia/ardiacore", [["deletePassword", "deletePassword"], ["savePassword", "savePassword"]]],
+  ['import { nativeAddHistoryVisits, nativeDeleteHistoryUrls } from "@ardia/settings";', "@ardia/settings", [["nativeAddHistoryVisits", "addHistoryVisits"], ["nativeDeleteHistoryUrls", "deleteHistoryUrls"]]],
+];
 
 function instrumentAdapters(source) {
   const appended = [];
-  if (source.includes(HOST_IMPORT)) {
-    const natives = ["addHistoryVisits", "deleteHistoryUrls", "deletePassword", "savePassword"];
+  for (const [line, module, natives] of HOST_IMPORTS) {
+    if (!source.includes(line)) continue;
     source = source.replace(
-      HOST_IMPORT,
-      `import { ${natives.map((n) => `${n} as __replay_${n}`).join(", ")} } from "@ardia/ardiacore";\n${natives.map((n) => `const ${n} = (...args) => globalThis.__replayHost("${n}", args, () => __replay_${n}(...args));`).join("\n")}`,
+      line,
+      `import { ${natives.map(([n]) => `${n} as __replay_${n}`).join(", ")} } from "${module}";\n${natives.map(([n, host]) => `const ${n} = (...args) => globalThis.__replayHost("${host}", args, () => __replay_${n}(...args));`).join("\n")}`,
     );
   }
   source = source.replace("async (p) => SyncNative?.readPasswords(p)", 'async (p) => globalThis.__replayHost("readLogins", [p], () => SyncNative?.readPasswords(p))');

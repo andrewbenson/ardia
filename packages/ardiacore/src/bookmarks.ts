@@ -10,9 +10,6 @@ export type BookmarkOp =
 
 export const bookmarkTree = (profile: string) => engineCall<{ bar: EngineBookmark; other: EngineBookmark }>("ac_bookmarks_tree", profile);
 
-export const applyBookmarkOps = (profile: string, ops: BookmarkOp[]) =>
-  engineCall<{ applied: number; skipped: number; invalid: string[] }>("ac_bookmarks_apply", profile, { ops });
-
 export const watchBookmarks = (profile: string) => engineCall("ac_bookmarks_watch", profile);
 
 export const onBookmarksChanged = (listener: (profile: string) => void) =>

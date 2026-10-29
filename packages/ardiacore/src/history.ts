@@ -14,28 +14,6 @@ export async function queryHistory(profile: string, maxUrls = 5000, maxVisits = 
   return entries.map((e) => ({ url: e.u, title: e.t, visits: e.n, visitTimes: e.v }));
 }
 
-const adding = new Map<string, Promise<unknown>>();
-
-export function addHistoryVisits(profile: string, pages: { url: string; title: string; visitTimes: number[] }[], toleranceMs = 1000) {
-  if (!pages.length) return Promise.resolve(0);
-  const run = (adding.get(profile) ?? Promise.resolve())
-    .catch(() => {})
-    .then(() =>
-      engineCall<{ added: number }>("ac_history_add", profile, { pages: pages.map((p) => ({ u: p.url, t: p.title, v: p.visitTimes })), toleranceMs }),
-    )
-    .then((r) => r.added);
-  adding.set(profile, run);
-  return run;
-}
-
-export const importHistoryRows = (profile: string, rows: { url: string; title: string; visits: number; lastVisit: number }[]) =>
-  rows.length
-    ? engineCall("ac_history_import", profile, { rows: rows.map((r) => ({ u: r.url, t: r.title, n: r.visits, l: r.lastVisit })) })
-    : Promise.resolve();
-
-export const deleteHistoryUrls = (profile: string, urls: string[]) =>
-  urls.length ? engineCall("ac_history_delete_urls", profile, { urls }) : Promise.resolve();
-
 export const watchHistory = (profile: string) => engineCall("ac_history_watch", profile);
 
 type RawChange = Record<string, unknown>;

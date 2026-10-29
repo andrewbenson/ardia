@@ -16,10 +16,6 @@ export async function faviconsFor(profile: string, pages: string[], icons: strin
   };
 }
 
-export function storeFavicon(profile: string, page: string, icon: string, png: string) {
-  return engineCall<{ stored: boolean }>("ac_favicons_set", profile, { page, icon, png });
-}
-
 export async function fetchFavicon(url: string, profile: string): Promise<FaviconImage | null> {
   return Cef.fetchFavicon(url, profile);
 }

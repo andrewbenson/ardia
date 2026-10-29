@@ -135,7 +135,7 @@ const LOOKS = [
 
 async function measure(native) {
   const data = join(scratch, native ? "native" : "rn", "data");
-  const app = await launch(appPath, { data, session: fixture(), env: native ? { ARDIA_NATIVE_TOP_STRIP: "1" } : {} });
+  const app = await launch(appPath, { data, session: fixture(), env: { ARDIA_NATIVE_TOP_STRIP: native ? "1" : "0", ARDIA_NATIVE_PROFILE_PAGER: "0" } });
   const run = (body) => app.eval(`${HELPERS}\n${body}`);
   try {
     await sleep(2500);

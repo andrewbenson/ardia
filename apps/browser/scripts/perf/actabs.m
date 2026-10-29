@@ -312,12 +312,15 @@ __attribute__((constructor)) static void Start(void) {
     if (!NSClassFromString(@"RCTUIManager")) return;
     SwizzleUIManager();
     if (getenv("AC_BENCH_COUNT_ADDS")) CountAdds();
-    [NSNotificationCenter.defaultCenter addObserverForName:@"SolaraSidebarSelectionShown" object:nil queue:nil usingBlock:^(NSNotification *note) {
-      double shown = EpochMs();
-      [CATransaction addCommitHandler:^{
-        Record([NSString stringWithFormat:@"{\"k\":\"n\",\"s\":%.3f,\"c\":%.3f}", shown, EpochMs()]);
-      } forPhase:2];
-    }];
+    for (NSString *name in @[ @"SolaraSidebarSelectionShown", @"SolaraTopStripShown" ]) {
+      NSString *kind = [name isEqualToString:@"SolaraTopStripShown"] ? @"t" : @"n";
+      [NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) {
+        double shown = EpochMs();
+        [CATransaction addCommitHandler:^{
+          Record([NSString stringWithFormat:@"{\"k\":\"%@\",\"s\":%.3f,\"c\":%.3f}", kind, shown, EpochMs()]);
+        } forPhase:2];
+      }];
+    }
     [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown | NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp
                                           handler:^NSEvent *(NSEvent *event) {
       Record([NSString stringWithFormat:@"{\"k\":\"e\",\"t\":%lu,\"made\":%.3f,\"seen\":%.3f}", (unsigned long)event.type, UptimeToEpoch(event.timestamp), EpochMs()]);

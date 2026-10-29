@@ -44,6 +44,9 @@ public final class TopStripView: NSView {
 
   public var current: StripPageView? { host.flatMap { pages[$0.profileId] } }
 
+  public static let shown = Notification.Name("SolaraTopStripShown")
+  private var shownKey: String?
+
   public func update(state: BrowserState, host: StripHostState) {
     self.state = state
     if self.host?.profileId != host.profileId, let pagerPosition, abs(pagerPosition - pagerPosition.rounded()) < 0.001 { self.pagerPosition = nil }
@@ -53,6 +56,9 @@ public final class TopStripView: NSView {
       pages[id] = nil
     }
     place(refresh: true)
+    let key = current?.shownKey
+    defer { shownKey = key }
+    if shownKey != nil, key != shownKey, !isHiddenOrHasHiddenAncestor { NotificationCenter.default.post(name: Self.shown, object: self) }
   }
 
   public func setPagerPosition(_ position: Double) {

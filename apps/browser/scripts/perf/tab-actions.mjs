@@ -30,6 +30,8 @@
 //                       (ARDIA_NATIVE_SIDEBAR=1, its SolaraSidebarSelectionShown notification), else first paint
 //   ui                  event → the commit of the last React commit within 500 ms that changed anything on screen (a flush
 //                       Core Animation doesn't commit within 60 ms had nothing to draw)
+//                       or, with the native top strip (ARDIA_NATIVE_TOP_STRIP=1), the commit that shows the strip's change
+//                       (its SolaraTopStripShown notification) when that is later
 //   page                event → the shown page's second requestAnimationFrame after it turned visible (CDP; switches)
 //   total               the later of ui and page
 // Counts per action (perf probe): React commits, renders (host wrappers included), store updates; with
@@ -423,6 +425,12 @@ async function runAction(rig, ctx, name) {
   const nativeShown = rig.records(t0).find((r) => r.k === "n" && r.s >= startAt - 1);
   timing.shown = nativeShown ? nativeShown.c - startAt : timing.firstPaint;
   timing.nativeStore = nativeShown ? nativeShown.s - startAt : NaN;
+  const stripShown = rig.records(t0).find((r) => r.k === "t" && r.s >= startAt - 1);
+  if (stripShown) {
+    timing.strip = stripShown.c - startAt;
+    timing.ui = Math.max(Number.isFinite(timing.ui) ? timing.ui : -Infinity, timing.strip);
+    timing.total = Math.max(timing.ui, Number.isFinite(timing.page) ? timing.page : -Infinity);
+  }
   if (name === "cmdT") {
     await S(`const w = S().windows[${JSON.stringify(w1)}]; const id = w.activeTabIds[w.profileId]; if (!S().tabs[id].url) S().closeTab(id); return true;`);
   }

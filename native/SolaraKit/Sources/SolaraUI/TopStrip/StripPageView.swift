@@ -38,6 +38,8 @@ public final class StripPageView: NSView {
   public private(set) var pageLayout = StripPageLayout()
 
   private var context: StripContext?
+  var shownKey: String { "\(context?.activeId ?? "")|\(pageLayout.items.map(\.key).joined(separator: ","))" }
+
   private let scroll = StripScrollView()
   private let document = StripDocumentView()
   private let dock = StripDockView()

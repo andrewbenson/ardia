@@ -1,3 +1,4 @@
+#if SOLARA_PROBES
 import Darwin
 import Foundation
 import Testing
@@ -134,3 +135,4 @@ struct ProbeTransportTests {
     #expect(files.claim().count == 8)
   }
 }
+#endif

@@ -1,3 +1,4 @@
+#if SOLARA_PROBES
 import Darwin
 import Foundation
 
@@ -233,3 +234,4 @@ public final class ProbeFiles {
     unlinkat(claimedFD, final, 0)
   }
 }
+#endif

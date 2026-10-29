@@ -12,8 +12,7 @@ import type { ProfileColor } from "../../store/types";
 import { importModule } from "./module";
 import { adoptProfileTheme } from "../../sync/engine";
 import { parseArcTheme } from "./arcTheme";
-import { newProfileLiveFolder } from "../../live/engine";
-import { live } from "../../live/store";
+import { liveCommand } from "@ardia/settings";
 import type { LiveSourceId } from "../../live/types";
 import { writeState } from "../../store/nativeStore";
 
@@ -43,8 +42,7 @@ const withoutLiveFolders = (nodes: ImportedNode[]): ImportedNode[] =>
 
 function importPullRequestsFolders(profileId: string, nodes: ImportedNode[]) {
   for (const source of new Set(liveSources(nodes))) {
-    const have = Object.values(live().folders).some((f) => f.profileId === profileId && f.kind === "pullRequests" && f.sources.includes(source));
-    if (!have) newProfileLiveFolder(profileId, "pullRequests", [source]);
+    void liveCommand("importFolder", { profileId, kind: "pullRequests", source });
   }
 }
 

@@ -1,60 +1,35 @@
+import { onLiveAuthRequest, resolveLiveAuth, liveCommand } from "@ardia/settings";
 import { useBrowser } from "../store/browser";
-import { endpoints, form } from "./net";
-import { connectGoogle } from "./sources";
 
-const REDIRECT = "http://127.0.0.1:53682/ardia-oauth";
-const SCOPE = "https://www.googleapis.com/auth/drive.metadata.readonly";
-const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-const random = (n: number) => Array.from({ length: n }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join("");
+let started = false;
 
-let pending: { cancel(): void } | null = null;
-
-function query(url: string): Map<string, string> {
-  const search = url.split("#")[0]!.split("?")[1] ?? "";
-  return new Map(
-    search
-      .split("&")
-      .filter(Boolean)
-      .map((pair) => pair.split("=").map((v) => decodeURIComponent(v.replace(/\+/g, " "))) as [string, string]),
-  );
-}
-
-export function connectGoogleDrive(windowId: string, clientId: string, clientSecret: string): Promise<void> {
-  pending?.cancel();
-  const verifier = random(64);
-  const state = random(24);
-  const url = `${endpoints.googleAuth}?${form({
-    client_id: clientId.trim(),
-    redirect_uri: REDIRECT,
-    response_type: "code",
-    scope: SCOPE,
-    code_challenge: verifier,
-    code_challenge_method: "plain",
-    state,
-    access_type: "offline",
-    prompt: "consent",
-  })}`;
-  const tabId = useBrowser.getState().newTab(windowId, { url });
-  return new Promise<void>((resolve, reject) => {
-    const stop = useBrowser.subscribe((s, prev) => {
-      if (s.tabs === prev.tabs) return;
-      const tab = s.tabs[tabId];
-      if (!tab) return finish(new Error("Sign-in was cancelled"));
-      if (!tab.url.startsWith(REDIRECT)) return;
-      const params = query(tab.url);
-      if (params.get("state") !== state) return finish(new Error("Sign-in didn't match this request"));
-      const code = params.get("code");
+export function startGoogleAuth() {
+  if (started) return;
+  started = true;
+  onLiveAuthRequest(({ requestId, url, redirectPrefix }) => {
+    const s = useBrowser.getState();
+    const windowId = s.ui.focusOrder.find((id) => s.windows[id] && !s.windows[id]!.incognito) ?? s.windowOrder.find((id) => !s.windows[id]!.incognito);
+    if (!windowId) {
+      void resolveLiveAuth(requestId, null, "Open a browser window first");
+      return;
+    }
+    const tabId = s.newTab(windowId, { url });
+    const stop = useBrowser.subscribe((state, prev) => {
+      if (state.tabs === prev.tabs) return;
+      const tab = state.tabs[tabId];
+      if (!tab) {
+        stop();
+        void resolveLiveAuth(requestId, null, "Sign-in was cancelled");
+        return;
+      }
+      if (!tab.url.startsWith(redirectPrefix)) return;
       stop();
       useBrowser.getState().closeTab(tabId);
-      if (!code) return finish(new Error(params.get("error") ?? "Google didn't grant access"));
-      connectGoogle(clientId.trim(), clientSecret.trim(), code, verifier, REDIRECT).then(() => finish(), finish);
+      void resolveLiveAuth(requestId, tab.url, null);
     });
-    const finish = (error?: unknown) => {
-      stop();
-      pending = null;
-      if (error) reject(error);
-      else resolve();
-    };
-    pending = { cancel: () => finish(new Error("Cancelled")) };
   });
 }
+
+export const connectGoogleDrive = async (_windowId: string, clientId: string, clientSecret: string): Promise<void> => {
+  await liveCommand("connectGoogleDrive", { clientId, clientSecret });
+};

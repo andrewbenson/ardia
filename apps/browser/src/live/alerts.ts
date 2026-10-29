@@ -42,7 +42,7 @@ export function joinEvent(event: CalendarEvent, openAll = false, windowId = fron
 }
 
 export function dismiss(event: CalendarEvent) {
-  dismissAlert(event.occurrence);
+  void dismissAlert(event.occurrence);
   void removeNotifications([`meeting:${event.occurrence}`]);
   if (useMeetingAlert.getState().event?.occurrence === event.occurrence) useMeetingAlert.setState({ event: null });
   check();

@@ -10,7 +10,6 @@ import type { LiveSourceId } from "../../../live/types";
 import { useBrowser } from "../../../store/browser";
 
 const deviceFlows = new Map<string, DeviceFlow>();
-let deviceFlowCounter = 0;
 
 function browserWindow(): string | null {
   const s = useBrowser.getState();
@@ -37,17 +36,17 @@ export const liveHandlers: Record<string, SettingsHandler> = {
   "liveFolders.deleteFolder": (id: string) => deleteLiveFolder(id),
   "liveFolders.updateFolder": (id: string, patch: Record<string, unknown>) => {
     if (!useLive.getState().folders[id]) return;
-    updateFolder(id, pickBooleans(patch ?? {}, ["groupStacks", "showCompleted"] as const));
+    return updateFolder(id, pickBooleans(patch ?? {}, ["groupStacks", "showCompleted"] as const));
   },
   "liveFolders.disconnect": (source: LiveSourceId) => disconnect(source),
   "liveFolders.connectGithub": (token: string) => connectGithub(token),
   "liveFolders.setGithubClientId": (clientId: string) => updateConfig({ githubClientId: clientId.trim() }),
   "liveFolders.startGithubDeviceFlow": async (clientId: string) => {
     const flow = await startGithubDeviceFlow(clientId.trim());
-    const id = `gh-${++deviceFlowCounter}`;
+    const id = flow.id;
     deviceFlows.set(id, flow);
     flow.done.finally(() => deviceFlows.delete(id)).catch(() => {});
-    return { id, userCode: flow.userCode, verificationUri: flow.verificationUri };
+    return { id, userCode: flow.userCode, verificationUri: flow.verificationUri, expiresAt: flow.expiresAt };
   },
   "liveFolders.finishGithubDeviceFlow": async (id: string) => {
     const flow = deviceFlows.get(id);
@@ -80,7 +79,7 @@ export const liveHandlers: Record<string, SettingsHandler> = {
     const next: Partial<CalendarSettings> = pickBooleans(patch ?? {}, ["showPreview", "showTimeToNext"] as const);
     if (typeof patch?.alertLead === "string") next.alertLead = patch.alertLead;
     if (ALERT_CONDITIONS.includes(patch?.alertCondition as CalendarSettings["alertCondition"])) next.alertCondition = patch.alertCondition as CalendarSettings["alertCondition"];
-    if (Object.keys(next).length) updateCalendarSettings(next);
+    if (Object.keys(next).length) return updateCalendarSettings(next);
   },
 };
 

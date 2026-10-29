@@ -40,15 +40,15 @@ function rows(...names) {
   return { w, ids };
 }
 
-function folder(name, after) {
-  const id = createFolder("default", "pullRequests");
-  updateFolder(id, { name, ...(after === undefined ? {} : { after }) });
+async function folder(name, after) {
+  const id = await createFolder("default", "pullRequests");
+  await updateFolder(id, { name, ...(after === undefined ? {} : { after }) });
   return id;
 }
 
-test("unpinning a live folder's anchor right after the folder was made and moved keeps it in place", () => {
+test("unpinning a live folder's anchor right after the folder was made and moved keeps it in place", async () => {
   const { w, ids } = rows("r1", "r2", "r3");
-  const lf = folder("LF");
+  const lf = await folder("LF");
   assert.deepEqual(sequence(w), ["r1", "r2", "r3", "LF"]);
   order.moveLiveFolder(w, lf, -1);
   assert.deepEqual(sequence(w), ["r1", "r2", "LF", "r3"]);
@@ -56,10 +56,10 @@ test("unpinning a live folder's anchor right after the folder was made and moved
   assert.deepEqual(sequence(w), ["r1", "LF", "r3"]);
 });
 
-test("after another Mac's reorder, folders whose anchors merge keep the order they were shown in", () => {
+test("after another Mac's reorder, folders whose anchors merge keep the order they were shown in", async () => {
   const { w, ids } = rows("a", "b", "c");
-  folder("LF1", `t:${ids.a}`);
-  folder("LF2", `t:${ids.b}`);
+  await folder("LF1", `t:${ids.a}`);
+  await folder("LF2", `t:${ids.b}`);
   assert.deepEqual(sequence(w), ["a", "LF1", "b", "LF2", "c"]);
   S().placeTabs([ids.b], { pinned: true, row: true, beforeId: ids.a });
   assert.deepEqual(sequence(w), ["b", "LF2", "a", "LF1", "c"]);
@@ -67,9 +67,9 @@ test("after another Mac's reorder, folders whose anchors merge keep the order th
   assert.deepEqual(sequence(w), ["b", "LF2", "LF1", "c"]);
 });
 
-test("a drop doesn't bring back an anchor that was unpinned while the folder was held", () => {
+test("a drop doesn't bring back an anchor that was unpinned while the folder was held", async () => {
   const { w, ids } = rows("a", "b", "c");
-  const lf = folder("LF", `t:${ids.b}`);
+  const lf = await folder("LF", `t:${ids.b}`);
   assert.deepEqual(sequence(w), ["a", "b", "LF", "c"]);
   const held = [`t:${ids.a}`, `t:${ids.b}`, `lf:${lf}`, `t:${ids.c}`];
   S().pinTabs([ids.b], false);
@@ -78,10 +78,10 @@ test("a drop doesn't bring back an anchor that was unpinned while the folder was
   assert.deepEqual(sequence(w), ["a", "LF", "c"]);
 });
 
-test("unpinning the last row a live folder follows moves the folder to the top, so a new row goes after it", () => {
+test("unpinning the last row a live folder follows moves the folder to the top, so a new row goes after it", async () => {
   const { w, ids } = rows("row", "fresh");
   S().pinTabs([ids.fresh], false);
-  folder("LF", `t:${ids.row}`);
+  await folder("LF", `t:${ids.row}`);
   assert.deepEqual(sequence(w), ["row", "LF"]);
   S().pinTabs([ids.row], false);
   assert.deepEqual(sequence(w), ["LF"]);
@@ -89,9 +89,9 @@ test("unpinning the last row a live folder follows moves the folder to the top, 
   assert.deepEqual(sequence(w), ["LF", "fresh"]);
 });
 
-test("a drop doesn't bring back an anchor that moved to another profile while the folder was held", () => {
+test("a drop doesn't bring back an anchor that moved to another profile while the folder was held", async () => {
   const { w, ids } = rows("a", "b", "c");
-  const lf = folder("LF", `t:${ids.b}`);
+  const lf = await folder("LF", `t:${ids.b}`);
   const other = S().createProfile({ name: "Work" });
   const held = [`t:${ids.a}`, `t:${ids.b}`, `lf:${lf}`, `t:${ids.c}`];
   S().moveTabToProfile(ids.b, other);
@@ -101,10 +101,10 @@ test("a drop doesn't bring back an anchor that moved to another profile while th
   assert.deepEqual(sequence(w), ["a", "LF", "c"]);
 });
 
-test("deleting another folder during a held drag doesn't move the folder that's left", () => {
+test("deleting another folder during a held drag doesn't move the folder that's left", async () => {
   const { w, ids } = rows("a", "b", "c");
-  const lf1 = folder("LF1", `t:${ids.a}`);
-  const lf2 = folder("LF2", `t:${ids.b}`);
+  const lf1 = await folder("LF1", `t:${ids.a}`);
+  const lf2 = await folder("LF2", `t:${ids.b}`);
   assert.deepEqual(sequence(w), ["a", "LF1", "b", "LF2", "c"]);
   const held = [`t:${ids.a}`, `lf:${lf1}`, `t:${ids.b}`, `lf:${lf2}`, `t:${ids.c}`];
   removeFolder(lf1);

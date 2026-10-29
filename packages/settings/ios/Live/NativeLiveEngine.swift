@@ -2,10 +2,6 @@ import ArdiaShell
 import Foundation
 import SolaraLive
 
-private enum NativeLiveShadowUnavailable: Error {
-  case readOnly
-}
-
 private struct NativeLiveDocuments: LiveDocumentStore {
   func read(_ name: String) -> String? { DocumentStore.read(name) }
   func readStatus(_ name: String) -> LiveDocumentRead {
@@ -14,62 +10,166 @@ private struct NativeLiveDocuments: LiveDocumentStore {
     if let failure = result["failure"] { return .failure(failure) }
     return .missing
   }
-  func write(_ name: String, _ text: String) throws { throw NativeLiveShadowUnavailable.readOnly }
+  func write(_ name: String, _ text: String) throws { try DocumentStore.write(name, text) }
 }
 
-private struct ShadowLiveSecrets: LiveSecretStore {
-  func secret(account: String) async -> String? { KeychainModule.readSecret(account) }
-  func setSecret(_ secret: String, account: String) async -> Bool { false }
-  func deleteSecret(account: String) async -> Bool { false }
+final class NativeLiveReplicaBox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var revision: UInt64 = 0
+  private var replicaJSON: String
+  private var error: String?
+  private var persistedText: String?
+  private var event: (@Sendable (UInt64, String) -> Void)?
+
+  init(text: String?, failure: String?) {
+    persistedText = text
+    do {
+      let initial = try LiveEngine.initialReplica(documentText: text)
+      replicaJSON = initial.replicaJSON
+    } catch {
+      replicaJSON = (try? LiveEngine.initialReplica(documentText: nil).replicaJSON) ?? "{}"
+      self.error = "Cannot decode live.json: \(error)"
+    }
+    if let failure { error = "Cannot read live.json: \(failure)" }
+  }
+
+  func current() -> [String: Any] {
+    lock.lock()
+    defer { lock.unlock() }
+    var value: [String: Any] = ["revision": revision, "replicaJSON": replicaJSON]
+    if let error { value["error"] = error }
+    return value
+  }
+
+  func publish(_ snapshot: (revision: UInt64, replicaJSON: String)) {
+    lock.lock()
+    if snapshot.revision <= revision {
+      lock.unlock()
+      return
+    }
+    revision = snapshot.revision
+    replicaJSON = snapshot.replicaJSON
+    let event = self.event
+    let revision = self.revision
+    let replicaJSON = self.replicaJSON
+    lock.unlock()
+    event?(revision, replicaJSON)
+  }
+
+  func setPersistedText(_ text: String) {
+    lock.lock()
+    persistedText = text
+    lock.unlock()
+  }
+
+  func flushAtQuit() {
+    lock.lock()
+    let text = persistedText
+    lock.unlock()
+    if let text, DocumentStore.read("live.json") != text {
+      try? DocumentStore.write("live.json", text)
+    }
+  }
+
+  func setEvent(_ event: (@Sendable (UInt64, String) -> Void)?) {
+    lock.lock()
+    self.event = event
+    lock.unlock()
+  }
 }
 
-private struct ShadowLiveHTTP: LiveHTTPClient {
-  func send(_ request: LiveHTTPRequest) async throws -> LiveHTTPResponse { throw NativeLiveShadowUnavailable.readOnly }
-}
+final class NativeLiveAuth: LiveAuthPresenter, @unchecked Sendable {
+  static let shared = NativeLiveAuth()
+  private let lock = NSLock()
+  private var pending: [String: CheckedContinuation<String, Error>] = [:]
+  private var event: (@Sendable ([String: String]) -> Void)?
 
-private struct ShadowLiveCalendar: LiveCalendarProvider {
-  func authorization() async -> CalendarAuthorization { .notDetermined }
-  func requestAccess() async -> Bool { false }
-  func calendars() async throws -> [SystemCalendar] { [] }
-  func events(start: Double, end: Double, calendarIds: [String]) async throws -> [CalendarEvent] { [] }
-}
+  func setEvent(_ event: (@Sendable ([String: String]) -> Void)?) {
+    lock.lock()
+    self.event = event
+    lock.unlock()
+  }
 
-private struct NativeLiveAuth: LiveAuthPresenter {
-  func authorize(url: String, redirectPrefix: String) async throws -> String { throw NativeLiveShadowUnavailable.readOnly }
-}
+  func authorize(url: String, redirectPrefix: String) async throws -> String {
+    let requestId = UUID().uuidString
+    return try await withCheckedThrowingContinuation { continuation in
+      lock.lock()
+      pending[requestId] = continuation
+      let event = self.event
+      lock.unlock()
+      guard let event else {
+        resolve(requestId: requestId, redirectURL: nil, error: "Live authorization presenter unavailable")
+        return
+      }
+      event(["requestId": requestId, "url": url, "redirectPrefix": redirectPrefix])
+      Task {
+        try? await Task.sleep(nanoseconds: 600_000_000_000)
+        resolve(requestId: requestId, redirectURL: nil, error: "Live authorization timed out")
+      }
+    }
+  }
 
-private struct ShadowLiveNotifier: LiveNotifier {
-  func post(_ notification: LiveNotification) async {}
-  func remove(ids: [String]) async {}
+  func resolve(requestId: String, redirectURL: String?, error: String?) {
+    lock.lock()
+    let continuation = pending.removeValue(forKey: requestId)
+    lock.unlock()
+    guard let continuation else { return }
+    if let error { continuation.resume(throwing: LiveError(.other, error)) }
+    else if let redirectURL { continuation.resume(returning: redirectURL) }
+    else { continuation.resume(throwing: LiveError(.other, "Live authorization cancelled")) }
+  }
 }
 
 final class NativeLiveEngine: @unchecked Sendable {
   static let shared = NativeLiveEngine()
 
-  private let shadow: LiveShadow
+  let engine: LiveEngine
+  private let box: NativeLiveReplicaBox
 
   private init() {
+    let result = DocumentStore.readResult("live.json")
+    box = NativeLiveReplicaBox(text: result["contents"], failure: result["failure"])
     #if DEBUG
     let mockBase = ProcessInfo.processInfo.environment["ARDIA_LIVE_MOCK"]
-    let isolated = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] != nil
     let fixture = ProcessInfo.processInfo.environment["ARDIA_CALENDAR_FIXTURE"] == "1"
     let separate = ProcessInfo.processInfo.environment["ARDIA_SLOW_TIMERS"] == "separate"
     #else
     let mockBase: String? = nil
-    let isolated = false
     let fixture = false
     let separate = false
     #endif
-    shadow = LiveShadow(effects: LiveEffects(
-      http: ShadowLiveHTTP(), secrets: ShadowLiveSecrets(), calendar: ShadowLiveCalendar(), auth: NativeLiveAuth(),
-      notifier: ShadowLiveNotifier(), documents: NativeLiveDocuments(), environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate)))
+    let isolated = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] != nil
+    engine = LiveEngine(effects: LiveEffects(
+      http: NativeLiveHTTP(), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: NativeLiveCalendar(fixture: fixture, launchedAt: SystemLiveClock().now()),
+      auth: NativeLiveAuth.shared, notifier: NativeLiveNotifier(), documents: NativeLiveDocuments(),
+      environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate)))
+    let box = self.box
+    DocumentStore.registerBeforeQuitFlush { box.flushAtQuit() }
+    Task {
+      await engine.setPersistedTextSink { box.setPersistedText($0) }
+      for await snapshot in await engine.changes() {
+        if let replica = try? await engine.currentReplica(), replica.revision == snapshot.revision { box.publish(replica) }
+      }
+    }
   }
 
-  func reload() async { await shadow.reload() }
+  func initialReplica() -> [String: Any] { box.current() }
+
+  func setEvent(_ event: (@Sendable (UInt64, String) -> Void)?) { box.setEvent(event) }
+
+  func command(name: String, payloadJSON: String) async throws -> String {
+    let payload = try JSONSerialization.jsonObject(with: Data(payloadJSON.utf8), options: .fragmentsAllowed)
+    let wire = try JSONSerialization.data(withJSONObject: ["name": name, "payload": payload], options: .fragmentsAllowed)
+    let command = try LiveJSON.decode(LiveCommand.self, from: wire)
+    let result = try await engine.perform(command)
+    return String(decoding: try LiveJSON.encode(result), as: UTF8.self)
+  }
+
+  func start() async { await engine.start(jobs: [.folders]) }
 
   #if DEBUG
   func devSnapshot() async -> [String: Any] {
-    let state = await shadow.snapshot().live
+    let state = await engine.snapshot.live
     let folders: [[String: Any]] = state.folders.keys.sorted().map { id in
       [
         "id": id,

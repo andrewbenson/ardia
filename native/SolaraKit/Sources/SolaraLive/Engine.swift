@@ -1,9 +1,14 @@
 import Foundation
 
 public struct LiveSnapshot: Sendable, Equatable {
+  public var revision: UInt64
   public var live: LiveState
   public var calendar: CalendarData
   public var meetingAlert: CalendarEvent?
+}
+
+public enum LiveJob: Sendable, Hashable, CaseIterable {
+  case folders, calendar, meetings, alerts
 }
 
 public actor LiveEngine {
@@ -21,6 +26,7 @@ public actor LiveEngine {
 
   static let sectionOrder: [PullRequestSection: Int] = [.authored: 0, .review: 1, .team: 2]
 
+  public private(set) var revision: UInt64 = 0
   public internal(set) var state: LiveState
   public private(set) var documentError: String?
   private let loadError: String?
@@ -45,6 +51,9 @@ public actor LiveEngine {
   var slowFiring = false
   var saveTask: Task<Void, Never>?
   var observers: [UUID: AsyncStream<LiveSnapshot>.Continuation] = [:]
+  var selectedJobs: Set<LiveJob> = []
+  var deviceFlows: [String: GithubDeviceFlow] = [:]
+  var persistedTextSink: (@Sendable (String) -> Void)?
   var calendarInflight: Task<Void, Never>?
   var appActive = true
   var notified = Set<String>()
@@ -86,7 +95,20 @@ public actor LiveEngine {
     self.launchedAt = effects.clock.now()
   }
 
-  public var snapshot: LiveSnapshot { LiveSnapshot(live: state, calendar: calendarData, meetingAlert: meetingAlert) }
+  public var snapshot: LiveSnapshot { LiveSnapshot(revision: revision, live: state, calendar: calendarData, meetingAlert: meetingAlert) }
+
+  public func currentReplica() throws -> (revision: UInt64, replicaJSON: String) {
+    (revision, try state.replicaJSON())
+  }
+
+  public nonisolated static func initialReplica(documentText: String?) throws -> (revision: UInt64, replicaJSON: String) {
+    let state = try documentText.map { try LiveJSON.decode(LiveState.self, from: $0) } ?? LiveState()
+    return (0, try state.replicaJSON())
+  }
+
+  public func setPersistedTextSink(_ sink: (@Sendable (String) -> Void)?) {
+    persistedTextSink = sink
+  }
 
   public func changes() -> AsyncStream<LiveSnapshot> {
     let id = UUID()
@@ -100,6 +122,7 @@ public actor LiveEngine {
   func dropObserver(_ id: UUID) { observers[id] = nil }
 
   func emit() {
+    revision += 1
     let snap = snapshot
     for continuation in observers.values { continuation.yield(snap) }
     rescheduleSlowJobs()
@@ -116,7 +139,7 @@ public actor LiveEngine {
     if state.persistedPart != before.persistedPart { scheduleSave() }
     let hiddenChanged = state.calendar.hiddenCalendarIds != before.calendar.hiddenCalendarIds
     emit()
-    if hiddenChanged, started { refreshCalendar() }
+    if hiddenChanged, started, selectedJobs.contains(.calendar) { refreshCalendar() }
   }
 
   func setCalendarData(_ body: (inout CalendarData) -> Void) {
@@ -125,10 +148,11 @@ public actor LiveEngine {
     if calendarData == before { return }
     let eventsChanged = calendarData.events != before.events
     emit()
-    if eventsChanged, started { Task { await self.checkAlerts() } }
+    if eventsChanged, started, selectedJobs.contains(.alerts) { Task { await self.checkAlerts() } }
   }
 
   func scheduleSave() {
+    if let persistedTextSink, loadError == nil, let text = try? state.persistedJSON() { persistedTextSink(text) }
     saveTask?.cancel()
     saveTask = Task {
       do {
@@ -361,24 +385,26 @@ public actor LiveEngine {
     return effects.clock.now() - last >= maxAge
   }
 
-  public func start(meetingHost: (any LiveMeetingHost)? = nil) {
+  public func start(jobs selected: Set<LiveJob> = Set(LiveJob.allCases), meetingHost: (any LiveMeetingHost)? = nil) {
     if started { return }
     started = true
+    selectedJobs = selected
     self.meetingHost = meetingHost
     let clock = effects.clock
-    jobs.append(
-      Task {
+    if selected.contains(.folders) {
+      jobs.append(Task {
         do { try await clock.sleep(milliseconds: LiveEngine.firstRefreshDelayMs) } catch { return }
         for id in self.state.folderOrder { self.refreshFolder(id) }
       })
+    }
     if effects.environment.separateSlowTimers {
-      for job in SlowJob.allCases { jobs.append(Task { await self.slowlySeparate(job) }) }
+      for job in SlowJob.allCases where selected.contains(job.liveJob) { jobs.append(Task { await self.slowlySeparate(job) }) }
     } else {
-      for job in SlowJob.allCases { slowEntries[job] = SlowEntry(next: slotAfter(effects.clock.now(), every(job)), armed: false) }
+      for job in SlowJob.allCases where selected.contains(job.liveJob) { slowEntries[job] = SlowEntry(next: slotAfter(effects.clock.now(), every(job)), armed: false) }
       rescheduleSlowJobs()
     }
-    refreshCalendar()
-    Task { await self.checkAlerts() }
+    if selected.contains(.calendar) { refreshCalendar() }
+    if selected.contains(.alerts) { Task { await self.checkAlerts() } }
   }
 
   public func stop() {
@@ -413,7 +439,18 @@ public actor LiveEngine {
     for f in state.folders.values where !existing.contains(f.profileId) { removeFolder(f.id) }
   }
 
-  enum SlowJob: CaseIterable { case folders, calendar, meetings, alerts }
+  enum SlowJob: CaseIterable {
+    case folders, calendar, meetings, alerts
+
+    var liveJob: LiveJob {
+      switch self {
+      case .folders: .folders
+      case .calendar: .calendar
+      case .meetings: .meetings
+      case .alerts: .alerts
+      }
+    }
+  }
 
   struct SlowEntry { var next: Double; var armed: Bool }
 
@@ -438,7 +475,7 @@ public actor LiveEngine {
   }
 
   func runJob(_ job: SlowJob) async {
-    guard started else { return }
+    guard started, selectedJobs.contains(job.liveJob) else { return }
     switch job {
     case .folders:
       for id in state.folderOrder {

@@ -405,15 +405,15 @@ test("nesting repair breaks a parent cycle without leaving an empty group", () =
   assert.ok(holders.length >= 1);
 });
 
-test("a live folder whose pinned anchor goes keeps its place under the item above it", () => {
+test("a live folder whose pinned anchor goes keeps its place under the item above it", async () => {
   reset();
   const liveStore = useLive.getState;
-  const folder = createFolder("default", "pullRequests");
+  const folder = await createFolder("default", "pullRequests");
   const { w, ids } = windowWith("home", "r1", "r2", "r3");
   S().placeTabs([ids[1], ids[2], ids[3]], { pinned: true, row: true, beforeId: null });
-  updateFolder(folder, { after: `t:${ids[2]}` });
+  await updateFolder(folder, { after: `t:${ids[2]}` });
   S().placeTabs([ids[2]], { pinned: false, beforeId: null });
   assert.equal(liveStore().folders[folder].after, `t:${ids[1]}`, "it stays under r1, not at the end");
   assert.deepEqual(sidebarEntries(S(), w).pinned, [`t:${ids[1]}`, `t:${ids[3]}`]);
-  removeFolder(folder);
+  await removeFolder(folder);
 });

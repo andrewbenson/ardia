@@ -162,12 +162,12 @@ try {
     await gone("hover away");
     const folder = await run(`
       const { store } = ac.live;
-      const folder = store.createFolder("default", "pullRequests");
       const pr = { number: 7, repo: "ardia/app", author: "octocat", authorAvatar: null, draft: false, headRef: "h7", baseRef: "main", review: "approved",
         mergeable: "mergeable", checks: [{ name: "lint", state: "failure", url: "https://ci.example/lint" }], comments: 2, unresolvedThreads: 0, additions: 4, deletions: 1, changedFiles: 1 };
-      store.applyFetch(folder, [{ id: "pr7", source: "github", url: "https://example.com/pr/7", title: "Pull request 7", subtitle: "", icon: null, updatedAt: Date.now(), section: "authored", pr }], {});
-      store.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null });
-      return folder;`);
+      return store.createFolder("default", "pullRequests").then((folder) =>
+        store.applyFetch(folder, [{ id: "pr7", source: "github", url: "https://example.com/pr/7", title: "Pull request 7", subtitle: "", icon: null, updatedAt: Date.now(), section: "authored", pr }], {})
+          .then(() => store.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null }))
+          .then(() => folder));`);
     await sleep(800);
     const key = `live|${folder}|pr7`;
     const r = await row(key);

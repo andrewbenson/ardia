@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { everySlowly } from "../lib/slowTimers";
 import type { CalendarEvent } from "./meetings";
-import { live, updateCalendarSettings, useLive } from "./store";
+import { live, setCalendarHidden as setCalendarHiddenCommand, useLive } from "./store";
 
 type CalendarData = {
   access: CalendarAuthorization | "fixture";
@@ -131,10 +131,7 @@ export function startCalendar() {
   });
 }
 
-export const setCalendarHidden = (id: string, hidden: boolean) => {
-  const ids = live().calendar.hiddenCalendarIds.filter((c) => c !== id);
-  updateCalendarSettings({ hiddenCalendarIds: hidden ? [...ids, id] : ids });
-};
+export const setCalendarHidden = (id: string, hidden: boolean) => setCalendarHiddenCommand(id, hidden);
 
 export function useNow(intervalMs = 15_000, enabled = true): number {
   const [now, setNow] = useState(Date.now());

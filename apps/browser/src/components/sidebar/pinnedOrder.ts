@@ -60,10 +60,18 @@ const stillPinned = (s: Pick<BrowserState, "tabs" | "groups" | "splits">, entry:
   return true;
 };
 
+function arrangeIfChanged(placed: { id: string; after: string | null }[]) {
+  const s = live();
+  const ids = new Set(placed.map((entry) => entry.id));
+  const current = s.folderOrder.filter((id) => ids.has(id));
+  if (placed.every((entry, index) => current[index] === entry.id && s.folders[entry.id]?.after === entry.after)) return;
+  void arrangeFolders(placed);
+}
+
 export function arrangeLive(sequence: string[]) {
   const s = useBrowser.getState();
   const profileId = sequence.flatMap((e) => (e.startsWith(LIVE) ? (live().folders[e.slice(LIVE.length)]?.profileId ?? []) : []))[0];
-  arrangeFolders(liveAnchors(sequence.filter((e) => stillPinned(s, e, profileId)), (e) => anchorKey(s, e)));
+  arrangeIfChanged(liveAnchors(sequence.filter((e) => stillPinned(s, e, profileId)), (e) => anchorKey(s, e)));
 }
 
 export function moveLiveFolder(windowId: string, folderId: string, delta: -1 | 1) {
@@ -89,7 +97,7 @@ export function keepLiveAnchors(s: BrowserState, prev: BrowserState) {
     const mine = foldersOf(folders, folderOrder, profileId);
     if (!mine.some((f) => f.after && !now.has(f.after) && was.includes(f.after))) continue;
     const shown = withLiveFolders(was, was, mine).filter((e) => e.startsWith(LIVE) || now.has(e));
-    arrangeFolders(liveAnchors(shown, (e) => e));
+    arrangeIfChanged(liveAnchors(shown, (e) => e));
   }
 }
 

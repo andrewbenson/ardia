@@ -8,7 +8,7 @@ import { COMPLETION_MS, errorText, manualRefresh, openLiveItem, statusText } fro
 import { prBadge } from "../../live/github";
 import { folderRows, liveTabPlace, type FolderRow } from "../../live/rows";
 import { liveFolderIcon, SOURCES } from "../../live/sources";
-import { setLive, updateFolder, useLive } from "../../live/store";
+import { setExpandedStack, setLive, updateFolder, useLive } from "../../live/store";
 import type { CompletedItem, LiveFolder, LiveItem } from "../../live/types";
 import { useBrowser } from "../../store/browser";
 import { usePageProfileId } from "../../store/hooks";
@@ -271,7 +271,7 @@ function StackRow({ folderId, windowId, stack }: { folderId: string; windowId: s
           }}
         >
           <Pressable
-            onPress={() => setLive((s) => ({ expandedStacks: { ...s.expandedStacks, [stack.id]: collapsed } }))}
+            onPress={() => void setExpandedStack(stack.id, collapsed)}
             accessibilityLabel={collapsed ? "Expand pull request stack" : "Collapse pull request stack"}
           >
             <View style={{ height: 26, borderRadius: 8, flexDirection: "row", alignItems: "center", paddingLeft: 9, paddingRight: 8, backgroundColor: hovered ? theme.rowHover : undefined }}>

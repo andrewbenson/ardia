@@ -6,7 +6,7 @@ import { calendarConnected, connectCalendar, setCalendarHidden, useCalendar } fr
 import { deleteLiveFolder, manualRefresh, newLiveFolder, openLiveItem, refreshFolder, statusText } from "../../live/engine";
 import { ALERT_LEADS } from "../../live/meetings";
 import { SOURCES } from "../../live/sources";
-import { hideItems, live, markRead, setLive, updateCalendarSettings, updateFolder } from "../../live/store";
+import { hideItems, live, markRead, markUnread, updateCalendarSettings, updateFolder } from "../../live/store";
 import type { LiveItem, LiveSourceId } from "../../live/types";
 import { useBrowser } from "../../store/browser";
 import { openSettings } from "../settings/windows";
@@ -91,13 +91,13 @@ export async function openLiveFolderMenu(windowId: string, folderId: string) {
   else if (option) updateFolder(folderId, { [option]: !folder[option] });
   else if (choice.startsWith("filter:")) {
     const key = choice.slice(7) as "authored" | "reviewRequests";
-    updateFolder(folderId, { filters: { ...folder.filters, [key]: !folder.filters[key] } });
+    await updateFolder(folderId, { filters: { ...folder.filters, [key]: !folder.filters[key] } });
     void refreshFolder(folderId);
   } else if (choice.startsWith("source:")) {
     const id = choice.slice(7) as LiveSourceId;
     if (!s.accounts[id]) return openSettings("liveFolders");
     const sources = folder.sources.includes(id) ? folder.sources.filter((x) => x !== id) : [...folder.sources, id];
-    updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
+    await updateFolder(folderId, { sources: sources.length ? sources : folder.sources });
     void refreshFolder(folderId);
   } else if (choice === "rename") {
     const name = await prompt({ title: "Rename Live Folder", value: folder.name, placeholder: "Live folder name", confirmTitle: "Rename", windowId });
@@ -129,7 +129,7 @@ export async function openLiveItemMenu(windowId: string, folderId: string, item:
   else if (choice === "copyMd") copyText(markdownLink(item.title, item.url));
   else if (choice === "unread") {
     if (unread) markRead(folderId, [item.id]);
-    else setLive((s) => ({ unread: { ...s.unread, [folderId]: [...(s.unread[folderId] ?? []), item.id] } }));
+    else void markUnread(folderId, item.id);
   } else if (choice === "hide") hideItems(folderId, [item]);
   else if (choice === "close" && tabId) void closeTab(tabId);
 }

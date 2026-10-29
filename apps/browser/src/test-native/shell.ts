@@ -25,6 +25,7 @@ type UserScriptsHost = {
 const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
+export const documentWrites: string[] = [];
 export const unreadableDocs = new Map<string, string>();
 export const heldSaves = { on: false, fail: false, only: null as string | null, queue: [] as (() => void)[] };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
@@ -55,7 +56,7 @@ const shell: Modules["ArdiaShell"] = {
   readDocument: (name) => docs.get(name) ?? null,
   readDocumentResult: (name) =>
     unreadableDocs.has(name) ? { path: `/data/${name}`, failure: unreadableDocs.get(name)! } : docs.has(name) ? { contents: docs.get(name)! } : {},
-  writeDocument: (name, contents) => void docs.set(name, contents),
+  writeDocument: (name, contents) => { documentWrites.push(name); docs.set(name, contents); },
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {
       if (heldSaves.fail) return reject(new Error("disk full"));

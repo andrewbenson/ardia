@@ -1,11 +1,12 @@
 import ExpoModulesCore
 import Foundation
+import SolaraLive
 
 public class SettingsModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraSettings")
 
-    Events("onSettingsCall")
+    Events("onSettingsCall", "onLiveReplica", "onLiveAuthRequest")
 
     OnCreate {
       _ = NativeLiveEngine.shared
@@ -122,14 +123,30 @@ public class SettingsModule: Module {
       MainActor.assumeIsolated { SettingsJS.shared.reply(id, resultJSON: resultJSON, error: error) }
     }.runOnQueue(.main)
 
-    AsyncFunction("reloadLiveShadow") { (promise: Promise) in
+    Function("liveInitialReplica") { () -> [String: Any] in NativeLiveEngine.shared.initialReplica() }
+
+    AsyncFunction("liveCommand") { (name: String, payloadJSON: String, promise: Promise) in
       nonisolated(unsafe) let reply = promise
       MainActor.assumeIsolated {
         Task { @MainActor in
-          await NativeLiveEngine.shared.reload()
+          do { reply.resolve(try await NativeLiveEngine.shared.command(name: name, payloadJSON: payloadJSON)) }
+          catch { reply.reject("ERR_LIVE_COMMAND", String(describing: error)) }
+        }
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("liveStart") { (promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in
+          await NativeLiveEngine.shared.start()
           reply.resolve(nil)
         }
       }
+    }.runOnQueue(.main)
+
+    AsyncFunction("resolveLiveAuth") { (requestId: String, redirectURL: String?, error: String?) in
+      NativeLiveAuth.shared.resolve(requestId: requestId, redirectURL: redirectURL, error: error)
     }.runOnQueue(.main)
 
     #if DEBUG
@@ -149,6 +166,12 @@ public class SettingsModule: Module {
       let sink = SettingsEventSink(module: self)
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
+          NativeLiveEngine.shared.setEvent { revision, replicaJSON in
+            DispatchQueue.main.async { sink.module?.sendEvent("onLiveReplica", ["revision": revision, "replicaJSON": replicaJSON]) }
+          }
+          NativeLiveAuth.shared.setEvent { value in
+            DispatchQueue.main.async { sink.module?.sendEvent("onLiveAuthRequest", value) }
+          }
           SettingsJS.shared.send = { id, name, args in
             sink.module?.sendEvent("onSettingsCall", ["id": id, "name": name, "args": args])
           }
@@ -159,6 +182,8 @@ public class SettingsModule: Module {
     OnStopObserving {
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
+          NativeLiveEngine.shared.setEvent(nil)
+          NativeLiveAuth.shared.setEvent(nil)
           SettingsJS.shared.send = nil
           SettingsJS.shared.failAll("JS stopped listening for Settings calls")
         }

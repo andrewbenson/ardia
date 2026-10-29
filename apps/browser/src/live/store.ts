@@ -1,5 +1,4 @@
-import { readDocument, writeDocument } from "@ardia/shell";
-import { reloadNativeLiveShadow } from "@ardia/settings";
+import { liveCommand, liveInitialReplica, onLiveReplica, type LiveReplica } from "@ardia/settings";
 import { create } from "zustand";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 
@@ -60,232 +59,88 @@ export const DEFAULT_CALENDAR: CalendarSettings = {
   prompted: false,
 };
 
-const DOC = "live.json";
-const PERSISTED = ["folders", "folderOrder", "items", "known", "unread", "hidden", "completed", "expandedStacks", "accounts", "config", "calendar", "meetingGroups", "dismissedAlerts"] as const;
-
-function load(): Partial<LiveState> {
-  try {
-    const json = readDocument(DOC);
-    return json ? (JSON.parse(json) as Partial<LiveState>) : {};
-  } catch {
-    return {};
-  }
-}
-
-const saved = load();
-
 const FOLDER_OPTION_DEFAULTS = { groupStacks: true, showCompleted: true } satisfies Partial<LiveFolder>;
 
 const withOptionDefaults = (folders: Record<string, LiveFolder> = {}) =>
   Object.fromEntries(Object.entries(folders).map(([id, f]) => [id, { ...FOLDER_OPTION_DEFAULTS, ...f }]));
 
-export const useLive = create<LiveState>()(() => ({
-  folders: withOptionDefaults(saved.folders),
-  folderOrder: saved.folderOrder ?? [],
-  items: saved.items ?? {},
-  known: saved.known ?? {},
-  unread: saved.unread ?? {},
-  hidden: saved.hidden ?? {},
-  completed: saved.completed ?? {},
-  completing: {},
-  status: {},
-  expandedStacks: saved.expandedStacks ?? {},
-  showAll: {},
-  accounts: saved.accounts ?? {},
-  config: { ...DEFAULT_CONFIG, ...saved.config },
-  calendar: { ...DEFAULT_CALENDAR, ...saved.calendar },
-  meetingGroups: saved.meetingGroups ?? {},
-  dismissedAlerts: saved.dismissedAlerts ?? [],
-}));
-
-export const live = () => useLive.getState();
-export const setLive = (patch: Partial<LiveState> | ((s: LiveState) => Partial<LiveState>)) => useLive.setState(patch);
-
-let timer: ReturnType<typeof setTimeout> | undefined;
-useLive.subscribe((s, prev) => {
-  if (PERSISTED.every((k) => s[k] === prev[k])) return;
-  clearTimeout(timer);
-  timer = setTimeout(() => {
-    const s = live();
-    try {
-      writeDocument(DOC, JSON.stringify(Object.fromEntries(PERSISTED.map((k) => [k, s[k]]))));
-      void reloadNativeLiveShadow()?.catch(() => {});
-    } catch (error) {
-      console.warn("Couldn't save live folders", error);
-    }
-  }, 800);
+const empty = (): LiveState => ({
+  folders: {}, folderOrder: [], items: {}, known: {}, unread: {}, hidden: {}, completed: {}, completing: {}, status: {}, expandedStacks: {}, showAll: {},
+  accounts: {}, config: DEFAULT_CONFIG, calendar: DEFAULT_CALENDAR, meetingGroups: {}, dismissedAlerts: [],
 });
 
-let counter = 0;
-const newId = () => `lf-${Date.now().toString(36)}-${(++counter).toString(36)}`;
+const initial = (() => {
+  try { return liveInitialReplica(); }
+  catch { return { revision: 0, replicaJSON: "{}" }; }
+})();
+
+const parseReplica = (replica: LiveReplica): Partial<LiveState> => JSON.parse(replica.replicaJSON) as Partial<LiveState>;
+const saved = parseReplica(initial);
+let lastRevision = initial.revision;
+let fieldJSON: Partial<Record<keyof LiveState, string>> = {};
+
+export const useLive = create<LiveState>()(() => ({
+  ...empty(),
+  ...saved,
+  folders: withOptionDefaults(saved.folders),
+  config: { ...DEFAULT_CONFIG, ...saved.config },
+  calendar: { ...DEFAULT_CALENDAR, ...saved.calendar },
+  showAll: {},
+}));
+
+for (const [key, value] of Object.entries(useLive.getState())) fieldJSON[key as keyof LiveState] = JSON.stringify(value);
+
+export const live = () => useLive.getState();
+export const setLive = (patch: Partial<Pick<LiveState, "showAll">> | ((s: LiveState) => Partial<Pick<LiveState, "showAll">>)) => {
+  const next = typeof patch === "function" ? patch(live()) : patch;
+  if (next.showAll) useLive.setState({ showAll: next.showAll });
+};
+
+export function applyLiveReplica(replica: LiveReplica): void {
+  if (replica.revision <= lastRevision) return;
+  const parsed = parseReplica(replica);
+  const before = live();
+  const changed: Partial<LiveState> = {};
+  for (const key of Object.keys(parsed) as (keyof LiveState)[]) {
+    if (key === "showAll") continue;
+    const value = parsed[key];
+    const json = JSON.stringify(value);
+    if (json === fieldJSON[key]) continue;
+    fieldJSON[key] = json;
+    (changed as Record<string, unknown>)[key] = key === "folders" ? withOptionDefaults(value as LiveState["folders"]) : value;
+  }
+  lastRevision = replica.revision;
+  if (Object.keys(changed).length) useLive.setState({ ...changed, showAll: before.showAll });
+}
+
+onLiveReplica(applyLiveReplica);
+try { applyLiveReplica(liveInitialReplica()); } catch {}
 
 export const FOLDER_DEFAULTS: Record<LiveFolderKind, { name: string; sources: LiveSourceId[] }> = {
   pullRequests: { name: "Pull Requests", sources: ["github"] },
   documents: { name: "Documents", sources: ["notion"] },
 };
 
-export function createFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): string {
-  const id = newId();
-  const folder: LiveFolder = {
-    id,
-    profileId,
-    kind,
-    name: FOLDER_DEFAULTS[kind].name,
-    icon: null,
-    collapsed: false,
-    sources: sources ?? FOLDER_DEFAULTS[kind].sources,
-    filters: { authored: true, reviewRequests: true },
-    ...FOLDER_OPTION_DEFAULTS,
-    createdAt: Date.now(),
-  };
-  setLive((s) => ({
-    folders: { ...s.folders, [id]: folder },
-    folderOrder: [...s.folderOrder, id],
-    status: { ...s.status, [id]: { state: "initializing", lastFetch: null, error: null } },
-  }));
-  return id;
+const command = (name: string, payload: Record<string, unknown>) => liveCommand(name, payload);
+
+export async function createFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): Promise<string> {
+  const result = await command("createFolder", { profileId, kind, ...(sources ? { sources } : {}) });
+  if (!result.folderId) throw new Error("Live folder creation returned no ID");
+  return result.folderId;
 }
 
-export function updateFolder(id: string, patch: Partial<Omit<LiveFolder, "id" | "profileId" | "kind">>) {
-  setLive((s) => (s.folders[id] ? { folders: { ...s.folders, [id]: { ...s.folders[id]!, ...patch } } } : {}));
-}
-
-const without = <T>(record: Record<string, T>, key: string) => {
-  const { [key]: _, ...rest } = record;
-  return rest;
-};
-
-export function removeFolder(id: string) {
-  setLive((s) => ({
-    folders: without(s.folders, id),
-    folderOrder: s.folderOrder.filter((f) => f !== id),
-    items: without(s.items, id),
-    known: without(s.known, id),
-    unread: without(s.unread, id),
-    hidden: without(s.hidden, id),
-    completed: without(s.completed, id),
-    completing: without(s.completing, id),
-    status: without(s.status, id),
-  }));
-}
-
-export function arrangeFolders(placed: { id: string; after: string | null }[]) {
-  setLive((s) => {
-    const ids = placed.map((p) => p.id).filter((id) => s.folders[id]);
-    if (!ids.length) return {};
-    const moved = placed.filter((p) => s.folders[p.id] && s.folders[p.id]!.after !== p.after);
-    const folders = moved.length ? { ...s.folders } : s.folders;
-    for (const p of moved) folders[p.id] = { ...folders[p.id]!, after: p.after };
-    const slots = s.folderOrder.flatMap((id, i) => (ids.includes(id) ? [i] : []));
-    const folderOrder = [...s.folderOrder];
-    slots.forEach((slot, i) => {
-      folderOrder[slot] = ids[i]!;
-    });
-    const reordered = folderOrder.some((id, i) => id !== s.folderOrder[i]);
-    if (!moved.length && !reordered) return {};
-    return { folders, folderOrder: reordered ? folderOrder : s.folderOrder };
-  });
-}
-
-const MAX_KNOWN = 600;
-const MAX_COMPLETED = 20;
-
-export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<string, CompletionState>, now = Date.now(), quiet: Set<string> = new Set()) {
-  setLive((s) => {
-    if (!s.folders[folderId]) return {};
-    const closed = (id: string) => gone[id] === "merged" || gone[id] === "closed";
-    const stillHidden = (s.hidden[folderId] ?? []).filter((it) => !closed(it.id));
-    const hiddenIds = new Set(stillHidden.map((it) => it.id));
-    const next = fetched.filter((it) => !hiddenIds.has(it.id));
-    const known = new Set(s.known[folderId] ?? []);
-    const first = known.size === 0 && !s.status[folderId]?.lastFetch;
-    const fresh = next.filter((it) => !known.has(it.id)).map((it) => it.id);
-    const unreadFresh = fresh.filter((id) => !quiet.has(id));
-    const ids = new Set(next.map((it) => it.id));
-    const prev = s.items[folderId] ?? [];
-    const animating = new Set(s.completing[folderId] ?? []);
-    const leaving = prev.filter((it) => !ids.has(it.id) && gone[it.id] && !animating.has(it.id));
-    const merged = [...next];
-    for (const it of prev) if (!ids.has(it.id) && (animating.has(it.id) || leaving.includes(it))) merged.splice(Math.min(prev.indexOf(it), merged.length), 0, it);
-    const completed = [
-      ...leaving.map((item) => ({ item, state: gone[item.id]!, at: now })),
-      ...(s.completed[folderId] ?? []).filter((c) => !ids.has(c.item.id) && !leaving.some((l) => l.id === c.item.id)),
-    ].slice(0, MAX_COMPLETED);
-    const stillThere = new Set(merged.map((it) => it.id));
-    return {
-      items: { ...s.items, [folderId]: merged },
-      hidden: stillHidden.length === (s.hidden[folderId] ?? []).length ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
-      known: { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) },
-      unread: { ...s.unread, [folderId]: first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id)) },
-      completed: leaving.length || (s.completed[folderId] ?? []).length !== completed.length ? { ...s.completed, [folderId]: completed } : s.completed,
-      completing: leaving.length ? { ...s.completing, [folderId]: [...(s.completing[folderId] ?? []), ...leaving.map((l) => l.id)] } : s.completing,
-      status: { ...s.status, [folderId]: { state: "idle", lastFetch: now, error: null } },
-    };
-  });
-}
-
-export function finishCompleting(folderId: string, ids: string[]) {
-  setLive((s) => ({
-    items: { ...s.items, [folderId]: (s.items[folderId] ?? []).filter((it) => !ids.includes(it.id)) },
-    completing: { ...s.completing, [folderId]: (s.completing[folderId] ?? []).filter((id) => !ids.includes(id)) },
-    unread: { ...s.unread, [folderId]: (s.unread[folderId] ?? []).filter((id) => !ids.includes(id)) },
-  }));
-}
-
-export function setStatus(folderId: string, status: Partial<FolderStatus>) {
-  setLive((s) => {
-    const current = s.status[folderId] ?? { state: "idle" as const, lastFetch: null, error: null };
-    return { status: { ...s.status, [folderId]: { ...current, ...status } } };
-  });
-}
-
-export function markRead(folderId: string, itemIds?: string[]) {
-  setLive((s) => {
-    const unread = s.unread[folderId] ?? [];
-    const next = itemIds ? unread.filter((id) => !itemIds.includes(id)) : [];
-    return next.length === unread.length ? {} : { unread: { ...s.unread, [folderId]: next } };
-  });
-}
-
-export function hideItems(folderId: string, hiding: LiveItem[]) {
-  const itemIds = hiding.map((it) => it.id);
-  const shown = (id: string) => !itemIds.includes(id);
-  setLive((s) => ({
-    hidden: { ...s.hidden, [folderId]: [...(s.hidden[folderId] ?? []).filter((it) => shown(it.id)), ...hiding] },
-    items: { ...s.items, [folderId]: (s.items[folderId] ?? []).filter((it) => shown(it.id)) },
-    unread: { ...s.unread, [folderId]: (s.unread[folderId] ?? []).filter(shown) },
-    completing: { ...s.completing, [folderId]: (s.completing[folderId] ?? []).filter(shown) },
-    completed: { ...s.completed, [folderId]: (s.completed[folderId] ?? []).filter((c) => shown(c.item.id)) },
-  }));
-}
-
-export function unhide(folderId: string) {
-  setLive((s) => {
-    const hidden = s.hidden[folderId] ?? [];
-    return hidden.length ? { hidden: without(s.hidden, folderId), items: { ...s.items, [folderId]: [...(s.items[folderId] ?? []), ...hidden] } } : {};
-  });
-}
-
-export function setAccount(source: LiveSourceId, account: LiveAccount | null) {
-  setLive((s) => {
-    const accounts = { ...s.accounts };
-    if (account) accounts[source] = account;
-    else delete accounts[source];
-    return { accounts };
-  });
-}
-
-export const updateConfig = (patch: Partial<LiveConfig>) => setLive((s) => ({ config: { ...s.config, ...patch } }));
-export const updateCalendarSettings = (patch: Partial<CalendarSettings>) => setLive((s) => ({ calendar: { ...s.calendar, ...patch } }));
-
-export function dismissAlert(occurrence: string) {
-  setLive((s) => (s.dismissedAlerts.includes(occurrence) ? {} : { dismissedAlerts: [...s.dismissedAlerts, occurrence].slice(-200) }));
-}
-
-export function setMeetingGroup(group: MeetingGroup | null, groupId?: string) {
-  setLive((s) => {
-    if (group) return { meetingGroups: { ...s.meetingGroups, [group.groupId]: group } };
-    return groupId && s.meetingGroups[groupId] ? { meetingGroups: without(s.meetingGroups, groupId) } : {};
-  });
-}
-
+export const updateFolder = (folderId: string, patch: Partial<Omit<LiveFolder, "id" | "profileId" | "kind">>) => command("updateFolder", { folderId, patch });
+export const removeFolder = (folderId: string) => command("removeFolder", { folderId });
+export const arrangeFolders = (placed: { id: string; after: string | null }[]) => command("arrangeFolders", { placed });
+export const applyFetch = (folderId: string, items: LiveItem[], gone: Record<string, CompletionState>) => command("applyFetch", { folderId, items, gone });
+export const setStatus = (folderId: string, status: Partial<FolderStatus>) => command("setStatus", { folderId, status });
+export const markRead = (folderId: string, itemIds?: string[]) => command("markRead", { folderId, ...(itemIds ? { itemIds } : {}) });
+export const markUnread = (folderId: string, itemId: string) => command("markUnread", { folderId, itemId });
+export const hideItems = (folderId: string, items: LiveItem[]) => command("hideItems", { folderId, items });
+export const unhide = (folderId: string) => command("unhide", { folderId });
+export const setExpandedStack = (key: string, expanded: boolean) => command("setExpandedStack", { key, expanded });
+export const updateConfig = (patch: Partial<LiveConfig>) => command("updateConfig", { patch });
+export const updateCalendarSettings = (patch: Partial<CalendarSettings>) => command("updateCalendarSettings", { patch });
+export const setCalendarHidden = (id: string, hidden: boolean) => command("setCalendarHidden", { id, hidden });
+export const dismissAlert = (occurrence: string) => command("dismissAlert", { occurrence });
+export const setMeetingGroup = (group: MeetingGroup | null, groupId?: string) => command("setMeetingGroup", { group, ...(groupId ? { groupId } : {}) });

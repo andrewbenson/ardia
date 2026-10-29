@@ -7,6 +7,7 @@ import * as sources from "./sources";
 import * as store from "./store";
 
 export function startLive() {
+  googleAuth.startGoogleAuth();
   engine.startLiveEngine();
   calendar.startCalendar();
   meetingGroups.startMeetingGroups();

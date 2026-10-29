@@ -43,20 +43,22 @@ try {
     const shut = s.createGroup(["b1", "b2"], { name: "Shut group", color: "blue" });
     s.updateGroup(shut, { collapsed: true });
     const { store, engine } = ac.live;
-    const folder = store.createFolder("default", "pullRequests");
     const pr = (n, extra) => ({ number: n, repo: "ardia/app", author: "a", authorAvatar: null, draft: false, headRef: "h" + n, baseRef: "main",
       review: null, mergeable: "mergeable", checks: [], comments: 0, unresolvedThreads: 0, additions: 1, deletions: 1, changedFiles: 1, ...extra });
     const item = (n, extra) => ({ id: "pr" + n, source: "github", url: "https://example.com/pr/" + n, title: "Pull request " + n + " with a long title",
       subtitle: "", icon: null, updatedAt: Date.now() - n, section: "authored", pr: pr(n, extra) });
     const items = [item(1, { review: "approved" }), item(2, {}), item(3, { mergeable: "conflicting" })];
-    store.applyFetch(folder, items, {});
-    store.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null });
-    engine.openLiveItem("w1", folder, items[1], { background: true });
-    engine.openLiveItem("w1", folder, items[2], { background: true });
     s.upsertDownload({ id: "d1", url: "https://example.com/report.pdf", filename: "report.pdf", path: ${JSON.stringify(file)},
       state: "finished", paused: false, received: 9, total: 9, speed: 0, mimeType: "application/pdf" });
     s.setDownloadsOpen("w1", false);
-    return true;
+    return store.createFolder("default", "pullRequests").then((folder) =>
+      store.applyFetch(folder, items, {})
+        .then(() => store.setStatus(folder, { state: "idle", lastFetch: Date.now(), error: null }))
+        .then(() => {
+          engine.openLiveItem("w1", folder, items[1], { background: true });
+          engine.openLiveItem("w1", folder, items[2], { background: true });
+          return true;
+        }));
   `);
   await sleep(1500);
 

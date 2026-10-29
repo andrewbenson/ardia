@@ -1,7 +1,7 @@
 import { publishSettingsTopic } from "@ardia/settings";
 import { closeTab } from "../../lib/actions";
 import { manualRefresh, openLiveItem } from "../../live/engine";
-import { live, setLive, updateFolder, useLive } from "../../live/store";
+import { live, setExpandedStack, setLive, updateFolder, useLive } from "../../live/store";
 import { useBrowser } from "../../store/browser";
 import { viewTabIds } from "../../store/model";
 import { openSettings } from "../settings/windows";
@@ -83,7 +83,7 @@ export function runNativeLive(windowId: string, folderId: string, action: string
     case "close":
       return itemId ? void closeTab(itemId) : undefined;
     case "stack":
-      return itemId ? setLive((l) => ({ expandedStacks: { ...l.expandedStacks, [itemId]: l.expandedStacks[itemId] === false } })) : undefined;
+      return itemId ? setExpandedStack(itemId, s.expandedStacks[itemId] === false) : undefined;
     case "stackMenu":
       return itemId ? void openLiveStackMenu(folderId, itemId) : undefined;
     case "more":

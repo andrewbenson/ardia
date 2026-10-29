@@ -363,6 +363,10 @@ public struct LiveState: Codable, Sendable, Equatable {
     if next.count != current.count { unread[folderId] = next }
   }
 
+  public mutating func markUnread(_ folderId: String, _ itemId: String) {
+    unread[folderId, default: []].append(itemId)
+  }
+
   public mutating func hideItems(_ folderId: String, _ hiding: [LiveItem]) {
     let itemIds = Set(hiding.map(\.id))
     func shown(_ id: String) -> Bool { !itemIds.contains(id) }

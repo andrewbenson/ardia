@@ -13,13 +13,22 @@ type NativeSettingsModule = {
   devHistorySnapshot?(profile: string): Promise<{ count: number; ready: boolean; floor: number | "-Infinity"; revision: number }>;
   devBookmarksSnapshot?(profile: string): Promise<{ count: number; ready: boolean; revision: number }>;
   devFaviconLookup?(page: string, engineProfile: string): Promise<{ bytes: number; source: string }>;
-  reloadLiveShadow?(): Promise<void>;
+  liveInitialReplica(): LiveReplica;
+  liveCommand(name: string, payloadJSON: string): Promise<string>;
+  liveStart(): Promise<void>;
+  resolveLiveAuth(requestId: string, redirectURL: string | null, error: string | null): Promise<void>;
   devLiveSnapshot?(): Promise<LiveShadowSnapshot>;
   libraryCommand?(kind: string, engineProfile: string, payload: Record<string, unknown>): Promise<unknown>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
   publish(topic: string, json: string): Promise<void>;
   addListener(event: "onSettingsCall", listener: (call: SettingsCall) => void): EventSubscription;
+  addListener(event: "onLiveReplica", listener: (replica: LiveReplica) => void): EventSubscription;
+  addListener(event: "onLiveAuthRequest", listener: (request: LiveAuthRequest) => void): EventSubscription;
 };
+
+export type LiveReplica = { revision: number; replicaJSON: string; error?: string };
+export type LiveCommandResult = { revision: number; folderId?: string; deviceFlow?: { id: string; userCode: string; verificationUri: string; expiresAt: number }; boolean?: boolean };
+export type LiveAuthRequest = { requestId: string; url: string; redirectPrefix: string };
 
 export type LiveShadowSnapshot = {
   folders: { id: string; items: number; hidden: number; completed: number; status: string | null }[];
@@ -71,7 +80,21 @@ export const focusNativeSettingsSearch = () => native?.focusSearch().catch(() =>
 
 export const startNativeHistoryCatalog = (profiles: string[]) => native?.startHistoryCatalog?.(profiles).catch(() => {});
 
-export const reloadNativeLiveShadow = () => native?.reloadLiveShadow?.();
+export const liveInitialReplica = (): LiveReplica => {
+  if (!native) throw new Error("native Live Folders unavailable");
+  return native.liveInitialReplica();
+};
+
+export const liveCommand = async (name: string, payload: Record<string, unknown> = {}): Promise<LiveCommandResult> => {
+  if (!native) throw new Error("native Live Folders unavailable");
+  return JSON.parse(await native.liveCommand(name, JSON.stringify(payload))) as LiveCommandResult;
+};
+
+export const liveStart = (): Promise<void> => native?.liveStart() ?? Promise.reject(new Error("native Live Folders unavailable"));
+export const onLiveReplica = (listener: (replica: LiveReplica) => void): EventSubscription | null => native?.addListener?.("onLiveReplica", listener) ?? null;
+export const onLiveAuthRequest = (listener: (request: LiveAuthRequest) => void): EventSubscription | null => native?.addListener?.("onLiveAuthRequest", listener) ?? null;
+export const resolveLiveAuth = (requestId: string, redirectURL: string | null, error: string | null): Promise<void> =>
+  native?.resolveLiveAuth(requestId, redirectURL, error) ?? Promise.reject(new Error("native Live Folders unavailable"));
 
 export const devLiveSnapshot = () => native?.devLiveSnapshot?.();
 

@@ -82,8 +82,24 @@ final class ProbeHost {
   }
 
   private func snapshot(_ request: ProbeRequest) throws -> [String: Any] {
-    guard Set(request.args.keys).isSubset(of: ["windowId"]),
+    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
+    let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
+    let viewFrames = request.args["viewFrames"] as? [String] ?? []
+    let hitPoint = request.args["hitPoint"] as? [Double]
+    let blockerStep = request.args["reactBlockerStep"] as? Double
+    let dropTypes = Set(["public.file-url", "public.url", "public.utf8-plain-text"])
+    guard request.args["dropTargets"] == nil || request.args["dropTargets"] is [[String: Any]],
+      request.args["viewFrames"] == nil || request.args["viewFrames"] is [String],
+      request.args["hitPoint"] == nil || hitPoint?.count == 2,
+      request.args["reactBlockerStep"] == nil || (blockerStep != nil && blockerStep! >= 8 && blockerStep! <= 64),
+      dropTargets.count <= 12, viewFrames.count <= 4,
+      viewFrames.allSatisfy({ ["PopoverView", "SidebarTabCardView", "SplitChromeView"].contains($0) }),
+      dropTargets.allSatisfy({ sample in
+        sample.count == 3 && (sample["x"] as? Double)?.isFinite == true &&
+          (sample["y"] as? Double)?.isFinite == true &&
+          (sample["type"] as? String).map(dropTypes.contains) == true
+      }) else { throw ProbeFailure.invalidArgument }
     guard let store = NativeStoreHandle.store else { throw ProbeFailure.notReady }
     let wanted = request.args["windowId"] as? String
     if let wanted, wanted != "settings", store.state.windows[wanted] == nil { throw ProbeFailure.windowGone }
@@ -126,6 +142,21 @@ final class ProbeHost {
           ["field": source["field"] ?? NSNull(), "value": safeURL(source["value"] as? String ?? ""),
             "selection": source["selection"] ?? NSNull()]
         }
+        var dropSamples: [[String: Any]] = []
+        var frames: [String: Any] = [:]
+        if let chromeNumber {
+          for sample in dropTargets {
+            let x = sample["x"] as! Double
+            let y = sample["y"] as! Double
+            let type = sample["type"] as! String
+            let target = PagesRead.dropTarget(windowNumber: chromeNumber, x: x, y: y, type: type)
+            dropSamples.append(["x": x, "y": y, "type": type, "view": target["view"] ?? NSNull(), "chain": target["chain"] ?? []])
+          }
+          for needle in viewFrames { frames[needle] = PagesRead.viewFrame(windowNumber: chromeNumber, needle: needle) }
+        }
+        let hitSlot = hitPoint.flatMap { WindowShellRead.hitSlot(windowId: id, x: $0[0], y: $0[1]) }
+        let hitView = hitPoint.flatMap { WindowShellRead.hitView(windowId: id, x: $0[0], y: $0[1]) }
+        let responder = (chromeWindow ?? window)?.firstResponder.map { NSStringFromClass(type(of: $0)) }
         return ["id": id, "kind": model.fields.kind ?? "browser", "profileId": model.profileId,
           "incognito": model.incognito, "order": state.windowOrder.firstIndex(of: id) ?? 0,
           "key": window?.isKeyWindow ?? false, "visible": window?.isVisible ?? false,
@@ -135,6 +166,12 @@ final class ProbeHost {
           "tour": Self.value(ToolTourRead.snapshot(windowId: id)),
           "folderPanel": Self.value(FolderPanelRead.snapshot(windowId: id)),
           "iconPicker": Self.value(SidebarIconPickerRead.snapshot(windowId: id)),
+          "shell": Self.value(WindowShellRead.snapshot(windowId: id)),
+          "sidebarShell": Self.value(SidebarShellRead.snapshot(windowId: id)),
+          "hoverCard": Self.value(SidebarHoverCardRead.snapshot(windowId: id)),
+          "reactBlockers": Self.value(blockerStep.flatMap { WindowShellRead.reactBlockers(windowId: id, step: $0) }),
+          "dropTargets": dropSamples, "viewFrames": frames, "hitSlot": Self.value(hitSlot), "hitView": Self.value(hitView),
+          "firstResponder": Self.value(responder),
           "contentFrame": Self.value(window?.contentView.map { Self.rectFromWindow($0.bounds) }),
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
@@ -164,9 +201,9 @@ final class ProbeHost {
           "storeRevision": initial.rev, "endRevision": final.rev, "capturedAtNs": DispatchTime.now().uptimeNanoseconds,
           "consistent": final.rev == initial.rev,
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
-          "focusedWindowId": Self.value(state.ui.focusedWindowId),
+          "focusedWindowId": Self.value(state.ui.focusedWindowId), "poolAvailable": TabPoolRead.available,
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "poolAvailable", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

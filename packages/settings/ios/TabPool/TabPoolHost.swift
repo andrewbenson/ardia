@@ -344,6 +344,8 @@ final class TabPoolCommits: @unchecked Sendable {
 #if SOLARA_PROBES
 @MainActor
 public enum TabPoolRead {
+  public static var available: Bool { TabPoolHost.available }
+
   public static func live(_ tabId: String) -> Bool? {
     guard TabPoolHost.available else { return nil }
     return TabPoolHost.shared.pageView(tabId) != nil

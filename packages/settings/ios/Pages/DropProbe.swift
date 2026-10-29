@@ -54,3 +54,16 @@ extension DropProbe {
     return String(decoding: data, as: UTF8.self)
   }
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum PagesRead {
+  public static func dropTarget(windowNumber: Int, x: Double, y: Double, type: String) -> [String: Any] {
+    DropProbe.target(windowNumber: windowNumber, x: x, y: y, type: type)
+  }
+
+  public static func viewFrame(windowNumber: Int, needle: String) -> [String: Any] {
+    DropProbe.frame(windowNumber: windowNumber, classContains: needle)
+  }
+}
+#endif

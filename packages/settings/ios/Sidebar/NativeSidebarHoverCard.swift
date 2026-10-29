@@ -391,3 +391,16 @@ final class SidebarIconPickerHost {
     return view.describe()
   }
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum SidebarHoverCardRead {
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let data = NativeSidebarHoverCard.describe(windowId).data(using: .utf8) else { return nil }
+    guard let source = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+    var result: [String: Any] = [:]
+    for key in ["kind", "phase", "opacity", "scale", "frame"] { result[key] = source[key] }
+    return result
+  }
+}
+#endif

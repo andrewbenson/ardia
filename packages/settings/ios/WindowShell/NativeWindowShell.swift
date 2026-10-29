@@ -201,6 +201,28 @@ public enum WindowShellRead {
   public static func accessibilityReach(windowId: String) -> [String: Int]? {
     NativeWindowShell.host(windowId)?.shell.accessibilityReach()
   }
+
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let source = NativeWindowShell.describe(windowId) else { return nil }
+    return ["card": source["card"] ?? NSNull(), "order": source["order"] ?? [],
+      "reactOnTop": source["reactOnTop"] ?? false]
+  }
+
+  public static func hitSlot(windowId: String, x: Double, y: Double) -> String? {
+    guard let shell = NativeWindowShell.host(windowId)?.shell, shell.window != nil else { return nil }
+    let point = shell.convert(NSPoint(x: x, y: y), to: nil)
+    return shell.slotUnderPointer(at: point)?.rawValue
+  }
+
+  public static func hitView(windowId: String, x: Double, y: Double) -> String? {
+    guard let window = NativeWindowShell.host(windowId)?.shell.window, let content = window.contentView else { return nil }
+    let point = content.convert(NSPoint(x: x, y: content.isFlipped ? y : content.bounds.height - y), to: nil)
+    return content.superview?.hitTest(point).map { String(describing: type(of: $0)) }
+  }
+
+  public static func reactBlockers(windowId: String, step: Double) -> [[String: Any]]? {
+    NativeWindowShell.host(windowId)?.reactBlockers(step: CGFloat(step))
+  }
 }
 #endif
 

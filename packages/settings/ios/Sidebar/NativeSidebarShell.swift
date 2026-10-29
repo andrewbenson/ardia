@@ -287,3 +287,10 @@ final class SidebarShellColumn: NSView, DevDropDestination {
     return !items.isEmpty
   }
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum SidebarShellRead {
+  public static func snapshot(windowId: String) -> [String: Any]? { NativeSidebarShell.column(windowId)?.describe() }
+}
+#endif

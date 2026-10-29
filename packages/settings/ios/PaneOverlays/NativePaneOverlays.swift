@@ -628,6 +628,8 @@ final class PaneOverlayHost {
 #if SOLARA_PROBES
 @MainActor
 public enum PaneOverlayRead {
+  public static func snapshot(windowId: String) -> [String: Any]? { NativePaneOverlays.host(windowId)?.describe() }
+
   public static func selection(windowId: String, tabId: String) -> [String: Any]? {
     (NativePaneOverlays.host(windowId)?.describe()["tabs"] as? [String: [String: Any]])?[tabId]?["selection"] as? [String: Any]
   }

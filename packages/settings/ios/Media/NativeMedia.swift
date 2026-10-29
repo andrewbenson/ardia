@@ -255,3 +255,16 @@ struct MediaPayload: @unchecked Sendable {
 
   init(_ value: [String: Any]) { self.value = value }
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum MediaRead {
+  public static var enabled: Bool { NativeMedia.enabled }
+  public static var kinds: [String] { HostedViews.kinds }
+
+  public static func rows(kind: String, windowId: String) -> [[String: Any]] {
+    guard let data = NativeMedia.probe(kind: kind, windowId: windowId).data(using: .utf8) else { return [] }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+  }
+}
+#endif

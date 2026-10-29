@@ -6,9 +6,13 @@ import Testing
 final class FakePage: TabPoolPage {
   let view: NSView
   var shownLog: [Bool] = []
+  var shownIn: [NSView?] = []
   var retired = false
   init(_ view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))) { self.view = view }
-  func setShown(_ shown: Bool) { shownLog.append(shown) }
+  func setShown(_ shown: Bool) {
+    shownLog.append(shown)
+    shownIn.append(view.superview)
+  }
   func retire() {
     retired = true
     view.removeFromSuperview()
@@ -122,6 +126,19 @@ struct TabViewPoolTests {
     #expect(a.view.superview === rig.hiddenBox)
     #expect(b.view.superview === rig.card)
     #expect(a.shownLog.last == false && b.shownLog.last == true)
+  }
+
+  @Test func aPageGoingAwayIsHiddenWhileStillInItsSlot() {
+    let rig = Rig()
+    rig.slots.set(.card("w1"), container: rig.card)
+    rig.pool.update([want("a"), want("b", .none)])
+    rig.turn()
+    let a = rig.made["a"]!
+    rig.pool.update([want("a", .none), want("b")])
+    rig.turn()
+    #expect(a.shownLog.last == false)
+    #expect(a.shownIn.last == rig.card)
+    #expect(a.view.superview === rig.hiddenBox)
   }
 
   @Test func aSlotAppearingLaterReconcilesOnItsOwn() {

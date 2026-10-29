@@ -66,6 +66,9 @@ public final class TabViewPool {
     }
     var made: Set<String> = []
     for op in ops {
+      if case .visible(let id, false) = op { pages[id]?.setShown(false) }
+    }
+    for op in ops {
       switch op {
       case .drop(let id):
         guard let page = pages.removeValue(forKey: id) else { continue }
@@ -85,7 +88,7 @@ public final class TabViewPool {
         guard let view = pages[id]?.view else { continue }
         move(view, into: hidden(windowId), below: false)
       case .visible(let id, let on):
-        pages[id]?.setShown(on)
+        if on { pages[id]?.setShown(true) }
       }
     }
     var applied = TabViewPlan.apply(ops, to: places, visible: shown)

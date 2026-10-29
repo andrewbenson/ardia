@@ -1,4 +1,5 @@
 #import "ArdiaCoreWebView.h"
+#import "ACChromeWindow.h"
 #import "ArdiaCoreWebViewInternal.h"
 #import "ArdiaCoreEarlyWindow.h"
 #import "ArdiaCorePictureInPicture.h"
@@ -811,6 +812,7 @@ static BOOL HeldSelector(SEL selector) {
   NSUInteger _frontGeneration;
   ACPageFocus _pageFocus;
   __weak NSView *_focusedDevTools;
+  __weak NSView *_focusedElsewhere;
   BOOL _focusOnActivate;
   BOOL _keepsOutgoingFocus;
   CFTimeInterval _focusActivatedAt;
@@ -1407,6 +1409,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   _focusOnActivate = NO;
   _pageFocus = ACPageFocus::Unknown;
   _focusedDevTools = nil;
+  _focusedElsewhere = nil;
   _handingOff = NO;
   _leaving = NO;
   _leaveGeneration++;
@@ -1834,6 +1837,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
     if (view->_visible) [view restoreFocusIfDue];
 }
 
+static BOOL ShowsIn(NSView *view, NSWindow *window) {
+  return view && view.window == window && !view.isHiddenOrHasHiddenAncestor;
+}
+
 static BOOL InTabPage(NSView *view) {
   for (NSView *v = view; v; v = v.superview)
     if ([v isKindOfClass:ArdiaCoreWebView.class]) return !((ArdiaCoreWebView *)v)->_standalone;
@@ -1877,6 +1884,7 @@ static BOOL InTabPage(NSView *view) {
 - (void)storePageFocusFrom:(NSResponder *)responder {
   _focusOnActivate = NO;
   _focusedDevTools = nil;
+  _focusedElsewhere = nil;
   NSWindow *window = self.window;
   if (!window || !_tab) return;
   NSView *view = [responder isKindOfClass:NSView.class] ? (NSView *)responder : nil;
@@ -1889,6 +1897,7 @@ static BOOL InTabPage(NSView *view) {
     _pageFocus = ACPageFocus::Unknown;
   } else {
     _pageFocus = ACPageFocus::Elsewhere;
+    _focusedElsewhere = view;
   }
 }
 
@@ -1925,6 +1934,9 @@ static BOOL InTabPage(NSView *view) {
     [window makeFirstResponder:devTools];
   } else if (_pageFocus != ACPageFocus::Elsewhere) {
     [self focusPage];
+  } else if (!ShowsIn(_focusedElsewhere, window)) {
+    BOOL (^claimedElsewhere)(NSWindow *, NSView *) = ACChromeWindowHost.focusClaimedElsewhereHandler;
+    if (!claimedElsewhere || !claimedElsewhere(window, self)) [self focusPage];
   }
 }
 

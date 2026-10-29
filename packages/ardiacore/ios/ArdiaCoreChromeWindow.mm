@@ -16,6 +16,7 @@ namespace {
 
 BOOL (^gShouldClose)(NSWindow *);
 BOOL (^gRefusesUnhandledKey)(NSWindow *, NSEvent *);
+BOOL (^gFocusClaimedElsewhere)(NSWindow *, NSView *);
 void (^gSwapped)(NSWindow *, NSWindow *);
 
 NSMapTable<NSWindow *, ArdiaCoreWindowController *> *Controllers() {
@@ -2392,6 +2393,14 @@ NSView *ACWindowRootView(NSWindow *window) {
 
 + (BOOL (^)(NSWindow *, NSEvent *))refusesUnhandledKeyHandler {
   return gRefusesUnhandledKey;
+}
+
++ (void)setFocusClaimedElsewhereHandler:(BOOL (^)(NSWindow *, NSView *))handler {
+  gFocusClaimedElsewhere = [handler copy];
+}
+
++ (BOOL (^)(NSWindow *, NSView *))focusClaimedElsewhereHandler {
+  return gFocusClaimedElsewhere;
 }
 
 + (void)embedRootView:(NSView *)root inWindow:(NSWindow *)window {

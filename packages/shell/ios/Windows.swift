@@ -1087,6 +1087,10 @@ final class FocusHandoff {
     newest.destination = destination
     newest.claimed = true
     deliverIfReady(gate)
+    DispatchQueue.main.async { [weak self, weak gate] in
+      guard let self, let gate, gate.generations.last?.id == id else { return }
+      self.focusClaimedPage(gate)
+    }
   }
 
   func cancel(_ id: Int, restoringSource: Bool) {
@@ -1195,6 +1199,7 @@ final class FocusHandoff {
     gate.watches.append(window.observe(\.firstResponder) { [weak self, weak gate] _, _ in
       DispatchQueue.main.async {
         guard let self, let gate, self.gates[key] === gate else { return }
+        self.focusClaimedPage(gate)
         self.deliverIfReady(gate)
       }
     })
@@ -1260,6 +1265,30 @@ final class FocusHandoff {
 
   private func gate(of id: Int) -> Gate? {
     gates.values.first { $0.generations.contains { $0.id == id } }
+  }
+
+  func claimedElsewhere(in window: NSWindow, than view: NSView) -> Bool {
+    guard let gate = gates[ObjectIdentifier(window)], CACurrentMediaTime() < gate.deadline, let newest = gate.generations.last else { return false }
+    guard newest.claimed, let claimed = newest.destination else { return true }
+    return !Self.holds(view, claimed)
+  }
+
+  private func focusClaimedPage(_ gate: Gate) {
+    guard let window = gate.window, gates[ObjectIdentifier(window)] === gate, CACurrentMediaTime() < gate.deadline, Self.unfocused(window),
+      let newest = gate.generations.last, newest.claimed, let claimed = newest.destination, let page = Self.webView(in: claimed),
+      page.window === window, !page.isHiddenOrHasHiddenAncestor
+    else { return }
+    note("focus claimed page \(newest.id)")
+    _ = page.perform(Self.focusPageSelector)
+  }
+
+  private static let focusPageSelector = NSSelectorFromString("focusPage")
+  private static let webViewClass: AnyClass? = NSClassFromString("ArdiaCoreWebView")
+
+  private static func webView(in view: NSView) -> NSView? {
+    guard let webViewClass else { return nil }
+    if view.isKind(of: webViewClass) { return view.responds(to: focusPageSelector) ? view : nil }
+    return view.subviews.first { $0.isKind(of: webViewClass) && $0.responds(to: focusPageSelector) }
   }
 
   private static func holds(_ responder: NSView, _ claimed: NSView) -> Bool {

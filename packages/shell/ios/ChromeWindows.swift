@@ -32,6 +32,9 @@ enum ChromeWindows {
     guard (host as AnyObject).responds(to: NSSelectorFromString("setRefusesUnhandledKeyHandler:")) else { return }
     let refuses: @convention(block) (NSWindow, NSEvent) -> Bool = { FocusHandoff.shared.refusesUnhandledKey($1, in: $0) }
     (host as AnyObject).setValue(refuses, forKey: "refusesUnhandledKeyHandler")
+    guard (host as AnyObject).responds(to: NSSelectorFromString("setFocusClaimedElsewhereHandler:")) else { return }
+    let claimedElsewhere: @convention(block) (NSWindow, NSView) -> Bool = { FocusHandoff.shared.claimedElsewhere(in: $0, than: $1) }
+    (host as AnyObject).setValue(claimedElsewhere, forKey: "focusClaimedElsewhereHandler")
   }
 
   static func noteLittleWindowOpening() {

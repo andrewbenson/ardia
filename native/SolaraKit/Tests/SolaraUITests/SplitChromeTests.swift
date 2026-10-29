@@ -243,4 +243,21 @@ private func paneToolbar(_ tabId: String) -> String {
     #expect(drops == ["a>b:left"])
     session.cancel()
   }
+
+  @Test func aPointCoveredByThePeekingSidebarIsNotThePage() throws {
+    let chrome = SplitChromeView(windowId: "w1")
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1007, height: 700), styleMask: [.borderless], backing: .buffered, defer: true)
+    window.contentView = chrome
+    let state = try splitState()
+    chrome.update(state: state)
+    chrome.layoutSubtreeIfNeeded()
+    let zone = SplitDropZone(windowId: "w1", chrome: chrome)
+    zone.state = { state }
+    let session = TabDragSession.begin(tabIds: ["a"], from: "w1")
+    defer { session.cancel() }
+    #expect(zone.aim(session, at: CGPoint(x: 700, y: 350)) == .page)
+    zone.covered = { $0.x < 750 }
+    #expect(zone.aim(session, at: CGPoint(x: 700, y: 350)) == nil)
+    #expect(zone.aim(session, at: CGPoint(x: 800, y: 350)) == .page)
+  }
 }

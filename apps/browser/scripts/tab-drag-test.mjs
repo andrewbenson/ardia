@@ -669,7 +669,8 @@ try {
   });
 
   await check("sidebar auto-hidden: a row dragged within the peeking sidebar reorders instead of splitting, and Esc cancels a drag", async () => {
-    const edge = (p) => run(`return ac.shell.devLeftEdgePointer("w1", ${JSON.stringify(p)}).then(() => settle(500)).then(() => !!globalThis.acLayout.peek.w1?.live);`);
+    const PEEKING = `(!!globalThis.acLayout.peek.w1?.live || "w1" in globalThis.acLayout.dockMotion.getState().peeks)`;
+    const edge = (p) => run(`return ac.shell.devLeftEdgePointer("w1", ${JSON.stringify(p)}).then(() => settle(500)).then(() => ${PEEKING});`);
     await run(`for (const v of Object.values(st().splits)) st().separateSplit(v.id); if (st().windows.w1.sidebarOpen) st().toggleSidebar("w1"); return settle(900);`);
     try {
       await edge({ x: -4, y: 300 });
@@ -686,7 +687,7 @@ try {
       assert.ok(seen.every(([onPage, target]) => !onPage && !target), `no page target under the sidebar: ${JSON.stringify(seen.slice(-3))}`);
       const after = await order("w1");
       assert.ok(after.indexOf(a.id) > after.indexOf(c.id), `${a.id} moved below ${c.id}: ${before} -> ${after}`);
-      assert.equal(await run(`return !!globalThis.acLayout.peek.w1?.live;`), true, "the sidebar stayed out");
+      assert.equal(await run(`return ${PEEKING};`), true, "the sidebar stayed out");
       const hold = Array.from({ length: 6 }, () => `${sx},${to}`).join(";");
       const cancelled = await run(`setTimeout(() => ac.shell.devTypeKeys("key", "\\u001b", 0), ${150 + 16 * 12 * 2 + 200});
         let ended = null; const t0 = performance.now();

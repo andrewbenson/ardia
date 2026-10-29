@@ -9,6 +9,7 @@ public final class SplitDropZone: TabDropZone {
   public let windowId: String
   public var state: () -> BrowserState? = { nil }
   public var onDrop: (_ tabId: String, _ targetTabId: String, _ side: SplitSide) -> Void = { _, _, _ in }
+  public var covered: (_ windowPoint: CGPoint) -> Bool = { _ in false }
   public private(set) var target: SplitDropTarget?
   public private(set) var grown = false
   private weak var chrome: SplitChromeView?
@@ -29,7 +30,7 @@ public final class SplitDropZone: TabDropZone {
     let panes = chrome.panes
     let next = Self.candidates(state(), windowId: windowId, dragging: dragging, panes: panes)
     let overPage = panes.values.contains { $0.contains(local) }
-    guard !next.isEmpty, overPage, session.lifted != false, !session.outside else { return hide() }
+    guard !next.isEmpty, overPage, !covered(windowPoint), session.lifted != false, !session.outside else { return hide() }
     candidates = next
     px = local.x
     if !shown {

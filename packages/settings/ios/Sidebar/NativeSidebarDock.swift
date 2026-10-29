@@ -20,6 +20,11 @@ enum NativeSidebarDock {
 
   static func dock(_ windowId: String) -> SidebarDock? { docks[windowId] }
 
+  static func peekCovers(_ windowId: String, x: CGFloat) -> Bool {
+    guard let dock = docks[windowId], dock.peek.live, !dock.state.open, !dock.state.fullscreen else { return false }
+    return x < ShellMetrics.peekOrigin.x + CGFloat(dock.state.width)
+  }
+
   static func describe(_ windowId: String) -> [String: Any]? {
     guard let dock = docks[windowId] else { return nil }
     return [

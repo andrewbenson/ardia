@@ -293,15 +293,23 @@ struct WindowShellViewTests {
     let move = { (x: CGFloat) in
       shell.mouseMoved(with: NSEvent.mouseEvent(with: .mouseMoved, location: NSPoint(x: x, y: 350), modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!)
     }
+    let frame = { shell.devPointerFrame() }
     move(550)
     #expect(posts == 1)
     move(560)
+    frame()
     #expect(posts == 1)
     move(700)
+    #expect(posts == 1)
+    frame()
     #expect(posts == 2)
     #expect(shell.slotUnderPointer(at: NSPoint(x: 700, y: 350)) == .card)
     move(550)
+    frame()
     #expect(posts == 3)
+    frame()
+    move(700)
+    #expect(posts == 4)
   }
 
   @Test func framesFollowTheDockAndReportOnlyChanges() {

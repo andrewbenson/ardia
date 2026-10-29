@@ -232,6 +232,10 @@ public final class WindowShellView: NSView {
   #if DEBUG
   public func devNotePointer(_ pointInWindow: NSPoint?) { notePointer(pointInWindow) }
 
+  public func devPointerFrame() {
+    if let pointerLink { pointerFrame(pointerLink) }
+  }
+
   public func devResetPointerStats() {
     devPointerLookups = 0
     devPointerLookupNanos = 0

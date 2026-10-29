@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,7 +15,9 @@ SwipeOverlay, which keeps the gesture). The same simulated gestures in both: one
 shows the confirmed 82 pt capsule centred on the page at the rubber-banded offset, and cancelling it navigates
 nowhere; one held still past the threshold turns into the 200 wide destination list (2 rows of 38 plus 8 above and
 below, its first row centred on the page), and ending it goes back one entry. The native frames match RN's within
-half a point, RN draws no capsule with the switch on, and the native container leaves the card once it fades.`);
+half a point, RN draws no capsule with the switch on, and the native container leaves the card once it fades.
+With pane roots and the page pool on (ARDIA_SHELL_PANES=1 ARDIA_NATIVE_PAGES_POOL=1), a back swipe on the page goes
+back, and the same swipe over the native extension side panel or over docked DevTools starts nothing and stays put.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -28,6 +30,14 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const url = (n) => `http://127.0.0.1:${server.address().port}/${n}`;
+const ext = join(scratch, "ext");
+cpSync(resolve(import.meta.dirname, "../../../packages/ardiacore/scripts/fixtures/ext"), ext, { recursive: true });
+const manifest = JSON.parse(readFileSync(join(ext, "manifest.json"), "utf8"));
+delete manifest.content_scripts;
+delete manifest.declarative_net_request;
+writeFileSync(join(ext, "manifest.json"), JSON.stringify({ ...manifest, name: "Side panel", side_panel: { default_path: "panel.html" }, permissions: ["sidePanel"] }));
+writeFileSync(join(ext, "panel.html"), `<!doctype html><meta charset="utf-8"><title>Panel</title><body>panel</body>`);
+
 const fixture = session({
   windows: [{ id: "w1", frame: [80, 80, 1280, 800], activeTabIds: { default: "a" } }],
   tabs: [{ id: "a", url: url("one"), title: "ONE" }],
@@ -116,6 +126,56 @@ try {
     await app.quit();
     app = null;
   }
+  app = await launch(resolve(appArg), {
+    data: join(scratch, "data-pool"), fresh: true, session: fixture, onboarded: true, probe: true,
+    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_SIDE_PANEL: "1" },
+    ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe",
+  });
+  await until("page ONE", `return title() === "ONE" || null;`, 15000);
+  const number = await until("window", `const id = Object.entries(ac.pageState.getState().browsers ?? {}).find(([, t]) => t === "a")?.[0]; return id ? C.devWindowNumber(Number(id)) : null;`, 15000);
+  const back = timed([{ phase: "began", dx: 0, atMs: 0 }, ...push, { phase: "ended", dx: 0, atMs: 200 }]);
+  const swipe = (x, y, steps = back) => run(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`);
+  const stays = async (what, x, y) => {
+    const where = await swipe(x, y);
+    await sleep(900);
+    const now = await run(`return title();`);
+    if (where.hit !== "RenderWidgetHostViewCocoa" || where.target || now !== "TWO") throw new Error(`${what}: hit ${where.hit}, target ${where.target}, page ${now}`);
+    return where;
+  };
+  await run(`ac.store.getState().navigate("a", ${JSON.stringify(url("two"))}, { userInitiated: true }); return true;`);
+  await until("page TWO", `return title() === "TWO" || null;`, 15000);
+
+  await rep.check("pool-side-panel-swipe-stays", async () => {
+    const { id } = await run(`return globalThis.expo.modules.ArdiaExtensions.install(${JSON.stringify(ext)}, "");`);
+    await run(`return ac.extensions.refreshExtensions("").then(() => true);`);
+    await until("the side panel opens", `return ac.extensions.openSidePanel("w1", ${JSON.stringify(id)}).then(() => !!ac.extensions.useExtensions.getState().sidePanels.w1 || null);`);
+    await sleep(1200);
+    const width = await run(`return ac.store.getState().settings.extensionSidePanelWidth ?? 360;`);
+    const where = await stays("side panel", 1280 - width / 2, 400);
+    await run(`ac.extensions.closeSidePanel("w1"); return true;`);
+    await sleep(600);
+    return where;
+  });
+
+  await rep.check("pool-devtools-swipe-stays", async () => {
+    await run(`ac.webviews.get("a").showDevTools(); return true;`);
+    for (const end = Date.now() + 8000; !(await app.targets()).some((t) => t.url.startsWith("devtools://")); await sleep(150)) if (Date.now() > end) throw new Error("DevTools never opened");
+    await sleep(1500);
+    const scan = [];
+    for (const x of [300, 600, 900, 1150]) scan.push([x, (await swipe(x, 400, [])).target]);
+    const devtools = scan.find(([, target]) => !target);
+    if (!scan[0][1] || !devtools) throw new Error(`page and DevTools not both under the card: ${JSON.stringify(scan)}`);
+    return { scan, where: await stays("DevTools", devtools[0], 400) };
+  });
+
+  await rep.check("pool-page-swipe-goes-back", async () => {
+    const where = await swipe(300, 400);
+    await until("back to ONE", `return title() === "ONE" || null;`, 4000);
+    return where;
+  });
+  await app.quit();
+  app = null;
+
   await rep.check("native-matches-rn", async () => {
     for (const k of ["capsule", "list"]) if (!near(got[`native-${k}`], got[`rn-${k}`])) throw new Error(`${k}: native ${got[`native-${k}`]}, RN ${got[`rn-${k}`]}`);
     return got;

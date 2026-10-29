@@ -1,5 +1,6 @@
 #import "ACSwipe.h"
 #import "ACChromeWindow.h"
+#import "ArdiaCoreWebViewInternal.h"
 
 #import <dlfcn.h>
 #import <objc/message.h>
@@ -267,10 +268,39 @@ NSView<ACSwipeTarget> *MisroutedRendererTarget(NSWindow *window, NSPoint locatio
   return best;
 }
 
+BOOL CoversPage(NSView<ACSwipeTarget> *target) {
+  return [target respondsToSelector:@selector(coversPage)] && target.coversPage;
+}
+
+BOOL IsTabPageRenderer(NSView *hit) {
+  ArdiaCoreWebView *web = nil;
+  for (NSView *v = hit.superview; v && !web; v = v.superview)
+    if ([v isKindOfClass:[ArdiaCoreWebView class]]) web = (ArdiaCoreWebView *)v;
+  if (!web || web.extensionHost.length) return NO;
+  NSView *devTools = web.dockedDevToolsView;
+  return !devTools || ![hit isDescendantOf:devTools];
+}
+
+NSView<ACSwipeTarget> *PageTarget(NSWindow *window, NSPoint location, NSView *hit) {
+  if (!IsRenderWidgetView(hit) || !NSPointInRect([hit convertPoint:location fromView:nil], hit.bounds) || !IsTabPageRenderer(hit)) return nil;
+  NSView<ACSwipeTarget> *best = nil;
+  CGFloat bestArea = CGFLOAT_MAX;
+  for (NSView<ACSwipeTarget> *target in Targets()) {
+    if (target.window != window || !target.superview || target.isHiddenOrHasHiddenAncestor || !CoversPage(target)) continue;
+    if (!NSPointInRect([target convertPoint:location fromView:nil], target.bounds)) continue;
+    CGFloat area = NSWidth(target.bounds) * NSHeight(target.bounds);
+    if (area < bestArea) {
+      best = target;
+      bestArea = area;
+    }
+  }
+  return best;
+}
+
 NSView *ResolveHit(NSWindow *window, NSPoint location, NSView<ACSwipeTarget> *__strong *target, BOOL *fallback) {
   NSView *hit = HitView(window, location);
   if (gTrace && gWrongRendererHit) hit = FirstRenderer(window.contentView) ?: hit;
-  *target = TargetAt(window, location, hit);
+  *target = TargetAt(window, location, hit) ?: PageTarget(window, location, hit);
   *fallback = NO;
   if (*target || (gTrace && gLegacyHitRouting)) return hit;
   NSView<ACSwipeTarget> *pager = MisroutedRendererTarget(window, location, hit);
@@ -747,7 +777,7 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
   NSView *hit = HitView(window, inWindow);
   NSDictionary *where = @{
     @"hit" : hit ? NSStringFromClass(hit.class) : @"",
-    @"target" : TargetAt(window, inWindow, hit) ? @YES : @NO,
+    @"target" : (TargetAt(window, inWindow, hit) ?: PageTarget(window, inWindow, hit)) ? @YES : @NO,
     @"window" : @(window.windowNumber),
     @"systemSwipeEnabled" : @(NSEvent.isSwipeTrackingFromScrollEventsEnabled),
   };

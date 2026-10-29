@@ -10,6 +10,7 @@ NS_ASSUME_NONNULL_BEGIN
 @optional
 @property (nonatomic, readonly) BOOL isPager;
 @property (nonatomic, readonly) BOOL hasNativePager;
+@property (nonatomic, readonly) BOOL coversPage;
 - (void)pagerInput:(NSString *)phase distance:(CGFloat)distance direction:(int)direction timestamp:(NSTimeInterval)timestamp;
 @required
 - (void)swipeEvent:(NSDictionary<NSString *, id> *)event;

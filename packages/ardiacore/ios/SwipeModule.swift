@@ -52,6 +52,7 @@ public class SwipeModule: Module {
       Prop("tracksUnavailableDirections") { (view: SwipeArea, value: Bool?) in view.tracksUnavailableDirections = value ?? false }
       Prop("allowsVerticalMotion") { (view: SwipeArea, value: Bool?) in view.allowsVerticalMotion = value ?? false }
       Prop("isPager") { (view: SwipeArea, value: Bool?) in view.isPager = value ?? false }
+      Prop("coversPage") { (view: SwipeArea, value: Bool?) in view.coversPage = value ?? false }
       Prop("nativePager") { (view: SwipeArea, value: [String: Any]?) in view.configurePager(value) }
       AsyncFunction("devLocate") { (view: SwipeArea) -> [String: Any]? in
         guard let window = view.window, let content = window.contentView else { return nil }
@@ -79,6 +80,7 @@ final class SwipeArea: ExpoView, ACSwipeTarget, ACPagerSurface {
   var tracksUnavailableDirections = false
   var allowsVerticalMotion = false
   @objc var isPager = false
+  @objc var coversPage = false
   private(set) var pager: ACPager?
   private var pagerWidth: CGFloat = 0
 

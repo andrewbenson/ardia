@@ -10,6 +10,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)requestFocusRestore;
 - (void)requestFocusRestoreIn:(NSWindow *)window;
 - (void)devToolsChanged:(nullable NSView *)devToolsView;
+@property (nonatomic, readonly, nullable) NSView *dockedDevToolsView;
 - (void)emit:(NSString *)name payload:(NSDictionary<NSString *, id> *)payload;
 + (void)keepTransfersOfWindow:(NSWindow *)window;
 + (NSArray<ArdiaCoreTab *> *)tabsToKeep:(NSArray<ArdiaCoreTab *> *)tabs closingWindow:(NSWindow *)window closedByChrome:(BOOL)closedByChrome;

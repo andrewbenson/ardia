@@ -1546,6 +1546,10 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
       }];
 }
 
+- (NSView *)dockedDevToolsView {
+  return _devtoolsView;
+}
+
 - (void)devToolsChanged:(NSView *)devToolsView {
   if (_devtoolsView && _devtoolsView != devToolsView && _devtoolsView.superview == self) {
     AcceptDrops(_devtoolsView, YES);

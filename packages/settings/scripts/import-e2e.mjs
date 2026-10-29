@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // End-to-end import into the native (SwiftUI) Import window of a hidden instance, from packages/import's fake Chrome
 // home (never a real profile). It drives the window's model through SolaraSettings.devImport (background instances
-// only) instead of clicks, and checks the same counts as packages/import/scripts/e2e.mjs.
+// only) instead of clicks, and checks the imported cookies, addresses and cards.
 //
 //   node packages/settings/scripts/import-e2e.mjs <Solara.app> <scratch dir>
 //

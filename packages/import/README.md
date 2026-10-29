@@ -47,8 +47,9 @@ Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result ty
 4. `ios/ImportWriter.swift`: `writeImported(token, engineProfile, kinds)` takes the vault entry and sends it to the
    engine with `ArdiaCoreEngineBridge.callWithSecret` as `ac_cookies_import` and `ac_autofill_import`, in batches of 500
    (`engine/chromium/src/chrome/browser/ardia/ac_cookies.cc`, `ac_autofill.cc`).
-5. `apps/browser/src/components/import/ImportWindow.tsx` is the wizard: choose, then profiles, then unlock, then
-   progress, then done. `apply.ts` writes the JS-side kinds into the store (bookmarks, history, tabs, Arc spaces,
+5. The native Import window (`native/SolaraKit/Sources/SolaraUI/Import`, hosted by
+   `packages/settings/ios/NativeImportWindow.swift`) is the wizard: choose, then profiles, then unlock, then progress,
+   then done. `apply.ts` writes the JS-side kinds into the store (bookmarks, history, tabs, Arc spaces,
    Dia profiles) and saves passwords with `savePassword` (`@ardia/ardiacore`). For cookies and autofill it calls
    `importNative`, which calls `writeImported`. Before any tab is made, the result's `favicons` for the pages that
    profile gets go to `adoptFavicons` (`apps/browser/src/lib/favicons.ts`): into the sidebar's icon cache at once, and
@@ -59,7 +60,7 @@ Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result ty
 
 - Chromium-family passwords, cookies and card numbers are encrypted with the browser's "`<Name> Safe Storage`"
   Keychain item. `SafeStorageKeychain.secret` reads it, and macOS shows a system prompt when it does. It runs only from
-  `unlockBrowser`, after the user goes through the unlock step (`ENCRYPTED` kinds in `ImportWindow.tsx`).
+  `unlockBrowser`, after the user goes through the unlock step (`ImportKind.encrypted` in the native Import window).
 - **Agents never trigger it.** The Swift tests pass the fixture key (`Fixtures.chromiumKey`, `importer.setKey`),
   and app runs set `ARDIA_IMPORT_TEST_SECRET`. Firefox has no Keychain item; its primary password goes through
   `unlockBrowser(id, { primaryPassword })`.
@@ -97,8 +98,7 @@ sqlite3 CLI: it checkpoints the WAL the tests depend on.
 | Swift tests (`tests/`, against `fixtures/`) | `pnpm --filter @ardia/import test` (`swift test`, scratch path in `$TMPDIR`) |
 | Rebuild fixtures | `pnpm --filter @ardia/import fixtures` |
 | Typecheck the JS wrapper | `pnpm --filter @ardia/import typecheck` |
-| End to end in a hidden Debug instance (cookies, addresses, cards) | `node packages/import/scripts/e2e.mjs <Solara.app> <scratch dir>` (`--help`) |
-| Run one script in that instance (`e2e.mjs --keep`) | `scripts/agent/ac eval <scratch dir>/data '<js>'` |
+| End to end through the native Import window in a hidden instance (cookies, addresses, cards) | `node packages/settings/scripts/import-e2e.mjs <Solara.app> <scratch dir>` |
 
 ## Test hooks (`ios/ImportModule.swift`)
 
@@ -121,7 +121,7 @@ sqlite3 CLI: it checkpoints the WAL the tests depend on.
    and throw `ImportError`. Then add its `(kind, family)` case in `Importer.importData`.
 4. Add a fixture: a `build_*` function in `fixtures/generate.py`, or a branch of an existing one. Run
    `pnpm --filter @ardia/import fixtures` and write a test in `tests/`.
-5. Apply it in the app. Add the kind to `KINDS` (and `ENCRYPTED` if it's encrypted) in `ImportWindow.tsx`, and write
-   it in `apply.ts`. A secret kind goes through `ImportWriter` and a new engine call instead.
-6. Run `test`, `typecheck` and `pnpm -w typecheck`. For anything that reaches the engine, also run `scripts/e2e.mjs`
-   against a fresh Debug build.
+5. Apply it in the app. Add the kind to the native Import window's kinds (`SolaraUI/Import`, in `ImportKind.encrypted` if it
+   is), and write it in `apply.ts`. A secret kind goes through `ImportWriter` and a new engine call instead.
+6. Run `test`, `typecheck` and `pnpm -w typecheck`. For anything that reaches the engine, also run
+   `packages/settings/scripts/import-e2e.mjs` against a fresh build.

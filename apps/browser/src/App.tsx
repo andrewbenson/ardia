@@ -8,7 +8,6 @@ import { EditBookmarkDialog } from "./components/bookmarks/EditBookmarkDialog";
 import { ExtensionOverlays } from "./components/extensions/ExtensionOverlays";
 import { ExtensionSidePanel } from "./components/extensions/SidePanel";
 import { DownloadMagnet, DownloadsPopover } from "./components/Downloads";
-import { UtilityWindow } from "./components/settings/UtilityWindow";
 import { isUtilityWindowId } from "./components/settings/windows";
 import { OnboardingOverlay } from "./components/onboarding";
 import { CreateProfileHost } from "./components/profiles/CreateProfile";
@@ -26,12 +25,7 @@ import { useBrowser } from "./store/browser";
 import { useWindowId, WindowContext } from "./store/hooks";
 
 export function WindowRoot({ windowId }: { windowId?: string }) {
-  if (isUtilityWindowId(windowId))
-    return (
-      <ThemeScope>
-        <UtilityWindow id={windowId!} />
-      </ThemeScope>
-    );
+  if (isUtilityWindowId(windowId)) return null;
   return <BrowserWindowRoot windowId={windowId} />;
 }
 

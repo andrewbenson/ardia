@@ -10,11 +10,11 @@ enum NativeImportWindow {
   static let kind = "import"
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeImport, defaultOn: true) && NativeSettingsWindow.enabled
+    NativeSettingsWindow.enabled
   }
 
   static func makeController() -> NSViewController? {
-    guard enabled else { return nil }
+    guard enabled else { return NativeSettingsWindow.unavailableController() }
     let model = ImportModel(services: ImportAdapter(), appName: Bundle.main.productName)
     current = model
     return ImportHostingController(model: model)

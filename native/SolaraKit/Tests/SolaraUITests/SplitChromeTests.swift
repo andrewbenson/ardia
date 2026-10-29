@@ -149,6 +149,24 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     #expect(view.container("a")?.superview?.layer?.backgroundColor == nil)
   }
 
+  @Test func aFullscreenPaneCoversItsSiblingWhichStaysShown() throws {
+    let view = SplitPanesView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    view.update(state: try splitState())
+    view.setFullscreenTab("a")
+    view.layoutSubtreeIfNeeded()
+    let a = try #require(view.container("a")?.superview)
+    let b = try #require(view.container("b")?.superview)
+    #expect(!b.isHiddenOrHasHiddenAncestor)
+    #expect(b.frame == CGRect(x: 507, y: 0, width: 500, height: 700))
+    #expect(a.layer?.zPosition == 1 && b.layer?.zPosition == 0)
+    #expect(view.hitTest(NSPoint(x: 900, y: 400)).map { $0.isDescendant(of: a) } == true)
+    view.setFullscreenTab(nil)
+    view.layoutSubtreeIfNeeded()
+    #expect(a.layer?.zPosition == 0)
+    #expect(view.hitTest(NSPoint(x: 900, y: 400)).map { $0.isDescendant(of: b) } == true)
+  }
+
   @Test func aNewTabLeafShowsTheEmptyStateOverItsPage() throws {
     let view = SplitPanesView(windowId: "w1")
     view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)

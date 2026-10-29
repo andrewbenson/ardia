@@ -47,6 +47,7 @@ public final class SplitPanesView: NSView {
   required init?(coder: NSCoder) { fatalError() }
 
   public override func hitTest(_ point: NSPoint) -> NSView? {
+    if !isHidden, let fullscreenTab, let pane = panes[fullscreenTab] { return pane.hitTest(convert(point, from: superview)) }
     let hit = super.hitTest(point)
     return hit === self ? nil : hit
   }
@@ -94,7 +95,7 @@ public final class SplitPanesView: NSView {
       let page = pane.page.convert(pane.page.bounds, to: nil)
       return [
         "frame": rect(pane.frame), "page": rect(pane.page.frame), "window": rect(CGRect(x: page.minX, y: height - page.maxY, width: page.width, height: page.height)),
-        "toolbar": !pane.toolbar.isHidden, "empty": pane.empty != nil, "hidden": pane.isHidden, "radius": Double(pane.radius),
+        "toolbar": !pane.toolbar.isHidden, "empty": pane.empty != nil, "hidden": pane.isHidden, "covered": fullscreenTab != nil && pane.layer?.zPosition == 0, "radius": Double(pane.radius),
       ]
     }
   }
@@ -106,8 +107,8 @@ public final class SplitPanesView: NSView {
     for (tabId, rect) in rects {
       let pane = panes[tabId] ?? { made = true; return make(tabId) }()
       pane.frame = rect
-      pane.isHidden = fullscreenTab != nil && tabId != fullscreenTab
       pane.fullscreen = tabId == fullscreenTab
+      pane.layer?.zPosition = pane.fullscreen ? 1 : 0
       pane.toolbarHeight = tabId == fullscreenTab ? 0 : toolbarHeight
       pane.liveTop = liveTops[tabId]
     }

@@ -11,10 +11,10 @@ if (!appArg) {
 
 PaneOverlays, the per-pane overlay slots over the shell's card (ARDIA_NATIVE_SHELL=1, ARDIA_NATIVE_PAGES_POOL=1).
 A two-pane split gives each pane a visible slot over its page area, below its pane toolbar, matching
-SplitPanesView's page frame. A fullscreen page in the split hides the other pane in SplitPanesView and hides its slot
-too, while the fullscreen pane's slot fills the card; leaving fullscreen shows both again. Separating the split leaves
-one slot for the active tab. Fullscreen is set through the page state, not the Fullscreen API, so the hidden
-instance never takes a Space.`);
+SplitPanesView's page frame. A fullscreen page in the split covers the other pane in SplitPanesView, which stays shown
+underneath so its page keeps running, and hides its slot, while the fullscreen pane's slot fills the card; leaving
+fullscreen uncovers both. Separating the split leaves one slot for the active tab. Fullscreen is set through the page
+state, not the Fullscreen API, so the hidden instance never takes a Space.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -74,7 +74,7 @@ try {
   let full;
   await rep.check("fullscreen-hides-the-other-slot", async () => {
     await run(`setFullscreen("b", true); return true;`);
-    full = await until("b fullscreen", `return split().then((s) => (s.leaves && s.leaves.a && s.leaves.a.hidden && !s.leaves.b.hidden) ? s : null);`);
+    full = await until("b fullscreen", `return split().then((s) => (s.leaves && s.leaves.a && s.leaves.a.covered && !s.leaves.a.hidden && !s.leaves.b.covered && !s.leaves.b.hidden) ? s : null);`);
     if (!hidden(full, "a")) throw new Error(`a's slot shows while its pane is hidden: ${JSON.stringify(full.overlays)}`);
     if (!shown(full, "b")) throw new Error(`b's slot is hidden: ${JSON.stringify(full.overlays)}`);
     const card = await run(`return shell().then((d) => d.card);`);
@@ -86,7 +86,7 @@ try {
 
   await rep.check("leaving-fullscreen-shows-both", async () => {
     await run(`setFullscreen("b", false); return true;`);
-    const s = await until("both shown", `return split().then((s) => (s.leaves && !s.leaves.a.hidden && !s.leaves.b.hidden) ? s : null);`);
+    const s = await until("both shown", `return split().then((s) => (s.leaves && !s.leaves.a.hidden && !s.leaves.b.hidden && !s.leaves.a.covered && !s.leaves.b.covered) ? s : null);`);
     for (const id of ["a", "b"]) if (!shown(s, id)) throw new Error(`${id}'s slot is hidden: ${JSON.stringify(s.overlays)}`);
     for (const id of ["a", "b"]) if (!near(s.overlays[id].window, s.leaves[id].window)) throw new Error(`${id}: slot ${s.overlays[id].window}, page ${s.leaves[id].window}`);
     return true;

@@ -2643,6 +2643,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
     return Describe([frameView hitTest:p]);
   }
   if ([action hasPrefix:@"layers:"]) {
+    if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
     NSPoint p = WindowPoint(window, [action substringFromIndex:7]);
     NSView *top = [frameView hitTest:p];
     for (NSView *v = top; v; v = v.superview)

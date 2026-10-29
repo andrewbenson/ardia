@@ -245,7 +245,7 @@ try {
       if (!rn?.shot || !pooled?.shot) throw new Error(`missing ${state} snapshots`);
       for (const key of ["find", "pill"]) if (!(rn[key] === pooled[key] || near(rn[key], pooled[key]))) throw new Error(`${key}: RN pages ${rn[key]}, pooled ${pooled[key]}`);
       const d = pixelDiff(rn.shot, pooled.shot, []);
-      if (d.max > 8) throw new Error(`snapshots differ: ${JSON.stringify(d)}`);
+      if (d.max > 8) throw new Error(`snapshots differ: ${JSON.stringify(d)}. Known engine red, not placement: a restored, never-shown pooled page can keep Chrome's background layer transparent (ac_contents_background.mm doesn't refresh it when the ahead-blank ends), and layer.render draws only that layer; the fix is queued in owner-away-queue.md (port-strip, engine fix A). Check with devWindow "layers:x,y" which layer differs`);
       return { pixels: d };
     });
   }

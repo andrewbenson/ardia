@@ -115,6 +115,13 @@ final class ProbeHost {
             "controls": [["id": "search", "frame": Self.rect(selection["button"])]],
             "area": Self.rect(selection["area"]), "above": selection["above"] ?? NSNull()]
         }
+        var overlays = selections
+        for tabId in model.tabIds {
+          if let zoom = PaneOverlayRead.zoom(windowId: id, tabId: tabId) { overlays.append(Self.popover(zoom, kind: "zoom", tabId: tabId)) }
+          if let history = PaneOverlayRead.history(windowId: id, tabId: tabId) { overlays.append(Self.popover(history, kind: "history", tabId: tabId)) }
+          if let sadTab = PaneOverlayRead.sadTab(windowId: id, tabId: tabId) { overlays.append(Self.sadTabOverlay(sadTab, tabId: tabId)) }
+        }
+        if let downloads = DownloadsPanelRead.panel(windowId: id) { overlays.append(Self.downloadsOverlay(downloads)) }
         return ["id": id, "kind": model.fields.kind ?? "browser", "profileId": model.profileId,
           "incognito": model.incognito, "order": state.windowOrder.firstIndex(of: id) ?? 0,
           "key": window?.isKeyWindow ?? false, "visible": window?.isVisible ?? false,
@@ -126,11 +133,7 @@ final class ProbeHost {
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
           "selectedTabIds": NSNull(), "activeTabIds": NSNull(), "tabIds": model.tabIds,
-          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "overlays": selections + model.tabIds.compactMap { tabId in
-            PaneOverlayRead.zoom(windowId: id, tabId: tabId).map { Self.popover($0, kind: "zoom", tabId: tabId) }
-          } + model.tabIds.compactMap { tabId in
-            PaneOverlayRead.history(windowId: id, tabId: tabId).map { Self.popover($0, kind: "history", tabId: tabId) }
-          } + (DownloadsPanelRead.panel(windowId: id).map { [Self.downloadsOverlay($0)] } ?? []),
+          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "overlays": overlays,
           "views": NSNull()]
       }
       if wanted == nil || wanted == "settings", let settingsWindow = WindowHost.window(id: "settings"),
@@ -156,7 +159,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.split", "windows.tour", "windows.folderPanel", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.split", "windows.tour", "windows.folderPanel", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final
@@ -171,6 +174,14 @@ final class ProbeHost {
       "visible": !(source["hidden"] as? Bool ?? true), "opacity": source["opacity"] ?? NSNull(),
       "frame": rect(source["card"]), "area": rect(source["frame"]),
       "controls": labels.compactMap { label in controls[label].map { ["id": label, "frame": rect($0)] } }]
+  }
+
+  private static func sadTabOverlay(_ source: [String: Any], tabId: String) -> [String: Any] {
+    let controls = source["controls"] as? [String: [Double]] ?? [:]
+    return ["id": "sadTab.\(tabId)", "kind": "sadTab", "tabId": tabId,
+      "visible": !(source["hidden"] as? Bool ?? true), "mode": source["mode"] ?? NSNull(),
+      "frame": rect(source["frame"]),
+      "controls": controls.keys.sorted().map { ["id": $0, "frame": rect(controls[$0])] }]
   }
 
   private static func downloadsOverlay(_ source: [String: Any]) -> [String: Any] {

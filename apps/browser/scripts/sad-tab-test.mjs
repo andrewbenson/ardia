@@ -67,6 +67,18 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot().catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const nativeSad = (state, windowId = "w1") => state.windows.find((window) => window.id === windowId)?.overlays.find((overlay) => overlay.kind === "sadTab" && overlay.tabId === "a");
+const nativeFrame = (frame) => frame && [frame.x, frame.y, frame.width, frame.height];
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
 
@@ -142,15 +154,27 @@ try {
           const kept = await run(`return native().then((d) => !!(d && d.tabs.a && d.tabs.a.sadTab && !d.tabs.a.sadTab.hidden));`);
           await run(`ac.pageState.setState((s) => ({ popover: { ...s.popover, a: null } })); return true;`);
           if (!kept) throw new Error("an unrelated pane overlay publish took the native sad tab down");
+          await untilSnapshot("the sad tab survives a zoom publish", (state) => nativeSad(state)?.visible && nativeSad(state)?.mode === name);
           await sleep(300);
         }
         const got = await frames(nativeShell, i);
         if (nativeShell && got.mode !== name) throw new Error(`native mode ${got.mode}`);
+        if (nativeShell) {
+          const sad = nativeSad(await untilSnapshot(`native ${name} sad tab`, (state) => nativeSad(state)?.visible && nativeSad(state)?.mode === name));
+          if (!near(nativeFrame(sad.frame), got.overlay)) throw new Error(`native sad tab ${JSON.stringify(sad.frame)}, JS ${got.overlay}`);
+          for (const title of labels[i]) {
+            const control = sad.controls.find((item) => item.id === title);
+            if (!control || !near(nativeFrame(control.frame), got.controls[title])) throw new Error(`native ${title} ${JSON.stringify(control)}, JS ${got.controls[title]}`);
+          }
+        }
         measured[tag][i] = got;
         const action = i === 0 ? "Reload" : "Wait";
         await run(`return click(${number}, ${JSON.stringify(centre(got.controls[action]))}).then(() => true);`);
         await until(`${action} clears it`, `const p = page(); return !p.crashed && !p.unresponsive || null;`, 3000);
-        if (nativeShell) await until("the native overlay goes", `return native().then((d) => !d || (!d.tabs.a && !d.inCard) || null);`, 3000);
+        if (nativeShell) {
+          await until("the native overlay goes", `return native().then((d) => !d || (!d.tabs.a && !d.inCard) || null);`, 3000);
+          await untilSnapshot("the sad tab leaves the native snapshot", (state) => !nativeSad(state)?.visible);
+        }
         if (pooled && i === 1) await until("the native model clears the hang", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.sadTab || d.tabs.a.sadTab.hidden || null);`, 3000);
         if (pooled && i === 0) await until("the pooled page reloads to A", `return ac.webviews.get("a") && ac.store.getState().tabs.a?.title === "A" && !ac.store.getState().live.a?.isLoading ? true : null;`, 8000);
         return got;
@@ -165,6 +189,7 @@ try {
         const to = await run(`return ac.store.getState().moveTabsToWindow(["a"], null) ?? null;`);
         if (!to) throw new Error("no new window");
         await until("the sad tab leaves w1", `return sadIn("w1").then((s) => !s || null);`, 5000);
+        await untilSnapshot("the sad tab leaves w1 in the native snapshot", (state) => !nativeSad(state)?.visible);
         await sleep(600);
         const crashedThere = await run(`return !!page().crashed;`);
         if (!crashedThere) {
@@ -172,6 +197,7 @@ try {
           return { to, reloadedOnMove: true };
         }
         await until("and shows in the new window", `return sadIn(${JSON.stringify(to)}) || null;`, 5000);
+        await untilSnapshot("the sad tab follows the native window", (state) => nativeSad(state, to)?.visible);
         await run(`ac.webviews.get("a").reload(); return true;`);
         await until("a reload clears it there", `return sadIn(${JSON.stringify(to)}).then((s) => !s || null);`, 8000);
         return { to };

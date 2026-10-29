@@ -73,6 +73,10 @@ public class HostedModule: Module {
       MainActor.assumeIsolated { NativeTabPickers.describe(windowId) }
     }.runOnQueue(.main)
 
+    AsyncFunction("downloadMagnet") { (windowId: String) -> String in
+      MainActor.assumeIsolated { NativeDownloadMagnet.describe(windowId) }
+    }.runOnQueue(.main)
+
     AsyncFunction("sidebarPages") { (windowId: String) -> String in
       MainActor.assumeIsolated { NativeSidebar.pages(windowId: windowId) ?? "null" }
     }.runOnQueue(.main)

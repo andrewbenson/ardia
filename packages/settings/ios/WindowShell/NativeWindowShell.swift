@@ -25,7 +25,7 @@ enum NativeWindowShell {
   }
 
   nonisolated static var mainOnTop: Bool {
-    NativePaneRoots.enabled && NativeSplitChrome.panesEnabled && LaunchSwitches.shared.isOn(.shellMainTop, defaultOn: false)
+    TabPoolHost.available && LaunchSwitches.shared.isOn(.shellMainTop, defaultOn: false)
   }
 
   static func install() {

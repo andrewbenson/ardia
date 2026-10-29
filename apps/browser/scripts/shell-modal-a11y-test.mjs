@@ -41,7 +41,7 @@ const layersOf = (reach) => Object.keys(reach ?? {}).filter((k) => !k.startsWith
 let instance = null;
 try {
   for (const leg of ["shell", "rn"]) {
-    instance = await launch(app, { data: join(scratch, `data-${leg}`), fresh: true, session: fixture, onboarded: true, env: leg === "shell" ? SHELL : {} });
+    instance = await launch(app, { data: join(scratch, `data-${leg}`), fresh: true, session: fixture, onboarded: true, env: leg === "shell" ? SHELL : { ARDIA_NATIVE_SHELL: "0" } });
     const run = (body) => instance.eval(body, { timeout: 20000 });
     const reach = () => run(`return globalThis.expo.modules.SolaraWindowShell.accessibilityReach("w1")`);
     const settle = () => sleep(1200);

@@ -34,15 +34,18 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativeServices = "ARDIA_NATIVE_SERVICES"
   case nativeToolTour = "ARDIA_NATIVE_TOOL_TOUR"
 
-  public static let experiments: [LaunchSwitch] = [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia]
+  public static let experiments: [LaunchSwitch] = [
+    .nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeToolTour, .nativeSidePanel,
+  ]
   static let storedInDevelopment: Set<LaunchSwitch> = [
     .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers, .nativeProfilePager,
+    .nativeToolTour, .nativeSidePanel,
   ]
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
   public static var recoverable: [LaunchSwitch] { experiments.filter(onByDefault.contains) }
   public static let onByDefault: Set<LaunchSwitch> = [
     .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
-    .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet,
+    .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
   ]
 
   public var needs: [LaunchSwitch] {
@@ -266,6 +269,7 @@ public struct LaunchSwitches: Sendable {
   static let spokenNames: [LaunchSwitch: String] = [
     .nativeShell: "the native window", .shellPanes: "native page overlays", .nativeAutoHide: "native auto-hide",
     .nativeSidebar: "the native sidebar", .nativeTopStrip: "the native tab strip", .nativeMedia: "native media controls",
+    .nativeToolTour: "the native tool tour", .nativeSidePanel: "the native side panel",
   ]
 
   public static func recoveryQuestion(_ turningOff: [LaunchSwitch]) -> (title: String, message: String) {

@@ -6,7 +6,7 @@ import Testing
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
     .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
-    .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet,
+    .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
   ]
   static let shippedSurfaces = defaultOn.filter { !$0.storable(distribution: false) && !$0.storable(distribution: true) }
 
@@ -253,7 +253,7 @@ import Testing
       #expect(second.isOn(.nativeShell) && second.isOn(.nativeTopStrip) && second.isOn(.nativeSidebar))
       let third = launch()
       #expect(third.droppedAfterFailedLaunches)
-      #expect(third.turnedOffByRecovery == [.nativeShell, .nativeSidebar, .nativeTopStrip])
+      #expect(third.turnedOffByRecovery == [.nativeShell, .nativeSidebar, .nativeTopStrip, .nativeSidePanel, .nativeToolTour])
       #expect(!third.isOn(.nativeShell) && !third.isOn(.nativeTopStrip) && !third.isOn(.nativeSidebar) && !third.isOn(.nativeTabPickers))
       #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
       #expect(defaults.string(forKey: "ARDIA_NATIVE_TOP_STRIP") == "0")
@@ -283,7 +283,7 @@ import Testing
       #expect(!switches.countedLaunch && !switches.droppedAfterFailedLaunches)
     }
     #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
-    #expect(LaunchSwitch.recoverable == [.nativeShell, .nativeTopStrip])
+    #expect(LaunchSwitch.recoverable == [.nativeShell, .nativeTopStrip, .nativeToolTour, .nativeSidePanel])
   }
 
   @Test func anIsolatedLaunchNeitherCountsNorAsksForOption() {
@@ -306,7 +306,7 @@ import Testing
       defaults.set(1, forKey: LaunchSwitches.failedLaunchesKey)
       let held = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { true })
       #expect(held.skippedStored && !held.countedLaunch)
-      #expect(held.turnedOffByRecovery == [.nativeShell, .nativeSidebar, .nativeTopStrip])
+      #expect(held.turnedOffByRecovery == [.nativeShell, .nativeSidebar, .nativeTopStrip, .nativeSidePanel, .nativeToolTour])
       #expect(!held.isOn(.nativeShell) && !held.isOn(.nativeSidebar) && !held.isOn(.nativeTopStrip))
       #expect(held.isOn(.nativeDownloadMagnet), "a switch that can't be saved can't be turned off this way")
       #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
@@ -329,7 +329,7 @@ import Testing
     var asked: [[LaunchSwitch]] = []
     let declined = LaunchSwitches.launching(
       environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmRecovery: { asked.append($0); return false })
-    #expect(asked == [[.nativeShell, .nativeSidebar, .nativeTopStrip]])
+    #expect(asked == [[.nativeShell, .nativeSidebar, .nativeTopStrip, .nativeSidePanel, .nativeToolTour]])
     #expect(!declined.skippedStored && declined.turnedOffByRecovery.isEmpty && declined.recoveryReport == nil)
     #expect(declined.isOn(.nativeShell) && declined.isOn(.nativeSidebar))
     #expect(declined.countedLaunch)

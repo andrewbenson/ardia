@@ -23,6 +23,8 @@ public final class ExperimentsModel {
     .nativeSidebar: ("Native sidebar", "The sidebar's tabs, pins, folders and hover cards."),
     .nativeTopStrip: ("Native tab strip", "The tab strip at the top of the window."),
     .nativeMedia: ("Native media controls", "The sidebar and mini players, the command line pill, and the share and cast pickers."),
+    .nativeToolTour: ("Native tool tour", "The tour that points out the command bar, tabs, sidebar and split view."),
+    .nativeSidePanel: ("Native side panel", "An extension's side panel, beside the page."),
   ]
 
   struct Row: Identifiable, Equatable {

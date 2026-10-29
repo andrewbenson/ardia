@@ -8,7 +8,7 @@ enum NativeToolTour {
   nonisolated static let kind = "toolTour"
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeToolTour, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeToolTour)
   }
 
   static func register() {

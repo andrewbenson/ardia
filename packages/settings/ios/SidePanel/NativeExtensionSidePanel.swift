@@ -10,7 +10,7 @@ enum NativeExtensionSidePanel {
   nonisolated static let kind = "extensionSidePanel"
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeSidePanel, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeSidePanel)
   }
 
   static func register() {

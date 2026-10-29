@@ -9,6 +9,7 @@ public enum SidePanelMetrics {
   public static let padLeft: CGFloat = 12
   public static let padRight: CGFloat = 5
   public static let gap: CGFloat = 8
+  public static let labelInset: CGFloat = 2
   public static let icon: CGFloat = 16
   public static let button: CGFloat = 30
   public static let gripOffset: CGFloat = -3
@@ -149,7 +150,8 @@ public final class ExtensionSidePanelView: NSView {
     grip.frame = f.grip
     iconView.frame = f.icon ?? .zero
     let lineHeight = ceil(titleField.intrinsicContentSize.height)
-    titleField.frame = CGRect(x: f.title.minX, y: f.title.midY - lineHeight / 2, width: f.title.width, height: lineHeight)
+    let inset = SidePanelMetrics.labelInset
+    titleField.frame = CGRect(x: f.title.minX - inset, y: f.title.midY - lineHeight / 2, width: f.title.width + 2 * inset, height: lineHeight)
     menuButton.frame = f.menu
     closeButton.frame = f.close
     content.frame = f.content

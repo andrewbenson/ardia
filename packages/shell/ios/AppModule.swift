@@ -691,6 +691,7 @@ enum KeyEquivalents {
   private static var watching = false
   private static var pressing = 0, dryPressing = 0
   private static var handler: ((String, String?, String?) -> Void)?
+  private static var nativeHandlers: [String: (String?) -> Void] = [:]
   private static var menuKeyIMP: IMP?
   private static var awaitingDry: [TimeInterval: String] = [:]
   private static var lateDry: [TimeInterval: String] = [:]
@@ -868,16 +869,23 @@ enum KeyEquivalents {
     }
     pressing += 1
     if dry {
-      if dryPressing == 0 { handler = MenuTarget.shared.handler }
+      if dryPressing == 0 {
+        handler = MenuTarget.shared.handler
+        nativeHandlers = NativeMenuCommands.handlers
+      }
       dryPressing += 1
       MenuTarget.shared.handler = { _, _, _ in }
+      NativeMenuCommands.handlers = [:]
     }
   }
 
   private static func end(dry: Bool) {
     if dry {
       dryPressing -= 1
-      if dryPressing == 0 { MenuTarget.shared.handler = handler }
+      if dryPressing == 0 {
+        MenuTarget.shared.handler = handler
+        NativeMenuCommands.handlers = nativeHandlers
+      }
     }
     pressing -= 1
     restoreMenuKeyIfIdle()

@@ -17,7 +17,6 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativeIconPicker = "ARDIA_NATIVE_ICON_PICKER"
   case nativeMedia = "ARDIA_NATIVE_MEDIA"
   case nativeAutoHide = "ARDIA_NATIVE_AUTOHIDE"
-  case nativeSettings = "ARDIA_NATIVE_SETTINGS"
   case nativeImport = "ARDIA_NATIVE_IMPORT"
   case nativeOnboarding = "ARDIA_NATIVE_ONBOARDING"
   case nativeNewTab = "ARDIA_NATIVE_NEWTAB"
@@ -44,7 +43,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
   public static var recoverable: [LaunchSwitch] { experiments.filter(onByDefault.contains) }
   public static let onByDefault: Set<LaunchSwitch> = [
-    .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
+    .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
     .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]

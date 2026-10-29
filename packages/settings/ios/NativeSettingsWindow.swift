@@ -53,7 +53,7 @@ enum NativeSettingsWindow {
   private static var context: SettingsContext?
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeSettings, defaultOn: true) && NativeSettingsHandle.active
+    NativeSettingsHandle.active
   }
 
   static func install() {

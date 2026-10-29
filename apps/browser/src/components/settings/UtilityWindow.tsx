@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
 import { ImportWindow } from "../import/ImportWindow";
-import { SettingsWindow } from "./SettingsWindow";
-import { SETTINGS_WINDOW_ID } from "./windows";
 
 const EMPTY_CHECK_MS = 2000;
 
@@ -26,7 +24,7 @@ export function UtilityWindow({ id }: { id: string }) {
   const onLayout = useReportEmptyContent(id);
   return (
     <View style={{ flex: 1 }} onLayout={onLayout}>
-      {id === SETTINGS_WINDOW_ID ? <SettingsWindow /> : <ImportWindow />}
+      <ImportWindow />
     </View>
   );
 }

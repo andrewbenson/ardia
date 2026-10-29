@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-// Phase 2 measurements for the native Settings window (docs/native/architecture.md §5.1), the native window against the
-// RN one in the same build (ARDIA_NATIVE_SETTINGS=0), interleaved run by run. Run it under the perflab lock.
-//
-//   node packages/settings/scripts/settings-bench.mjs <Solara.app> <scratch dir> [--runs N]
-//
-//   open → content   the JS call that opens Settings on General → General's view laid out and its frame committed
-//   pane switch      the JS call that shows a pane → that pane laid out and committed, over 6 panes, twice each
-//   memory           the app's physical footprint with one browser window, then with Settings open on General
-//   Each launch idles 8 s first, as a user would before opening Settings; native-unwarmed turns off the pre-built
-//   view (ARDIA_SETTINGS_PREWARM=0) to show what the pre-build saves.
-//
-//   <Solara.app>   a Release build (JS bundled) under apps/browser/build-*; it runs hidden on scratch data
-//   --runs N       launches per variant (default 6)
-//   --variants a,b only these variants (default native,native-unwarmed,rn)
-// Results go to <scratch dir>/settings-bench.json and a table on stdout. Typing in search needs real key events in a key
-// window, so it isn't measured here.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -37,16 +21,12 @@ const PANES = ["tabs", "appearance", "privacy", "search", "advanced", "engines"]
 const VARIANTS = [
   { name: "native", env: {} },
   { name: "native-unwarmed", env: { ARDIA_SETTINGS_PREWARM: "0" } },
-  { name: "rn", env: { ARDIA_NATIVE_SETTINGS: "0" } },
 ].filter((v) => !ONLY || ONLY.includes(v.name));
 const SETTLE_MS = 8000;
 
 const inApp = (inst, body) => inst.eval(body);
 
-const timingsCall = (variant) =>
-  variant.startsWith("native")
-    ? "return globalThis.expo.modules.SolaraSettings.devTimings().then((t) => JSON.parse(t))"
-    : "return globalThis.acSettingsTimings ? globalThis.acSettingsTimings() : []";
+const timingsCall = () => "return globalThis.expo.modules.SolaraSettings.devTimings().then((t) => JSON.parse(t))";
 
 async function waitFor(inst, variant, pane, since, seen, timeout = 10000) {
   const deadline = Date.now() + timeout;

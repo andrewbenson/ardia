@@ -1,6 +1,6 @@
 import { applyResult, applySafari, importArcSpace, importBookmarks, importTabs } from "../import/apply";
 import { importModule } from "../import/module";
-import { openImport, openSettings, useSettingsNav } from "../settings/windows";
+import { openImport, openSettings } from "../settings/windows";
 import { useBookmarkDialog } from "../bookmarks/actions";
 import { useBookmarkEditor } from "../bookmarks/edit";
 import { useMeetingAlert } from "../../live/alerts";
@@ -26,7 +26,6 @@ export const pagesDrivers = {
   openInternalPage,
   openSettings,
   openImport,
-  settingsNav: useSettingsNav,
   importModule,
   bookmarkDialog: useBookmarkDialog,
   bookmarkEditor: useBookmarkEditor,

@@ -116,6 +116,7 @@ public final class HeroBarModel {
   @ObservationIgnored let sources: NewTabSources
   @ObservationIgnored let fetcher: SuggestFetcher?
   @ObservationIgnored let bangs: () -> any BangTable
+  @ObservationIgnored let now: @MainActor () -> Double
 
   public private(set) var typed: String
   public private(set) var edited: Bool
@@ -139,7 +140,8 @@ public final class HeroBarModel {
   public init(
     windowId: String, tabId: String, profileId: String, incognito: Bool, settings: @escaping () -> Settings,
     sources: NewTabSources = .shared, fetcher: SuggestFetcher? = nil, bangs: @escaping () -> any BangTable = { BundledBangs.table },
-    variant: BarVariant = .hero, opensTab: Bool = false, initialText: String = "", currentUrl: String = ""
+    variant: BarVariant = .hero, opensTab: Bool = false, initialText: String = "", currentUrl: String = "",
+    now: @escaping @MainActor () -> Double = { Date().timeIntervalSince1970 * 1000 }
   ) {
     self.variant = variant
     self.opensTab = opensTab
@@ -153,6 +155,7 @@ public final class HeroBarModel {
     self.sources = sources
     self.fetcher = fetcher
     self.bangs = bangs
+    self.now = now
     let restored = variant == .hero ? HeroBarModel.saved[tabId] : nil
     typed = restored?.typed ?? initialText
     edited = restored?.edited ?? false
@@ -584,6 +587,7 @@ public final class HeroBarModel {
     let s = settings()
     let table = scope == nil && query.contains("!") ? bangs() : nil
     let options = SuggestOptions(
+      now: now(),
       engine: defaultSearchEngine(s),
       preference: SearchPreference(rawValue: s.string("commandBarPreference") ?? "") ?? .website,
       remote: remoteList(query),

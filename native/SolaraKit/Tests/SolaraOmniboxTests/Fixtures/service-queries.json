@@ -1,0 +1,2125 @@
+{
+  "contexts": [
+    {
+      "id": "default",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "website",
+      "preventInline": false,
+      "remote": []
+    },
+    {
+      "id": "shared",
+      "profileId": "shared",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "website",
+      "preventInline": false,
+      "remote": []
+    },
+    {
+      "id": "search",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "search",
+      "preventInline": false,
+      "remote": []
+    },
+    {
+      "id": "prevent-inline",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "website",
+      "preventInline": true,
+      "remote": []
+    },
+    {
+      "id": "current-tab",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "fixture-tab-gh",
+      "currentUrl": "https://github.com/net",
+      "preference": "website",
+      "preventInline": false,
+      "remote": []
+    },
+    {
+      "id": "scope-github",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "website",
+      "preventInline": false,
+      "remote": [],
+      "scope": {
+        "kind": "site",
+        "name": "GitHub",
+        "host": "github.com",
+        "url": "https://github.com/search?q=%s"
+      }
+    },
+    {
+      "id": "scope-keyword",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "website",
+      "preventInline": false,
+      "remote": [],
+      "scope": {
+        "kind": "engine",
+        "name": "Fixture Docs",
+        "host": "docs.fixture.example",
+        "url": "https://docs.fixture.example/search?q=%s",
+        "engineId": "fixture-docs"
+      }
+    },
+    {
+      "id": "scope-history",
+      "profileId": "default",
+      "windowId": "w-bench",
+      "tabId": "t-default-20",
+      "currentUrl": "",
+      "preference": "website",
+      "preventInline": false,
+      "remote": [],
+      "scope": {
+        "kind": "history",
+        "name": "duplicate.example",
+        "host": "duplicate.example",
+        "url": ""
+      }
+    }
+  ],
+  "queries": [
+    {
+      "text": "g",
+      "context": "default"
+    },
+    {
+      "text": "gi",
+      "context": "default"
+    },
+    {
+      "text": "git",
+      "context": "default"
+    },
+    {
+      "text": "gith",
+      "context": "default"
+    },
+    {
+      "text": "githu",
+      "context": "default"
+    },
+    {
+      "text": "github",
+      "context": "default"
+    },
+    {
+      "text": "github.",
+      "context": "default"
+    },
+    {
+      "text": "github.c",
+      "context": "default"
+    },
+    {
+      "text": "github.co",
+      "context": "default"
+    },
+    {
+      "text": "github.com",
+      "context": "default"
+    },
+    {
+      "text": "github.com/",
+      "context": "default"
+    },
+    {
+      "text": "github.com/n",
+      "context": "default"
+    },
+    {
+      "text": "github.com/ne",
+      "context": "default"
+    },
+    {
+      "text": "github.com/net",
+      "context": "default"
+    },
+    {
+      "text": "r",
+      "context": "default"
+    },
+    {
+      "text": "re",
+      "context": "default"
+    },
+    {
+      "text": "rea",
+      "context": "default"
+    },
+    {
+      "text": "reac",
+      "context": "default"
+    },
+    {
+      "text": "react",
+      "context": "default"
+    },
+    {
+      "text": "react ",
+      "context": "default"
+    },
+    {
+      "text": "react n",
+      "context": "default"
+    },
+    {
+      "text": "react na",
+      "context": "default"
+    },
+    {
+      "text": "react nat",
+      "context": "default"
+    },
+    {
+      "text": "react nati",
+      "context": "default"
+    },
+    {
+      "text": "react nativ",
+      "context": "default"
+    },
+    {
+      "text": "react native",
+      "context": "default"
+    },
+    {
+      "text": "react native ",
+      "context": "default"
+    },
+    {
+      "text": "react native p",
+      "context": "default"
+    },
+    {
+      "text": "react native pe",
+      "context": "default"
+    },
+    {
+      "text": "react native per",
+      "context": "default"
+    },
+    {
+      "text": "react native perf",
+      "context": "default"
+    },
+    {
+      "text": "d",
+      "context": "default"
+    },
+    {
+      "text": "du",
+      "context": "default"
+    },
+    {
+      "text": "dup",
+      "context": "default"
+    },
+    {
+      "text": "dupl",
+      "context": "default"
+    },
+    {
+      "text": "dupli",
+      "context": "default"
+    },
+    {
+      "text": "duplic",
+      "context": "default"
+    },
+    {
+      "text": "duplica",
+      "context": "default"
+    },
+    {
+      "text": "duplicat",
+      "context": "default"
+    },
+    {
+      "text": "duplicate",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.e",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.ex",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.exa",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.exam",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.examp",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.exampl",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.example",
+      "context": "default"
+    },
+    {
+      "text": "w",
+      "context": "default"
+    },
+    {
+      "text": "ww",
+      "context": "default"
+    },
+    {
+      "text": "www",
+      "context": "default"
+    },
+    {
+      "text": "www.",
+      "context": "default"
+    },
+    {
+      "text": "www.r",
+      "context": "default"
+    },
+    {
+      "text": "www.re",
+      "context": "default"
+    },
+    {
+      "text": "www.red",
+      "context": "default"
+    },
+    {
+      "text": "www.redd",
+      "context": "default"
+    },
+    {
+      "text": "www.reddi",
+      "context": "default"
+    },
+    {
+      "text": "www.reddit",
+      "context": "default"
+    },
+    {
+      "text": "www.reddit.",
+      "context": "default"
+    },
+    {
+      "text": "www.reddit.c",
+      "context": "default"
+    },
+    {
+      "text": "www.reddit.co",
+      "context": "default"
+    },
+    {
+      "text": "www.reddit.com",
+      "context": "default"
+    },
+    {
+      "text": "www.n",
+      "context": "default"
+    },
+    {
+      "text": "www.ny",
+      "context": "default"
+    },
+    {
+      "text": "www.nyt",
+      "context": "default"
+    },
+    {
+      "text": "www.nyti",
+      "context": "default"
+    },
+    {
+      "text": "www.nytim",
+      "context": "default"
+    },
+    {
+      "text": "www.nytime",
+      "context": "default"
+    },
+    {
+      "text": "www.nytimes",
+      "context": "default"
+    },
+    {
+      "text": "www.nytimes.",
+      "context": "default"
+    },
+    {
+      "text": "www.nytimes.c",
+      "context": "default"
+    },
+    {
+      "text": "www.nytimes.co",
+      "context": "default"
+    },
+    {
+      "text": "www.nytimes.com",
+      "context": "default"
+    },
+    {
+      "text": "x",
+      "context": "default"
+    },
+    {
+      "text": "xn",
+      "context": "default"
+    },
+    {
+      "text": "xn-",
+      "context": "default"
+    },
+    {
+      "text": "xn--",
+      "context": "default"
+    },
+    {
+      "text": "xn--b",
+      "context": "default"
+    },
+    {
+      "text": "xn--bc",
+      "context": "default"
+    },
+    {
+      "text": "xn--bch",
+      "context": "default"
+    },
+    {
+      "text": "xn--bche",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-k",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-kv",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-kva",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-kva.",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-kva.d",
+      "context": "default"
+    },
+    {
+      "text": "xn--bcher-kva.de",
+      "context": "default"
+    },
+    {
+      "text": "e",
+      "context": "default"
+    },
+    {
+      "text": "en",
+      "context": "default"
+    },
+    {
+      "text": "en.",
+      "context": "default"
+    },
+    {
+      "text": "en.w",
+      "context": "default"
+    },
+    {
+      "text": "en.wi",
+      "context": "default"
+    },
+    {
+      "text": "en.wik",
+      "context": "default"
+    },
+    {
+      "text": "en.wiki",
+      "context": "default"
+    },
+    {
+      "text": "en.wikip",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipe",
+      "context": "default"
+    },
+    {
+      "text": "en.wikiped",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipedi",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipedia",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipedia.",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipedia.o",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipedia.or",
+      "context": "default"
+    },
+    {
+      "text": "en.wikipedia.org",
+      "context": "default"
+    },
+    {
+      "text": "n",
+      "context": "default"
+    },
+    {
+      "text": "ne",
+      "context": "default"
+    },
+    {
+      "text": "new",
+      "context": "default"
+    },
+    {
+      "text": "news",
+      "context": "default"
+    },
+    {
+      "text": "news.",
+      "context": "default"
+    },
+    {
+      "text": "news.y",
+      "context": "default"
+    },
+    {
+      "text": "news.yc",
+      "context": "default"
+    },
+    {
+      "text": "news.yco",
+      "context": "default"
+    },
+    {
+      "text": "news.ycom",
+      "context": "default"
+    },
+    {
+      "text": "news.ycomb",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombi",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombin",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombina",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinat",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinato",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinator",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinator.",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinator.c",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinator.co",
+      "context": "default"
+    },
+    {
+      "text": "news.ycombinator.com",
+      "context": "default"
+    },
+    {
+      "text": "www.y",
+      "context": "default"
+    },
+    {
+      "text": "www.yo",
+      "context": "default"
+    },
+    {
+      "text": "www.you",
+      "context": "default"
+    },
+    {
+      "text": "www.yout",
+      "context": "default"
+    },
+    {
+      "text": "www.youtu",
+      "context": "default"
+    },
+    {
+      "text": "www.youtub",
+      "context": "default"
+    },
+    {
+      "text": "www.youtube",
+      "context": "default"
+    },
+    {
+      "text": "www.youtube.",
+      "context": "default"
+    },
+    {
+      "text": "www.youtube.c",
+      "context": "default"
+    },
+    {
+      "text": "www.youtube.co",
+      "context": "default"
+    },
+    {
+      "text": "www.youtube.com",
+      "context": "default"
+    },
+    {
+      "text": "de",
+      "context": "default"
+    },
+    {
+      "text": "dev",
+      "context": "default"
+    },
+    {
+      "text": "deve",
+      "context": "default"
+    },
+    {
+      "text": "devel",
+      "context": "default"
+    },
+    {
+      "text": "develo",
+      "context": "default"
+    },
+    {
+      "text": "develop",
+      "context": "default"
+    },
+    {
+      "text": "develope",
+      "context": "default"
+    },
+    {
+      "text": "developer",
+      "context": "default"
+    },
+    {
+      "text": "developer.",
+      "context": "default"
+    },
+    {
+      "text": "developer.a",
+      "context": "default"
+    },
+    {
+      "text": "developer.ap",
+      "context": "default"
+    },
+    {
+      "text": "developer.app",
+      "context": "default"
+    },
+    {
+      "text": "developer.appl",
+      "context": "default"
+    },
+    {
+      "text": "developer.apple",
+      "context": "default"
+    },
+    {
+      "text": "developer.apple.",
+      "context": "default"
+    },
+    {
+      "text": "developer.apple.c",
+      "context": "default"
+    },
+    {
+      "text": "developer.apple.co",
+      "context": "default"
+    },
+    {
+      "text": "developer.apple.com",
+      "context": "default"
+    },
+    {
+      "text": "www.t",
+      "context": "default"
+    },
+    {
+      "text": "www.th",
+      "context": "default"
+    },
+    {
+      "text": "www.the",
+      "context": "default"
+    },
+    {
+      "text": "www.thev",
+      "context": "default"
+    },
+    {
+      "text": "www.theve",
+      "context": "default"
+    },
+    {
+      "text": "www.thever",
+      "context": "default"
+    },
+    {
+      "text": "www.theverg",
+      "context": "default"
+    },
+    {
+      "text": "www.theverge",
+      "context": "default"
+    },
+    {
+      "text": "www.theverge.",
+      "context": "default"
+    },
+    {
+      "text": "www.theverge.c",
+      "context": "default"
+    },
+    {
+      "text": "www.theverge.co",
+      "context": "default"
+    },
+    {
+      "text": "www.theverge.com",
+      "context": "default"
+    },
+    {
+      "text": "t",
+      "context": "default"
+    },
+    {
+      "text": "tw",
+      "context": "default"
+    },
+    {
+      "text": "twi",
+      "context": "default"
+    },
+    {
+      "text": "twit",
+      "context": "default"
+    },
+    {
+      "text": "twitt",
+      "context": "default"
+    },
+    {
+      "text": "twitte",
+      "context": "default"
+    },
+    {
+      "text": "twitter",
+      "context": "default"
+    },
+    {
+      "text": "twitter.",
+      "context": "default"
+    },
+    {
+      "text": "twitter.c",
+      "context": "default"
+    },
+    {
+      "text": "twitter.co",
+      "context": "default"
+    },
+    {
+      "text": "twitter.com",
+      "context": "default"
+    },
+    {
+      "text": "m",
+      "context": "default"
+    },
+    {
+      "text": "ma",
+      "context": "default"
+    },
+    {
+      "text": "mai",
+      "context": "default"
+    },
+    {
+      "text": "mail",
+      "context": "default"
+    },
+    {
+      "text": "mail.",
+      "context": "default"
+    },
+    {
+      "text": "mail.g",
+      "context": "default"
+    },
+    {
+      "text": "mail.go",
+      "context": "default"
+    },
+    {
+      "text": "mail.goo",
+      "context": "default"
+    },
+    {
+      "text": "mail.goog",
+      "context": "default"
+    },
+    {
+      "text": "mail.googl",
+      "context": "default"
+    },
+    {
+      "text": "mail.google",
+      "context": "default"
+    },
+    {
+      "text": "mail.google.",
+      "context": "default"
+    },
+    {
+      "text": "mail.google.c",
+      "context": "default"
+    },
+    {
+      "text": "mail.google.co",
+      "context": "default"
+    },
+    {
+      "text": "mail.google.com",
+      "context": "default"
+    },
+    {
+      "text": "react.",
+      "context": "default"
+    },
+    {
+      "text": "react.d",
+      "context": "default"
+    },
+    {
+      "text": "react.de",
+      "context": "default"
+    },
+    {
+      "text": "react.dev",
+      "context": "default"
+    },
+    {
+      "text": "l",
+      "context": "default"
+    },
+    {
+      "text": "li",
+      "context": "default"
+    },
+    {
+      "text": "lin",
+      "context": "default"
+    },
+    {
+      "text": "line",
+      "context": "default"
+    },
+    {
+      "text": "linea",
+      "context": "default"
+    },
+    {
+      "text": "linear",
+      "context": "default"
+    },
+    {
+      "text": "linear.",
+      "context": "default"
+    },
+    {
+      "text": "linear.a",
+      "context": "default"
+    },
+    {
+      "text": "linear.ap",
+      "context": "default"
+    },
+    {
+      "text": "linear.app",
+      "context": "default"
+    },
+    {
+      "text": "no",
+      "context": "default"
+    },
+    {
+      "text": "nod",
+      "context": "default"
+    },
+    {
+      "text": "node",
+      "context": "default"
+    },
+    {
+      "text": "nodej",
+      "context": "default"
+    },
+    {
+      "text": "nodejs",
+      "context": "default"
+    },
+    {
+      "text": "nodejs.",
+      "context": "default"
+    },
+    {
+      "text": "nodejs.o",
+      "context": "default"
+    },
+    {
+      "text": "nodejs.or",
+      "context": "default"
+    },
+    {
+      "text": "nodejs.org",
+      "context": "default"
+    },
+    {
+      "text": "s",
+      "context": "default"
+    },
+    {
+      "text": "st",
+      "context": "default"
+    },
+    {
+      "text": "sta",
+      "context": "default"
+    },
+    {
+      "text": "stac",
+      "context": "default"
+    },
+    {
+      "text": "stack",
+      "context": "default"
+    },
+    {
+      "text": "stacko",
+      "context": "default"
+    },
+    {
+      "text": "stackov",
+      "context": "default"
+    },
+    {
+      "text": "stackove",
+      "context": "default"
+    },
+    {
+      "text": "stackover",
+      "context": "default"
+    },
+    {
+      "text": "stackoverf",
+      "context": "default"
+    },
+    {
+      "text": "stackoverfl",
+      "context": "default"
+    },
+    {
+      "text": "stackoverflo",
+      "context": "default"
+    },
+    {
+      "text": "stackoverflow",
+      "context": "default"
+    },
+    {
+      "text": "stackoverflow.",
+      "context": "default"
+    },
+    {
+      "text": "stackoverflow.c",
+      "context": "default"
+    },
+    {
+      "text": "stackoverflow.co",
+      "context": "default"
+    },
+    {
+      "text": "stackoverflow.com",
+      "context": "default"
+    },
+    {
+      "text": "do",
+      "context": "default"
+    },
+    {
+      "text": "doc",
+      "context": "default"
+    },
+    {
+      "text": "docs",
+      "context": "default"
+    },
+    {
+      "text": "docs.",
+      "context": "default"
+    },
+    {
+      "text": "docs.g",
+      "context": "default"
+    },
+    {
+      "text": "docs.go",
+      "context": "default"
+    },
+    {
+      "text": "docs.goo",
+      "context": "default"
+    },
+    {
+      "text": "docs.goog",
+      "context": "default"
+    },
+    {
+      "text": "docs.googl",
+      "context": "default"
+    },
+    {
+      "text": "docs.google",
+      "context": "default"
+    },
+    {
+      "text": "docs.google.",
+      "context": "default"
+    },
+    {
+      "text": "docs.google.c",
+      "context": "default"
+    },
+    {
+      "text": "docs.google.co",
+      "context": "default"
+    },
+    {
+      "text": "docs.google.com",
+      "context": "default"
+    },
+    {
+      "text": "www.f",
+      "context": "default"
+    },
+    {
+      "text": "www.fi",
+      "context": "default"
+    },
+    {
+      "text": "www.fig",
+      "context": "default"
+    },
+    {
+      "text": "www.figm",
+      "context": "default"
+    },
+    {
+      "text": "www.figma",
+      "context": "default"
+    },
+    {
+      "text": "www.figma.",
+      "context": "default"
+    },
+    {
+      "text": "www.figma.c",
+      "context": "default"
+    },
+    {
+      "text": "www.figma.co",
+      "context": "default"
+    },
+    {
+      "text": "www.figma.com",
+      "context": "default"
+    },
+    {
+      "text": "ti",
+      "context": "default"
+    },
+    {
+      "text": "tie",
+      "context": "default"
+    },
+    {
+      "text": "tie.",
+      "context": "default"
+    },
+    {
+      "text": "tie.e",
+      "context": "default"
+    },
+    {
+      "text": "tie.ex",
+      "context": "default"
+    },
+    {
+      "text": "tie.exa",
+      "context": "default"
+    },
+    {
+      "text": "tie.exam",
+      "context": "default"
+    },
+    {
+      "text": "tie.examp",
+      "context": "default"
+    },
+    {
+      "text": "tie.exampl",
+      "context": "default"
+    },
+    {
+      "text": "tie.example",
+      "context": "default"
+    },
+    {
+      "text": "developer.m",
+      "context": "default"
+    },
+    {
+      "text": "developer.mo",
+      "context": "default"
+    },
+    {
+      "text": "developer.moz",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozi",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozil",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozill",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozilla",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozilla.",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozilla.o",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozilla.or",
+      "context": "default"
+    },
+    {
+      "text": "developer.mozilla.org",
+      "context": "default"
+    },
+    {
+      "text": "a",
+      "context": "default"
+    },
+    {
+      "text": "ar",
+      "context": "default"
+    },
+    {
+      "text": "ars",
+      "context": "default"
+    },
+    {
+      "text": "arst",
+      "context": "default"
+    },
+    {
+      "text": "arste",
+      "context": "default"
+    },
+    {
+      "text": "arstec",
+      "context": "default"
+    },
+    {
+      "text": "arstech",
+      "context": "default"
+    },
+    {
+      "text": "arstechn",
+      "context": "default"
+    },
+    {
+      "text": "arstechni",
+      "context": "default"
+    },
+    {
+      "text": "arstechnic",
+      "context": "default"
+    },
+    {
+      "text": "arstechnica",
+      "context": "default"
+    },
+    {
+      "text": "arstechnica.",
+      "context": "default"
+    },
+    {
+      "text": "arstechnica.c",
+      "context": "default"
+    },
+    {
+      "text": "arstechnica.co",
+      "context": "default"
+    },
+    {
+      "text": "arstechnica.com",
+      "context": "default"
+    },
+    {
+      "text": "reactn",
+      "context": "default"
+    },
+    {
+      "text": "reactna",
+      "context": "default"
+    },
+    {
+      "text": "reactnat",
+      "context": "default"
+    },
+    {
+      "text": "reactnati",
+      "context": "default"
+    },
+    {
+      "text": "reactnativ",
+      "context": "default"
+    },
+    {
+      "text": "reactnative",
+      "context": "default"
+    },
+    {
+      "text": "reactnative.",
+      "context": "default"
+    },
+    {
+      "text": "reactnative.d",
+      "context": "default"
+    },
+    {
+      "text": "reactnative.de",
+      "context": "default"
+    },
+    {
+      "text": "reactnative.dev",
+      "context": "default"
+    },
+    {
+      "text": "www.no",
+      "context": "default"
+    },
+    {
+      "text": "www.not",
+      "context": "default"
+    },
+    {
+      "text": "www.noti",
+      "context": "default"
+    },
+    {
+      "text": "www.notio",
+      "context": "default"
+    },
+    {
+      "text": "www.notion",
+      "context": "default"
+    },
+    {
+      "text": "www.notion.",
+      "context": "default"
+    },
+    {
+      "text": "www.notion.s",
+      "context": "default"
+    },
+    {
+      "text": "www.notion.so",
+      "context": "default"
+    },
+    {
+      "text": "duplicate ",
+      "context": "default"
+    },
+    {
+      "text": "duplicate h",
+      "context": "default"
+    },
+    {
+      "text": "duplicate hi",
+      "context": "default"
+    },
+    {
+      "text": "duplicate his",
+      "context": "default"
+    },
+    {
+      "text": "duplicate hist",
+      "context": "default"
+    },
+    {
+      "text": "duplicate histo",
+      "context": "default"
+    },
+    {
+      "text": "duplicate histor",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history ",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history t",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history ti",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history tit",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history titl",
+      "context": "default"
+    },
+    {
+      "text": "duplicate history title",
+      "context": "default"
+    },
+    {
+      "text": "duplicate f",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fr",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fra",
+      "context": "default"
+    },
+    {
+      "text": "duplicate frag",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragm",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragme",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragmen",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment ",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment t",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment ti",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment tit",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment titl",
+      "context": "default"
+    },
+    {
+      "text": "duplicate fragment title",
+      "context": "default"
+    },
+    {
+      "text": "c",
+      "context": "default"
+    },
+    {
+      "text": "ch",
+      "context": "default"
+    },
+    {
+      "text": "chr",
+      "context": "default"
+    },
+    {
+      "text": "chro",
+      "context": "default"
+    },
+    {
+      "text": "chrom",
+      "context": "default"
+    },
+    {
+      "text": "chromi",
+      "context": "default"
+    },
+    {
+      "text": "chromiu",
+      "context": "default"
+    },
+    {
+      "text": "chromium",
+      "context": "default"
+    },
+    {
+      "text": "chromium ",
+      "context": "default"
+    },
+    {
+      "text": "chromium a",
+      "context": "default"
+    },
+    {
+      "text": "chromium an",
+      "context": "default"
+    },
+    {
+      "text": "chromium ani",
+      "context": "default"
+    },
+    {
+      "text": "chromium anim",
+      "context": "default"
+    },
+    {
+      "text": "chromium anima",
+      "context": "default"
+    },
+    {
+      "text": "chromium animat",
+      "context": "default"
+    },
+    {
+      "text": "chromium animati",
+      "context": "default"
+    },
+    {
+      "text": "chromium animatio",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation ",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation t",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation th",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation the",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation them",
+      "context": "default"
+    },
+    {
+      "text": "chromium animation theme",
+      "context": "default"
+    },
+    {
+      "text": "sp",
+      "context": "default"
+    },
+    {
+      "text": "spl",
+      "context": "default"
+    },
+    {
+      "text": "spli",
+      "context": "default"
+    },
+    {
+      "text": "split",
+      "context": "default"
+    },
+    {
+      "text": "split ",
+      "context": "default"
+    },
+    {
+      "text": "split p",
+      "context": "default"
+    },
+    {
+      "text": "split pi",
+      "context": "default"
+    },
+    {
+      "text": "split pin",
+      "context": "default"
+    },
+    {
+      "text": "split pinn",
+      "context": "default"
+    },
+    {
+      "text": "split pinne",
+      "context": "default"
+    },
+    {
+      "text": "split pinned",
+      "context": "default"
+    },
+    {
+      "text": "split pinned ",
+      "context": "default"
+    },
+    {
+      "text": "split pinned s",
+      "context": "default"
+    },
+    {
+      "text": "split pinned sp",
+      "context": "default"
+    },
+    {
+      "text": "split pinned spl",
+      "context": "default"
+    },
+    {
+      "text": "split pinned spli",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split ",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split a",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split an",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split ani",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split anim",
+      "context": "default"
+    },
+    {
+      "text": "split pinned split anima",
+      "context": "default"
+    },
+    {
+      "text": " github",
+      "context": "default"
+    },
+    {
+      "text": "github ",
+      "context": "default"
+    },
+    {
+      "text": "  github  ",
+      "context": "default"
+    },
+    {
+      "text": "\tgithub\n",
+      "context": "default"
+    },
+    {
+      "text": "GITHUB",
+      "context": "default"
+    },
+    {
+      "text": "GitHub.com/NET",
+      "context": "default"
+    },
+    {
+      "text": "REACT NATIVE PERF",
+      "context": "default"
+    },
+    {
+      "text": "React Native",
+      "context": "default"
+    },
+    {
+      "text": "native perf",
+      "context": "default"
+    },
+    {
+      "text": "perf native",
+      "context": "default"
+    },
+    {
+      "text": "Bücher",
+      "context": "default"
+    },
+    {
+      "text": "bücher.de",
+      "context": "default"
+    },
+    {
+      "text": "https://bücher.de",
+      "context": "default"
+    },
+    {
+      "text": "Duplicate open",
+      "context": "default"
+    },
+    {
+      "text": "equal score",
+      "context": "default"
+    },
+    {
+      "text": "tab equal",
+      "context": "default"
+    },
+    {
+      "text": "?",
+      "context": "default"
+    },
+    {
+      "text": "?github.com",
+      "context": "default"
+    },
+    {
+      "text": "? react native perf",
+      "context": "default"
+    },
+    {
+      "text": "?1+2",
+      "context": "default"
+    },
+    {
+      "text": "2+2",
+      "context": "default"
+    },
+    {
+      "text": "(2+3)*4",
+      "context": "default"
+    },
+    {
+      "text": "sqrt(81)",
+      "context": "default"
+    },
+    {
+      "text": "10 km in miles",
+      "context": "default"
+    },
+    {
+      "text": "12*4",
+      "context": "default"
+    },
+    {
+      "text": "google",
+      "context": "default"
+    },
+    {
+      "text": "google.com",
+      "context": "default"
+    },
+    {
+      "text": "docs ",
+      "context": "default"
+    },
+    {
+      "text": "github.com ",
+      "context": "default"
+    },
+    {
+      "text": "!gh react native",
+      "context": "default"
+    },
+    {
+      "text": "react native !gh",
+      "context": "default"
+    },
+    {
+      "text": "!w Bücher",
+      "context": "default"
+    },
+    {
+      "text": "!yt native perf",
+      "context": "default"
+    },
+    {
+      "text": "!GH solara",
+      "context": "default"
+    },
+    {
+      "text": "!ют музыка",
+      "context": "default"
+    },
+    {
+      "text": "!not-a-bang text",
+      "context": "default"
+    },
+    {
+      "text": "new tab",
+      "context": "default"
+    },
+    {
+      "text": "close tab",
+      "context": "default"
+    },
+    {
+      "text": "dark mode",
+      "context": "default"
+    },
+    {
+      "text": "settings",
+      "context": "default"
+    },
+    {
+      "text": "bookmarks",
+      "context": "default"
+    },
+    {
+      "text": "docs.new",
+      "context": "default"
+    },
+    {
+      "text": "sheet.new",
+      "context": "default"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "default"
+    },
+    {
+      "text": "https://no-match-47817.invalid/path",
+      "context": "default"
+    },
+    {
+      "text": "localhost:47817",
+      "context": "default"
+    },
+    {
+      "text": "127.0.0.1:47817",
+      "context": "default"
+    },
+    {
+      "text": "http://",
+      "context": "default"
+    },
+    {
+      "text": "https://github.com/net",
+      "context": "default"
+    },
+    {
+      "text": "duplicate.example/path#fragment",
+      "context": "default"
+    },
+    {
+      "text": " github ",
+      "context": "default"
+    },
+    {
+      "text": "g",
+      "context": "shared"
+    },
+    {
+      "text": "github.com/net",
+      "context": "shared"
+    },
+    {
+      "text": "react native perf",
+      "context": "shared"
+    },
+    {
+      "text": "duplicate",
+      "context": "shared"
+    },
+    {
+      "text": "equal score",
+      "context": "shared"
+    },
+    {
+      "text": "Bücher",
+      "context": "shared"
+    },
+    {
+      "text": "!gh react",
+      "context": "shared"
+    },
+    {
+      "text": "?github",
+      "context": "shared"
+    },
+    {
+      "text": "1+2",
+      "context": "shared"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "shared"
+    },
+    {
+      "text": "g",
+      "context": "search"
+    },
+    {
+      "text": "github.com/net",
+      "context": "search"
+    },
+    {
+      "text": "react native perf",
+      "context": "search"
+    },
+    {
+      "text": "duplicate",
+      "context": "search"
+    },
+    {
+      "text": "equal score",
+      "context": "search"
+    },
+    {
+      "text": "Bücher",
+      "context": "search"
+    },
+    {
+      "text": "!gh react",
+      "context": "search"
+    },
+    {
+      "text": "?github",
+      "context": "search"
+    },
+    {
+      "text": "1+2",
+      "context": "search"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "search"
+    },
+    {
+      "text": "g",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "github.com/net",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "react native perf",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "duplicate",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "equal score",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "Bücher",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "!gh react",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "?github",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "1+2",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "prevent-inline"
+    },
+    {
+      "text": "g",
+      "context": "current-tab"
+    },
+    {
+      "text": "github.com/net",
+      "context": "current-tab"
+    },
+    {
+      "text": "react native perf",
+      "context": "current-tab"
+    },
+    {
+      "text": "duplicate",
+      "context": "current-tab"
+    },
+    {
+      "text": "equal score",
+      "context": "current-tab"
+    },
+    {
+      "text": "Bücher",
+      "context": "current-tab"
+    },
+    {
+      "text": "!gh react",
+      "context": "current-tab"
+    },
+    {
+      "text": "?github",
+      "context": "current-tab"
+    },
+    {
+      "text": "1+2",
+      "context": "current-tab"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "current-tab"
+    },
+    {
+      "text": "g",
+      "context": "scope-github"
+    },
+    {
+      "text": "github.com/net",
+      "context": "scope-github"
+    },
+    {
+      "text": "react native perf",
+      "context": "scope-github"
+    },
+    {
+      "text": "duplicate",
+      "context": "scope-github"
+    },
+    {
+      "text": "equal score",
+      "context": "scope-github"
+    },
+    {
+      "text": "Bücher",
+      "context": "scope-github"
+    },
+    {
+      "text": "!gh react",
+      "context": "scope-github"
+    },
+    {
+      "text": "?github",
+      "context": "scope-github"
+    },
+    {
+      "text": "1+2",
+      "context": "scope-github"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "scope-github"
+    },
+    {
+      "text": "g",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "github.com/net",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "react native perf",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "duplicate",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "equal score",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "Bücher",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "!gh react",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "?github",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "1+2",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "scope-keyword"
+    },
+    {
+      "text": "g",
+      "context": "scope-history"
+    },
+    {
+      "text": "github.com/net",
+      "context": "scope-history"
+    },
+    {
+      "text": "react native perf",
+      "context": "scope-history"
+    },
+    {
+      "text": "duplicate",
+      "context": "scope-history"
+    },
+    {
+      "text": "equal score",
+      "context": "scope-history"
+    },
+    {
+      "text": "Bücher",
+      "context": "scope-history"
+    },
+    {
+      "text": "!gh react",
+      "context": "scope-history"
+    },
+    {
+      "text": "?github",
+      "context": "scope-history"
+    },
+    {
+      "text": "1+2",
+      "context": "scope-history"
+    },
+    {
+      "text": "zzzxq-no-match-47817",
+      "context": "scope-history"
+    }
+  ]
+}

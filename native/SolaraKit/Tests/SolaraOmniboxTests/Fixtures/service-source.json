@@ -1,0 +1,1663 @@
+{
+  "now": 1793232000000,
+  "provenance": {
+    "seed": "apps/browser/scripts/perf/seed.mjs buildSeed(\"http://127.0.0.1:47817\")",
+    "sampling": "Fresh module seed=42; Date.now frozen to now. History: first 24 newest plus first row per host, URL deduplicated, then six explicit rows, stable descending lastVisit. Bookmarks: first 14 leaves in bar->other DFS, retained folder order, then explicit nested/duplicate/IDN leaves. Tabs: first 12 default-profile rows in table order, then five explicit rows. Source original counts: 5000 history, 900 default/100 work bookmarks, 158 default/200 total tabs.",
+    "projection": "History favicon null as apps/browser/src/lib/history.ts; bookmarks bar->other depth-first, first URL wins as profileBookmarks/NewTabSources, bookmarkIcons applied; tabs default profile in table order, fields id/url/title/favicon. shared profile maps to default engine and bookmark engine with identical projected tabs."
+  },
+  "engineHistory": [
+    {
+      "url": "https://github.com/net",
+      "title": "React native perf",
+      "visits": 40,
+      "visitTimes": [
+        1793231999000
+      ]
+    },
+    {
+      "url": "https://duplicate.example/path",
+      "title": "Duplicate history title",
+      "visits": 7,
+      "visitTimes": [
+        1793231995000
+      ]
+    },
+    {
+      "url": "https://duplicate.example/path#fragment",
+      "title": "Duplicate fragment title",
+      "visits": 7,
+      "visitTimes": [
+        1793231995000
+      ]
+    },
+    {
+      "url": "https://github.com/facebook/react-native/issues/10377",
+      "title": "Group download macos render",
+      "visits": 24,
+      "visitTimes": [
+        1793148342552,
+        1793151942552,
+        1793155542552,
+        1793159142552,
+        1793162742552,
+        1793166342552,
+        1793169942552,
+        1793173542552,
+        1793177142552,
+        1793180742552,
+        1793184342552,
+        1793187942552,
+        1793191542552,
+        1793195142552,
+        1793198742552,
+        1793202342552,
+        1793205942552,
+        1793209542552,
+        1793213142552,
+        1793216742552,
+        1793220342552,
+        1793223942552,
+        1793227542552,
+        1793231142552
+      ]
+    },
+    {
+      "url": "https://www.reddit.com/window/timing/5031",
+      "title": "Engine suggestion omnibox layout omnibox render shortcut macos",
+      "visits": 18,
+      "visitTimes": [
+        1793169082322,
+        1793172682322,
+        1793176282322,
+        1793179882322,
+        1793183482322,
+        1793187082322,
+        1793190682322,
+        1793194282322,
+        1793197882322,
+        1793201482322,
+        1793205082322,
+        1793208682322,
+        1793212282322,
+        1793215882322,
+        1793219482322,
+        1793223082322,
+        1793226682322,
+        1793230282322
+      ]
+    },
+    {
+      "url": "https://github.com/nodejs/hermes/pull/1148",
+      "title": "Macos search keyboard suggestion omnibox omnibox keyboard",
+      "visits": 1,
+      "visitTimes": [
+        1793227518905
+      ]
+    },
+    {
+      "url": "https://www.nytimes.com/omnibox/download/9895",
+      "title": "Render timing react commit split",
+      "visits": 23,
+      "visitTimes": [
+        1793147620084,
+        1793151220084,
+        1793154820084,
+        1793158420084,
+        1793162020084,
+        1793165620084,
+        1793169220084,
+        1793172820084,
+        1793176420084,
+        1793180020084,
+        1793183620084,
+        1793187220084,
+        1793190820084,
+        1793194420084,
+        1793198020084,
+        1793201620084,
+        1793205220084,
+        1793208820084,
+        1793212420084,
+        1793216020084,
+        1793219620084,
+        1793223220084,
+        1793226820084
+      ]
+    },
+    {
+      "url": "https://xn--bcher-kva.de/lesen",
+      "title": "Bücher lesen",
+      "visits": 8,
+      "visitTimes": [
+        1793224800000
+      ]
+    },
+    {
+      "url": "https://en.wikipedia.org/browser/keyboard/1900",
+      "title": "Profile layout hermes render performance zustand download",
+      "visits": 2,
+      "visitTimes": [
+        1793220374282,
+        1793223974282
+      ]
+    },
+    {
+      "url": "https://news.ycombinator.com/layout/chromium/6614",
+      "title": "Group search omnibox suggestion",
+      "visits": 1,
+      "visitTimes": [
+        1793221470300
+      ]
+    },
+    {
+      "url": "https://www.youtube.com/keyboard/engine/5036",
+      "title": "Profile macos commit download",
+      "visits": 1,
+      "visitTimes": [
+        1793220913190
+      ]
+    },
+    {
+      "url": "https://developer.apple.com/react/store/602",
+      "title": "Store profile pinned split search search browser keyboard react",
+      "visits": 9,
+      "visitTimes": [
+        1793191826988,
+        1793195426988,
+        1793199026988,
+        1793202626988,
+        1793206226988,
+        1793209826988,
+        1793213426988,
+        1793217026988,
+        1793220626988
+      ]
+    },
+    {
+      "url": "https://www.theverge.com/color/search/2666",
+      "title": "Tab download layout keyboard native",
+      "visits": 36,
+      "visitTimes": [
+        1793091300087,
+        1793094900087,
+        1793098500087,
+        1793102100087,
+        1793105700087,
+        1793109300087,
+        1793112900087,
+        1793116500087,
+        1793120100087,
+        1793123700087,
+        1793127300087,
+        1793130900087,
+        1793134500087,
+        1793138100087,
+        1793141700087,
+        1793145300087,
+        1793148900087,
+        1793152500087,
+        1793156100087,
+        1793159700087,
+        1793163300087,
+        1793166900087,
+        1793170500087,
+        1793174100087,
+        1793177700087,
+        1793181300087,
+        1793184900087,
+        1793188500087,
+        1793192100087,
+        1793195700087,
+        1793199300087,
+        1793202900087,
+        1793206500087,
+        1793210100087,
+        1793213700087,
+        1793217300087
+      ]
+    },
+    {
+      "url": "https://twitter.com/history/tab/9252",
+      "title": "Zustand color sidebar performance engine macos download suggestion",
+      "visits": 28,
+      "visitTimes": [
+        1793113112577,
+        1793116712577,
+        1793120312577,
+        1793123912577,
+        1793127512577,
+        1793131112577,
+        1793134712577,
+        1793138312577,
+        1793141912577,
+        1793145512577,
+        1793149112577,
+        1793152712577,
+        1793156312577,
+        1793159912577,
+        1793163512577,
+        1793167112577,
+        1793170712577,
+        1793174312577,
+        1793177912577,
+        1793181512577,
+        1793185112577,
+        1793188712577,
+        1793192312577,
+        1793195912577,
+        1793199512577,
+        1793203112577,
+        1793206712577,
+        1793210312577
+      ]
+    },
+    {
+      "url": "https://www.youtube.com/keyboard/suggestion/9045",
+      "title": "Timing profile macos native macos animation",
+      "visits": 15,
+      "visitTimes": [
+        1793159099623,
+        1793162699623,
+        1793166299623,
+        1793169899623,
+        1793173499623,
+        1793177099623,
+        1793180699623,
+        1793184299623,
+        1793187899623,
+        1793191499623,
+        1793195099623,
+        1793198699623,
+        1793202299623,
+        1793205899623,
+        1793209499623
+      ]
+    },
+    {
+      "url": "https://en.wikipedia.org/react/group/7938",
+      "title": "Performance react split split suggestion window sidebar suggestion",
+      "visits": 25,
+      "visitTimes": [
+        1793122292231,
+        1793125892231,
+        1793129492231,
+        1793133092231,
+        1793136692231,
+        1793140292231,
+        1793143892231,
+        1793147492231,
+        1793151092231,
+        1793154692231,
+        1793158292231,
+        1793161892231,
+        1793165492231,
+        1793169092231,
+        1793172692231,
+        1793176292231,
+        1793179892231,
+        1793183492231,
+        1793187092231,
+        1793190692231,
+        1793194292231,
+        1793197892231,
+        1793201492231,
+        1793205092231,
+        1793208692231
+      ]
+    },
+    {
+      "url": "https://twitter.com/download/chromium/1207",
+      "title": "Window native animation group pinned pinned",
+      "visits": 12,
+      "visitTimes": [
+        1793169052371,
+        1793172652371,
+        1793176252371,
+        1793179852371,
+        1793183452371,
+        1793187052371,
+        1793190652371,
+        1793194252371,
+        1793197852371,
+        1793201452371,
+        1793205052371,
+        1793208652371
+      ]
+    },
+    {
+      "url": "https://twitter.com/profile/shortcut/9684",
+      "title": "Layout selector render theme split zustand",
+      "visits": 1,
+      "visitTimes": [
+        1793208650285
+      ]
+    },
+    {
+      "url": "https://mail.google.com/react/react/3489",
+      "title": "Omnibox chromium memo render pinned sidebar bookmark bookmark zustand",
+      "visits": 36,
+      "visitTimes": [
+        1793081880204,
+        1793085480204,
+        1793089080204,
+        1793092680204,
+        1793096280204,
+        1793099880204,
+        1793103480204,
+        1793107080204,
+        1793110680204,
+        1793114280204,
+        1793117880204,
+        1793121480204,
+        1793125080204,
+        1793128680204,
+        1793132280204,
+        1793135880204,
+        1793139480204,
+        1793143080204,
+        1793146680204,
+        1793150280204,
+        1793153880204,
+        1793157480204,
+        1793161080204,
+        1793164680204,
+        1793168280204,
+        1793171880204,
+        1793175480204,
+        1793179080204,
+        1793182680204,
+        1793186280204,
+        1793189880204,
+        1793193480204,
+        1793197080204,
+        1793200680204,
+        1793204280204,
+        1793207880204
+      ]
+    },
+    {
+      "url": "https://www.nytimes.com/suggestion/selector/3302",
+      "title": "Sidebar animation browser shortcut history group native shortcut",
+      "visits": 15,
+      "visitTimes": [
+        1793157372675,
+        1793160972675,
+        1793164572675,
+        1793168172675,
+        1793171772675,
+        1793175372675,
+        1793178972675,
+        1793182572675,
+        1793186172675,
+        1793189772675,
+        1793193372675,
+        1793196972675,
+        1793200572675,
+        1793204172675,
+        1793207772675
+      ]
+    },
+    {
+      "url": "https://react.dev/suggestion/memo/918",
+      "title": "Browser group group zustand chromium",
+      "visits": 22,
+      "visitTimes": [
+        1793129415862,
+        1793133015862,
+        1793136615862,
+        1793140215862,
+        1793143815862,
+        1793147415862,
+        1793151015862,
+        1793154615862,
+        1793158215862,
+        1793161815862,
+        1793165415862,
+        1793169015862,
+        1793172615862,
+        1793176215862,
+        1793179815862,
+        1793183415862,
+        1793187015862,
+        1793190615862,
+        1793194215862,
+        1793197815862,
+        1793201415862,
+        1793205015862
+      ]
+    },
+    {
+      "url": "https://linear.app/suggestion/chromium/2279",
+      "title": "Performance search engine keyboard commit layout",
+      "visits": 3,
+      "visitTimes": [
+        1793192695272,
+        1793196295272,
+        1793199895272
+      ]
+    },
+    {
+      "url": "https://nodejs.org/keyboard/hermes/5911",
+      "title": "Tab performance browser layout",
+      "visits": 9,
+      "visitTimes": [
+        1793170403751,
+        1793174003751,
+        1793177603751,
+        1793181203751,
+        1793184803751,
+        1793188403751,
+        1793192003751,
+        1793195603751,
+        1793199203751
+      ]
+    },
+    {
+      "url": "https://www.nytimes.com/download/bookmark/8718",
+      "title": "Omnibox timing omnibox tab profile sidebar chromium group",
+      "visits": 33,
+      "visitTimes": [
+        1793083005403,
+        1793086605403,
+        1793090205403,
+        1793093805403,
+        1793097405403,
+        1793101005403,
+        1793104605403,
+        1793108205403,
+        1793111805403,
+        1793115405403,
+        1793119005403,
+        1793122605403,
+        1793126205403,
+        1793129805403,
+        1793133405403,
+        1793137005403,
+        1793140605403,
+        1793144205403,
+        1793147805403,
+        1793151405403,
+        1793155005403,
+        1793158605403,
+        1793162205403,
+        1793165805403,
+        1793169405403,
+        1793173005403,
+        1793176605403,
+        1793180205403,
+        1793183805403,
+        1793187405403,
+        1793191005403,
+        1793194605403,
+        1793198205403
+      ]
+    },
+    {
+      "url": "https://www.nytimes.com/timing/macos/9429",
+      "title": "History keyboard color group memo zustand theme",
+      "visits": 1,
+      "visitTimes": [
+        1793197573904
+      ]
+    },
+    {
+      "url": "https://stackoverflow.com/bookmark/selector/8160",
+      "title": "Sidebar omnibox sidebar react pinned group chromium",
+      "visits": 1,
+      "visitTimes": [
+        1793197538910
+      ]
+    },
+    {
+      "url": "https://twitter.com/tab/history/32",
+      "title": "Animation shortcut animation animation sidebar tab theme suggestion render",
+      "visits": 5,
+      "visitTimes": [
+        1793180048388,
+        1793183648388,
+        1793187248388,
+        1793190848388,
+        1793194448388
+      ]
+    },
+    {
+      "url": "https://react.dev/render/animation/592",
+      "title": "Profile zustand sidebar search macos download commit theme history",
+      "visits": 5,
+      "visitTimes": [
+        1793176198675,
+        1793179798675,
+        1793183398675,
+        1793186998675,
+        1793190598675
+      ]
+    },
+    {
+      "url": "https://docs.google.com/tab/memo/7264",
+      "title": "Window keyboard history pinned download native browser commit",
+      "visits": 1,
+      "visitTimes": [
+        1793183836187
+      ]
+    },
+    {
+      "url": "https://www.figma.com/suggestion/commit/1599",
+      "title": "Store shortcut memo react macos",
+      "visits": 6,
+      "visitTimes": [
+        1793157730053,
+        1793161330053,
+        1793164930053,
+        1793168530053,
+        1793172130053,
+        1793175730053
+      ]
+    },
+    {
+      "url": "https://tie.example/first",
+      "title": "Equal score parity",
+      "visits": 3,
+      "visitTimes": [
+        1793145600000
+      ]
+    },
+    {
+      "url": "https://tie.example/second",
+      "title": "Equal score parity",
+      "visits": 3,
+      "visitTimes": [
+        1793145600000
+      ]
+    },
+    {
+      "url": "https://developer.mozilla.org/search/commit/5845",
+      "title": "Selector zustand bookmark suggestion profile",
+      "visits": 1,
+      "visitTimes": [
+        1793140504936
+      ]
+    },
+    {
+      "url": "https://arstechnica.com/profile/macos/5968",
+      "title": "Shortcut selector performance macos performance performance bookmark",
+      "visits": 10,
+      "visitTimes": [
+        1793100360293,
+        1793103960293,
+        1793107560293,
+        1793111160293,
+        1793114760293,
+        1793118360293,
+        1793121960293,
+        1793125560293,
+        1793129160293,
+        1793132760293
+      ]
+    },
+    {
+      "url": "https://reactnative.dev/split/react/1644",
+      "title": "Download shortcut animation engine window",
+      "visits": 9,
+      "visitTimes": [
+        1793099056614,
+        1793102656614,
+        1793106256614,
+        1793109856614,
+        1793113456614,
+        1793117056614,
+        1793120656614,
+        1793124256614,
+        1793127856614
+      ]
+    },
+    {
+      "url": "https://www.notion.so/engine/hermes/5464",
+      "title": "Hermes animation react theme engine window suggestion group render",
+      "visits": 1,
+      "visitTimes": [
+        1793119637853
+      ]
+    }
+  ],
+  "history": [
+    {
+      "url": "https://github.com/net",
+      "title": "React native perf",
+      "favicon": null,
+      "visits": 40,
+      "lastVisit": 1793231999000
+    },
+    {
+      "url": "https://duplicate.example/path",
+      "title": "Duplicate history title",
+      "favicon": null,
+      "visits": 7,
+      "lastVisit": 1793231995000
+    },
+    {
+      "url": "https://duplicate.example/path#fragment",
+      "title": "Duplicate fragment title",
+      "favicon": null,
+      "visits": 7,
+      "lastVisit": 1793231995000
+    },
+    {
+      "url": "https://github.com/facebook/react-native/issues/10377",
+      "title": "Group download macos render",
+      "favicon": null,
+      "visits": 24,
+      "lastVisit": 1793231142552
+    },
+    {
+      "url": "https://www.reddit.com/window/timing/5031",
+      "title": "Engine suggestion omnibox layout omnibox render shortcut macos",
+      "favicon": null,
+      "visits": 18,
+      "lastVisit": 1793230282322
+    },
+    {
+      "url": "https://github.com/nodejs/hermes/pull/1148",
+      "title": "Macos search keyboard suggestion omnibox omnibox keyboard",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793227518905
+    },
+    {
+      "url": "https://www.nytimes.com/omnibox/download/9895",
+      "title": "Render timing react commit split",
+      "favicon": null,
+      "visits": 23,
+      "lastVisit": 1793226820084
+    },
+    {
+      "url": "https://xn--bcher-kva.de/lesen",
+      "title": "Bücher lesen",
+      "favicon": null,
+      "visits": 8,
+      "lastVisit": 1793224800000
+    },
+    {
+      "url": "https://en.wikipedia.org/browser/keyboard/1900",
+      "title": "Profile layout hermes render performance zustand download",
+      "favicon": null,
+      "visits": 2,
+      "lastVisit": 1793223974282
+    },
+    {
+      "url": "https://news.ycombinator.com/layout/chromium/6614",
+      "title": "Group search omnibox suggestion",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793221470300
+    },
+    {
+      "url": "https://www.youtube.com/keyboard/engine/5036",
+      "title": "Profile macos commit download",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793220913190
+    },
+    {
+      "url": "https://developer.apple.com/react/store/602",
+      "title": "Store profile pinned split search search browser keyboard react",
+      "favicon": null,
+      "visits": 9,
+      "lastVisit": 1793220626988
+    },
+    {
+      "url": "https://www.theverge.com/color/search/2666",
+      "title": "Tab download layout keyboard native",
+      "favicon": null,
+      "visits": 36,
+      "lastVisit": 1793217300087
+    },
+    {
+      "url": "https://twitter.com/history/tab/9252",
+      "title": "Zustand color sidebar performance engine macos download suggestion",
+      "favicon": null,
+      "visits": 28,
+      "lastVisit": 1793210312577
+    },
+    {
+      "url": "https://www.youtube.com/keyboard/suggestion/9045",
+      "title": "Timing profile macos native macos animation",
+      "favicon": null,
+      "visits": 15,
+      "lastVisit": 1793209499623
+    },
+    {
+      "url": "https://en.wikipedia.org/react/group/7938",
+      "title": "Performance react split split suggestion window sidebar suggestion",
+      "favicon": null,
+      "visits": 25,
+      "lastVisit": 1793208692231
+    },
+    {
+      "url": "https://twitter.com/download/chromium/1207",
+      "title": "Window native animation group pinned pinned",
+      "favicon": null,
+      "visits": 12,
+      "lastVisit": 1793208652371
+    },
+    {
+      "url": "https://twitter.com/profile/shortcut/9684",
+      "title": "Layout selector render theme split zustand",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793208650285
+    },
+    {
+      "url": "https://mail.google.com/react/react/3489",
+      "title": "Omnibox chromium memo render pinned sidebar bookmark bookmark zustand",
+      "favicon": null,
+      "visits": 36,
+      "lastVisit": 1793207880204
+    },
+    {
+      "url": "https://www.nytimes.com/suggestion/selector/3302",
+      "title": "Sidebar animation browser shortcut history group native shortcut",
+      "favicon": null,
+      "visits": 15,
+      "lastVisit": 1793207772675
+    },
+    {
+      "url": "https://react.dev/suggestion/memo/918",
+      "title": "Browser group group zustand chromium",
+      "favicon": null,
+      "visits": 22,
+      "lastVisit": 1793205015862
+    },
+    {
+      "url": "https://linear.app/suggestion/chromium/2279",
+      "title": "Performance search engine keyboard commit layout",
+      "favicon": null,
+      "visits": 3,
+      "lastVisit": 1793199895272
+    },
+    {
+      "url": "https://nodejs.org/keyboard/hermes/5911",
+      "title": "Tab performance browser layout",
+      "favicon": null,
+      "visits": 9,
+      "lastVisit": 1793199203751
+    },
+    {
+      "url": "https://www.nytimes.com/download/bookmark/8718",
+      "title": "Omnibox timing omnibox tab profile sidebar chromium group",
+      "favicon": null,
+      "visits": 33,
+      "lastVisit": 1793198205403
+    },
+    {
+      "url": "https://www.nytimes.com/timing/macos/9429",
+      "title": "History keyboard color group memo zustand theme",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793197573904
+    },
+    {
+      "url": "https://stackoverflow.com/bookmark/selector/8160",
+      "title": "Sidebar omnibox sidebar react pinned group chromium",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793197538910
+    },
+    {
+      "url": "https://twitter.com/tab/history/32",
+      "title": "Animation shortcut animation animation sidebar tab theme suggestion render",
+      "favicon": null,
+      "visits": 5,
+      "lastVisit": 1793194448388
+    },
+    {
+      "url": "https://react.dev/render/animation/592",
+      "title": "Profile zustand sidebar search macos download commit theme history",
+      "favicon": null,
+      "visits": 5,
+      "lastVisit": 1793190598675
+    },
+    {
+      "url": "https://docs.google.com/tab/memo/7264",
+      "title": "Window keyboard history pinned download native browser commit",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793183836187
+    },
+    {
+      "url": "https://www.figma.com/suggestion/commit/1599",
+      "title": "Store shortcut memo react macos",
+      "favicon": null,
+      "visits": 6,
+      "lastVisit": 1793175730053
+    },
+    {
+      "url": "https://tie.example/first",
+      "title": "Equal score parity",
+      "favicon": null,
+      "visits": 3,
+      "lastVisit": 1793145600000
+    },
+    {
+      "url": "https://tie.example/second",
+      "title": "Equal score parity",
+      "favicon": null,
+      "visits": 3,
+      "lastVisit": 1793145600000
+    },
+    {
+      "url": "https://developer.mozilla.org/search/commit/5845",
+      "title": "Selector zustand bookmark suggestion profile",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793140504936
+    },
+    {
+      "url": "https://arstechnica.com/profile/macos/5968",
+      "title": "Shortcut selector performance macos performance performance bookmark",
+      "favicon": null,
+      "visits": 10,
+      "lastVisit": 1793132760293
+    },
+    {
+      "url": "https://reactnative.dev/split/react/1644",
+      "title": "Download shortcut animation engine window",
+      "favicon": null,
+      "visits": 9,
+      "lastVisit": 1793127856614
+    },
+    {
+      "url": "https://www.notion.so/engine/hermes/5464",
+      "title": "Hermes animation react theme engine window suggestion group render",
+      "favicon": null,
+      "visits": 1,
+      "lastVisit": 1793119637853
+    }
+  ],
+  "bookmarkTree": {
+    "bar": {
+      "id": "bm-0",
+      "k": "f",
+      "t": "Bookmarks Bar",
+      "a": 1793232000000,
+      "c": [
+        {
+          "id": "bm-3",
+          "k": "f",
+          "t": "Hermes selector",
+          "a": 1793232000000,
+          "c": [
+            {
+              "id": "bm-89",
+              "k": "u",
+              "t": "Sidebar performance tab shortcut render split profile",
+              "u": "https://www.theverge.com/download/download/9720",
+              "a": 1793231933000
+            },
+            {
+              "id": "bm-90",
+              "k": "u",
+              "t": "Memo tab profile react shortcut layout performance window",
+              "u": "https://react.dev/bookmark/profile/7118",
+              "a": 1793231932000
+            },
+            {
+              "id": "bm-107",
+              "k": "u",
+              "t": "Commit animation tab omnibox layout sidebar profile split keyboard",
+              "u": "https://docs.google.com/keyboard/keyboard/3443",
+              "a": 1793231915000
+            },
+            {
+              "id": "bm-114",
+              "k": "u",
+              "t": "Profile search animation store",
+              "u": "https://github.com/microsoft/hermes/pull/5319",
+              "a": 1793231908000
+            },
+            {
+              "id": "bm-153",
+              "k": "u",
+              "t": "Hermes zustand download pinned group download react",
+              "u": "https://linear.app/zustand/group/1183",
+              "a": 1793231869000
+            },
+            {
+              "id": "bm-210",
+              "k": "u",
+              "t": "Chromium history zustand window performance timing store",
+              "u": "https://news.ycombinator.com/theme/color/847",
+              "a": 1793231812000
+            },
+            {
+              "id": "bm-223",
+              "k": "u",
+              "t": "Macos chromium performance suggestion tab render",
+              "u": "https://developer.mozilla.org/download/sidebar/7315",
+              "a": 1793231799000
+            },
+            {
+              "id": "bm-243",
+              "k": "u",
+              "t": "Theme chromium hermes engine",
+              "u": "https://linear.app/keyboard/suggestion/8301",
+              "a": 1793231779000
+            },
+            {
+              "id": "bm-282",
+              "k": "u",
+              "t": "Theme animation engine keyboard",
+              "u": "https://linear.app/pinned/macos/2026",
+              "a": 1793231740000
+            },
+            {
+              "id": "bm-353",
+              "k": "u",
+              "t": "Animation render animation native layout performance",
+              "u": "https://arstechnica.com/suggestion/store/4692",
+              "a": 1793231669000
+            },
+            {
+              "id": "bm-388",
+              "k": "u",
+              "t": "Animation search browser react browser render zustand",
+              "u": "https://mail.google.com/tab/bookmark/4851",
+              "a": 1793231634000
+            },
+            {
+              "id": "bm-392",
+              "k": "u",
+              "t": "Selector commit browser react sidebar",
+              "u": "https://stackoverflow.com/profile/chromium/1965",
+              "a": 1793231630000
+            },
+            {
+              "id": "bm-410",
+              "k": "u",
+              "t": "Hermes history history browser",
+              "u": "https://arstechnica.com/memo/keyboard/7275",
+              "a": 1793231612000
+            },
+            {
+              "id": "bm-444",
+              "k": "u",
+              "t": "Sidebar tab theme suggestion render chromium sidebar",
+              "u": "https://github.com/microsoft/react/issues/20089",
+              "a": 1793231578000
+            }
+          ]
+        },
+        {
+          "id": "bm-5",
+          "k": "f",
+          "t": "Download color",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-7",
+          "k": "f",
+          "t": "Window performance",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-9",
+          "k": "f",
+          "t": "Zustand chromium",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-11",
+          "k": "f",
+          "t": "Keyboard engine",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-13",
+          "k": "f",
+          "t": "Performance macos",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-15",
+          "k": "f",
+          "t": "Commit download",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-17",
+          "k": "f",
+          "t": "Color tab",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-19",
+          "k": "f",
+          "t": "Selector download",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-21",
+          "k": "f",
+          "t": "Pinned render",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "fixture-nested",
+          "k": "f",
+          "t": "Fixture folder",
+          "a": 1793232000000,
+          "c": [
+            {
+              "id": "fixture-bookmark-first",
+              "k": "u",
+              "t": "First bookmark title",
+              "u": "https://duplicate.example/path",
+              "a": 1793232000000
+            }
+          ]
+        },
+        {
+          "id": "fixture-gh",
+          "k": "u",
+          "t": "React native perf bookmarked",
+          "u": "https://github.com/net",
+          "a": 1793232000000
+        },
+        {
+          "id": "fixture-idn",
+          "k": "u",
+          "t": "Bücher bookmark",
+          "u": "https://xn--bcher-kva.de/lesen",
+          "a": 1793232000000
+        }
+      ]
+    },
+    "other": {
+      "id": "bm-1",
+      "k": "f",
+      "t": "Other Bookmarks",
+      "a": 1793232000000,
+      "c": [
+        {
+          "id": "bm-2",
+          "k": "f",
+          "t": "Store group",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-4",
+          "k": "f",
+          "t": "Timing window",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-6",
+          "k": "f",
+          "t": "Split animation",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-8",
+          "k": "f",
+          "t": "Bookmark zustand",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-10",
+          "k": "f",
+          "t": "Group bookmark",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-12",
+          "k": "f",
+          "t": "Animation macos",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-14",
+          "k": "f",
+          "t": "Profile macos",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-16",
+          "k": "f",
+          "t": "Performance layout",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-18",
+          "k": "f",
+          "t": "Color store",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "bm-20",
+          "k": "f",
+          "t": "Shortcut color",
+          "a": 1793232000000,
+          "c": []
+        },
+        {
+          "id": "fixture-bookmark-duplicate",
+          "k": "u",
+          "t": "Later duplicate must lose",
+          "u": "https://duplicate.example/path",
+          "a": 1793232000000
+        }
+      ]
+    }
+  },
+  "bookmarks": [
+    {
+      "url": "https://www.theverge.com/download/download/9720",
+      "title": "Sidebar performance tab shortcut render split profile",
+      "favicon": null
+    },
+    {
+      "url": "https://react.dev/bookmark/profile/7118",
+      "title": "Memo tab profile react shortcut layout performance window",
+      "favicon": null
+    },
+    {
+      "url": "https://docs.google.com/keyboard/keyboard/3443",
+      "title": "Commit animation tab omnibox layout sidebar profile split keyboard",
+      "favicon": null
+    },
+    {
+      "url": "https://github.com/microsoft/hermes/pull/5319",
+      "title": "Profile search animation store",
+      "favicon": null
+    },
+    {
+      "url": "https://linear.app/zustand/group/1183",
+      "title": "Hermes zustand download pinned group download react",
+      "favicon": null
+    },
+    {
+      "url": "https://news.ycombinator.com/theme/color/847",
+      "title": "Chromium history zustand window performance timing store",
+      "favicon": null
+    },
+    {
+      "url": "https://developer.mozilla.org/download/sidebar/7315",
+      "title": "Macos chromium performance suggestion tab render",
+      "favicon": null
+    },
+    {
+      "url": "https://linear.app/keyboard/suggestion/8301",
+      "title": "Theme chromium hermes engine",
+      "favicon": null
+    },
+    {
+      "url": "https://linear.app/pinned/macos/2026",
+      "title": "Theme animation engine keyboard",
+      "favicon": null
+    },
+    {
+      "url": "https://arstechnica.com/suggestion/store/4692",
+      "title": "Animation render animation native layout performance",
+      "favicon": null
+    },
+    {
+      "url": "https://mail.google.com/tab/bookmark/4851",
+      "title": "Animation search browser react browser render zustand",
+      "favicon": null
+    },
+    {
+      "url": "https://stackoverflow.com/profile/chromium/1965",
+      "title": "Selector commit browser react sidebar",
+      "favicon": null
+    },
+    {
+      "url": "https://arstechnica.com/memo/keyboard/7275",
+      "title": "Hermes history history browser",
+      "favicon": null
+    },
+    {
+      "url": "https://github.com/microsoft/react/issues/20089",
+      "title": "Sidebar tab theme suggestion render chromium sidebar",
+      "favicon": null
+    },
+    {
+      "url": "https://duplicate.example/path",
+      "title": "First bookmark title",
+      "favicon": "https://fixture.example/duplicate.png"
+    },
+    {
+      "url": "https://github.com/net",
+      "title": "React native perf bookmarked",
+      "favicon": "https://fixture.example/github.png"
+    },
+    {
+      "url": "https://xn--bcher-kva.de/lesen",
+      "title": "Bücher bookmark",
+      "favicon": null
+    }
+  ],
+  "bookmarkIcons": {
+    "https://github.com/net": "https://fixture.example/github.png",
+    "https://duplicate.example/path": "https://fixture.example/duplicate.png"
+  },
+  "tabs": [
+    {
+      "id": "t-default-0",
+      "url": "http://127.0.0.1:47817/p/default-0",
+      "title": "Chromium animation theme",
+      "favicon": null
+    },
+    {
+      "id": "t-default-1",
+      "url": "http://127.0.0.1:47817/p/default-1",
+      "title": "Split pinned split animation",
+      "favicon": null
+    },
+    {
+      "id": "t-default-2",
+      "url": "http://127.0.0.1:47817/p/default-2",
+      "title": "Browser react profile bookmark download",
+      "favicon": null
+    },
+    {
+      "id": "t-default-3",
+      "url": "http://127.0.0.1:47817/p/default-3",
+      "title": "Group tab memo history hermes shortcut",
+      "favicon": null
+    },
+    {
+      "id": "t-default-4",
+      "url": "http://127.0.0.1:47817/p/default-4",
+      "title": "Omnibox omnibox zustand bookmark omnibox react search",
+      "favicon": null
+    },
+    {
+      "id": "t-default-5",
+      "url": "http://127.0.0.1:47817/p/default-5",
+      "title": "Color suggestion hermes",
+      "favicon": null
+    },
+    {
+      "id": "t-default-6",
+      "url": "http://127.0.0.1:47817/p/default-6",
+      "title": "Commit tab react bookmark",
+      "favicon": null
+    },
+    {
+      "id": "t-default-7",
+      "url": "http://127.0.0.1:47817/p/default-7",
+      "title": "Animation search bookmark animation performance",
+      "favicon": null
+    },
+    {
+      "id": "t-default-8",
+      "url": "http://127.0.0.1:47817/p/default-8",
+      "title": "Chromium timing tab split keyboard suggestion",
+      "favicon": null
+    },
+    {
+      "id": "t-default-9",
+      "url": "http://127.0.0.1:47817/p/default-9",
+      "title": "Profile omnibox store theme macos omnibox bookmark",
+      "favicon": null
+    },
+    {
+      "id": "t-default-10",
+      "url": "http://127.0.0.1:47817/p/default-10",
+      "title": "Performance layout performance",
+      "favicon": null
+    },
+    {
+      "id": "t-default-11",
+      "url": "http://127.0.0.1:47817/p/default-11",
+      "title": "Browser theme history commit",
+      "favicon": null
+    },
+    {
+      "id": "fixture-tab-first",
+      "url": "https://duplicate.example/path",
+      "title": "Duplicate open first",
+      "favicon": "https://fixture.example/tab-first.png"
+    },
+    {
+      "id": "fixture-tab-second",
+      "url": "https://duplicate.example/path",
+      "title": "Duplicate open second",
+      "favicon": "https://fixture.example/tab-second.png"
+    },
+    {
+      "id": "fixture-tab-gh",
+      "url": "https://github.com/net",
+      "title": "React native perf open",
+      "favicon": null
+    },
+    {
+      "id": "fixture-tab-tie-first",
+      "url": "https://tabtie.example/first",
+      "title": "Tab equal score parity",
+      "favicon": null
+    },
+    {
+      "id": "fixture-tab-tie-second",
+      "url": "https://tabtie.example/second",
+      "title": "Tab equal score parity",
+      "favicon": null
+    }
+  ],
+  "profiles": [
+    {
+      "id": "default",
+      "engineProfile": "default",
+      "bookmarkEngineProfile": "default"
+    },
+    {
+      "id": "shared",
+      "engineProfile": "default",
+      "bookmarkEngineProfile": "default"
+    }
+  ],
+  "settings": {
+    "searchEngine": "google",
+    "commandBarPreference": "website",
+    "searchSuggestions": false,
+    "customSearchEngines": [
+      {
+        "id": "fixture-docs",
+        "name": "Fixture Docs",
+        "keyword": "docs",
+        "url": "https://docs.fixture.example/search?q=%s"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "id": "newTab",
+      "title": "New Tab",
+      "keywords": [
+        "open tab"
+      ]
+    },
+    {
+      "id": "newWindow",
+      "title": "New Window"
+    },
+    {
+      "id": "newIncognitoWindow",
+      "title": "New Incognito Window",
+      "keywords": [
+        "private window",
+        "incognito"
+      ]
+    },
+    {
+      "id": "closeTab",
+      "title": "Close Tab"
+    },
+    {
+      "id": "closeAllTabs",
+      "title": "Close All Tabs"
+    },
+    {
+      "id": "reopenClosedTab",
+      "title": "Reopen Closed Tab",
+      "keywords": [
+        "undo close",
+        "restore tab"
+      ]
+    },
+    {
+      "id": "togglePin",
+      "title": "Move to Top Apps",
+      "keywords": [
+        "pin",
+        "unpin",
+        "pin tab",
+        "unpin tab",
+        "remove from top apps",
+        "favorites"
+      ]
+    },
+    {
+      "id": "duplicateTab",
+      "title": "Duplicate Tab"
+    },
+    {
+      "id": "renameTab",
+      "title": "Rename Tab"
+    },
+    {
+      "id": "searchTabs",
+      "title": "Search Tabs"
+    },
+    {
+      "id": "cleanUpTabs",
+      "title": "Clean Up Tabs",
+      "keywords": [
+        "tidy tabs"
+      ]
+    },
+    {
+      "id": "newGroupWithTabs",
+      "title": "New Group with Tab",
+      "keywords": [
+        "tab group"
+      ]
+    },
+    {
+      "id": "reload",
+      "title": "Reload Page",
+      "keywords": [
+        "refresh"
+      ]
+    },
+    {
+      "id": "forceReload",
+      "title": "Force Reload Page",
+      "keywords": [
+        "hard reload",
+        "hard refresh"
+      ]
+    },
+    {
+      "id": "toggleMute",
+      "title": "Mute Site",
+      "keywords": [
+        "mute",
+        "unmute",
+        "silence"
+      ]
+    },
+    {
+      "id": "copyUrl",
+      "title": "Copy URL",
+      "keywords": [
+        "copy link"
+      ]
+    },
+    {
+      "id": "copyUrlAsMarkdown",
+      "title": "Copy URL as Markdown",
+      "keywords": [
+        "markdown link"
+      ]
+    },
+    {
+      "id": "findInPage",
+      "title": "Find in Page"
+    },
+    {
+      "id": "bookmarkPage",
+      "title": "Bookmark This Page",
+      "keywords": [
+        "add bookmark",
+        "bookmark"
+      ]
+    },
+    {
+      "id": "print",
+      "title": "Print"
+    },
+    {
+      "id": "share",
+      "title": "Share",
+      "keywords": [
+        "airdrop",
+        "share link",
+        "send link"
+      ]
+    },
+    {
+      "id": "zoomIn",
+      "title": "Zoom In"
+    },
+    {
+      "id": "zoomOut",
+      "title": "Zoom Out"
+    },
+    {
+      "id": "zoomReset",
+      "title": "Actual Size",
+      "keywords": [
+        "reset zoom"
+      ]
+    },
+    {
+      "id": "devTools",
+      "title": "Developer Tools",
+      "keywords": [
+        "inspect",
+        "devtools",
+        "console"
+      ]
+    },
+    {
+      "id": "toggleFullUrl",
+      "title": "Show Full URL"
+    },
+    {
+      "id": "toggleSidebar",
+      "title": "Auto-Hide Tabs",
+      "keywords": [
+        "toggle sidebar",
+        "hide sidebar",
+        "show sidebar",
+        "focus mode"
+      ]
+    },
+    {
+      "id": "toggleBookmarksBar",
+      "title": "Toggle Bookmarks Bar",
+      "keywords": [
+        "bookmarks bar"
+      ]
+    },
+    {
+      "id": "downloads",
+      "title": "Downloads",
+      "keywords": [
+        "show downloads",
+        "dl"
+      ]
+    },
+    {
+      "id": "showHistory",
+      "title": "History",
+      "keywords": [
+        "show history"
+      ]
+    },
+    {
+      "id": "manageBookmarks",
+      "title": "Bookmarks",
+      "keywords": [
+        "manage bookmarks",
+        "show bookmarks"
+      ]
+    },
+    {
+      "id": "openSettings",
+      "title": "Settings",
+      "keywords": [
+        "preferences",
+        "prefs",
+        "options"
+      ]
+    },
+    {
+      "id": "clearBrowsingData",
+      "title": "Clear Browsing Data",
+      "keywords": [
+        "clear history",
+        "clear cache",
+        "clear cookies"
+      ]
+    },
+    {
+      "id": "importBrowserData",
+      "title": "Import Browser Data",
+      "keywords": [
+        "import bookmarks",
+        "import passwords"
+      ]
+    },
+    {
+      "id": "keyboardShortcuts",
+      "title": "Keyboard Shortcuts",
+      "keywords": [
+        "shortcuts",
+        "hotkeys"
+      ]
+    },
+    {
+      "id": "mergeAllWindows",
+      "title": "Merge All Windows"
+    },
+    {
+      "id": "newProfile",
+      "title": "New Profile",
+      "keywords": [
+        "create profile"
+      ]
+    },
+    {
+      "id": "setAppearance:dark",
+      "title": "Dark Appearance",
+      "keywords": [
+        "dark mode"
+      ]
+    },
+    {
+      "id": "setAppearance:light",
+      "title": "Light Appearance",
+      "keywords": [
+        "light mode"
+      ]
+    },
+    {
+      "id": "setAppearance:auto",
+      "title": "Use System Appearance",
+      "keywords": [
+        "auto appearance",
+        "system appearance"
+      ]
+    }
+  ],
+  "extensions": []
+}

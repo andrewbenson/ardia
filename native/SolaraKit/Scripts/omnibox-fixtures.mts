@@ -7,9 +7,18 @@ as JSON next to its expected output. The Swift tests replay the inputs and must 
 --out defaults to Tests/SolaraOmniboxTests/Fixtures; --runs and --big set how many keystroke-sequence runs
 (profiles of up to 151 rows, and of 1500 rows) suggest.json holds. The committed set uses the defaults;
 a larger set (--runs 500 --big 12, the size of suggest.property.test.ts) can be written elsewhere and passed
-to the tests with SOLARA_OMNIBOX_FIXTURES=<dir>.`;
+to the tests with SOLARA_OMNIBOX_FIXTURES=<dir>.
 
-import { writeFileSync, mkdirSync } from "node:fs";
+Service parity:
+  --service-source <json> --service-queries <json> --service-out <json> [--verify]
+
+Records production-projected sources with the fixed source clock, ordered top eight rows and exact completion.
+--verify regenerates into a temporary directory and diffs without rewriting the accepted golden.`;
+
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { domainToASCII } from "node:url";
@@ -40,6 +49,131 @@ const here = dirname(fileURLToPath(import.meta.url));
 const out = flag("out", join(here, "../Tests/SolaraOmniboxTests/Fixtures"));
 const RUNS = Number(flag("runs", "70"));
 const BIG = Number(flag("big", "3"));
+type ServiceNode = { id: string; k: "f" | "u"; t: string; u?: string; a: number; c?: ServiceNode[] };
+type ServiceContext = {
+  id: string;
+  profileId: string;
+  windowId: string;
+  tabId: string;
+  currentUrl: string;
+  preference: "website" | "search";
+  preventInline: boolean;
+  remote: string[];
+  scope?: siteSearch.SearchScope;
+};
+
+function serviceFixtures() {
+  const sourcePath = flag("service-source", "");
+  const queryPath = flag("service-queries", "");
+  const outputPath = flag("service-out", "");
+  if (!sourcePath || !queryPath || !outputPath) throw new Error("--service-source, --service-queries and --service-out are required together");
+  const sourceText = readFileSync(sourcePath, "utf8");
+  const queryText = readFileSync(queryPath, "utf8");
+  const source = JSON.parse(sourceText) as SuggestionSource & {
+    now: number;
+    engineHistory: { url: string; title: string; visits: number; visitTimes: number[] }[];
+    bookmarkTree: { bar: ServiceNode; other: ServiceNode };
+    bookmarkIcons: Record<string, string>;
+    profiles: { id: string; engineProfile: string; bookmarkEngineProfile: string }[];
+    settings: { searchEngine?: string; customSearchEngines?: engines.CustomSearchEngine[]; extensionSearchEngines?: engines.ExtensionSearchEngine[]; customSearchUrl?: string };
+    actions: NonNullable<SuggestOptions["actions"]>;
+    extensions: NonNullable<SuggestOptions["extensions"]>;
+  };
+  const corpus = JSON.parse(queryText) as { contexts: ServiceContext[]; queries: { text: string; context: string }[] };
+  const equal = (actual: unknown, expected: unknown, label: string) => {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} differs from the recorded production projection`);
+  };
+  const history = source.engineHistory.map(row => ({ url: row.url, title: row.title, favicon: null, visits: row.visits, lastVisit: row.visitTimes.at(-1) ?? 0 }));
+  equal(history, source.history, "history");
+  const seen = new Set<string>();
+  const bookmarks: NonNullable<SuggestionSource["bookmarks"]>[number][] = [];
+  const walk = (node: ServiceNode) => {
+    if (node.k === "f") for (const child of node.c ?? []) walk(child);
+    else if (node.u && !seen.has(node.u)) {
+      seen.add(node.u);
+      bookmarks.push({ url: node.u, title: node.t, favicon: source.bookmarkIcons[node.u] ?? null });
+    }
+  };
+  walk(source.bookmarkTree.bar);
+  walk(source.bookmarkTree.other);
+  equal(bookmarks, source.bookmarks, "bookmarks");
+  const queryCount = new Set(corpus.queries.map(row => row.text)).size;
+  const defaultQueryCount = new Set(corpus.queries.filter(row => row.context === "default").map(row => row.text)).size;
+  if (queryCount < 240 || defaultQueryCount < 200) throw new Error(`Insufficient corpus: ${queryCount} distinct, ${defaultQueryCount} default`);
+  if (new Set(corpus.queries.map(row => JSON.stringify(row))).size !== corpus.queries.length) throw new Error("Duplicate query/context pairs");
+  if (!Number.isFinite(source.now)) throw new Error("A fixed finite now is required");
+  const contexts = new Map(corpus.contexts.map(context => [context.id, context]));
+  const list = engines.allEngines(source.settings.customSearchEngines, source.settings.extensionSearchEngines);
+  if (source.settings.customSearchUrl?.includes("%s")) {
+    const at = list.findIndex(engine => engine.extension);
+    list.splice(at < 0 ? list.length : at, 0, { id: "custom", name: "Custom", keyword: "custom", url: source.settings.customSearchUrl, custom: true });
+  }
+  const controlling = engines.controllingExtensionEngine(source.settings.extensionSearchEngines ?? []);
+  const engine = engines.engineById(list, controlling ? engines.extensionEngineId(controlling.extensionId) : source.settings.searchEngine);
+  const table = bangs.joinBangTables([bangs.bangTable(BANG_LIST), bangs.bangTable(BANG_LIST_UNICODE)]);
+  const results = corpus.queries.map(row => {
+    const context = contexts.get(row.context);
+    if (!context || !source.profiles.some(profile => profile.id === context.profileId)) throw new Error(`Unknown context/profile: ${row.context}`);
+    const options: SuggestOptions = {
+      limit: 8,
+      now: source.now,
+      engine,
+      preference: context.preference,
+      remote: context.remote,
+      actions: source.actions,
+      extensions: source.extensions,
+      currentTabId: context.tabId,
+      currentUrl: context.currentUrl || undefined,
+      scope: context.scope,
+      preventInline: context.preventInline,
+      bangs: !context.scope && row.text.trim().includes("!") ? table : null,
+    };
+    const coldSource = structuredClone({ history: source.history, bookmarks: source.bookmarks, tabs: source.tabs });
+    const cold = buildSuggestions(row.text, coldSource, options);
+    prepareSuggestions(coldSource, Infinity);
+    equal(buildSuggestions(row.text, coldSource, options), cold, `cold/warm ${JSON.stringify(row)}`);
+    return { ...row, items: cold.items.slice(0, 8), completion: cold.completion };
+  });
+  const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
+  const golden = {
+    manifest: {
+      sourceHash: sha256(sourceText),
+      queriesHash: sha256(queryText),
+      queryCount: results.length,
+      distinctQueryCount: queryCount,
+      defaultQueryCount,
+      limit: 8,
+      now: source.now,
+      nodeVersion: process.version,
+      recorderRevision: sha256(readFileSync(fileURLToPath(import.meta.url), "utf8")),
+    },
+    results,
+  };
+  const recorded = JSON.stringify(golden, null, 2) + "\n";
+  if (args.includes("--verify")) {
+    const scratch = mkdtempSync(join(tmpdir(), "solara-omnibox-service-"));
+    const regenerated = join(scratch, "service-golden.json");
+    writeFileSync(regenerated, recorded);
+    const accepted = readFileSync(outputPath, "utf8");
+    const comparable = JSON.stringify({ ...golden, manifest: { ...golden.manifest, nodeVersion: JSON.parse(accepted).manifest.nodeVersion } }, null, 2) + "\n";
+    if (accepted !== comparable) {
+      const diff = spawnSync("diff", ["-u", outputPath, regenerated], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+      process.stderr.write(diff.stdout || diff.stderr || "Golden byte comparison failed\n");
+      throw new Error(`Service golden drift; regenerated fixture retained at ${regenerated}`);
+    }
+    console.log(`Verified ${results.length} service queries against ${regenerated}`);
+  } else {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, recorded);
+    console.log(`Recorded ${results.length} service queries (${queryCount} distinct; ${defaultQueryCount} default) to ${outputPath}`);
+  }
+}
+
+if (args.some(arg => arg.startsWith("--service-"))) {
+  serviceFixtures();
+  process.exit(0);
+}
+if (args.includes("--verify")) throw new Error("--verify requires the service fixture inputs");
 mkdirSync(out, { recursive: true });
 
 function rng(seed: number) {

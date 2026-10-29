@@ -67,6 +67,7 @@ import { cpus, loadavg, totalmem } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { holdUiGate, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../../..");
@@ -525,6 +526,8 @@ class Instance {
     const env = { ...this.env(), ...(url && isArdia(this.name) ? { ARDIA_ACCEPT_EXTERNAL_URLS: "1" } : {}) };
     const argv = ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), "-a", this.app, ...(url ? [url] : []), "--args", ...this.args()];
     this.front = probe("state").front;
+    if (opt["allow-focus"]) await holdUiGate();
+    else await uiGateLaunching(this.info.exe);
     this.t0 = Date.now();
     execFileSync("open", argv);
     const main = `^${this.info.exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`;
@@ -534,6 +537,7 @@ class Instance {
       else await sleep(5);
     }
     if (!this.pid) throw new Error(`${this.name} didn't start`);
+    if (!opt["allow-focus"]) uiGateWatch(this.pid);
     live.add(this);
     this.window = new Promise((done) => {
       const p = spawn(acperfBin(), ["waitwindow", String(this.pid), "60"], { stdio: ["ignore", "pipe", "ignore"] });

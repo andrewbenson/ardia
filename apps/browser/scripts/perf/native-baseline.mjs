@@ -61,6 +61,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { holdUiGate } from "../../../../scripts/lib/instance.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../../..");
@@ -445,6 +446,7 @@ const phases = {
       return Number.isFinite(ns) && ns >= secs * 1e9;
     };
     if (!ownerAway(60)) throw new Error("someone used the mouse or keyboard in the last minute; the drag phase waits for the owner to be away");
+    await holdUiGate();
     execFileSync("open", ["-g", "-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
     let pid = 0;
     for (let i = 0; i < 400 && !pid; i++) {

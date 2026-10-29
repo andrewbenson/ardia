@@ -6,6 +6,7 @@ import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseFront } from "./ui-guard.mjs";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const here = fileURLToPath(import.meta.url);
@@ -99,6 +100,89 @@ export function secureInputHolder() {
   const r = spawnSync("ioreg", ["-l", "-w", "0", "-d", "1", "-k", "IOConsoleUsers"], { encoding: "utf8", timeout: 5000 });
   const pid = /"kCGSSessionSecureInputPID"=(\d+)/.exec(r.stdout ?? "")?.[1];
   return pid ? Number(pid) : null;
+}
+const uiGuardScript = join(dirname(here), "ui-guard.mjs");
+const lockedTool = join(dirname(here), "..", "agent", "locked");
+let uiGate = null;
+const gated = new Set();
+export function frontApp() {
+  const asn = spawnSync("lsappinfo", ["front"], { encoding: "utf8", timeout: 3000 }).stdout?.trim();
+  return asn ? parseFront(spawnSync("lsappinfo", ["info", asn], { encoding: "utf8", timeout: 3000 }).stdout ?? "") : null;
+}
+function failUiGate(found) {
+  process.stderr.write(`\n!!! UI GATE: failing this run: test instance pid ${found.pid} ${found.what}; it was killed.\n\n`);
+  for (const pid of new Set([...launched.keys(), ...gated])) if (pid !== found.pid) try { process.kill(pid, "SIGTERM"); } catch {}
+  process.exit(1);
+}
+function gateNote(state, entry) { appendFileSync(state, `${JSON.stringify(entry)}\n`); }
+export const uiGateKey = (path) => process.env.AC_LOCKED_AS || /\/build-([^/]+)\/Build\/Products\//.exec(path ?? "")?.[1] || null;
+const uiGateCurrent = (key) => join(tmpdir(), `ac-uitest-${key.replace(/[^A-Za-z0-9_.-]/g, "_")}.current`);
+function liveGate(state) {
+  if (!state || !existsSync(state)) return false;
+  const holder = readFileSync(state, "utf8").split("\n").map((l) => { try { return JSON.parse(l).lockHolder; } catch { return null; } }).find(Boolean);
+  return !!holder && isAlive(holder);
+}
+export async function holdUiGate(key = null) {
+  if (uiGate) return uiGate;
+  let current = null;
+  try { current = key ? readFileSync(uiGateCurrent(key), "utf8").trim() : null; } catch {}
+  for (const joined of [process.env.AC_UITEST_STATE, current])
+    if (liveGate(joined)) {
+      gateNote(joined, { owner: process.pid });
+      process.env.AC_UITEST_STATE = joined;
+      return (uiGate = { state: joined });
+    }
+  const state = join(tmpdir(), `ac-uitest-${process.pid}-${Date.now()}.state`);
+  writeFileSync(state, `${JSON.stringify({ owner: process.pid })}\n`);
+  const wait = Number(process.env.AC_UITEST_WAIT ?? 480);
+  const child = spawn(lockedTool, ["uitest", "--wait", String(wait), "--", process.execPath, uiGuardScript, state],
+    { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  let errors = "";
+  child.stderr.on("data", (d) => { errors += d; });
+  const notice = setTimeout(() => process.stderr.write("waiting for the uitest lock: another UI test has instances running (one at a time across agents)\n"), 2000);
+  try {
+    await new Promise((res, rej) => {
+      let out = "";
+      const onData = (d) => {
+        out += d;
+        if (out.includes("held\n")) { child.stdout.off("data", onData); res(); }
+      };
+      child.stdout.on("data", onData);
+      child.on("exit", (code) => rej(new Error(`couldn't take the uitest lock (exit ${code}): ${errors.trim() || "no reason given"}`)));
+    });
+  } catch (e) {
+    rmSync(state, { force: true });
+    throw e;
+  } finally {
+    clearTimeout(notice);
+  }
+  child.removeAllListeners("exit");
+  child.stderr.removeAllListeners("data");
+  child.stderr.on("data", (d) => process.stderr.write(d));
+  let lines = "";
+  child.stdout.on("data", (d) => {
+    lines += d;
+    for (let i; (i = lines.indexOf("\n")) >= 0; lines = lines.slice(i + 1)) {
+      const m = /^violation (.*)$/.exec(lines.slice(0, i));
+      if (m) failUiGate(JSON.parse(m[1]));
+    }
+  });
+  child.unref();
+  child.stdout.unref?.();
+  child.stderr.unref?.();
+  gateNote(state, { lockHolder: child.pid });
+  process.env.AC_UITEST_STATE = state;
+  if (key) writeFileSync(uiGateCurrent(key), state);
+  return (uiGate = { state });
+}
+export async function uiGateLaunching(binary, { allowFront = false } = {}) {
+  const gate = await holdUiGate(uiGateKey(binary));
+  gateNote(gate.state, { binary, frontBefore: frontApp(), ...(allowFront ? { allowFront } : {}) });
+}
+export function uiGateWatch(pid, data = null, { allowFront = false } = {}) {
+  if (!uiGate) throw new Error("uiGateWatch before uiGateLaunching: take the uitest lock before launching the app");
+  gated.add(pid);
+  gateNote(uiGate.state, { watch: pid, data, ...(allowFront ? { allowFront } : {}) });
 }
 export function warnSecureInput(pid, data, when) {
   if (!pid || secureInputHolder() !== pid) return false;
@@ -329,7 +413,13 @@ class Instance {
 
   async quit(opts = {}) {
     warnSecureInput(this.pid, this.data, "at quit");
+    const key = uiGateKey(this.binary);
+    let state = process.env.AC_UITEST_STATE;
+    try { state ||= key ? readFileSync(uiGateCurrent(key), "utf8").trim() : null; } catch {}
+    const gateLog = join(this.data, "ui-gate-violation.log");
+    if (existsSync(gateLog)) process.stderr.write(readFileSync(gateLog, "utf8"));
     const how = await this.#quit(opts);
+    if (!isAlive(this.pid) && state && existsSync(state)) gateNote(state, { unwatch: this.pid });
     launched.delete(this.pid);
     if (this.exited && quitEnded(how)) quitData.add(this.data);
     const errors = this.jsErrors();
@@ -372,6 +462,7 @@ export async function launch(app, opts = {}) {
   if (opts.urls?.length && (opts.env?.ARDIA_ACCEPT_EXTERNAL_URLS ?? "1") !== "1")
     throw new Error("refusing to hand URLs to a hidden instance without ARDIA_ACCEPT_EXTERNAL_URLS=1: it would forward them to the owner's running app");
   app = realPath(app);
+  const gate = await holdUiGate(uiGateKey(app));
   const data = resolve(opts.data ?? join(process.env.TMPDIR ?? "/tmp", `ac-instance-${process.pid}-${Date.now()}`));
   quitData.delete(data);
   if (opts.fresh) {
@@ -382,7 +473,7 @@ export async function launch(app, opts = {}) {
   mkdirSync(data, { recursive: true });
   let previous = null;
   try { previous = JSON.parse(readFileSync(join(data, "instance.json"), "utf8")); } catch {}
-  for (const f of ["dev-eval.js", "dev-eval-result.json", "instance.json"]) rmSync(join(data, f), { force: true });
+  for (const f of ["dev-eval.js", "dev-eval-result.json", "instance.json", "ui-gate-violation.log"]) rmSync(join(data, f), { force: true });
   if (opts.session) writeFileSync(join(data, "session.json"), JSON.stringify(opts.session));
   if (opts.onboarded) writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
   if (opts.probe || process.env.AC_PROBE === "1") writeFileSync(join(data, "perf-probe"), "");
@@ -413,6 +504,7 @@ export async function launch(app, opts = {}) {
     ...opts.env,
   });
   const log = resolve(opts.log ?? join(data, "app.out.log"));
+  gateNote(gate.state, { binary, frontBefore: frontApp() });
   const before = binaryPids(binary);
   const launchedAt = Date.now();
   execFileSync("open", ["-g", "-n", ...Object.entries(env).filter(([, v]) => v !== null && v !== undefined).flatMap(([k, v]) => ["--env", `${k}=${v}`]),
@@ -432,6 +524,7 @@ export async function launch(app, opts = {}) {
     await killSpawned(spawned);
     throw e;
   }
+  gateNote(gate.state, { watch: owned.pid, data });
   const instance = new Instance({ app: runsFrom, binary, data, port, log, launchedAt, js, ...owned, meta: opts.meta ?? {} }).save();
   launched.set(instance.pid, data);
   if (opts.ready !== false)

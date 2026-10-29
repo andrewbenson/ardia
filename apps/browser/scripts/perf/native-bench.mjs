@@ -150,7 +150,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, freePort, listenerPids } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, freePort, listenerPids, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { writeSwitches } from "./js-bench.mjs";
 import { frameRows, frameTable, framesLibrary, framesRun, stallTable } from "./frames-phase.mjs";
@@ -480,6 +480,7 @@ class Instance {
       ARDIA_UPDATE_FEED_URL: this.feed, DYLD_INSERT_LIBRARIES: dyld,
       ...Object.fromEntries(extra.map((e) => [e.slice(0, e.indexOf("=")), e.slice(e.indexOf("=") + 1)])),
     });
+    await uiGateLaunching(exe);
     execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), this.app,
       "--args", "--mute-audio", ...(process.env.BENCH_ALLOW_APP_NAP ? [] : ["-NSAppSleepDisabled", "YES"])]);
     for (let i = 0; i < 400 && !this.pid; i++) {
@@ -488,6 +489,7 @@ class Instance {
       else await sleep(5);
     }
     if (!this.pid) throw new Error("the app didn't start");
+    uiGateWatch(this.pid, this.dataDir);
     live.add(this);
     const w = acperf("waitwindow", String(this.pid), "60");
     this.windowAt = w.code === 0 ? +w.out : NaN;

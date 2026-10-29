@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { hostname, tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { attach, binaryOf, binaryPids, freePort, isAlive, launch, listenerPids, processInfo, sleep } from "../../../scripts/lib/instance.mjs";
+import { attach, binaryOf, binaryPids, freePort, isAlive, launch, listenerPids, processInfo, sleep, uiGateLaunching, uiGateWatch } from "../../../scripts/lib/instance.mjs";
 
 const USAGE = `usage:
   node apps/browser/scripts/rekey-e2e.mjs fixture <Debug app> <fixture dir> [--other-key-only]
@@ -607,12 +607,13 @@ async function start(app, run, env, { until = "devtools", timeout = 120000 } = {
   const full = { ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: run.data, ARDIA_REMOTE_DEBUGGING_PORT: String(port), ARDIA_JS_LOCATION: "localhost:8081", ARDIA_TEST_REAUTH: "granted", ...env };
   const before = binaryPids(binary);
   if (before.size) throw new Error(`${binary} is already running (${[...before]})`);
+  await uiGateLaunching(binary);
   const launchedAt = Date.now();
   execFileSync("open", ["-g", "-n", ...Object.entries(full).filter(([, v]) => v !== null && v !== undefined).flatMap(([k, v]) => ["--env", `${k}=${v}`]), "--stdout", log, "--stderr", log, app]);
   let pid = null;
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    if (!pid) pid = [...binaryPids(binary)][0] ?? null;
+    if (!pid && (pid = [...binaryPids(binary)][0] ?? null)) uiGateWatch(pid, run.data);
     const text = read(log) ?? "";
     if (pid && !isAlive(pid)) return { outcome: dialogShown(read(log) ?? "") ? "dialog" : "exited", pid, ms: Date.now() - launchedAt };
     if (!pid && Date.now() - launchedAt > 15000) return { outcome: "exited", pid: null, ms: Date.now() - launchedAt };

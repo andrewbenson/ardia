@@ -56,7 +56,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, stat
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appEnv, binaryOf } from "../../../../scripts/lib/instance.mjs";
+import { appEnv, binaryOf, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
 import { writeSeed } from "./seed.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -256,10 +256,14 @@ export async function launch(app, dataDir, port) {
     ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}),
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_"))),
   });
+  await uiGateLaunching(binary);
   execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), app]);
   for (let i = 0; i < 200; i++) {
     const [pid] = pidsOf(binary);
-    if (pid) return { pid, launchedAt };
+    if (pid) {
+      uiGateWatch(pid, dataDir);
+      return { pid, launchedAt };
+    }
     await sleep(50);
   }
   throw new Error("app did not start");

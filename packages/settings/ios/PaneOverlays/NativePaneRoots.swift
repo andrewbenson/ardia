@@ -8,7 +8,7 @@ import Synchronization
 @MainActor
 enum NativePaneRoots {
   nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.shellPanes, defaultOn: false)
+    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.shellPanes)
   }
 
   nonisolated static var available: Bool { enabled && WindowHost.makeRootView != nil }

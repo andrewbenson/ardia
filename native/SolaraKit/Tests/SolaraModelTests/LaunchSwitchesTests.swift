@@ -7,7 +7,7 @@ import Testing
   static let defaultOn: Set<LaunchSwitch> = [
     .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
-    .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager,
+    .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool,
   ]
   static let shippedSurfaces = defaultOn.filter { !$0.storable(distribution: false) && !$0.storable(distribution: true) }
 
@@ -194,7 +194,7 @@ import Testing
     #expect(met.isOn(.nativeIconPicker, defaultOn: false))
     #expect(met.refusals.isEmpty)
 
-    let prompts = LaunchSwitches(environment: ["ARDIA_NATIVE_PANE_PROMPTS": "1", "ARDIA_NATIVE_SHELL": "1"], defaults: nil, distribution: false, skipStored: false)
+    let prompts = LaunchSwitches(environment: ["ARDIA_NATIVE_PANE_PROMPTS": "1", "ARDIA_NATIVE_SHELL": "1", "ARDIA_NATIVE_PAGES_POOL": "0"], defaults: nil, distribution: false, skipStored: false)
     #expect(!prompts.isOn(.nativePanePrompts, defaultOn: false))
     #expect(prompts.refusals == ["ARDIA_NATIVE_PANE_PROMPTS is on but stays off: it needs ARDIA_NATIVE_PAGES_POOL=1"])
 
@@ -204,7 +204,7 @@ import Testing
     #expect(noShell.unmetNeeds(.shellMainTop) == [.shellPanes, .nativePagesPool])
     #expect(noShell.refusals.count == 6)
     #expect(LaunchSwitches(environment: [:], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
-    #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0", "ARDIA_NATIVE_TAB_PICKERS": "0", "ARDIA_NATIVE_ICON_PICKER": "0", "ARDIA_NATIVE_AUTOHIDE": "0", "ARDIA_NATIVE_PROFILE_PAGER": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
+    #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0", "ARDIA_NATIVE_TAB_PICKERS": "0", "ARDIA_NATIVE_ICON_PICKER": "0", "ARDIA_NATIVE_AUTOHIDE": "0", "ARDIA_NATIVE_PROFILE_PAGER": "0", "ARDIA_NATIVE_PAGES_POOL": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
   }
 
   @Test func theOneArgumentReadUsesTheSwitchsOwnDefault() {
@@ -219,14 +219,15 @@ import Testing
   @Test func theNativeInterfaceIsOnByDefaultAndASavedZeroTurnsOneOff() {
     let plain = LaunchSwitches(environment: [:], defaults: scratchDefaults(), distribution: true, skipStored: false)
     for name: LaunchSwitch in [.nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet] { #expect(plain.isOn(name), "\(name.rawValue)") }
-    #expect(!plain.isOn(.shellPanes))
-    for name: LaunchSwitch in [.nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .nativeToolTour, .nativeSidePanel] { #expect(plain.isOn(name), "\(name.rawValue)") }
+    for name: LaunchSwitch in [.shellPanes, .nativePagesPool, .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .nativeToolTour, .nativeSidePanel] { #expect(plain.isOn(name), "\(name.rawValue)") }
     let defaults = scratchDefaults()
     defaults.set("0", forKey: "ARDIA_NATIVE_SHELL")
     let off = LaunchSwitches(environment: [:], defaults: defaults, distribution: true, skipStored: false)
     #expect(!off.isOn(.nativeShell))
     #expect(!off.isOn(.nativeTabPickers))
     #expect(off.refusals == [
+      "ARDIA_SHELL_PANES is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
+      "ARDIA_NATIVE_PAGES_POOL is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
       "ARDIA_NATIVE_ICON_PICKER is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
       "ARDIA_NATIVE_AUTOHIDE is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
       "ARDIA_NATIVE_TAB_PICKERS is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
@@ -245,7 +246,7 @@ import Testing
     let switches = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(!switches.isOn(.shellPanes, defaultOn: false))
     #expect(!switches.isOn(.nativeTabPickers, defaultOn: false))
-    #expect(switches.refusals.count == 5)
+    #expect(switches.refusals.count == 6)
     defaults.set("1", forKey: "ARDIA_NATIVE_SHELL")
     let withShell = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(withShell.isOn(.shellPanes, defaultOn: false))
@@ -263,7 +264,7 @@ import Testing
       #expect(second.isOn(.nativeShell) && second.isOn(.nativeTopStrip) && second.isOn(.nativeSidebar))
       let third = launch()
       #expect(third.droppedAfterFailedLaunches)
-      #expect(third.turnedOffByRecovery == [.nativeShell, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour])
+      #expect(third.turnedOffByRecovery == [.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour])
       #expect(!third.isOn(.nativeShell) && !third.isOn(.nativeTopStrip) && !third.isOn(.nativeSidebar) && !third.isOn(.nativeTabPickers))
       #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
       #expect(defaults.string(forKey: "ARDIA_NATIVE_TOP_STRIP") == "0")
@@ -271,7 +272,7 @@ import Testing
       #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
       let report = third.recoveryReport ?? ""
       #expect(report.hasPrefix("Solara didn't finish opening twice in a row"))
-      #expect(report.contains("ARDIA_NATIVE_SHELL, ARDIA_NATIVE_SIDEBAR, ARDIA_NATIVE_TOP_STRIP"))
+      #expect(report.contains("ARDIA_NATIVE_SHELL, ARDIA_SHELL_PANES, ARDIA_NATIVE_SIDEBAR, ARDIA_NATIVE_TOP_STRIP"))
       #expect(report.contains("Settings › Advanced › Experimental") && report.contains("defaults delete"))
       let fourth = launch()
       #expect(!fourth.countedLaunch && !fourth.droppedAfterFailedLaunches && fourth.recoveryReport == nil)
@@ -293,7 +294,7 @@ import Testing
       #expect(!switches.countedLaunch && !switches.droppedAfterFailedLaunches)
     }
     #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
-    #expect(LaunchSwitch.recoverable == [.nativeShell, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeToolTour, .nativeSidePanel])
+    #expect(LaunchSwitch.recoverable == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeToolTour, .nativeSidePanel])
   }
 
   @Test func anIsolatedLaunchNeitherCountsNorAsksForOption() {
@@ -316,7 +317,7 @@ import Testing
       defaults.set(1, forKey: LaunchSwitches.failedLaunchesKey)
       let held = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { true })
       #expect(held.skippedStored && !held.countedLaunch)
-      #expect(held.turnedOffByRecovery == [.nativeShell, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour])
+      #expect(held.turnedOffByRecovery == [.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour])
       #expect(!held.isOn(.nativeShell) && !held.isOn(.nativeSidebar) && !held.isOn(.nativeTopStrip))
       #expect(held.isOn(.nativeDownloadMagnet), "a switch that can't be saved can't be turned off this way")
       #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
@@ -339,7 +340,7 @@ import Testing
     var asked: [[LaunchSwitch]] = []
     let declined = LaunchSwitches.launching(
       environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmRecovery: { asked.append($0); return false })
-    #expect(asked == [[.nativeShell, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour]])
+    #expect(asked == [[.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour]])
     #expect(!declined.skippedStored && declined.turnedOffByRecovery.isEmpty && declined.recoveryReport == nil)
     #expect(declined.isOn(.nativeShell) && declined.isOn(.nativeSidebar))
     #expect(declined.countedLaunch)

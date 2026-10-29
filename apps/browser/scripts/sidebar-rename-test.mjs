@@ -38,6 +38,22 @@ const until = async (what, test, ms = 3000) => {
     await sleep(40);
   }
 };
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const assertNativeRename = async (id, title, count) => {
+  const snapshot = await untilSnapshot(`native rename of ${id}`, (state) => state.tabs.some((tab) => tab.id === id && tab.customTitle === title) &&
+    state.windows.some((window) => window.id === "w1" && window.tabIds.length === count));
+  assert.equal(snapshot.tabs.find((tab) => tab.id === id)?.customTitle, title);
+  assert.equal(snapshot.windows.find((window) => window.id === "w1")?.tabIds.length, count);
+};
 const startRename = async (id) => {
   await run(`ac.pages.setSidebarUi({ renaming: { windowId: "w1", kind: "tab", id: ${JSON.stringify(id)} } }); return true`);
   await sleep(400);
@@ -59,6 +75,7 @@ try {
     assert.equal(await run(`return ac.store.getState().tabs.t1.customTitle`), "Renamed");
     await sleep(500);
     assert.equal(await tabCount(), before, "no new tab");
+    await assertNativeRename("t1", "Renamed", before);
   });
 
   await rep.check("a second click there right after opens no tab either", async () => {
@@ -72,6 +89,7 @@ try {
     assert.equal(await run(`return ac.store.getState().tabs.t2.customTitle`), "Second");
     await sleep(500);
     assert.equal(await tabCount(), before, "no new tab");
+    await assertNativeRename("t2", "Second", before);
   });
 
   await rep.check("Esc still cancels", async () => {
@@ -81,6 +99,7 @@ try {
     await run(`return ac.shell.devTypeKeys("w1", "\\u001b", 10)`);
     await until("the field to close", async () => (await renaming()) === null);
     assert.equal(await run(`return ac.store.getState().tabs.t0.customTitle ?? null`), null);
+    await assertNativeRename("t0", null, await tabCount());
   });
 } finally {
   await app.quit();

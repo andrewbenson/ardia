@@ -143,6 +143,7 @@ final class ProbeHost {
         guard let tab = state.tabs[id], allowedIds.contains(tab.windowId) else { return nil }
         return ["id": id, "windowId": tab.windowId, "profileId": tab.profileId,
           "url": safeURL(tab.url), "title": String(tab.title.prefix(512)),
+          "customTitle": Self.value(tab.customTitle.map { String($0.prefix(512)) }),
           "pinned": NSNull(), "loading": NSNull(), "live": Self.value(TabPoolRead.live(id)),
           "visible": NSNull(), "zoom": tab.zoom]
       }
@@ -154,7 +155,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.split", "windows.tour", "tabs.url", "tabs.title", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.split", "windows.tour", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

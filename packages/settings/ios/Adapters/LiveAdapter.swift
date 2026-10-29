@@ -5,57 +5,90 @@ import SolaraUI
 
 @MainActor
 final class LiveAdapter: LiveFoldersServices, CalendarServices {
-  static let foldersTopic = "liveFolders.state"
-  static let calendarTopic = "calendar.state"
+  private let engine = NativeLiveEngine.shared.engine
+  private var mocked: Bool { !(engine.effects.environment.mockBase ?? "").isEmpty }
 
   func liveFoldersState() async -> LiveFoldersState {
-    Self.foldersState(SettingsJS.shared.latestValue(Self.foldersTopic))
+    LiveSettingsMapping.folders(await engine.snapshot.live, mocked: mocked)
   }
 
   func liveFoldersChanges() -> AsyncStream<LiveFoldersState> {
-    SettingsJS.shared.stream(Self.foldersTopic) { Self.foldersState($0) }
+    let (stream, continuation) = AsyncStream<LiveFoldersState>.makeStream(bufferingPolicy: .bufferingNewest(1))
+    let task = Task {
+      var previous: LiveFoldersState?
+      for await snapshot in await engine.changes() {
+        let mapped = LiveSettingsMapping.folders(snapshot.live, mocked: mocked)
+        if mapped != previous {
+          continuation.yield(mapped)
+          previous = mapped
+        }
+      }
+      continuation.finish()
+    }
+    continuation.onTermination = { _ in task.cancel() }
+    return stream
   }
 
-  func refreshFolder(_ id: String) async { await SettingsAdapters.js("liveFolders.refreshFolder", id) }
+  func refreshFolder(_ id: String) async {
+    await perform(.manualRefresh(.object(["folderId": .string(id)])))
+  }
 
   func deleteFolder(_ id: String) { SettingsJS.shared.fire("liveFolders.deleteFolder", id) }
 
   func updateFolder(_ id: String, groupStacks: Bool?, showCompleted: Bool?) {
-    var patch: [String: Any] = [:]
-    if let groupStacks { patch["groupStacks"] = groupStacks }
-    if let showCompleted { patch["showCompleted"] = showCompleted }
+    var patch: [String: LiveAnyJSON] = [:]
+    if let groupStacks { patch["groupStacks"] = .bool(groupStacks) }
+    if let showCompleted { patch["showCompleted"] = .bool(showCompleted) }
     guard !patch.isEmpty else { return }
-    SettingsJS.shared.fire("liveFolders.updateFolder", id, patch)
+    fire(.updateFolder(.object(["folderId": .string(id), "patch": .object(patch)])))
   }
 
-  func disconnect(_ source: LiveSourceId) async { await SettingsAdapters.js("liveFolders.disconnect", source.rawValue) }
+  func disconnect(_ source: LiveSourceId) async {
+    await perform(.disconnect(.object(["source": .string(source.rawValue)])))
+  }
 
-  func connectGithub(token: String) async throws { try await Self.connect("liveFolders.connectGithub", token) }
+  func connectGithub(token: String) async throws {
+    _ = try await connect(.connectGithub(.object(["token": .string(token)])))
+  }
 
-  func setGithubClientId(_ clientId: String) { SettingsJS.shared.fire("liveFolders.setGithubClientId", clientId) }
+  func setGithubClientId(_ clientId: String) {
+    let trimmed = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
+    fire(.updateConfig(.object(["patch": .object(["githubClientId": .string(trimmed)])])))
+  }
 
   func startGithubDeviceFlow(clientId: String) async throws -> LiveDeviceFlow {
-    let result = try await Self.connect("liveFolders.startGithubDeviceFlow", clientId) as? [String: Any]
-    guard let result, let id = result.string("id"), let userCode = result.string("userCode"), let uri = result.string("verificationUri") else {
-      throw LiveConnectError("GitHub didn't start the sign-in")
-    }
-    return LiveDeviceFlow(id: id, userCode: userCode, verificationUri: uri)
+    let trimmed = clientId.trimmingCharacters(in: .whitespacesAndNewlines)
+    let result = try await connect(.startGithubDeviceFlow(.object(["clientId": .string(trimmed)])))
+    guard let flow = result.deviceFlow else { throw LiveConnectError("GitHub didn't start the sign-in") }
+    return LiveDeviceFlow(id: flow.id, userCode: flow.userCode, verificationUri: flow.verificationUri)
   }
 
-  func finishGithubDeviceFlow(_ flow: LiveDeviceFlow) async throws { try await Self.connect("liveFolders.finishGithubDeviceFlow", flow.id) }
+  func finishGithubDeviceFlow(_ flow: LiveDeviceFlow) async throws {
+    _ = try await connect(.finishGithubDeviceFlow(.object(["id": .string(flow.id)])))
+  }
 
-  func cancelGithubDeviceFlow(_ flow: LiveDeviceFlow) { SettingsJS.shared.fire("liveFolders.cancelGithubDeviceFlow", flow.id) }
+  func cancelGithubDeviceFlow(_ flow: LiveDeviceFlow) {
+    fire(.cancelGithubDeviceFlow(.object(["id": .string(flow.id)])))
+  }
 
-  func connectBitbucket(user: String, token: String) async throws { try await Self.connect("liveFolders.connectBitbucket", user, token) }
+  func connectBitbucket(user: String, token: String) async throws {
+    _ = try await connect(.connectBitbucket(.object(["user": .string(user), "token": .string(token)])))
+  }
 
-  func connectNotion(token: String) async throws { try await Self.connect("liveFolders.connectNotion", token) }
+  func connectNotion(token: String) async throws {
+    _ = try await connect(.connectNotion(.object(["token": .string(token)])))
+  }
 
   func connectConfluence(site: String, email: String, token: String) async throws {
-    try await Self.connect("liveFolders.connectConfluence", site, email, token)
+    _ = try await connect(.connectConfluence(.object(["site": .string(site), "email": .string(email), "token": .string(token)])))
   }
 
   func connectGoogleDrive(clientId: String, clientSecret: String) async throws {
-    try await Self.connect("liveFolders.connectGoogleDrive", clientId, clientSecret)
+    do {
+      _ = try await SettingsJS.shared.invoke("liveFolders.connectGoogleDrive", [clientId, clientSecret])
+    } catch let error as SettingsJSError {
+      throw LiveConnectError(error.description)
+    }
   }
 
   func copyText(_ text: String) { SettingsAdapters.copyText(text) }
@@ -63,28 +96,47 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
   func openInBrowser(_ url: String) { SettingsJS.shared.fire("liveFolders.openInBrowser", url) }
 
   func calendarState() async -> CalendarPaneState {
-    Self.calendarState(SettingsJS.shared.latestValue(Self.calendarTopic))
+    let snapshot = await engine.snapshot
+    return LiveSettingsMapping.calendar(snapshot.live, data: snapshot.calendar)
   }
 
   func calendarChanges() -> AsyncStream<CalendarPaneState> {
-    SettingsJS.shared.stream(Self.calendarTopic) { Self.calendarState($0) }
+    let (stream, continuation) = AsyncStream<CalendarPaneState>.makeStream(bufferingPolicy: .bufferingNewest(1))
+    let task = Task {
+      var previous: CalendarPaneState?
+      for await snapshot in await engine.changes() {
+        let mapped = LiveSettingsMapping.calendar(snapshot.live, data: snapshot.calendar)
+        if mapped != previous {
+          continuation.yield(mapped)
+          previous = mapped
+        }
+      }
+      continuation.finish()
+    }
+    continuation.onTermination = { _ in task.cancel() }
+    return stream
   }
 
-  func refreshCalendar() async { await SettingsAdapters.js("calendar.refresh") }
+  func refreshCalendar() async { await perform(.refreshCalendar(.object([:]))) }
 
-  func connectCalendar() async { await SettingsAdapters.js("calendar.connect") }
+  func connectCalendar() async { await perform(.connectCalendar(.object([:]))) }
 
   func updateCalendarOptions(_ change: LiveCalendarOptionChange) {
-    let patch: [String: Any] = switch change {
-    case .alertLead(let value): ["alertLead": value]
-    case .alertCondition(let value): ["alertCondition": value]
-    case .showPreview(let value): ["showPreview": value]
-    case .showTimeToNext(let value): ["showTimeToNext": value]
+    let patch: [String: LiveAnyJSON]
+    switch change {
+    case .alertLead(let value): patch = ["alertLead": .string(value)]
+    case .alertCondition(let value):
+      guard AlertCondition(rawValue: value) != nil else { return }
+      patch = ["alertCondition": .string(value)]
+    case .showPreview(let value): patch = ["showPreview": .bool(value)]
+    case .showTimeToNext(let value): patch = ["showTimeToNext": .bool(value)]
     }
-    SettingsJS.shared.fire("calendar.updateOptions", patch)
+    fire(.updateCalendarSettings(.object(["patch": .object(patch)])))
   }
 
-  func setCalendarHidden(_ id: String, hidden: Bool) { SettingsJS.shared.fire("calendar.setHidden", id, hidden) }
+  func setCalendarHidden(_ id: String, hidden: Bool) {
+    fire(.setCalendarHidden(.object(["id": .string(id), "hidden": .bool(hidden)])))
+  }
 
   func openCalendarPrivacySettings() {
     guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") else { return }
@@ -92,86 +144,25 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
     NSWorkspace.shared.open(url)
   }
 
-  @discardableResult
-  static func connect(_ name: String, _ args: Any...) async throws -> Any? {
+  private func connect(_ command: LiveCommand) async throws -> LiveCommandResult {
     do {
-      return try await SettingsJS.shared.invoke(name, args)
-    } catch let error as SettingsJSError {
-      throw LiveConnectError(error.description)
+      return try await engine.perform(command)
+    } catch let error as LiveError {
+      throw LiveConnectError(error.message)
+    } catch {
+      throw LiveConnectError(String(describing: error))
     }
   }
 
-  static func foldersState(_ value: Any?) -> LiveFoldersState {
-    let dict = value as? [String: Any] ?? [:]
-    let folders = dict.list("folders").compactMap(folder)
-    var accounts: [LiveSourceId: LiveAccount] = [:]
-    for (key, raw) in dict.dict("accounts") ?? [:] {
-      guard let source = LiveSourceId(rawValue: key), let account = raw as? [String: Any], let login = account.string("login") else { continue }
-      accounts[source] = LiveAccount(login: login, name: account.string("name"), avatar: account.string("avatar"), connectedAt: account.double("connectedAt") ?? 0)
+  private func perform(_ command: LiveCommand) async {
+    do {
+      _ = try await engine.perform(command)
+    } catch {
+      NSLog("[settings] Live command failed: %@", String(describing: error))
     }
-    let config = dict.dict("config") ?? [:]
-    return LiveFoldersState(
-      folders: folders,
-      accounts: accounts,
-      config: LiveConfig(
-        githubClientId: config.string("githubClientId") ?? "",
-        bitbucketUser: config.string("bitbucketUser") ?? "",
-        confluenceSite: config.string("confluenceSite") ?? "",
-        confluenceEmail: config.string("confluenceEmail") ?? "",
-        googleClientId: config.string("googleClientId") ?? ""
-      ),
-      mocked: dict.bool("mocked") ?? false
-    )
   }
 
-  static func folder(_ dict: [String: Any]) -> LiveFolderSummary? {
-    guard let id = dict.string("id"), let kind = dict.string("kind").flatMap(LiveFolderKind.init(rawValue:)) else { return nil }
-    return LiveFolderSummary(
-      id: id,
-      profileId: dict.string("profileId") ?? "",
-      kind: kind,
-      name: dict.string("name") ?? "",
-      sources: dict.strings("sources").compactMap(LiveSourceId.init(rawValue:)),
-      groupStacks: dict.bool("groupStacks") ?? true,
-      showCompleted: dict.bool("showCompleted") ?? true,
-      status: dict.dict("status").flatMap(status),
-      hiddenCount: dict.int("hiddenCount") ?? 0
-    )
-  }
-
-  static func status(_ dict: [String: Any]) -> LiveFolderStatus? {
-    guard let state = dict.string("state").flatMap(LiveFolderFetchState.init(rawValue:)) else { return nil }
-    let error = dict.dict("error").flatMap { error -> LiveFolderError? in
-      guard let source = error.string("source").flatMap(LiveSourceId.init(rawValue:)) else { return nil }
-      return LiveFolderError(kind: error.string("kind").flatMap(LiveErrorKind.init(rawValue:)) ?? .other, source: source)
-    }
-    return LiveFolderStatus(state: state, lastFetch: dict.date("lastFetch"), error: error)
-  }
-
-  static func calendarState(_ value: Any?) -> CalendarPaneState {
-    let dict = value as? [String: Any] ?? [:]
-    let calendars = dict.list("calendars").compactMap { calendar -> SystemCalendarInfo? in
-      guard let id = calendar.string("id") else { return nil }
-      return SystemCalendarInfo(
-        id: id,
-        title: calendar.string("title") ?? "",
-        color: calendar.string("color") ?? "",
-        account: calendar.string("account") ?? "",
-        owned: calendar.bool("owned") ?? false
-      )
-    }
-    let options = dict.dict("options") ?? [:]
-    let defaults = LiveCalendarOptions()
-    return CalendarPaneState(
-      access: dict.string("access").flatMap(CalendarAccess.init(rawValue:)) ?? .notDetermined,
-      calendars: calendars,
-      options: LiveCalendarOptions(
-        alertLead: options.string("alertLead") ?? defaults.alertLead,
-        alertCondition: options.string("alertCondition") ?? defaults.alertCondition,
-        showPreview: options.bool("showPreview") ?? defaults.showPreview,
-        showTimeToNext: options.bool("showTimeToNext") ?? defaults.showTimeToNext,
-        hiddenCalendarIds: options.strings("hiddenCalendarIds")
-      )
-    )
+  private func fire(_ command: LiveCommand) {
+    Task { await perform(command) }
   }
 }

@@ -54,7 +54,7 @@ export function answerPermission(tabId: string, requestId: string, result: Permi
   const current = pageOf(tabId).permission;
   const queued = queues.get(tabId)?.find((r) => r.id === requestId) ?? orphans.find((r) => r.id === requestId);
   const request = current?.id === requestId ? current : queued;
-  if (!request) return;
+  if (!request) return void resolvePermission(requestId, result, result !== "dismiss");
   void resolvePermission(request.id, result, result !== "dismiss");
   if (result === "accept" && request.permissions.includes("notifications")) {
     void ensureNotificationPermission(useBrowser.getState().tabs[tabId]?.windowId);

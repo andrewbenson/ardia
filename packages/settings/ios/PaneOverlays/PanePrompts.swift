@@ -20,6 +20,7 @@ enum PanePrompts {
   private static var pages: [String: PanePromptPage] = [:]
   private static var windows: [String: [String: Any]] = [:]
   private static var browsers = PaneBrowsers()
+  private static var windowOfTab: [String: String] = [:]
   private static var selectionShown: [String: PaneSelection] = [:]
   private static var selectionGenerations: [String: Int] = [:]
   private static var engineRemember: [String: (site: String, on: Bool)] = [:]
@@ -37,6 +38,7 @@ enum PanePrompts {
     guard enabled, NativeWindowShell.enabled, !started else { return }
     started = true
     TabPoolHost.shared.pageEventObservers.append { tabId, name, payload in pageEvent(tabId, name, payload) }
+    TabPoolHost.shared.stateObservers.append { tabsMoved() }
     ArdiaCoreEventTaps.observers.append { name, payload in coreEvent(name, payload) }
     for name in [NSApplication.didBecomeActiveNotification, NSWindow.didBecomeKeyNotification] {
       NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
@@ -57,21 +59,55 @@ enum PanePrompts {
 
   static func holds(_ windowId: String) -> Bool { !tabs(in: windowId) { $0.shown != PanePromptPage().shown }.isEmpty }
 
+  static func draws(_ windowId: String) -> Bool {
+    if holds(windowId) || selectionShown.keys.contains(where: { TabPoolHost.shared.windowOf($0) == windowId }) { return true }
+    guard let window = windows[windowId] else { return false }
+    let panes = window["panes"] as? [String: [String: Any]] ?? [:]
+    if panes.values.contains(where: { $0["popups"] is [String: Any] || $0["engineOffer"] is [String: Any] }) { return true }
+    return ((window["theme"] as? [String: Any])?["cli"] as? [String: Any])?["shown"] as? Bool == true || (cliHideUntil[windowId] ?? 0) > ProcessInfo.processInfo.systemUptime
+  }
+
+  private static func tabsMoved() {
+    var moved: Set<String> = []
+    for (tabId, was) in windowOfTab {
+      let now = TabPoolHost.shared.windowOf(tabId)
+      guard now != was else { continue }
+      moved.insert(was)
+      if let now {
+        moved.insert(now)
+        windowOfTab[tabId] = now
+      } else {
+        windowOfTab[tabId] = nil
+      }
+    }
+    for windowId in moved { NativePaneOverlays.refresh(windowId) }
+  }
+
   static func pageEvent(_ tabId: String, _ name: String, _ payload: [String: Any]) {
     if name == "onReady", let browserId = (payload["browserId"] as? NSNumber)?.intValue {
       for found in browsers.ready(tabId, browserId: browserId) { enqueue(found.tabId, found.request) }
+      if let chooser = browsers.parkedChooser(browserId) {
+        var page = pages[tabId] ?? PanePromptPage()
+        if page.chooserEvent(chooser) { update(tabId, page) }
+      }
     }
     if name == "onPageGone" {
       browsers.gone(tabId)
-      selectionShown[tabId] = nil
+      let barShown = selectionShown.removeValue(forKey: tabId) != nil
       selectionGenerations[tabId] = nil
-      guard let gone = pages.removeValue(forKey: tabId), gone.shown != PanePromptPage().shown else { return }
-      return refreshAll()
+      engineRemember[tabId] = nil
+      let gone = pages.removeValue(forKey: tabId)
+      let windowId = windowOfTab.removeValue(forKey: tabId) ?? TabPoolHost.shared.windowOf(tabId)
+      guard barShown || (gone.map { $0.shown != PanePromptPage().shown } ?? false) else { return }
+      return NativePaneOverlays.refreshShowing(tabId, lastWindow: windowId)
     }
     var page = pages[tabId] ?? PanePromptPage()
     let shown = page.shown
     let selection = page.selection
-    guard page.take(name, payload) else { return pages[tabId] = page }
+    guard page.take(name, payload) else {
+      if pages[tabId] != nil { pages[tabId] = page }
+      return
+    }
     pages[tabId] = page
     if page.selection != selection { selectionChanged(tabId, page.selection) }
     if page.shown != shown { changed(tabId) }
@@ -120,7 +156,11 @@ enum PanePrompts {
   static func coreEvent(_ name: String, _ payload: [String: Any]) {
     switch name {
     case "permission":
-      guard let request = PanePermissionRequest(payload), let tabId = browsers.route(request) else { return }
+      guard let request = PanePermissionRequest(payload) else { return }
+      guard let tabId = browsers.route(request) else {
+        _ = browsers.overflow()
+        return
+      }
       enqueue(tabId, request)
     case "permissionDismissed":
       guard let id = payload["id"] as? String else { return }
@@ -130,7 +170,8 @@ enum PanePrompts {
         update(tabId, page)
       }
     case "deviceChooser":
-      guard let chooser = PaneDeviceChooser(payload), let tabId = browsers.tab(chooser.browserId) else { return }
+      guard let chooser = PaneDeviceChooser(payload) else { return }
+      guard let tabId = browsers.tab(chooser.browserId) else { return browsers.park(chooser) }
       var page = pages[tabId] ?? PanePromptPage()
       if page.chooserEvent(chooser) { update(tabId, page) }
     default: break
@@ -151,8 +192,13 @@ enum PanePrompts {
       page.chooserSelected = index
       update(tabId, page)
     case .choose(let index):
-      if let choice = chooser.choice(index, selected: page.chooserSelected) { ArdiaCoreHost.deviceChooser(id, select: Int32(choice)) }
-    case .cancel: ArdiaCoreHost.deviceChooser(id, action: "cancel")
+      guard let choice = chooser.choice(index, selected: page.chooserSelected), page.answerChooser() else { return }
+      pages[tabId] = page
+      ArdiaCoreHost.deviceChooser(id, select: Int32(choice))
+    case .cancel:
+      guard page.answerChooser() else { return }
+      pages[tabId] = page
+      ArdiaCoreHost.deviceChooser(id, action: "cancel")
     case .refresh: ArdiaCoreHost.deviceChooser(id, action: "refresh")
     case .openSettings: ArdiaCoreHost.deviceChooser(id, action: "settings")
     }
@@ -264,7 +310,7 @@ enum PanePrompts {
       page.password = nil
       page.chosenUsername = nil
       update(tabId, page)
-      js("pane.password", windowId, tabId, action, username)
+      js("pane.password", windowId, tabId, action, username, prompt.key)
     case .autofill:
       guard let prompt = page.autofill else { return }
       let action: String
@@ -331,6 +377,7 @@ enum PanePrompts {
 
   private static func changed(_ tabId: String) {
     guard let windowId = TabPoolHost.shared.windowOf(tabId) else { return refreshAll() }
+    windowOfTab[tabId] = windowId
     NativePaneOverlays.refresh(windowId)
   }
 

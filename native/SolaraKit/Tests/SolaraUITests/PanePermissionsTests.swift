@@ -48,6 +48,54 @@ import Testing
     #expect(browsers.tab(11) == nil)
   }
 
+  @Test func orphansAreBoundedOldestFirst() {
+    var browsers = PaneBrowsers()
+    for i in 0..<(PaneBrowsers.orphanLimit + 3) { #expect(route(&browsers, request("\(i)", 9)) == nil) }
+    let dropped = browsers.overflow()
+    #expect(dropped.map(\.id) == ["0", "1", "2"])
+    let none = browsers.overflow()
+    #expect(none.isEmpty)
+    #expect(ready(&browsers, "a", 9).count == PaneBrowsers.orphanLimit)
+  }
+
+  @Test func aChooserBeforeItsBrowserWaitsForIt() {
+    var browsers = PaneBrowsers()
+    let open: [String: Any] = ["id": 4, "browserId": 9, "open": true, "title": "t", "okLabel": "Pair"]
+    browsers.park(PaneDeviceChooser(open)!)
+    let other = browsers.parkedChooser(8)
+    #expect(other == nil)
+    let parked = browsers.parkedChooser(9)
+    #expect(parked?.id == 4)
+    let again = browsers.parkedChooser(9)
+    #expect(again == nil)
+    browsers.park(PaneDeviceChooser(open)!)
+    var closed = open
+    closed["open"] = false
+    browsers.park(PaneDeviceChooser(closed)!)
+    let cleared = browsers.parkedChooser(9)
+    #expect(cleared == nil)
+  }
+
+  @Test func aChooserIsAnsweredOnce() {
+    var page = PanePromptPage()
+    let early = page.answerChooser()
+    #expect(!early)
+    let open: [String: Any] = ["id": 4, "browserId": 9, "open": true, "title": "t", "okLabel": "Pair"]
+    _ = chooser(&page, open)
+    let first = page.answerChooser()
+    let second = page.answerChooser()
+    #expect(first && !second)
+    _ = chooser(&page, open)
+    let afterUpdate = page.answerChooser()
+    #expect(!afterUpdate)
+    var closed = open
+    closed["open"] = false
+    _ = chooser(&page, closed)
+    _ = chooser(&page, open)
+    let reopened = page.answerChooser()
+    #expect(reopened)
+  }
+
   @Test func describesLikeRN() {
     #expect(PanePromptSpecs.describePermission(request("1")).question == "Allow a.test to send you notifications?")
     let av = PanePromptSpecs.describePermission(request("1", 7, ["camera", "microphone", "location"], origin: "http://127.0.0.1:8080"))

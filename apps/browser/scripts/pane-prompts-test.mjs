@@ -56,7 +56,8 @@ const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const act = (n, a) => C.devWindow(n, a);
 const click = (n, p) => act(n, "mouse:moved:" + Math.round(p[0]) + "," + Math.round(p[1])).then(() => settle(60))
   .then(() => act(n, "mouse:down:" + Math.round(p[0]) + "," + Math.round(p[1]))).then(() => settle(60)).then(() => act(n, "mouse:up:" + Math.round(p[0]) + "," + Math.round(p[1])));
-const native = () => M.describePaneOverlays("w1").then(JSON.parse);
+const native = (w = "w1") => M.describePaneOverlays(w).then(JSON.parse);
+const promptIn = (w, kind) => native(w).then((d) => { const p = d && d.tabs && d.tabs.a && d.tabs.a[kind]; return p && !p.hidden ? p : null; });
 const rnDrawn = (name) => acPerf.findFibers(name, 5).filter((f) => !!f.child).length;
 const rnPrompt = () => rnDrawn("PasswordPrompt");
 const pageEvent = (name, payload) => globalThis.expo.modules.SolaraTabPool.devPageEvent("a", name, payload);
@@ -348,6 +349,41 @@ try {
       await run(`return click(${number}, ${JSON.stringify(centre(locked.controls.Cancel))}).then(() => true);`);
       await until("it closes too", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.deviceChooser || null);`, 3000);
       return { card: shown.card };
+    });
+
+    await rep.check(`${tag}-prompts-move-with-their-tab`, async () => {
+      if (!nativePrompts) return "rn";
+      await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/login`)}, { userInitiated: true }); return true;`);
+      await submit("hopper", "th1rd-pass");
+      await until("a password prompt", `return ac.pageState.getState().pages.a?.passwordPrompt || null;`, 10000);
+      await until("drawn in w1", `return promptIn("w1", "password");`, 6000);
+      await run(`ac.store.getState().newTab("w1"); return true;`);
+      const to = await run(`return ac.store.getState().moveTabsToWindow(["a"], null) ?? null;`);
+      if (!to) throw new Error("no new window");
+      await until("the password prompt leaves w1", `return promptIn("w1", "password").then((p) => !p || null);`, 5000);
+      await until("and shows in the new window", `return promptIn(${JSON.stringify(to)}, "password");`, 5000).catch(async (e) => {
+        const seen = await run(`return native(${JSON.stringify(to)}).then((d) => ({ overlays: d, prompt: !!ac.pageState.getState().pages.a?.passwordPrompt, window: ac.store.getState().tabs.a?.windowId }));`).catch((x) => String(x));
+        throw new Error(`${e.message}; ${JSON.stringify(seen)}`);
+      });
+      const other = `${base.replace("127.0.0.1", "localhost")}/other`;
+      await run(`ac.store.getState().navigate("a", ${JSON.stringify(other)}, { userInitiated: true }); return true;`);
+      await until("navigation drops the password prompt", `return promptIn(${JSON.stringify(to)}, "password").then((p) => !p || null);`, 8000);
+      await until("the localhost page", `return ac.store.getState().tabs.a?.url === ${JSON.stringify(other)} && !ac.store.getState().live.a?.isLoading || null;`, 10000);
+      const target = await until("its DevTools target", async () => (await app.pageTarget(other)) ?? null, 5000);
+      const cdp = await devtools(target);
+      try {
+        await cdp.send("Runtime.evaluate", { expression: "navigator.geolocation.getCurrentPosition(() => {}, () => {}); true", userGesture: true });
+      } finally {
+        cdp.close();
+      }
+      await until("a permission prompt in the new window", `return promptIn(${JSON.stringify(to)}, "permission");`, 8000);
+      await run(`ac.store.getState().moveTabsToWindow(["a"], "w1"); return true;`);
+      await until("the permission prompt follows it back to w1", `return promptIn("w1", "permission");`, 5000);
+      const left = await run(`return native(${JSON.stringify(to)}).then((d) => !!(d && d.tabs && d.tabs.a));`);
+      if (left) throw new Error("the old window still draws tab a's prompts");
+      await run(`ac.store.getState().navigate("a", ${JSON.stringify(`${base}/other`)}, { userInitiated: true }); return true;`);
+      await until("navigation drops it", `return promptIn("w1", "permission").then((p) => !p || null);`, 8000);
+      return { to };
     });
 
     await app.quit();

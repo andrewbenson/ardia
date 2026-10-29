@@ -15,8 +15,9 @@ reload" and a Reload button, an unresponsive one dims it under a 320 wide card w
 overlay, its buttons and RN's are the same frames in the window (within half a point: one pixel of Yoga rounding), a click on Reload clears the
 crash and a click on Wait clears the hang, and once both are gone the native container leaves the card. A third instance
 serves the page from the pool (ARDIA_NATIVE_PAGES_POOL=1 ARDIA_SHELL_PANES=1): the renderer really crashes
-(chrome://crash through the pooled handle), the crash reaches the store as a page event, the native sad tab sits where
-RN's does, and Reload reloads the pooled page back to A. A fourth adds ARDIA_NATIVE_PANE_PROMPTS=1: RN no longer mounts
+(chrome://crash through the pooled handle) and really hangs (a 40 second busy loop and a key press), both reach the
+store as page events, the native sad tab sits where RN's does, Reload reloads the pooled page back to A and Wait clears
+the hang. A fourth adds ARDIA_NATIVE_PANE_PROMPTS=1: RN no longer mounts
 its SadTab wrapper for the pooled pane at all, the native sad tab comes from the pool's page events alone (a real
 renderer crash, then a real hang: a 40 second busy loop and a key press, so onUnresponsive comes from the engine), it
 stays up while JS publishes an unrelated pane overlay (the zoom popover), and Reload and Wait clear it.`);
@@ -51,7 +52,8 @@ const button = (title) => { const f = fibers("PromptButton").find((b) => b.memoi
 const act = (n, a) => C.devWindow(n, a);
 const click = (n, p) => act(n, "mouse:moved:" + p[0] + "," + p[1]).then(() => settle(60))
   .then(() => act(n, "mouse:down:" + p[0] + "," + p[1])).then(() => settle(60)).then(() => act(n, "mouse:up:" + p[0] + "," + p[1]));
-const native = () => M && M.describePaneOverlays ? M.describePaneOverlays("w1").then(JSON.parse) : Promise.resolve(null);
+const native = (w = "w1") => M && M.describePaneOverlays ? M.describePaneOverlays(w).then(JSON.parse) : Promise.resolve(null);
+const sadIn = (w) => native(w).then((d) => !!(d && d.tabs && d.tabs.a && d.tabs.a.sadTab && !d.tabs.a.sadTab.hidden));
 `;
 let app = null;
 const run = (body, timeout = 20000) => app.eval(`${HELPERS}\n${body}`, { timeout });
@@ -75,8 +77,8 @@ const modes = [
 const labels = { 0: ["Reload"], 1: ["Exit Page", "Wait"] };
 const measured = { rn: [], native: [], pool: [], prompts: [] };
 const LEGS = [
-  { tag: "rn", env: { ARDIA_NATIVE_SHELL: "0" } },
-  { tag: "native", env: { ARDIA_NATIVE_SHELL: "1" } },
+  { tag: "rn", env: { ARDIA_NATIVE_SHELL: "0", ARDIA_NATIVE_PAGES_POOL: "0", ARDIA_SHELL_PANES: "0", ARDIA_NATIVE_PANE_PROMPTS: "0" } },
+  { tag: "native", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "0", ARDIA_SHELL_PANES: "0" } },
   { tag: "pool", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } },
   { tag: "prompts", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" } },
 ];
@@ -121,7 +123,7 @@ try {
         if (pooled && i === 0) {
           await run(`ac.webviews.get("a").loadUrl("chrome://crash"); return true;`);
           await until("the crash reaches the store", `return page().crashed || null;`, 8000);
-        } else if (prompts) {
+        } else if (pooled) {
           const target = await app.pageTarget(pageUrl);
           if (!target) throw new Error("no DevTools target for page A");
           const cdp = await devtools(target);
@@ -130,6 +132,7 @@ try {
           await run(`return ac.shell.devKeyEquivalent("w1", { key: "a", keyCode: 0, modifiers: [], focus: "page" }).then(() => true);`);
         } else await run(`patch(${JSON.stringify(state)}); return true;`);
         await sleep(400);
+        if (pooled && !prompts) await until(`the ${name} page reaches the store`, `const p = page(); return (${i === 0} ? p.crashed : p.unresponsive) || null;`, 35000);
         if (prompts) {
           await until("the native sad tab", `return native().then((d) => d && d.tabs.a && d.tabs.a.sadTab && !d.tabs.a.sadTab.hidden && d.tabs.a.sadTab.mode === ${JSON.stringify(name)} || null);`, 35000);
           const wrappers = await run(`return acPerf.findFibers("SadTab", 5).length;`);
@@ -148,9 +151,30 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(got.controls[action]))}).then(() => true);`);
         await until(`${action} clears it`, `const p = page(); return !p.crashed && !p.unresponsive || null;`, 3000);
         if (nativeShell) await until("the native overlay goes", `return native().then((d) => !d || (!d.tabs.a && !d.inCard) || null);`, 3000);
-        if (prompts && i === 1) await until("the native model clears the hang", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.sadTab || d.tabs.a.sadTab.hidden || null);`, 3000);
+        if (pooled && i === 1) await until("the native model clears the hang", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.sadTab || d.tabs.a.sadTab.hidden || null);`, 3000);
         if (pooled && i === 0) await until("the pooled page reloads to A", `return ac.webviews.get("a") && ac.store.getState().tabs.a?.title === "A" && !ac.store.getState().live.a?.isLoading ? true : null;`, 8000);
         return got;
+      });
+    }
+    if (prompts) {
+      await rep.check(`${tag}-moves-with-its-tab`, async () => {
+        await run(`ac.webviews.get("a").loadUrl("chrome://crash"); return true;`);
+        await until("the crash reaches the store, once the hang's busy loop ends", `return page().crashed || null;`, 45000);
+        await until("the sad tab in w1", `return sadIn("w1") || null;`, 5000);
+        await run(`ac.store.getState().newTab("w1"); return true;`);
+        const to = await run(`return ac.store.getState().moveTabsToWindow(["a"], null) ?? null;`);
+        if (!to) throw new Error("no new window");
+        await until("the sad tab leaves w1", `return sadIn("w1").then((s) => !s || null);`, 5000);
+        await sleep(600);
+        const crashedThere = await run(`return !!page().crashed;`);
+        if (!crashedThere) {
+          if (await run(`return sadIn(${JSON.stringify(to)});`)) throw new Error("the move recovered the page but the new window still draws a sad tab");
+          return { to, reloadedOnMove: true };
+        }
+        await until("and shows in the new window", `return sadIn(${JSON.stringify(to)}) || null;`, 5000);
+        await run(`ac.webviews.get("a").reload(); return true;`);
+        await until("a reload clears it there", `return sadIn(${JSON.stringify(to)}).then((s) => !s || null);`, 8000);
+        return { to };
       });
     }
     await app.quit();

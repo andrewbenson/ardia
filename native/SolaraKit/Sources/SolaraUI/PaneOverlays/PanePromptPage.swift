@@ -90,6 +90,7 @@ public struct PanePromptPage: Equatable, Sendable {
   public var permissions: [PanePermissionRequest] = []
   public var chooser: PaneDeviceChooser?
   public var chooserSelected: Int?
+  public var chooserAnswered = false
   public var selection: PaneSelection?
 
   public init() {}

@@ -16,6 +16,7 @@ import { mediaTheme } from "../media/nativeMedia";
 import { acceptEngineOffer, stayOnPage } from "../../lib/engines";
 
 const VERSION = 1;
+const passwordPromptKey = (prompt: { origin: string; username: string; state: string }) => `${prompt.origin}|${prompt.username}|${prompt.state === "update" ? "update" : "save"}`;
 export type PaneHistoryEvent = { kind: "open"; index: number; metaKey: boolean; shiftKey: boolean; altKey: boolean; middle: boolean } | { kind: "fullHistory" | "dismiss" };
 export type PaneClick = { metaKey: boolean; shiftKey: boolean; altKey: boolean };
 const handlers = new Map<string, { current: ((event: never) => void) | null }>();
@@ -54,7 +55,9 @@ addNativeSettingsHandlers({
   },
   "pane.history": (windowId: string, tabId: string, event: PaneHistoryEvent) => handlers.get(`history:${windowId}:${tabId}`)?.current?.(event as never),
   "pane.selection": (windowId: string, tabId: string, click: PaneClick) => handlers.get(`selection:${windowId}:${tabId}`)?.current?.(click as never),
-  "pane.password": (_windowId: string, tabId: string, action: PasswordPromptAnswer, username: string) => {
+  "pane.password": (_windowId: string, tabId: string, action: PasswordPromptAnswer, username: string, key?: string) => {
+    const shown = pageOf(tabId).passwordPrompt;
+    if (shown && key !== undefined && passwordPromptKey(shown) !== key) return;
     patchPage(tabId, { passwordPrompt: null });
     void webviews.get(tabId)?.resolvePasswordPrompt(action, action === "save" || action === "update" ? { username } : undefined);
   },

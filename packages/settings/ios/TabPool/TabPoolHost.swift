@@ -15,6 +15,7 @@ final class TabPoolHost {
   var emit: ((String, [String: Any]) -> Void)?
   var onPageGone: ((String) -> Void)?
   var pageEventObservers: [@MainActor (String, String, [String: Any]) -> Void] = []
+  var stateObservers: [@MainActor () -> Void] = []
   private var pool: TabViewPool?
   private var listener: Int?
   private var slotObserver: NSObjectProtocol?
@@ -82,6 +83,7 @@ final class TabPoolHost {
     state = next
     for tabId in props.keys where next.tabs[tabId] == nil { props[tabId] = nil }
     refresh()
+    stateObservers.forEach { $0() }
   }
 
   private func refresh() {

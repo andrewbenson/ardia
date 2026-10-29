@@ -17,6 +17,10 @@ enum NativePaneOverlays {
       guard let windowId = note.userInfo?["windowId"] as? String else { return }
       MainActor.assumeIsolated { hosts[windowId]?.relayout() }
     }
+    NotificationCenter.default.addObserver(forName: Notification.Name("RCTContentDidAppearNotification"), object: nil, queue: .main) { note in
+      guard let windowId = (note.object as? WindowShellView)?.windowId else { return }
+      MainActor.assumeIsolated { refresh(windowId) }
+    }
     apply(SettingsJS.shared.latestValue(topic))
   }
 
@@ -24,9 +28,17 @@ enum NativePaneOverlays {
 
   static func refresh(_ windowId: String) {
     guard started else { return }
-    let host = hosts[windowId] ?? PaneOverlayHost(windowId: windowId)
+    if let host = hosts[windowId] { return host.refresh() }
+    guard NativeWindowShell.host(windowId) != nil, PanePrompts.draws(windowId) else { return }
+    let host = PaneOverlayHost(windowId: windowId)
     hosts[windowId] = host
     host.refresh()
+  }
+
+  static func refreshShowing(_ tabId: String, lastWindow: String?) {
+    var windows = Set(hosts.compactMap { $0.value.shows(tabId) ? $0.key : nil })
+    if let lastWindow { windows.insert(lastWindow) }
+    for windowId in windows { refresh(windowId) }
   }
 
   private static func apply(_ value: Any?) {
@@ -45,7 +57,7 @@ enum NativePaneOverlays {
 
   static func swipe(_ windowId: String, _ tabId: String, _ json: String) {
     guard NativeWindowShell.enabled, let data = json.data(using: .utf8), let message = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-    let host = hosts[windowId] ?? PaneOverlayHost(windowId: windowId)
+    guard let host = hosts[windowId] ?? (NativeWindowShell.host(windowId) != nil ? PaneOverlayHost(windowId: windowId) : nil) else { return }
     hosts[windowId] = host
     host.swipe(tabId, message)
   }
@@ -216,6 +228,10 @@ final class PaneOverlayHost {
   }
 
   func refresh() { apply(fromJS) }
+
+  func shows(_ tabId: String) -> Bool {
+    sadTabs[tabId] != nil || selections[tabId] != nil || cliPills[tabId] != nil || prompts.values.contains { $0.tabId == tabId } || choosers.values.contains { $0.tabId == tabId }
+  }
 
   func apply(_ tabs: [String: Any]) {
     fromJS = tabs

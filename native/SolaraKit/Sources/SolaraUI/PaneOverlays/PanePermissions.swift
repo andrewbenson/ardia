@@ -76,12 +76,35 @@ public struct PaneDeviceChooser: Equatable, Sendable {
 }
 
 public struct PaneBrowsers: Sendable {
+  public static let orphanLimit = 32
+  public static let parkedChooserLimit = 8
+
   public private(set) var tabs: [Int: String] = [:]
   private var orphans: [PanePermissionRequest] = []
+  private var parkedChoosers: [PaneDeviceChooser] = []
 
   public init() {}
 
   public func tab(_ browserId: Int) -> String? { tabs[browserId] }
+
+  public mutating func overflow() -> [PanePermissionRequest] {
+    guard orphans.count > Self.orphanLimit else { return [] }
+    let dropped = Array(orphans.prefix(orphans.count - Self.orphanLimit))
+    orphans.removeFirst(dropped.count)
+    return dropped
+  }
+
+  public mutating func park(_ chooser: PaneDeviceChooser) {
+    parkedChoosers.removeAll { $0.browserId == chooser.browserId || $0.id == chooser.id }
+    guard chooser.open else { return }
+    parkedChoosers.append(chooser)
+    if parkedChoosers.count > Self.parkedChooserLimit { parkedChoosers.removeFirst(parkedChoosers.count - Self.parkedChooserLimit) }
+  }
+
+  public mutating func parkedChooser(_ browserId: Int) -> PaneDeviceChooser? {
+    guard let index = parkedChoosers.firstIndex(where: { $0.browserId == browserId }) else { return nil }
+    return parkedChoosers.remove(at: index)
+  }
 
   public mutating func ready(_ tabId: String, browserId: Int) -> [(tabId: String, request: PanePermissionRequest)] {
     tabs = tabs.filter { $0.value != tabId }
@@ -116,13 +139,23 @@ extension PanePromptPage {
   public mutating func chooserEvent(_ next: PaneDeviceChooser) -> Bool {
     let before = self
     if next.open {
-      if chooser?.id != next.id { chooserSelected = nil }
+      if chooser?.id != next.id {
+        chooserSelected = nil
+        chooserAnswered = false
+      }
       chooser = next
     } else if chooser?.id == next.id {
       chooser = nil
       chooserSelected = nil
+      chooserAnswered = false
     }
     return self != before
+  }
+
+  public mutating func answerChooser() -> Bool {
+    guard chooser != nil, !chooserAnswered else { return false }
+    chooserAnswered = true
+    return true
   }
 }
 

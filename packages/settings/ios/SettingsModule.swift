@@ -23,6 +23,17 @@ public class SettingsModule: Module {
       NativeAppIntegration.active
     }
 
+    AsyncFunction("installCli") { (reason: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        guard NativeCliControl.active else { return reply.reject("ERR_SERVICES_OFF", "native services are off") }
+        NativeCliControl.shared.install(reason: reason) { result in
+          nonisolated(unsafe) let result = result
+          reply.resolve(result)
+        }
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("navigate") { (pane: String?, profileId: String?, detail: String?) in
       MainActor.assumeIsolated { NativeSettingsWindow.navigate(pane: pane, profileId: profileId, detail: detail) }
     }.runOnQueue(.main)

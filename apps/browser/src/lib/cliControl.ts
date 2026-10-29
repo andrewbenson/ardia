@@ -1,4 +1,5 @@
 import { cliControlStatus, onCliControlChanged, setCliActiveTab, setCliControl, type CliControlStatus } from "@ardia/ardiacore";
+import { nativeInstallCli, nativeServicesActive } from "@ardia/settings";
 import { installCli, installedCliVersion, onCliInstallLine, readDocument, systemInfo, writeDocument, type CliInstallResult } from "@ardia/shell";
 import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../store/browser";
@@ -86,18 +87,19 @@ export function installCliInBackground(reason: CliInstallReason): Promise<CliIns
     const step = /^step (\S+)/.exec(line)?.[1];
     if (step) useCli.setState({ step });
   });
-  running = installCli()
+  const native = nativeServicesActive();
+  running = (native ? (nativeInstallCli(reason) as Promise<CliInstallResult>) : installCli())
     .catch((e: unknown): CliInstallResult => ({ ok: false, appVersion: "", error: e instanceof Error ? e.message : String(e), lines: [] }))
     .then((result) => {
       lines.remove();
       running = null;
       const installedVersion = installedCliVersion();
       if (result.ok) {
-        save({ binPath: result.binPath ?? null, version: result.version ?? installedVersion, error: null });
+        if (!native) save({ binPath: result.binPath ?? null, version: result.version ?? installedVersion, error: null });
         useCli.setState({ installing: null, step: null, installedVersion, binPath: result.binPath ?? null, error: null });
       } else {
         const error = result.error ?? "The installer stopped.";
-        save({ error });
+        if (!native) save({ error });
         useCli.setState({ installing: null, step: null, installedVersion, error });
       }
       return result;

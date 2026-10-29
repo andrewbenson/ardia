@@ -69,7 +69,7 @@ final class NativeCliControl {
     self.model = model
     CliPillIndicator.shared.onStop = { NativeCliControl.shared.stop() }
     showPill()
-    ArdiaCoreEngineBridge.observe("cliControl") { payload in
+    ArdiaCoreEngineBridge.observe("cliControl") { @Sendable payload in
       let status = CliControlServer(payload)
       Task { @MainActor in NativeCliControl.shared.heard(status) }
     }
@@ -90,7 +90,7 @@ final class NativeCliControl {
     case .status: nil
     case .set(let on): ["on": on]
     }
-    ArdiaCoreServices.call("ac_cli_control", profile: "", args: args) { result in
+    ArdiaCoreServices.call("ac_cli_control", profile: "", args: args) { @Sendable result in
       let status = CliControlServer(result)
       Task { @MainActor in NativeCliControl.shared.settled(call.request, status) }
     }
@@ -143,11 +143,11 @@ final class NativeCliControl {
     installing = reason
     step = nil
     CliTool.install(
-      onLine: { line in
+      onLine: { @Sendable line in
         guard line.hasPrefix("step "), let step = line.dropFirst(5).split(separator: " ").first else { return }
         Task { @MainActor in NativeCliControl.shared.step = String(step) }
       },
-      done: { result in
+      done: { @Sendable result in
         nonisolated(unsafe) let result = result
         Task { @MainActor in NativeCliControl.shared.installed(result) }
       })

@@ -34,7 +34,7 @@ final class NativeAppIntegration {
       "sendFeedback": { windowId in NativeAppIntegration.shared.sendFeedback(windowId) },
       "copyDiagnostics": { _ in NativeAppIntegration.copy(NativeAppIntegration.shared.diagnostics()) },
       "recordPerformanceIssue": { _ in NativeAppIntegration.shared.recordPerformanceIssue() },
-      "taskManager": { _ in ArdiaCoreServices.call("ac_task_manager_open", profile: "", args: nil) { _ in } },
+      "taskManager": { _ in ArdiaCoreServices.call("ac_task_manager_open", profile: "", args: nil) { @Sendable _ in } },
     ]
     let writer = StoreWorkspaceWriter(store: store, showWindow: ShellScripting.showWindow)
     let pages = PooledScriptPages()

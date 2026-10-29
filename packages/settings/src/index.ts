@@ -6,6 +6,7 @@ type NativeSettingsModule = {
   available(): boolean;
   servicesActive?(): boolean;
   appServicesActive?(): boolean;
+  installCli?(reason: string): Promise<Record<string, unknown>>;
   navigate(pane: string | null, profileId: string | null, detail: string | null): Promise<void>;
   focusSearch(): Promise<void>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
@@ -31,6 +32,9 @@ export function nativeServicesActive(): boolean {
     return false;
   }
 }
+
+export const nativeInstallCli = (reason: string) =>
+  native?.installCli ? native.installCli(reason) : Promise.reject(new Error("native services are off"));
 
 export function nativeAppServicesActive(): boolean {
   try {

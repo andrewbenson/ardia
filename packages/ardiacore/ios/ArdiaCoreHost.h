@@ -1,5 +1,7 @@
 #import <AppKit/AppKit.h>
 
+FOUNDATION_EXPORT BOOL ArdiaCoreTestHooksAllowed(void);
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaCoreHost : NSObject

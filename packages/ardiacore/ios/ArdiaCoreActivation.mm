@@ -626,3 +626,7 @@ __attribute__((used, section("__DATA,__interpose"))) const Interpose kSecureInpu
 };
 
 }
+
+extern "C" BOOL ArdiaCoreTestHooksAllowed(void) {
+  return ardiacore_host::TestHooksAllowed();
+}

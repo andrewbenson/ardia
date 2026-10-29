@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { evaluate, launch, quit } from "./perf/js-bench.mjs";
+import { devtools, sleep } from "../../../scripts/lib/instance.mjs";
 
 const { values: flags, positionals } = parseArgs({ allowPositionals: true, options: { bundle: { type: "string" }, out: { type: "string" }, port: { type: "string" } } });
 if (!positionals[0]) {
@@ -63,7 +64,24 @@ const stillLoading = createServer((req, res) => {
 await new Promise((r) => stillLoading.listen(0, "127.0.0.1", r));
 const loadingPage = (name) => `http://127.0.0.1:${stillLoading.address().port}/${name}`;
 
-const { pid } = await launch(app, data, Number(flags.port ?? 9795));
+const port = Number(flags.port ?? 9795);
+const { pid } = await launch(app, data, port);
+const askFromPage = async (urlPart, expression) => {
+  const end = Date.now() + 8000;
+  let target = null;
+  while (!target && Date.now() < end) {
+    const list = await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json(), () => []);
+    target = list.find((t) => t.type === "page" && t.url.includes(urlPart)) ?? null;
+    if (!target) await sleep(200);
+  }
+  if (!target) throw new Error(`no DevTools target for ${urlPart}`);
+  const cdp = await devtools(target);
+  try {
+    await cdp.send("Runtime.evaluate", { expression, userGesture: true, returnByValue: true });
+  } finally {
+    cdp.close();
+  }
+};
 const ac = (body, ms) => evaluate(data, pid, body, ms);
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -83,6 +101,7 @@ try {
     };
     return true;`);
   const S = "const S = () => ac.store.getState();";
+  const nativePrompts = await ac(`return Promise.resolve(globalThis.expo.modules.SolaraHosted?.kinds?.() ?? []).then((k) => k.includes("panePrompts"));`);
 
   const loaded = await ac(`${S}
     S().activate("b");
@@ -99,21 +118,30 @@ try {
       ok = loadedIt;
       S().updateTab("b", { zoom: 1.5 });
       S().setFind("b", { open: true, query: "findme" });
-      ac.pageState.setState((p) => ({ pages: { ...p.pages, b: { ...(p.pages.b || {}), permission: { id: "audit", browserId: 0, origin: "https://example.com", permissions: ["notifications"] } } } }));
+      if (!${nativePrompts}) ac.pageState.setState((p) => ({ pages: { ...p.pages, b: { ...(p.pages.b || {}), permission: { id: "audit", browserId: 0, origin: "https://example.com", permissions: ["notifications"] } } } }));
       return audit.frames(3);
     }).then(() => ({ ok, url: S().tabs.b.url, title: S().tabs.b.title, renderedB: audit.props("UrlField", "b").length + audit.native("b").length }));`, 60_000);
   check("a hidden tab loads what it's sent to (its own tab's navigation)", hiddenChanges.ok, `${hiddenChanges.url} "${hiddenChanges.title}"`);
   check("nothing of B's toolbar renders while it's hidden", hiddenChanges.renderedB === 0);
+  if (nativePrompts) {
+    await askFromPage("/HiddenLoad", "Notification.requestPermission(); true");
+    const asked = await ac(`return audit.until(() => !!ac.pageState.getState().pages.b?.permission, 8000);`, 15_000);
+    check("a hidden page's permission request reaches the store", asked === true);
+  }
 
   const shown = await ac(`${S}
     S().activate("b");
     const t = (f) => { try { return f(); } catch (e) { return "ERR " + e.message; } };
-    return audit.frames(3).then(() => ({
+    const M = globalThis.expo.modules.SolaraMedia;
+    const inPane = () => M.describePaneOverlays("w1").then((d) => { const p = JSON.parse(d)?.tabs?.b?.permission; return !!p && !p.hidden; });
+    const paneWithin = (ms) => { const end = Date.now() + ms; const poll = () => inPane().then((on) => (on || Date.now() > end ? on : new Promise((r) => setTimeout(r, 100)).then(poll))); return poll(); };
+    const drawn = () => (${nativePrompts} ? paneWithin(3000) : Promise.resolve(null));
+    return audit.frames(3).then(drawn).then((paneShown) => ({
       url: t(() => audit.props("UrlField", "b")[0]?.props.tab.url ?? audit.native("b").map((n) => n.url && n.url.host + n.url.hoverTrail)[0]),
       zoom: t(() => audit.props("ZoomIndicator", "b")[0]?.props.zoom ?? audit.native("b").map((n) => { const z = (n.url?.trailing ?? []).find((t) => t.id === "zoom"); return z ? Number(z.tooltip.match(/([0-9]+)%/)[1]) / 100 : 1; })[0]),
       loading: t(() => audit.props("ReloadButton", "b")[0]?.props.loading ?? audit.native("b").map((n) => (n.left ?? []).find((b) => b.id === "reload")?.icon === "xmark")[0]),
       find: t(() => audit.props("FindBar", "b")[0]?.rendered),
-      prompt: t(() => audit.props("PermissionPrompt", "b")[0]?.rendered),
+      prompt: t(() => (${nativePrompts} ? paneShown && !audit.props("PermissionPrompt", "b").some((p) => p.rendered) : audit.props("PermissionPrompt", "b")[0]?.rendered)),
     }));`);
   check("shown: the URL it loaded while hidden", typeof shown.url === "string" && shown.url.includes("HiddenLoad"), shown.url);
   check("shown: its zoom", shown.zoom === 1.5, String(shown.zoom));

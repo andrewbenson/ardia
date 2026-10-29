@@ -105,7 +105,7 @@ enum NativeTopStrip {
   static var hosts: [String: TopStripHost] = [:]
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeTopStrip, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeTopStrip)
   }
 
   static func register() {

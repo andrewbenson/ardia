@@ -23,7 +23,7 @@ enum NativeTabPickers {
   nonisolated static let switcherPresses = SwitcherPresses()
 
   nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeTabPickers, defaultOn: false)
+    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeTabPickers)
   }
 
   static func register() {

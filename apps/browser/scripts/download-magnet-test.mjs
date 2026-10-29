@@ -114,7 +114,16 @@ async function magnetChecks(native, downloads) {
   `, 30000);
   rep.log(`${samples.length} samples over ${samples.at(-1).t} ms`);
 
-  const download = await run(`return ac.store.getState().downloads.map((d) => ({ state: d.state, path: d.path, filename: d.filename }));`);
+  const download = await run(`
+    const t0 = Date.now();
+    const read = () => ac.store.getState().downloads.map((d) => ({ state: d.state, path: d.path, filename: d.filename }));
+    const loop = () => {
+      const list = read();
+      if (list.some((d) => d.filename) || Date.now() - t0 > 10000) return list;
+      return settle(100).then(loop);
+    };
+    return loop();
+  `, 15000);
   const got = download.find((d) => d.filename?.includes("magnet-test"));
   assert.ok(got, `the download reached the store (${JSON.stringify(download)})`);
   assert.ok(!got.path || got.path.startsWith(downloads), `downloaded to ${got.path}, not the scratch folder`);

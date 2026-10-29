@@ -39,8 +39,10 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
     .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers, .nativeProfilePager,
   ]
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
+  public static var recoverable: [LaunchSwitch] { experiments.filter(onByDefault.contains) }
   public static let onByDefault: Set<LaunchSwitch> = [
     .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
+    .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet,
   ]
 
   public var needs: [LaunchSwitch] {
@@ -68,8 +70,9 @@ public struct LaunchSwitches: Sendable {
   public let isolated: Bool
   public let defaultsSuite: String?
   public let distribution: Bool
-  public let skippedStored: Bool
+  public internal(set) var skippedStored: Bool
   public var droppedAfterFailedLaunches = false
+  public internal(set) var turnedOffByRecovery: [LaunchSwitch] = []
   public var countedLaunch = false
   public let scope: String?
   let environment: [LaunchSwitch: Bool]
@@ -170,25 +173,60 @@ public struct LaunchSwitches: Sendable {
   static let failedLaunchesKey = "SolaraLaunchSwitchFailedLaunches"
   static let failedLaunchLimit = 2
 
-  public static func launching(environment env: [String: String], defaults: UserDefaults, distribution: Bool, optionHeld: () -> Bool) -> LaunchSwitches {
+  public static func launching(
+    environment env: [String: String], defaults: UserDefaults, distribution: Bool, optionHeld: () -> Bool, counting: Bool = true,
+    confirmRecovery: ([LaunchSwitch]) -> Bool = { _ in true }
+  ) -> LaunchSwitches {
     let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
     if !probe.usesDefaults { return probe }
-    var switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: optionHeld())
-    guard !switches.stored.isEmpty else {
+    var switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: false)
+    if optionHeld() {
+      let turningOff = switches.wouldRecover
+      if turningOff.isEmpty || confirmRecovery(turningOff) {
+        defaults.removeObject(forKey: failedLaunchesKey)
+        var recovered = turningOff.isEmpty ? switches : recover(switches, environment: env, defaults: defaults)
+        recovered.skippedStored = true
+        return recovered
+      }
+    }
+    guard counting else { return switches }
+    guard !switches.wouldRecover.isEmpty else {
       defaults.removeObject(forKey: failedLaunchesKey)
       return switches
     }
     let failed = defaults.integer(forKey: failedLaunchesKey)
     if failed >= failedLaunchLimit {
-      StoredLaunchSwitches(defaults: defaults, distribution: distribution).clear()
       defaults.removeObject(forKey: failedLaunchesKey)
-      switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: false)
+      switches = recover(switches, environment: env, defaults: defaults)
       switches.droppedAfterFailedLaunches = true
       return switches
     }
     defaults.set(failed + 1, forKey: failedLaunchesKey)
     switches.countedLaunch = true
     return switches
+  }
+
+  var wouldRecover: [LaunchSwitch] {
+    LaunchSwitch.allCases.filter { name in
+      name.storable(distribution: distribution) && (stored[name] ?? LaunchSwitch.recoverable.contains(name))
+    }
+  }
+
+  static func recover(_ before: LaunchSwitches, environment env: [String: String], defaults: UserDefaults) -> LaunchSwitches {
+    let turnedOff = before.wouldRecover
+    let store = StoredLaunchSwitches(defaults: defaults, distribution: before.distribution)
+    store.clear()
+    for name in LaunchSwitch.recoverable { store.set(name, false) }
+    var after = LaunchSwitches(environment: env, defaults: defaults, distribution: before.distribution, skipStored: false)
+    after.turnedOffByRecovery = turnedOff
+    return after
+  }
+
+  public var recoveryReport: String? {
+    guard !turnedOffByRecovery.isEmpty else { return nil }
+    let why = droppedAfterFailedLaunches ? "Solara didn't finish opening twice in a row" : "Option was held while Solara opened"
+    let names = turnedOffByRecovery.map(\.rawValue).joined(separator: ", ")
+    return "\(why), so these were turned off: \(names). Turn them back on in Settings › Advanced › Experimental, or in Terminal with defaults delete <domain> <NAME>."
   }
 
   public static func launchSucceeded(defaults: UserDefaults = LaunchSwitches.defaults, isolated: Bool = !shared.usesDefaults) {
@@ -202,16 +240,40 @@ public struct LaunchSwitches: Sendable {
     let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
     let defaults = probe.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard
     let held = { (probe.defaultsSuite != nil && env[optionVariable] == "1") || optionHeld() }
-    let switches: LaunchSwitches
-    if counting {
-      switches = launching(environment: env, defaults: defaults, distribution: distribution, optionHeld: held)
-    } else if !probe.usesDefaults {
-      switches = probe
-    } else {
-      switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: held())
-    }
+    let isolated = probe.isolated
+    let confirm: ([LaunchSwitch]) -> Bool = { isolated || confirmRecoveryAlert($0) }
+    let switches = launching(
+      environment: env, defaults: defaults, distribution: distribution, optionHeld: held, counting: counting, confirmRecovery: confirm)
+    if let report = switches.recoveryReport { NSLog("[launch switches] %@", report) }
     for refusal in switches.refusals { NSLog("[launch switches] %@", refusal) }
     return switches
+  }
+
+  static let spokenNames: [LaunchSwitch: String] = [
+    .nativeShell: "the native window", .shellPanes: "native page overlays", .nativeAutoHide: "native auto-hide",
+    .nativeSidebar: "the native sidebar", .nativeTopStrip: "the native tab strip", .nativeMedia: "native media controls",
+  ]
+
+  public static func recoveryQuestion(_ turningOff: [LaunchSwitch]) -> (title: String, message: String) {
+    let names = turningOff.map { spokenNames[$0] ?? $0.rawValue }
+    let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+    return (
+      "Turn off \(list)?",
+      "Option was held while Solara opened. Turning these off stays in effect until you turn them back on in Settings › Advanced › Experimental."
+    )
+  }
+
+  static func confirmRecoveryAlert(_ turningOff: [LaunchSwitch]) -> Bool {
+    #if os(macOS)
+    let question = recoveryQuestion(turningOff)
+    var response: CFOptionFlags = 0
+    let shown = CFUserNotificationDisplayAlert(
+      0, kCFUserNotificationCautionAlertLevel, nil, nil, nil, question.title as CFString, question.message as CFString,
+      "Turn Off" as CFString, "Open Normally" as CFString, nil, &response)
+    return shown == 0 && response & 0x3 == kCFUserNotificationDefaultResponse
+    #else
+    true
+    #endif
   }
 
   static func optionHeld() -> Bool {

@@ -21,7 +21,7 @@ enum NativeWindowShell {
   nonisolated private static let activeIds = Mutex<Set<String>>([])
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeShell, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeShell)
   }
 
   nonisolated static var mainOnTop: Bool {

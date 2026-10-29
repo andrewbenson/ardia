@@ -9,7 +9,7 @@ enum NativeDownloadMagnet {
   private static let views = NSMapTable<NSString, DownloadMagnetView>.strongToWeakObjects()
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeDownloadMagnet, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeDownloadMagnet)
   }
 
   static func register() {

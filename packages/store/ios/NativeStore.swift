@@ -149,33 +149,33 @@ public final class NativeStore: Sendable {
 }
 
 @MainActor
-final class LaunchSuccessWatch {
-  static let settleSeconds = 15.0
-  static var current: LaunchSuccessWatch?
-  var tokens: [NSObjectProtocol] = []
+enum LaunchSuccessWatch {
+  static var tokens: [NSObjectProtocol] = []
 
   static func start() {
-    let watch = LaunchSuccessWatch()
-    current = watch
+    let success = LaunchSuccess(
+      after: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated { work() } } },
+      report: {
+        LaunchSwitches.launchSucceeded()
+        MainActor.assumeIsolated {
+          tokens.forEach(NotificationCenter.default.removeObserver)
+          tokens = []
+        }
+      })
+    success.start()
+    tokens.append(
+      NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+        MainActor.assumeIsolated { success.quitting() }
+      })
     for name in [NSWindow.didBecomeMainNotification, NSWindow.didChangeOcclusionStateNotification] {
-      watch.tokens.append(
+      tokens.append(
         NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { note in
           let window = note.object as? NSWindow
           MainActor.assumeIsolated {
             guard let window, window.isVisible, window.occlusionState.contains(.visible) || window.isMainWindow else { return }
-            current?.windowShown()
+            success.windowShown()
           }
         })
-    }
-  }
-
-  func windowShown() {
-    tokens.forEach(NotificationCenter.default.removeObserver)
-    tokens = []
-    Self.current = nil
-    DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { LaunchSwitches.launchSucceeded() }
-    _ = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
-      LaunchSwitches.launchSucceeded()
     }
   }
 }

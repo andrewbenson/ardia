@@ -85,15 +85,24 @@ public final class ExperimentsModel {
 
   var note: String {
     if !stored.writable { return "This instance has its own data folder, so only its environment sets these." }
-    if running.droppedAfterFailedLaunches { return "Solara didn't finish opening twice in a row, so these were turned off." }
-    if running.skippedStored { return "Option was held while Solara opened, so these were skipped this time." }
+    if running.droppedAfterFailedLaunches { return "Solara didn't finish opening twice in a row, so \(turnedOff)." }
+    if running.skippedStored { return "Option was held while Solara opened, so \(turnedOff)." }
     return "These turn on parts of Solara that are still being built. Changes apply the next time Solara opens."
+  }
+
+  var turnedOff: String {
+    let names = running.turnedOffByRecovery.map { Self.titles[$0]?.title ?? $0.rawValue }
+    guard !names.isEmpty else { return "nothing needed turning off" }
+    let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
+    return "these were turned off: \(list)"
   }
 
   var recovery: String? {
     guard stored.writable else { return nil }
     let domain = Bundle.main.bundleIdentifier ?? "com.hill.solara"
-    return "If Solara won't open with one on, hold Option while it opens to skip them, or turn one off in Terminal with defaults write \(domain) <NAME> 0, for example defaults write \(domain) \(LaunchSwitch.nativeShell.rawValue) 0."
+    let back = running.turnedOffByRecovery.isEmpty
+      ? "" : "To turn back on what Solara turned off, use its switch above, or in Terminal defaults delete \(domain) <NAME>. "
+    return back + "If Solara won't open with one on, hold Option while it opens to turn them all off, or turn one off in Terminal with defaults write \(domain) <NAME> 0, for example defaults write \(domain) \(LaunchSwitch.nativeShell.rawValue) 0."
   }
 }
 

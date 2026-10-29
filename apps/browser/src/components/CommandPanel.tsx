@@ -15,7 +15,6 @@ import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
 import { breadcrumb } from "@ardia/core";
 import { nativeOmniboxAvailable, nativeUrlPrefixWidth, showNativePanel, sidebarAddressBarAvailable } from "@ardia/settings";
-import { Omnibox as ReactOmnibox, PANEL_TEXT_LEFT } from "./Omnibox";
 import { NativeOmniboxBar } from "./omnibox/NativeOmniboxBar";
 import { closePanelToHeroBar, type BarDismissal } from "./omnibox/barState";
 import { insecureLevel, URL_FIELD, urlTextLeft } from "./Toolbar";
@@ -33,9 +32,7 @@ const DROPDOWN_RADIUS = 12;
 const PANEL_OPEN_HEIGHT = 107;
 const CENTRED_TOP_SHARE = 0.22;
 
-function Omnibox(props: ComponentProps<typeof ReactOmnibox> & { variant: "panel" | "sidebar" }) {
-  return nativeOmniboxAvailable() ? <NativeOmniboxBar {...props} /> : <ReactOmnibox {...props} />;
-}
+const PANEL_TEXT_LEFT = 48;
 
 const NATIVE_URL_TEXT_SHIFT = { x: 1.5, y: 0.5 };
 const GROW_MS = 130;
@@ -165,7 +162,7 @@ function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
     return (
       <Grow from={null} frame={centredFrame(card)} openHeight={PANEL_OPEN_HEIGHT} radius={PANEL_RADIUS} surface={surface(PANEL_RADIUS)}>
         <OutsidePressArea onOutsidePress={onCancel}>
-          <Omnibox key={activeId} variant="panel" floating tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
+          <NativeOmniboxBar key={activeId} variant="panel" floating tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
         </OutsidePressArea>
       </Grow>
     );
@@ -178,7 +175,7 @@ function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
     return (
       <Grow from={from} frame={{ left, top: anchor.top, width }} openHeight={anchor.sidebar.height} radius={DROPDOWN_RADIUS} surface={surface(DROPDOWN_RADIUS)}>
         <OutsidePressArea onOutsidePress={onCancel}>
-          <Omnibox key={activeId} variant="sidebar" tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
+          <NativeOmniboxBar key={activeId} variant="sidebar" tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
         </OutsidePressArea>
       </Grow>
     );
@@ -190,7 +187,7 @@ function CommandPanelBody({ windowWidth }: { windowWidth: number }) {
   return (
     <Grow from={from} frame={{ left, top, width }} openHeight={PANEL_OPEN_HEIGHT} radius={PANEL_RADIUS} surface={surface(PANEL_RADIUS)}>
       <OutsidePressArea onOutsidePress={onCancel}>
-        <Omnibox key={activeId} variant="panel" tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
+        <NativeOmniboxBar key={activeId} variant="panel" tabId={activeId} initialText={panel.initialText} onCancel={onCancel} onDone={onDone} />
       </OutsidePressArea>
     </Grow>
   );
@@ -236,7 +233,7 @@ function CentredBar({ windowId, tabId, target, card }: { windowId: string; tabId
       surface={panelSurface(theme, PANEL_RADIUS)}
     >
       <OutsidePressArea onOutsidePress={onCancel}>
-        <Omnibox key={`newTab:${target.kind}`} variant="panel" floating tabId={tabId} opensTab={target} onCancel={onCancel} onDone={onDone} />
+        <NativeOmniboxBar key={`newTab:${target.kind}`} variant="panel" floating tabId={tabId} opensTab={target} onCancel={onCancel} onDone={onDone} />
       </OutsidePressArea>
     </Grow>
   );

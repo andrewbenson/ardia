@@ -13,7 +13,7 @@ Little Solara on a local page: the window opens with its bar and card where Smal
 28 high, the buttons at the right, the card inset 6 below a 38 pt bar), a click on the field opens the command panel,
 the panel grows from the field box to RN's dropdown frame (left and top of the field, max(350, field + 137) wide, 12
 from the window's right edge at most; port-omnibox's native panel draws it, RN's Grow under
-ARDIA_NATIVE_OMNIBOX=0) with its field taking a click inside the 38 pt bar and a click on the card closing it,
+the removed fallback) with its field taking a click inside the 38 pt bar and a click on the card closing it,
 a click on the bar's blank part leaves the window alone, and Open in Solara (its button natively, ⌘O's command under RN) moves the tab to the main window and closes the small one;
 then a relaunch handed a link, as another app hands it (ARDIA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
 passes outside links on to another copy), opens it in Little Solara and not the main window, through the early link window
@@ -22,7 +22,7 @@ its backdrop, bar and RN slots in that order and the bar fed from JS.`);
   process.exit(2);
 }
 const native = args.includes("--native");
-const omnibox = process.env.ARDIA_NATIVE_OMNIBOX !== "0";
+const omnibox = true;
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-little-solara-"));
 const data = join(scratch, "data");

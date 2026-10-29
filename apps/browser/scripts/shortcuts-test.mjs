@@ -52,7 +52,6 @@ app = await launch(appPath, {
   }),
   switches: "--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=PMProcessPriorityPolicy",
   ready: "return !!ac.shell.devKeyEquivalent",
-  env: { ARDIA_NATIVE_NEWTAB: process.env.ARDIA_NATIVE_NEWTAB ?? null, ARDIA_NATIVE_OMNIBOX: process.env.ARDIA_NATIVE_OMNIBOX ?? null },
 });
 rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
 await sleep(3000);

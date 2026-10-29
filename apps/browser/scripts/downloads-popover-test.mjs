@@ -72,7 +72,7 @@ try {
     const tag = nativeShell ? "native" : "rn";
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0", ARDIA_NATIVE_OMNIBOX: "1" },
+      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);

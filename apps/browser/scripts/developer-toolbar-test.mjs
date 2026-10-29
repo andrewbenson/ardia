@@ -1,13 +1,11 @@
-const HELP = `Checks the Developer Mode toolbar: the native one against RN's, and its edit-in-place.
+const HELP = `Checks the Developer Mode toolbar and its edit-in-place.
 
   node apps/browser/scripts/developer-toolbar-test.mjs <Debug Solara.app> [--keep DIR]
 
-Two hidden instances in turn, ARDIA_NATIVE_OMNIBOX=0 (RN) and =1 (native), each on a page served from 127.0.0.1,
-which is in Developer Mode by default. For light and dark it snapshots the window at rest and with the URL being
+A hidden instance on a page served from 127.0.0.1, which is in Developer Mode by default. For light and dark it snapshots the window at rest and with the URL being
 edited (⌘L), and checks:
   - Chromium's level for the loopback page is NONE and the field shows no red not-secure badge;
-  - the native resting URL's ink box matches RN's within 1 px at 2x, and so does the native editing one;
-  - the toolbar's stripes (none in light) match RN's pixel for pixel along two rows through the bar;
+  - the URL's ink box doesn't move (1 px at 2x) when editing starts;
   - ⌘L opens no command bar, typed text and Return navigate the tab, Escape leaves the URL as it was.
 Exits 1 on any failure.`;
 
@@ -97,9 +95,8 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? `  (${detail})` : ""}`);
 };
 
-for (const native of [false, true]) {
-  const side = native ? "native" : "rn";
-  const instance = await launch(app, { data: join(scratch, `data-${side}`), fresh: true, onboarded: true, env: { ARDIA_NATIVE_OMNIBOX: native ? "1" : "0", ARDIA_NATIVE_NEWTAB: "0" } });
+for (const side of ["native"]) {
+  const instance = await launch(app, { data: join(scratch, `data-${side}`), fresh: true, onboarded: true });
   const inApp = (body) => instance.eval(body, { timeout: 30000 });
   try {
     const w = await inApp(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; s.setWindowFrame(w, [80, 80, 1280, 800]); return w;`);
@@ -152,21 +149,12 @@ server.close();
 const near = (a, b) => !!a && !!b && ["left", "right", "top", "bottom"].every((k) => Math.abs(a[k] - b[k]) <= 1);
 const box = (b) => (b ? `${b.left}-${b.right} × ${b.top}-${b.bottom}` : "none");
 for (const appearance of ["light", "dark"]) {
-  const rn = results[`rn-${appearance}`], nat = results[`native-${appearance}`];
-  check(`${appearance}: loopback is Chromium's NONE and shows no not-secure badge`, nat.level === "none" && nat.red === 0 && rn.red === 0, `level ${nat.level}, red px ${nat.red} native, ${rn.red} rn`);
-  check(`${appearance}: the resting URL sits where RN's does`, near(nat.rest, rn.rest), `native ${box(nat.rest)}, rn ${box(rn.rest)}`);
-  check(`${appearance}: the URL being edited sits where RN's does`, near(nat.edit, rn.edit), `native ${box(nat.edit)}, rn ${box(rn.edit)}`);
+  const nat = results[`native-${appearance}`];
+  check(`${appearance}: loopback is Chromium's NONE and shows no not-secure badge`, nat.level === "none" && nat.red === 0, `level ${nat.level}, red px ${nat.red}`);
   check(`${appearance}: the URL doesn't move when editing starts`, near(nat.edit, nat.rest), `rest ${box(nat.rest)}, edit ${box(nat.edit)}`);
-  check(`${appearance}: ⌘L edits in place, no command bar`, !nat.panel && !rn.panel, `panel native ${nat.panel}, rn ${rn.panel}`);
+  check(`${appearance}: ⌘L edits in place, no command bar`, !nat.panel, `panel ${nat.panel}`);
 }
-for (const appearance of ["light", "dark"]) {
-  const rn = results[`rn-${appearance}`].row, nat = results[`native-${appearance}`].row;
-  const differ = rn.filter((v, i) => v !== nat[i]).length;
-  check(`${appearance}: the toolbar's stripes match RN's along two rows through the bar`, differ === 0, `${differ} of ${rn.length} px differ`);
-}
-for (const side of ["rn", "native"]) {
-  const e = results[`${side}-edits`];
-  check(`${side}: Return goes to the typed URL, Escape keeps it`, e.went.endsWith("/other") && e.kept === e.went && !e.panel, JSON.stringify(e).replace(base, ""));
-}
+const e = results["native-edits"];
+check("Return goes to the typed URL, Escape keeps it", e.went.endsWith("/other") && e.kept === e.went && !e.panel, JSON.stringify(e).replace(base, ""));
 console.log(failed ? `${failed} failed (snapshots in ${scratch})` : "all pass");
 process.exit(failed ? 1 : 0);

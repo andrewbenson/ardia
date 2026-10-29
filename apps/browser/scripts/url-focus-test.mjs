@@ -2,7 +2,7 @@ const HELP = `Checks that focusing the native address bar doesn't move the addre
 
   node apps/browser/scripts/url-focus-test.mjs <Debug Solara.app> [--keep DIR]
 
-One hidden instance with ARDIA_NATIVE_OMNIBOX=1. For each case (https, http and a long URL, light and dark) it
+One hidden instance with the native omnibox. For each case (https, http and a long URL, light and dark) it
 snapshots the window at rest, opens the command panel, snapshots again, then finds the resting host's ink in the
 focused snapshot. The host must land within 0.5 pt of where it was, and the field's text must start with the scheme.
 The pages are on a .test host, so nothing loads and nothing leaves the machine. Exits 1 on any failure.`;
@@ -93,7 +93,7 @@ const cases = [
   { name: "long URL, dark", url: long, appearance: "dark", scheme: "https://" },
 ];
 
-const instance = await launch(app, { data: join(scratch, "data"), fresh: true, onboarded: true, env: { ARDIA_NATIVE_OMNIBOX: "1", ARDIA_NATIVE_NEWTAB: "0" } });
+const instance = await launch(app, { data: join(scratch, "data"), fresh: true, onboarded: true });
 const inApp = (body) => instance.eval(body, { timeout: 30000 });
 let failed = 0;
 try {

@@ -10,7 +10,7 @@ public class OmniboxModule: Module {
     Name("SolaraOmniboxBar")
 
     Function("available") { () -> Bool in
-      LaunchSwitches.shared.isOn(.nativeOmnibox, defaultOn: true) && NativeSettingsHandle.active
+      NativeSettingsHandle.active
     }
 
     AsyncFunction("showPanel") { (windowId: String, json: String) in

@@ -6,7 +6,7 @@ import SolaraStore
 import SolaraUI
 
 public class ToolbarModule: Module {
-  nonisolated static var available: Bool { LaunchSwitches.shared.isOn(.nativeOmnibox, defaultOn: true) && NativeSettingsHandle.active }
+  nonisolated static var available: Bool { NativeSettingsHandle.active }
 
   public func definition() -> ModuleDefinition {
     Name("SolaraToolbar")

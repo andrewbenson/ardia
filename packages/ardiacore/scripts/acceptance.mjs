@@ -4658,10 +4658,14 @@ try {
     const target = await pageFor(tab.id, "/c?parked");
     try {
       return await slowMount(async () => {
+        const pooled = await evalApp(`return !!globalThis.expo.modules.SolaraTabPool?.available()`);
         await evalApp(`ac.store.getState().moveTabsToWindow(["${tab.id}"], null); return true`);
-        await until("the old view gone", () => evalApp(`return !ac.webviews.get("${tab.id}")`), 3000);
+        if (pooled) await sleep(1000);
+        else await until("the old view gone", () => evalApp(`return !ac.webviews.get("${tab.id}")`), 3000);
         await sleep(300);
         if (!(await targets()).some((x) => x.id === target.id)) throw new Error("the page went before its tab closed");
+        const copies = (await targets()).filter((x) => x.type === "page" && x.url.includes("/c?parked")).length;
+        if (copies !== 1) throw new Error(`${copies} pages for the moved tab`);
         await closeTab(tab.id);
         const closed = Date.now();
         await until("the parked page gone", async () => !(await targets()).some((x) => x.id === target.id), 1500);

@@ -1,3 +1,4 @@
+import { hostedKinds } from "@ardia/settings";
 import { launchEnvironment, readDocument, stopIntroMusic, writeDocument } from "@ardia/shell";
 import { persistenceRefused } from "../../lib/persistLatch";
 import { create } from "zustand";
@@ -376,6 +377,7 @@ export function dismissOnboarding(session: number) {
 export function maybeStartOnboarding() {
   const saved = readSaved();
   if (saved?.completedAt) return;
+  if (!hostedKinds().includes("onboarding")) return;
   if (saved?.startedAt) return resumeOnboarding(saved);
   if (persistenceRefused()) return;
   if (readDocument("session.json")) return markCompleted();

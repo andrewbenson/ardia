@@ -12,7 +12,7 @@ enum NativeOnboarding {
   static let kind = "onboarding"
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeOnboarding, defaultOn: true) && NativeSettingsWindow.enabled
+    NativeSettingsWindow.enabled
   }
 
   private static var sessions: [OnboardingSession] = []

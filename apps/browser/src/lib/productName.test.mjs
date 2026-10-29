@@ -8,16 +8,11 @@ appInfo.switchesURL = "https://stats.example.com/flags.json";
 appInfo.updateFeedURL = "https://github.com/example/solara/releases/latest/download/appcast.xml";
 
 const { PRODUCT, SERVICES } = await import("./productName.ts");
-const { ONBOARDING_COPY } = await import("../components/onboarding/copy.ts");
 const { SETTINGS, setting } = await import("../components/settings/settingsIndex.ts");
 const { SHARING_COPY } = await import("../telemetry/copy.ts");
 
 test("the bundle's product name names the app everywhere", () => {
   assert.equal(PRODUCT, "Solara");
-  assert.equal(ONBOARDING_COPY.wordmark, "Solara");
-  assert.equal(ONBOARDING_COPY.system.setDefault, "Set Solara as default browser");
-  assert.equal(ONBOARDING_COPY.system.title, "Make Solara your default?");
-  assert.equal(ONBOARDING_COPY.littleWindow, "Little Solara");
   assert.equal(setting("general.openAtLogin").title, "Open Solara at login");
   assert.equal(setting("general.autoUpdate").title, "Automatically update Solara");
   assert.equal(SHARING_COPY.ask.title, "Help fix Solara?");
@@ -27,7 +22,6 @@ test("the bundle's product name names the app everywhere", () => {
 
 test("no product-facing copy still names Ardia", () => {
   const strings = [
-    JSON.stringify(ONBOARDING_COPY),
     ...SETTINGS.flatMap((e) => [e.title, e.section, e.description ?? ""]),
     JSON.stringify(SHARING_COPY),
   ];

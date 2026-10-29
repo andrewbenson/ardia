@@ -8,7 +8,7 @@ import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node onboarding-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data] [--rn | --native]\n\n--rn and --native pick the overlay (ARDIA_NATIVE_ONBOARDING=0 or 1); the checks are the same for both.\n\nNo text field sits behind the onboarding card, where its I-beam and clicks would come through the rows, the first row's checkbox toggles on a click, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once onboarding ends, in a bar that keeps its height.");
+  console.error("usage: node onboarding-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data]\n\nNo text field sits behind the onboarding card, where its I-beam and clicks would come through the rows, the first row's checkbox toggles on a click, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once onboarding ends, in a bar that keeps its height.");
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -18,7 +18,7 @@ const defaultBrowserAx = new RegExp(`AXCheckBox: ${defaultBrowserRow}`);
 const port = args.find((a) => a.startsWith("--port="))?.slice(7);
 const keep = args.includes("--keep-data");
 const extraEnv = Object.fromEntries(args.filter((a) => a.startsWith("--env=")).map((a) => a.slice(6).split("=")));
-const overlay = args.includes("--rn") ? { ARDIA_NATIVE_ONBOARDING: "0" } : args.includes("--native") ? { ARDIA_NATIVE_ONBOARDING: "1" } : {};
+const overlay = {};
 const scratch = mkdtempSync(join(tmpdir(), "ac-onboarding-"));
 const data = join(scratch, "data");
 const rep = reporter(join(scratch, "onboarding-test.log"), { name: "onboarding-test" });

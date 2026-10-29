@@ -13,8 +13,10 @@
 // opens the meeting and Ignore dismisses it. The page prompts (permission, password, autofill, external app, engine
 // offer, device chooser, blocked pop-ups) open in the native popover frame at the card RN draws for them; Esc or a
 // click on the page leaves the first six unanswered and closes the pop-ups list, and a pop-up's row opens just that
-// one, as RN does (a second instance with ARDIA_NATIVE_PAGES=0 gives RN's numbers). A click on the native frame's
-// Allow less than 0.5 s after the prompt shows is ignored (promptGuard) and one 0.8 s later answers it.
+// one, as RN does (a second instance with ARDIA_NATIVE_PAGES=0 and ARDIA_NATIVE_PAGES_POOL=0 gives RN's numbers). A
+// click on the native frame's Allow less than 0.5 s after the prompt shows is ignored (promptGuard) and one 0.8 s
+// later answers it. The calendar preview and the meeting alert are read from whichever host draws them: the native
+// sidebar's hover card and the shell's alert frame when those are on.
 //
 //   node apps/browser/scripts/pages-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
@@ -512,6 +514,19 @@ try {
     assert.equal(shared.data, shared.head, "shares the preset's data");
   });
   const kindPage = async (kind) => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages.find((p) => p.kind === kind) ?? null;
+  const calendarRows = async (windowId) => {
+    const card = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraHosted?.sidebarHoverCard?.(${JSON.stringify(windowId)}) ?? "null"`));
+    if (card?.kind === "calendar") return Object.entries(card.events ?? {}).map(([label, [x, y, width, height]]) => ({ label, x, y, width, height }));
+    return (await kindPage("calendarPreview"))?.frames ?? null;
+  };
+  const alertButtons = async () => {
+    const page = await kindPage("meetingAlert");
+    if (page) return { join: frameOf(page, "Join"), ignore: frameOf(page, "Ignore") };
+    const win = await app.eval(`return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
+    const f = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${win}, "MeetingAlertFrameView")`));
+    if (!f.found || f.height <= 100) return null;
+    return { join: { x: f.x + 150 - 50, y: f.y + f.height - 27 - 10, width: 100, height: 20 }, ignore: { x: f.x + 283 - 6, y: f.y + 19 - 6, width: 12, height: 12 } };
+  };
 
   await rep.check("the calendar preview lists today's events and a click shows the calendar tab", async () => {
     const ids = JSON.parse(await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
@@ -521,12 +536,12 @@ try {
     await until(async () => ({ ok: (await app.eval(`return ac.pages.calendar.getState().events.length`)) >= 2 }), 5000);
     await app.eval(`ac.pages.setSidebarUi({ hover: { windowId: ${JSON.stringify(ids.w)}, kind: "tab", id: ${JSON.stringify(ids.tab)}, anchor: { x: 10, y: 120, width: 240, height: 32 } } }); return true`);
     const shown = await until(async () => {
-      const now = await kindPage("calendarPreview");
-      return { ok: !!now && now.frames.some((f) => f.label.startsWith("event:standup")), now };
+      const now = await calendarRows(ids.w);
+      return { ok: !!now && now.some((f) => f.label.startsWith("event:standup")), now };
     });
     assert.ok(shown.ok, "preview with the standup row");
     await sleep(800);
-    const row = shown.now.frames.find((f) => f.label.startsWith("event:review"));
+    const row = shown.now.find((f) => f.label.startsWith("event:review"));
     const hit = await click(row);
     const active = await until(async () => ({ ok: (await app.eval(`const s = ac.store.getState(); const w = s.windows[${JSON.stringify(ids.w)}]; return w.activeTabIds[w.profileId]`)) === ids.tab }));
     assert.ok(active.ok, `the calendar tab is shown (clicked ${JSON.stringify(row)} on ${hit})`);
@@ -537,20 +552,22 @@ try {
     const show = () => app.eval(`const e = ac.pages.calendar.getState().events.find((x) => x.id === "standup"); ac.store.getState().setFocusedWindow?.(Object.keys(ac.store.getState().windows)[0]); ac.pages.meetingAlert.setState({ event: e }); return !!e`);
     assert.equal(await show(), true, "fixture event");
     let shown = await until(async () => {
-      const now = await kindPage("meetingAlert");
-      return { ok: !!now && !!frameOf(now, "Join"), now };
+      const now = await alertButtons();
+      return { ok: !!now?.join, now };
     });
     assert.ok(shown.ok, `alert with Join (focused: ${await app.eval("return ac.store.getState().ui.focusedWindowId")})`);
     const tabsBefore = await app.eval(`return Object.keys(ac.store.getState().tabs).length`);
-    await click(frameOf(shown.now, "Join"));
+    await sleep(800);
+    await click(shown.now.join);
     const opened = await until(async () => ({ ok: (await app.eval(`return Object.values(ac.store.getState().tabs).some((t) => (t.url || "").includes("zoom.us"))`)) }), 4000);
     assert.ok(opened.ok, `a zoom tab (tabs ${tabsBefore} → ${await app.eval("return Object.keys(ac.store.getState().tabs).length")})`);
     await show();
     shown = await until(async () => {
-      const now = await kindPage("meetingAlert");
-      return { ok: !!now && !!frameOf(now, "Ignore"), now };
+      const now = await alertButtons();
+      return { ok: !!now?.ignore, now };
     });
-    await click(frameOf(shown.now, "Ignore"));
+    await sleep(800);
+    await click(shown.now.ignore);
     const gone = await until(async () => ({ ok: (await app.eval(`return ac.pages.meetingAlert.getState().event === null`)) }));
     assert.ok(gone.ok, "dismissed");
   });
@@ -608,7 +625,7 @@ const rnData = join(scratch, "rn-data");
 mkdirSync(rnData, { recursive: true });
 let rn = null;
 try {
-  rn = await launch(resolve(appArg), { data: rnData, onboarded: true, env: { ARDIA_NATIVE_PAGES: "0" } });
+  rn = await launch(resolve(appArg), { data: rnData, onboarded: true, env: { ARDIA_NATIVE_PAGES: "0", ARDIA_NATIVE_PAGES_POOL: "0" } });
   await rn.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
   await sleep(4000);
   await rep.check("each prompt's native card sits where RN draws it, and Esc and a click on the page answer it as RN does", async () => {

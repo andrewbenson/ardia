@@ -42,6 +42,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)startLinkTabs:(NSArray<NSString *> *)urls profile:(NSString *)profile;
 + (NSDictionary<NSString *, id> *)routeLinkTabs:(NSArray<NSString *> *)urls;
 + (void)setSearchEngineName:(NSString *)name;
++ (void)setOwnedTabStillWanted:(nullable BOOL (^)(ArdiaCoreWebView *view))handler;
 + (void)installSwitchPrewarm;
 + (void)installOutgoingFocusSnapshots;
 + (void)setDisplayMediaPicker:(BOOL)enabled;

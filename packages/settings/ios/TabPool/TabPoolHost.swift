@@ -26,6 +26,9 @@ final class TabPoolHost {
   private var pages: [String: PoolPage] = [:]
   private var warm: Set<String> = []
   private var shellWindows: Set<String> = []
+  private var wanted: [TabViewWanted] = []
+  private var closing: [String: ClosingWindow] = [:]
+  private let shellNSWindows = NSMapTable<NSString, NSWindow>.strongToWeakObjects()
 
   func start() {
     guard pool == nil else { return }
@@ -44,6 +47,7 @@ final class TabPoolHost {
     overlaysObserver = NotificationCenter.default.addObserver(forName: PaneOverlays.changed, object: PaneOverlays.shared, queue: nil) { [weak self] _ in
       MainActor.assumeIsolated { self?.followCardPages() }
     }
+    ArdiaCoreWebView.setOwnedTabStillWanted { view in MainActor.assumeIsolated { TabPoolHost.shared.stillWants(view) } }
     receive(store.state)
   }
 
@@ -78,17 +82,69 @@ final class TabPoolHost {
     state = next
     for tabId in props.keys where next.tabs[tabId] == nil { props[tabId] = nil }
     refresh()
+    stateObservers.forEach { $0() }
   }
 
   private func refresh() {
     guard let pool, let state else { return }
     shellWindows.formUnion(NativeWindowShell.activeWindowIds)
+    for windowId in shellWindows {
+      if let window = NativeWindowShell.host(windowId)?.shell.window { shellNSWindows.setObject(window, forKey: windowId as NSString) }
+    }
+    for (windowId, hold) in closing where state.windows[windowId] != nil || hold.window == nil { end(windowId, hold) }
+    for windowId in shellWindows where state.windows[windowId] == nil { holdUntilClosed(windowId) }
     shellWindows = shellWindows.filter { state.windows[$0] != nil }
-    let wanted = TabViewWanted.from(state, windows: shellWindows, isInternal: Self.isInternal, frozen: { _ in false })
-    warm = Set(wanted.filter(\.warm).map(\.tabId))
+    for key in shellNSWindows.keyEnumerator().allObjects.compactMap({ $0 as? String }) where !shellWindows.contains(key) {
+      shellNSWindows.removeObject(forKey: key as NSString)
+    }
+    let fresh = TabViewWanted.from(state, windows: shellWindows, isInternal: Self.isInternal, frozen: { _ in false })
+    let freshIds = Set(fresh.map(\.tabId))
+    wanted = fresh + closing.sorted { $0.key < $1.key }.flatMap { $0.value.tabs.filter { !freshIds.contains($0.tabId) } }
+    warm = Set(fresh.filter(\.warm).map(\.tabId))
     for page in pages.values { page.setWarm(warm.contains(page.tabId), neighbour: Self.neighbour(state, page.tabId)) }
     pool.update(wanted)
     followCardPages()
+  }
+
+  private func holdUntilClosed(_ windowId: String) {
+    guard closing[windowId] == nil else { return }
+    let tabs = wanted.filter { $0.windowId == windowId }
+    let window = shellNSWindows.object(forKey: windowId as NSString) ?? tabs.lazy.compactMap({ self.pages[$0.tabId]?.page.view.window }).first
+    guard let window else { return }
+    let hold = ClosingWindow(tabs: tabs.map { TabViewWanted(tabId: $0.tabId, windowId: $0.windowId, shown: $0.shown) }, window: window)
+    hold.observer = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) {
+      [weak self, weak hold] _ in
+      MainActor.assumeIsolated {
+        guard let self, let hold else { return }
+        self.release(windowId, hold)
+      }
+    }
+    closing[windowId] = hold
+  }
+
+  private func release(_ windowId: String, _ hold: ClosingWindow) {
+    guard closing[windowId] === hold else { return }
+    end(windowId, hold)
+    refresh()
+  }
+
+  private func end(_ windowId: String, _ hold: ClosingWindow) {
+    closing[windowId] = nil
+    if let observer = hold.observer { NotificationCenter.default.removeObserver(observer) }
+    hold.observer = nil
+  }
+
+  func stillWants(_ view: NSView) -> Bool {
+    guard let tabId = pages.first(where: { $0.value.page.view === view })?.key, let store = NativeStoreHandle.store else { return true }
+    let state = store.state
+    guard let tab = state.tabs[tabId] else { return false }
+    return state.windows[tab.windowId] != nil
+  }
+
+  func devPageIds() -> [String] { pages.keys.sorted() }
+
+  func devClosingWindows() -> [String: Int] {
+    closing.mapValues { $0.window?.windowNumber ?? -1 }
   }
 
   private func followCardPages() {
@@ -157,6 +213,18 @@ final class TabPoolHost {
     let rest = url[colon.upperBound...]
     let host = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }.lowercased()
     return ["history", "bookmarks", "downloads"].contains(host)
+  }
+}
+
+@MainActor
+final class ClosingWindow {
+  let tabs: [TabViewWanted]
+  weak var window: NSWindow?
+  var observer: NSObjectProtocol?
+
+  init(tabs: [TabViewWanted], window: NSWindow) {
+    self.tabs = tabs
+    self.window = window
   }
 }
 

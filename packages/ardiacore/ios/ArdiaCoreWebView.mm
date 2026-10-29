@@ -225,6 +225,7 @@ BOOL gDisplayMediaPicker = NO;
 NSString *gPeekModifier = @"shift";
 NSString *gSplitLinkModifier = @"altShift";
 static BOOL gSelectionPopover = YES;
+static BOOL (^gOwnedTabStillWanted)(ArdiaCoreWebView *);
 static const NSEventModifierFlags kPeekKeyMask = NSEventModifierFlagOption | NSEventModifierFlagShift | NSEventModifierFlagCommand | NSEventModifierFlagControl;
 static NSEventModifierFlags gPeekUpKeys = 0;
 static CFTimeInterval gPeekUpAt = -1;
@@ -1167,12 +1168,17 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   [ArdiaCoreTabParking rehomeFromWindow:closing];
 }
 
++ (void)setOwnedTabStillWanted:(BOOL (^)(ArdiaCoreWebView *))handler {
+  gOwnedTabStillWanted = [handler copy];
+}
+
 + (NSArray<ArdiaCoreTab *> *)tabsToKeep:(NSArray<ArdiaCoreTab *> *)tabs closingWindow:(NSWindow *)window closedByChrome:(BOOL)closedByChrome {
   NSAssert(NSThread.isMainThread, @"tabsToKeep off main");
   NSMutableArray<ArdiaCoreTab *> *keep = [NSMutableArray array];
   for (ArdiaCoreTab *tab in tabs) {
     if (tab.closed || !tab.profile) continue;
-    BOOL kept = [ArdiaCoreTabs viewForTab:tab].owned && !closedByChrome;
+    ArdiaCoreWebView *owner = [ArdiaCoreTabs viewForTab:tab];
+    BOOL kept = owner.owned && !closedByChrome && (!gOwnedTabStillWanted || gOwnedTabStillWanted(owner));
 #if DEBUG
     BOOL forced = NO;
     if (!kept && [DevKeptBrowsers() containsObject:@(ardiacore_host::BrowserId(tab))]) {
@@ -1184,7 +1190,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
       forced = YES;
     }
     ArdiaCoreWebView *view = [ArdiaCoreTabs viewForTab:tab];
-    if (forced && view && !view.owned) view->_devKeptOnClose = YES;
+    if (forced && view) view->_devKeptOnClose = YES;
     kept = kept || forced;
 #endif
     if (kept) [keep addObject:tab];

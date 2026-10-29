@@ -69,6 +69,7 @@ const needs = {
   "tab-switch": ["open-url", "target-blank"],
   "tab-keys-from-page": ["open-url", "target-blank"],
   "window-close": ["window-open"],
+  "no-hidden-window-after-stay": ["chrome-windows-remove"],
   "site-data-clear": ["open-url"],
   "frozen": ["open-url", "cmd-click"],
   "discard": ["open-url", "cmd-click"],
@@ -2326,6 +2327,25 @@ try {
           setTimeout(() => { try { ws.close(); } catch {} }, 3000);
         }
       })();
+      const hostCloseFrees = await (async () => {
+        const poolIds = () => evalApp(`const pool = globalThis.expo.modules.SolaraTabPool; return pool?.available() ? pool.devPageIds() : null`);
+        const baseline = await poolIds();
+        const marks = ["rm-q", "rm-r"];
+        const { appWindow } = await openWindow(marks, []);
+        const ids = [await tabIdOf("rm-q"), await tabIdOf("rm-r")];
+        const windowNumber = await cef(`devWindowNumber(${await browserOf(ids[0])})`);
+        await cef(`devWindow(${windowNumber}, "close-button")`);
+        await until("the window closing", async () => !(await storeTabs()).some((t) => t.windowId === appWindow), 15000);
+        await until(`${marks} closing`, async () => (await pages(marks)).length === 0, 15000);
+        if (baseline === null) return { pool: false };
+        const after = await until("the pool freeing the window's pages", async () => {
+          const now = await poolIds();
+          return JSON.stringify(now) === JSON.stringify(baseline) ? now : null;
+        }, 5000).catch(async (e) => {
+          throw new Error(`${e.message}: pool pages ${JSON.stringify(await poolIds())}, baseline ${JSON.stringify(baseline)}, closed ${JSON.stringify(ids)}`);
+        });
+        return { pool: true, pages: after.length };
+      })();
       const failedMove = await (async () => {
         const marks = ["rm-m", "rm-n"];
         const { id } = await openWindow(marks, []);
@@ -2442,13 +2462,30 @@ try {
           await evalApp(`const s = ac.store.getState(); const p = Object.values(s.profiles ?? {}).find((x) => x.name === "Close keep"); if (p && s.deleteProfile) s.deleteProfile(p.id); return true`).catch(() => null);
         }
       })();
-      return { plain: { ...plain, ...plainStore }, unload, keepOne, keepAll, cancelled, hostClose, failedMove, failedMoveStay, twoProfiles, mainTabs: main.length };
+      const held = await until("the pool holding only hidden windows Chrome still has", async () => {
+        const holds = await evalApp(`const pool = globalThis.expo.modules.SolaraTabPool; return pool?.available() ? pool.devClosingWindows() : {}`);
+        const chrome = await cef(`chromeWindows()`);
+        const alive = new Set(chrome.map((w) => w.window));
+        const hidden = new Set(chrome.filter((w) => !w.visible && !w.hasRoot).map((w) => w.window));
+        const heldWindows = Object.values(holds);
+        return heldWindows.every((w) => alive.has(w) && hidden.has(w)) ? { holds: heldWindows.length, hidden: hidden.size } : null;
+      }, 10000).catch(async (e) => {
+        const chrome = (await cef(`chromeWindows()`)).map((w) => ({ window: w.window, visible: w.visible, hasRoot: w.hasRoot }));
+        throw new Error(`${e.message}: holds ${JSON.stringify(await evalApp(`return globalThis.expo.modules.SolaraTabPool.devClosingWindows()`))}, chrome windows ${JSON.stringify(chrome)}`);
+      });
+      return { plain: { ...plain, ...plainStore }, unload, keepOne, keepAll, cancelled, hostClose, hostCloseFrees, failedMove, failedMoveStay, twoProfiles, held, mainTabs: main.length };
     } finally {
       await cef(`devKeepTabsOnClose(0)`).catch(() => null);
       await cef(`devFailKeptMoves(0)`).catch(() => null);
       for (const w of made) if (w !== mainWindow) await evalApp(`ac.store.getState().closeWindow(${JSON.stringify(w)}); return true`).catch(() => null);
       await exts(`uninstall("${installed.id}", "")`).catch(() => null);
     }
+  });
+
+  await check("no-hidden-window-after-stay", async () => {
+    const hidden = (await cef(`chromeWindows()`)).filter((w) => !w.visible && !w.hasRoot).map((w) => w.window);
+    if (hidden.length) throw new Error(`${hidden.length} window(s) still alive but hidden after chrome-windows-remove's Stay cases: ${JSON.stringify(hidden)}`);
+    return { hidden: 0 };
   });
 
   await check("private-windows-create", async () => {

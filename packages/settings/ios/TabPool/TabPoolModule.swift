@@ -46,6 +46,14 @@ public class TabPoolModule: Module {
       MainActor.assumeIsolated { TabPoolHost.shared.setPageProps(tabId, changed) }
     }.runOnQueue(.main)
 
+    AsyncFunction("devPageIds") { () -> [String] in
+      MainActor.assumeIsolated { TabPoolHost.shared.devPageIds() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("devClosingWindows") { () -> [String: Int] in
+      MainActor.assumeIsolated { TabPoolHost.shared.devClosingWindows() }
+    }.runOnQueue(.main)
+
     AsyncFunction("devPageEvent") { (tabId: String, name: String, payload: [String: Any]) -> Bool in
       nonisolated(unsafe) let body = payload
       return MainActor.assumeIsolated { TabPoolHost.shared.devPageEvent(tabId, name, body) }

@@ -11,7 +11,8 @@ if (!appArg) {
 
 The window's RN main root on top of the native shell's layers (ARDIA_SHELL_MAIN_TOP=1, with ARDIA_NATIVE_SHELL=1,
 ARDIA_SHELL_PANES=1 and ARDIA_NATIVE_PAGES_POOL=1), once with the native sidebar (ARDIA_NATIVE_SIDEBAR=1) and once
-with RN's: the root is stacked under the overlay and above every other slot;
+with RN's: the root is stacked under the overlay and above every other slot (the profile pager's swipe targets, which
+draw nothing and hit nothing, sit above the overlay as the shell keeps views it doesn't own, and don't count);
 no React Native view that draws nothing and handles nothing catches the pointer over the card, the sidebar or the top
 strip (devReactBlockers hit-tests a grid over them and names each RN view there with no background or content; the
 ones with their own mouse enter or leave handler, or a press, click, responder or drop handler on themselves or a
@@ -70,7 +71,7 @@ async function pass(label, env) {
   const shell = await run(`return describe();`);
 
   await rep.check(`${label}: the-main-root-is-under-the-overlay-and-above-the-rest`, async () => {
-    const order = shell.order;
+    const order = shell.order.filter((name) => name !== "ArdiaSettings.NativeSwipeTarget");
     if (!shell.reactOnTop) throw new Error(`the flag didn't take: ${JSON.stringify(shell)}`);
     if (order.at(-1) !== "SolaraUI.ShellOverlayView" || order.at(-2) !== "RCTRootView") throw new Error(`order ${order.join(" < ")}`);
     return order.join(" < ");

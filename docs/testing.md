@@ -121,6 +121,7 @@ make an instance a test instance; the rest are hooks for one test.
 | `ARDIA_SYNC_DEFAULT_FOLDER` | `SyncModule.swift` | The sync folder (`packages/sync/scripts/e2e.mjs`) |
 | `ARDIA_IMPORT_SOURCE_DIR`, `_SAFARI_HOME`, `_TEST_SECRET`, `_DIA_BUNDLE_ID` | `ImportModule.swift` | Import from fixtures: the Application Support root, Safari's home, a fixed Safe Storage secret instead of the keychain, the app Dia's tabs come from (`packages/import/README.md`) |
 | `ARDIA_ONBOARDING=1`, `_WHATS_NEW=1`, `_TELEMETRY=1`, `_LIVE_MOCK=<url>`, `_CALENDAR_FIXTURE=1` | JS, Debug builds only (`launchEnvironment`) | Run onboarding, show What's New, send telemetry, serve live folders from a mock, use the calendar fixture |
+| `ARDIA_NATIVE_PAGES_POOL=1` | `TabPoolHost.swift` | The native page pool serves pages only with `ARDIA_SHELL_PANES=1` as well: `TabPoolHost.available` needs the pane roots, though the switch declares only the shell as a need. A run with the pool switch alone quietly tests RN's pages; check `SolaraTabPool.available()` |
 
 `ARDIA_BACKGROUND=1` changes:
 - **Activation:** the process is BackgroundOnly and every activation path is refused and logged to

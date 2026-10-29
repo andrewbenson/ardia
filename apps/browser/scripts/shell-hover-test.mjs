@@ -147,6 +147,7 @@ try {
 
   await rep.check("hover-within-a-frame", async () => {
     const moves = [];
+    await run(`return S.devPointerLatency("w1", -1, -1);`);
     for (const [x, y] of [[120, 130], [-1, -1], [700, 400], [-1, -1], [120, 130], [-1, -1]]) {
       const moved = await run(`return S.devPointerLatency("w1", ${x}, ${y});`);
       moves.push([x, y, moved]);

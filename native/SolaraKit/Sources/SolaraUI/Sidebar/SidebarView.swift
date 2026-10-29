@@ -509,15 +509,15 @@ public final class SidebarView: NSView {
     syncPointer()
   }
 
-  private func covered(_ windowPoint: NSPoint) -> Bool {
+  private func covered() -> Bool {
     var layer: NSView = self
     while let up = layer.superview, !(up is WindowShellView) { layer = up }
     guard let shell = layer.superview as? WindowShellView, let mine = shell.slot(of: layer) else { return false }
-    return shell.slotUnderPointer(at: windowPoint) != mine
+    return shell.pointerSlot != mine
   }
 
   private func point(_ windowPoint: NSPoint) {
-    if covered(windowPoint) { return setHover(nil, group: nil) }
+    if covered() { return setHover(nil, group: nil) }
     let row = rowAt(windowPoint)
     let groups = groupsAt(windowPoint)
     setHover(row, group: groups)

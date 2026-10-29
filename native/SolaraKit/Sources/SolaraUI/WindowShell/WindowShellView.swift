@@ -34,6 +34,7 @@ public final class WindowShellView: NSView {
   private var mounted: [Slot: NSView] = [:]
   private var pointerLayer: ObjectIdentifier?
   private var pendingPointer: NSPoint??
+  private var lastPointer: NSPoint?
   private var pointerLink: CADisplayLink?
   #if DEBUG
   public var devPointerResolved: ((_ changed: Bool) -> Void)?
@@ -62,6 +63,7 @@ public final class WindowShellView: NSView {
     mount(.card, card)
     mount(.overlay, overlay)
     overlay.onChildrenChanged = { [weak self] in self?.coverChanged() }
+    DevPointer.observe(self, #selector(devPointer(_:)))
   }
 
   required init?(coder: NSCoder) { fatalError() }
@@ -192,7 +194,20 @@ public final class WindowShellView: NSView {
   public override func mouseExited(with event: NSEvent) { notePointer(nil) }
 
   public func coverChanged() {
+    if reactOnTop, let pointerLink {
+      pendingPointer = .some(lastPointer)
+      pointerLink.isPaused = false
+      return postCoverChanged()
+    }
+    if !resolvePointer(lastPointer) { postCoverChanged() }
+  }
+
+  private func postCoverChanged() {
     NotificationCenter.default.post(name: Self.hoverCoverChanged, object: self)
+  }
+
+  public var pointerSlot: Slot? {
+    pointerLayer.flatMap { layer in mounted.first { ObjectIdentifier($0.value) == layer }?.key }
   }
 
   public func slotUnderPointer(at pointInWindow: NSPoint) -> Slot? {
@@ -208,8 +223,17 @@ public final class WindowShellView: NSView {
     return nil
   }
 
+  @objc private func devPointer(_ note: Notification) {
+    guard let window else { return }
+    notePointer((note.object as? NSValue).map { window.convertPoint(fromScreen: $0.pointValue) } ?? window.mouseLocationOutsideOfEventStream)
+  }
+
   private func notePointer(_ pointInWindow: NSPoint?) {
-    guard reactOnTop, window != nil else { return resolvePointer(pointInWindow) }
+    lastPointer = pointInWindow
+    guard reactOnTop, window != nil else {
+      resolvePointer(pointInWindow)
+      return
+    }
     if let pointerLink, !pointerLink.isPaused {
       pendingPointer = .some(pointInWindow)
       return
@@ -233,7 +257,8 @@ public final class WindowShellView: NSView {
     pendingPointer = nil
   }
 
-  private func resolvePointer(_ pointInWindow: NSPoint?) {
+  @discardableResult
+  private func resolvePointer(_ pointInWindow: NSPoint?) -> Bool {
     #if DEBUG
     let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
     #endif
@@ -245,11 +270,12 @@ public final class WindowShellView: NSView {
     #endif
     if changed {
       pointerLayer = layer
-      coverChanged()
+      postCoverChanged()
     }
     #if DEBUG
     devPointerResolved?(changed)
     #endif
+    return changed
   }
 
   #if DEBUG

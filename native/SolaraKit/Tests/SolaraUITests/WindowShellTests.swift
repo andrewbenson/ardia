@@ -426,6 +426,40 @@ struct WindowShellMountTests {
     #expect(shell.slotUnderPointer(at: NSPoint(x: 30, y: 350)) == .overlay)
   }
 
+  #if DEBUG
+  @Test func thePointerSlotIsTheLayerTheShellLastResolvedAndReadingItLooksNothingUp() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    shell.mount(.sidebar, NSView())
+    #expect(shell.pointerSlot == nil)
+    shell.devNotePointer(NSPoint(x: 30, y: 350))
+    #expect(shell.pointerSlot == .sidebar)
+    shell.devResetPointerStats()
+    for _ in 0..<40 { #expect(shell.pointerSlot == .sidebar) }
+    #expect(shell.devPointerLookups == 0)
+    shell.devNotePointer(nil)
+    #expect(shell.pointerSlot == nil)
+  }
+
+  @Test func aCoverArrivingUnderAStillPointerMovesThePointerSlotBeforeHoverHears() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    shell.mount(.sidebar, NSView())
+    shell.devNotePointer(NSPoint(x: 30, y: 350))
+    var seen: [WindowShellView.Slot?] = []
+    let token = NotificationCenter.default.addObserver(forName: WindowShellView.hoverCoverChanged, object: shell, queue: nil) { _ in
+      MainActor.assumeIsolated { seen.append(shell.pointerSlot) }
+    }
+    defer { NotificationCenter.default.removeObserver(token) }
+    let cover = NSView(frame: CGRect(x: 10, y: 325, width: 50, height: 50))
+    shell.overlay.addSubview(cover)
+    shell.coverChanged()
+    cover.removeFromSuperview()
+    shell.coverChanged()
+    #expect(seen == [.overlay, .sidebar])
+  }
+  #endif
+
   @Test func theOverlayTellsHoverOncePerTurnWhenAChildComesGoesMovesOrHides() async {
     let shell = WindowShellView(windowId: "w")
     shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)

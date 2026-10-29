@@ -145,9 +145,13 @@ const CONTROLS = [
     close: `acMedia.useMedia.setState((m) => { const d = { ...m.displayRequests }; delete d.b; return { displayRequests: d }; });`,
   },
 ];
+const RN_HOSTED = Object.fromEntries([
+  "ARDIA_NATIVE_SHELL", "ARDIA_NATIVE_SIDEBAR", "ARDIA_NATIVE_TOP_STRIP", "ARDIA_NATIVE_AUTOHIDE", "ARDIA_SHELL_PANES", "ARDIA_SHELL_MAIN_TOP",
+  "ARDIA_NATIVE_PAGES_POOL", "ARDIA_NATIVE_PANE_PROMPTS",
+].map((name) => [name, "0"]));
 const MODES = [
-  { tag: "rn", env: { ARDIA_NATIVE_MEDIA: "0", ARDIA_NATIVE_SHELL: "0" } },
-  { tag: "native", env: { ARDIA_NATIVE_MEDIA: "1", ARDIA_NATIVE_SHELL: "0" } },
+  { tag: "rn", env: { ...RN_HOSTED, ARDIA_NATIVE_MEDIA: "0" } },
+  { tag: "native", env: { ...RN_HOSTED, ARDIA_NATIVE_MEDIA: "1" } },
   { tag: "shell", env: { ARDIA_NATIVE_MEDIA: "1", ARDIA_NATIVE_SHELL: "1" } },
 ];
 const APPEARANCES = ["light", "dark"];

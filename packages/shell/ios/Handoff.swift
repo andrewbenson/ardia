@@ -166,6 +166,7 @@ final class ShareMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
 
   @objc func openSharingSettings(_ sender: Any?) {
     if let url = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences?extensionPointIdentifier=com.apple.share-services") {
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[handoff] background instance, not opening %@", url.absoluteString) }
       NSWorkspace.shared.open(url)
     }
   }

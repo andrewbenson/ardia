@@ -101,7 +101,7 @@ public class ImportModule: Module {
 
     AsyncFunction("openFullDiskAccessSettings") { (promise: Promise) in
       let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-      NSWorkspace.shared.open(url)
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { NSLog("[import] background instance, not opening %@", url.absoluteString) } else { NSWorkspace.shared.open(url) }
       promise.resolve(nil)
     }.runOnQueue(.main)
 
@@ -124,11 +124,13 @@ public class ImportModule: Module {
     }
 
     AsyncFunction("openAutomationSettings") { (promise: Promise) in
-      NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+      let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { NSLog("[import] background instance, not opening %@", url.absoluteString) } else { NSWorkspace.shared.open(url) }
       promise.resolve(nil)
     }.runOnQueue(.main)
 
     AsyncFunction("openDia") { (promise: Promise) in
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return promise.reject("background", "a background instance doesn't open Dia") }
       guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.diaBundleId) else {
         return promise.reject("notFound", "Dia isn't installed")
       }

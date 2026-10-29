@@ -72,7 +72,10 @@ struct AboutLinkButton: View {
   @State private var hovered = false
 
   var body: some View {
-    Button(link.title) { NSWorkspace.shared.open(link.url) }
+    Button(link.title) {
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[about] background instance, not opening %@", link.url.absoluteString) }
+      NSWorkspace.shared.open(link.url)
+    }
       .buttonStyle(.plain)
       .font(.system(size: 11, weight: .medium))
       .foregroundStyle(hovered ? .primary : .secondary)

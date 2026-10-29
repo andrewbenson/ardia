@@ -1371,8 +1371,10 @@ try {
   await check("password-prompt", async () => {
     await evalApp(`ac.store.getState().navigate("${first.id}", "${base}/login", { userInitiated: true }); return true`);
     await until("the login page", async () => (await state()).tabs.find((t) => t.id === first.id && t.title === "Login" && !t.loading));
+    const typedIn = [];
     try {
       const t = await pageFor(first.id, `${base}/login`);
+      typedIn.push(t);
       for (const [field, text] of [["u", "nnformuser"], ["p", "form-s3cret"]]) {
         await cdp(t, "Runtime.evaluate", { expression: `document.getElementById('${field}').focus()` });
         await cdp(t, "Input.insertText", { text });
@@ -1395,6 +1397,7 @@ try {
       await evalApp(`ac.store.getState().navigate("${first.id}", "${base}/login?again", { userInitiated: true }); return true`);
       await until("the login page again", async () => (await state()).tabs.find((t) => t.id === first.id && t.url?.endsWith("/login?again") && !t.loading));
       const t2 = await pageFor(first.id, `${base}/login?again`);
+      typedIn.push(t2);
       await cdp(t2, "Runtime.evaluate", { expression: "document.getElementById('u').value = ''; document.getElementById('p').value = ''" });
       for (const [field, text] of [["u", "nnformuser"], ["p", "form-s3cret-2"]]) {
         await cdp(t2, "Runtime.evaluate", { expression: `document.getElementById('${field}').focus()` });
@@ -1416,6 +1419,7 @@ try {
       await evalApp(`return globalThis.expo.modules.ArdiaCEF.deletePassword("", ${JSON.stringify(saved.origin)}, "nnformuser")`);
       return { prompt: { state: p.state, passwordLength: p.passwordLength, usernames: p.usernames }, update: u.payload.state, edited: !!edited, origin: saved.origin };
     } finally {
+      for (const target of typedIn) await cdp(target, "Runtime.evaluate", { expression: "document.activeElement?.blur()" }).catch(() => {});
       await backToA();
     }
   });

@@ -79,6 +79,7 @@ public class AppModule: Module {
     AsyncFunction("openNotificationSettings") {
       let id = Bundle.main.bundleIdentifier ?? ""
       if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)") {
+        if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("\(Bundle.main.productName): background instance, not opening %@", url.absoluteString) }
         NSWorkspace.shared.open(url)
       }
     }.runOnQueue(.main)
@@ -101,6 +102,10 @@ public class AppModule: Module {
 
     AsyncFunction("openExternalURL") { (url: String) -> Bool in
       guard let target = URL(string: url), target.scheme != nil else { return false }
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" {
+        NSLog("\(Bundle.main.productName): background instance, not opening %@", target.absoluteString)
+        return false
+      }
       return NSWorkspace.shared.open(target)
     }.runOnQueue(.main)
 

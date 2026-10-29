@@ -249,6 +249,7 @@ public class SyncModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("revealFolder") { (path: String) in
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[sync] background instance, not revealing %@", path) }
       NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path, isDirectory: true)])
     }.runOnQueue(.main)
 

@@ -194,7 +194,9 @@ final class EnginesAdapter: EnginesServices {
   }
 
   func openPasskeySystemSettings() {
-    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") { NSWorkspace.shared.open(url) }
+    guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") else { return }
+    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
+    NSWorkspace.shared.open(url)
   }
 
   nonisolated static func passkeys(_ dict: [String: Any]?) -> PasskeyAccess? {

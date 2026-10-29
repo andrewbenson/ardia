@@ -10,8 +10,8 @@ NSString *ACIsolatedDataDirectory(void) { return gDataDirectory; }
 
 static NSUserDefaults *IsolatedStandardUserDefaults(id self, SEL _cmd) { return gDefaults; }
 
-#if DEBUG
 static NSString *gPasteboardName;
+static NSString *gFindPasteboardName;
 static IMP gPasteboardWithName;
 
 static NSPasteboard *SystemPasteboardWithName(NSPasteboardName name) {
@@ -21,17 +21,39 @@ static NSPasteboard *SystemPasteboardWithName(NSPasteboardName name) {
 static NSPasteboard *IsolatedGeneralPasteboard(id self, SEL _cmd) { return SystemPasteboardWithName(gPasteboardName); }
 
 static NSPasteboard *IsolatedPasteboardWithName(id self, SEL _cmd, NSPasteboardName name) {
-  return SystemPasteboardWithName([name isEqualToString:NSPasteboardNameGeneral] ? gPasteboardName : name);
+  if ([name isEqualToString:NSPasteboardNameGeneral]) return SystemPasteboardWithName(gPasteboardName);
+  if ([name isEqualToString:NSPasteboardNameFind]) return SystemPasteboardWithName(gFindPasteboardName);
+  return SystemPasteboardWithName(name);
 }
 
-static void IsolatePasteboard(NSString *dataDirectory) {
-  gPasteboardName = [@"com.ardia.scratch:" stringByAppendingString:dataDirectory];
+static void IsolatePasteboard(NSString *scope) {
+  gPasteboardName = [@"com.ardia.scratch:" stringByAppendingString:scope];
+  gFindPasteboardName = [@"com.ardia.scratch.find:" stringByAppendingString:scope];
   Method withName = class_getClassMethod(NSPasteboard.class, @selector(pasteboardWithName:));
   gPasteboardWithName = method_getImplementation(withName);
   method_setImplementation(withName, (IMP)IsolatedPasteboardWithName);
   method_setImplementation(class_getClassMethod(NSPasteboard.class, @selector(generalPasteboard)), (IMP)IsolatedGeneralPasteboard);
+  [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationWillTerminateNotification
+                                                  object:nil
+                                                   queue:nil
+                                              usingBlock:^(NSNotification *note) {
+                                                [SystemPasteboardWithName(gPasteboardName) releaseGlobally];
+                                                [SystemPasteboardWithName(gFindPasteboardName) releaseGlobally];
+                                                NSLog(@"ACIsolation: released isolated pasteboards %@", gPasteboardName);
+                                              }];
 }
+
+static BOOL BackgroundInstance(void) {
+  const char *background = getenv("ARDIA_BACKGROUND");
+  return background && !strcmp(background, "1");
+}
+
+static BOOL ShouldIsolatePasteboard(void) {
+#if DEBUG
+  if (gDataDirectory) return YES;
 #endif
+  return BackgroundInstance();
+}
 
 @interface ACIsolation : NSObject
 @end
@@ -40,14 +62,15 @@ static void IsolatePasteboard(NSString *dataDirectory) {
 
 + (void)load {
   const char *dir = getenv("ARDIA_DATA_DIR");
-  if (!dir || !*dir) return;
-  NSString *path = @(dir);
-  if (!path.absolutePath)
-    path = [NSFileManager.defaultManager.currentDirectoryPath stringByAppendingPathComponent:path];
-  gDataDirectory = path.stringByStandardizingPath;
-#if DEBUG
-  IsolatePasteboard(gDataDirectory);
-#endif
+  if (dir && *dir) {
+    NSString *path = @(dir);
+    if (!path.absolutePath)
+      path = [NSFileManager.defaultManager.currentDirectoryPath stringByAppendingPathComponent:path];
+    gDataDirectory = path.stringByStandardizingPath;
+  }
+  if (ShouldIsolatePasteboard())
+    IsolatePasteboard(gDataDirectory ?: [NSString stringWithFormat:@"pid-%d", getpid()]);
+  if (!gDataDirectory) return;
   NSString *domain = NSBundle.mainBundle.bundleIdentifier ?: @"com.ardia.browser";
   gDefaults = [[NSUserDefaults alloc]
       initWithSuiteName:[[gDataDirectory stringByAppendingPathComponent:@"Preferences"] stringByAppendingPathComponent:domain]];

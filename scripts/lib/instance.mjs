@@ -94,7 +94,20 @@ export function wipeRefusal(data) {
 export const quitEnded = ({ how }) => how === "quit" || how === "SIGTERM" || how === "SIGKILL";
 const quitData = new Set();
 const reportDirs = new Map();
+const launched = new Map();
+export function secureInputHolder() {
+  const r = spawnSync("ioreg", ["-l", "-w", "0", "-d", "1", "-k", "IOConsoleUsers"], { encoding: "utf8", timeout: 5000 });
+  const pid = /"kCGSSessionSecureInputPID"=(\d+)/.exec(r.stdout ?? "")?.[1];
+  return pid ? Number(pid) : null;
+}
+export function warnSecureInput(pid, data, when) {
+  if (!pid || secureInputHolder() !== pid) return false;
+  process.stderr.write(`\n!!! SECURE INPUT: test instance pid ${pid} (${data}) holds macOS Secure Event Input ${when}.\n` +
+    `!!! While it does, every other app's keyboard shortcuts and key taps are blocked system-wide. A password field was left focused.\n\n`);
+  return true;
+}
 process.on("exit", (code) => {
+  for (const [pid, data] of launched) if (isAlive(pid)) warnSecureInput(pid, data, "as the test run exits");
   if (code !== 0) return;
   for (const data of quitData) removeTemporaryData(data);
   for (const [dir, report] of reportDirs) if (!report.failed.length) removeTemporaryData(dir);
@@ -315,7 +328,9 @@ class Instance {
   windows() { return onScreenWindows(this.pid); }
 
   async quit(opts = {}) {
+    warnSecureInput(this.pid, this.data, "at quit");
     const how = await this.#quit(opts);
+    launched.delete(this.pid);
     if (this.exited && quitEnded(how)) quitData.add(this.data);
     const errors = this.jsErrors();
     if (errors) process.stderr.write(`JS errors the app caught and survived (${join(this.data, "js-errors.log")}):\n${errors}`);
@@ -418,6 +433,7 @@ export async function launch(app, opts = {}) {
     throw e;
   }
   const instance = new Instance({ app: runsFrom, binary, data, port, log, launchedAt, js, ...owned, meta: opts.meta ?? {} }).save();
+  launched.set(instance.pid, data);
   if (opts.ready !== false)
     try {
       await instance.ready(typeof opts.ready === "string" ? { test: opts.ready } : typeof opts.ready === "object" ? opts.ready : {});

@@ -439,6 +439,26 @@ void InstallActivationGuardsEarly() {
   });
 
   if (!Background()) return;
+  {
+    Class meta = object_getClass(NSApplication.class);
+    SEL selector = @selector(sharedApplication);
+    auto original = (NSApplication * (*)(id, SEL))method_getImplementation(class_getInstanceMethod(meta, selector));
+    Swizzle(meta, selector, ^NSApplication *(Class cls) {
+      static bool prohibited = false;
+      NSApplication *app = original(cls, selector);
+      if (!prohibited && app) {
+        prohibited = true;
+        [app setActivationPolicy:NSApplicationActivationPolicyProhibited];
+      }
+      return app;
+    });
+  }
+  [NSNotificationCenter.defaultCenter addObserverForName:NSApplicationWillFinishLaunchingNotification
+                                                  object:nil
+                                                   queue:nil
+                                              usingBlock:^(NSNotification *note) {
+                                                [(NSApplication *)note.object setActivationPolicy:NSApplicationActivationPolicyProhibited];
+                                              }];
   FakeKeyWindows();
   KeepBehindOwnerWindows();
   auto note = [](NSString *name, NSWindow *window) {

@@ -97,6 +97,7 @@ async function submit(user, pass) {
     await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...at, buttons: 1 });
     await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...at, buttons: 0 });
   } finally {
+    await cdp.send("Runtime.evaluate", { expression: "document.activeElement?.blur()" }).catch(() => {});
     cdp.close();
   }
 }

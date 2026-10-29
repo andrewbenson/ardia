@@ -1,6 +1,7 @@
 import { beginTracing, endTracing, engineInfo, isTracing, openTaskManager } from "@ardia/ardiacore";
 import { nativeAppServicesActive } from "@ardia/settings";
 import {
+  backgroundInstance,
   confirm,
   copyText,
   isDefaultBrowser,
@@ -91,7 +92,7 @@ export async function sendFeedback(windowId?: string | null) {
   if (page) return openUrls([page.replace("%s", encodeURIComponent(body))], windowId);
   const to = app.feedbackEmail && !/[\s?&]/.test(app.feedbackEmail) ? app.feedbackEmail : "";
   const draft = `mailto:${to}?subject=${encodeURIComponent(`${app.appName} Feedback`)}&body=${encodeURIComponent(body)}`;
-  if (!(await openExternalURL(draft))) copyText(body);
+  if (!(await openExternalURL(draft)) && !backgroundInstance) copyText(body);
 }
 
 export async function diagnostics(): Promise<string> {

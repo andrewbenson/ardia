@@ -95,6 +95,7 @@ final class NativeAppIntegration {
     case .page(let url):
       openTab(url, in: windowId)
     case .mail(let draft, let body):
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[services] background instance, not opening the feedback mail draft") }
       if !(URL(string: draft).map { NSWorkspace.shared.open($0) } ?? false) { Self.copy(body) }
     }
   }

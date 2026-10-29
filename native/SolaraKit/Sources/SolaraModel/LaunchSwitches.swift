@@ -46,6 +46,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   public static let onByDefault: Set<LaunchSwitch> = [
     .nativeSettings, .nativeImport, .nativeOnboarding, .nativeNewTab, .nativeOmnibox, .nativeStatusBubble, .nativeStore, .nativePages,
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
+    .nativeSidebar, .nativeIconPicker, .nativeMedia,
   ]
 
   public var needs: [LaunchSwitch] {
@@ -276,8 +277,8 @@ public struct LaunchSwitches: Sendable {
     let names = turningOff.map { spokenNames[$0] ?? $0.rawValue }
     let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
     return (
-      "Turn off \(list)?",
-      "Option was held while Solara opened. Turning these off stays in effect until you turn them back on in Settings › Advanced › Experimental."
+      "Turn off Solara's new native interface?",
+      "Option was held while Solara opened. This turns off \(list), and they stay off until you turn them back on in Settings › Advanced › Experimental."
     )
   }
 

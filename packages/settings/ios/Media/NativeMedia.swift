@@ -14,7 +14,7 @@ enum NativeMedia {
   static let smallBar = "littleSolara.bar"
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeMedia, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeMedia)
   }
 
   private static var mounted: [(kind: String, windowId: String, view: WeakMediaView)] = []

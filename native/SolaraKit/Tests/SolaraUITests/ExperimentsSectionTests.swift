@@ -68,7 +68,7 @@ import Testing
 
   @Test func turnAllOffClearsEverySavedSwitch() {
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_NATIVE_SIDEBAR")
+    defaults.set("0", forKey: "ARDIA_NATIVE_SIDEBAR")
     defaults.set("1", forKey: "ARDIA_SHELL_MAIN_TOP")
     let model = model(defaults: defaults)
     model.turnAllOff()
@@ -123,7 +123,7 @@ import Testing
     let model = ExperimentsModel(running: running, stored: StoredLaunchSwitches(running, defaults: defaults))
     model.reveal(optionHeld: false)
     #expect(model.revealed)
-    #expect(model.note == "Solara didn't finish opening twice in a row, so these were turned off: Native window, Native tab strip, Native side panel and Native tool tour.")
+    #expect(model.note == "Solara didn't finish opening twice in a row, so these were turned off: Native window, Native sidebar, Native tab strip, Native media controls, Native side panel and Native tool tour.")
     #expect(model.recovery?.hasPrefix("To turn back on what Solara turned off, use its switch above, or in Terminal defaults delete ") == true)
     #expect(!row(model, .nativeShell).on && row(model, .nativeShell).enabled)
     model.set(.nativeShell, true)
@@ -137,7 +137,7 @@ import Testing
     let model = ExperimentsModel(running: running, stored: StoredLaunchSwitches(running, defaults: defaults))
     model.reveal(optionHeld: false)
     #expect(model.revealed)
-    #expect(model.note == "Option was held while Solara opened, so these were turned off: Native window, Native tab strip, Native media controls, Native side panel and Native tool tour.")
+    #expect(model.note == "Option was held while Solara opened, so these were turned off: Native window, Native sidebar, Native tab strip, Native media controls, Native side panel and Native tool tour.")
     #expect(!row(model, .nativeMedia).on && !row(model, .nativeTopStrip).on)
     let quiet = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: true, optionHeld: { true })
     #expect(ExperimentsModel(running: quiet, stored: StoredLaunchSwitches(quiet, defaults: defaults)).note == "Option was held while Solara opened, so nothing needed turning off.")

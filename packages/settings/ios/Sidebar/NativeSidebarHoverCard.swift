@@ -294,7 +294,7 @@ enum NativeSidebarIconPicker {
   private static var hosts: [String: SidebarIconPickerHost] = [:]
 
   nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeIconPicker, defaultOn: false)
+    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeIconPicker)
   }
 
   static func register() {

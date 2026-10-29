@@ -139,6 +139,8 @@ final class FadeLabel: NSTextField {
     if changed { relayout() }
   }
 
+  static let cellPadding: CGFloat = 4
+
   var textWidth: CGFloat { cell?.cellSize.width ?? 0 }
 
   private func relayout() {

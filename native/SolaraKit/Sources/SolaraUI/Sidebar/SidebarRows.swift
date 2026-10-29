@@ -877,7 +877,7 @@ final class GroupHeaderView: SidebarRowView {
     let textWidth = min(room, label.textWidth + 8)
     titleBox.frame = NSRect(x: x, y: (h - 18) / 2, width: max(0, right - slot - x), height: 18)
     label.frame = NSRect(x: 0, y: 0, width: textWidth, height: 18)
-    chevron.frame = NSRect(x: textWidth, y: 4, width: 10, height: 10)
+    chevron.frame = NSRect(x: textWidth - FadeLabel.cellPadding, y: 4, width: 10, height: 10)
     rotateChevron(animated: false)
     if let context, let group = context.state.groups[groupId] {
       let editing = context.host.renaming == "group:\(groupId)"

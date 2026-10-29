@@ -10,7 +10,7 @@ enum NativeSidebar {
   static var hosts: [String: SidebarHost] = [:]
 
   nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeSidebar, defaultOn: false)
+    LaunchSwitches.shared.isOn(.nativeSidebar)
   }
 
   static func register() {

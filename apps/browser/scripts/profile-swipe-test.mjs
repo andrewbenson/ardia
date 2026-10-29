@@ -27,7 +27,7 @@ try { port = portArg && parsePort(portArg); } catch (error) {
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
-const nativePager = process.env.ARDIA_NATIVE_PROFILE_PAGER === "1";
+const nativePager = process.env.ARDIA_NATIVE_PROFILE_PAGER !== "0";
 const stale = args.includes("--stale-window");
 const only = args.find((a) => a.startsWith("--only="))?.slice("--only=".length).toLowerCase();
 let matched = 0;

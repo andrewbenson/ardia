@@ -14,7 +14,7 @@ enum NativeProfilePager {
   private(set) static var looks: [String: NSDictionary] = [:]
 
   nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && NativeSidebar.enabled && NativeTopStrip.enabled && LaunchSwitches.shared.isOn(.nativeProfilePager, defaultOn: false)
+    NativeWindowShell.enabled && NativeSidebar.enabled && NativeTopStrip.enabled && LaunchSwitches.shared.isOn(.nativeProfilePager)
   }
 
   static func start(_ shell: WindowShellView) -> ProfilePagerHost? {

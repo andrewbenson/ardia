@@ -38,7 +38,13 @@ public class SwipeModule: Module {
         return
       }
       ACSwipe.simulate(in: window, point: NSPoint(x: x, y: y), steps: steps, ignoreSystemPreference: ignorePreference) {
+        #if SOLARA_PROBES
+        let result = $0
+        MainActor.assumeIsolated { SwipeRead.record(result) }
+        promise.resolve(result)
+        #else
         promise.resolve($0)
+        #endif
       }
       #else
       promise.resolve(["error": "DEV builds only"])
@@ -587,3 +593,19 @@ public final class ACPager {
   }
   #endif
 }
+
+#if SOLARA_PROBES
+@MainActor
+public enum SwipeRead {
+  private static var count = 0
+  private static var whereHit: [String: Any] = [:]
+
+  public static var snapshot: [String: Any] { ["count": count, "where": whereHit] }
+
+  static func record(_ result: Any) {
+    guard let result = result as? [String: Any], let whereValue = result["where"] as? [String: Any] else { return }
+    count += 1
+    whereHit = whereValue
+  }
+}
+#endif

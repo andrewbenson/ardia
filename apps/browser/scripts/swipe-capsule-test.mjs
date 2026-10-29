@@ -79,6 +79,16 @@ const until = async (what, body, ms = 8000) => {
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last.windows.find((w) => w.id === "w1"), last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const got = {};
 
 try {
@@ -98,7 +108,18 @@ try {
     const shown = (s) => (nativeShell ? s.native && s.native.frame : s.rn);
 
     await rep.check(`${tag}-confirmed-capsule`, async () => {
-      const s = await run(`return gesture(${JSON.stringify(kept)}, 620);`);
+      const running = run(`return gesture(${JSON.stringify(kept)}, 620);`);
+      let captured = null;
+      if (nativeShell) {
+        await sleep(620);
+        captured = await untilSnapshot("confirmed native capsule", (window) => window?.paneOverlays?.tabs?.a?.swipe?.confirmed);
+      }
+      const s = await running;
+      if (captured) {
+        const read = captured.windows.find((window) => window.id === "w1").paneOverlays.tabs.a.swipe;
+        if (!near(read.frame, s.native.frame) || !near(read.area, s.native.area) || read.confirmed !== s.native.confirmed)
+          throw new Error(`native snapshot capsule ${JSON.stringify(read)} vs JS ${JSON.stringify(s.native)}`);
+      }
       const frame = shown(s);
       if (!frame) throw new Error(`no capsule mid-gesture: ${JSON.stringify(s)}`);
       const [, ay, , ah] = s.area;
@@ -106,12 +127,24 @@ try {
       if (nativeShell && (s.rn || !s.native.confirmed)) throw new Error(`RN capsule ${s.rn}, native ${JSON.stringify(s.native)}`);
       await sleep(500);
       if ((await run(`return title();`)) !== "THREE") throw new Error("cancelling navigated");
+      await untilSnapshot("cancel keeps THREE", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.title === "THREE" && tab.url === url("three")));
       got[`${tag}-capsule`] = frame;
       return { frame, area: s.area };
     });
 
     await rep.check(`${tag}-destination-list`, async () => {
-      const s = await run(`return gesture(${JSON.stringify(held)}, 950);`);
+      const running = run(`return gesture(${JSON.stringify(held)}, 950);`);
+      let captured = null;
+      if (nativeShell) {
+        await sleep(950);
+        captured = await untilSnapshot("native destination list", (window) => window?.paneOverlays?.tabs?.a?.swipe?.list);
+      }
+      const s = await running;
+      if (captured) {
+        const read = captured.windows.find((window) => window.id === "w1").paneOverlays.tabs.a.swipe;
+        if (!near(read.frame, s.native.frame) || !near(read.area, s.native.area) || JSON.stringify(read.items) !== JSON.stringify(s.native.items))
+          throw new Error(`native snapshot list ${JSON.stringify(read)} vs JS ${JSON.stringify(s.native)}`);
+      }
       const frame = shown(s);
       if (!frame) throw new Error(`no list mid-gesture: ${JSON.stringify(s)}`);
       const [, ay, , ah] = s.area;
@@ -119,7 +152,11 @@ try {
       if (!near(frame.slice(2), want) || Math.abs(frame[1] - (ay + ah / 2 - 8 - 19)) > 0.5) throw new Error(`list ${frame} in ${s.area}`);
       if (nativeShell && (s.lists || JSON.stringify(s.native.items) !== JSON.stringify(["TWO", "ONE"]))) throw new Error(`RN lists ${s.lists}, native items ${JSON.stringify(s.native.items)}`);
       await until("back to TWO", `return title() === "TWO" || null;`, 4000);
-      if (nativeShell) await until("the native capsule goes", `return native().then((d) => !d || !d.inCard || null);`, 2000);
+      await untilSnapshot("back to TWO", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.title === "TWO" && tab.url === url("two")));
+      if (nativeShell) {
+        await until("the native capsule goes", `return native().then((d) => !d || !d.inCard || null);`, 2000);
+        await untilSnapshot("native capsule leaves card", (window) => !window?.paneOverlays?.inCard);
+      }
       got[`${tag}-list`] = frame;
       return { frame };
     });
@@ -133,13 +170,22 @@ try {
   });
   await until("page ONE", `return title() === "ONE" || null;`, 15000);
   const number = await until("window", `const id = Object.entries(ac.pageState.getState().browsers ?? {}).find(([, t]) => t === "a")?.[0]; return id ? C.devWindowNumber(Number(id)) : null;`, 15000);
+  await untilSnapshot("pooled window number", (window) => window?.chromeWindowNumber === number);
   const back = timed([{ phase: "began", dx: 0, atMs: 0 }, ...push, { phase: "ended", dx: 0, atMs: 200 }]);
-  const swipe = (x, y, steps = back) => run(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`);
+  const swipe = async (x, y, steps = back) => {
+    const before = (await app.snapshot()).swipeSimulation.count;
+    const where = await run(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`);
+    await untilSnapshot("native swipe hit", (_, state) => state.swipeSimulation.count > before &&
+      state.swipeSimulation.where.hit === where.hit && state.swipeSimulation.where.target === where.target &&
+      state.swipeSimulation.where.window === where.window);
+    return where;
+  };
   const stays = async (what, x, y) => {
     const where = await swipe(x, y);
     await sleep(900);
     const now = await run(`return title();`);
     if (where.hit !== "RenderWidgetHostViewCocoa" || where.target || now !== "TWO") throw new Error(`${what}: hit ${where.hit}, target ${where.target}, page ${now}`);
+    await untilSnapshot(`${what} keeps TWO`, (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.url === url("two")));
     return where;
   };
   await run(`ac.store.getState().navigate("a", ${JSON.stringify(url("two"))}, { userInitiated: true }); return true;`);
@@ -171,6 +217,7 @@ try {
   await rep.check("pool-page-swipe-goes-back", async () => {
     const where = await swipe(300, 400);
     await until("back to ONE", `return title() === "ONE" || null;`, 4000);
+    await untilSnapshot("page swipe goes back", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.url === url("one")));
     return where;
   });
 
@@ -180,6 +227,7 @@ try {
     await sleep(500);
     const where = await swipe(300, 400, [{ phase: "swipe", dx: 3, atMs: 0 }]);
     await until("back to ONE", `return title() === "ONE" || null;`, 4000);
+    await untilSnapshot("discrete page swipe goes back", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.url === url("one")));
     return where;
   });
   await app.quit();

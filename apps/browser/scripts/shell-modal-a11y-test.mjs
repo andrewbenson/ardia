@@ -12,8 +12,9 @@ if (!appArg) {
 What the accessibility tree reaches in a shell window (ARDIA_NATIVE_SHELL=1 with the main root on top, the pool and
 the pane roots) while the main root shows a modal. The shell's WindowShellAccessibility walks the window's
 accessibilityChildren the way VoiceOver does and counts the elements by the shell layer they live in. At rest and in a
-split the card's native layers are reachable. With the command panel or the Bookmark All Tabs dialog up, only the main
-root is reachable, and closing the panel brings the card back. Without the shell
+split the card's native layers (and the native sidebar's, when it is on) are reachable; in a split the main root has
+nothing to reach. With the command panel up only the main root and the native command bar in the shell's overlay are,
+with the Bookmark All Tabs dialog only the main root, and closing the panel brings the card back. Without the shell
 switch, the sampler answers null.`);
   process.exit(2);
 }
@@ -65,12 +66,13 @@ try {
         if (JSON.stringify(layers) !== JSON.stringify([...want].sort())) throw new Error(`reached ${JSON.stringify(got)}, want only ${want.join(", ")}`);
         return got;
       });
-    await expectLayers("rest: the card is reachable", null, ["react", "card", "titlebar"]);
-    await expectLayers("command panel: only the main root", `ac.store.getState().openPanel("w1"); return true`, ["react"]);
-    await expectLayers("panel closed: the card is back", `ac.store.getState().closePanel("w1"); return true`, ["react", "card", "titlebar"]);
-    await expectLayers("split: the split panes are reachable", `ac.store.getState().createSplit(["a", "b"]); return true`, ["react", "card", "titlebar"]);
-    await expectLayers("split under the command panel: only the main root", `ac.store.getState().openPanel("w1"); return true`, ["react"]);
-    await expectLayers("split, panel closed: the panes are back", `ac.store.getState().closePanel("w1"); return true`, ["react", "card", "titlebar"]);
+    const sidebar = (await run(`return globalThis.expo.modules.SolaraHosted.sidebarShell("w1")`)) !== "null" ? ["sidebar"] : [];
+    await expectLayers("rest: the card is reachable", null, ["react", "card", "titlebar", ...sidebar]);
+    await expectLayers("command panel: only the main root and the native bar", `ac.store.getState().openPanel("w1"); return true`, ["react", "overlay"]);
+    await expectLayers("panel closed: the card is back", `ac.store.getState().closePanel("w1"); return true`, ["react", "card", "titlebar", ...sidebar]);
+    await expectLayers("split: the split panes are reachable", `ac.store.getState().createSplit(["a", "b"]); return true`, ["card", "titlebar", ...sidebar]);
+    await expectLayers("split under the command panel: only the native bar", `ac.store.getState().openPanel("w1"); return true`, ["overlay"]);
+    await expectLayers("split, panel closed: the panes are back", `ac.store.getState().closePanel("w1"); return true`, ["card", "titlebar", ...sidebar]);
     await expectLayers("Bookmark All Tabs dialog: only the main root", `ac.runCommand({ command: "bookmarkAllTabs", windowId: "w1" }); return true`, ["react"]);
     await instance.quit().catch(() => {});
     instance = null;

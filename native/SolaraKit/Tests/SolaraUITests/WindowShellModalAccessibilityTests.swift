@@ -36,6 +36,32 @@ struct WindowShellModalAccessibilityTests {
     #expect(zoomChild.map { reachable($0, from: window) } == true)
   }
 
+  @Test func aModalKeepsTheOverlayReachableAndHidesTheLayersUnderTheMainRoot() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = NSRect(x: 0, y: 0, width: 500, height: 400)
+    let root = NSView(frame: shell.bounds)
+    shell.mount(.react, root)
+    let card = NSButton(title: "Card", target: nil, action: nil)
+    card.frame = NSRect(x: 200, y: 200, width: 100, height: 30)
+    shell.card.addSubview(card)
+    let panel = NSButton(title: "Panel", target: nil, action: nil)
+    panel.frame = NSRect(x: 20, y: 20, width: 100, height: 30)
+    shell.overlay.addSubview(panel)
+    let window = NSWindow(contentRect: shell.frame, styleMask: [.titled], backing: .buffered, defer: true)
+    window.isReleasedWhenClosed = false
+    window.contentView?.addSubview(shell)
+    shell.layoutSubtreeIfNeeded()
+    #expect(reachable(card.cell!, from: window))
+    #expect(reachable(panel.cell!, from: window))
+    shell.setModal("mainRoot", shown: true)
+    #expect(!reachable(card.cell!, from: window))
+    #expect(reachable(panel.cell!, from: window))
+    #expect(shell.accessibilityReach()["overlay"] != nil)
+    #expect(shell.accessibilityReach()["card"] == nil)
+    shell.setModal("mainRoot", shown: false)
+    #expect(reachable(card.cell!, from: window))
+  }
+
   private func reachable(_ target: NSObject, from window: NSWindow) -> Bool {
     var queue: [Any] = window.accessibilityChildren() ?? []
     while !queue.isEmpty {

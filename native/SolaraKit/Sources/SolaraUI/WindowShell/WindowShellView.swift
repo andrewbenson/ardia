@@ -174,19 +174,22 @@ public final class WindowShellView: NSView {
     NSAccessibility.post(element: window, notification: .layoutChanged)
   }
 
-  private var modalRoot: NSView? {
+  private var modalLayers: [NSView]? {
     guard modalShown, let root = mounted[.react], root.superview === self else { return nil }
-    return root
+    return overlay.superview === self && !overlay.isHidden ? [root, overlay] : [root]
   }
 
   public override func accessibilityChildren() -> [Any]? {
-    guard let modalRoot else { return super.accessibilityChildren() }
-    return NSAccessibility.unignoredChildren(from: [modalRoot])
+    guard let modalLayers else { return super.accessibilityChildren() }
+    return NSAccessibility.unignoredChildren(from: modalLayers)
   }
 
   public override func accessibilityHitTest(_ point: NSPoint) -> Any? {
-    guard let modalRoot else { return super.accessibilityHitTest(point) }
-    return modalRoot.accessibilityHitTest(point)
+    guard let modalLayers, let root = modalLayers.first else { return super.accessibilityHitTest(point) }
+    if modalLayers.contains(where: { $0 === overlay }), let window, overlay.hitTest(convert(window.convertPoint(fromScreen: point), from: nil)) != nil {
+      return overlay.accessibilityHitTest(point)
+    }
+    return root.accessibilityHitTest(point)
   }
 
   public override func mouseMoved(with event: NSEvent) { notePointer(event.locationInWindow) }

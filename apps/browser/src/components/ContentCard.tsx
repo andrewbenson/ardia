@@ -550,7 +550,7 @@ function PageOverlays({
     <>
       <FindBar tabId={tabId} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>
-        <StatusBubble tabId={tabId} windowId={windowId} maxWidth={Math.max(160, width / 2)} />
+        <StatusBubble tabId={tabId} windowId={windowId} />
       </Animated.View>
       {!nativePrompts && <SadTab tabId={tabId} nativeAllowed={!peek} />}
       {cliPill && !nativeCli && <CliControlPill tabId={tabId} style={statusStyle} nativeAllowed={!peek} />}

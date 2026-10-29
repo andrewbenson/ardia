@@ -1,8 +1,7 @@
-import { toAppUrl, urlForDisplay } from "@ardia/core";
-import { hostedKinds, SolaraHostedView, windowShellActive } from "@ardia/settings";
+import { SolaraHostedView, windowShellActive } from "@ardia/settings";
 import { Surface, Symbol } from "@ardia/shell";
-import { memo, useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import { memo, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";
 import { PromptButton } from "./controls";
@@ -10,71 +9,11 @@ import { patchPage, usePage } from "./pageState";
 import { useNativeSadTab, usePageFrame } from "./nativePaneOverlays";
 import { useWindowId } from "../../store/hooks";
 
-let nativeStatusBubble = false;
-
-function hasNativeStatusBubble() {
-  nativeStatusBubble ||= hostedKinds().includes("statusBubble");
-  return nativeStatusBubble;
-}
-
-export function StatusBubble({ tabId, windowId, maxWidth }: { tabId: string; windowId: string; maxWidth: number }) {
-  if (hasNativeStatusBubble()) return <NativeStatusBubble key={tabId} tabId={tabId} windowId={windowId} />;
-  return <ReactStatusBubble tabId={tabId} maxWidth={maxWidth} />;
-}
-
-function NativeStatusBubble({ tabId, windowId }: { tabId: string; windowId: string }) {
+export function StatusBubble({ tabId, windowId }: { tabId: string; windowId: string }) {
   const dark = useTheme().dark;
   const text = usePage(tabId, (p) => p.status);
   const state = JSON.stringify({ text, dark });
   return <SolaraHostedView kind="statusBubble" windowId={windowId} state={state} pointerEvents="none" style={StyleSheet.absoluteFill} />;
-}
-
-function ReactStatusBubble({ tabId, maxWidth }: { tabId: string; maxWidth: number }) {
-  const theme = useTheme();
-  const status = usePage(tabId, (p) => p.status);
-  const [shown, setShown] = useState(status);
-  const opacity = useRef(new Animated.Value(status ? 1 : 0)).current;
-  useEffect(() => {
-    if (status) {
-      setShown(status);
-      Animated.timing(opacity, { toValue: 1, duration: 90, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
-      return;
-    }
-    const timer = setTimeout(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => {
-        if (finished) setShown("");
-      });
-    }, 180);
-    return () => clearTimeout(timer);
-  }, [status]);
-  if (!shown) return null;
-  return (
-    <Animated.View pointerEvents="none" style={{ position: "absolute", left: 6, bottom: 6, maxWidth, opacity }}>
-      <Surface
-        fill={hex(theme.dark ? "rgba(40,38,39,0.96)" : "rgba(250,249,250,0.97)")}
-        cornerRadius={7}
-        borderColor={hex(theme.dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)")}
-        borderWidth={0.5}
-        shadowColor="#000000"
-        shadowOpacity={theme.dark ? 0.3 : 0.1}
-        shadowRadius={6}
-        shadowOffset={[0, 2]}
-        style={{ paddingHorizontal: 8, height: 22, justifyContent: "center" }}
-      >
-        <Text numberOfLines={1} ellipsizeMode="middle" style={{ fontSize: 12, color: theme.dark ? "#FFFFFFD9" : "#000000C7" }}>
-          {displayUrl(shown)}
-        </Text>
-      </Surface>
-    </Animated.View>
-  );
-}
-
-function displayUrl(url: string) {
-  let out = /^https?:\/\//i.test(url) ? urlForDisplay(url) : toAppUrl(url);
-  try {
-    out = decodeURI(out);
-  } catch {}
-  return out;
 }
 
 export const SadTab = memo(function SadTab({ tabId, nativeAllowed = true }: { tabId: string; nativeAllowed?: boolean }) {

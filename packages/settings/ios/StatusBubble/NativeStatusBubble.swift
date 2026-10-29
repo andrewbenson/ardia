@@ -7,12 +7,7 @@ import SolaraUI
 enum NativeStatusBubble {
   static let kind = "statusBubble"
 
-  nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeStatusBubble, defaultOn: true)
-  }
-
   static func register() {
-    guard enabled else { return }
     HostedViews.register(kind) { _ in
       let host = StatusBubbleHost()
       return HostedContent(

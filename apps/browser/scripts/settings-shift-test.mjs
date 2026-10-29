@@ -76,7 +76,7 @@ return wait(400)
     if (typed.results[${downs}] !== ${JSON.stringify(id)}) throw new Error("result ${downs + 1} is " + typed.results[${downs}] + ", not ${id}");
     const press = (key, keyCode) => ac.shell.devKeyEquivalent("settings", { key, keyCode, modifiers: [], send: true, asKey: true, wait: 30 });
     const downs = Array.from({ length: ${downs} }).reduce((p) => p.then(() => press("\\uF701", 125)), Promise.resolve());
-    return downs.then(() => press("\\r", 36)).then(() => until((s) => s.flash === ${JSON.stringify(id)} && s.anchor, 3000)).then((s) => ({ results: typed.results, s }));
+    return downs.then(() => press("\\r", 36)).then(() => until((s) => s.flash === ${JSON.stringify(id)} && s.anchor, 3000)).then((s) => s ? wait(600).then(state).then((later) => ({ results: typed.results, s: later && later.anchor ? later : s })) : { results: typed.results, s });
   })
   .then(({ results, s }) => {
     if (!s) throw new Error("${id} wasn't highlighted");
@@ -115,7 +115,7 @@ try {
     from = pane;
   }
 
-  for (const [query, id, downs] of [["cookies", "privacy.blockCookieBanners", 0], ["dark", "appearance.theme", 0], ["licenses", "advanced.licenses", 0], ["password", "passwords.offerToSave", 1]]) {
+  for (const [query, id, downs] of [["cookies", "privacy.blockCookieBanners", 0], ["dark", "appearance.theme", 0], ["licenses", "advanced.licenses", 0], ["password", "passwords.offerToSave", 1], ["peek", "tabs.peekModifier", 0], ["clean up", "tabs.cleanUp", 0]]) {
     await rep.check(`search "${query}"${downs ? ` ↓×${downs}` : ""} opens ${id}`, async () => {
       const out = await ac(NATIVE_SEARCH(query, id, downs));
       const [, y, , h] = out.frame;

@@ -81,6 +81,23 @@ struct AutoHideStripTests {
     #expect(abs(band.minY) < 0.01 && abs(band.height - 20) < 0.01 && band.width == 600)
   }
 
+  @MainActor @Test func withNoDisplayFramesACollapseStillSettles() throws {
+    let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 600, height: 41))
+    strip.reduceMotion = false
+    let style = AutoHideStripStyle(card: try #require(CSSColor("#FFFFFF")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
+    var moving: [Bool] = []
+    strip.onMotion = { moving.append($0) }
+    strip.set(style: style, mode: .shown, shownTop: 41)
+    moving = []
+    strip.set(style: style, mode: .collapsed, shownTop: 41)
+    #expect(moving == [true])
+    let deadline = Date().addingTimeInterval(3)
+    while moving.last != false && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    #expect(moving.last == false)
+    let band = strip.bandFrame
+    #expect(abs(band.minY) < 0.01 && abs(band.height - 20) < 0.01)
+  }
+
   @MainActor @Test func developerStripesDrawInTheBand() throws {
     let asset = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../apps/browser/assets/developer-stripes-light@2x.png").standardized
     let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 200, height: 41))

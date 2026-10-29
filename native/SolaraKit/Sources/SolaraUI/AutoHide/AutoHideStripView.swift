@@ -61,6 +61,8 @@ public final class AutoHideStripView: NSView {
   private var moved = false
   private var configured = false
   private var link: CADisplayLink?
+  private var stallTimer: Timer?
+  private var lastTick: CFTimeInterval = 0
   private var peekTimer: Timer?
   private var tracking: NSTrackingArea?
   private var pinnedReduceMotion: Bool?
@@ -194,12 +196,31 @@ public final class AutoHideStripView: NSView {
     let made = displayLink(target: self, selector: #selector(step))
     made.add(to: .main, forMode: .common)
     link = made
+    let timer = Timer(timeInterval: DockMotion.stalledFrame / 2, repeats: true) { [weak self] timer in
+      guard let self else { return timer.invalidate() }
+      MainActor.assumeIsolated { self.tickIfStalled() }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    stallTimer = timer
+  }
+
+  private func stopLink() {
+    link?.invalidate()
+    link = nil
+    stallTimer?.invalidate()
+    stallTimer = nil
   }
 
   @objc private func step() { tick() }
 
+  func tickIfStalled() {
+    guard link != nil, CACurrentMediaTime() - lastTick >= DockMotion.stalledFrame else { return }
+    tick()
+  }
+
   private func tick() {
     let now = CACurrentMediaTime()
+    lastTick = now
     let b = bar.value(at: now)
     let f = fade.value(at: now)
     let p = page.value(at: now)
@@ -207,8 +228,7 @@ public final class AutoHideStripView: NSView {
     apply(bar: b, fade: f)
     onFrame(AutoHideFrame(bar: b, fade: f, liveTop: top, interactive: mode != .collapsed))
     if page.finished(at: now), bar.finished(at: now), fade.finished(at: now) {
-      link?.invalidate()
-      link = nil
+      stopLink()
       onMotion(false)
     }
   }
@@ -292,8 +312,7 @@ public final class AutoHideStripView: NSView {
   public override func viewWillMove(toWindow newWindow: NSWindow?) {
     super.viewWillMove(toWindow: newWindow)
     if newWindow == nil {
-      link?.invalidate()
-      link = nil
+      stopLink()
       peekTimer?.invalidate()
     }
   }

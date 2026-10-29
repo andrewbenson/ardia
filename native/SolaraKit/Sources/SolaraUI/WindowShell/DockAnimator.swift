@@ -21,6 +21,7 @@ public final class DockAnimator {
   private var elapsed: Double = 0
   private var last: CFTimeInterval = 0
   private var link: CADisplayLink?
+  private var stallTimer: Timer?
   private var run = 0
   private var running = false
 
@@ -58,6 +59,14 @@ public final class DockAnimator {
       made.add(to: .main, forMode: .common)
       link = made
     }
+    if stallTimer == nil {
+      let timer = Timer(timeInterval: DockMotion.stalledFrame / 2, repeats: true) { [weak self] timer in
+        guard let self else { return timer.invalidate() }
+        MainActor.assumeIsolated { self.tickIfStalled() }
+      }
+      RunLoop.main.add(timer, forMode: .common)
+      stallTimer = timer
+    }
   }
 
   public func step(by seconds: Double) {
@@ -84,17 +93,24 @@ public final class DockAnimator {
     onSettle?(value)
   }
 
-  fileprivate func tick() {
+  func tick() {
     let t = now()
     let dt = t - last
     last = t
     step(by: dt)
   }
 
+  func tickIfStalled() {
+    guard running, now() - last >= DockMotion.stalledFrame else { return }
+    tick()
+  }
+
   private func halt() {
     running = false
     link?.invalidate()
     link = nil
+    stallTimer?.invalidate()
+    stallTimer = nil
   }
 
   public func stop() {

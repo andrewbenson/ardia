@@ -66,6 +66,16 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && last.consistent && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const near = (a, b, tol = 0.5) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= tol);
 const seen = { rn: {}, native: {} };
 
@@ -117,6 +127,7 @@ try {
       await press("enter");
       await searchClosed();
       mine.firstMatch = await run(`return active();`);
+      await untilSnapshot(`${tag} first search selection`, (state) => state.windows[0]?.selectedTabId === mine.firstMatch);
       if (nativePickers && mine.firstMatch !== seen.rn.firstMatch) throw new Error(`picked ${mine.firstMatch}, RN picked ${seen.rn.firstMatch}`);
       return mine.firstMatch;
     });
@@ -136,6 +147,7 @@ try {
       await press("enter");
       await searchClosed();
       mine.secondMatch = await run(`return active();`);
+      await untilSnapshot(`${tag} second search selection`, (state) => state.windows[0]?.selectedTabId === mine.secondMatch);
       if (mine.secondMatch === mine.firstMatch) throw new Error(`Down didn't move off ${mine.firstMatch}`);
       if (nativePickers && mine.secondMatch !== seen.rn.secondMatch) throw new Error(`picked ${mine.secondMatch}, RN picked ${seen.rn.secondMatch}`);
       return mine.secondMatch;
@@ -147,6 +159,7 @@ try {
       await run(`return click(${number}, [${Math.round(x + w / 2)}, ${Math.round(y + 50 + 1 + 6 + 21.5 + 36 + 18)}], 60).then(() => true);`);
       await searchClosed();
       mine.clicked = await run(`return active();`);
+      await untilSnapshot(`${tag} clicked search selection`, (state) => state.windows[0]?.selectedTabId === mine.clicked);
       if (nativePickers && mine.clicked !== seen.rn.clicked) throw new Error(`clicked into ${mine.clicked}, RN into ${seen.rn.clicked}`);
       return mine.clicked;
     });
@@ -215,6 +228,7 @@ try {
         const now = await run(`return active();`);
         mine.switcher = { frame, ids: s.ids, picked: now };
         if (now !== s.ids[target]) throw new Error(`active ${now}, clicked ${s.ids[target]} in ${s.ids}`);
+        await untilSnapshot(`${tag} switcher selection`, (state) => state.windows[0]?.selectedTabId === now);
         return mine.switcher;
       });
     }

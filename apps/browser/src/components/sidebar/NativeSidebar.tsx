@@ -4,8 +4,6 @@ import { memo, useEffect, useMemo } from "react";
 import { Image, StyleSheet } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { closeTab, toggleMute } from "../../lib/actions";
-import { faviconUri } from "../../lib/favicons";
-import { bundledSiteIcon } from "../../lib/siteIcons";
 import { shortcutHint } from "../../lib/commandShortcuts";
 import { PRODUCT } from "../../lib/productName";
 import { useLifecycle } from "../../lib/tabLifecycle";
@@ -177,16 +175,8 @@ const NONE: string[] = [];
 
 type Mods = { meta?: boolean; shift?: boolean; alt?: boolean };
 
-const FAVICON_WAIT_MS = 3000;
 
 addNativeSettingsHandlers({
-  "sidebar.favicon": async (url: string, profileId: string | null, dark: boolean) => {
-    const cached = await faviconUri(url, profileId ?? undefined, 0);
-    if (cached) return cached;
-    const icon = bundledSiteIcon(url, dark);
-    if (icon !== undefined) return Image.resolveAssetSource(icon)?.uri ?? null;
-    return faviconUri(url, profileId ?? undefined, FAVICON_WAIT_MS);
-  },
   "sidebar.action": (
     windowId: string,
     name: string,

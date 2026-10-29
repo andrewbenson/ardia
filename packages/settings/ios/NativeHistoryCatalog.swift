@@ -1,6 +1,8 @@
+import AppKit
 import ArdiaCore
 import Foundation
 import SolaraEngine
+import SolaraStore
 import SolaraUI
 
 @MainActor
@@ -83,7 +85,47 @@ final class ArdiaHistoryClient: EngineClient {
     }
   }
 
-  private func call(_ name: String, profile: String, args: [String: Int] = [:]) async throws -> Data {
+  func storedFavicon(page: String, engineProfile: String) async throws -> Data? {
+    let data = try await call("ac_favicons_get", profile: engineProfile, args: ["pages": [page], "size": 32])
+    guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let pages = object["pages"] as? [String: [String: String]], let png = pages[page]?["png"] else { return nil }
+    return Data(base64Encoded: png)
+  }
+
+  func fetchFavicon(source: String, engineProfile: String) async -> Data? {
+    if source.hasPrefix("data:"), let comma = source.firstIndex(of: ",") {
+      return validImageData(Data(base64Encoded: String(source[source.index(after: comma)...])))
+    }
+    if source.hasPrefix("file:"), let url = URL(string: source), url.isFileURL { return validImageData(try? Data(contentsOf: url)) }
+    if source.hasPrefix("/") { return validImageData(try? Data(contentsOf: URL(fileURLWithPath: source))) }
+    guard source.hasPrefix("https://") || source.hasPrefix("http://") else { return nil }
+    return await withCheckedContinuation { continuation in
+      ArdiaCoreFavicons.fetch(source, profile: engineProfile, name: nil) { result in
+        guard let uri = result?["uri"] as? String, let comma = uri.firstIndex(of: ",") else {
+          continuation.resume(returning: nil)
+          return
+        }
+        continuation.resume(returning: Data(base64Encoded: String(uri[uri.index(after: comma)...])))
+      }
+    }
+  }
+
+  private func validImageData(_ data: Data?) -> Data? {
+    guard let data, NSImage(data: data) != nil else { return nil }
+    return data
+  }
+
+  func bundledFavicon(page: String, dark: Bool) async -> Data? {
+    guard let name = BundledSiteIcons.name(for: page, dark: dark),
+      let url = Bundle.main.resourceURL?.appendingPathComponent("assets/assets/site-icons/\(name).png") else { return nil }
+    return try? Data(contentsOf: url)
+  }
+
+  func storeFavicon(page: String, source: String, data: Data, engineProfile: String) async throws {
+    _ = try await call("ac_favicons_set", profile: engineProfile, args: ["page": page, "icon": source, "png": data.base64EncodedString()])
+  }
+
+  private func call(_ name: String, profile: String, args: [String: Any] = [:]) async throws -> Data {
     let body = String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self)
     return try await withCheckedThrowingContinuation { continuation in
       ArdiaCoreEngineBridge.call(name, profile: profile, args: body) { json in
@@ -105,6 +147,17 @@ final class ArdiaHistoryClient: EngineClient {
 @MainActor
 enum NativeHistoryCatalog {
   static let catalog = LibraryCatalog(client: ArdiaHistoryClient())
+
+  static func favicon(page: String, source: String? = nil, profileId: String, dark: Bool) async -> NSImage? {
+    let profile = NativeStoreHandle.store?.state.engineProfile(profileId) ?? (profileId == "default" ? "" : profileId)
+    guard let result = await catalog.favicons?.favicon(page: page, source: source, engineProfile: profile, appearance: dark) else { return nil }
+    return NSImage(data: result.data)
+  }
+
+  static func devFaviconLookup(page: String, engineProfile: String) async -> [String: Any] {
+    let result = await catalog.favicons?.favicon(page: page, engineProfile: engineProfile, appearance: false)
+    return ["bytes": result?.data.count ?? 0, "source": result?.source ?? "missing"]
+  }
 
   static func start(engineProfiles: [String]) async {
     NewTabSources.shared.useHistoryCatalog(catalog)

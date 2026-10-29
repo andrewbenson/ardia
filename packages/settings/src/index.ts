@@ -12,6 +12,7 @@ type NativeSettingsModule = {
   startHistoryCatalog?(profiles: string[]): Promise<void>;
   devHistorySnapshot?(profile: string): Promise<{ count: number; ready: boolean; floor: number | "-Infinity"; revision: number }>;
   devBookmarksSnapshot?(profile: string): Promise<{ count: number; ready: boolean; revision: number }>;
+  devFaviconLookup?(page: string, engineProfile: string): Promise<{ bytes: number; source: string }>;
   bookmarkWriteComplete?(profile: string): Promise<void>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
   publish(topic: string, json: string): Promise<void>;
@@ -58,6 +59,8 @@ export const startNativeHistoryCatalog = (profiles: string[]) => native?.startHi
 export const devNativeHistorySnapshot = (profile: string) => native?.devHistorySnapshot?.(profile);
 
 export const devNativeBookmarksSnapshot = (profile: string) => native?.devBookmarksSnapshot?.(profile);
+
+export const devFaviconLookup = (page: string, engineProfile: string) => native?.devFaviconLookup?.(page, engineProfile);
 
 export const nativeBookmarkWriteComplete = (profile: string) => native?.bookmarkWriteComplete?.(profile).catch(() => {});
 

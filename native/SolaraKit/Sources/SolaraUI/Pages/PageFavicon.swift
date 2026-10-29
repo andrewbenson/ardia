@@ -1,4 +1,5 @@
 import AppKit
+import SolaraEngine
 import SwiftUI
 
 @MainActor
@@ -8,6 +9,7 @@ public final class PageFavicons {
   private var cache: [String: NSImage] = [:]
   private var misses: Set<String> = []
   private var bundledCache: [String: NSImage] = [:]
+  nonisolated(unsafe) private var invalidationObserver: NSObjectProtocol?
 
   public init(
     load: @escaping (_ url: String, _ favicon: String?, _ profileId: String, _ dark: Bool) async -> NSImage?,
@@ -15,7 +17,15 @@ public final class PageFavicons {
   ) {
     self.load = load
     bundledImage = bundled
+    invalidationObserver = NotificationCenter.default.addObserver(forName: FaviconLibrary.didInvalidate, object: nil, queue: nil) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.cache.removeAll()
+        self?.misses.removeAll()
+      }
+    }
   }
+
+  deinit { if let invalidationObserver { NotificationCenter.default.removeObserver(invalidationObserver) } }
 
   static func key(_ url: String, _ favicon: String?, _ profileId: String, dark: Bool) -> String { "\(dark ? 1 : 0)\u{1}\(profileId)\u{1}\(favicon ?? "")\u{1}\(url)" }
 

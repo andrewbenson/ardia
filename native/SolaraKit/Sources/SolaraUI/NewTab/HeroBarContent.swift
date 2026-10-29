@@ -1,4 +1,5 @@
 import AppKit
+import SolaraEngine
 import SolaraOmnibox
 import SwiftUI
 
@@ -7,10 +8,19 @@ public final class NewTabFavicons {
   private let load: (String, String?, String) async -> NSImage?
   private var cache: [String: NSImage] = [:]
   private var missing: Set<String> = []
+  nonisolated(unsafe) private var invalidationObserver: NSObjectProtocol?
 
   public init(load: @escaping (_ url: String, _ favicon: String?, _ profileId: String) async -> NSImage?) {
     self.load = load
+    invalidationObserver = NotificationCenter.default.addObserver(forName: FaviconLibrary.didInvalidate, object: nil, queue: nil) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.cache.removeAll()
+        self?.missing.removeAll()
+      }
+    }
   }
+
+  deinit { if let invalidationObserver { NotificationCenter.default.removeObserver(invalidationObserver) } }
 
   static func key(_ url: String, _ favicon: String?) -> String { "\(favicon ?? "")\u{1}\(url)" }
 

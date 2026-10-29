@@ -69,18 +69,7 @@ enum NativeSidebar {
   }
 
   static func favicon(_ request: SidebarFaviconRequest) async throws -> NSImage? {
-    if let favicon = request.favicon, favicon.hasPrefix("data:") || favicon.hasPrefix("file:") || favicon.hasPrefix("/"),
-      let image = SettingsAdapters.image(favicon)
-    {
-      return image
-    }
-    if request.direct, let favicon = request.favicon, let url = URL(string: favicon) {
-      return await Task.detached { (try? Data(contentsOf: url)).flatMap(NSImage.init(data:)) }.value
-    }
-    guard let uri = try await SettingsAdapters.jsThrowing("sidebar.favicon", request.url, request.profileId, request.dark) as? String else { return nil }
-    if let image = SettingsAdapters.image(uri) { return image }
-    guard let url = URL(string: uri) else { return nil }
-    return await Task.detached { (try? Data(contentsOf: url)).flatMap(NSImage.init(data:)) }.value
+    await NativeHistoryCatalog.favicon(page: request.url, source: request.favicon, profileId: request.profileId, dark: request.dark)
   }
 }
 

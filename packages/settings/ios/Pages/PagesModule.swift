@@ -57,11 +57,7 @@ public class PagesModule: Module {
 enum PageNetwork {
   static let favicons = PageFavicons(
     load: { url, favicon, profile, dark in
-      if let favicon, favicon.hasPrefix("data:") || favicon.hasPrefix("file:") || favicon.hasPrefix("/"), let image = SettingsAdapters.image(favicon) { return image }
-      guard let uri = await SettingsAdapters.js("newTab.favicon", url, profile, dark) as? String else { return nil }
-      if let image = SettingsAdapters.image(uri) { return image }
-      guard let source = URL(string: uri), source.isFileURL, let data = try? Data(contentsOf: source) else { return nil }
-      return NSImage(data: data)
+      await NativeHistoryCatalog.favicon(page: url, source: favicon, profileId: profile, dark: dark)
     },
     bundled: { name in NativeSettingsWindow.bundledSiteIcon(name) })
 }

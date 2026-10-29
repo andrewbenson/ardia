@@ -1,7 +1,6 @@
 import { nativeSettingsAvailable, publishSettingsTopic, serveNativeSettings, type SettingsHandler } from "@ardia/settings";
 import { openUrls } from "../../lib/actions";
 import { installCliInBackground, useCli } from "../../lib/cliControl";
-import { faviconUri } from "../../lib/favicons";
 import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";
 import { extensionsProfileId } from "../extensions/store";
@@ -44,7 +43,6 @@ function manageExtensionsOf(profile: string) {
 }
 
 const coreHandlers: Record<string, SettingsHandler> = {
-  "favicon.uri": (url: string, profileId: string | null) => faviconUri(url, profileId ?? undefined),
   "app.openInternalPage": (page: Parameters<typeof openInternalPage>[0]) => openInternalPage(page),
   "app.openUrls": (urls: string[]) => openUrls(urls),
 

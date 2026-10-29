@@ -1,9 +1,7 @@
 import { hostedKinds, nativeCliIndicatorShown, nativeSettingsAvailable, SolaraHostedView } from "@ardia/settings";
-import { Image, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { toggleMute } from "../../lib/actions";
 import { stopCliControl, useCliIndicator } from "../../lib/cliControl";
-import { faviconUri } from "../../lib/favicons";
-import { bundledSiteIcon } from "../../lib/siteIcons";
 import type { Theme } from "../../lib/theme";
 import type { Tab } from "../../store/types";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
@@ -118,16 +116,8 @@ export function addMediaActions(added: Record<string, MediaActionHandler>) {
   Object.assign(actions, added);
 }
 
-const FAVICON_WAIT_MS = 3000;
 
 addNativeSettingsHandlers({
-  "media.favicon": async (url: string, profileId: string | null, dark: boolean) => {
-    const cached = await faviconUri(url, profileId ?? undefined, 0);
-    if (cached) return cached;
-    const icon = bundledSiteIcon(url, dark);
-    if (icon !== undefined) return Image.resolveAssetSource(icon)?.uri ?? null;
-    return faviconUri(url, profileId ?? undefined, FAVICON_WAIT_MS);
-  },
   "media.action": (windowId: string, name: string, tabId: string, extra: Record<string, unknown>) => actions[name]?.(windowId, tabId, extra ?? {}),
 });
 

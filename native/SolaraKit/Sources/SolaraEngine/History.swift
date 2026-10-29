@@ -78,6 +78,10 @@ public protocol EngineClient: AnyObject {
   func observeBookmarks(_ handler: @escaping @MainActor @Sendable (String) -> Void)
   func watchBookmarks(engineProfile: String) async throws
   func readBookmarks(engineProfile: String) async throws -> EngineBookmarkTree
+  func storedFavicon(page: String, engineProfile: String) async throws -> Data?
+  func fetchFavicon(source: String, engineProfile: String) async -> Data?
+  func bundledFavicon(page: String, dark: Bool) async -> Data?
+  func storeFavicon(page: String, source: String, data: Data, engineProfile: String) async throws
 }
 
 @MainActor
@@ -201,6 +205,7 @@ public final class LibraryCatalog {
   public private(set) var histories: [String: HistorySnapshot] = [:]
   public private(set) var bookmarkSnapshots: [String: BookmarkSnapshot] = [:]
   @ObservationIgnored private let client: any EngineClient
+  @ObservationIgnored public private(set) var favicons: FaviconLibrary?
   @ObservationIgnored private var libraries: [String: HistoryLibrary] = [:]
   @ObservationIgnored private var bookmarkLibraries: [String: BookmarkLibrary] = [:]
   @ObservationIgnored private var bookmarkObservers: [String: [UUID: AsyncStream<BookmarkSnapshot>.Continuation]] = [:]
@@ -209,7 +214,10 @@ public final class LibraryCatalog {
   @ObservationIgnored private var observing = false
   @ObservationIgnored private var observers: [String: [UUID: AsyncStream<HistorySnapshot>.Continuation]] = [:]
 
-  public init(client: any EngineClient) { self.client = client }
+  public init(client: any EngineClient) {
+    self.client = client
+    favicons = FaviconLibrary(client: client)
+  }
 
   public func history(engineProfile: String) -> HistorySnapshot { histories[engineProfile] ?? HistorySnapshot() }
 
@@ -279,6 +287,11 @@ public final class LibraryCatalog {
   }
 
   private func receive(_ change: HistoryChange) {
+    switch change {
+    case .deleted(_, let all, let urls): favicons?.invalidate(engineProfile: change.profile, pages: all ? nil : urls)
+    case .visit(_, let url, _, _, _): favicons?.forgetMisses(engineProfile: change.profile, pages: [url])
+    case .modified(_, let rows): favicons?.forgetMisses(engineProfile: change.profile, pages: rows.map(\.url))
+    }
     guard let library = libraries[change.profile] else { return }
     if library.receiveDuringLoad(change) { return }
     pending.append(change)

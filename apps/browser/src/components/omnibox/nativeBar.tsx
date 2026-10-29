@@ -2,39 +2,25 @@ import { displayUrl, type Suggestion } from "@ardia/core";
 import { newTabSources, type NewTabMenuChoice } from "@ardia/settings";
 import { pickFiles, readDocument, showMenu, startDictation } from "@ardia/shell";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { findNodeHandle, Image } from "react-native";
+import { findNodeHandle } from "react-native";
 import { claimFocusTag } from "../../lib/focusClaims";
-import { faviconUri } from "../../lib/favicons";
 import { perfProbeEnabled } from "../../lib/perfProbe";
-import { bundledSiteIcon } from "../../lib/siteIcons";
 import type { Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { activeTabId, bookmarkProfileId, engineProfile, viewTabIds } from "../../store/model";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../lib/perfMarks";
 import { sampleOmniboxLatency } from "../../lib/perfMarks";
-import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { currentBarActions } from "./actions";
+import { profileBookmarks } from "./useSuggestions";
 import { useOmniboxDriver } from "./devDriver";
 import { useBarExtensions } from "./extensions";
 import { openFromBar, switchFromBar, type Disposition } from "./open";
 import { clipboardPasteAction, pasteMenuItem, pasteTarget } from "./paste";
 import { runBarAction, runBarExtension } from "./runBar";
-import { profileBookmarks } from "./useSuggestions";
 
 export { openFromBar };
 
-const FAVICON_WAIT_MS = 3000;
 const benchOffline = readDocument("bench-offline") !== null;
-
-addNativeSettingsHandlers({
-  "newTab.favicon": async (url: string, profileId: string | null, dark: boolean) => {
-    const cached = await faviconUri(url, profileId ?? undefined, 0);
-    if (cached) return cached;
-    const icon = bundledSiteIcon(url, dark);
-    if (icon !== undefined) return Image.resolveAssetSource(icon)?.uri ?? null;
-    return faviconUri(url, profileId ?? undefined, FAVICON_WAIT_MS);
-  },
-});
 
 const PUBLISH_DELAY_MS = 50;
 

@@ -29,8 +29,7 @@ enum SettingsAdapters {
   static func displayHost(_ host: String) -> String { SolaraOmnibox.displayHost(host) }
 
   static func favicon(url: String, profile: String?) async -> NSImage? {
-    guard let uri = await js("favicon.uri", url, profile ?? NSNull()) as? String else { return nil }
-    return image(uri)
+    await NativeHistoryCatalog.favicon(page: url, profileId: profile ?? "default", dark: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
   }
 
   static func image(_ uri: String?) -> NSImage? {

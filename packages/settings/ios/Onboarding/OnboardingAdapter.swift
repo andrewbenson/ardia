@@ -163,8 +163,7 @@ final class OnboardingAdapter: OnboardingServices {
   }
 
   func favicon(_ url: String) async -> NSImage? {
-    guard let uri = await Self.call("favicon.uri", url, window.string("profileId") ?? NSNull()) as? String else { return nil }
-    return SettingsAdapters.image(uri)
+    await NativeHistoryCatalog.favicon(page: url, profileId: window.string("profileId") ?? "default", dark: NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
   }
 
   static let connectWait = Duration.seconds(5)

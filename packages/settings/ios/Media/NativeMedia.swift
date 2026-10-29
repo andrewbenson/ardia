@@ -29,8 +29,7 @@ enum NativeMedia {
     guard enabled else { return }
     MediaImages.load = { SettingsAdapters.image($0) }
     MediaImages.favicons.loader = { request in
-      guard let uri = try await SettingsAdapters.jsThrowing("media.favicon", request.url, request.profileId, request.dark) as? String else { return nil }
-      return SettingsAdapters.image(uri)
+      return await NativeHistoryCatalog.favicon(page: request.url, source: request.favicon, profileId: request.profileId, dark: request.dark)
     }
     HostedViews.register(sidebarPlayer) { windowId in
       let view = SidebarPlayerView()

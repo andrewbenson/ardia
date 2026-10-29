@@ -1,4 +1,5 @@
 import AppKit
+import SolaraEngine
 
 public struct SidebarFaviconRequest: Hashable, Sendable {
   public var url: String
@@ -17,8 +18,18 @@ public final class SidebarFavicons {
   private var cache: [SidebarFaviconRequest: NSImage] = [:]
   private var missing: Set<SidebarFaviconRequest> = []
   private var pending: [SidebarFaviconRequest: [(NSImage?) -> Void]] = [:]
+  nonisolated(unsafe) private var invalidationObserver: NSObjectProtocol?
 
-  public init() {}
+  public init() {
+    invalidationObserver = NotificationCenter.default.addObserver(forName: FaviconLibrary.didInvalidate, object: nil, queue: nil) { [weak self] _ in
+      MainActor.assumeIsolated {
+        self?.cache.removeAll()
+        self?.missing.removeAll()
+      }
+    }
+  }
+
+  deinit { if let invalidationObserver { NotificationCenter.default.removeObserver(invalidationObserver) } }
 
   public func cached(_ request: SidebarFaviconRequest) -> NSImage?? {
     if let image = cache[request] { return .some(image) }

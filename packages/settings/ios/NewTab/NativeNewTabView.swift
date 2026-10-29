@@ -115,16 +115,8 @@ enum NewTabNetwork {
   static let fetcher = SuggestFetcher(fetch: SuggestFetcher.urlSession())
 
   static let favicons = NewTabFavicons { url, favicon, profile in
-    if let favicon, favicon.hasPrefix("data:") || favicon.hasPrefix("file:") || favicon.hasPrefix("/"), let image = SettingsAdapters.image(favicon) { return image }
     let dark = await MainActor.run { NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
-    guard let uri = await SettingsAdapters.js("newTab.favicon", url, profile, dark) as? String else { return nil }
-    return siteIcon(uri)
-  }
-
-  private static func siteIcon(_ uri: String) -> NSImage? {
-    if let image = SettingsAdapters.image(uri) { return image }
-    guard let url = URL(string: uri), let data = try? Data(contentsOf: url) else { return nil }
-    return NSImage(data: data)
+    return await NativeHistoryCatalog.favicon(page: url, source: favicon, profileId: profile, dark: dark)
   }
 
   private static var markCache: [String: NSImage] = [:]

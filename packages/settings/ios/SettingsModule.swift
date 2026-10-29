@@ -55,6 +55,15 @@ public class SettingsModule: Module {
     }.runOnQueue(.main)
 
     #if DEBUG
+    AsyncFunction("devFaviconLookup") { (page: String, engineProfile: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in reply.resolve(await NativeHistoryCatalog.devFaviconLookup(page: page, engineProfile: engineProfile)) }
+      }
+    }.runOnQueue(.main)
+    #endif
+
+    #if DEBUG
     AsyncFunction("devBookmarksSnapshot") { (profile: String, promise: Promise) in
       nonisolated(unsafe) let reply = promise
       MainActor.assumeIsolated { reply.resolve(NativeHistoryCatalog.bookmarksSnapshot(engineProfile: profile)) }

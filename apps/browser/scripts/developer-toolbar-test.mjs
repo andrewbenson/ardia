@@ -14,7 +14,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { inflateSync } from "node:zlib";
-import { launch } from "../../../scripts/lib/instance.mjs";
+import { launch, sleep } from "../../../scripts/lib/instance.mjs";
 
 const argv = process.argv.slice(2);
 if (!argv.length || argv.includes("-h") || argv.includes("--help")) {
@@ -98,6 +98,16 @@ const check = (name, ok, detail) => {
 for (const side of ["native"]) {
   const instance = await launch(app, { data: join(scratch, `data-${side}`), fresh: true, onboarded: true });
   const inApp = (body) => instance.eval(body, { timeout: 30000 });
+  const untilSnapshot = async (what, accept, ms = 5000) => {
+    const end = Date.now() + ms;
+    let last;
+    while (Date.now() < end) {
+      last = await instance.snapshot().catch((error) => ({ error: error.message }));
+      if (!last.error && accept(last)) return last;
+      await sleep(100);
+    }
+    throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+  };
   try {
     const w = await inApp(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; s.setWindowFrame(w, [80, 80, 1280, 800]); return w;`);
     for (const appearance of ["light", "dark"]) {
@@ -140,6 +150,10 @@ for (const side of ["native"]) {
         .then(() => sleep(2000))
         .then(() => { const went = url(); cmdL(); return sleep(800).then(() => ac.shell.devTypeKeys(w, "junk\\u001b", 20)).then(() => sleep(800)).then(() => ({ went, kept: url(), panel: ac.store.getState().windowUi[w].panel.open })); });`);
     results[`${side}-edits`] = edits;
+    const snapshot = await untilSnapshot("the edited URL", (state) => state.windows.some((window) => window.id === w &&
+      state.tabs.some((tab) => tab.id === window.selectedTabId && tab.url === edits.kept)));
+    const selected = snapshot.windows.find((window) => window.id === w)?.selectedTabId;
+    results[`${side}-native-url`] = snapshot.tabs.find((tab) => tab.id === selected)?.url;
   } finally {
     await instance.quit();
   }
@@ -156,5 +170,7 @@ for (const appearance of ["light", "dark"]) {
 }
 const e = results["native-edits"];
 check("Return goes to the typed URL, Escape keeps it", e.went.endsWith("/other") && e.kept === e.went && !e.panel, JSON.stringify(e).replace(base, ""));
+check("native snapshot keeps the selected tab at the edited URL", results["native-native-url"] === e.kept,
+  `native ${results["native-native-url"]}, JS ${e.kept}`);
 console.log(failed ? `${failed} failed (snapshots in ${scratch})` : "all pass");
 process.exit(failed ? 1 : 0);

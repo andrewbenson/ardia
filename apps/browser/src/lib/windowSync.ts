@@ -2,7 +2,7 @@ import type { OpenWindowOptions, WindowEvent } from "@ardia/shell";
 import type { BrowserState } from "../store/browser";
 import { engineProfile, windowTitle } from "../store/model";
 import { windowOpens } from "./windowOpenOrder";
-import { hasPendingCloseSnapshot } from "./windowClose";
+import { hasPendingCloseSnapshot } from "./closeSnapshots";
 
 export type LightsCenter = [number, number] | null;
 

@@ -1,32 +1,17 @@
 import { confirm, onWindowEvent } from "@ardia/shell";
 import { useBrowser } from "../store/browser";
 import { tabsClosingWithWindow } from "../store/model";
-import type { BrowserWindow, SplitView, Tab, TabGroup } from "../store/types";
+import type { Tab } from "../store/types";
 import { closeWindowDialog } from "./closeWindowDialog";
 import { isSmall } from "../store/small";
 import { closeLittleArdia } from "../components/littleArdia/actions";
 import { closeWindowAnimated } from "./closeAnimated";
+import { closeSnapshots as snapshots, type CloseSnapshot } from "./closeSnapshots";
 import { usePages } from "../components/layout/pageState";
 import { pagesPooledIn } from "./pagesPool";
 
 const MIN_TABS = 2;
 const SNAPSHOT_MS = 30_000;
-
-export type CloseSnapshot = {
-  window: BrowserWindow;
-  tabs: Tab[];
-  groups: TabGroup[];
-  splits: SplitView[];
-  browsers: Record<number, string>;
-  pooled: boolean;
-  closedAt: number;
-};
-
-const snapshots = new Map<string, CloseSnapshot>();
-
-export function hasPendingCloseSnapshot(windowId: string) {
-  return snapshots.has(windowId);
-}
 
 export function snapshotTabId(snapshot: CloseSnapshot, tab: { storeTabId: string; browserId: number }) {
   return [snapshot.browsers[tab.browserId], tab.storeTabId].find((id) => !!id && snapshot.tabs.some((saved) => saved.id === id));

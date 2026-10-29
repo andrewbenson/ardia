@@ -65,6 +65,17 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const nativeFrame = (frame) => frame && [frame.x, frame.y, frame.width, frame.height];
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const deadline = Date.now() + ms;
+  let last;
+  while (Date.now() < deadline) {
+    last = await app.snapshot().catch((e) => ({ error: e.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
 const select = (id) => page.eval(`(() => {
@@ -102,6 +113,13 @@ try {
         if (nativeShell) {
           if (f[3] !== above) throw new Error(`above ${f[3]} for #${id}`);
           if (await run(`return fibers("SearchButton").length > 0 || !!rnBar();`)) throw new Error("RN still draws the bar");
+          const snapshot = await untilSnapshot("the native selection", (state) => state.windows.some((w) => w.overlays.some((o) => o.tabId === "a" && o.opacity === 1)));
+          const tab = snapshot.tabs.find((t) => t.id === "a");
+          const overlay = snapshot.windows.find((w) => w.id === "w1")?.overlays.find((o) => o.tabId === "a");
+          if (tab?.url !== `${base}/words` || tab.title !== "WORDS") throw new Error(`native tab ${JSON.stringify(tab)}`);
+          if (!near(nativeFrame(overlay.frame), bar) || !near(nativeFrame(overlay.controls[0]?.frame), button) ||
+            !near(nativeFrame(overlay.area), f[2]) || overlay.opacity !== 1 || overlay.above !== above)
+            throw new Error(`native overlay ${JSON.stringify(overlay)} vs ${JSON.stringify(f)}`);
           const area = f[2];
           const wordTop = area[1] + word[1];
           const wantY = above ? wordTop - 6 - 32 : area[1] + word[1] + word[3] + 6;
@@ -122,6 +140,10 @@ try {
         await run(`return click(${number}, ${JSON.stringify(centre(f))}).then(() => true);`);
         const searched = await until("the search", `return Object.values(ac.store.getState().tabs).map((t) => t.url).find((u) => u.includes("/search?q=selectable")) || null;`, 5000);
         await until("the bar goes", `return native().then((d) => !d || !d.tabs.a || !d.tabs.a.selection || null);`, 3000);
+        const snapshot = await untilSnapshot("native search landing", (state) =>
+          state.tabs.some((t) => t.url.includes("/search?q=selectable") && t.title === "RESULTS") &&
+          !state.windows.some((w) => w.overlays.some((o) => o.tabId === "a" && o.visible)), 5000);
+        if (!snapshot.tabs.some((t) => t.title === "RESULTS")) throw new Error("native search title missing");
         return { searched };
       });
     }

@@ -37,6 +37,15 @@ export function violation(state, front, secure) {
 }
 
 export const stillNeeded = (state, isAlive = alive) => [...state.owners, ...state.watched.keys()].some(isAlive);
+export function prune(state, isAlive = alive, programOf = executableOf) {
+  const runsOther = (pid, ours) => {
+    const program = programOf(pid);
+    return !!program && !ours(program);
+  };
+  for (const pid of state.watched.keys()) if (!isAlive(pid) || runsOther(pid, (p) => launchedBinary(state, p))) state.watched.delete(pid);
+  for (const pid of state.owners) if (!isAlive(pid) || runsOther(pid, (p) => /(^|\/)node$/.test(p))) state.owners.delete(pid);
+  return state;
+}
 
 function banner(found, frontBefore) {
   return `\n!!! UI GATE: test instance pid ${found.pid}${found.data ? ` (${found.data})` : ""} ${found.what}.\n` +
@@ -60,11 +69,10 @@ async function main(stateFile, interval) {
   };
   process.stdout.write("held\n");
   for (let tick = 0; ; tick++) {
-    const state = readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : "");
-    for (const pid of state.watched.keys()) if (!alive(pid)) state.watched.delete(pid);
+    const state = prune(readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : ""));
     if (tick > 0 && !stillNeeded(state)) {
       await new Promise((r) => setTimeout(r, interval));
-      if (!stillNeeded(readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : ""))) break;
+      if (!stillNeeded(prune(readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : "")))) break;
       continue;
     }
     const front = parseFront(run("lsappinfo", ["info", run("lsappinfo", ["front"]).trim()]));

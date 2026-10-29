@@ -179,7 +179,7 @@ export async function holdUiGate(key = null) {
 }
 export async function uiGateLaunching(binary, { allowFront = false } = {}) {
   const gate = await holdUiGate(uiGateKey(binary));
-  gateNote(gate.state, { binary, frontBefore: frontApp(), ...(allowFront ? { allowFront } : {}) });
+  gateNote(gate.state, { binary: realPath(binary), frontBefore: frontApp(), ...(allowFront ? { allowFront } : {}) });
 }
 export function uiGateWatch(pid, data = null, { allowFront = false } = {}) {
   if (!uiGate) throw new Error("uiGateWatch before uiGateLaunching: take the uitest lock before launching the app");
@@ -506,7 +506,7 @@ export async function launch(app, opts = {}) {
     ...opts.env,
   });
   const log = resolve(opts.log ?? join(data, "app.out.log"));
-  gateNote(gate.state, { binary, frontBefore: frontApp() });
+  gateNote(gate.state, { binary: realPath(binary), frontBefore: frontApp() });
   const before = binaryPids(binary);
   const launchedAt = Date.now();
   execFileSync("open", ["-g", "-n", ...Object.entries(env).filter(([, v]) => v !== null && v !== undefined).flatMap(([k, v]) => ["--env", `${k}=${v}`]),

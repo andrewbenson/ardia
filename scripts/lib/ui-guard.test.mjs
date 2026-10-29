@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseFront, readState, secureInputPid, stillNeeded, violation } from "./ui-guard.mjs";
+import { parseFront, prune, readState, secureInputPid, stillNeeded, violation } from "./ui-guard.mjs";
 
 const lsappinfo = (name, pid, executable) => `"${name}" ASN:0x0-0xb2db2d: (in front) \n    bundleID="x"\n    bundle path="${executable.replace(/\/Contents\/MacOS\/.*$/, "")}"\n    executable path="${executable}"\n    pid = ${pid} token=[sess=1 pid=${pid}] type="Foreground" flavor=3\n`;
 const build = "/Users/me/Developer/Personal/ardia/apps/browser/build-x/Build/Products/Debug/Solara.app/Contents/MacOS/Solara";
@@ -65,6 +65,22 @@ test("the gate is needed while an owner or a watched instance lives", () => {
   assert.equal(stillNeeded(s, (pid) => pid === 500), true);
   assert.equal(stillNeeded(s, (pid) => pid === 11), true);
   assert.equal(stillNeeded(s, () => false), false);
+});
+
+test("a live pid reused by another program no longer keeps the gate (and the lock) held", () => {
+  const programs = { 10: "/usr/sbin/cfprefsd", 500: "/Applications/Dia.app/Contents/MacOS/Dia", 501: build, 11: "/Users/me/.nvm/versions/node/v24/bin/node" };
+  const s = prune(state([{ owner: 10 }, { owner: 11 }, { binary: build }, { watch: 500 }, { watch: 501 }]), () => true, (pid) => programs[pid] ?? "");
+  assert.deepEqual([...s.watched.keys()], [501]);
+  assert.deepEqual([...s.owners], [11]);
+  const reused = prune(state([{ owner: 10 }, { binary: build }, { watch: 500 }]), () => true, (pid) => programs[pid] ?? "");
+  assert.equal(stillNeeded(reused, () => true), false);
+});
+
+test("a live pid whose program can't be read (ps failed or timed out) is kept, not dropped", () => {
+  const s = prune(state([{ owner: 11 }, { binary: build }, { watch: 501 }]), () => true, () => "");
+  assert.deepEqual([...s.watched.keys()], [501]);
+  assert.deepEqual([...s.owners], [11]);
+  assert.equal(stillNeeded(s, () => true), true);
 });
 
 test("state keeps the first frontBefore and skips lines it can't read", () => {

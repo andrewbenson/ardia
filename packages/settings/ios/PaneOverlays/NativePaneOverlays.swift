@@ -624,3 +624,10 @@ final class PaneOverlayHost {
     return ["top": layer != nil && card?.subviews.last === layer, "inCard": !(sadTabs.isEmpty && zooms.isEmpty && histories.isEmpty && swipes.isEmpty && selections.isEmpty && cliPills.isEmpty && casts.isEmpty && shares.isEmpty) && layer != nil && layer?.superview === card, "tabs": tabs]
   }
 }
+
+@MainActor
+public enum PaneOverlayRead {
+  public static func selection(windowId: String, tabId: String) -> [String: Any]? {
+    (NativePaneOverlays.host(windowId)?.describe()["tabs"] as? [String: [String: Any]])?[tabId]?["selection"] as? [String: Any]
+  }
+}

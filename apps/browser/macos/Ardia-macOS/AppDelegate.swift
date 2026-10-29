@@ -10,6 +10,9 @@ final class AppDelegate: ExpoAppDelegate {
   private var reactNativeFactory: RCTReactNativeFactory?
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
+    #if SOLARA_PROBES
+    MainActor.assumeIsolated { ProbeHost.start() }
+    #endif
     let delegate = ReactNativeDelegate()
     let factory = ExpoReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()

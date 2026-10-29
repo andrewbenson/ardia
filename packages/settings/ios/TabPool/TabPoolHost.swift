@@ -340,3 +340,11 @@ final class TabPoolCommits: @unchecked Sendable {
     }
   }
 }
+
+@MainActor
+public enum TabPoolRead {
+  public static func live(_ tabId: String) -> Bool? {
+    guard TabPoolHost.available else { return nil }
+    return TabPoolHost.shared.pageView(tabId) != nil
+  }
+}

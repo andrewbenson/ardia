@@ -137,6 +137,7 @@ final class SidebarShellColumn: NSView, DevDropDestination {
     return [
       "frame": rect(inWindow), "list": rect(list), "header": given.header, "bottom": given.bottom, "clip": given.clip,
       "slot": (superview as? WindowShellView)?.slot(of: self)?.rawValue ?? NSNull(), "hidden": isHiddenOrHasHiddenAncestor,
+      "hover": host.view.current?.hoverKey ?? NSNull(),
       "reactUnder": reactUnderList().map { [$0.0, $0.1.minX, height - $0.1.maxY, $0.1.width, $0.1.height] },
     ]
   }

@@ -66,6 +66,7 @@ public final class SidebarView: NSView {
     addSubview(panels)
     NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
     DevPointer.observe(self, #selector(devPointer(_:)))
+    NotificationCenter.default.addObserver(self, selector: #selector(coverChanged(_:)), name: WindowShellView.hoverCoverChanged, object: nil)
     NotificationCenter.default.addObserver(self, selector: #selector(liveChanged), name: SidebarLiveFeed.changed, object: nil)
   }
 
@@ -503,7 +504,20 @@ public final class SidebarView: NSView {
     if DevPointer.inside(self, note) { point(at) } else { setHover(nil, group: nil) }
   }
 
+  @objc private func coverChanged(_ note: Notification) {
+    guard let shell = note.object as? NSView, isDescendant(of: shell) else { return }
+    syncPointer()
+  }
+
+  private func covered(_ windowPoint: NSPoint) -> Bool {
+    var layer: NSView = self
+    while let up = layer.superview, !(up is WindowShellView) { layer = up }
+    guard let shell = layer.superview as? WindowShellView, let mine = shell.slot(of: layer) else { return false }
+    return shell.slotUnderPointer(at: windowPoint) != mine
+  }
+
   private func point(_ windowPoint: NSPoint) {
+    if covered(windowPoint) { return setHover(nil, group: nil) }
     let row = rowAt(windowPoint)
     let groups = groupsAt(windowPoint)
     setHover(row, group: groups)

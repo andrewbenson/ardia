@@ -6,19 +6,21 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error(`usage: node shell-hover-test.mjs <Debug Solara.app> [--keep-data]
+  console.error(`usage: node shell-hover-test.mjs <Debug Solara.app> [--sidebar] [--keep-data]
 
-Hover goes to what's on top in a native window shell (ARDIA_NATIVE_SHELL=1): the RN sidebar's rows hover under the
-pointer; under a native view mounted in the shell's overlay slot they don't; a row under a still pointer leaves when
-the native view arrives and enters again when it goes, and the same when the native view is hidden and shown
-without leaving the overlay; finding the layer under the pointer stays under 30 µs. With the RN main root on top
-(ARDIA_SHELL_MAIN_TOP=1) the exact lookup is too deep for that, so the shell runs it at most once a display frame: a
-120 Hz pointer stream costs at most one lookup per frame and 3% of a core on a 60 Hz display (the per-call cost and
-the 120 Hz display estimate are only reported), and with or without it the hover layer changes within a frame of the
-move.`);
+Hover goes to what's on top in a native window shell (ARDIA_NATIVE_SHELL=1): the sidebar's rows (RN's, or the native
+column's when the native sidebar is on) hover under the pointer; under a native view mounted in the shell's overlay slot
+they don't; a row under a still pointer leaves when the native view arrives and enters again when it goes, and the same
+when the native view is hidden and shown without leaving the overlay; with the native sidebar, a native view over the
+peeking sidebar takes its hover too (--sidebar runs the native column, the RN rows otherwise); finding the layer under
+the pointer stays under 30 µs. With the RN main root on top (ARDIA_SHELL_MAIN_TOP=1) the exact lookup is too deep for
+that, so the shell runs it at most once a display frame: a 120 Hz pointer stream costs at most one lookup per frame and
+3% of a core on a 60 Hz display (the per-call cost and the 120 Hz display estimate are only reported), and with or
+without it the hover layer changes within a frame of the move.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
+const nativeColumn = args.includes("--sidebar");
 const scratch = mkdtempSync(join(tmpdir(), "ac-shell-hover-"));
 const data = join(scratch, "data");
 const rep = reporter(join(scratch, "shell-hover-test.log"), { name: "shell-hover-test" });
@@ -35,26 +37,34 @@ const win = () => C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).windo
 const at = (x, y) => ac.shell.devSetPointer("w1", { x, y }).then(() => win()).then((n) => C.devWindow(n, "mouse:moved:" + x + "," + y)).then(() => settle(250));
 const stats = () => ac.shell.devHoverStats(true);
 const count = (s, kind) => (s.log || []).filter((e) => e[0] === kind).length;
+const H = globalThis.expo.modules.SolaraHosted;
+const hover = () => (H?.sidebarShell ? H.sidebarShell("w1").then((d) => JSON.parse(d)?.hover ?? null) : Promise.resolve(null));
 `;
 const ROWS = [90, 130, 170, 210];
 const COVER = [0, 0, 320, 800];
 let app = null;
+let native = false;
 const run = (body) => app.eval(`${HELPERS}\n${body}`, { timeout: 30000 });
-const entersAt = (y) => run(`return at(700, 400).then(stats).then(() => at(120, ${y})).then(stats).then((s) => count(s, "enter"));`);
+const entersAt = (y) =>
+  native
+    ? run(`return at(700, 400).then(() => at(120, ${y})).then(hover).then((k) => (k ? 1 : 0));`)
+    : run(`return at(700, 400).then(stats).then(() => at(120, ${y})).then(stats).then((s) => count(s, "enter"));`);
+const cover = (rect, hidden) => `S.devCover("w1", ${JSON.stringify(rect)}, ${JSON.stringify(hidden)}).then(() => settle(250))`;
 
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "0" },
+    env: nativeColumn ? { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_TOP_STRIP: "1", ARDIA_NATIVE_PROFILE_PAGER: "1" } : { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "0" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.expo.modules.SolaraWindowShell.devCover",
   });
   await sleep(2000);
+  native = await run(`return H?.sidebarShell ? H.sidebarShell("w1").then((d) => d !== "null") : false;`);
 
   await rep.check("rows-hover", async () => {
     const enters = [];
     for (const y of ROWS) enters.push(await entersAt(y));
     if (enters.some((n) => n === 0)) throw new Error(`a row didn't hover: ${enters}`);
-    return enters;
+    return { native, enters };
   });
 
   await rep.check("covered-rows-dont-hover", async () => {
@@ -70,6 +80,13 @@ try {
   });
 
   await rep.check("still-pointer-follows-the-cover", async () => {
+    if (native) {
+      await run(`return at(700, 400);`);
+      const parked = await run(`return at(120, 130).then(hover);`);
+      const out = { parked, coverOn: await run(`return ${cover(COVER, null)}.then(hover);`), coverOff: await run(`return ${cover(null, null)}.then(hover);`) };
+      if (!parked || out.coverOn !== null || out.coverOff !== parked) throw new Error(`hover didn't follow the cover: ${JSON.stringify(out)}`);
+      return out;
+    }
     await run(`return at(700, 400).then(stats);`);
     const parked = await run(`return at(120, 130).then(stats).then((s) => count(s, "enter"));`);
     const on = await run(`return S.devCover("w1", ${JSON.stringify(COVER)}, null).then(() => settle(250)).then(stats).then((s) => [count(s, "leave"), count(s, "enter")]);`);
@@ -80,6 +97,14 @@ try {
   });
 
   await rep.check("a-hidden-cover-gives-hover-back", async () => {
+    if (native) {
+      await run(`return at(700, 400);`);
+      const parked = await run(`return at(120, 130).then(hover);`);
+      const out = { parked, shown: await run(`return ${cover(COVER, null)}.then(hover);`), hidden: await run(`return ${cover(null, true)}.then(hover);`), again: await run(`return ${cover(null, false)}.then(hover);`) };
+      await run(`return S.devCover("w1", null, null);`);
+      if (!parked || out.shown !== null || out.hidden !== parked || out.again !== null) throw new Error(`hover didn't follow the cover's isHidden: ${JSON.stringify(out)}`);
+      return out;
+    }
     await run(`return at(700, 400).then(stats);`);
     const parked = await run(`return at(120, 130).then(stats).then((s) => count(s, "enter"));`);
     const shown = await run(`return S.devCover("w1", ${JSON.stringify(COVER)}, null).then(() => settle(250)).then(stats).then((s) => count(s, "leave"));`);
@@ -89,6 +114,21 @@ try {
     const out = { parked, shown, hidden, again };
     if (!parked || shown !== parked || hidden !== parked || again !== parked) throw new Error(`hover didn't follow the cover's isHidden: ${JSON.stringify(out)}`);
     return out;
+  });
+
+  const PEEK = "a-cover-over-the-peeking-sidebar-takes-its-hover";
+  if (!native) rep.record(PEEK, { skip: "RN sidebar" });
+  else await rep.check(PEEK, async () => {
+    await run(`if (ac.store.getState().windows.w1.sidebarOpen) ac.store.getState().toggleSidebar("w1"); return settle(900);`);
+    try {
+      await run(`return ac.shell.devLeftEdgePointer("w1", { x: -4, y: 300 }).then(() => settle(500));`);
+      const peeking = await run(`return ac.shell.devLeftEdgePointer("w1", { x: 120, y: 300 }).then(() => settle(500)).then(() => "w1" in globalThis.acLayout.dockMotion.getState().peeks);`);
+      const out = { peeking, parked: await run(`return at(120, 130).then(hover);`), covered: await run(`return ${cover(COVER, null)}.then(hover);`) };
+      if (!peeking || !out.parked || out.covered !== null) throw new Error(`hover under the cover while peeking: ${JSON.stringify(out)}`);
+      return out;
+    } finally {
+      await run(`return S.devCover("w1", null, null).then(() => ac.shell.devLeftEdgePointer("w1", null)).then(() => { if (!ac.store.getState().windows.w1.sidebarOpen) ac.store.getState().toggleSidebar("w1"); return settle(900); });`);
+    }
   });
 
   await rep.check("layer-lookup-cost", async () => {

@@ -1,3 +1,4 @@
+import { hostedKinds, onHostedEvent, SolaraHostedView } from "@ardia/settings";
 import { Surface } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
@@ -5,6 +6,7 @@ import { hex, useTheme } from "../../../lib/theme";
 import { useWindowId } from "../../../store/hooks";
 import type { Rect } from "../../layout/geometry";
 import { useHover } from "../../primitives";
+import { pageThemeState } from "../../pages/nativePageTheme";
 import { useOnboardingColors } from "../ui";
 import { locateAnchor } from "./anchors";
 import { endToolTour, openVideoTour, stepToolTour, useTour, videoTourUrl, type TourStop } from "./state";
@@ -14,7 +16,70 @@ const GAP = 14;
 const MARGIN = 12;
 const SCRIM_REACH = 6000;
 
+let nativeToolTour = false;
+
+function hasNativeToolTour() {
+  nativeToolTour ||= hostedKinds().includes("toolTour");
+  return nativeToolTour;
+}
+
 export function ToolTour() {
+  return hasNativeToolTour() ? <NativeToolTour /> : <ReactToolTour />;
+}
+
+function NativeToolTour() {
+  const windowId = useWindowId();
+  const theme = useTheme();
+  const active = useTour((s) => s.windowId === windowId && s.stops.length > 0);
+  const session = useTour((s) => s.session);
+  const stops = useTour((s) => s.stops);
+  const index = useTour((s) => s.index);
+  const stop = active ? stops[Math.min(index, stops.length - 1)] : undefined;
+  const [target, setTarget] = useState<Rect | null>(null);
+
+  useEffect(() => {
+    if (!stop?.anchor) return setTarget(null);
+    let cancelled = false;
+    const update = () =>
+      void locateAnchor(windowId, stop.anchor!).then((rect) => {
+        if (!cancelled) setTarget((prev) => (sameRect(prev, rect) ? prev : rect));
+      });
+    update();
+    const timer = setInterval(update, 400);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [stop?.id, windowId]);
+
+  useEffect(
+    () =>
+      onHostedEvent("toolTour", windowId, (name) => {
+        if (name === "next") stepToolTour(1);
+        else if (name === "back") stepToolTour(-1);
+        else if (name === "skip") endToolTour();
+        else if (name === "video") {
+          endToolTour();
+          openVideoTour(windowId);
+        }
+      }),
+    [windowId],
+  );
+
+  if (!active) return null;
+  const state = JSON.stringify({
+    session,
+    active,
+    index,
+    stops: stops.map((s) => ({ id: s.id, title: s.title, body: s.body, anchored: !!s.anchor, placement: s.placement, radius: s.radius, pad: s.pad })),
+    target: stop?.anchor ? target : null,
+    video: !!videoTourUrl(),
+    ...pageThemeState(theme),
+  });
+  return <SolaraHostedView key={session} kind="toolTour" windowId={windowId} state={state} style={StyleSheet.absoluteFill} />;
+}
+
+function ReactToolTour() {
   const windowId = useWindowId();
   const active = useTour((s) => s.windowId === windowId && s.stops.length > 0);
   const session = useTour((s) => s.session);

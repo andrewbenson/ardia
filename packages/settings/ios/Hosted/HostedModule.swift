@@ -11,11 +11,13 @@ public class HostedModule: Module {
       if NativeExtensionSidePanel.enabled { HostedViews.declare(NativeExtensionSidePanel.kind) }
       if PanePrompts.enabled { HostedViews.declare(PanePrompts.kind) }
       if NativeSidebarShell.enabled { HostedViews.declare(NativeSidebarShell.topic) }
+      if NativeToolTour.enabled { HostedViews.declare(NativeToolTour.kind) }
       let sink = HostedSink(self)
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
           HostedViews.emit = { body in sink.module?.sendEvent("onHostedEvent", body) }
           NativeStatusBubble.register(); NativeSidebar.register(); NativeDownloadMagnet.register(); NativeTabPickers.register(); NativeExtensionSidePanel.register()
+          NativeToolTour.register()
         }
       }
     }

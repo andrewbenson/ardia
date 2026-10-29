@@ -6,7 +6,7 @@ import { createServer as createNetServer } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFront } from "./ui-guard.mjs";
+import { parseFront, suppressedLog } from "./ui-guard.mjs";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const here = fileURLToPath(import.meta.url);
@@ -96,11 +96,6 @@ export const quitEnded = ({ how }) => how === "quit" || how === "SIGTERM" || how
 const quitData = new Set();
 const reportDirs = new Map();
 const launched = new Map();
-export function secureInputHolder() {
-  const r = spawnSync("ioreg", ["-l", "-w", "0", "-d", "1", "-k", "IOConsoleUsers"], { encoding: "utf8", timeout: 5000 });
-  const pid = /"kCGSSessionSecureInputPID"=(\d+)/.exec(r.stdout ?? "")?.[1];
-  return pid ? Number(pid) : null;
-}
 const uiGuardScript = join(dirname(here), "ui-guard.mjs");
 const lockedTool = join(dirname(here), "..", "agent", "locked");
 let uiGate = null;
@@ -186,14 +181,16 @@ export function uiGateWatch(pid, data = null, { allowFront = false } = {}) {
   gated.add(pid);
   gateNote(uiGate.state, { watch: pid, data, ...(allowFront ? { allowFront } : {}) });
 }
-export function warnSecureInput(pid, data, when) {
-  if (!pid || secureInputHolder() !== pid) return false;
-  process.stderr.write(`\n!!! SECURE INPUT: test instance pid ${pid} (${data}) holds macOS Secure Event Input ${when}.\n` +
-    `!!! While it does, every other app's keyboard shortcuts and key taps are blocked system-wide. A password field was left focused.\n\n`);
+export function reportSuppressedSecureInput(data, when) {
+  let text = "";
+  try { text = readFileSync(suppressedLog(data), "utf8"); } catch {}
+  if (!text.trim()) return false;
+  process.stderr.write(`\nSECURE INPUT (prevented) ${when}: a password field took focus in the test instance at ${data}. In a\n` +
+    `background instance Secure Event Input is suppressed, so the owner's keyboard was not blocked; outside one it would have been:\n${text}\n`);
   return true;
 }
 process.on("exit", (code) => {
-  for (const [pid, data] of launched) if (isAlive(pid)) warnSecureInput(pid, data, "as the test run exits");
+  for (const [pid, data] of launched) if (isAlive(pid)) reportSuppressedSecureInput(data, "as the test run exits");
   if (code !== 0) return;
   for (const data of quitData) removeTemporaryData(data);
   for (const [dir, report] of reportDirs) if (!report.failed.length) removeTemporaryData(dir);
@@ -414,7 +411,7 @@ class Instance {
   windows() { return onScreenWindows(this.pid); }
 
   async quit(opts = {}) {
-    warnSecureInput(this.pid, this.data, "at quit");
+    reportSuppressedSecureInput(this.data, "at quit");
     const key = uiGateKey(this.binary);
     let state = process.env.AC_UITEST_STATE;
     try { state ||= key ? readFileSync(uiGateCurrent(key), "utf8").trim() : null; } catch {}
@@ -475,7 +472,7 @@ export async function launch(app, opts = {}) {
   mkdirSync(data, { recursive: true });
   let previous = null;
   try { previous = JSON.parse(readFileSync(join(data, "instance.json"), "utf8")); } catch {}
-  for (const f of ["dev-eval.js", "dev-eval-result.json", "instance.json", "ui-gate-violation.log"]) rmSync(join(data, f), { force: true });
+  for (const f of ["dev-eval.js", "dev-eval-result.json", "instance.json", "ui-gate-violation.log", "secure-input-suppressed.log"]) rmSync(join(data, f), { force: true });
   if (opts.session) writeFileSync(join(data, "session.json"), JSON.stringify(opts.session));
   if (opts.onboarded) writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
   if (opts.probe || process.env.AC_PROBE === "1") writeFileSync(join(data, "perf-probe"), "");

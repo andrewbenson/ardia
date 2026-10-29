@@ -11,7 +11,11 @@ export function parseFront(info) {
   const pid = Number(/\bpid = (\d+)/.exec(info)?.[1] ?? 0);
   return pid ? { pid, executable: /executable path="([^"]*)"/.exec(info)?.[1] ?? "", name: /^"([^"]*)"/m.exec(info.trim())?.[1] ?? "" } : null;
 }
-export const secureInputPid = (ioreg) => Number(/"kCGSSessionSecureInputPID"=(\d+)/.exec(ioreg)?.[1] ?? 0) || null;
+export const suppressedLog = (data) => `${data}/secure-input-suppressed.log`;
+export function newSuppressed(text, seen) {
+  const lines = text.split("\n").filter(Boolean);
+  return { lines: lines.slice(seen), seen: lines.length };
+}
 
 export function readState(text) {
   const state = { owners: new Set(), watched: new Map(), binaries: new Set(), frontBefore: null };
@@ -29,10 +33,8 @@ export function readState(text) {
 }
 
 export const launchedBinary = (state, executable) => !!executable && state.binaries.has(folded(executable));
-export function violation(state, front, secure) {
+export function violation(state, front) {
   if (front && launchedBinary(state, front.executable)) return { pid: front.pid, executable: front.executable, data: state.watched.get(front.pid) ?? null, what: "became the frontmost, active app" };
-  if (secure && state.watched.has(secure.pid) && launchedBinary(state, secure.executable))
-    return { pid: secure.pid, executable: secure.executable, data: state.watched.get(secure.pid), what: "holds macOS Secure Event Input" };
   return null;
 }
 
@@ -68,6 +70,7 @@ async function main(stateFile, interval) {
     try { process.stderr.write(text); } catch {}
   };
   process.stdout.write("held\n");
+  const suppressedSeen = new Map();
   for (let tick = 0; ; tick++) {
     const state = prune(readState(existsSync(stateFile) ? readFileSync(stateFile, "utf8") : ""));
     if (tick > 0 && !stillNeeded(state)) {
@@ -76,8 +79,14 @@ async function main(stateFile, interval) {
       continue;
     }
     const front = parseFront(run("lsappinfo", ["info", run("lsappinfo", ["front"]).trim()]));
-    const securePid = secureInputPid(run("ioreg", ["-l", "-w", "0", "-d", "1", "-k", "IOConsoleUsers"]));
-    const found = violation(state, front, securePid ? { pid: securePid, executable: executableOf(securePid) } : null);
+    for (const data of new Set([...state.watched.values()].filter(Boolean))) {
+      let text = "";
+      try { text = readFileSync(suppressedLog(data), "utf8"); } catch {}
+      const { lines, seen } = newSuppressed(text, suppressedSeen.get(data) ?? 0);
+      suppressedSeen.set(data, seen);
+      if (lines.length) say(`ui gate: ${data}: a password field took focus in a test instance; Secure Event Input was prevented (${suppressedLog(data)}):\n${lines.map((l) => `  ${l}`).join("\n")}\n`);
+    }
+    const found = violation(state, front);
     if (found && launchedBinary(state, executableOf(found.pid))) {
       await stop(found.pid);
       say(banner(found, state.frontBefore));

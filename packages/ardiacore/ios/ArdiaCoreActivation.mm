@@ -1,5 +1,7 @@
 #import "ArdiaCoreInternal.h"
 
+#include <Carbon/Carbon.h>
+#include <dlfcn.h>
 #include <execinfo.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -581,5 +583,46 @@ void LogActivation(NSString *what) {
 void InstallActivationGuardsLate() {
   if (Background()) [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
 }
+
+}
+
+namespace {
+
+void NoteSuppressedSecureInput(const void *caller) {
+  const char *dataDir = getenv("ARDIA_DATA_DIR");
+  if (!dataDir || !*dataDir) return;
+  Dl_info info = {};
+  const char *symbol = dladdr(caller, &info) && info.dli_sname ? info.dli_sname : "?";
+  const char *image = info.dli_fname ? strrchr(info.dli_fname, '/') : nullptr;
+  NSString *line = [NSString stringWithFormat:@"%@ EnableSecureEventInput suppressed (background instance), caller %s in %s\n",
+                                              [NSDate.date descriptionWithLocale:nil], symbol, image ? image + 1 : "?"];
+  NSString *path = [@(dataDir) stringByAppendingPathComponent:@"secure-input-suppressed.log"];
+  int fd = open(path.fileSystemRepresentation, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0644);
+  if (fd < 0) return;
+  NSData *bytes = [line dataUsingEncoding:NSUTF8StringEncoding];
+  write(fd, bytes.bytes, bytes.length);
+  close(fd);
+}
+
+OSStatus ArdiaEnableSecureEventInput() {
+  if (!ardiacore_host::TestHooksAllowed()) return EnableSecureEventInput();
+  NoteSuppressedSecureInput(__builtin_return_address(0));
+  return noErr;
+}
+
+OSStatus ArdiaDisableSecureEventInput() {
+  if (!ardiacore_host::TestHooksAllowed()) return DisableSecureEventInput();
+  return noErr;
+}
+
+struct Interpose {
+  const void *replacement;
+  const void *replacee;
+};
+
+__attribute__((used, section("__DATA,__interpose"))) const Interpose kSecureInputInterposes[] = {
+    {(const void *)ArdiaEnableSecureEventInput, (const void *)EnableSecureEventInput},
+    {(const void *)ArdiaDisableSecureEventInput, (const void *)DisableSecureEventInput},
+};
 
 }

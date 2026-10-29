@@ -1,5 +1,9 @@
 import AppKit
 import ArdiaShell
+#if DEBUG
+import Carbon
+import SwiftUI
+#endif
 import SolaraStore
 import SolaraUI
 
@@ -151,6 +155,12 @@ enum SettingsDev {
       answer["frontAfter"] = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
       answer["active"] = NSApp.isActive
       return json(answer)
+    case "secureFieldProbe":
+      let env = ProcessInfo.processInfo.environment
+      guard env["ARDIA_BACKGROUND"] == "1", env["ARDIA_DATA_DIR"]?.isEmpty == false else { return #"{"error":"test instances only"}"# }
+      return json(SecureFieldProbe.run(argument ?? "window", settings: window))
+    case "focusState":
+      return json(SecureFieldProbe.focusState())
     #endif
     case "front":
       return json(["front": NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0, "active": NSApp.isActive])
@@ -231,3 +241,61 @@ enum SettingsDev {
     return text
   }
 }
+
+#if DEBUG
+@MainActor
+enum SecureFieldProbe {
+  static func holder() -> Int {
+    (CGSessionCopyCurrentDictionary() as? [String: Any])?["kCGSSessionSecureInputPID"] as? Int ?? 0
+  }
+
+  static func run(_ variant: String, settings: NSWindow?) -> [String: Any] {
+    let sheet = variant.contains("sheet"), swiftUI = variant.contains("swiftui")
+    if sheet && settings == nil { return ["error": "open Settings first"] }
+    let probe = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 260, height: 80), styleMask: [.titled], backing: .buffered, defer: false)
+    probe.isReleasedWhenClosed = false
+    let field: NSView
+    if swiftUI {
+      let host = NSHostingView(rootView: SecureField("", text: .constant("")).frame(width: 200))
+      host.frame = NSRect(x: 20, y: 20, width: 220, height: 30)
+      probe.contentView?.addSubview(host)
+      host.layoutSubtreeIfNeeded()
+      field = secureField(in: host) ?? host
+    } else {
+      let secure = NSSecureTextField(frame: NSRect(x: 20, y: 20, width: 200, height: 24))
+      probe.contentView?.addSubview(secure)
+      field = secure
+    }
+    let before = holder()
+    if sheet { settings?.beginSheet(probe) } else { probe.makeKeyAndOrderFront(nil) }
+    let focused = probe.makeFirstResponder(field)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    let during = holder(), enabled = IsSecureEventInputEnabled(), key = probe.isKeyWindow
+    let responder = probe.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
+    probe.makeFirstResponder(nil)
+    if sheet { settings?.endSheet(probe) }
+    probe.orderOut(nil)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    return [
+      "variant": variant, "pid": Int(getpid()), "fieldFound": field !== probe.contentView, "focused": focused, "responder": responder,
+      "isKey": key, "appActive": NSApp.isActive, "holderBefore": before, "holderDuring": during, "enabledDuring": enabled,
+      "holderAfter": holder(),
+    ]
+  }
+
+  static func focusState() -> [String: Any] {
+    let key = NSApp.keyWindow
+    return [
+      "keyWindow": key.map { String(describing: type(of: $0)) } ?? "nil", "keyWindowTitle": key?.title ?? "",
+      "firstResponder": key?.firstResponder.map { String(describing: type(of: $0)) } ?? "nil",
+      "appActive": NSApp.isActive, "holder": holder(), "enabled": IsSecureEventInputEnabled(),
+    ]
+  }
+
+  private static func secureField(in view: NSView) -> NSView? {
+    if view is NSSecureTextField { return view }
+    for child in view.subviews { if let found = secureField(in: child) { return found } }
+    return nil
+  }
+}
+#endif

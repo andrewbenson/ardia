@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseFront, prune, readState, secureInputPid, stillNeeded, violation } from "./ui-guard.mjs";
+import { newSuppressed, parseFront, prune, readState, stillNeeded, violation } from "./ui-guard.mjs";
 
 const lsappinfo = (name, pid, executable) => `"${name}" ASN:0x0-0xb2db2d: (in front) \n    bundleID="x"\n    bundle path="${executable.replace(/\/Contents\/MacOS\/.*$/, "")}"\n    executable path="${executable}"\n    pid = ${pid} token=[sess=1 pid=${pid}] type="Foreground" flavor=3\n`;
 const build = "/Users/me/Developer/Personal/ardia/apps/browser/build-x/Build/Products/Debug/Solara.app/Contents/MacOS/Solara";
@@ -13,9 +13,12 @@ test("the front app's pid, executable and name come from lsappinfo info", () => 
   assert.equal(parseFront('[ NULL ] ASN:0x0-0x1: (in front)\n    pid = 0 !cgsConnection\n'), null);
 });
 
-test("the secure input holder comes from ioreg, and none is null", () => {
-  assert.equal(secureInputPid('| "IOConsoleUsers" = ({"kCGSSessionSecureInputPID"=4242,"kCGSSessionUserIDKey"=501})'), 4242);
-  assert.equal(secureInputPid('| "IOConsoleUsers" = ({"kCGSSessionUserIDKey"=501})'), null);
+test("suppressed secure input lines are reported once each, as the log grows", () => {
+  const first = newSuppressed("a\nb\n", 0);
+  assert.deepEqual(first, { lines: ["a", "b"], seen: 2 });
+  assert.deepEqual(newSuppressed("a\nb\n", first.seen).lines, []);
+  assert.deepEqual(newSuppressed("a\nb\nc\n", first.seen).lines, ["c"]);
+  assert.deepEqual(newSuppressed("", 0), { lines: [], seen: 0 });
 });
 
 test("the owner's own front app is never a violation", () => {
@@ -37,17 +40,10 @@ test("an instance of a launched binary in front before its pid is known is a vio
   assert.equal(found.data, null);
 });
 
-test("a watched instance holding Secure Event Input is a violation; another process holding it isn't ours", () => {
-  const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x" }]);
-  assert.equal(violation(s, null, { pid: 500, executable: build }).what, "holds macOS Secure Event Input");
-  assert.equal(violation(s, null, { pid: 1234, executable: build }), null);
-});
-
 test("a watched pid that now runs another program is never a violation (pid reuse)", () => {
   const s = state([{ owner: 10 }, { binary: build }, { watch: 500, data: "/tmp/ac-x" }]);
   assert.equal(violation(s, { pid: 500, executable: "/Applications/Dia.app/Contents/MacOS/Dia", name: "Dia" }, null), null);
-  assert.equal(violation(s, null, { pid: 500, executable: "/Applications/Dia.app/Contents/MacOS/Dia" }), null);
-  assert.equal(violation(s, null, { pid: 500, executable: "" }), null);
+  assert.equal(violation(s, { pid: 500, executable: "", name: "" }), null);
 });
 
 test("a watched pid in front running the launched binary is a violation", () => {

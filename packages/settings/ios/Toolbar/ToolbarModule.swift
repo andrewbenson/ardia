@@ -199,3 +199,18 @@ public enum ToolbarStateRead {
   }
 }
 #endif
+
+#if SOLARA_PROBES
+@MainActor
+public enum ToolbarRead {
+  public static func snapshot(windowId: String) -> [[String: Any]] {
+    guard let model = NativeStoreHandle.store?.state.windows[windowId] else { return [] }
+    var rows: [[String: Any]] = []
+    for tabId in model.tabIds {
+      guard let host = NativeToolbarHostView.host(windowId: windowId, tabId: tabId), let state = host.toolbar.state else { continue }
+      rows.append(["tabId": state.tabId, "bare": state.bare, "urlHost": state.url.map { $0.host as Any } ?? NSNull()])
+    }
+    return rows
+  }
+}
+#endif

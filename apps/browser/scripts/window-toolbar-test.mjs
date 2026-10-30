@@ -3,7 +3,8 @@ import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { evaluate, launch, quit } from "./perf/js-bench.mjs";
+import { evaluate } from "./perf/js-bench.mjs";
+import { launch, sleep } from "../../../scripts/lib/instance.mjs";
 
 const { values: flags, positionals } = parseArgs({ allowPositionals: true, options: { bundle: { type: "string" }, out: { type: "string" }, port: { type: "string" } } });
 if (!positionals[0]) {
@@ -27,14 +28,11 @@ if (flags.bundle) {
 
 const data = join(out, "data");
 rmSync(data, { recursive: true, force: true });
-mkdirSync(data, { recursive: true });
 const page = (name, color) => `data:text/html,<title>${name}</title><meta name="theme-color" content="${color}"><p>${name}</p>`;
 const tab = (id, url) => ({ id, url, title: id, favicon: null, pinned: false, muted: false, zoom: 1, customTitle: null, customIcon: null, pinnedUrl: null, navigation: null, openerId: null, createdAt: Date.now(), lastActiveAt: Date.now() });
 const pages = { a: page("Tab-a", "#C0392B"), b: page("Tab-b", "#2471A3"), c: "https://example.com/c", d: "https://example.org/d" };
 const ids = Object.keys(pages);
-writeFileSync(
-  join(data, "session.json"),
-  JSON.stringify({
+const fixture = {
     version: 2,
     profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } },
     profileOrder: ["default"],
@@ -48,13 +46,42 @@ writeFileSync(
     splits: [],
     closedTabs: [],
     closedWindows: [],
-  }),
-);
-writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
-writeFileSync(join(data, "perf-probe"), "");
-
-const { pid } = await launch(app, data, Number(flags.port ?? 9796));
+};
+const files = { "perf-probe": "" };
+if (process.env.ARDIA_SWITCHES) {
+  const switches = {};
+  for (const part of process.env.ARDIA_SWITCHES.split(",")) {
+    const [name, value] = part.split("=").map((value) => value.trim());
+    if (name && value) switches[name] = !["off", "0", "false"].includes(value);
+  }
+  files["switches-cache.json"] = { version: 1, switches };
+}
+const instance = await launch(app, { data, port: Number(flags.port ?? 9796), session: fixture,
+  onboarded: true, files, js: "none", ready: false,
+  env: { ARDIA_DRAW_WINDOWS: "1", ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}) } });
+const { pid } = instance;
 const ac = (body, ms) => evaluate(data, pid, body, ms);
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await instance.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(50);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const snapshotURL = (url) => url === "" ? null : url?.startsWith("data:") ? "data:" : url;
+const sortedBars = (bars) => bars.map((bar) => [bar.tabId, bar.bare, bar.urlHost]).sort((a, b) => a[0].localeCompare(b[0]));
+const nativeState = async (state) => {
+  await untilSnapshot("toolbar tab ids, addresses and native host state", (snapshot) => {
+    const window = snapshot.windows[0];
+    if (!window || window.selectedTabId !== state.active || JSON.stringify(window.tabIds) !== JSON.stringify(state.tabIds)) return false;
+    if (state.tabIds.some((id) => snapshot.tabs.find((tab) => tab.id === id)?.url !==
+      snapshotURL(state.tabUrls[id]))) return false;
+    return JSON.stringify(sortedBars(window.toolbarHosts)) === JSON.stringify(sortedBars(state.nativeToolbars));
+  });
+};
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push(ok);
@@ -73,16 +100,22 @@ try {
         const toolbars = wt.fibers("Toolbar").map((f) => ({ tabId: f.memoizedProps.tabId, bare: !!f.memoizedProps.bare, pane: wt.inPane(f) }));
         const auto = wt.fibers("AutoHideToolbar").map((f) => ({ tabId: f.memoizedProps.tabId, mode: f.memoizedProps.mode, pane: wt.inPane(f) }));
         const backdrops = [...wt.fibers("AutoHideBackdrop"), ...wt.fibers("ToolbarBackdrop")].map((f) => ({ tabId: f.memoizedProps.tabId, pane: wt.inPane(f) }));
-        const native = acPerf.findFibers("NativeToolbarView", 500).map((f) => { try { return JSON.parse(f.memoizedProps?.state ?? "null"); } catch { return null; } }).filter((n) => n?.url?.host);
-        const hosts = [...wt.fibers("UrlField").map((f) => f.memoizedProps.tab?.url), ...native.map((n) => ac.store.getState().tabs[n.tabId]?.url)];
+        const native = acPerf.findFibers("NativeToolbarView", 500).map((f) => { try { return JSON.parse(f.memoizedProps?.state ?? "null"); } catch { return null; } }).filter((n) => n?.tabId);
+        const hosts = [...wt.fibers("UrlField").map((f) => f.memoizedProps.tab?.url), ...native.filter((n) => n.url?.host).map((n) => ac.store.getState().tabs[n.tabId]?.url)];
         const w = ac.store.getState().windows.w1;
-        return { active: w.activeTabIds[w.profileId], toolbars, auto, backdrops, hosts };
+        return { active: w.activeTabIds[w.profileId], toolbars, auto, backdrops, hosts,
+          tabIds: [...w.tabIds], tabUrls: Object.fromEntries(w.tabIds.map((id) => [id, ac.store.getState().tabs[id]?.url])),
+          nativeToolbars: native.map((n) => ({ tabId: n.tabId, bare: !!n.bare, urlHost: n.url?.host ?? null })) };
       },
       until: (test, ms) => new Promise((r) => { const end = Date.now() + (ms || 15000); const poll = () => (test() ? r(true) : Date.now() > end ? r(false) : setTimeout(poll, 50)); poll(); }),
     };
     return true;`);
   const S = "const S = () => ac.store.getState();";
-  const switchTo = (id) => ac(`${S} acPerf.reset(); S().activate(${JSON.stringify(id)}); return wt.frames(4).then(() => ({ ...wt.state(), mounted: acPerf.read().mounts.Toolbar ?? 0 }));`);
+  const switchTo = async (id) => {
+    const state = await ac(`${S} acPerf.reset(); S().activate(${JSON.stringify(id)}); return wt.frames(4).then(() => ({ ...wt.state(), mounted: acPerf.read().mounts.Toolbar ?? 0 }));`);
+    await nativeState(state);
+    return state;
+  };
 
   for (const mode of ["auto-hide", "always shown"]) {
     if (mode === "always shown") await ac(`${S} S().updateSettings({ hideToolbarWhileScrolling: false }); return wt.frames(4).then(() => true);`);
@@ -101,6 +134,7 @@ try {
 
   await switchTo("c");
   const collapsed = await ac(`${S} ac.toolbarAutoHide.noteScroll("c", { state: "down" }); return wt.frames(4).then(() => wt.state());`);
+  await nativeState(collapsed);
   check("auto-hide: scrolling down collapses the window's bar for the shown tab", collapsed.auto.length === 1 && collapsed.auto[0].tabId === "c" && collapsed.auto[0].mode === "collapsed", JSON.stringify(collapsed.auto));
   const other = await switchTo("d");
   check("auto-hide: the next tab's bar is shown", other.auto[0]?.tabId === "d" && other.auto[0]?.mode === "shown", JSON.stringify(other.auto));
@@ -108,19 +142,23 @@ try {
   check("auto-hide: back on the scrolled tab, its bar is revealed", back.auto[0]?.tabId === "c" && back.auto[0]?.mode === "shown", JSON.stringify(back.auto));
 
   const opened = await ac(`${S} const id = S().newTab("w1"); return wt.frames(6).then(() => ({ id, ...wt.state() }));`);
+  await nativeState(opened);
   check("a new tab: the window's toolbar follows it", opened.toolbars.length === 1 && opened.toolbars[0].tabId === opened.id && opened.active === opened.id, JSON.stringify(opened.toolbars));
   const closed = await ac(`${S} S().closeTab(${JSON.stringify(opened.id)}); return wt.frames(6).then(() => wt.state());`);
+  await nativeState(closed);
   check("closing it: the toolbar shows the tab shown after it", closed.toolbars.length === 1 && closed.toolbars[0].tabId === closed.active && closed.active !== opened.id, JSON.stringify(closed));
 
   const split = await ac(`${S} S().createSplit(["a", "b"]); S().activate("a"); return wt.frames(6).then(() => wt.state());`);
+  await nativeState(split);
   const paneBars = split.auto.filter((t) => t.pane).map((t) => t.tabId).sort();
   check("a split: each pane has its own toolbar, the window has none", split.auto.every((t) => t.pane) && paneBars.join() === "a,b", JSON.stringify(split.auto));
   const unsplit = await ac(`${S} for (const id of Object.keys(S().splits)) S().separateSplit(id); S().activate("d"); return wt.frames(6).then(() => wt.state());`);
+  await nativeState(unsplit);
   check("out of the split: back to one window toolbar", unsplit.auto.length === 1 && !unsplit.auto[0].pane && unsplit.auto[0].tabId === "d", JSON.stringify(unsplit.auto));
 } catch (e) {
   check("run", false, e.message);
 } finally {
-  await quit(pid);
+  await instance.quit();
 }
 const failed = results.filter((r) => !r).length;
 console.log(failed ? `${failed} of ${results.length} checks failed` : `all ${results.length} checks passed`);

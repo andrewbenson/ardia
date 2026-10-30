@@ -18,6 +18,7 @@ public struct OmniboxWorkspaceSources: Sendable, Equatable {
   }
 
   public let profiles: [Profile]
+  public let idleTabs: OmniboxIdleTabSources
 
   static func rawStringsEqual(_ lhs: String?, _ rhs: String?) -> Bool {
     switch (lhs, rhs) {
@@ -35,6 +36,7 @@ public struct OmniboxWorkspaceSources: Sendable, Equatable {
   }
 
   public init(_ state: BrowserState) {
+    idleTabs = OmniboxIdleTabSources(state)
     let windows = state.windows.values
     let tabs = state.tabs.values
     var ids: [String] = []

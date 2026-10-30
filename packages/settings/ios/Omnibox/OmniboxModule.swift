@@ -41,7 +41,6 @@ public class OmniboxModule: Module {
       Prop("floating") { (view: NativeOmniboxView, v: Bool?) in MainActor.assumeIsolated { view.bar.floating = v ?? false } }
       Prop("incognito") { (view: NativeOmniboxView, v: Bool?) in MainActor.assumeIsolated { view.bar.incognito = v ?? false } }
       Prop("currentUrl") { (view: NativeOmniboxView, v: String?) in MainActor.assumeIsolated { view.bar.currentUrl = v ?? "" } }
-      Prop("openTabs") { (view: NativeOmniboxView, v: String?) in MainActor.assumeIsolated { view.setOpenTabs(v ?? "[]") } }
       Prop("dark") { (view: NativeOmniboxView, v: Bool?) in MainActor.assumeIsolated { view.dark = v ?? false } }
       Prop("theme") { (view: NativeOmniboxView, v: [String: String]?) in MainActor.assumeIsolated { view.themeTokens = v ?? [:] } }
       Prop("offline") { (view: NativeOmniboxView, v: Bool?) in MainActor.assumeIsolated { view.bar.fetcher = v == true ? nil : NewTabNetwork.fetcher } }

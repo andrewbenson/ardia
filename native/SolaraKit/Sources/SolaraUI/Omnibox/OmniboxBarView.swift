@@ -33,7 +33,6 @@ public final class OmniboxBarView: NSView {
   public var incognito = false { didSet { model?.incognito = incognito } }
   public var floating = false { didSet { if floating != oldValue { rebuild() } } }
   public var currentUrl = "" { didSet { if let model, !model.opensTab { model.currentUrl = currentUrl } } }
-  public var openTabs: [SolaraOmnibox.Suggestion] = [] { didSet { model?.openTabs = openTabs } }
 
   public private(set) var model: HeroBarModel?
   private var identity: OmniboxBarIdentity?
@@ -61,7 +60,6 @@ public final class OmniboxBarView: NSView {
       settings: { [weak self] in self?.settings() ?? SolaraModel.Settings(values: [:]) }, fetcher: fetcher, variant: next.variant,
       opensTab: next.opensTab, initialText: next.initialText, currentUrl: currentUrl)
     made.events = events
-    made.openTabs = openTabs
     model = made
     focusedOnce = false
     rebuild()

@@ -10,7 +10,7 @@ const native = {
   available: () => true,
   sourceStatus: () => readStatus(),
   addListener: events.addListener,
-  ...Object.fromEntries(["setTabs", "setEngineProfile", "setBookmarkIcons", "setActions", "setExtensions", "forgetWindow"].map((name) => [name, async (...args) => { calls.push({ name, args }); }])),
+  ...Object.fromEntries(["setIdleTabs", "setTabs", "setEngineProfile", "setBookmarkIcons", "setActions", "setExtensions", "forgetWindow"].map((name) => [name, async (...args) => { calls.push({ name, args }); }])),
 };
 globalThis.acTestNativeModules = { SolaraNewTab: native };
 const { newTabSources } = await import("../../../../../packages/settings/src/newTab.tsx");
@@ -145,6 +145,7 @@ test("first fallback snapshot cannot starve under other-profile churn", (t) => {
     windows: { w: { profileId: "default" } },
     profiles: { default: { id: "default" } },
     settings: { defaultProfileId: "default" },
+    peeks: {},
     tabs: { current: { id: "current", profileId: "default", url: "https://current.example/", title: "Current" } },
   };
   let receiveStatus;
@@ -159,6 +160,7 @@ test("first fallback snapshot cannot starve under other-profile churn", (t) => {
       handler({ mode: "native-store", ready: true, epoch: 1 });
       return () => {};
     },
+    setIdleTabs: () => {},
     setTabs: (...args) => publications.push({ name: "tabs", args }),
     setEngineProfile: (...args) => publications.push({ name: "mapping", args }),
   });
@@ -181,4 +183,106 @@ test("first fallback snapshot cannot starve under other-profile churn", (t) => {
   receiveStatus({ mode: "js-feed", ready: true, epoch: 4 });
   assert.equal(rows().length, 3);
   assert.equal(rows().at(-1).args[2], 4);
+});
+
+
+test("fallback idle inputs preserve raw tabs, peeks, sharing and active tab changes", async () => {
+  const windowId = setup();
+  let state = useBrowser.getState();
+  let changed;
+  const stop = startWorkspaceSources(windowId, "default", {
+    getState: () => state,
+    subscribe: (handler) => { changed = handler; return () => {}; },
+  }, newTabSources);
+  await settle();
+  const first = of("setIdleTabs").at(-1);
+  assert.ok(first);
+  const payload = JSON.parse(first.args[0]);
+  assert.deepEqual(payload.tabs, Object.values(state.tabs));
+  assert.deepEqual(payload.windows, Object.values(state.windows));
+  assert.deepEqual(payload.peeks, {});
+  assert.equal(payload.shared, false);
+  assert.equal(first.args[1], 0);
+  calls.length = 0;
+  const tabId = Object.keys(state.tabs)[0];
+  state = { ...state,
+    peeks: { ...state.peeks, [windowId]: { tabId } },
+    settings: { ...state.settings, shareTabsAcrossWindows: true },
+    windows: { ...state.windows, [windowId]: { ...state.windows[windowId], activeTabIds: { default: "changed" } } },
+  };
+  changed();
+  await settle();
+  const updated = JSON.parse(of("setIdleTabs").at(-1).args[0]);
+  assert.deepEqual(updated.peeks, { [windowId]: tabId });
+  assert.equal(updated.shared, true);
+  assert.equal(updated.windows.find((window) => window.id === windowId).activeTabIds.default, "changed");
+  publish({ mode: "native-store", ready: true, epoch: 1 });
+  calls.length = 0;
+  state = { ...state, peeks: {} };
+  changed();
+  await settle();
+  assert.equal(of("setIdleTabs").length, 0);
+  publish({ mode: "js-feed", ready: false, epoch: 2 });
+  await settle();
+  assert.equal(of("setIdleTabs").at(-1).args[1], 2);
+  assert.deepEqual(JSON.parse(of("setIdleTabs").at(-1).args[0]).peeks, {});
+  stop();
+});
+
+test("closing the last publishing window clears its idle workspace snapshot", () => {
+  let state = {
+    windows: { w: { id: "w", profileId: "default", activeTabIds: {} } },
+    profiles: { default: { id: "default" } },
+    settings: { defaultProfileId: "default" },
+    tabs: { t: { id: "t", windowId: "w", profileId: "default", url: "https://closed.example/", title: "Closed" } },
+    peeks: {},
+  };
+  let changed;
+  const snapshots = [];
+  const stop = startWorkspaceSources("w", "default", {
+    getState: () => state,
+    subscribe: (handler) => { changed = handler; return () => {}; },
+  }, {
+    onSourceStatus: (handler) => { handler({ mode: "js-feed", ready: true, epoch: 0 }); return () => {}; },
+    setTabs: () => {},
+    setEngineProfile: () => {},
+    setIdleTabs: (snapshot) => snapshots.push(snapshot),
+  });
+  assert.equal(snapshots.at(-1).tabs.length, 1);
+  state = { ...state, windows: {}, tabs: {} };
+  changed();
+  assert.deepEqual(snapshots.at(-1).tabs, []);
+  assert.deepEqual(snapshots.at(-1).windows, []);
+  stop();
+});
+
+test("idle snapshot revisions increase across publishers, closes and remounts in one epoch", async () => {
+  const firstWindow = setup();
+  const secondWindow = useBrowser.getState().createWindow({ url: "https://second.example/" });
+  const first = start(firstWindow);
+  const second = start(secondWindow);
+  try {
+    await settle();
+    useBrowser.getState().closeWindow(firstWindow);
+    await settle();
+    first.unmount();
+    const remounted = start(secondWindow);
+    await settle();
+    remounted.unmount();
+    const snapshots = of("setIdleTabs");
+    assert.ok(snapshots.length >= 4);
+    let previous = -1;
+    for (const { args } of snapshots) {
+      assert.equal(args[1], 0);
+      assert.ok(Number.isSafeInteger(args[2]), "each snapshot carries a workspace revision");
+      assert.ok(args[2] > previous, "publishers must share one monotonic revision");
+      previous = args[2];
+    }
+    const closed = snapshots.findIndex(({ args }) => !JSON.parse(args[0]).windows.some((window) => window.id === firstWindow));
+    assert.ok(closed >= 0);
+    assert.ok(snapshots[closed].args[2] > snapshots[closed - 1].args[2]);
+  } finally {
+    first.unmount();
+    second.unmount();
+  }
 });

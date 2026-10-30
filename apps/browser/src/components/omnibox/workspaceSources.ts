@@ -3,7 +3,9 @@ import type { BrowserState, useBrowser } from "../../store/browser";
 import { bookmarkProfileId, engineProfile } from "../../store/model";
 
 type Store = Pick<typeof useBrowser, "getState" | "subscribe">;
-type Sources = Pick<typeof newTabSources, "setTabs" | "setEngineProfile" | "onSourceStatus">;
+type Sources = Pick<typeof newTabSources, "setTabs" | "setIdleTabs" | "setEngineProfile" | "onSourceStatus">;
+
+let idleSnapshotRevision = 0;
 
 export const queryTabRows = (state: Pick<BrowserState, "tabs">, profileId: string) => Object.values(state.tabs)
   .filter((tab) => tab.profileId === profileId)
@@ -14,6 +16,14 @@ export function startWorkspaceSources(windowId: string, profileId: string, store
   let active = true;
   let tabs: unknown = null;
   let firstSnapshot = true;
+  let idleInputs: unknown[] = [];
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const publishIdle = (state: BrowserState, epoch: number) => sources.setIdleTabs({
+    tabs: Object.values(state.tabs),
+    windows: Object.values(state.windows),
+    peeks: Object.fromEntries(Object.entries(state.peeks).map(([id, peek]) => [id, peek.tabId])),
+    shared: !!state.settings.shareTabsAcrossWindows,
+  }, epoch, ++idleSnapshotRevision);
   let historyEngine: string | undefined;
   let bookmarkEngine: string | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -24,7 +34,26 @@ export function startWorkspaceSources(windowId: string, profileId: string, store
     const window = state.windows[windowId];
     if (!window) {
       clearTimeout(timer);
+      clearTimeout(idleTimer);
+      if (idleInputs.length) {
+        idleInputs = [];
+        void publishIdle(state, status.epoch);
+      }
       return;
+    }
+    const nextIdleInputs = [state.tabs, state.windows, state.peeks, !!state.settings.shareTabsAcrossWindows];
+    if (nextIdleInputs.some((value, index) => value !== idleInputs[index])) {
+      const firstIdleSnapshot = idleInputs.length === 0;
+      idleInputs = nextIdleInputs;
+      clearTimeout(idleTimer);
+      const epoch = status.epoch;
+      if (firstIdleSnapshot) void publishIdle(state, epoch);
+      else idleTimer = setTimeout(() => {
+        if (!active || nativeReady() || status.epoch !== epoch) return;
+        const latest = store.getState();
+        if (!latest.windows[windowId]) return;
+        void publishIdle(latest, epoch);
+      }, 50);
     }
     const engine = engineProfile(profileId);
     const bookmark = engineProfile(bookmarkProfileId(state, window));
@@ -52,6 +81,8 @@ export function startWorkspaceSources(windowId: string, profileId: string, store
   const offStatus = sources.onSourceStatus((next) => {
     status = next;
     clearTimeout(timer);
+    clearTimeout(idleTimer);
+    idleInputs = [];
     tabs = null;
     firstSnapshot = true;
     historyEngine = undefined;
@@ -65,5 +96,6 @@ export function startWorkspaceSources(windowId: string, profileId: string, store
     offStatus();
     offStore();
     clearTimeout(timer);
+    clearTimeout(idleTimer);
   };
 }

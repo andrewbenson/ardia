@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Observation
 import SolaraEngine
 import SolaraModel
 import SolaraOmnibox
@@ -563,13 +564,76 @@ struct OmniboxPanelModelTests {
 
   @Test func theNewTabBarStartsWithNoRowSelected() {
     let (model, _, _) = make(.panel, opensTab: true)
-    model.openTabs = [.page(url: "https://a.example/", title: "A", favicon: nil, tabId: "t9")]
+    var state = BrowserState()
+    state.tabs["t9"] = Tab(id: "t9", windowId: "w", profileId: "p", url: "https://a.example/", now: 1)
+    model.sources.applyWorkspace(OmniboxWorkspaceSources(state))
+    #expect(model.items.count == 1)
     #expect(model.selectedIndex == -1)
     model.key(HeroKey(.arrowDown))
     #expect(model.selectedIndex == 0)
     model.textChanged("x", edit: nil)
     model.textChanged("", edit: nil)
     #expect(model.selectedIndex == -1)
+  }
+
+  @Test func idleRowsFollowWorkspaceAndActiveTabChanges() {
+    let sources = NewTabSources()
+    var state = BrowserState()
+    var window = BrowserWindow(id: "w", profileId: "p", incognito: false, frame: nil, createdAt: 0)
+    window.activeTabIds["p"] = "active"
+    state.windows["w"] = window
+    state.tabs["active"] = Tab(id: "active", windowId: "w", profileId: "p", url: "https://active.example/", now: 30)
+    state.tabs["old"] = Tab(id: "old", windowId: "w", profileId: "p", url: "https://old.example/", now: 20)
+    state.tabs["recent"] = Tab(id: "recent", windowId: "w", profileId: "p", url: "https://recent.example/", now: 10)
+    sources.applyWorkspace(OmniboxWorkspaceSources(state))
+    let model = HeroBarModel(windowId: "w", tabId: "old", profileId: "p", incognito: false,
+      settings: { Settings(values: [:]) }, sources: sources, variant: .panel, opensTab: true)
+    #expect(model.items.map { if case .page(_, _, _, let id, _, _) = $0 { id ?? "" } else { "" } } == ["old", "recent"])
+    #expect(model.current == nil && model.selectedIndex == -1)
+    state.windows["w"]?.activeTabIds["p"] = "old"
+    state.tabs["recent"]?.lastActiveAt = 40
+    sources.applyWorkspace(OmniboxWorkspaceSources(state))
+    model.sourcesChanged()
+    #expect(model.items.map { if case .page(_, _, _, let id, _, _) = $0 { id ?? "" } else { "" } } == ["recent", "active"])
+    #expect(model.selectedIndex == -1)
+    model.textChanged("query with spaces", edit: nil)
+    #expect(model.items.allSatisfy { if case .page(_, _, _, let id, _, _) = $0 { id != "recent" } else { true } })
+    model.textChanged("", edit: nil)
+    #expect(model.items.map { if case .page(_, _, _, let id, _, _) = $0 { id ?? "" } else { "" } } == ["recent", "active"])
+    sources.resetWorkspace()
+    model.sourcesChanged()
+    #expect(model.items.isEmpty)
+  }
+
+  @Test func idleWorkspaceChangesInvalidateObservedRows() {
+    let sources = NewTabSources()
+    var state = BrowserState()
+    state.tabs["recent"] = Tab(id: "recent", windowId: "w", profileId: "p", url: "https://recent.example/", now: 10)
+    sources.applyWorkspace(OmniboxWorkspaceSources(state))
+    let model = HeroBarModel(windowId: "w", tabId: "current", profileId: "p", incognito: false,
+      settings: { Settings(values: [:]) }, sources: sources, variant: .panel, opensTab: true)
+    nonisolated(unsafe) var invalidated = false
+    withObservationTracking {
+      _ = model.items
+    } onChange: {
+      invalidated = true
+    }
+    state.tabs["recent"]!.customTitle = "Changed"
+    sources.applyWorkspace(OmniboxWorkspaceSources(state))
+    model.sourcesChanged()
+    #expect(invalidated)
+  }
+
+  @Test func sidebarRecentsCollapseHashesAndKeepTheCurrentPage() {
+    let (model, _, _) = make(.sidebar, currentUrl: "https://site2.example/#current")
+    model.sources.setHistory([
+      HistoryRow(url: "https://site2.example/#other", title: "Same page", favicon: nil, visits: 1, lastVisit: 100),
+      HistoryRow(url: "https://recent.example/#first", title: "First", favicon: nil, visits: 1, lastVisit: 90),
+      HistoryRow(url: "https://recent.example/#second", title: "Second", favicon: nil, visits: 1, lastVisit: 80),
+    ] + (0..<5).map { HistoryRow(url: "https://extra\($0).example/", title: "Extra", favicon: nil, visits: 1, lastVisit: Double(70 - $0)) }, profileId: "p")
+    #expect(model.items.map { if case .page(let url, _, _, _, _, _) = $0 { url } else { "" } } == [
+      "https://site2.example/#current", "https://recent.example/#first", "https://extra0.example/", "https://extra1.example/", "https://extra2.example/",
+    ])
   }
 
   @Test func thePanelOpensWithItsTextSelected() {

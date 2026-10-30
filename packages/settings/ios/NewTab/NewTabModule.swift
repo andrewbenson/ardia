@@ -69,6 +69,11 @@ public class NewTabModule: Module {
       }
     }.runOnQueue(.main)
 
+    AsyncFunction("setIdleTabs") { (json: String, epoch: Int, revision: Int) in
+      guard let rows = OmniboxIdleTabSources.decode(json) else { return }
+      await MainActor.run { NativeOmniboxSources.shared.setIdleTabs(rows, epoch: epoch, revision: revision) }
+    }
+
     AsyncFunction("setTabs") { (profileId: String, json: String, epoch: Int) in
       let rows = NewTabRows.tabs(json)
       await MainActor.run { NativeOmniboxSources.shared.setTabs(rows, profileId: profileId, epoch: epoch) }

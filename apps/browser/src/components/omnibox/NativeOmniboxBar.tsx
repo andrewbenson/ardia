@@ -1,5 +1,5 @@
 import { NativeOmnibox, type NativeOmniboxHandle, type NativeOmniboxVariant } from "@ardia/settings";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { commandBarFocus } from "../../lib/focusClaims";
 import { useTheme } from "../../lib/theme";
@@ -8,7 +8,6 @@ import { useWindowId, useWindowProfileId } from "../../store/hooks";
 import type { NewTabTarget } from "../../store/types";
 import { setPopover } from "../layout/pageState";
 import type { BarDismissal } from "./barState";
-import { useOpenTabsStart } from "./dropdownStart";
 import { openFromBar, useNativeBar, useThemeTokens } from "./nativeBar";
 import { openFromNewTabBar } from "./newTabBar";
 import type { Disposition } from "./open";
@@ -39,11 +38,6 @@ export function NativeOmniboxBar({
   const profileId = useWindowProfileId();
   const incognito = useBrowser((s) => !!s.windows[windowId]?.incognito);
   const currentUrl = useBrowser((s) => (opensTab ? "" : (s.tabs[tabId]?.url ?? "")));
-  const openTabRows = useOpenTabsStart(!!opensTab, windowId, profileId);
-  const openTabs = useMemo(
-    () => JSON.stringify(openTabRows.map((s) => (s.kind === "page" ? { url: s.url, title: s.title, favicon: s.favicon ?? null, tabId: s.tabId ?? null } : null)).filter(Boolean)),
-    [openTabRows],
-  );
   const themeProps = useThemeTokens(theme);
   const ref = useRef<NativeOmniboxHandle>(null);
   const [height, setHeight] = useState<number | null>(null);
@@ -70,7 +64,6 @@ export function NativeOmniboxBar({
         initialText={initialText}
         incognito={incognito}
         currentUrl={currentUrl}
-        openTabs={openTabs}
         dark={!!theme.dark}
         theme={themeProps}
         {...props}

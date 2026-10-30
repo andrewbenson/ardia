@@ -169,13 +169,6 @@ final class NativeOmniboxView: ExpoView, FocusHandoffDestination {
     }
   }
 
-  func setOpenTabs(_ json: String) {
-    guard let data = json.data(using: .utf8), let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
-    bar.openTabs = rows.map {
-      .page(url: $0["url"] as? String ?? "", title: $0["title"] as? String ?? "", favicon: $0["favicon"] as? String, tabId: $0["tabId"] as? String)
-    }
-  }
-
   private func makeEvents() -> HeroBarEvents {
     var e = HeroBarEvents()
     e.open = { [weak self] url, disposition in self?.onOpen(["url": url, "disposition": disposition.rawValue]) }

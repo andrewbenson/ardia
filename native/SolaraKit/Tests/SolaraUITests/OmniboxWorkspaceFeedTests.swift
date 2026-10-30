@@ -137,6 +137,68 @@ struct OmniboxWorkspaceFeedTests {
     feed.stop()
   }
 
+  @Test func olderOrDuplicateIdleSnapshotCannotRestoreClosedRowsOrRollBackMetadata() {
+    let sources = NewTabSources()
+    let feed = OmniboxWorkspaceFeed(sources: sources, ownsWorkspace: { false }, resolve: { nil })
+    let epoch = feed.status.epoch
+    let beforeClose = OmniboxIdleTabSources(state("Before close"))
+    let closed = OmniboxIdleTabSources(BrowserState())
+    feed.setIdleTabs(closed, epoch: epoch, revision: 2)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil).isEmpty)
+    let closedRevision = sources.revision
+    feed.setIdleTabs(beforeClose, epoch: epoch, revision: 1)
+    feed.setIdleTabs(beforeClose, epoch: epoch, revision: 2)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil).isEmpty)
+    #expect(sources.revision == closedRevision)
+    var latest = state("Latest")
+    latest.tabs["tab"]!.lastActiveAt = 200
+    latest.tabs["tab"]!.customTitle = "Latest custom"
+    feed.setIdleTabs(OmniboxIdleTabSources(latest), epoch: epoch, revision: 3)
+    feed.setIdleTabs(beforeClose, epoch: epoch, revision: 1)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil) == [
+      .page(url: "https://example.com/", title: "Latest custom", favicon: nil, tabId: "tab"),
+    ])
+  }
+
+  @Test func idleFallbackRequiresTheCurrentEpochAndNativeOwnershipReplacesIt() {
+    let sources = NewTabSources()
+    let store = Store(state: state(), checksInvariants: false)
+    var owned = false
+    let feed = OmniboxWorkspaceFeed(sources: sources, ownsWorkspace: { owned }, resolve: { store })
+    var fallback = state("Fallback")
+    fallback.tabs["tab"]!.customTitle = "Custom fallback"
+    let rows = OmniboxIdleTabSources(fallback)
+    feed.setIdleTabs(rows, epoch: feed.status.epoch, revision: 1)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil) == [
+      .page(url: "https://example.com/", title: "Custom fallback", favicon: nil, tabId: "tab"),
+    ])
+    owned = true
+    feed.reconcile()
+    let nativeEpoch = feed.status.epoch
+    feed.setIdleTabs(rows, epoch: nativeEpoch, revision: 99)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil) == [
+      .page(url: "https://example.com/", title: "Initial", favicon: nil, tabId: "tab"),
+    ])
+    owned = false
+    feed.reconcile()
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil).isEmpty)
+    feed.setIdleTabs(rows, epoch: nativeEpoch, revision: 99)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil).isEmpty)
+    feed.setIdleTabs(rows, epoch: feed.status.epoch, revision: 1)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil).count == 1)
+    owned = true
+    feed.reconcile()
+    var changed = state()
+    changed.tabs["tab"]!.customTitle = "MRU update"
+    changed.tabs["tab"]!.lastActiveAt = 200
+    feed.receive(state: changed, revision: 10, generation: feed.generation)
+    #expect(sources.openTabs(windowId: "window", profileId: "default", excluding: nil) == [
+      .page(url: "https://example.com/", title: "MRU update", favicon: nil, tabId: "tab"),
+    ])
+    #expect(sources.tabs("default").first?.title == "Initial")
+    feed.stop()
+  }
+
   @Test func delayedObserverInstallationReplaysTheCurrentFallbackEpoch() {
     let sources = NewTabSources()
     let store = Store(state: state(), checksInvariants: false)

@@ -114,7 +114,6 @@ public final class HeroBarModel {
   @ObservationIgnored public weak var field: HeroFieldControl?
   @ObservationIgnored public var settings: () -> Settings
   public var currentUrl: String
-  public var openTabs: [SolaraOmnibox.Suggestion] = []
   @ObservationIgnored let sources: NewTabSources
   @ObservationIgnored let fetcher: SuggestFetcher?
   @ObservationIgnored let bangs: () -> any BangTable
@@ -178,7 +177,9 @@ public final class HeroBarModel {
 
   public var items: [SolaraOmnibox.Suggestion] {
     if showsStart { return dropdownStart() }
-    if idle { return openTabs }
+    if idle {
+      return sources.openTabs(windowId: windowId, profileId: profileId, excluding: sources.activeTabId(windowId: windowId, profileId: profileId))
+    }
     return result.items
   }
   public var value: String { typed + shown }
@@ -616,6 +617,7 @@ public final class HeroBarModel {
     let query = jsTrim(typed)
     requestRemote(query)
     guard active, !query.isEmpty else {
+      if idle { _ = items }
       result = SuggestionResult(items: [], completion: "")
       shown = ""
       return

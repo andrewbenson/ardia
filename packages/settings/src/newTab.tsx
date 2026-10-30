@@ -56,6 +56,7 @@ type NewTabModule = {
   sourceStatus(): Promise<NewTabSourceStatus>;
   addListener(event: "onSourceStatus", listener: (status: NewTabSourceStatus) => void): EventSubscription;
   available(): boolean;
+  setIdleTabs(json: string, epoch: number, revision: number): Promise<void>;
   setTabs(profileId: string, json: string, epoch: number): Promise<void>;
   setEngineProfile(profileId: string, engineProfile: string, bookmarkEngineProfile: string, epoch: number): Promise<void>;
   setBookmarkIcons(profileId: string, engineProfile: string, json: string): Promise<void>;
@@ -104,6 +105,7 @@ export const newTabSources = {
       subscription?.remove();
     };
   },
+  setIdleTabs: (snapshot: unknown, epoch: number, revision: number) => native?.setIdleTabs(JSON.stringify(snapshot), epoch, revision).catch(ignore),
   setTabs: (profileId: string, rows: unknown[], epoch: number) => native?.setTabs(profileId, JSON.stringify(rows), epoch).catch(ignore),
   setEngineProfile: (profileId: string, engineProfile: string, bookmarkEngineProfile: string, epoch: number) => native?.setEngineProfile(profileId, engineProfile, bookmarkEngineProfile, epoch).catch(ignore),
   setBookmarkIcons: (profileId: string, engineProfile: string, icons: Record<string, string>) => native?.setBookmarkIcons(profileId, engineProfile, JSON.stringify(icons)).catch(ignore),

@@ -1,0 +1,4040 @@
+{
+  "sourceHashes": {
+    "../../../apps/browser/src/components/omnibox/dropdownStart.ts": "df0e20cbdcaf63e009241de5fe35c22143ae743049ba80fef2ce6acca0ab6cdc",
+    "../../../apps/browser/src/store/tabShare.ts": "ee03b5b69bd1c612b8d79cae71ff573f7d3e48fd1c5c9b1310abd6b0cc4c8cc3",
+    "../../../apps/browser/src/store/pinMirror.ts": "a95487e81a04948ab720f4e46425b221d716852f1c08bbde998f3a24ab50e454",
+    "../../../apps/browser/src/components/sidebar/actions.ts": "c2316868b0e3f4d3a0e8fbee67d3c8a86313c46cdda2b188359ce88616099392",
+    "../../../packages/core/src/openTabs.ts": "097b0cfa7d407fd3f5222330e92f7b4b1b3425f1ff66671a92ec7362f3f17740"
+  },
+  "cases": [
+    {
+      "name": "unshared-w1",
+      "shared": false,
+      "windowId": "w1",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": false
+      },
+      "active": "active",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "tabId": "remote"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Custom here",
+          "favicon": "icon:here",
+          "tabId": "named-first"
+        }
+      ]
+    },
+    {
+      "name": "unshared-w2",
+      "shared": false,
+      "windowId": "w2",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": false
+      },
+      "active": "remote",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "tabId": "active"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Custom here",
+          "favicon": "icon:here",
+          "tabId": "named-first"
+        }
+      ]
+    },
+    {
+      "name": "shared-w1",
+      "shared": true,
+      "windowId": "w1",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": "active",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Custom here",
+          "favicon": "icon:here",
+          "tabId": "named-first"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "tabId": "orphan"
+        }
+      ]
+    },
+    {
+      "name": "shared-w2",
+      "shared": true,
+      "windowId": "w2",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": "remote",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "tabId": "active"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "tabId": "orphan"
+        }
+      ]
+    },
+    {
+      "name": "other-profile",
+      "shared": true,
+      "windowId": "w1",
+      "profileId": "work",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": null,
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "tabId": "other-profile"
+        }
+      ]
+    },
+    {
+      "name": "absent-window",
+      "shared": true,
+      "windowId": "missing",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": null,
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "tabId": "active"
+        },
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Custom here",
+          "favicon": "icon:here",
+          "tabId": "named-first"
+        },
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "tabId": "remote"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        }
+      ]
+    },
+    {
+      "name": "active-family-excluded",
+      "shared": true,
+      "windowId": "w1",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "named-first"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "named-first"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "named-first"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "named-first"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": "named-first",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "tabId": "active"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "tabId": "orphan"
+        }
+      ]
+    },
+    {
+      "name": "no-local-family-copy",
+      "shared": true,
+      "windowId": "w1",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 20
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 100
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 80,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 90,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 30,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 70,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 60,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 50,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 200,
+          "customTitle": ""
+        },
+        {
+          "id": "other-profile",
+          "windowId": "w1",
+          "profileId": "work",
+          "url": "https://other.example/",
+          "title": "Title other-profile",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 500,
+          "pinKey": "family"
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 5
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 20
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 100
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 80,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 90,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 30,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 70,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 60,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 50,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 200,
+            "customTitle": ""
+          },
+          {
+            "id": "other-profile",
+            "windowId": "w1",
+            "profileId": "work",
+            "url": "https://other.example/",
+            "title": "Title other-profile",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 500,
+            "pinKey": "family"
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 5
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": "active",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "tabId": "remote"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "tabId": "orphan"
+        }
+      ]
+    },
+    {
+      "name": "equal-last-use",
+      "shared": true,
+      "windowId": "w1",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title named-first",
+          "favicon": "icon:here",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "pinKey": "family",
+          "customTitle": "Custom here"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "active",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://active.example/",
+          "title": "Title active",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "remote",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://same.example/",
+          "title": "Title remote",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "pinKey": "family"
+        },
+        {
+          "id": "peek",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://peek.example/",
+          "title": "Title peek",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "pinKey": "family"
+        },
+        {
+          "id": "pinned-here",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "pinned-away",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "pinned": true,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "pinKey": "pinned"
+        },
+        {
+          "id": "custom",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://custom.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "customTitle": "Only custom"
+        },
+        {
+          "id": "label",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "customTitle": ""
+        },
+        {
+          "id": "blank",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "customTitle": ""
+        },
+        {
+          "id": "orphan",
+          "windowId": "closed",
+          "profileId": "default",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        }
+      ],
+      "peeks": {
+        "w2": {
+          "tabId": "peek",
+          "sourceId": "remote",
+          "sourcePage": "https://same.example/"
+        }
+      },
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "2",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://two.example/",
+            "title": "Title 2",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "10",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://ten.example/",
+            "title": "Title 10",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "named-first",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title named-first",
+            "favicon": "icon:here",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "pinKey": "family",
+            "customTitle": "Custom here"
+          },
+          {
+            "id": "active",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://active.example/",
+            "title": "Title active",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "remote",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://same.example/",
+            "title": "Title remote",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "pinKey": "family"
+          },
+          {
+            "id": "peek",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://peek.example/",
+            "title": "Title peek",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "pinKey": "family"
+          },
+          {
+            "id": "pinned-here",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-here",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "pinned-away",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://pin.example/",
+            "title": "Title pinned-away",
+            "favicon": null,
+            "pinned": true,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "pinKey": "pinned"
+          },
+          {
+            "id": "custom",
+            "windowId": "w2",
+            "profileId": "default",
+            "url": "https://custom.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "customTitle": "Only custom"
+          },
+          {
+            "id": "label",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "HTTPS://www.example.com/path/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "customTitle": ""
+          },
+          {
+            "id": "blank",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "customTitle": ""
+          },
+          {
+            "id": "orphan",
+            "windowId": "closed",
+            "profileId": "default",
+            "url": "https://orphan.example/",
+            "title": "Title orphan",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {
+          "w2": "peek"
+        },
+        "shared": true
+      },
+      "active": "active",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://two.example/",
+          "title": "Title 2",
+          "favicon": null,
+          "tabId": "2"
+        },
+        {
+          "kind": "page",
+          "url": "https://ten.example/",
+          "title": "Title 10",
+          "favicon": null,
+          "tabId": "10"
+        },
+        {
+          "kind": "page",
+          "url": "https://same.example/",
+          "title": "Custom here",
+          "favicon": "icon:here",
+          "tabId": "named-first"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-here",
+          "favicon": null,
+          "tabId": "pinned-here"
+        },
+        {
+          "kind": "page",
+          "url": "https://pin.example/",
+          "title": "Title pinned-away",
+          "favicon": null,
+          "tabId": "pinned-away"
+        },
+        {
+          "kind": "page",
+          "url": "https://custom.example/",
+          "title": "Only custom",
+          "favicon": null,
+          "tabId": "custom"
+        },
+        {
+          "kind": "page",
+          "url": "HTTPS://www.example.com/path/",
+          "title": "example.com/path",
+          "favicon": null,
+          "tabId": "label"
+        },
+        {
+          "kind": "page",
+          "url": "https://orphan.example/",
+          "title": "Title orphan",
+          "favicon": null,
+          "tabId": "orphan"
+        }
+      ]
+    },
+    {
+      "name": "title-fallbacks",
+      "shared": false,
+      "windowId": "w1",
+      "profileId": "default",
+      "tabs": [
+        {
+          "id": "title",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://title.example/",
+          "title": "Title title",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "url",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://www.host.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "scheme",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "CUSTOM+scheme://www.host.example/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "new",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "/",
+          "title": "",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10
+        },
+        {
+          "id": "spaces",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://spaces.example/",
+          "title": "Title spaces",
+          "favicon": null,
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "customTitle": " "
+        },
+        {
+          "id": "unicode",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://example.com/café",
+          "title": "Title unicode",
+          "favicon": "icon:café",
+          "pinned": false,
+          "createdAt": 0,
+          "lastActiveAt": 10,
+          "customTitle": "Café"
+        }
+      ],
+      "peeks": {},
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "active"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "activeTabIds": {
+            "default": "remote"
+          },
+          "tabIds": [],
+          "createdAt": 0
+        }
+      ],
+      "fallbackPayload": {
+        "tabs": [
+          {
+            "id": "title",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://title.example/",
+            "title": "Title title",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "url",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://www.host.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "scheme",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "CUSTOM+scheme://www.host.example/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "new",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "/",
+            "title": "",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10
+          },
+          {
+            "id": "spaces",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://spaces.example/",
+            "title": "Title spaces",
+            "favicon": null,
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "customTitle": " "
+          },
+          {
+            "id": "unicode",
+            "windowId": "w1",
+            "profileId": "default",
+            "url": "https://example.com/café",
+            "title": "Title unicode",
+            "favicon": "icon:café",
+            "pinned": false,
+            "createdAt": 0,
+            "lastActiveAt": 10,
+            "customTitle": "Café"
+          }
+        ],
+        "windows": [
+          {
+            "id": "w1",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "active"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          },
+          {
+            "id": "w2",
+            "profileId": "default",
+            "incognito": false,
+            "activeTabIds": {
+              "default": "remote"
+            },
+            "tabIds": [],
+            "createdAt": 0
+          }
+        ],
+        "peeks": {},
+        "shared": false
+      },
+      "active": "active",
+      "expected": [
+        {
+          "kind": "page",
+          "url": "https://title.example/",
+          "title": "Title title",
+          "favicon": null,
+          "tabId": "title"
+        },
+        {
+          "kind": "page",
+          "url": "https://www.host.example/",
+          "title": "host.example",
+          "favicon": null,
+          "tabId": "url"
+        },
+        {
+          "kind": "page",
+          "url": "CUSTOM+scheme://www.host.example/",
+          "title": "host.example",
+          "favicon": null,
+          "tabId": "scheme"
+        },
+        {
+          "kind": "page",
+          "url": "/",
+          "title": "New Tab",
+          "favicon": null,
+          "tabId": "new"
+        },
+        {
+          "kind": "page",
+          "url": "https://spaces.example/",
+          "title": " ",
+          "favicon": null,
+          "tabId": "spaces"
+        },
+        {
+          "kind": "page",
+          "url": "https://example.com/café",
+          "title": "Café",
+          "favicon": "icon:café",
+          "tabId": "unicode"
+        }
+      ]
+    }
+  ]
+}

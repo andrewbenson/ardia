@@ -76,6 +76,7 @@ const newTabModule = {
   available: () => false,
   sourceStatus: async () => ({ mode: "js-feed", ready: true, epoch: 0 }),
   addListener: newTabEvents.addListener,
+  setIdleTabs: async (_json: string, _epoch: number) => {},
   setTabs: async (_profileId: string, _json: string, _epoch: number) => {},
   setEngineProfile: async (_profileId: string, _engineProfile: string, _bookmarkEngineProfile: string, _epoch: number) => {},
   setBookmarkIcons: async (_profileId: string, _engineProfile: string, _json: string) => {},

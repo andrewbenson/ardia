@@ -17,7 +17,6 @@ export type NativeOmniboxProps = ViewProps & {
   initialText?: string;
   incognito: boolean;
   currentUrl: string;
-  openTabs?: string;
   dark: boolean;
   theme: Record<string, string>;
   offline?: boolean;

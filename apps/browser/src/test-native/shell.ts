@@ -106,7 +106,7 @@ const shell: Modules["ArdiaShell"] = {
 
 const appEvents = nativeEvents();
 const app: Modules["ArdiaApp"] & { apiVersion: number } = {
-  apiVersion: 20,
+  apiVersion: 21,
   addListener: appEvents.addListener,
   updaterState: () => Promise.resolve({ available: false }),
   checkForUpdates: () => Promise.resolve(),

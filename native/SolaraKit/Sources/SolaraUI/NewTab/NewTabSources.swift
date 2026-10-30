@@ -9,6 +9,12 @@ public final class NewTabSources {
   public static let shared = NewTabSources()
   static let warmSlice: Duration = .milliseconds(4)
 
+  private struct IdleTabContext: Hashable {
+    let windowId: [UInt16]
+    let profileId: [UInt16]
+    let excluding: [UInt16]?
+  }
+
   struct Profile {
     var tabs: [TabRow] = []
     var history: [HistoryRow] = []
@@ -24,6 +30,11 @@ public final class NewTabSources {
 
   public private(set) var revision = 0
   @ObservationIgnored private var workspaceProfileIds: Set<String> = []
+  @ObservationIgnored private var idleTabs = OmniboxIdleTabSources(tabs: [], peeks: [:], shared: false)
+  @ObservationIgnored private var idleTabRows: [IdleTabContext: [Suggestion]] = [:]
+  #if SOLARA_PROBES
+  @ObservationIgnored private(set) var idleProjectionCount = 0
+  #endif
   @ObservationIgnored private var profiles: [String: Profile] = [:]
   @ObservationIgnored private var actions: [String: ActionIndex<CommandAction>] = [:]
   @ObservationIgnored private var extensions: [String: [ExtensionCandidate]] = [:]
@@ -134,7 +145,35 @@ public final class NewTabSources {
     ]
   }
 
+  public func setIdleTabs(_ projection: OmniboxIdleTabSources) {
+    if replaceIdleTabs(projection) { revision += 1 }
+  }
+
+  private func replaceIdleTabs(_ projection: OmniboxIdleTabSources) -> Bool {
+    guard idleTabs != projection else { return false }
+    idleTabs = projection
+    idleTabRows.removeAll(keepingCapacity: true)
+    return true
+  }
+
+  public func activeTabId(windowId: String, profileId: String) -> String? {
+    idleTabs.activeTabId(windowId: windowId, profileId: profileId)
+  }
+
+  public func openTabs(windowId: String, profileId: String, excluding: String?) -> [Suggestion] {
+    _ = revision
+    let context = IdleTabContext(windowId: Array(windowId.utf16), profileId: Array(profileId.utf16), excluding: excluding.map { Array($0.utf16) })
+    if let cached = idleTabRows[context] { return cached }
+    #if SOLARA_PROBES
+    idleProjectionCount += 1
+    #endif
+    let rows = idleTabs.openTabs(windowId: windowId, profileId: profileId, excluding: excluding)
+    idleTabRows[context] = rows
+    return rows
+  }
+
   public func applyWorkspace(_ workspace: OmniboxWorkspaceSources) {
+    _ = replaceIdleTabs(workspace.idleTabs)
     let ids = Set(workspace.profiles.map(\.profileId))
     for profileId in Array(profiles.keys) where !ids.contains(profileId) { removeProfile(profileId) }
     workspaceProfileIds = ids
@@ -148,6 +187,7 @@ public final class NewTabSources {
   }
 
   public func resetWorkspace() {
+    _ = replaceIdleTabs(OmniboxIdleTabSources(tabs: [], peeks: [:], shared: false))
     workspaceProfileIds = []
     for profileId in Array(profiles.keys) {
       let icons = profiles[profileId]?.bookmarkIconsByEngine ?? [:]

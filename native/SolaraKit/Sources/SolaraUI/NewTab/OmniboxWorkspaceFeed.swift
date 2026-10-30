@@ -25,6 +25,7 @@ public final class OmniboxWorkspaceFeed {
   private(set) var generation = 0
   private var projection: OmniboxWorkspaceSources?
   private var revision = -1
+  private var idleSnapshotRevision = -1
   private var waitingSince: TimeInterval?
   private var timedOut = false
   private var started = false
@@ -138,6 +139,13 @@ public final class OmniboxWorkspaceFeed {
     }
   }
 
+  public func setIdleTabs(_ rows: OmniboxIdleTabSources, epoch: Int, revision: Int) {
+    reconcile()
+    guard acceptsFallback(epoch), revision > idleSnapshotRevision else { return }
+    idleSnapshotRevision = revision
+    sources.setIdleTabs(rows)
+  }
+
   public func setTabs(_ rows: [TabRow], profileId: String, epoch: Int) {
     reconcile()
     guard acceptsFallback(epoch) else { return }
@@ -181,6 +189,7 @@ public final class OmniboxWorkspaceFeed {
   }
 
   private func publish(mode: String, ready: Bool) {
+    idleSnapshotRevision = -1
     status = OmniboxSourceStatus(mode: mode, ready: ready, epoch: status.epoch + 1)
     onStatus?(status)
   }

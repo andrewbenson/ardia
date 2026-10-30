@@ -220,3 +220,36 @@ public enum HostedRead {
   public static var kinds: [String] { HostedViews.kinds }
 }
 #endif
+
+#if SOLARA_PROBES
+@MainActor
+public enum HoverLayoutRead {
+  public static func snapshot(windowId: String, area: String) -> [String: Any]? {
+    switch area {
+    case "sidebar":
+      guard let page = NativeSidebar.hosts[windowId]?.view.current else { return nil }
+      return ["area": area, "targets": page.probeHoverTargets(), "frames": page.probeHoverFrames()]
+    case "topStrip":
+      guard let page = NativeTopStrip.hosts[windowId]?.view.current else { return nil }
+      return ["area": area, "targets": page.probeHoverTargets(), "frames": page.probeHoverFrames()]
+    case "downloads":
+      var result = DownloadsHoverShifts.probeSnapshot(windowId: windowId)
+      result["area"] = area
+      return result
+    default: return nil
+    }
+  }
+}
+
+@MainActor
+public enum HoverLayoutInput {
+  public static func perform(windowId: String, area: String, target: String, on: Bool) -> Bool {
+    switch area {
+    case "sidebar": return NativeSidebar.hosts[windowId]?.view.current?.probeHover(target, on: on) ?? false
+    case "topStrip": return NativeTopStrip.hosts[windowId]?.view.current?.probeHover(target, on: on) ?? false
+    case "downloads": return DownloadsHoverShifts.probeHover(windowId: windowId, key: target, on: on)
+    default: return false
+    }
+  }
+}
+#endif

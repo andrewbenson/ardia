@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaShell
 import ExpoModulesCore
 import Foundation
 import SolaraUI
@@ -135,3 +136,54 @@ enum DownloadsHoverShifts {
     return label.isEmpty ? String(describing: type(of: view)) : "\(type(of: view)) \"\(label)\""
   }
 }
+
+#if SOLARA_PROBES
+@MainActor
+extension DownloadsHoverShifts {
+  private static func probeRoots(windowId: String) -> [DownloadsListView] {
+    guard let number = WindowHost.window(id: windowId)?.windowNumber else { return [] }
+    return shown.allObjects.filter { $0.window?.windowNumber == number }.sorted { String(describing: ObjectIdentifier($0)) < String(describing: ObjectIdentifier($1)) }
+  }
+
+  private static func probeViews(_ root: NSView) -> [(String, NSView)] {
+    var result: [(String, NSView)] = []
+    func walk(_ parent: NSView, _ path: String) {
+      for (index, view) in parent.subviews.enumerated() {
+        let key = path.isEmpty ? "\(index)" : "\(path)/\(index)"
+        result.append((key, view))
+        walk(view, key)
+      }
+    }
+    walk(root, "")
+    return result
+  }
+
+  static func probeSnapshot(windowId: String) -> [String: Any] {
+    let roots = probeRoots(windowId: windowId)
+    var targets: [String] = []
+    var frames: [[String: Any]] = []
+    for (index, root) in roots.enumerated() {
+      for (path, view) in probeViews(root) {
+        let id = "\(index)/\(path)"
+        if view.trackingAreas.contains(where: { $0.owner === view }) { targets.append(id) }
+        if !view.isHiddenOrHasHiddenAncestor && view.alphaValue > 0 {
+          frames.append(["id": id, "frame": rect(view.convert(view.bounds, to: root)), "label": view is NSTextField || view.superview is NSTextField])
+        }
+      }
+    }
+    return ["hosts": roots.count, "targets": targets, "frames": frames]
+  }
+
+  static func probeHover(windowId: String, key: String, on: Bool) -> Bool {
+    let roots = probeRoots(windowId: windowId)
+    let parts = key.split(separator: "/", maxSplits: 1).map(String.init)
+    guard parts.count == 2, let index = Int(parts[0]), roots.indices.contains(index),
+      let target = probeViews(roots[index]).first(where: { $0.0 == parts[1] })?.1,
+      target.trackingAreas.contains(where: { $0.owner === target }),
+      let input = event(on ? .mouseEntered : .mouseExited, in: target) else { return false }
+    if on { target.mouseEntered(with: input) } else { target.mouseExited(with: input) }
+    roots[index].layoutSubtreeIfNeeded()
+    return true
+  }
+}
+#endif

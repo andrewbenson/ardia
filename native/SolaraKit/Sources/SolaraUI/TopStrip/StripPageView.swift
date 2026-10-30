@@ -604,6 +604,26 @@ public final class StripPageView: NSView {
     return out.sorted { ($0["x"] as? CGFloat ?? 0) < ($1["x"] as? CGFloat ?? 0) }
   }
 
+  #if SOLARA_PROBES
+  public func probeHoverTargets() -> [String] { allHoverViews().indices.map(String.init) }
+
+  public func probeHoverFrames() -> [[String: Any]] {
+    describe().enumerated().map { index, item in
+      ["id": "\(item["kind"] ?? "")/\(item["id"] ?? "")/\(index)",
+        "frame": [item["x"] ?? 0, item["y"] ?? 0, item["width"] ?? 0, item["height"] ?? 0]]
+    }
+  }
+
+  public func probeHover(_ key: String, on: Bool) -> Bool {
+    let targets = allHoverViews()
+    guard let index = Int(key), targets.indices.contains(index) else { return false }
+    targets[index].hovered = on
+    layoutSubtreeIfNeeded()
+    if !on { syncHover() }
+    return true
+  }
+  #endif
+
   public func hoverShifts() -> (hovered: [String], shifts: [String]) {
     var shifts: [String] = []
     var hovered: [String] = []

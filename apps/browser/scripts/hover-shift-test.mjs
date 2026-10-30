@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
@@ -11,10 +12,8 @@ if (!appArg) {
 const pass = "native";
 const scratch = mkdtempSync(join(tmpdir(), "ac-hover-shift-"));
 const data = join(scratch, "data");
-mkdirSync(data);
 const rep = reporter(join(scratch, "hover-shift-test.log"), { name: `hover-shift-test ${pass}` });
 const file = join(data, "report.pdf");
-writeFileSync(file, "%PDF-1.4\n");
 
 const ids = ["pin1", "pin2", "a1", "a2", "a3", "b1", "b2", ...Array.from({ length: 12 }, (_, i) => `t${i}`)];
 const tab = (id) => {
@@ -26,11 +25,53 @@ const tab = (id) => {
 let app;
 try {
   app = await launch(resolve(appArg), {
-    data, port,
+    data, port, files: { "report.pdf": "%PDF-1.4\n" },
     session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t2" } }], tabs: ids.map(tab) }),
     ready: "return !!ac.hoverShift",
   });
   const ac = (body) => app.eval(body, { timeout: 120000 });
+  const untilSnapshot = async (what, accept, ms = 8000, args = {}) => {
+    const end = Date.now() + ms;
+    let last;
+    do {
+      last = await app.snapshot({ windowId: "w1", ...args });
+      assert.equal(last.schema, 1);
+      if (last.consistent && accept(last)) return last;
+      await sleep(60);
+    } while (Date.now() < end);
+    throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+  };
+  const hoverNative = async (area, expected) => {
+    const first = await untilSnapshot(`${area} hover targets`, (s) => s.windows[0]?.hoverLayout?.targets?.length > 0, 8000, { hoverArea: area });
+    const targets = first.windows[0].hoverLayout.targets;
+    assert.equal(targets.length, expected, "native/JS hovered target count");
+    assert.ok(targets.length <= 128, "bounded hover targets");
+    if (area === "downloads") assert.ok(first.windows[0].hoverLayout.hosts > 0, "native downloads host is shown");
+    let moved = 0;
+    for (const target of targets) {
+      const before = await app.snapshot({ windowId: "w1", hoverArea: area });
+      const input = await app.probe("input.hover", { windowId: "w1", area, target, on: true });
+      assert.equal(input.delivered, true);
+      try {
+        const during = await app.snapshot({ windowId: "w1", hoverArea: area });
+        const a = before.windows[0].hoverLayout, b = during.windows[0].hoverLayout;
+        const duringFrames = new Map(b.frames.map((frame) => [frame.id, frame]));
+        for (const was of a.frames) {
+          const now = duringFrames.get(was.id);
+          if (!now) continue;
+          const wasGeometry = was.frame ?? was.origin, nowGeometry = now.frame ?? now.origin;
+          assert.equal(wasGeometry.length, nowGeometry.length);
+          const changed = wasGeometry.some((v, j) => Math.abs(v - nowGeometry[j]) > 0.01);
+          const labelMakesRoom = area === "downloads" && was.label && was.frame.slice(0, 2).every((v, j) => Math.abs(v - now.frame[j]) <= 0.01) && Math.abs(was.frame[3] - now.frame[3]) <= 0.01 && now.frame[2] < was.frame[2];
+          if (changed && !labelMakesRoom) moved++;
+        }
+      } finally {
+        assert.equal((await app.probe("input.hover", { windowId: "w1", area, target, on: false })).delivered, true);
+      }
+    }
+    assert.equal(moved, 0, `${area}: native element frames stay fixed through hover`);
+    return moved;
+  };
   const nativeDownloadShifts = async () => {
     const r = JSON.parse(await ac(`return globalThis.expo.modules.SolaraDownloads.devHoverShifts();`));
     if (!r.hosts) throw new Error("the native downloads list isn't shown");
@@ -74,6 +115,9 @@ try {
       const native = name === "sidebar" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("sidebar");`));
       const nativeStrip = name === "tab strip" && (await ac(`return globalThis.expo.modules.SolaraHosted.kinds().includes("topStrip");`));
       const nativeDownloads = name === "downloads" && (!!JSON.parse(await ac(`return globalThis.expo.modules.SolaraDownloads.devHoverShifts();`)).hosts);
+      const capabilitySnapshot = await untilSnapshot("hosted hover capabilities", (s) => Array.isArray(s.hostedKinds));
+      if (name === "sidebar") assert.equal(capabilitySnapshot.hostedKinds.includes("sidebar"), native);
+      if (name === "tab strip") assert.equal(capabilitySnapshot.hostedKinds.includes("topStrip"), nativeStrip);
       const { hovered, shifts } = nativeDownloads
         ? await nativeDownloadShifts()
         : native
@@ -82,6 +126,11 @@ try {
         ? await ac(`return globalThis.expo.modules.SolaraTopStrip.hoverShifts("w1").then((json) => JSON.parse(json)).then((r) => ({ hovered: r.hovered.length, shifts: r.shifts.map((s) => ({ hovered: s, view: "native strip item", before: [], after: [] })) }));`)
         : await ac(`return ac.hoverShift.check({ scopes: ${JSON.stringify(scopes)} });`);
       if (!hovered) throw new Error("nothing hover-tracked found");
+      if (native || nativeStrip || nativeDownloads) {
+        const area = nativeDownloads ? "downloads" : native ? "sidebar" : "topStrip";
+        const nativeMoved = await hoverNative(area, hovered);
+        assert.equal(nativeMoved, shifts.length, "native/JS hover shift count");
+      }
       if (shifts.length) {
         throw new Error([`${shifts.length} views moved or resized (${hovered} hovered)`,
           ...shifts.slice(0, 20).flatMap((s) => [`hovering ${s.hovered}`, `  ${s.view}: ${s.before.join(", ")} -> ${s.after.join(", ")}`])].join("\n"));

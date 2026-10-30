@@ -165,6 +165,32 @@ public final class SidebarView: NSView {
     }
   }
 
+  #if SOLARA_PROBES
+  public func probeHoverTargets() -> [String] {
+    views.values.compactMap { $0 as? SidebarRowView }.filter { $0.window != nil && !$0.isHidden }.compactMap { $0.item?.key }.sorted()
+  }
+
+  public func probeHoverFrames() -> [[String: Any]] {
+    var frames: [[String: Any]] = []
+    for key in probeHoverTargets() {
+      guard let row = views[key] as? SidebarRowView else { continue }
+      let frame = row.frame
+      frames.append(["id": key, "frame": [frame.minX, frame.minY, frame.width, frame.height]])
+      for (index, view) in row.body.subviews.enumerated() where !view.isHidden {
+        frames.append(["id": "\(key)/\(index)", "origin": [view.frame.minX, view.frame.minY]])
+      }
+    }
+    return frames
+  }
+
+  public func probeHover(_ key: String, on: Bool) -> Bool {
+    guard probeHoverTargets().contains(key), let row = views[key] as? SidebarRowView else { return false }
+    row.hovered = on
+    layoutSubtreeIfNeeded()
+    return true
+  }
+  #endif
+
   public func hoverShifts() -> (hovered: Int, shifts: [String]) {
     let rows = views.values.compactMap { $0 as? SidebarRowView }.filter { $0.window != nil && !$0.isHidden }
     func placed() -> [String: CGRect] {

@@ -1,4 +1,5 @@
 import AppKit
+import ArdiaCore
 import ExpoModulesCore
 
 public class ImportModule: Module {
@@ -11,7 +12,7 @@ public class ImportModule: Module {
     return Importer(discovery: BrowserDiscovery(
       applicationSupport: support,
       locateApp: AppIcons.locate,
-      iconFor: { app, id in AppIcons.png(for: app, id: id, directory: icons) }
+      iconFor: { app, id in AppIcons.png(for: app, id: id, directory: icons, safeMode: ArdiaCoreHost.safeMode) }
     ))
   }()
 

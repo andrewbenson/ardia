@@ -3,6 +3,7 @@ import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
 import { pruneProfileFavicons } from "../../../lib/favicons";
 import { sanitizeTheme } from "../../../lib/profileTheme";
 import { useBrowser, type BrowserState } from "../../../store/browser";
+import { refuseSafeHistoryDeletion } from "../../../store/safeLibraryEdits";
 import type { Profile, ProfileColor, ProfileTheme } from "../../../store/types";
 import { adoptProfileTheme } from "../../../sync/engine";
 import { parseArcTheme } from "../../import/arcTheme";
@@ -18,8 +19,10 @@ export const profilesHandlers: Record<string, SettingsHandler> = {
   "profiles.reorder": (ids: string[]) => useBrowser.getState().reorderProfiles(ids),
   "profiles.clearHistory": (profileId: string, since: number | null) => useBrowser.getState().clearHistory(profileId, since ?? undefined),
   "profiles.pruneFavicons": (profileId: string) => pruneProfileFavicons(profileId),
-  "profiles.clearBrowsingData": (profile: string, kinds: BrowsingDataType[], since: number | null) =>
-    clearBrowsingData(profile, kinds, since ?? undefined).catch(() => {}),
+  "profiles.clearBrowsingData": (profile: string, kinds: BrowsingDataType[], since: number | null) => {
+    if (kinds.includes("history") && refuseSafeHistoryDeletion(profile, undefined, since ?? undefined)) throw new Error("History deletion is unavailable until the legacy file has migrated in a normal launch.");
+    return clearBrowsingData(profile, kinds, since ?? undefined);
+  },
   "profiles.extensionsKeptOnDelete": () =>
     listExtensions("").then(
       (list) => list.filter((e) => e.mayModify).map((e) => e.name),

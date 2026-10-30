@@ -34,7 +34,6 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
     .nativeToolTour, .nativeSidePanel,
   ]
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
-  public static var recoverable: [LaunchSwitch] { experiments.filter(onByDefault.contains) }
   public static let onByDefault: Set<LaunchSwitch> = [
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
     .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
@@ -52,7 +51,7 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   }
 
   public func storable(distribution: Bool) -> Bool {
-    distribution ? Self.experiments.contains(self) : Self.storedInDevelopment.contains(self)
+    distribution ? Self.experiments.contains(self) && !Self.onByDefault.contains(self) : Self.storedInDevelopment.contains(self)
   }
 }
 
@@ -65,9 +64,8 @@ public struct LaunchSwitches: Sendable {
   public let isolated: Bool
   public let defaultsSuite: String?
   public let distribution: Bool
-  public internal(set) var skippedStored: Bool
-  public var droppedAfterFailedLaunches = false
-  public internal(set) var turnedOffByRecovery: [LaunchSwitch] = []
+  public var safeMode = false
+  public var safeModeAfterFailedLaunches = false
   public var countedLaunch = false
   public let scope: String?
   let environment: [LaunchSwitch: Bool]
@@ -82,13 +80,12 @@ public struct LaunchSwitches: Sendable {
     self.scope = env[Self.scopeVariable]
     var environment: [LaunchSwitch: Bool] = [:]
     let ownDataFolder = env["ARDIA_DATA_DIR"].map { !$0.isEmpty } ?? false
-    for name in LaunchSwitch.allCases where !LaunchSwitch.developmentOnly.contains(name) || (ownDataFolder && !distribution) {
+    for name in LaunchSwitch.allCases where (!LaunchSwitch.developmentOnly.contains(name) || (ownDataFolder && !distribution))
+      && (!distribution || !LaunchSwitch.onByDefault.contains(name)) {
       if let value = env[name.rawValue].flatMap(Self.parse) { environment[name] = value }
     }
     self.environment = environment
     let readsDefaults = (!isolated || suite != nil) && defaults != nil
-    self.skippedStored = readsDefaults && skipStored
-      && LaunchSwitch.allCases.contains { $0.storable(distribution: distribution) && Self.storedValue($0, in: defaults) != nil }
     var stored: [LaunchSwitch: Bool] = [:]
     if readsDefaults, !skipStored, let defaults {
       for name in LaunchSwitch.allCases where name.storable(distribution: distribution) {
@@ -105,22 +102,22 @@ public struct LaunchSwitches: Sendable {
   static let current = Mutex<LaunchSwitches?>(nil)
 
   public static var shared: LaunchSwitches {
-    resolve(current, ask: askRecovery) { system(counting: false, recoveryAnswer: $0) }
+    resolve(current, ask: askSafeMode) { system(counting: false, safeModeAnswer: $0) }
   }
 
   @discardableResult
   public static func countLaunch() -> LaunchSwitches {
-    resolve(current, ask: askRecovery) { system(counting: true, recoveryAnswer: $0) }
+    resolve(current, ask: askSafeMode) { system(counting: true, safeModeAnswer: $0) }
   }
 
   static func resolve(
     _ cell: borrowing Mutex<LaunchSwitches?>, ask: () -> Bool?, build: (Bool?) -> LaunchSwitches
   ) -> LaunchSwitches {
     if let existing = cell.withLock({ $0 }) { return existing }
-    let recoveryAnswer = ask()
+    let safeModeAnswer = ask()
     return cell.withLock { current in
       if let current { return current }
-      let switches = build(recoveryAnswer)
+      let switches = build(safeModeAnswer)
       current = switches
       return switches
     }
@@ -173,30 +170,25 @@ public struct LaunchSwitches: Sendable {
 
   public static func launching(
     environment env: [String: String], defaults: UserDefaults, distribution: Bool, optionHeld: () -> Bool, counting: Bool = true,
-    confirmRecovery: ([LaunchSwitch]) -> Bool = { _ in true }
+    confirmSafeMode: () -> Bool = { true }
   ) -> LaunchSwitches {
     let probe = LaunchSwitches(environment: env, defaults: nil, distribution: distribution, skipStored: false)
     if !probe.usesDefaults { return probe }
     var switches = LaunchSwitches(environment: env, defaults: defaults, distribution: distribution, skipStored: false)
-    if optionHeld() {
-      let turningOff = switches.wouldRecover
-      if turningOff.isEmpty || confirmRecovery(turningOff) {
-        defaults.removeObject(forKey: failedLaunchesKey)
-        var recovered = turningOff.isEmpty ? switches : recover(switches, environment: env, defaults: defaults)
-        recovered.skippedStored = true
-        return recovered
+    if optionHeld(), confirmSafeMode() {
+      if counting {
+        defaults.set(max(defaults.integer(forKey: failedLaunchesKey), failedLaunchLimit), forKey: failedLaunchesKey)
+        switches.countedLaunch = true
       }
-    }
-    guard counting else { return switches }
-    guard !switches.wouldRecover.isEmpty else {
-      defaults.removeObject(forKey: failedLaunchesKey)
+      switches.safeMode = true
       return switches
     }
+    guard counting else { return switches }
     let failed = defaults.integer(forKey: failedLaunchesKey)
     if failed >= failedLaunchLimit {
-      defaults.removeObject(forKey: failedLaunchesKey)
-      switches = recover(switches, environment: env, defaults: defaults)
-      switches.droppedAfterFailedLaunches = true
+      switches.safeMode = true
+      switches.safeModeAfterFailedLaunches = true
+      switches.countedLaunch = true
       return switches
     }
     defaults.set(failed + 1, forKey: failedLaunchesKey)
@@ -204,27 +196,11 @@ public struct LaunchSwitches: Sendable {
     return switches
   }
 
-  var wouldRecover: [LaunchSwitch] {
-    LaunchSwitch.allCases.filter { name in
-      name.storable(distribution: distribution) && (stored[name] ?? LaunchSwitch.recoverable.contains(name))
-    }
-  }
-
-  static func recover(_ before: LaunchSwitches, environment env: [String: String], defaults: UserDefaults) -> LaunchSwitches {
-    let turnedOff = before.wouldRecover
-    let store = StoredLaunchSwitches(defaults: defaults, distribution: before.distribution)
-    store.clear()
-    for name in LaunchSwitch.recoverable { store.set(name, false) }
-    var after = LaunchSwitches(environment: env, defaults: defaults, distribution: before.distribution, skipStored: false)
-    after.turnedOffByRecovery = turnedOff
-    return after
-  }
-
-  public var recoveryReport: String? {
-    guard !turnedOffByRecovery.isEmpty else { return nil }
-    let why = droppedAfterFailedLaunches ? "Solara didn't finish opening twice in a row" : "Option was held while Solara opened"
-    let names = turnedOffByRecovery.map(\.rawValue).joined(separator: ", ")
-    return "\(why), so these were turned off: \(names). Turn them back on in Settings › Advanced › Experimental, or in Terminal with defaults delete <domain> <NAME>."
+  public var safeModeReport: String? {
+    guard safeMode else { return nil }
+    return safeModeAfterFailedLaunches
+      ? "Solara didn't finish opening twice in a row, so this launch skips session restore and extensions."
+      : "Option was held while Solara opened, so this launch skips session restore and extensions."
   }
 
   public static func launchSucceeded(defaults: UserDefaults = LaunchSwitches.defaults, isolated: Bool = !shared.usesDefaults) {
@@ -239,47 +215,37 @@ public struct LaunchSwitches: Sendable {
     var defaults: UserDefaults { probe.defaultsSuite.flatMap { UserDefaults(suiteName: $0) } ?? .standard }
   }
 
-  static func askRecovery() -> Bool? {
+  static func askSafeMode() -> Bool? {
     let launch = Launch()
     let probe = launch.probe
     guard probe.usesDefaults, (probe.defaultsSuite != nil && launch.env[optionVariable] == "1") || optionHeld() else { return nil }
-    let turningOff = LaunchSwitches(environment: launch.env, defaults: launch.defaults, distribution: launch.distribution, skipStored: false)
-      .wouldRecover
-    return turningOff.isEmpty || probe.isolated || confirmRecoveryAlert(turningOff)
+    return probe.isolated || confirmSafeModeAlert()
   }
 
-  static func system(counting: Bool, recoveryAnswer: Bool?) -> LaunchSwitches {
+  static func system(counting: Bool, safeModeAnswer: Bool?) -> LaunchSwitches {
     let launch = Launch()
     let switches = launching(
-      environment: launch.env, defaults: launch.defaults, distribution: launch.distribution, optionHeld: { recoveryAnswer != nil },
-      counting: counting, confirmRecovery: { _ in recoveryAnswer ?? false })
-    if let report = switches.recoveryReport { NSLog("[launch switches] %@", report) }
+      environment: launch.env, defaults: launch.defaults, distribution: launch.distribution, optionHeld: { safeModeAnswer != nil },
+      counting: counting, confirmSafeMode: { safeModeAnswer ?? false })
+    if let report = switches.safeModeReport { NSLog("[launch switches] %@", report) }
     for refusal in switches.refusals { NSLog("[launch switches] %@", refusal) }
     return switches
   }
 
-  static let spokenNames: [LaunchSwitch: String] = [
-    .nativeShell: "the native window", .shellPanes: "native page overlays", .nativeAutoHide: "native auto-hide",
-    .nativeSidebar: "the native sidebar", .nativeTopStrip: "the native tab strip", .nativeMedia: "native media controls",
-    .nativeToolTour: "the native tool tour", .nativeSidePanel: "the native side panel",
-  ]
-
-  public static func recoveryQuestion(_ turningOff: [LaunchSwitch]) -> (title: String, message: String) {
-    let names = turningOff.map { spokenNames[$0] ?? $0.rawValue }
-    let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
-    return (
-      "Turn off Solara's new native interface?",
-      "Option was held while Solara opened. This turns off \(list), and they stay off until you turn them back on in Settings › Advanced › Experimental."
+  public static func safeModeQuestion() -> (title: String, message: String) {
+    (
+      "Open Solara in safe mode?",
+      "Option was held while Solara opened. Safe mode keeps the native interface on, skips restoring the saved session, and disables extensions for this launch. The saved session returns on the next normal launch."
     )
   }
 
-  static func confirmRecoveryAlert(_ turningOff: [LaunchSwitch]) -> Bool {
+  static func confirmSafeModeAlert() -> Bool {
     #if os(macOS)
-    let question = recoveryQuestion(turningOff)
+    let question = safeModeQuestion()
     var response: CFOptionFlags = 0
     let shown = CFUserNotificationDisplayAlert(
       0, kCFUserNotificationCautionAlertLevel, nil, nil, nil, question.title as CFString, question.message as CFString,
-      "Turn Off" as CFString, "Open Normally" as CFString, nil, &response)
+      "Open in Safe Mode" as CFString, "Open Normally" as CFString, nil, &response)
     return shown == 0 && response & 0x3 == kCFUserNotificationDefaultResponse
     #else
     true

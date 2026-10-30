@@ -210,11 +210,11 @@ extension Session {
     case "createProfile":
       let o = a.object(0)
       result = .string(
-        createProfile(
+        try createProfile(
           name: o["name"]?.string ?? "", color: optionalString(o, "color"), icon: optionalString(o, "icon"), shareWith: optionalString(o, "shareWith")))
-    case "updateProfile": updateProfile(try a.requireString(0), a.update(1))
-    case "deleteProfile": deleteProfile(try a.requireString(0))
-    case "reorderProfiles": reorderProfiles(a.strings(0))
+    case "updateProfile": try updateProfile(try a.requireString(0), a.update(1))
+    case "deleteProfile": try deleteProfile(try a.requireString(0))
+    case "reorderProfiles": try reorderProfiles(a.strings(0))
     case "setDefaultProfile": setDefaultProfile(try a.requireString(0))
     case "profileDataDeleted": profileDataDeleted(try a.requireString(0))
     case "createGroup":

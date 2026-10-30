@@ -12,11 +12,14 @@ public class StoreModule: Module {
 
     Function("status") { () -> [String: Any] in
       let syncRedesign = LaunchSwitch(rawValue: "ARDIA_SYNC_REDESIGN").map { LaunchSwitches.shared.isOn($0, defaultOn: false) } ?? false
-      if NativeStore.shared != nil { return ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads", "syncRedesign": syncRedesign] }
-      var status: [String: Any] = [
-        "active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff, "syncRedesign": syncRedesign,
-      ]
-      if let refusedSession = NativeStore.refusedSession { status["refusedSession"] = refusedSession }
+      var status: [String: Any]
+      if NativeStore.shared != nil {
+        status = ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads", "syncRedesign": syncRedesign]
+      } else {
+        status = ["active": false, "reason": NativeStore.unavailableReason ?? "not launched", "handedOff": NativeStore.handedOff, "syncRedesign": syncRedesign]
+        if let refusedSession = NativeStore.refusedSession { status["refusedSession"] = refusedSession }
+      }
+      if NativeStore.safeMode { status["safeMode"] = NativeStore.safeModeAfterFailedLaunches ? "failedLaunches" : "option" }
       return status
     }
 
@@ -40,12 +43,12 @@ public class StoreModule: Module {
     }
 
     Function("syncAnchor") { () -> String? in
-      NativeStore.shared?.writer.syncAnchor
+      NativeStore.shared?.writer?.syncAnchor
     }
 
     Function("setSyncAnchor") { (anchor: String) -> Bool in
-      guard let store = NativeStore.shared else { return false }
-      store.writer.setSyncAnchor(anchor)
+      guard let writer = NativeStore.shared?.writer else { return false }
+      writer.setSyncAnchor(anchor)
       return true
     }
 

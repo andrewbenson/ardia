@@ -114,8 +114,18 @@ struct ImportFileIcon: View {
   var fallback: String? = nil
   var round = false
 
+  static func image(at path: String?) -> NSImage? {
+    guard let path else { return nil }
+    let prefix = "data:image/png;base64,"
+    if path.hasPrefix(prefix) {
+      guard let data = Data(base64Encoded: String(path.dropFirst(prefix.count))) else { return nil }
+      return NSImage(data: data)
+    }
+    return NSImage(contentsOfFile: path)
+  }
+
   var body: some View {
-    if let path, let image = NSImage(contentsOfFile: path) {
+    if let image = Self.image(at: path) {
       Image(nsImage: image)
         .resizable()
         .interpolation(.high)

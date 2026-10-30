@@ -21,8 +21,9 @@ public final class UserScripts: @unchecked Sendable {
   private var source: DispatchSourceFileSystemObject?
   private var lastSignature: String?
 
-  private struct Refused: Error {
+  private struct Refused: LocalizedError {
     let message: String
+    var errorDescription: String? { message }
     init(_ message: String) { self.message = message }
   }
 
@@ -41,7 +42,7 @@ public final class UserScripts: @unchecked Sendable {
   }
 
   private func arm() {
-    guard source == nil, let dir else { return }
+    guard !DocumentStore.safeMode, source == nil, let dir else { return }
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     let fd = open(dir.path, O_EVTONLY | O_CLOEXEC)
     guard fd >= 0 else { return }
@@ -77,6 +78,7 @@ public final class UserScripts: @unchecked Sendable {
   }
 
   public func read() -> [String: Any] {
+    guard !DocumentStore.safeMode else { return ["state": "empty", "error": "Automatic user scripts are paused in safe mode."] }
     guard let dir else { return ["state": "invalid", "error": "\(Bundle.main.productName) has no data folder"] }
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     let lock = open(dir.appendingPathComponent(".lock").path, O_RDONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0o644)
@@ -142,6 +144,7 @@ public final class UserScripts: @unchecked Sendable {
   }
 
   public func writeStatus(_ json: String) throws {
+    guard !DocumentStore.safeMode else { throw Refused("Automatic user scripts are paused in safe mode.") }
     guard let dir else { throw Refused("\(Bundle.main.productName) has no data folder") }
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     try Data(json.utf8).write(to: dir.appendingPathComponent("status.json"), options: .atomic)

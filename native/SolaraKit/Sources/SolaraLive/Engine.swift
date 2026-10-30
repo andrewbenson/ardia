@@ -29,7 +29,9 @@ public actor LiveEngine {
   public private(set) var revision: UInt64 = 0
   public internal(set) var state: LiveState
   public private(set) var documentError: String?
+  public private(set) var documentDirty = false
   let loadError: String?
+  var safeDocumentState: LiveState?
   public internal(set) var calendarData = CalendarData()
   public internal(set) var meetingAlert: CalendarEvent?
 
@@ -92,6 +94,7 @@ public actor LiveEngine {
         self.loadError = error
       }
     }
+    self.safeDocumentState = effects.environment.safeMode ? self.state : nil
     self.launchedAt = effects.clock.now()
   }
 
@@ -133,11 +136,18 @@ public actor LiveEngine {
     mutate(body)
   }
 
-  func mutate(_ body: (inout LiveState) -> Void) {
+  func mutate(persist: Bool = true, _ body: (inout LiveState) -> Void) {
     let before = state
     body(&state)
-    if state == before { return }
-    if state.persistedPart != before.persistedPart { scheduleSave() }
+    var documentChanged = false
+    if persist, var document = safeDocumentState {
+      let previous = document.persistedPart
+      body(&document)
+      documentChanged = document.persistedPart != previous
+      safeDocumentState = document
+    }
+    if state == before, !documentChanged { return }
+    if effects.environment.safeMode ? documentChanged : state.persistedPart != before.persistedPart { scheduleSave() }
     let hiddenChanged = state.calendar.hiddenCalendarIds != before.calendar.hiddenCalendarIds
     emit()
     if hiddenChanged, started, selectedJobs.contains(.calendar) { refreshCalendar() }
@@ -153,7 +163,8 @@ public actor LiveEngine {
   }
 
   func scheduleSave() {
-    if let persistedTextSink, loadError == nil, let text = try? state.persistedJSON() { persistedTextSink(text) }
+    documentDirty = true
+    if let persistedTextSink, loadError == nil, let text = try? persistedDocumentJSON() { persistedTextSink(text) }
     saveTask?.cancel()
     saveTask = Task {
       do {
@@ -166,10 +177,18 @@ public actor LiveEngine {
     }
   }
 
+  public func acknowledgeDocumentSave(_ text: String) {
+    if (try? persistedDocumentJSON()) == text { documentDirty = false }
+  }
+
+  public func persistedDocumentJSON() throws -> String {
+    try (safeDocumentState ?? state).persistedJSON()
+  }
+
   public func save() throws {
     if let loadError { throw LiveError(.other, loadError) }
     do {
-      let text = try state.persistedJSON()
+      let text = try persistedDocumentJSON()
       try effects.documents.write(LiveState.documentName, text)
       documentError = nil
     } catch {
@@ -210,11 +229,28 @@ public actor LiveEngine {
 
   public func applyFetch(_ folderId: String, _ fetched: [LiveItem], gone: [String: CompletionState], now: Double? = nil, quiet: Set<String> = []) {
     let at = now ?? effects.clock.now()
-    mutate { $0.applyFetch(folderId, fetched: fetched, gone: gone, now: at, quiet: quiet) }
+    mutate(persist: false) { $0.applyFetch(folderId, fetched: fetched, gone: gone, now: at, quiet: quiet) }
   }
 
-  public func finishCompleting(_ folderId: String, _ ids: [String]) { mutate { $0.finishCompleting(folderId, ids) } }
-  public func markRead(_ folderId: String, _ itemIds: [String]? = nil) { mutate { $0.markRead(folderId, itemIds) } }
+  public func finishCompleting(_ folderId: String, _ ids: [String]) { mutate(persist: false) { $0.finishCompleting(folderId, ids) } }
+  public func markRead(_ folderId: String, _ itemIds: [String]? = nil) {
+    let read = itemIds ?? state.unread[folderId] ?? []
+    mutate {
+      $0.markRead(folderId, itemIds)
+      if effects.environment.safeMode, !read.isEmpty {
+        $0.known[folderId] = Array((($0.known[folderId] ?? []) + read).uniqued().suffix(LiveState.maxKnown))
+      }
+    }
+  }
+
+  public func markUnread(_ folderId: String, _ itemId: String) {
+    mutate {
+      $0.markUnread(folderId, itemId)
+      if effects.environment.safeMode {
+        $0.known[folderId] = Array((($0.known[folderId] ?? []) + [itemId]).uniqued().suffix(LiveState.maxKnown))
+      }
+    }
+  }
   public func hideItems(_ folderId: String, _ items: [LiveItem]) { mutate { $0.hideItems(folderId, items) } }
   public func setExpandedStack(_ key: String, _ expanded: Bool) { mutate { $0.expandedStacks[key] = expanded } }
   public func setShowAll(_ key: String, _ all: Bool) { mutate { $0.showAll[key] = all } }
@@ -233,7 +269,7 @@ public actor LiveEngine {
     let candidates: [LiveSourceId] = kind == .pullRequests ? [.github] : [.notion, .gdrive]
     let connected = candidates.filter { state.accounts[$0] != nil }
     let id = createFolder(profileId: profileId, kind: kind, sources: sources ?? (connected.isEmpty ? nil : connected))
-    refreshFolder(id)
+    if !effects.environment.safeMode { refreshFolder(id) }
     return id
   }
 
@@ -387,6 +423,7 @@ public actor LiveEngine {
   }
 
   public func start(jobs selected: Set<LiveJob> = Set(LiveJob.allCases), meetingHost: (any LiveMeetingHost)? = nil) async {
+    guard !effects.environment.safeMode else { return }
     if started { return }
     started = true
     let retiredCredentials = state.retiredCredentials
@@ -427,6 +464,7 @@ public actor LiveEngine {
   }
 
   public func windowFocused() {
+    guard !effects.environment.safeMode else { return }
     appActive = true
     for id in state.folderOrder where due(id, maxAge: LiveEngine.staleOnFocusMs) { refreshFolder(id) }
   }
@@ -434,6 +472,7 @@ public actor LiveEngine {
   public func appResignedActive() { appActive = false }
 
   public func liveTabDeactivated(folderId: String) {
+    guard !effects.environment.safeMode else { return }
     let now = effects.clock.now()
     if now - (lastNudge[folderId] ?? 0) < LiveEngine.nudgeThrottleMs { return }
     lastNudge[folderId] = now
@@ -445,6 +484,7 @@ public actor LiveEngine {
   }
 
   public func profilesChanged(existing: Set<String>) {
+    guard !effects.environment.safeMode else { return }
     for f in state.folders.values where !existing.contains(f.profileId) { removeFolder(f.id) }
   }
 
@@ -553,6 +593,7 @@ public actor LiveEngine {
   }
 
   public func meetingTick() async {
+    guard !effects.environment.safeMode else { return }
     guard let host = meetingHost else { return }
     guard let browser = await host.meetingSnapshot() else { return }
     let result = MeetingGroups.tick(state.meetingGroups, browser: browser, now: effects.clock.now())

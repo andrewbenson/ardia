@@ -7,6 +7,26 @@ import Testing
     Command("importWorkspace", [["profileId": .string(profileId), "pinnedAgainst": .string(pinnedAgainst), "windows": .array(windows)]])
   }
 
+  @Test func safeImportRefusesWorkspaceAndThemeWithoutChangingStateOrIds() throws {
+    var config = StoreConfig()
+    config.safeMode = true
+    let store = Store(state: BrowserState(settings: Settings.hydrated(from: nil)), config: config, checksInvariants: true)
+    let before = store.state
+    let ids = store.memory.ids
+    let imports: [[JSONValue]] = [[], [["newWindow": true, "tabs": [["url": "https://safe-import.example/", "title": "Refused"]]]]]
+    for windows in imports {
+      do {
+        try store.dispatch(Command("importWorkspace", [["profileId": "default", "theme": ["kind": "solid", "color": "#123456"], "windows": .array(windows)]]))
+        Issue.record("Safe workspace import reported success")
+      } catch let error as CommandError {
+        #expect(error.description.contains("safe mode"))
+      }
+      #expect(store.state == before)
+      #expect(store.memory.ids == ids)
+      #expect(store.rev == 0)
+    }
+  }
+
   @Test func importsWindowsGroupsAndSplitsWithUniqueIdsInOneCommit() throws {
     let store = makeStore()
     let seen = Seen()

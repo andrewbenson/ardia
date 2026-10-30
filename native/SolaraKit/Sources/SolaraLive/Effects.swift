@@ -105,6 +105,7 @@ public struct LiveEnvironment: Sendable, Equatable {
   public var mockBase: String?
   public var isolatedDataDirectory: Bool
   public var separateSlowTimers: Bool
+  public var safeMode: Bool
   public var calendarFixture: Bool
 
   public func checkRequest(_ url: String) throws {
@@ -116,7 +117,8 @@ public struct LiveEnvironment: Sendable, Equatable {
     }
   }
 
-  public init(mockBase: String? = nil, calendarFixture: Bool = false, isolatedDataDirectory: Bool = false, separateSlowTimers: Bool = false) {
+  public init(mockBase: String? = nil, calendarFixture: Bool = false, isolatedDataDirectory: Bool = false, separateSlowTimers: Bool = false, safeMode: Bool = false) {
+    self.safeMode = safeMode
     self.mockBase = mockBase
     self.calendarFixture = calendarFixture
     self.isolatedDataDirectory = isolatedDataDirectory

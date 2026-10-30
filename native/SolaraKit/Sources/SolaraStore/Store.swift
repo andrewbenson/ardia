@@ -27,6 +27,10 @@ public struct StoreBusy: Error, CustomStringConvertible {
   public var description: String { "a user transaction is open, so a sync apply has to retry from fresh state" }
 }
 
+public struct StorePersistenceRefused: Error, CustomStringConvertible {
+  public let description: String
+}
+
 typealias QueuedSyncApply = @Sendable (Session) throws -> Void
 
 public final class Store: Sendable {
@@ -75,6 +79,7 @@ public final class Store: Sendable {
   public let config: StoreConfig
   public let checksInvariants: Bool
   public let invariantHandler: @Sendable ([String], [Command]) -> Void
+  private let onPersistenceRefusal: @Sendable (String) -> Void
 
   public init(
     state: BrowserState = BrowserState(),
@@ -84,9 +89,11 @@ public final class Store: Sendable {
     config: StoreConfig = StoreConfig(),
     checksInvariants: Bool = Store.debugBuild,
     invariantHandler: @escaping @Sendable ([String], [Command]) -> Void = Store.logInvariants,
+    onPersistenceRefusal: @escaping @Sendable (String) -> Void = { _ in },
     clock: @escaping @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
   ) {
     self.invariantHandler = invariantHandler
+    self.onPersistenceRefusal = onPersistenceRefusal
     self.clock = clock
     self.env = env
     self.config = config
@@ -190,6 +197,17 @@ public final class Store: Sendable {
   private func transact(
     commands: [Command], origin: Origin, durable: Bool, fromSync: Bool, waiting: QueuedSyncApply?, replaying: Bool, _ body: (Session) throws -> Void
   ) throws -> Commit? {
+    do {
+      return try transactPersisting(commands: commands, origin: origin, durable: durable, fromSync: fromSync, waiting: waiting, replaying: replaying, body)
+    } catch let refusal as StorePersistenceRefused {
+      onPersistenceRefusal(refusal.description)
+      throw refusal
+    }
+  }
+
+  private func transactPersisting(
+    commands: [Command], origin: Origin, durable: Bool, fromSync: Bool, waiting: QueuedSyncApply?, replaying: Bool, _ body: (Session) throws -> Void
+  ) throws -> Commit? {
     let now = clock()
     let tags = syncOrigins
     let pinned = commands.contains { $0.name == "syncPinsApply" || $0.name == "settlePinChoices" }
@@ -232,12 +250,29 @@ public final class Store: Sendable {
       } else {
         session = Session(state: core.state, memory: core.memory, env: env, config: config, now: now)
       }
+      let checkpoint = config.persistenceRefusal == nil ? nil : (
+        state: session.state, memory: session.memory, depth: session.depth, heard: session.heard,
+        effects: session.effects, result: session.result, mirroring: session.mirroring, itemSerial: session.itemSerial)
       if replaying {
         session.memory.fromSyncDepth += 1
         defer { session.memory.fromSyncDepth -= 1 }
         try body(session)
       } else {
         try body(session)
+      }
+      if let reason = config.persistenceRefusal, let checkpoint {
+        let before = checkpoint.state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }
+        let after = session.state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }
+        if session.state.settings != checkpoint.state.settings || after != before {
+          session.resume(state: checkpoint.state, memory: checkpoint.memory, now: now)
+          session.depth = checkpoint.depth
+          session.heard = checkpoint.heard
+          session.effects = checkpoint.effects
+          session.result = checkpoint.result
+          session.mirroring = checkpoint.mirroring
+          session.itemSerial = checkpoint.itemSerial
+          throw StorePersistenceRefused(description: reason)
+        }
       }
       if session.depth > 0 && core.held == nil {
         core.heldSince = now

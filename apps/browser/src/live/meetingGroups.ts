@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import { confirm } from "@ardia/shell";
 import { liveMeetingBrowser, onLiveCloseGroup } from "@ardia/settings";
 import { useBrowser, type BrowserState } from "../store/browser";
@@ -54,7 +55,7 @@ export function joinMeeting(windowId: string, event: CalendarEvent, joinUrl: str
 let started = false;
 
 export function startMeetingGroups() {
-  if (started) return;
+  if (started || nativeSafeMode()) return;
   started = true;
 
   useBrowser.subscribe((s, prev) => {

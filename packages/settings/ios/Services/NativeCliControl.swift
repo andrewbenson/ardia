@@ -180,6 +180,10 @@ final class NativeCliControl {
   }
 
   func install(reason: String, done: (([String: Any]) -> Void)? = nil) {
+    if reason == "upgrade", ArdiaCoreHost.safeMode {
+      done?(["ok": false, "appVersion": CliTool.appVersion, "error": "Automatic CLI upgrades are paused in safe mode.", "lines": [String]()])
+      return
+    }
     if let done { running.append(done) }
     guard installing == nil else { return }
     installing = reason
@@ -216,6 +220,7 @@ final class NativeCliControl {
   }
 
   private func upgradeIfBehind() {
+    guard !ArdiaCoreHost.safeMode else { return }
     let installed = CliTool.installedVersion()
     installedVersion = installed
     let app = CliTool.appVersion

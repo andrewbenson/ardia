@@ -51,6 +51,10 @@ final class ProfilesAdapter: ProfilesServices {
     if let icon = patch.icon { arg["icon"] = jsonArg(icon) }
     if let theme = patch.theme { arg["theme"] = theme.flatMap(Self.json) ?? NSNull() }
     guard !arg.isEmpty else { return }
+    if ArdiaCoreHost.safeMode {
+      SettingsJS.shared.fire("profiles.update", id, arg)
+      return
+    }
     if let index = profiles.firstIndex(where: { $0.id == id }) {
       var profile = profiles[index]
       if let name = patch.name { profile.name = name }
@@ -69,6 +73,10 @@ final class ProfilesAdapter: ProfilesServices {
   }
 
   func reorderProfiles(_ ids: [String]) {
+    if ArdiaCoreHost.safeMode {
+      SettingsJS.shared.fire("profiles.reorder", ids)
+      return
+    }
     let known = ids.compactMap { id in profiles.first { $0.id == id } }
     profiles = known + profiles.filter { !ids.contains($0.id) }
     Task { _ = await SettingsAdapters.js("profiles.reorder", ids) }
@@ -85,11 +93,7 @@ final class ProfilesAdapter: ProfilesServices {
   }
 
   func clearBrowsingData(engineProfile: String, kinds: [BrowsingDataKind], since: Date?) async {
-    let types = kinds.map(\.rawValue)
-    let sinceMs = since.map { ($0.timeIntervalSince1970 * 1000).rounded() } ?? 0
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-      ArdiaCoreServices.clearBrowsingData(profile: engineProfile, types: types, since: sinceMs) { continuation.resume() }
-    }
+    _ = await SettingsAdapters.js("profiles.clearBrowsingData", engineProfile, kinds.map(\.rawValue), Self.millis(since))
   }
 
   func extensionsKeptOnDelete() async -> [String]? {

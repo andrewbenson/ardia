@@ -8,7 +8,7 @@ import type { Settings } from "../../store/settings";
 import type { ProfileColor } from "../../store/types";
 import { pinSites } from "./sites";
 import { endToolTour, startToolTour } from "./tour/state";
-import { nativeOwnsWorkspace, nativeWrite, writeState } from "../../store/nativeStore";
+import { nativeOwnsWorkspace, nativeSafeMode, nativeWrite, writeState } from "../../store/nativeStore";
 import { encodeCommand } from "@ardia/store";
 
 export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
@@ -373,6 +373,7 @@ export function dismissOnboarding(session: number) {
 }
 
 export function maybeStartOnboarding() {
+  if (nativeSafeMode()) return;
   const saved = readSaved();
   if (saved?.completedAt) return;
   if (!hostedKinds().includes("onboarding")) return;

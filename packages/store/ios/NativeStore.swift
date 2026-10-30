@@ -8,6 +8,8 @@ internal import SolaraStore
 
 public final class NativeStore: Sendable {
   nonisolated(unsafe) public private(set) static var ownsWorkspace = false
+  nonisolated(unsafe) public private(set) static var safeMode = false
+  nonisolated(unsafe) public private(set) static var safeModeAfterFailedLaunches = false
 
   static var scope: PersistenceScope {
     LaunchSwitches.shared.scope == "settingsAndDownloads" ? .settingsAndDownloads : .everything
@@ -15,6 +17,7 @@ public final class NativeStore: Sendable {
 
   static func config(_ folder: URL) -> StoreConfig {
     var config = StoreConfig()
+    config.safeMode = safeMode
     config.handOffPinsImmediately = false
     config.earlyLaunchTab = earlyLaunchTabSwitch(folder)
     return config
@@ -33,12 +36,12 @@ public final class NativeStore: Sendable {
   nonisolated(unsafe) static var folderLock: FolderLock?
 
   let bridge: StoreBridge
-  let writer: PersistenceWriter
-  let launch: Launch
+  let writer: PersistenceWriter?
+  let launch: SafeLaunch
   let caches: NativeCacheFeeds
 
   @MainActor
-  init(bridge: StoreBridge, writer: PersistenceWriter, launch: Launch, folder: URL) {
+  init(bridge: StoreBridge, writer: PersistenceWriter?, launch: SafeLaunch, folder: URL) {
     self.bridge = bridge
     self.writer = writer
     self.launch = launch
@@ -99,7 +102,10 @@ public final class NativeStore: Sendable {
     do {
       guard let lock = try FolderLock.acquire(DataFolder(url: folder)) ?? waitForHolder(folder) else { return false }
       folderLock = lock
-      if LaunchSwitches.countLaunch().countedLaunch { MainActor.assumeIsolated { LaunchSuccessWatch.start() } }
+      let switches = LaunchSwitches.countLaunch()
+      safeMode = switches.safeMode
+      safeModeAfterFailedLaunches = switches.safeModeAfterFailedLaunches
+      if switches.countedLaunch { MainActor.assumeIsolated { LaunchSuccessWatch.start() } }
     } catch {
       unavailableReason = "couldn't lock the data folder: \(error)"
       NativeSettingsHandle.unavailable = StoreUnavailable(cause: .openFailed, detail: unavailableReason ?? "", dataFolder: folder)
@@ -111,19 +117,29 @@ public final class NativeStore: Sendable {
     let clock: @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
     let memory = StoreMemory(ids: IdSource.random(now: clock()))
     let addressing = OmniboxAddressing()
-    let storeConfig = Self.config(folder)
+    var storeConfig = Self.config(folder)
     let activeScope = Self.scope
     let context = LoadContext(env: addressing, config: storeConfig, memory: memory, now: clock())
     do {
-      let launch = try Launcher.open(DataFolder(url: folder), appVersion: version, now: now, context: context, scope: activeScope)
+      let launch = try safeMode
+        ? Launcher.openSafe(DataFolder(url: folder), appVersion: version, now: now, context: context)
+        : SafeLaunch(Launcher.open(DataFolder(url: folder), appVersion: version, now: now, context: context, scope: activeScope))
       for note in launch.report.notes { NSLog("[store] %@", note) }
       var state = launch.state
       state.caches.systemDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-      let store = Store(state: state, memory: launch.memory, env: addressing, config: storeConfig, clock: clock)
+      if safeMode && launch.database == nil {
+        storeConfig.persistenceRefusal = "Safe mode could not open the database. Changes to settings and downloads cannot be saved. Open Solara normally to make these changes."
+      }
+      let store = Store(
+        state: state, memory: launch.memory, env: addressing, config: storeConfig,
+        onPersistenceRefusal: { message in DispatchQueue.main.async { showPersistenceRefusal(message) } }, clock: clock)
       ownsWorkspace = activeScope == .everything
-      let writer = PersistenceWriter(
-        store: store, database: launch.database, folder: DataFolder(url: folder), persisted: launch.persisted, scope: activeScope,
-        trouble: { message in NSLog("[store] %@", message) })
+      let writer = launch.database.map { database in
+        PersistenceWriter(
+          store: store, database: database, folder: DataFolder(url: folder), persisted: launch.persisted,
+          scope: safeMode ? .settingsAndDownloads : activeScope,
+          trouble: { message in NSLog("[store] %@", message) })
+      }
       shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch, folder: folder)
       NativeSettingsHandle.active = true
       NativeStoreHandle.ownsWorkspace = ownsWorkspace
@@ -138,7 +154,7 @@ public final class NativeStore: Sendable {
       }
       NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
         guard let store = NativeStore.shared else { return }
-        let result = store.writer.flush(timeout: 0.5)
+        let result = store.flush(timeout: 0.5)
         if result != .saved { NSLog("[store] quit flush: %@", result.description) }
       }
       return true
@@ -151,9 +167,27 @@ public final class NativeStore: Sendable {
     }
   }
 
-  func flush(timeout: TimeInterval) -> FlushResult { writer.flush(timeout: timeout) }
+  @MainActor private static var persistenceAlertVisible = false
 
-  public func freeze() { writer.freeze() }
+  @MainActor
+  private static func showPersistenceRefusal(_ message: String) {
+    guard !persistenceAlertVisible else { return }
+    persistenceAlertVisible = true
+    let alert = NSAlert()
+    alert.messageText = "Changes Couldn't Be Saved"
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+      alert.beginSheetModal(for: window) { _ in persistenceAlertVisible = false }
+    } else {
+      alert.runModal()
+      persistenceAlertVisible = false
+    }
+  }
+
+  func flush(timeout: TimeInterval) -> FlushResult { FlushResult.flushing(writer, timeout: timeout) }
+
+  public func freeze() { writer?.freeze() }
 }
 
 @MainActor

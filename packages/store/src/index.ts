@@ -2,7 +2,7 @@ import { requireOptionalNativeModule, type EventSubscription } from "expo-module
 
 export { encodeArgs, encodeCommand, PATCH_COMMANDS } from "./encode";
 
-type StoreStatus = ({ active: true; scope?: "settingsAndDownloads" | "everything" } | { active: false; reason: string; handedOff?: boolean; refusedSession?: string }) & { syncRedesign?: boolean };
+type StoreStatus = ({ active: true; scope?: "settingsAndDownloads" | "everything" } | { active: false; reason: string; handedOff?: boolean; refusedSession?: string }) & { syncRedesign?: boolean; safeMode?: "option" | "failedLaunches" };
 
 type NativeStoreModule = {
   status(): StoreStatus;
@@ -97,6 +97,10 @@ export function flushNativeStore(timeoutSeconds = 0.5): string {
   const result = native?.flush(timeoutSeconds);
   if (typeof result === "boolean") return result ? "saved" : "timedOut";
   return result ?? "failed: the native store is unavailable";
+}
+
+export function flushProblem(result: string): boolean {
+  return result !== "saved" && !result.startsWith("skipped:");
 }
 
 export function onForeignCommit(listener: (commit: ForeignCommit) => void): () => void {

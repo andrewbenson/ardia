@@ -1,8 +1,10 @@
+import { confirm } from "@ardia/shell";
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "./browser";
 import { bookmarkRoots, ensureRoots, removeBookmarkTree } from "./bookmarks";
 import { newId, setSharedDataIds, viewTabIds, without } from "./model";
 import { DEFAULT_PROFILE_ID } from "./settings";
+import { nativeSafeMode } from "./nativeStore";
 import { activated, apply, removeTabs, withNewTab } from "./tabs";
 import type { Profile, ProfileColor } from "./types";
 
@@ -46,6 +48,16 @@ export function sharingProfiles(s: Pick<BrowserState, "profiles" | "profileOrder
   return s.profileOrder.filter((other) => other !== id && s.profiles[other] && dataIdOf(s.profiles[other]!) === dataIdOf(p));
 }
 
+function refuseSafeProfileEdit(): boolean {
+  if (!nativeSafeMode()) return false;
+  void confirm({
+    title: "Safe Mode",
+    message: "Profile edits can't be saved in safe mode while the saved session and launch appearance are kept unchanged. Open Solara normally to edit profiles.",
+    confirmTitle: "OK",
+  });
+  return true;
+}
+
 function syncSharedData(s: BrowserState, prev: BrowserState): Partial<BrowserState> | null {
   if (s.profiles !== prev.profiles) {
     setSharedDataIds(Object.fromEntries(Object.values(s.profiles).filter((p) => p.dataId).map((p) => [p.id, p.dataId!])));
@@ -77,6 +89,14 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     orphanedProfileData: [],
 
     createProfile({ name, color, icon = null, shareWith }) {
+      if (nativeSafeMode()) {
+        void confirm({
+          title: "Safe Mode",
+          message: "New profiles cannot be saved in safe mode. Open Solara normally to create one and keep its bookmarks, passwords and Live folders.",
+          confirmTitle: "OK",
+        });
+        return "";
+      }
       const s = get();
       const source = shareWith ? s.profiles[shareWith] : undefined;
       const profile: Profile = {
@@ -101,10 +121,19 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     updateProfile(id, patch) {
+      if (refuseSafeProfileEdit()) return;
       set((s) => (s.profiles[id] ? { profiles: { ...s.profiles, [id]: { ...s.profiles[id]!, ...patch } } } : {}));
     },
 
     deleteProfile(id) {
+      if (nativeSafeMode()) {
+        void confirm({
+          title: "Safe Mode",
+          message: "Profiles can't be deleted in safe mode. Quit and open Solara normally to delete one.",
+          confirmTitle: "OK",
+        });
+        return;
+      }
       if (!get().profiles[id] || get().profileOrder.length <= 1) return;
       for (const w of Object.values(get().windows)) if (w.incognito && w.originalProfileId === id) get().closeWindow(w.id);
       let s = get();
@@ -166,6 +195,7 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
     },
 
     reorderProfiles(ids) {
+      if (refuseSafeProfileEdit()) return;
       set((s) => {
         const known = ids.filter((id) => s.profiles[id]);
         return { profileOrder: [...known, ...s.profileOrder.filter((id) => !known.includes(id))] };

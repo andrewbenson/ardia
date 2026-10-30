@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import { onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "@ardia/ardiacore";
 import { readDocument, removeDocument } from "@ardia/shell";
 import { nativeAddHistoryVisits, startNativeHistoryCatalog } from "@ardia/settings";
@@ -177,6 +178,7 @@ function applyPending() {
 type LegacyFile = { history?: Record<string, HistoryEntry[]> };
 
 export async function migrateHistoryFile(now = Date.now(), { keepMs = LEGACY_KEPT_MS } = {}): Promise<"none" | "moved" | "kept"> {
+  if (nativeSafeMode()) return "kept";
   let file: LegacyFile | null = null;
   try {
     const json = readDocument(LEGACY_FILE);

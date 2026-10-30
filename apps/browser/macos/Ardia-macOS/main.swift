@@ -14,5 +14,6 @@ if let code = SafeStorageRekeyRun.runAtLaunch(
   stores: { RekeyStores(onStaged: $0) }) { exit(code) }
 
 _ = MainActor.assumeIsolated { NativeStore.launchAtStartup() }
+ArdiaCoreHost.safeMode = NativeStore.safeMode
 
 exit(ArdiaCoreHost.run(argc: CommandLine.argc, argv: CommandLine.unsafeArgv) { AppDelegate() })

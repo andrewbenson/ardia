@@ -23,7 +23,7 @@ import {
 } from "@ardia/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
-import { nativeBusyWrites, nativeOwnsWorkspace } from "../store/nativeStore";
+import { nativeBusyWrites, nativeOwnsWorkspace, nativeSafeMode } from "../store/nativeStore";
 import { persistenceRefused } from "../lib/persistLatch";
 import { engineProfile, isIncognitoProfile } from "../store/model";
 import { DEFAULT_PROFILE_ID } from "../store/settings";
@@ -193,6 +193,8 @@ const sealingPasswords = () => syncRedesign.on && !!SyncNative?.useSealedPasswor
 let recordsKnown = false;
 let journalRefused = false;
 const SESSION_UNREADABLE = "Sync is paused because Solara couldn't read its saved session. Nothing from this window is sent to your other Macs.";
+const SAFE_MODE = "Sync is paused because Solara opened in safe mode. Nothing from this window is sent to your other Macs.";
+const syncHeld = () => (persistenceRefused() ? SESSION_UNREADABLE : nativeSafeMode() ? SAFE_MODE : null);
 let stopping = false;
 let turningOn = false;
 let phraseEntry: Promise<PhraseResult> | null = null;
@@ -477,7 +479,7 @@ const compactionDue = () =>
   Date.now() - compactedAt >= COMPACT_MS;
 
 function save() {
-  if (newerFormat || persistenceRefused()) return;
+  if (newerFormat || syncHeld()) return;
   const { scopes, ...meta } = doc;
   const json = JSON.stringify(loaded ? { ...meta, seqs: Object.fromEntries(Object.entries(scopes).map(([k, s]) => [k, writtenSeq(s)])) } : meta);
   if (json !== savedJson) {
@@ -701,7 +703,7 @@ export async function syncNow() {
 
 async function runCycle({ retiring = false } = {}) {
   const native = SyncNative;
-  if (!native || newerFormat || persistenceRefused() || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
+  if (!native || newerFormat || syncHeld() || !doc.enabled || !doc.folder || !doc.deviceId || locked || !loaded || (stopping && !retiring)) return;
   if (running) {
     again = true;
     return;
@@ -1256,7 +1258,8 @@ export async function turnOnSync(folder: string): Promise<{ ok: true } | { error
   const native = SyncNative;
   if (!native) return { error: "Sync isn’t available in this build." };
   if (newerFormat) return { error: NEWER_FORMAT };
-  if (persistenceRefused()) return { error: SESSION_UNREADABLE };
+  const held = syncHeld();
+  if (held) return { error: held };
   if (doc.enabled || turningOn) return { error: "Sync is already on." };
   turningOn = true;
   try {
@@ -1291,7 +1294,7 @@ export async function enterRecoveryPhrase(folder: string, text: string): Promise
       phraseEntry = null;
     }
   }
-  if (newerFormat || persistenceRefused() || doc.enabled || turningOn) return { error: "unavailable" };
+  if (newerFormat || syncHeld() || doc.enabled || turningOn) return { error: "unavailable" };
   turningOn = true;
   try {
     const deviceId = native.newDeviceId();
@@ -1451,7 +1454,8 @@ function addLinkedProfile(syncId: string, record: ProfileRecord, shareWith: stri
 
 export function startSync() {
   if (!SyncNative) return;
-  if (persistenceRefused()) return publishUi({ status: "unavailable", error: SESSION_UNREADABLE });
+  const held = syncHeld();
+  if (held) return publishUi({ status: "unavailable", error: held });
   if (sealingPasswords()) SyncNative.useSealedPasswords!();
   load();
   editJournal();

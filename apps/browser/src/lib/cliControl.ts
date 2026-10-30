@@ -3,6 +3,7 @@ import { nativeInstallCli } from "@ardia/settings";
 import { installedCliVersion, readDocument, systemInfo, type CliInstallResult } from "@ardia/shell";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
+import { nativeSafeMode } from "../store/nativeStore";
 
 type Saved = { binPath?: string | null; error?: string | null };
 
@@ -46,6 +47,7 @@ export const useCliIndicator = create<{ shown: boolean }>(() => ({ shown: false 
 let running: Promise<CliInstallResult> | null = null;
 
 export function installCliInBackground(reason: CliInstallReason): Promise<CliInstallResult> {
+  if (reason === "upgrade" && nativeSafeMode()) return Promise.resolve({ ok: false, appVersion: "", error: "Automatic CLI upgrades are paused in safe mode.", lines: [] });
   if (running) return running;
   useCli.setState({ installing: reason, step: null });
   running = (nativeInstallCli(reason) as Promise<CliInstallResult>)

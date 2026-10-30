@@ -41,6 +41,8 @@ public struct PlainWebAddressing: WebAddressing {
 }
 
 public struct StoreConfig: Sendable, Equatable {
+  public var safeMode = false
+  public var persistenceRefusal: String?
   public var handOffPinsImmediately = true
   public var earlyLaunchTab = true
   public var listeners: [SettleListener] = SettleListener.app

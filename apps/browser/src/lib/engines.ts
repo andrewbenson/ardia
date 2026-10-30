@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import type { PageEngine } from "@ardia/ardiacore";
 import { nativeAddHistoryVisits } from "@ardia/settings";
 import { confirm } from "@ardia/shell";
@@ -169,7 +170,10 @@ export function followSiteChoice(tabId: string, engine: PageEngine, url: string,
 }
 
 const visits = visitRecorder(
-  (profile, visit) => void nativeAddHistoryVisits(profile, [{ url: visit.url, title: visit.title, visitTimes: [visit.at] }]).catch(() => {}),
+  (profile, visit) => {
+    if (nativeSafeMode()) return;
+    void nativeAddHistoryVisits(profile, [{ url: visit.url, title: visit.title, visitTimes: [visit.at] }]).catch(() => {});
+  },
   { set: (run, ms) => setTimeout(run, ms), clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
   Date.now,
 );

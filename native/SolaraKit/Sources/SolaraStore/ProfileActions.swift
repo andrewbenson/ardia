@@ -15,7 +15,10 @@ func sharingProfiles(_ s: BrowserState, _ id: String) -> [String] {
 }
 
 extension Session {
-  public func createProfile(name: String, color: String?, icon: String?, shareWith: String?) -> String {
+  public func createProfile(name: String, color: String?, icon: String?, shareWith: String?) throws -> String {
+    guard !config.safeMode else {
+      throw CommandError("Profiles can't be created in safe mode. Quit and open Solara normally to create one.")
+    }
     let s = state
     let source = shareWith.flatMap { $0.isEmpty ? nil : s.profiles[$0] }
     let trimmed = name.jsTrim()
@@ -31,7 +34,10 @@ extension Session {
     return profile.id
   }
 
-  public func updateProfile(_ id: String, _ patch: TabUpdate) {
+  public func updateProfile(_ id: String, _ patch: TabUpdate) throws {
+    guard !config.safeMode else {
+      throw CommandError("Profile edits can't be saved in safe mode while the saved session and launch appearance are kept unchanged. Open Solara normally to edit profiles.")
+    }
     var next = state
     guard let p = next.profiles[id] else {
       set(next)
@@ -44,7 +50,10 @@ extension Session {
     set(next)
   }
 
-  public func deleteProfile(_ id: String) {
+  public func deleteProfile(_ id: String) throws {
+    guard !config.safeMode else {
+      throw CommandError("Profiles can't be deleted in safe mode. Quit and open Solara normally to delete one.")
+    }
     guard state.profiles[id] != nil, state.profileOrder.count > 1 else { return }
     for w in state.windows.values where w.incognito && w.originalProfileId == id { closeWindow(w.id) }
     var s = state
@@ -103,7 +112,10 @@ extension Session {
     for w in state.windows.values where state.viewTabIds(w.id).isEmpty { _ = newTab(w.id) }
   }
 
-  public func reorderProfiles(_ ids: [String]) {
+  public func reorderProfiles(_ ids: [String]) throws {
+    guard !config.safeMode else {
+      throw CommandError("Profile edits can't be saved in safe mode while the saved session and launch appearance are kept unchanged. Open Solara normally to edit profiles.")
+    }
     var next = state
     let known = ids.filter { next.profiles[$0] != nil }
     next.profileOrder = known + next.profileOrder.filter { !known.contains($0) }
@@ -169,7 +181,8 @@ extension Session {
     if exists {
       next.downloads = next.downloads.map { $0.id == d.id ? d : $0 }
     } else {
-      next.downloads = Array(([d] + next.downloads).prefix(Download.maxKept))
+      next.downloads = [d] + next.downloads
+      if !config.safeMode { next.downloads = Array(next.downloads.prefix(Download.maxKept)) }
       if let focused = next.ui.focusedWindowId, downloadVisibleIn(next, d, next.windows[focused]) { next.openDownloads(focused) }
     }
     set(next)

@@ -228,6 +228,17 @@ public enum Importer {
     return only
   }
 
+  public static func safeMode(of state: BrowserState) -> BrowserState {
+    var safe = settingsAndDownloads(of: state)
+    if !state.profiles.isEmpty {
+      safe.profiles = state.profiles
+      safe.profileOrder = state.profileOrder
+      safe.orphanedProfileData = state.orphanedProfileData
+    }
+    safe.ui.lastProfileId = state.ui.lastProfileId
+    return safe
+  }
+
   public static func importFolder(
     _ folder: DataFolder, carrying carried: PersistedState?, appVersion: String, now: Date, context: LoadContext, scope: PersistenceScope = .everything,
     originalsFallback: Bool = true

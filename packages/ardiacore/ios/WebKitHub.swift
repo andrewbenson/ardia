@@ -490,6 +490,7 @@ final class WebKitHub: NSObject, WKScriptMessageHandler {
   }
 
   func deleteProfileData(_ profile: String, completion: @escaping (Bool) -> Void) {
+    guard !ArdiaCoreHost.safeMode else { return completion(false) }
     guard !Self.isPrivate(profile) else { return completion(true) }
     let identifier = Self.storeIdentifier(profile)
     deletedProfileStores[profile] = .nonPersistent()
@@ -719,6 +720,7 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
   }
 
   static func removeStaging(_ path: String, uuid: String, folder: String) -> Bool {
+    guard !ArdiaCoreHost.safeMode else { return false }
     guard UUID(uuidString: uuid) != nil, plainAbsolute(path), plainAbsolute(folder),
       (path as NSString).deletingLastPathComponent == folder, (path as NSString).lastPathComponent == stagingPrefix + uuid
     else { return false }

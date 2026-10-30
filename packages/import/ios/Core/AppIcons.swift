@@ -8,11 +8,11 @@ public enum AppIcons {
     return nil
   }
 
-  public static func png(for app: URL, id: String, directory: URL) -> String? {
+  public static func png(for app: URL, id: String, directory: URL, safeMode: Bool) -> String? {
     let stamp = (try? app.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
       .map { Int($0.timeIntervalSince1970) } ?? 0
     let file = directory.appendingPathComponent("\(id)-\(stamp).png")
-    if FileManager.default.fileExists(atPath: file.path) { return file.path }
+    if !safeMode && FileManager.default.fileExists(atPath: file.path) { return file.path }
 
     let icon = NSWorkspace.shared.icon(forFile: app.path)
     let pixels = 128
@@ -25,6 +25,7 @@ public enum AppIcons {
     icon.draw(in: NSRect(x: 0, y: 0, width: 64, height: 64), from: .zero, operation: .copy, fraction: 1)
     NSGraphicsContext.restoreGraphicsState()
     guard let png = rep.representation(using: .png, properties: [:]) else { return nil }
+    if safeMode { return "data:image/png;base64,\(png.base64EncodedString())" }
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       for old in (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [] where old.hasPrefix("\(id)-") {

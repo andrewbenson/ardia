@@ -172,6 +172,10 @@ final class BangListFetch: NSObject, URLSessionDataDelegate {
 
 public enum DocumentStore {
   public typealias Done = (Error?) -> Void
+  public static var safeMode: Bool {
+    guard let host = NSClassFromString("ArdiaCoreHost") as? NSObject.Type else { return false }
+    return (host as AnyObject).value(forKey: "safeMode") as? Bool ?? false
+  }
   private struct Staged {
     let url: URL
     let generation: UInt64
@@ -234,6 +238,9 @@ public enum DocumentStore {
   }
 
   public static func write(_ name: String, _ contents: String, done: Done? = nil) throws {
+    guard SafeLaunchDocuments.mayWrite(name, safeMode: safeMode) else {
+      throw NSError(domain: "SolaraSafeMode", code: 1, userInfo: [NSLocalizedDescriptionKey: "Automatic document writes are disabled in safe mode: \(name)"])
+    }
     _ = flushOnQuit
     let url = try ShellModule.documentURL(name)
     let key = url.lastPathComponent
@@ -251,6 +258,9 @@ public enum DocumentStore {
   }
 
   static func remove(_ name: String) throws {
+    guard SafeLaunchDocuments.mayRemove(name, safeMode: safeMode) else {
+      throw NSError(domain: "SolaraSafeMode", code: 1, userInfo: [NSLocalizedDescriptionKey: "Automatic document removal is disabled in safe mode: \(name)"])
+    }
     let url = try ShellModule.documentURL(name)
     lock.lock()
     if closed { return lock.unlock() }
@@ -299,7 +309,7 @@ public enum DocumentStore {
   }
 
   @discardableResult
-  static func flush() -> Bool {
+  public static func flush() -> Bool {
     queue.sync {
       lock.lock()
       let keys = Array(staged.keys)

@@ -252,6 +252,7 @@ extension LiveEngine {
       let id = try folder(Fields.object(payload, allowed: ["folderId"], required: ["folderId"]))
       removeFolder(id)
     case .removeProfile(let payload):
+      guard !effects.environment.safeMode else { throw LiveError(.other, "Profile deletion is disabled in safe mode") }
       let v = try Fields.object(payload, allowed: ["profileId"], required: ["profileId"])
       let profileId = try Fields.decode(String.self, v["profileId"])
       for id in state.folders.values.filter({ $0.profileId == profileId }).map(\.id) { removeFolder(id) }
@@ -273,7 +274,7 @@ extension LiveEngine {
       let v = try Fields.object(payload, allowed: ["folderId", "itemId"], required: ["folderId", "itemId"])
       let id = try folder(v)
       let itemId = try Fields.decode(String.self, v["itemId"])
-      mutate { $0.markUnread(id, itemId) }
+      markUnread(id, itemId)
     case .hideItems(let payload):
       let v = try Fields.object(payload, allowed: ["folderId", "items"], required: ["folderId", "items"])
       hideItems(try folder(v), try Fields.decode([LiveItem].self, v["items"]))

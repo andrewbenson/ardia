@@ -1,8 +1,10 @@
+import CryptoKit
 import Foundation
 import GRDB
 import SolaraModel
 @testable import SolaraPersistence
 import SolaraStore
+import Synchronization
 import Testing
 
 func scratchFolder() throws -> DataFolder {
@@ -126,6 +128,364 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     }
   }
 
+  func savedNatively(_ fixture: String) throws -> (folder: DataFolder, tabs: Set<String>) {
+    let folder = try scratchFolder()
+    try copyFixture(fixture, into: folder)
+    let first = try open(folder)
+    let firstStore = store(for: first)
+    let writer = PersistenceWriter(store: firstStore, database: first.database, folder: folder, persisted: first.persisted, clock: { 42 })
+    let window = try #require(firstStore.state.windowOrder.first)
+    try firstStore.dispatch(Command("newTab", [.string(window), ["url": "https://kept.example/"]]))
+    #expect(writer.flush(timeout: 5) == .saved)
+    try first.database.close()
+    return (folder, Set(firstStore.state.tabs.values.map(\.url)))
+  }
+
+  func workspaceRows(_ folder: DataFolder) throws -> WorkspaceRows? {
+    let database = try SolaraDatabase(url: folder.database)
+    defer { try? database.close() }
+    return try database.load().workspace
+  }
+
+  func safeLaunch(_ folder: DataFolder) throws {
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    #expect(safe.state.tabs.isEmpty && safe.state.windows.isEmpty)
+    let safeStore = Store(state: safe.state, memory: safe.memory, checksInvariants: true, clock: { now.timeIntervalSince1970 * 1000 })
+    let writer = (safe.database as SolaraDatabase?).map { database in
+      PersistenceWriter(store: safeStore, database: database, folder: folder, persisted: safe.persisted, scope: .settingsAndDownloads, clock: { 43 })
+    }
+    let window = try safeStore.dispatch(Command("createWindow", [["url": "https://safe.example/"]])).result!.string!
+    try safeStore.dispatch(Command("newTab", [.string(window), ["url": "https://safe-two.example/"]]))
+    try safeStore.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    #expect(!FlushResult.flushing(writer, timeout: 5).isProblem)
+    #expect(writer?.errors.isEmpty ?? true)
+    try (safe.database as SolaraDatabase?)?.close()
+  }
+
+  @Test func aSafeLaunchKeepsTheSessionAndRowsByteForByteForTheNextNormalLaunch() throws {
+    let (folder, tabs) = try savedNatively("broken-splits")
+    let session = try Data(contentsOf: folder.session)
+    let rows = try workspaceRows(folder)
+    #expect(rows != nil)
+    let before = names(in: folder)
+    try safeLaunch(folder)
+    #expect(try Data(contentsOf: folder.session) == session)
+    #expect(try workspaceRows(folder) == rows)
+    let allowed: Set<String> = [folder.downloads.lastPathComponent, folder.importLog.lastPathComponent]
+    #expect(names(in: folder).filter { !before.contains($0) && !$0.hasSuffix("-wal") && !$0.hasSuffix("-shm") && !allowed.contains($0) } == [])
+    let next = try open(folder)
+    #expect(next.report.source == .database)
+    #expect(Set(next.state.tabs.values.map(\.url)) == tabs)
+    #expect(next.state.settings["appearance"] == "dark")
+    try next.database.close()
+  }
+
+  struct FileSnapshot: Equatable {
+    let size: Int
+    let sha256: String
+  }
+
+  func folderSnapshot(_ folder: DataFolder) throws -> [String: FileSnapshot] {
+    let root = folder.url.resolvingSymlinksInPath()
+    let files = try #require(FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey]))
+    var snapshot: [String: FileSnapshot] = [:]
+    for case let entry as URL in files {
+      let file = entry.resolvingSymlinksInPath()
+      guard try file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else { continue }
+      let data = try Data(contentsOf: file)
+      #expect(Array(file.pathComponents.prefix(root.pathComponents.count)) == root.pathComponents)
+      let relative = file.pathComponents.dropFirst(root.pathComponents.count).joined(separator: "/")
+      snapshot[relative] = FileSnapshot(size: data.count, sha256: SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined())
+    }
+    return snapshot
+  }
+
+  func databaseSnapshot(_ folder: DataFolder) throws -> [String: [String]] {
+    var config = Configuration()
+    config.readonly = true
+    let database = try DatabaseQueue(path: folder.database.path, configuration: config)
+    defer { try? database.close() }
+    return try database.read { db in
+      var snapshot: [String: [String]] = [:]
+      snapshot["sqlite_master"] = try Row.fetchAll(db, sql: "SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name").map { $0.description }
+      let tables = try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+      for table in tables {
+        let quoted = table.replacingOccurrences(of: "\"", with: "\"\"")
+        snapshot[table] = try Row.fetchAll(db, sql: "SELECT * FROM \"\(quoted)\"").map { $0.description }.sorted()
+      }
+      return snapshot
+    }
+  }
+
+  @Test func aSafeStoreLaunchAndQuitChangeOnlySettingsAndDownloadsAcrossTheWholeDataFolder() throws {
+    let (folder, tabs) = try savedNatively("nested-groups-folders-rows")
+    defer { try? FileManager.default.removeItem(at: folder.url) }
+    for name in [
+      "bookmarks.json", "history.json", "bookmarks-cache.json", "launch-look.json", "launch-layout.json", "release-notes.json", "onboarding.json",
+      "profiles/custom/Bookmarks", "profiles/custom/History", "profiles/custom/Preferences", "launch-pictures/saved.png", "sync/ledger.json",
+      "solara.sqlite.corrupt-2026-01-01", "session.json.pre-reimport-2026-01-01", ".session.json.writing",
+    ] {
+      let file = folder.url.appending(path: name)
+      try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try write("saved bytes for \(name)", to: file)
+    }
+    let beforeTables = try databaseSnapshot(folder)
+    let beforeFiles = try folderSnapshot(folder)
+    var config = StoreConfig()
+    config.safeMode = true
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe-folder"))
+    let database = try #require(safe.database)
+    let safeStore = Store(state: safe.state, memory: safe.memory, config: config, checksInvariants: true)
+    let writer = PersistenceWriter(store: safeStore, database: database, folder: folder, persisted: safe.persisted, scope: .settingsAndDownloads, clock: { 43 })
+    #expect(safeStore.state.windows.isEmpty && safeStore.state.tabs.isEmpty)
+    try safeStore.dispatch(Command("createWindow", [["url": "https://safe.example/"]]))
+    try safeStore.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    try safeStore.dispatch(Command("upsertDownload", [["id": "safe-download", "url": "https://download.example/safe.zip", "state": "complete", "profile": ""]]))
+    #expect(writer.flush(timeout: 5) == .saved)
+    #expect(writer.errors.isEmpty)
+    writer.freeze()
+    try database.close()
+    let afterTables = try databaseSnapshot(folder)
+    let afterFiles = try folderSnapshot(folder)
+    let mutableFiles: Set<String> = ["solara.sqlite", "solara.sqlite-wal", "solara.sqlite-shm", "downloads.json"]
+    #expect(beforeFiles.filter { !mutableFiles.contains($0.key) } == afterFiles.filter { !mutableFiles.contains($0.key) })
+    #expect(beforeTables.filter { $0.key != "setting" && $0.key != "download" } == afterTables.filter { $0.key != "setting" && $0.key != "download" })
+    #expect(beforeTables["setting"] != afterTables["setting"])
+    #expect(beforeTables["download"] != afterTables["download"])
+    let next = try open(folder)
+    #expect(Set(next.state.tabs.values.map(\.url)) == tabs)
+    #expect(next.state.settings["appearance"] == "dark")
+    #expect(next.state.downloads.contains { $0.json["url"] == "https://download.example/safe.zip" })
+    try next.database.close()
+  }
+
+  @Test func aSafeWriterCannotExportWorkspaceOrAdvanceTheSyncAnchorEvenWithTheDefaultScope() throws {
+    let (folder, _) = try savedNatively("broken-splits")
+    defer { try? FileManager.default.removeItem(at: folder.url) }
+    let before = try databaseSnapshot(folder)
+    let session = try Data(contentsOf: folder.session)
+    var config = StoreConfig()
+    config.safeMode = true
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe-scope"))
+    let database = try #require(safe.database)
+    let safeStore = Store(state: safe.state, memory: safe.memory, config: config)
+    let writer = PersistenceWriter(store: safeStore, database: database, folder: folder, persisted: safe.persisted)
+    writer.setSyncAnchor("safe-launch-must-not-advance")
+    try safeStore.dispatch(Command("createWindow", [["url": "https://temporary.example/"]]))
+    try safeStore.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    #expect(writer.flush(timeout: 5) == .saved)
+    #expect(writer.errors.isEmpty)
+    writer.freeze()
+    try database.close()
+    let after = try databaseSnapshot(folder)
+    #expect(before.filter { $0.key != "setting" } == after.filter { $0.key != "setting" })
+    #expect(try Data(contentsOf: folder.session) == session)
+  }
+
+  @Test func aSafeLaunchLeavesAStaleWorkspaceForTheNextNormalLaunchToReimport() throws {
+    let (folder, _) = try savedNatively("broken-splits")
+    let text = try String(contentsOf: folder.session, encoding: .utf8)
+    #expect(text.contains(#""scope":"everything""#))
+    try write(text.replacingOccurrences(of: #""scope":"everything""#, with: #""scope":"settingsAndDownloads""#), to: folder.session)
+    let session = try Data(contentsOf: folder.session)
+    let rows = try workspaceRows(folder)
+    try safeLaunch(folder)
+    #expect(try Data(contentsOf: folder.session) == session)
+    #expect(try workspaceRows(folder) == rows)
+    #expect(!names(in: folder).contains { $0.contains("pre-reimport") })
+    let next = try open(folder)
+    #expect(next.report.source != .database)
+    #expect(names(in: folder).contains { $0.contains("pre-reimport") })
+    try next.database.close()
+  }
+
+  @Test func aSafeLaunchKeepsProfilesWhenSessionIsUnreadableButOpensNoWindows() throws {
+    let (folder, _) = try savedNatively("broken-splits")
+    let normal = try open(folder)
+    let profiles = normal.state.profileOrder
+    try normal.database.close()
+    try FileManager.default.removeItem(at: folder.session)
+    try FileManager.default.createDirectory(at: folder.session, withIntermediateDirectories: false)
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    #expect(safe.state.profileOrder == profiles)
+    #expect(safe.state.windows.isEmpty && safe.state.tabs.isEmpty && safe.state.closedTabs.isEmpty)
+    try (safe.database as SolaraDatabase?)?.close()
+  }
+
+  func safeFiles(_ folder: DataFolder) -> [String: String] {
+    Dictionary(uniqueKeysWithValues: names(in: folder).map { name in
+      (name, contents(folder.url.appending(path: name))?.base64EncodedString() ?? "unreadable")
+    })
+  }
+
+  @Test(arguments: ["missing", "corrupt", "newer", "olderSchema", "unreadableWorkspace", "unreadableDatabase"])
+  func aSafeLaunchNeverRepairsOrWritesAnUnusableDatabase(_ damage: String) throws {
+    let folder = try scratchFolder()
+    try copyFixture("downloads-and-staging", into: folder)
+    try write(legacySession, to: folder.session)
+    if damage != "missing" && damage != "corrupt" && damage != "unreadableDatabase" {
+      let normal = try open(folder)
+      try normal.database.pool.write { db in
+        if damage == "newer" { try db.execute(sql: "INSERT INTO grdb_migrations (identifier) VALUES ('v999')") }
+        if damage == "olderSchema" {
+          for table in ["profile", "window", "tab", "tab_group", "split", "pin_table", "archive", "workspace"] {
+            try db.execute(sql: "DROP TABLE \"\(table)\"")
+          }
+          try db.execute(sql: "DELETE FROM grdb_migrations WHERE identifier = 'v2'")
+          try db.execute(sql: "DELETE FROM meta WHERE key = 'workspace'")
+          try db.execute(sql: "UPDATE meta SET value = 'v1' WHERE key = 'schema'")
+        }
+        if damage == "unreadableWorkspace" { try db.execute(sql: "DROP TABLE profile") }
+      }
+      try normal.database.close()
+      try write(#"{"version":2,"settings":{"searchEngine":"brave"}}"#, to: folder.session)
+    }
+    if damage == "corrupt" { try write("not sqlite, padding padding padding padding padding padding padding", to: folder.database) }
+    if damage == "unreadableDatabase" { try FileManager.default.createDirectory(at: folder.database, withIntermediateDirectories: false) }
+    let before = safeFiles(folder)
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    let database = safe.database as SolaraDatabase?
+    #expect(database == nil, "\(damage) must disable persistence")
+    #expect(safe.state.settings["searchEngine"] == "duckduckgo", "\(damage) must prefer readable database settings")
+    #expect(safe.state.downloads.count == 2)
+    #expect(safe.state.tabs.isEmpty && safe.state.windows.isEmpty)
+    let store = Store(state: safe.state, memory: safe.memory)
+    let writer = database.map {
+      PersistenceWriter(store: store, database: $0, folder: folder, persisted: safe.persisted, scope: .settingsAndDownloads)
+    }
+    try store.dispatch(Command("updateSettings", [["appearance": "dark"]]))
+    try store.dispatch(Command("upsertDownload", [["id": "safe-only", "state": "complete", "profile": ""]]))
+    #expect(!FlushResult.flushing(writer, timeout: 5).isProblem)
+    try database?.close()
+    let unchanged = safeFiles(folder) == before
+    #expect(unchanged, "\(damage) changed the data folder")
+  }
+
+  @Test func aSafeLaunchSalvagesTheWALWithoutCreatingSidecars() throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    try open(folder).database.close()
+    var config = Configuration()
+    config.prepareDatabase { db in
+      try db.execute(sql: "PRAGMA journal_mode = WAL")
+      try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
+    }
+    let writer = try DatabaseQueue(path: folder.database.path, configuration: config)
+    try writer.write { db in
+      try db.execute(sql: #"UPDATE setting SET value = '"ecosia"' WHERE key = 'searchEngine'"#)
+      try db.execute(sql: "INSERT INTO grdb_migrations (identifier) VALUES ('v999')")
+    }
+    let database = try Data(contentsOf: folder.database)
+    let walURL = URL(fileURLWithPath: folder.database.path + "-wal")
+    let wal = try Data(contentsOf: walURL)
+    try writer.close()
+    try database.write(to: folder.database)
+    try wal.write(to: walURL)
+    let shmURL = URL(fileURLWithPath: folder.database.path + "-shm")
+    if FileManager.default.fileExists(atPath: shmURL.path) { try FileManager.default.removeItem(at: shmURL) }
+    #expect(!FileManager.default.fileExists(atPath: folder.database.path + "-shm"))
+    let before = safeFiles(folder)
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    #expect((safe.database as SolaraDatabase?) == nil)
+    #expect(safe.state.settings["searchEngine"] == "ecosia")
+    let unchanged = safeFiles(folder) == before
+    #expect(unchanged)
+  }
+
+  @Test(arguments: [false, true])
+  func aSafeLaunchRecoversAHotJournalOnlyInItsSnapshot(_ linked: Bool) throws {
+    let folder = try scratchFolder()
+    try write(legacySession, to: folder.session)
+    try open(folder).database.close()
+    let queue = try DatabaseQueue(path: folder.database.path)
+    let journalURL = URL(fileURLWithPath: folder.database.path + "-journal")
+    var database = Data()
+    var journal = Data()
+    try queue.writeWithoutTransaction { db in
+      try db.execute(sql: "PRAGMA journal_mode = DELETE")
+      try db.execute(sql: "PRAGMA synchronous = FULL")
+      try db.execute(sql: "PRAGMA cache_size = 1")
+      try db.execute(sql: "PRAGMA cache_spill = 1")
+      try db.execute(sql: "CREATE TABLE journal_spill (payload BLOB)")
+      try db.execute(sql: "WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<100) INSERT INTO journal_spill SELECT zeroblob(8192) FROM n")
+      try db.execute(sql: "BEGIN IMMEDIATE")
+      try db.execute(sql: "UPDATE setting SET value = ? WHERE key = 'searchEngine'", arguments: [String(repeating: "x", count: 500_000)])
+      try db.execute(sql: "UPDATE journal_spill SET payload = randomblob(8192)")
+      database = try Data(contentsOf: folder.database)
+      journal = try Data(contentsOf: journalURL)
+      try db.execute(sql: "ROLLBACK")
+    }
+    try queue.close()
+    try #require(journal.prefix(8) == Data([0xd9, 0xd5, 0x05, 0xf9, 0x20, 0xa1, 0x63, 0xd7]), "journal header: \(journal.prefix(28).map { String(format: "%02x", $0) }.joined())")
+    try database.write(to: folder.database)
+    try journal.write(to: journalURL)
+    let backing = try scratchFolder()
+    if linked {
+      for (source, target) in [(folder.database, backing.database), (journalURL, URL(fileURLWithPath: backing.database.path + "-journal"))] {
+        try FileManager.default.moveItem(at: source, to: target)
+        try FileManager.default.createSymbolicLink(at: source, withDestinationURL: target)
+      }
+    }
+    let backingBefore = safeFiles(backing)
+    try write(#"{"version":2,"settings":{"searchEngine":"brave"}}"#, to: folder.session)
+    let before = safeFiles(folder)
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    #expect((safe.database as SolaraDatabase?) == nil)
+    #expect(safe.state.settings["searchEngine"] == "duckduckgo")
+    try (safe.database as SolaraDatabase?)?.close()
+    let unchanged = safeFiles(folder) == before
+    #expect(unchanged)
+    let backingUnchanged = safeFiles(backing) == backingBefore
+    #expect(backingUnchanged)
+  }
+
+  @Test(arguments: ["damaged", "unreadable", "olderBuild"])
+  func aSafeLaunchReadsProfilesButDisablesWritesWhenLegacySourcesCannotBeTrusted(_ sessionKind: String) throws {
+    let (folder, _) = try savedNatively("broken-splits")
+    let normal = try open(folder)
+    let profiles = normal.state.profileOrder
+    let settings = normal.state.settings
+    try normal.database.close()
+    if sessionKind == "unreadable" {
+      try FileManager.default.removeItem(at: folder.session)
+      try FileManager.default.createDirectory(at: folder.session, withIntermediateDirectories: false)
+    } else {
+      try write(sessionKind == "damaged" ? "{" : #"{"version":2,"settings":{"searchEngine":"brave"}}"#, to: folder.session)
+    }
+    let session = contents(folder.session)
+    let rows = try workspaceRows(folder)
+    let reads = FileReads()
+    let safe = try FileReads.$current.withValue(reads) {
+      try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    }
+    #expect(reads.count("session.json") == 1)
+    #expect((safe.database == nil) == (sessionKind != "damaged"))
+    #expect(safe.state.settings == settings)
+    #expect(safe.state.profileOrder == profiles)
+    try (safe.database as SolaraDatabase?)?.close()
+    #expect(contents(folder.session) == session)
+    #expect(try workspaceRows(folder) == rows)
+  }
+
+  @Test(arguments: [false, true])
+  func aSafeLaunchWithoutADatabaseIgnoresADamagedSession(_ unreadable: Bool) throws {
+    let folder = try scratchFolder()
+    try copyFixture("downloads-and-staging", into: folder)
+    if unreadable {
+      try FileManager.default.removeItem(at: folder.session)
+      try FileManager.default.createDirectory(at: folder.session, withIntermediateDirectories: false)
+    } else {
+      try write("{", to: folder.session)
+    }
+    let before = safeFiles(folder)
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe"))
+    #expect((safe.database as SolaraDatabase?) == nil)
+    #expect(safe.state.settings == Settings.hydrated(from: nil))
+    #expect(safe.state.downloads.count == 2)
+    let unchanged = safeFiles(folder) == before
+    #expect(unchanged)
+  }
+
   @Test func theWriterKeepsRowsAndTheShadowSessionCurrent() throws {
     let folder = try scratchFolder()
     try copyFixture("broken-splits", into: folder)
@@ -191,6 +551,53 @@ let legacySession = #"{"version":2,"profiles":{},"profileOrder":[],"settings":{"
     #expect(second.report.movedAside.filter { $0.hasPrefix("solara.sqlite.superseded-") }.count == 1)
     #expect(second.state.settings["searchEngine"] == "ecosia")
     #expect(second.state.settings["onlyNative"] == true)
+  }
+
+  @Test(arguments: ["session", "downloads", "workspace"])
+  func aSafeLaunchRefusesUserWritesWhileADeferredImportIsPending(_ changedFile: String) throws {
+    let folder = try scratchFolder()
+    defer { try? FileManager.default.removeItem(at: folder.url) }
+    try write(legacySession, to: folder.session)
+    try write(#"{"version":2,"downloads":[]}"#, to: folder.downloads)
+    try open(folder).database.close()
+    if changedFile == "session" {
+      try write(legacySession.replacingOccurrences(of: "duckduckgo", with: "brave"), to: folder.session)
+    } else if changedFile == "downloads" {
+      try write(#"{"version":2,"downloads":[{"id":"older-build","url":"https://older-build.example/file.zip","state":"complete","profile":""}]}"#, to: folder.downloads)
+    } else {
+      var session = try #require(JSONValue.parse(Data(legacySession.utf8)).object)
+      session[Launcher.markerKey] = ["scope": "settingsAndDownloads", "rev": 1, "at": 1]
+      try write(JSONValue.object(session).text(), to: folder.session)
+    }
+    let before = safeFiles(folder)
+    let safe = try Launcher.openSafe(folder, appVersion: "1.0", now: now, context: context("safe-superseded"))
+    #expect(safe.database == nil)
+    let refusal = "Safe mode could not open the database. Changes to settings and downloads cannot be saved. Open Solara normally to make these changes."
+    var config = StoreConfig()
+    config.safeMode = true
+    if safe.database == nil { config.persistenceRefusal = refusal }
+    let alerts = Mutex<[String]>([])
+    let store = Store(state: safe.state, memory: safe.memory, config: config, onPersistenceRefusal: { message in alerts.withLock { $0.append(message) } })
+    let writer = safe.database.map { PersistenceWriter(store: store, database: $0, folder: folder, persisted: safe.persisted) }
+    let state = store.state
+    for command in [
+      Command("updateSettings", [["searchEngine": "ecosia"]]),
+      Command("upsertDownload", [["id": "safe-edit", "state": "complete", "profile": ""]]),
+    ] {
+      #expect(throws: StorePersistenceRefused.self) { try store.dispatch(command) }
+      #expect(store.state == state)
+    }
+    #expect(alerts.withLock { $0 } == [refusal, refusal])
+    #expect(FlushResult.flushing(writer, timeout: 5) == .safeModeOpenedNoDatabase)
+    writer?.freeze()
+    try safe.database?.close()
+    #expect(safeFiles(folder) == before)
+    let normal = try open(folder)
+    defer { try? normal.database.close() }
+    #expect(normal.state.settings["searchEngine"] == .string(changedFile == "session" ? "brave" : "duckduckgo"))
+    #expect(!normal.state.downloads.contains { $0.id == "safe-edit" })
+    #expect(normal.state.downloads.contains { $0.json["url"] == "https://older-build.example/file.zip" } == (changedFile == "downloads"))
+    #expect(try normal.database.load().settings == normal.state.settings.values)
   }
 
   @Test func aMarkedSessionJSONDoesNotTriggerAReimport() throws {

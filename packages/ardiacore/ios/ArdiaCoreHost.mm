@@ -168,7 +168,10 @@ static NSString *AppDataDirectory() {
   return [support URLByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"Ardia"].path;
 }
 
+static BOOL gSafeMode = NO;
+
 static NSDictionary *SavedSession(NSString *dir) {
+  if (gSafeMode) return nil;
   NSData *data = dir ? [NSData dataWithContentsOfFile:[dir stringByAppendingPathComponent:@"session.json"]] : nil;
   NSDictionary *session = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
   return [session isKindOfClass:NSDictionary.class] ? session : nil;
@@ -585,6 +588,9 @@ static void StartEarlyWindow() {
 
 @implementation ArdiaCoreHost
 
++ (BOOL)safeMode { return gSafeMode; }
++ (void)setSafeMode:(BOOL)safeMode { gSafeMode = safeMode; }
+
 + (BOOL)chromeUsesRealKeychain {
   return ChromeUsesRealKeychain();
 }
@@ -615,7 +621,7 @@ static void StartEarlyWindow() {
   }
   ardiacore_host::InstallTestCrashGuard(scratch && ardiacore_host::Background() ? scratch.stringByStandardizingPath : nil);
   ardiacore_host::InstallActivationGuardsEarly();
-  ardiacore_host::PrepareContentBlocker();
+  if (!gSafeMode) ardiacore_host::PrepareContentBlocker();
   Method finishLaunching = class_getInstanceMethod(NSApplication.class, @selector(finishLaunching));
   IMP appKitFinishLaunching = method_getImplementation(finishLaunching);
   method_setImplementation(finishLaunching, imp_implementationWithBlock(^(NSApplication *app) {
@@ -697,12 +703,13 @@ static void StartEarlyWindow() {
       "--profile-directory=Default",
       "--js-flags=--no-memory-reducer",
   };
+  if (gSafeMode) extra.push_back("--disable-extensions");
   const bool mockKeychain = !ChromeUsesRealKeychain();
   if (mockKeychain) extra.push_back("--use-mock-keychain");
   ardiacore_host::PrepareStartup(gDataDirectory, extra);
   @autoreleasepool {
     [ArdiaCoreEarlyWindow setDataDirectory:AppDataDirectory()];
-    [ArdiaCoreEarlyWindow prefetchForSession:SavedSession(AppDataDirectory()) ?: @{}];
+    if (!gSafeMode) [ArdiaCoreEarlyWindow prefetchForSession:SavedSession(AppDataDirectory()) ?: @{}];
   }
   if (getenv("ARDIA_BACKGROUND") && !getenv("ARDIA_ALLOW_OCCLUSION")) {
     extra.push_back("--disable-backgrounding-occluded-windows");
@@ -790,6 +797,7 @@ static void StartEarlyWindow() {
 }
 
 + (void)deleteProfileData:(NSString *)profile completion:(void (^)(NSArray<NSString *> *))completion {
+  if (gSafeMode) return completion(@[ @"safe mode" ]);
   if (ardiacore_host::IsIncognito(profile)) return completion(@[]);
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
   ArdiaCoreProfile *p = ardiacore_host::LoadedProfile(profile);

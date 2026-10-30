@@ -30,7 +30,7 @@ bool SafeName(NSString *name) {
 
 NSDictionary *Store(NSData *png, int width, int height, NSString *profile, NSString *name) {
   if (!png.length) return nil;
-  if (profile && !ardiacore_host::IsIncognito(profile) && SafeName(name)) {
+  if (!ArdiaCoreHost.safeMode && profile && !ardiacore_host::IsIncognito(profile) && SafeName(name)) {
     NSString *dir = FaviconDirectory(profile);
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     NSString *path = [dir stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"png"]];

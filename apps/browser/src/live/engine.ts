@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import { onAppEvent, onWindowEvent } from "@ardia/shell";
 import { liveCommand, liveStart } from "@ardia/settings";
 import { useBrowser } from "../store/browser";
@@ -76,7 +77,7 @@ export function deleteLiveFolder(folderId: string) {
 let started = false;
 
 export function startLiveEngine() {
-  if (started) return;
+  if (started || nativeSafeMode()) return;
   started = true;
   const orphans = () => {
     const s = useBrowser.getState();

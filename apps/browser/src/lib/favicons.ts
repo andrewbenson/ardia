@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import { faviconsFor, fetchFavicon, onHistoryChanged } from "@ardia/ardiacore";
 import { nativeStoreFavicon } from "@ardia/settings";
 import { iconTheme, readDocument, removeDocument, type IconTheme } from "@ardia/shell";
@@ -437,6 +438,7 @@ function forget(key: string) {
 export const pruneProfileFavicons = (profileId: string) => forget(cacheKey(profileId));
 
 function removeLegacyFiles(s: Pick<BrowserState, "profiles">) {
+  if (nativeSafeMode()) return;
   for (const id of Object.keys(s.profiles)) {
     const doc = `favicons-${id}.json`;
     try {

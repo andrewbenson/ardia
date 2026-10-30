@@ -47,6 +47,7 @@ public class SyncModule: Module {
     Function("deviceName") { Host.current().localizedName ?? "This Mac" }
 
     AsyncFunction("createPhrase") { (account: String) -> Bool in
+      guard !ArdiaCoreHost.safeMode else { return false }
       let entropy = RecoveryPhrase.generateEntropy()
       guard Self.keyStore.save(entropy, account: account) else { return false }
       self.owner.revoke()
@@ -55,6 +56,7 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("enterPhrase") { (account: String, text: String, folder: String) -> [String: Any] in
+      guard !ArdiaCoreHost.safeMode else { return ["error": "safe mode"] }
       let entropy: Data
       do {
         entropy = try RecoveryPhrase.entropy(from: text)
@@ -82,6 +84,7 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("forget") { (account: String) in
+      guard !ArdiaCoreHost.safeMode else { return }
       Self.keyStore.delete(account: account)
       self.state.set(nil)
       self.owner.revoke()
@@ -98,8 +101,9 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("createChain") { (folder: String) throws in
+      let vault = try self.vault(folder)
       try FileManager.default.createDirectory(at: URL(fileURLWithPath: folder, isDirectory: true), withIntermediateDirectories: true)
-      try self.vault(folder).createChain()
+      try vault.createChain()
     }.runOnQueue(Self.work)
 
     AsyncFunction("write") { (folder: String, scope: String, payload: String) throws -> String in
@@ -201,6 +205,7 @@ public class SyncModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("saveRecoveryKit") { (format: String, promise: Promise) in
+      guard !ArdiaCoreHost.safeMode else { return promise.reject("safe mode", "Sync is paused in safe mode.") }
       guard (try? self.words()) != nil else { return promise.reject("locked", "Sync isn't set up on this Mac.") }
       let panel = NSSavePanel()
       let text = format == "text"
@@ -346,6 +351,7 @@ public class SyncModule: Module {
   }
 
   private func vault(_ folder: String) throws -> SyncVault {
+    guard !ArdiaCoreHost.safeMode else { throw Exception(name: "safe mode", description: "Sync is paused in safe mode.") }
     guard let keys = state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
     return SyncVault(folder: URL(fileURLWithPath: folder, isDirectory: true), keys: keys)
   }

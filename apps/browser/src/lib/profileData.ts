@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import { deleteProfileData } from "@ardia/ardiacore";
 import { useBrowser } from "../store/browser";
 import { engineIdOf } from "../store/profiles";
@@ -10,7 +11,7 @@ let running = false;
 const inUse = (engine: string) => Object.values(useBrowser.getState().profiles).some((p) => engineIdOf(p) === engine);
 
 async function drain() {
-  if (running) return;
+  if (running || nativeSafeMode()) return;
   running = true;
   try {
     for (;;) {

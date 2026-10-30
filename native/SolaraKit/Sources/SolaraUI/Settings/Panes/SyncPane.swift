@@ -478,7 +478,7 @@ struct SyncPane: View {
       if let state = model.state {
         if state.status == .unavailable {
           Section {
-            Text(SyncText.unavailable).foregroundStyle(.secondary)
+            Text(state.error ?? SyncText.unavailable).foregroundStyle(.secondary)
           }
         } else if state.enabled {
           SyncOnSections(model: model, state: state)

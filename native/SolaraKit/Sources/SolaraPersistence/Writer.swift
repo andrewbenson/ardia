@@ -7,12 +7,27 @@ public enum FlushResult: Sendable, Equatable, CustomStringConvertible {
   case saved
   case failed(String)
   case timedOut
+  case skipped(String)
+
+  public static let safeModeOpenedNoDatabase = FlushResult.skipped("safe mode opened no database")
+
+  public static func flushing(_ writer: PersistenceWriter?, timeout: TimeInterval) -> FlushResult {
+    writer?.flush(timeout: timeout) ?? safeModeOpenedNoDatabase
+  }
+
+  public var isProblem: Bool {
+    switch self {
+    case .saved, .skipped: false
+    case .failed, .timedOut: true
+    }
+  }
 
   public var description: String {
     switch self {
     case .saved: "saved"
     case .failed(let message): "failed: \(message)"
     case .timedOut: "timedOut"
+    case .skipped(let reason): "skipped: \(reason)"
     }
   }
 }
@@ -64,11 +79,14 @@ public final class PersistenceWriter: Sendable {
     self.folder = folder
     self.clock = clock
     self.trouble = trouble
-    self.scope = scope
+    self.scope = store.config.safeMode ? .settingsAndDownloads : scope
     keepsDownloadsFile = persisted.keepsDownloadsFile
     pending = Mutex(
       Pending(
-        rows: true, rowsScheduled: true, written: persisted.workspace ?? WorkspaceRows(), settings: persisted.settings, downloads: persisted.downloads,
+        rows: true, rowsScheduled: true, written: store.config.safeMode ? WorkspaceRows() : persisted.workspace ?? WorkspaceRows(),
+        settings: store.config.safeMode ? store.state.settings.values : persisted.settings,
+        downloads: store.config.safeMode ? store.state.downloads.filter { !$0.isPrivate }.map { $0.persisted() } : persisted.downloads,
+        exportedDownloads: store.config.safeMode ? ShadowExport.downloadsDocument(store.state) : nil,
         syncAnchor: persisted.syncAnchor, writtenSyncAnchor: persisted.syncAnchor))
     let id = store.subscribe { [weak self] commit in self?.note(commit) }
     subscription.withLock { $0 = id }
@@ -89,6 +107,7 @@ public final class PersistenceWriter: Sendable {
   public var syncAnchor: String? { pending.withLock { $0.syncAnchor } }
 
   public func setSyncAnchor(_ anchor: String) {
+    guard !store.config.safeMode else { return }
     let schedule = pending.withLock { p -> Bool in
       guard p.syncAnchor != anchor else { return false }
       p.syncAnchor = anchor
@@ -151,7 +170,7 @@ public final class PersistenceWriter: Sendable {
         if settings != previousSettings { try Rows.writeSettings(db, settings) }
         if downloads != previousDownloads { try Rows.writeDownloads(db, downloads) }
         if let anchor, anchor != previousAnchor { try Rows.setMeta(db, "sync_anchor", anchor) }
-        try Rows.setMeta(db, "rev", String(rev))
+        if !store.config.safeMode { try Rows.setMeta(db, "rev", String(rev)) }
       }
       pending.withLock {
         $0.written = rows

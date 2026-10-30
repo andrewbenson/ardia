@@ -3,6 +3,7 @@ import type { StateCreator } from "zustand";
 import type { BrowserState } from "./browser";
 import { engineProfile, isIncognitoProfile } from "./model";
 import type { HistoryEntry } from "./types";
+import { refuseSafeHistoryDeletion } from "./safeLibraryEdits";
 
 export type HistorySlice = {
   history: Record<string, HistoryEntry[]>;
@@ -33,7 +34,7 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
   historyFloor: {},
 
   removeHistory(profileId, urls) {
-    if (!urls.length || isIncognitoProfile(profileId)) return;
+    if (!urls.length || isIncognitoProfile(profileId) || refuseSafeHistoryDeletion(engineProfile(profileId), urls)) return;
     set((s) => ({ history: { ...s.history, [profileId]: (s.history[profileId] ?? []).filter((h) => !urls.includes(h.url)) } }));
     void nativeDeleteHistoryUrls(engineProfile(profileId), urls).catch(failed("delete"));
   },
@@ -58,6 +59,7 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
   },
 
   clearHistory(profileId, since) {
+    if (refuseSafeHistoryDeletion(engineProfile(profileId), undefined, since)) return;
     set((s) => {
       if (since === undefined) return { history: { ...s.history, [profileId]: [] } };
       const kept = (s.history[profileId] ?? []).map((h) => withoutVisitsSince(h, since)).filter((h): h is HistoryEntry => !!h);

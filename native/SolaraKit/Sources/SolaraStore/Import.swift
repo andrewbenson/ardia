@@ -81,6 +81,9 @@ private func importMode(_ value: JSONValue?, fallback: String) throws -> String 
 
 extension Session {
   public func importWorkspace(_ payload: JSONValue) throws -> JSONValue {
+    guard !config.safeMode else {
+      throw CommandError("Imported tabs, spaces and pinned tabs cannot be saved in safe mode. Open Solara normally to import them.")
+    }
     guard let object = payload.object, let profileId = object["profileId"]?.string,
       state.profiles[profileId] != nil, !Ids.isIncognitoProfile(profileId), let values = object["windows"]?.array
     else { throw invalidImport() }

@@ -2,12 +2,13 @@ import type { BrowserSource, DiaAutomationStatus, DiaTabsResult, ImportedExtensi
 import { closeWindow, confirm } from "@ardia/shell";
 import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
 import { allArcHolders, restoreArcFolders } from "../../../lib/bookmarkGroups";
+import { nativeSafeMode } from "../../../store/nativeStore";
 import { useBrowser } from "../../../store/browser";
 import { MAX_DRAFT_LINKS } from "../../../store/draftGroups";
 import { plural } from "../../../store/model";
 import type { ProfileColor } from "../../../store/types";
 import { useOnboarding } from "../../onboarding/state";
-import { applyResult, applySafari, emptyCounts, importArcSpace, importBookmarks, importDiaProfile, openInWebStore, profileColorFor, type ImportCounts } from "../../import/apply";
+import { applyResult, applySafari, emptyCounts, importArcSpace, importBookmarks, importDiaProfile, openInWebStore, profileColorFor, transientImportRefused, type ImportCounts } from "../../import/apply";
 import { importModule } from "../../import/module";
 import { IMPORT_WINDOW_ID, takePreferredImportSource } from "../windows";
 
@@ -71,14 +72,22 @@ async function run(req: RunRequest) {
   if (!api || !source) return { cancelled: true };
   const bySpaces = !!source.sidebar;
   const selected = source.profiles.filter((p) => req.profileIds.includes(p.id) || (bySpaces && p.spaces?.some((s) => req.spaceIds.includes(s.id))));
+  const transient = new Set<ImportKind>(["tabs", "spaces", "pinnedTabs", "favorites"]);
+  const refused = nativeSafeMode() ? req.kinds.filter((k) => selected.length > 1 || transient.has(k)) : [];
+  if (refused.length) transientImportRefused();
+  if (nativeSafeMode() && selected.length > 1) return {
+    status: Object.fromEntries(refused.map((kind) => [kind, "failed"])),
+    failures: refused.map((kind) => ({ kind, profiles: selected.map((p) => p.name) })),
+    counts: emptyCounts(), notes: ["Import one source profile into an existing profile in safe mode."],
+  };
   const tabsLocked = (p: (typeof selected)[number]) => req.withoutKey && !!p.tabsNeedKey;
-  const requested: ImportKind[] = req.kinds.filter((k) => k !== "tabs" || !selected.every(tabsLocked));
+  const requested: ImportKind[] = req.kinds.filter((k) => !refused.includes(k)).filter((k) => k !== "tabs" || !selected.every(tabsLocked));
   if (bySpaces && requested.includes("tabs")) requested.push("spaces", "pinnedTabs");
   const order = KIND_ORDER.filter((k) => requested.includes(k));
   const progress = {
     runId: req.runId,
     preparing: bySpaces ? Math.max(1, req.spaceIds.length) : selected.length,
-    status: Object.fromEntries(order.map((k) => [k, "pending"])) as Partial<Record<ImportKind, Status>>,
+    status: Object.fromEntries([...order.map((k) => [k, "pending"]), ...refused.map((k) => [k, "failed"])]) as Partial<Record<ImportKind, Status>>,
   };
   const setStatus = (kind: ImportKind, next: (current: Status | undefined) => Status) => {
     progress.status = { ...progress.status, [kind]: next(progress.status[kind]) };
@@ -89,7 +98,7 @@ async function run(req: RunRequest) {
   const abort = new AbortController();
   session.abort = abort;
   const total = emptyCounts();
-  const failed = new Map<ImportKind, string[]>();
+  const failed = new Map<ImportKind, string[]>(refused.map((k) => [k, selected.map((p) => p.name)]));
   const add = (c: ImportCounts) => (Object.keys(total) as (keyof ImportCounts)[]).forEach((k) => (total[k] += c[k]));
   let destinationIndex = 0;
   const found = new Map<string, ImportedExtension>();
@@ -185,8 +194,9 @@ async function readDia() {
 }
 
 async function runDia(req: { profileIds: string[]; target: string; pinned: boolean; open: boolean }) {
-  const result = session.dia;
   const total = emptyCounts();
+  if (transientImportRefused()) return total;
+  const result = session.dia;
   if (!result) return total;
   const selected = result.profiles.filter((p) => req.profileIds.includes(p.id));
   for (const [i, p] of selected.entries()) {
@@ -287,6 +297,7 @@ export const importHandlers: Record<string, SettingsHandler> = {
   "import.openInWebStore": (profileId: string, urls: string[]) => openInWebStore(profileId, urls),
   "import.arcHolders": () => allArcHolders(useBrowser.getState()).length,
   "import.restoreArcFolders": () => {
+    if (transientImportRefused()) return allArcHolders(useBrowser.getState()).length;
     for (const id of allArcHolders(useBrowser.getState())) restoreArcFolders(id, null);
     return allArcHolders(useBrowser.getState()).length;
   },

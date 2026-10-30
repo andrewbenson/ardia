@@ -784,7 +784,10 @@ final class WindowManager: NSObject, NSWindowDelegate {
       return NSApp.reply(toApplicationShouldTerminate: false)
     }
     guard quitStep == .saving else { return }
-    if DocumentStore.flush() { ChromeWindows.recordLaunchLayout() } else { ChromeWindows.forgetLaunchPictures() }
+    let flushed = DocumentStore.flush()
+    if !DocumentStore.safeMode {
+      if flushed { ChromeWindows.recordLaunchLayout() } else { ChromeWindows.forgetLaunchPictures() }
+    }
     quitAfterUpdaterSettles()
   }
 

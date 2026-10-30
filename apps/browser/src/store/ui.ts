@@ -5,7 +5,7 @@ import { engineProfile, isIncognitoProfile, privateSession } from "./model";
 import { linkProfileOf } from "./small";
 import type { FindState, NewTabTarget, WindowUi } from "./types";
 import { commandBarFocus, expectFocus } from "../lib/focusClaims";
-import { nativeOwnsWorkspace, nativeStoreActive, nativeWrite } from "./nativeStore";
+import { nativeOwnsWorkspace, nativeSafeMode, nativeStoreActive, nativeWrite } from "./nativeStore";
 
 export type UiSlice = {
   ui: {
@@ -109,7 +109,7 @@ export const createUiSlice: StateCreator<BrowserState, [], [], UiSlice> = (set, 
         endedPrivateDownloads.add(d.id);
         return;
       }
-      const downloads = exists ? s.downloads.map((x) => (x.id === d.id ? d : x)) : [d, ...s.downloads].slice(0, MAX_DOWNLOADS);
+      const downloads = exists ? s.downloads.map((x) => (x.id === d.id ? d : x)) : [d, ...s.downloads].slice(0, nativeSafeMode() ? undefined : MAX_DOWNLOADS);
       const focused = s.ui.focusedWindowId;
       const open = !exists && focused && downloadVisibleIn(d, s.windows[focused]);
       commitDownloads(downloads, open ? patchWindowUi(s, focused, { downloadsOpen: true }) : {});

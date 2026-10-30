@@ -5,6 +5,7 @@ enum ArdiaCoreProfileData {
   private typealias Step = (label: String, run: (@escaping (Bool) -> Void) -> Void)
 
   static func deleteDefault(_ done: @escaping Done) {
+    guard !ArdiaCoreHost.safeMode else { return done(["safe mode"]) }
     let steps: [Step] = [
       ("history, cookies and cache", { ok in
         ArdiaCoreServices.clearBrowsingData(profile: "", types: ["history", "siteData", "cache", "downloads"], since: 0) { ok(true) }

@@ -97,6 +97,26 @@ public struct Launch: Sendable {
   public var rows: WorkspaceRows { persisted.workspace ?? WorkspaceRows() }
 }
 
+public struct SafeLaunch: Sendable {
+  public let database: SolaraDatabase?
+  public let state: BrowserState
+  public let memory: StoreMemory
+  public let persisted: PersistedState
+  public let report: LaunchReport
+
+  public init(_ launch: Launch) {
+    self.init(database: launch.database, state: launch.state, memory: launch.memory, persisted: launch.persisted, report: launch.report)
+  }
+
+  init(database: SolaraDatabase?, state: BrowserState, memory: StoreMemory, persisted: PersistedState, report: LaunchReport) {
+    self.database = database
+    self.state = state
+    self.memory = memory
+    self.persisted = persisted
+    self.report = report
+  }
+}
+
 public enum Launcher {
   public static let markerKey = "nativeExport"
   public static let keptAsideCopies = 3
@@ -122,6 +142,81 @@ public enum Launcher {
     }
     pruneMovedAside(folder)
     return launch
+  }
+
+  public static func openSafe(_ folder: DataFolder, appVersion: String, now: Date = Date(), context: LoadContext) throws -> SafeLaunch {
+    let files = LaunchFiles(folder)
+    let snapshot = FileManager.default.temporaryDirectory.appending(path: "solara-safe-\(UUID().uuidString)")
+    let reader = try? safeSnapshot(folder, at: snapshot)
+    defer {
+      try? reader?.close()
+      try? FileManager.default.removeItem(at: snapshot)
+    }
+    if let reader,
+      let persisted = try? reader.read({ db in
+        try SolaraDatabase.checkCurrent(db)
+        return try Rows.load(db)
+      })
+    {
+      let writable = (try? reader.read { db in
+        guard files.session.failure == nil, files.downloads.failure == nil,
+          try writtenByOlderBuild(files, db: db) == nil else { return false }
+        if persisted.workspace != nil,
+          markerScope(files.session.data).map({ $0 != PersistenceScope.everything.markerName }) == true,
+          files.session.data.map(sha256) != (try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'workspace_source_sha256'"))
+        {
+          return false
+        }
+        return true
+      }) == true && !FileManager.default.fileExists(atPath: folder.database.path + "-journal")
+      let database = writable ? (try? SolaraDatabase(existing: folder.database)) : nil
+      let loader = context.session()
+      var baseline = persisted
+      if let workspace = persisted.workspace { baseline.workspace = workspace.readable().rows }
+      let session = baseline.sessionJSON() ?? ["version": 2, "settings": persisted.settings.map(JSONValue.object) ?? .null]
+      let loaded = DecodeLog.collecting { loader.loadSession(session, downloads: persisted.downloadsJSON) }
+      baseline.workspace = nil
+      return SafeLaunch(
+        database: database, state: Importer.safeMode(of: loaded.0), memory: loader.memory, persisted: baseline,
+        report: LaunchReport(source: .database, notes: persisted.notes + loaded.1))
+    }
+    var notes: [String] = []
+    let settings = reader.flatMap { reader in
+      try? reader.read { db in try Rows.loadSettings(db, notes: &notes) ?? JSONObject() }
+    } ?? files.session.data.flatMap { (try? JSONValue.parse($0))?["settings"]?.object }
+    let downloads = reader.flatMap { reader in
+      try? reader.read { db in try Rows.loadDownloads(db, notes: &notes) }
+    }
+    let session: JSONValue = ["version": 2, "settings": settings.map(JSONValue.object) ?? .null]
+    let downloadsJSON: JSONValue? = downloads.map { ["version": 2, "downloads": .array($0.map { .object($0.json) })] }
+      ?? files.downloads.data.flatMap { try? JSONValue.parse($0) }
+    let loader = context.session()
+    let loaded = DecodeLog.collecting { loader.loadSession(session, downloads: downloadsJSON) }
+    let state = Importer.settingsAndDownloads(of: loaded.0)
+    return SafeLaunch(
+      database: nil, state: state, memory: loader.memory,
+      persisted: PersistedState(settings: settings, downloads: state.downloads),
+      report: LaunchReport(source: .imported(reason: "settings-only safe launch without persistence"), notes: notes + loaded.1))
+  }
+
+  static func safeSnapshot(_ folder: DataFolder, at directory: URL) throws -> DatabaseQueue {
+    let fm = FileManager.default
+    try fm.createDirectory(at: directory, withIntermediateDirectories: false)
+    let copy = directory.appending(path: "store")
+    try Data(contentsOf: folder.database).write(to: copy)
+    for suffix in ["-wal", "-journal"] {
+      let side = URL(fileURLWithPath: folder.database.path + suffix)
+      if fm.fileExists(atPath: side.path) { try Data(contentsOf: side).write(to: URL(fileURLWithPath: copy.path + suffix)) }
+    }
+    var config = Configuration()
+    config.busyMode = .timeout(5)
+    return try DatabaseQueue(path: copy.path, configuration: config)
+  }
+
+  static func workspaceIsCurrent(_ database: SolaraDatabase, files: LaunchFiles) throws -> Bool {
+    guard try database.load().workspace != nil else { return false }
+    guard markerScope(files.session.data).map({ $0 != PersistenceScope.everything.markerName }) == true else { return true }
+    return files.session.data.map(sha256) == (try database.meta("workspace_source_sha256"))
   }
 
   static let unreadableCodes: [ResultCode] = [.SQLITE_ERROR, .SQLITE_CORRUPT, .SQLITE_NOTADB, .SQLITE_SCHEMA, .SQLITE_MISMATCH, .SQLITE_FORMAT, .SQLITE_RANGE]
@@ -297,14 +392,18 @@ public enum Launcher {
   }
 
   static func writtenByOlderBuild(_ files: LaunchFiles, database: SolaraDatabase) throws -> String? {
+    try database.pool.read { db in try writtenByOlderBuild(files, db: db) }
+  }
+
+  static func writtenByOlderBuild(_ files: LaunchFiles, db: Database) throws -> String? {
     let session = files.session.data
     if let session, marker(in: session) == false {
-      let importedHash = try database.meta("source_session_sha256")
+      let importedHash = try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'source_session_sha256'")
       if importedHash != sha256(session) { return "session.json was written by a build without the native store" }
     }
     let downloads = files.downloads.data
     if let downloads, marker(in: downloads) == false {
-      let importedHash = try database.meta("source_downloads_sha256")
+      let importedHash = try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'source_downloads_sha256'")
       if importedHash != sha256(downloads) { return "downloads.json was written by a build without the native store" }
     }
     return nil

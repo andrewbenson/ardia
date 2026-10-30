@@ -41,7 +41,8 @@ void NoteNavigationDownload(NSString *url, NSString *profile) {
     NSArray *oldest = [entries keysSortedByValueUsingSelector:@selector(compare:)];
     [entries removeObjectsForKeys:[oldest subarrayWithRange:NSMakeRange(0, entries.count - 200)]];
   }
-  [[NSJSONSerialization dataWithJSONObject:entries options:0 error:nil] writeToFile:SavedPath() atomically:YES];
+  if (!ArdiaCoreHost.safeMode)
+    [[NSJSONSerialization dataWithJSONObject:entries options:0 error:nil] writeToFile:SavedPath() atomically:YES];
 }
 
 bool WasNavigationDownload(NSString *url, NSString *profile) {

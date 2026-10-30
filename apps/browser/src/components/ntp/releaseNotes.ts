@@ -1,5 +1,6 @@
 import { launchEnvironment, readDocument, systemInfo, writeDocument } from "@ardia/shell";
 import { persistenceRefused } from "../../lib/persistLatch";
+import { nativeSafeMode } from "../../store/nativeStore";
 import { create } from "zustand";
 import { PRODUCT } from "../../lib/productName";
 
@@ -71,7 +72,7 @@ export function trackAppVersion(): boolean {
     pending = notesFor(version) ? { version, since: Date.now() } : null;
   }
   if (pending && Date.now() - pending.since > POSTCARD_SECONDS * 1000) pending = null;
-  save({ lastVersion: version, pending });
+  if (!nativeSafeMode()) save({ lastVersion: version, pending });
   useReleaseNotes.setState({ pending });
   return updated;
 }
@@ -95,9 +96,10 @@ export function openReleaseNotes(windowId: string, version = useReleaseNotes.get
 export const closeReleaseNotes = () => useReleaseNotes.setState({ page: null });
 
 export function retireReleaseNotes() {
-  if (!useReleaseNotes.getState().pending) return;
+  const pending = useReleaseNotes.getState().pending;
+  if (!pending) return;
   useReleaseNotes.setState({ pending: null });
-  save({ lastVersion: readSaved()?.lastVersion ?? systemInfo().appVersion, pending: null });
+  save({ lastVersion: pending.version, pending: null });
 }
 
 function queueReleaseNotes(version = systemInfo().appVersion) {

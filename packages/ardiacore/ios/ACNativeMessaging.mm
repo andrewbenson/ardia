@@ -1,4 +1,5 @@
 #import "ACNativeMessaging.h"
+#import "ArdiaCoreHost.h"
 
 namespace ac::nativemessaging {
 
@@ -89,6 +90,7 @@ NSDictionary<NSString *, NSData *> *InstalledHosts() {
 }
 
 void SyncHosts(NSString *userDataDir) {
+  if (ArdiaCoreHost.safeMode) return;
   NSFileManager *fm = NSFileManager.defaultManager;
   NSString *dir = [userDataDir stringByAppendingPathComponent:@"NativeMessagingHosts"];
   [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];

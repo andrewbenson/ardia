@@ -1,4 +1,5 @@
 #import "ArdiaCoreEarlyWindow.h"
+#import "ArdiaCoreHost.h"
 
 #import "ACChromeWindow.h"
 #import "ArdiaCoreEngineBridge.h"
@@ -689,7 +690,7 @@ NSString *ActiveTabOf(NSDictionary *session, NSString *windowId);
 
 void Record(BOOL wait) {
   gRecordQueued = NO;
-  if (!gDirectory.length) return;
+  if (!gDirectory.length || ArdiaCoreHost.safeMode) return;
   NSDictionary *session = SessionAt(gDirectory);
   if ([session[@"settings"] isKindOfClass:NSDictionary.class] && [session[@"settings"][@"restoreSession"] isEqual:@NO])
     [ArdiaCoreEarlyWindow forgetPictures];
@@ -1184,7 +1185,7 @@ CGImageRef TakePrefetched(NSString *windowId) {
 
 + (void)setDataDirectory:(NSString *)directory {
   gDirectory = [directory copy];
-  gLayoutPath = directory.length && !SwitchedOffByEnvironment() ? [directory stringByAppendingPathComponent:@"launch-layout.json"] : nil;
+  gLayoutPath = directory.length && !ArdiaCoreHost.safeMode && !SwitchedOffByEnvironment() ? [directory stringByAppendingPathComponent:@"launch-layout.json"] : nil;
 }
 
 + (BOOL)switchedOff {
@@ -1260,6 +1261,7 @@ CGImageRef TakePrefetched(NSString *windowId) {
 }
 
 + (void)forgetPictures {
+  if (ArdiaCoreHost.safeMode) return;
   NSString *directory = gDirectory;
   if (!directory.length) return;
   gLayouts = [NSMutableDictionary dictionary];

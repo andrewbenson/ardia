@@ -18,13 +18,13 @@ final class NativeUserScripts: UserScriptsHost {
   private init() {}
 
   func startWhenReady() {
-    guard !requested else { return }
+    guard !ArdiaCoreHost.safeMode, !requested else { return }
     requested = true
     lifecycle = NativeStoreHandle.subscribeLifecycle { NativeUserScripts.shared.prepare() }
   }
 
   private func prepare() {
-    guard !started, NativeSettingsHandle.model != nil, let store = NativeStoreHandle.store else { return }
+    guard !ArdiaCoreHost.safeMode, !started, NativeSettingsHandle.model != nil, let store = NativeStoreHandle.store else { return }
     started = true
     UserScripts.shared.emit = {
       DispatchQueue.main.async { MainActor.assumeIsolated { NativeUserScripts.shared.sync.schedule() } }
@@ -36,6 +36,7 @@ final class NativeUserScripts: UserScriptsHost {
   }
 
   private func stateChanged(_ state: BrowserState) {
+    guard !ArdiaCoreHost.safeMode else { return }
     sync.sync(enabled: state.settings["cliControl"]?.bool ?? false, targets: UserScriptsSync.targets(state))
   }
 

@@ -110,11 +110,13 @@ public struct ProfileDeletePrompt: Identifiable, Hashable, Sendable {
   public let title: String
   public let message: String
   public let fromDetails: Bool
+  public let canDelete: Bool
 }
 
 @MainActor
 @Observable
 public final class ProfilesPaneModel: SettingsPaneProvider {
+  @ObservationIgnored let safeMode: Bool
   @ObservationIgnored let services: ProfilesServices
   @ObservationIgnored let store: SettingsStoreSource
   var creating = false
@@ -125,7 +127,8 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
   @ObservationIgnored var pendingThemes: [String: ProfileThemeValue] = [:]
   @ObservationIgnored var themeFlush: Task<Void, Never>?
 
-  public init(services: ProfilesServices, store: SettingsStoreSource) {
+  public init(services: ProfilesServices, store: SettingsStoreSource, safeMode: Bool = false) {
+    self.safeMode = safeMode
     self.services = services
     self.store = store
   }
@@ -175,6 +178,12 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
 
   func requestDelete(_ id: String, fromDetails: Bool) async {
     guard let profile = profile(id), profiles.count > 1 else { return }
+    if safeMode {
+      deletePrompt = ProfileDeletePrompt(
+        profileId: id, title: "Safe Mode", message: "Profiles can't be deleted in safe mode. Quit and open Solara normally to delete one.",
+        fromDetails: fromDetails, canDelete: false)
+      return
+    }
     let sharing = sharingProfiles(id).compactMap { self.profile($0)?.name }
     let message: String
     if !sharing.isEmpty {
@@ -183,7 +192,7 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
       let note = profile.usesDefaultEngineProfile ? Self.keptExtensionsNote(await services.extensionsKeptOnDelete()) : ""
       message = "All data associated with this Profile will be removed. This action cannot be undone.\(note)"
     }
-    deletePrompt = ProfileDeletePrompt(profileId: id, title: "Delete “\(profile.name)”?", message: message, fromDetails: fromDetails)
+    deletePrompt = ProfileDeletePrompt(profileId: id, title: "Delete “\(profile.name)”?", message: message, fromDetails: fromDetails, canDelete: true)
   }
 
   static func keptExtensionsNote(_ names: [String]?) -> String {
@@ -194,12 +203,21 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
 
   func confirmDelete(_ prompt: ProfileDeletePrompt, navigation: SettingsNavigation?) {
     deletePrompt = nil
-    guard profiles.count > 1, profile(prompt.profileId) != nil else { return }
+    guard !safeMode, prompt.canDelete, profiles.count > 1, profile(prompt.profileId) != nil else { return }
     services.deleteProfile(prompt.profileId)
     if prompt.fromDetails, profile(prompt.profileId) == nil { navigation?.go(.profiles) }
   }
 
+  func refuseProfileEdit(_ id: String) -> Bool {
+    guard safeMode else { return false }
+    deletePrompt = ProfileDeletePrompt(
+      profileId: id, title: "Safe Mode", message: "Profile edits can't be saved in safe mode while the saved session and launch appearance are kept unchanged. Open Solara normally to edit profiles.",
+      fromDetails: false, canDelete: false)
+    return true
+  }
+
   func move(_ id: String, to target: Int) {
+    guard !refuseProfileEdit(id) else { return }
     var ids = order.filter { $0 != id }
     ids.insert(id, at: min(max(0, target), ids.count))
     if ids != order { services.reorderProfiles(ids) }
@@ -207,6 +225,7 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
 
   func updateName(_ id: String, _ draft: String) -> String? {
     guard let profile = profile(id) else { return nil }
+    guard !refuseProfileEdit(id) else { return profile.name }
     let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return profile.name }
     if trimmed != profile.name { services.updateProfile(id, ProfilePatch(name: trimmed)) }
@@ -214,6 +233,7 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
   }
 
   func setIcon(_ id: String, _ icon: String?) {
+    guard !refuseProfileEdit(id) else { return }
     services.updateProfile(id, ProfilePatch(icon: .some(icon)))
   }
 
@@ -232,6 +252,7 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
   }
 
   func changeTheme(_ id: String, _ next: ProfileThemeValue, settle: Bool) {
+    guard !refuseProfileEdit(id) else { return }
     pendingThemes[id] = next
     if settle {
       themeDrafts[id] = nil
@@ -260,6 +281,7 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
   }
 
   func choosePreset(_ id: String, _ color: ProfileColorValue) {
+    guard !refuseProfileEdit(id) else { return }
     pendingThemes[id] = nil
     themeDrafts[id] = nil
     services.adoptProfileTheme(id)
@@ -267,6 +289,7 @@ public final class ProfilesPaneModel: SettingsPaneProvider {
   }
 
   func importArcTheme(_ id: String, _ choice: ArcThemeChoice) {
+    guard !refuseProfileEdit(id) else { return }
     pendingThemes[id] = nil
     themeDrafts[id] = nil
     services.adoptProfileTheme(id)
@@ -339,8 +362,12 @@ struct ProfileDeleteAlert: ViewModifier {
       isPresented: Binding(get: { model.deletePrompt != nil }, set: { if !$0 { model.deletePrompt = nil } }),
       presenting: prompt
     ) { prompt in
-      Button("Delete Profile", role: .destructive) { model.confirmDelete(prompt, navigation: context?.navigation) }
-      Button("Cancel", role: .cancel) { model.deletePrompt = nil }
+      if prompt.canDelete {
+        Button("Delete Profile", role: .destructive) { model.confirmDelete(prompt, navigation: context?.navigation) }
+        Button("Cancel", role: .cancel) { model.deletePrompt = nil }
+      } else {
+        Button("OK", role: .cancel) { model.deletePrompt = nil }
+      }
     } message: { prompt in
       Text(prompt.message)
     }

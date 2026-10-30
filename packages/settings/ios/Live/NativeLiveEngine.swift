@@ -75,6 +75,7 @@ final class NativeLiveReplicaBox: @unchecked Sendable {
   }
 
   func flushAtQuit() {
+    guard !DocumentStore.safeMode else { return }
     lock.lock()
     let text = persistedText
     lock.unlock()
@@ -172,7 +173,7 @@ final class NativeLiveEngine: @unchecked Sendable {
     engine = LiveEngine(effects: LiveEffects(
       http: NativeLiveHTTP(followsRedirects: !isolated), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: calendarProvider,
       auth: NativeLiveAuth.shared, notifier: NativeLiveNotifier(), documents: NativeLiveDocuments(),
-      environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate)))
+      environment: LiveEnvironment(mockBase: mockBase, calendarFixture: fixture, isolatedDataDirectory: isolated, separateSlowTimers: separate, safeMode: DocumentStore.safeMode)))
     let box = self.box
     DocumentStore.registerBeforeQuitFlush { box.flushAtQuit() }
     Task {
@@ -197,7 +198,15 @@ final class NativeLiveEngine: @unchecked Sendable {
     let payload = try JSONSerialization.jsonObject(with: Data(payloadJSON.utf8), options: .fragmentsAllowed)
     let wire = try JSONSerialization.data(withJSONObject: ["name": name, "payload": payload], options: .fragmentsAllowed)
     let command = try LiveJSON.decode(LiveCommand.self, from: wire)
+    let before = DocumentStore.safeMode ? try await engine.persistedDocumentJSON() : nil
     let result = try await engine.perform(command)
+    let dirty = await engine.documentDirty
+    if let before, before != (try await engine.persistedDocumentJSON()) || dirty {
+      let saved = try await engine.persistedDocumentJSON()
+      try await engine.flush()
+      guard DocumentStore.flush() else { throw LiveError(.other, "Cannot save Live and calendar changes to disk") }
+      await engine.acknowledgeDocumentSave(saved)
+    }
     if let replica = try? await engine.currentReplica() { box.publish(replica) }
     return String(decoding: try LiveJSON.encode(result), as: UTF8.self)
   }

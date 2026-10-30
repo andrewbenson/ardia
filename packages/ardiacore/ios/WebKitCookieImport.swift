@@ -27,6 +27,7 @@ extension WebKitHub {
   }
 
   func importCookies(_ cookies: [[String: Any]], profile: String, storeKey: String, completion: @escaping (Int) -> Void) {
+    guard !ArdiaCoreHost.safeMode else { return completion(0) }
     let made = cookies.compactMap(Self.httpCookie(fromEngine:))
     guard !made.isEmpty, let store = liveDataStore(for: profile, storeKey: storeKey)?.httpCookieStore else { return completion(0) }
     let group = DispatchGroup()

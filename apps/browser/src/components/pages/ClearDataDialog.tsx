@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { pruneProfileFavicons } from "../../lib/favicons";
 import { useBrowser } from "../../store/browser";
 import { engineProfile, isIncognitoProfile } from "../../store/model";
+import { refuseSafeHistoryDeletion } from "../../store/safeLibraryEdits";
 
 const RANGES = [
   { value: "hour", title: "Last hour", ms: 3_600_000 },
@@ -23,6 +24,7 @@ export type ClearRange = Range;
 export async function clearDataFor(profileId: string, range: Range, history: boolean, siteData: boolean) {
   const ms = RANGES.find((r) => r.value === range)?.ms ?? RANGES[0].ms;
   const since = ms === Infinity ? undefined : Date.now() - ms;
+  if (history && refuseSafeHistoryDeletion(engineProfile(profileId), undefined, since)) throw new Error("History deletion is unavailable until the legacy file has migrated in a normal launch.");
   if (history) {
     useBrowser.getState().clearHistory(profileId, since);
     pruneProfileFavicons(profileId);

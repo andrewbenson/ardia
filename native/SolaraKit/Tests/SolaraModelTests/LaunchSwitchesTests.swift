@@ -116,31 +116,29 @@ import Testing
     }
   }
 
-  @Test func aDistributionBuildTakesOnlyTheSettingsRowsFromDefaults() {
+  @Test func aDistributionBuildIgnoresStoredValuesForEveryDefaultOnSwitch() {
     let defaults = scratchDefaults()
-    for name in LaunchSwitch.storedInDevelopment { defaults.set("1", forKey: name.rawValue) }
+    for name in LaunchSwitch.onByDefault { defaults.set("0", forKey: name.rawValue) }
     let shipped = LaunchSwitches(environment: [:], defaults: defaults, distribution: true, skipStored: false)
     let dev = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
-    for name in LaunchSwitch.storedInDevelopment {
-      #expect(shipped.isOn(name, defaultOn: false) == LaunchSwitch.experiments.contains(name), "\(name.rawValue)")
-      #expect(dev.isOn(name, defaultOn: false), "\(name.rawValue)")
+    for name in LaunchSwitch.onByDefault {
+      #expect(shipped.isOn(name), "\(name.rawValue)")
+      if name.storable(distribution: false) { #expect(!dev.isOn(name), "\(name.rawValue)") }
+      #expect(!name.storable(distribution: true))
     }
-    #expect(!LaunchSwitch.experiments.contains(.nativePagesPool))
-    #expect(!LaunchSwitch.experiments.contains(.shellMainTop))
+    let overridden = LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0"], defaults: defaults, distribution: true, skipStored: false)
+    #expect(overridden.isOn(.nativeShell))
+    let devOverride = LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0"], defaults: defaults, distribution: false, skipStored: false)
+    #expect(!devOverride.isOn(.nativeShell))
   }
 
-  @Test func holdingOptionAtLaunchSkipsStoredValuesAndSaysSo() {
+  @Test func aSafeModeDecisionDoesNotChangeStoredSwitches() {
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_NATIVE_SHELL")
-    let skipped = LaunchSwitches(environment: ["ARDIA_NATIVE_SIDEBAR": "1"], defaults: defaults, distribution: false, skipStored: true)
-    #expect(!skipped.isOn(.nativeShell, defaultOn: false))
-    #expect(skipped.isOn(.nativeSidebar, defaultOn: false))
-    #expect(skipped.skippedStored)
-    let nothingStored = LaunchSwitches(environment: [:], defaults: scratchDefaults(), distribution: false, skipStored: true)
-    #expect(!nothingStored.skippedStored)
-    let unstorable = scratchDefaults()
-    unstorable.set("0", forKey: "ARDIA_NATIVE_DOWNLOAD_MAGNET")
-    #expect(!LaunchSwitches(environment: [:], defaults: unstorable, distribution: false, skipStored: true).skippedStored)
+    defaults.set("0", forKey: "ARDIA_NATIVE_SHELL")
+    let held = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: false, optionHeld: { true })
+    #expect(held.safeMode)
+    #expect(!held.isOn(.nativeShell))
+    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
   }
 
   @Test func writingAndClearingTouchOnlyTheAllowedKeys() {
@@ -152,16 +150,17 @@ import Testing
     stored.set(.nativeShell, true)
     stored.set(.nativeDownloadMagnet, false)
     stored.set(.nativePagesPool, true)
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "1")
+    #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_DOWNLOAD_MAGNET") == nil)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_PAGES_POOL") == nil)
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_GONE") == nil)
+    #expect(defaults.string(forKey: "ARDIA_NATIVE_GONE") == "1")
     #expect(defaults.string(forKey: "ARDIA_TEST_REAUTH") == "1")
-    #expect(stored.any)
+    #expect(!stored.any)
     stored.set(.nativeShell, nil)
     #expect(!stored.any)
     stored.set(.nativeSidebar, false)
     stored.clear()
+    #expect(defaults.object(forKey: "ARDIA_NATIVE_GONE") == nil)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_SIDEBAR") == nil)
     #expect(defaults.string(forKey: "ARDIA_SHELL_MAIN_TOP") == "1")
   }
@@ -218,28 +217,13 @@ import Testing
     #expect(LaunchSwitch.onByDefault.allSatisfy { !off.isOn($0) })
   }
 
-  @Test func theNativeInterfaceIsOnByDefaultAndASavedZeroTurnsOneOff() {
-    let plain = LaunchSwitches(environment: [:], defaults: scratchDefaults(), distribution: true, skipStored: false)
-    for name: LaunchSwitch in [.nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet] { #expect(plain.isOn(name), "\(name.rawValue)") }
-    for name: LaunchSwitch in [.shellPanes, .nativePagesPool, .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .nativeToolTour, .nativeSidePanel] { #expect(plain.isOn(name), "\(name.rawValue)") }
+  @Test func theNativeInterfaceIsOnByDefaultEvenWithASavedZeroInDistribution() {
     let defaults = scratchDefaults()
     defaults.set("0", forKey: "ARDIA_NATIVE_SHELL")
-    let off = LaunchSwitches(environment: [:], defaults: defaults, distribution: true, skipStored: false)
-    #expect(!off.isOn(.nativeShell))
-    #expect(!off.isOn(.nativeTabPickers))
-    #expect(off.refusals == [
-      "ARDIA_SHELL_PANES is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
-      "ARDIA_NATIVE_PAGES_POOL is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
-      "ARDIA_SHELL_MAIN_TOP is on but stays off: it needs ARDIA_SHELL_PANES=1 and ARDIA_NATIVE_PAGES_POOL=1",
-      "ARDIA_NATIVE_ICON_PICKER is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
-      "ARDIA_NATIVE_AUTOHIDE is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
-      "ARDIA_NATIVE_PANE_PROMPTS is on but stays off: it needs ARDIA_NATIVE_SHELL=1 and ARDIA_NATIVE_PAGES_POOL=1",
-      "ARDIA_NATIVE_TAB_PICKERS is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
-      "ARDIA_NATIVE_PROFILE_PAGER is on but stays off: it needs ARDIA_NATIVE_SHELL=1",
-    ])
-    #expect(off.isOn(.nativeTopStrip))
-    let skipped = LaunchSwitches(environment: [:], defaults: defaults, distribution: true, skipStored: true)
-    #expect(skipped.isOn(.nativeShell))
+    let shipped = LaunchSwitches(environment: [:], defaults: defaults, distribution: true, skipStored: false)
+    #expect(LaunchSwitch.onByDefault.allSatisfy { shipped.isOn($0) })
+    let dev = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
+    #expect(!dev.isOn(.nativeShell))
   }
 
   @Test func aSavedSwitchWhoseNeedsWereTurnedOffStaysOff() {
@@ -258,47 +242,40 @@ import Testing
     #expect(withShell.refusals.isEmpty)
   }
 
-  @Test func twoLaunchesThatNeverFinishedTurnOffTheDefaultOnSwitchesAndTheSavedOnes() {
+  @Test func twoUnfinishedLaunchesTriggerSafeModeWithoutChangingSwitches() {
     for distribution in [false, true] {
       let defaults = scratchDefaults()
       defaults.set("1", forKey: "ARDIA_NATIVE_SIDEBAR")
       let launch = { LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { false }) }
       #expect(launch().countedLaunch)
-      let second = launch()
-      #expect(second.isOn(.nativeShell) && second.isOn(.nativeTopStrip) && second.isOn(.nativeSidebar))
-      let third = launch()
-      #expect(third.droppedAfterFailedLaunches)
-      #expect(third.turnedOffByRecovery == [.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour])
-      #expect(!third.isOn(.nativeShell) && !third.isOn(.nativeTopStrip) && !third.isOn(.nativeSidebar) && !third.isOn(.nativeTabPickers))
-      #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
-      #expect(defaults.string(forKey: "ARDIA_NATIVE_TOP_STRIP") == "0")
-      #expect(defaults.string(forKey: "ARDIA_NATIVE_SIDEBAR") == "0")
-      #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
-      let report = third.recoveryReport ?? ""
-      #expect(report.hasPrefix("Solara didn't finish opening twice in a row"))
-      #expect(report.contains("ARDIA_NATIVE_SHELL, ARDIA_SHELL_PANES, ARDIA_NATIVE_SIDEBAR, ARDIA_NATIVE_TOP_STRIP"))
-      #expect(report.contains("Settings › Advanced › Experimental") && report.contains("defaults delete"))
-      let fourth = launch()
-      #expect(!fourth.countedLaunch && !fourth.droppedAfterFailedLaunches && fourth.recoveryReport == nil)
-      #expect(!fourth.isOn(.nativeShell))
-      StoredLaunchSwitches(defaults: defaults, distribution: distribution).set(.nativeShell, nil)
+      #expect(defaults.integer(forKey: LaunchSwitches.failedLaunchesKey) == 1)
       #expect(launch().countedLaunch)
+      #expect(defaults.integer(forKey: LaunchSwitches.failedLaunchesKey) == 2)
+      let third = launch()
+      #expect(third.safeMode && third.safeModeAfterFailedLaunches && third.countedLaunch)
+      #expect(third.isOn(.nativeShell) && third.isOn(.nativeTopStrip) && third.isOn(.nativeSidebar))
+      #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
+      #expect(defaults.string(forKey: "ARDIA_NATIVE_SIDEBAR") == "1")
+      #expect(defaults.integer(forKey: LaunchSwitches.failedLaunchesKey) == 2)
+      #expect((third.safeModeReport ?? "").contains("twice in a row"))
+      let fourth = launch()
+      #expect(fourth.safeMode && fourth.safeModeAfterFailedLaunches && fourth.countedLaunch)
+      #expect(defaults.integer(forKey: LaunchSwitches.failedLaunchesKey) == 2)
       LaunchSwitches.launchSucceeded(defaults: defaults, isolated: false)
-      #expect(launch().isOn(.nativeShell))
-      #expect(launch().isOn(.nativeShell))
-      #expect(launch().droppedAfterFailedLaunches)
+      #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
+      let fifth = launch()
+      #expect(!fifth.safeMode && fifth.countedLaunch)
     }
   }
 
-  @Test func withNothingRecoveryCouldTurnOffALaunchIsNotCounted() {
+  @Test func launchesStillCountWhenDevelopmentSwitchesAreStoredOff() {
     let defaults = scratchDefaults()
-    for name in LaunchSwitch.recoverable { defaults.set("0", forKey: name.rawValue) }
-    for _ in 0..<4 {
-      let switches = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: false, optionHeld: { false })
-      #expect(!switches.countedLaunch && !switches.droppedAfterFailedLaunches)
-    }
-    #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
-    #expect(LaunchSwitch.recoverable == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeToolTour, .nativeSidePanel])
+    for name in LaunchSwitch.experiments { defaults.set("0", forKey: name.rawValue) }
+    let launch = { LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: false, optionHeld: { false }) }
+    #expect(launch().countedLaunch)
+    #expect(launch().countedLaunch)
+    #expect(launch().safeMode)
+    for name in LaunchSwitch.experiments { #expect(defaults.string(forKey: name.rawValue) == "0") }
   }
 
   @Test func anIsolatedLaunchNeitherCountsNorAsksForOption() {
@@ -314,55 +291,39 @@ import Testing
     #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "1")
   }
 
-  @Test func holdingOptionTurnsOffTheDefaultOnSwitchesAndTheSavedOnesAndIsNotAFailedLaunch() {
+  @Test func holdingOptionStartsSafeModeForOneLaunchWithoutWritingSwitches() {
     for distribution in [false, true] {
       let defaults = scratchDefaults()
       defaults.set("1", forKey: "ARDIA_NATIVE_SIDEBAR")
       defaults.set(1, forKey: LaunchSwitches.failedLaunchesKey)
       let held = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { true })
-      #expect(held.skippedStored && !held.countedLaunch)
-      #expect(held.turnedOffByRecovery == [.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour])
-      #expect(!held.isOn(.nativeShell) && !held.isOn(.nativeSidebar) && !held.isOn(.nativeTopStrip))
-      #expect(held.isOn(.nativeDownloadMagnet), "a switch that can't be saved can't be turned off this way")
-      #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
-      #expect(defaults.string(forKey: "ARDIA_NATIVE_TOP_STRIP") == "0")
-      #expect(defaults.string(forKey: "ARDIA_NATIVE_SIDEBAR") == "0")
-      #expect(defaults.object(forKey: LaunchSwitches.failedLaunchesKey) == nil)
-      #expect((held.recoveryReport ?? "").hasPrefix("Option was held while Solara opened"))
+      #expect(held.safeMode && held.countedLaunch && !held.safeModeAfterFailedLaunches)
+      #expect(held.isOn(.nativeShell) && held.isOn(.nativeSidebar) && held.isOn(.nativeTopStrip))
+      #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
+      #expect(defaults.string(forKey: "ARDIA_NATIVE_SIDEBAR") == "1")
+      #expect(defaults.integer(forKey: LaunchSwitches.failedLaunchesKey) == 2)
+      let retry = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { false })
+      #expect(retry.safeMode && retry.safeModeAfterFailedLaunches && retry.countedLaunch)
+      LaunchSwitches.launchSucceeded(defaults: defaults, isolated: false)
       let next = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { false })
-      #expect(!next.isOn(.nativeShell) && next.recoveryReport == nil && !next.countedLaunch)
-      let again = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: distribution, optionHeld: { true })
-      #expect(again.skippedStored && again.turnedOffByRecovery.isEmpty && again.recoveryReport == nil)
-      let environment = LaunchSwitches.launching(environment: ["ARDIA_NATIVE_SHELL": "1"], defaults: defaults, distribution: distribution, optionHeld: { true })
-      #expect(environment.isOn(.nativeShell))
+      #expect(!next.safeMode && next.isOn(.nativeShell) && next.countedLaunch)
     }
   }
 
   @Test func holdingOptionAsksFirstAndOpeningNormallyChangesNothing() {
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_NATIVE_SIDEBAR")
-    var asked: [[LaunchSwitch]] = []
+    var asked = 0
     let declined = LaunchSwitches.launching(
-      environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmRecovery: { asked.append($0); return false })
-    #expect(asked == [[.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeSidePanel, .nativeToolTour]])
-    #expect(!declined.skippedStored && declined.turnedOffByRecovery.isEmpty && declined.recoveryReport == nil)
-    #expect(declined.isOn(.nativeShell) && declined.isOn(.nativeSidebar))
-    #expect(declined.countedLaunch)
+      environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmSafeMode: { asked += 1; return false })
+    #expect(asked == 1 && !declined.safeMode && declined.countedLaunch)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_SIDEBAR") == "1")
     let accepted = LaunchSwitches.launching(
-      environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmRecovery: { asked.append($0); return true })
-    #expect(accepted.skippedStored && !accepted.isOn(.nativeShell))
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
-    asked = []
-    _ = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmRecovery: { asked.append($0); return true })
-    #expect(asked.isEmpty, "nothing left to turn off, so no question")
-    _ = LaunchSwitches.launching(environment: ["ARDIA_DATA_DIR": "/tmp/x"], defaults: scratchDefaults(), distribution: false, optionHeld: { true }, confirmRecovery: { asked.append($0); return true })
-    #expect(asked.isEmpty, "an isolated instance never asks")
-    let question = LaunchSwitches.recoveryQuestion([.nativeShell, .nativeTopStrip])
-    #expect(question.title == "Turn off Solara's new native interface?")
-    #expect(question.message.contains("This turns off the native window and the native tab strip, and they stay off"))
-    #expect(question.message.contains("Settings › Advanced › Experimental"))
+      environment: [:], defaults: defaults, distribution: true, optionHeld: { true }, confirmSafeMode: { asked += 1; return true })
+    #expect(asked == 2 && accepted.safeMode && accepted.isOn(.nativeShell))
+    #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
+    let question = LaunchSwitches.safeModeQuestion()
+    #expect(question.title == "Open Solara in safe mode?")
+    #expect(question.message.contains("saved session") && question.message.contains("extensions"))
   }
 
   @Test func aScratchSuiteLetsAnIsolatedDevelopmentInstanceStoreAndCount() {
@@ -375,7 +336,7 @@ import Testing
     #expect(switches.countedLaunch)
     #expect(StoredLaunchSwitches(switches, defaults: defaults).writable)
     _ = LaunchSwitches.launching(environment: env, defaults: defaults, distribution: false, optionHeld: { false })
-    #expect(LaunchSwitches.launching(environment: env, defaults: defaults, distribution: false, optionHeld: { false }).droppedAfterFailedLaunches)
+    #expect(LaunchSwitches.launching(environment: env, defaults: defaults, distribution: false, optionHeld: { false }).safeModeAfterFailedLaunches)
   }
 
   @Test func aDistributionBuildRefusesTheScratchSuite() {
@@ -397,7 +358,7 @@ import Testing
     let build: (Bool?) -> LaunchSwitches = { answer in
       answers.append(answer)
       return LaunchSwitches.launching(
-        environment: [:], defaults: defaults, distribution: true, optionHeld: { answer != nil }, confirmRecovery: { _ in answer ?? false })
+        environment: [:], defaults: defaults, distribution: true, optionHeld: { answer != nil }, confirmSafeMode: { answer ?? false })
     }
     let first = LaunchSwitches.resolve(cell, ask: {
       lockFreeWhileAsking.append(cell.withLockIfAvailable { _ in true } ?? false)
@@ -405,13 +366,13 @@ import Testing
     }, build: build)
     #expect(lockFreeWhileAsking == [true])
     #expect(answers == [true])
-    #expect(first.skippedStored && !first.isOn(.nativeShell))
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
+    #expect(first.safeMode && first.isOn(.nativeShell))
+    #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
     let again = LaunchSwitches.resolve(cell, ask: {
       lockFreeWhileAsking.append(false)
       return false
     }, build: build)
     #expect(lockFreeWhileAsking == [true], "once resolved, nothing asks again")
-    #expect(again.skippedStored && answers.count == 1)
+    #expect(again.safeMode && answers.count == 1)
   }
 }

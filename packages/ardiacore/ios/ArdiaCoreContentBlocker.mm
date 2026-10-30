@@ -1,5 +1,6 @@
 #import "ArdiaCoreServices.h"
 #import "ArdiaCoreInternal.h"
+#import "ArdiaCoreHost.h"
 
 #include <utility>
 
@@ -192,6 +193,7 @@ NSString *BundledExtension() {
 NSString *gExtensionPath;
 
 void StartPreparing() {
+  if (ArdiaCoreHost.safeMode) return;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     gExtensionPath = BundledExtension();
@@ -211,6 +213,7 @@ void FollowDefault(NSArray<NSString *> *profiles, void (^done)(NSString *error))
 void WhenDefaultSettled(void (^then)(void));
 
 void LoadIntoProfile(NSString *profile, void (^then)(NSString *error)) {
+  if (ArdiaCoreHost.safeMode) return then(@"disabled in safe mode");
   then = [then copy];
   StartPreparing();
   void (^load)(void) = ^{
@@ -534,6 +537,7 @@ void MarkLiteSettingsMoved(ArdiaCoreProfile *p, NSString *summary) {
 constexpr double kLiteReadSeconds = 10;
 
 void ReadLiteSettings(NSString *profile, ArdiaCoreProfile *p, void (^done)(NSDictionary *lite, NSString *error)) {
+  if (ArdiaCoreHost.safeMode) return done(nil, @"disabled in safe mode");
   done = [done copy];
   NSString *reader = LiteReaderPath();
   if (!reader) return done(nil, @"the reader isn't in the app");
@@ -774,6 +778,7 @@ void PrepareContentBlocker() {
 }
 
 void LoadContentBlocker(NSString *profile) {
+  if (ArdiaCoreHost.safeMode) return DefaultSettled();
   if (!IsIncognito(profile)) LoadHeld(profile ?: @"");
 }
 }

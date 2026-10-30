@@ -40,6 +40,7 @@ const UI_KEYS = [...WRITABLE_UI_KEYS, "appDark"] as const;
 let active = false;
 let ownsWorkspace = false;
 let handedOff = false;
+let safeMode: "option" | "failedLaunches" | null = null;
 let refusedSession: string | null = null;
 let appliedRev = 0;
 let syncOriginsAtStart = false;
@@ -56,6 +57,8 @@ let stopListening: (() => void) | null = null;
 export const nativeStoreActive = () => active;
 export const nativeOwnsWorkspace = () => active && ownsWorkspace;
 export const dataFolderHandedOff = () => handedOff;
+export const nativeSafeMode = () => safeMode !== null;
+export const nativeSafeModeAfterFailedLaunches = () => safeMode === "failedLaunches";
 export const nativeRefusedSession = () => refusedSession;
 export const nativeStoreRev = () => appliedRev;
 
@@ -64,6 +67,7 @@ export function startNativeStore(): { active: boolean; reason?: string; modulePr
   active = status.active;
   ownsWorkspace = status.active && status.scope === "everything";
   handedOff = !status.active && status.handedOff === true;
+  safeMode = status.safeMode ?? null;
   refusedSession = !status.active ? (status.refusedSession ?? null) : null;
   if (status.syncRedesign !== undefined) syncRedesign.on = status.syncRedesign;
   syncOriginsAtStart = syncRedesign.on;
@@ -221,6 +225,7 @@ function wrapActions(store: Replica) {
     if (typeof s[name] !== "function") continue;
     const prelude = COMMAND_PRELUDES.get(name);
     wrapped[name] = (...args: unknown[]) => {
+      if ((name === "deleteProfile" || name === "createProfile" || name === "updateProfile" || name === "reorderProfiles") && nativeSafeMode()) return (s[name] as (...a: unknown[]) => unknown)(...args);
       prelude?.(...args);
       const closingId = name === "restoreClosingWindow" ? (args[0] as { window: { id: string } }).window.id : undefined;
       const undo = closingId ? nativeClosingUndo(closingId) : undefined;

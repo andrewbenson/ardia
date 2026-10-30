@@ -40,7 +40,7 @@ public final class ExperimentsModel {
   }
 
   func reveal(optionHeld: Bool) {
-    revealed = revealed || optionHeld || stored.any || running.skippedStored || running.droppedAfterFailedLaunches
+    revealed = revealed || optionHeld || stored.any || running.safeMode
       || LaunchSwitch.experiments.contains(where: running.fromEnvironment)
   }
 
@@ -48,7 +48,7 @@ public final class ExperimentsModel {
     _ = revision
     let byDefault = LaunchSwitch.onByDefault.contains(name)
     if running.fromEnvironment(name) { return running.requested(name, defaultOn: byDefault) }
-    return stored.value(name) ?? byDefault
+    return running.distribution ? byDefault : stored.value(name) ?? byDefault
   }
 
   func next(_ name: LaunchSwitch) -> Bool {
@@ -66,7 +66,7 @@ public final class ExperimentsModel {
         needs: needs.isEmpty ? nil : "Needs \(needs.joined(separator: " and ")).",
         waiting: requested(name) && !unmet.isEmpty ? "Off until \(unmet.joined(separator: " and ")) is on." : nil,
         on: next(name),
-        enabled: !fromEnvironment && stored.writable && name.needs.allSatisfy(next),
+        enabled: !fromEnvironment && stored.writable && name.storable(distribution: running.distribution) && name.needs.allSatisfy(next),
         fromEnvironment: fromEnvironment)
     }
   }
@@ -86,26 +86,11 @@ public final class ExperimentsModel {
   }
 
   var note: String {
+    if running.safeMode { return "This launch is in safe mode. The saved session will return on the next normal launch; extensions are off for this launch." }
     if !stored.writable { return "This instance has its own data folder, so only its environment sets these." }
-    if running.droppedAfterFailedLaunches { return "Solara didn't finish opening twice in a row, so \(turnedOff)." }
-    if running.skippedStored { return "Option was held while Solara opened, so \(turnedOff)." }
     return "These turn on parts of Solara that are still being built. Changes apply the next time Solara opens."
   }
 
-  var turnedOff: String {
-    let names = running.turnedOffByRecovery.map { Self.titles[$0]?.title ?? $0.rawValue }
-    guard !names.isEmpty else { return "nothing needed turning off" }
-    let list = names.count == 1 ? names[0] : names.dropLast().joined(separator: ", ") + " and " + names[names.count - 1]
-    return "these were turned off: \(list)"
-  }
-
-  var recovery: String? {
-    guard stored.writable else { return nil }
-    let domain = Bundle.main.bundleIdentifier ?? "com.hill.solara"
-    let back = running.turnedOffByRecovery.isEmpty
-      ? "" : "To turn back on what Solara turned off, use its switch above, or in Terminal defaults delete \(domain) <NAME>. "
-    return back + "If Solara won't open with one on, hold Option while it opens to turn them all off, or turn one off in Terminal with defaults write \(domain) <NAME> 0, for example defaults write \(domain) \(LaunchSwitch.nativeShell.rawValue) 0."
-  }
 }
 
 struct ExperimentsSection: View {
@@ -132,17 +117,9 @@ struct ExperimentsSection: View {
       }
     } header: {
       SettingsSectionHeader("Experimental", description: model.note) {
-        if model.stored.writable && (model.stored.any || model.running.skippedStored) {
+        if model.stored.writable && model.stored.any {
           Button("Turn All Off") { model.turnAllOff() }
         }
-      }
-    } footer: {
-      if let recovery = model.recovery {
-        Text(recovery)
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .textSelection(.enabled)
-          .fixedSize(horizontal: false, vertical: true)
       }
     }
   }

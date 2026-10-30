@@ -1,3 +1,4 @@
+import { nativeSafeMode } from "../store/nativeStore";
 import { bookmarkTree, onBookmarksChanged, watchBookmarks, type BookmarkOp, type EngineBookmark } from "@ardia/ardiacore";
 import { readDocument, removeDocument, writeDocument } from "@ardia/shell";
 import { nativeApplyBookmarkOps } from "@ardia/settings";
@@ -381,6 +382,7 @@ let cacheTimer: ReturnType<typeof setTimeout> | undefined;
 
 function saveCache() {
   cacheTimer = undefined;
+  if (nativeSafeMode()) return;
   const s = store();
   const trees: CacheDoc["trees"] = {};
   for (const [engine, state] of engines) {
@@ -395,6 +397,7 @@ function saveCache() {
 }
 
 export async function migrateBookmarksFile({ keepMs = LEGACY_KEPT_MS } = {}): Promise<"none" | "moved" | "kept"> {
+  if (nativeSafeMode()) return "kept";
   let file: { bookmarks?: Bookmarks } | null = null;
   try {
     const json = readDocument(LEGACY_FILE);

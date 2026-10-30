@@ -9,7 +9,7 @@ public enum OpenFailure: Error, Equatable {
 }
 
 public final class SolaraDatabase: Sendable {
-  public let pool: DatabasePool
+  public let pool: any DatabaseWriter
   public let url: URL
 
   static func configuration() -> Configuration {
@@ -33,6 +33,18 @@ public final class SolaraDatabase: Sendable {
     if try pool.read({ try migrator.hasBeenSuperseded($0) }) { throw OpenFailure.newerSchema }
     try migrator.migrate(pool)
     try pool.write { db in try Rows.setMeta(db, "schema", Schema.migrationNames.last!) }
+  }
+
+  init(existing url: URL) throws {
+    self.url = url
+    pool = try DatabaseQueue(path: url.absoluteString + "?mode=rw", configuration: Self.configuration())
+    try pool.read { db in try Self.checkCurrent(db) }
+  }
+
+  static func checkCurrent(_ db: Database) throws {
+    let quick = try String.fetchAll(db, sql: "PRAGMA quick_check")
+    guard quick == ["ok"] else { throw OpenFailure.corrupt(quick.joined(separator: "; ")) }
+    guard try Schema.migrator.appliedIdentifiers(db) == Set(Schema.migrationNames) else { throw OpenFailure.newerSchema }
   }
 
   public func write(durable: Bool, _ body: (Database) throws -> Void) throws {
@@ -331,20 +343,30 @@ enum Rows {
     }
   }
 
-  static func load(_ db: Database) throws -> PersistedState {
-    var notes: [String] = []
+  static func loadSettings(_ db: Database, notes: inout [String]) throws -> JSONObject? {
     var settings = JSONObject()
-    let settingRows = try Row.fetchAll(db, sql: "SELECT key, value FROM setting ORDER BY position")
-    for row in settingRows {
+    let rows = try Row.fetchAll(db, sql: "SELECT key, value FROM setting ORDER BY position")
+    for row in rows {
       let key: String = row["key"]
       let text: String = row["value"]
       if let value = try? JSONValue.parse(text) { settings[key] = value } else { notes.append("skipped unreadable setting \(key)") }
     }
-    let downloadRows = try String.fetchAll(db, sql: "SELECT payload FROM download ORDER BY position")
+    return rows.isEmpty ? nil : settings
+  }
+
+  static func loadDownloads(_ db: Database, notes: inout [String]) throws -> [Download] {
+    let rows = try String.fetchAll(db, sql: "SELECT payload FROM download ORDER BY position")
     var downloads: [Download] = []
-    for (position, text) in downloadRows.enumerated() {
+    for (position, text) in rows.enumerated() {
       if let object = (try? JSONValue.parse(text))?.object { downloads.append(Download(json: object)) } else { notes.append("skipped unreadable download \(position)") }
     }
+    return downloads
+  }
+
+  static func load(_ db: Database) throws -> PersistedState {
+    var notes: [String] = []
+    let settings = try loadSettings(db, notes: &notes)
+    let downloads = try loadDownloads(db, notes: &notes)
     var documents = JSMap<String>()
     for row in try Row.fetchAll(db, sql: "SELECT name, value FROM document ORDER BY name") {
       let name: String = row["name"]
@@ -391,6 +413,6 @@ enum Rows {
     }
     let syncAnchor = try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'sync_anchor'")
     return PersistedState(
-      settings: settingRows.isEmpty ? nil : settings, downloads: downloads, workspace: workspace, documents: documents, notes: notes, syncAnchor: syncAnchor)
+      settings: settings, downloads: downloads, workspace: workspace, documents: documents, notes: notes, syncAnchor: syncAnchor)
   }
 }

@@ -78,7 +78,10 @@ extension LiveEngine {
     return granted
   }
 
-  public func calendarChanged() { refreshCalendar() }
+  public func calendarChanged() {
+    guard !effects.environment.safeMode else { return }
+    refreshCalendar()
+  }
 
   public var calendarConnected: Bool { calendarData.connected }
 
@@ -88,6 +91,7 @@ extension LiveEngine {
   }
 
   public func checkAlerts() async {
+    guard !effects.environment.safeMode else { return }
     let event = alertEvent()
     if event?.occurrence != meetingAlert?.occurrence {
       meetingAlert = event
@@ -120,7 +124,7 @@ extension LiveEngine {
   }
 
   public func offerAlertsForPinnedTab(url: String) -> Bool {
-    guard Meetings.isCalendarUrl(url), !state.calendar.prompted else { return false }
+    guard !effects.environment.safeMode, Meetings.isCalendarUrl(url), !state.calendar.prompted else { return false }
     updateCalendarSettings(CalendarSettingsPatch(prompted: true))
     return true
   }

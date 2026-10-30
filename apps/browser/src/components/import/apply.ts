@@ -1,3 +1,4 @@
+import { confirm } from "@ardia/shell";
 import { savePassword } from "@ardia/ardiacore";
 import type { BookmarkNode as ImportedNode, Credential, DiaTabsProfile, ImportedFavicon, ImportedTab, ImportKind, ImportResult, SafariExport, SpaceSuggestion } from "@ardia/import";
 import { addGroupsFromDrafts } from "../../lib/bookmarkGroups";
@@ -14,7 +15,7 @@ import { adoptProfileTheme } from "../../sync/engine";
 import { parseArcTheme } from "./arcTheme";
 import { liveCommand } from "@ardia/settings";
 import type { LiveSourceId } from "../../live/types";
-import { nativeOwnsWorkspace, nativeWrite, writeState } from "../../store/nativeStore";
+import { nativeOwnsWorkspace, nativeSafeMode, nativeWrite, writeState } from "../../store/nativeStore";
 import { encodeCommand } from "@ardia/store";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number };
@@ -132,12 +133,23 @@ export function openInWebStore(profileId: string, urls: string[]) {
   urls.forEach((url, i) => useBrowser.getState().newTab(windowId, { url, profileId, background: i > 0 }));
 }
 
+export function transientImportRefused(): boolean {
+  if (!nativeSafeMode()) return false;
+  void confirm({
+    title: "Safe Mode",
+    message: "Imported tabs, spaces, pinned tabs and new profiles cannot be saved in safe mode. Open Solara normally to import them.",
+    confirmTitle: "OK",
+  });
+  return true;
+}
+
 export function importTabs(
   profileId: string,
   tabs: (Pick<ImportedTab, "url" | "title" | "pinned" | "customTitle"> & { row?: boolean })[],
   group: string | null,
   pinnedAgainst: "anyPin" | "tiles" = "anyPin",
 ): number {
+  if (transientImportRefused()) return 0;
   if (nativeOwnsWorkspace()) return (nativeWrite(encodeCommand("importWorkspace", [{ profileId, pinnedAgainst, windows: [{ tabs, group }] }]))?.result as { tabs: number } | undefined)?.tabs ?? 0;
   const s = useBrowser.getState();
   const pinned = pinnedAgainst === "tiles" ? tilePages(s, profileId) : pinnedPages(s, profileId);
@@ -174,6 +186,7 @@ export function importTabs(
 }
 
 export function importArcSpace(profileId: string, space: SpaceSuggestion, favicons?: ImportedFavicon[]): { tabs: number; bookmarks: number; skipped: number } {
+  if (transientImportRefused()) return { tabs: 0, bookmarks: 0, skipped: 0 };
   importFavicons(profileId, favicons, [...linksOf(space.pinned), ...space.tabs.map((t) => t.url)]);
   const links = space.pinned.filter((n) => n.type === "url" && n.url);
   importPullRequestsFolders(profileId, space.pinned);
@@ -209,6 +222,7 @@ export function importArcSpace(profileId: string, space: SpaceSuggestion, favico
 }
 
 export function importDiaProfile(profileId: string, profile: DiaTabsProfile, what: { pinned: boolean; open: boolean }, favicons?: ImportedFavicon[]): number {
+  if (transientImportRefused()) return 0;
   importFavicons(profileId, favicons, [...(what.pinned ? profile.pinned : []), ...(what.open ? profile.tabs : [])].map((t) => t.url));
   if (nativeOwnsWorkspace()) {
     const windows = [
@@ -239,7 +253,12 @@ export async function applyResult(
   if (result.history.length) counts.history += importHistory(profileId, result.history);
   const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
   Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed));
-  if (nativeOwnsWorkspace()) {
+  const tabs = result.tabs.length > 0 && !result.spaces.length;
+  const favorites = result.favorites.length > 0;
+  if ((tabs || favorites) && transientImportRefused()) {
+    if (tabs) onFailed?.("tabs");
+    if (favorites) onFailed?.("favorites");
+  } else if (nativeOwnsWorkspace()) {
     const windows = [
       ...(result.tabs.length && !result.spaces.length ? [{ tabs: result.tabs, group: "Imported" }] : []),
       ...(result.favorites.length ? [{ tabs: result.favorites.map((t) => ({ ...t, pinned: true })), pinnedAgainst: "tiles" }] : []),
@@ -259,7 +278,10 @@ export async function applySafari(profileId: string, data: SafariExport, cookies
   const history = data.profiles.find((p) => !p.name)?.history ?? data.profiles[0]?.history ?? [];
   counts.history = importHistory(profileId, history);
   Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed));
-  if (data.tabs.length) counts.tabs += importTabs(profileId, data.tabs, "Imported");
+  if (data.tabs.length) {
+    counts.tabs += importTabs(profileId, data.tabs, "Imported");
+    if (nativeSafeMode()) onFailed?.("tabs");
+  }
   counts.passwords = await importPasswords(profileId, data.credentials);
   return counts;
 }

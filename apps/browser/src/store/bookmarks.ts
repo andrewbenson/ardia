@@ -3,6 +3,7 @@ import { LEGACY_BOOKMARK_SEED } from "../legacy";
 import type { BrowserState } from "./browser";
 import { engineProfile, without } from "./model";
 import type { BookmarkFolder, BookmarkNode, Bookmarks } from "./types";
+import { refuseSafeLegacyDeletion } from "./safeLibraryEdits";
 
 export type BookmarksSlice = {
   bookmarks: Bookmarks;
@@ -145,6 +146,14 @@ export function folderLinks(b: Bookmarks, folderId: string): Extract<BookmarkNod
   return folderChildren(b, folderId).flatMap((n) => (n.kind === "url" ? [n] : folderLinks(b, n.id)));
 }
 
+function refuseSafeBookmarkDeletion(bookmarks: Bookmarks, ids: string[]): boolean {
+  const removed = new Set(subtree(bookmarks, ids));
+  return refuseSafeLegacyDeletion("bookmarks", (contents) => {
+    const document = JSON.parse(contents) as { bookmarks?: Bookmarks };
+    return Object.keys(document.bookmarks?.nodes ?? {}).some((id) => removed.has(bookmarkUuidFor(id)));
+  });
+}
+
 export const createBookmarksSlice: StateCreator<BrowserState, [], [], BookmarksSlice> = (set, get) => ({
   bookmarks: EMPTY_BOOKMARKS,
   bookmarksReady: {},
@@ -186,6 +195,7 @@ export const createBookmarksSlice: StateCreator<BrowserState, [], [], BookmarksS
   },
 
   removeBookmark(id) {
+    if (refuseSafeBookmarkDeletion(get().bookmarks, [id])) return;
     set((s) => {
       const node = s.bookmarks.nodes[id];
       if (!node || node.parentId === null) return {};
@@ -218,6 +228,7 @@ export const createBookmarksSlice: StateCreator<BrowserState, [], [], BookmarksS
   },
 
   removeBookmarks(ids) {
+    if (refuseSafeBookmarkDeletion(get().bookmarks, ids)) return { nodes: [], places: [] };
     const b = get().bookmarks;
     const removable = ids.filter((id) => b.nodes[id]?.parentId);
     const tops = removable.filter((id) => !bookmarkAncestors(b, id).some((a) => removable.includes(a.id)));
@@ -254,6 +265,7 @@ export const createBookmarksSlice: StateCreator<BrowserState, [], [], BookmarksS
     if (!page.url) return false;
     const existing = bookmarksByUrl(s.bookmarks, profileId).get(page.url);
     if (existing?.length) {
+      if (refuseSafeBookmarkDeletion(s.bookmarks, existing)) return true;
       set({ bookmarks: removeBookmarkTree(s.bookmarks, existing) });
       return false;
     }

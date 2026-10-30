@@ -9,6 +9,17 @@
 
 namespace {
 
+bool RefusesSafeModeCall(NSString *name) {
+  if (!ArdiaCoreHost.safeMode) return false;
+  static NSSet<NSString *> *mutations = [NSSet setWithArray:@[
+    @"ac_favicons_set", @"ac_passwords_mark",
+    @"ac_extensions_configure", @"ac_extensions_install", @"ac_extensions_install_crx", @"ac_extensions_reload",
+    @"ac_extensions_set_enabled", @"ac_extensions_sync_apply", @"ac_extensions_sync_state", @"ac_extensions_uninstall",
+    @"ac_tab_restore_tag", @"ac_tab_restore_take", @"ac_tab_restore_load"
+  ]];
+  return [mutations containsObject:name];
+}
+
 void (^gEventHandler)(NSString *, NSString *);
 NSSet<NSString *> *gForwardedTopics;
 NSMutableArray<NSArray *> *gPendingForwards;
@@ -112,6 +123,7 @@ void InstallSink() {
 @implementation ArdiaCoreEngineBridge
 
 + (void)call:(NSString *)name profile:(NSString *)profile args:(NSString *)args completion:(void (^)(NSString *))completion {
+  if (RefusesSafeModeCall(name)) return completion(JSON(@{@"error" : @"disabled in safe mode"}));
   auto call = (ac_engine_call_t)Symbol(name.UTF8String);
   if (!call) return completion(JSON(@{@"error" : [NSString stringWithFormat:@"the engine has no %@", name]}));
   if (ardiacore_host::IsIncognito(profile)) {
@@ -148,6 +160,10 @@ void InstallSink() {
     volatile unsigned char *bytes = (volatile unsigned char *)secret.mutableBytes;
     for (NSUInteger i = 0; i < secret.length; i++) bytes[i] = 0;
   };
+  if (RefusesSafeModeCall(name)) {
+    wipe();
+    return completion(JSON(@{@"error" : @"disabled in safe mode"}));
+  }
   auto call = (ac_engine_call_t)Symbol(name.UTF8String);
   const char *bytes = (const char *)secret.bytes;
   if (!call || ardiacore_host::IsIncognito(profile) || !secret.length || bytes[secret.length - 1] != 0) {

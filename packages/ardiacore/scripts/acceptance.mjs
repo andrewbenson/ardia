@@ -2447,7 +2447,7 @@ try {
           const oldPageIsLive = async () => (await targets()).some((t) => t.id === oldTarget.id || t.type === "page" && t.url === url);
           const target = await until("the identity Leave page loaded", async () => {
             const found = await pageTarget(`e?${marks[1]}`).catch(() => null);
-            const ready = found && await cdp(found, "Runtime.evaluate", { expression: "document.readyState", returnByValue: true }).catch(() => null);
+            const ready = found && await cdp(found, "Runtime.evaluate", { expression: `location.href.includes(${JSON.stringify(`e?${marks[1]}`)}) ? document.readyState : "initial"`, returnByValue: true }).catch(() => null);
             return ready?.result?.value === "complete" ? found : null;
           }, 15000);
           const installed = await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
@@ -2666,7 +2666,7 @@ try {
         const split = kind === "normal" ? await evalApp(`return ac.store.getState().createSplit(${JSON.stringify(before.ids.slice(0, 2))}, "vertical")`) : null;
         const target = await until(`${kind} first page ready`, async () => {
           const found = await pageTarget(`e?${marks[0]}`).catch(() => null);
-          const ready = found && (await cdp(found, "Runtime.evaluate", { expression: "document.readyState", returnByValue: true }).catch(() => null));
+          const ready = found && (await cdp(found, "Runtime.evaluate", { expression: `location.href.includes(${JSON.stringify(`e?${marks[0]}`)}) ? document.readyState : "initial"`, returnByValue: true }).catch(() => null));
           return ready?.result?.value === "complete" ? found : null;
         }, 15000);
         const token = `stay-${kind}-${Date.now()}`;

@@ -178,10 +178,6 @@ export async function uninstallExtension(id: string, profile: string) {
   unwrap(await Native.uninstall(id, profile));
 }
 
-export async function reloadExtension(id: string, profile: string) {
-  unwrap(await Native.reload(id, profile));
-}
-
 export async function configureExtension(
   id: string,
   profile: string,

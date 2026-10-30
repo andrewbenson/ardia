@@ -6,23 +6,12 @@ import type {
   ShellNativeModules,
   ShellOptionalNativeModules,
   SystemInfo,
-  UserScriptsFolder,
   WindowEvent,
 } from "@ardia/shell";
 import { nativeEvents, unfaked } from "./events";
 
 type Modules = ShellNativeModules;
 type OptionalModules = { [Name in keyof ShellOptionalNativeModules]: () => ShellOptionalNativeModules[Name] | null };
-
-type UserScriptsHost = {
-  watching: boolean[];
-  writes: unknown[];
-  status: string | null;
-  change: (() => void) | null;
-  read(): Promise<UserScriptsFolder>;
-};
-
-const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 
 export const docs = new Map<string, string>();
 export const documentWrites: string[] = [];
@@ -210,21 +199,6 @@ const cli: ShellOptionalNativeModules["ArdiaCli"] = {
   addListener: cliEvents.addListener,
 };
 
-const userScriptsHost = () => testGlobals.acTestUserScripts!;
-const userScripts: ShellOptionalNativeModules["ArdiaUserScripts"] = {
-  watch: (on) => void userScriptsHost().watching.push(on),
-  read: () => userScriptsHost().read(),
-  readStatus: async () => userScriptsHost().status,
-  writeStatus: async (json) => {
-    userScriptsHost().status = json;
-    userScriptsHost().writes.push(JSON.parse(json));
-  },
-  addListener: (_name, listener) => {
-    userScriptsHost().change = listener;
-    return { remove() {} };
-  },
-};
-
 const popoverBubble: ShellOptionalNativeModules["ArdiaPopoverBubble"] = { isAvailable: () => false };
 const magnifyArea: ShellOptionalNativeModules["ArdiaMagnifyArea"] = { devMagnify: () => unfaked("ArdiaMagnifyArea", "devMagnify") };
 const fileDrop: ShellOptionalNativeModules["ArdiaFileDrop"] = {
@@ -237,6 +211,5 @@ export const shellOptionalNativeModules: OptionalModules = {
   ArdiaMagnifyArea: () => magnifyArea,
   ArdiaFileDrop: () => fileDrop,
   ArdiaCli: () => cli,
-  ArdiaUserScripts: () => (testGlobals.acTestUserScripts ? userScripts : null),
   ArdiaHairline: () => null,
 };

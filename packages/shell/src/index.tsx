@@ -6,7 +6,6 @@ export * from "./system";
 export * from "./app";
 export * from "./live";
 export * from "./cli";
-export * from "./userScripts";
 export type { ShellNativeModules, ShellOptionalNativeModules } from "./nativeModules";
 
 export type BrowserCommand =

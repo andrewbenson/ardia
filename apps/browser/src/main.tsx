@@ -11,7 +11,6 @@ import { startTranslate } from "./components/site/translate";
 import { afterFirstWindow, firstWindowCommitted } from "./lib/afterFirstWindow";
 import { jsErrorsSurvivable } from "./lib/jsErrors";
 import { startAppIntegration } from "./lib/appIntegration";
-import { startUserScripts } from "./lib/userScripts";
 import { startNativeSync } from "./lib/native";
 import { startPersistence } from "./lib/persist";
 import { startNewTabBar } from "./components/omnibox/newTabBar";
@@ -39,7 +38,6 @@ startTranslate();
 startSync();
 startPerfMarks();
 afterFirstWindow(startNativeSettings);
-afterFirstWindow(startUserScripts);
 if (__DEV__ || perfProbeEnabled) require("./lib/devHarness").startDevHarness();
 
 const devMountDelay = () => (__DEV__ ? ((globalThis as { acDevMountDelayMs?: number }).acDevMountDelayMs ?? 0) : 0);

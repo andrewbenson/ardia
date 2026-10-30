@@ -6,7 +6,6 @@ import type {
   CliControlStatus,
   EngineBookmark,
   HistoryChange,
-  InstalledExtension,
   LinkRoute,
   TabStripCommand,
   TabStripTransaction,
@@ -22,12 +21,6 @@ type TabStripHost = {
   command(command: TabStripCommand, id: number): unknown;
   snapshot(): Promise<TabStripTransaction>;
 };
-type ExtensionEngine = {
-  list(profile: string): Promise<InstalledExtension[]>;
-  install(path: string, profile: string): Promise<string>;
-  reload(id: string, profile: string): Promise<void>;
-  uninstall(id: string, profile: string): Promise<void>;
-};
 type EngineArgs = Record<string, unknown> | undefined;
 
 const testGlobals = globalThis as {
@@ -35,7 +28,6 @@ const testGlobals = globalThis as {
   acTestTabStrip?: TabStripHost;
   acTestCliControl?: (on: boolean | null) => Promise<CliControlStatus> | undefined;
   acTestCliActive?: (chromeTabId: number) => Promise<CliControlStatus> | undefined;
-  acTestUserScripts?: { engine: ExtensionEngine };
 };
 
 const cefEvents = nativeEvents();
@@ -344,20 +336,16 @@ const cef: Modules["ArdiaCEF"] = {
   revealCardNumber: () => Promise.resolve({ number: null }),
 };
 
-const extensionEngine = () => testGlobals.acTestUserScripts?.engine;
 const extensionEvents = nativeEvents();
 const extensions: Modules["ArdiaExtensions"] = {
   addListener: extensionEvents.addListener,
   resolveInstallPrompt: () => Promise.resolve(),
-  list: async (profile) => ({ extensions: (await extensionEngine()?.list(profile)) ?? [] }),
+  list: async () => ({ extensions: [] }),
   inspectUnpacked: () => unfaked("ArdiaExtensions", "inspectUnpacked"),
-  install: async (path, profile) => {
-    const engine = extensionEngine();
-    return engine ? { id: await engine.install(path, profile) } : { error: "no extension engine in this test" };
-  },
+  install: () => Promise.resolve({ error: "no extension engine in this test" }),
   setEnabled: () => Promise.resolve({ ok: true }),
-  uninstall: async (id, profile) => (await extensionEngine()?.uninstall(id, profile), { ok: true }),
-  reload: async (id, profile) => (await extensionEngine()?.reload(id, profile), { ok: true }),
+  uninstall: () => Promise.resolve({ ok: true }),
+  reload: () => Promise.resolve({ ok: true }),
   configure: () => Promise.resolve({ ok: true }),
   searchEngineList: () => Promise.resolve({ list: [] }),
   chooseFolder: () => Promise.resolve(null),

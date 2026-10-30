@@ -1,30 +1,8 @@
-import ExpoModulesCore
 import Foundation
 
-public class UserScriptsModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("ArdiaUserScripts")
-    Events("onChange")
-
-    OnCreate {
-      UserScripts.shared.emit = { [weak self] in self?.sendEvent("onChange", [:]) }
-    }
-
-    Function("watch") { (on: Bool) in
-      if on { UserScripts.shared.start() } else { UserScripts.shared.stop() }
-    }
-
-    AsyncFunction("read") { () -> [String: Any] in UserScripts.shared.read() }.runOnQueue(UserScripts.work)
-
-    AsyncFunction("readStatus") { () -> String? in UserScripts.shared.readStatus() }.runOnQueue(UserScripts.work)
-
-    AsyncFunction("writeStatus") { (json: String) in try UserScripts.shared.writeStatus(json) }.runOnQueue(UserScripts.work)
-  }
-}
-
-final class UserScripts {
-  static let shared = UserScripts()
-  static let work = DispatchQueue(label: "ardia.userscripts", qos: .utility)
+public final class UserScripts: @unchecked Sendable {
+  public static let shared = UserScripts()
+  public static let work = DispatchQueue(label: "ardia.userscripts", qos: .utility)
 
   private static let manifestLimit = 1 << 20
   private static let lockAttempts = 200
@@ -39,7 +17,7 @@ final class UserScripts {
   private static let runAts: Set<String> = ["document_start", "document_end", "document_idle"]
   private static let worlds: Set<String> = ["ISOLATED", "MAIN"]
 
-  var emit: (() -> Void)?
+  public var emit: (@Sendable () -> Void)?
   private var source: DispatchSourceFileSystemObject?
   private var lastSignature: String?
 
@@ -50,11 +28,11 @@ final class UserScripts {
 
   private var dir: URL? { try? ShellModule.documentURL("Scripts") }
 
-  func start() {
+  public func start() {
     UserScripts.work.async { self.arm() }
   }
 
-  func stop() {
+  public func stop() {
     UserScripts.work.async {
       self.source?.cancel()
       self.source = nil
@@ -98,7 +76,7 @@ final class UserScripts {
     return "\(generation)|\(ext)"
   }
 
-  func read() -> [String: Any] {
+  public func read() -> [String: Any] {
     guard let dir else { return ["state": "invalid", "error": "\(Bundle.main.productName) has no data folder"] }
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     let lock = open(dir.appendingPathComponent(".lock").path, O_RDONLY | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0o644)
@@ -158,12 +136,12 @@ final class UserScripts {
     return ["state": "ready", "generation": generation, "path": path]
   }
 
-  func readStatus() -> String? {
+  public func readStatus() -> String? {
     guard let dir else { return nil }
     return try? String(contentsOf: dir.appendingPathComponent("status.json"), encoding: .utf8)
   }
 
-  func writeStatus(_ json: String) throws {
+  public func writeStatus(_ json: String) throws {
     guard let dir else { throw Refused("\(Bundle.main.productName) has no data folder") }
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     try Data(json.utf8).write(to: dir.appendingPathComponent("status.json"), options: .atomic)

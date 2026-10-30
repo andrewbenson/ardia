@@ -239,7 +239,7 @@ struct HeroBarModelTests {
     first!.events.queryCommit = { commits.append($0) }
     first!.events.queryJourney = { mark, _, _, _, _ in if mark == .suggestions { completed += 1 } }
     first!.driverType("g")
-    first!.didBlur()
+    first!.didBlur(session: first!.editingSession)
     commits[0]()
     #expect(completed == 0)
     first!.driverType("g")
@@ -520,6 +520,73 @@ struct OmniboxPanelModelTests {
     let field = FakeHeroField()
     model.field = field
     return (model, field, [])
+  }
+
+  func drainBlurCallbacks() async {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+      DispatchQueue.main.async { continuation.resume() }
+    }
+  }
+
+  @Test(arguments: [BarVariant.panel, .sidebar])
+  func staleBlurDoesNotCancelCurrentSession(_ variant: BarVariant) {
+    let (model, _, _) = make(variant)
+    var cancelled: [UUID] = []
+    model.events.cancel = { cancelled.append($0) }
+    model.didFocus()
+    let endedSession = model.editingSession
+    model.didFocus()
+    let currentSession = model.editingSession
+    #expect(endedSession != currentSession)
+    model.didBlur(session: endedSession)
+    #expect(cancelled.isEmpty)
+    #expect(model.editing)
+    model.didBlur(session: currentSession)
+    #expect(cancelled == [currentSession])
+    #expect(!model.editing)
+  }
+
+  @Test func deferredBlurKeepsEndedSession() async {
+    let (model, _, _) = make(.panel)
+    let coordinator = HeroFieldCoordinator(model: model)
+    var cancelled: [UUID] = []
+    model.events.cancel = { cancelled.append($0) }
+    model.didFocus()
+    coordinator.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+    model.didFocus()
+    let currentSession = model.editingSession
+    await drainBlurCallbacks()
+    #expect(cancelled.isEmpty)
+    #expect(model.editing)
+    coordinator.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+    await drainBlurCallbacks()
+    #expect(cancelled == [currentSession])
+    #expect(!model.editing)
+    #expect(coordinator.model === model)
+  }
+
+  @Test func deferredBlurAfterReboundEndsOnlyTheOldModel() async {
+    let (endedModel, _, _) = make(.panel)
+    let (currentModel, _, _) = make(.sidebar)
+    let coordinator = HeroFieldCoordinator(model: endedModel)
+    var cancelled: [UUID] = []
+    endedModel.events.cancel = { cancelled.append($0) }
+    currentModel.events.cancel = { cancelled.append($0) }
+    endedModel.didFocus()
+    let endedSession = endedModel.editingSession
+    coordinator.controlTextDidEndEditing(Notification(name: NSControl.textDidEndEditingNotification))
+    coordinator.model = currentModel
+    currentModel.didFocus()
+    let currentSession = currentModel.editingSession
+    #expect(endedSession != currentSession)
+    await drainBlurCallbacks()
+    #expect(cancelled == [endedSession])
+    #expect(!endedModel.editing)
+    #expect(currentModel.editing)
+    #expect(coordinator.model === currentModel)
+    currentModel.didBlur(session: currentSession)
+    #expect(cancelled == [endedSession, currentSession])
+    #expect(!currentModel.editing)
   }
 
   @Test func escapeClosesThePanelAndLeavesAScopeFirst() {

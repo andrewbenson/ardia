@@ -170,9 +170,11 @@ final class HeroFieldCoordinator: NSObject, NSTextFieldDelegate, HeroFieldContro
   }
 
   func controlTextDidEndEditing(_ obj: Notification) {
+    let endedModel = model
+    let endedSession = endedModel.editingSession
     DispatchQueue.main.async { [weak self] in
       guard let self, !self.holdsFocus else { return }
-      self.model.didBlur()
+      endedModel.didBlur(session: endedSession)
     }
   }
 

@@ -199,7 +199,10 @@ final class NativeOmniboxView: ExpoView, FocusHandoffDestination {
       FieldTimingMarks.atPresent("bar:\(self.windowId)", "keyShown")
     }
     e.done = { [weak self] reason in self?.onDone(["reason": reason?.rawValue ?? NSNull()]) }
-    e.cancel = { [weak self] in self?.onCancel([:]) }
+    e.cancel = { [weak self] session in
+      guard let self, self.bar.model?.editingSession == session else { return }
+      self.onCancel([:])
+    }
     e.siteControls = { [weak self] in self?.onSiteControls([:]) }
     e.changed = { [weak self] in
       guard let self, self.driven else { return }

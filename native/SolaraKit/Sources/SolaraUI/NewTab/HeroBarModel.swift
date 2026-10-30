@@ -48,7 +48,7 @@ public struct HeroBarEvents {
   public var keyShown: () -> Void = {}
   public var changed: () -> Void = {}
   public var done: (BarDismissal?) -> Void = { _ in }
-  public var cancel: () -> Void = {}
+  public var cancel: (UUID) -> Void = { _ in }
   public var siteControls: () -> Void = {}
   public var copy: (String) -> Void = { text in
     NSPasteboard.general.clearContents()
@@ -140,6 +140,7 @@ public final class HeroBarModel {
   @ObservationIgnored private var tabScopeCache: (key: String, scope: SearchScope?)?
   @ObservationIgnored private var changeAnnounced = false
   @ObservationIgnored public private(set) var editing = false
+  @ObservationIgnored public private(set) var editingSession = UUID()
   @ObservationIgnored private var focusedOnce = false
 
   public init(
@@ -268,14 +269,16 @@ public final class HeroBarModel {
   }
 
   public func didFocus() {
+    editingSession = UUID()
     editing = true
     listAway = false
   }
 
-  public func didBlur() {
+  public func didBlur(session: UUID) {
+    guard session == editingSession else { return }
     invalidateQueryProbe()
     editing = false
-    if !hero { events.cancel() }
+    if !hero { events.cancel(session) }
   }
 
   public func sourcesChanged() {

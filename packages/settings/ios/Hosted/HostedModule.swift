@@ -17,6 +17,7 @@ public class HostedModule: Module {
         MainActor.assumeIsolated {
           HostedViews.emit = { body in sink.module?.sendEvent("onHostedEvent", body) }
           NativeStatusBubble.register(); NativeSidebar.register(); NativeDownloadMagnet.register(); NativeTabPickers.register(); NativeExtensionSidePanel.register()
+          NativeSidebarIconPicker.register()
           NativeToolTour.register()
         }
       }

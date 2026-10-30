@@ -14,7 +14,6 @@ enum NativeSidebarHoverCard {
     guard NativeWindowShell.enabled, observer == nil else { return }
     observer = SettingsJS.shared.observe(topic) { value in receive(value) }
     receive(SettingsJS.shared.latestValue(topic))
-    NativeSidebarIconPicker.register()
   }
 
   private static func receive(_ value: Any?) {
@@ -310,12 +309,8 @@ enum NativeSidebarIconPicker {
   private static var observer: UUID?
   private static var hosts: [String: SidebarIconPickerHost] = [:]
 
-  nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeIconPicker)
-  }
-
   static func register() {
-    guard enabled, observer == nil else { return }
+    guard observer == nil else { return }
     HostedViews.register(topic) { _ in nil }
     observer = SettingsJS.shared.observe(topic) { value in receive(value) }
     receive(SettingsJS.shared.latestValue(topic))

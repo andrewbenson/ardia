@@ -6,7 +6,7 @@ import Testing
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
     .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
-    .nativeSidebar, .nativeIconPicker, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
+    .nativeSidebar, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]
   static let shippedSurfaces = defaultOn.filter { !$0.storable(distribution: false) && !$0.storable(distribution: true) }
 
@@ -173,23 +173,21 @@ import Testing
     #expect(LaunchSwitch.nativeSidebar.needs.isEmpty)
     #expect(LaunchSwitch.nativeTabPickers.needs == [.nativeShell])
     #expect(LaunchSwitch.nativeProfilePager.needs == [.nativeShell, .nativeSidebar, .nativeTopStrip])
-    #expect(LaunchSwitch.nativeIconPicker.needs == [.nativeShell, .nativeSidebar])
     #expect(LaunchSwitch.nativePanePrompts.needs == [.nativeShell, .nativePagesPool])
     #expect(LaunchSwitch.onByDefault == Self.defaultOn)
   }
 
   @Test func aSwitchWhoseNeedsAreOffStaysOffAndTheLaunchSaysWhy() {
-    let alone = LaunchSwitches(environment: ["ARDIA_NATIVE_ICON_PICKER": "1", "ARDIA_NATIVE_SHELL": "1", "ARDIA_NATIVE_SIDEBAR": "0"], defaults: nil, distribution: false, skipStored: false)
-    #expect(alone.requested(.nativeIconPicker, defaultOn: false))
-    #expect(!alone.isOn(.nativeIconPicker, defaultOn: false))
-    #expect(alone.unmetNeeds(.nativeIconPicker) == [.nativeSidebar])
+    let alone = LaunchSwitches(environment: ["ARDIA_NATIVE_PROFILE_PAGER": "1", "ARDIA_NATIVE_SHELL": "1", "ARDIA_NATIVE_SIDEBAR": "0"], defaults: nil, distribution: false, skipStored: false)
+    #expect(alone.requested(.nativeProfilePager, defaultOn: false))
+    #expect(!alone.isOn(.nativeProfilePager, defaultOn: false))
+    #expect(alone.unmetNeeds(.nativeProfilePager) == [.nativeSidebar])
     #expect(alone.refusals == [
-      "ARDIA_NATIVE_ICON_PICKER is on but stays off: it needs ARDIA_NATIVE_SIDEBAR=1",
       "ARDIA_NATIVE_PROFILE_PAGER is on but stays off: it needs ARDIA_NATIVE_SIDEBAR=1",
     ])
     let met = LaunchSwitches(
-      environment: ["ARDIA_NATIVE_ICON_PICKER": "1", "ARDIA_NATIVE_SHELL": "1", "ARDIA_NATIVE_SIDEBAR": "1"], defaults: nil, distribution: false, skipStored: false)
-    #expect(met.isOn(.nativeIconPicker, defaultOn: false))
+      environment: ["ARDIA_NATIVE_PROFILE_PAGER": "1", "ARDIA_NATIVE_SHELL": "1", "ARDIA_NATIVE_SIDEBAR": "1"], defaults: nil, distribution: false, skipStored: false)
+    #expect(met.isOn(.nativeProfilePager, defaultOn: false))
     #expect(met.refusals.isEmpty)
 
     let prompts = LaunchSwitches(environment: ["ARDIA_NATIVE_PANE_PROMPTS": "1", "ARDIA_NATIVE_SHELL": "1", "ARDIA_NATIVE_PAGES_POOL": "0"], defaults: nil, distribution: false, skipStored: false)
@@ -203,9 +201,9 @@ import Testing
       environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_MAIN_TOP": "1", "ARDIA_SHELL_PANES": "1", "ARDIA_NATIVE_PAGES_POOL": "1", "ARDIA_NATIVE_TAB_PICKERS": "0"], defaults: nil, distribution: false, skipStored: false)
     #expect(!noShell.isOn(.shellMainTop, defaultOn: false))
     #expect(noShell.unmetNeeds(.shellMainTop) == [.shellPanes, .nativePagesPool])
-    #expect(noShell.refusals.count == 7)
+    #expect(noShell.refusals.count == 6)
     #expect(LaunchSwitches(environment: [:], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
-    #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0", "ARDIA_NATIVE_TAB_PICKERS": "0", "ARDIA_NATIVE_ICON_PICKER": "0", "ARDIA_NATIVE_AUTOHIDE": "0", "ARDIA_NATIVE_PROFILE_PAGER": "0", "ARDIA_NATIVE_PAGES_POOL": "0", "ARDIA_NATIVE_PANE_PROMPTS": "0", "ARDIA_SHELL_MAIN_TOP": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
+    #expect(LaunchSwitches(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "0", "ARDIA_NATIVE_TAB_PICKERS": "0", "ARDIA_NATIVE_AUTOHIDE": "0", "ARDIA_NATIVE_PROFILE_PAGER": "0", "ARDIA_NATIVE_PAGES_POOL": "0", "ARDIA_NATIVE_PANE_PROMPTS": "0", "ARDIA_SHELL_MAIN_TOP": "0"], defaults: nil, distribution: false, skipStored: false).refusals.isEmpty)
   }
 
   @Test func theOneArgumentReadUsesTheSwitchsOwnDefault() {
@@ -234,7 +232,7 @@ import Testing
     let switches = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(!switches.isOn(.shellPanes, defaultOn: false))
     #expect(!switches.isOn(.nativeTabPickers, defaultOn: false))
-    #expect(switches.refusals.count == 8)
+    #expect(switches.refusals.count == 7)
     defaults.set("1", forKey: "ARDIA_NATIVE_SHELL")
     let withShell = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(withShell.isOn(.shellPanes, defaultOn: false))

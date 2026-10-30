@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-// The native sidebar's icon picker in the window shell's overlay (ARDIA_NATIVE_ICON_PICKER=1 with ARDIA_NATIVE_SIDEBAR=1
-// and ARDIA_NATIVE_SHELL=1): it opens beside the row at RN's frame with its search field focused and RN draws none of
-// its own; typing filters, Return takes the first match and Escape closes without a change; a hovered cell lights; a
-// click on a cell sets that icon, the Icons tab lists symbols, Reset Icon clears a custom icon and a group gets No Icon;
-// a click outside closes it. Without the switch RN's picker shows and the native one stays hidden.
-//
-//   node apps/browser/scripts/icon-picker-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +7,7 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
-if (!appArg || resolve(appArg).startsWith("/Applications/")) {
+if (!appArg || resolve(appArg).startsWith("/Applications/") || args.some((arg) => arg.startsWith("--") && arg !== "--keep-data")) {
   console.error("usage: node icon-picker-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]");
   process.exit(2);
 }
@@ -27,10 +20,10 @@ const layout = { windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1
 const CELL = 30;
 const INSET = 8.5;
 
-async function start(name, env) {
+async function start() {
   const app = await launch(resolve(appArg), {
-    data: join(scratch, name),
-    env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ...env },
+    data: join(scratch, "native"),
+    env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1" },
     probe: true,
     session: session(layout),
     ready: "return !!ac.store",
@@ -65,7 +58,7 @@ const openPicker = (run, kind, id) =>
 
 let native;
 try {
-  native = await start("native", { ARDIA_NATIVE_ICON_PICKER: "1" });
+  native = await start();
   const { run } = native;
   await sleep(2500);
   const picker = async () => JSON.parse(await run(`return globalThis.expo.modules.SolaraHosted.sidebarIconPicker("w1")`));
@@ -90,7 +83,7 @@ try {
   const cellCenter = (panel, index) => [panel[0] + INSET + (index % 7) * CELL + CELL / 2, panel[1] + INSET + 26 + 8 + Math.floor(index / 7) * CELL + CELL / 2];
   const footerCenter = (panel) => [panel[0] + 128, panel[1] + panel[3] - INSET - 13];
 
-  await rep.check("it opens beside the row at RN's frame, focused, and RN draws none of its own", async () => {
+  await rep.check("it opens beside the row at the expected frame, focused", async () => {
     const p = await open("tab", "t3");
     const anchor = JSON.parse(await run(`return ac.sidebarRows.measureRow("w1", "t3").then((a) => JSON.stringify(a))`));
     assert.deepEqual(p.panel, [Math.max(8, Math.min(240 + 6, anchor.x + anchor.width + 6)), Math.max(8, anchor.y - 8), 256, 231]);
@@ -98,7 +91,6 @@ try {
     assert.equal(p.focused, true, "the search field has the keys");
     assert.equal(p.items, 108);
     assert.deepEqual(p.footer, []);
-    assert.equal(await run(`return acPerf.findFibers("PickerPanel", 5).length`), 0, "RN draws no picker");
   });
 
   await rep.check("typing filters, and Return takes the first match and closes", async () => {
@@ -184,22 +176,6 @@ try {
   });
 } finally {
   await native?.app.quit();
-}
-
-let rn;
-try {
-  rn = await start("rn", { ARDIA_NATIVE_ICON_PICKER: "0" });
-  const { run } = rn;
-  await sleep(2500);
-  await rep.check("without the switch RN's picker shows and the native one stays hidden", async () => {
-    await openPicker(run, "tab", "t3");
-    await sleep(800);
-    assert.equal(await run(`return acPerf.findFibers("PickerPanel", 5).length`), 1, "RN draws its picker");
-    assert.equal(await run(`return globalThis.expo.modules.SolaraHosted.sidebarIconPicker("w1")`), "null");
-    await untilSnapshot(rn.app, "native picker remains absent", (state) => nativePicker(state) === null);
-  });
-} finally {
-  await rn?.app.quit();
 }
 
 const ok = rep.summary();

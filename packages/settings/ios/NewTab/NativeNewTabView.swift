@@ -132,8 +132,7 @@ final class NativeNewTabView: ExpoView {
 enum NewTabNetwork {
   static let fetcher = SuggestFetcher(fetch: SuggestFetcher.urlSession())
 
-  static let favicons = NewTabFavicons { url, favicon, profile in
-    let dark = await MainActor.run { NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }
+  static let favicons = NewTabFavicons { url, favicon, profile, dark in
     return await NativeHistoryCatalog.favicon(page: url, source: favicon, profileId: profile, dark: dark)
   }
 

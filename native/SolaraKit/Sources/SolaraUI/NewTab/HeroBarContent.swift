@@ -5,12 +5,19 @@ import SwiftUI
 
 @MainActor
 public final class NewTabFavicons {
-  private let load: (String, String?, String) async -> NSImage?
-  private var cache: [String: NSImage] = [:]
-  private var missing: Set<String> = []
+  struct Key: Hashable {
+    var url: String
+    var favicon: String
+    var profileId: String
+    var dark: Bool
+  }
+
+  private let load: (String, String?, String, Bool) async -> NSImage?
+  private var cache: [Key: NSImage] = [:]
+  private var missing: Set<Key> = []
   nonisolated(unsafe) private var invalidationObserver: NSObjectProtocol?
 
-  public init(load: @escaping (_ url: String, _ favicon: String?, _ profileId: String) async -> NSImage?) {
+  public init(load: @escaping (_ url: String, _ favicon: String?, _ profileId: String, _ dark: Bool) async -> NSImage?) {
     self.load = load
     invalidationObserver = NotificationCenter.default.addObserver(forName: FaviconLibrary.didInvalidate, object: nil, queue: nil) { [weak self] _ in
       MainActor.assumeIsolated {
@@ -22,15 +29,17 @@ public final class NewTabFavicons {
 
   deinit { if let invalidationObserver { NotificationCenter.default.removeObserver(invalidationObserver) } }
 
-  static func key(_ url: String, _ favicon: String?) -> String { "\(favicon ?? "")\u{1}\(url)" }
+  static func key(_ url: String, _ favicon: String?, profileId: String, dark: Bool) -> Key {
+    Key(url: url, favicon: favicon ?? "", profileId: profileId, dark: dark)
+  }
 
-  func cached(_ url: String, _ favicon: String?) -> NSImage? { cache[Self.key(url, favicon)] }
+  func cached(_ url: String, _ favicon: String?, profileId: String, dark: Bool) -> NSImage? { cache[Self.key(url, favicon, profileId: profileId, dark: dark)] }
 
-  func fetch(_ url: String, _ favicon: String?, profileId: String) async -> NSImage? {
-    let key = Self.key(url, favicon)
+  func fetch(_ url: String, _ favicon: String?, profileId: String, dark: Bool) async -> NSImage? {
+    let key = Self.key(url, favicon, profileId: profileId, dark: dark)
     if let image = cache[key] { return image }
     if missing.contains(key) { return nil }
-    guard let image = await load(url, favicon, profileId) else {
+    guard let image = await load(url, favicon, profileId, dark) else {
       missing.insert(key)
       return nil
     }
@@ -74,15 +83,15 @@ struct SymbolImage: View {
 struct NewTabFavicon: View {
   @Environment(\.newTab) private var env
   @State private var image: NSImage?
-  @State private var loadedKey: String?
+  @State private var loadedKey: NewTabFavicons.Key?
   let url: String
   var favicon: String?
   var size: CGFloat = 16
 
   var body: some View {
-    let key = NewTabFavicons.key(url, favicon)
+    let key = NewTabFavicons.key(url, favicon, profileId: env.profileId, dark: env.theme.dark)
     Group {
-      if let image = (loadedKey == key ? image : nil) ?? env.favicons?.cached(url, favicon) {
+      if let image = (loadedKey == key ? image : nil) ?? env.favicons?.cached(url, favicon, profileId: env.profileId, dark: env.theme.dark) {
         Image(nsImage: image)
           .resizable()
           .interpolation(.high)
@@ -94,7 +103,7 @@ struct NewTabFavicon: View {
     }
     .task(id: key) {
       guard let favicons = env.favicons else { return }
-      let fetched = await favicons.fetch(url, favicon, profileId: env.profileId)
+      let fetched = await favicons.fetch(url, favicon, profileId: env.profileId, dark: env.theme.dark)
       image = fetched
       loadedKey = key
     }

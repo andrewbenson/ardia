@@ -509,7 +509,7 @@ public final class SitePanelView: NSView {
     icon.layer?.masksToBounds = true
     addSubview(icon)
     if let fav = item.favicon {
-      if let image = favicons?.cached(fav.url, fav.favicon) {
+      if let image = favicons?.cached(fav.url, fav.favicon, profileId: fav.profileId, dark: theme.dark) {
         icon.image = image
       } else {
         let env = NewTabEnvironment(theme: theme, favicons: favicons, profileId: fav.profileId)
@@ -520,7 +520,7 @@ public final class SitePanelView: NSView {
         addSubview(fallback)
         if let favicons {
           faviconTask = Task { [weak icon, weak fallback] in
-            guard let image = await favicons.fetch(fav.url, fav.favicon, profileId: fav.profileId), !Task.isCancelled else { return }
+            guard let image = await favicons.fetch(fav.url, fav.favicon, profileId: fav.profileId, dark: theme.dark), !Task.isCancelled else { return }
             fallback?.removeFromSuperview()
             icon?.image = image
           }

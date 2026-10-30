@@ -2587,6 +2587,7 @@ NSDictionary *ProbeFrame(NSWindow *window, ACWindowFullScreen *state, CFTimeInte
 
 + (NSString *)devAction:(NSString *)action window:(NSWindow *)window {
   if (!window) return nil;
+  if (!ardiacore_host::TestHooksAllowed()) return @"test instances only";
   if ([action hasPrefix:@"alertSheets:"]) {
     if (!ardiacore_host::ShowAlertSheetsInTests([[action substringFromIndex:12] isEqualToString:@"1"])) return @"test instances only";
     return [action substringFromIndex:12];

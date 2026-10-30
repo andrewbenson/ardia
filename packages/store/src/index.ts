@@ -9,7 +9,7 @@ type NativeStoreModule = {
   snapshot(): string | null;
   dispatch(commandJSON: string, sinceRev: number): string | null;
   catchUp(sinceRev: number): string | null;
-  flush(timeout: number): boolean;
+  flush(timeout: number): string | boolean;
   freeze?(): boolean;
   useSyncOrigins?(on: boolean): boolean;
   syncAnchor?(): string | null;
@@ -93,8 +93,10 @@ export function freezeNativeStore(): boolean {
   return native?.freeze?.() ?? false;
 }
 
-export function flushNativeStore(timeoutSeconds = 0.5): boolean {
-  return native?.flush(timeoutSeconds) ?? false;
+export function flushNativeStore(timeoutSeconds = 0.5): string {
+  const result = native?.flush(timeoutSeconds);
+  if (typeof result === "boolean") return result ? "saved" : "timedOut";
+  return result ?? "failed: the native store is unavailable";
 }
 
 export function onForeignCommit(listener: (commit: ForeignCommit) => void): () => void {

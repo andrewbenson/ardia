@@ -136,7 +136,7 @@ case "serve":
     case "snapshot": print(bridge.snapshotJSON())
     case "dispatch": print(bridge.dispatch(request["commands"]?.text() ?? "[]", sinceRev: sinceRev))
     case "catchUp": print(JSONValue.object(bridge.catchUp(sinceRev: sinceRev)).text())
-    case "flush": print(JSONValue.object(["flushed": .bool(writer?.flush(timeout: 10) ?? false)]).text())
+    case "flush": print(JSONValue.object(["flushed": .bool(writer?.flush(timeout: 10) == .saved)]).text())
     default: print(#"{"error":"unknown op"}"#)
     }
     fflush(stdout)

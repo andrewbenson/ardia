@@ -1,6 +1,6 @@
 import type { StorePatch, StoreEffect } from "@ardia/store";
 import { cancelDownload, endWebKitPrivateSession } from "@ardia/ardiacore";
-import type { BrowserState } from "./browser";
+import type { BrowserState, HydrateData } from "./browser";
 import { bookmarkRoots, ensureRoots, removeBookmarkTree } from "./bookmarks";
 import { IDLE_LIVE, without } from "./model";
 import { pruneSelection } from "./organize";
@@ -171,10 +171,39 @@ export const onStoreEffect = (type: string, handler: (effect: StoreEffect) => vo
 
 const keptFor = <T>(local: Record<string, T>, ids: Record<string, unknown>) => Object.fromEntries(Object.entries(local).filter(([id]) => id in ids));
 
+function retainingJSON(previous: unknown, value: unknown): unknown {
+  if (previous === value || JSON.stringify(previous) === JSON.stringify(value)) return previous;
+  if (Array.isArray(previous) && Array.isArray(value)) {
+    const byId = new Map(previous.filter((entry) => entry && typeof entry === "object" && "id" in entry).map((entry) => [entry.id, entry]));
+    return value.map((entry, index) => retainingJSON(entry && typeof entry === "object" && "id" in entry ? byId.get(entry.id) : previous[index], entry));
+  }
+  if (previous && value && typeof previous === "object" && typeof value === "object" && !Array.isArray(previous) && !Array.isArray(value)) {
+    const before = previous as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, retainingJSON(before[key], entry)]));
+  }
+  return value;
+}
+
+export function workspaceHydration(s: BrowserState, data: HydrateData): Partial<BrowserState> {
+  let bookmarks = data.bookmarks ?? s.bookmarks;
+  for (const id of s.profileOrder) bookmarks = ensureRoots(bookmarks, id)[0];
+  return {
+    history: Object.fromEntries(Object.entries(data.history ?? {}).filter(([id]) => s.profiles[id])),
+    historyReady: Object.fromEntries(Object.keys(data.history ?? {}).filter((id) => s.profiles[id]).map((id) => [id, true as const])),
+    bookmarks,
+    bookmarksReady: Object.fromEntries(Object.keys(data.bookmarks?.roots ?? {}).filter((id) => s.profiles[id]).map((id) => [id, true as const])),
+    live: Object.fromEntries(Object.keys(s.tabs).map((id) => [id, IDLE_LIVE])),
+    find: {},
+    selection: {},
+    selectionAnchors: {},
+    windowUi: {},
+  };
+}
+
 export function workspaceFromSnapshot(s: BrowserState, data: Record<string, unknown>, { keepLocal = false } = {}): Partial<BrowserState> {
   const next: Record<string, unknown> = {};
-  for (const name of [...TABLES, "peeks", "parkedPins", "pinChoices", "pinSync", ...LISTS, ...KEYED]) if (name in data) next[name] = data[name];
-  if (data.settings) next.settings = data.settings;
+  for (const name of [...TABLES, "peeks", "parkedPins", "pinChoices", "pinSync", ...LISTS, ...KEYED]) if (name in data) next[name] = retainingJSON((s as unknown as Record<string, unknown>)[name], data[name]);
+  if (data.settings) next.settings = retainingJSON(s.settings, data.settings);
   if (data.ui) next.ui = { ...s.ui, ...(data.ui as object) };
   const tabs = (next.tabs ?? {}) as BrowserState["tabs"];
   const windows = (next.windows ?? {}) as BrowserState["windows"];

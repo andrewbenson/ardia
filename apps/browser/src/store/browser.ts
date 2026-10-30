@@ -15,7 +15,7 @@ import { createProfilesSlice, DEFAULT_PROFILE, engineIdOf, type ProfilesSlice } 
 import { createSettingsSlice, DEFAULT_SETTINGS, migrateSavedSettings, type SettingsSlice } from "./settings";
 import { createSplitsSlice, sanitizeSplits, type SplitsSlice } from "./splits";
 import { activated, apply, createTabsSlice, type TabsSlice } from "./tabs";
-import { nativeOwnsWorkspace, nativeTransaction } from "./nativeStore";
+import { guardNativeSet, nativeOwnsWorkspace, nativeTransaction } from "./nativeStore";
 import { transactional } from "./transaction";
 import type { BrowserWindow, Tab } from "./types";
 import { createUiSlice, type UiSlice } from "./ui";
@@ -70,7 +70,12 @@ export const batchStoreUpdates = (update: () => void) => batch(update);
 const batched =
   <T,>(creator: StateCreator<T>): StateCreator<T> =>
   (set, get, api) => {
-    const batchedSet = ((...args: Parameters<typeof set>) => batch(() => (set as (...a: typeof args) => void)(...args))) as typeof set;
+    const batchedSet = ((update: unknown, replace?: boolean) => guardNativeSet(
+      update as Partial<BrowserState> | ((s: BrowserState) => Partial<BrowserState>),
+      replace,
+      get as () => BrowserState,
+      (next, shouldReplace) => batch(() => (set as (update: Partial<BrowserState>, replace?: boolean) => void)(next, shouldReplace)),
+    )) as typeof set;
     api.setState = batchedSet;
     return creator(batchedSet, get, api);
   };

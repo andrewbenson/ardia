@@ -16,9 +16,9 @@ import {
 import type { Download } from "@ardia/ardiacore";
 import { syncRedesign } from "../sync/redesignSwitch";
 import { applyingFromSync, asSyncOrigin, asUserChange } from "./syncOrigin";
-import type { BrowserState } from "./browser";
+import type { BrowserState, HydrateData } from "./browser";
 import type { Settings } from "./settings";
-import { LIVE_PATCH_COMMANDS, runEffects, WORKSPACE_COMMANDS, workspaceFromPatch, workspaceFromSnapshot } from "./nativeWorkspace";
+import { LIVE_PATCH_COMMANDS, runEffects, WORKSPACE_COMMANDS, workspaceFromPatch, workspaceFromSnapshot, workspaceHydration } from "./nativeWorkspace";
 
 type OwnedSlices = { settings: Settings; downloads: Download[] };
 type Replica = {
@@ -44,8 +44,29 @@ let busyWrites = 0;
 export const nativeBusyWrites = () => busyWrites;
 export const nativeOriginsKnown = () => !active || taggingSyncOrigins;
 let applying = 0;
+let applyingUiVersions: Map<string, number> | null = null;
 let replica: Replica | null = null;
 let stopListening: (() => void) | null = null;
+let uiVersion = 0;
+const windowUiVersions = new Map<string, number>();
+const revisionUiVersions = new Map<number, number>();
+
+function observeRevision(rev: number) {
+  if (!revisionUiVersions.has(rev) && rev >= appliedRev) revisionUiVersions.set(rev, uiVersion);
+  while (revisionUiVersions.size > 1024) revisionUiVersions.delete(revisionUiVersions.keys().next().value!);
+}
+
+function noteLocalUi(s: BrowserState, next: Partial<BrowserState>, versions?: Map<string, number>) {
+  for (const key of ["windowUi", "selection"] as const) {
+    if (!next[key] || next[key] === s[key]) continue;
+    for (const id of new Set([...Object.keys(s[key]), ...Object.keys(next[key])])) {
+      if (s[key][id] !== next[key][id]) {
+        windowUiVersions.set(id, ++uiVersion);
+        versions?.set(id, uiVersion);
+      }
+    }
+  }
+}
 
 export const nativeStoreActive = () => active;
 export const nativeOwnsWorkspace = () => active && ownsWorkspace;
@@ -70,6 +91,7 @@ export function nativeOwnedSnapshot(): Partial<OwnedSlices> | null {
   if (!active) return null;
   const snapshot = nativeSnapshot();
   if (!snapshot) return null;
+  observeRevision(snapshot.rev);
   appliedRev = snapshot.rev;
   const data = snapshot.data as Partial<OwnedSlices>;
   return { settings: data.settings, downloads: data.downloads };
@@ -80,6 +102,9 @@ export function standDown() {
   stopListening?.();
   stopListening = null;
   replica = null;
+  windowUiVersions.clear();
+  revisionUiVersions.clear();
+  uiVersion = 0;
   active = false;
   ownsWorkspace = false;
 }
@@ -88,17 +113,21 @@ export function hydrateFromNative(store: Replica): boolean {
   if (!nativeOwnsWorkspace()) return false;
   const snapshot = nativeSnapshot();
   if (!snapshot) return false;
+  observeRevision(snapshot.rev);
   appliedRev = snapshot.rev;
   withApplier(() => store.setState(workspaceFromSnapshot(store.getState(), snapshot.data)));
   return true;
 }
 
-export function withApplier<T>(run: () => T): T {
+export function withApplier<T>(run: () => T, uiVersions: Map<string, number> | null = null): T {
+  const heldUiVersions = applyingUiVersions;
+  applyingUiVersions = uiVersions;
   applying++;
   try {
     return run();
   } finally {
     applying--;
+    applyingUiVersions = heldUiVersions;
   }
 }
 
@@ -127,16 +156,22 @@ function applySnapshot(data: Record<string, unknown>) {
 
 const BUSY_EFFECT_RETRY_MS = 50;
 
-function afterApplied(effects: StoreEffect[] | undefined) {
+const UI_EFFECTS = new Set(["openDownloads", "closePanel", "clearSelection"]);
+const changesState = (patch: StorePatch) => Object.keys(patch).some((key) => key !== "rev" && key !== "bridge" && key !== "sync");
+
+function afterApplied(effects: StoreEffect[] | undefined, rev = appliedRev, mayBeStale = false, since: number | undefined = mayBeStale ? revisionUiVersions.get(rev) : uiVersion) {
   if (!effects?.length || !replica) return;
   const store = replica;
-  const run = (effect: StoreEffect) => withApplier(() => runEffects([effect], () => store.getState(), (partial) => store.setState(partial)));
+  const uiVersions = new Map<string, number>();
+  const run = (effect: StoreEffect) => withApplier(() => runEffects([effect], () => store.getState(), (partial) => store.setState(partial)), uiVersions);
   for (const effect of effects) {
+    const windowId = effect.windowId as string;
+    if (UI_EFFECTS.has(effect.type) && (since === undefined || (windowUiVersions.get(windowId) ?? 0) > (uiVersions.get(windowId) ?? since))) continue;
     try {
-      run(effect);
+      run({ ...effect, rev });
     } catch (error) {
       if (!(error instanceof NativeStoreBusy)) throw error;
-      setTimeout(() => asSyncOrigin(() => afterApplied([effect])), BUSY_EFFECT_RETRY_MS);
+      setTimeout(() => asSyncOrigin(() => afterApplied([effect], rev, mayBeStale, since)), BUSY_EFFECT_RETRY_MS);
     }
   }
 }
@@ -146,15 +181,17 @@ function inPatchOrigin<T>(patch: StorePatch, apply: () => T): T {
   return patch.bridge ? apply() : asUserChange(apply);
 }
 
-function applyResponse(response: DispatchResponse | null) {
+function applyResponse(response: DispatchResponse | null, fromSync = applyingFromSync()) {
   if (!response || !replica) return;
   if (response.snapshot) {
+    observeRevision(response.rev);
     appliedRev = Math.max(appliedRev, response.rev);
-    applySnapshot(response.snapshot);
+    (fromSync ? asSyncOrigin : asUserChange)(() => applySnapshot(response.snapshot!));
     return;
   }
   for (const patch of response.patches ?? []) {
     if (patch.rev <= appliedRev) continue;
+    observeRevision(patch.rev);
     appliedRev = patch.rev;
     inPatchOrigin(patch, () => applyPatch(patch));
   }
@@ -167,18 +204,33 @@ export class NativeStoreBusy extends Error {
   }
 }
 
-export function nativeWrite(commands: StoreCommand | StoreCommand[]): DispatchResponse | null {
+function dispatchCommands(commands: StoreCommand | StoreCommand[], acceptedOnly = false): DispatchResponse | null {
   if (!active) return null;
   if (syncRedesign.on !== syncOriginsAtStart) throw new Error("syncRedesign changed after startNativeStore; set it before the native store starts");
-  const response = nativeDispatch(commands, appliedRev, { fromSync: taggingSyncOrigins && applyingFromSync() });
-  applyResponse(response);
+  const fromSync = applyingFromSync();
+  const effectSince = uiVersion;
+  const response = nativeDispatch(commands, appliedRev, { fromSync: taggingSyncOrigins && fromSync });
+  if (!acceptedOnly || (!response.busy && !response.error)) applyResponse(response, fromSync);
   if (response.busy) {
     busyWrites++;
     throw new NativeStoreBusy();
   }
-  afterApplied(response.effects);
+  if (!acceptedOnly || !response.error) afterApplied(response.effects, response.rev, false, effectSince);
   if (response.error) console.warn("The native store refused", commands, response.error);
   return response;
+}
+
+export function nativeWrite(commands: StoreCommand | StoreCommand[]): DispatchResponse | null {
+  return dispatchCommands(commands);
+}
+
+export function nativeWriteWhenFree(command: StoreCommand) {
+  try {
+    nativeWrite(command);
+  } catch (error) {
+    if (!(error instanceof NativeStoreBusy)) throw error;
+    setTimeout(() => asSyncOrigin(() => nativeWriteWhenFree(command)), BUSY_EFFECT_RETRY_MS);
+  }
 }
 
 export function nativeTransaction(run: () => void) {
@@ -202,15 +254,14 @@ function wrapActions(store: Replica) {
     if (typeof s[name] !== "function") continue;
     wrapped[name] = (...args: unknown[]) => {
       const response = nativeWrite(encodeCommand(name, args));
-      if (LIVE_PATCH_COMMANDS.has(name) && typeof args[0] === "string" && args[2] && typeof args[2] === "object") updateLive(args[0], args[2]);
+      if (!response?.error && LIVE_PATCH_COMMANDS.has(name) && typeof args[0] === "string" && args[2] && typeof args[2] === "object") updateLive(args[0], args[2]);
       return response?.result ?? undefined;
     };
   }
-  const hydrate = s.hydrate as (data: object) => void;
-  wrapped.hydrate = (data: object) => {
-    withApplier(() => hydrate(data));
-    nativeWrite(encodeCommand("hydrate", [data]));
-    resync(store, [...OWNED_KEYS, "ui"]);
+  wrapped.hydrate = (data: HydrateData) => {
+    const response = dispatchCommands(encodeCommand("hydrate", [data]), true);
+    if (!response || response.error) return;
+    withApplier(() => store.setState(workspaceHydration(store.getState(), data)));
   };
   withApplier(() => store.setState(wrapped as Partial<BrowserState>));
 }
@@ -258,18 +309,22 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
     wrapActions(store);
   } else wrapProfileSettingsWriters(store);
   const stopCommits = onForeignCommit((commit) => {
+    const effectSince = uiVersion;
     if (commit.rev === appliedRev + 1) {
+      observeRevision(commit.rev);
       appliedRev = commit.rev;
       inPatchOrigin(commit.patch, () => applyPatch(commit.patch));
     } else if (commit.rev > appliedRev) {
       applyResponse(nativeCatchUp(appliedRev));
     }
-    inPatchOrigin(commit.patch, () => afterApplied(commit.effects));
+    inPatchOrigin(commit.patch, () => afterApplied(commit.effects, commit.rev, changesState(commit.patch), changesState(commit.patch) ? revisionUiVersions.get(commit.rev) : effectSince));
   });
   const sendProfiles = (s: BrowserState) => nativeWrite({ name: "applyState", args: [{ profiles: s.profiles, profileOrder: s.profileOrder }] });
   if (!ownsWorkspace) sendProfiles(store.getState());
   let lastCaches = new Map<string, unknown>();
+  let pushingCaches = false;
   const pushCaches = (s: BrowserState) => {
+    if (pushingCaches) return;
     const next = new Map<string, unknown>();
     const changed: StoreCommand[] = [];
     for (const command of caches(s)) {
@@ -277,33 +332,31 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
       next.set(key, command.args);
       if (!sameJSON(lastCaches.get(key), command.args)) changed.push(command);
     }
-    lastCaches = next;
-    if (changed.length) nativeWrite(changed);
+    if (!changed.length) {
+      lastCaches = next;
+      return;
+    }
+    pushingCaches = true;
+    let succeeded = false;
+    try {
+      const response = nativeWrite(changed);
+      if (response && !response.error) {
+        lastCaches = next;
+        succeeded = true;
+      }
+    } finally {
+      pushingCaches = false;
+    }
+    if (succeeded) pushCaches(store.getState());
   };
   if (ownsWorkspace) pushCaches(store.getState());
   const stopMirror = store.subscribe((s, prev) => {
     if (!ownsWorkspace && (s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder)) sendProfiles(s);
     if (ownsWorkspace) pushCaches(s);
   });
-  const stopGuard = store.subscribe((s, prev) => {
-    if (applying) return;
-    const changed = ownedChanges(s, prev);
-    if (!Object.keys(changed).length) return;
-    const caught = new Error(`${Object.keys(changed).join(", ")} changed outside the native store's applier; route the write through nativeWrite`);
-    nativeWrite({ name: "applyState", args: [changed] });
-    resync(store, Object.keys(changed));
-    const forwards = ((globalThis as { __nativeStoreForwards?: string[] }).__nativeStoreForwards ??= []);
-    forwards.push(caught.stack ?? caught.message);
-    if (forwards.length > 50) forwards.shift();
-    if (__DEV__) queueMicrotask(() => {
-      throw caught;
-    });
-    else console.warn(caught.message);
-  });
   stopListening = () => {
     stopCommits();
     stopMirror();
-    stopGuard();
   };
 }
 
@@ -328,7 +381,7 @@ export function writeState(store: Replica, update: Partial<BrowserState> | ((s: 
   const applyLocal = () => {
     if (!Object.keys(local).length) return;
     if (local.ui) local.ui = { ...store.getState().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
-    withApplier(() => store.setState(local as Partial<BrowserState>));
+    store.setState(local as Partial<BrowserState>);
   };
   const nativeFirst = taggingSyncOrigins && applyingFromSync();
   if (!nativeFirst) applyLocal();
@@ -339,19 +392,67 @@ export function writeState(store: Replica, update: Partial<BrowserState> | ((s: 
   if (nativeFirst) applyLocal();
 }
 
-function resync(store: Replica, keys: string[]) {
-  const snapshot = nativeSnapshot();
-  if (!snapshot) return;
-  const s = store.getState() as unknown as Record<string, unknown>;
-  const data = snapshot.data;
-  const next: Record<string, unknown> = {};
-  for (const key of keys) {
-    if (key === "ui") {
-      const ui = { ...store.getState().ui, ...(data.ui as object) };
-      if (!sameJSON(ui, store.getState().ui)) next.ui = ui;
-    } else if (key in data && !sameJSON(s[key], data[key])) next[key] = data[key];
+function resync(_store: Replica, _keys: string[]) {
+  applyResponse(nativeCatchUp(appliedRev));
+}
+
+function ownedWritePolicy(): "forward" | "refuse" {
+  return "forward";
+}
+
+function forwardOwnedWrite(changed: Record<string, unknown>) {
+  const caught = new Error(`${Object.keys(changed).join(", ")} changed outside the native store's applier; route the write through nativeWrite`);
+  const forwards = ((globalThis as { __nativeStoreForwards?: string[] }).__nativeStoreForwards ??= []);
+  forwards.push(caught.stack ?? caught.message);
+  if (forwards.length > 50) forwards.shift();
+  if (__DEV__) queueMicrotask(() => { throw caught; });
+  else console.warn(caught.message);
+  if (ownedWritePolicy() === "forward") {
+    nativeWrite({ name: "applyState", args: [changed] });
+    resync(replica!, Object.keys(changed));
   }
-  if (Object.keys(next).length) withApplier(() => store.setState(next as Partial<BrowserState>));
+}
+
+export function guardNativeSet(
+  update: Partial<BrowserState> | ((s: BrowserState) => Partial<BrowserState>),
+  replace: boolean | undefined,
+  get: () => BrowserState,
+  set: (update: Partial<BrowserState>, replace?: boolean) => void,
+) {
+  const s = get();
+  const partial = typeof update === "function" ? update(s) : update;
+  if (applying) {
+    const heldUiVersions = applyingUiVersions;
+    if (heldUiVersions) noteLocalUi(s, partial, heldUiVersions);
+    const held = applying;
+    applying = 0;
+    applyingUiVersions = null;
+    try {
+      return set(partial, replace);
+    } finally {
+      applying = held;
+      applyingUiVersions = heldUiVersions;
+    }
+  }
+  if (!active || !replica) return set(partial, replace);
+  const changed = ownedChanges({ ...s, ...partial }, s);
+  const local: Record<string, unknown> = { ...partial };
+  const owned = ownsWorkspace ? OWNED_KEYS : new Set(["settings", "downloads"]);
+  for (const key of owned) delete local[key];
+  if (ownsWorkspace && local.ui) {
+    const ui = local.ui as BrowserState["ui"];
+    local.ui = { ...s.ui, appDark: ui.appDark };
+  }
+  if (Object.keys(changed).length) forwardOwnedWrite(changed);
+  if (!Object.keys(local).length) return;
+  if (local.ui && ownsWorkspace) local.ui = { ...get().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
+  const next = local as Partial<BrowserState>;
+  noteLocalUi(get(), next);
+  if (!replace) return set(next, replace);
+  const current = get() as unknown as Record<string, unknown>;
+  const retained = Object.fromEntries([...owned].map((key) => [key, current[key]]));
+  if (ownsWorkspace && !next.ui) retained.ui = { ...get().ui };
+  set({ ...retained, ...next } as Partial<BrowserState>, true);
 }
 
 export function adoptRepairs(s: OwnedSlices, from: Partial<OwnedSlices>) {

@@ -54,8 +54,8 @@ public class StoreModule: Module {
       return NativeStore.shared != nil
     }
 
-    Function("flush") { (timeout: Double) -> Bool in
-      NativeStore.shared?.flush(timeout: timeout) ?? false
+    Function("flush") { (timeout: Double) -> String in
+      NativeStore.shared?.flush(timeout: timeout).description ?? "failed: the native store is unavailable"
     }
 
     OnStartObserving {

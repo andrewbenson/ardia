@@ -3,6 +3,20 @@ import SolaraModel
 import SolaraStore
 import Synchronization
 
+public enum FlushResult: Sendable, Equatable, CustomStringConvertible {
+  case saved
+  case failed(String)
+  case timedOut
+
+  public var description: String {
+    switch self {
+    case .saved: "saved"
+    case .failed(let message): "failed: \(message)"
+    case .timedOut: "timedOut"
+    }
+  }
+}
+
 public final class PersistenceWriter: Sendable {
   public static let rowDelay: TimeInterval = 0.25
   public static let shadowDelay: TimeInterval = 2
@@ -99,14 +113,18 @@ public final class PersistenceWriter: Sendable {
       return (rows, shadow)
     }
     if commit.durable {
-      queue.async { self.flushRows() }
+      queue.async {
+        self.flushRows()
+        self.writeShadow()
+      }
     } else if scheduleRows {
       queue.asyncAfter(deadline: .now() + Self.rowDelay) { self.flushRows() }
     }
     if scheduleShadow { queue.asyncAfter(deadline: .now() + Self.shadowDelay) { self.writeShadow() } }
   }
 
-  func flushRows() {
+  @discardableResult
+  func flushRows() -> String? {
     let (dirty, durable, anchor) = pending.withLock { p -> (Bool, Bool, String?) in
       if p.frozen { return (false, false, nil) }
       defer {
@@ -116,7 +134,7 @@ public final class PersistenceWriter: Sendable {
       }
       return (p.rows, p.durable, p.syncAnchor)
     }
-    guard dirty else { return }
+    guard dirty else { return nil }
     let (rev, state) = store.snapshot
     let rows = scope == .everything ? WorkspaceRows(store.sessionDocument(of: state)) : WorkspaceRows()
     let settings = state.settings.values
@@ -124,9 +142,11 @@ public final class PersistenceWriter: Sendable {
     let (previous, previousSettings, previousDownloads, previousAnchor) = pending.withLock {
       ($0.written, $0.settings, $0.downloads, $0.writtenSyncAnchor)
     }
-    if rows == previous && settings == previousSettings && downloads == previousDownloads && anchor == previousAnchor { return }
+    let changed = rows != previous || settings != previousSettings || downloads != previousDownloads || anchor != previousAnchor
+    if !changed && !durable { return nil }
     do {
       try database.write(durable: durable) { db in
+        guard changed else { return }
         if scope == .everything { try Rows.writeWorkspace(db, rows, previous: previous) }
         if settings != previousSettings { try Rows.writeSettings(db, settings) }
         if downloads != previousDownloads { try Rows.writeDownloads(db, downloads) }
@@ -138,20 +158,24 @@ public final class PersistenceWriter: Sendable {
         $0.settings = settings
         $0.downloads = downloads
         $0.writtenSyncAnchor = anchor
-        $0.flushes += 1
+        if changed { $0.flushes += 1 }
       }
       succeeded()
+      return nil
     } catch {
       pending.withLock {
         $0.rows = true
         $0.rowsScheduled = true
         $0.durable = $0.durable || durable
       }
-      failed("rows: \(error)") { self.flushRows() }
+      let message = "rows: \(error)"
+      failed(message) { self.flushRows() }
+      return message
     }
   }
 
-  func writeShadow() {
+  @discardableResult
+  func writeShadow() -> String? {
     let dirty = pending.withLock { p -> Bool in
       if p.frozen { return false }
       defer {
@@ -160,7 +184,7 @@ public final class PersistenceWriter: Sendable {
       }
       return p.shadow
     }
-    guard dirty else { return }
+    guard dirty else { return nil }
     let (rev, state) = store.snapshot
     let marker: JSONValue = ["rev": JSONValue(rev), "at": JSONValue(clock().rounded()), "scope": .string(scope.markerName)]
     let document = scope == .everything ? store.sessionDocument(of: state) : nil
@@ -177,12 +201,15 @@ public final class PersistenceWriter: Sendable {
         pending.withLock { $0.exportedDownloads = downloads }
       }
       succeeded()
+      return nil
     } catch {
       pending.withLock {
         $0.shadow = true
         $0.shadowScheduled = true
       }
-      failed("shadow export: \(error)") { self.writeShadow() }
+      let message = "shadow export: \(error)"
+      failed(message) { self.writeShadow() }
+      return message
     }
   }
 
@@ -209,23 +236,32 @@ public final class PersistenceWriter: Sendable {
   }
 
   @discardableResult
-  public func flush(timeout: TimeInterval = 0.5) -> Bool {
+  public func flush(timeout: TimeInterval = 0.5) -> FlushResult {
     let done = DispatchSemaphore(value: 0)
+    let result = Mutex<FlushResult>(.timedOut)
     queue.async {
-      self.writeEverythingDurably()
+      let saved = self.writeEverythingDurably()
+      result.withLock { $0 = saved }
       done.signal()
     }
-    return done.wait(timeout: .now() + timeout) == .success
+    guard done.wait(timeout: .now() + timeout) == .success else { return .timedOut }
+    return result.withLock { $0 }
   }
 
-  func writeEverythingDurably() {
+  @discardableResult
+  func writeEverythingDurably() -> FlushResult {
     dispatchPrecondition(condition: .onQueue(queue))
-    pending.withLock {
-      $0.rows = true
-      $0.durable = true
+    let frozen = pending.withLock { p -> Bool in
+      guard !p.frozen else { return true }
+      p.rows = true
+      p.durable = true
+      return false
     }
-    flushRows()
-    writeShadow()
+    if frozen { return .failed("persistence is frozen") }
+    let failures = [flushRows(), writeShadow()].compactMap { $0 }
+    if !failures.isEmpty { return .failed(failures.joined(separator: "; ")) }
+    if pending.withLock({ $0.rows || $0.shadow }) { return .failed("persistence still has pending writes") }
+    return .saved
   }
 }
 

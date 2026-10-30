@@ -12,7 +12,7 @@ import {
 import { useBrowser, type BrowserState } from "../store/browser";
 import { changedIds } from "../store/changes";
 import { chromeChanged, groupStep, stripActual, stripPlan, type GroupBindings } from "../store/liveTabs";
-import { nativeOwnsWorkspace, nativeWrite } from "../store/nativeStore";
+import { nativeOwnsWorkspace, nativeWrite, nativeWriteWhenFree } from "../store/nativeStore";
 import { onStoreEffect } from "../store/nativeWorkspace";
 
 let started = false;
@@ -41,7 +41,7 @@ function startNativeChromeTabs() {
   onStoreEffect("stripCommand", (effect) => {
     const strip = effect.strip as number;
     const cmd = sendTabStripCommand(effect.command as TabStripCommand);
-    nativeWrite({ name: "stripCommandSent", args: [strip, cmd] });
+    nativeWriteWhenFree({ name: "stripCommandSent", args: [strip, cmd] });
   });
   let ready = false;
   let queued: TabStripTransaction[] = [];

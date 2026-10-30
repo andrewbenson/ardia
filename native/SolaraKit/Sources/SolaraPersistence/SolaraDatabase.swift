@@ -43,6 +43,12 @@ public final class SolaraDatabase: Sendable {
         try body(db)
         return .commit
       }
+      if durable {
+        let checkpoint = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(FULL)")
+        if let checkpoint, checkpoint[0] as Int != 0 {
+          throw DatabaseError(resultCode: .SQLITE_BUSY, message: "durable WAL checkpoint did not complete")
+        }
+      }
     }
   }
 

@@ -46,8 +46,12 @@ globalThis.acTestNativeModules = {
       }
       return JSON.stringify(native.since(sinceRev));
     },
-    catchUp: (sinceRev) => JSON.stringify(native.since(sinceRev)),
-    flush: () => true,
+    catchUp: (sinceRev) => {
+      native.beforeCatchUp?.();
+      native.beforeCatchUp = null;
+      return JSON.stringify(native.since(sinceRev));
+    },
+    flush: () => "saved",
     addListener(_event, listener) {
       listeners.add(listener);
       return { remove: () => listeners.delete(listener) };
@@ -61,6 +65,7 @@ docs.set("downloads.json", JSON.stringify({ version: 2, downloads: [{ id: "stale
 const { useBrowser } = await import("../store/browser.ts");
 const { flushPersistence, startPersistence } = await import("./persist.ts");
 const { nativeStoreActive, nativeStoreRev } = await import("../store/nativeStore.ts");
+const { applyingFromSync } = await import("../store/syncOrigin.ts");
 const S = () => useBrowser.getState();
 const foreign = (patch) => {
   const entry = native.commit(patch);
@@ -180,11 +185,15 @@ test("a commit that only carries effects still runs them, and effects behind a r
 
 test("a resync after a forwarded write doesn't skip a foreign commit it didn't apply", () => {
   let pending;
-  native.beforeSnapshot = () => {
+  native.beforeCatchUp = () => {
     const downloads = [{ id: "from-elsewhere", url: "https://e/x", state: "complete", profile: "" }];
     native.downloads = downloads;
-    pending = native.commit({ downloads });
+    pending = native.commit({ downloads, sync: true });
   };
+  const origins = [];
+  const stop = useBrowser.subscribe((s, prev) => {
+    if (s.downloads !== prev.downloads) origins.push(applyingFromSync());
+  });
   const warn = console.warn;
   console.warn = () => {};
   try {
@@ -192,7 +201,10 @@ test("a resync after a forwarded write doesn't skip a foreign commit it didn't a
   } finally {
     console.warn = warn;
   }
-  assert.ok(pending, "a commit landed between the dispatch and the resync's snapshot");
+  stop();
+  assert.ok(pending, "a commit landed between dispatch and resync catch-up");
+  assert.deepEqual(origins, [true]);
+  assert.equal(nativeStoreRev(), pending.rev);
   for (const listener of listeners) listener({ event: JSON.stringify({ rev: pending.rev, patch: pending }) });
   assert.ok(S().downloads.some((d) => d.id === "from-elsewhere"));
   assert.equal(S().settings.searchEngine, "mojeek");

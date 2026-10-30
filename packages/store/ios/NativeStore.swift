@@ -132,7 +132,9 @@ public final class NativeStore: Sendable {
         }
       }
       NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: nil) { _ in
-        _ = NativeStore.shared?.writer.flush(timeout: 0.5)
+        guard let store = NativeStore.shared else { return }
+        let result = store.writer.flush(timeout: 0.5)
+        if result != .saved { NSLog("[store] quit flush: %@", result.description) }
       }
       return true
     } catch {
@@ -144,7 +146,7 @@ public final class NativeStore: Sendable {
     }
   }
 
-  public func flush(timeout: TimeInterval) -> Bool { writer.flush(timeout: timeout) }
+  func flush(timeout: TimeInterval) -> FlushResult { writer.flush(timeout: timeout) }
 
   public func freeze() { writer.freeze() }
 }

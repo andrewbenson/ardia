@@ -1,7 +1,77 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 
 globalThis.__DEV__ = false;
+
+test("a busy native strip acknowledgement retries without sending the engine command again", () => {
+  const script = `
+    import assert from "node:assert/strict";
+    import { mock } from "node:test";
+    globalThis.__DEV__ = false;
+    const commands = [];
+    const acknowledgements = [];
+    const origins = [];
+    let listener;
+    let busy = 2;
+    globalThis.acTestTabStrip = {
+      listen: () => ({ remove() {} }),
+      snapshot: () => Promise.resolve({ rev: 0, cmd: null, strips: [] }),
+      command: (command, id) => commands.push({ command, id }),
+    };
+    globalThis.acTestNativeModules = {
+      ArdiaStore: {
+        status: () => ({ active: true, scope: "everything", syncRedesign: true }),
+        useSyncOrigins: (on) => on,
+        dispatch(json) {
+          const message = JSON.parse(json);
+          const command = message.commands ?? message;
+          if (command.name === "stripCommandSent") {
+            acknowledgements.push(command.args);
+            origins.push(message.fromSync === true);
+            if (busy-- > 0) return JSON.stringify({ rev: 0, busy: true });
+          }
+          return JSON.stringify({ rev: 0, patches: [] });
+        },
+        catchUp: () => JSON.stringify({ rev: 0, patches: [] }),
+        addListener(_event, receive) {
+          listener = receive;
+          return { remove() {} };
+        },
+      },
+    };
+    const { useBrowser } = await import("./src/store/browser.ts");
+    const { startNativeStore, attachReplica } = await import("./src/store/nativeStore.ts");
+    const { startChromeTabs } = await import("./src/lib/chromeTabs.ts");
+    startNativeStore();
+    attachReplica(useBrowser);
+    startChromeTabs();
+    await new Promise((resolve) => setImmediate(resolve));
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      listener({ event: JSON.stringify({
+        rev: 0,
+        patch: { rev: 0, sync: true },
+        effects: [{ type: "stripCommand", strip: 7, command: { op: "activate", strip: 7, key: "t1" } }],
+      }) });
+      assert.equal(commands.length, 1);
+      mock.timers.tick(50);
+      mock.timers.tick(50);
+      assert.equal(acknowledgements.length, 3);
+      assert.equal(commands.length, 1, "only the acknowledgement retries");
+      assert.deepEqual(origins, [true, true, true]);
+      assert.deepEqual(acknowledgements, [[7, commands[0].id], [7, commands[0].id], [7, commands[0].id]]);
+    } finally {
+      mock.timers.reset();
+    }
+  `;
+  const result = spawnSync(process.execPath, ["--no-warnings", "--import", "./src/test-loader.mjs", "--input-type=module", "-e", script], {
+    cwd: new URL("../..", import.meta.url),
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+});
 
 class FakeChrome {
   rev = 0;

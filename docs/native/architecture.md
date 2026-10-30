@@ -396,9 +396,10 @@ Chrome (UI thread = main)
 ### 2.7 Persistence: GRDB
 
 The database is one file, `solara.sqlite`, in the data folder (`ARDIA_DATA_DIR` is honored), opened as a GRDB
-`DatabasePool` in WAL mode with `synchronous = FULL`, `fullfsync = ON`, `checkpoint_fullfsync = ON` and
-`foreign_keys = ON`, so a durable commit survives power loss, not only an app crash. Writes are off main and
-debounced, so the extra fsyncs cost nothing the user waits on.
+`DatabasePool` in WAL mode with `synchronous = NORMAL`, `fullfsync = ON`, `checkpoint_fullfsync = ON` and
+`foreign_keys = ON`. Durable writes temporarily use `synchronous = FULL` and finish with a FULL WAL checkpoint.
+Ordinary writes stay at NORMAL; a power loss can lose uncheckpointed commits while preserving consistency.
+Writes are off main and debounced; marking a commit durable queues its flush immediately.
 
 ```sql
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -449,7 +450,8 @@ itself raises is handled like corruption: the file moves aside and the importer 
 **Write strategy.**
 - Each commit's `ChangeSet` is merged into a dirty set.
 - The writer flushes it in **one transaction** 250 ms after the first change, or at once for commits marked durable:
-  closing a window, deleting a profile, settings, quit. A flush upserts only the dirty rows.
+  closing a window, deleting a profile, settings, quit. A flush upserts only the dirty rows. Durable commits write
+  the shadow in the same flush; ordinary commits export it after two seconds.
 - When a window's order changes, that window's `position` values are rewritten. That is at most a few hundred rows,
   about 1–2 ms off main.
 - Today's equivalent re-serializes the whole session on the JS thread every 800 ms after any change.
@@ -458,8 +460,9 @@ itself raises is handled like corruption: the file moves aside and the importer 
 - WAL plus a single transaction per flush: a crash loses at most the last 250 ms, never half a flush. Today the loss
   window is 800 ms.
 - `willTerminate` flushes synchronously with a 500 ms deadline (`DocumentStore`'s pattern): the rows first, then the
-  shadow `session.json` (§3.4), so the next launch's early window shows the right tab. A flush with nothing changed
-  writes nothing.
+  shadow `session.json` (§3.4), so the next launch's early window shows the right tab. The durable row flush runs
+  `PRAGMA wal_checkpoint(FULL)` even when no row changed. The result distinguishes saved, failed and timed out;
+  quit logs a failure or timeout and proceeds.
 - At launch, `PRAGMA quick_check` runs (sub-ms at this size). If it fails, the file moves to
   `solara.sqlite.corrupt-<date>` and the app re-imports from the shadow `session.json` (§3.4).
 - Moving a database aside moves its `-wal` and `-shm` first, then the main file, so a crash in between can never

@@ -250,7 +250,10 @@ let frozen = false;
 
 export function flushPersistence({ final = false } = {}) {
   flush();
-  if (final || nativeOwnsWorkspace()) flushNativeStore();
+  if (final || nativeOwnsWorkspace()) {
+    const result = flushNativeStore();
+    if (final && result !== "saved") console.warn("Native store quit flush:", result);
+  }
   if (final && !frozen && !persistenceRefused()) saveLaunchLook(useBrowser.getState());
   if (final) frozen = true;
 }

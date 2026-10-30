@@ -134,7 +134,7 @@ public final class CalendarPaneModel: SettingsPaneProvider {
   func accessDescription(appName: String) -> String {
     if access == .fixture { return "Development build: using calendar-fixture.json" }
     if connected { return "Connected · \(calendars.count == 1 ? "1 calendar" : "\(calendars.count) calendars")" }
-    if denied { return "\(appName) isn't allowed to read your calendars. Allow it in System Settings › Privacy & Security › Calendars." }
+    if denied { return "Allow \(appName) in System Settings › Privacy & Security › Calendars." }
     return "Not connected"
   }
 
@@ -176,7 +176,7 @@ struct CalendarPane: View {
     SettingsForm {
       SettingsSection(
         "Live Calendar",
-        description: "Pin Google Calendar, Outlook, iCloud or Notion Calendar to see your day when you hover it, a countdown to your next meeting, and alerts with a Join button before meetings start. Events come from the Calendar app's accounts."
+        description: "Pin a calendar for previews, meeting countdowns and Join alerts. Events come from the Calendar app's accounts."
       ) {
         SettingRow("calendar.access", description: model.accessDescription(appName: app)) {
           if model.denied {

@@ -287,7 +287,7 @@ struct ProfilesPane: View {
       Section {
         EmptyView()
       } header: {
-        Text("Profiles keep your browsing organized. Each keeps its own history, logins, cookies, and extensions, unless you turn on Share data when you create it: then it uses another profile's, and only the tabs are its own.")
+        Text("Profiles keep browsing data separate unless you choose Share data when creating one. Tabs always stay separate.")
           .font(.callout)
           .fontWeight(.regular)
           .foregroundStyle(.secondary)
@@ -304,7 +304,7 @@ struct ProfilesPane: View {
         }
       }
 
-      SettingsSection(description: context?.index.entry("profiles.list")?.description, anchor: "profiles.list") {
+      SettingsSection(description: context?.index.entry("profiles.list")?.displayCaption, anchor: "profiles.list") {
         Button {
           model.creating = true
         } label: {

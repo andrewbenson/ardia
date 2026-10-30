@@ -203,7 +203,7 @@ struct SyncPaneModelTests {
     let (plain, _) = await SyncFixture.model(SyncFixture.offState())
     #expect(plain.offDescription == "Off")
     let (withData, _) = await SyncFixture.model(SyncFixture.offState(), folder: SyncFixture.folder(hasData: true))
-    #expect(withData.offDescription.hasPrefix("This folder has synced data already."))
+    #expect(withData.offDescription == "Enter a recovery phrase from another device to use the synced data in this folder.")
     let (reset, _) = await SyncFixture.model(SyncFixture.offState(status: .reset, error: "Sync was reset on another Mac."), folder: SyncFixture.folder(hasData: true))
     #expect(reset.offDescription == "Sync was reset on another Mac.")
   }

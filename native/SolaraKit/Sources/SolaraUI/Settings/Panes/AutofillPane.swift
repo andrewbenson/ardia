@@ -273,7 +273,7 @@ struct AutofillPane: View {
     SettingsForm {
       SettingsSection(
         "Autofill",
-        description: "Addresses and cards you save are offered when you fill in a form, separately for each profile. Card numbers are kept in your macOS Keychain."
+        description: "Saved addresses and cards fill forms for each profile. Card numbers stay in your macOS Keychain."
       ) {
         if profiles.count > 1 {
           SettingPicker(profiles.map { SettingOption($0.id, $0.name) }, selection: $profileId)

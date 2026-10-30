@@ -70,7 +70,7 @@ struct ProfileDetailsPane: View {
               ProfileColorStack(colors: shared.compactMap { model.profile($0)?.accent }, size: 14)
               VStack(alignment: .leading) {
                 Text("Shared data")
-                Text("\(ProfileNames.listOf(shared.compactMap { model.profile($0)?.name })) share Cookies, Passwords, Extensions, Bookmarks, and History. Each keeps its own tabs.")
+                Text("Shares browsing data with \(ProfileNames.listOf(shared.compactMap { model.profile($0)?.name })). Tabs stay separate.")
                   .font(.callout)
                   .foregroundStyle(.secondary)
               }

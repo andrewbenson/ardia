@@ -66,8 +66,8 @@ public final class AppearancePaneModel: SettingsPaneProvider {
 
   static func addressBarDescription(topTabs: Bool) -> String {
     topTabs
-      ? "Tabs are across the top of the window, so the address bar stays in the toolbar. Also in View › Show Address Bar in Sidebar."
-      : "In the sidebar, the page gets the toolbar’s height. While the sidebar is hidden, the address bar is in the toolbar. Also in View › Show Address Bar in Sidebar."
+      ? "With tabs across the top, the address bar stays in the toolbar."
+      : "Putting the address bar in the sidebar gives pages more height. It returns to the toolbar when the sidebar is hidden."
   }
 }
 

@@ -100,6 +100,41 @@ struct SettingsSearchTests {
     #expect(index["advanced.cliControl"].title == "Let the solara command control Solara")
   }
 
+  @Test func everyDisplayCaptionFitsUnderItsTitle() {
+    for entry in index.entries {
+      if let caption = entry.displayCaption {
+        #expect(caption.count <= 90, "\(entry.id): \(caption.count) characters")
+      }
+    }
+  }
+
+  @Test func searchKeepsWordsDroppedFromTheCaption() {
+    let entry = index["tabs.fadeUnloadedTabs"]
+    let word = "relaunch"
+    #expect(SettingsSearch.words(entry.description ?? "").contains(word))
+    let displayed = [entry.title, entry.keywords.joined(separator: " "), entry.section, entry.paneTitle, entry.displayCaption ?? ""]
+    #expect(displayed.allSatisfy { !SettingsSearch.words($0).contains(word) })
+    #expect(!SettingsSearch.words(entry.displayCaption ?? "").contains(word))
+    let found = hits(word)
+    #expect(found.contains { $0.entry.id == entry.id && $0.score == 2.0 })
+  }
+
+  @Test func searchIndexesWordsFoundOnlyInTheCaption() {
+    let entry = SettingEntry(
+      id: "tabs.example",
+      pane: .tabs,
+      section: "General",
+      title: "Example",
+      description: "Original explanation.",
+      caption: "Concise wording.",
+      keywords: [],
+      liquidGlassOnly: false
+    )
+    let found = SettingsSearch.search(SettingsSearch.prepare([entry]), "concise")
+    #expect(found.map(\.entry.id) == [entry.id])
+    #expect(found.first?.score == 2.0)
+  }
+
   @Test func aboutAnswersVersionQuestions() {
     #expect(ids("chromium").contains("about.chromium"))
     #expect(ids("version").contains("about.version"))

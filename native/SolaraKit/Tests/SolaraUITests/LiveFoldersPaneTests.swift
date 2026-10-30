@@ -69,6 +69,12 @@ final class FakeLiveFoldersServices: LiveFoldersServices {
 
 @MainActor
 struct LiveFoldersPaneTests {
+  @Test func sourceCaptionsStayShort() {
+    for source in LiveSourceId.allCases {
+      #expect(source.settingsDescription.count <= 90, "\(source.rawValue): \(source.settingsDescription.count) characters")
+    }
+  }
+
   static func loaded(_ services: FakeLiveFoldersServices = FakeLiveFoldersServices()) async -> (SettingsContext, LiveFoldersPaneModel, FakeLiveFoldersServices) {
     let (context, store) = SettingsFixture.context()
     let model = LiveFoldersPaneModel(services: services, store: store)

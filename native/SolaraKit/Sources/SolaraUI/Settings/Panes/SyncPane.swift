@@ -339,7 +339,7 @@ public final class SyncPaneModel: SettingsPaneProvider {
 
   var offDescription: String {
     if state?.status == .reset, let error = state?.error { return error }
-    return hasSyncData ? "This folder has synced data already. To sync with your other devices, enter the recovery phrase from one of them." : "Off"
+    return hasSyncData ? "Enter a recovery phrase from another device to use the synced data in this folder." : "Off"
   }
 
   var folderDescription: String { info.map(SyncText.folderLabel) ?? " " }
@@ -396,7 +396,7 @@ public final class SyncPaneModel: SettingsPaneProvider {
 }
 
 enum SyncText {
-  static let intro = "Sync your profiles, bookmarks, history, open tabs, pinned tabs, groups, passwords, extensions and settings across your Macs. It all goes through a folder you choose, like one in iCloud Drive, and it’s end-to-end encrypted: only your devices can read it."
+  static let intro = "Sync your browsing data across Macs through a folder you choose. Only your devices can read it."
   static let offNote = "No server and no account: your Macs meet in the sync folder. Your recovery phrase never leaves your devices, and without it the folder is unreadable, file names included."
   static let unavailable = "Sync isn’t available in this build."
 
@@ -546,7 +546,7 @@ struct SyncOffSection: View {
             .frame(width: 28, height: 20)
           SettingRow(
             title: "iCloud Drive is off on this Mac",
-            description: "Turn on iCloud Drive in System Settings, or choose another folder that syncs between your Macs, like one in Dropbox, on a NAS or on a USB drive."
+            description: "Turn on iCloud Drive in System Settings, or choose another folder that syncs your Macs."
           ) {
             Button("Open iCloud Settings") { model.services.openICloudSettings() }
           }

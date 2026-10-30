@@ -86,11 +86,10 @@ enum PasswordsText {
   }
 
   static func managerAppsNote(appName: String, inApplicationsFolder: Bool?) -> String {
-    let apps = "1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their Mac apps."
     if inApplicationsFolder == false {
-      return "\(apps) For 1Password, move \(appName) to your Applications folder and reopen it (1Password only connects to browsers there), then in the 1Password app open Settings › Browser › Add Browser and choose it."
+      return "Move \(appName) to Applications, reopen it, then add it in 1Password's Browser settings."
     }
-    return "\(apps) For 1Password, add \(appName) once: in the 1Password app, open Settings › Browser › Add Browser and choose \(appName)."
+    return "In 1Password Settings › Browser › Add Browser, choose \(appName)."
   }
 
   static func exportMessage(_ result: PasswordExportResult) -> String {

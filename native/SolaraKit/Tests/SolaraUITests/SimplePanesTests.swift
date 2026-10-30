@@ -109,6 +109,35 @@ struct SimplePanesTests {
     #expect(TabsPaneModel.splitOptions(peekWith: "alt")[1].title == "⌥-click (Peek moves to ⇧-click)")
   }
 
+  @Test func staticPaneCaptionsStayShort() {
+    for (mode, caption) in AdvancedPaneModel.batterySaverDescriptions {
+      #expect(caption.count <= 90, "Battery Saver \(mode): \(caption.count) characters")
+    }
+    for type in SyncDataType.allCases {
+      #expect(type.summary.count <= 90, "Sync \(type.rawValue): \(type.summary.count) characters")
+    }
+    for status: PasskeyAccessStatus in [.entitlementRequired, .deviceNotConfigured, .notDetermined, .authorized, .denied] {
+      #expect((EnginesPaneModel.passkeyStatus(status, app: "Solara")?.count ?? 0) <= 90)
+    }
+    for installed: Bool? in [false, true, nil] {
+      #expect(PasswordsText.managerAppsNote(appName: "Solara", inApplicationsFolder: installed).count <= 90)
+    }
+    for on in [false, true] {
+      for status: CliServerStatus? in [nil, CliServerStatus(state: "off"), CliServerStatus(state: "external"), CliServerStatus(state: "on", connections: 0), CliServerStatus(state: "on", connections: 1), CliServerStatus(state: "on", connections: 2)] {
+        #expect(AdvancedPaneModel.serverNote(on: on, server: status).count <= 90)
+      }
+    }
+    for state in [CliInstallState(), CliInstallState(installing: true), CliInstallState(installing: true, step: "copying"), CliInstallState(installedVersion: "1"), CliInstallState(installedVersion: "1", binPath: "/usr/local/bin/solara")] {
+      #expect(AdvancedPaneModel.describeInstall(state).count <= 90)
+    }
+    let model = AdvancedPaneModel(services: FakeAdvancedServices(), store: FakeSettingsStore())
+    #expect(model.widevineDescription.count <= 90)
+    model.widevine = .some(.some(nil))
+    #expect(model.widevineDescription.count <= 90)
+    model.widevine = .some(.some("4.10.2891.0"))
+    #expect(model.widevineDescription.count <= 90)
+  }
+
   @Test func newTabPositionsFollowTheLayout() {
     #expect(TabsPaneModel.newTabPositions(top: false).map(\.title) == ["At the bottom", "At the top", "Below the current tab"])
     #expect(TabsPaneModel.newTabPositions(top: true).map(\.title) == ["On the right", "On the left", "Next to the current tab"])
@@ -155,7 +184,7 @@ struct SimplePanesTests {
   }
 
   @Test func passkeyStatusUsesTheAppName() {
-    #expect(EnginesPaneModel.passkeyStatus(.denied, app: "Solara") == "Off. Turn Solara on in System Settings › Privacy & Security › Passkeys Access for Web Browsers.")
+    #expect(EnginesPaneModel.passkeyStatus(.denied, app: "Solara") == "Allow Solara in System Settings › Privacy & Security › Passkeys Access for Web Browsers.")
     #expect(EnginesPaneModel.passkeyStatus(.entitlementRequired, app: "Solara") == nil)
   }
 

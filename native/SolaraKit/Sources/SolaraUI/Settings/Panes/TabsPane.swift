@@ -122,7 +122,7 @@ struct TabsPane: View {
 
       SettingsSection(
         "Clean up",
-        description: "Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily. Pinned, playing and selected tabs stay; cleaned tabs are listed under Recently Cleaned."
+        description: "Closes unused and duplicate tabs. Pinned, playing and selected tabs stay. Find closed tabs in Recently Cleaned."
       ) {
         CleanUpRow(store: store)
       }
@@ -131,7 +131,6 @@ struct TabsPane: View {
 }
 
 struct LinkKeys: View {
-  @Environment(\.settingsContext) private var context
   let store: SettingsStoreSource
 
   var body: some View {
@@ -139,22 +138,16 @@ struct LinkKeys: View {
     let splitWith = TabsPaneModel.splitLinkModifier(store)
     SettingRow(
       "tabs.peekModifier",
-      description: note("tabs.peekModifier", splitWith == "alt" ? "⌥-click opens a split now: choosing it here moves split view back to ⌥⇧-click." : nil)
+      description: splitWith == "alt" ? .text("⌥-click is currently used for split view.") : .index
     ) {
       SettingPicker(TabsPaneModel.peekOptions(splitWith: splitWith), selection: Binding(get: { peekWith }, set: { store.set("peekModifier", $0) }))
     }
     SettingRow(
       "tabs.splitLinkModifier",
-      description: note("tabs.splitLinkModifier", peekWith == "alt" ? "⌥-click peeks now: choosing it here moves Peek back to ⇧-click." : nil)
+      description: peekWith == "alt" ? .text("⌥-click is currently used for Peek.") : .index
     ) {
       SettingPicker(TabsPaneModel.splitOptions(peekWith: peekWith), selection: Binding(get: { splitWith }, set: { store.set("splitLinkModifier", $0) }))
     }
-  }
-
-  private func note(_ anchor: String, _ extra: String?) -> String? {
-    guard let extra else { return nil }
-    let base = context?.index.entry(anchor)?.description ?? ""
-    return "\(base) \(extra)".trimmingCharacters(in: .whitespaces)
   }
 }
 

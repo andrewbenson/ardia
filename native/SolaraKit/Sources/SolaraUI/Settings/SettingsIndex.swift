@@ -6,10 +6,12 @@ public struct SettingEntry: Hashable, Sendable, Identifiable {
   public let section: String
   public let title: String
   public let description: String?
+  public let caption: String?
   public let keywords: [String]
   public let liquidGlassOnly: Bool
 
   public var paneTitle: String { pane.title }
+  public var displayCaption: String? { caption ?? description }
 }
 
 public struct SettingsIndex: Sendable {
@@ -34,6 +36,7 @@ public struct SettingsIndex: Sendable {
     let key: String
     let title: String
     var description: String? = nil
+    var caption: String? = nil
     var keywords: [String] = []
     var liquidGlassOnly = false
   }
@@ -54,6 +57,7 @@ public struct SettingsIndex: Sendable {
             section: section.section,
             title: row.title,
             description: row.description,
+            caption: row.caption,
             keywords: row.keywords,
             liquidGlassOnly: row.liquidGlassOnly
           )
@@ -83,6 +87,7 @@ public struct SettingsIndex: Sendable {
             key: "windowsAndTabs",
             title: "Windows and tabs",
             description: "What you see the next time you open it. Closed windows stay in History › Recently Closed.",
+            caption: "What you see the next time you open it.",
             keywords: ["restore", "session", "reopen", "preserve tabs", "start fresh"]
           ),
         ]),
@@ -104,6 +109,7 @@ public struct SettingsIndex: Sendable {
             key: "importBrowser",
             title: "Import from another browser",
             description: "Bookmarks, history, passwords, tabs and Arc spaces from Chrome, Arc, Safari, Firefox and more.",
+            caption: "Import bookmarks, history, passwords, tabs and Arc spaces from another browser.",
             keywords: ["migrate", "switch", "transfer"]
           ),
         ]),
@@ -122,6 +128,7 @@ public struct SettingsIndex: Sendable {
             key: "sync",
             title: "Sync",
             description: "Sync your profiles, bookmarks, history, tabs, passwords, extensions and settings across your Macs.",
+            caption: "Sync your browsing data and settings across your Macs.",
             keywords: ["icloud", "recovery phrase", "devices", "turn on sync", "end to end", "encrypted"]
           ),
           Row(key: "folder", title: "Sync folder", keywords: ["icloud drive", "dropbox", "folder"]),
@@ -136,6 +143,7 @@ public struct SettingsIndex: Sendable {
             key: "hideToolbarWhileScrolling",
             title: "Hide toolbar while scrolling",
             description: "Scrolling down tucks the toolbar into a thin strip with the site's name. Scroll up, or click the strip, to bring it back.",
+            caption: "Scrolling down tucks the toolbar into a thin strip; scroll up to bring it back.",
             keywords: ["auto hide", "compact"]
           ),
           Row(key: "showSidebarButton", title: "Show sidebar button", description: "⌘S and View › Auto-Hide Tabs still hide and show the sidebar.", keywords: ["toggle sidebar"]),
@@ -143,18 +151,21 @@ public struct SettingsIndex: Sendable {
             key: "showClearButton",
             title: "Show Clear button",
             description: "The ↓ Clear between your pinned tabs and your tabs. ⇧⌘K and File › Close All Tabs still clear them.",
+            caption: "Shows ↓ Clear between your pinned tabs and your tabs.",
             keywords: ["clear unpinned tabs", "close all tabs", "clear today", "divider", "arc"]
           ),
           Row(
             key: "balancedTopApps",
             title: "Grow Top Apps as the sidebar widens",
             description: "As in Arc: up to four tiles across in balanced rows, and a wider sidebar makes them larger. Off, as in Dia, each row fills with as many tiles as fit.",
+            caption: "Shows up to four tiles across in balanced rows that grow as the sidebar widens.",
             keywords: ["pinned tiles", "favorites", "grid", "columns", "rows", "arc"]
           ),
           Row(
             key: "pinnedTabIconRing",
             title: "Highlight pinned tabs in their icon's colors",
             description: "As in Dia: the Top App you're on gets a ring and tint from its icon instead of the raised glass.",
+            caption: "The selected Top App gets a ring and tint from its icon.",
             keywords: ["dia", "liquid glass", "top apps", "favicon", "colour", "ring", "tint", "selected tile"],
             liquidGlassOnly: true
           ),
@@ -162,6 +173,7 @@ public struct SettingsIndex: Sendable {
             key: "fadeUnloadedTabs",
             title: "Fade icons of unloaded tabs",
             description: "A tab whose page isn't loaded, like a closed pinned tab or one restored after a relaunch, shows its icon faded, as sleeping tabs do. Clicking it loads the page.",
+            caption: "Fades icons of tabs whose pages aren't loaded; clicking a tab loads its page.",
             keywords: ["unloaded", "asleep", "sleeping", "discarded", "dim", "grey", "gray", "inactive", "pinned", "closed"]
           ),
         ]),
@@ -170,24 +182,28 @@ public struct SettingsIndex: Sendable {
             key: "newTabOpens",
             title: "New tab opens",
             description: "With Command Bar, ⌘T and New Tab open the command bar over the page, as in Arc. The tab appears when you pick a result; Esc leaves everything as it was.",
+            caption: "With Command Bar, ⌘T opens the command bar; the tab appears when you pick a result.",
             keywords: ["new tab page", "command bar", "cmd t"]
           ),
           Row(
             key: "newTabPosition",
             title: "Add new tabs",
             description: "Where ⌘T and + New Tab put the new tab. Next to the current tab, it joins that tab's group (from a pinned tab, it goes first in the list), and closing it brings you back. Links open next to their page either way.",
+            caption: "Where ⌘T and + New Tab put the new tab. Links open next to their page either way.",
             keywords: ["new tab position", "next to current tab", "after current tab", "beside", "right of", "below", "adjacent", "end", "left", "top", "bottom", "order", "cmd t"]
           ),
           Row(
             key: "newTabButtonPosition",
             title: "New Tab button",
             description: "Where + New Tab sits in the sidebar, whatever Add new tabs says. At the top it stays above your tabs and scrolls with them; at the bottom it follows your last tab and stays at the sidebar's bottom edge once the tabs fill it.",
+            caption: "Where + New Tab sits in the sidebar, whatever Add new tabs says.",
             keywords: ["new tab button", "plus", "+", "top", "bottom", "sticky", "docked", "position"]
           ),
           Row(
             key: "shareTabsAcrossWindows",
             title: "Share tabs across windows",
             description: "Every window of a profile lists the same tabs, as in Arc. A tab is live in one window at a time: selecting it in another brings it there, and the first window shows it grayed until you click it. Each window keeps its own selected tab.",
+            caption: "Every window of a profile lists the same tabs; each tab is live in one window at a time.",
             keywords: ["arc", "multiple windows", "same tabs", "sync windows", "shared sidebar", "unpinned"]
           ),
           Row(key: "tabReorderHaptics", title: "Haptic feedback when reordering tabs", keywords: ["trackpad", "vibration", "drag"]),
@@ -196,18 +212,21 @@ public struct SettingsIndex: Sendable {
             key: "sidebarMediaControls",
             title: "Show media controls in the sidebar",
             description: "When a tab you're not looking at plays sound, a player appears at the bottom of the sidebar. Pinned tabs that are playing show one when you hover them.",
+            caption: "When another tab plays sound, a player appears at the bottom of the sidebar.",
             keywords: ["music", "player", "audio", "now playing"]
           ),
           Row(
             key: "autoPictureInPicture",
             title: "Automatic Picture in Picture",
             description: "A video or call you're watching pops out when you switch tabs or leave the window, and returns when you come back.",
+            caption: "Pops out the video or call you're watching when you switch tabs or leave the window.",
             keywords: ["pip", "video", "floating", "mini player"]
           ),
           Row(
             key: "videoUpscaling",
             title: "Video upscaling",
             description: "Sharpens low-resolution videos shown larger than they are, on Apple silicon. Only in the tab you're watching, never in the background, in Low Power Mode or when the Mac runs hot.",
+            caption: "Sharpens low-resolution videos shown larger than they are, on Apple silicon.",
             keywords: ["super resolution", "sharpen", "video quality"]
           ),
         ]),
@@ -216,12 +235,14 @@ public struct SettingsIndex: Sendable {
             key: "peekModifier",
             title: "Peek a link with",
             description: "Opens the link in a preview over the page. Open as Tab or Split View keeps it; Esc closes it.",
+            caption: "Opens the link in a preview over the page; Esc closes it.",
             keywords: ["peek", "preview", "shift click", "option click", "arc"]
           ),
           Row(
             key: "splitLinkModifier",
             title: "Open a link in split view with",
             description: "Opens the link in a pane beside the page. ⌥⌘-click splits too, and so does ⌥⇧-click when ⌥-click is chosen. A link that downloads still downloads.",
+            caption: "Opens the link in a pane beside the page.",
             keywords: ["split view", "split screen", "side by side", "option click", "alt click", "option shift click", "download", "dia"]
           ),
         ]),
@@ -230,6 +251,7 @@ public struct SettingsIndex: Sendable {
             key: "warnBeforeClosingTabGroup",
             title: "Warn before closing a tab group",
             description: "Asks before Close Group closes a group and its tabs. A pinned group's − unloads its tabs instead, and keeps the group.",
+            caption: "Asks before Close Group closes a group and its tabs.",
             keywords: ["confirm", "close group", "folder", "accidentally"]
           ),
           Row(key: "cmdClickCreatesTabGroup", title: "⌘-clicking links creates tab groups", keywords: ["command click", "cmd click"]),
@@ -237,6 +259,7 @@ public struct SettingsIndex: Sendable {
             key: "optShiftClickOpensInGroup",
             title: "⌥⇧-click opens tab in group",
             description: "⌥⇧-click a tab to open it in a group with the current tab. (⌥⇧-clicking a link opens it in a split.)",
+            caption: "⌥⇧-click a tab to open it in a group with the current tab.",
             keywords: ["option shift click", "split"]
           ),
           Row(key: "autoGroupMeetingTabs", title: "Automatically group tabs for meetings", keywords: ["calendar", "zoom", "meet", "call"]),
@@ -246,6 +269,7 @@ public struct SettingsIndex: Sendable {
             key: "cleanUp",
             title: "Clean up tabs I haven't used in",
             description: "Closes tabs you haven't used (and duplicates) automatically, like the tab menu's Clean Up Daily.",
+            caption: "Automatically closes tabs you haven't used and duplicates.",
             keywords: ["archive", "auto close", "inactive tabs", "duplicates"]
           ),
         ]),
@@ -257,6 +281,7 @@ public struct SettingsIndex: Sendable {
             key: "spacesFollowAppearance",
             title: "Profile themes follow this appearance",
             description: "Every profile goes light or dark with this choice, even when its theme (like one imported from an Arc space) says Light. In dark mode a light theme's colours are darkened so white text reads.",
+            caption: "Every profile goes light or dark with this choice, even if its theme says Light.",
             keywords: ["space", "profile theme", "arc theme", "follow system"]
           ),
         ]),
@@ -266,6 +291,7 @@ public struct SettingsIndex: Sendable {
             key: "commandBarPlacement",
             title: "⌘L opens the command bar",
             description: "In the centre, ⌘L and a click on the address show it over the middle of the page, as in Arc.",
+            caption: "In the centre, ⌘L and a click on the address show the command bar over the page.",
             keywords: ["cmd l", "command bar", "centred", "centered", "arc", "url bar", "location bar"]
           ),
         ]),
@@ -274,6 +300,7 @@ public struct SettingsIndex: Sendable {
             key: "selectedTabGlow",
             title: "Glow around the selected tab",
             description: "The soft light around the selected tab in the sidebar. Full is Dia's.",
+            caption: "The soft light around the selected tab in the sidebar.",
             keywords: ["glow", "shadow", "halo", "highlight", "selected tab", "active tab"]
           ),
         ]),
@@ -282,6 +309,7 @@ public struct SettingsIndex: Sendable {
             key: "pageScrollBars",
             title: "Scroll bars",
             description: "Follow macOS uses System Settings › Appearance › Show scroll bars. Thin shows slim scroll bars over the page only while you scroll, even with a mouse.",
+            caption: "Follow macOS uses your system setting; Thin shows scroll bars only while you scroll.",
             keywords: ["scrollbar", "scroll bar", "overlay", "thin", "mouse", "trackpad"]
           ),
         ]),
@@ -319,6 +347,7 @@ public struct SettingsIndex: Sendable {
             key: "offerToSave",
             title: "Offer to save and fill passwords",
             description: "Offers to save a login after you sign in, and suggests saved ones when you click a login field.",
+            caption: "Offers to save logins after sign-in and suggests saved ones in login fields.",
             keywords: ["password manager", "logins", "credentials", "keychain"]
           ),
           Row(key: "importPasswords", title: "Import passwords", description: "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…", keywords: ["csv", "logins"]),
@@ -336,7 +365,7 @@ public struct SettingsIndex: Sendable {
       ],
       .extensions: [
         Section(section: "Extensions", rows: [
-          Row(key: "installed", title: "Extensions", description: "Add features to \(app) with extensions from the Chrome Web Store. Each profile has its own.", keywords: ["add ons", "plugins", "installed"]),
+          Row(key: "installed", title: "Extensions", description: "Add features to \(app) with extensions from the Chrome Web Store. Each profile has its own.", caption: "Add features to \(app) with extensions from the Chrome Web Store.", keywords: ["add ons", "plugins", "installed"]),
         ]),
         Section(section: "Add extensions", rows: [
           Row(key: "webStore", title: "Chrome Web Store", description: "Browse the store; its Add to \(app) button installs here.", keywords: ["install extension"]),
@@ -369,6 +398,7 @@ public struct SettingsIndex: Sendable {
             key: "undoReopensClosedTab",
             title: "⌘Z reopens closed tabs",
             description: "Outside text fields, as in Arc; press it again for the tab closed before. In a text field ⌘Z still undoes typing.",
+            caption: "Outside text fields, reopens closed tabs; in text fields, undoes typing.",
             keywords: ["undo", "undo close tab", "reopen", "restore tab", "arc", "cmd z"]
           ),
           Row(key: "actions", title: "Customize keyboard shortcuts", keywords: ["hotkeys", "keybindings", "remap", "menu shortcuts"]),
@@ -426,12 +456,14 @@ public struct SettingsIndex: Sendable {
             key: "recommendedDefault",
             title: "Use Recommended Default",
             description: "Chromium runs extensions and the ad blocker. Sites that need protected video can still open in WebKit.",
+            caption: "Chromium runs extensions and the ad blocker.",
             keywords: ["reset", "recommended", "chromium"]
           ),
           Row(
             key: "protectedVideo",
             title: "Open streaming sites in WebKit",
             description: "Netflix, Disney+, Max, Prime Video, Hulu, Apple TV+, Spotify and other sites whose video is protected open in WebKit, which plays it. A website rule wins.",
+            caption: "Protected video sites open in WebKit unless a website rule says otherwise.",
             keywords: ["drm", "netflix", "disney", "hbo", "max", "prime video", "hulu", "spotify", "apple tv", "fairplay", "widevine", "streaming"]
           ),
         ]),
@@ -440,6 +472,7 @@ public struct SettingsIndex: Sendable {
             key: "websiteRules",
             title: "Website rules",
             description: "Sites that always open in a chosen engine. Links opened from a page stay on that page's engine.",
+            caption: "Sites that always open in a chosen engine.",
             keywords: ["opens in", "site engine", "rule", "webkit", "chromium"]
           ),
         ]),
@@ -448,6 +481,7 @@ public struct SettingsIndex: Sendable {
             key: "separateData",
             title: "Separate sign-ins",
             description: "Each engine keeps its own cookies and site data in every profile. Spaces, tabs, history and settings are shared.",
+            caption: "Each engine keeps its own cookies and site data in every profile.",
             keywords: ["cookies", "site data", "sign in", "logged out"]
           ),
           Row(
@@ -460,6 +494,7 @@ public struct SettingsIndex: Sendable {
             key: "passkeys",
             title: "Passkeys",
             description: "WebKit pages can't use passkeys until Apple grants \(app) its browser passkey entitlement. Sign in with a passkey in Chromium meanwhile.",
+            caption: "WebKit pages can't use passkeys yet; sign in with a passkey in Chromium.",
             keywords: ["passkey", "webauthn", "icloud keychain", "passwords app", "security key"]
           ),
         ]),
@@ -473,6 +508,7 @@ public struct SettingsIndex: Sendable {
             key: "developerMode",
             title: "Developer Mode sites",
             description: "Developer Mode adds console, network and inspect buttons and a reload menu. localhost is on until you turn it off.",
+            caption: "Adds console, network and inspect buttons and a reload menu.",
             keywords: ["developer mode", "dev mode", "reset", "localhost", "console"]
           ),
         ]),

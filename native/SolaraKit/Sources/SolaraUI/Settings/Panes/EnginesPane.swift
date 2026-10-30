@@ -76,10 +76,10 @@ public final class EnginesPaneModel: SettingsPaneProvider {
   static func passkeyStatus(_ status: PasskeyAccessStatus, app: String) -> String? {
     switch status {
     case .entitlementRequired: nil
-    case .deviceNotConfigured: "Passkeys aren't set up on this Mac. Set up iCloud Keychain or another passkey app in System Settings, then reopen \(app)."
-    case .notDetermined: "Allow \(app) to use the passkeys saved on this Mac, from the Passwords app and other passkey apps, in WebKit and Chromium pages."
+    case .deviceNotConfigured: "Set up a passkey app in System Settings, then reopen \(app)."
+    case .notDetermined: "Allow \(app) to use passkeys saved on this Mac in WebKit and Chromium."
     case .authorized: "Websites can use the passkeys saved on this Mac, in WebKit and Chromium pages."
-    case .denied: "Off. Turn \(app) on in System Settings › Privacy & Security › Passkeys Access for Web Browsers."
+    case .denied: "Allow \(app) in System Settings › Privacy & Security › Passkeys Access for Web Browsers."
     }
   }
 

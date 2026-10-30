@@ -431,7 +431,7 @@ struct SitePermissionsSection: View {
   var body: some View {
     let profile = model.sitePermissionsProfile
     SettingsSection(
-      description: context?.index.entry("privacy.sitePermissions")?.description,
+      description: context?.index.entry("privacy.sitePermissions")?.displayCaption,
       anchor: "privacy.sitePermissions"
     ) {
       PrivacyProfilePicker(model: model, selection: $model.sitePermissionsProfileId)
@@ -471,7 +471,7 @@ struct AppLinksSection: View {
   var body: some View {
     let profile = model.appLinksProfile
     SettingsSection(
-      description: context?.index.entry("privacy.appLinks")?.description,
+      description: context?.index.entry("privacy.appLinks")?.displayCaption,
       anchor: "privacy.appLinks"
     ) {
       PrivacyProfilePicker(model: model, selection: $model.appLinksProfileId)

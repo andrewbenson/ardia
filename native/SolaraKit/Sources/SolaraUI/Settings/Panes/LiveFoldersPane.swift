@@ -284,7 +284,7 @@ struct LiveFoldersPane: View {
   var body: some View {
     SettingsForm {
       SettingsSection(
-        description: "Right-click empty space in the sidebar and choose New Live Folder to add one. Live folders refresh every few minutes; items open as tabs that stay in the folder.",
+        description: "Right-click empty sidebar space and choose New Live Folder. Folders refresh every few minutes.",
         anchor: "liveFolders.folders"
       ) {
         EmptyView()
@@ -344,7 +344,7 @@ struct LiveFoldersFolderSection: View {
 
   private func option(_ id: String, isOn: Binding<Bool>) -> some View {
     let entry = context?.index.entry(id)
-    return SettingRow(anchored ? id : nil, title: entry?.title, description: entry.flatMap(\.description).map(RowDescription.text) ?? .none) {
+    return SettingRow(anchored ? id : nil, title: entry?.title, description: entry.flatMap(\.displayCaption).map(RowDescription.text) ?? .none) {
       Toggle("", isOn: isOn)
         .labelsHidden()
         .toggleStyle(.settingsSwitch)

@@ -256,9 +256,9 @@ struct PasswordsPaneTests {
     #expect(SettingsFavicon.hostInitial("http://192.168.1.1") == nil)
     #expect(SettingsFavicon.hostInitial("android://x@com.example") == nil)
     let moved = PasswordsText.managerAppsNote(appName: "Solara", inApplicationsFolder: false)
-    #expect(moved.contains("move Solara to your Applications folder"))
+    #expect(moved == "Move Solara to Applications, reopen it, then add it in 1Password's Browser settings.")
     let added = PasswordsText.managerAppsNote(appName: "Solara", inApplicationsFolder: nil)
-    #expect(added.hasSuffix("Add Browser and choose Solara."))
+    #expect(added == "In 1Password Settings › Browser › Add Browser, choose Solara.")
   }
 
   static func renderWindow(_ context: SettingsContext, _ place: SettingsPlace, named name: String, setup: () async -> Void = {}) async throws {

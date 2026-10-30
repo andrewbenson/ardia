@@ -184,8 +184,8 @@ struct CreateProfileSheet: View {
           .toggleStyle(.switch)
           if share {
             Text(single
-              ? "This profile will share your cookies, logins, passwords, extensions, bookmarks and history with your current profile. Tabs stay separate."
-              : "This profile will share your cookies, logins, passwords, extensions, bookmarks and history with another profile you choose. Tabs stay separate.")
+              ? "Shares browsing data with your current profile. Tabs stay separate."
+              : "Shares browsing data with a profile you choose. Tabs stay separate.")
               .font(.system(size: 11.5))
               .foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)

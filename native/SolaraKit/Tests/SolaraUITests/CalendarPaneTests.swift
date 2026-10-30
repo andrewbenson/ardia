@@ -59,7 +59,7 @@ struct CalendarPaneTests {
     #expect(model.accessDescription(appName: "Solara") == "Development build: using calendar-fixture.json")
     model.state?.access = .restricted
     #expect(model.denied && !model.connected)
-    #expect(model.accessDescription(appName: "Solara") == "Solara isn't allowed to read your calendars. Allow it in System Settings › Privacy & Security › Calendars.")
+    #expect(model.accessDescription(appName: "Solara") == "Allow Solara in System Settings › Privacy & Security › Calendars.")
     model.state?.access = .writeOnly
     #expect(!model.denied && !model.connected)
     #expect(model.accessDescription(appName: "Solara") == "Not connected")

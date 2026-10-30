@@ -288,7 +288,7 @@ struct ExtensionsList: View {
     let profiles = model.store.profiles
     let list = model.lists[profile] ?? []
     SettingsForm {
-      SettingsSection(description: context?.index.entry("extensions.installed")?.description, anchor: "extensions.installed") {
+      SettingsSection(description: context?.index.entry("extensions.installed")?.displayCaption, anchor: "extensions.installed") {
         if profiles.count > 1 {
           SettingPicker(
             profiles.map { SettingOption($0.id, $0.name) },

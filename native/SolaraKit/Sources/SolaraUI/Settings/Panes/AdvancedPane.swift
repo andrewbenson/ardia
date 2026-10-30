@@ -83,8 +83,8 @@ public final class AdvancedPaneModel: SettingsPaneProvider {
   public func view(_ place: SettingsPlace) -> AnyView { AnyView(AdvancedPane(model: self)) }
 
   static let batterySaverDescriptions = [
-    "lowBattery": "At 20% battery or less, or in Low Power Mode, busy background tabs pause and animations slow down.",
-    "unplugged": "On battery or in Low Power Mode, busy background tabs pause and animations slow down.",
+    "lowBattery": "At 20% or less, or in Low Power Mode, pauses busy background tabs and slows animations.",
+    "unplugged": "On battery or in Low Power Mode, pauses busy background tabs and slows animations.",
     "never": "Background tabs and animations run at full speed on battery.",
   ]
 
@@ -95,7 +95,7 @@ public final class AdvancedPaneModel: SettingsPaneProvider {
   }
 
   static func serverNote(on: Bool, server: CliServerStatus?) -> String {
-    if server?.state == "external" { return "This instance already has a DevTools port from the command line, so the setting leaves it alone." }
+    if server?.state == "external" { return "This instance already has a command-line DevTools port." }
     if let reason = server?.reason { return reason }
     if on, server?.state == "on" {
       if let connections = server?.connections, connections > 0 {
@@ -103,7 +103,7 @@ public final class AdvancedPaneModel: SettingsPaneProvider {
       }
       return "On. Nothing is connected."
     }
-    return "While it's on, the command can open, read and act in every page you're signed in to, and it stays on after you quit."
+    return "The command can read and act in pages you're signed in to. It stays on after you quit."
   }
 
   static func describeInstall(_ state: CliInstallState) -> String {
@@ -135,7 +135,7 @@ struct AdvancedPane: View {
       }
 
       SettingsSection("Performance") {
-        SettingRow("advanced.batterySaver", description: AdvancedPaneModel.batterySaverDescriptions[batterySaver].map(RowDescription.footer) ?? .index) {
+        SettingRow("advanced.batterySaver", description: AdvancedPaneModel.batterySaverDescriptions[batterySaver].map(RowDescription.text) ?? .index) {
           SettingPicker(
             [SettingOption("lowBattery", "When battery is low"), SettingOption("unplugged", "When unplugged"), SettingOption("never", "Never")],
             selection: store.choice("batterySaverWhen")

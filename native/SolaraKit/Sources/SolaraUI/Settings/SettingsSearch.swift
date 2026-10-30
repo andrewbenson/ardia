@@ -120,7 +120,7 @@ public enum SettingsSearch {
         (.keywords, entry.keywords.joined(separator: " ")),
         (.section, entry.section),
         (.paneTitle, entry.paneTitle),
-        (.description, entry.description ?? ""),
+        (.description, [entry.caption, entry.description].compactMap { $0 }.joined(separator: " ")),
       ]
       return Prepared(entry: entry, fields: texts.map { ($0.0, words($0.1), normalize($0.1)) })
     }

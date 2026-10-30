@@ -61,7 +61,7 @@ The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `We
 | Discard and resume | shared `onDiscarded` handler sets the session's pending URL; resume goes through the navigation path above |
 | `handOff` / `takeHandOff`, `adoptId` transfers, pin handoffs, peek to tab | not in pooled mode: the pool moves its own view between slots and windows. Crossing to Little Solara is the park path |
 | New Tab prewarm (`usePrewarm`) | off in pooled windows |
-| A tab's engine or engine profile changes (Open in, Move to Profile) | the pool keys each page by its engine and engine profile: the old page is discarded, never parked for a WebKit transfer, and a new one is made in its slot; JS stops following navigations on the old page once the tab's profile changed |
+| A tab's engine or engine profile changes (Open in, Move to Profile) | the pool keys each page by its engine and engine profile: the old page is discarded, never parked for a WebKit transfer, and a new one is made in its slot; JS stops following navigations on the old page once the tab's profile changed; if the old page had keyboard focus, the new one takes it |
 | A page's `onWindowClose(withWindow)`: `withWindow` is true when Chrome started the window's close (an extension's `chrome.windows.remove`) | shared handler: `closeTabs([tabId], { lastClosesWindow: true, windowClosedByChrome: withWindow })` |
 | Split-pane activation on a click (`TabPane` `onTouchStart`) | shared `onPageFocus` and `onPagePress` handlers (`activateSplitPane`). A left press on a page no longer reaches RN's touch handler, so `onPagePress` is the only click signal |
 
@@ -71,4 +71,4 @@ The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `We
 each kind reaches the store (title and favicon, progress, a notification click focuses its tab), a click in the
 unfocused split pane focuses it, a peek opens and promotes, a tab moved to another profile and back gets a new page
 each time (cookies prove which profile loaded it), and an engine change makes a new page whose ready reaches the store,
-never one revived from an armed WebKit transfer.
+never one revived from an armed WebKit transfer, and that keeps keyboard focus when the old page had it.

@@ -314,6 +314,10 @@ final class PoolPage: TabPoolPage {
     apply()
   }
 
+  func focus() {
+    page.focus()
+  }
+
   func retire() {
     page.retire()
     onRetire()

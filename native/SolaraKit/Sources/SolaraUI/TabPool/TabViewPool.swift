@@ -4,6 +4,7 @@ import AppKit
 public protocol TabPoolPage: AnyObject {
   var view: NSView { get }
   func setShown(_ shown: Bool)
+  func focus()
   func retire()
 }
 
@@ -25,6 +26,7 @@ public final class TabViewPool {
   private var places: [String: TabViewPlace] = [:]
   private var shown: [String: Bool] = [:]
   private var identities: [String: String] = [:]
+  private var refocus: Set<String> = []
   private var scheduled = false
   private var slotObserver: NSObjectProtocol?
 
@@ -64,6 +66,7 @@ public final class TabViewPool {
     let ops = TabViewPlan.plan(wanted: wanted, slots: slots.keys, current: places, visible: shown)
     let rehosted = rehost()
     guard !ops.isEmpty else {
+      focusReplaced()
       if rehosted || replaced { onPlaced?(places.mapValues(Self.describe)) }
       return
     }
@@ -105,7 +108,17 @@ public final class TabViewPool {
     }
     places = applied.current
     shown = applied.visible
+    focusReplaced()
     onPlaced?(places.mapValues(Self.describe))
+  }
+
+  private func focusReplaced() {
+    let ids = refocus
+    refocus = []
+    for id in ids.sorted() {
+      guard let page = pages[id], page.view.window != nil, !page.view.isHiddenOrHasHiddenAncestor else { continue }
+      page.focus()
+    }
   }
 
   private func retireChangedIdentities() -> Bool {
@@ -117,6 +130,8 @@ public final class TabViewPool {
         continue
       }
       guard had != entry.identity, let page = pages.removeValue(forKey: entry.tabId) else { continue }
+      let responder = page.view.window?.firstResponder as? NSView
+      if let responder, responder === page.view || responder.isDescendant(of: page.view) { refocus.insert(entry.tabId) }
       identities[entry.tabId] = nil
       places[entry.tabId] = nil
       shown[entry.tabId] = nil

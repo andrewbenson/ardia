@@ -17,7 +17,8 @@ then done); a page's notification, clicked while another tab is active, brings i
 and fires the page's onclick; a peek opens on its own pooled page and Open as Tab promotes that page into the window;
 in a split, a click in the unfocused pane focuses it and a pane's close button closes its tab; a tab moved to another
 profile, and back, gets a new page each time in the right profile (cookies prove it); and an engine change makes a new
-page whose ready reaches the store, never one revived from an armed WebKit transfer. A build whose pool doesn't serve pages fails every check.`);
+page whose ready reaches the store, never one revived from an armed WebKit transfer, and that keeps keyboard focus
+when the old page had it. A build whose pool doesn't serve pages fails every check.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -238,6 +239,22 @@ try {
     const w3 = await loaded("w3");
     if (w3.back) throw new Error("the WebKit page came back with its old history");
     return { c1: c1.browser, w3: w3.browser };
+  });
+
+  await rep.check("a page that had keyboard focus hands it to the page that replaces it", async () => {
+    await run(`go("b", ${json(url("f1"))}, { engine: "chromium" }); return true;`);
+    await loaded("f1");
+    const card = await run(`return W.describe("w1").then(JSON.parse).then((d) => d.card);`);
+    const click = await run(`return ac.shell.devClick("w1", { x: ${card[0] + 300}, y: ${card[1] + 300}, wait: 300 });`);
+    if (click.firstResponderAfter !== "RenderWidgetHostViewCocoa") throw new Error(`the click left focus on ${click.firstResponderAfter}`);
+    await run(`go("b", ${json(url("f2"))}, { engine: "webkit" }); return true;`);
+    await loaded("f2");
+    await run(`return page("b").evaluate("window.__keys = []; addEventListener('keydown', (e) => __keys.push(e.key)); post('result', 'ok')");`);
+    await run(`return globalThis.expo.modules.ArdiaApp.devPostKeys("w1", [{ key: "k", keyCode: 40, send: true }]).then(() => true);`);
+    await sleep(300);
+    const keys = await run(`return page("b").evaluate("post('result', JSON.stringify(__keys))");`);
+    if (!String(keys).includes("k")) throw new Error(`the new page got ${json(keys)}`);
+    return { keys };
   });
 } catch (e) {
   rep.record("run", { error: e });

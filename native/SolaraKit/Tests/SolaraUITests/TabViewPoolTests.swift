@@ -8,11 +8,13 @@ final class FakePage: TabPoolPage {
   var shownLog: [Bool] = []
   var shownIn: [NSView?] = []
   var retired = false
+  var focused = 0
   init(_ view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: 10, height: 10))) { self.view = view }
   func setShown(_ shown: Bool) {
     shownLog.append(shown)
     shownIn.append(view.superview)
   }
+  func focus() { focused += 1 }
   func retire() {
     retired = true
     view.removeFromSuperview()
@@ -235,6 +237,25 @@ struct TabViewPoolTests {
     rig.turn()
     #expect(view.superview === other)
     #expect(rig.window.firstResponder === view)
+  }
+
+  @Test func aReplacedPageThatHadKeyboardFocusHandsItToItsReplacement() {
+    let rig = Rig()
+    rig.pageView = { _ in FocusableView(frame: NSRect(x: 0, y: 0, width: 10, height: 10)) }
+    let pane = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 300))
+    rig.window.contentView!.addSubview(pane)
+    rig.slots.set(.card("w1"), container: rig.card)
+    rig.slots.set(.pane("w1", "b"), container: pane)
+    rig.pool.update([want("a", identity: "webkit|default"), want("b", .pane, identity: "webkit|default")])
+    rig.turn()
+    let a = rig.made["a"]!, b = rig.made["b"]!
+    #expect(rig.window.makeFirstResponder(a.view))
+    rig.pool.update([want("a", identity: "chromium|work"), want("b", .pane, identity: "chromium|work")])
+    rig.turn()
+    #expect(a.retired && b.retired)
+    #expect(rig.made["a"]!.focused == 1)
+    #expect(rig.made["a"]!.view.superview === rig.card)
+    #expect(rig.made["b"]!.focused == 0, "a page that didn't have focus doesn't take it")
   }
 
   @Test func placementsAreReportedAfterEachChange() {

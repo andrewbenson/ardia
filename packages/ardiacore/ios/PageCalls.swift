@@ -270,6 +270,14 @@ public final class PooledPage {
     }
   }
 
+  public func focus() {
+    if let web = view as? ArdiaCoreWebView {
+      web.focusPage()
+    } else if let tab = view as? WebKitTab {
+      tab.focusPage()
+    }
+  }
+
   public func discard() {
     if let parked = WebKitHub.shared.claimParked(tabId) { WebKitHub.close(parked) }
     if let tab = view as? WebKitTab {

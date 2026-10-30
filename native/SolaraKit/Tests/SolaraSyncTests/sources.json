@@ -1,7 +1,7 @@
 {
   "Adapters": {
     "apps/browser/src/sync/adapters.ts": "e61cef6edd35b7f3f202aaca47f8434bb96ba6984ac9bbab9187b9ef5f54795d",
-    "apps/browser/src/sync/pinned.ts": "49ede6b7fadea6337f623ae478e786401a87e7c18c29ba6e1ba27484096529a0",
+    "apps/browser/src/sync/pinned.ts": "58cd0c14e0d7ad0c047ffb18c5673ec6e18b38a9bf027f04dd6c26ead6c9cfb9",
     "apps/browser/src/sync/extensions.ts": "11c156c7bed0ae74298c020f76bda436a6e99d8fdedac9041237b44fb8fc3497"
   },
   "Cases/journal.json.deflate": {

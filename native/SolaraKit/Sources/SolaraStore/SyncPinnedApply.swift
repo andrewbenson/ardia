@@ -23,6 +23,20 @@ func lookPatch(_ v: JSONValue?, _ key: String, into patch: inout TabPatch) {
   if value == nil { patch.undefined.insert(field) }
 }
 
+func keepUnseenMembers(_ wanted: [String], _ local: [String], _ unseen: (String) -> Bool) -> [String] {
+  var out = wanted
+  var after = -1
+  for id in local {
+    if let at = out.firstIndex(of: id) {
+      after = at
+    } else if unseen(id) {
+      after += 1
+      out.insert(id, at: after)
+    }
+  }
+  return out
+}
+
 extension Session {
   func carryNullable(_ copy: inout Tab, _ from: Tab, _ keys: Set<String>) {
     copy.markAbsent(from.absent.intersection(keys))
@@ -228,18 +242,46 @@ extension Session {
       t.pinKey = nil
       tabs[id] = t
     }
+    let framed = Set(memberOrder.values.flatMap { $0 })
+    let changedKeys = Set(changed)
+    let gone = Set(goneTabs)
+    func unseenByView(_ id: String) -> Bool {
+      guard tabs[id] != nil, let before = s.tabs[id], !framed.contains(id), !gone.contains(id) else { return false }
+      let key = "pin:t:\(before.pinKeyOrId)"
+      return visible[key] == nil && !changedKeys.contains(key)
+    }
     var groups = s.groups
     groups.touch()
+    var orphaned = OrderedSet<String>()
     for k in changed {
       let key: String? = starts(k, "pin:g:") ? k.jsSlice(6) : starts(k, "\(nestPrefix)g:") ? k.jsSlice(nestPrefix.utf16.count + 2) : nil
       guard let key, visible[k] == nil else { continue }
       if all.contains(gidText(key)) { continue }
-      if let g = groups[gidText(key)], g.pinned, scope.contains(g.windowId) { groups[gidText(key)] = nil }
+      guard let deleted = groups[gidText(key)], deleted.pinned, scope.contains(deleted.windowId) else { continue }
+      for id in deleted.tabIds where unseenByView(id) { _ = orphaned.insert(id) }
+      groups[gidText(key)] = nil
+    }
+    let before = s.groups
+    func localGroupsOf(_ id: String) -> [String] {
+      before.values.filter { $0.pinned && $0.profileId == profileId && $0.tabIds.contains(id) }.map(\.id)
+        .stableSorted { Groups.depthOf(before, $0) > Groups.depthOf(before, $1) }
+    }
+    func homeOf(_ id: String) -> String? { localGroupsOf(id).first { groups[$0] != nil } }
+    for id in orphaned where homeOf(id) == nil {
+      var tile = tabs[id]!
+      tile.pinned = true
+      tile.pinnedUrl = tile.pinnedUrl.flatMap { $0.isEmpty ? nil : $0 } ?? tile.url
+      tabs[id] = tile
     }
     var windows = s.windows
     windows.touch()
 
-    for id in groupOrder {
+    var described = OrderedSet<String>()
+    for id in groupOrder { _ = described.insert(id) }
+    for id in all.elements where groups[id] != nil && !described.contains(id) {
+      for x in chainUp(id).reversed() { _ = described.insert(x) }
+    }
+    for id in described {
       let v = lookOf(id)
       let old = groups[id]
       let color = lookedColor(v?["c"], base("\(PinnedSync.groupLook)\(old.map(\.pinKeyOrId) ?? keyOf(id))"))
@@ -334,9 +376,23 @@ extension Session {
     for (id, g) in Groups.leaveGroups(Table(unpinnedPart), standalone) { pinnedPart[id] = g }
     groups = Table(pinnedPart)
     let inGroup = Set(memberOrder.values.flatMap { $0 }.filter { tabs[$0] != nil })
+    var localMembers = OrderedSet<String>()
+    for g in s.groups.values where g.pinned && g.profileId == profileId {
+      for id in g.tabIds { _ = localMembers.insert(id) }
+    }
+    let unseenHere = localMembers.filter { unseenByView($0) && homeOf($0) != nil }
+    func keptUnder(_ id: String, _ group: String) -> Bool {
+      guard let home = homeOf(id) else { return false }
+      return home == group || Groups.ancestorIds(groups, home).contains(group)
+    }
     for g in groups.values where g.profileId == profileId {
       var next = g
-      next.tabIds = g.pinned && memberOrder[g.id] != nil ? memberOrder[g.id]!.filter { tabs[$0] != nil } : g.tabIds.filter { !inGroup.contains($0) }
+      next.tabIds =
+        g.pinned && memberOrder[g.id] != nil
+        ? keepUnseenMembers(memberOrder[g.id]!.filter { tabs[$0] != nil }, g.tabIds + unseenHere.filter { !g.tabIds.contains($0) }) {
+          unseenByView($0) && keptUnder($0, g.id)
+        }
+        : g.tabIds.filter { !inGroup.contains($0) && (!g.pinned || !unseenByView($0) || keptUnder($0, g.id)) }
       groups[g.id] = next
     }
     for g in groups.values where g.profileId == profileId && g.tabIds.isEmpty { groups[g.id] = nil }

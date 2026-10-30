@@ -114,6 +114,17 @@ function homeWindow(s: BrowserState, profileId: string): Window | undefined {
   return order.find((w) => w.profileId === profileId && shows(w)) ?? order.find(shows) ?? order.find((w) => w.profileId === profileId) ?? order[0];
 }
 
+function keepUnseenMembers(wanted: string[], local: string[], unseen: (id: string) => boolean): string[] {
+  const out = [...wanted];
+  let after = -1;
+  for (const id of local) {
+    const at = out.indexOf(id);
+    if (at >= 0) after = at;
+    else if (unseen(id)) out.splice(++after, 0, id);
+  }
+  return out;
+}
+
 export function pinnedAdapter(profileId: string): Adapter {
   return {
     prefix: "pin",
@@ -358,15 +369,34 @@ export function pinnedAdapter(profileId: string): Adapter {
       s = removeTabs(s, removable, false);
       const tabs = { ...s.tabs };
       for (const id of goneTabs) if (tabs[id]) tabs[id] = { ...tabs[id]!, pinned: false, pinnedUrl: null, pinnedAsRow: undefined, tileFolder: undefined, pinKey: undefined };
+      const framed = new Set([...memberOrder.values()].flat());
+      const unseenByView = (id: string) => {
+        if (!tabs[id] || !s.tabs[id] || framed.has(id) || goneTabs.includes(id)) return false;
+        const key = `pin:t:${pinKeyOf(s.tabs[id]!)}`;
+        return !visible.has(key) && !changed.has(key);
+      };
       let groups = { ...s.groups };
+      const orphaned = new Set<string>();
       for (const k of changed) {
         const key = k.startsWith("pin:g:") ? k.slice(6) : k.startsWith(`${PIN_NEST}g:`) ? k.slice(PIN_NEST.length + 2) : null;
         if (key === null || visible.has(k) || all.has(gid(key))) continue;
-        if (groups[gid(key)]?.pinned && scope.has(groups[gid(key)]!.windowId)) delete groups[gid(key)];
+        const deleted = groups[gid(key)];
+        if (!deleted?.pinned || !scope.has(deleted.windowId)) continue;
+        deleted.tabIds.filter(unseenByView).forEach((id) => orphaned.add(id));
+        delete groups[gid(key)];
       }
+      const localGroupsOf = (id: string) =>
+        Object.values(s.groups)
+          .filter((g) => g.pinned && g.profileId === profileId && g.tabIds.includes(id))
+          .map((g) => g.id)
+          .sort((a, z) => depthOf(s.groups, z) - depthOf(s.groups, a));
+      const homeOf = (id: string) => localGroupsOf(id).find((g) => groups[g]);
+      for (const id of orphaned) if (!homeOf(id)) tabs[id] = { ...tabs[id]!, pinned: true, pinnedUrl: tabs[id]!.pinnedUrl || tabs[id]!.url };
       const windows = { ...s.windows };
 
-      for (const id of groupOrder) {
+      const described = new Set(groupOrder);
+      for (const id of all) if (groups[id] && !described.has(id)) chainUp(id).reverse().forEach((x) => described.add(x));
+      for (const id of described) {
         const v = lookOf(id);
         const old = groups[id];
         const color = lookedColor(v.c, base(`${GROUP_LOOK}${old ? pinKeyOf(old) : keyOf(id)}`));
@@ -422,9 +452,14 @@ export function pinnedAdapter(profileId: string): Adapter {
         ...leaveGroups(Object.fromEntries(Object.entries(groups).filter(([, g]) => !g.pinned)), standalone),
       };
       const inGroup = new Set([...memberOrder.values()].flat().filter((id) => tabs[id]));
+      const unseenHere = [...new Set(Object.values(s.groups).filter((g) => g.pinned && g.profileId === profileId).flatMap((g) => g.tabIds))].filter((id) => unseenByView(id) && !!homeOf(id));
+      const keptUnder = (id: string, group: string) => {
+        const home = homeOf(id);
+        return !!home && (home === group || ancestorIds(groups, home).includes(group));
+      };
       for (const g of Object.values(groups)) {
         if (g.profileId !== profileId) continue;
-        const wanted = g.pinned && memberOrder.has(g.id) ? memberOrder.get(g.id)!.filter((id) => tabs[id]) : g.tabIds.filter((id) => !inGroup.has(id));
+        const wanted = g.pinned && memberOrder.has(g.id) ? keepUnseenMembers(memberOrder.get(g.id)!.filter((id) => tabs[id]), [...g.tabIds, ...unseenHere.filter((id) => !g.tabIds.includes(id))], (id) => unseenByView(id) && keptUnder(id, g.id)) : g.tabIds.filter((id) => !inGroup.has(id) && (!g.pinned || !unseenByView(id) || keptUnder(id, g.id)));
         groups[g.id] = { ...g, tabIds: wanted };
       }
       for (const g of Object.values(groups)) if (g.profileId === profileId && !g.tabIds.length) delete groups[g.id];

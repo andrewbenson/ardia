@@ -10,6 +10,8 @@ struct TabPageModelTests {
     var m = fresh()
     #expect(m.issued(TabNavigationRequest(seq: 1, url: "https://a.test/", userInitiated: true), newTabShown: false, startedEarly: false) == [.load("https://a.test/", userInitiated: true)])
     #expect(m.pending == "https://a.test/")
+    #expect(m.issuedSeq == 1)
+    #expect(m.issued(TabNavigationRequest(seq: 1, url: "https://a.test/", userInitiated: true), newTabShown: false, startedEarly: false).isEmpty)
   }
 
   @Test func aHandedOffViewDoesNotReloadItsNavigation() {
@@ -74,5 +76,101 @@ struct TabPageModelTests {
     _ = m.issued(TabNavigationRequest(seq: 1, url: "https://a.test/"), newTabShown: false, startedEarly: false)
     m.loadFailed()
     #expect(m.pending == nil)
+  }
+
+  @Test func aNewNavigationBeforeTheFirstHandoffFollowStillLoads() {
+    var m = fresh(handoff: 1)
+    #expect(m.issued(TabNavigationRequest(seq: 2, url: "https://b.test/"), newTabShown: false, startedEarly: false) == [.load("https://b.test/", userInitiated: false)])
+  }
+
+  @Test func clearingNavigationAllowsItsSequenceToBeFollowedAgain() {
+    var m = fresh()
+    let nav = TabNavigationRequest(seq: 1, url: "https://a.test/")
+    _ = m.issued(nav, newTabShown: false, startedEarly: false)
+    #expect(m.issued(nil, newTabShown: false, startedEarly: false).isEmpty)
+    #expect(m.issuedSeq == 1)
+    #expect(m.issued(nav, newTabShown: false, startedEarly: false) == [.load(nav.url, userInitiated: false)])
+  }
+
+  @Test func aSameProfileMovePreservesTheSurvivingPage() {
+    var m = fresh()
+    _ = m.issued(TabNavigationRequest(seq: 1, url: "https://a.test/"), newTabShown: false, startedEarly: false)
+    m.moved(sameProfile: true)
+    #expect(m.issued(TabNavigationRequest(seq: 2, url: "https://moved.test/"), newTabShown: true, startedEarly: false).isEmpty)
+    #expect(m.issued(TabNavigationRequest(seq: 3, url: "https://next.test/"), newTabShown: false, startedEarly: false) == [.load("https://next.test/", userInitiated: false)])
+  }
+
+  @Test func aProfileChangeDoesNotTreatANavigationAsArrived() {
+    var m = fresh()
+    _ = m.issued(TabNavigationRequest(seq: 1, url: "https://a.test/"), newTabShown: false, startedEarly: false)
+    m.moved(sameProfile: false)
+    #expect(m.issued(TabNavigationRequest(seq: 2, url: "https://next.test/"), newTabShown: false, startedEarly: false) == [.load("https://next.test/", userInitiated: false)])
+  }
+
+  @Test func aHandoffWithoutANavigationDoesNotSwallowTheFirstRequest() {
+    var m = fresh(nil)
+    #expect(m.issued(TabNavigationRequest(seq: 1, url: "https://first.test/"), newTabShown: false, startedEarly: false) == [.load("https://first.test/", userInitiated: false)])
+  }
+
+  @Test func anUntouchedBlankIsAcceptedForAnAboutTarget() {
+    var m = fresh(TabNavigationRequest(seq: 1, url: "about:blank"))
+    #expect(m.reported(TabNavigationReport(url: "", committedInitial: true), TabPageContext()).contains(.navigated(url: "", title: "", isLoading: false, canGoBack: false, canGoForward: false)))
+    #expect(m.pending == nil)
+  }
+
+  @Test func anOldStyleAdoptedOpenerBlankIsNotSuppressed() {
+    var m = fresh(adopted: "https://opener.test/")
+    #expect(m.reported(TabNavigationReport(url: ""), TabPageContext(openedByAdoption: true)).contains(.navigated(url: "", title: "", isLoading: false, canGoBack: false, canGoForward: false)))
+  }
+
+  @Test func aDownloadRestoresOnlyAChangedCommittedURL() {
+    var m = fresh()
+    #expect(m.downloadNavigation(committedUrl: "https://before.test/", skipped: false, context: TabDownloadContext(currentUrl: "https://file.test/")) == [.stopLoading, .updateURL("https://before.test/")])
+    #expect(m.pending == nil)
+    #expect(m.downloadNavigation(committedUrl: "https://before.test/", skipped: false, context: TabDownloadContext(currentUrl: "https://before.test/")) == [.stopLoading])
+  }
+
+  @Test func anUncommittedDownloadClosesAnAdoptedOrOpenerTab() {
+    var m = fresh()
+    for adopted in [false, true] {
+      #expect(m.downloadNavigation(committedUrl: nil, skipped: false, context: TabDownloadContext(hasOtherProfileTab: true, hasOpener: !adopted, hasAdoptId: adopted)) == [.stopLoading, .closeTab])
+    }
+  }
+
+  @Test func downloadCloseGuardsReturnToNewTab() {
+    var m = fresh()
+    let contexts = [
+      TabDownloadContext(hasOtherProfileTab: false, hasOpener: true),
+      TabDownloadContext(hasOtherProfileTab: true),
+      TabDownloadContext(hasOtherProfileTab: true, hasOpener: true, wasNewTab: true),
+      TabDownloadContext(hasOtherProfileTab: true, hasOpener: true, canGoBack: true),
+    ]
+    for context in contexts {
+      #expect(m.downloadNavigation(committedUrl: "", skipped: false, context: context) == [.stopLoading, .resetToNewTab])
+    }
+    #expect(m.downloadNavigation(committedUrl: nil, skipped: true, context: TabDownloadContext(hasOtherProfileTab: true, hasOpener: true)) == [.stopLoading, .resetToNewTab])
+  }
+
+  @Test func aDownloadForAMissingTabOnlyClearsPending() {
+    var m = fresh()
+    #expect(m.downloadNavigation(committedUrl: nil, skipped: false, context: TabDownloadContext(tabExists: false)).isEmpty)
+    #expect(m.pending == nil)
+  }
+
+  @Test func discardResetsTheNewTabOriginAndKeepsTheWakeTarget() {
+    var m = fresh(newTab: true)
+    #expect(m.discarded("https://sleep.test/") == [.discarded])
+    #expect(m.pending == "https://sleep.test/")
+    #expect(m.reported(TabNavigationReport(url: "", committedInitial: true), TabPageContext()) == [.markLoading])
+    #expect(!m.reported(TabNavigationReport(url: "https://sleep.test/"), TabPageContext()).contains(.backToNewTab))
+    #expect(m.ready(muted: false) == [.ready])
+    #expect(m.ready(muted: true) == [.ready, .setMuted(true)])
+  }
+
+  @Test func aChromeWindowCloseCarriesItsWindowFlagUnlessQuitting() {
+    let m = fresh()
+    #expect(m.windowClosed(withWindow: true, isQuitting: false) == [.closeTabs(windowClosedByChrome: true)])
+    #expect(m.windowClosed(withWindow: false, isQuitting: false) == [.closeTabs(windowClosedByChrome: false)])
+    #expect(m.windowClosed(withWindow: true, isQuitting: true).isEmpty)
   }
 }

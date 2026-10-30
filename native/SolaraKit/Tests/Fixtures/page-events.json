@@ -1,0 +1,3043 @@
+{
+  "version": 1,
+  "sources": {
+    "components/pageEvents": "105893ce86cae8fc2a0a90bfe2aadd62b8fcae21f1e20702efe2b0faf6c41701",
+    "components/pooledPages": "829c5c5121b9b6ad939041388dfd890fda22c8eed02688941f92dc2db9cc4ed7",
+    "lib/nativeEvents": "980d88b151ce735fa3ecec0a28b8a2988dc8a7d05948555584385cd5eb534491",
+    "lib/launchLook": "681124e0ad6e2f57bbbe0c49f765a11185d761d6e4ed0f10a7690b18de86f970",
+    "lib/pageHandoff": "8316d9ce298be99aec5cf3beb7d824503095695d56d1e11b34327c82603af00d",
+    "lib/webviews": "66039df7e6cf934734b3b0cfa0f4bdb761fd43ea28b8583f1ee0d252ef87cb3f",
+    "store/model": "fe036cb8187867f21dc82e912fd4b357edb06bb35d4d0edbda73181dd09668b0",
+    "store/tabs": "ef7af4245cea12dcfc29860e20d57231f12e1c9d423bd236f525f46f36cbdedd"
+  },
+  "cases": [
+    {
+      "name": "held report before navigate",
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 1,
+            "url": "https://old.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "follow"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://old.test/",
+            "title": "https://old.test/",
+            "isLoading": true
+          },
+          "held": true
+        },
+        {
+          "op": "navigate",
+          "url": "https://new.test/",
+          "seq": 2,
+          "userInitiated": true
+        },
+        {
+          "op": "flush"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://new.test/",
+            "title": "https://new.test/"
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "handle",
+          "method": "loadUrl",
+          "args": [
+            "https://old.test/",
+            {
+              "userInitiated": false
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://old.test/",
+              "title": "https://old.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://old.test/",
+              "title": "https://old.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://old.test/",
+            "title": "https://old.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://old.test/"
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://old.test/",
+            "title": "https://old.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://old.test/"
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "command",
+          "name": "navigate",
+          "url": "https://new.test/"
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "seq": 2,
+                "url": "https://new.test/",
+                "userInitiated": true
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://old.test/",
+            "title": "https://old.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://new.test/",
+              "userInitiated": true
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://old.test/",
+            "title": "https://old.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://new.test/",
+              "userInitiated": true
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "handle",
+          "method": "loadUrl",
+          "args": [
+            "https://new.test/",
+            {
+              "userInitiated": true
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://new.test/",
+              "title": "https://new.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://new.test/",
+              "title": "https://new.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://new.test/",
+            "title": "https://new.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://new.test/",
+              "userInitiated": true
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://new.test/",
+            "title": "https://new.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://new.test/",
+              "userInitiated": true
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "loading edges activation strip",
+      "steps": [
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "isLoading": true
+          },
+          "held": true
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "isLoading": false
+          },
+          "held": true
+        },
+        {
+          "op": "activate"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://b.test/",
+            "title": "https://b.test/"
+          },
+          "held": true
+        },
+        {
+          "op": "strip"
+        },
+        {
+          "op": "observe"
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "url": "https://a.test/",
+                "seq": 1
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "command",
+          "name": "activate"
+        },
+        {
+          "kind": "write",
+          "activeTabId": "t"
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "t"
+        },
+        {
+          "kind": "observe",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "t"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://b.test/",
+              "title": "https://b.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://b.test/",
+              "title": "https://b.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://b.test/",
+            "title": "https://b.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://b.test/",
+            "title": "https://b.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "t"
+        },
+        {
+          "kind": "command",
+          "name": "strip"
+        },
+        {
+          "kind": "write",
+          "activeTabId": "other"
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://b.test/",
+            "title": "https://b.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "observe",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://b.test/",
+            "title": "https://b.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "observe",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://b.test/",
+            "title": "https://b.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "discard ready",
+      "initial": {
+        "page": {
+          "wasNewTab": true
+        },
+        "live": {
+          "playingAudio": true,
+          "canGoBack": true
+        }
+      },
+      "steps": [
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/"
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onDiscarded",
+          "payload": "https://a.test/"
+        },
+        {
+          "op": "report",
+          "name": "onReady",
+          "payload": [
+            12,
+            34
+          ]
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "",
+            "title": "",
+            "committedInitial": true
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/"
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "url": "https://a.test/",
+                "seq": 1
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": true,
+            "canGoForward": false,
+            "playingAudio": true,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": true,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": true,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "playingAudio": false
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "lifecycle",
+          "value": "discarded"
+        },
+        {
+          "kind": "lifecycle",
+          "value": "ready"
+        },
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": true
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "download adopted closes",
+      "initial": {
+        "tab": {
+          "adoptId": "adopt",
+          "openerId": "other"
+        }
+      },
+      "steps": [
+        {
+          "op": "report",
+          "name": "onDownloadNavigation",
+          "payload": {
+            "committedUrl": "",
+            "skipped": false
+          }
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://late.test/",
+            "title": "https://late.test/",
+            "isLoading": true
+          },
+          "held": false
+        },
+        {
+          "op": "observe"
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": false
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "closeTab",
+          "args": [
+            "t"
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": null
+        },
+        {
+          "kind": "subscriber",
+          "tab": null,
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://late.test/",
+              "title": "https://late.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://late.test/",
+              "title": "https://late.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "observe",
+          "tab": null,
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "download committed",
+      "initial": {
+        "tab": {
+          "url": "https://download.test/",
+          "navigation": {
+            "seq": 1,
+            "url": "https://download.test/file"
+          }
+        },
+        "live": {
+          "isLoading": true
+        }
+      },
+      "steps": [
+        {
+          "op": "report",
+          "name": "onDownloadNavigation",
+          "payload": {
+            "committedUrl": "https://download.test/",
+            "skipped": false
+          }
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": false
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://download.test/",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://download.test/file"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "download skipped keeps NTP",
+      "initial": {
+        "tab": {
+          "openerId": "other",
+          "url": "https://file.test/"
+        },
+        "page": {
+          "wasNewTab": true,
+          "newTabShown": {
+            "url": "https://kept.test/",
+            "title": "Kept"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "report",
+          "name": "onDownloadNavigation",
+          "payload": {
+            "committedUrl": "",
+            "skipped": true
+          }
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": false
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "",
+              "title": "",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "openerId": "other"
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "openerId": "other"
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "preserved NTP and back",
+      "initial": {
+        "page": {
+          "wasNewTab": true,
+          "newTabShown": {
+            "url": "https://kept.test/",
+            "title": "Kept"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://kept.test/",
+            "title": "https://kept.test/",
+            "isLoading": true,
+            "themeColor": "#123"
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://else.test/",
+            "title": "https://else.test/",
+            "canGoBack": true
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "url": "https://kept.test/",
+                "seq": 1
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://kept.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://kept.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#123"
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#123"
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://kept.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#123"
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://else.test/",
+              "title": "https://else.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": true,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://else.test/",
+              "title": "https://else.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": true,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://else.test/",
+            "title": "https://else.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://kept.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": true,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://else.test/",
+            "title": "https://else.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://kept.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": true,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "unsolicited pooled prewarm",
+      "pooled": true,
+      "steps": [
+        {
+          "op": "flush"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "",
+            "title": ""
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://adopted.test/",
+            "title": "https://adopted.test/"
+          },
+          "held": false
+        },
+        {
+          "op": "flush"
+        },
+        {
+          "op": "observe"
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "url": "https://adopted.test/",
+                "seq": 1
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://adopted.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://adopted.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://adopted.test/",
+              "title": "https://adopted.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://adopted.test/",
+              "title": "https://adopted.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://adopted.test/",
+            "title": "https://adopted.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://adopted.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://adopted.test/",
+            "title": "https://adopted.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://adopted.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "observe",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://adopted.test/",
+            "title": "https://adopted.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://adopted.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "pooled handoff changed before follow",
+      "pooled": true,
+      "handoff": 1,
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 1,
+            "url": "https://a.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "navigate",
+          "seq": 2,
+          "url": "https://b.test/"
+        },
+        {
+          "op": "flush"
+        }
+      ],
+      "writes": [
+        {
+          "kind": "command",
+          "name": "navigate",
+          "url": "https://b.test/"
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "seq": 2,
+                "url": "https://b.test/"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://b.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://b.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "handle",
+          "method": "loadUrl",
+          "args": [
+            "https://b.test/",
+            {
+              "userInitiated": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "pooled unchanged sequence and moved handoff",
+      "pooled": true,
+      "handoff": 8,
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 8,
+            "url": "https://a.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "flush"
+        },
+        {
+          "op": "touch",
+          "title": "Changed"
+        },
+        {
+          "op": "flush"
+        },
+        {
+          "op": "move",
+          "seq": 9,
+          "url": "https://moved.test/"
+        },
+        {
+          "op": "flush"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://moved.test/",
+            "title": "https://moved.test/"
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "command",
+          "name": "touch"
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "title": "Changed"
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "Changed",
+            "favicon": null,
+            "navigation": {
+              "seq": 8,
+              "url": "https://a.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "Changed",
+            "favicon": null,
+            "navigation": {
+              "seq": 8,
+              "url": "https://a.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "command",
+          "name": "move"
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "windowId": "w2",
+              "navigation": {
+                "seq": 9,
+                "url": "https://moved.test/"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w2",
+            "profileId": "p",
+            "url": "",
+            "title": "Changed",
+            "favicon": null,
+            "navigation": {
+              "seq": 9,
+              "url": "https://moved.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w2",
+            "profileId": "p",
+            "url": "",
+            "title": "Changed",
+            "favicon": null,
+            "navigation": {
+              "seq": 9,
+              "url": "https://moved.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "t"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://moved.test/",
+              "title": "https://moved.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://moved.test/",
+              "title": "https://moved.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w2",
+            "profileId": "p",
+            "url": "https://moved.test/",
+            "title": "https://moved.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 9,
+              "url": "https://moved.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w2",
+            "profileId": "p",
+            "url": "https://moved.test/",
+            "title": "https://moved.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 9,
+              "url": "https://moved.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "t"
+        }
+      ]
+    },
+    {
+      "name": "webkit create early navigation",
+      "engine": "webkit",
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 1,
+            "url": "https://a.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "follow"
+        },
+        {
+          "op": "navigate",
+          "seq": 2,
+          "url": "https://b.test/"
+        },
+        {
+          "op": "report",
+          "name": "onLoadError",
+          "payload": {}
+        }
+      ],
+      "writes": [
+        {
+          "kind": "command",
+          "name": "navigate",
+          "url": "https://b.test/"
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "seq": 2,
+                "url": "https://b.test/"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://b.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "seq": 2,
+              "url": "https://b.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "handle",
+          "method": "loadUrl",
+          "args": [
+            "https://b.test/",
+            {
+              "userInitiated": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "early navigation already started",
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 7,
+            "url": "https://early.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "follow",
+          "startedEarly": true
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://early.test/",
+            "title": "https://early.test/"
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://early.test/",
+              "title": "https://early.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://early.test/",
+              "title": "https://early.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://early.test/",
+            "title": "https://early.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 7,
+              "url": "https://early.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://early.test/",
+            "title": "https://early.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 7,
+              "url": "https://early.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "matching handoff",
+      "handoff": 4,
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 4,
+            "url": "https://handoff.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "follow"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://handoff.test/",
+            "title": "https://handoff.test/"
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://handoff.test/",
+              "title": "https://handoff.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://handoff.test/",
+              "title": "https://handoff.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://handoff.test/",
+            "title": "https://handoff.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 4,
+              "url": "https://handoff.test/"
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://handoff.test/",
+            "title": "https://handoff.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 4,
+              "url": "https://handoff.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "blank guard and accessed initial",
+      "initial": {
+        "tab": {
+          "navigation": {
+            "seq": 1,
+            "url": "https://a.test/"
+          }
+        }
+      },
+      "steps": [
+        {
+          "op": "follow"
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "",
+            "title": "",
+            "committedInitial": true
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://opener.test/",
+            "title": "https://opener.test/",
+            "committedInitial": true,
+            "initialDocumentAccessed": true
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "themeColor": "#abc"
+          },
+          "held": false
+        }
+      ],
+      "writes": [
+        {
+          "kind": "handle",
+          "method": "loadUrl",
+          "args": [
+            "https://a.test/",
+            {
+              "userInitiated": false
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "isLoading": true
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://a.test/"
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "about:blank",
+              "title": "https://opener.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "about:blank",
+              "title": "https://opener.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "about:blank",
+            "title": "https://opener.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://a.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "about:blank",
+            "title": "https://opener.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://a.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#abc"
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#abc"
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://a.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#abc"
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "seq": 1,
+              "url": "https://a.test/"
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#abc"
+          },
+          "activeTabId": "other"
+        }
+      ]
+    },
+    {
+      "name": "restored theme grace",
+      "initial": {
+        "tab": {
+          "url": "https://a.test/"
+        }
+      },
+      "themes": [
+        {
+          "tab": "t",
+          "page": "https://a.test/",
+          "color": "#restored"
+        }
+      ],
+      "steps": [
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "isLoading": true
+          },
+          "held": false
+        },
+        {
+          "op": "report",
+          "name": "onNavigationChange",
+          "payload": {
+            "url": "https://a.test/",
+            "title": "https://a.test/"
+          },
+          "held": false
+        },
+        {
+          "op": "tick",
+          "now": 1499
+        },
+        {
+          "op": "observe"
+        },
+        {
+          "op": "tick",
+          "now": 1500
+        },
+        {
+          "op": "observe"
+        },
+        {
+          "op": "report",
+          "name": "onMedia",
+          "payload": {
+            "playing": true,
+            "muted": false
+          }
+        }
+      ],
+      "writes": [
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "",
+            "favicon": null
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "navigation": {
+                "url": "https://a.test/",
+                "seq": 1
+              }
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#restored"
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": true,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#restored"
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": true,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "navigated",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#restored"
+            }
+          ]
+        },
+        {
+          "kind": "call",
+          "name": "updateTab",
+          "args": [
+            "t",
+            {
+              "url": "https://a.test/",
+              "title": "https://a.test/"
+            },
+            {
+              "isLoading": false,
+              "canGoBack": false,
+              "canGoForward": false,
+              "themeColor": "#restored"
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "observe",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": "#restored"
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "themeColor": null
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "observe",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": false,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        },
+        {
+          "kind": "call",
+          "name": "updateLive",
+          "args": [
+            "t",
+            {
+              "playingAudio": true
+            }
+          ]
+        },
+        {
+          "kind": "write",
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": true,
+            "themeColor": null
+          }
+        },
+        {
+          "kind": "subscriber",
+          "tab": {
+            "id": "t",
+            "windowId": "w",
+            "profileId": "p",
+            "url": "https://a.test/",
+            "title": "https://a.test/",
+            "favicon": null,
+            "navigation": {
+              "url": "https://a.test/",
+              "seq": 1
+            }
+          },
+          "live": {
+            "isLoading": false,
+            "canGoBack": false,
+            "canGoForward": false,
+            "playingAudio": true,
+            "themeColor": null
+          },
+          "activeTabId": "other"
+        }
+      ]
+    }
+  ]
+}

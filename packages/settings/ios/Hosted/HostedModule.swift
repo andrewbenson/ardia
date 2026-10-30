@@ -214,3 +214,9 @@ final class DevHostView: NSView {
 
   var mountedView: NSView? { mount?.content.view }
 }
+
+#if SOLARA_PROBES
+public enum HostedRead {
+  public static var kinds: [String] { HostedViews.kinds }
+}
+#endif

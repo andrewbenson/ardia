@@ -302,6 +302,10 @@ final class ProbeHost {
           }
           for needle in viewFrames { frames[needle] = PagesRead.viewFrame(windowNumber: chromeNumber, needle: needle) }
         }
+        var toolbarStates: [String: Any] = [:]
+        for tabId in model.tabIds {
+          if let toolbar = ToolbarStateRead.snapshot(windowId: id, tabId: tabId) { toolbarStates[tabId] = toolbar }
+        }
         var media: [String: Any] = [:]
         for kind in ["media.sidebarPlayer", "media.hoverPlayer", "media.cliPill", "media.castPicker", "media.sharePicker"] {
           media[kind] = MediaRead.rows(kind: kind, windowId: id)
@@ -329,6 +333,7 @@ final class ProbeHost {
           "textFieldCount": Self.value(chromeNumber.flatMap { WindowAccessibilityRead.textFieldCount(windowNumber: $0) }),
           "media": media, "mediaEnabled": MediaRead.enabled, "mediaKinds": MediaRead.kinds,
           "paneOverlays": Self.value(PaneOverlayRead.snapshot(windowId: id)),
+          "toolbarStates": toolbarStates,
           "contentFrame": Self.value(window?.contentView.map { Self.rectFromWindow($0.bounds) }),
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
@@ -376,10 +381,11 @@ final class ProbeHost {
           "consistent": final.rev == initial.rev,
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId), "poolAvailable": TabPoolRead.available,
+          "hostedKinds": HostedRead.kinds,
           "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot, "haptics": SwipeRead.haptics,
           "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

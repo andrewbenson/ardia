@@ -4,8 +4,9 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { evaluate, launch, quit } from "./perf/js-bench.mjs";
-import { devtools, sleep } from "../../../scripts/lib/instance.mjs";
+import assert from "node:assert/strict";
+import { evaluate, quit } from "./perf/js-bench.mjs";
+import { devtools, launch, sleep } from "../../../scripts/lib/instance.mjs";
 
 const { values: flags, positionals } = parseArgs({ allowPositionals: true, options: { bundle: { type: "string" }, out: { type: "string" }, port: { type: "string" } } });
 if (!positionals[0]) {
@@ -29,13 +30,10 @@ if (flags.bundle) {
 
 const data = join(out, "data");
 rmSync(data, { recursive: true, force: true });
-mkdirSync(data, { recursive: true });
 const page = (name) => `data:text/html,<title>${name}</title><p>${name}-findme</p>`;
 const tab = (id, url) => ({ id, url, title: id, favicon: null, pinned: false, muted: false, zoom: 1, customTitle: null, customIcon: null, pinnedUrl: null, navigation: null, openerId: null, createdAt: Date.now(), lastActiveAt: Date.now() });
 const ids = ["a", "b", "c", "d"];
-writeFileSync(
-  join(data, "session.json"),
-  JSON.stringify({
+const fixture = {
     version: 2,
     profiles: { default: { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 } },
     profileOrder: ["default"],
@@ -49,10 +47,7 @@ writeFileSync(
     splits: [],
     closedTabs: [],
     closedWindows: [],
-  }),
-);
-writeFileSync(join(data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
-writeFileSync(join(data, "perf-probe"), "");
+  };
 
 const unfinished = new Set();
 const stillLoading = createServer((req, res) => {
@@ -65,7 +60,28 @@ await new Promise((r) => stillLoading.listen(0, "127.0.0.1", r));
 const loadingPage = (name) => `http://127.0.0.1:${stillLoading.address().port}/${name}`;
 
 const port = Number(flags.port ?? 9795);
-const { pid } = await launch(app, data, port);
+const switches = {};
+for (const part of (process.env.ARDIA_SWITCHES ?? "").split(",")) {
+  const [name, value] = part.split("=").map((text) => text.trim());
+  if (name && value) switches[name] = !["off", "0", "false"].includes(value);
+}
+const instance = await launch(app, {
+  data, port, session: fixture, onboarded: true, ready: false, js: "none",
+  env: { ARDIA_DRAW_WINDOWS: "1", ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}) },
+  files: { "perf-probe": "", ...(process.env.ARDIA_SWITCHES ? { "switches-cache.json": { version: 1, switches } } : {}) },
+});
+const { pid } = instance;
+const untilSnapshot = async (what, accept, ms = 8000) => {
+  const end = Date.now() + ms;
+  let last;
+  do {
+    last = await instance.snapshot({ windowId: "w1" });
+    assert.equal(last.schema, 1);
+    if (last.consistent && accept(last)) return last;
+    await sleep(80);
+  } while (Date.now() < end);
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const askFromPage = async (urlPart, expression) => {
   const end = Date.now() + 8000;
   let target = null;
@@ -102,6 +118,8 @@ try {
     return true;`);
   const S = "const S = () => ac.store.getState();";
   const nativePrompts = await ac(`return Promise.resolve(globalThis.expo.modules.SolaraHosted?.kinds?.() ?? []).then((k) => k.includes("panePrompts"));`);
+  const initialSnapshot = await untilSnapshot("hosted capabilities", (s) => Array.isArray(s.hostedKinds));
+  assert.equal(initialSnapshot.hostedKinds.includes("panePrompts"), nativePrompts);
 
   const loaded = await ac(`${S}
     S().activate("b");
@@ -109,6 +127,8 @@ try {
       .then(() => { S().activate("a"); return audit.frames(3); })
       .then(() => ({ b: ac.webviews.has("b"), shown: S().windows.w1.activeTabIds.default }));`, 60_000);
   check("tab B's pane stays mounted while hidden", loaded.b && loaded.shown === "a", JSON.stringify(loaded));
+  const loadedSnapshot = await untilSnapshot("A remains selected", (s) => s.windows[0]?.selectedTabId === loaded.shown);
+  assert.equal(loadedSnapshot.windows[0].selectedTabId, loaded.shown);
 
   const hiddenChanges = await ac(`${S}
     const url = ${JSON.stringify(loadingPage("HiddenLoad"))};
@@ -122,6 +142,11 @@ try {
     }).then(() => ({ ok, url: S().tabs.b.url, title: S().tabs.b.title, renderedB: audit.props("UrlField", "b").length + audit.native("b").length }));`, 60_000);
   check("a hidden tab loads what it's sent to (its own tab's navigation)", hiddenChanges.ok, `${hiddenChanges.url} "${hiddenChanges.title}"`);
   check("nothing of B's toolbar renders while it's hidden", hiddenChanges.renderedB === 0);
+  const hiddenSnapshot = await untilSnapshot("hidden B navigation and zoom", (s) => s.tabs.some((t) => t.id === "b" && t.url === hiddenChanges.url && t.title === hiddenChanges.title && t.zoom === 1.5));
+  const hiddenTab = hiddenSnapshot.tabs.find((t) => t.id === "b");
+  assert.equal(hiddenTab.url, hiddenChanges.url);
+  assert.equal(hiddenTab.title, hiddenChanges.title);
+  assert.equal(hiddenTab.zoom, 1.5);
   await askFromPage("/HiddenLoad", "Notification.requestPermission(); true");
   await sleep(3000);
   const askedWhileHidden = await ac("return !!ac.pageState.getState().pages.b?.permission;");
@@ -136,6 +161,7 @@ try {
     const rnDrawn = () => audit.until(() => audit.props("PermissionPrompt", "b").some((p) => p.rendered), 8000);
     const drawn = () => (${nativePrompts} ? paneWithin(8000) : rnDrawn());
     return audit.frames(3).then(drawn).then((paneShown) => ({
+      nativeToolbarCount: audit.native("b").length,
       url: t(() => audit.props("UrlField", "b")[0]?.props.tab.url ?? audit.native("b").map((n) => n.url && n.url.host + n.url.hoverTrail)[0]),
       zoom: t(() => audit.props("ZoomIndicator", "b")[0]?.props.zoom ?? audit.native("b").map((n) => { const z = (n.url?.trailing ?? []).find((t) => t.id === "zoom"); return z ? Number(z.tooltip.match(/([0-9]+)%/)[1]) / 100 : 1; })[0]),
       loading: t(() => audit.props("ReloadButton", "b")[0]?.props.loading ?? audit.native("b").map((n) => (n.left ?? []).find((b) => b.id === "reload")?.icon === "xmark")[0]),
@@ -147,6 +173,18 @@ try {
   check("shown: loading", shown.loading === true, String(shown.loading));
   check("shown: the find bar opened while hidden", shown.find === true);
   check("shown: the permission prompt that came while hidden", shown.prompt === true);
+  const shownSnapshot = await untilSnapshot("B shown with its native permission prompt", (s) => s.windows[0]?.selectedTabId === "b" && (!shown.nativeToolbarCount || !!s.windows[0]?.toolbarStates?.b) && (!nativePrompts || s.windows[0]?.paneOverlays?.tabs?.b?.permission?.hidden === false));
+  const shownTab = shownSnapshot.tabs.find((t) => t.id === "b");
+  assert.ok(shownTab.url.includes("HiddenLoad"));
+  assert.equal(shownTab.zoom, shown.zoom);
+  if (shown.nativeToolbarCount) {
+    const toolbar = shownSnapshot.windows[0].toolbarStates.b;
+    assert.equal(toolbar.tabId, "b");
+    assert.equal(toolbar.hidden, false);
+    assert.equal(toolbar.reloadIcon === "xmark", shown.loading);
+    assert.equal(Number(toolbar.zoomLabel.match(/([0-9]+)%/)[1]) / 100, shown.zoom);
+  }
+  if (nativePrompts) assert.equal(!shownSnapshot.windows[0].paneOverlays.tabs.b.permission.hidden, shown.prompt);
 
   const panes = await ac(`${S}
     const want = () => S().windows.w1.tabIds.filter((id) => S().tabs[id]?.navigation || S().tabs[id]?.adoptId).sort().join(",");

@@ -187,3 +187,15 @@ public enum SidebarAddressBarRead {
   }
 }
 #endif
+
+#if SOLARA_PROBES
+@MainActor
+public enum ToolbarStateRead {
+  public static func snapshot(windowId: String, tabId: String) -> [String: Any]? {
+    guard let host = NativeToolbarHostView.host(windowId: windowId, tabId: tabId), let state = host.toolbar.state else { return nil }
+    return ["tabId": state.tabId, "hidden": host.isHiddenOrHasHiddenAncestor,
+      "reloadIcon": state.left.first(where: { $0.id == "reload" }).map { $0.icon as Any } ?? NSNull(),
+      "zoomLabel": (state.url?.trailing.first(where: { $0.id == "zoom" })?.tooltip).map { $0 as Any } ?? NSNull()]
+  }
+}
+#endif

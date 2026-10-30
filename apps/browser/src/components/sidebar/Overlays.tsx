@@ -19,8 +19,8 @@ export function SidebarOverlays({ windowWidth }: { windowWidth: number }) {
       <HoverCard windowId={windowId} width={size.width} height={size.height} />
       <MeetingAlert windowId={windowId} windowWidth={windowWidth} />
       <IconPicker windowId={windowId} sidebarWidth={sidebarWidth} />
-      <SearchTabs windowId={windowId} windowWidth={windowWidth} />
-      <TabSwitcher windowId={windowId} windowWidth={windowWidth} windowHeight={size.height} />
+      <SearchTabs windowId={windowId} />
+      <TabSwitcher windowId={windowId} />
     </View>
   );
 }

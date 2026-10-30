@@ -19,7 +19,6 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
   case nativeDownloadMagnet = "ARDIA_NATIVE_DOWNLOAD_MAGNET"
   case nativeSidePanel = "ARDIA_NATIVE_SIDE_PANEL"
   case nativePanePrompts = "ARDIA_NATIVE_PANE_PROMPTS"
-  case nativeTabPickers = "ARDIA_NATIVE_TAB_PICKERS"
   case nativeProfilePager = "ARDIA_NATIVE_PROFILE_PAGER"
   case syncRedesign = "ARDIA_SYNC_REDESIGN"
   case nativeServices = "ARDIA_NATIVE_SERVICES"
@@ -29,18 +28,18 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
     .nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeToolTour, .nativeSidePanel,
   ]
   static let storedInDevelopment: Set<LaunchSwitch> = [
-    .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeTabPickers, .nativeProfilePager,
+    .nativeShell, .shellPanes, .nativePagesPool, .shellMainTop, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeAutoHide, .nativeProfilePager,
     .nativeToolTour, .nativeSidePanel,
   ]
   static let developmentOnly: Set<LaunchSwitch> = [.syncRedesign]
   public static let onByDefault: Set<LaunchSwitch> = [
-    .nativeShell, .nativeTabPickers, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
+    .nativeShell, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
     .nativeSidebar, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]
 
   public var needs: [LaunchSwitch] {
     switch self {
-    case .shellPanes, .nativePagesPool, .nativeAutoHide, .nativeTabPickers: [.nativeShell]
+    case .shellPanes, .nativePagesPool, .nativeAutoHide: [.nativeShell]
     case .shellMainTop: [.shellPanes, .nativePagesPool]
     case .nativeProfilePager: [.nativeShell, .nativeSidebar, .nativeTopStrip]
     case .nativePanePrompts: [.nativeShell, .nativePagesPool]

@@ -1,5 +1,5 @@
 import { displayUrl } from "@ardia/core";
-import { hostedKinds, publishSettingsTopic, takeSwitcherPress, windowShellActive } from "@ardia/settings";
+import { publishSettingsTopic, takeSwitcherPress } from "@ardia/settings";
 import { useEffect, useState } from "react";
 import { switchToTab } from "../../lib/actions";
 import { hex, useTheme } from "../../lib/theme";
@@ -26,11 +26,6 @@ function publish(topic: string, windowId: string, value: object | null) {
     queued.delete(topic);
     publishSettingsTopic(topic, { windows: { ...published[topic] } });
   });
-}
-
-export function useNativeTabPickers(windowId: string): boolean {
-  const [active] = useState(() => hostedKinds().includes("tabPickers") && windowShellActive(windowId));
-  return active;
 }
 
 export function useTabPickerTheme() {

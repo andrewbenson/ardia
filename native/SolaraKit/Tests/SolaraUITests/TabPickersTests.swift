@@ -16,7 +16,7 @@ import Testing
     TabSearchState(open: open, closed: closed, dark: true, theme: ["panel": "#2A2A2A", "panelBorder": "rgba(255,255,255,0.1)", "panelShadowOpacity": "0.5", "rowSelected": "rgba(255,255,255,0.22)"])
   }
 
-  @Test func rankingKeepsRNsOrderForTheSameQueries() {
+  @Test func rankingMatchesKnownQueries() {
     let expected: [String: [String]] = [
       "gm": ["gmail", "github", "docs"], "git": ["github"], "news": ["hn", "github"], "doc": ["docs"], "goo": ["docs", "gmail", "github"],
       "zz": [], "hn": ["hn", "github", "docs"], "mail": ["gmail"],
@@ -33,7 +33,7 @@ import Testing
     #expect(TabSearchMetrics.sections("closed", Self.state(closed: closed))[1].rows.count == 8)
   }
 
-  @Test func thePanelSitsWhereRNsDoes() {
+  @Test func thePanelUsesItsExpectedFrame() {
     #expect(TabSearchMetrics.frame(windowWidth: 1200, height: 300) == CGRect(x: 320, y: 56, width: 560, height: 300))
     #expect(TabSearchMetrics.frame(windowWidth: 500, height: 300) == CGRect(x: 12, y: 56, width: 476, height: 300))
     let many = [TabSearchSection(title: "Open Tabs", rows: Array(repeating: Self.rows[0], count: 40))]
@@ -66,7 +66,7 @@ import Testing
     #expect(events == [.close])
   }
 
-  @Test func theSwitcherWindowFollowsTheFocusAndCentersLikeRN() {
+  @Test func theSwitcherWindowFollowsTheFocusAndUsesItsExpectedFrame() {
     #expect(TabSwitcherMetrics.shown(index: 1, count: 4) == 0..<4)
     #expect(TabSwitcherMetrics.shown(index: 10, count: 20) == 6..<15)
     #expect(TabSwitcherMetrics.shown(index: 19, count: 20) == 11..<20)

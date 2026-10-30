@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import SolaraModel
 import SolaraUI
 
 final class SwitcherPresses: @unchecked Sendable {
@@ -22,12 +21,8 @@ enum NativeTabPickers {
   private static var switchers: [String: TabSwitcherPanelView] = [:]
   nonisolated static let switcherPresses = SwitcherPresses()
 
-  nonisolated static var enabled: Bool {
-    NativeWindowShell.enabled && LaunchSwitches.shared.isOn(.nativeTabPickers)
-  }
-
   static func register() {
-    guard enabled, observers.isEmpty else { return }
+    guard observers.isEmpty else { return }
     HostedViews.register(kind) { _ in nil }
     observers[searchTopic] = SettingsJS.shared.observe(searchTopic) { value in receiveSearch(value) }
     observers[switcherTopic] = SettingsJS.shared.observe(switcherTopic) { value in receiveSwitcher(value) }

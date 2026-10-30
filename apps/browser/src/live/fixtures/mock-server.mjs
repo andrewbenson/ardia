@@ -10,7 +10,6 @@ let prs;
 let state;
 let approved;
 let detailsError;
-let bitbucketState;
 const log = [];
 function reset() {
   github = load("github.json");
@@ -18,7 +17,6 @@ function reset() {
   state = {};
   approved = false;
   detailsError = null;
-  bitbucketState = "OPEN";
 }
 reset();
 
@@ -51,7 +49,6 @@ createServer(async (req, res) => {
     state[id] = p === "/mock/merge" ? "MERGED" : "CLOSED";
     return send(res, 200, { ok: true });
   }
-  if (p === "/mock/bitbucket-merge") return (bitbucketState = "MERGED"), send(res, 200, { ok: true });
   if (p === "/mock/review") {
     const id = url.searchParams.get("id");
     drop(id);
@@ -105,23 +102,6 @@ createServer(async (req, res) => {
     if (p === "/notion/v1/users/me") return send(res, 200, load("notion-me.json"));
     if (p === "/notion/v1/users") return send(res, 200, load("notion-users.json"));
     if (p === "/notion/v1/search") return send(res, 200, load("notion-search.json"));
-  }
-
-  if (p.startsWith("/confluence/")) {
-    if (!auth.startsWith("Basic ")) return send(res, 401, {});
-    if (p === "/confluence/wiki/rest/api/user/current") return send(res, 200, { accountId: "acc-1", displayName: "Octo Dev" });
-    if (p === "/confluence/wiki/rest/api/content/search") return send(res, 200, load("confluence-search.json"));
-  }
-
-  if (p.startsWith("/bitbucket/")) {
-    if (!auth.startsWith("Basic ")) return send(res, 401, {});
-    if (p === "/bitbucket/2.0/user") return send(res, 200, { account_id: "bb-1", display_name: "Octo Dev" });
-    if (p === "/bitbucket/2.0/repositories/acme/pipelines/pullrequests/7") return send(res, 200, { id: 7, state: bitbucketState });
-    if (p.startsWith("/bitbucket/2.0/pullrequests/")) {
-      if (bitbucketState !== "OPEN") return send(res, 200, { values: [] });
-      return send(res, 200, { values: [{ id: 7, title: "Bitbucket: tidy pipelines", updated_on: "2026-09-25T06:00:00Z", comment_count: 2, author: { display_name: "Octo Dev" }, source: { branch: { name: "tidy" } }, destination: { branch: { name: "main" }, repository: { full_name: "acme/pipelines" } }, links: { html: { href: "https://bitbucket.org/acme/pipelines/pull-requests/7" } }, participants: [{ role: "REVIEWER", state: "approved" }] }] });
-    }
-    if (p.endsWith("/statuses")) return send(res, 200, { values: [{ state: "SUCCESSFUL", name: "Pipeline #12", url: "https://bitbucket.org/acme/pipelines/pipelines/12" }] });
   }
 
   if (p === "/google/auth") {

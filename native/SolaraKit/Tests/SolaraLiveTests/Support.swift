@@ -152,12 +152,14 @@ final class MemorySecrets: LiveSecretStore, @unchecked Sendable {
   let values = Locked<[String: String]>([:])
   func secret(account: String) async -> String? { values.current[account] }
   let allowWrite = Locked(true)
+  let deletions = Locked<[String]>([])
   @discardableResult func setSecret(_ secret: String, account: String) async -> Bool {
     guard allowWrite.current else { return false }
     values.with { $0[account] = secret }
     return true
   }
   @discardableResult func deleteSecret(account: String) async -> Bool {
+    deletions.with { $0.append(account) }
     guard allowWrite.current else { return false }
     _ = values.with { $0.removeValue(forKey: account) }
     return true

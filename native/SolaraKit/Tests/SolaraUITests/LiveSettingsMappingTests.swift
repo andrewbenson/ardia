@@ -14,7 +14,7 @@ import Testing
     state.hidden[first.id] = [LiveItem(id: "hidden", source: .github, url: "https://example.com", title: "Hidden", subtitle: "", updatedAt: 1)]
     state.status[first.id] = FolderStatus(state: .error, lastFetch: 1_700_000_000_000, error: FolderError(kind: .rateLimited, message: "private", source: .github))
     state.accounts[.github] = LiveAccount(login: "octocat", name: "Mona", avatar: "private-avatar", connectedAt: 42)
-    state.config = LiveConfig(githubClientId: "client", bitbucketUser: "user", confluenceSite: "site", confluenceEmail: "mail", googleClientId: "google")
+    state.config = LiveConfig(githubClientId: "client", googleClientId: "google")
     state.config.extra["private"] = .string("ignored")
 
     let mapped = LiveSettingsMapping.folders(state, mocked: true)
@@ -24,9 +24,6 @@ import Testing
     #expect(mapped.folders[1].status == LiveFolderStatus(state: .error, lastFetch: Date(timeIntervalSince1970: 1_700_000_000), error: LiveFolderError(kind: .rateLimited, source: .github)))
     #expect(mapped.accounts[.github] == LiveAccount(login: "octocat", name: "Mona", avatar: nil, connectedAt: 0))
     #expect(mapped.config.githubClientId == "client")
-    #expect(mapped.config.bitbucketUser == "user")
-    #expect(mapped.config.confluenceSite == "site")
-    #expect(mapped.config.confluenceEmail == "mail")
     #expect(mapped.config.googleClientId == "google")
     #expect(mapped.config.extra.isEmpty)
     #expect(mapped.mocked)

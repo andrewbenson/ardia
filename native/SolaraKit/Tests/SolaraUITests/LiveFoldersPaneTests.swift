@@ -12,7 +12,7 @@ final class FakeLiveFoldersServices: LiveFoldersServices {
   var state = LiveFoldersState(
     folders: [
       LiveFolderSummary(
-        id: "lf-1", profileId: "default", kind: .pullRequests, name: "Pull Requests", sources: [.github, .bitbucket],
+        id: "lf-1", profileId: "default", kind: .pullRequests, name: "Pull Requests", sources: [.github],
         groupStacks: true, showCompleted: false,
         status: LiveFolderStatus(state: .idle, lastFetch: now.addingTimeInterval(-4 * 60), error: nil), hiddenCount: 2
       ),
@@ -30,7 +30,7 @@ final class FakeLiveFoldersServices: LiveFoldersServices {
       .github: LiveAccount(login: "octocat", name: "Mona Lisa", avatar: nil, connectedAt: 0),
       .notion: LiveAccount(login: "Acme", name: "Acme", avatar: nil, connectedAt: 0),
     ],
-    config: LiveConfig(githubClientId: "Iv1.abc", bitbucketUser: "me@example.com", confluenceSite: "https://acme.atlassian.net", confluenceEmail: "", googleClientId: "")
+    config: LiveConfig(githubClientId: "Iv1.abc", googleClientId: "")
   )
   var calls: [String] = []
   var failConnect: String?
@@ -59,9 +59,7 @@ final class FakeLiveFoldersServices: LiveFoldersServices {
   }
   func finishGithubDeviceFlow(_ flow: LiveDeviceFlow) async throws { calls.append("finish \(flow.id)") }
   func cancelGithubDeviceFlow(_ flow: LiveDeviceFlow) { calls.append("cancel \(flow.id)") }
-  func connectBitbucket(user: String, token: String) async throws { calls.append("bitbucket \(user)") }
   func connectNotion(token: String) async throws { calls.append("notion") }
-  func connectConfluence(site: String, email: String, token: String) async throws { calls.append("confluence \(site)") }
   func connectGoogleDrive(clientId: String, clientSecret: String) async throws { calls.append("gdrive \(clientId)") }
   func copyText(_ text: String) { calls.append("copy \(text)") }
   func openInBrowser(_ url: String) { calls.append("open \(url)") }
@@ -103,24 +101,24 @@ struct LiveFoldersPaneTests {
     #expect(LiveFoldersText.errorText(.notConfigured, .gdrive) == "Connect Google Drive in Settings")
     #expect(LiveFoldersText.errorText(.signedOut, .notion) == "Sign back in to Notion")
     #expect(LiveFoldersText.errorText(.sso, .github) == "GitHub needs Single Sign-On for this organization")
-    #expect(LiveFoldersText.errorText(.network, .confluence) == "Couldn't connect to Confluence")
-    #expect(LiveFoldersText.errorText(.other, .bitbucket) == "We're having trouble connecting to Bitbucket")
+    #expect(LiveFoldersText.errorText(.network, .notion) == "Couldn't connect to Notion")
+    #expect(LiveFoldersText.errorText(.other, .gdrive) == "We're having trouble connecting to Google Drive")
   }
 
   @Test func connectedAsShowsLoginOnlyForGithubAndDrive() {
     #expect(LiveFoldersText.connectedAs(.github, LiveAccount(login: "octocat", name: "Mona", avatar: nil, connectedAt: 0)) == "Mona (octocat)")
     #expect(LiveFoldersText.connectedAs(.gdrive, LiveAccount(login: "me@x.com", name: "Me", avatar: nil, connectedAt: 0)) == "Me (me@x.com)")
-    #expect(LiveFoldersText.connectedAs(.bitbucket, LiveAccount(login: "123", name: "Me", avatar: nil, connectedAt: 0)) == "Me")
+    #expect(LiveFoldersText.connectedAs(.notion, LiveAccount(login: "123", name: "Me", avatar: nil, connectedAt: 0)) == "Me")
     #expect(LiveFoldersText.connectedAs(.notion, LiveAccount(login: "Acme", name: "Acme", avatar: nil, connectedAt: 0)) == "Acme")
     #expect(LiveFoldersText.connectedAs(.github, LiveAccount(login: "octocat", name: nil, avatar: nil, connectedAt: 0)) == "octocat")
-    #expect(LiveFoldersText.sourceDescription(.confluence, nil) == "Pages you created, edited or watch.")
+    #expect(LiveFoldersText.sourceDescription(.notion, nil) == "Pages recently edited in your workspace.")
     #expect(LiveFoldersText.sourceDescription(.github, LiveAccount(login: "octocat", name: nil, avatar: nil, connectedAt: 0)) == "Connected as octocat")
   }
 
   @Test func folderDescriptionNamesProfileSourcesAndStatus() async {
     let (_, model, services) = await Self.loaded()
     let first = services.state.folders[0]
-    #expect(LiveFoldersText.folderDescription(first, profileName: model.profileName(first), now: FakeLiveFoldersServices.now) == "Personal · GitHub, Bitbucket · Updated 4 min ago · 2 hidden until you refresh")
+    #expect(LiveFoldersText.folderDescription(first, profileName: model.profileName(first), now: FakeLiveFoldersServices.now) == "Personal · GitHub · Updated 4 min ago · 2 hidden until you refresh")
     var orphan = first
     orphan.profileId = "gone"
     #expect(model.profileName(orphan) == "Profile")

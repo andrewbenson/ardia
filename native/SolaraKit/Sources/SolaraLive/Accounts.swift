@@ -79,11 +79,6 @@ extension LiveEngine {
     return try JSONDecoder().decode(type, from: data)
   }
 
-  func bitbucketAuth() async throws -> String {
-    let user = state.config.bitbucketUser
-    return LiveNet.basic(user, try await secret(.bitbucket))
-  }
-
   func googleAccessToken() async throws -> String {
     let stored = try JSONDecoder().decode(GoogleTokens.self, from: Data(try await secret(.gdrive).utf8))
     if stored.expires_at > effects.clock.now() + 60_000 { return stored.access_token }
@@ -155,41 +150,12 @@ extension LiveEngine {
     return GithubDeviceFlow(userCode: code.user_code, verificationUri: code.verification_uri, expiresAt: expiresAt, done: done)
   }
 
-  public func connectBitbucket(user: String, token: String) async throws {
-    let user = LiveEngine.trimmed(user)
-    let token = LiveEngine.trimmed(token)
-    let me = try await requester.json(
-      BitbucketMe.self, LiveHTTPRequest(url: "\(endpoints.bitbucket)/user", headers: ["Authorization": LiveNet.basic(user, token)]))
-    try await setSecret(.bitbucket, token)
-    updateConfig(ConfigPatch(bitbucketUser: user))
-    setAccount(.bitbucket, account(me.account_id, me.display_name, me.links?.avatar?.href))
-  }
-
   public func connectNotion(token: String) async throws {
     let token = LiveEngine.trimmed(token)
     let me = try await requester.json(NotionMe.self, LiveHTTPRequest(url: "\(endpoints.notion)/users/me", headers: LiveSource.notionHeaders(token)))
     try await setSecret(.notion, token)
     let workspace = me.bot?.workspace_name
     setAccount(.notion, account(workspace ?? me.name ?? "Notion", workspace, nil))
-  }
-
-  public static func confluenceBase(_ site: String) -> String {
-    var base = trimmed(site)
-    while base.hasSuffix("/") { base.removeLast() }
-    if !base.hasPrefix("http://"), !base.hasPrefix("https://") { base = "https://" + base }
-    return base
-  }
-
-  public func connectConfluence(site: String, email: String, token: String) async throws {
-    let base = LiveEngine.confluenceBase(site)
-    let email = LiveEngine.trimmed(email)
-    let token = LiveEngine.trimmed(token)
-    let me = try await requester.json(
-      ConfluenceMe.self,
-      LiveHTTPRequest(url: "\(endpoints.confluence(base))/wiki/rest/api/user/current", headers: ["Authorization": LiveNet.basic(email, token)]))
-    try await setSecret(.confluence, token)
-    updateConfig(ConfigPatch(confluenceSite: base, confluenceEmail: email))
-    setAccount(.confluence, account(me.accountId, me.displayName, nil))
   }
 
   public func connectGoogle(clientId: String, clientSecret: String, code: String, verifier: String, redirectUri: String) async throws {

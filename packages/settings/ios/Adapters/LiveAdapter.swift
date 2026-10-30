@@ -71,16 +71,8 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
     fire(.cancelGithubDeviceFlow(.object(["id": .string(flow.id)])))
   }
 
-  func connectBitbucket(user: String, token: String) async throws {
-    _ = try await connect(.connectBitbucket(.object(["user": .string(user), "token": .string(token)])))
-  }
-
   func connectNotion(token: String) async throws {
     _ = try await connect(.connectNotion(.object(["token": .string(token)])))
-  }
-
-  func connectConfluence(site: String, email: String, token: String) async throws {
-    _ = try await connect(.connectConfluence(.object(["site": .string(site), "email": .string(email), "token": .string(token)])))
   }
 
   func connectGoogleDrive(clientId: String, clientSecret: String) async throws {

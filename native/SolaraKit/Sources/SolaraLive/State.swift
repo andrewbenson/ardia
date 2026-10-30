@@ -43,19 +43,12 @@ public struct FolderPatch: Sendable, Equatable {
 
 public struct ConfigPatch: Sendable, Equatable {
   public var githubClientId: String?
-  public var bitbucketUser: String?
-  public var confluenceSite: String?
-  public var confluenceEmail: String?
   public var googleClientId: String?
 
   public init(
-    githubClientId: String? = nil, bitbucketUser: String? = nil, confluenceSite: String? = nil, confluenceEmail: String? = nil,
-    googleClientId: String? = nil
+    githubClientId: String? = nil, googleClientId: String? = nil
   ) {
     self.githubClientId = githubClientId
-    self.bitbucketUser = bitbucketUser
-    self.confluenceSite = confluenceSite
-    self.confluenceEmail = confluenceEmail
     self.googleClientId = googleClientId
   }
 }
@@ -115,6 +108,8 @@ public struct LiveState: Codable, Sendable, Equatable {
   public var dismissedAlerts: [String] = []
   public var notifiedAlerts: [String] = []
   public var extra: [String: LiveAnyJSON] = [:]
+  var retiredSources = Set<LiveRetiredSource>()
+  var retiredCredentials = Set<LiveRetiredSource>()
   var originalKnown: [String: LiveAnyJSON]?
   var decodedKnown: [String: LiveAnyJSON]?
 
@@ -167,6 +162,7 @@ public struct LiveState: Codable, Sendable, Equatable {
     for key in raw.allKeys where persistedKeys.contains(key.stringValue) {
       originalKnown?[key.stringValue] = try raw.decode(LiveAnyJSON.self, forKey: key)
     }
+    scrubRetiredSources()
     decodedKnown = nil
     var clean = self
     clean.originalKnown = nil
@@ -394,9 +390,6 @@ public struct LiveState: Codable, Sendable, Equatable {
 
   public mutating func updateConfig(_ patch: ConfigPatch) {
     if let v = patch.githubClientId { config.githubClientId = v }
-    if let v = patch.bitbucketUser { config.bitbucketUser = v }
-    if let v = patch.confluenceSite { config.confluenceSite = v }
-    if let v = patch.confluenceEmail { config.confluenceEmail = v }
     if let v = patch.googleClientId { config.googleClientId = v }
   }
 

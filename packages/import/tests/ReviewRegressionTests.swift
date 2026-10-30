@@ -79,7 +79,8 @@ final class ReviewRegressionTests: XCTestCase {
        "folder", {"id": "folder", "data": {"list": {}}, "childrenIds": ["nested-tab"], "title": "Docs"},
        "nested-tab", {"id": "nested-tab", "data": {"tab": {"savedURL": "https://example.com/docs", "savedTitle": "Documentation"}}, "childrenIds": [], "title": null},
        "live", {"id": "live", "data": {"list": {"automaticLiveFolderData": {"source": {"github": {}}}}}, "childrenIds": ["pr"], "title": "Pull Requests"},
-       "bitbucket", {"id": "bitbucket", "data": {"list": {"automaticLiveFolderData": {"source": {"bitbucket": {}}}}}, "childrenIds": [], "title": "Reviews"},
+       "bitbucket", {"id": "bitbucket", "data": {"list": {"automaticLiveFolderData": {"source": {"bitbucket": {"github": "previous"}}}}}, "childrenIds": ["review-tab"], "title": "Reviews"},
+       "review-tab", {"id": "review-tab", "data": {"tab": {"savedURL": "https://example.com/review", "savedTitle": "Review"}}, "childrenIds": [], "title": null},
        "pr", {"id": "pr", "data": {"tab": {"savedURL": "https://github.com/o/r/pull/1", "savedTitle": "PR"}}, "childrenIds": [], "title": null},
        "favorites", {"id": "favorites", "data": {"itemContainer": {}}, "childrenIds": ["favorite-tab"], "title": null},
        "favorite-tab", {"id": "favorite-tab", "data": {"tab": {"savedURL": "https://example.com/favorite", "savedTitle": "Favorite"}}, "childrenIds": [], "title": null}
@@ -93,12 +94,16 @@ final class ReviewRegressionTests: XCTestCase {
     for littleFirst in [true, false] {
       let sidebar = try arcSidebar(littleFirst: littleFirst)
       XCTAssertEqual(sidebar.spaces.map(\.name), ["Work"], "Little Arc first: \(littleFirst)")
-      XCTAssertEqual(sidebar.spaces.first?.pinned.reduce(0) { $0 + $1.linkCount }, 2)
+      XCTAssertEqual(sidebar.spaces.first?.pinned.reduce(0) { $0 + $1.linkCount }, 3)
       XCTAssertEqual(sidebar.favorites["Default"]?.map(\.url), ["https://example.com/favorite"])
       let live = sidebar.spaces.first?.pinned.filter { $0.role?.hasPrefix("live") == true }
-      XCTAssertEqual(live?.map(\.role), ["liveGitHubPullRequests", "liveBitbucketPullRequests"])
-      XCTAssertEqual(live?.map(\.title), ["Pull Requests", "Reviews"])
+      XCTAssertEqual(live?.map(\.role), ["liveGitHubPullRequests"])
+      XCTAssertEqual(live?.map(\.title), ["Pull Requests"])
       XCTAssertEqual(live?.flatMap { $0.children ?? [] }, [])
+      let reviews = sidebar.spaces.first?.pinned.first { $0.title == "Reviews" }
+      XCTAssertNil(reviews?.role)
+      XCTAssertEqual(reviews?.type, .folder)
+      XCTAssertEqual(reviews?.children?.map(\.url), ["https://example.com/review"])
     }
   }
 }

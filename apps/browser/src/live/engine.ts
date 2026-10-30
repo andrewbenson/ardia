@@ -45,8 +45,8 @@ export function newLiveFolder(windowId: string, kind: LiveFolderKind): Promise<s
 export async function newProfileLiveFolder(profileId: string, kind: LiveFolderKind, sources?: LiveSourceId[]): Promise<string> {
   const s = live();
   const connected: LiveSourceId[] = kind === "pullRequests"
-    ? (["github", "bitbucket"] as const).filter((id) => s.accounts[id])
-    : (["notion", "confluence", "gdrive"] as const).filter((id) => s.accounts[id]);
+    ? (["github"] as const).filter((id) => s.accounts[id])
+    : (["notion", "gdrive"] as const).filter((id) => s.accounts[id]);
   const chosen = sources ?? (connected.length ? connected : undefined);
   const result = await liveCommand("newProfileLiveFolder", { profileId, kind, ...(chosen ? { sources: chosen } : {}) });
   if (!result.folderId) throw new Error("Live folder creation returned no ID");

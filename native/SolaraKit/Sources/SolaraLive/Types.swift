@@ -1,7 +1,7 @@
 import Foundation
 
 public enum LiveSourceId: String, Codable, Sendable, CaseIterable, CodingKeyRepresentable, Comparable {
-  case github, bitbucket, notion, confluence, gdrive
+  case github, notion, gdrive
 
   public static func < (a: LiveSourceId, b: LiveSourceId) -> Bool {
     allCases.firstIndex(of: a)! < allCases.firstIndex(of: b)!
@@ -359,23 +359,17 @@ public struct LiveAccount: Codable, Sendable, Equatable {
 
 public struct LiveConfig: Codable, Sendable, Equatable {
   public var githubClientId: String
-  public var bitbucketUser: String
-  public var confluenceSite: String
-  public var confluenceEmail: String
   public var googleClientId: String
   public var extra: [String: LiveAnyJSON] = [:]
 
   enum CodingKeys: String, CodingKey, CaseIterable {
-    case githubClientId, bitbucketUser, confluenceSite, confluenceEmail, googleClientId
+    case githubClientId, googleClientId
   }
 
-  public static let defaults = LiveConfig(githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "")
+  public static let defaults = LiveConfig(githubClientId: "", googleClientId: "")
 
-  public init(githubClientId: String, bitbucketUser: String, confluenceSite: String, confluenceEmail: String, googleClientId: String) {
+  public init(githubClientId: String, googleClientId: String) {
     self.githubClientId = githubClientId
-    self.bitbucketUser = bitbucketUser
-    self.confluenceSite = confluenceSite
-    self.confluenceEmail = confluenceEmail
     self.googleClientId = googleClientId
   }
 
@@ -383,20 +377,14 @@ public struct LiveConfig: Codable, Sendable, Equatable {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     let d = LiveConfig.defaults
     githubClientId = (try? c.decodeIfPresent(String.self, forKey: .githubClientId)) ?? d.githubClientId
-    bitbucketUser = (try? c.decodeIfPresent(String.self, forKey: .bitbucketUser)) ?? d.bitbucketUser
-    confluenceSite = (try? c.decodeIfPresent(String.self, forKey: .confluenceSite)) ?? d.confluenceSite
-    confluenceEmail = (try? c.decodeIfPresent(String.self, forKey: .confluenceEmail)) ?? d.confluenceEmail
     googleClientId = (try? c.decodeIfPresent(String.self, forKey: .googleClientId)) ?? d.googleClientId
-    extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue))
+    extra = UnknownKeys.read(decoder, known: CodingKeys.allCases.map(\.rawValue) + LiveRetiredSource.configKeys)
   }
 
   public func encode(to encoder: Encoder) throws {
     try UnknownKeys.write(extra, to: encoder)
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(githubClientId, forKey: .githubClientId)
-    try c.encode(bitbucketUser, forKey: .bitbucketUser)
-    try c.encode(confluenceSite, forKey: .confluenceSite)
-    try c.encode(confluenceEmail, forKey: .confluenceEmail)
     try c.encode(googleClientId, forKey: .googleClientId)
   }
 }

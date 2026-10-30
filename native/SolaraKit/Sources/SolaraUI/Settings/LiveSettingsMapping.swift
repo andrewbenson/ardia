@@ -22,8 +22,7 @@ public enum LiveSettingsMapping {
     return LiveFoldersState(
       folders: folders, accounts: accounts,
       config: LiveConfig(
-        githubClientId: config.githubClientId, bitbucketUser: config.bitbucketUser, confluenceSite: config.confluenceSite,
-        confluenceEmail: config.confluenceEmail, googleClientId: config.googleClientId
+        githubClientId: config.githubClientId, googleClientId: config.googleClientId
       ),
       mocked: mocked
     )

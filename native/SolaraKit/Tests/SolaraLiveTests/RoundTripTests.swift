@@ -16,7 +16,6 @@ import Testing
     roundTrips(NotionSearch.self, "notion-search.json")
     roundTrips(NotionUsers.self, "notion-users.json")
     roundTrips(NotionMe.self, "notion-me.json")
-    roundTrips(ConfluenceSearch.self, "confluence-search.json")
     roundTrips(DriveFiles.self, "drive-files.json")
   }
 
@@ -36,10 +35,10 @@ import Testing
 
   @Test func aDocumentWithOneBrokenKeyKeepsTheRest() {
     let state = LiveState.load(
-      #"{"folders":{"f":{"id":"f","profileId":"p","kind":"documents","name":"D","icon":null,"collapsed":false,"sources":["notion"],"filters":{"authored":true,"reviewRequests":true},"createdAt":1}},"folderOrder":["f"],"items":"broken","config":{"bitbucketUser":"me"},"calendar":{"alertLead":"5"}}"#)
+      #"{"folders":{"f":{"id":"f","profileId":"p","kind":"documents","name":"D","icon":null,"collapsed":false,"sources":["notion"],"filters":{"authored":true,"reviewRequests":true},"createdAt":1}},"folderOrder":["f"],"items":"broken","config":{"googleClientId":"me"},"calendar":{"alertLead":"5"}}"#)
     #expect(state.folderOrder == ["f"])
     #expect(state.items == [:])
-    #expect(state.config.bitbucketUser == "me")
+    #expect(state.config.googleClientId == "me")
     #expect(state.config.githubClientId == "")
     #expect(state.calendar.alertLead == "5")
     #expect(state.calendar.showPreview == true)
@@ -91,11 +90,8 @@ import Testing
     #expect(http.log.current[1].headers == ["accept": "text/plain"])
   }
 
-  @Test func formAndBasicAuthEncodeAsJSDoes() {
+  @Test func formsAndSecretAccountsUseTheExpectedEncoding() {
     #expect(LiveNet.form([("client_id", "a b"), ("scope", "repo read:org")]) == "client_id=a%20b&scope=repo%20read%3Aorg")
-    #expect(LiveNet.basic("me@x.com", "tok:én") == "Basic bWVAeC5jb206dG9rOsOpbg==")
-    #expect(LiveEngine.confluenceBase("  acme.atlassian.net/// ") == "https://acme.atlassian.net")
-    #expect(LiveEngine.confluenceBase("http://wiki.local/") == "http://wiki.local")
     #expect(LiveEndpoints(mock: "http://m").secretAccount(.github) == "mock:github")
     #expect(LiveEndpoints(mock: nil).secretAccount(.gdrive) == "gdrive")
   }
@@ -136,11 +132,11 @@ import Testing
     let good = #"{"id":"a","source":"github","url":"u","title":"t","subtitle":"s","icon":null,"updatedAt":1}"#
     let state = LiveState.load(
       #"""
-      {"folders":{"f":{"id":"f","profileId":"p","kind":"documents","name":"D","icon":null,"collapsed":false,"sources":["notion","jira"],"filters":{"authored":true,"reviewRequests":true},"createdAt":1},"bad":{"id":3}},
+      {"folders":{"f":{"id":"f","profileId":"p","kind":"documents","name":"D","icon":null,"collapsed":false,"sources":["notion","linear"],"filters":{"authored":true,"reviewRequests":true},"createdAt":1},"bad":{"id":3}},
        "folderOrder":["f",7],
        "items":{"f":[\#(good),{"id":"b"},"junk",\#(good.replacingOccurrences(of: "\"a\"", with: "\"c\""))],"g":"broken"},
-       "hidden":{"f":[{"id":"x","source":"jira"}]},
-       "accounts":{"github":{"login":"o","name":null,"avatar":null,"connectedAt":1},"jira":{"login":"j","name":null,"avatar":null,"connectedAt":1},"notion":{"login":1}},
+       "hidden":{"f":[{"id":"x","source":"linear"}]},
+       "accounts":{"github":{"login":"o","name":null,"avatar":null,"connectedAt":1},"linear":{"login":"j","name":null,"avatar":null,"connectedAt":1},"notion":{"login":1}},
        "dismissedAlerts":["a@1",null,"b@2"]}
       """#)
     #expect(state.folders.keys.sorted() == ["f"])

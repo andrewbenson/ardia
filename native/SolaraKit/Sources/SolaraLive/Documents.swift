@@ -125,32 +125,6 @@ public struct NotionMe: Codable, Sendable, Equatable {
   public var bot: Bot?
 }
 
-public struct ConfluenceSearch: Codable, Sendable, Equatable {
-  public struct Space: Codable, Sendable, Equatable {
-    public var key: String
-    public var name: String
-  }
-  public struct By: Codable, Sendable, Equatable { public var displayName: String }
-  public struct LastUpdated: Codable, Sendable, Equatable {
-    public var when: String
-    public var by: By?
-  }
-  public struct History: Codable, Sendable, Equatable { public var lastUpdated: LastUpdated? }
-  public struct Links: Codable, Sendable, Equatable { public var webui: String }
-  public struct Result: Codable, Sendable, Equatable {
-    public var id: String
-    public var type: String
-    public var title: String
-    public var space: Space?
-    public var history: History?
-    public var _links: Links
-  }
-  public struct BaseLinks: Codable, Sendable, Equatable { public var base: String? }
-
-  public var results: [Result]
-  public var _links: BaseLinks?
-}
-
 public struct DriveFiles: Codable, Sendable, Equatable {
   public struct User: Codable, Sendable, Equatable { public var displayName: String }
   public struct File: Codable, Sendable, Equatable {
@@ -163,52 +137,6 @@ public struct DriveFiles: Codable, Sendable, Equatable {
     public var lastModifyingUser: User?
   }
   public var files: [File]
-}
-
-public struct BitbucketPR: Codable, Sendable, Equatable {
-  public struct Href: Codable, Sendable, Equatable { public var href: String }
-  public struct AvatarLinks: Codable, Sendable, Equatable { public var avatar: Href? }
-  public struct Author: Codable, Sendable, Equatable {
-    public var display_name: String
-    public var links: AvatarLinks?
-  }
-  public struct Branch: Codable, Sendable, Equatable { public var name: String }
-  public struct Repository: Codable, Sendable, Equatable { public var full_name: String }
-  public struct Source: Codable, Sendable, Equatable { public var branch: Branch }
-  public struct Destination: Codable, Sendable, Equatable {
-    public var branch: Branch
-    public var repository: Repository
-  }
-  public struct Links: Codable, Sendable, Equatable { public var html: Href }
-  public struct Participant: Codable, Sendable, Equatable {
-    public var role: String
-    public var state: String?
-    public func encode(to encoder: Encoder) throws {
-      var c = encoder.container(keyedBy: CodingKeys.self)
-      try c.encode(role, forKey: .role)
-      try c.encode(state, forKey: .state)
-    }
-  }
-
-  public var id: Int
-  public var title: String
-  public var draft: Bool?
-  public var updated_on: String
-  public var comment_count: Int
-  public var author: Author
-  public var source: Source
-  public var destination: Destination
-  public var links: Links
-  public var participants: [Participant]?
-}
-
-public struct BitbucketStatuses: Codable, Sendable, Equatable {
-  public struct Status: Codable, Sendable, Equatable {
-    public var state: String
-    public var name: String
-    public var url: String
-  }
-  public var values: [Status]
 }
 
 public enum Documents {
@@ -232,19 +160,6 @@ public enum Documents {
           icon: (p.icon ?? nil)?.value, updatedAt: JS.dateParse(p.last_edited_time),
           doc: DocumentInfo(kind: p.object == "database" ? "Database" : "Page", editedBy: editedBy, place: workspace))
       }
-  }
-
-  public static let confluenceCQL =
-    "type=page AND (contributor=currentUser() OR creator=currentUser() OR watcher=currentUser()) ORDER BY lastmodified DESC"
-
-  public static func mapConfluence(_ json: ConfluenceSearch, site: String) -> [LiveItem] {
-    let base = json._links?.base ?? "\(site.hasSuffix("/") ? String(site.dropLast()) : site)/wiki"
-    return json.results.map { r in
-      LiveItem(
-        id: "confluence:\(r.id)", source: .confluence, url: base + r._links.webui, title: r.title.isEmpty ? "Untitled" : r.title,
-        subtitle: r.space?.name ?? "Confluence", icon: nil, updatedAt: JS.dateParse(r.history?.lastUpdated?.when ?? ""),
-        doc: DocumentInfo(kind: "Page", editedBy: r.history?.lastUpdated?.by?.displayName, place: r.space?.name))
-    }
   }
 
   public static let driveQuery: [(String, String)] = [
@@ -272,23 +187,4 @@ public enum Documents {
     }
   }
 
-  public static func mapBitbucket(_ pr: BitbucketPR, statuses: BitbucketStatuses?) -> LiveItem {
-    let reviewers = (pr.participants ?? []).filter { $0.role == "REVIEWER" }
-    let repo = pr.destination.repository.full_name
-    let review: ReviewDecision? =
-      reviewers.contains { $0.state == "changes_requested" } ? .changesRequested
-      : reviewers.contains { $0.state == "approved" } ? .approved : reviewers.isEmpty ? nil : .required
-    let checks = (statuses?.values ?? []).map { s in
-      PullRequestCheck(
-        name: s.name, state: s.state == "SUCCESSFUL" ? .success : s.state == "FAILED" ? .failure : s.state == "STOPPED" ? .neutral : .pending,
-        url: s.url)
-    }
-    return LiveItem(
-      id: "bitbucket:\(repo)#\(pr.id)", source: .bitbucket, url: pr.links.html.href, title: pr.title, subtitle: "\(repo) #\(pr.id)",
-      icon: nil, updatedAt: JS.dateParse(pr.updated_on), section: .authored,
-      pr: PullRequestInfo(
-        number: pr.id, repo: repo, author: pr.author.display_name, authorAvatar: pr.author.links?.avatar?.href, draft: pr.draft ?? false,
-        headRef: pr.source.branch.name, baseRef: pr.destination.branch.name, review: review, mergeable: .unknown, checks: checks,
-        comments: pr.comment_count, unresolvedThreads: 0, additions: 0, deletions: 0, changedFiles: 0))
-  }
 }

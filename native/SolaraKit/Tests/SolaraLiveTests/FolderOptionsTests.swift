@@ -22,10 +22,8 @@ func stubPR(_ id: String, _ number: Int, _ headRef: String, _ baseRef: String, s
     stubPR("c", 3, "three", "main"),
   ]
 
-  func bitbucket(_ id: String) -> LiveItem {
-    var item = stubPR(id, 1, "h-\(id)", "main")
-    item.source = .bitbucket
-    return item
+  func githubPR(_ id: String) -> LiveItem {
+    stubPR(id, 1, "h-\(id)", "main")
   }
 
   func shown(_ id: String) async -> [String] { await engine.state.items[id]!.map(\.id) }
@@ -97,27 +95,27 @@ func stubPR(_ id: String, _ number: Int, _ headRef: String, _ baseRef: String, s
   }
 
   @Test func aManualRefreshWhoseFetchFailsKeepsThePullRequestsItUnhid() async {
-    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.bitbucket])
-    await engine.applyFetch(id, [bitbucket("x"), bitbucket("y")], gone: [:])
-    await engine.hideItems(id, [bitbucket("x")])
+    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github])
+    await engine.applyFetch(id, [githubPR("x"), githubPR("y")], gone: [:])
+    await engine.hideItems(id, [githubPR("x")])
     await engine.manualRefresh(id).value
-    #expect(await engine.state.status[id]!.error?.source == .bitbucket, "the fetch failed: Bitbucket isn't connected in tests")
+    #expect(await engine.state.status[id]!.error?.source == .github, "the fetch failed: GitHub isn't connected in tests")
     #expect(await shown(id).sorted() == ["x", "y"])
   }
 
   @Test func aHiddenPullRequestThatDropsOutOfAFetchStaysHiddenWhileItsSourceCantSayItClosed() async {
-    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.bitbucket])
-    await engine.applyFetch(id, [bitbucket("x")], gone: [:])
-    await engine.hideItems(id, [bitbucket("x")])
+    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github])
+    await engine.applyFetch(id, [githubPR("x")], gone: [:])
+    await engine.hideItems(id, [githubPR("x")])
     await engine.updateFolder(id, FolderPatch(filters: LiveFilters(authored: false, reviewRequests: true)))
     await engine.refreshFolder(id).value
     #expect(await engine.state.hidden[id]!.map(\.id) == ["x"])
   }
 
   @Test func aManualRefreshDuringAnAutomaticOneKeepsWhatItUnhidWhenTheFetchFails() async {
-    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.bitbucket])
-    await engine.applyFetch(id, [bitbucket("x"), bitbucket("y")], gone: [:])
-    await engine.hideItems(id, [bitbucket("x")])
+    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github])
+    await engine.applyFetch(id, [githubPR("x"), githubPR("y")], gone: [:])
+    await engine.hideItems(id, [githubPR("x")])
     let automatic = await engine.refreshFolder(id)
     let manual = await engine.manualRefresh(id)
     await automatic.value
@@ -126,12 +124,12 @@ func stubPR(_ id: String, _ number: Int, _ headRef: String, _ baseRef: String, s
   }
 
   @Test func aRefreshDoesntAskWhetherPullRequestsItsFiltersLeaveOutHaveClosed() async {
-    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.bitbucket])
-    await engine.applyFetch(id, [bitbucket("x"), bitbucket("y")], gone: [:])
-    await engine.hideItems(id, [bitbucket("x")])
+    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github])
+    await engine.applyFetch(id, [githubPR("x"), githubPR("y")], gone: [:])
+    await engine.hideItems(id, [githubPR("x")])
     await engine.updateFolder(id, FolderPatch(filters: LiveFilters(authored: false, reviewRequests: true)))
     let asked = Locked<[String]>([])
-    await engine.setResolveGone(.bitbucket) { _, items in
+    await engine.setResolveGone(.github) { _, items in
       asked.with { $0 += items.map(\.id) }
       return ["x": .merged, "y": .merged]
     }
@@ -152,12 +150,14 @@ func stubPR(_ id: String, _ number: Int, _ headRef: String, _ baseRef: String, s
   }
 
   @Test func aRefreshDoesntAskAboutHiddenPullRequestsFromASourceTheFolderNoLongerFetches() async {
-    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github, .bitbucket])
-    await engine.applyFetch(id, [bitbucket("x")], gone: [:])
-    await engine.hideItems(id, [bitbucket("x")])
+    let id = await engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github, .notion])
+    var item = githubPR("x")
+    item.source = .notion
+    await engine.applyFetch(id, [item], gone: [:])
+    await engine.hideItems(id, [item])
     await engine.updateFolder(id, FolderPatch(sources: [.github]))
     let asked = Locked<[String]>([])
-    await engine.setResolveGone(.bitbucket) { _, items in
+    await engine.setResolveGone(.notion) { _, items in
       asked.with { $0 += items.map(\.id) }
       return ["x": .merged]
     }

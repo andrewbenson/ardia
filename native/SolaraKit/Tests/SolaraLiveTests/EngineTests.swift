@@ -104,10 +104,10 @@ final class FakeMeetingHost: LiveMeetingHost, @unchecked Sendable {
 
   @Test func newFoldersUseConnectedSourcesAndRemovedProfilesTakeTheirFolders() async {
     let rig = Rig()
-    await rig.engine.setAccount(.bitbucket, LiveAccount(login: "b", name: nil, avatar: nil, connectedAt: 0))
+    await rig.engine.setAccount(.github, LiveAccount(login: "b", name: nil, avatar: nil, connectedAt: 0))
     let a = await rig.engine.newProfileLiveFolder(profileId: "keep", kind: .pullRequests)
     let b = await rig.engine.newProfileLiveFolder(profileId: "gone", kind: .documents)
-    #expect(await rig.engine.state.folders[a]?.sources == [.bitbucket])
+    #expect(await rig.engine.state.folders[a]?.sources == [.github])
     #expect(await rig.engine.state.folders[b]?.sources == [.notion])
     #expect(await rig.engine.state.folders[a]?.name == "Pull Requests")
     await rig.engine.profilesChanged(existing: ["keep"])

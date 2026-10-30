@@ -9,17 +9,17 @@ public struct LiveEndpoints: Sendable, Equatable {
 
   public var githubGraphql: String { mock.map { "\($0)/github/graphql" } ?? "https://api.github.com/graphql" }
   public var githubWeb: String { mock.map { "\($0)/github" } ?? "https://github.com" }
-  public var bitbucket: String { mock.map { "\($0)/bitbucket/2.0" } ?? "https://api.bitbucket.org/2.0" }
   public var notion: String { mock.map { "\($0)/notion/v1" } ?? "https://api.notion.com/v1" }
-  public func confluence(_ site: String) -> String {
-    mock.map { "\($0)/confluence" } ?? (site.hasSuffix("/") ? String(site.dropLast()) : site)
-  }
   public var googleAuth: String { mock.map { "\($0)/google/auth" } ?? "https://accounts.google.com/o/oauth2/v2/auth" }
   public var googleToken: String { mock.map { "\($0)/google/token" } ?? "https://oauth2.googleapis.com/token" }
   public var drive: String { mock.map { "\($0)/google/drive/v3" } ?? "https://www.googleapis.com/drive/v3" }
 
   public func secretAccount(_ source: LiveSourceId) -> String {
-    mock == nil ? source.rawValue : "mock:\(source.rawValue)"
+    secretAccount(source.rawValue)
+  }
+
+  public func secretAccount(_ source: String) -> String {
+    mock == nil ? source : "mock:\(source)"
   }
 }
 
@@ -42,13 +42,6 @@ public enum LiveNet {
     fields.map { "\(JS.encodeURIComponent($0.0))=\(JS.encodeURIComponent($0.1))" }.joined(separator: "&")
   }
 
-  public static func base64(_ text: String) -> String {
-    Data(text.utf8).base64EncodedString()
-  }
-
-  public static func basic(_ user: String, _ secret: String) -> String {
-    "Basic \(base64("\(user):\(secret)"))"
-  }
 }
 
 struct LiveRequester: Sendable {

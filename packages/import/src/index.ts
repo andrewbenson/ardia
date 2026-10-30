@@ -51,7 +51,7 @@ export type BrowserSource = {
   sidebar?: "arc" | "zen";
 };
 
-export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests" | "liveBitbucketPullRequests";
+export type BookmarkRole = "toolbar" | "other" | "mobile" | "menu" | "readingList" | "liveGitHubPullRequests";
 
 export type BookmarkNode = {
   type: "folder" | "url";

@@ -76,9 +76,7 @@ import Testing
     let rig = Rig(mock: mock)
     let engine = rig.engine
     try await engine.connectNotion(token: " mock-notion ")
-    try await engine.connectConfluence(site: "acme.atlassian.net/", email: " octo@acme.com", token: "t")
     #expect(await engine.state.accounts[.notion]?.login == "Acme")
-    #expect(await engine.state.config.confluenceSite == "https://acme.atlassian.net")
     rig.auth.respond.with { $0 = { url in
       let state = GoogleAuth.query(url)["state"]!
       return "\(GoogleAuth.redirect)?code=mock-google-code&state=\(state)"
@@ -87,10 +85,10 @@ import Testing
     #expect(await engine.state.accounts[.gdrive]?.login == "octo@acme.com")
     #expect(await engine.state.config.googleClientId == "cid")
     let id = await engine.newProfileLiveFolder(profileId: "p", kind: .documents)
-    #expect(await engine.state.folders[id]?.sources == [.notion, .confluence, .gdrive])
+    #expect(await engine.state.folders[id]?.sources == [.notion, .gdrive])
     await engine.refreshFolder(id).value
     let items = await engine.state.items[id]!
-    #expect(Set(items.map(\.source)) == [.notion, .confluence, .gdrive])
+    #expect(Set(items.map(\.source)) == [.notion, .gdrive])
     #expect(items.map(\.updatedAt) == items.map(\.updatedAt).sorted(by: >))
     #expect(await engine.state.unread[id] == [], "the first fetch marks nothing unread")
     #expect(await engine.liveFolderIcon(engine.state.folders[id]!).icon == "symbol:doc.text")
@@ -121,23 +119,6 @@ import Testing
     let q = GoogleAuth.query(opened)
     #expect(opened.hasPrefix("\(MockServer.base)/google/auth?client_id=c&redirect_uri=http%3A%2F%2F127.0.0.1%3A53682%2Fardia-oauth"))
     #expect(q["code_challenge"]?.count == 64 && q["state"]?.count == 24 && q["code_challenge_method"] == "plain")
-  }
-
-  @Test func bitbucketFetchesAuthoredPullRequestsAndResolvesAMerge() async throws {
-    let rig = Rig(mock: mock)
-    try await rig.engine.connectBitbucket(user: "octo ", token: "tok")
-    let id = await rig.engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.bitbucket])
-    await rig.engine.refreshFolder(id).value
-    let item = await rig.engine.state.items[id]!.first!
-    #expect(item.id == "bitbucket:acme/pipelines#7")
-    #expect(item.pr?.checks.first?.state == .success)
-    #expect(item.pr?.review == .approved)
-    mock.model.with { $0.bitbucketState = "MERGED" }
-    await rig.engine.refreshFolder(id).value
-    #expect(await rig.engine.state.completed[id]?.first?.state == .merged)
-    try await rig.engine.disconnect(.bitbucket)
-    #expect(await rig.engine.state.accounts[.bitbucket] == nil)
-    #expect(await rig.secrets.secret(account: "mock:bitbucket") == nil)
   }
 
   @Test func theDeviceFlowPollsAtItsIntervalBacksOffOnSlowDownAndConnects() async throws {

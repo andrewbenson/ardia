@@ -61,9 +61,7 @@ struct LiveFoldersConnectSheet: View {
     let config = model.state?.config ?? LiveConfig.defaults
     switch source {
     case .github: LiveFoldersGithubConnect(model: model, runner: runner, appName: appName, clientId: config.githubClientId)
-    case .bitbucket: LiveFoldersBitbucketConnect(model: model, runner: runner, user: config.bitbucketUser)
     case .notion: LiveFoldersNotionConnect(model: model, runner: runner)
-    case .confluence: LiveFoldersConfluenceConnect(model: model, runner: runner, site: config.confluenceSite, email: config.confluenceEmail)
     case .gdrive: LiveFoldersGoogleConnect(model: model, runner: runner, appName: appName, clientId: config.googleClientId)
     }
   }
@@ -210,46 +208,6 @@ struct LiveFoldersGithubConnect: View {
   }
 }
 
-struct LiveFoldersBitbucketConnect: View {
-  @Environment(\.dismiss) private var dismiss
-  let model: LiveFoldersPaneModel
-  let runner: LiveFoldersConnectRun
-  @State private var user: String
-  @State private var token = ""
-
-  init(model: LiveFoldersPaneModel, runner: LiveFoldersConnectRun, user: String) {
-    self.model = model
-    self.runner = runner
-    _user = State(initialValue: user)
-  }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      LiveFoldersConnectHelp("Create an API token (bitbucket.org › Personal settings › API tokens, with read access to pull requests and repositories), then enter your Atlassian account email with it. Bitbucket can't search review requests across repositories, so the folder lists your own pull requests.")
-      LiveFoldersConnectField("Email or username") {
-        TextField("", text: $user, prompt: Text(verbatim: "you@example.com"))
-      }
-      LiveFoldersConnectField("API token") {
-        SecureField("", text: $token)
-          .onSubmit { go() }
-      }
-      LiveFoldersConnectActions {
-        Button("Cancel") { dismiss() }
-          .keyboardShortcut(.cancelAction)
-        Button(runner.busy ? "Checking…" : "Connect") { go() }
-          .buttonStyle(.borderedProminent)
-          .disabled(!filled(user, token) || runner.busy)
-      }
-    }
-  }
-
-  private func go() {
-    let user = user
-    let token = token
-    runner.run { try await model.services.connectBitbucket(user: user, token: token) }
-  }
-}
-
 struct LiveFoldersNotionConnect: View {
   @Environment(\.dismiss) private var dismiss
   let model: LiveFoldersPaneModel
@@ -276,52 +234,6 @@ struct LiveFoldersNotionConnect: View {
   private func go() {
     let token = token
     runner.run { try await model.services.connectNotion(token: token) }
-  }
-}
-
-struct LiveFoldersConfluenceConnect: View {
-  @Environment(\.dismiss) private var dismiss
-  let model: LiveFoldersPaneModel
-  let runner: LiveFoldersConnectRun
-  @State private var site: String
-  @State private var email: String
-  @State private var token = ""
-
-  init(model: LiveFoldersPaneModel, runner: LiveFoldersConnectRun, site: String, email: String) {
-    self.model = model
-    self.runner = runner
-    _site = State(initialValue: site)
-    _email = State(initialValue: email)
-  }
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      LiveFoldersConnectHelp("Create an API token at id.atlassian.com › Security › API tokens, then enter your Confluence Cloud site and account email.")
-      LiveFoldersConnectField("Site") {
-        TextField("", text: $site, prompt: Text(verbatim: "https://your-team.atlassian.net"))
-      }
-      LiveFoldersConnectField("Email") {
-        TextField("", text: $email, prompt: Text(verbatim: "you@example.com"))
-      }
-      LiveFoldersConnectField("API token") {
-        SecureField("", text: $token)
-          .onSubmit { go() }
-      }
-      LiveFoldersConnectActions {
-        Button("Cancel") { dismiss() }
-          .keyboardShortcut(.cancelAction)
-        Button(runner.busy ? "Checking…" : "Connect") { go() }
-          .buttonStyle(.borderedProminent)
-          .disabled(!filled(site, email, token) || runner.busy)
-      }
-    }
-  }
-
-  private func go() {
-    let site = site
-    let email = email
-    let token = token
-    runner.run { try await model.services.connectConfluence(site: site, email: email, token: token) }
   }
 }
 

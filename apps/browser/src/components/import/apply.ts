@@ -32,7 +32,6 @@ const toGroupDraft = (n: ImportedNode): GroupDraft =>
 
 const LIVE_SOURCES: Partial<Record<NonNullable<ImportedNode["role"]>, LiveSourceId>> = {
   liveGitHubPullRequests: "github",
-  liveBitbucketPullRequests: "bitbucket",
 };
 const liveSourceOf = (n: ImportedNode) => (n.role ? LIVE_SOURCES[n.role] : undefined);
 const liveSources = (nodes: ImportedNode[]): LiveSourceId[] =>

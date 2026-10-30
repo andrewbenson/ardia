@@ -12,7 +12,6 @@ final class MockServer: @unchecked Sendable {
     var approved = false
     var deviceResponses: [[String: Any]] = []
     var detailsError: (id: String, type: String)?
-    var bitbucketState = "OPEN"
     var driveTokenValid = "mock-google-access"
   }
 
@@ -99,34 +98,6 @@ final class MockServer: @unchecked Sendable {
       if p == "/notion/v1/users/me" { return json(load("notion-me.json")) }
       if p == "/notion/v1/users" { return json(load("notion-users.json")) }
       if p == "/notion/v1/search" { return json(load("notion-search.json")) }
-    }
-    if p.hasPrefix("/confluence/") {
-      if !auth.hasPrefix("Basic ") { return json([:], status: 401) }
-      if p == "/confluence/wiki/rest/api/user/current" { return json(["accountId": "acc-1", "displayName": "Octo Dev"]) }
-      if p == "/confluence/wiki/rest/api/content/search" { return json(load("confluence-search.json")) }
-    }
-    if p.hasPrefix("/bitbucket/") {
-      if !auth.hasPrefix("Basic ") { return json([:], status: 401) }
-      let state = model.current.bitbucketState
-      if p == "/bitbucket/2.0/user" { return json(["account_id": "bb-1", "display_name": "Octo Dev"]) }
-      if p == "/bitbucket/2.0/repositories/acme/pipelines/pullrequests/7" { return json(["id": 7, "state": state]) }
-      if p.hasPrefix("/bitbucket/2.0/pullrequests/") {
-        if state != "OPEN" { return json(["values": []]) }
-        return json([
-          "values": [
-            [
-              "id": 7, "title": "Bitbucket: tidy pipelines", "updated_on": "2026-09-25T06:00:00Z", "comment_count": 2,
-              "author": ["display_name": "Octo Dev"], "source": ["branch": ["name": "tidy"]],
-              "destination": ["branch": ["name": "main"], "repository": ["full_name": "acme/pipelines"]],
-              "links": ["html": ["href": "https://bitbucket.org/acme/pipelines/pull-requests/7"]],
-              "participants": [["role": "REVIEWER", "state": "approved"]],
-            ]
-          ]
-        ])
-      }
-      if p.hasSuffix("/statuses") {
-        return json(["values": [["state": "SUCCESSFUL", "name": "Pipeline #12", "url": "https://bitbucket.org/acme/pipelines/pipelines/12"]]])
-      }
     }
     if p == "/google/token" { return json(["access_token": "mock-google-access", "refresh_token": "mock-google-refresh", "expires_in": 3600]) }
     if p == "/google/drive/v3/about" { return json(["user": ["displayName": "Octo Dev", "emailAddress": "octo@acme.com"]]) }

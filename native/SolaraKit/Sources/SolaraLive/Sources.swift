@@ -55,22 +55,6 @@ struct GithubViewerResponse: Decodable {
   var data: Payload?
 }
 
-struct BitbucketPage: Decodable { var values: [BitbucketPR] }
-struct BitbucketState: Decodable { var state: String? }
-
-struct BitbucketMe: Decodable {
-  struct Href: Decodable { var href: String }
-  struct Links: Decodable { var avatar: Href? }
-  var account_id: String
-  var display_name: String
-  var links: Links?
-}
-
-struct ConfluenceMe: Decodable {
-  var accountId: String
-  var displayName: String
-}
-
 struct GoogleTokenResponse: Decodable {
   var access_token: String
   var refresh_token: String?
@@ -102,22 +86,19 @@ struct DeviceToken: Decodable {
 
 extension LiveSource {
   public static let names: [LiveSourceId: String] = [
-    .github: "GitHub", .bitbucket: "Bitbucket", .notion: "Notion", .confluence: "Confluence", .gdrive: "Google Drive",
+    .github: "GitHub", .notion: "Notion", .gdrive: "Google Drive",
   ]
 
   public static let sites: [LiveSourceId: String] = [
-    .github: "https://github.com", .bitbucket: "https://bitbucket.org", .notion: "https://www.notion.so",
-    .confluence: "https://www.atlassian.com", .gdrive: "https://drive.google.com",
+    .github: "https://github.com", .notion: "https://www.notion.so", .gdrive: "https://drive.google.com",
   ]
-
-  static let bitbucketStateBatch = 10
 
   static func notionHeaders(_ token: String) -> [String: String] {
     ["Authorization": "Bearer \(token)", "Notion-Version": "2022-06-28", "Content-Type": "application/json"]
   }
 
   public static let standard: [LiveSourceId: LiveSource] = [
-    .github: github, .bitbucket: bitbucket, .notion: notion, .confluence: confluence, .gdrive: gdrive,
+    .github: github, .notion: notion, .gdrive: gdrive,
   ]
 
   static let github = LiveSource(
@@ -167,61 +148,6 @@ extension LiveSource {
       return out
     })
 
-  static let bitbucket = LiveSource(
-    id: .bitbucket, name: "Bitbucket", kind: .pullRequests, site: "https://bitbucket.org",
-    fetch: { engine, folder in
-      if !folder.filters.authored { return [] }
-      let auth = try await engine.bitbucketAuth()
-      guard let me = await engine.state.accounts[.bitbucket] else { throw LiveError(.signedOut, "Not signed in") }
-      let base = engine.endpoints.bitbucket
-      let page = try await engine.requester.json(
-        BitbucketPage.self,
-        LiveHTTPRequest(url: "\(base)/pullrequests/\(JS.encodeURIComponent(me.login))?state=OPEN&pagelen=50", headers: ["Authorization": auth]))
-      return await withTaskGroup(of: (Int, LiveItem).self) { group in
-        for (i, pr) in page.values.enumerated() {
-          group.addTask {
-            let repo = pr.destination.repository.full_name
-            let statuses = try? await engine.requester.json(
-              BitbucketStatuses.self,
-              LiveHTTPRequest(url: "\(base)/repositories/\(repo)/pullrequests/\(pr.id)/statuses?pagelen=50", headers: ["Authorization": auth]))
-            return (i, Documents.mapBitbucket(pr, statuses: statuses))
-          }
-        }
-        var out: [(Int, LiveItem)] = []
-        for await result in group { out.append(result) }
-        return out.sorted { $0.0 < $1.0 }.map(\.1)
-      }
-    },
-    resolveGone: { engine, items in
-      let auth = try await engine.bitbucketAuth()
-      let base = engine.endpoints.bitbucket
-      let prs = items.compactMap { it in it.pr.map { (id: it.id, repo: $0.repo, number: $0.number) } }
-      var out: [String: CompletionState] = [:]
-      for start in stride(from: 0, to: prs.count, by: bitbucketStateBatch) {
-        let batch = prs[start..<min(start + bitbucketStateBatch, prs.count)]
-        let states = await withTaskGroup(of: (String, String?).self) { group in
-          for pr in batch {
-            group.addTask {
-              let state = try? await engine.requester.json(
-                BitbucketState.self, LiveHTTPRequest(url: "\(base)/repositories/\(pr.repo)/pullrequests/\(pr.number)", headers: ["Authorization": auth]))
-              return (pr.id, state?.state)
-            }
-          }
-          var out: [(String, String?)] = []
-          for await result in group { out.append(result) }
-          return out
-        }
-        for (id, state) in states {
-          if state == "MERGED" {
-            out[id] = .merged
-          } else if state == "DECLINED" || state == "SUPERSEDED" {
-            out[id] = .closed
-          }
-        }
-      }
-      return out
-    })
-
   static let notion = LiveSource(
     id: .notion, name: "Notion", kind: .documents, site: "https://www.notion.so",
     fetch: { engine, _ in
@@ -233,18 +159,6 @@ extension LiveSource {
       async let users = try? engine.requester.json(NotionUsers.self, LiveHTTPRequest(url: "\(base)/users?page_size=100", headers: notionHeaders(token)))
       let (found, people) = try await (pages, users)
       return Documents.mapNotion(found, users: people, workspace: await engine.state.accounts[.notion]?.name)
-    })
-
-  static let confluence = LiveSource(
-    id: .confluence, name: "Confluence", kind: .documents, site: "https://www.atlassian.com",
-    fetch: { engine, _ in
-      let config = await engine.state.config
-      if config.confluenceSite.isEmpty { throw LiveError(.notConfigured, "No Confluence site") }
-      let auth = LiveNet.basic(config.confluenceEmail, try await engine.secret(.confluence))
-      let url =
-        "\(engine.endpoints.confluence(config.confluenceSite))/wiki/rest/api/content/search?limit=30&expand=space,history.lastUpdated&cql=\(JS.encodeURIComponent(Documents.confluenceCQL))"
-      return Documents.mapConfluence(
-        try await engine.requester.json(ConfluenceSearch.self, LiveHTTPRequest(url: url, headers: ["Authorization": auth])), site: config.confluenceSite)
     })
 
   static let gdrive = LiveSource(

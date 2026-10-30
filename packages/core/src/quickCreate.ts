@@ -15,8 +15,6 @@ const QUICK_CREATE: readonly QuickCreate[] = [
   { id: "meet", title: "New Google Meet", url: "https://meet.new", aliases: ["meet", "call", "video call", "google meet"], site: "meet.google.com" },
   { id: "notion", title: "New Notion Page", url: "https://notion.new", aliases: ["notion", "note", "page", "notion page"], site: "notion.so" },
   { id: "linear", title: "New Linear Issue", url: "https://linear.new", aliases: ["linear", "issue", "ticket", "linear issue"], site: "linear.app" },
-  { id: "jira", title: "New Jira Issue", url: "https://jira.new", aliases: ["jira", "ticket", "issue", "jira issue"], site: "atlassian.com" },
-  { id: "confluence", title: "New Confluence Page", url: "https://confluence.new", aliases: ["wiki", "confluence", "confluence page"], site: "atlassian.com" },
   { id: "gist", title: "New GitHub Gist", url: "https://gist.new", aliases: ["gist", "snippet", "github gist"], site: "github.com" },
   { id: "repo", title: "New GitHub Repository", url: "https://repo.new", aliases: ["repo", "repository", "github repo"], site: "github.com" },
   { id: "figma", title: "New Figma Design", url: "https://figma.new", aliases: ["figma", "design", "figma design"], site: "figma.com" },

@@ -97,7 +97,7 @@ import Testing
   }
 
   @Test func commandWireAndInvalidFields() async throws {
-    let names = "createFolder newProfileLiveFolder importFolder updateFolder removeFolder removeProfile arrangeFolders markRead markUnread hideItems unhide setExpandedStack updateConfig updateCalendarSettings setCalendarHidden dismissAlert setMeetingGroup refreshFolder manualRefresh refreshCalendar windowFocused appResignedActive liveTabDeactivated connectCalendar connectGithub connectBitbucket connectNotion connectConfluence connectGoogleDrive disconnect startGithubDeviceFlow finishGithubDeviceFlow cancelGithubDeviceFlow offerAlertsForPinnedTab answerAlertOffer applyFetch setStatus".split(separator: " ")
+    let names = "createFolder newProfileLiveFolder importFolder updateFolder removeFolder removeProfile arrangeFolders markRead markUnread hideItems unhide setExpandedStack updateConfig updateCalendarSettings setCalendarHidden dismissAlert setMeetingGroup refreshFolder manualRefresh refreshCalendar windowFocused appResignedActive liveTabDeactivated connectCalendar connectGithub connectNotion connectGoogleDrive disconnect startGithubDeviceFlow finishGithubDeviceFlow cancelGithubDeviceFlow offerAlertsForPinnedTab answerAlertOffer applyFetch setStatus".split(separator: " ")
     for name in names {
       let parsed = try command(String(name))
       #expect(try LiveJSON.decode(LiveCommand.self, from: LiveJSON.encode(parsed)) == parsed)
@@ -114,6 +114,21 @@ import Testing
     await #expect(throws: LiveError.self) { _ = try await rig.engine.perform(command("finishGithubDeviceFlow", #"{"id":"missing"}"#)) }
     await #expect(throws: LiveError.self) { _ = try await rig.engine.perform(command("cancelGithubDeviceFlow", #"{"id":"missing"}"#)) }
     #expect(throws: LiveError.self) { _ = try command("nonexistent") }
+  }
+
+  @Test func retiredConnectionCommandsAreUnknown() {
+    for name in ["connectBitbucket", "connectConfluence"] {
+      #expect(throws: LiveError.self) { _ = try command(name) }
+    }
+  }
+
+  @Test func retiredConfigFieldsAreUnknown() async throws {
+    let rig = Rig()
+    for field in ["bitbucketUser", "confluenceSite", "confluenceEmail"] {
+      await #expect(throws: LiveError.self) {
+        _ = try await rig.engine.perform(command("updateConfig", "{\"patch\":{\"\(field)\":\"old\"}}"))
+      }
+    }
   }
 
   @Test func synchronousInitialReplicaMatchesLoadedState() async throws {
@@ -149,7 +164,7 @@ import Testing
     #expect(await rig.engine.state.calendar.prompted)
     _ = try await rig.engine.perform(command("answerAlertOffer", #"{"confirmed":false}"#))
     #expect(await rig.engine.state.calendar.alertLead == "never")
-    for name in ["connectGithub", "connectBitbucket", "connectNotion", "connectConfluence", "connectGoogleDrive", "disconnect", "startGithubDeviceFlow"] {
+    for name in ["connectGithub", "connectNotion", "connectGoogleDrive", "disconnect", "startGithubDeviceFlow"] {
       await #expect(throws: LiveError.self) { _ = try await rig.engine.perform(command(name)) }
     }
   }
@@ -175,23 +190,23 @@ import Testing
 
   @Test func failedPollsKeepSavedItemsForFailedSources() async throws {
     let rig = Rig()
-    let id = await rig.engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github, .bitbucket])
+    let id = await rig.engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github, .notion])
     let github = stubPR("github:old", 1, "head", "main")
-    var bitbucket = stubPR("bitbucket:old", 1, "head", "main")
-    bitbucket.id = "bitbucket:old"
-    bitbucket.source = .bitbucket
-    await rig.engine.applyFetch(id, [github, bitbucket], gone: [:])
+    var notion = stubPR("notion:old", 1, "head", "main")
+    notion.id = "notion:old"
+    notion.source = .notion
+    await rig.engine.applyFetch(id, [github, notion], gone: [:])
     try await rig.engine.flush()
     await rig.engine.setSource(LiveSource(id: .github, name: "GitHub", kind: .pullRequests, site: "x", fetch: { _, _ in throw LiveError(.network, "down") }))
-    await rig.engine.setSource(LiveSource(id: .bitbucket, name: "Bitbucket", kind: .pullRequests, site: "x", fetch: { _, _ in throw LiveError(.network, "down") }))
+    await rig.engine.setSource(LiveSource(id: .notion, name: "Notion", kind: .pullRequests, site: "x", fetch: { _, _ in throw LiveError(.network, "down") }))
     await rig.engine.refreshFolder(id).value
-    #expect(await rig.engine.state.items[id]?.map(\.id) == [github.id, bitbucket.id])
+    #expect(await rig.engine.state.items[id]?.map(\.id) == [github.id, notion.id])
     try await rig.engine.flush()
     #expect(LiveState.load(rig.documents.read(LiveState.documentName)).items[id]?.count == 2)
-    let savedBitbucket = bitbucket
-    await rig.engine.setSource(LiveSource(id: .bitbucket, name: "Bitbucket", kind: .pullRequests, site: "x", fetch: { _, _ in [savedBitbucket] }))
+    let savedNotion = notion
+    await rig.engine.setSource(LiveSource(id: .notion, name: "Notion", kind: .pullRequests, site: "x", fetch: { _, _ in [savedNotion] }))
     await rig.engine.refreshFolder(id).value
-    #expect(Set(await rig.engine.state.items[id]?.map(\.id) ?? []) == [github.id, bitbucket.id])
+    #expect(Set(await rig.engine.state.items[id]?.map(\.id) ?? []) == [github.id, notion.id])
     try await rig.engine.flush()
     #expect(LiveState.load(rig.documents.read(LiveState.documentName)).items[id]?.count == 2)
   }

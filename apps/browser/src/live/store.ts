@@ -4,9 +4,6 @@ import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFol
 
 export type LiveConfig = {
   githubClientId: string;
-  bitbucketUser: string;
-  confluenceSite: string;
-  confluenceEmail: string;
   googleClientId: string;
 };
 
@@ -48,7 +45,7 @@ type LiveState = {
   dismissedAlerts: string[];
 };
 
-export const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", bitbucketUser: "", confluenceSite: "", confluenceEmail: "", googleClientId: "" };
+export const DEFAULT_CONFIG: LiveConfig = { githubClientId: "", googleClientId: "" };
 
 export const DEFAULT_CALENDAR: CalendarSettings = {
   alertLead: "1",

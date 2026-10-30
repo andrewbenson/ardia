@@ -9,9 +9,7 @@ extension LiveSourceId: Identifiable {
   public var name: String {
     switch self {
     case .github: "GitHub"
-    case .bitbucket: "Bitbucket"
     case .notion: "Notion"
-    case .confluence: "Confluence"
     case .gdrive: "Google Drive"
     }
   }
@@ -19,9 +17,7 @@ extension LiveSourceId: Identifiable {
   public var site: String {
     switch self {
     case .github: "https://github.com"
-    case .bitbucket: "https://bitbucket.org"
     case .notion: "https://www.notion.so"
-    case .confluence: "https://www.atlassian.com"
     case .gdrive: "https://drive.google.com"
     }
   }
@@ -29,9 +25,7 @@ extension LiveSourceId: Identifiable {
   var settingsAnchor: String {
     switch self {
     case .github: "liveFolders.github"
-    case .bitbucket: "liveFolders.bitbucket"
     case .notion: "liveFolders.notion"
-    case .confluence: "liveFolders.confluence"
     case .gdrive: "liveFolders.gdrive"
     }
   }
@@ -39,9 +33,7 @@ extension LiveSourceId: Identifiable {
   var settingsDescription: String {
     switch self {
     case .github: "Your open pull requests and the ones waiting for your review, with checks and conflicts."
-    case .bitbucket: "Your open pull requests on Bitbucket Cloud, with build status."
     case .notion: "Pages recently edited in your workspace."
-    case .confluence: "Pages you created, edited or watch."
     case .gdrive: "Documents recently changed in your Drive."
     }
   }
@@ -149,9 +141,7 @@ public protocol LiveFoldersServices: AnyObject {
   func startGithubDeviceFlow(clientId: String) async throws -> LiveDeviceFlow
   func finishGithubDeviceFlow(_ flow: LiveDeviceFlow) async throws
   func cancelGithubDeviceFlow(_ flow: LiveDeviceFlow)
-  func connectBitbucket(user: String, token: String) async throws
   func connectNotion(token: String) async throws
-  func connectConfluence(site: String, email: String, token: String) async throws
   func connectGoogleDrive(clientId: String, clientSecret: String) async throws
   func copyText(_ text: String)
   func openInBrowser(_ url: String)
@@ -296,12 +286,10 @@ struct LiveFoldersPane: View {
 
       SettingsSection("Pull Requests") {
         LiveFoldersSourceRow(model: model, source: .github, connecting: $connecting)
-        LiveFoldersSourceRow(model: model, source: .bitbucket, connecting: $connecting)
       }
 
       SettingsSection("Documents") {
         LiveFoldersSourceRow(model: model, source: .notion, connecting: $connecting)
-        LiveFoldersSourceRow(model: model, source: .confluence, connecting: $connecting)
         LiveFoldersSourceRow(model: model, source: .gdrive, connecting: $connecting)
       }
 

@@ -5,7 +5,7 @@ import Testing
 struct UnknownKeysTests {
   static let saved = """
     {"folders":{},"folderOrder":[],"items":{},"known":{},"unread":{},"hidden":{},"completed":{},"expandedStacks":{},"accounts":{},
-    "config":{"githubClientId":"abc","bitbucketUser":"","confluenceSite":"","confluenceEmail":"","googleClientId":"","linearClientId":"lin_1","nested":{"a":[1,true,null,"x"]}},
+    "config":{"githubClientId":"abc","googleClientId":"","linearClientId":"lin_1","nested":{"a":[1,true,null,"x"]}},
     "calendar":{"alertLead":"5","alertCondition":"always","showPreview":true,"showTimeToNext":false,"hiddenCalendarIds":["c1"],"prompted":true,"snoozeMinutes":10},
     "meetingGroups":{},"dismissedAlerts":[],"futureSection":{"version":3}}
     """
@@ -45,6 +45,6 @@ struct UnknownKeysTests {
     #expect(state.extra.isEmpty)
     #expect(state.config.extra.isEmpty)
     let config = try #require(try Self.object(try state.persistedJSON())["config"] as? NSDictionary)
-    #expect(Set(config.allKeys.compactMap { $0 as? String }) == ["githubClientId", "bitbucketUser", "confluenceSite", "confluenceEmail", "googleClientId"])
+    #expect(Set(config.allKeys.compactMap { $0 as? String }) == ["githubClientId", "googleClientId"])
   }
 }

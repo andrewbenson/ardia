@@ -415,11 +415,9 @@ public struct SettingsIndex: Sendable {
         ]),
         Section(section: "Pull Requests", rows: [
           Row(key: "github", title: "GitHub", description: "Your open pull requests and the ones waiting for your review, with checks and conflicts.", keywords: ["pull requests", "connect"]),
-          Row(key: "bitbucket", title: "Bitbucket", description: "Your open pull requests on Bitbucket Cloud, with build status.", keywords: ["pull requests", "connect"]),
         ]),
         Section(section: "Documents", rows: [
           Row(key: "notion", title: "Notion", description: "Pages recently edited in your workspace.", keywords: ["documents", "connect"]),
-          Row(key: "confluence", title: "Confluence", description: "Pages you created, edited or watch.", keywords: ["documents", "atlassian", "connect"]),
           Row(key: "gdrive", title: "Google Drive", description: "Documents recently changed in your Drive.", keywords: ["documents", "docs", "connect"]),
         ]),
       ],

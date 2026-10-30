@@ -5892,66 +5892,6 @@
     }
    }
   ],
-  "confluence": [
-   {
-    "id": "confluence:9001",
-    "source": "confluence",
-    "url": "https://acme.atlassian.net/wiki/spaces/ENG/pages/9001/Onboarding+checklist",
-    "title": "Onboarding checklist",
-    "subtitle": "Engineering",
-    "icon": null,
-    "updatedAt": 1790319600000,
-    "doc": {
-     "kind": "Page",
-     "editedBy": "Ana Ruiz",
-     "place": "Engineering"
-    }
-   },
-   {
-    "id": "confluence:9002",
-    "source": "confluence",
-    "url": "https://acme.atlassian.net/wiki/spaces/OPS/pages/9002/Release+process",
-    "title": "Release process",
-    "subtitle": "Operations",
-    "icon": null,
-    "updatedAt": 1790060400000,
-    "doc": {
-     "kind": "Page",
-     "editedBy": "Octo Dev",
-     "place": "Operations"
-    }
-   }
-  ],
-  "confluenceNoBase": [
-   {
-    "id": "confluence:9001",
-    "source": "confluence",
-    "url": "https://acme.atlassian.net/wiki/spaces/ENG/pages/9001/Onboarding+checklist",
-    "title": "Onboarding checklist",
-    "subtitle": "Engineering",
-    "icon": null,
-    "updatedAt": 1790319600000,
-    "doc": {
-     "kind": "Page",
-     "editedBy": "Ana Ruiz",
-     "place": "Engineering"
-    }
-   },
-   {
-    "id": "confluence:9002",
-    "source": "confluence",
-    "url": "https://acme.atlassian.net/wiki/spaces/OPS/pages/9002/Release+process",
-    "title": "Release process",
-    "subtitle": "Operations",
-    "icon": null,
-    "updatedAt": 1790060400000,
-    "doc": {
-     "kind": "Page",
-     "editedBy": "Octo Dev",
-     "place": "Operations"
-    }
-   }
-  ],
   "drive": [
    {
     "id": "gdrive:d1",
@@ -5979,318 +5919,6 @@
      "kind": "Spreadsheet",
      "editedBy": null,
      "place": null
-    }
-   }
-  ],
-  "bitbucket": [
-   {
-    "pr": {
-     "id": 7,
-     "title": "Bitbucket: tidy pipelines",
-     "updated_on": "2026-09-25T06:00:00Z",
-     "comment_count": 2,
-     "author": {
-      "display_name": "Octo Dev"
-     },
-     "source": {
-      "branch": {
-       "name": "tidy"
-      }
-     },
-     "destination": {
-      "branch": {
-       "name": "main"
-      },
-      "repository": {
-       "full_name": "acme/pipelines"
-      }
-     },
-     "links": {
-      "html": {
-       "href": "https://bitbucket.org/acme/pipelines/pull-requests/7"
-      }
-     },
-     "participants": [
-      {
-       "role": "REVIEWER",
-       "state": "approved"
-      }
-     ]
-    },
-    "statuses": {
-     "values": [
-      {
-       "state": "SUCCESSFUL",
-       "name": "Pipeline #12",
-       "url": "u12"
-      },
-      {
-       "state": "FAILED",
-       "name": "f",
-       "url": "uf"
-      },
-      {
-       "state": "STOPPED",
-       "name": "s",
-       "url": "us"
-      },
-      {
-       "state": "INPROGRESS",
-       "name": "i",
-       "url": "ui"
-      }
-     ]
-    },
-    "item": {
-     "id": "bitbucket:acme/pipelines#7",
-     "source": "bitbucket",
-     "url": "https://bitbucket.org/acme/pipelines/pull-requests/7",
-     "title": "Bitbucket: tidy pipelines",
-     "subtitle": "acme/pipelines #7",
-     "icon": null,
-     "updatedAt": 1790316000000,
-     "section": "authored",
-     "pr": {
-      "number": 7,
-      "repo": "acme/pipelines",
-      "author": "Octo Dev",
-      "authorAvatar": null,
-      "draft": false,
-      "headRef": "tidy",
-      "baseRef": "main",
-      "review": "approved",
-      "mergeable": "unknown",
-      "checks": [
-       {
-        "name": "Pipeline #12",
-        "state": "success",
-        "url": "u12"
-       },
-       {
-        "name": "f",
-        "state": "failure",
-        "url": "uf"
-       },
-       {
-        "name": "s",
-        "state": "neutral",
-        "url": "us"
-       },
-       {
-        "name": "i",
-        "state": "pending",
-        "url": "ui"
-       }
-      ],
-      "comments": 2,
-      "unresolvedThreads": 0,
-      "additions": 0,
-      "deletions": 0,
-      "changedFiles": 0
-     }
-    }
-   },
-   {
-    "pr": {
-     "id": 7,
-     "title": "Bitbucket: tidy pipelines",
-     "updated_on": "2026-09-25T06:00:00Z",
-     "comment_count": 2,
-     "author": {
-      "display_name": "B",
-      "links": {
-       "avatar": {
-        "href": "https://avatar"
-       }
-      }
-     },
-     "source": {
-      "branch": {
-       "name": "tidy"
-      }
-     },
-     "destination": {
-      "branch": {
-       "name": "main"
-      },
-      "repository": {
-       "full_name": "acme/pipelines"
-      }
-     },
-     "links": {
-      "html": {
-       "href": "https://bitbucket.org/acme/pipelines/pull-requests/7"
-      }
-     },
-     "participants": [
-      {
-       "role": "REVIEWER",
-       "state": "approved"
-      },
-      {
-       "role": "REVIEWER",
-       "state": "changes_requested"
-      },
-      {
-       "role": "PARTICIPANT",
-       "state": null
-      }
-     ],
-     "draft": true
-    },
-    "statuses": null,
-    "item": {
-     "id": "bitbucket:acme/pipelines#7",
-     "source": "bitbucket",
-     "url": "https://bitbucket.org/acme/pipelines/pull-requests/7",
-     "title": "Bitbucket: tidy pipelines",
-     "subtitle": "acme/pipelines #7",
-     "icon": null,
-     "updatedAt": 1790316000000,
-     "section": "authored",
-     "pr": {
-      "number": 7,
-      "repo": "acme/pipelines",
-      "author": "B",
-      "authorAvatar": "https://avatar",
-      "draft": true,
-      "headRef": "tidy",
-      "baseRef": "main",
-      "review": "changesRequested",
-      "mergeable": "unknown",
-      "checks": [],
-      "comments": 2,
-      "unresolvedThreads": 0,
-      "additions": 0,
-      "deletions": 0,
-      "changedFiles": 0
-     }
-    }
-   },
-   {
-    "pr": {
-     "id": 7,
-     "title": "Bitbucket: tidy pipelines",
-     "updated_on": "2026-09-25T06:00:00Z",
-     "comment_count": 2,
-     "author": {
-      "display_name": "Octo Dev"
-     },
-     "source": {
-      "branch": {
-       "name": "tidy"
-      }
-     },
-     "destination": {
-      "branch": {
-       "name": "main"
-      },
-      "repository": {
-       "full_name": "acme/pipelines"
-      }
-     },
-     "links": {
-      "html": {
-       "href": "https://bitbucket.org/acme/pipelines/pull-requests/7"
-      }
-     },
-     "participants": [
-      {
-       "role": "PARTICIPANT",
-       "state": "approved"
-      }
-     ]
-    },
-    "statuses": null,
-    "item": {
-     "id": "bitbucket:acme/pipelines#7",
-     "source": "bitbucket",
-     "url": "https://bitbucket.org/acme/pipelines/pull-requests/7",
-     "title": "Bitbucket: tidy pipelines",
-     "subtitle": "acme/pipelines #7",
-     "icon": null,
-     "updatedAt": 1790316000000,
-     "section": "authored",
-     "pr": {
-      "number": 7,
-      "repo": "acme/pipelines",
-      "author": "Octo Dev",
-      "authorAvatar": null,
-      "draft": false,
-      "headRef": "tidy",
-      "baseRef": "main",
-      "review": null,
-      "mergeable": "unknown",
-      "checks": [],
-      "comments": 2,
-      "unresolvedThreads": 0,
-      "additions": 0,
-      "deletions": 0,
-      "changedFiles": 0
-     }
-    }
-   },
-   {
-    "pr": {
-     "id": 7,
-     "title": "Bitbucket: tidy pipelines",
-     "updated_on": "2026-09-25T06:00:00Z",
-     "comment_count": 2,
-     "author": {
-      "display_name": "Octo Dev"
-     },
-     "source": {
-      "branch": {
-       "name": "tidy"
-      }
-     },
-     "destination": {
-      "branch": {
-       "name": "main"
-      },
-      "repository": {
-       "full_name": "acme/pipelines"
-      }
-     },
-     "links": {
-      "html": {
-       "href": "https://bitbucket.org/acme/pipelines/pull-requests/7"
-      }
-     },
-     "participants": [
-      {
-       "role": "REVIEWER",
-       "state": null
-      }
-     ]
-    },
-    "statuses": null,
-    "item": {
-     "id": "bitbucket:acme/pipelines#7",
-     "source": "bitbucket",
-     "url": "https://bitbucket.org/acme/pipelines/pull-requests/7",
-     "title": "Bitbucket: tidy pipelines",
-     "subtitle": "acme/pipelines #7",
-     "icon": null,
-     "updatedAt": 1790316000000,
-     "section": "authored",
-     "pr": {
-      "number": 7,
-      "repo": "acme/pipelines",
-      "author": "Octo Dev",
-      "authorAvatar": null,
-      "draft": false,
-      "headRef": "tidy",
-      "baseRef": "main",
-      "review": "required",
-      "mergeable": "unknown",
-      "checks": [],
-      "comments": 2,
-      "unresolvedThreads": 0,
-      "additions": 0,
-      "deletions": 0,
-      "changedFiles": 0
-     }
     }
    }
   ]
@@ -7864,18 +7492,8 @@
   },
   {
    "kind": "signedOut",
-   "source": "bitbucket",
-   "text": "Sign back in to Bitbucket"
-  },
-  {
-   "kind": "signedOut",
    "source": "notion",
    "text": "Sign back in to Notion"
-  },
-  {
-   "kind": "signedOut",
-   "source": "confluence",
-   "text": "Sign back in to Confluence"
   },
   {
    "kind": "signedOut",
@@ -7889,18 +7507,8 @@
   },
   {
    "kind": "sso",
-   "source": "bitbucket",
-   "text": "Bitbucket needs Single Sign-On for this organization"
-  },
-  {
-   "kind": "sso",
    "source": "notion",
    "text": "Notion needs Single Sign-On for this organization"
-  },
-  {
-   "kind": "sso",
-   "source": "confluence",
-   "text": "Confluence needs Single Sign-On for this organization"
   },
   {
    "kind": "sso",
@@ -7914,18 +7522,8 @@
   },
   {
    "kind": "rateLimited",
-   "source": "bitbucket",
-   "text": "Bitbucket rate limit exceeded. Try again in a few minutes."
-  },
-  {
-   "kind": "rateLimited",
    "source": "notion",
    "text": "Notion rate limit exceeded. Try again in a few minutes."
-  },
-  {
-   "kind": "rateLimited",
-   "source": "confluence",
-   "text": "Confluence rate limit exceeded. Try again in a few minutes."
   },
   {
    "kind": "rateLimited",
@@ -7939,18 +7537,8 @@
   },
   {
    "kind": "network",
-   "source": "bitbucket",
-   "text": "Couldn't connect to Bitbucket"
-  },
-  {
-   "kind": "network",
    "source": "notion",
    "text": "Couldn't connect to Notion"
-  },
-  {
-   "kind": "network",
-   "source": "confluence",
-   "text": "Couldn't connect to Confluence"
   },
   {
    "kind": "network",
@@ -7964,18 +7552,8 @@
   },
   {
    "kind": "notConfigured",
-   "source": "bitbucket",
-   "text": "Connect Bitbucket in Settings"
-  },
-  {
-   "kind": "notConfigured",
    "source": "notion",
    "text": "Connect Notion in Settings"
-  },
-  {
-   "kind": "notConfigured",
-   "source": "confluence",
-   "text": "Connect Confluence in Settings"
   },
   {
    "kind": "notConfigured",
@@ -7989,18 +7567,8 @@
   },
   {
    "kind": "other",
-   "source": "bitbucket",
-   "text": "We're having trouble connecting to Bitbucket"
-  },
-  {
-   "kind": "other",
    "source": "notion",
    "text": "We're having trouble connecting to Notion"
-  },
-  {
-   "kind": "other",
-   "source": "confluence",
-   "text": "We're having trouble connecting to Confluence"
   },
   {
    "kind": "other",
@@ -8805,10 +8373,7 @@
    {
     "op": "updateConfig",
     "args": [
-     {
-      "bitbucketUser": "octo",
-      "confluenceSite": "https://acme.atlassian.net"
-     }
+     {}
     ]
    },
    {
@@ -8871,7 +8436,7 @@
     ]
    }
   ],
-  "persisted": "{\"folders\":{\"lf-mubbs7i8-1\":{\"id\":\"lf-mubbs7i8-1\",\"profileId\":\"p\",\"kind\":\"pullRequests\",\"name\":\"Mine\",\"icon\":null,\"collapsed\":false,\"sources\":[\"github\"],\"filters\":{\"authored\":true,\"reviewRequests\":true},\"groupStacks\":false,\"showCompleted\":true,\"createdAt\":1790000000000,\"after\":null},\"lf-mubbs7i8-2\":{\"id\":\"lf-mubbs7i8-2\",\"profileId\":\"p\",\"kind\":\"documents\",\"name\":\"Documents\",\"icon\":null,\"collapsed\":false,\"sources\":[\"notion\"],\"filters\":{\"authored\":true,\"reviewRequests\":true},\"groupStacks\":true,\"showCompleted\":true,\"createdAt\":1790000000000,\"after\":\"tab1\"}},\"folderOrder\":[\"lf-mubbs7i8-2\",\"lf-mubbs7i8-1\"],\"items\":{\"lf-mubbs7i8-1\":[{\"id\":\"github:PR_102\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/102\",\"title\":\"Live folder hover cards\",\"subtitle\":\"acme/browser #102\",\"icon\":null,\"updatedAt\":1790328600000,\"section\":\"authored\",\"pr\":{\"number\":102,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"live-hover\",\"baseRef\":\"live-folders\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"failure\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"},{\"name\":\"ci/e2e\",\"state\":\"failure\",\"url\":\"https://ci.example.com/ci/e2e\"}],\"comments\":1,\"unresolvedThreads\":1,\"additions\":310,\"deletions\":40,\"changedFiles\":9,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":2,\"size\":3}}},{\"id\":\"github:PR_57\",\"source\":\"github\",\"url\":\"https://github.com/acme/infra/pull/57\",\"title\":\"Fix flaky download test\",\"subtitle\":\"acme/infra #57\",\"icon\":null,\"updatedAt\":1790272800000,\"section\":\"authored\",\"pr\":{\"number\":57,\"repo\":\"acme/infra\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"fix-flaky\",\"baseRef\":\"main\",\"review\":\"changesRequested\",\"mergeable\":\"conflicting\",\"checks\":[{\"name\":\"unit\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/13372\"}],\"comments\":7,\"unresolvedThreads\":0,\"additions\":12,\"deletions\":4,\"changedFiles\":1}},{\"id\":\"github:PR_88\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/88\",\"title\":\"Calendar preview polish\",\"subtitle\":\"acme/browser #88\",\"icon\":null,\"updatedAt\":1790323200000,\"section\":\"review\",\"pr\":{\"number\":88,\"repo\":\"acme/browser\",\"author\":\"mira\",\"authorAvatar\":\"https://avatars.githubusercontent.com/mira\",\"draft\":false,\"headRef\":\"calendar-polish\",\"baseRef\":\"main\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"queued\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"queued\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"}],\"comments\":2,\"unresolvedThreads\":0,\"additions\":120,\"deletions\":30,\"changedFiles\":6}},{\"id\":\"github:PR_412\",\"source\":\"github\",\"url\":\"https://github.com/acme/design-system/pull/412\",\"title\":\"Tokens for sidebar\",\"subtitle\":\"acme/design-system #412\",\"icon\":null,\"updatedAt\":1790251200000,\"section\":\"team\",\"pr\":{\"number\":412,\"repo\":\"acme/design-system\",\"author\":\"sam\",\"authorAvatar\":\"https://avatars.githubusercontent.com/sam\",\"draft\":false,\"headRef\":\"sidebar-tokens\",\"baseRef\":\"main\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"ci/build\",\"state\":\"success\",\"url\":\"https://ci.example.com/ci/build\"}],\"comments\":0,\"unresolvedThreads\":0,\"additions\":40,\"deletions\":2,\"changedFiles\":2}}],\"lf-mubbs7i8-2\":[{\"id\":\"notion:a1b2\",\"source\":\"notion\",\"url\":\"https://www.notion.so/acme/Q4-Roadmap-a1b2\",\"title\":\"Q4 Roadmap\",\"subtitle\":\"Acme\",\"icon\":\"🗺️\",\"updatedAt\":1790327400000,\"doc\":{\"kind\":\"Page\",\"editedBy\":\"Mira Chen\",\"place\":\"Acme\"}},{\"id\":\"notion:c3d4\",\"source\":\"notion\",\"url\":\"https://www.notion.so/acme/Live-folders-spec-c3d4\",\"title\":\"Live folders spec\",\"subtitle\":\"Acme\",\"icon\":null,\"updatedAt\":1790268000000,\"doc\":{\"kind\":\"Page\",\"editedBy\":\"Sam Patel\",\"place\":\"Acme\"}},{\"id\":\"notion:e5f6\",\"source\":\"notion\",\"url\":\"https://www.notion.so/acme/e5f6\",\"title\":\"Bug triage\",\"subtitle\":\"Acme\",\"icon\":\"🐞\",\"updatedAt\":1790161200000,\"doc\":{\"kind\":\"Database\",\"editedBy\":null,\"place\":\"Acme\"}},{\"id\":\"gdrive:d1\",\"source\":\"gdrive\",\"url\":\"https://docs.google.com/document/d/d1/edit\",\"title\":\"Launch plan\",\"subtitle\":\"Document\",\"icon\":null,\"updatedAt\":1790325000000,\"doc\":{\"kind\":\"Document\",\"editedBy\":\"Mira Chen\",\"place\":null}},{\"id\":\"gdrive:d2\",\"source\":\"gdrive\",\"url\":\"https://docs.google.com/spreadsheets/d/d2/edit\",\"title\":\"Metrics\",\"subtitle\":\"Spreadsheet\",\"icon\":null,\"updatedAt\":1790238600000,\"doc\":{\"kind\":\"Spreadsheet\",\"editedBy\":null,\"place\":null}}]},\"known\":{\"lf-mubbs7i8-1\":[\"github:PR_101\",\"github:PR_102\",\"github:PR_103\",\"github:PR_57\",\"github:PR_88\",\"github:PR_412\"],\"lf-mubbs7i8-2\":[\"notion:a1b2\",\"notion:c3d4\",\"notion:e5f6\",\"gdrive:d1\",\"gdrive:d2\"]},\"unread\":{\"lf-mubbs7i8-1\":[],\"lf-mubbs7i8-2\":[\"gdrive:d2\"]},\"hidden\":{\"lf-mubbs7i8-1\":[{\"id\":\"github:PR_103\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/103\",\"title\":\"Unread pip for live folders\",\"subtitle\":\"acme/browser #103\",\"icon\":null,\"updatedAt\":1790329500000,\"section\":\"authored\",\"pr\":{\"number\":103,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":true,\"headRef\":\"live-pip\",\"baseRef\":\"live-hover\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"pending\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"queued\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"}],\"comments\":0,\"unresolvedThreads\":0,\"additions\":96,\"deletions\":8,\"changedFiles\":3,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":3,\"size\":3}}}]},\"completed\":{\"lf-mubbs7i8-1\":[{\"item\":{\"id\":\"github:PR_101\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/101\",\"title\":\"Add live folders framework\",\"subtitle\":\"acme/browser #101\",\"icon\":null,\"updatedAt\":1790326800000,\"section\":\"authored\",\"pr\":{\"number\":101,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"live-folders\",\"baseRef\":\"main\",\"review\":\"approved\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"}],\"comments\":3,\"unresolvedThreads\":0,\"additions\":840,\"deletions\":112,\"changedFiles\":23,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":1,\"size\":3}}},\"state\":\"merged\",\"at\":1790000001000},{\"item\":{\"id\":\"github:PR_102\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/102\",\"title\":\"Live folder hover cards\",\"subtitle\":\"acme/browser #102\",\"icon\":null,\"updatedAt\":1790328600000,\"section\":\"authored\",\"pr\":{\"number\":102,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"live-hover\",\"baseRef\":\"live-folders\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"failure\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"},{\"name\":\"ci/e2e\",\"state\":\"failure\",\"url\":\"https://ci.example.com/ci/e2e\"}],\"comments\":1,\"unresolvedThreads\":1,\"additions\":310,\"deletions\":40,\"changedFiles\":9,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":2,\"size\":3}}},\"state\":\"reviewed\",\"at\":1790000001000}]},\"expandedStacks\":{},\"accounts\":{\"github\":{\"login\":\"octo-dev\",\"name\":null,\"avatar\":\"https://a\",\"connectedAt\":1790000000000}},\"config\":{\"githubClientId\":\"\",\"bitbucketUser\":\"octo\",\"confluenceSite\":\"https://acme.atlassian.net\",\"confluenceEmail\":\"\",\"googleClientId\":\"\"},\"calendar\":{\"alertLead\":\"5\",\"alertCondition\":\"always\",\"showPreview\":true,\"showTimeToNext\":true,\"hiddenCalendarIds\":[\"home\"],\"prompted\":true},\"meetingGroups\":{\"g2\":{\"groupId\":\"g2\",\"callTabId\":\"t2\",\"occurrence\":\"o@1\",\"title\":\"Design\",\"start\":1790000000000,\"end\":1790000060000,\"endedAt\":1790000000001}},\"dismissedAlerts\":[\"standup@1\"]}",
+  "persisted": "{\"folders\":{\"lf-mubbs7i8-1\":{\"id\":\"lf-mubbs7i8-1\",\"profileId\":\"p\",\"kind\":\"pullRequests\",\"name\":\"Mine\",\"icon\":null,\"collapsed\":false,\"sources\":[\"github\"],\"filters\":{\"authored\":true,\"reviewRequests\":true},\"groupStacks\":false,\"showCompleted\":true,\"createdAt\":1790000000000,\"after\":null},\"lf-mubbs7i8-2\":{\"id\":\"lf-mubbs7i8-2\",\"profileId\":\"p\",\"kind\":\"documents\",\"name\":\"Documents\",\"icon\":null,\"collapsed\":false,\"sources\":[\"notion\"],\"filters\":{\"authored\":true,\"reviewRequests\":true},\"groupStacks\":true,\"showCompleted\":true,\"createdAt\":1790000000000,\"after\":\"tab1\"}},\"folderOrder\":[\"lf-mubbs7i8-2\",\"lf-mubbs7i8-1\"],\"items\":{\"lf-mubbs7i8-1\":[{\"id\":\"github:PR_102\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/102\",\"title\":\"Live folder hover cards\",\"subtitle\":\"acme/browser #102\",\"icon\":null,\"updatedAt\":1790328600000,\"section\":\"authored\",\"pr\":{\"number\":102,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"live-hover\",\"baseRef\":\"live-folders\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"failure\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"},{\"name\":\"ci/e2e\",\"state\":\"failure\",\"url\":\"https://ci.example.com/ci/e2e\"}],\"comments\":1,\"unresolvedThreads\":1,\"additions\":310,\"deletions\":40,\"changedFiles\":9,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":2,\"size\":3}}},{\"id\":\"github:PR_57\",\"source\":\"github\",\"url\":\"https://github.com/acme/infra/pull/57\",\"title\":\"Fix flaky download test\",\"subtitle\":\"acme/infra #57\",\"icon\":null,\"updatedAt\":1790272800000,\"section\":\"authored\",\"pr\":{\"number\":57,\"repo\":\"acme/infra\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"fix-flaky\",\"baseRef\":\"main\",\"review\":\"changesRequested\",\"mergeable\":\"conflicting\",\"checks\":[{\"name\":\"unit\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/13372\"}],\"comments\":7,\"unresolvedThreads\":0,\"additions\":12,\"deletions\":4,\"changedFiles\":1}},{\"id\":\"github:PR_88\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/88\",\"title\":\"Calendar preview polish\",\"subtitle\":\"acme/browser #88\",\"icon\":null,\"updatedAt\":1790323200000,\"section\":\"review\",\"pr\":{\"number\":88,\"repo\":\"acme/browser\",\"author\":\"mira\",\"authorAvatar\":\"https://avatars.githubusercontent.com/mira\",\"draft\":false,\"headRef\":\"calendar-polish\",\"baseRef\":\"main\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"queued\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"queued\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"}],\"comments\":2,\"unresolvedThreads\":0,\"additions\":120,\"deletions\":30,\"changedFiles\":6}},{\"id\":\"github:PR_412\",\"source\":\"github\",\"url\":\"https://github.com/acme/design-system/pull/412\",\"title\":\"Tokens for sidebar\",\"subtitle\":\"acme/design-system #412\",\"icon\":null,\"updatedAt\":1790251200000,\"section\":\"team\",\"pr\":{\"number\":412,\"repo\":\"acme/design-system\",\"author\":\"sam\",\"authorAvatar\":\"https://avatars.githubusercontent.com/sam\",\"draft\":false,\"headRef\":\"sidebar-tokens\",\"baseRef\":\"main\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"ci/build\",\"state\":\"success\",\"url\":\"https://ci.example.com/ci/build\"}],\"comments\":0,\"unresolvedThreads\":0,\"additions\":40,\"deletions\":2,\"changedFiles\":2}}],\"lf-mubbs7i8-2\":[{\"id\":\"notion:a1b2\",\"source\":\"notion\",\"url\":\"https://www.notion.so/acme/Q4-Roadmap-a1b2\",\"title\":\"Q4 Roadmap\",\"subtitle\":\"Acme\",\"icon\":\"🗺️\",\"updatedAt\":1790327400000,\"doc\":{\"kind\":\"Page\",\"editedBy\":\"Mira Chen\",\"place\":\"Acme\"}},{\"id\":\"notion:c3d4\",\"source\":\"notion\",\"url\":\"https://www.notion.so/acme/Live-folders-spec-c3d4\",\"title\":\"Live folders spec\",\"subtitle\":\"Acme\",\"icon\":null,\"updatedAt\":1790268000000,\"doc\":{\"kind\":\"Page\",\"editedBy\":\"Sam Patel\",\"place\":\"Acme\"}},{\"id\":\"notion:e5f6\",\"source\":\"notion\",\"url\":\"https://www.notion.so/acme/e5f6\",\"title\":\"Bug triage\",\"subtitle\":\"Acme\",\"icon\":\"🐞\",\"updatedAt\":1790161200000,\"doc\":{\"kind\":\"Database\",\"editedBy\":null,\"place\":\"Acme\"}},{\"id\":\"gdrive:d1\",\"source\":\"gdrive\",\"url\":\"https://docs.google.com/document/d/d1/edit\",\"title\":\"Launch plan\",\"subtitle\":\"Document\",\"icon\":null,\"updatedAt\":1790325000000,\"doc\":{\"kind\":\"Document\",\"editedBy\":\"Mira Chen\",\"place\":null}},{\"id\":\"gdrive:d2\",\"source\":\"gdrive\",\"url\":\"https://docs.google.com/spreadsheets/d/d2/edit\",\"title\":\"Metrics\",\"subtitle\":\"Spreadsheet\",\"icon\":null,\"updatedAt\":1790238600000,\"doc\":{\"kind\":\"Spreadsheet\",\"editedBy\":null,\"place\":null}}]},\"known\":{\"lf-mubbs7i8-1\":[\"github:PR_101\",\"github:PR_102\",\"github:PR_103\",\"github:PR_57\",\"github:PR_88\",\"github:PR_412\"],\"lf-mubbs7i8-2\":[\"notion:a1b2\",\"notion:c3d4\",\"notion:e5f6\",\"gdrive:d1\",\"gdrive:d2\"]},\"unread\":{\"lf-mubbs7i8-1\":[],\"lf-mubbs7i8-2\":[\"gdrive:d2\"]},\"hidden\":{\"lf-mubbs7i8-1\":[{\"id\":\"github:PR_103\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/103\",\"title\":\"Unread pip for live folders\",\"subtitle\":\"acme/browser #103\",\"icon\":null,\"updatedAt\":1790329500000,\"section\":\"authored\",\"pr\":{\"number\":103,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":true,\"headRef\":\"live-pip\",\"baseRef\":\"live-hover\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"pending\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"queued\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"}],\"comments\":0,\"unresolvedThreads\":0,\"additions\":96,\"deletions\":8,\"changedFiles\":3,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":3,\"size\":3}}}]},\"completed\":{\"lf-mubbs7i8-1\":[{\"item\":{\"id\":\"github:PR_101\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/101\",\"title\":\"Add live folders framework\",\"subtitle\":\"acme/browser #101\",\"icon\":null,\"updatedAt\":1790326800000,\"section\":\"authored\",\"pr\":{\"number\":101,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"live-folders\",\"baseRef\":\"main\",\"review\":\"approved\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"}],\"comments\":3,\"unresolvedThreads\":0,\"additions\":840,\"deletions\":112,\"changedFiles\":23,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":1,\"size\":3}}},\"state\":\"merged\",\"at\":1790000001000},{\"item\":{\"id\":\"github:PR_102\",\"source\":\"github\",\"url\":\"https://github.com/acme/browser/pull/102\",\"title\":\"Live folder hover cards\",\"subtitle\":\"acme/browser #102\",\"icon\":null,\"updatedAt\":1790328600000,\"section\":\"authored\",\"pr\":{\"number\":102,\"repo\":\"acme/browser\",\"author\":\"octo-dev\",\"authorAvatar\":\"https://avatars.githubusercontent.com/octo-dev\",\"draft\":false,\"headRef\":\"live-hover\",\"baseRef\":\"live-folders\",\"review\":\"required\",\"mergeable\":\"mergeable\",\"checks\":[{\"name\":\"build\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/64123\"},{\"name\":\"test\",\"state\":\"failure\",\"url\":\"https://github.com/acme/browser/actions/runs/11302\"},{\"name\":\"lint\",\"state\":\"success\",\"url\":\"https://github.com/acme/browser/actions/runs/84326\"},{\"name\":\"ci/e2e\",\"state\":\"failure\",\"url\":\"https://ci.example.com/ci/e2e\"}],\"comments\":1,\"unresolvedThreads\":1,\"additions\":310,\"deletions\":40,\"changedFiles\":9,\"stack\":{\"id\":\"stack:github:PR_101\",\"position\":2,\"size\":3}}},\"state\":\"reviewed\",\"at\":1790000001000}]},\"expandedStacks\":{},\"accounts\":{\"github\":{\"login\":\"octo-dev\",\"name\":null,\"avatar\":\"https://a\",\"connectedAt\":1790000000000}},\"config\":{\"githubClientId\":\"\",\"googleClientId\":\"\"},\"calendar\":{\"alertLead\":\"5\",\"alertCondition\":\"always\",\"showPreview\":true,\"showTimeToNext\":true,\"hiddenCalendarIds\":[\"home\"],\"prompted\":true},\"meetingGroups\":{\"g2\":{\"groupId\":\"g2\",\"callTabId\":\"t2\",\"occurrence\":\"o@1\",\"title\":\"Design\",\"start\":1790000000000,\"end\":1790000060000,\"endedAt\":1790000000001}},\"dismissedAlerts\":[\"standup@1\"]}",
   "status": {
    "lf-mubbs7i8-1": {
     "state": "idle",

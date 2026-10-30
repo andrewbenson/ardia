@@ -230,7 +230,7 @@ public actor LiveEngine {
 
   @discardableResult
   public func newProfileLiveFolder(profileId: String, kind: LiveFolderKind, sources: [LiveSourceId]? = nil) -> String {
-    let candidates: [LiveSourceId] = kind == .pullRequests ? [.github, .bitbucket] : [.notion, .confluence, .gdrive]
+    let candidates: [LiveSourceId] = kind == .pullRequests ? [.github] : [.notion, .gdrive]
     let connected = candidates.filter { state.accounts[$0] != nil }
     let id = createFolder(profileId: profileId, kind: kind, sources: sources ?? (connected.isEmpty ? nil : connected))
     refreshFolder(id)
@@ -386,9 +386,13 @@ public actor LiveEngine {
     return effects.clock.now() - last >= maxAge
   }
 
-  public func start(jobs selected: Set<LiveJob> = Set(LiveJob.allCases), meetingHost: (any LiveMeetingHost)? = nil) {
+  public func start(jobs selected: Set<LiveJob> = Set(LiveJob.allCases), meetingHost: (any LiveMeetingHost)? = nil) async {
     if started { return }
     started = true
+    let retiredCredentials = state.retiredCredentials
+    let retiredDataFound = !state.retiredSources.isEmpty
+    state.retiredSources = []
+    state.retiredCredentials = []
     selectedJobs = selected
     self.meetingHost = meetingHost
     let clock = effects.clock
@@ -406,6 +410,10 @@ public actor LiveEngine {
     }
     if selected.contains(.calendar) { refreshCalendar() }
     if selected.contains(.alerts) { Task { await self.checkAlerts() } }
+    for source in retiredCredentials {
+      _ = await effects.secrets.deleteSecret(account: endpoints.secretAccount(source.rawValue))
+    }
+    if retiredDataFound { scheduleSave() }
   }
 
   public func stop() {

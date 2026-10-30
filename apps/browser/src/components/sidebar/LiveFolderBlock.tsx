@@ -7,7 +7,7 @@ import { hex, layout, useSelectedTabGlow, useTheme } from "../../lib/theme";
 import { COMPLETION_MS, errorText, manualRefresh, openLiveItem, statusText } from "../../live/engine";
 import { prBadge } from "../../live/github";
 import { folderRows, liveTabPlace, type FolderRow } from "../../live/rows";
-import { liveFolderIcon, SOURCES } from "../../live/sources";
+import { liveFolderIcon } from "../../live/sources";
 import { setExpandedStack, setLive, updateFolder, useLive } from "../../live/store";
 import type { CompletedItem, LiveFolder, LiveItem } from "../../live/types";
 import { useBrowser } from "../../store/browser";
@@ -412,7 +412,7 @@ function ItemIcon({ item, completion, colors }: { item: LiveItem; completion: Co
     return <Symbol name="arrow.triangle.pull" size={12} weight="semibold" color={item.pr.draft ? colors.draft : colors.success} style={{ width: 16, height: 16 }} />;
   }
   if (item.icon && /^https?:/.test(item.icon)) return <TabIcon url={item.url} favicon={item.icon} direct />;
-  return <TabIcon url={item.source === "confluence" && !item.icon ? SOURCES.confluence.site : item.url} icon={item.icon} />;
+  return <TabIcon url={item.url} icon={item.icon} />;
 }
 
 const BADGES: Record<NonNullable<ReturnType<typeof prBadge>>, { symbol: string | null; color: keyof LiveColors; tip: string }> = {

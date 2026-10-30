@@ -372,14 +372,12 @@ const ROWS: Record<SettingsPane, Section[]> = {
       section: "Pull Requests",
       rows: {
         github: { title: "GitHub", description: "Your open pull requests and the ones waiting for your review, with checks and conflicts.", keywords: ["pull requests", "connect"] },
-        bitbucket: { title: "Bitbucket", description: "Your open pull requests on Bitbucket Cloud, with build status.", keywords: ["pull requests", "connect"] },
       },
     },
     {
       section: "Documents",
       rows: {
         notion: { title: "Notion", description: "Pages recently edited in your workspace.", keywords: ["documents", "connect"] },
-        confluence: { title: "Confluence", description: "Pages you created, edited or watch.", keywords: ["documents", "atlassian", "connect"] },
         gdrive: { title: "Google Drive", description: "Documents recently changed in your Drive.", keywords: ["documents", "docs", "connect"] },
       },
     },

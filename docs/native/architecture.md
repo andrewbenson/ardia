@@ -795,7 +795,7 @@ Timings in frames are measured from 30 fps recordings.
 | Extensions | 213 | Data-heavy, live | `ArdiaCoreServices.listExtensions` / `setExtension` / `uninstall` / `reload` / `configure`, `extensionsHandler` events; Web Store link, load unpacked (`inspectUnpacked`) |
 | Profiles + details + Theme editor | 318 + 571 | Data-heavy | `AppModel` profiles; create / share-with / reorder / delete commands; clear data (`clearBrowsingData`, `deleteProfileData`); theme editor on `ArdiaShaders` Metal views (already native) |
 | Sync + sheets | 282 + 294 | Data-heavy, setup flows | `SyncModule` / `ArdiaSyncCore` (folder info, recovery phrase, recovery kit PDF/QR); sync state and devices from the TS engine until phase 5 (through the bridge), then `SolaraSync` |
-| Live Folders | 348 | Data-heavy, OAuth | Live engine (ported in this phase): sources (GitHub, Bitbucket, Notion, Confluence, Google Drive), Google auth, connected accounts in the Keychain |
+| Live Folders | 348 | Data-heavy, OAuth | Live engine (ported in this phase): sources (GitHub, Notion, Google Drive; Bitbucket and Confluence dropped 2026-10-30), Google auth, connected accounts in the Keychain |
 | Calendar | 114 | Data-heavy | `Calendar.swift` (EventKit) + Live state (`hiddenCalendarIds`, alert options), `autoGroupMeetingTabs` |
 
 **Port order:**

@@ -56,16 +56,8 @@ import Testing
     let users = Fixture.decode(NotionUsers.self, "notion-users.json")
     #expect(canonical(encoding: Documents.mapNotion(search, users: users, workspace: "Acme")) == canonical(docs["notion"]!))
     #expect(canonical(encoding: Documents.mapNotion(search, users: nil, workspace: nil)) == canonical(docs["notionNoUsers"]!))
-    var confluence = Fixture.decode(ConfluenceSearch.self, "confluence-search.json")
-    #expect(canonical(encoding: Documents.mapConfluence(confluence, site: "https://acme.atlassian.net")) == canonical(docs["confluence"]!))
-    confluence._links = nil
-    #expect(canonical(encoding: Documents.mapConfluence(confluence, site: "https://acme.atlassian.net/")) == canonical(docs["confluenceNoBase"]!))
     #expect(canonical(encoding: Documents.mapDrive(Fixture.decode(DriveFiles.self, "drive-files.json"))) == canonical(docs["drive"]!))
-    for c in docs["bitbucket"] as! [[String: Any]] {
-      let pr = decoded(BitbucketPR.self, c["pr"]!)
-      let statuses = c["statuses"] is NSNull ? nil : decoded(BitbucketStatuses.self, c["statuses"]!)
-      #expect(canonical(encoding: Documents.mapBitbucket(pr, statuses: statuses)) == canonical(c["item"]!))
-    }
+
   }
 
   @Test func meetingDetectionMatchesJS() {
@@ -180,7 +172,7 @@ import Testing
           LiveSourceId(rawValue: args[0] as! String)!, args[1] is NSNull ? nil : decoded(LiveAccount.self, args[1]))
       case "updateConfig":
         let patch = args[0] as! [String: String]
-        await engine.updateConfig(ConfigPatch(bitbucketUser: patch["bitbucketUser"], confluenceSite: patch["confluenceSite"]))
+        await engine.updateConfig(ConfigPatch(githubClientId: patch["githubClientId"], googleClientId: patch["googleClientId"]))
       case "updateCalendarSettings":
         let patch = args[0] as! [String: Any]
         await engine.updateCalendarSettings(

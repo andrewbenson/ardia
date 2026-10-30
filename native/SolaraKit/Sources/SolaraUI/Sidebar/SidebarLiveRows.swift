@@ -451,8 +451,7 @@ final class LiveItemRowView: LiveRowView {
       icon.set(TabIconSpec(url: item.url, favicon: raw, customIcon: nil, profileId: context.host.profileId, direct: true), palette: palette)
       icon.isHidden = false
     } else {
-      let url = item.source == .confluence && item.icon == nil ? (LiveSource.sites[.confluence] ?? item.url) : item.url
-      icon.set(TabIconSpec(url: url, favicon: nil, customIcon: item.icon, profileId: context.host.profileId), palette: palette)
+      icon.set(TabIconSpec(url: item.url, favicon: nil, customIcon: item.icon, profileId: context.host.profileId), palette: palette)
       icon.isHidden = false
     }
     label.text = item.title

@@ -26,9 +26,7 @@ public enum LiveCommand: Codable, Sendable, Equatable {
   case liveTabDeactivated(LiveAnyJSON)
   case connectCalendar(LiveAnyJSON)
   case connectGithub(LiveAnyJSON)
-  case connectBitbucket(LiveAnyJSON)
   case connectNotion(LiveAnyJSON)
-  case connectConfluence(LiveAnyJSON)
   case connectGoogleDrive(LiveAnyJSON)
   case disconnect(LiveAnyJSON)
   case startGithubDeviceFlow(LiveAnyJSON)
@@ -69,9 +67,7 @@ public enum LiveCommand: Codable, Sendable, Equatable {
     case "liveTabDeactivated": self = .liveTabDeactivated(wire.payload)
     case "connectCalendar": self = .connectCalendar(wire.payload)
     case "connectGithub": self = .connectGithub(wire.payload)
-    case "connectBitbucket": self = .connectBitbucket(wire.payload)
     case "connectNotion": self = .connectNotion(wire.payload)
-    case "connectConfluence": self = .connectConfluence(wire.payload)
     case "connectGoogleDrive": self = .connectGoogleDrive(wire.payload)
     case "disconnect": self = .disconnect(wire.payload)
     case "startGithubDeviceFlow": self = .startGithubDeviceFlow(wire.payload)
@@ -115,9 +111,7 @@ public enum LiveCommand: Codable, Sendable, Equatable {
     case .liveTabDeactivated(let payload): wire = Wire(name: "liveTabDeactivated", payload: payload)
     case .connectCalendar(let payload): wire = Wire(name: "connectCalendar", payload: payload)
     case .connectGithub(let payload): wire = Wire(name: "connectGithub", payload: payload)
-    case .connectBitbucket(let payload): wire = Wire(name: "connectBitbucket", payload: payload)
     case .connectNotion(let payload): wire = Wire(name: "connectNotion", payload: payload)
-    case .connectConfluence(let payload): wire = Wire(name: "connectConfluence", payload: payload)
     case .connectGoogleDrive(let payload): wire = Wire(name: "connectGoogleDrive", payload: payload)
     case .disconnect(let payload): wire = Wire(name: "disconnect", payload: payload)
     case .startGithubDeviceFlow(let payload): wire = Wire(name: "startGithubDeviceFlow", payload: payload)
@@ -212,10 +206,9 @@ private enum Fields {
   }
 
   static func config(_ raw: LiveAnyJSON) throws -> ConfigPatch {
-    let v = try object(raw, allowed: ["githubClientId", "bitbucketUser", "confluenceSite", "confluenceEmail", "googleClientId"])
+    let v = try object(raw, allowed: ["githubClientId", "googleClientId"])
     return try ConfigPatch(
-      githubClientId: nonnull(String.self, v, "githubClientId"), bitbucketUser: nonnull(String.self, v, "bitbucketUser"),
-      confluenceSite: nonnull(String.self, v, "confluenceSite"), confluenceEmail: nonnull(String.self, v, "confluenceEmail"),
+      githubClientId: nonnull(String.self, v, "githubClientId"),
       googleClientId: nonnull(String.self, v, "googleClientId"))
   }
 
@@ -337,15 +330,9 @@ extension LiveEngine {
     case .connectGithub(let payload):
       let v = try Fields.object(payload, allowed: ["token"], required: ["token"])
       try await connectGithub(token: Fields.decode(String.self, v["token"]))
-    case .connectBitbucket(let payload):
-      let v = try Fields.object(payload, allowed: ["user", "token"], required: ["user", "token"])
-      try await connectBitbucket(user: Fields.decode(String.self, v["user"]), token: Fields.decode(String.self, v["token"]))
     case .connectNotion(let payload):
       let v = try Fields.object(payload, allowed: ["token"], required: ["token"])
       try await connectNotion(token: Fields.decode(String.self, v["token"]))
-    case .connectConfluence(let payload):
-      let v = try Fields.object(payload, allowed: ["site", "email", "token"], required: ["site", "email", "token"])
-      try await connectConfluence(site: Fields.decode(String.self, v["site"]), email: Fields.decode(String.self, v["email"]), token: Fields.decode(String.self, v["token"]))
     case .connectGoogleDrive(let payload):
       let v = try Fields.object(payload, allowed: ["clientId", "clientSecret"], required: ["clientId", "clientSecret"])
       try await connectGoogleDrive(clientId: Fields.decode(String.self, v["clientId"]), clientSecret: Fields.decode(String.self, v["clientSecret"]))

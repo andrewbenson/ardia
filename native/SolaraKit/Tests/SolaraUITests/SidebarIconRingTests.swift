@@ -71,6 +71,21 @@ import Testing
     #expect(ring(other)?.isHidden ?? true)
   }
 
+  @Test func anInvalidatedFaviconReloadsTheActiveRing() async throws {
+    let (window, sidebar) = try await mounted(active: "p1", ring: true, colors: [.systemBlue])
+    _ = window
+    let active = try #require(sidebar.views["tile:p1"])
+    let shown = try #require(ring(active))
+    #expect(!shown.isHidden)
+    sidebar.favicons.forget(url: "https://p1.example/")
+    var host = SidebarHostState(profileId: "p")
+    host.iconRing = true
+    sidebar.update(state: try state(active: "p1"), host: host)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while shown.isHidden && ContinuousClock.now < deadline { await Task.yield() }
+    #expect(!shown.isHidden)
+  }
+
   @Test func aManyColourIconGetsTheBlurredRing() async throws {
     let (window, sidebar) = try await mounted(active: "p2", ring: true, colors: [.systemRed, .systemGreen, .systemBlue, .systemYellow])
     _ = window

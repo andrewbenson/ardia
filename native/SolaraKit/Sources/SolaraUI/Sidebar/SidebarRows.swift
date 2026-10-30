@@ -1329,8 +1329,9 @@ final class TileView: SidebarRowView {
     guard ringRequest != request else { return nil }
     ringRequest = request
     context.favicons.load(request) { [weak self] picture in
-      guard let self, picture != nil, self.ringRequest == request else { return }
-      self.render()
+      guard let self, self.ringRequest == request else { return }
+      self.ringRequest = nil
+      if picture != nil { self.render() }
     }
     return nil
   }

@@ -219,7 +219,7 @@ function acperf(...args) {
     writeFileSync(bin + ".src", readFileSync(src, "utf8"));
   }
   const r = spawnSync(bin, args, { encoding: "utf8", timeout: 120_000 });
-  return { code: r.status, out: r.stdout.trim() };
+  return { code: r.status, out: r.stdout.trim(), err: r.stderr.trim() };
 }
 
 function markerLibrary() {
@@ -831,6 +831,7 @@ async function recover(app) {
 
 function postKeys(app, gap, ...specs) {
   const r = acperf("postkeys", String(app.pid), String(gap), ...specs);
+  if (r.code === 77) throw new FatalError(r.err || "acperf postkeys: macOS event-posting access denied");
   if (r.code !== 0) throw new Error(`acperf postkeys ${specs.join(" ")} failed (${r.code}): ${r.out}`);
   return r.out.split("\n").filter(Boolean).map((l) => JSON.parse(l));
 }
@@ -880,7 +881,7 @@ async function openNewTab(app) {
   let press, bar = null;
   for (let attempt = 0; attempt < 2 && !bar; attempt++) {
     press = await postSeen(app, "cmd+t");
-    if (!press) break;
+    if (!press) throw new FatalError("Cmd-T key never arrived in the app's key log after four posts; check event-posting access, session input delivery and AC_BENCH_KEYLOG before timing");
     bar = await waitFor(app, (st) => st.pending.some((q) => q.journey === "j2" && q.bar !== undefined && q.t0 >= press.at - 5), 2500);
   }
   return { press, bar };

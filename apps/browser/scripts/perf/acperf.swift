@@ -140,6 +140,10 @@ case "postkeys":
     FileHandle.standardError.write("usage: acperf postkeys <pid> <gap ms> <spec>...\n".data(using: .utf8)!)
     exit(64)
   }
+  guard CGPreflightPostEventAccess() else {
+    FileHandle.standardError.write("acperf postkeys: macOS event-posting access denied; allow the benchmark runner in Accessibility before timing\n".data(using: .utf8)!)
+    exit(77)
+  }
   let codes: [Character: UInt16] = [
     "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
     "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29,

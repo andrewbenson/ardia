@@ -332,7 +332,7 @@ final class ProbeHost {
               "url": safeURL(item["url"] as? String ?? ""), "title": Self.value(title),
               "tabId": Self.value(item["tabId"] as? String)])
           }
-          return ["variant": Self.value(source["variant"] as? String),
+          return ["variant": Self.value(source["variant"] as? String), "source": Self.value(source["source"] as? String),
             "open": Self.value(source["mounted"] as? Bool), "focused": Self.value(source["focused"] as? Bool),
             "typed": omniboxText(source["typed"] as? String),
             "completion": omniboxText(source["completion"] as? String),

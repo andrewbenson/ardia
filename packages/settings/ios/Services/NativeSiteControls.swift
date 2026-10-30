@@ -285,7 +285,7 @@ final class NativeSiteMenu {
     alert.addButton(withTitle: "Clear").hasDestructiveAction = true
     alert.addButton(withTitle: "Cancel")
     let confirmed: Bool = await withCheckedContinuation { continuation in
-      if let window = WindowHost.window(id: captured["windowId"]?.string ?? ""), window.isVisible {
+      if let window = ShellDrag.window(captured["windowId"]?.string ?? ""), window.isVisible {
         alert.beginSheetModal(for: window) { continuation.resume(returning: $0 == .alertFirstButtonReturn) }
       } else { continuation.resume(returning: false) }
     }

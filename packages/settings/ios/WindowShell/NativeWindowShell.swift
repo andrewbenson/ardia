@@ -197,7 +197,22 @@ final class ShellHost {
 
 #if SOLARA_PROBES
 @MainActor
+enum WindowShellProbeSamples {
+  static var hitCosts: [String: [String: String]] = [:]
+  static var pointerStreams: [String: [String: Double]] = [:]
+  static var pointerLatencies: [String: [String: Any]] = [:]
+}
+
+@MainActor
 public enum WindowShellRead {
+  public static func hoverMeasurements(windowId: String) -> [String: Any]? {
+    guard NativeWindowShell.host(windowId) != nil else { return nil }
+    return ["hitCost": WindowShellProbeSamples.hitCosts[windowId] ?? [:],
+      "pointerStream": WindowShellProbeSamples.pointerStreams[windowId] ?? [:],
+      "pointerLatency": WindowShellProbeSamples.pointerLatencies[windowId] ?? [:],
+      "sidebarDockLive": NativeSidebarDock.describe(windowId)?["live"] ?? NSNull()]
+  }
+
   public static func accessibilityReach(windowId: String) -> [String: Int]? {
     NativeWindowShell.host(windowId)?.shell.accessibilityReach()
   }
@@ -415,7 +430,11 @@ public class WindowShellModule: Module {
         var slot: WindowShellView.Slot?
         for _ in 0..<1000 { slot = host.shell.slotUnderPointer(at: point) }
         let micros = Double(DispatchTime.now().uptimeNanoseconds - start) / 1000 / 1000
-        return ["micros": String(micros), "slot": slot?.rawValue ?? ""]
+        let result = ["micros": String(micros), "slot": slot?.rawValue ?? ""]
+        #if SOLARA_PROBES
+        WindowShellProbeSamples.hitCosts[windowId] = result
+        #endif
+        return result
       }
       #else
       return [:]
@@ -466,11 +485,15 @@ public class WindowShellModule: Module {
           }
           try? await Task.sleep(nanoseconds: 50_000_000)
           let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
-          reply.resolve([
+          let result = [
             "moves": Double(inWindow.count), "lookups": Double(shell.devPointerLookups), "seconds": seconds,
             "frame": 1 / Double(window.screen?.maximumFramesPerSecond ?? 60),
             "lookupMicros": Double(shell.devPointerLookupNanos) / 1000, "coreShare": Double(shell.devPointerLookupNanos) / 1e9 / seconds,
-          ])
+          ]
+          #if SOLARA_PROBES
+          WindowShellProbeSamples.pointerStreams[windowId] = result
+          #endif
+          reply.resolve(result)
         }
       }
       #else
@@ -490,10 +513,14 @@ public class WindowShellModule: Module {
           guard !answered else { return }
           answered = true
           shell.devPointerResolved = nil
-          reply.resolve([
+          let result: [String: Any] = [
             "changed": changed, "slot": x < 0 ? "" : shell.slotUnderPointer(at: shell.convert(NSPoint(x: x, y: y), to: nil))?.rawValue ?? "",
             "ms": Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6, "frameMs": 1000 / Double(window.screen?.maximumFramesPerSecond ?? 60),
-          ])
+          ]
+          #if SOLARA_PROBES
+          WindowShellProbeSamples.pointerLatencies[windowId] = result
+          #endif
+          reply.resolve(result)
         }
         shell.devPointerResolved = { changed in finish(changed) }
         Task { @MainActor in

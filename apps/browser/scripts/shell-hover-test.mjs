@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -35,16 +36,45 @@ const C = globalThis.expo.modules.ArdiaCEF;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const win = () => C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window);
 const at = (x, y) => ac.shell.devSetPointer("w1", { x, y }).then(() => win()).then((n) => C.devWindow(n, "mouse:moved:" + x + "," + y)).then(() => settle(250));
-const stats = () => ac.shell.devHoverStats(true);
+const stats = () => ac.shell.devHoverStats(true).then((value) => { globalThis.__shellHoverStats = value; return value; });
 const count = (s, kind) => (s.log || []).filter((e) => e[0] === kind).length;
 const H = globalThis.expo.modules.SolaraHosted;
-const hover = () => (H?.sidebarShell ? H.sidebarShell("w1").then((d) => JSON.parse(d)?.hover ?? null) : Promise.resolve(null));
+const hover = () => (H?.sidebarShell ? H.sidebarShell("w1").then((d) => JSON.parse(d)?.hover ?? null) : Promise.resolve(null)).then((value) => { globalThis.__shellHoverValue = { value }; return value; });
 `;
 const ROWS = [90, 130, 170, 210];
 const COVER = [0, 0, 320, 800];
 let app = null;
 let native = false;
-const run = (body) => app.eval(`${HELPERS}\n${body}`, { timeout: 30000 });
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && await accept(last)) return last;
+    await sleep(50);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const same = (a, b) => {
+  try { assert.deepEqual(a, b); return true; } catch { return false; }
+};
+const run = async (body) => {
+  const result = await app.eval(`${HELPERS}
+    globalThis.__shellHoverStats = null;
+    globalThis.__shellHoverValue = null;
+    return Promise.resolve().then(() => { ${body} }).then((value) => ({ value, stats: globalThis.__shellHoverStats, hover: globalThis.__shellHoverValue }));`, { timeout: 30000 });
+  if (result.stats) {
+    await untilSnapshot("RN hover counts and event ids", (snapshot) => same(snapshot.hoverStats,
+      { passes: result.stats.passes, registered: result.stats.registered, log: (result.stats.log ?? []).slice(0, 512) }));
+    await untilSnapshot("live RN hover counts and event ids", async (snapshot) => {
+      const live = await app.eval(`return ac.shell.devHoverStats(false);`);
+      return same(snapshot.hoverStatsLive, { passes: live.passes, registered: live.registered, log: (live.log ?? []).slice(0, 512) });
+    });
+  }
+  if (result.hover) await untilSnapshot("native sidebar hovered id", (snapshot) =>
+    (snapshot.windows[0]?.sidebarShell?.hover ?? null) === result.hover.value);
+  return result.value;
+};
 const entersAt = (y) =>
   native
     ? run(`return at(700, 400).then(() => at(120, ${y})).then(hover).then((k) => (k ? 1 : 0));`)
@@ -59,6 +89,9 @@ try {
   });
   await sleep(2000);
   native = await run(`return H?.sidebarShell ? H.sidebarShell("w1").then((d) => d !== "null") : false;`);
+  await untilSnapshot("native sidebar availability", (snapshot) => (snapshot.windows[0]?.sidebarShell != null) === native);
+  const chromeWindowNumber = await run(`return win();`);
+  await untilSnapshot("Chrome window number", (snapshot) => snapshot.windows[0]?.chromeWindowNumber === chromeWindowNumber);
 
   await rep.check("rows-hover", async () => {
     const enters = [];
@@ -123,6 +156,7 @@ try {
     try {
       await run(`return ac.shell.devLeftEdgePointer("w1", { x: -4, y: 300 }).then(() => settle(500));`);
       const peeking = await run(`return ac.shell.devLeftEdgePointer("w1", { x: 120, y: 300 }).then(() => settle(500)).then(() => "w1" in globalThis.acLayout.dockMotion.getState().peeks);`);
+      await untilSnapshot("peeking sidebar", (snapshot) => snapshot.windows[0]?.shellHover?.sidebarDockLive === peeking);
       const out = { peeking, parked: await run(`return at(120, 130).then(hover);`), covered: await run(`return ${cover(COVER, null)}.then(hover);`) };
       if (!peeking || !out.parked || out.covered !== null) throw new Error(`hover under the cover while peeking: ${JSON.stringify(out)}`);
       return out;
@@ -132,13 +166,19 @@ try {
   });
 
   await rep.check("layer-lookup-cost", async () => {
-    const costs = [await run(`return S.devHitCost("w1", 120, 130);`), await run(`return S.devHitCost("w1", 700, 400);`)];
+    const costs = [];
+    for (const [x, y] of [[120, 130], [700, 400]]) {
+      const cost = await run(`return S.devHitCost("w1", ${x}, ${y});`);
+      await untilSnapshot("layer lookup timings and slot", (snapshot) => same(snapshot.windows[0]?.shellHover?.hitCost, cost));
+      costs.push(cost);
+    }
     const micros = costs.map((c) => Number(c.micros));
     const mainTop = process.env.ARDIA_SHELL_MAIN_TOP !== "0";
     if (micros.some((m) => !(m < (mainTop ? 120 : 40)))) throw new Error(`layer lookup ${micros} µs`);
     if (!mainTop) return micros;
     const points = Array.from({ length: 240 }, (_, i) => (i % 2 ? [700 + (i % 7), 400] : [120, 130 + (i % 5)]));
     const stream = await run(`return S.devPointerStream("w1", ${JSON.stringify(points)}, 120);`);
+    await untilSnapshot("pointer stream counters and timings", (snapshot) => same(snapshot.windows[0]?.shellHover?.pointerStream, stream));
     const frames = stream.seconds / stream.frame;
     if (!(stream.lookups <= frames + 1) || !(stream.coreShare <= 0.03)) throw new Error(`pointer stream ${JSON.stringify(stream)} over ${frames.toFixed(0)} frames`);
     return { perCall: micros, stream, frames, coreShareAt120Hz: stream.coreShare * 120 * stream.frame };
@@ -149,6 +189,7 @@ try {
     await run(`return S.devPointerLatency("w1", -1, -1);`);
     for (const [x, y] of [[120, 130], [-1, -1], [700, 400], [-1, -1], [120, 130], [-1, -1]]) {
       const moved = await run(`return S.devPointerLatency("w1", ${x}, ${y});`);
+      await untilSnapshot("hover latency and slot", (snapshot) => same(snapshot.windows[0]?.shellHover?.pointerLatency, moved));
       moves.push([x, y, moved]);
       if (!moved.changed || !(moved.ms <= moved.frameMs + 1)) throw new Error(`hover took ${JSON.stringify(moves)}`);
       await sleep(50);

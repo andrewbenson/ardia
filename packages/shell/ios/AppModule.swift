@@ -304,7 +304,11 @@ public class AppModule: Module {
       #if DEBUG
       let select = NSSelectorFromString("ardia_hoverStats:")
       guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return [:] }
-      return ((view as AnyObject).perform(select, with: NSNumber(value: reset))?.takeUnretainedValue() as? [String: Any]) ?? [:]
+      let stats = ((view as AnyObject).perform(select, with: NSNumber(value: reset))?.takeUnretainedValue() as? [String: Any]) ?? [:]
+      #if SOLARA_PROBES
+      MainActor.assumeIsolated { HoverStatsProbeCapture.latest = stats }
+      #endif
+      return stats
       #else
       return [:]
       #endif
@@ -910,6 +914,30 @@ enum KeyEquivalents {
 public enum WindowCaptureRead {
   public static func png(windowId: String) -> Data? {
     AppModule.snapshotData(windowId: windowId)
+  }
+}
+#endif
+
+#if SOLARA_PROBES
+@MainActor
+enum HoverStatsProbeCapture {
+  static var latest: [String: Any] = [:]
+}
+
+@MainActor
+public enum HoverStatsRead {
+  public static func snapshot() -> [String: Any] { values(HoverStatsProbeCapture.latest) }
+
+  public static func current() -> [String: Any] {
+    let select = NSSelectorFromString("ardia_hoverStats:")
+    guard let view = NSClassFromString("RCTView"), (view as AnyObject).responds(to: select) else { return values([:]) }
+    let source = ((view as AnyObject).perform(select, with: NSNumber(value: false))?.takeUnretainedValue() as? [String: Any]) ?? [:]
+    return values(source)
+  }
+
+  private static func values(_ source: [String: Any]) -> [String: Any] {
+    let log = Array((source["log"] as? [[Any]] ?? []).prefix(512))
+    return ["passes": source["passes"] ?? 0, "registered": source["registered"] ?? 0, "log": log]
   }
 }
 #endif

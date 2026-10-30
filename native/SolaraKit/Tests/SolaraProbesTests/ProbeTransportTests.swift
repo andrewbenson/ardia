@@ -190,5 +190,62 @@ struct ProbeTransportTests {
     #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent("probes/outbox/\(id).json.tmp").path))
   }
 
+  private func artifactName() -> String { ".solara-probe-window-\(UUID().uuidString.lowercased()).png" }
+
+  @Test func refusesArtifactBeyondCountBudget() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    for _ in 0..<32 { try files.writeArtifact(name: artifactName(), data: Data([1])) }
+    let extra = artifactName()
+    do {
+      try files.writeArtifact(name: extra, data: Data([1]))
+      Issue.record("An artifact beyond the count budget was accepted")
+    } catch { #expect((error as? ProbeFailure)?.code == "artifactBudgetExceeded") }
+    #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent(extra).path))
+    #expect(try FileManager.default.contentsOfDirectory(atPath: data.path).filter { $0.hasSuffix(".png") }.count == 32)
+  }
+
+  @Test func refusesArtifactBeyondAggregateByteBudget() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let existing = data.appendingPathComponent(artifactName())
+    #expect(FileManager.default.createFile(atPath: existing.path, contents: Data()))
+    let handle = try FileHandle(forWritingTo: existing)
+    try handle.truncate(atOffset: 268_435_455)
+    try handle.close()
+    let extra = artifactName()
+    do {
+      try files.writeArtifact(name: extra, data: Data([1, 2]))
+      Issue.record("An artifact beyond the aggregate byte budget was accepted")
+    } catch { #expect((error as? ProbeFailure)?.code == "artifactBudgetExceeded") }
+    #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent(extra).path))
+    try files.writeArtifact(name: artifactName(), data: Data([1]))
+    do {
+      try files.writeArtifact(name: artifactName(), data: Data([1]))
+      Issue.record("An artifact at a full aggregate byte budget was accepted")
+    } catch { #expect((error as? ProbeFailure)?.code == "artifactBudgetExceeded") }
+  }
+
+  @Test func clearStaleRemovesOnlyArtifactsOlderThanProcess() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let old = data.appendingPathComponent(artifactName())
+    let fresh = data.appendingPathComponent(artifactName())
+    let current = data.appendingPathComponent(artifactName())
+    let unrelated = data.appendingPathComponent("fixture.png")
+    let invalid = data.appendingPathComponent(".solara-probe-window-not-a-uuid.png")
+    for item in [old, fresh, current, unrelated, invalid] { try Data([1]).write(to: item) }
+    for item in [old, unrelated, invalid] {
+      try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: item.path)
+    }
+    try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(60)], ofItemAtPath: fresh.path)
+    files.clearStale()
+    #expect(!FileManager.default.fileExists(atPath: old.path))
+    #expect(FileManager.default.fileExists(atPath: fresh.path))
+    #expect(FileManager.default.fileExists(atPath: current.path))
+    #expect(FileManager.default.fileExists(atPath: unrelated.path))
+    #expect(FileManager.default.fileExists(atPath: invalid.path))
+  }
+
 }
 #endif

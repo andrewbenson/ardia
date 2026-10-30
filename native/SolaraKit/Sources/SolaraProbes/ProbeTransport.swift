@@ -7,6 +7,7 @@ public enum ProbeFailure: Error, Equatable {
   case unsupportedProtocol
   case invalidArgument
   case oversized
+  case artifactBudgetExceeded
   case expired
   case duplicate
   case testHooksDenied
@@ -22,6 +23,7 @@ public enum ProbeFailure: Error, Equatable {
     case .unsupportedProtocol: "unsupportedProtocol"
     case .invalidArgument: "invalidArgument"
     case .oversized: "oversized"
+    case .artifactBudgetExceeded: "artifactBudgetExceeded"
     case .expired: "expired"
     case .duplicate: "duplicate"
     case .testHooksDenied: "testHooksDenied"
@@ -81,8 +83,10 @@ public final class ProbeFiles {
   private let device: dev_t
   private let inode: ino_t
   private let owner: uid_t
+  private let artifactLock = NSLock()
 
   public static func open(dataPath: String, defaultPath: String, homePath: String) throws -> ProbeFiles {
+    guard Self.processStart != nil else { throw ProbeFailure.testHooksDenied }
     guard dataPath.hasPrefix("/"), !dataPath.hasSuffix("/"), !dataPath.contains("/../"), !dataPath.contains("/./") else { throw ProbeFailure.testHooksDenied }
     guard let canonical = realPath(dataPath), canonical == dataPath else { throw ProbeFailure.testHooksDenied }
     let defaultCanonical = realPath(defaultPath) ?? defaultPath
@@ -180,6 +184,12 @@ public final class ProbeFiles {
   }
 
   public func clearStale(now: Date = Date()) {
+    artifactLock.lock()
+    try? forEachArtifact { name, info in
+      let modified = Double(info.st_mtimespec.tv_sec) + Double(info.st_mtimespec.tv_nsec) / 1_000_000_000
+      if let processStart = Self.processStart, info.st_mode & S_IFMT == S_IFREG, modified < processStart { unlinkat(dataFD, name, 0) }
+    }
+    artifactLock.unlock()
     for fd in [claimedFD, outboxFD] {
       for name in names(fd) where name.hasSuffix(".json") || name.hasSuffix(".json.tmp") { unlinkat(fd, name, 0) }
     }
@@ -208,6 +218,93 @@ public final class ProbeFiles {
       result.append((id, try? handle.read(upToCount: 65_537), nil))
     }
     return result
+  }
+
+  private static let artifactLimit = 32
+  private static let artifactByteLimit: Int64 = 268_435_456
+  private static let processStart: Double? = {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+    guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return nil }
+    let start = info.kp_proc.p_starttime
+    return Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000
+  }()
+
+  private static func isArtifact(_ name: String) -> Bool {
+    let prefix = ".solara-probe-window-"
+    guard name.hasPrefix(prefix), name.hasSuffix(".png") else { return false }
+    let id = String(name.dropFirst(prefix.count).dropLast(4))
+    return UUID(uuidString: id)?.uuidString.lowercased() == id
+  }
+
+  private func forEachArtifact(_ body: (String, stat) throws -> Void) throws {
+    let listing = openat(dataFD, ".", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    guard listing >= 0 else { throw ProbeFailure.testHooksDenied }
+    guard let directory = fdopendir(listing) else { close(listing); throw ProbeFailure.testHooksDenied }
+    defer { closedir(directory) }
+    while true {
+      errno = 0
+      guard let entry = readdir(directory) else {
+        guard errno == 0 else { throw ProbeFailure.testHooksDenied }
+        break
+      }
+      let name = withUnsafePointer(to: entry.pointee.d_name) { String(cString: UnsafeRawPointer($0).assumingMemoryBound(to: CChar.self)) }
+      guard Self.isArtifact(name) else { continue }
+      var info = stat()
+      guard fstatat(dataFD, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { throw ProbeFailure.testHooksDenied }
+      try body(name, info)
+    }
+  }
+
+  private func checkArtifactBudget(adding bytes: Int64) throws {
+    var count = 0
+    var total: Int64 = 0
+    try forEachArtifact { _, info in
+      guard info.st_mode & S_IFMT == S_IFREG, info.st_uid == owner, info.st_size >= 0 else { throw ProbeFailure.testHooksDenied }
+      count += 1
+      let sum = total.addingReportingOverflow(info.st_size)
+      guard count < Self.artifactLimit, !sum.overflow, sum.partialValue <= Self.artifactByteLimit else { throw ProbeFailure.artifactBudgetExceeded }
+      total = sum.partialValue
+    }
+    guard bytes > 0, bytes <= Self.artifactByteLimit - total else { throw ProbeFailure.artifactBudgetExceeded }
+  }
+
+  public func checkArtifactBudget() throws {
+    artifactLock.lock()
+    defer { artifactLock.unlock() }
+    try recheck()
+    try checkArtifactBudget(adding: 1)
+  }
+
+  public func writeArtifact(name: String, data: Data) throws {
+    let prefix = ".solara-probe-window-"
+    guard name.hasPrefix(prefix), name.hasSuffix(".png") else { throw ProbeFailure.invalidArgument }
+    let id = String(name.dropFirst(prefix.count).dropLast(4))
+    guard let uuid = UUID(uuidString: id), uuid.uuidString.lowercased() == id,
+      !data.isEmpty, data.count <= 67_108_864 else { throw ProbeFailure.invalidArgument }
+    artifactLock.lock()
+    defer { artifactLock.unlock() }
+    try recheck()
+    try checkArtifactBudget(adding: Int64(data.count))
+    let fd = openat(dataFD, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+    guard fd >= 0 else { throw ProbeFailure.testHooksDenied }
+    defer { close(fd) }
+    let written = data.withUnsafeBytes { bytes -> Bool in
+      guard let base = bytes.baseAddress else { return false }
+      var offset = 0
+      while offset < bytes.count {
+        let count = Darwin.write(fd, base.advanced(by: offset), bytes.count - offset)
+        if count < 0 && errno == EINTR { continue }
+        if count <= 0 { return false }
+        offset += count
+      }
+      return true
+    }
+    guard written else {
+      unlinkat(dataFD, name, 0)
+      throw ProbeFailure.testHooksDenied
+    }
   }
 
   public func reply(id: String, data: Data) throws {

@@ -67,7 +67,7 @@ final class ProbeHost {
         switch request.command {
         case "probe.hello":
           guard request.args.isEmpty else { throw ProbeFailure.invalidArgument }
-          response = ["id": id, "protocol": 1, "result": ["protocol": 1, "capabilities": ["probe.hello", "state.snapshot", "input.swipe", "input.hover"], "pid": getpid()]]
+          response = ["id": id, "protocol": 1, "result": ["protocol": 1, "capabilities": ["probe.hello", "state.snapshot", "input.swipe", "input.hover", "view.capture"], "pid": getpid()]]
         case "input.swipe":
           try swipe(request)
           continue
@@ -87,6 +87,18 @@ final class ProbeHost {
             }
           })
           continue
+        case "view.capture":
+          guard Set(request.args.keys) == ["windowId"],
+            let windowId = request.args["windowId"] as? String, !windowId.isEmpty, windowId.utf8.count <= 128 else { throw ProbeFailure.invalidArgument }
+          guard NativeStoreHandle.store?.state.windows[windowId] != nil,
+            let window = WindowHost.window(id: windowId), let content = window.contentView else { throw ProbeFailure.windowGone }
+          let artifact = ".solara-probe-window-\(UUID().uuidString.lowercased()).png"
+          try files.checkArtifactBudget()
+          guard let png = WindowCaptureRead.png(windowId: windowId) else { throw ProbeFailure.notReady }
+          try files.writeArtifact(name: artifact, data: png)
+          let scale = window.backingScaleFactor
+          response = ["id": id, "protocol": 1, "result": ["artifact": artifact,
+            "width": Int(content.bounds.width * scale), "height": Int(content.bounds.height * scale), "scale": scale]]
         case "input.hover":
           guard Set(request.args.keys) == ["windowId", "area", "target", "on"],
             let windowId = request.args["windowId"] as? String, !windowId.isEmpty, windowId.utf8.count <= 128,

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -131,6 +132,17 @@ const until = async (what, body, ms = 8000) => {
   }
   throw new Error(`${what}: never true (last ${JSON.stringify(last)})`);
 };
+const untilSnapshot = async (what, accept, ms = 8000) => {
+  const end = Date.now() + ms;
+  let last;
+  do {
+    last = await app.snapshot({ windowId: "w1" });
+    assert.equal(last.schema, 1);
+    if (last.consistent && accept(last)) return last;
+    await sleep(80);
+  } while (Date.now() < end);
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
 const near = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
 
 try {
@@ -142,12 +154,26 @@ try {
     });
     const g = got[panes];
     const serving = await run(`return !!globalThis.expo.modules.SolaraTabPool?.available?.();`);
+    const initialSnapshot = await untilSnapshot("page pool capability", (s) => typeof s.poolAvailable === "boolean");
+    assert.equal(initialSnapshot.poolAvailable, serving, "native/JS page pool availability");
     if (pool === "1") poolServing = serving;
     else if (serving) throw new Error(`leg ${panes}: SolaraTabPool serves pages with ARDIA_TAB_POOL=0, so this leg can't test RN's pages`);
     const snap = async (state) => {
       const path = join(scratch, `${panes}-${state}.png`);
       if (!(await run(`return shot(${JSON.stringify(path)});`))) throw new Error(`no snapshot for ${state}`);
-      g[state] = { ...g[state], shot: path };
+      const native = await app.probe("view.capture", { windowId: "w1" });
+      assert.match(native.artifact, /^\.solara-probe-window-[0-9a-f-]{36}\.png$/);
+      const nativePath = join(app.data, native.artifact);
+      const image = readPng(nativePath);
+      assert.equal(image.width, native.width);
+      assert.equal(image.height, native.height);
+      const snapshot = await untilSnapshot("capture geometry", (s) => !!s.windows[0]?.contentFrame);
+      assert.equal(native.scale, snapshot.coordinateSpace.displayScale);
+      assert.ok(Math.abs(image.width / native.scale - snapshot.windows[0].contentFrame.width) <= 0.5);
+      assert.ok(Math.abs(image.height / native.scale - snapshot.windows[0].contentFrame.height) <= 0.5);
+      const pixels = pixelDiff(path, nativePath);
+      assert.ok(pixels.max <= 8, `native/JS capture ${state}: ${JSON.stringify(pixels)}`);
+      g[state] = { ...g[state], shot: path, nativeShot: nativePath };
     };
     await until("pages", `return S().tabs.a.title === "PA" && S().tabs.b.title === "PB" || null;`, 20000);
 

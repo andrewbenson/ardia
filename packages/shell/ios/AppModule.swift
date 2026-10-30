@@ -465,6 +465,49 @@ public class AppModule: Module {
     return (try? png.write(to: URL(fileURLWithPath: path))) != nil
   }
 
+  #if SOLARA_PROBES
+  static func snapshotPixelSize(_ size: CGSize, scale: CGFloat) -> (width: Int, height: Int)? {
+    let pixelWidth = size.width * scale
+    let pixelHeight = size.height * scale
+    guard scale.isFinite, scale > 0, pixelWidth.isFinite, pixelHeight.isFinite,
+      pixelWidth > 0, pixelHeight > 0, pixelWidth <= 8192, pixelHeight <= 8192 else { return nil }
+    let width = Int(pixelWidth)
+    let height = Int(pixelHeight)
+    guard width > 0, height > 0 else { return nil }
+    let pixels = width.multipliedReportingOverflow(by: height)
+    guard !pixels.overflow else { return nil }
+    let bytes = pixels.partialValue.multipliedReportingOverflow(by: 4)
+    guard !bytes.overflow, bytes.partialValue <= 128 * 1024 * 1024 else { return nil }
+    return (width, height)
+  }
+
+  static func snapshotData(windowId: String, transparent: Bool = false) -> Data? {
+    guard let view = WindowManager.shared.windows[windowId]?.contentView, let layer = view.layer else { return nil }
+    let scale = view.window?.backingScaleFactor ?? 2
+    let size = view.bounds.size
+    guard let pixels = snapshotPixelSize(size, scale: scale) else { return nil }
+    guard let rep = NSBitmapImageRep(
+      bitmapDataPlanes: nil, pixelsWide: pixels.width, pixelsHigh: pixels.height, bitsPerSample: 8,
+      samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+      let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+    let cg = context.cgContext
+    if !transparent {
+      NSGraphicsContext.saveGraphicsState()
+      NSGraphicsContext.current = context
+      (view.window?.backgroundColor ?? .windowBackgroundColor).setFill()
+      NSRect(origin: .zero, size: CGSize(width: size.width * scale, height: size.height * scale)).fill()
+      NSGraphicsContext.restoreGraphicsState()
+    }
+    cg.scaleBy(x: scale, y: scale)
+    if view.isFlipped || layer.isGeometryFlipped {
+      cg.translateBy(x: 0, y: size.height)
+      cg.scaleBy(x: 1, y: -1)
+    }
+    layer.render(in: cg)
+    return rep.representation(using: .png, properties: [:])
+  }
+
+  #endif
   private static func plain(_ d: NSAppleEventDescriptor) -> Any {
     switch d.descriptorType {
     case typeAEList:
@@ -858,6 +901,15 @@ enum KeyEquivalents {
     while let current = tab, String(describing: type(of: current)) != "ArdiaCoreWebView" { tab = current.superview }
     guard let tab, let devTools = tab.value(forKey: "devtoolsView") as? NSView else { return false }
     return view.isDescendant(of: devTools)
+  }
+}
+#endif
+
+#if SOLARA_PROBES
+@MainActor
+public enum WindowCaptureRead {
+  public static func png(windowId: String) -> Data? {
+    AppModule.snapshotData(windowId: windowId)
   }
 }
 #endif

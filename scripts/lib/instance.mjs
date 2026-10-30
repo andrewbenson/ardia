@@ -509,7 +509,7 @@ class Instance {
     const how = await this.#quit(opts);
     if (!isAlive(this.pid) && state && existsSync(state)) gateNote(state, { unwatch: this.pid });
     launched.delete(this.pid);
-    if (this.exited && quitEnded(how)) quitData.add(this.data);
+    if (this.exited && quitEnded(how) && !this.keepData) quitData.add(this.data);
     const errors = this.jsErrors();
     if (errors) process.stderr.write(`JS errors the app caught and survived (${join(this.data, "js-errors.log")}):\n${errors}`);
     if (this.js?.mode === "pinned" && (processInfo(this.js.pid)?.command ?? "").includes(`--metro-proxy ${this.data} `))
@@ -618,17 +618,18 @@ export async function launch(app, opts = {}) {
     await killSpawned(spawned);
     throw e;
   }
-  gateNote(gate.state, { watch: owned.pid, data, ...holdNote(gate.key) });
-  const instance = new Instance({ app: runsFrom, binary, data, probeData: canonicalData, port, log, launchedAt, js, ...owned, meta: opts.meta ?? {} }).save();
-  launched.set(instance.pid, data);
-  if (opts.ready !== false)
-    try {
+  const instance = new Instance({ app: runsFrom, binary, data, probeData: canonicalData, port, log, launchedAt, js, keepData: opts.keepData === true, ...owned, meta: opts.meta ?? {} });
+  try {
+    gateNote(gate.state, { watch: owned.pid, data, ...holdNote(gate.key) });
+    instance.save();
+    launched.set(instance.pid, data);
+    if (opts.ready !== false)
       await instance.ready(typeof opts.ready === "string" ? { test: opts.ready } : typeof opts.ready === "object" ? opts.ready : {});
-    } catch (e) {
-      await instance.quit({ graceful: false });
-      throw e;
-    }
-  return instance;
+    return instance;
+  } catch (error) {
+    await instance.quit({ graceful: false });
+    throw error;
+  }
 }
 
 export function attach(dir) {

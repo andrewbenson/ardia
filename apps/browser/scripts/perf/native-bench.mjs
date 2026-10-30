@@ -147,7 +147,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { appEnv, freePort, listenerPids, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
+import { launch as launchInstance } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { fixtureReady, querySample, validateFixtureManifest } from "./omnibox-gate.mjs";
 import { writeSwitches } from "./js-bench.mjs";
@@ -445,6 +445,7 @@ function buildBundle(out) {
 }
 
 const live = new Set();
+let stopping = false;
 
 class Instance {
   constructor(side, dataDir) {
@@ -458,37 +459,41 @@ class Instance {
     this.env = [];
   }
   async launch() {
+    if (stopping) throw new Error("the bench is stopping");
+    live.add(this);
+    this.starting = this.acquire();
+    try {
+      await this.starting;
+      if (stopping) throw new Error("the bench is stopping");
+      const w = acperf("waitwindow", String(this.pid), "60");
+      this.windowAt = w.code === 0 ? +w.out : NaN;
+      const boot = await this.waitFile("bench-boot.json", 60_000);
+      if (stopping) throw new Error("the bench is stopping");
+      this.jsStart = boot?.jsStart ?? NaN;
+      return this;
+    } catch (error) {
+      await this.quit();
+      throw error;
+    }
+  }
+  async acquire() {
     const exe = join(realpathSync(this.app), "Contents/MacOS", execFileSync("defaults", ["read", join(this.app, "Contents/Info.plist"), "CFBundleExecutable"], { encoding: "utf8" }).trim());
     const main = `^${exe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`;
     if (spawnSync("pgrep", ["-f", main]).status === 0) throw new Error("a bench instance is still running");
-    if (!opt.port) this.port = this.cdp.port = await freePort();
-    const holders = listenerPids(this.port);
-    if (holders.length) throw new Error(`CDP port ${this.port} is already taken by pid ${holders.join(", ")}: quit that instance or pass another --port`);
     const extra = [...opt.env, ...this.side.env, ...this.env].filter((e) => !e.startsWith("DYLD_INSERT_LIBRARIES="));
     writeSwitches(this.dataDir, extra.find((e) => e.startsWith("ARDIA_SWITCHES="))?.slice(19));
     const dyld = [markerLibrary(), ...(this.frames ? [framesLibrary(toolDir, here)] : []), ...opt.env.filter((e) => e.startsWith("DYLD_INSERT_LIBRARIES=")).map((e) => e.slice(22))].join(":");
-    this.t0 = Date.now();
-    const env = appEnv(this.app, {
-      ARDIA_BACKGROUND: "1", ARDIA_DRAW_WINDOWS: "1", ARDIA_DATA_DIR: this.dataDir, ARDIA_REMOTE_DEBUGGING_PORT: String(this.port),
-      ARDIA_UPDATE_FEED_URL: this.feed, DYLD_INSERT_LIBRARIES: dyld,
-      ...Object.fromEntries(extra.map((e) => [e.slice(0, e.indexOf("=")), e.slice(e.indexOf("=") + 1)])),
+    this.instance = await launchInstance(this.app, {
+      data: this.dataDir, port: this.port || undefined, js: "none", ready: false, scratchMarker: false, keepData: true,
+      env: {
+        ARDIA_DRAW_WINDOWS: "1", ARDIA_UPDATE_FEED_URL: this.feed, DYLD_INSERT_LIBRARIES: dyld,
+        ...Object.fromEntries(extra.map((e) => [e.slice(0, e.indexOf("=")), e.slice(e.indexOf("=") + 1)])),
+      },
+      args: ["--mute-audio", ...(process.env.BENCH_ALLOW_APP_NAP ? [] : ["-NSAppSleepDisabled", "YES"])],
     });
-    await uiGateLaunching(exe);
-    execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), this.app,
-      "--args", "--mute-audio", ...(process.env.BENCH_ALLOW_APP_NAP ? [] : ["-NSAppSleepDisabled", "YES"])]);
-    for (let i = 0; i < 400 && !this.pid; i++) {
-      const r = spawnSync("pgrep", ["-f", main], { encoding: "utf8" });
-      if (r.status === 0) this.pid = +r.stdout.trim().split("\n")[0];
-      else await sleep(5);
-    }
-    if (!this.pid) throw new Error("the app didn't start");
-    uiGateWatch(this.pid, this.dataDir);
-    live.add(this);
-    const w = acperf("waitwindow", String(this.pid), "60");
-    this.windowAt = w.code === 0 ? +w.out : NaN;
-    const boot = await this.waitFile("bench-boot.json", 60_000);
-    this.jsStart = boot?.jsStart ?? NaN;
-    return this;
+    this.pid = this.instance.pid;
+    this.port = this.cdp.port = this.instance.port;
+    this.t0 = this.instance.launchedAt;
   }
   marks() {
     try {
@@ -544,22 +549,23 @@ class Instance {
   }
   async done() {
     const secs = +opt.hold;
-    if (secs > 0 && this.pid && this.alive()) {
+    if (!stopping && secs > 0 && this.pid && this.alive()) {
       log(`holding ${this.side.label} pid ${this.pid} for ${secs} s (data ${this.dataDir}): lldb -p ${this.pid}, heap ${this.pid}, vmmap --summary ${this.pid}`);
-      for (const end = Date.now() + secs * 1000; Date.now() < end && this.alive(); ) await sleep(200);
+      for (const end = Date.now() + secs * 1000; Date.now() < end && !stopping && this.alive(); ) await sleep(200);
     }
     await this.quit();
   }
-  async quit() {
-    this.cdp.close();
-    live.delete(this);
-    if (!this.pid || !this.alive()) return;
-    acperf("quit", String(this.pid));
-    for (let i = 0; i < 100 && this.alive(); i++) await sleep(100);
-    if (this.alive()) process.kill(this.pid, "SIGKILL");
-    const helpers = () => spawnSync("pgrep", ["-f", this.app], { encoding: "utf8" }).stdout.trim();
-    for (let i = 0; i < 100 && helpers(); i++) await sleep(100);
-    for (const p of helpers().split("\n").filter(Boolean)) process.kill(+p, "SIGKILL");
+  quit() {
+    this.quitting ??= (async () => {
+      await this.starting?.catch(() => {});
+      this.cdp.close();
+      if (this.instance) {
+        await this.instance.quit({ graceful: !stopping });
+        if (this.instance.alive) throw new FatalError(`the bench instance (pid ${this.pid}) is still running`);
+      }
+      live.delete(this);
+    })();
+    return this.quitting;
   }
 }
 
@@ -1399,7 +1405,7 @@ async function interleaved(n, fn) {
       try {
         await fn(side, i);
       } catch (error) {
-        if (error instanceof FatalError || /Native API skew|a bench instance is still running/.test(String(error?.message ?? error))) throw error;
+        if (stopping || error instanceof FatalError || /Native API skew|a bench instance is still running/.test(String(error?.message ?? error))) throw error;
         log(`${side.tag}run ${i} failed: ${String(error?.message ?? error).slice(0, 300)}`);
         (side.results.errors ??= []).push({ run: i, phase: fn.name || "run", error: String(error?.message ?? error), at: new Date().toISOString() });
       }
@@ -1407,15 +1413,36 @@ async function interleaved(n, fn) {
     }
 }
 
-const cleanup = async () => {
-  for (const app of [...live]) await app.quit().catch(() => {});
-  server?.close();
+let cleanupPromise;
+const cleanup = () => {
+  stopping = true;
+  cleanupPromise ??= (async () => {
+    const errors = [];
+    for (const app of [...live]) {
+      try { await app.quit(); } catch (error) { errors.push(error); }
+    }
+    server?.close();
+    if (errors.length) throw new AggregateError(errors, "could not quit every bench instance");
+  })();
+  return cleanupPromise;
 };
-process.on("SIGINT", async () => {
-  log("interrupted: quitting the instance");
-  await cleanup();
-  process.exit(130);
-});
+let signalExit;
+const stop = (reason, code) => {
+  signalExit ??= (async () => {
+    log(reason);
+    try {
+      await cleanup();
+    } catch (error) {
+      log(error);
+      process.exit(1);
+      return;
+    }
+    process.exit(code);
+  })();
+};
+for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) process.on(signal, () => stop(`${signal}: quitting the instance`, code));
+process.on("uncaughtException", (error) => stop(error, 1));
+process.on("unhandledRejection", (error) => stop(error, 1));
 
 try {
   server = await startServer();

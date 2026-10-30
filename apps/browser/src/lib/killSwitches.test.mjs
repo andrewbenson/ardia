@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
@@ -9,9 +10,7 @@ const names = Object.keys(ks.SWITCHES);
 const reset = () => {
   docs.clear();
   ks.reloadSwitches();
-  ks.resetRefreshForTests();
 };
-const answer = (body, { ok = true } = {}) => async () => ({ ok, text: async () => (typeof body === "string" ? body : JSON.stringify(body)) });
 const file = (switches) => ({ version: 1, switches });
 
 test("at most 8 live switches, each on by default with an owner and a removal date still ahead", () => {
@@ -47,93 +46,9 @@ test("ARDIA_SWITCHES text parses to values, and ignores what it doesn't know", (
   assert.deepEqual(ks.parseOverride(null), {});
 });
 
-test("a fetch asks for the plain URL (no cookies, no query), saves the answer, and applies it now only to a live switch", async () => {
-  reset();
-  let asked;
-  const fetchFn = async (url, init) => {
-    asked = { url, init };
-    return answer(file({ sidebarSlide: false, lazySidebarRows: false }))();
-  };
-  assert.equal(await ks.refreshSwitches(fetchFn), "updated");
-  assert.equal(asked.url, "https://ardia.dev/switches.json");
-  assert.equal(asked.init.credentials, "omit");
-  assert.equal(asked.init.headers, undefined);
-  assert.ok(!asked.url.includes("?"));
-  assert.equal(ks.switchOn("sidebarSlide"), false);
-  assert.equal(ks.switchOn("lazySidebarRows"), true);
-  ks.reloadSwitches();
-  assert.equal(ks.switchOn("sidebarSlide"), false);
-  assert.equal(ks.switchOn("lazySidebarRows"), false);
-});
-
-test("a build with no switches URL never fetches and keeps every switch on", async () => {
-  const upstream = appInfo.switchesURL;
-  try {
-    for (const off of ["", "   ", null, undefined, "http://ardia.dev/switches.json", "file:///tmp/switches.json"]) {
-      reset();
-      appInfo.switchesURL = off;
-      let fetched = false;
-      const fetchFn = async () => {
-        fetched = true;
-        return answer(file({ sidebarSlide: false }))();
-      };
-      assert.equal(await ks.refreshSwitches(fetchFn), "off", String(off));
-      assert.equal(fetched, false, String(off));
-      assert.equal(ks.switchOn("sidebarSlide"), true, String(off));
-      assert.equal(docs.has("switches-cache.json"), false, String(off));
-    }
-  } finally {
-    appInfo.switchesURL = upstream;
-  }
-});
-
-test("at most one fetch a launch", async () => {
-  reset();
-  let n = 0;
-  const fetchFn = async () => (n++, answer(file({}))());
-  assert.equal(await ks.refreshSwitches(fetchFn), "updated");
-  assert.equal(await ks.refreshSwitches(fetchFn), "already");
-  assert.equal(n, 1);
-});
-
-test("a switch the file stops naming goes back on (staleness: the cache follows the file, not the first answer)", async () => {
-  reset();
-  await ks.refreshSwitches(answer(file({ sidebarSlide: false })));
-  assert.equal(ks.switchOn("sidebarSlide"), false);
-  ks.resetRefreshForTests();
-  await ks.refreshSwitches(answer(file({})));
-  assert.equal(ks.switchOn("sidebarSlide"), true);
-  ks.reloadSwitches();
-  assert.equal(ks.switchOn("sidebarSlide"), true);
-});
-
-test("offline, an error, an odd answer or a slow one keeps the cached value (or the default)", async () => {
-  for (const [label, fetchFn] of [
-    ["offline", async () => Promise.reject(new TypeError("Network request failed"))],
-    ["404", answer("", { ok: false })],
-    ["html", answer("<html>")],
-    ["wrong version", answer({ version: 2, switches: { sidebarSlide: true } })],
-    ["no switches", answer({ version: 1 })],
-    ["huge", answer(file({ sidebarSlide: true, pad: "x".repeat(5000) }))],
-  ]) {
-    reset();
-    docs.set("switches-cache.json", JSON.stringify(file({ sidebarSlide: false })));
-    const before = docs.get("switches-cache.json");
-    assert.equal(await ks.refreshSwitches(fetchFn), "failed", label);
-    assert.equal(ks.switchOn("sidebarSlide"), false, label);
-    assert.equal(docs.get("switches-cache.json"), before, label);
-  }
-  reset();
-  assert.equal(await ks.refreshSwitches(answer("<html>")), "failed");
-  assert.equal(ks.switchOn("sidebarSlide"), true);
-});
-
-test("a slow answer is dropped after the timeout", async (t) => {
-  reset();
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  const slow = (_url, { signal }) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
-  const result = ks.refreshSwitches(slow);
-  t.mock.timers.tick(5000);
-  assert.equal(await result, "failed");
-  assert.equal(ks.switchOn("sidebarSlide"), true);
+test("the app never fetches a switch file: values come only from the environment and the cache", () => {
+  assert.equal(ks.refreshSwitches, undefined);
+  const source = readFileSync(new URL("./killSwitches.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /\bfetch\b|writeDocument|switchesURL/);
+  assert.doesNotMatch(readFileSync(new URL("../main.tsx", import.meta.url), "utf8"), /killSwitchesLaunch|startKillSwitches/);
 });

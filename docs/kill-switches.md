@@ -1,9 +1,9 @@
 # Kill switches
 
-A speed change people can feel ships behind a switch, so a release that turns out slow or broken on some Macs can be
-backed out without another build. `apps/browser/src/lib/killSwitches.ts` is the registry; the file at
-`AC_SWITCHES_URL` says which are off. Solara has no switch file (its `AC_SWITCHES_URL` is empty), so it never fetches
-one and every switch stays on; upstream Ardia serves its file at `https://ardia.dev/switches.json`.
+A speed change people can feel ships behind a switch, so it can be turned off for a bench, a bisect or a Mac where it
+misbehaves. `apps/browser/src/lib/killSwitches.ts` is the registry. The app never fetches a switch file: Solara has no
+switches URL, and the remote check upstream Ardia runs was removed with the port off React Native. A switch's value comes
+from `ARDIA_SWITCHES`, else from `switches-cache.json` in the data dir (written only by tests and benches), else on.
 
 ## Rules
 
@@ -11,33 +11,14 @@ one and every switch stays on; upstream Ardia serves its file at `https://ardia.
   `removeBy` date: delete the switch and its old path, or move the date and say why in the commit.
 - Every switch is **on by default**, has an `owner` (an area) and an `about` line, and falls back to the behavior from
   before the change when off, with a unit test of both paths.
-- A switch is **`live`** when it's read where it's used (each call, never held in state), so a value that arrives mid-launch
+- A switch is **`live`** when it's read where it's used (each call, never held in state), so a change to the cache
   applies at once. Otherwise it's read once at launch and a change applies at the next one.
 - Reads are synchronous (`switchOn(name)`) and never re-render anything.
-
-## The file
-
-```json
-{ "version": 1, "switches": { "newTabPrewarm": false } }
-```
-
-Only names the app knows and booleans count; anything else is ignored. Leaving a switch out means on (the cache follows
-the file, not the first answer). Publishing the file is an owner-approved
-public action like any other.
-
-## The request
-
-Once a launch, after the first window, and only where the update check runs too (an updater that's set up, automatic
-checks on: `killSwitchesLaunch.ts`). A plain GET of the static file: no cookies (`credentials: "omit"`), no headers of ours,
-no query string, no ID, a 5 s timeout, 4 KB at most. The answer is cached in the data dir (`switches-cache.json`) and used
-offline; a failed or odd answer leaves the cache as it was. The same file goes to everyone, so it can't tell one Mac from
-another. Solara's `AC_SWITCHES_URL` is empty, so it fetches nothing. Settings no longer discloses the file, so a build
-that sets it needs a disclosure first.
 
 ## For a bench or a test instance
 
 `ARDIA_SWITCHES="newTabPrewarm=off,lazySidebarRows=off"` sets a launch's values over everything else (the app and
-the updater both read it). A test instance has no updater, so it never fetches.
+the updater both read it).
 
 ## The switches (see `SWITCHES` for owners and dates)
 

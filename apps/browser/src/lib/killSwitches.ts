@@ -1,4 +1,4 @@
-import { killSwitchEnvironment, readDocument, systemInfo, writeDocument } from "@ardia/shell";
+import { killSwitchEnvironment, readDocument } from "@ardia/shell";
 
 type SwitchDef = {
   about: string;
@@ -64,8 +64,6 @@ type SwitchName = keyof typeof SWITCHES;
 
 const CACHE_DOC = "switches-cache.json";
 const SWITCHES_ENV = "ARDIA_SWITCHES";
-const FETCH_TIMEOUT_MS = 5000;
-const MAX_BYTES = 4096;
 
 type Values = Partial<Record<SwitchName, boolean>>;
 
@@ -117,42 +115,3 @@ export function reloadSwitches() {
   cached = {};
   override = {};
 }
-
-let fetchedThisLaunch = false;
-
-type RefreshResult = "updated" | "failed" | "already" | "off";
-
-function switchesUrl(): string | null {
-  const url = systemInfo().switchesURL?.trim();
-  return url && /^https:\/\//i.test(url) ? url : null;
-}
-
-export async function refreshSwitches(fetchFn: typeof fetch = fetch): Promise<RefreshResult> {
-  if (fetchedThisLaunch) return "already";
-  fetchedThisLaunch = true;
-  if (!loaded) load();
-  const url = switchesUrl();
-  if (!url) return "off";
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetchFn(url, { method: "GET", credentials: "omit", cache: "no-store", signal: abort.signal });
-    if (!response.ok) return "failed";
-    const text = await response.text();
-    if (text.length > MAX_BYTES) return "failed";
-    const parsed = JSON.parse(text) as { version?: unknown; switches?: unknown };
-    if (parsed?.version !== 1 || !parsed.switches || typeof parsed.switches !== "object") return "failed";
-    const values = parseSwitches(text);
-    writeDocument(CACHE_DOC, JSON.stringify({ version: 1, switches: values }));
-    const next: Values = { ...cached };
-    for (const name of Object.keys(SWITCHES) as SwitchName[]) if (SWITCHES[name].live) next[name] = values[name];
-    cached = next;
-    return "updated";
-  } catch {
-    return "failed";
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-export const resetRefreshForTests = () => void (fetchedThisLaunch = false);

@@ -22,6 +22,7 @@ import {
   type MenuState,
 } from "@ardia/shell";
 import { Appearance } from "react-native";
+import { nativeOwnsWorkspace } from "../store/nativeStore";
 import { folderChildren, isBookmarked } from "../store/bookmarks";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { activeTab, bookmarkProfileId, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle } from "../store/model";
@@ -82,14 +83,16 @@ export function startNativeSync() {
   void lastTabClosesWindow().then((closes) => setLastTabKeepsWindow(!closes));
   onDownload((d) => store.getState().upsertDownload(d));
 
-  store.getState().setAppDark(Appearance.getColorScheme() === "dark");
+  if (!nativeOwnsWorkspace()) store.getState().setAppDark(Appearance.getColorScheme() === "dark");
   void setAppearance(store.getState().settings.appearance);
   void setThinScrollBars(store.getState().settings.pageScrollBars === "thin");
-  void isDarkAppearance().then((dark) => store.getState().setAppDark(dark));
+  if (!nativeOwnsWorkspace()) void isDarkAppearance().then((dark) => {
+    if (!nativeOwnsWorkspace()) store.getState().setAppDark(dark);
+  });
 
   onAppEvent((e) => {
     const s = store.getState();
-    if (e.type === "appearance") s.setAppDark(e.dark);
+    if (e.type === "appearance" && !nativeOwnsWorkspace()) s.setAppDark(e.dark);
     if (e.type === "reopen") createWindow();
     if (e.type === "quitWarningSuppressed") s.updateSettings({ warnBeforeQuitting: false });
     if (e.type === "willQuit") {

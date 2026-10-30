@@ -131,6 +131,7 @@ public final class NativeStore: Sendable {
       NativeStoreHandle.opened = true
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
+          StoreAppearanceWatch.start()
           NativeSettingsHandle.resolve = { NativeStore.settingsModel }
           NativeStoreHandle.resolve = { NativeStore.shared?.bridge.store }
         }

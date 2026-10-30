@@ -41,7 +41,8 @@ modules before using them — this is a summary from the agent that built it.
   Chrome: members are plain pinned tabs there. Mirrored, parked and synced with the pins (`tilefold:` records).
 - UI: `ui.focusedWindowId`, `ui.focusOrder`, `ui.lastProfileId` (the regular profile of the window used last, a private
   window counting as its `originalProfileId`; saved with the session; read it through `lastActiveProfile(s)`, store/small.ts),
-  `ui.appDark`, `windowUi[windowId]` (command panel, downloads popover), `find[tabId]`.
+  `ui.appDark`, `windowUi[windowId]` (command panel, downloads popover), `find[tabId]`. `find` and `ui.appDark` are
+  Swift-owned and not persisted.
 
 ## Actions
 - Windows: `createWindow`, `closeWindow`, `switchProfile`, `moveTabsToWindow`, `moveTabToProfile`,
@@ -123,6 +124,10 @@ modules before using them — this is a summary from the agent that built it.
   Data deletes from Chrome), `importHistory` (Chrome's importer path). Favicons are Chrome's too: lib/favicons.ts is
   an in-memory cache by page, plus the icons live tabs show and the light/dark pick. Settings: `updateSettings`
   (`bookmarksBar`, `shortcuts` = remapped menu keys read by Menus.swift, …).
+- `setAppDark(dark)`: updates `ui.appDark` from the native appearance observer; the JS action is a no-op when Swift
+  owns the workspace.
+- `setFind(tabId, patch)`: merges per-tab find state onto closed defaults, synchronously through Swift when it owns
+  the workspace; unknown tabs are ignored and removed tabs are pruned.
 
 ## Hooks (store/hooks.ts, window-scoped)
 `useWindowId`, `useActiveTab(Id)`, `useTab(id)`,

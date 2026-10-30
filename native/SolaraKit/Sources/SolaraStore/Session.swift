@@ -124,6 +124,8 @@ public final class Session {
 
   public func set(_ next: BrowserState) {
     let prev = state
+    var next = next
+    if next.tabs.changed(from: prev.tabs) { next.find = next.find.filter { id, _ in next.tabs.contains(id) } }
     state = next
     if depth == 0 {
       notify(prev)

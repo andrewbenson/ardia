@@ -17,7 +17,7 @@ export const WORKSPACE_COMMANDS: ReadonlySet<string> = new Set([
   "duplicateGroup", "newTabInGroup", "cleanUpTabs", "restoreCleaned", "clearUnpinnedTabs", "undoClearTabs", "removeClosedPin",
   "closeAbandonedNewTabs", "createSplit", "openSplitPane", "replaceSplitPane", "removeTabFromSplit", "separateSplit", "updateSplit",
   "flipSplit", "toggleSplitOrientation", "movePane", "focusPane", "toggleTabLayout", "openPeek", "closePeek", "peekToTab", "updateSettings",
-  "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "tidyPins", "untidyPins",
+  "setFocusedWindow", "setFind", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "tidyPins", "untidyPins",
   "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab",
 ]);
 
@@ -58,7 +58,8 @@ export function workspaceFromPatch(s: BrowserState, patch: StorePatch): Partial<
   if (p.parkedPins) next.parkedPins = applyTable(state.parkedPins!, p.parkedPins as TablePatch, keyedBy("profileId"));
   for (const name of ["pinChoices", "pinSync"] as const) if (p[name]) next[name] = applyTable(state[name]!, p[name] as TablePatch, tableOf);
   for (const name of [...LISTS, ...KEYED]) if (name in p) next[name] = p[name];
-  if (p.ui) next.ui = { ...s.ui, ...(p.ui as object) };
+  if (p.ui) next.ui = retainingJSON(s.ui, { ...s.ui, ...(p.ui as object) });
+  if (p.find) next.find = applyTable(state.find!, p.find as TablePatch, (entry) => [entry.tabId as string, entry.state]);
   if (patch.settings) {
     const settings = { ...s.settings, ...(patch.settings.set ?? {}) } as Record<string, unknown>;
     for (const key of patch.settings.remove ?? []) delete settings[key];
@@ -85,8 +86,6 @@ function withDerived(prev: BrowserState, s: BrowserState, next: Record<string, u
     }
     if (live !== prev.live) out.live = live;
     if (gone.size) {
-      const find = without(prev.find, gone);
-      if (Object.keys(find).length !== Object.keys(prev.find).length) out.find = find;
       const selection = pruneSelection(prev.selection, gone);
       if (selection !== prev.selection) out.selection = selection;
     }
@@ -193,7 +192,6 @@ export function workspaceHydration(s: BrowserState, data: HydrateData): Partial<
     bookmarks,
     bookmarksReady: Object.fromEntries(Object.keys(data.bookmarks?.roots ?? {}).filter((id) => s.profiles[id]).map((id) => [id, true as const])),
     live: Object.fromEntries(Object.keys(s.tabs).map((id) => [id, IDLE_LIVE])),
-    find: {},
     selection: {},
     selectionAnchors: {},
     windowUi: {},
@@ -204,12 +202,12 @@ export function workspaceFromSnapshot(s: BrowserState, data: Record<string, unkn
   const next: Record<string, unknown> = {};
   for (const name of [...TABLES, "peeks", "parkedPins", "pinChoices", "pinSync", ...LISTS, ...KEYED]) if (name in data) next[name] = retainingJSON((s as unknown as Record<string, unknown>)[name], data[name]);
   if (data.settings) next.settings = retainingJSON(s.settings, data.settings);
-  if (data.ui) next.ui = { ...s.ui, ...(data.ui as object) };
+  if (data.ui) next.ui = retainingJSON(s.ui, { ...s.ui, ...(data.ui as object) });
   const tabs = (next.tabs ?? {}) as BrowserState["tabs"];
   const windows = (next.windows ?? {}) as BrowserState["windows"];
   next.live = Object.fromEntries(Object.keys(tabs).map((id) => [id, (keepLocal && s.live[id]) || IDLE_LIVE]));
   next.windowUi = keepLocal ? keptFor(s.windowUi, windows) : {};
-  next.find = keepLocal ? keptFor(s.find, tabs) : {};
+  next.find = retainingJSON(s.find, data.find ?? {});
   next.selection = keepLocal ? Object.fromEntries(Object.entries(keptFor(s.selection, windows)).map(([w, ids]) => [w, ids.filter((id) => id in tabs)])) : {};
   next.selectionAnchors = keepLocal ? keptFor(s.selectionAnchors, windows) : {};
   let bookmarks = s.bookmarks;

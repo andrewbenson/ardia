@@ -162,6 +162,7 @@ extension Session {
     next.privateSiteMutes = JSMap()
     next.downloads = data.downloads ?? []
     next.peeks = Table()
+    next.find = JSMap()
     next.ui.focusedWindowId = focused
     next.ui.focusOrder = focused.map { f in [f] + windowOrder.filter { $0 != f }.reversed() } ?? []
     next.ui.lastProfileId = data.lastProfileId.flatMap { profilesData[$0] != nil ? $0 : nil }

@@ -31,6 +31,7 @@ public struct ChangeSet: Sendable, Equatable {
   public var parkedPins = TableChange()
   public var pinChoices = TableChange()
   public var pinSync = TableChange()
+  public var find = TableChange()
   public var lists: Set<String> = []
   public var settingsChanged: [String] = []
   public var settingsRemoved: [String] = []
@@ -58,6 +59,7 @@ public struct ChangeSet: Sendable, Equatable {
     if after.privateCleanedTabs != before.privateCleanedTabs { lists.insert("privateCleanedTabs") }
     if after.privateSiteMutes != before.privateSiteMutes { lists.insert("privateSiteMutes") }
     if after.downloads != before.downloads { lists.insert("downloads") }
+    if after.find != before.find { find = TableChange(Table(after.find), Table(before.find)) }
     if after.ui != before.ui { lists.insert("ui") }
     if after.caches != before.caches { lists.insert("caches") }
     if before.settings != after.settings {
@@ -68,7 +70,7 @@ public struct ChangeSet: Sendable, Equatable {
 
   public var isEmpty: Bool {
     profiles.isEmpty && windows.isEmpty && tabs.isEmpty && groups.isEmpty && splits.isEmpty && peeks.isEmpty && parkedPins.isEmpty
-      && pinChoices.isEmpty && pinSync.isEmpty && lists.isEmpty && settingsChanged.isEmpty && settingsRemoved.isEmpty
+      && pinChoices.isEmpty && pinSync.isEmpty && find.isEmpty && lists.isEmpty && settingsChanged.isEmpty && settingsRemoved.isEmpty
   }
 
   public var downloads: Bool { lists.contains("downloads") }
@@ -120,7 +122,7 @@ enum ListValue: @unchecked Sendable {
     case .privateCleaned(let v): .object(v.mapValues { .array($0.map(\.jsonValue)) })
     case .privateMutes(let v): .object(v.mapValues { .object($0.mapValues(JSONValue.bool)) })
     case .downloads(let v): .array(v.map { .object($0.json) })
-    case .focus(let ui): ["focusedWindowId": JSONValue(ui.focusedWindowId), "focusOrder": JSONValue(ui.focusOrder), "lastProfileId": JSONValue(ui.lastProfileId)]
+    case .focus(let ui): ["appDark": .bool(ui.appDark), "focusedWindowId": JSONValue(ui.focusedWindowId), "focusOrder": JSONValue(ui.focusOrder), "lastProfileId": JSONValue(ui.lastProfileId)]
     }
   }
 }
@@ -162,6 +164,7 @@ public struct Patch: @unchecked Sendable {
     if !changes.pinSync.isEmpty, let patch = TablePatch(changes.pinSync, Table(s.pinSync.map.mapValues(PinTableValue.sync)), encode: { id, v in v.json(id) }) {
       tables.append(("pinSync", patch))
     }
+    add("find", changes.find, Table(s.find)) { id, value in ["tabId": .string(id), "state": value.jsonValue] }
     for name in changes.lists.sorted() {
       switch name {
       case "profileOrder": lists.append((name, .strings(s.profileOrder)))

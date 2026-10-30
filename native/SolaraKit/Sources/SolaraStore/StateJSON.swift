@@ -20,7 +20,7 @@ extension BrowserState {
   public static let sliceKeys = [
     "profiles", "profileOrder", "orphanedProfileData", "windows", "windowOrder", "tabs", "groups", "splits", "peeks", "closedTabs", "closedWindows",
     "closedGroups", "deletedGroups", "cleanedTabs", "privateCleanedTabs", "privateSiteMutes", "parkedPins", "pinChoices", "pinSync", "downloads",
-    "settings", "ui",
+    "settings", "ui", "find",
   ]
 
   public mutating func applySlice(_ key: String, _ value: JSONValue?) throws {
@@ -66,11 +66,15 @@ extension BrowserState {
       pinSync = Table(sync)
     case "downloads": downloads = (value?.array ?? []).compactMap { $0.object.map(Download.init) }
     case "settings": settings = Settings(values: value?.object ?? Settings.defaults.values)
+    case "find":
+      var find = JSMap<FindState>()
+      for (id, value) in value?.object ?? [:] { find[id] = try FindState(value: value) }
+      self.find = find
     case "ui":
       let ui = value?.object ?? [:]
       self.ui = FocusState(
         focusedWindowId: ui["focusedWindowId"]?.string, focusOrder: ui["focusOrder"]?.array?.compactMap(\.string) ?? [],
-        lastProfileId: ui["lastProfileId"]?.string)
+        lastProfileId: ui["lastProfileId"]?.string, appDark: ui["appDark"]?.bool ?? true)
     case "caches":
       let caches = value?.object ?? [:]
       var hints = JSMap<[HistoryHint]>()
@@ -98,7 +102,8 @@ extension BrowserState {
       "privateSiteMutes": .object(privateSiteMutes.mapValues { .object($0.mapValues(JSONValue.bool)) }), "parkedPins": table(parkedPins),
       "pinChoices": .object(pinChoices.map.mapValues { .object($0.mapValues(JSONValue.number)) }), "pinSync": .object(pinSync.map.mapValues { .object($0) }),
       "downloads": .array(downloads.map { .object($0.json) }), "settings": settings.json,
-      "ui": ["focusedWindowId": JSONValue(ui.focusedWindowId), "focusOrder": JSONValue(ui.focusOrder), "lastProfileId": JSONValue(ui.lastProfileId)],
+      "find": .object(find.mapValues(\.jsonValue)),
+      "ui": ["appDark": .bool(ui.appDark), "focusedWindowId": JSONValue(ui.focusedWindowId), "focusOrder": JSONValue(ui.focusOrder), "lastProfileId": JSONValue(ui.lastProfileId)],
     ]
   }
 }

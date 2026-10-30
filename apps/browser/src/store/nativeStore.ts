@@ -29,9 +29,10 @@ type Replica = {
 
 const WORKSPACE_SLICES = [
   "profiles", "profileOrder", "orphanedProfileData", "windows", "windowOrder", "tabs", "groups", "splits", "peeks", "closedTabs", "closedWindows",
-  "closedGroups", "deletedGroups", "cleanedTabs", "privateCleanedTabs", "privateSiteMutes", "parkedPins", "pinChoices", "pinSync",
+  "closedGroups", "deletedGroups", "cleanedTabs", "privateCleanedTabs", "privateSiteMutes", "parkedPins", "pinChoices", "pinSync", "find",
 ] as const;
-const UI_KEYS = ["focusedWindowId", "focusOrder", "lastProfileId"] as const;
+const WRITABLE_UI_KEYS = ["focusedWindowId", "focusOrder", "lastProfileId"] as const;
+const UI_KEYS = [...WRITABLE_UI_KEYS, "appDark"] as const;
 
 let active = false;
 let ownsWorkspace = false;
@@ -374,16 +375,15 @@ export function writeState(store: Replica, update: Partial<BrowserState> | ((s: 
   const local: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(partial)) {
     if (value === before[key]) continue;
+    if (ownsWorkspace && key === "find") continue;
     if (ownedKeys.has(key)) owned[key] = value;
     else if (ownsWorkspace && key === "ui") {
       const ui = value as BrowserState["ui"];
-      if (UI_KEYS.some((k) => ui[k] !== s.ui[k])) owned.ui = Object.fromEntries(UI_KEYS.map((k) => [k, ui[k]]));
-      if (ui.appDark !== s.ui.appDark) local.ui = { ...s.ui, appDark: ui.appDark };
+      if (WRITABLE_UI_KEYS.some((k) => ui[k] !== s.ui[k])) owned.ui = Object.fromEntries(WRITABLE_UI_KEYS.map((k) => [k, ui[k]]));
     } else local[key] = value;
   }
   const applyLocal = () => {
     if (!Object.keys(local).length) return;
-    if (ownsWorkspace && local.ui) local.ui = { ...store.getState().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
     store.setState(local as Partial<BrowserState>);
   };
   const nativeFirst = taggingSyncOrigins && applyingFromSync();
@@ -403,14 +403,23 @@ function ownedWritePolicy(): "forward" | "refuse" {
   return __DEV__ && !applyingFromSync() ? "refuse" : "forward";
 }
 
-function forwardOwnedWrite(changed: Record<string, unknown>) {
+function forwardOwnedWrite(changed: Record<string, unknown>, s: BrowserState) {
   const caught = new Error(`${Object.keys(changed).join(", ")} changed outside the native store's applier; route the write through nativeWrite`);
   if (ownedWritePolicy() === "refuse") throw caught;
   const forwards = ((globalThis as { __nativeStoreForwards?: string[] }).__nativeStoreForwards ??= []);
   forwards.push(caught.stack ?? caught.message);
   if (forwards.length > 50) forwards.shift();
   console.warn(`${caught.message} (forwarded write ${++forwardedWrites})`);
-  nativeWrite({ name: "applyState", args: [changed] });
+  const forwarded = { ...changed };
+  if (ownsWorkspace) {
+    delete forwarded.find;
+    if (forwarded.ui) {
+      const ui = forwarded.ui as BrowserState["ui"];
+      if (WRITABLE_UI_KEYS.some((key) => !sameJSON(ui[key], s.ui[key]))) forwarded.ui = Object.fromEntries(WRITABLE_UI_KEYS.map((key) => [key, ui[key]]));
+      else delete forwarded.ui;
+    }
+  }
+  if (Object.keys(forwarded).length) nativeWrite({ name: "applyState", args: [forwarded] });
   resync(replica!, Object.keys(changed));
 }
 
@@ -440,19 +449,15 @@ export function guardNativeSet(
   const local: Record<string, unknown> = { ...partial };
   const owned = ownsWorkspace ? OWNED_KEYS : new Set(["settings", "downloads"]);
   for (const key of owned) delete local[key];
-  if (ownsWorkspace && local.ui) {
-    const ui = local.ui as BrowserState["ui"];
-    local.ui = { ...s.ui, appDark: ui.appDark };
-  }
-  if (Object.keys(changed).length) forwardOwnedWrite(changed);
+  if (ownsWorkspace) delete local.ui;
+  if (Object.keys(changed).length) forwardOwnedWrite(changed, s);
   if (!Object.keys(local).length) return;
-  if (local.ui && ownsWorkspace) local.ui = { ...get().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
   const next = local as Partial<BrowserState>;
   noteLocalUi(get(), next);
   if (!replace) return set(next, replace);
   const current = get() as unknown as Record<string, unknown>;
   const retained = Object.fromEntries([...owned].map((key) => [key, current[key]]));
-  if (ownsWorkspace && !next.ui) retained.ui = { ...get().ui };
+  if (ownsWorkspace && !next.ui) retained.ui = get().ui;
   set({ ...retained, ...next } as Partial<BrowserState>, true);
 }
 

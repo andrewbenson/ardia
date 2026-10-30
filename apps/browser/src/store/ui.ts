@@ -5,7 +5,7 @@ import { engineProfile, isIncognitoProfile, privateSession } from "./model";
 import { linkProfileOf } from "./small";
 import type { FindState, NewTabTarget, WindowUi } from "./types";
 import { commandBarFocus, expectFocus } from "../lib/focusClaims";
-import { nativeStoreActive, nativeWrite } from "./nativeStore";
+import { nativeOwnsWorkspace, nativeStoreActive, nativeWrite } from "./nativeStore";
 
 export type UiSlice = {
   ui: {
@@ -80,6 +80,7 @@ export const createUiSlice: StateCreator<BrowserState, [], [], UiSlice> = (set, 
     },
 
     setAppDark(appDark) {
+      if (nativeOwnsWorkspace()) return;
       if (get().ui.appDark !== appDark) set((s) => ({ ui: { ...s.ui, appDark } }));
     },
 

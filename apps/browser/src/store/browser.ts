@@ -185,7 +185,7 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
       downloads: data.downloads ?? [],
       windowUi: {},
       peeks: {},
-      find: {},
+      find: nativeOwnsWorkspace() ? s.find : {},
       ui: {
         ...s.ui,
         focusedWindowId: focused,

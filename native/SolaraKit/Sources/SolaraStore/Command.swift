@@ -43,6 +43,7 @@ public struct Command: Sendable, Equatable {
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
     "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "setEarlyLaunchTab", "nextId", "nextNavigation",
     "syncPinsApply", "settlePinChoices", "beginFromSync", "endFromSync", "beginTransaction", "endTransaction", "closeTransactions", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
+    "setAppDark", "setFind",
   ]
 }
 
@@ -315,7 +316,8 @@ extension Session {
     case "settlePinChoices": try SettledPinChoices(command.args).apply(self)
     case "applyState":
       var next = state
-      for (key, value) in a.object(0) { try next.applySlice(key, value) }
+      for (key, value) in a.object(0) where key != "find" { try next.applySlice(key, value) }
+      next.ui.appDark = state.ui.appDark
       let remote = a[1]?["fromSync"]?.truthy ?? false
       if remote { memory.fromSyncDepth += 1 }
       defer { if remote { memory.fromSyncDepth -= 1 } }
@@ -325,6 +327,8 @@ extension Session {
     case "closeTransactions": closeTransactions()
     case "beginFromSync": memory.fromSyncDepth += 1
     case "endFromSync": memory.fromSyncDepth = max(0, memory.fromSyncDepth - 1)
+    case "setAppDark": setAppDark(a.bool(0))
+    case "setFind": setFind(try a.requireString(0), a.update(1))
     default:
       throw CommandError("unknown command \(command.name)")
     }

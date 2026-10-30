@@ -185,9 +185,11 @@ test("Release: owned API and captured reducer writes expose only the native acce
   };
   catchUpReply = { rev, patches: [] };
   try {
-    useBrowser.setState((s) => ({ settings: { ...s.settings, searchEngine: "unforwarded-api" }, find: { t1: { query: "local" } } }));
+    const beforeFind = S().find;
+    useBrowser.setState((s) => ({ settings: { ...s.settings, searchEngine: "unforwarded-api" }, find: { t1: { query: "local" } }, selection: { w1: ["t1"] } }));
     assert.equal(S().settings.searchEngine, "native");
-    assert.equal(S().find.t1.query, "local");
+    assert.equal(S().find, beforeFind);
+    assert.deepEqual(S().selection.w1, ["t1"]);
     capturedSetWindowFrame("w1", [9, 9, 9, 9]);
     assert.deepEqual(S().windows.w1.frame, [1, 2, 3, 4]);
     assert.equal(S().settings.searchEngine, "native");

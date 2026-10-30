@@ -183,7 +183,12 @@ func replayOnce(_ json: JSONValue) throws -> (JSONValue, JSONValue?, [String]) {
       if ProcessInfo.processInfo.environment["REPLAY_TRACE"] != nil { print("case \(replay.testDescription)") }
       do {
         let (state, result, missed) = try replayOnce(json)
-        var problem = firstDifference(state, json["after"]!)
+        var expectedState = json["after"]!.object!
+        if expectedState["find"] == nil { expectedState["find"] = [:] }
+        var expectedUi = expectedState["ui"]?.object ?? [:]
+        if expectedUi["appDark"] == nil { expectedUi["appDark"] = true }
+        expectedState["ui"] = .object(expectedUi)
+        var problem = firstDifference(state, .object(expectedState))
         if problem == nil, let expected = json["result"], !(expected.isNull && result == nil) {
           let got = result ?? .null
           if got.canonical != expected.canonical { problem = "result: swift \(got.text().prefix(300)) vs js \(expected.text().prefix(300))" }

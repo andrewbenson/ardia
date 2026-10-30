@@ -42,7 +42,8 @@ import Testing
 
   @Test func withNoTokenAndNoSyncOriginAHeldTransactionCommitsAndDeliversExactlyAsBefore() throws {
     let golden = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Cases/held-transaction-at-head.txt"), encoding: .utf8)
-    let halves = golden.components(separatedBy: "\n=====\n")
+    let currentSchema = golden.replacingOccurrences(of: "\"ui\":{", with: "\"ui\":{\"appDark\":true,")
+    let halves = currentSchema.components(separatedBy: "\n=====\n")
     try #require(halves.count == 2)
     #expect(try Self.transcript(origin: .native) == halves[0], "a native user's transaction is byte for byte as before")
     #expect(try Self.transcript(origin: .bridge) == halves[1], "so is a bridged one")

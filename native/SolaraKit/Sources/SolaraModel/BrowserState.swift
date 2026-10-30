@@ -1,9 +1,11 @@
 public struct FocusState: Sendable, Equatable {
+  public var appDark: Bool
   public var focusedWindowId: String?
   public var focusOrder: [String]
   public var lastProfileId: String?
 
-  public init(focusedWindowId: String? = nil, focusOrder: [String] = [], lastProfileId: String? = nil) {
+  public init(focusedWindowId: String? = nil, focusOrder: [String] = [], lastProfileId: String? = nil, appDark: Bool = true) {
+    self.appDark = appDark
     self.focusedWindowId = focusedWindowId
     self.focusOrder = focusOrder
     self.lastProfileId = lastProfileId
@@ -54,6 +56,7 @@ public struct BrowserState: Sendable, Equatable {
   public var pinSync: Table<JSMap<JSONValue>>
   public var downloads: [Download]
   public var settings: Settings
+  public var find: JSMap<FindState>
   public var ui: FocusState
   public var caches: JSCaches
 
@@ -83,6 +86,7 @@ public struct BrowserState: Sendable, Equatable {
     pinSync = Table()
     self.downloads = downloads
     self.settings = settings
+    find = JSMap()
     ui = FocusState()
     caches = JSCaches()
   }

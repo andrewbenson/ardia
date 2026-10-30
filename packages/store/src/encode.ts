@@ -1,4 +1,4 @@
-export const PATCH_COMMANDS: ReadonlySet<string> = new Set(["updateTab", "navigated", "updateProfile", "updateGroup"]);
+export const PATCH_COMMANDS: ReadonlySet<string> = new Set(["updateTab", "navigated", "updateProfile", "updateGroup", "setFind"]);
 
 const plain = (value: unknown): unknown => (value === undefined ? null : JSON.parse(JSON.stringify(value)));
 

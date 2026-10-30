@@ -29,6 +29,8 @@ public final class WindowShellView: NSView {
   public let overlay = ShellOverlayView()
   public let hiddenPages = FlippedContainerView()
   public let cardPage = FlippedContainerView()
+  public let cardClip = FlippedContainerView()
+  public var cardStyle = CardStyle.resting { didSet { if cardStyle != oldValue { applyCardStyle() } } }
   public var cardPageFrame: CGRect? { didSet { if cardPageFrame != oldValue { placeCardPage() } } }
   public var widthDragActive = false
   private var mounted: [Slot: NSView] = [:]
@@ -59,7 +61,13 @@ public final class WindowShellView: NSView {
     addSubview(hiddenPages)
     addTrackingArea(NSTrackingArea(rect: .zero, options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect], owner: self, userInfo: nil))
     cardPage.autoresizingMask = []
-    card.addSubview(cardPage)
+    cardClip.autoresizingMask = []
+    cardClip.wantsLayer = true
+    cardClip.layer?.masksToBounds = true
+    cardClip.layer?.cornerCurve = .continuous
+    applyCardStyle()
+    cardClip.addSubview(cardPage)
+    card.addSubview(cardClip)
     mount(.card, card)
     mount(.overlay, overlay)
     overlay.onChildrenChanged = { [weak self] in self?.coverChanged() }
@@ -308,7 +316,14 @@ public final class WindowShellView: NSView {
     }
   }
 
+  private func applyCardStyle() {
+    cardClip.layer?.cornerRadius = cardStyle.radius
+    cardClip.layer?.backgroundColor = cardStyle.fill?.cgColor
+  }
+
   private func placeCardPage() {
+    let clip = CGRect(origin: .zero, size: frames.card.size)
+    if cardClip.frame != clip { cardClip.frame = clip }
     let top = min(ShellMetrics.toolbarHeight, frames.card.height)
     let frame = cardPageFrame ?? CGRect(x: 0, y: top, width: frames.card.width, height: frames.card.height - top)
     if cardPage.frame != frame { cardPage.frame = frame }
@@ -325,6 +340,18 @@ public final class WindowShellView: NSView {
     if view.frame != frame { view.frame = frame }
     view.isHidden = (slot == .sidebar && frames.sidebar == nil) || (slot == .topStrip && frames.topStrip == nil)
   }
+}
+
+public struct CardStyle: Equatable {
+  public var fill: NSColor?
+  public var radius: CGFloat
+
+  public init(fill: NSColor?, radius: CGFloat) {
+    self.fill = fill
+    self.radius = radius
+  }
+
+  public static var resting: CardStyle { CardStyle(fill: nil, radius: ShellMetrics.cardRadius) }
 }
 
 @MainActor

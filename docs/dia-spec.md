@@ -116,9 +116,10 @@ window is opaque in both, so comparing an active window with an inactive one als
 ## Content card
 
 - Frame: x = sidebar width, top 6, right 7, bottom 7. Radius 10.
-- Fill: `WindowContent/BaseTint`, #121212 at 60% (dark) or white at 80% (light), over the window
-  tint. Samples: `#1B1416` at the top, `#1F1C1D` at the bottom. Web content is opaque and sits
-  below the toolbar; the toolbar itself is translucent card.
+- Fill: #121212 at 0.5 (dark) or white at 0.7 (light), over the window tint: the rebrand's `WindowContent`
+  fill (`0x103d81118`), on in 1.50.1. The `WindowContent/BaseTint` asset's 0.6 / 0.8 is the pre-rebrand value.
+  Samples: `#1B1416` at the top, `#1F1C1D` at the bottom. Web content is opaque and sits below the toolbar; the
+  toolbar itself is translucent card.
 
 ## Link status bubble (Dia 1.54.2)
 

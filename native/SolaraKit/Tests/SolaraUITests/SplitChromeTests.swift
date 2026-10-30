@@ -167,6 +167,28 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     #expect(view.hitTest(NSPoint(x: 900, y: 400)).map { $0.isDescendant(of: b) } == true)
   }
 
+  @Test func aSingleTabCardTakesTheCardFillWhichASplitOrFullscreenDrops() throws {
+    let view = SplitPanesView(windowId: "w1")
+    view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)
+    let card = NSColor(srgbRed: 18 / 255, green: 18 / 255, blue: 18 / 255, alpha: 0.5)
+    view.cardColor = card
+    var styles: [CardStyle] = []
+    view.onCardStyle = { styles.append($0) }
+    var state = try splitState()
+    state.splits = Table()
+    state.tabs["a"]?.url = ""
+    view.update(state: state)
+    #expect(styles.last == CardStyle(fill: card, radius: 10))
+    view.setFullscreenTab("a")
+    #expect(styles.last == CardStyle(fill: nil, radius: 0))
+    view.setFullscreenTab(nil)
+    view.update(state: try splitState())
+    #expect(styles.last == CardStyle(fill: nil, radius: 10))
+    let count = styles.count
+    view.update(state: try splitState())
+    #expect(styles.count == count)
+  }
+
   @Test func aNewTabLeafShowsTheEmptyStateOverItsPage() throws {
     let view = SplitPanesView(windowId: "w1")
     view.frame = CGRect(x: 0, y: 0, width: 1007, height: 700)

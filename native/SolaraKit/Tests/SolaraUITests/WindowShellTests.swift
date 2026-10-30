@@ -227,6 +227,35 @@ struct WindowShellViewTests {
     #expect(sidebar.superview == nil)
   }
 
+  @Test func theCardPageSitsInsideTheCardsRoundedClipWhichSpansTheWholeCard() throws {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    shell.layoutSubtreeIfNeeded()
+    var clip: NSView? = shell.cardPage.superview
+    while let view = clip, view !== shell, !(view.layer?.masksToBounds == true && (view.layer?.cornerRadius ?? 0) > 0) { clip = view.superview }
+    let rounded = try #require(clip.flatMap { $0 === shell ? nil : $0 }, "nothing rounds the card page's bottom corners")
+    #expect(rounded.layer?.cornerRadius == ShellMetrics.cardRadius)
+    #expect(rounded.layer?.cornerCurve == .continuous)
+    #expect(rounded.convert(rounded.bounds, to: shell) == shell.frames.card)
+    #expect(shell.cardPage.convert(shell.cardPage.bounds, to: shell).maxY == shell.frames.card.maxY)
+    shell.cardPageFrame = CGRect(x: 0, y: 0, width: shell.frames.card.width, height: shell.frames.card.height)
+    #expect(shell.cardPage.convert(shell.cardPage.bounds, to: shell) == shell.frames.card)
+  }
+
+  @Test func theCardStyleFillsAndRoundsTheClipAndFullscreenSquaresIt() {
+    let shell = WindowShellView(windowId: "w")
+    shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)
+    #expect(shell.cardClip.layer?.backgroundColor == nil)
+    let card = NSColor(srgbRed: 18 / 255, green: 18 / 255, blue: 18 / 255, alpha: 0.5)
+    shell.cardStyle = CardStyle(fill: card, radius: ShellMetrics.cardRadius)
+    #expect(shell.cardClip.layer?.backgroundColor == card.cgColor)
+    #expect(shell.cardClip.layer?.cornerRadius == 10)
+    shell.cardStyle = CardStyle(fill: nil, radius: 0)
+    #expect(shell.cardClip.layer?.backgroundColor == nil)
+    #expect(shell.cardClip.layer?.cornerRadius == 0)
+    #expect(shell.hitTest(NSPoint(x: 500, y: 400)) == nil)
+  }
+
   @Test func theReactRootOnTopStacksAboveEveryNativeLayerButTheOverlay() {
     let shell = WindowShellView(windowId: "w", reactOnTop: true)
     shell.frame = CGRect(x: 0, y: 0, width: 1000, height: 700)

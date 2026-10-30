@@ -21,7 +21,23 @@ public enum SplitLayout {
 public final class SplitPanesView: NSView {
   public let windowId: String
   public var toolbarHeight: CGFloat = ShellMetrics.toolbarHeight { didSet { if toolbarHeight != oldValue { needsLayout = true } } }
-  public var cardColor: NSColor = .windowBackgroundColor { didSet { if cardColor != oldValue { panes.values.forEach { $0.fill = cardColor } } } }
+  public var cardColor: NSColor = .windowBackgroundColor {
+    didSet {
+      guard cardColor != oldValue else { return }
+      panes.values.forEach { $0.fill = cardColor }
+      publishCardStyle()
+    }
+  }
+  public var onCardStyle: (CardStyle) -> Void = { _ in } {
+    didSet {
+      publishedCardStyle = nil
+      publishCardStyle()
+    }
+  }
+  public var cardStyle: CardStyle {
+    CardStyle(fill: split == nil && fullscreenTab == nil ? cardColor : nil, radius: fullscreenTab == nil ? ShellMetrics.cardRadius : 0)
+  }
+  private var publishedCardStyle: CardStyle?
   public var small = false { didSet { if small != oldValue { refreshEmpty() } } }
   public var theme = SplitChromeTheme.fallback { didSet { if theme != oldValue { panes.values.forEach { $0.empty?.theme = theme } } } }
   public var favicons: SidebarFavicons?
@@ -63,12 +79,21 @@ public final class SplitPanesView: NSView {
       needsLayout = true
     }
     refreshEmpty()
+    publishCardStyle()
   }
 
   public func setFullscreenTab(_ tabId: String?) {
     guard tabId != fullscreenTab else { return }
     fullscreenTab = tabId
     needsLayout = true
+    publishCardStyle()
+  }
+
+  private func publishCardStyle() {
+    let next = cardStyle
+    guard next != publishedCardStyle else { return }
+    publishedCardStyle = next
+    onCardStyle(next)
   }
 
   public func setToolbars(_ next: [String: String]) {

@@ -430,7 +430,15 @@ struct ProfileRow: View {
   let profile: ProfileSummary
   let first: Bool
   let lifted: Bool
-  @State private var hovered = false
+  @State private var hovered: Bool
+
+  init(model: ProfilesPaneModel, profile: ProfileSummary, first: Bool, lifted: Bool, hovered: Bool = false) {
+    self.model = model
+    self.profile = profile
+    self.first = first
+    self.lifted = lifted
+    _hovered = State(initialValue: hovered)
+  }
 
   var body: some View {
     let description = model.rowDescription(profile.id)
@@ -463,7 +471,14 @@ struct ProfileRow: View {
       .padding(.leading, 8)
       .padding(.trailing, 12)
       .frame(height: ProfileReorder.rowHeight - (first ? 0 : 1))
-      .background(hovered && !lifted ? Color.primary.opacity(0.06) : Color.clear)
+      .background {
+        if hovered && !lifted {
+          RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color.primary.opacity(0.06))
+            .padding(.horizontal, -6)
+            .padding(.vertical, 2)
+        }
+      }
     }
     .background {
       if lifted {

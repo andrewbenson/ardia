@@ -98,7 +98,7 @@ const snapshotRowMatches = (row, item) => row?.kind === item.kind
   && row.title === (typeof item.title === "string" ? item.title.slice(0, 512) : null)
   && (!plainURL(item.url) || row.url === item.url);
 const snapshotMatches = (omnibox, state) => !!omnibox
-  && (omnibox.source == null || omnibox.source === (current.newTab ? "panel" : "anchor"))
+  && omnibox.source === (current.newTab ? "panel" : "anchor")
   && omnibox.variant === state.variant && omnibox.open === true && omnibox.focused === true
   && omnibox.selectedIndex === state.selected
   && (plainURL(state.typed) || !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(state.typed) ? omnibox.typed === state.typed.slice(0, 512) : true)

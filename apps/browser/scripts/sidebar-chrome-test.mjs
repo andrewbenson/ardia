@@ -81,12 +81,15 @@ try {
   await canary("launch");
   await rep.check("(a) the blank header drags the window, and a double-click acts as the titlebar's", async () => {
     await run(`st().updateSettings({ addressBar: "toolbar" }); return settle(900);`);
+    const beforeDrag = await untilSnapshot("header drag counter before click", (_, snapshot) => Number.isInteger(snapshot.windowDragCount));
+    const beforeCount = beforeDrag.windowDragCount;
     const out = await run(`const x = 172, y = 20;
       const o = {};
       return act("hit:" + x + "," + y).then((h) => { o.hit = h; return act("windowDrags"); })
         .then(() => click(x, y)).then(() => settle(300)).then(() => act("windowDrags")).then((d) => { o.drags = Number(String(d).split("\\n")[0]); return frame(); })
-        .then((f) => { o.before = f; return click(x, y).then(() => click(x, y, 2)); }).then(() => settle(900)).then(frame)
-        .then((f) => { o.after = f; return o; });`);
+        .then((f) => { o.before = f; return o; });`);
+    await untilSnapshot("header drag counter after click", (_, snapshot) => snapshot.windowDragCount - beforeCount === out.drags);
+    out.after = await run(`return click(172, 20).then(() => click(172, 20, 2)).then(() => settle(900)).then(frame);`);
     if (!/SidebarChromeView/.test(out.hit) || out.drags !== 1 || JSON.stringify(out.after) === JSON.stringify(out.before)) throw new Error(JSON.stringify(out));
     const afterFrame = out.after.replace(/[{}]/g, "").split(",").map(Number);
     await untilSnapshot("header drag window frame", (window) => window?.sidebarShell?.chrome?.header === 46 &&
@@ -152,11 +155,22 @@ try {
     const [x, y] = centre(c, c.chrome.resize);
     const out = await run(`const o = { saved: st().settings.sidebarWidth ?? 190 };
       return act("mouse:down:${x},${y},1").then(() => act("mouse:dragged:${x + 20},${y}")).then(() => act("mouse:dragged:${x + 40},${y}")).then(() => settle(200))
-        .then(() => col()).then((c) => { o.live = c.frame[2]; return act("mouse:up:${x + 40},${y},1"); }).then(() => settle(500))
-        .then(() => { o.committed = st().settings.sidebarWidth; return col(); }).then((c) => { o.after = c.frame[2]; return click(${x + 40}, ${y}).then(() => click(${x + 40}, ${y}, 2)); })
-        .then(() => settle(600)).then(() => { o.reset = st().settings.sidebarWidth; return o; });`);
+        .then(() => col()).then((c) => ({ ...o, live: c.frame[2] }));`);
+    try {
+      await untilSnapshot("sidebar resize live width", (window) =>
+        Math.abs(window?.sidebarChromeMetrics?.liveWidth - out.live) <= 0.5 &&
+        Math.abs(window?.sidebarChromeMetrics?.committedWidth - out.saved) <= 0.5);
+    } finally {
+      await run(`return act("mouse:up:${x + 40},${y},1").then(() => settle(500));`);
+    }
+    Object.assign(out, await run(`const committed = st().settings.sidebarWidth; return col().then((c) => ({ committed, after: c.frame[2] }));`));
+    await untilSnapshot("sidebar resize committed width", (window) =>
+      Math.abs(window?.sidebarChromeMetrics?.liveWidth - out.after) <= 0.5 &&
+      Math.abs(window?.sidebarChromeMetrics?.committedWidth - out.committed) <= 0.5);
+    out.reset = await run(`return click(${x + 40}, ${y}).then(() => click(${x + 40}, ${y}, 2)).then(() => settle(600)).then(() => st().settings.sidebarWidth);`);
     if (!(out.live > out.saved + 30) || !(Math.abs(out.committed - out.after) < 1) || out.reset !== 190) throw new Error(JSON.stringify(out));
-    await untilSnapshot("sidebar resize reset", (window) => Math.abs(window?.sidebarShell?.frame?.[2] - out.reset) <= 1);
+    await untilSnapshot("sidebar resize reset", (window) => Math.abs(window?.sidebarShell?.frame?.[2] - out.reset) <= 0.5 &&
+      Math.abs(window?.sidebarChromeMetrics?.committedWidth - out.reset) <= 0.5);
     return out;
   });
   await canary("(d)");

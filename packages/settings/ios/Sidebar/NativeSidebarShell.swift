@@ -290,6 +290,17 @@ final class SidebarShellColumn: NSView, DevDropDestination {
 
 #if SOLARA_PROBES
 @MainActor
+public enum SidebarChromeRead {
+  public static func snapshot(windowId: String) -> [String: Any]? {
+    guard let column = NativeSidebarShell.column(windowId) else { return nil }
+    let committed = NativeStoreHandle.store?.state.settings["sidebarWidth"]?.number ?? SidebarChromeMetrics.defaultWidth
+    return ["liveWidth": Double(column.frame.width), "committedWidth": committed]
+  }
+}
+#endif
+
+#if SOLARA_PROBES
+@MainActor
 public enum SidebarShellRead {
   public static func snapshot(windowId: String) -> [String: Any]? { NativeSidebarShell.column(windowId)?.describe() }
 }

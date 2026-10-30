@@ -508,3 +508,45 @@ public enum VideoUpscalingRead {
   public static func snapshot() -> [String: Any] { ArdiaCoreWebView.videoUpscalingState() as? [String: Any] ?? [:] }
 }
 #endif
+
+#if SOLARA_PROBES
+import ObjectiveC
+
+@MainActor
+private enum WindowDragCounter {
+  static var installed = false
+  static var count = 0
+
+  static func snapshot() -> Int {
+    if !installed {
+      installed = true
+      for name in ["performWindowDragWithEvent:", "performWindowDragWithEvent:completionHandler:"] {
+        let selector = NSSelectorFromString(name)
+        guard let method = class_getInstanceMethod(NSWindow.self, selector) else { continue }
+        let original = method_getImplementation(method)
+        if name.hasSuffix("Handler:") {
+          let block: @convention(block) (NSWindow, NSEvent, AnyObject?) -> Void = { window, event, completion in
+            MainActor.assumeIsolated { count += 1 }
+            typealias Call = @convention(c) (AnyObject, Selector, NSEvent, AnyObject?) -> Void
+            unsafeBitCast(original, to: Call.self)(window, selector, event, completion)
+          }
+          method_setImplementation(method, imp_implementationWithBlock(block))
+        } else {
+          let block: @convention(block) (NSWindow, NSEvent) -> Void = { window, event in
+            MainActor.assumeIsolated { count += 1 }
+            typealias Call = @convention(c) (AnyObject, Selector, NSEvent) -> Void
+            unsafeBitCast(original, to: Call.self)(window, selector, event)
+          }
+          method_setImplementation(method, imp_implementationWithBlock(block))
+        }
+      }
+    }
+    return count
+  }
+}
+
+@MainActor
+public enum WindowDragRead {
+  public static var count: Int { WindowDragCounter.snapshot() }
+}
+#endif

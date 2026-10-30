@@ -182,6 +182,7 @@ enum NativeHistoryCatalog {
   }
 
   static func start(engineProfiles: [String]) async {
+    NativeHistoryHints.start(catalog: catalog)
     NewTabSources.shared.useHistoryCatalog(catalog)
     NewTabSources.shared.useBookmarkCatalog(catalog)
     await catalog.start(engineProfiles: engineProfiles)

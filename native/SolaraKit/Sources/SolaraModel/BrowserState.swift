@@ -27,6 +27,7 @@ public struct JSCaches: Sendable, Equatable {
   public var playingAudio: Set<String> = []
   public var launchBackdrop: JSONValue = .null
   public var earlyLaunchTab: Bool? = nil
+  public var systemDark = false
 
   public init() {}
 }

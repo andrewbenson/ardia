@@ -3,7 +3,7 @@ import Foundation
 internal import SolaraBridgeCore
 internal import SolaraModel
 internal import SolaraOmnibox
-internal import SolaraPersistence
+public import SolaraPersistence
 internal import SolaraStore
 
 public final class NativeStore: Sendable {
@@ -21,10 +21,9 @@ public final class NativeStore: Sendable {
   }
 
   static func earlyLaunchTabSwitch(_ folder: URL) -> Bool {
-    guard let data = try? Data(contentsOf: folder.appending(path: "switches-cache.json")),
-      let switches = (try? JSONValue.parse(data))?["switches"]?.object
-    else { return true }
-    return switches["launchTab"] != .bool(false)
+    EarlyLaunchTabProvider.resolve(
+      environment: ProcessInfo.processInfo.environment["ARDIA_SWITCHES"],
+      cache: try? Data(contentsOf: folder.appending(path: "switches-cache.json")))
   }
 
   nonisolated(unsafe) public private(set) static var shared: NativeStore?
@@ -36,11 +35,14 @@ public final class NativeStore: Sendable {
   let bridge: StoreBridge
   let writer: PersistenceWriter
   let launch: Launch
+  let caches: NativeCacheFeeds
 
-  init(bridge: StoreBridge, writer: PersistenceWriter, launch: Launch) {
+  @MainActor
+  init(bridge: StoreBridge, writer: PersistenceWriter, launch: Launch, folder: URL) {
     self.bridge = bridge
     self.writer = writer
     self.launch = launch
+    caches = NativeCacheFeeds(store: bridge.store, folder: folder)
   }
 
   public static func productName() -> String {
@@ -115,12 +117,14 @@ public final class NativeStore: Sendable {
     do {
       let launch = try Launcher.open(DataFolder(url: folder), appVersion: version, now: now, context: context, scope: activeScope)
       for note in launch.report.notes { NSLog("[store] %@", note) }
-      let store = Store(state: launch.state, memory: launch.memory, env: addressing, config: storeConfig, clock: clock)
+      var state = launch.state
+      state.caches.systemDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+      let store = Store(state: state, memory: launch.memory, env: addressing, config: storeConfig, clock: clock)
       ownsWorkspace = activeScope == .everything
       let writer = PersistenceWriter(
         store: store, database: launch.database, folder: DataFolder(url: folder), persisted: launch.persisted, scope: activeScope,
         trouble: { message in NSLog("[store] %@", message) })
-      shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch)
+      shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch, folder: folder)
       NativeSettingsHandle.active = true
       NativeStoreHandle.ownsWorkspace = ownsWorkspace
       NativeStoreHandle.ownedWorkspaceAtLaunch = ownsWorkspace

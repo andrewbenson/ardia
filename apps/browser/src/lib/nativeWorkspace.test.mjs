@@ -40,6 +40,25 @@ test("attaching closes any transaction a previous JS runtime left open", () => {
   assert.ok(sent.includes("closeTransactions"));
 });
 
+test("attaching sends only the audio cache Swift cannot derive yet", () => {
+  assert.deepEqual(sent.filter((name) => name.startsWith("set")), ["setPlayingAudio"]);
+});
+
+test("history and appearance changes do not send native-owned caches", () => {
+  const before = sent.length;
+  useBrowser.setState({ history: { default: [{ url: "https://history.example/", title: "History", favicon: "https://history.example/icon.png", visitedAt: 1 }] } });
+  S().setAppDark(!S().ui.appDark);
+  assert.deepEqual(sent.slice(before), []);
+});
+
+test("the fallback last-tab policy does not write Swift-owned memory", async () => {
+  const { setLastTabKeepsWindow } = await import("../store/newTabBar.ts");
+  const before = sent.length;
+  setLastTabKeepsWindow(true);
+  setLastTabKeepsWindow(false);
+  assert.deepEqual(sent.slice(before), []);
+});
+
 test("a catch-up snapshot after a gap keeps the live state, panels and selection of what still exists", () => {
   S().updateLive("t1", { playingAudio: true, isLoading: true });
   S().setDownloadsOpen("w1", true);

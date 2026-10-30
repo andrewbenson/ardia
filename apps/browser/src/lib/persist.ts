@@ -106,20 +106,9 @@ const unreadableDocs = new Set<string>();
 const docsToWrite = () =>
   (nativeOwnsWorkspace() ? [] : nativeStoreActive() ? DOCS.filter((d) => d.name !== "downloads.json") : DOCS).filter((d) => !unreadableDocs.has(d.name));
 
-const focusedForLaunch = (s: BrowserState) => s.ui.focusOrder.find((id) => s.windows[id] && !s.windows[id].incognito && s.windows[id].kind !== "small") ?? null;
-
 function nativeCaches(s: BrowserState): StoreCommand[] {
   const playing = Object.keys(s.live).filter((id) => s.live[id]?.playingAudio);
-  const hints = Object.entries(s.history ?? {}).map(([profileId, list]) => ({
-    name: "setHistoryHints",
-    args: [profileId, list.map((h) => ({ url: h.url, title: h.title, favicon: h.favicon }))],
-  }));
-  return [
-    { name: "setEarlyLaunchTab", args: [earlyLaunchTabOn()] },
-    { name: "setPlayingAudio", args: [playing] },
-    ...hints,
-    { name: "setLaunchBackdrop", args: [earlyLaunchTabOn() ? (launchBackdrop(s, focusedForLaunch(s)) ?? null) : null] },
-  ];
+  return [{ name: "setPlayingAudio", args: [playing] }];
 }
 
 function parsed<T>(name: string, read: DocumentRead | null): T | null {

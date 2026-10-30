@@ -81,7 +81,7 @@ extension Session {
       profiles: s.profiles.map.mapValues(\.jsonValue), profileOrder: s.profileOrder, orphanedProfileData: s.orphanedProfileData,
       settings: s.settings.json, windows: windows, windowOrder: s.windowOrder.filter { windows[$0] != nil }, focusedWindowId: focusedWindowId,
       lastProfileId: s.ui.lastProfileId, launchTab: early ? launchTab(s, focusedWindowId) : .null,
-      launchBackdrop: early && focusedWindowId != nil ? s.caches.launchBackdrop : .null,
+      launchBackdrop: early ? LaunchBackdropProvider.document(s, windowId: focusedWindowId) : .null,
       linkProfile: early ? .string(s.engineProfile(lastActiveProfile(s))) : .null, tabs: tabs,
       groups: s.groups.map.filter { _, g in windows[g.windowId] != nil }.mapValues(\.jsonValue),
       splits: s.splits.map.filter { _, v in windows[v.windowId] != nil }.mapValues(\.jsonValue),

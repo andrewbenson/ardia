@@ -328,7 +328,7 @@ export function attachReplica(store: Replica, caches: (s: BrowserState) => Store
     const next = new Map<string, unknown>();
     const changed: StoreCommand[] = [];
     for (const command of caches(s)) {
-      const key = command.name + (command.name === "setHistoryHints" ? `:${command.args[0]}` : "");
+      const key = command.name;
       next.set(key, command.args);
       if (!sameJSON(lastCaches.get(key), command.args)) changed.push(command);
     }

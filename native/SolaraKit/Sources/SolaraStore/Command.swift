@@ -290,21 +290,14 @@ extension Session {
     case "setWindowClosing":
       let id = try a.requireString(0)
       if a.bool(1) { memory.closingWindows.insert(id) } else { memory.closingWindows.remove(id) }
-    case "setLastTabKeepsWindow": memory.lastTabKeepsWindow = a.bool(0)
+    case "setLastTabKeepsWindow": break
     case "noteRemotePinDeletion":
       let profileId = try a.requireString(0)
       memory.remotePinDeletions[profileId] = (memory.remotePinDeletions[profileId] ?? 0) + 1
-    case "setHistoryHints":
-      var next = state
-      let hints = (a[1]?.array ?? []).map { HistoryHint(url: $0["url"]?.string ?? "", title: $0["title"]?.string ?? "", favicon: $0["favicon"]?.string) }
-      next.caches.historyHints[try a.requireString(0)] = hints
-      state = next
+    case "setHistoryHints": break
     case "setPlayingAudio":
       state.caches.playingAudio = Set(a.strings(0))
-    case "setEarlyLaunchTab":
-      state.caches.earlyLaunchTab = a.bool(0)
-    case "setLaunchBackdrop":
-      state.caches.launchBackdrop = a.raw(0) ?? .null
+    case "setEarlyLaunchTab", "setLaunchBackdrop": break
     case "nextId": result = .string(newId(try a.requireString(0)))
     case "nextNavigation": result = navigationTo(try a.requireString(0), userInitiated: a.bool(1)).jsonValue
     case "stripSnapshot": stripSnapshot(a[0] ?? .null)

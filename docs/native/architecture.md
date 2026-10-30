@@ -555,9 +555,9 @@ Swift importer, run through its CLI on the same file, prints the same canonical 
   what `persist.ts` writes today, plus one extra key, `"nativeExport": {"rev": …, "at": …}`. Each write goes to a
   temporary file, is synced with `F_FULLFSYNC`, and is renamed into place. Nothing is written until the state
   changes, so a launch that changes nothing leaves the user's files as they were. It includes `launchTab` and
-  `linkProfile`, ported with the exporter (`store/launchTab.ts`). `launchBackdrop` stays computed in JS until the
-  theme code ports in phase 5: JS sends it to the store as a cached value (`setLaunchBackdrop`), and until it does,
-  the store keeps the value the loaded document had. It does this from the import until phase 6 ships plus two stable releases. That
+  `linkProfile`, ported with the exporter (`store/launchTab.ts`). `launchBackdrop` is computed in Swift
+  (`SolaraStore/LaunchBackdrop.swift`, a port of `lib/launchBackdrop.ts` checked against cases recorded from it) for
+  the focused public window at export time. It does this from the import until phase 6 ships plus two stable releases. That
   keeps three things working:
   1. `ArdiaCoreHost.mm`'s early-window read (`launchTab`, `launchBackdrop`, `linkProfile`), unchanged until the
      window shell goes native;
@@ -713,8 +713,8 @@ Things the code that wires a native module into the app must do. Each one fails 
 | `persist.ts` | Phase 1a | Keep writing `session.json`, with `"nativeExport": {"rev", "at"}` added, and stop writing `downloads.json` (the native writer's shadow does). Without the marker, every launch would take a re-import as if an older build had run. |
 | `persist.ts` | Phase 1b | With the native store on, never write `session.json` or `downloads.json`. The shadow export owns both, and a JS write would look like a downgrade and re-import at every launch. |
 | `SolaraStore` | Store creation | Inject a `WebAddressing` built on `SolaraOmnibox` (`WhatwgURL`, `resolveInput` with `searchUrlPrefix(settings)`). The default `PlainWebAddressing` is for tests and parses only simple URLs. |
-| `@ardia/store` (JS) | Phase 1b, every state change | Push the caches the core reads but JS computes: `setPlayingAudio` (tabs whose live state plays audio), `setHistoryHints` per profile, `setLaunchBackdrop` (`launchBackdrop` of the focused regular window while the launchTab switch is on). `persist.ts`'s `nativeCaches` does it; a missing push leaves the core's guess stale without an error. |
-| `@ardia/store` (JS) | Phase 1b, JS module memory | Mirror each setter of memory the core reads: `setWindowClosing` (closing windows), `setLastTabKeepsWindow`, `noteRemotePinDeletion`, and bracket sync writes with `beginFromSync`/`endFromSync` (`fromSync`). |
+| `@ardia/store` (JS) | Phase 1b, every state change | Push the one cache the core reads but JS computes: `setPlayingAudio` (tabs whose live state plays audio). `persist.ts`'s `nativeCaches` does it; a missing push leaves the core's guess stale without an error. History hints, the launch backdrop, the early launch tab and the last-tab policy are Swift's own (`NativeCaches.swift`, `HistoryHints.swift`, `NativeCacheFeeds.swift`); their old commands are accepted and ignored. |
+| `@ardia/store` (JS) | Phase 1b, JS module memory | Mirror each setter of memory the core reads: `setWindowClosing` (closing windows), `noteRemotePinDeletion`, and bracket sync writes with `beginFromSync`/`endFromSync` (`fromSync`). |
 | `@ardia/store` (JS) | Phase 1b, writes outside actions | Use `writeState` (owned slices go as `applyState`, JS-owned ones stay local) or the command. Anything else is forwarded by the guard, logged in `globalThis.__nativeStoreForwards` with its stack, and raised in Debug. |
 | `NativeStore` | Scope switch | The whole workspace runs on the native store by default (1b), and the shadow export owns `session.json` and `downloads.json`. `ARDIA_NATIVE_SCOPE=settingsAndDownloads` falls back to the 1a scope. |
 | `SolaraUI` New Tab | While a native New Tab is mounted | JS publishes the suggestion data the hero can't read natively: the profile's tabs, history and bookmarks, and the window's bar actions and extensions (`newTabSources` in `@ardia/settings`, driven by `NativeNewTabHero.tsx`). A missing push leaves the hero's suggestions stale without an error. Settings come from `NativeStore.settingsModel`, so the hero is off (`SolaraNewTab.available()` is false) whenever native settings are. `ARDIA_NATIVE_NEWTAB=0` forces the RN page. |

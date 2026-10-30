@@ -323,6 +323,21 @@ final class ProbeHost {
           ["field": source["field"] ?? NSNull(), "value": safeURL(source["value"] as? String ?? ""),
             "selection": source["selection"] ?? NSNull()]
         }
+        let omnibox = OmniboxRead.bar(windowId: id).map { source -> [String: Any] in
+          let items = source["items"] as? [[String: Any]] ?? []
+          var rows: [[String: Any]] = []
+          for item in items.prefix(64) {
+            let title = (item["title"] as? String).map { String($0.prefix(512)) }
+            rows.append(["kind": Self.value(item["kind"] as? String),
+              "url": safeURL(item["url"] as? String ?? ""), "title": Self.value(title),
+              "tabId": Self.value(item["tabId"] as? String)])
+          }
+          return ["variant": Self.value(source["variant"] as? String),
+            "open": Self.value(source["mounted"] as? Bool), "focused": Self.value(source["focused"] as? Bool),
+            "typed": omniboxText(source["typed"] as? String),
+            "completion": omniboxText(source["completion"] as? String),
+            "selectedIndex": Self.value(source["selected"] as? Int), "rows": rows]
+        }
         var dropSamples: [[String: Any]] = []
         var frames: [String: Any] = [:]
         if let chromeNumber {
@@ -377,14 +392,15 @@ final class ProbeHost {
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
           "selectedTabIds": NSNull(), "activeTabIds": NSNull(), "tabIds": model.tabIds,
-          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "focusedURL": Self.value(focusedURL), "overlays": overlays,
+          "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "focusedURL": Self.value(focusedURL),
+          "omnibox": Self.value(omnibox), "overlays": overlays,
           "views": NSNull()]
       }
       if wanted == nil || wanted == "settings", let settingsWindow = WindowHost.window(id: "settings"),
         let settings = SettingsRead.snapshot() {
         windows.append(["id": "settings", "kind": "settings", "visible": settingsWindow.isVisible,
           "frame": Self.rectFromWindow(NSRect(origin: .zero, size: settingsWindow.frame.size)),
-          "overlays": [], "settings": settings])
+          "omnibox": Self.value(nil), "overlays": [], "settings": settings])
       }
       let allowedIds = Set(ids)
       let tabs: [[String: Any]] = state.tabs.keys.sorted().compactMap { id in
@@ -425,7 +441,7 @@ final class ProbeHost {
           "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "hoverStats": HoverStatsRead.snapshot(), "hoverStatsLive": HoverStatsRead.current(),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds", "windows.hoverPresentation", "windows.hoverPresentationTrace", "windows.hoverLayout", "tabs.pinned", "tabs.pinnedAsRow", "windows.shellHover", "hoverStats", "hoverStatsLive", "windows.toolbarHosts"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.omnibox", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds", "windows.hoverPresentation", "windows.hoverPresentationTrace", "windows.hoverLayout", "tabs.pinned", "tabs.pinnedAsRow", "windows.shellHover", "hoverStats", "hoverStatsLive", "windows.toolbarHosts"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final
@@ -456,6 +472,15 @@ final class ProbeHost {
       "opacity": source["opacity"] ?? NSNull(), "frame": rect(source["card"]),
       "list": rect(source["list"]),
       "controls": controls.keys.sorted().map { ["id": $0, "frame": rect(controls[$0])] }]
+  }
+
+  private func omniboxText(_ raw: String?) -> Any {
+    guard let raw else { return Self.value(nil) }
+    if raw.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:", options: .regularExpression) != nil {
+      let sanitized = safeURL(raw) as? String
+      return Self.value(sanitized.map { String($0.prefix(512)) })
+    }
+    return String(raw.prefix(512))
   }
 
   private func safeURL(_ raw: String) -> Any {

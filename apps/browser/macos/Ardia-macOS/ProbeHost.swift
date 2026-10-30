@@ -430,6 +430,14 @@ final class ProbeHost {
       if final.rev == initial.rev || attempt == 1 {
         try checkSnapshot(request)
         let windowDragCount = WindowDragRead.count
+        let swipeHaptics = SwipeRead.haptics
+        let shellHaptics = ShellHapticRead.snapshot
+        let swipePerformed = swipeHaptics["performed"] as? Int ?? 0
+        let swipeSuppressed = swipeHaptics["suppressed"] as? Int ?? 0
+        let shellPerformed = shellHaptics["performed"] as? Int ?? 0
+        let shellSuppressed = shellHaptics["suppressed"] as? Int ?? 0
+        let haptics: [String: Any] = ["performed": swipePerformed + shellPerformed, "suppressed": swipeSuppressed + shellSuppressed,
+          "swipe": swipeHaptics, "shell": shellHaptics]
         try checkSnapshot(request)
         return ["id": request.id, "protocol": 1, "result": ["schema": 1,
           "storeRevision": initial.rev, "endRevision": final.rev, "capturedAtNs": DispatchTime.now().uptimeNanoseconds,
@@ -437,7 +445,7 @@ final class ProbeHost {
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId), "poolAvailable": TabPoolRead.available,
           "hostedKinds": HostedRead.kinds,
-          "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot, "haptics": SwipeRead.haptics,
+          "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot, "haptics": haptics,
           "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "hoverStats": HoverStatsRead.snapshot(), "hoverStatsLive": HoverStatsRead.current(),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),

@@ -113,7 +113,7 @@ final class ProfilesAdapter: ProfilesServices {
   func themeSwatch(_ spec: ThemeSwatchSpec) -> AnyView? { nil }
 
   func hapticTick() {
-    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    ACSwipe.performHaptic("alignment")
   }
 
   static func millis(_ date: Date?) -> Any {

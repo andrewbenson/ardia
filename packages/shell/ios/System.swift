@@ -153,7 +153,7 @@ public class SystemModule: Module {
 
     Function("hapticTick") {
       DispatchQueue.main.async {
-        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        ShellHaptics.alignment()
         HapticLog.note("alignment")
       }
     }
@@ -293,6 +293,34 @@ final class FileDragView: ExpoView, NSDraggingSource {
     [.copy, .generic]
   }
 }
+
+@MainActor
+enum ShellHaptics {
+  #if SOLARA_PROBES
+  static var performed = 0
+  static var suppressed = 0
+  #endif
+
+  static func alignment() {
+    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" {
+      #if SOLARA_PROBES
+      suppressed += 1
+      #endif
+      return
+    }
+    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    #if SOLARA_PROBES
+    performed += 1
+    #endif
+  }
+}
+
+#if SOLARA_PROBES
+@MainActor
+public enum ShellHapticRead {
+  public static var snapshot: [String: Any] { ["performed": ShellHaptics.performed, "suppressed": ShellHaptics.suppressed] }
+}
+#endif
 
 enum HapticLog {
   private static let path: String? = {

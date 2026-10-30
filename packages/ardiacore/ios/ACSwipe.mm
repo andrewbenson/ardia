@@ -772,6 +772,8 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
     gHapticsSuppressed += 1;
     return;
   }
+#else
+  if ([NSProcessInfo.processInfo.environment[@"ARDIA_BACKGROUND"] isEqualToString:@"1"]) return;
 #endif
   NSHapticFeedbackPattern p = [pattern isEqualToString:@"levelChange"] ? NSHapticFeedbackPatternLevelChange
                               : [pattern isEqualToString:@"alignment"]  ? NSHapticFeedbackPatternAlignment

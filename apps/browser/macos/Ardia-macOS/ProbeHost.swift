@@ -1,5 +1,6 @@
 #if SOLARA_PROBES
 import AppKit
+import CoreFoundation
 import ArdiaCore
 import Foundation
 import SolaraProbes
@@ -209,17 +210,19 @@ final class ProbeHost {
 
   private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
     try checkSnapshot(request)
-    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin"]),
+    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin", "hoverPresentation"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
     let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
     let viewFrames = request.args["viewFrames"] as? [String] ?? []
     let hitPoint = request.args["hitPoint"] as? [Double]
     let blockerStep = request.args["reactBlockerStep"] as? Double
+    let hoverPresentation = request.args["hoverPresentation"] as? [Double]
     let dropTypes = Set(["public.file-url", "public.url", "public.utf8-plain-text"])
     guard request.args["dropTargets"] == nil || request.args["dropTargets"] is [[String: Any]],
       request.args["viewFrames"] == nil || request.args["viewFrames"] is [String],
       request.args["hitPoint"] == nil || hitPoint?.count == 2,
       request.args["reactBlockerStep"] == nil || (blockerStep != nil && blockerStep! >= 8 && blockerStep! <= 64),
+      request.args["hoverPresentation"] == nil || ((request.args["hoverPresentation"] as? [NSNumber])?.allSatisfy({ CFGetTypeID($0) != CFBooleanGetTypeID() }) == true && hoverPresentation?.count == 6 && hoverPresentation!.allSatisfy({ $0.isFinite && abs($0) <= 10000 }) && hoverPresentation![2] > 0 && hoverPresentation![2] <= hoverPresentation![3] && hoverPresentation![4] > 0 && hoverPresentation![4] <= hoverPresentation![5]),
       dropTargets.count <= 12, viewFrames.count <= 4,
       viewFrames.allSatisfy({ ["PopoverView", "SidebarTabCardView", "SplitChromeView"].contains($0) }),
       dropTargets.allSatisfy({ sample in
@@ -248,6 +251,7 @@ final class ProbeHost {
     let viewFrames = request.args["viewFrames"] as? [String] ?? []
     let hitPoint = request.args["hitPoint"] as? [Double]
     let blockerStep = request.args["reactBlockerStep"] as? Double
+    let hoverPresentation = request.args["hoverPresentation"] as? [Double]
     guard let store = NativeStoreHandle.store else { throw ProbeFailure.notReady }
     let wanted = request.args["windowId"] as? String
     if let wanted, wanted != "settings", store.state.windows[wanted] == nil { throw ProbeFailure.windowGone }
@@ -327,6 +331,8 @@ final class ProbeHost {
           "sidebarChromeMetrics": Self.value(SidebarChromeRead.snapshot(windowId: id)),
           "sidebarAddressBar": Self.value(SidebarAddressBarRead.snapshot(windowId: id)),
           "hoverCard": Self.value(SidebarHoverCardRead.snapshot(windowId: id)),
+          "hoverPresentation": Self.value(hoverPresentation.flatMap { SidebarHoverCardRead.presentation(windowId: id, sample: $0) }),
+          "hoverPresentationTrace": SidebarHoverCardRead.trace(windowId: id),
           "reactBlockers": Self.value(blockerStep.flatMap { WindowShellRead.reactBlockers(windowId: id, step: $0) }),
           "dropTargets": dropSamples, "viewFrames": frames, "hitSlot": Self.value(hitSlot), "hitView": Self.value(hitView),
           "firstResponder": Self.value(responder),
@@ -385,7 +391,7 @@ final class ProbeHost {
           "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot, "haptics": SwipeRead.haptics,
           "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds", "windows.hoverPresentation", "windows.hoverPresentationTrace"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

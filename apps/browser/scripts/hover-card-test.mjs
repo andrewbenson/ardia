@@ -12,7 +12,7 @@
 //
 //   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.mjs";
@@ -30,28 +30,62 @@ const ids = Array.from({ length: 8 }, (_, i) => `t${i}`);
 const titleOf = (id, i) => (i === 3 ? "Anker USB-C to USB-C Cable (240W, 6 ft), Nylon Braided" : `Tab ${id}`);
 const tabs = ids.map((id, i) => ({ id, url: `data:text/html,<title>${titleOf(id, i)}</title>`, title: titleOf(id, i), lastActiveAt: Date.now() - i * 60_000 }));
 
-mkdirSync(join(scratch, "data"), { recursive: true });
 const midnight = new Date();
 midnight.setHours(24, 0, 0, 0);
 const minutesLeftToday = Math.floor((midnight.getTime() - Date.now()) / 60_000);
 const startToday = (minutes) => Math.min(minutes, minutesLeftToday - 5);
-writeFileSync(join(scratch, "data", "calendar-fixture.json"), JSON.stringify({
+const calendarFixture = {
   calendars: [{ id: "work", title: "Work", color: "#3478F6", account: "Fixture", accountType: "local", owned: true }],
   events: [
     { id: "standup", calendarId: "work", color: "#3478F6", title: "Standup", startInMinutes: startToday(3), durationMinutes: 15, allDay: false, location: "", notes: "", url: "https://zoom.us/j/123456789", cancelled: false, declined: false, organizer: null, attendees: [{ name: "Ada Lovelace", email: "ada@example.com", me: false }] },
     { id: "review", calendarId: "work", color: "#34C759", title: "Design review", startInMinutes: startToday(90), durationMinutes: 30, allDay: false, location: "", notes: "", url: "", cancelled: false, declined: false, organizer: null, attendees: [] },
   ],
-}));
+};
 
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
+  files: { "calendar-fixture.json": calendarFixture },
   env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_MEDIA: "1", ARDIA_CALENDAR_FIXTURE: "1" },
   probe: true,
   session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
 });
 const run = (body) => app.eval(body, { timeout: 30000 });
-const card = async () => JSON.parse(await run(`return globalThis.expo.modules.SolaraHosted.sidebarHoverCard("w1")`));
+const untilSnapshot = async (what, accept, ms = 3000, args = {}) => {
+  const end = Date.now() + ms;
+  let last;
+  do {
+    last = await app.snapshot({ windowId: "w1", ...args });
+    assert.equal(last.schema, 1);
+    if (last.consistent && await accept(last)) return last;
+    await sleep(40);
+  } while (Date.now() < end);
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const near = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
+const crossCard = async (js) => {
+  if (js && !["shown", "hidden"].includes(js.phase)) return js;
+  const snapshot = await untilSnapshot("hover card", async (s) => {
+    const n = s.windows[0]?.hoverCard;
+    const same = js === null ? n === null : n && ["shown", "hidden"].includes(js.phase) && n.phase === js.phase && n.kind === js.kind && (!js.frame || near(n.frame, js.frame)) &&
+      ["inWindow", "onScreen", "typingInCard", "titleShown", "title", "more", "rows"].every((key) => !(key in js) || JSON.stringify(n[key]) === JSON.stringify(js[key])) &&
+      ["buttons", "events"].every((key) => !js[key] || n[key] && JSON.stringify(Object.keys(n[key]).sort()) === JSON.stringify(Object.keys(js[key]).sort()) && Object.keys(js[key]).every((label) => near(n[key][label], js[key][label])));
+    if (same) return true;
+    js = JSON.parse(await run(`return globalThis.expo.modules.SolaraHosted.sidebarHoverCard("w1")`));
+    return false;
+  });
+  const native = snapshot.windows[0].hoverCard;
+  if (!js) { assert.equal(native, js); return js; }
+  for (const key of ["kind", "phase", "inWindow", "onScreen", "typingInCard", "titleShown", "title", "more", "rows"]) if (key in js) assert.deepEqual(native[key], js[key], `native hover card ${key}`);
+  for (const key of ["opacity", "scale"]) if (key in js) assert.ok(Math.abs(native[key] - js[key]) <= 0.02, `native hover card ${key}`);
+  if (js.frame) assert.ok(near(native.frame, js.frame), "native hover card frame");
+  for (const key of ["buttons", "events"]) if (js[key]) {
+    assert.deepEqual(Object.keys(native[key]).sort(), Object.keys(js[key]).sort(), `native hover card ${key} labels`);
+    for (const label of Object.keys(js[key])) assert.ok(near(native[key][label], js[key][label]), `native ${key} ${label} frame`);
+  }
+  return js;
+};
+const card = async () => crossCard(JSON.parse(await run(`return globalThis.expo.modules.SolaraHosted.sidebarHoverCard("w1")`)));
 const hover = () => run(`const h = ac.sidebarRows.useSidebarUi.getState().hover; return h ? h.id : null`);
 const point = (x, y) => run(`return ac.shell.devSetPointer("w1", { x: ${x}, y: ${y} })`);
 const rnCards = () => run(`return acPerf.findFibers("DiaTabCard", 5).length`);
@@ -82,6 +116,8 @@ try {
     assert.ok(early.ms < 450, `sampled in time (${early.ms} ms)`);
     assert.equal(early.hover, null, "nothing at 300 ms");
     assert.equal(early.phase, "hidden", "no native card at 300 ms");
+    const earlySnapshot = await app.snapshot({ windowId: "w1" });
+    assert.equal(earlySnapshot.windows[0]?.hoverCard?.phase ?? "hidden", early.phase);
     const c = await shown("t3");
     rep.say(`shown at ${c.frame.map(Math.round)}`);
     assert.ok(c.inWindow && c.onScreen && c.opacity > 0.99, "on screen and opaque");
@@ -111,6 +147,7 @@ try {
   await rep.check("hovering away hides it after the 160 ms delay and the 100 ms fade", async () => {
     const early = await run(`const H = globalThis.expo.modules.SolaraHosted; return ac.shell.devSetPointer("w1", { x: 900, y: 600 }).then(() => { const t0 = Date.now(); return new Promise((done) => setTimeout(done, 80)).then(() => H.sidebarHoverCard("w1")).then((c) => ({ ms: Date.now() - t0, phase: JSON.parse(c)?.phase })); })`);
     if (early.ms < 150) assert.equal(early.phase, "shown", `still shown inside the delay (${early.ms} ms)`);
+    await untilSnapshot("hover away reaches the native fade", (s) => ["leaving", "hidden"].includes(s.windows[0]?.hoverCard?.phase));
     await gone("hover away");
   });
 
@@ -248,7 +285,7 @@ try {
           return loop();
         });
       };
-      return ac.shell.devSetPointer("w1", ${JSON.stringify(to)}).then(loop).then(() => { unsub(); return JSON.stringify(out.map(([at, p]) => [at - t0, p.opacity, p.scale])); });
+      return ac.shell.devSetPointer("w1", ${JSON.stringify(to)}).then(loop).then(() => { unsub(); return JSON.stringify(out.map(([at, p]) => [at - t0, p.opacity, p.scale, p.probeSequence, p.rect])); });
     `).then(JSON.parse);
     const bezier = (x1, y1, x2, y2) => (x) => {
       let lo = 0, hi = 1, t = 0.5;
@@ -278,6 +315,23 @@ try {
       ["out", { x: 900, y: 600 }, (t) => 1 - ease(Math.min(1, Math.max(0, t / 100))), spring(0.2, 0.6, 1, 0.92)],
     ]) {
       const samples = await sample(phase, to);
+      const nativeSnapshot = await untilSnapshot("native presentation records", (s) => s.windows[0]?.hoverPresentationTrace?.some((p) => p.sequence === samples.at(-1)[3]));
+      const records = nativeSnapshot.windows[0].hoverPresentationTrace;
+      const bySequence = new Map(records.map((p) => [p.sequence, p]));
+      const mirrored = samples.filter((sample) => bySequence.has(sample[3]));
+      assert.equal(mirrored.length, Math.min(128, samples.length), "the native ring mirrors the bounded JS tail");
+      for (const [, opacity, scale, sequence, rect] of mirrored) {
+        const native = bySequence.get(sequence);
+        assert.equal(native.opacity, opacity, `presentation ${sequence} opacity`);
+        assert.equal(native.scale, scale, `presentation ${sequence} scale`);
+        assert.ok(near(native.rect, rect), `presentation ${sequence} frame`);
+      }
+      const endpoint = await untilSnapshot("native presentation endpoint", (s) => s.windows[0]?.hoverCard?.phase === (phase === "in" ? "shown" : "hidden"), 3000,
+        { hoverPresentation: [probe.x, probe.y, w * 0.75, w + 1, h * 0.75, h + 1] });
+      if (phase === "in") {
+        assert.ok(Math.abs(endpoint.windows[0].hoverPresentation.opacity - samples.at(-1)[1]) <= 0.02);
+        assert.ok(Math.abs(endpoint.windows[0].hoverPresentation.scale - samples.at(-1)[2]) <= 0.02);
+      }
       const opacity = fit(frames(samples, 1, (s) => s[1] > 0.001 && s[1] < 0.999), fade);
       const size = fit(frames(samples, 2, (s) => s[2] > 0.5 && s[1] > 0.02), scale);
       rep.say(`${phase}: the fade starts ${opacity.start.toFixed(1)} ms after the hover changes, off RN's curve by ${opacity.error.toFixed(3)} at worst; the scale ${size.start.toFixed(1)} ms, off by ${size.error.toFixed(4)}`);
@@ -331,6 +385,8 @@ try {
       assert.ok(after.ms < 450, `sampled before a new hover intent could show (${after.ms} ms)`);
       assert.equal(after.hover, null, "the hover is dismissed");
       assert.notEqual(after.phase, "shown", "the native card is leaving or gone");
+      const afterSnapshot = await untilSnapshot("scroll dismisses native card", (s) => ["leaving", "hidden"].includes(s.windows[0]?.hoverCard?.phase));
+      assert.notEqual(afterSnapshot.windows[0].hoverCard.phase, "shown");
     } finally {
       await run(`ac.store.getState().closeTabs(${JSON.stringify(extra)}); return true`);
     }

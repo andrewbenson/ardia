@@ -46,7 +46,11 @@ enum NativeSidebarHoverCard {
       }
       return nil
     }
+    #if SOLARA_PROBES
+    guard let hit = find(root) else { return presentationJSON(["opacity": 0, "scale": 0, "rect": [0, 0, 0, 0]], windowId: windowId) }
+    #else
     guard let hit = find(root) else { return "{\"opacity\":0,\"scale\":0,\"rect\":[0,0,0,0]}" }
+    #endif
     var opacity = 1.0
     var layer: CALayer? = hit
     while let current = layer, current !== root {
@@ -60,10 +64,23 @@ enum NativeSidebarHoverCard {
       "rect": [rect.minX, flipped ? rect.minY : root.bounds.height - rect.maxY, rect.width, rect.height],
       "layer": String(describing: type(of: hit)), "delegate": hit.delegate.map { String(describing: type(of: $0)) } ?? "",
     ]
+    #if SOLARA_PROBES
+    return presentationJSON(info, windowId: windowId)
+    #else
+    guard let data = try? JSONSerialization.data(withJSONObject: info) else { return "null" }
+    return String(data: data, encoding: .utf8) ?? "null"
+    #endif
+  }
+
+  #if SOLARA_PROBES
+  private static func presentationJSON(_ source: [String: Any], windowId: String) -> String {
+    var info = source
+    info["probeSequence"] = SidebarHoverPresentationTrace.record(windowId: windowId, source: source)
     guard let data = try? JSONSerialization.data(withJSONObject: info) else { return "null" }
     return String(data: data, encoding: .utf8) ?? "null"
   }
 
+  #endif
   static func send(_ windowId: String, _ id: String, _ event: String, _ extra: [String: Any] = [:]) {
     var payload = extra
     if payload["clickAt"] == nil {
@@ -394,13 +411,42 @@ final class SidebarIconPickerHost {
 
 #if SOLARA_PROBES
 @MainActor
+private enum SidebarHoverPresentationTrace {
+  private static var sequence = 0
+  private static var samples: [String: [[String: Any]]] = [:]
+
+  static func record(windowId: String, source: [String: Any]) -> Int {
+    sequence += 1
+    let sample: [String: Any] = ["sequence": sequence, "atNs": DispatchTime.now().uptimeNanoseconds,
+      "opacity": source["opacity"] ?? NSNull(), "scale": source["scale"] ?? NSNull(), "rect": source["rect"] ?? NSNull()]
+    var records = samples[windowId] ?? []
+    records.append(sample)
+    if records.count > 128 { records.removeFirst(records.count - 128) }
+    samples[windowId] = records
+    return sequence
+  }
+
+  static func read(windowId: String) -> [[String: Any]] { samples[windowId] ?? [] }
+
+}
+
+@MainActor
 public enum SidebarHoverCardRead {
+  public static func trace(windowId: String) -> [[String: Any]] { SidebarHoverPresentationTrace.read(windowId: windowId) }
+
   public static func snapshot(windowId: String) -> [String: Any]? {
     guard let data = NativeSidebarHoverCard.describe(windowId).data(using: .utf8) else { return nil }
     guard let source = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
     var result: [String: Any] = [:]
-    for key in ["kind", "phase", "opacity", "scale", "frame"] { result[key] = source[key] }
+    for key in ["kind", "phase", "opacity", "scale", "frame", "inWindow", "onScreen", "typingInCard", "buttons", "titleShown", "rows", "title", "more", "events"] { result[key] = source[key] }
     return result
+  }
+
+  public static func presentation(windowId: String, sample: [Double]) -> [String: Any]? {
+    guard sample.count == 6,
+      let data = NativeSidebarHoverCard.presented(windowId, at: CGPoint(x: sample[0], y: sample[1]), width: sample[2]...sample[3], height: sample[4]...sample[5]).data(using: .utf8),
+      let source = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+    return ["opacity": source["opacity"] ?? NSNull(), "scale": source["scale"] ?? NSNull(), "rect": source["rect"] ?? NSNull()]
   }
 }
 #endif

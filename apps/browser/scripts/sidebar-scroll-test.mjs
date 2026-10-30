@@ -49,6 +49,26 @@ const tiles = () => st().windows.w1.tabIds.filter((id) => st().tabs[id].pinned &
 const viewport = () => frame(drag().scroll);
 `;
 const run = (body) => app.eval(`${HELPERS}\n${body}`, { timeout: 30000 });
+const untilSnapshot = async (what, accept, ms = 5000) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1" }).catch((error) => ({ error: error.message }));
+    if (!last.error && accept(last)) return last;
+    await sleep(100);
+  }
+  throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
+};
+const readTiles = async () => {
+  const ids = await run(`return tiles();`);
+  await untilSnapshot("pinned tile ids and order", (snapshot) => {
+    const window = snapshot.windows.find((w) => w.id === "w1");
+    const tabs = new Map(snapshot.tabs.map((tab) => [tab.id, tab]));
+    const native = window?.tabIds.filter((id) => tabs.get(id)?.pinned && !tabs.get(id)?.pinnedAsRow);
+    return JSON.stringify(native) === JSON.stringify(ids);
+  });
+  return ids;
+};
 
 async function layoutWith(addressBar) {
   await run(`st().updateSettings({ addressBar: ${JSON.stringify(addressBar)}, tabLayout: "sidebar" }); return settle(900).then(() => scrollTo(0));`);
@@ -73,7 +93,7 @@ async function dragRowOntoTile(addressBar) {
   const tx = Math.round(tile.x + 6), ty = Math.round(tile.y + tile.h / 2);
   const steps = [[sx, sy], [sx + 6, sy - 10], [sx + 10, sy - 40], [tx, Math.round((sy + ty) / 2)], [tx, ty + 6], [tx, ty + 2], [tx, ty]];
   await run(`return act("drag:${steps.map((p) => p.join(",")).join(";")}").then(() => settle(1500));`);
-  const after = await run(`return tiles();`);
+  const after = await readTiles();
   assert.ok(after.includes(row.id), `${row.id} dragged from the scrolled list onto p2 is pinned (tiles ${after.join(",")})`);
   assert.equal(after.indexOf(row.id), after.indexOf("p2") - 1, `it lands before p2, where it was let go (tiles ${after.join(",")})`);
   await run(`st().placeTabs([${JSON.stringify(row.id)}], { pinned: false, beforeId: null }); return settle(600);`);
@@ -84,6 +104,8 @@ try {
   app = await launch(appPath, { data, port, session: fixture, onboarded: true });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await sleep(1500);
+  const chromeWindowNumber = await run(`return win();`);
+  await untilSnapshot("Chrome window number", (snapshot) => snapshot.windows[0]?.chromeWindowNumber === chromeWindowNumber);
   await run(`return act("fakeActiveClicks");`);
 
   for (const addressBar of ["sidebar", "toolbar"])
@@ -100,7 +122,9 @@ try {
       const x = Math.round(tile.x + tile.w / 2), y = Math.round(tile.y + tile.h / 2);
       await run(`return ac.shell.devSetPointer("w1", { x: ${x}, y: ${y} }).then(() => act("mouse:down:${x},${y}")).then(() => settle(70)).then(() => act("mouse:up:${x},${y}")).then(() => settle(900));`);
     }
-    assert.equal(await run(`return st().windows.w1.activeTabIds[st().windows.w1.profileId];`), "p3", "p3 selected");
+    const selected = await run(`return st().windows.w1.activeTabIds[st().windows.w1.profileId];`);
+    assert.equal(selected, "p3", "p3 selected");
+    await untilSnapshot("selected pinned tile", (snapshot) => snapshot.windows[0]?.selectedTabId === selected);
     assert.equal(await run(`return drag().scrollY;`), scrolled, `the list stays at ${scrolled} (was ${after})`);
     await run(`return ac.shell.devSetPointer("w1", null);`);
   });
@@ -117,7 +141,7 @@ try {
     const steps = [[sx, sy], [sx + 6, sy - 10], [sx + 10, sy - 40], [tx, Math.round((sy + ty) / 2)], [tx, ty + 6], [tx, ty + 2], [tx, ty], [tx, ty]];
     const during = await run(`const seen = []; const iv = setInterval(() => viewport().then((v) => seen.push(v && v.h)), 80);
       return act("drag:${steps.map((p) => p.join(",")).join(";")}").then(() => settle(3000)).then(() => { clearInterval(iv); return seen; });`);
-    const after = await run(`return tiles();`);
+    const after = await readTiles();
     assert.equal(after.length, 23, `all twenty pinned (tiles ${after.join(",")})`);
     for (const id of many) assert.ok(after.includes(id), `${id} pinned`);
     assert.ok(Math.min(...during.filter(Boolean)) > room * 0.6, `the list kept its room through the drag (${Math.min(...during.filter(Boolean))} of ${room} pt)`);
@@ -130,7 +154,7 @@ try {
   await rep.check("a dock too tall for the window scrolls with the tabs, so every tile and tab stays reachable", async () => {
     await layoutWith("sidebar");
     await run(`st().pinTabs(${JSON.stringify(LOOSE.slice(1, 22))}, true); return settle(900).then(() => scrollTo(0));`);
-    const count = (await run(`return tiles();`)).length;
+    const count = (await readTiles()).length;
     assert.equal(count, 24, "24 tiles");
     const top = await run(`return frameOf("p1");`);
     await run(`return scrollTo(120);`);

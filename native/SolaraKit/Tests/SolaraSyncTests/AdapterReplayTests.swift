@@ -79,6 +79,23 @@ struct RecordedURLs: WebAddressing {
   func parseURL(_ url: String) -> ParsedURL? { urls[url] ?? PlainWebAddressing().parseURL(url) }
 }
 
+let uiOnlySlices = ["find"]
+let uiOnlyUiKeys = ["appDark"]
+
+func replayedState(_ state: JSONValue) -> JSONValue {
+  guard var object = state.object else { return state }
+  for key in uiOnlySlices { object.removeValue(forKey: key) }
+  if var ui = object["ui"]?.object {
+    for key in uiOnlyUiKeys { ui.removeValue(forKey: key) }
+    object["ui"] = .object(ui)
+  }
+  return .object(object)
+}
+
+func stateDifference(_ swift: JSONObject, _ recorded: JSONValue?) -> String? {
+  adapterDifference(replayedState(.object(swift)), replayedState(recorded ?? .null))
+}
+
 func adapterDifference(_ a: JSONValue, _ b: JSONValue, path: String = "") -> String? {
   switch (a, b) {
   case (.object(let x), .object(let y)):
@@ -206,7 +223,7 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
           problems.append("\(kind)(\(key)): swift \(answer.map(String.init) ?? "no function") vs js \(parts[2].text())")
         }
       }
-      if let d = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { problems.append("state after: \(d)") }
+      if let d = stateDifference(store.state.stateJSON, json["after"]) { problems.append("state after: \(d)") }
       stateChecked = true
       if let published = json["published"]?.array?.compactMap(\.string) {
         if let choices = json["publishedChoices"] {
@@ -252,7 +269,7 @@ func replayAdapterCase(_ json: JSONObject) async throws -> String?? {
     }
     if got != expected { problems.append("result: swift \(got.text()) vs js \(expected.text())") }
   }
-  if !stateChecked, let d = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { problems.append("state after: \(d)") }
+  if !stateChecked, let d = stateDifference(store.state.stateJSON, json["after"]) { problems.append("state after: \(d)") }
   if let d = memoryDifference(store.memory, json["memoryAfter"]) { problems.append("memory after: \(d)") }
   if let callbacks = json["callbacks"], JSONValue.array(adopted) != callbacks { problems.append("adopted: swift \(JSONValue.array(adopted).text()) vs js \(callbacks.text())") }
   if !lookups.missed.isEmpty { problems.append("asked what js didn't: \(lookups.missed.prefix(4).joined(separator: ", "))") }

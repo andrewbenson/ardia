@@ -30,7 +30,7 @@ import Testing
     let expected = json["result"] ?? .null
     let wanted = expected["written"] ?? (expected.isNull ? .bool(true) : expected)
     if result != wanted { return "result swift \(result?.text() ?? "nil") vs TS \(wanted.text())" }
-    if let difference = adapterDifference(.object(store.state.stateJSON), json["after"] ?? .null) { return difference }
+    if let difference = stateDifference(store.state.stateJSON, json["after"]) { return difference }
     return name.hasPrefix("legacy") ? nil : memoryDifference(store.memory, json["memoryAfter"])
   }
 

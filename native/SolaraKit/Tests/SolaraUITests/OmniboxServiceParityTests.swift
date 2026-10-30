@@ -3,6 +3,7 @@ import Foundation
 import SolaraEngine
 import SolaraModel
 import SolaraOmnibox
+import SolaraStore
 import Testing
 @testable import SolaraUI
 
@@ -60,7 +61,7 @@ private struct ServiceParityFixture {
     return Settings(values: values)
   }
 
-  @MainActor func sources(_ catalog: LibraryCatalog) -> NewTabSources {
+  @MainActor func sources(_ catalog: LibraryCatalog, workspaceTabs: Bool = false) -> NewTabSources {
     let sources = NewTabSources()
     sources.useHistoryCatalog(catalog)
     sources.useBookmarkCatalog(catalog)
@@ -73,7 +74,23 @@ private struct ServiceParityFixture {
       let bookmarkEngine = profile["bookmarkEngineProfile"]!.string!
       sources.setBookmarkIcons(icons, engineProfile: bookmarkEngine, profileId: id)
       sources.setEngineProfile(profile["engineProfile"]!.string!, bookmarkEngineProfile: bookmarkEngine, profileId: id)
-      sources.setTabs(tabs, profileId: id)
+      if workspaceTabs {
+        var state = BrowserState()
+        state.profiles[id] = Profile(id: id, name: id, color: "blue", icon: nil, createdAt: now)
+        let window = BrowserWindow(id: "fixture-window", profileId: id, incognito: false, frame: nil, createdAt: now)
+        state.windows[window.id] = window
+        for row in tabs {
+          var tab = Tab(id: row.id, windowId: window.id, profileId: id, url: row.url, now: now)
+          tab.title = row.title
+          tab.favicon = row.favicon
+          state.tabs[tab.id] = tab
+        }
+        let store = Store(state: state)
+        let projected = OmniboxWorkspaceSources(store.snapshot.state).profiles.first { $0.profileId == id }!
+        sources.setTabs(projected.tabs, profileId: id)
+      } else {
+        sources.setTabs(tabs, profileId: id)
+      }
     }
     let actions = source["actions"]!.array!.map {
       CommandAction(id: $0["id"]!.string!, title: $0["title"]!.string!, keywords: $0["keywords"]?.array?.map { $0.string! },
@@ -151,7 +168,7 @@ private func serviceResult(_ result: SuggestionResult) -> JSONValue {
 
 @Suite @MainActor
 struct OmniboxServiceParityTests {
-  @Test func catalogProjectionAndEveryOrderedAnswerMatchNodeFreshAndWarm() async throws {
+  @Test(arguments: [false, true]) func catalogProjectionAndEveryOrderedAnswerMatchNodeFreshAndWarm(workspaceTabs: Bool) async throws {
     let fixture = try ServiceParityFixture()
     let manifest = try #require(fixture.golden["manifest"])
     let sourceHash = SHA256.hash(data: fixture.sourceData).map { String(format: "%02x", $0) }.joined()
@@ -169,7 +186,7 @@ struct OmniboxServiceParityTests {
     let client = try ServiceParityClient(fixture.source)
     let catalog = LibraryCatalog(client: client)
     await catalog.start(engineProfiles: fixture.source["profiles"]!.array!.map { $0["engineProfile"]!.string! })
-    let warm = fixture.sources(catalog)
+    let warm = fixture.sources(catalog, workspaceTabs: workspaceTabs)
     for profile in fixture.source["profiles"]!.array! {
       let id = profile["id"]!.string!
       let history: JSONValue = .array(warm.history(id).map {
@@ -192,7 +209,7 @@ struct OmniboxServiceParityTests {
       let text = query["text"]!.string!
       let profile = fixture.context(query)["profileId"]!.string!
       let answer: JSONValue = ["items": expected["items"]!, "completion": expected["completion"]!]
-      for (state, sources) in [("fresh", fixture.sources(catalog)), ("warm", warm)] {
+      for (state, sources) in [("fresh", fixture.sources(catalog, workspaceTabs: workspaceTabs)), ("warm", warm)] {
         let result = sources.index(profile).suggest(text, tabs: sources.tabs(profile), options: fixture.options(query, sources))
         let actual = serviceResult(result)
         #expect(result.items.count <= 8)

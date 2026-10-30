@@ -23,6 +23,7 @@ public final class NewTabSources {
   }
 
   public private(set) var revision = 0
+  @ObservationIgnored private var workspaceProfileIds: Set<String> = []
   @ObservationIgnored private var profiles: [String: Profile] = [:]
   @ObservationIgnored private var actions: [String: ActionIndex<CommandAction>] = [:]
   @ObservationIgnored private var extensions: [String: [ExtensionCandidate]] = [:]
@@ -53,8 +54,8 @@ public final class NewTabSources {
   public func setEngineProfile(_ engineProfile: String, bookmarkEngineProfile: String? = nil, profileId: String) {
     var profile = profiles[profileId] ?? Profile()
     let bookmarkProfile = bookmarkEngineProfile ?? engineProfile
-    let historyChanged = profile.engineProfile != engineProfile
-    let bookmarksChanged = profile.bookmarkEngineProfile != bookmarkProfile
+    let historyChanged = !OmniboxWorkspaceSources.rawStringsEqual(profile.engineProfile, engineProfile)
+    let bookmarksChanged = !OmniboxWorkspaceSources.rawStringsEqual(profile.bookmarkEngineProfile, bookmarkProfile)
     guard historyChanged || bookmarksChanged else { return }
     profile.engineProfile = engineProfile
     profile.bookmarkEngineProfile = bookmarkProfile
@@ -66,6 +67,7 @@ public final class NewTabSources {
 
   private func observeHistory(profileId: String, engineProfile: String) {
     historyObservers[profileId]?.cancel()
+    setHistory([], profileId: profileId)
     guard let historyCatalog else { return }
     applyHistory(historyCatalog.history(engineProfile: engineProfile), profileId: profileId)
     historyObservers[profileId] = Task { [weak self] in
@@ -85,6 +87,7 @@ public final class NewTabSources {
 
   private func observeBookmarks(profileId: String, engineProfile: String) {
     bookmarkObservers[profileId]?.cancel()
+    setBookmarks([], profileId: profileId)
     guard let bookmarkCatalog else { return }
     applyBookmarks(bookmarkCatalog.bookmarks(engineProfile: engineProfile), profileId: profileId)
     bookmarkObservers[profileId] = Task { [weak self] in
@@ -121,7 +124,7 @@ public final class NewTabSources {
   public func omniboxBenchSnapshot(profileId: String) -> [String: Any] {
     guard let profile = profiles[profileId] else { return ["sourceMode": "unpublished"] }
     return [
-      "sourceMode": "js-feed",
+      "sourceMode": workspaceProfileIds.contains(profileId) ? "native-store" : "js-feed",
       "engineProfile": profile.engineProfile.map { $0 as Any } ?? NSNull(),
       "bookmarkEngineProfile": profile.bookmarkEngineProfile.map { $0 as Any } ?? NSNull(),
       "tabs": profile.tabs.count,
@@ -129,6 +132,38 @@ public final class NewTabSources {
       "bookmarks": profile.bookmarks.count,
       "revision": revision,
     ]
+  }
+
+  public func applyWorkspace(_ workspace: OmniboxWorkspaceSources) {
+    let ids = Set(workspace.profiles.map(\.profileId))
+    for profileId in Array(profiles.keys) where !ids.contains(profileId) { removeProfile(profileId) }
+    workspaceProfileIds = ids
+    for profile in workspace.profiles {
+      setEngineProfile(profile.engineProfile, bookmarkEngineProfile: profile.bookmarkEngineProfile, profileId: profile.profileId)
+      if !OmniboxWorkspaceSources.tabsEqual(profiles[profile.profileId]?.tabs ?? [], profile.tabs) {
+        setTabs(profile.tabs, profileId: profile.profileId)
+      }
+    }
+    revision += 1
+  }
+
+  public func resetWorkspace() {
+    workspaceProfileIds = []
+    for profileId in Array(profiles.keys) {
+      let icons = profiles[profileId]?.bookmarkIconsByEngine ?? [:]
+      removeProfile(profileId)
+      var profile = Profile()
+      profile.bookmarkIconsByEngine = icons
+      profiles[profileId] = profile
+    }
+    revision += 1
+  }
+
+  private func removeProfile(_ profileId: String) {
+    historyObservers.removeValue(forKey: profileId)?.cancel()
+    bookmarkObservers.removeValue(forKey: profileId)?.cancel()
+    warming.removeValue(forKey: profileId)?.cancel()
+    profiles[profileId] = nil
   }
 
   public func setBookmarkIcons(_ icons: [String: String], engineProfile: String, profileId: String) {

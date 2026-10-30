@@ -10,6 +10,46 @@ public class NewTabModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraNewTab")
 
+    Events("onSourceStatus")
+
+    OnCreate {
+      DispatchQueue.main.async { MainActor.assumeIsolated { NativeOmniboxSources.shared.start() } }
+    }
+
+    OnDestroy {
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          NativeOmniboxSources.shared.onStatus = nil
+          NativeOmniboxSources.shared.stop()
+        }
+      }
+    }
+
+    OnStartObserving {
+      let sink = NewTabSourceEventSink(module: self)
+      DispatchQueue.main.async {
+        MainActor.assumeIsolated {
+          NativeOmniboxSources.shared.observeStatus { status in
+            sink.module?.sendEvent("onSourceStatus", status.dictionary)
+          }
+        }
+      }
+    }
+
+    OnStopObserving {
+      DispatchQueue.main.async { MainActor.assumeIsolated { NativeOmniboxSources.shared.onStatus = nil } }
+    }
+
+    AsyncFunction("sourceStatus") { () -> [String: Any] in
+      nonisolated(unsafe) var status: [String: Any] = [:]
+      MainActor.assumeIsolated {
+        NativeOmniboxSources.shared.start()
+        NativeOmniboxSources.shared.reconcile()
+        status = NativeOmniboxSources.shared.status.dictionary
+      }
+      return status
+    }.runOnQueue(.main)
+
     Function("available") { () -> Bool in
       NativeSettingsHandle.active
     }
@@ -29,13 +69,13 @@ public class NewTabModule: Module {
       }
     }.runOnQueue(.main)
 
-    AsyncFunction("setTabs") { (profileId: String, json: String) in
+    AsyncFunction("setTabs") { (profileId: String, json: String, epoch: Int) in
       let rows = NewTabRows.tabs(json)
-      await MainActor.run { NewTabSources.shared.setTabs(rows, profileId: profileId) }
+      await MainActor.run { NativeOmniboxSources.shared.setTabs(rows, profileId: profileId, epoch: epoch) }
     }
 
-    AsyncFunction("setEngineProfile") { (profileId: String, engineProfile: String, bookmarkEngineProfile: String) in
-      await MainActor.run { NewTabSources.shared.setEngineProfile(engineProfile, bookmarkEngineProfile: bookmarkEngineProfile, profileId: profileId) }
+    AsyncFunction("setEngineProfile") { (profileId: String, engineProfile: String, bookmarkEngineProfile: String, epoch: Int) in
+      await MainActor.run { NativeOmniboxSources.shared.setEngineProfile(engineProfile, bookmarkEngineProfile: bookmarkEngineProfile, profileId: profileId, epoch: epoch) }
     }
 
     AsyncFunction("setBookmarkIcons") { (profileId: String, engineProfile: String, json: String) in
@@ -54,7 +94,7 @@ public class NewTabModule: Module {
     }
 
     AsyncFunction("forgetWindow") { (windowId: String) in
-      await MainActor.run { NewTabSources.shared.forget(windowId: windowId) }
+      await MainActor.run { NativeOmniboxSources.shared.forget(windowId: windowId) }
     }
 
     View(NativeNewTabView.self) {
@@ -144,3 +184,9 @@ public enum NewTabRead {
   public static var available: Bool { NativeSettingsHandle.active }
 }
 #endif
+
+private final class NewTabSourceEventSink: @unchecked Sendable {
+  weak var module: NewTabModule?
+
+  init(module: NewTabModule) { self.module = module }
+}

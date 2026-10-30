@@ -17,6 +17,7 @@ import { useBarExtensions } from "./extensions";
 import { openFromBar, switchFromBar, type Disposition } from "./open";
 import { clipboardPasteAction, pasteMenuItem, pasteTarget } from "./paste";
 import { runBarAction, runBarExtension } from "./runBar";
+import { startWorkspaceSources } from "./workspaceSources";
 
 export { openFromBar };
 
@@ -48,19 +49,10 @@ export function usePublishSources(windowId: string, profileId: string) {
   }, [windowId, extensions]);
 
   useEffect(() => {
-    let tabs: unknown = null;
     let bookmarks: unknown = null;
     let bookmarkProfile = "";
-    let historyEngine: string | undefined;
-    let bookmarkEngine: string | undefined;
     let actions = "";
-    const publishTabs = debounced(() => {
-      const s = useBrowser.getState();
-      const rows = Object.values(s.tabs)
-        .filter((t) => t.profileId === profileId)
-        .map((t) => ({ id: t.id, url: t.url, title: t.title, favicon: t.favicon ?? null }));
-      void newTabSources.setTabs(profileId, rows);
-    });
+    const offWorkspace = startWorkspaceSources(windowId, profileId, useBrowser, newTabSources);
     const publishBookmarkIcons = debounced(() => {
       const s = useBrowser.getState();
       const icons: Record<string, string> = {};
@@ -77,17 +69,6 @@ export function usePublishSources(windowId: string, profileId: string) {
     });
     const check = () => {
       const s = useBrowser.getState();
-      const engine = engineProfile(profileId);
-      const bookmark = engineProfile(bookmarkProfileId(s, s.windows[windowId]));
-      if (historyEngine !== engine || bookmarkEngine !== bookmark) {
-        historyEngine = engine;
-        bookmarkEngine = bookmark;
-        void newTabSources.setEngineProfile(profileId, engine, bookmark);
-      }
-      if (s.tabs !== tabs) {
-        tabs = s.tabs;
-        publishTabs.schedule();
-      }
       const bp = bookmarkProfileId(s, s.windows[windowId]);
       if (s.bookmarks !== bookmarks || bp !== bookmarkProfile) {
         bookmarks = s.bookmarks;
@@ -100,7 +81,7 @@ export function usePublishSources(windowId: string, profileId: string) {
     const off = useBrowser.subscribe(check);
     return () => {
       off();
-      publishTabs.cancel();
+      offWorkspace();
       publishBookmarkIcons.cancel();
       publishActions.cancel();
     };

@@ -1,0 +1,1005 @@
+{
+  "cases": [
+    {
+      "name": "numeric-named-shared-private",
+      "profiles": [
+        {
+          "id": "default",
+          "name": "default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "shared",
+          "name": "shared",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "default"
+        },
+        {
+          "id": "work",
+          "name": "work",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "other",
+          "name": "other",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "empty",
+          "name": "empty",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "incognito:closed@default",
+          "name": "incognito:closed@default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        }
+      ],
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "ws",
+          "profileId": "shared",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "ww",
+          "profileId": "work",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "wp",
+          "profileId": "incognito:wp@work",
+          "incognito": true,
+          "originalProfileId": "work",
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "wp2",
+          "profileId": "incognito:wp2@default",
+          "incognito": true,
+          "originalProfileId": "default",
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        }
+      ],
+      "tabs": [
+        {
+          "id": "named-first",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Actual title",
+          "favicon": "icon:a",
+          "customTitle": "Do not publish custom title"
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Duplicate URL",
+          "favicon": null
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "Empty URL",
+          "favicon": ""
+        },
+        {
+          "id": "01",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://leading.example/",
+          "title": "Leading zero",
+          "favicon": null
+        },
+        {
+          "id": "4294967295",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://max.example/",
+          "title": "Named max index",
+          "favicon": null
+        },
+        {
+          "id": "0",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://zero.example/",
+          "title": "Zero",
+          "favicon": null
+        },
+        {
+          "id": "4294967294",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://index.example/",
+          "title": "Last numeric index",
+          "favicon": null
+        },
+        {
+          "id": "shared-tab",
+          "windowId": "ws",
+          "profileId": "shared",
+          "url": "https://duplicate.example/",
+          "title": "Separate UI profile",
+          "favicon": null
+        },
+        {
+          "id": "private-tab",
+          "windowId": "wp",
+          "profileId": "incognito:wp@work",
+          "url": "https://private.example/",
+          "title": "Private work",
+          "favicon": null
+        },
+        {
+          "id": "private-tab2",
+          "windowId": "wp2",
+          "profileId": "incognito:wp2@default",
+          "url": "https://private.example/",
+          "title": "Private default",
+          "favicon": null
+        },
+        {
+          "id": "work-tab",
+          "windowId": "ww",
+          "profileId": "work",
+          "url": "https://work.example/",
+          "title": "Work",
+          "favicon": null
+        },
+        {
+          "id": "named-last",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://last.example/",
+          "title": "Last named",
+          "favicon": null
+        },
+        {
+          "id": "named-first",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Updated title",
+          "favicon": "icon:updated",
+          "customTitle": "Still ignored"
+        }
+      ],
+      "expected": [
+        {
+          "profileId": "default",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "0",
+              "url": "https://zero.example/",
+              "title": "Zero",
+              "favicon": null
+            },
+            {
+              "id": "2",
+              "url": "",
+              "title": "Empty URL",
+              "favicon": ""
+            },
+            {
+              "id": "10",
+              "url": "https://duplicate.example/",
+              "title": "Duplicate URL",
+              "favicon": null
+            },
+            {
+              "id": "4294967294",
+              "url": "https://index.example/",
+              "title": "Last numeric index",
+              "favicon": null
+            },
+            {
+              "id": "named-first",
+              "url": "https://duplicate.example/",
+              "title": "Updated title",
+              "favicon": "icon:updated"
+            },
+            {
+              "id": "01",
+              "url": "https://leading.example/",
+              "title": "Leading zero",
+              "favicon": null
+            },
+            {
+              "id": "4294967295",
+              "url": "https://max.example/",
+              "title": "Named max index",
+              "favicon": null
+            },
+            {
+              "id": "named-last",
+              "url": "https://last.example/",
+              "title": "Last named",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "shared",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "shared-tab",
+              "url": "https://duplicate.example/",
+              "title": "Separate UI profile",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "work",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": [
+            {
+              "id": "work-tab",
+              "url": "https://work.example/",
+              "title": "Work",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "other",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": []
+        },
+        {
+          "profileId": "empty",
+          "engineProfile": "empty",
+          "bookmarkEngineProfile": "empty",
+          "tabs": []
+        },
+        {
+          "profileId": "incognito:wp@work",
+          "engineProfile": "incognito:wp@engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": [
+            {
+              "id": "private-tab",
+              "url": "https://private.example/",
+              "title": "Private work",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "incognito:wp2@default",
+          "engineProfile": "incognito:wp2@",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "private-tab2",
+              "url": "https://private.example/",
+              "title": "Private default",
+              "favicon": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "first-window-closed",
+      "profiles": [
+        {
+          "id": "default",
+          "name": "default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "shared",
+          "name": "shared",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "default"
+        },
+        {
+          "id": "work",
+          "name": "work",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "other",
+          "name": "other",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "empty",
+          "name": "empty",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "incognito:closed@default",
+          "name": "incognito:closed@default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        }
+      ],
+      "windows": [
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "ws",
+          "profileId": "shared",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "ww",
+          "profileId": "work",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "wp",
+          "profileId": "incognito:wp@work",
+          "incognito": true,
+          "originalProfileId": "work",
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "wp2",
+          "profileId": "incognito:wp2@default",
+          "incognito": true,
+          "originalProfileId": "default",
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        }
+      ],
+      "tabs": [
+        {
+          "id": "0",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://zero.example/",
+          "title": "Zero",
+          "favicon": null
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Duplicate URL",
+          "favicon": null
+        },
+        {
+          "id": "4294967294",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://index.example/",
+          "title": "Last numeric index",
+          "favicon": null
+        },
+        {
+          "id": "named-first",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Updated title",
+          "favicon": "icon:updated",
+          "customTitle": "Still ignored"
+        },
+        {
+          "id": "01",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://leading.example/",
+          "title": "Leading zero",
+          "favicon": null
+        },
+        {
+          "id": "shared-tab",
+          "windowId": "ws",
+          "profileId": "shared",
+          "url": "https://duplicate.example/",
+          "title": "Separate UI profile",
+          "favicon": null
+        },
+        {
+          "id": "private-tab",
+          "windowId": "wp",
+          "profileId": "incognito:wp@work",
+          "url": "https://private.example/",
+          "title": "Private work",
+          "favicon": null
+        },
+        {
+          "id": "private-tab2",
+          "windowId": "wp2",
+          "profileId": "incognito:wp2@default",
+          "url": "https://private.example/",
+          "title": "Private default",
+          "favicon": null
+        },
+        {
+          "id": "work-tab",
+          "windowId": "ww",
+          "profileId": "work",
+          "url": "https://work.example/",
+          "title": "Work",
+          "favicon": null
+        }
+      ],
+      "expected": [
+        {
+          "profileId": "default",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "0",
+              "url": "https://zero.example/",
+              "title": "Zero",
+              "favicon": null
+            },
+            {
+              "id": "10",
+              "url": "https://duplicate.example/",
+              "title": "Duplicate URL",
+              "favicon": null
+            },
+            {
+              "id": "4294967294",
+              "url": "https://index.example/",
+              "title": "Last numeric index",
+              "favicon": null
+            },
+            {
+              "id": "named-first",
+              "url": "https://duplicate.example/",
+              "title": "Updated title",
+              "favicon": "icon:updated"
+            },
+            {
+              "id": "01",
+              "url": "https://leading.example/",
+              "title": "Leading zero",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "shared",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "shared-tab",
+              "url": "https://duplicate.example/",
+              "title": "Separate UI profile",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "work",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": [
+            {
+              "id": "work-tab",
+              "url": "https://work.example/",
+              "title": "Work",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "other",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": []
+        },
+        {
+          "profileId": "empty",
+          "engineProfile": "empty",
+          "bookmarkEngineProfile": "empty",
+          "tabs": []
+        },
+        {
+          "profileId": "incognito:wp@work",
+          "engineProfile": "incognito:wp@engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": [
+            {
+              "id": "private-tab",
+              "url": "https://private.example/",
+              "title": "Private work",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "incognito:wp2@default",
+          "engineProfile": "incognito:wp2@",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "private-tab2",
+              "url": "https://private.example/",
+              "title": "Private default",
+              "favicon": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "private-window-closed",
+      "profiles": [
+        {
+          "id": "default",
+          "name": "default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "shared",
+          "name": "shared",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "default"
+        },
+        {
+          "id": "work",
+          "name": "work",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "other",
+          "name": "other",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "empty",
+          "name": "empty",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "incognito:closed@default",
+          "name": "incognito:closed@default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        }
+      ],
+      "windows": [
+        {
+          "id": "w1",
+          "profileId": "default",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "w2",
+          "profileId": "default",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "ws",
+          "profileId": "shared",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        },
+        {
+          "id": "ww",
+          "profileId": "work",
+          "incognito": false,
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        }
+      ],
+      "tabs": [
+        {
+          "id": "0",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://zero.example/",
+          "title": "Zero",
+          "favicon": null
+        },
+        {
+          "id": "2",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "",
+          "title": "Empty URL",
+          "favicon": ""
+        },
+        {
+          "id": "10",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Duplicate URL",
+          "favicon": null
+        },
+        {
+          "id": "4294967294",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://index.example/",
+          "title": "Last numeric index",
+          "favicon": null
+        },
+        {
+          "id": "named-first",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://duplicate.example/",
+          "title": "Updated title",
+          "favicon": "icon:updated",
+          "customTitle": "Still ignored"
+        },
+        {
+          "id": "01",
+          "windowId": "w2",
+          "profileId": "default",
+          "url": "https://leading.example/",
+          "title": "Leading zero",
+          "favicon": null
+        },
+        {
+          "id": "4294967295",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://max.example/",
+          "title": "Named max index",
+          "favicon": null
+        },
+        {
+          "id": "shared-tab",
+          "windowId": "ws",
+          "profileId": "shared",
+          "url": "https://duplicate.example/",
+          "title": "Separate UI profile",
+          "favicon": null
+        },
+        {
+          "id": "work-tab",
+          "windowId": "ww",
+          "profileId": "work",
+          "url": "https://work.example/",
+          "title": "Work",
+          "favicon": null
+        },
+        {
+          "id": "named-last",
+          "windowId": "w1",
+          "profileId": "default",
+          "url": "https://last.example/",
+          "title": "Last named",
+          "favicon": null
+        }
+      ],
+      "expected": [
+        {
+          "profileId": "default",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "0",
+              "url": "https://zero.example/",
+              "title": "Zero",
+              "favicon": null
+            },
+            {
+              "id": "2",
+              "url": "",
+              "title": "Empty URL",
+              "favicon": ""
+            },
+            {
+              "id": "10",
+              "url": "https://duplicate.example/",
+              "title": "Duplicate URL",
+              "favicon": null
+            },
+            {
+              "id": "4294967294",
+              "url": "https://index.example/",
+              "title": "Last numeric index",
+              "favicon": null
+            },
+            {
+              "id": "named-first",
+              "url": "https://duplicate.example/",
+              "title": "Updated title",
+              "favicon": "icon:updated"
+            },
+            {
+              "id": "01",
+              "url": "https://leading.example/",
+              "title": "Leading zero",
+              "favicon": null
+            },
+            {
+              "id": "4294967295",
+              "url": "https://max.example/",
+              "title": "Named max index",
+              "favicon": null
+            },
+            {
+              "id": "named-last",
+              "url": "https://last.example/",
+              "title": "Last named",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "shared",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": [
+            {
+              "id": "shared-tab",
+              "url": "https://duplicate.example/",
+              "title": "Separate UI profile",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "work",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": [
+            {
+              "id": "work-tab",
+              "url": "https://work.example/",
+              "title": "Work",
+              "favicon": null
+            }
+          ]
+        },
+        {
+          "profileId": "other",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": []
+        },
+        {
+          "profileId": "empty",
+          "engineProfile": "empty",
+          "bookmarkEngineProfile": "empty",
+          "tabs": []
+        }
+      ]
+    },
+    {
+      "name": "missing-original-falls-back",
+      "profiles": [
+        {
+          "id": "default",
+          "name": "default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "shared",
+          "name": "shared",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "default"
+        },
+        {
+          "id": "work",
+          "name": "work",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "other",
+          "name": "other",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        },
+        {
+          "id": "empty",
+          "name": "empty",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "incognito:closed@default",
+          "name": "incognito:closed@default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        }
+      ],
+      "windows": [
+        {
+          "id": "orphan",
+          "profileId": "incognito:orphan@missing",
+          "incognito": true,
+          "originalProfileId": "missing",
+          "tabIds": [],
+          "activeTabIds": {},
+          "createdAt": 0
+        }
+      ],
+      "tabs": [],
+      "expected": [
+        {
+          "profileId": "default",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": []
+        },
+        {
+          "profileId": "shared",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": []
+        },
+        {
+          "profileId": "work",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": []
+        },
+        {
+          "profileId": "other",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": []
+        },
+        {
+          "profileId": "empty",
+          "engineProfile": "empty",
+          "bookmarkEngineProfile": "empty",
+          "tabs": []
+        },
+        {
+          "profileId": "incognito:orphan@missing",
+          "engineProfile": "incognito:orphan@missing",
+          "bookmarkEngineProfile": "",
+          "tabs": []
+        }
+      ]
+    },
+    {
+      "name": "no-windows",
+      "profiles": [
+        {
+          "id": "default",
+          "name": "default",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0
+        },
+        {
+          "id": "work",
+          "name": "work",
+          "color": "blue",
+          "icon": null,
+          "createdAt": 0,
+          "dataId": "engine-work"
+        }
+      ],
+      "windows": [],
+      "tabs": [],
+      "expected": [
+        {
+          "profileId": "default",
+          "engineProfile": "",
+          "bookmarkEngineProfile": "",
+          "tabs": []
+        },
+        {
+          "profileId": "work",
+          "engineProfile": "engine-work",
+          "bookmarkEngineProfile": "engine-work",
+          "tabs": []
+        }
+      ]
+    }
+  ]
+}

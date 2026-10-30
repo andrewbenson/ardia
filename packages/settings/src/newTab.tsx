@@ -1,4 +1,4 @@
-import { requireNativeViewManager, requireOptionalNativeModule } from "expo-modules-core";
+import { requireNativeViewManager, requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { forwardRef, type ComponentType, type Ref } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
@@ -50,10 +50,14 @@ export type NativeNewTabHandle = {
   measure(): Promise<{ x: number; y: number; width: number; height: number }>;
 };
 
+export type NewTabSourceStatus = { mode: "native-store" | "js-feed"; ready: boolean; epoch: number };
+
 type NewTabModule = {
+  sourceStatus(): Promise<NewTabSourceStatus>;
+  addListener(event: "onSourceStatus", listener: (status: NewTabSourceStatus) => void): EventSubscription;
   available(): boolean;
-  setTabs(profileId: string, json: string): Promise<void>;
-  setEngineProfile(profileId: string, engineProfile: string, bookmarkEngineProfile: string): Promise<void>;
+  setTabs(profileId: string, json: string, epoch: number): Promise<void>;
+  setEngineProfile(profileId: string, engineProfile: string, bookmarkEngineProfile: string, epoch: number): Promise<void>;
   setBookmarkIcons(profileId: string, engineProfile: string, json: string): Promise<void>;
   setActions(windowId: string, json: string): Promise<void>;
   setExtensions(windowId: string, json: string): Promise<void>;
@@ -84,8 +88,24 @@ export const NativeNewTab = forwardRef<NativeNewTabHandle, NativeNewTabProps>(fu
 const ignore = () => {};
 
 export const newTabSources = {
-  setTabs: (profileId: string, rows: unknown[]) => native?.setTabs(profileId, JSON.stringify(rows)).catch(ignore),
-  setEngineProfile: (profileId: string, engineProfile: string, bookmarkEngineProfile: string) => native?.setEngineProfile(profileId, engineProfile, bookmarkEngineProfile).catch(ignore),
+  sourceStatus: (): Promise<NewTabSourceStatus> => native?.sourceStatus() ?? Promise.resolve({ mode: "js-feed", ready: true, epoch: 0 }),
+  onSourceStatus: (listener: (status: NewTabSourceStatus) => void): (() => void) => {
+    let active = true;
+    let epoch = -1;
+    const receive = (status: NewTabSourceStatus) => {
+      if (!active || status.epoch <= epoch) return;
+      epoch = status.epoch;
+      listener(status);
+    };
+    const subscription = native?.addListener("onSourceStatus", receive);
+    void native?.sourceStatus().then(receive).catch(ignore);
+    return () => {
+      active = false;
+      subscription?.remove();
+    };
+  },
+  setTabs: (profileId: string, rows: unknown[], epoch: number) => native?.setTabs(profileId, JSON.stringify(rows), epoch).catch(ignore),
+  setEngineProfile: (profileId: string, engineProfile: string, bookmarkEngineProfile: string, epoch: number) => native?.setEngineProfile(profileId, engineProfile, bookmarkEngineProfile, epoch).catch(ignore),
   setBookmarkIcons: (profileId: string, engineProfile: string, icons: Record<string, string>) => native?.setBookmarkIcons(profileId, engineProfile, JSON.stringify(icons)).catch(ignore),
   setActions: (windowId: string, rows: unknown[]) => native?.setActions(windowId, JSON.stringify(rows)).catch(ignore),
   setExtensions: (windowId: string, rows: unknown[]) => native?.setExtensions(windowId, JSON.stringify(rows)).catch(ignore),

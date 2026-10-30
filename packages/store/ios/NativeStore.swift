@@ -85,6 +85,7 @@ public final class NativeStore: Sendable {
     exit(0)
   }
 
+  @MainActor
   @discardableResult
   public static func launchAtStartup() -> Bool {
     _ = setAppScheme(productName())
@@ -122,6 +123,7 @@ public final class NativeStore: Sendable {
       shared = NativeStore(bridge: StoreBridge(store: store), writer: writer, launch: launch)
       NativeSettingsHandle.active = true
       NativeStoreHandle.ownsWorkspace = ownsWorkspace
+      NativeStoreHandle.ownedWorkspaceAtLaunch = ownsWorkspace
       NativeStoreHandle.opened = true
       DispatchQueue.main.async {
         MainActor.assumeIsolated {

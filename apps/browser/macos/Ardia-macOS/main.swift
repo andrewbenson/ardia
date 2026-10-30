@@ -13,6 +13,6 @@ if let code = SafeStorageRekeyRun.runAtLaunch(
   chromeUsesRealKeychain: ArdiaCoreHost.chromeUsesRealKeychain, installedUserDataDir: ArdiaCoreHost.installedDataDirectory,
   stores: { RekeyStores(onStaged: $0) }) { exit(code) }
 
-NativeStore.launchAtStartup()
+_ = MainActor.assumeIsolated { NativeStore.launchAtStartup() }
 
 exit(ArdiaCoreHost.run(argc: CommandLine.argc, argv: CommandLine.unsafeArgv) { AppDelegate() })

@@ -1,6 +1,7 @@
 import type * as Expo from "expo-modules-core";
 import { ardiaCoreNativeModules, ardiaCoreOptionalNativeModules } from "./ardiacore";
 import { shellNativeModules, shellOptionalNativeModules } from "./shell";
+import { nativeEvents } from "./events";
 import type { LiveFolder } from "../live/types";
 
 const settingsCommands: Record<string, string> = {
@@ -70,7 +71,20 @@ const settingsModule = {
   },
 };
 
-const nativeModules: Record<string, object> = { ...shellNativeModules, ...ardiaCoreNativeModules, SolaraSettings: settingsModule };
+const newTabEvents = nativeEvents();
+const newTabModule = {
+  available: () => false,
+  sourceStatus: async () => ({ mode: "js-feed", ready: true, epoch: 0 }),
+  addListener: newTabEvents.addListener,
+  setTabs: async (_profileId: string, _json: string, _epoch: number) => {},
+  setEngineProfile: async (_profileId: string, _engineProfile: string, _bookmarkEngineProfile: string, _epoch: number) => {},
+  setBookmarkIcons: async (_profileId: string, _engineProfile: string, _json: string) => {},
+  setActions: async (_windowId: string, _json: string) => {},
+  setExtensions: async (_windowId: string, _json: string) => {},
+  forgetWindow: async (_windowId: string) => {},
+};
+
+const nativeModules: Record<string, object> = { ...shellNativeModules, ...ardiaCoreNativeModules, SolaraSettings: settingsModule, SolaraNewTab: newTabModule };
 const optionalNativeModules: Record<string, () => object | null> = { ...shellOptionalNativeModules, ...ardiaCoreOptionalNativeModules };
 const testModules = () => (globalThis as { acTestNativeModules?: Record<string, object> }).acTestNativeModules;
 

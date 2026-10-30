@@ -9,7 +9,7 @@ extension Bundle {
 public class AppModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaApp")
-    Constant("apiVersion") { () -> Int in 19 }
+    Constant("apiVersion") { () -> Int in 20 }
     Events("onNotificationResponse", "onScriptCommand")
 
     OnCreate {

@@ -9,9 +9,10 @@ export type NativeSitePanelEvent =
   | { kind: "zoom"; id: string; step: number };
 
 export type NativeSitePanelProps = ViewProps & {
-  state: string;
+  request: string;
+  onSitePanelDismiss?(): void;
+  onSitePanelClosed?(): void;
   onSitePanelEvent?(e: NativeSyntheticEvent<NativeSitePanelEvent>): void;
-  onSitePanelHeight?(e: NativeSyntheticEvent<{ height: number }>): void;
 };
 
 let View: ComponentType<NativeSitePanelProps> | null = null;

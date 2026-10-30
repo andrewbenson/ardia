@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import Testing
 
 @testable import SolaraUI
@@ -63,5 +64,109 @@ struct SwipeCapsuleTests {
     let end = v.sample(at: 1.33)
     #expect(end.opacity == 0 && abs(end.scale - 0.01) < 0.0001)
     #expect(!v.active)
+  }
+
+  @Test func displayFramesKeepTheirOriginalFadeAndCompletion() throws {
+    let v = view()
+    var dismissals = 0
+    v.onDismissed = { dismissals += 1 }
+    v.move(x: 14, now: 1)
+    v.dismiss(delay: 0.12, now: 1)
+    let box = try #require(v.subviews.first)
+    let layer = try #require(box.layer)
+    let frames: [(Double, Double, Double)] = [
+      (1.1, 1, 1),
+      (1.12, 1, 1),
+      (1.17, 0.906535349281, 0.907469995788),
+      (1.22, 0.684643187427, 0.687796755553),
+      (1.27, 0.378138130825, 0.384356749517)
+    ]
+    for (time, opacity, scale) in frames {
+      v.tick(at: time)
+      let sample = v.sample(at: time)
+      #expect(sample.frame == CGRect(x: 14, y: 264, width: 72, height: 72))
+      #expect(sample.radius == 36 && sample.iconScale == 1 && sample.iconOpacity == 0.5 && sample.list == 0 && sample.pill == 0)
+      #expect(abs(sample.opacity - opacity) < 0.000000001)
+      #expect(abs(sample.scale - scale) < 0.000000001)
+      #expect(box.frame == sample.frame && layer.opacity == Float(sample.opacity))
+      #expect(CATransform3DEqualToTransform(layer.sublayerTransform, PrimitiveMotion.scale(about: CGPoint(x: 36, y: 36), scale: sample.scale)))
+      #expect(v.shown && !v.active && dismissals == 0)
+    }
+    let deadline = (1.0 + 0.12 + SwipeCapsuleMetrics.dismissDuration).nextUp
+    v.tick(at: deadline)
+    #expect(!v.shown && dismissals == 1)
+    #expect(layer.opacity == 0 && v.sample(at: deadline).scale == 0.01)
+    v.tick(at: 2)
+    v.finishDismissal(at: 2)
+    #expect(dismissals == 1)
+  }
+
+  @Test func dismissFinishesWithoutDisplayFrames() async throws {
+    let v = view()
+    var completions: [CFTimeInterval] = []
+    let now = CACurrentMediaTime()
+    let deadline = (now + 0.12 + SwipeCapsuleMetrics.dismissDuration).nextUp
+    v.onDismissed = { completions.append(CACurrentMediaTime()) }
+    v.dismiss(delay: 0.12, now: now)
+    v.viewDidMoveToWindow()
+    #expect(v.shown && completions.isEmpty)
+    try await Task.sleep(nanoseconds: 500_000_000)
+    #expect(!v.shown && !v.active && completions.count == 1)
+    #expect(completions.first.map { $0 >= deadline } == true)
+    #expect(v.sample().opacity == 0)
+  }
+
+  @Test func dismissalCompletionWaitsForTheFadeAndRunsOnce() {
+    let v = view()
+    var dismissals = 0
+    v.onDismissed = { dismissals += 1 }
+    v.dismiss(delay: 0.12, now: 1)
+    let roundedDeadline = 1.0 + 0.12 + SwipeCapsuleMetrics.dismissDuration
+    v.finishDismissal(at: roundedDeadline)
+    #expect(v.shown && dismissals == 0)
+    v.finishDismissal(at: roundedDeadline.nextUp)
+    v.finishDismissal(at: 2)
+    #expect(!v.shown && dismissals == 1)
+  }
+
+  @Test func aNewSwipeCancelsThePreviousDismissal() async throws {
+    let v = view()
+    var dismissals = 0
+    v.onDismissed = { dismissals += 1 }
+    v.dismiss()
+    v.show(.forward, theme: theme, profileId: "default")
+    try await Task.sleep(nanoseconds: 500_000_000)
+    #expect(v.shown && v.active && v.direction == .forward && dismissals == 0)
+  }
+
+  @Test func aDismissalCallbackCanImmediatelyShowAndDismissANewSwipe() async throws {
+    let v = view()
+    var dismissals = 0
+    v.onDismissed = {
+      dismissals += 1
+      if dismissals == 1 {
+        v.show(.forward, theme: theme, profileId: "default")
+        v.dismiss(delay: 0.12)
+      }
+    }
+    v.dismiss(now: 1)
+    v.tick(at: 1.21)
+    #expect(v.shown && !v.active && v.direction == .forward && dismissals == 1)
+    try await Task.sleep(nanoseconds: 500_000_000)
+    #expect(!v.shown && dismissals == 2)
+    v.tick(at: CACurrentMediaTime())
+    #expect(dismissals == 2)
+  }
+
+  @Test func aReplacementDismissalUsesItsOwnDeadline() {
+    let v = view()
+    var dismissals = 0
+    v.onDismissed = { dismissals += 1 }
+    v.dismiss(now: 1)
+    v.dismiss(delay: 0.4, now: 1.1)
+    v.finishDismissal(at: 1.3)
+    #expect(v.shown && dismissals == 0)
+    v.finishDismissal(at: 1.71)
+    #expect(!v.shown && dismissals == 1)
   }
 }

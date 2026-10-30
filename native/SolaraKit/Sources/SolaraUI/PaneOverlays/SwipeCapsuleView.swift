@@ -109,6 +109,7 @@ public final class SwipeCapsuleView: NSView {
   private var scale = SwipeCurveTween.resting(1)
   private var dismissing = false
   private var link: CADisplayLink?
+  private var dismissal: DispatchWorkItem?
 
   private let box = PrimitiveFlippedView()
   private let glow = CALayer()
@@ -162,6 +163,8 @@ public final class SwipeCapsuleView: NSView {
 
   public func show(_ direction: SwipeCapsuleDirection, theme next: SwipeCapsuleTheme, profileId: String, now: CFTimeInterval = CACurrentMediaTime()) {
     let M = SwipeCapsuleMetrics.self
+    dismissal?.cancel()
+    dismissal = nil
     self.direction = direction
     theme = next
     self.profileId = profileId
@@ -231,11 +234,30 @@ public final class SwipeCapsuleView: NSView {
 
   public func dismiss(delay: Double = 0, now: CFTimeInterval = CACurrentMediaTime()) {
     let M = SwipeCapsuleMetrics.self
+    dismissal?.cancel()
     active = false
     dismissing = true
     fade = SwipeCurveTween(from: fade.value(at: now), to: 0, start: now + delay, duration: M.dismissDuration, curve: M.easeIn)
     scale = SwipeCurveTween(from: scale.value(at: now), to: 0.01, start: now + delay, duration: M.dismissDuration, curve: M.easeIn)
+    let deadline = (now + delay + M.dismissDuration).nextUp
+    let completion = DispatchWorkItem { [weak self] in
+      MainActor.assumeIsolated { self?.finishDismissal(at: CACurrentMediaTime()) }
+    }
+    dismissal = completion
+    let remaining = max(0, deadline - CACurrentMediaTime())
+    DispatchQueue.main.asyncAfter(deadline: .now() + .nanoseconds(Int(ceil(remaining * 1_000_000_000))), execute: completion)
     run(now)
+  }
+
+  func finishDismissal(at now: CFTimeInterval) {
+    guard dismissing, fade.finished(at: now), scale.finished(at: now) else { return }
+    apply(at: now)
+    dismissing = false
+    box.isHidden = true
+    dismissal?.cancel()
+    dismissal = nil
+    stop()
+    onDismissed?()
   }
 
   public var shown: Bool { !box.isHidden }
@@ -333,14 +355,12 @@ public final class SwipeCapsuleView: NSView {
     link = made
   }
 
-  @objc private func tick(_ link: CADisplayLink) {
-    let now = CACurrentMediaTime()
+  @objc private func tick(_ link: CADisplayLink) { tick(at: CACurrentMediaTime()) }
+
+  func tick(at now: CFTimeInterval) {
     apply(at: now)
     if dismissing, fade.finished(at: now), scale.finished(at: now) {
-      dismissing = false
-      box.isHidden = true
-      stop()
-      onDismissed?()
+      finishDismissal(at: now)
       return
     }
     if settled { stop() }

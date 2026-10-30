@@ -494,6 +494,24 @@ final class SystemState {
 
 #if SOLARA_PROBES
 @MainActor
+public enum SavedLoginRead {
+  public static func exists(origin: String, username: String) async -> Bool {
+    await withCheckedContinuation { continuation in
+      ArdiaCoreServices.listPasswords(profile: "") { result in
+        let rows = result["passwords"] as? [[String: Any]] ?? []
+        let exists = rows.contains { row in
+          let savedOrigin = (row["origin"] as? String ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+          return savedOrigin == origin && row["username"] as? String == username
+        }
+        continuation.resume(returning: exists)
+      }
+    }
+  }
+}
+#endif
+
+#if SOLARA_PROBES
+@MainActor
 public enum WindowAccessibilityRead {
   public static func textFieldCount(windowNumber: Int) -> Int? {
     guard let window = NSApp.window(withWindowNumber: windowNumber),

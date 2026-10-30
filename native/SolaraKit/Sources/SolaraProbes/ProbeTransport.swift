@@ -212,6 +212,7 @@ public final class ProbeFiles {
 
   public func reply(id: String, data: Data) throws {
     guard UUID(uuidString: id) != nil, data.count <= 65_536 else { throw ProbeFailure.invalidArgument }
+    try recheck()
     let temp = "\(id).json.tmp"
     let final = "\(id).json"
     let fd = openat(outboxFD, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
@@ -226,6 +227,10 @@ public final class ProbeFiles {
         offset += count
       }
       return true
+    }
+    do { try recheck() } catch {
+      unlinkat(outboxFD, temp, 0)
+      throw error
     }
     guard written, renameat(outboxFD, temp, outboxFD, final) == 0 else {
       unlinkat(outboxFD, temp, 0)

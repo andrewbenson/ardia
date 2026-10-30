@@ -16,6 +16,9 @@ final class ProbeHost {
   private let files: ProbeFiles
   private var seen = ProbeSeenIds()
   private var timer: Timer?
+  private var pending: [String: Timer] = [:]
+  private var snapshotTasks: [String: Task<Void, Never>] = [:]
+  private var cancellations: [String: () -> Void] = [:]
 
   static func start() {
     guard SolaraProbeHostMarker() == 1 else { return }
@@ -63,7 +66,20 @@ final class ProbeHost {
           guard request.args.isEmpty else { throw ProbeFailure.invalidArgument }
           response = ["id": id, "protocol": 1, "result": ["protocol": 1, "capabilities": ["probe.hello", "state.snapshot"], "pid": getpid()]]
         case "state.snapshot":
-          response = try snapshot(request)
+          guard snapshotTasks.count < 4, snapshotTasks[request.id] == nil else { throw ProbeFailure.notReady }
+          begin(request)
+          snapshotTasks[request.id] = Task { @MainActor in
+            defer { snapshotTasks.removeValue(forKey: request.id) }
+            do {
+              try checkSnapshot(request)
+              let response = try await snapshot(request)
+              try checkSnapshot(request)
+              finish(request, response: response)
+            } catch {
+              finish(request, response: ["id": id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code]])
+            }
+          }
+          continue
         default:
           throw ProbeFailure.unsupported
         }
@@ -71,18 +87,61 @@ final class ProbeHost {
         let code = (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code
         response = ["id": id, "protocol": 1, "error": ["code": code]]
       }
-      let encoded = try? JSONSerialization.data(withJSONObject: response)
-      let output = encoded.flatMap { $0.count <= 65_536 ? $0 : try? JSONSerialization.data(withJSONObject:
-        ["id": id, "protocol": 1, "error": ["code": ProbeFailure.oversized.code]]) }
-      if let output {
-        do { try files.reply(id: id, data: output) }
-        catch { NSLog("[solara-probe] reply: %@", String(describing: error)) }
+      reply(response, id: id)
+    }
+  }
+
+  private func reply(_ response: [String: Any], id: String) {
+    let encoded = try? JSONSerialization.data(withJSONObject: response)
+    let output = encoded.flatMap { $0.count <= 65_536 ? $0 : try? JSONSerialization.data(withJSONObject:
+      ["id": id, "protocol": 1, "error": ["code": ProbeFailure.oversized.code]]) }
+    if let output {
+      do { try files.reply(id: id, data: output) }
+      catch { NSLog("[solara-probe] reply: %@", String(describing: error)) }
+    }
+  }
+
+  private func checkGate(_ request: ProbeRequest? = nil) throws {
+    guard Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true,
+      ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1",
+      ArdiaCoreTestHooksAllowed() else { throw ProbeFailure.testHooksDenied }
+    try files.recheck()
+    if let request, Int64(Date().timeIntervalSince1970 * 1000) >= request.expiresAtMs { throw ProbeFailure.timeout }
+  }
+
+  private func checkSnapshot(_ request: ProbeRequest) throws {
+    try checkGate(request)
+    guard !Task.isCancelled, pending[request.id] != nil else { throw ProbeFailure.timeout }
+  }
+
+  private func begin(_ request: ProbeRequest) {
+    let seconds = max(0, Double(request.expiresAtMs) / 1000 - Date().timeIntervalSince1970)
+    pending[request.id] = Timer.scheduledTimer(withTimeInterval: seconds, repeats: false) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        self.snapshotTasks[request.id]?.cancel()
+        self.cancellations.removeValue(forKey: request.id)?()
+        self.finish(request, response: ["id": request.id, "protocol": 1, "error": ["code": ProbeFailure.timeout.code]])
       }
     }
   }
 
-  private func snapshot(_ request: ProbeRequest) throws -> [String: Any] {
-    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep"]),
+  private func finish(_ request: ProbeRequest, response: [String: Any]) {
+    guard let timer = pending.removeValue(forKey: request.id) else { return }
+    timer.invalidate()
+    let cancel = cancellations.removeValue(forKey: request.id)
+    do {
+      try checkGate(request)
+      reply(response, id: request.id)
+    } catch {
+      cancel?()
+      reply(["id": request.id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.testHooksDenied.code]], id: request.id)
+    }
+  }
+
+  private func snapshot(_ request: ProbeRequest) async throws -> [String: Any] {
+    try checkSnapshot(request)
+    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
     let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
     let viewFrames = request.args["viewFrames"] as? [String] ?? []
@@ -100,6 +159,21 @@ final class ProbeHost {
           (sample["y"] as? Double)?.isFinite == true &&
           (sample["type"] as? String).map(dropTypes.contains) == true
       }) else { throw ProbeFailure.invalidArgument }
+    var savedLogin: [String: Any]?
+    if let query = request.args["savedLogin"] {
+      guard let query = query as? [String: Any], Set(query.keys) == Set(["origin", "username"]),
+        let origin = query["origin"] as? String, origin.utf8.count <= 2048,
+        let username = query["username"] as? String, username.utf8.count <= 256,
+        !username.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+        let components = URLComponents(string: origin), let scheme = components.scheme, ["http", "https"].contains(scheme),
+        let host = components.host, !host.isEmpty, components.user == nil, components.password == nil,
+        components.path.isEmpty || components.path == "/", components.query == nil, components.fragment == nil,
+        let url = components.url else { throw ProbeFailure.invalidArgument }
+      let canonical = url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+      let exists = await SavedLoginRead.exists(origin: canonical, username: username)
+      try checkSnapshot(request)
+      savedLogin = ["exists": exists]
+    }
     guard let store = NativeStoreHandle.store else { throw ProbeFailure.notReady }
     let wanted = request.args["windowId"] as? String
     if let wanted, wanted != "settings", store.state.windows[wanted] == nil { throw ProbeFailure.windowGone }
@@ -220,15 +294,18 @@ final class ProbeHost {
         "thermalPressure": upscaling["thermalPressure"] ?? NSNull(), "appActive": upscaling["appActive"] ?? NSNull()]
       final = store.snapshot
       if final.rev == initial.rev || attempt == 1 {
+        try checkSnapshot(request)
+        let windowDragCount = WindowDragRead.count
+        try checkSnapshot(request)
         return ["id": request.id, "protocol": 1, "result": ["schema": 1,
           "storeRevision": initial.rev, "endRevision": final.rev, "capturedAtNs": DispatchTime.now().uptimeNanoseconds,
           "consistent": final.rev == initial.rev,
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId), "poolAvailable": TabPoolRead.available,
-          "windowDragCount": WindowDragRead.count, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot,
-          "videoUpscaling": videoUpscaling,
+          "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot,
+          "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "videoUpscaling", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

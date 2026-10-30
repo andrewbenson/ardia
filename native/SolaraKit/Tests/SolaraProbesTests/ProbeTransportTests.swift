@@ -180,5 +180,15 @@ struct ProbeTransportTests {
     #expect(start.duration(to: .now) < .seconds(1))
   }
 
+  @Test func replyRechecksTransportBeforeWriting() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.removeItem(at: data.appendingPathComponent(".solara-probe-scratch"))
+    let id = UUID().uuidString
+    #expect(throws: ProbeFailure.testHooksDenied) { try files.reply(id: id, data: Data("{}".utf8)) }
+    #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent("probes/outbox/\(id).json").path))
+    #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent("probes/outbox/\(id).json.tmp").path))
+  }
+
 }
 #endif

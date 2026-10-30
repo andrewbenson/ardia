@@ -76,11 +76,11 @@ const until = async (what, test, ms = 8000) => {
 };
 const centre = (f) => [f[0] + f[2] / 2, f[1] + f[3] / 2];
 const nearRect = (a, b) => a && b && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 0.5);
-const untilSnapshot = async (what, accept, windowId = "w1", ms = 5000) => {
+const untilSnapshot = async (what, accept, windowId = "w1", ms = 5000, args = {}) => {
   const end = Date.now() + ms;
   let last;
   while (Date.now() < end) {
-    last = await app.snapshot({ windowId }).catch((error) => ({ error: error.message }));
+    last = await app.snapshot({ ...args, windowId }).catch((error) => ({ error: error.message }));
     if (!last.error && await accept(last.windows.find((w) => w.id === windowId), last)) return last;
     await sleep(100);
   }
@@ -170,6 +170,11 @@ try {
       await promptGone("w1", "password");
       await until("the store's prompt clears", `return !ac.pageState.getState().pages.a?.passwordPrompt || null;`, 3000);
       const saved = await until("the saved login", `return C.listPasswords("").then((l) => (l.passwords || []).find((x) => x.username === "ada") || null);`, 8000);
+      const query = { origin: base, username: "ada" };
+      const savedOrigin = new URL(saved.origin).origin;
+      if (savedOrigin !== base) throw new Error(`saved login belongs to ${savedOrigin}, expected ${base}`);
+      await untilSnapshot("native saved login", (_, snapshot) => snapshot.savedLogin?.exists === !!saved,
+        "w1", 8000, { savedLogin: query });
       return { card: shown.card, saved: !!saved };
     });
 

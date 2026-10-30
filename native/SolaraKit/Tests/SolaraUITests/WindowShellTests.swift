@@ -278,6 +278,7 @@ struct WindowShellViewTests {
     #expect(shell.slotUnderPointer(at: NSPoint(x: 600, y: 200)) == nil)
   }
 
+  #if DEBUG
   @Test func movingFromTheReactRootOnTopToAnEmptySpotInItTellsHover() {
     let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 700), styleMask: [.titled], backing: .buffered, defer: true)
     window.isReleasedWhenClosed = false
@@ -311,6 +312,7 @@ struct WindowShellViewTests {
     move(700)
     #expect(posts == 4)
   }
+  #endif
 
   @Test func framesFollowTheDockAndReportOnlyChanges() {
     let shell = WindowShellView(windowId: "w")

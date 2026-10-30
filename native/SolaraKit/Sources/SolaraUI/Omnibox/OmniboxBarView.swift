@@ -28,6 +28,7 @@ public final class OmniboxBarView: NSView {
   public var onHeight: (CGFloat) -> Void = { _ in }
   public var settings: () -> SolaraModel.Settings = { SolaraModel.Settings(values: [:]) }
   public var fetcher: SuggestFetcher? { didSet { if fetcher !== oldValue { model?.setFetcher(fetcher) } } }
+  public var bangStore: BangStore?
   public var favicons: NewTabFavicons? { didSet { rebuild() } }
   public var theme = NewTabTheme.fallbackLight { didSet { if theme != oldValue { rebuild() } } }
   public var incognito = false { didSet { model?.incognito = incognito } }
@@ -57,7 +58,7 @@ public final class OmniboxBarView: NSView {
     identity = next
     let made = HeroBarModel(
       windowId: next.windowId, tabId: next.tabId, profileId: next.profileId, incognito: incognito,
-      settings: { [weak self] in self?.settings() ?? SolaraModel.Settings(values: [:]) }, fetcher: fetcher, variant: next.variant,
+      settings: { [weak self] in self?.settings() ?? SolaraModel.Settings(values: [:]) }, fetcher: fetcher, bangStore: bangStore, variant: next.variant,
       opensTab: next.opensTab, initialText: next.initialText, currentUrl: currentUrl)
     made.events = events
     model = made

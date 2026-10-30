@@ -43,6 +43,7 @@ final class NativeNewTabView: ExpoView {
     hero.frame = bounds
     hero.settings = { NativeSettingsHandle.model?.settings ?? SolaraModel.Settings(values: [:]) }
     hero.fetcher = NewTabNetwork.fetcher
+    hero.bangStore = NativeBangs.shared
     hero.favicons = NewTabNetwork.favicons
     hero.events = makeEvents()
     hero.onBarLayout = { [weak self] height, heading in self?.onBarLayout(["height": height, "headingHeight": heading]) }

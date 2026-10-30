@@ -52,6 +52,7 @@ final class NativeOmniboxView: ExpoView, FocusHandoffDestination {
     bar.frame = bounds
     bar.settings = { NativeSettingsHandle.model?.settings ?? SolaraModel.Settings(values: [:]) }
     bar.fetcher = NewTabNetwork.fetcher
+    bar.bangStore = NativeBangs.shared
     bar.favicons = NewTabNetwork.favicons
     bar.events = makeEvents()
     bar.onHeight = { [weak self] height in self?.onBarLayout(["height": height]) }

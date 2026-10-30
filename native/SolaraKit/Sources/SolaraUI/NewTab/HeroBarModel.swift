@@ -117,6 +117,8 @@ public final class HeroBarModel {
   @ObservationIgnored let sources: NewTabSources
   @ObservationIgnored private var fetcher: SuggestFetcher?
   @ObservationIgnored let bangs: () -> any BangTable
+  @ObservationIgnored private let bangStore: BangStore?
+  @ObservationIgnored private var requestedBangRefresh = false
   @ObservationIgnored let now: @MainActor () -> Double
 
   public private(set) var typed: String
@@ -143,7 +145,7 @@ public final class HeroBarModel {
   public init(
     windowId: String, tabId: String, profileId: String, incognito: Bool, settings: @escaping () -> Settings,
     sources: NewTabSources = .shared, fetcher: SuggestFetcher? = nil, bangs: @escaping () -> any BangTable = { BundledBangs.table },
-    variant: BarVariant = .hero, opensTab: Bool = false, initialText: String = "", currentUrl: String = "",
+    bangStore: BangStore? = nil, variant: BarVariant = .hero, opensTab: Bool = false, initialText: String = "", currentUrl: String = "",
     now: @escaping @MainActor () -> Double = { Date().timeIntervalSince1970 * 1000 }
   ) {
     self.variant = variant
@@ -157,7 +159,8 @@ public final class HeroBarModel {
     self.settings = settings
     self.sources = sources
     self.fetcher = fetcher?.makeContext()
-    self.bangs = bangs
+    self.bangStore = bangStore
+    self.bangs = bangStore.map { store in { store.tableForUse() } } ?? bangs
     self.now = now
     let restored = variant == .hero ? HeroBarModel.saved[tabId] : nil
     typed = restored?.typed ?? initialText
@@ -167,6 +170,7 @@ public final class HeroBarModel {
     scopeFrom = restored?.scopeFrom ?? ""
     selection = restored?.selection ?? (initialText.isEmpty ? .caret(0) : TextSelection(start: 0, end: initialText.utf16.count))
     recompute()
+    observeBangs()
   }
 
   public func setFetcher(_ fetcher: SuggestFetcher?) {
@@ -278,6 +282,20 @@ public final class HeroBarModel {
     guard sourcesSeen != sources.revision else { return }
     recompute()
     writeField()
+  }
+
+  private func observeBangs() {
+    guard let bangStore else { return }
+    withObservationTracking {
+      _ = bangStore.revision
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        self.observeBangs()
+        self.recompute()
+        self.writeField()
+      }
+    }
   }
 
   public func textChanged(_ next: String, edit: EditContext?) {
@@ -637,6 +655,10 @@ public final class HeroBarModel {
     }
     let s = settings()
     let table = scope == nil && query.contains("!") ? bangs() : nil
+    if table != nil, let bangStore, !requestedBangRefresh {
+      requestedBangRefresh = true
+      Task { [weak bangStore] in _ = await bangStore?.refreshOnce() }
+    }
     let options = SuggestOptions(
       now: now(),
       engine: defaultSearchEngine(s),
@@ -675,7 +697,7 @@ public final class HeroBarModel {
     if q.hasPrefix("?") { q.removeFirst() }
     q = jsTrim(q)
     let s = settings()
-    let table = scope == nil && query.contains("!") ? bangs() : nil
+    let table = active && scope == nil && query.contains("!") ? bangs() : nil
     let blocked = !active || !s.bool("searchSuggestions") || q.isEmpty || (table.map { findBang(query, $0) != nil } ?? false)
       || q.range(of: "^[a-zA-Z][a-zA-Z0-9+.-]*://", options: .regularExpression) != nil || scope?.kind == .history
     if blocked {

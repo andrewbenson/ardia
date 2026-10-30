@@ -24,14 +24,14 @@ public struct Command: Sendable, Equatable {
   public var json: JSONValue { ["name": .string(name), "args": .array(args)] }
 
   public static let durable: Set<String> = [
-    "updateSettings", "closeWindow", "deleteProfile", "createProfile", "updateProfile", "reorderProfiles", "setDefaultProfile",
+    "updateSettings", "closeWindow", "restoreClosingWindow", "deleteProfile", "createProfile", "updateProfile", "reorderProfiles", "setDefaultProfile",
   ]
 
   public var isDurable: Bool { Command.durable.contains(name) }
 
   public static let known: Set<String> = [
     "importWorkspace", "setWindowLayout", "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
-    "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
+    "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "restoreClosingWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
     "switchProfile", "moveTabsToWindow", "moveTabToProfile", "mergeAllWindows", "reopenClosed", "reopenClosedTab", "reopenClosedWindow",
     "restoreClosed", "createProfile", "updateProfile", "deleteProfile", "reorderProfiles", "setDefaultProfile", "profileDataDeleted",
     "createGroup", "updateGroup", "addTabsToGroup", "removeTabsFromGroup", "ungroup", "newNestedGroup", "closeGroup", "deleteGroup",
@@ -188,6 +188,13 @@ extension Session {
       options.chromeWindow = optionalString(o, "chromeWindow")
       result = .string(createWindow(options))
     case "closeWindow": closeWindow(try a.requireString(0))
+    case "restoreClosingWindow":
+      let snapshot = a.object(0)
+      let window = try BrowserWindow(value: snapshot["window"] ?? .null)
+      let tabs = try (snapshot["tabs"]?.array ?? []).map { try Tab(value: $0) }
+      let groups = try (snapshot["groups"]?.array ?? []).map { try TabGroup(value: $0) }
+      let splits = try (snapshot["splits"]?.array ?? []).map { try SplitView(value: $0) }
+      result = JSONValue(restoreClosingWindow(window, tabs, groups, splits, chromeWindow: try a.requireString(1), liveTabIds: a.strings(2)))
     case "forgetClosedWindow": forgetClosedWindow(try a.requireString(0))
     case "setWindowFrame": setWindowFrame(try a.requireString(0), a[1]?.array?.compactMap(\.number) ?? [])
     case "setWindowFullScreen": setWindowFullScreen(try a.requireString(0), a.bool(1))
@@ -279,7 +286,9 @@ extension Session {
     case "removeDownload": removeDownload(try a.requireString(0))
     case "clearDownloads": clearDownloads(a.string(0))
     case "forgetDownloads": forgetDownloads(try a.requireString(0))
-    case "hydrate": hydrate(try HydrateData(json: a.object(0)))
+    case "hydrate":
+      memory.closingWindowUndos.removeAll()
+      hydrate(try HydrateData(json: a.object(0)))
     case "tidyPins": result = tidyPins(try a.requireString(0), a.string(1))
     case "untidyPins": untidyPins(try TidiedPins(json: a[0] ?? .null))
     case "renameTileFolder": set(renameTileFolder(state, try a.requireString(0), try a.requireString(1), a.string(2) ?? ""))

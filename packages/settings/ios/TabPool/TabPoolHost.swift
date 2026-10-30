@@ -96,15 +96,22 @@ final class TabPoolHost {
     for windowId in shellWindows {
       if let window = NativeWindowShell.host(windowId)?.shell.window { shellNSWindows.setObject(window, forKey: windowId as NSString) }
     }
-    for (windowId, hold) in closing where state.windows[windowId] != nil || hold.window == nil { end(windowId, hold) }
-    for windowId in shellWindows where state.windows[windowId] == nil { holdUntilClosed(windowId) }
+    for windowId in shellWindows where state.windows[windowId] == nil { holdUntilClosed(windowId, in: state) }
     shellWindows = shellWindows.filter { state.windows[$0] != nil }
     for key in shellNSWindows.keyEnumerator().allObjects.compactMap({ $0 as? String }) where !shellWindows.contains(key) {
       shellNSWindows.removeObject(forKey: key as NSString)
     }
     let fresh = TabViewWanted.from(state, windows: shellWindows, isInternal: Self.isInternal, frozen: { _ in false })
     let freshIds = Set(fresh.map(\.tabId))
-    let parked = parkAwaitingShell(state, freshIds: freshIds)
+    let absentIds = Set(closing.values.flatMap { $0.restoration.absentTabIds })
+    let presentIds = Set(absentIds.filter { state.tabs[$0] != nil })
+    let unloadedIds = Set(presentIds.filter { state.tabs[$0]?.unloaded == true })
+    for (windowId, hold) in closing {
+      let restored = hold.restoration.restored(presentTabIds: presentIds, freshTabIds: freshIds, unloadedTabIds: unloadedIds)
+      if state.windows[windowId] != nil || hold.window == nil || restored { end(windowId, hold) }
+    }
+    let held = Set(closing.values.flatMap { $0.tabs.map(\.tabId) })
+    let parked = parkAwaitingShell(state, freshIds: freshIds, held: held)
     wanted = fresh + parked + closing.sorted { $0.key < $1.key }.flatMap { $0.value.tabs.filter { !freshIds.contains($0.tabId) } }
     warm = Set(fresh.filter(\.warm).map(\.tabId))
     for page in pages.values { page.setWarm(warm.contains(page.tabId), neighbour: Self.neighbour(state, page.tabId)) }
@@ -112,10 +119,10 @@ final class TabPoolHost {
     followCardPages()
   }
 
-  private func parkAwaitingShell(_ state: BrowserState, freshIds: Set<String>) -> [TabViewWanted] {
+  private func parkAwaitingShell(_ state: BrowserState, freshIds: Set<String>, held: Set<String>) -> [TabViewWanted] {
     let awaiting = Set(state.windows.keys).subtracting(shellWindows).filter { NativeWindowShell.enabled && NativeWindowShell.isBrowserWindow($0) }
     let moving = TabViewWanted.from(state, windows: awaiting, isInternal: Self.isInternal, frozen: { _ in false })
-      .filter { pages[$0.tabId] != nil && !freshIds.contains($0.tabId) }
+      .filter { pages[$0.tabId] != nil && !freshIds.contains($0.tabId) && !held.contains($0.tabId) }
     let now = Date()
     let parked = park.park(moving, now: now)
     if let due = park.nextExpiry(after: now), parkCheckDue.map({ due < $0 }) ?? true {
@@ -131,12 +138,13 @@ final class TabPoolHost {
     return parked
   }
 
-  private func holdUntilClosed(_ windowId: String) {
+  private func holdUntilClosed(_ windowId: String, in state: BrowserState) {
     guard closing[windowId] == nil else { return }
     let tabs = wanted.filter { $0.windowId == windowId }
     let window = shellNSWindows.object(forKey: windowId as NSString) ?? tabs.lazy.compactMap({ self.pages[$0.tabId]?.page.view.window }).first
     guard let window else { return }
-    let hold = ClosingWindow(tabs: tabs.map { TabViewWanted(tabId: $0.tabId, windowId: $0.windowId, shown: $0.shown) }, window: window)
+    let hold = ClosingWindow(tabs: tabs.map { TabViewWanted(tabId: $0.tabId, windowId: $0.windowId, shown: $0.shown) },
+      restoration: TabViewCloseHold(tabIds: Set(tabs.map(\.tabId)), presentTabIds: Set(state.tabs.keys)), window: window)
     hold.observer = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) {
       [weak self, weak hold] _ in
       MainActor.assumeIsolated {
@@ -266,11 +274,13 @@ final class TabPoolHost {
 @MainActor
 final class ClosingWindow {
   let tabs: [TabViewWanted]
+  let restoration: TabViewCloseHold
   weak var window: NSWindow?
   var observer: NSObjectProtocol?
 
-  init(tabs: [TabViewWanted], window: NSWindow) {
+  init(tabs: [TabViewWanted], restoration: TabViewCloseHold, window: NSWindow) {
     self.tabs = tabs
+    self.restoration = restoration
     self.window = window
   }
 }

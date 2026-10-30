@@ -2347,6 +2347,171 @@ try {
         });
         return { pool: true, pages: after.length };
       })();
+      const sharePinBack = async (tabId, pinKey, appWindow, label) => {
+        const copy = await until(`${label}: its copy in another window`, () => evalApp(`const s = ac.store.getState(); return Object.values(s.tabs).find((t) => t.id !== ${JSON.stringify(tabId)} && t.windowId !== ${JSON.stringify(appWindow)} && s.windows[t.windowId] && (t.pinKey ?? t.id) === ${JSON.stringify(pinKey)})?.id ?? null`), 10000);
+        await evalApp(`ac.store.getState().activate(${JSON.stringify(copy)}); return true`);
+        const frozen = await until(`${label}: its page shown in the other window`, () => evalApp(`const s = ac.store.getState(); return s.tabs[${JSON.stringify(tabId)}]?.windowId !== ${JSON.stringify(appWindow)} ? Object.values(s.tabs).find((t) => t.windowId === ${JSON.stringify(appWindow)} && t.pageIn === ${JSON.stringify(tabId)})?.id ?? null : null`), 10000);
+        await evalApp(`ac.store.getState().activate(${JSON.stringify(frozen)}); return true`);
+      };
+      const poolHoldThroughLeave = await (async () => {
+        const poolIds = () => evalApp(`const pool = globalThis.expo.modules.SolaraTabPool; return pool?.available() ? pool.devPageIds() : null`);
+        if (await poolIds() === null) return { pool: false };
+        const marks = ["rm-hold-pin", "rm-hold-leave"];
+        const { appWindow } = await openWindow(marks, []);
+        const ids = [await tabIdOf(marks[0]), await tabIdOf(marks[1])];
+        const previous = await evalApp(`const s = ac.store.getState(); s.pinTabs([${JSON.stringify(ids[0])}], true); return s.settings.warnBeforeClosingWindow`);
+        const pinKey = await evalApp(`return ac.store.getState().tabs[${JSON.stringify(ids[0])}].pinKey ?? ${JSON.stringify(ids[0])}`);
+        let ws;
+        let prompt = false;
+        let leaving = false;
+        let windowNumber;
+        try {
+          await sharePinBack(ids[0], pinKey, appWindow, "the held pin");
+          await until("the pinned page mirrored into another window", () => evalApp(`const s = ac.store.getState(); return Object.values(s.tabs).some((t) => t.id !== ${JSON.stringify(ids[0])} && t.windowId !== ${JSON.stringify(appWindow)} && t.pageIn === ${JSON.stringify(ids[0])})`), 10000);
+          const target = await pageTarget(`e?${marks[1]}`);
+          const installed = await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+          if (installed.exceptionDetails) throw new Error(`installing Leave beforeunload: ${JSON.stringify(installed.exceptionDetails)}`);
+          ws = new WebSocket(target.webSocketDebuggerUrl);
+          await Promise.race([new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("DevTools connection failed"))))), sleep(5000).then(() => { throw new Error("Leave DevTools connection timed out"); })]);
+          let enabled;
+          const ready = new Promise((resolve, reject) => {
+            enabled = (message) => message.error ? reject(new Error(JSON.stringify(message.error))) : resolve();
+          });
+          ws.onmessage = (message) => {
+            const event = JSON.parse(message.data);
+            if (event.id === 1) enabled(event);
+            if (event.method !== "Page.javascriptDialogOpening") return;
+            prompt = true;
+            if (leaving) ws.send(JSON.stringify({ id: 101, method: "Page.handleJavaScriptDialog", params: { accept: true } }));
+          };
+          ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+          await Promise.race([ready, sleep(5000).then(() => { throw new Error("Page.enable timed out for Leave"); })]);
+          const pinBrowser = await browserOf(ids[0]);
+          windowNumber = await cef(`devWindowNumber(${await browserOf(ids[1])})`);
+          await evalApp(`const s = ac.store.getState(); s.updateSettings({ warnBeforeClosingWindow: false }); s.activate(${JSON.stringify(ids[1])}); return true`);
+          await cef(`devKeepBrowsersOnClose([${pinBrowser}], [])`);
+          await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until("the Leave beforeunload prompt", async () => prompt, 15000);
+          for (let sample = 0; sample < 3; sample++) {
+            const probe = await evalApp(`const s = ac.store.getState(); const pool = globalThis.expo.modules.SolaraTabPool; return Promise.all([pool.devClosingWindows(), pool.devPageIds()]).then(([holds, pages]) => ({ holds, pages, open: !!s.windows[${JSON.stringify(appWindow)}], survivor: s.tabs[${JSON.stringify(ids[0])}]?.windowId }))`);
+            if (probe.open || !probe.survivor || probe.survivor === appWindow) throw new Error(`Leave did not exercise a shared pinned survivor: ${JSON.stringify(probe)}`);
+            if (!Object.values(probe.holds).includes(windowNumber) || !probe.pages.includes(ids[1])) throw new Error(`the pool released its hold before Leave finished the close: ${JSON.stringify(probe)}`);
+            await sleep(50);
+          }
+          leaving = true;
+          ws.send(JSON.stringify({ id: 101, method: "Page.handleJavaScriptDialog", params: { accept: true } }));
+          await until("Leave finishing the Chrome window close", async () => !(await cef(`chromeWindows()`)).some((w) => w.window === windowNumber) && !(await pages(marks)).includes(marks[1]), 15000);
+          const holds = await until("the pool releasing the finished Leave hold", async () => {
+            const now = await evalApp(`return globalThis.expo.modules.SolaraTabPool.devClosingWindows()`);
+            return Object.values(now).includes(windowNumber) ? null : now;
+          }, 10000);
+          return { pool: true, pinned: ids[0], prompt, holdSamples: 3, holds };
+        } finally {
+          leaving = true;
+          if (prompt) try { ws?.send(JSON.stringify({ id: 102, method: "Page.handleJavaScriptDialog", params: { accept: true } })); } catch {}
+          setTimeout(() => { try { ws?.close(); } catch {} }, 3000);
+          await cef(`devKeepBrowsersOnClose([], [])`).catch(() => null);
+          await evalApp(`const s = ac.store.getState(); s.updateSettings({ warnBeforeClosingWindow: ${JSON.stringify(previous)} }); const pins = Object.values(s.tabs).filter((t) => (t.pinKey ?? t.id) === ${JSON.stringify(pinKey)}); for (const t of pins) { s.pinTabs([t.id], false); s.closeTab(t.id); } return true`).catch(() => null);
+        }
+      })();
+      const poolHeldIdentityChange = await (async () => {
+        if (!await evalApp(`return !!globalThis.expo.modules.SolaraTabPool?.available()`)) return { pool: false, skip: "held identity replacement requires the native page pool" };
+        for (const call of ["devKeepTabsOnClose(0)", "devFailKeptMoves(0)", "devKeepBrowsersOnClose([], [])"]) {
+          if (await cef(call) < 0) throw new Error(`${call} requires a Debug build`);
+        }
+        const marks = ["rm-identity-pin", "rm-identity-leave"];
+        const url = `${base}/e?${marks[0]}`;
+        const { appWindow } = await openWindow(marks, []);
+        const ids = [await tabIdOf(marks[0]), await tabIdOf(marks[1])];
+        const previous = await evalApp(`return ac.store.getState().settings.warnBeforeClosingWindow`);
+        const probe = () => evalApp(`const pool = globalThis.expo.modules.SolaraTabPool; return Promise.all([pool.devClosingWindows(), pool.devPageIds(), pool.livePages()]).then(([holds, ids, live]) => { const s = ac.store.getState(); const tab = s.tabs[${JSON.stringify(ids[0])}]; const events = globalThis.__acHeldIdentity; return { holds, ids, live, sourceOpen: !!s.windows[${JSON.stringify(appWindow)}], tab, survivorOpen: !!s.windows[tab?.windowId], created: events?.created ?? 0, gone: events?.gone ?? 0 }; })`);
+        const tokenOf = (page) => `${page.engine}|${page.ready?.browserId}`;
+        let pinKey;
+        let ws;
+        let prompt = false;
+        let leaving = false;
+        let windowNumber;
+        try {
+          await evalApp(`ac.store.getState().pinTabs([${JSON.stringify(ids[0])}], true); return true`);
+          pinKey = await evalApp(`return ac.store.getState().tabs[${JSON.stringify(ids[0])}].pinKey ?? ${JSON.stringify(ids[0])}`);
+          await sharePinBack(ids[0], pinKey, appWindow, "the identity pin");
+          await until("the identity pin mirrored elsewhere", () => evalApp(`const s = ac.store.getState(); return Object.values(s.tabs).some((t) => t.id !== ${JSON.stringify(ids[0])} && t.windowId !== ${JSON.stringify(appWindow)} && t.pageIn === ${JSON.stringify(ids[0])})`), 10000);
+          await until("the identity source shell and pane roots", () => evalApp(`const shell = globalThis.expo.modules.SolaraWindowShell; return !!shell?.active(${JSON.stringify(appWindow)}) && !!shell?.paneRoots(${JSON.stringify(appWindow)})`), 10000);
+          const original = await until("the original pooled identity page loaded", async () => {
+            const now = await probe();
+            const pages = now.live.filter((p) => p.tabId === ids[0]);
+            return pages.length === 1 && pages[0].engine === "chromium" && pages[0].ready?.browserId != null && pages[0].navigation?.url === url && pages[0].navigation.isLoading === false ? { page: pages[0], profileId: now.tab.profileId } : null;
+          }, 15000);
+          const oldToken = tokenOf(original.page);
+          const oldTarget = await pageTarget(`e?${marks[0]}`);
+          const oldPageIsLive = async () => (await targets()).some((t) => t.id === oldTarget.id || t.type === "page" && t.url === url);
+          const target = await until("the identity Leave page loaded", async () => {
+            const found = await pageTarget(`e?${marks[1]}`).catch(() => null);
+            const ready = found && await cdp(found, "Runtime.evaluate", { expression: "document.readyState", returnByValue: true }).catch(() => null);
+            return ready?.result?.value === "complete" ? found : null;
+          }, 15000);
+          const installed = await cdp(target, "Runtime.evaluate", { expression: `addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
+          if (installed.exceptionDetails) throw new Error(`installing identity beforeunload: ${JSON.stringify(installed.exceptionDetails)}`);
+          ws = new WebSocket(target.webSocketDebuggerUrl);
+          await Promise.race([new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("identity DevTools connection failed"))))), sleep(5000).then(() => { throw new Error("identity DevTools connection timed out"); })]);
+          let enabled;
+          const ready = new Promise((resolve, reject) => { enabled = (event) => event.error ? reject(new Error(JSON.stringify(event.error))) : resolve(); });
+          ws.onmessage = (message) => {
+            const event = JSON.parse(message.data);
+            if (event.id === 1) enabled(event);
+            if (event.method !== "Page.javascriptDialogOpening") return;
+            prompt = true;
+            if (leaving) ws.send(JSON.stringify({ id: 101, method: "Page.handleJavaScriptDialog", params: { accept: true } }));
+          };
+          ws.send(JSON.stringify({ id: 1, method: "Page.enable" }));
+          await Promise.race([ready, sleep(5000).then(() => { throw new Error("identity Page.enable timed out"); })]);
+          windowNumber = await cef(`devWindowNumber(${await browserOf(ids[1])})`);
+          await evalApp(`const s = ac.store.getState(); s.updateSettings({ warnBeforeClosingWindow: false }); s.activate(${JSON.stringify(ids[1])}); return true`);
+          await cef(`devWindow(${windowNumber}, "close-button")`);
+          await until("the identity closing beforeunload prompt", async () => prompt, 15000);
+          const held = await until("the identity source held with its pin transferred", async () => {
+            const now = await probe();
+            return !now.sourceOpen && now.tab?.windowId !== appWindow && now.survivorOpen && now.tab?.profileId === original.profileId && Object.values(now.holds).includes(windowNumber) && now.ids.includes(ids[1]) ? now : null;
+          }, 10000);
+          const pin = held.live.filter((p) => p.tabId === ids[0]);
+          if (pin.length !== 1 || tokenOf(pin[0]) !== oldToken) throw new Error(`identity pin changed before the command: ${JSON.stringify(held)}`);
+          if (!(await targets()).some((t) => t.id === oldTarget.id)) throw new Error("the identity pin's Chromium page closed before the engine command");
+          await evalApp(`globalThis.__acHeldIdentity?.sub?.remove(); const counts = { created: 0, gone: 0 }; counts.sub = globalThis.expo.modules.SolaraTabPool.addListener("onPageEvent", (e) => { if (e.tabId !== ${JSON.stringify(ids[0])}) return; if (e.name === "onPageCreated") counts.created++; if (e.name === "onPageGone") counts.gone++; }); globalThis.__acHeldIdentity = counts; const s = ac.store.getState(); s.activate(${JSON.stringify(ids[0])}); ac.runCommand({ command: "togglePageEngine", windowId: ${JSON.stringify(held.tab.windowId)} }); return true`);
+          const replacement = await until("one new WebKit page under the held pin id", async () => {
+            const now = await probe();
+            const pages = now.live.filter((p) => p.tabId === ids[0]);
+            return pages.length === 1 && pages[0].engine === "webkit" && pages[0].ready?.browserId != null && pages[0].navigation?.url === url && pages[0].navigation.isLoading === false && now.created === 1 && now.gone === 1 ? { page: pages[0], state: now } : null;
+          }, 15000);
+          const newToken = tokenOf(replacement.page);
+          if (newToken === oldToken || replacement.page.ready.browserId === original.page.ready.browserId) throw new Error(`identity page token did not change: ${JSON.stringify(replacement)}`);
+          await until("the discarded identity page gone from Chromium", async () => !await oldPageIsLive(), 10000);
+          const verify = (now, holding) => {
+            const pages = now.live.filter((p) => p.tabId === ids[0]);
+            if (now.sourceOpen || !now.survivorOpen || now.tab?.windowId !== held.tab.windowId || now.tab?.profileId !== original.profileId || now.ids.filter((id) => id === ids[0]).length !== 1 || pages.length !== 1 || tokenOf(pages[0]) !== newToken || now.live.some((p) => tokenOf(p) === oldToken) || now.created !== 1 || now.gone !== 1) throw new Error(`identity replacement leaked or changed: ${JSON.stringify(now)}`);
+            if (Object.values(now.holds).includes(windowNumber) !== holding || now.ids.includes(ids[1]) !== holding) throw new Error(`identity hold lifecycle disagrees: ${JSON.stringify(now)}`);
+          };
+          for (let sample = 0; sample < 3; sample++) {
+            verify(await probe(), true);
+            if (await oldPageIsLive()) throw new Error("the discarded identity page or a duplicate returned to Chromium");
+            await sleep(50);
+          }
+          leaving = true;
+          ws.send(JSON.stringify({ id: 101, method: "Page.handleJavaScriptDialog", params: { accept: true } }));
+          await until("the identity source window and hold released", async () => {
+            const now = await probe();
+            return !Object.values(now.holds).includes(windowNumber) && !now.ids.includes(ids[1]) && !(await cef(`chromeWindows()`)).some((w) => w.window === windowNumber) && !(await targets()).some((t) => t.id === target.id) ? now : null;
+          }, 15000);
+          const final = await probe();
+          verify(final, false);
+          if (await oldPageIsLive()) throw new Error("the old identity page or a duplicate survived Leave");
+          return { pool: true, tabId: ids[0], oldToken, newToken, created: final.created, gone: final.gone, holdSamples: 3, holds: final.holds };
+        } finally {
+          leaving = true;
+          if (prompt) try { ws?.send(JSON.stringify({ id: 102, method: "Page.handleJavaScriptDialog", params: { accept: true } })); } catch {}
+          await evalApp(`globalThis.__acHeldIdentity?.sub?.remove(); delete globalThis.__acHeldIdentity; const s = ac.store.getState(); s.updateSettings({ warnBeforeClosingWindow: ${JSON.stringify(previous)} }); const pins = Object.values(s.tabs).filter((t) => (t.pinKey ?? t.id) === ${JSON.stringify(pinKey ?? ids[0])}); for (const t of pins) { s.pinTabs([t.id], false); s.closeTab(t.id); } return true`).catch(() => null);
+          if (ws && ws.readyState !== WebSocket.CLOSED) await Promise.race([new Promise((resolve) => { ws.onclose = resolve; try { ws.close(); } catch { resolve(); } }), sleep(1000)]);
+        }
+      })();
       const failedMove = await (async () => {
         const marks = ["rm-m", "rm-n"];
         const { id } = await openWindow(marks, []);
@@ -2474,7 +2639,7 @@ try {
         const chrome = (await cef(`chromeWindows()`)).map((w) => ({ window: w.window, visible: w.visible, hasRoot: w.hasRoot }));
         throw new Error(`${e.message}: holds ${JSON.stringify(await evalApp(`return globalThis.expo.modules.SolaraTabPool.devClosingWindows()`))}, chrome windows ${JSON.stringify(chrome)}`);
       });
-      return { plain: { ...plain, ...plainStore }, unload, keepOne, keepAll, cancelled, hostClose, hostCloseFrees, failedMove, failedMoveStay, twoProfiles, held, mainTabs: main.length };
+      return { plain: { ...plain, ...plainStore }, unload, keepOne, keepAll, cancelled, hostClose, hostCloseFrees, poolHoldThroughLeave, poolHeldIdentityChange, failedMove, failedMoveStay, twoProfiles, held, mainTabs: main.length };
     } finally {
       await cef(`devKeepTabsOnClose(0)`).catch(() => null);
       await cef(`devFailKeptMoves(0)`).catch(() => null);
@@ -2483,13 +2648,12 @@ try {
     }
   });
 
-  let poolStayHidden = null;
   await check("stay-restores-window", async () => {
     const previous = await evalApp(`return ac.store.getState().settings.warnBeforeClosingWindow`);
     const pooled = await evalApp(`return !!globalThis.expo.modules.SolaraTabPool?.available()`);
     const legs = [];
     try {
-      for (const kind of pooled ? ["normal"] : ["normal", "private", "small"]) {
+      for (const kind of ["normal", "private", "small"]) {
         const lazy = kind === "normal" && !pooled;
         const marks = kind === "small" ? [`stay-${kind}-a`] : lazy ? ["a", "b", "c", "d"].map((m) => `stay-${kind}-${m}`) : [`stay-${kind}-a`, `stay-${kind}-b`];
         const url = (mark) => `${base}/e?${mark}`;
@@ -2506,6 +2670,7 @@ try {
           return ready?.result?.value === "complete" ? found : null;
         }, 15000);
         const token = `stay-${kind}-${Date.now()}`;
+        const windowPooled = pooled && await evalApp(`const shell = globalThis.expo.modules.SolaraWindowShell; return !!shell?.active(${JSON.stringify(oldWindow)}) && !!shell?.paneRoots(${JSON.stringify(oldWindow)})`);
         await cdp(target, "Runtime.evaluate", { expression: `globalThis.stayToken = ${JSON.stringify(token)}; addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; }); true`, userGesture: true });
         const ws = new WebSocket(target.webSocketDebuggerUrl);
         await new Promise((resolve, reject) => ((ws.onopen = resolve), (ws.onerror = () => reject(new Error("DevTools connection failed")))));
@@ -2524,33 +2689,24 @@ try {
           const windowNumber = await cef(`devWindowNumber(${await browserOf(tabId)})`);
           await evalApp(`ac.store.getState().updateSettings({ warnBeforeClosingWindow: false }); return true`);
           const browsers = await Promise.all(before.ids.map((id) => browserOf(id)));
-          if (!pooled) await cef(`devKeepBrowsersOnClose([${browsers.join(",")}], [${browsers.join(",")}])`);
+          if (!windowPooled) await cef(`devKeepBrowsersOnClose([${browsers.join(",")}], [${browsers.join(",")}])`);
           await cef(`devWindow(${windowNumber}, "close-button")`);
           await until(`${kind} beforeunload prompt`, async () => prompts > 0, 15000);
-          if (pooled) {
-            await sleep(1500);
-            const back = await evalApp(`const s = ac.store.getState(); return Object.values(s.windows).some((w) => w.tabIds.some((id) => s.tabs[id]?.url?.includes(${JSON.stringify(marks[0])})))`);
-            if (back) throw new Error("the pool restored a window; its path is meant to keep today's behaviour until it restores under the original tab ids");
-            const stayed = await cdp(target, "Runtime.evaluate", { expression: "globalThis.stayToken", returnByValue: true });
-            if (stayed.result?.value !== token) throw new Error("the page closed or reloaded though beforeunload said Stay");
-            poolStayHidden = (await cef(`chromeWindows()`)).find((w) => w.window === windowNumber && !w.visible) ?? null;
-            leave = true;
-            await cef(`devWindow(${windowNumber}, "close-button")`);
-            await until("the hidden window closing after Leave", async () => !(await pageTarget(`e?${marks[0]}`).catch(() => null)), 15000);
-            const holds = await until("the pool letting go of the closed window", async () => {
-              const now = await evalApp(`return globalThis.expo.modules.SolaraTabPool.devClosingWindows()`);
-              return Object.values(now).includes(windowNumber) ? null : now;
-            }, 10000);
-            legs.push({ kind, pool: "unchanged", holds });
-            continue;
-          }
           const restored = await until(`${kind} window restored`, async () => {
-            const windows = await evalApp(`const s = ac.store.getState(); return Object.values(s.windows).map((w) => ({ id: w.id, profileId: w.profileId, incognito: w.incognito, kind: w.kind, urls: w.tabIds.map((id) => s.tabs[id]?.url), closed: s.closedWindows.some((c) => c.tabs.some((t) => ${JSON.stringify(before.ids)}.includes(t.tabId))) }))`);
+            const windows = await evalApp(`const s = ac.store.getState(); return Object.values(s.windows).map((w) => ({ id: w.id, profileId: w.profileId, incognito: w.incognito, kind: w.kind, ids: w.tabIds, urls: w.tabIds.map((id) => s.tabs[id]?.url), closed: s.closedWindows.some((c) => c.tabs.some((t) => ${JSON.stringify(before.ids)}.includes(t.tabId))) }))`);
             return windows.find((w) => w.id !== oldWindow && marks.every((mark) => w.urls.some((u) => u?.includes(mark)))) ?? null;
           }, 15000);
           if (restored.incognito !== (kind === "private") || (restored.kind === "small") !== (kind === "small")) throw new Error(`${kind} restored with wrong window kind: ${JSON.stringify(restored)}`);
           if (restored.profileId !== before.profileId) throw new Error(`${kind} profile changed: ${before.profileId} to ${restored.profileId}`);
           if (restored.closed) throw new Error(`${kind} left a closedWindows entry`);
+          if (windowPooled && JSON.stringify(restored.ids) !== JSON.stringify(before.ids)) throw new Error(`${kind} restored with different tab ids: ${JSON.stringify(restored.ids)}`);
+          if (windowPooled) {
+            const holds = await until(`${kind} pool hold released`, async () => {
+              const now = await evalApp(`return globalThis.expo.modules.SolaraTabPool.devClosingWindows()`);
+              return Object.values(now).includes(windowNumber) ? null : now;
+            }, 10000);
+            if (Object.values(holds).includes(windowNumber)) throw new Error(`${kind} pool still holds the NSWindow`);
+          }
           if (split) {
             const splits = await evalApp(`const s = ac.store.getState(); return Object.values(s.splits).filter((x) => x.windowId === ${JSON.stringify(restored.id)}).map((x) => ({ orientation: x.orientation, urls: x.tabIds.map((id) => s.tabs[id]?.url) }))`);
             if (!splits.some((x) => x.orientation === "vertical" && marks.slice(0, 2).every((mark) => x.urls.some((u) => u?.includes(mark))))) throw new Error(`${kind} split not restored: ${JSON.stringify(splits)}`);
@@ -2579,7 +2735,7 @@ try {
           legs.push({ kind, restored: restored.id, window: visible.window, prompts });
         } finally {
           leave = true;
-          if (!pooled) await cef(`devKeepBrowsersOnClose([], [])`).catch(() => null);
+          if (!windowPooled) await cef(`devKeepBrowsersOnClose([], [])`).catch(() => null);
           setTimeout(() => { try { ws.close(); } catch {} }, 3000);
           await evalApp(`const s = ac.store.getState(); const w = Object.values(s.windows).find((w) => w.tabIds.some((id) => s.tabs[id]?.url?.includes(${JSON.stringify(marks[0])}))); if (w) s.closeWindow(w.id); return true`).catch(() => null);
         }
@@ -2591,7 +2747,6 @@ try {
   });
 
   await check("no-hidden-window-after-stay", async () => {
-    if (poolStayHidden) throw new Error(`known red, pool Stay restore: A pending. On the page pool, window ${poolStayHidden.window} stayed hidden after Stay (stray ${poolStayHidden.stray}, root ${poolStayHidden.hasRoot}) until Leave closed it`);
     const hidden = (await cef(`chromeWindows()`)).filter((w) => !w.visible && !w.hasRoot && !w.stray).map((w) => w.window);
     if (hidden.length) throw new Error(`${hidden.length} window(s) still alive but hidden after chrome-windows-remove's Stay cases: ${JSON.stringify(hidden)}`);
     return { hidden: 0 };

@@ -14,6 +14,7 @@ import {
   type StorePatch,
 } from "@ardia/store";
 import type { Download } from "@ardia/ardiacore";
+import { clearNativeClosingLocals, nativeClosingLiveAtApply, nativeClosingUndo, pruneClosingLocals, restoredNativeClosingLocals } from "./closingWindowRestore";
 import { syncRedesign } from "../sync/redesignSwitch";
 import { applyingFromSync, asSyncOrigin, asUserChange } from "./syncOrigin";
 import type { BrowserState, HydrateData } from "./browser";
@@ -221,14 +222,22 @@ function wrapActions(store: Replica) {
     const prelude = COMMAND_PRELUDES.get(name);
     wrapped[name] = (...args: unknown[]) => {
       prelude?.(...args);
+      const closingId = name === "restoreClosingWindow" ? (args[0] as { window: { id: string } }).window.id : undefined;
+      const undo = closingId ? nativeClosingUndo(closingId) : undefined;
+      if (closingId && (!undo || !restoredNativeClosingLocals(store.getState(), closingId))) return null;
       const response = nativeWrite(encodeCommand(name, args));
+      if (closingId && undo && !response?.error && typeof response?.result === "string") {
+        withApplier(() => store.setState(pruneClosingLocals(nativeClosingLiveAtApply(store.getState(), undo), store.getState(), (args[0] as { tabs: { id: string }[] }).tabs.map((t) => t.id))));
+        clearNativeClosingLocals(closingId);
+      }
       if (!response?.error && LIVE_PATCH_COMMANDS.has(name) && typeof args[0] === "string" && args[2] && typeof args[2] === "object") updateLive(args[0], args[2]);
-      return response?.result ?? undefined;
+      return response?.result ?? (name === "restoreClosingWindow" ? null : undefined);
     };
   }
   wrapped.hydrate = (data: HydrateData) => {
     const response = dispatchCommands(encodeCommand("hydrate", [data]), true);
     if (!response || response.error) return;
+    clearNativeClosingLocals();
     withApplier(() => store.setState(workspaceHydration(store.getState(), data)));
   };
   withApplier(() => store.setState(wrapped as Partial<BrowserState>));

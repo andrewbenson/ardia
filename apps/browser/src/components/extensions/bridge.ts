@@ -105,10 +105,20 @@ function snapshotFields(tab: Tab): Partial<TabSnapshot> {
 
 function restoreCancelledClose(request: TabsRequest) {
   const live = request.tabs;
-  if (!request.chromeWindow || !live?.length) return;
+  if (!request.chromeWindow || !live) return;
   const snapshot = takeCloseSnapshot(request.appWindow, live);
   if (!snapshot) return console.warn("[windowClose] no snapshot for cancelled close", request.appWindow);
-  if (snapshot.pooled) return console.warn("[windowClose] a cancelled close on the page pool keeps its window hidden", snapshot.window.id);
+  if (snapshot.pooled) {
+    const { window, tabs, groups, splits } = snapshot;
+    const liveTabIds = [...new Set(live.map((tab) => snapshotTabId(snapshot, tab)).filter((id): id is string => !!id))];
+    if (!liveTabIds.length) {
+      console.warn("[windowClose] no live snapshot tabs for cancelled close", window.id);
+      return null;
+    }
+    const restored = useBrowser.getState().restoreClosingWindow({ window, tabs, groups, splits }, request.chromeWindow, liveTabIds);
+    if (!restored) console.warn("[windowClose] a cancelled close on the page pool could not restore its window", window.id);
+    return restored;
+  }
   const s = useBrowser.getState();
   const old = new Map(snapshot.tabs.map((tab) => [tab.id, tab]));
   const byId = (tab: CloseCancelledTab) => old.get(snapshotTabId(snapshot, tab) ?? "");

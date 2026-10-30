@@ -198,8 +198,9 @@ extension Session {
     return back
   }
 
-  func unloadPinnedTabs(_ s: BrowserState, _ requested: [String]) -> BrowserState {
-    let ids = withSharedFamily(s, Splits.withPinnedPanes(s, requested.filter { s.inPinnedContainer($0) }))
+  func unloadPinnedTabs(_ s: BrowserState, _ requested: [String], expand: Bool = true) -> BrowserState {
+    let pinnedIds = requested.filter { s.inPinnedContainer($0) }
+    let ids = expand ? withSharedFamily(s, Splits.withPinnedPanes(s, pinnedIds)) : pinnedIds
     let closing = Set(requested + ids)
     let pinned = ids.filter { s.inPinnedContainer($0) }
     if pinned.isEmpty { return s }

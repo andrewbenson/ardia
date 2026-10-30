@@ -117,7 +117,8 @@ extension Session {
   }
 
   public func closeWindow(_ id: String) {
-    let s = returnSharedPages(state, id)
+    let before = state
+    let s = returnSharedPages(before, id)
     guard let w = s.windows[id] else { return }
     let tabs = w.tabIds.compactMap { s.tabs[$0] }.filter { !s.inPinnedContainer($0.id) && !sharedElsewhere(s, $0) }
     let tabIds = tabs.map(\.id)
@@ -147,6 +148,7 @@ extension Session {
     next.ui.focusedWindowId = next.ui.focusedWindowId == id ? focusOrder.first { $0 != id } : next.ui.focusedWindowId
     next.ui.lastProfileId = lastProfileAfterClosing(s, id)
     set(next)
+    rememberClosingWindow(id, before: before)
   }
 
   public func forgetClosedWindow(_ id: String) {

@@ -249,8 +249,9 @@ function adoptOrphans(tabs: Record<string, Tab>, before: Record<string, Tab>, go
   return next;
 }
 
-export function unloadPinnedTabs(s: BrowserState, requested: string[]): BrowserState {
-  const ids = withSharedFamily(s, withPinnedPanes(s, requested.filter((id) => inPinnedContainer(s, id))));
+export function unloadPinnedTabs(s: BrowserState, requested: string[], expand = true): BrowserState {
+  const pinnedIds = requested.filter((id) => inPinnedContainer(s, id));
+  const ids = expand ? withSharedFamily(s, withPinnedPanes(s, pinnedIds)) : pinnedIds;
   const closing = new Set([...requested, ...ids]);
   const pinned = ids.filter((id) => inPinnedContainer(s, id));
   if (!pinned.length) return s;

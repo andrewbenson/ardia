@@ -3,13 +3,14 @@ import { cancelDownload, endWebKitPrivateSession } from "@ardia/ardiacore";
 import type { BrowserState, HydrateData } from "./browser";
 import { bookmarkRoots, ensureRoots, removeBookmarkTree } from "./bookmarks";
 import { IDLE_LIVE, without } from "./model";
+import { rememberNativeClosingLocals } from "./closingWindowRestore";
 import { runPinHandoff } from "./tabs";
 import { startNavigation } from "../lib/earlyNavigate";
 import { commandBarFocus, expectFocus } from "../lib/focusClaims";
 
 export const WORKSPACE_COMMANDS: ReadonlySet<string> = new Set([
   "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
-  "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
+  "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "restoreClosingWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
   "switchProfile", "moveTabsToWindow", "moveTabToProfile", "mergeAllWindows", "reopenClosed", "reopenClosedTab", "reopenClosedWindow",
   "restoreClosed", "createProfile", "updateProfile", "deleteProfile", "reorderProfiles", "setDefaultProfile", "profileDataDeleted",
   "createGroup", "updateGroup", "addTabsToGroup", "removeTabsFromGroup", "ungroup", "newNestedGroup", "closeGroup", "deleteGroup",
@@ -94,6 +95,7 @@ function withDerived(prev: BrowserState, s: BrowserState, next: Record<string, u
     }
     if (live !== prev.live) out.live = live;
   }
+  rememberNativeClosingLocals(prev, { ...s, ...out });
   return out;
 }
 
@@ -190,5 +192,6 @@ export function workspaceFromSnapshot(s: BrowserState, data: Record<string, unkn
   let bookmarks = s.bookmarks;
   for (const id of (next.profileOrder ?? []) as string[]) bookmarks = ensureRoots(bookmarks, id)[0];
   next.bookmarks = bookmarks;
+  rememberNativeClosingLocals(s, { ...s, ...next } as BrowserState);
   return next as Partial<BrowserState>;
 }

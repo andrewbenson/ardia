@@ -7,6 +7,7 @@ public struct StoreMemory: Sendable, Equatable {
   public var remotePinDeletions: JSMap<Double> = JSMap()
   public var endedPrivateDownloads: Set<String> = []
   public var closingWindows: Set<String> = []
+  var closingWindowUndos: [String: ClosingWindowUndo] = [:]
   public var lastTabKeepsWindow = false
   public var fromSyncDepth = 0
   public var chromeTabs = ChromeTabsMemory()

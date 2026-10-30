@@ -11,7 +11,7 @@ import { activeTabId, bookmarkProfileId, engineProfile, viewTabIds } from "../..
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions, journeyQueryInvalidated } from "../../lib/perfMarks";
 import { sampleOmniboxLatency } from "../../lib/perfMarks";
 import { currentBarActions } from "./actions";
-import { profileBookmarks } from "./useSuggestions";
+import { profileBookmarks } from "./profileBookmarks";
 import { useOmniboxDriver } from "./devDriver";
 import { useBarExtensions } from "./extensions";
 import { openFromBar, switchFromBar, type Disposition } from "./open";

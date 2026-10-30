@@ -68,9 +68,6 @@ export function startDevHarness() {
     get extensions(): typeof import("../components/extensions/state") {
       return require("../components/extensions/state");
     },
-    get bangs(): typeof import("../components/omnibox/bangs") {
-      return require("../components/omnibox/bangs");
-    },
     get switcher(): typeof import("../components/sidebar/switcher") {
       return require("../components/sidebar/switcher");
     },

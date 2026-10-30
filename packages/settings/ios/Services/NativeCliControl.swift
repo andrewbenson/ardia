@@ -15,8 +15,7 @@ final class NativeCliControl {
   static let upgradeDelay: TimeInterval = 8
   static let indicatorHold: TimeInterval = 3
 
-  nonisolated static var enabled: Bool { LaunchSwitches.shared.isOn(.nativeServices, defaultOn: false) }
-  nonisolated static let active: Bool = enabled && NativeSettingsHandle.active
+  nonisolated static var active: Bool { NativeSettingsHandle.active }
 
   private(set) var server: CliControlServer?
   private(set) var installing: String?
@@ -44,6 +43,8 @@ final class NativeCliControl {
   }
 
   @ObservationIgnored private var sync = CliControlSync()
+  @ObservationIgnored private var activeTabSync = CliActiveTabSync()
+  @ObservationIgnored private var activeBrowsers = CliActiveTabBrowsers()
   @ObservationIgnored private var model: SettingsModel?
   @ObservationIgnored private var started = false
   @ObservationIgnored private var indicatorHide: DispatchWorkItem?
@@ -73,6 +74,7 @@ final class NativeCliControl {
       let status = CliControlServer(payload)
       Task { @MainActor in NativeCliControl.shared.heard(status) }
     }
+    observeActiveTabs()
     settingChanged()
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.upgradeDelay) { [weak self] in self?.upgradeIfBehind() }
   }
@@ -109,6 +111,46 @@ final class NativeCliControl {
   private func adoptServer() {
     if server != sync.server { server = sync.server }
     updateIndicator()
+    pushActiveTab()
+  }
+
+  private func observeActiveTabs() {
+    if let transaction = Self.stripTransaction(ArdiaCoreTabStrip.allStrips) {
+      activeBrowsers = CliActiveTabBrowsers(snapshot: transaction)
+    }
+    NativeStoreHandle.store?.subscribe { _ in
+      DispatchQueue.main.async { MainActor.assumeIsolated { NativeCliControl.shared.pushActiveTab() } }
+    }
+    ArdiaCoreEventTaps.observers.append { [weak self] name, payload in
+      guard name == "tabStrip", let transaction = Self.stripTransaction(payload) else { return }
+      self?.activeBrowsers.receive(transaction)
+      self?.pushActiveTab()
+    }
+    TabPoolHost.shared.pageEventObservers.append { [weak self] _, name, _ in
+      if name == "onReady" || name == "onPageGone" || name == "onDiscarded" { self?.pushActiveTab() }
+    }
+  }
+
+  private static func stripTransaction(_ payload: [String: Any]) -> StripTransaction? {
+    guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = try? JSONValue.parse(data) else { return nil }
+    return StripTransaction(json: json)
+  }
+
+  private func pushActiveTab() {
+    let serving = server?.state == "on" || server?.state == "starting"
+    var chromeId: Int?
+    if serving, let store = NativeStoreHandle.store {
+      let memory = store.memory.chromeTabs
+      let browsers = activeBrowsers.map(memory)
+      if let browserId = cliActiveBrowserId(store.state, browsers: browsers), let bridgeId = Int32(exactly: browserId),
+        ArdiaCoreHost.responds(to: #selector(ArdiaCoreHost.chromeTabId(browserId:)))
+      {
+        let id = Int(ArdiaCoreHost.chromeTabId(browserId: bridgeId))
+        if id >= 0 { chromeId = id }
+      }
+    }
+    guard let args = activeTabSync.update(serverState: server?.state, chromeId: chromeId) else { return }
+    ArdiaCoreServices.call("ac_cli_control", profile: "", args: args) { @Sendable _ in }
   }
 
   func stop() {

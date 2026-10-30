@@ -12,7 +12,8 @@ final class NativeAppIntegration {
   static let handoffDelay: TimeInterval = 0.25
   static let firstHandoffDelay: TimeInterval = 1
 
-  nonisolated static let active: Bool = NativeCliControl.enabled && NativeStoreHandle.opened && NativeStoreHandle.ownedWorkspaceAtLaunch
+  nonisolated static var enabled: Bool { LaunchSwitches.shared.isOn(.nativeServices, defaultOn: false) }
+  nonisolated static let active: Bool = enabled && NativeStoreHandle.opened && NativeStoreHandle.ownedWorkspaceAtLaunch
 
   private var handoff = HandoffTracker()
   private var handoffQueued = false

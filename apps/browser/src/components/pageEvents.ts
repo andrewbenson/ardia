@@ -2,7 +2,6 @@ import type { OpenWindowRequest, PageEngine, WebViewProps } from "@ardia/ardiaco
 import { focus, switchToTab } from "../lib/actions";
 import { adoptIconPage, dropOutlivedFavicon, noteFavicon, noteIconPage } from "../lib/favicons";
 import { restoredThemeColor } from "../lib/launchLook";
-import { noteChromeTab } from "../lib/cliControl";
 import { takeStartedNavigation } from "../lib/earlyNavigate";
 import { isQuitting } from "../lib/native";
 import { noteDiscarded, noteReady } from "../lib/tabLifecycle";
@@ -135,9 +134,8 @@ export function pageEventHandlers(session: PageSession): PageEventHandlers {
   };
 
   return {
-    onReady: (browserId, chromeTabId) => {
+    onReady: (browserId) => {
       setBrowserId(tabId, browserId);
-      noteChromeTab(tabId, chromeTabId);
       noteReady(tabId);
       if (tab()?.muted) void webviews.get(tabId)?.setMuted(true);
     },

@@ -43,6 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)deleteProfileData:(NSString *)profile completion:(void (^)(NSArray<NSString *> *remaining))completion
     NS_SWIFT_NAME(deleteProfileData(_:completion:));
 + (void)releaseProfile:(NSString *)profile;
++ (int)chromeTabId:(int)browserId NS_SWIFT_NAME(chromeTabId(browserId:));
 + (BOOL)stopCapture:(int)browserId NS_SWIFT_NAME(stopCapture(browserId:));
 + (BOOL)showAutofillSuggestions:(int)browserId passwords:(BOOL)passwords NS_SWIFT_NAME(showAutofillSuggestions(browserId:passwords:));
 + (void)resolvePermission:(NSString *)requestId result:(NSString *)result remember:(BOOL)remember

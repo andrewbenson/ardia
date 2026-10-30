@@ -52,7 +52,7 @@ The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `We
 | Logic | Owner when pooled |
 |---|---|
 | Navigation: `loadUrl` on a new `navigation.seq`, skipping the seq loaded on create, a started navigation (`takeStartedNavigation`) and an adopted URL | JS pool session, per tab, same code as `EngineWebView` (`pageSession.ts`) |
-| `noteIssued`, `persistEngine`, `noteReady`, `setBrowserId`, `noteChromeTab`, muted on ready | shared handlers (`onReady`, `onPageCreated`) |
+| `noteIssued`, `persistEngine`, `noteReady`, `setBrowserId`, muted on ready | shared handlers (`onReady`, `onPageCreated`) |
 | `noteGone`, progress to 0 | `onPageGone` |
 | Initial page: `url`, `adoptId`, `profile`, `engine`, `transferKey` | pool, from the store (`TabViewWanted`) |
 | `visible`, `warm`, `neighbour` | pool, from where it places the view |

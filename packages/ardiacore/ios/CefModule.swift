@@ -19,7 +19,10 @@ public class CefModule: Module {
 
     OnCreate {
       ArdiaCoreEngineBridge.setEventHandler { [weak self] topic, json in self?.sendEvent("onEngineEvent", ["topic": topic, "payload": json]) }
-      ArdiaCoreTabStrip.setHandler { [weak self] tx in self?.sendEvent("onTabStrip", tx) }
+      ArdiaCoreTabStrip.setHandler { [weak self] tx in
+        self?.sendEvent("onTabStrip", tx)
+        ArdiaCoreEventTaps.send("tabStrip", tx)
+      }
       ArdiaCoreServices.downloadsHandler = { [weak self] download in self?.sendEvent("onDownload", download) }
       ArdiaCoreHost.eventHandler = { [weak self] name, payload in
         ArdiaCoreEventTaps.send(name, payload)

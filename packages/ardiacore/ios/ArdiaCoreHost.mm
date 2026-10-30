@@ -829,6 +829,11 @@ static void StartEarlyWindow() {
   if (p && [engine respondsToSelector:@selector(releaseProfile:)]) [engine releaseProfile:p];
 }
 
++ (int)chromeTabId:(int)browserId {
+  ArdiaCoreTab *tab = ardiacore_host::TabWithBrowserId(browserId);
+  return [tab respondsToSelector:@selector(tabId)] ? tab.tabId : -1;
+}
+
 + (BOOL)stopCapture:(int)browserId {
   ArdiaCoreTab *tab = ardiacore_host::TabWithBrowserId(browserId);
   return [tab respondsToSelector:@selector(stopCapture)] && [tab stopCapture];

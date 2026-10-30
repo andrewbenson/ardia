@@ -100,6 +100,7 @@ struct AutoHideStripTests {
 
   @MainActor @Test func developerStripesDrawInTheBand() throws {
     let asset = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../apps/browser/assets/developer-stripes-light@2x.png").standardized
+    try #require(FileManager.default.fileExists(atPath: asset.path), "copy apps/browser/assets next to native/SolaraKit")
     let strip = AutoHideStripView(frame: CGRect(x: 0, y: 0, width: 200, height: 41))
     var style = AutoHideStripStyle(card: try #require(CSSColor("#202020")), band: nil, divider: try #require(CSSColor("rgba(0,0,0,0.1)")), secondary: try #require(CSSColor("#00000080")), host: "example.com", hasPage: true)
     style.stripes = asset.path

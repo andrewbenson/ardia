@@ -23,6 +23,10 @@ struct DownloadsPanelTests {
     return v
   }
 
+  private func serviceRunLoop(for seconds: TimeInterval) {
+    RunLoop.main.run(until: Date().addingTimeInterval(seconds))
+  }
+
   @Test func itHangsBelowItsButtonWithTheArrowOnTop() async throws {
     let v = try await panel(DownloadsPanelPlacement(width: 300, left: 40, top: 60, arrow: .top, arrowX: 30))
     let card = try #require(v.cardFrame)
@@ -55,10 +59,10 @@ struct DownloadsPanelTests {
     v.onClosed = { closed += 1 }
     v.update(DownloadsPanelState(list: list(rows: 2), placement: placement, closing: true))
     v.update(DownloadsPanelState(list: list(rows: 2), placement: placement, closing: false))
-    try await Task.sleep(for: .milliseconds(200))
+    serviceRunLoop(for: 0.2)
     #expect(closed == 0 && !v.isClosing)
     v.update(DownloadsPanelState(list: list(rows: 2), placement: placement, closing: true))
-    try await Task.sleep(for: .milliseconds(200))
+    serviceRunLoop(for: 0.2)
     #expect(closed == 1)
   }
 }

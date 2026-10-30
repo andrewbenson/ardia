@@ -197,6 +197,13 @@ import Testing
     let body = CastPickerView()
     let popover = PopoverView(body: body)
     popover.frame = NSRect(x: 0, y: 0, width: 1083, height: 746)
+    let window = MediaLayoutWindow(contentRect: popover.frame, styleMask: [.borderless], backing: .buffered, defer: true)
+    window.isReleasedWhenClosed = false
+    window.contentView = popover
+    defer {
+      window.contentView = nil
+      window.close()
+    }
     popover.onDismiss = {}
     popover.set(placement: PopoverPlacement(width: 340, top: 8, right: 8), dark: true)
     popover.set(bodyHeight: 184)
@@ -208,4 +215,11 @@ import Testing
     popover.layoutSubtreeIfNeeded()
     #expect(popover.cardFrame.minX == 311.5)
   }
+}
+
+@MainActor
+private final class MediaLayoutWindow: NSWindow {
+  override var backingScaleFactor: CGFloat { 2 }
+  override var canBecomeKey: Bool { false }
+  override var canBecomeMain: Bool { false }
 }

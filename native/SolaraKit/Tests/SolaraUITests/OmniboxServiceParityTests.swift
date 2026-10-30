@@ -205,6 +205,7 @@ struct OmniboxServiceParityTests {
       #expect(warm.index(id).prepare())
     }
     for (query, expected) in zip(fixture.cases, fixture.expected) {
+      await Task.yield()
       #expect(query["text"] == expected["text"] && query["context"] == expected["context"])
       let text = query["text"]!.string!
       let profile = fixture.context(query)["profileId"]!.string!

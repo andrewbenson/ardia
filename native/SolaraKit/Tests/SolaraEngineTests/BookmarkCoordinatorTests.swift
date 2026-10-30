@@ -416,3 +416,14 @@ extension BookmarkCoordinatorTests {
     #expect(!owner.hasUnconfirmedEdit(profileId: "p", nodeId: "b0") && !owner.hasUnconfirmedEdit(profileId: "p", nodeId: "b2"))
   }
 }
+
+extension BookmarkCoordinatorTests {
+  @Test func legacyJSOnlyPartialDeleteResurrectsTheSuffixWhichTheNativePumpKeepsDeleted() throws {
+    let record = try #require(try oracle()["pure"]?.array?.first { $0["name"] == "partial-delete-valid-suffix-resurrected" })
+    let engine = record["engine"]?.string ?? ""
+    let ops = BookmarkReconcile.operations(from: BookmarkFlat(records: record["before"]?.array ?? []), to: BookmarkFlat(records: record["after"]?.array ?? []), engine: engine)
+    let legacy = BookmarkReconcile.replay(BookmarkFlat(records: record["fetched"]?.array ?? []), operations: ops, engine: engine)
+    #expect(legacy.structuralBreak != nil)
+    #expect(legacy.tree.records.filter { $0["kind"] == "url" }.count == 1)
+  }
+}

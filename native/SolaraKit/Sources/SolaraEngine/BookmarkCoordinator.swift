@@ -37,10 +37,14 @@ public struct BookmarkDesiredView: Equatable, Sendable {
   public var hasView = false
   public var readyForSync = false
   public var structuralBreak: Int?
+  public var failedPushes = 0
+  public var retryNotBeforeMs: Double?
+  public var requiresRead = false
+  public var inFlightTarget: JSONValue?
   public var pendingStamps: JSMap<BookmarkEditStamp> = [:]
   public var unconfirmedEdits: Set<JSKey> = []
   public static func == (lhs: Self, rhs: Self) -> Bool {
-    JSKey(lhs.engine) == JSKey(rhs.engine) && lhs.document == rhs.document && lhs.revision == rhs.revision && lhs.hasView == rhs.hasView && lhs.readyForSync == rhs.readyForSync && lhs.structuralBreak == rhs.structuralBreak && lhs.pendingStamps == rhs.pendingStamps && lhs.unconfirmedEdits == rhs.unconfirmedEdits
+    JSKey(lhs.engine) == JSKey(rhs.engine) && lhs.document == rhs.document && lhs.revision == rhs.revision && lhs.hasView == rhs.hasView && lhs.readyForSync == rhs.readyForSync && lhs.structuralBreak == rhs.structuralBreak && lhs.failedPushes == rhs.failedPushes && lhs.retryNotBeforeMs == rhs.retryNotBeforeMs && lhs.requiresRead == rhs.requiresRead && lhs.inFlightTarget == rhs.inFlightTarget && lhs.pendingStamps == rhs.pendingStamps && lhs.unconfirmedEdits == rhs.unconfirmedEdits
   }
 }
 
@@ -63,6 +67,13 @@ public struct BookmarkReceipt: Equatable, Sendable {
 }
 
 public final class BookmarkCoordinator: @unchecked Sendable {
+  let engineQueue = BookmarkEngineQueue()
+  private let journalQueue = DispatchQueue(label: "app.solara.bookmarks.journal")
+
+  func offMain<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
+    await withCheckedContinuation { continuation in journalQueue.async { continuation.resume(returning: body()) } }
+  }
+  private var pumpEpoch: UInt64 = 0
   private let lock = NSRecursiveLock()
   private let writerLock = NSLock()
   private var profiles: JSMap<String>
@@ -179,7 +190,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
   }
 
   public func remap(profiles: JSMap<String>, defaultProfile: String) {
-    writing { locked { self.profiles = profiles; self.defaultProfile = defaultProfile } }
+    writing { locked { self.profiles = profiles; self.defaultProfile = defaultProfile; pumpEpoch += 1 } }
   }
 
   private func aliases(_ engine: String) -> [String] { profiles.filter { BookmarkReconcile.same($1, engine) }.keys }
@@ -335,8 +346,9 @@ public final class BookmarkCoordinator: @unchecked Sendable {
   }
 
   @discardableResult
-  public func submit(profile: String, mutations: [BookmarkMutation], fromSync: Bool = false, requestID: String? = nil) throws -> BookmarkReceipt {
+  public func submit(profile: String, mutations: [BookmarkMutation], fromSync: Bool = false, requestID: String? = nil, expectedPumpEpoch: UInt64? = nil) throws -> BookmarkReceipt {
     let result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkReceipt, (BookmarkMembershipSnapshot, [BookmarkMembershipObserver]))) in
+      if let expectedPumpEpoch, expectedPumpEpoch != pumpEpoch { throw BookmarkCoordinatorError.staleRevision }
       let engine = engine(profile: profile)
       let payload: JSONValue = ["kind": "submit", "profile": .string(profile), "engine": .string(engine), "fromSync": .bool(fromSync), "mutations": .array(mutations.map { ["method": .string($0.method), "args": .array($0.args)] })]
       if let receipt = try durability.receipt(requestID: requestID, payload: payload) { return (nil, { (receipt, (self.snapshot(self.desiredView(engine: engine)), [])) }) }
@@ -428,15 +440,27 @@ public final class BookmarkCoordinator: @unchecked Sendable {
   }
 
   @discardableResult
-  public func completeRead(engine: String, document: JSONValue, capturedRevision: UInt64) -> Bool {
+  public func completeRead(engine: String, document: JSONValue, capturedRevision: UInt64, epoch: UInt64? = nil) -> Bool {
     let result: (BookmarkMembershipSnapshot, [BookmarkMembershipObserver])
     do {
       result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkMembershipSnapshot, [BookmarkMembershipObserver])) in
+        guard epoch == nil || epoch == pumpEpoch else { throw BookmarkCoordinatorError.staleRevision }
         var view = desiredView(engine: engine)
+        let requiredRead = view.requiresRead || view.inFlightTarget != nil
+        view.requiresRead = false
         let fetched = BookmarkFlat(document: document, engine: engine)
         let base = bases[engine] ?? BookmarkFlat(records: [])
-        let delta = BookmarkReconcile.operations(from: base, to: BookmarkFlat(document: view.document, engine: engine), engine: engine)
-        let replay = BookmarkReconcile.replay(fetched, operations: delta, engine: engine)
+        let desired = BookmarkFlat(document: view.document, engine: engine)
+        let intended = view.inFlightTarget.map { BookmarkFlat(document: $0, engine: engine) } ?? desired
+        var delta = BookmarkReconcile.operations(from: base, to: intended, engine: engine)
+        var replay = BookmarkReconcile.replayPending(fetched, operations: delta, engine: engine)
+        if view.inFlightTarget != nil, replay.structuralBreak == nil {
+          let later = BookmarkReconcile.operations(from: intended, to: desired, engine: engine)
+          let latest = BookmarkReconcile.replayPending(replay.tree, operations: later, engine: engine)
+          replay = BookmarkReplayResult(tree: latest.tree, structuralBreak: latest.structuralBreak.map { delta.count + $0 })
+          delta.append(contentsOf: later)
+        }
+        view.inFlightTarget = nil
         let merged = replay.tree.document(profiles: aliases(engine), preserving: view.document)
         var conflicts = durability.conflicts
         if let offset = replay.structuralBreak {
@@ -444,7 +468,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
           if !conflicts.contains(conflict) { conflicts.append(conflict) }
         }
         let ready = !durability.legacyPendingEngines.contains(JSKey(engine))
-        if view.document != merged || view.readyForSync != ready || view.structuralBreak != replay.structuralBreak {
+        if view.document != merged || view.readyForSync != ready || view.structuralBreak != replay.structuralBreak || requiredRead {
           view.document = merged
           view.hasView = true
           view.readyForSync = ready
@@ -465,6 +489,95 @@ public final class BookmarkCoordinator: @unchecked Sendable {
     } catch { return false }
     deliver(result)
     return true
+  }
+
+  func claimPump() -> UInt64 {
+    writing { locked { pumpEpoch += 1; return pumpEpoch } }
+  }
+
+  func invalidatePump(epoch: UInt64) {
+    writing { locked { if pumpEpoch == epoch { pumpEpoch += 1 } } }
+  }
+
+  func ownsPump(engine: String, epoch: UInt64) -> Bool {
+    locked { pumpEpoch == epoch && !engine.hasPrefix("incognito:") && profiles.values.contains { BookmarkReconcile.same($0, engine) } }
+  }
+
+  func pumpInput(engine: String, epoch: UInt64) -> (BookmarkDesiredView, BookmarkFlat)? {
+    locked {
+      guard ownsPump(engine: engine, epoch: epoch) else { return nil }
+      return (desiredView(engine: engine), bases[engine] ?? BookmarkFlat(records: []))
+    }
+  }
+
+  @discardableResult
+  func beginPush(engine: String, captured: BookmarkDesiredView, epoch: UInt64) -> Bool {
+    do {
+      let notification = try transact {
+        guard ownsPump(engine: engine, epoch: epoch) else { throw BookmarkCoordinatorError.staleRevision }
+        var view = desiredView(engine: engine)
+        guard view.inFlightTarget == nil else { throw BookmarkCoordinatorError.staleRevision }
+        view.inFlightTarget = captured.document
+        view.revision += 1
+        var nextViews = views
+        nextViews[engine] = view
+        let checkpoint = checkpoint(views: nextViews, bases: bases)
+        return (checkpoint, { self.views = nextViews; return self.notifications(engine) })
+      }
+      deliver(notification)
+      return true
+    } catch { return false }
+  }
+
+  @discardableResult
+  func completePush(engine: String, captured: BookmarkDesiredView, epoch: UInt64, succeeded: Bool, nowMs: Double) -> Bool {
+    do {
+      let notification = try transact {
+        guard ownsPump(engine: engine, epoch: epoch) else { throw BookmarkCoordinatorError.staleRevision }
+        var view = desiredView(engine: engine)
+        let before = view
+        var nextBases = bases
+        if succeeded {
+          view.inFlightTarget = nil
+          nextBases[engine] = BookmarkFlat(document: captured.document, engine: engine)
+          view.failedPushes = 0
+          view.retryNotBeforeMs = nil
+          view.requiresRead = false
+        } else {
+          view.failedPushes = min(view.failedPushes + 1, 64)
+          view.retryNotBeforeMs = view.failedPushes < 2 ? nil : nowMs + min(60_000, 1500 * pow(2, Double(min(view.failedPushes - 2, 6))))
+          view.requiresRead = true
+        }
+        if view != before { view.revision += 1 }
+        var nextViews = views
+        nextViews[engine] = view
+        let checkpoint = checkpoint(views: nextViews, bases: nextBases)
+        return (checkpoint, { self.views = nextViews; self.bases = nextBases; return self.notifications(engine) })
+      }
+      deliver(notification)
+      return true
+    } catch { return false }
+  }
+
+  @discardableResult
+  func deferRead(engine: String, epoch: UInt64, nowMs: Double, delayMs: Double) -> Bool {
+    do {
+      let notification = try transact {
+        guard ownsPump(engine: engine, epoch: epoch) else { throw BookmarkCoordinatorError.staleRevision }
+        var view = desiredView(engine: engine)
+        let before = view
+        view.requiresRead = true
+        view.retryNotBeforeMs = max(view.retryNotBeforeMs ?? 0, nowMs + delayMs)
+        guard view != before else { return (nil, { (self.snapshot(view), [BookmarkMembershipObserver]()) }) }
+        view.revision += 1
+        var nextViews = views
+        nextViews[engine] = view
+        let checkpoint = checkpoint(views: nextViews, bases: bases)
+        return (checkpoint, { self.views = nextViews; return self.notifications(engine) })
+      }
+      deliver(notification)
+      return true
+    } catch { return false }
   }
 
 }

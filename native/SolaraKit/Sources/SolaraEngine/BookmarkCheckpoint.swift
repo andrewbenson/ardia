@@ -133,7 +133,7 @@ final class BookmarkDurability {
   }
 
   static func encodeView(_ view: BookmarkDesiredView) -> JSONValue {
-    ["engine": .string(view.engine), "document": view.document, "revision": .string(String(view.revision)), "hasView": .bool(view.hasView), "structuralBreak": view.structuralBreak.map { JSONValue($0) } ?? .null,
+    ["engine": .string(view.engine), "document": view.document, "revision": .string(String(view.revision)), "hasView": .bool(view.hasView), "failedPushes": JSONValue(view.failedPushes), "retryNotBeforeMs": view.retryNotBeforeMs.map(JSONValue.number) ?? .null, "requiresRead": .bool(view.requiresRead), "inFlightTarget": view.inFlightTarget ?? .null, "structuralBreak": view.structuralBreak.map { JSONValue($0) } ?? .null,
      "unconfirmedEdits": .array(view.unconfirmedEdits.map(\.text).sorted(by: jsKeyPrecedes).map(JSONValue.string)),
      "stamps": .array(view.pendingStamps.map { id, stamp in ["id": .string(id), "hlc": .string(stamp.hlc), "origin": .string(stamp.origin)] })]
   }
@@ -156,7 +156,14 @@ final class BookmarkDurability {
         Set(ids.compactMap(\.string).map(JSKey.init)).count == ids.count else { throw BookmarkPendingStoreError.invalidEnvelope }
       unconfirmed = Set(ids.compactMap(\.string).map(JSKey.init))
     } else { unconfirmed = [] }
-    return BookmarkDesiredView(engine: engine, document: document, revision: revision, hasView: hasView, readyForSync: false, structuralBreak: structuralBreak.int, pendingStamps: pending, unconfirmedEdits: unconfirmed)
+    let failures = value["failedPushes"] ?? 0
+    let deadline = value["retryNotBeforeMs"] ?? .null
+    let requiresRead = value["requiresRead"] ?? false
+    guard let failureCount = failures.int, (0...64).contains(failureCount),
+      deadline.isNull || deadline.number?.isFinite == true, let needsRead = requiresRead.bool else { throw BookmarkPendingStoreError.invalidEnvelope }
+    let target = value["inFlightTarget"].flatMap { value -> JSONValue? in value.isNull ? Optional<JSONValue>.none : Optional.some(value) }
+    if let target { try validateDocument(target, engine: engine) }
+    return BookmarkDesiredView(engine: engine, document: document, revision: revision, hasView: hasView, readyForSync: false, structuralBreak: structuralBreak.int, failedPushes: failureCount, retryNotBeforeMs: deadline.number, requiresRead: needsRead, inFlightTarget: target, pendingStamps: pending, unconfirmedEdits: unconfirmed)
   }
 
   func validateAcceptance(_ document: JSONValue, engine: String) throws {

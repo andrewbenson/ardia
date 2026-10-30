@@ -388,7 +388,7 @@ struct BookmarkPendingStoreTests {
     #expect(!coordinator.desiredView(engine: "").readyForSync)
   }
 
-  @Test func structuralReplayRetainsDurableConflictInsteadOfInferringSettlement() throws {
+  @Test func satisfiedRemovalsKeepDurableSuffixPendingAcrossRelaunch() throws {
     let dir = try directory()
     defer { try? FileManager.default.removeItem(at: dir) }
     var first: BookmarkCoordinator? = owner(dir)
@@ -405,13 +405,15 @@ struct BookmarkPendingStoreTests {
     nodes["bar@default"] = .object(root)
     let fetched: JSONValue = ["nodes": .object(nodes), "roots": partiallyApplied["roots"]!]
     second!.completeRead(engine: "", document: fetched, capturedRevision: 0)
-    #expect(second!.desiredView(engine: "").structuralBreak == 0)
-    #expect(second!.desiredView(engine: "").document["nodes"]?["b2"] != nil)
-    #expect(second!.recoveryConflicts.count == 1)
-    #expect(second!.recoveryConflicts.first?["operations"] == [["op": "remove", "id": "b0"], ["op": "remove", "id": "b1"], ["op": "remove", "id": "b2"]])
-    #expect(second!.recoveryConflicts.first?["desired"]?["nodes"]?["b2"] == nil)
+    #expect(second!.desiredView(engine: "").structuralBreak == nil)
+    #expect(second!.desiredView(engine: "").document["nodes"]?["b2"] == nil)
+    #expect(second!.recoveryConflicts.isEmpty)
     second = nil
-    #expect(owner(dir).recoveryConflicts.count == 1)
+    let third = owner(dir)
+    #expect(third.desiredView(engine: "").document["nodes"]?["b2"] == nil)
+    #expect(third.completeRead(engine: "", document: fetched, capturedRevision: 0))
+    #expect(third.desiredView(engine: "").document["nodes"]?["b2"] == nil)
+    #expect(third.recoveryConflicts.isEmpty)
   }
 
   @Test func persistedReadDoesNotReplayAcknowledgedHistoricalEdits() throws {

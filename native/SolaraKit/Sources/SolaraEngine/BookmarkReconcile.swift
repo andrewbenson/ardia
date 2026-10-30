@@ -245,7 +245,15 @@ public enum BookmarkReconcile {
     return ops
   }
 
+  public static func replayPending(_ tree: BookmarkFlat, operations: [JSONValue], engine: String) -> BookmarkReplayResult {
+    replay(tree, operations: operations, engine: engine, satisfiedRemovals: true)
+  }
+
   public static func replay(_ tree: BookmarkFlat, operations: [JSONValue], engine: String) -> BookmarkReplayResult {
+    replay(tree, operations: operations, engine: engine, satisfiedRemovals: false)
+  }
+
+  private static func replay(_ tree: BookmarkFlat, operations: [JSONValue], engine: String, satisfiedRemovals: Bool) -> BookmarkReplayResult {
     var flat = tree
     let roots = BookmarkFlat.roots(engine)
     func parentID(_ parent: String) -> String { same(parent, "bar") ? roots.bar : same(parent, "other") ? roots.other : parent }
@@ -283,6 +291,7 @@ public enum BookmarkReconcile {
       let node = flat.nodes[id]
       let kind = op["op"]?.string ?? ""
       if kind == "remove" {
+        if node == nil && satisfiedRemovals { continue }
         guard let node, node["parent"]?.isNull == false else { return BookmarkReplayResult(tree: flat, structuralBreak: offset) }
         detach(id)
         drop(id)

@@ -153,11 +153,9 @@ final class NativeSiteMenu {
 
   private func readBlocker(_ c: JSONValue, token: Int) async {
     let host = SiteControlsLogic.host(c["url"]?.string ?? "")
-    async let state = EngineCalls.result({ done in ArdiaCoreContentBlocker.state(done) }, NativeSiteControls.json)
-    async let allowed: Bool = withCheckedContinuation { continuation in
-      ArdiaCoreContentBlocker.isAllowed(host: host) { continuation.resume(returning: $0) }
-    }
-    let result: JSONValue = ["enabled": .bool(await state["enabled"]?.bool == true), "allowed": .bool(await allowed)]
+    let state = await EngineCalls.result({ done in ArdiaCoreContentBlocker.state(done) }, NativeSiteControls.json)
+    let allowed = await EngineCalls.result({ done in ArdiaCoreContentBlocker.isAllowed(host: host) { done(["allowed": $0]) } }, { $0["allowed"] as? Bool == true })
+    let result: JSONValue = ["enabled": .bool(state["enabled"]?.bool == true), "allowed": .bool(allowed)]
     guard session.accepts(token: token) else { return }
     blocker = result
     render()

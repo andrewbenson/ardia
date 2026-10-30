@@ -126,6 +126,38 @@ public enum BookmarkReconcile {
     return false
   }
 
+  private static func alignedTargets(_ targets: [String], folder: String, nodes: JSONObject) -> Bool {
+    var seen: Set<JSKey> = [JSKey(folder)]
+    return targets.allSatisfy { nodes[$0] != nil && seen.insert(JSKey($0)).inserted }
+  }
+
+  private static func addOperation(_ id: String, node: JSONValue, parent: String, index: Int) -> JSONValue {
+    var op: JSONObject = ["op": "add", "id": .string(id), "k": node["kind"] == "url" ? "u" : "f", "t": node["title"] ?? ""]
+    if let url = node["url"] { op["u"] = url }
+    op["a"] = node["addedAt"] ?? 0
+    if node["key"]?.truthy == true { op["key"] = node["key"] }
+    op["parent"] = .string(parent)
+    op["index"] = JSONValue(index)
+    return .object(op)
+  }
+
+  private static func updateOperation(_ id: String, was: JSONValue?, node: JSONValue) -> JSONValue? {
+    guard let was, was["title"] != node["title"] || (node["url"] != nil && was["url"] != node["url"]) else { return nil }
+    var op: JSONObject = ["op": "update", "id": .string(id), "t": node["title"] ?? ""]
+    if let url = node["url"] { op["u"] = url }
+    return .object(op)
+  }
+
+  private static func moveIntoPlace(_ id: String, at index: Int, in list: inout [String]) -> Bool {
+    guard index < list.count else { return false }
+    guard let found = list[index...].firstIndex(where: { same($0, id) }) else { return false }
+    guard found != index else { return true }
+    let moved = list[found]
+    for position in stride(from: found, to: index, by: -1) { list[position] = list[position - 1] }
+    list[index] = moved
+    return true
+  }
+
   public static func operations(from: BookmarkFlat, to: BookmarkFlat, engine: String) -> [JSONValue] {
     let roots = BookmarkFlat.roots(engine)
     var parents = from.nodes.mapValues { $0["parent"] ?? .null }
@@ -138,17 +170,45 @@ public enum BookmarkReconcile {
       let folder = queue[cursor]
       cursor += 1
       if kids[folder] == nil { kids[folder] = [] }
-      for (index, id) in (to.children[folder] ?? []).enumerated() {
+      let targets = to.children[folder] ?? []
+      if alignedTargets(targets, folder: folder, nodes: to.nodes) {
+        var current = kids.removeValue(forKey: folder) ?? []
+        for (index, id) in targets.enumerated() {
+          let node = to.nodes[id]!
+          if parents[id] == nil {
+            ops.append(addOperation(id, node: node, parent: opParent(folder), index: index))
+            current.insert(id, at: min(index, current.count))
+            parents[id] = .string(folder)
+            if node["kind"] == "folder" { kids[id] = [] }
+          } else {
+            let inFolder = parents[id] == .string(folder)
+            if !(inFolder && index < current.count && same(current[index], id)) {
+              if inFolder {
+                if !moveIntoPlace(id, at: index, in: &current) {
+                  removeSplice(&current, id)
+                  current.insert(id, at: min(index, current.count))
+                }
+              } else {
+                if let parent = parents[id]?.string, var old = kids[parent] {
+                  removeSplice(&old, id)
+                  kids[parent] = old
+                }
+                current.insert(id, at: min(index, current.count))
+              }
+              parents[id] = .string(folder)
+              ops.append(["op": "move", "id": .string(id), "parent": .string(opParent(folder)), "index": JSONValue(index)])
+            }
+            if let update = updateOperation(id, was: from.nodes[id], node: node) { ops.append(update) }
+          }
+          if node["kind"] == "folder" { queue.append(id) }
+        }
+        kids[folder] = current
+        continue
+      }
+      for (index, id) in targets.enumerated() {
         guard let node = to.nodes[id] else { continue }
-        let was = from.nodes[id]
         if parents[id] == nil {
-          var op: JSONObject = ["op": "add", "id": .string(id), "k": node["kind"] == "url" ? "u" : "f", "t": node["title"] ?? ""]
-          if let url = node["url"] { op["u"] = url }
-          op["a"] = node["addedAt"] ?? 0
-          if node["key"]?.truthy == true { op["key"] = node["key"] }
-          op["parent"] = .string(opParent(folder))
-          op["index"] = JSONValue(index)
-          ops.append(.object(op))
+          ops.append(addOperation(id, node: node, parent: opParent(folder), index: index))
           var list = kids[folder] ?? []
           list.insert(id, at: min(index, list.count))
           kids[folder] = list
@@ -166,11 +226,7 @@ public enum BookmarkReconcile {
             parents[id] = .string(folder)
             ops.append(["op": "move", "id": .string(id), "parent": .string(opParent(folder)), "index": JSONValue(index)])
           }
-          if let was, was["title"] != node["title"] || (node["url"] != nil && was["url"] != node["url"]) {
-            var op: JSONObject = ["op": "update", "id": .string(id), "t": node["title"] ?? ""]
-            if let url = node["url"] { op["u"] = url }
-            ops.append(.object(op))
-          }
+          if let update = updateOperation(id, was: from.nodes[id], node: node) { ops.append(update) }
         }
         if node["kind"] == "folder" { queue.append(id) }
       }

@@ -284,6 +284,11 @@ Profiles).
 | `pw:<origin>\n<username>` | profile | `{ o, u, p }` | see below |
 | `ext:<id>`, `ext:v:<id>` | profile | an extension: `{ on, inc, pin }`, or `{ removed: true }` once the user removes it; and the newest version approved anywhere with its permissions, `{ v, fps }` | Chrome Web Store extensions only; see below |
 
+Native pin publication settlement waits behind a held user transaction and compares stamps when it runs,
+preserving a newer local choice. The 10 s hold limit has no timer: a stale hold is closed by the next relevant
+store operation. A persistence flush can complete while settlement remains queued; an unchanged pending stamp
+can therefore survive a restart and be published again.
+
 ### Extensions
 
 What Chrome Sync does for extensions, through our folder (`packages/sync/src/extensions.ts`, the app's host in

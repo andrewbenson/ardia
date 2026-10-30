@@ -121,7 +121,16 @@ public final class Store: Sendable {
 
   @discardableResult
   public func dispatch(_ commands: [Command], origin: Origin = .native, fromSync: Bool = false) throws -> Commit {
-    try transact(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable), fromSync: fromSync, waiting: nil, replaying: false) { session in
+    let pinned = commands.contains { $0.name == "syncPinsApply" || $0.name == "settlePinChoices" }
+    if pinned && commands.count != 1 { throw CommandError("pinned sync commands must be dispatched alone") }
+    if let command = commands.first, command.name == "settlePinChoices" {
+      let settled = try SettledPinChoices(command.args)
+      return try transact(commands: commands, origin: origin, durable: false, fromSync: true, waiting: { settled.apply($0) }, replaying: false) {
+        settled.apply($0)
+      }!
+    }
+    if let command = commands.first, command.name == "syncPinsApply" { _ = try SyncPinsApplyRequest(command.args) }
+    return try transact(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable), fromSync: fromSync, waiting: nil, replaying: false) { session in
       if commands.count == 1 {
         try session.apply(commands[0])
       } else {
@@ -183,15 +192,22 @@ public final class Store: Sendable {
   ) throws -> Commit? {
     let now = clock()
     let tags = syncOrigins
-    let fromSync = tags && (fromSync || origin == .sync)
+    let pinned = commands.contains { $0.name == "syncPinsApply" || $0.name == "settlePinChoices" }
+    let syncRequest = fromSync || origin == .sync || pinned
+    let isolated = (tags && syncRequest) || pinned || waiting != nil || replaying
+    let fromSync = tags && syncRequest
+    defer {
+      drain()
+      runQueuedFromSync()
+    }
     let commit: Commit? = try core.withLock { core -> Commit? in
-      if tags, let held = core.held, core.heldFromSync != fromSync, now - core.heldSince > Store.heldTransactionLimit {
+      if tags || isolated, let held = core.held, core.heldFromSync != isolated, now - core.heldSince > Store.heldTransactionLimit {
         let heldFromSync = core.heldFromSync
         held.resume(state: core.state, memory: core.memory, now: now)
         held.closeTransactions()
         core.held = nil
         let (_, patch) = try settle(
-          from: core.state, rev: core.rev, settled: true, held, origin: heldFromSync ? .sync : .native, fromSync: heldFromSync, tags: tags, commands: [], durable: false)
+          from: core.state, rev: core.rev, settled: true, held, origin: heldFromSync ? .sync : .native, fromSync: tags && heldFromSync, tags: tags, commands: [], durable: false)
         if let patch { core.record(patch, state: held.state) }
         core.memory = held.memory
       }
@@ -199,12 +215,13 @@ public final class Store: Sendable {
       if replaying {
         if heldByUser { return nil }
         core.queuedFromSync.removeFirst()
-      } else if fromSync && (heldByUser || !core.queuedFromSync.isEmpty) && !Self.closesSyncWindow(commands) {
+      } else if isolated && (heldByUser || !core.queuedFromSync.isEmpty) && !Self.closesSyncWindow(commands) {
         guard let waiting else { throw StoreBusy() }
         core.queuedFromSync.append(waiting)
         let patch = Patch(rev: core.rev, changes: ChangeSet(), state: core.state)
         return Commit(
-          rev: core.rev, origin: origin, fromSync: true, commands: commands, changes: ChangeSet(), patch: patch, effects: [], result: nil, durable: false,
+          rev: core.rev, origin: origin, fromSync: fromSync, commands: commands, changes: ChangeSet(), patch: patch, effects: [],
+          result: commands.first?.name == "settlePinChoices" ? .bool(true) : nil, durable: false,
           state: core.state)
       }
       let session: Session
@@ -224,7 +241,7 @@ public final class Store: Sendable {
       }
       if session.depth > 0 && core.held == nil {
         core.heldSince = now
-        core.heldFromSync = fromSync
+        core.heldFromSync = isolated
       }
       core.held = session.depth > 0 ? session : nil
       let (commit, patch) = try settle(
@@ -233,8 +250,6 @@ public final class Store: Sendable {
       core.memory = session.memory
       return commit
     }
-    drain()
-    runQueuedFromSync()
     return commit
   }
 

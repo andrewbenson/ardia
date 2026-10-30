@@ -12,6 +12,7 @@ of its time in `swift test`'s first build. Each package also runs its own:
 | `packages/ardiacore` | `pnpm --filter @ardia/ardiacore test` (`tests/pip-zoom.test.cc`, compiled with `clang++`) | 1 program |
 | `extras/raycast-solara` | `node --test extras/raycast-solara/src/scripts.test.ts` | 6 |
 | `native/SolaraKit` | `swift test -Xswiftc -DSOLARA_PROBES` in `native/SolaraKit` (without the define `SolaraProbesTests` compiles to nothing and is skipped silently) | every suite |
+| Sync pin apply corpus | `node src/sync/recordPinsApply.mjs --help` in `apps/browser`; `--representative <fresh-dir>` regenerates the four checked-in fixtures, `<fresh-dir>` records the exhaustive pairs; `PIN_APPLY_DIR=<dir> swift test --filter SyncPinsApplyReplayTests` in `native/SolaraKit` | Six kinds, 22 named regressions, six labelled schedules and both Legacy fixtures; every apply replays under both native configurations |
 
 `apps/browser` runs its TypeScript under plain Node, with the real `@ardia/shell` and `@ardia/ardiacore` code:
 `src/test-loader.mjs` swaps only the native side. `expo-modules-core` becomes `src/test-native/expo.ts`, which hands

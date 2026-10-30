@@ -1,4 +1,5 @@
-import { assignPositions, type Adapter, type Extraction } from "@ardia/sync";
+import { assignPositions, type Adapter, type ApplyRecords, type Extraction } from "@ardia/sync";
+import { nativeSnapshot } from "@ardia/store";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { ancestorIds, depthOf, leaveGroups, orderSections, syncGroupOrder, withParent } from "../store/groups";
 import { makeTab, newId, pinnedFirst, without } from "../store/model";
@@ -12,9 +13,72 @@ import { removeTabs } from "../store/tabs";
 import { tileFolderOf, withTileFolder } from "../store/tileFolders";
 import type { Tab, TabGroup, TileFolder } from "../store/types";
 import { inTodaysNames } from "./adapters";
-import { writeState } from "../store/nativeStore";
+import { NativeStoreBusy, nativeOwnsWorkspace, nativeWrite, writeState } from "../store/nativeStore";
+import { asSyncOrigin } from "../store/syncOrigin";
 
 const store = () => useBrowser.getState();
+
+type SyncPinsKind = "pins" | "rows" | "order" | "looks" | "homes" | "tileFolders";
+
+function frozenPinInputs(visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords) {
+  const ids = new Set<string>();
+  const prefixes = ["pin:t:", "pin:g:", "pinn:g:", "pinn:t:", "pinrow:", "pord:g:", "pgc:", "pgh:", "tilefold:"];
+  for (const key of [...visible.keys(), ...changed]) {
+    const prefix = prefixes.find((prefix) => key.startsWith(prefix));
+    if (prefix) ids.add(key.slice(prefix.length));
+  }
+  for (const value of visible.values()) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of ["g", "p"]) {
+      const id = (value as Record<string, unknown>)[key];
+      if (id) ids.add(String(id));
+    }
+  }
+  for (const source of [store(), nativeSnapshot()?.data]) {
+    if (!source) continue;
+    const state = source as Partial<BrowserState>;
+    for (const table of [state.tabs, state.groups]) {
+      for (const entity of Object.values(table ?? {})) {
+        ids.add(entity.id);
+        if (entity.pinKey) ids.add(entity.pinKey);
+      }
+    }
+    for (const park of Object.values(state.parkedPins ?? {})) {
+      for (const entity of [...park.tabs, ...park.groups]) ids.add(entity.id);
+    }
+  }
+  const values: Record<string, unknown> = {};
+  for (const id of ids) {
+    for (const prefix of prefixes) {
+      const key = `${prefix}${id}`;
+      const value = base(key);
+      if (value !== undefined) values[key] = value;
+    }
+    const folder = syncedFolderId(values[`${TILE_FOLDER}${id}`]);
+    if (folder) {
+      const nameKey = `${FOLDER_NAME}${folder}`;
+      const name = base(nameKey);
+      if (name !== undefined) values[nameKey] = name;
+    }
+  }
+  return JSON.parse(JSON.stringify({
+    visible: [...visible], changed: [...changed], base: values,
+    known: [...ids].map((id) => `pin:g:${id}`).filter((key) => records.known(key)), now: records.now, horizon: records.horizon,
+  }));
+}
+
+function applyNativePins(profileId: string, kind: SyncPinsKind, visible: Map<string, unknown>, changed: Set<string>, base: (key: string) => unknown, records: ApplyRecords): boolean | Set<string> {
+  const inputs = frozenPinInputs(visible, changed, base, records);
+  try {
+    const response = asSyncOrigin(() => nativeWrite({ name: "syncPinsApply", args: [profileId, { kind, ...inputs }] }));
+    if (!response || response.busy || response.error || response.result === false) return false;
+    if (Array.isArray(response.result) && response.result.every((key) => typeof key === "string")) return new Set(response.result);
+    return response.result === true;
+  } catch (error) {
+    if (error instanceof NativeStoreBusy) return false;
+    throw error;
+  }
+}
 
 export function pinnedAreaAdapters(profileId: string): Adapter[] {
   return [
@@ -154,6 +218,7 @@ export function pinnedAdapter(profileId: string): Adapter {
       } satisfies Extraction;
     },
     apply: (visible, changed, base, records) => {
+      if (nativeOwnsWorkspace()) return applyNativePins(profileId, "pins", visible, changed, base, records);
       if ([...changed].every((k) => k.startsWith(PIN_ROW))) return true;
       const pinItem = (k: string) => k.startsWith("pin:t:") || k.startsWith("pin:g:") || k.startsWith(`${PIN_NEST}g:`);
       if ([...changed].some((k) => pinItem(k) && !visible.has(k))) noteRemotePinDeletion(profileId);
@@ -465,7 +530,8 @@ export function pinnedOrderAdapter(profileId: string): Adapter {
         published: (published) => settleChoices(profileId, Object.fromEntries([...published].map(choiceOf).filter((c) => c in chosen).map((c) => [c, chosen[c]!]))),
       } satisfies Extraction;
     },
-    apply: (visible) => {
+    apply: (visible, changed, base, records) => {
+      if (nativeOwnsWorkspace()) return applyNativePins(profileId, "order", visible, changed, base, records);
       const s = store();
       const anchorOf = (group: string) => anchorIn(visible.get(`${PIN_ORDER}${group}`));
       let windows = s.windows;
@@ -491,6 +557,10 @@ const ROW = 1;
 const TILE = 0;
 
 function settleChoices(profileId: string, published: Record<string, number>) {
+  if (nativeOwnsWorkspace()) {
+    asSyncOrigin(() => nativeWrite({ name: "settlePinChoices", args: [profileId, JSON.parse(JSON.stringify(published))] }));
+    return;
+  }
   const now = store().pinChoices;
   const mine = now[profileId];
   if (!mine) return;
@@ -535,7 +605,8 @@ export function pinnedRowsAdapter(profileId: string): Adapter {
         published: (keys) => settleChoices(profileId, Object.fromEntries([...keys].map(keyOf).filter((k) => k in chosen).map((k) => [k, chosen[k]!]))),
       } satisfies Extraction;
     },
-    apply: (visible, changed, base) => {
+    apply: (visible, changed, base, records) => {
+      if (nativeOwnsWorkspace()) return applyNativePins(profileId, "rows", visible, changed, base, records);
       const s = store();
       const rows = new Set([...visible].filter(([, v]) => v === ROW).map(([k]) => keyOf(k)));
       const pos = (t: Tab | undefined) => (t ? (base(`pin:t:${pinKeyOf(t)}`) as PinValue | undefined)?.pos : undefined);
@@ -600,7 +671,8 @@ export function groupLooksAdapter(profileId: string): Adapter {
       const gone = (key: string) => groupRecords(key).some(recorded) && groupRecords(key).every((k) => (remote(k) ?? null) === null);
       return { values, ignore: (k) => !known.has(keyOf(k)) && !gone(keyOf(k)) } satisfies Extraction;
     },
-    apply: (visible, changed) => {
+    apply: (visible, changed, base, records) => {
+      if (nativeOwnsWorkspace()) return applyNativePins(profileId, "looks", visible, changed, base, records);
       const touched = new Set([...changed].map(keyOf));
       if (!touched.size) return true;
       const wanted = (key: string, color: TabGroup["color"]) => {
@@ -677,7 +749,8 @@ export function pinnedHomesAdapter(profileId: string): Adapter {
         ignore: (k) => held.has(keyOf(k)) || (!known.has(keyOf(k)) && base(`pin:t:${keyOf(k)}`) === undefined && !unpinned(keyOf(k))),
       } satisfies Extraction;
     },
-    apply: (visible, changed, base) => {
+    apply: (visible, changed, base, records) => {
+      if (nativeOwnsWorkspace()) return applyNativePins(profileId, "homes", visible, changed, base, records);
       const incoming = new Map<string, string>();
       for (const k of changed) {
         const home = syncedHome(visible.get(k));
@@ -776,7 +849,8 @@ export function tileFoldersAdapter(profileId: string): Adapter {
       };
       return { values, ignore } satisfies Extraction;
     },
-    apply: (visible, changed) => {
+    apply: (visible, changed, base, records) => {
+      if (nativeOwnsWorkspace()) return applyNativePins(profileId, "tileFolders", visible, changed, base, records);
       const s = store();
       const touched = new Set([...changed].filter((k) => !k.startsWith(FOLDER_NAME)).map(keyOf));
       const names = new Map<string, string>();

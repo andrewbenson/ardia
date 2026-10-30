@@ -23,7 +23,7 @@ import {
 } from "@ardia/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
-import { nativeBusyWrites } from "../store/nativeStore";
+import { nativeBusyWrites, nativeOwnsWorkspace } from "../store/nativeStore";
 import { persistenceRefused } from "../lib/persistLatch";
 import { engineProfile, isIncognitoProfile } from "../store/model";
 import { DEFAULT_PROFILE_ID } from "../store/settings";
@@ -630,6 +630,20 @@ function appAdapters(retiring: boolean, everyType = false): Adapter[] {
   ];
 }
 
+const PIN_ADAPTER_PREFIXES = new Set(["pin", "pinrow:", "pord:g:", "pgc:", "pgh:", "tilefold:"]);
+const usesWrittenKeys = (prefix: string) => syncRedesign.on || (nativeOwnsWorkspace() && PIN_ADAPTER_PREFIXES.has(prefix));
+
+function nativePinApplyOutcomes(adapter: Adapter): Adapter {
+  if (!nativeOwnsWorkspace() || usesWrittenKeys(adapter.prefix)) return adapter;
+  return {
+    ...adapter,
+    apply: async (...args) => {
+      const result = await adapter.apply(...args);
+      return result instanceof Set ? true : result;
+    },
+  };
+}
+
 function profileAdapters(profileId: string, retiring: boolean, everyType = false): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceTabsAdapter(profileId, id, deviceName, true)];
@@ -657,7 +671,7 @@ function profileAdapters(profileId: string, retiring: boolean, everyType = false
     ...(t.passwords && ownsData && !passwordsRefused() ? [passwords] : []),
     ...(t.settings ? [developerModeAdapter(profileId)] : []),
     ...(t.extensions && ownsData && extensionSyncAvailable() ? [extensionsOf(profileId)] : []),
-  ];
+  ].map(nativePinApplyOutcomes);
 }
 
 async function watchExtensions() {
@@ -743,7 +757,7 @@ async function runCycle({ retiring = false } = {}) {
         adapters: scopeGuard.adapters,
         clock,
         device,
-        options: { expired: historyExpired, persist: persistJournal(scope), writtenKeysOnly: syncRedesign.on, ...seenHooks(scope, state) },
+        options: { expired: historyExpired, persist: persistJournal(scope), writtenKeysOnly: syncRedesign.on || nativeOwnsWorkspace(), ...seenHooks(scope, state) },
       });
       scopeGuard.settle();
       pending += state.pending;
@@ -859,7 +873,7 @@ function guard(scope: string, state: Guarded, device: string, adapters: Adapter[
         const ok = await adapter.apply(visible, changed, before ? (key) => base(key) ?? (standIn(key) ? parseKept(before.get(key)) : undefined) : base, records);
         if (!before || ok === false) return ok;
         const noted = rebuilding(adapter.prefix) ? notedFor(state, adapter.prefix, before) : null;
-        const written = syncRedesign.on && ok instanceof Set ? [...changed].filter((key) => ok.has(key)) : changed;
+        const written = usesWrittenKeys(adapter.prefix) && ok instanceof Set ? [...changed].filter((key) => ok.has(key)) : changed;
         for (const key of written) {
           if (visible.has(key)) before.set(key, choice(visible.get(key)));
           else before.delete(key);

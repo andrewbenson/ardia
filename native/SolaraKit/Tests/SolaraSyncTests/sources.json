@@ -1,7 +1,7 @@
 {
   "Adapters": {
     "apps/browser/src/sync/adapters.ts": "e61cef6edd35b7f3f202aaca47f8434bb96ba6984ac9bbab9187b9ef5f54795d",
-    "apps/browser/src/sync/pinned.ts": "6d3f3c5c4d3a5e61a26ba2497603b43cc9bad6e4ae46ee0a569a72979292c150",
+    "apps/browser/src/sync/pinned.ts": "49ede6b7fadea6337f623ae478e786401a87e7c18c29ba6e1ba27484096529a0",
     "apps/browser/src/sync/extensions.ts": "11c156c7bed0ae74298c020f76bda436a6e99d8fdedac9041237b44fb8fc3497"
   },
   "Cases/journal.json.deflate": {
@@ -36,5 +36,14 @@
     "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
     "apps/browser/src/sync/notes.ts": "b94e9f73af50b9daf91b44ff9b8c43775dd33ba1f92776b13974925656fdaeb6",
     "apps/browser/src/sync/passwordLedger.ts": "6b295a464fb795e47bb90fdcb8bd94823b8b0305322a1d3f110fd9629c64818b"
+  },
+  "Cases/SyncPinsApply": {
+    "apps/browser/src/sync/pinned.ts": "49ede6b7fadea6337f623ae478e786401a87e7c18c29ba6e1ba27484096529a0",
+    "apps/browser/src/sync/pairs.test.mjs": "0e38785cf2e5a4c8a90956b96ff3540b0e11f7ee68812f4dfc823b4d0784ed47",
+    "apps/browser/src/sync/pinned.test.mjs": "a503a8822f262d8304163af230cd4452686c739d72984d2360006cb70465832d",
+    "apps/browser/src/sync/fixtures/pinned-v0.2.38.ts": "e8863c15f631570ba7a5632c1a7d86912261047bc8a0823b08739253c6a31e76",
+    "apps/browser/src/sync/fixtures/pinned-v0.2.40.ts": "821abd74f1f4c92face88ef293e62a9468c1d7a9ccd720d8a0fccb8551816e62",
+    "apps/browser/src/sync/recordPinsApply.mjs": "f3d765f6cbde3d49c631b8275f8c2e33a1d6654325cffd4a45ce0fcf2f405aba",
+    "apps/browser/src/sync/normalizeLegacyPinsApply.mjs": "4dea75781d5df1540d4ba890bcfdbb162be77fb13208f7a95fbd474c81dd4e55"
   }
 }

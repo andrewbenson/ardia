@@ -42,7 +42,7 @@ public struct Command: Sendable, Equatable {
     "setFocusedWindow", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "hydrate", "tidyPins", "untidyPins",
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
     "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "setEarlyLaunchTab", "nextId", "nextNavigation",
-    "beginFromSync", "endFromSync", "beginTransaction", "endTransaction", "closeTransactions", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
+    "syncPinsApply", "settlePinChoices", "beginFromSync", "endFromSync", "beginTransaction", "endTransaction", "closeTransactions", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
   ]
 }
 
@@ -311,6 +311,8 @@ extension Session {
     case "stripTransaction": stripTransaction(StripTransaction(json: a[0] ?? .null))
     case "projectStrips": projectStrips()
     case "stripCommandSent": stripCommandSent(a.int(0), a.int(1))
+    case "syncPinsApply": result = try SyncPinsApplyRequest(command.args).apply(self)
+    case "settlePinChoices": try SettledPinChoices(command.args).apply(self)
     case "applyState":
       var next = state
       for (key, value) in a.object(0) { try next.applySlice(key, value) }

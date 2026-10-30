@@ -92,8 +92,20 @@ const nativeWindow = async (name, accept) => {
     (state) => state.consistent && accept(state.windows.find((window) => window.id === "w1"), state));
   return snapshot;
 };
+const plainURL = (url) => typeof url === "string" && /^https?:\/\/[^/@]*\//i.test(url);
+const snapshotRowMatches = (row, item) => row?.kind === item.kind
+  && row.tabId === (item.tabId ?? null)
+  && row.title === (typeof item.title === "string" ? item.title.slice(0, 512) : null)
+  && (!plainURL(item.url) || row.url === item.url);
+const snapshotMatches = (omnibox, state) => !!omnibox
+  && (omnibox.source == null || omnibox.source === (current.newTab ? "panel" : "anchor"))
+  && omnibox.variant === state.variant && omnibox.open === true && omnibox.focused === true
+  && omnibox.selectedIndex === state.selected
+  && (plainURL(state.typed) || !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(state.typed) ? omnibox.typed === state.typed.slice(0, 512) : true)
+  && Array.isArray(omnibox.rows) && omnibox.rows.length === Math.min(state.items.length, 64)
+  && omnibox.rows.every((row, index) => snapshotRowMatches(row, state.items[index]));
 let current = null;
-const observe = async (name, accept = () => true) => {
+const observe =async (name, accept = () => true) => {
   const pair = await until(name, () => run(`
     const cached = ac.omnibox.get(${JSON.stringify("w1:")} + ${JSON.stringify(current.variant)})?.state();
     return globalThis.__omniboxNative.driverState().then((json) => ({ cached, native: JSON.parse(json) }));
@@ -117,6 +129,8 @@ const observe = async (name, accept = () => true) => {
   await nativeWindow(name, (window) => window?.profileId === "default" && window.selectedTabId === state.tabId
     && (current.newTab || isDeepStrictEqual(window.focusedURL?.selection, state.selection)
       && (!/^https?:\/\//.test(state.value) || window.focusedURL?.value === state.value)));
+  const snapshot = await nativeWindow(`${name} probe snapshot rows`, (window) => snapshotMatches(window?.omnibox, state));
+  rep.log(`${name} probe snapshot`, snapshot.windows.find((window) => window.id === "w1").omnibox);
   rep.log(name, state);
   const differences = ["windowId", "tabId", "profileId", "variant", "opensTab", "typed", "value", "completion", "selection", "scope", "selected", "items"]
     .filter((key) => !isDeepStrictEqual(pair.cached?.[key], state[key]));

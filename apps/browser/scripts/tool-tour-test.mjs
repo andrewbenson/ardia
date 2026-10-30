@@ -6,18 +6,15 @@ import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
-if (!appArg) {
-  console.error(`usage: node tool-tour-test.mjs <Debug Solara.app> [--rn | --native] [--keep-data]
+if (!appArg || args.some((arg) => arg.startsWith("--") && arg !== "--keep-data")) {
+  console.error(`usage: node tool-tour-test.mjs <Debug Solara.app> [--keep-data]
 
---rn and --native pick the tour (ARDIA_NATIVE_TOOL_TOUR=0 or 1); the checks are the same for both.
-
-Starts the tool tour in a fresh window (1360×860) and clicks through it in-process: a click inside the spotlight
+Starts the native tool tour in a fresh window (1360×860) and clicks through it in-process: a click inside the spotlight
 reaches the page, one on the dimmed rest does nothing, Next and Back step, Done ends it, and a skipped tour stays
 gone.`);
   process.exit(2);
 }
 const appPath = resolve(appArg);
-const native = !args.includes("--rn");
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-tool-tour-"));
 const data = join(scratch, "data");
@@ -45,7 +42,6 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
 };
 const nativeTour = (state) => state.windows.find((window) => window.kind === "browser")?.tour;
 const assertNativeTour = async (what, expected) => {
-  if (!native) return;
   const state = await untilSnapshot(what, (snapshot) => {
     const tour = nativeTour(snapshot);
     return expected.active ? tour?.visible && tour.index === expected.index &&
@@ -58,10 +54,10 @@ const assertNativeTour = async (what, expected) => {
   } else assert.ok(!tour || !tour.visible, `${what}: native tour remains visible`);
 };
 try {
-  app = await launch(appPath, { data, onboarded: true, env: { ARDIA_NATIVE_TOOL_TOUR: native ? "1" : "0" } });
+  app = await launch(appPath, { data, onboarded: true });
   rep.log(`instance: pid ${app.pid}, data ${data}`);
   await app.ready({ test: "return !!globalThis.acTour && !!globalThis.ac?.store" });
-  await rep.check(`the ${native ? "native" : "RN"} tour steps, passes clicks through its spotlight and stays closed`, () => tourChecks());
+  await rep.check("the native tour steps, passes clicks through its spotlight and stays closed", () => tourChecks());
 } finally {
   await app?.quit();
   if (!keep) rmSync(data, { recursive: true, force: true });
@@ -71,8 +67,8 @@ process.exit(rep.summary() ? 0 : 1);
 
 async function tourChecks() {
   const kinds = await app.eval("return globalThis.expo.modules.SolaraHosted?.kinds() ?? [];");
-  assert.equal(kinds.includes("toolTour"), native, `the toolTour kind is ${native ? "missing" : "registered"}`);
-  rep.log(`tour: ${native ? "native" : "RN"}`);
+  assert.ok(kinds.includes("toolTour"), "the toolTour kind is registered");
+  rep.log("tour: native");
 
   const started = await run("return acTour.start(wid).then(() => settle(1500)).then(tour);");
   assert.deepEqual(started.stops, ["commandBar", "tabs", "sidebar", "split", "done"], "every stop finds its anchor");

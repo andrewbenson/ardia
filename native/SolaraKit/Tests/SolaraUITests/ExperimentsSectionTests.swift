@@ -21,9 +21,9 @@ import Testing
     model.rows.first { $0.name == name }!
   }
 
-  @Test func theRowsAreTheEightInterfaceSwitchesWithTheirDependencies() {
+  @Test func theRowsAreTheRemainingInterfaceSwitchesWithTheirDependencies() {
     let model = model(defaults: scratchDefaults())
-    #expect(model.rows.map(\.name) == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeToolTour, .nativeSidePanel])
+    #expect(model.rows.map(\.name) == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeSidePanel])
     #expect(!model.rows.contains { $0.name == .nativePagesPool || $0.name == .shellMainTop })
     #expect(row(model, .shellPanes).needs == "Needs Native window.")
     #expect(row(model, .nativeAutoHide).needs == "Needs Native window.")

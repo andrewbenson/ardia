@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the fake Chrome home that scripts/e2e.mjs imports from. Everything here is invented.
+"""Builds the fake Chrome home that packages/settings/scripts/import-e2e.mjs imports from. Everything here is invented.
 
     python3 packages/import/scripts/e2e_fixture.py <home dir> [safe storage secret] [fixture server port]
 

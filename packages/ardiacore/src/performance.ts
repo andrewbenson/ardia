@@ -9,6 +9,4 @@ export const openTaskManager = () => engineCall<{ ok: boolean }>("ac_task_manage
 
 export const setBatterySaver = (mode: BatterySaverMode) => engineCall<BatterySaverState>("ac_battery_saver", "", { mode });
 
-export const trimEngineMemory = () => engineCall<{ ok: boolean }>("ac_memory_trim", "");
-
 export const inputIdleSeconds = () => Cef.inputIdleSeconds?.() ?? null;

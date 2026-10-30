@@ -31,11 +31,19 @@ public final class SettingsJS {
     Task { _ = try? await invoke(name, args) }
   }
 
-  func invoke(_ name: String, _ args: [Any]) async throws -> Any? {
+  func invoke(_ name: String, _ args: [Any], timeout: TimeInterval? = nil) async throws -> Any? {
     guard let send else { throw SettingsJSError(description: "JS isn't listening for Settings calls") }
     let payload = try JSONSerialization.data(withJSONObject: args.map { $0 is NSNull ? NSNull() : $0 }, options: [.fragmentsAllowed])
     nextId += 1
     let id = nextId
+    let deadline = timeout.map { timeout in
+      let work = DispatchWorkItem { [weak self] in
+        self?.reply(id, resultJSON: nil, error: "Settings call \(name) timed out")
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + timeout, execute: work)
+      return work
+    }
+    defer { deadline?.cancel() }
     return try await withCheckedThrowingContinuation { continuation in
       pending[id] = continuation
       send(id, name, String(decoding: payload, as: UTF8.self))

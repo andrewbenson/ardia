@@ -778,7 +778,11 @@ final class MenuChoice: NSObject {
 }
 
 public enum ShellApp {
-  public static func shouldTerminate() -> NSApplication.TerminateReply { WindowManager.shared.shouldTerminate() }
+  public static func shouldTerminate() -> NSApplication.TerminateReply {
+    let reply = WindowManager.shared.shouldTerminate()
+    if reply != .terminateCancel { NotificationCenter.default.post(name: Notification.Name("SolaraWillQuit"), object: nil) }
+    return reply
+  }
   public static func reopen(hasVisibleWindows: Bool) -> Bool {
     if !hasVisibleWindows { WindowManager.shared.reopen() }
     return true

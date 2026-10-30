@@ -159,6 +159,7 @@ enum NativeSplitChrome {
       panes.toolbarHeight = entry["toolbar"] as? Bool ?? true ? ShellMetrics.toolbarHeight : 0
       panes.small = entry["small"] as? Bool ?? false
       panes.setFullscreenTab(fullscreenTab)
+      panes.pagesPooled = TabPoolHost.available
       if let shell = NativeWindowShell.host(windowId)?.shell { panes.onCardStyle = { [weak shell] in shell?.cardStyle = $0 } }
     }
   }

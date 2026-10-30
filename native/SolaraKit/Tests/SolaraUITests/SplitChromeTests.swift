@@ -178,6 +178,8 @@ private func splitState(sizes: [Double] = [0.5, 0.5]) throws -> BrowserState {
     state.splits = Table()
     state.tabs["a"]?.url = ""
     view.update(state: state)
+    #expect(styles.last == CardStyle(fill: nil, radius: 10), "React Native draws the card while the pool doesn't serve pages")
+    view.pagesPooled = true
     #expect(styles.last == CardStyle(fill: card, radius: 10))
     view.setFullscreenTab("a")
     #expect(styles.last == CardStyle(fill: nil, radius: 0))

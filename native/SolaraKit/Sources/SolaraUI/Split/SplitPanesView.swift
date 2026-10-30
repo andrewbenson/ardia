@@ -34,8 +34,9 @@ public final class SplitPanesView: NSView {
       publishCardStyle()
     }
   }
+  public var pagesPooled = false { didSet { if pagesPooled != oldValue { publishCardStyle() } } }
   public var cardStyle: CardStyle {
-    CardStyle(fill: split == nil && fullscreenTab == nil ? cardColor : nil, radius: fullscreenTab == nil ? ShellMetrics.cardRadius : 0)
+    CardStyle(fill: pagesPooled && split == nil && fullscreenTab == nil ? cardColor : nil, radius: fullscreenTab == nil ? ShellMetrics.cardRadius : 0)
   }
   private var publishedCardStyle: CardStyle?
   public var small = false { didSet { if small != oldValue { refreshEmpty() } } }

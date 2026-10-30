@@ -184,6 +184,13 @@ public final class SidebarPlayerView: NSView {
   public override func mouseEntered(with event: NSEvent) { hovered = true }
   public override func mouseExited(with event: NSEvent) { hovered = false }
 
+#if SOLARA_PROBES
+  public var controlLabels: [String: String] {
+    ["play": play.toolTip ?? "", "previous": previous.toolTip ?? "", "next": next.toolTip ?? "",
+      "art": artView.toolTip ?? "", "close": closeCorner.toolTip ?? "", "mute": muteCorner.toolTip ?? ""]
+  }
+#endif
+
   public var controlFrames: [String: CGRect] {
     ["play": play.frame, "art": artView.frame, "seek": seek.frame, "close": closeCorner.frame, "mute": muteCorner.frame, "title": textHit.frame]
   }

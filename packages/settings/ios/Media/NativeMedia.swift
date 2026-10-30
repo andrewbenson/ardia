@@ -186,43 +186,51 @@ enum NativeMedia {
       }
     }
     let rows: [[String: Any]] = views.compactMap { view in
-      if let mini = view as? MiniPlayerView {
-        return [
-          "marquee": mini.marqueeProgress, "titleShift": mini.titleShift, "titleOverflow": mini.titleOverflow, "artistOverflow": mini.artistOverflow,
-          "hover": mini.hoverProgress ?? NSNull(), "elapsed": mini.elapsedText, "artwork": mini.showsArtwork, "t": CACurrentMediaTime(), "frames": frames(mini, mini.controlFrames),
-        ]
-      }
-      if let bar = view as? SmallBarView {
-        return ["progress": Double(bar.progressWidth), "hovered": bar.fieldHovered, "frames": frames(bar, bar.controlFrames)]
-      }
-      if let bar = view as? ShareBarView {
-        return ["primary": bar.primaryTitle, "frames": frames(bar, bar.controlFrames)]
-      }
-      if let popover = view as? PopoverView {
-        var row: [String: Any] = [
-          "card": frames(popover, ["card": popover.cardFrame])["card"] ?? [], "progress": popover.progress, "opacity": popover.presentedOpacity,
-          "t": CACurrentMediaTime(), "focused": popover.window?.firstResponder === popover,
-        ]
-        if let picker = popover.body as? SharePickerView {
-          row["height"] = picker.contentHeight
-          row["selected"] = picker.selectedId ?? NSNull()
-          row["frames"] = frames(picker, picker.controlFrames)
-        } else if let picker = popover.body as? CastPickerView {
-          row["height"] = picker.contentHeight
-          row["frames"] = frames(picker, picker.controlFrames)
+      @MainActor
+      func readRow() -> [String: Any]? {
+        if let mini = view as? MiniPlayerView {
+          return [
+            "marquee": mini.marqueeProgress, "titleShift": mini.titleShift, "titleOverflow": mini.titleOverflow, "artistOverflow": mini.artistOverflow,
+            "hover": mini.hoverProgress ?? NSNull(), "elapsed": mini.elapsedText, "artwork": mini.showsArtwork, "t": CACurrentMediaTime(), "frames": frames(mini, mini.controlFrames),
+          ]
         }
-        return row
+        if let bar = view as? SmallBarView {
+          return ["progress": Double(bar.progressWidth), "hovered": bar.fieldHovered, "frames": frames(bar, bar.controlFrames)]
+        }
+        if let bar = view as? ShareBarView {
+          return ["primary": bar.primaryTitle, "frames": frames(bar, bar.controlFrames)]
+        }
+        if let popover = view as? PopoverView {
+          var row: [String: Any] = [
+            "card": frames(popover, ["card": popover.cardFrame])["card"] ?? [], "progress": popover.progress, "opacity": popover.presentedOpacity,
+            "t": CACurrentMediaTime(), "focused": popover.window?.firstResponder === popover,
+          ]
+          if let picker = popover.body as? SharePickerView {
+            row["height"] = picker.contentHeight
+            row["selected"] = picker.selectedId ?? NSNull()
+            row["frames"] = frames(picker, picker.controlFrames)
+          } else if let picker = popover.body as? CastPickerView {
+            row["height"] = picker.contentHeight
+            row["frames"] = frames(picker, picker.controlFrames)
+          }
+          return row
+        }
+        if let player = view as? SidebarPlayerView {
+          return ["corners": player.cornersShown, "seek": player.seekProgress, "height": player.frame.height, "frames": frames(player, player.controlFrames)]
+        }
+        guard let pill = view as? CliControlPillView, let content = pill.window?.contentView else { return nil }
+        let frame = pill.convert(pill.pillFrame, to: content)
+        let presented = pill.subviews.first?.layer?.presentation()
+        return [
+          "shown": pill.shown, "progress": pill.progress, "opacity": Double(presented?.opacity ?? 0), "t": CACurrentMediaTime(), "stopClipped": pill.stopTitleClipped,
+          "frame": [frame.minX, content.bounds.height - frame.maxY, frame.width, frame.height],
+        ]
       }
-      if let player = view as? SidebarPlayerView {
-        return ["corners": player.cornersShown, "seek": player.seekProgress, "height": player.frame.height, "frames": frames(player, player.controlFrames)]
-      }
-      guard let pill = view as? CliControlPillView, let content = pill.window?.contentView else { return nil }
-      let frame = pill.convert(pill.pillFrame, to: content)
-      let presented = pill.subviews.first?.layer?.presentation()
-      return [
-        "shown": pill.shown, "progress": pill.progress, "opacity": Double(presented?.opacity ?? 0), "t": CACurrentMediaTime(), "stopClipped": pill.stopTitleClipped,
-        "frame": [frame.minX, content.bounds.height - frame.maxY, frame.width, frame.height],
-      ]
+      guard var row = readRow() else { return nil }
+#if SOLARA_PROBES
+      row["labels"] = MediaRead.labels(view: view)
+#endif
+      return row
     }
     let json = try? JSONSerialization.data(withJSONObject: rows)
     return json.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
@@ -254,6 +262,18 @@ struct MediaPayload: @unchecked Sendable {
 @MainActor
 public enum MediaRead {
   public static var kinds: [String] { HostedViews.kinds }
+
+  public static func labels(view: NSView) -> [String: String] {
+    let labels: [String: String]
+    if let player = view as? SidebarPlayerView { labels = player.controlLabels }
+    else if let mini = view as? MiniPlayerView { labels = mini.controlLabels }
+    else if let pill = view as? CliControlPillView { labels = pill.controlLabels }
+    else if let bar = view as? ShareBarView { labels = bar.controlLabels }
+    else if let popover = view as? PopoverView, let picker = popover.body as? CastPickerView { labels = picker.controlLabels }
+    else if let popover = view as? PopoverView, let picker = popover.body as? SharePickerView { labels = picker.controlLabels }
+    else { labels = [:] }
+    return labels.mapValues { String($0.prefix(128)) }
+  }
 
   public static func rows(kind: String, windowId: String) -> [[String: Any]] {
     guard let data = NativeMedia.probe(kind: kind, windowId: windowId).data(using: .utf8) else { return [] }

@@ -203,4 +203,8 @@ public final class ShareBarView: NSView {
 
   public var controlFrames: [String: CGRect] { ["primary": primaryButton.frame, "dismiss": dismissButton.frame, "text": label.frame] }
   public var primaryTitle: String { primaryButton.title }
+
+#if SOLARA_PROBES
+  public var controlLabels: [String: String] { ["primary": primaryButton.title, "dismiss": dismissButton.title] }
+#endif
 }

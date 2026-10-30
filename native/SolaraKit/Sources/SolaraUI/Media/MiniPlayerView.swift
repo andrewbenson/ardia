@@ -172,6 +172,13 @@ public final class MiniPlayerView: NSView {
     seek.frame = CGRect(x: seekLeft, y: top, width: max(0, right - remainingWidth - 6 - seekLeft), height: height)
   }
 
+#if SOLARA_PROBES
+  public var controlLabels: [String: String] {
+    ["play": play.toolTip ?? "", "previous": previous.toolTip ?? "", "next": next.toolTip ?? "",
+      "art": artView.toolTip ?? "", "unmute": unmute.toolTip ?? ""]
+  }
+#endif
+
   public var controlFrames: [String: CGRect] { ["play": play.frame, "art": artView.frame, "seek": seek.frame, "previous": previous.frame] }
   public var marqueeProgress: Double { group.progress() }
   public var titleShift: Double { title.presentedShift }

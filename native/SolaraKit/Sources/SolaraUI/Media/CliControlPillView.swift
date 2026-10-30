@@ -98,6 +98,10 @@ public final class CliControlPillView: NSView {
   public var progress: Double { tween.value(at: CACurrentMediaTime()) }
   public var pillFrame: CGRect { motion.frame }
   public var stopTitleClipped: Bool { stop.titleClipped }
+
+#if SOLARA_PROBES
+  public var controlLabels: [String: String] { ["stop": stop.title] }
+#endif
   var stopWidth: CGFloat { stop.frame.width }
 
   public func update(_ next: CliPillState) {

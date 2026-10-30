@@ -523,6 +523,10 @@ public final class SharePickerView: NSView {
     return super.hitTest(point)
   }
 
+#if SOLARA_PROBES
+  public var controlLabels: [String: String] { ["share": share.title, "cancel": cancel.title] }
+#endif
+
   public var controlFrames: [String: CGRect] {
     var out: [String: CGRect] = ["share": share.frame, "cancel": cancel.frame, "header": header.frame, "list": scroll.frame]
     if !checkbox.isHidden { out["audio"] = checkbox.frame }

@@ -254,6 +254,14 @@ public final class CastPickerView: NSView {
     }
   }
 
+#if SOLARA_PROBES
+  public var controlLabels: [String: String] {
+    var labels = ["done": done.title]
+    for (i, row) in rows.enumerated() where !scroll.isHidden && !row.stop.isHidden { labels["stop\(i)"] = row.stop.title }
+    return labels
+  }
+#endif
+
   public var controlFrames: [String: CGRect] {
     var out: [String: CGRect] = ["done": done.frame, "header": header.frame]
     if header.accessory != nil { out["source"] = source.convert(source.bounds, to: self) }

@@ -30,7 +30,7 @@ public class MediaModule: Module {
     #endif
 
     Function("littleActive") { (windowId: String) -> Bool in
-      NativeMedia.enabled && NativeLittleSolara.active(windowId)
+      NativeLittleSolara.active(windowId)
     }
 
     AsyncFunction("setLittleBar") { (windowId: String, json: String) in
@@ -59,10 +59,6 @@ public class MediaModule: Module {
         return String(data: data, encoding: .utf8) ?? "null"
       }
     }.runOnQueue(.main)
-
-    Function("enabled") { () -> Bool in
-      NativeMedia.enabled
-    }
 
     AsyncFunction("probe") { (kind: String, windowId: String) -> String in
       MainActor.assumeIsolated { NativeMedia.probe(kind: kind, windowId: windowId) }

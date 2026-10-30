@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import SolaraModel
 import SolaraUI
 
 @MainActor
@@ -13,10 +12,6 @@ enum NativeMedia {
   static let sharePicker = "media.sharePicker"
   static let smallBar = "littleSolara.bar"
 
-  nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeMedia)
-  }
-
   private static var mounted: [(kind: String, windowId: String, view: WeakMediaView)] = []
 
   private static var indicatorMirror: NSObjectProtocol?
@@ -26,7 +21,6 @@ enum NativeMedia {
 
   static func register() {
     mirrorCliIndicator()
-    guard enabled else { return }
     MediaImages.load = { SettingsAdapters.image($0) }
     MediaImages.favicons.loader = { request in
       return await NativeHistoryCatalog.favicon(page: request.url, source: request.favicon, profileId: request.profileId, dark: request.dark)
@@ -259,7 +253,6 @@ struct MediaPayload: @unchecked Sendable {
 #if SOLARA_PROBES
 @MainActor
 public enum MediaRead {
-  public static var enabled: Bool { NativeMedia.enabled }
   public static var kinds: [String] { HostedViews.kinds }
 
   public static func rows(kind: String, windowId: String) -> [[String: Any]] {

@@ -13,7 +13,7 @@ enum NativeLittleSolara {
   nonisolated private static let activeIds = Mutex<Set<String>>([])
 
   static func install() {
-    guard NativeMedia.enabled, !installed, let make = WindowHost.makeContentView else { return }
+    guard !installed, let make = WindowHost.makeContentView else { return }
     installed = true
     WindowHost.makeContentView = { windowId in
       guard isSmallWindow(windowId) else { return make(windowId) }

@@ -1,16 +1,14 @@
 import { CastMode, preferredCastMode, startCasting, stopCasting, type CastDialog, type CastSink } from "@ardia/ardiacore";
-import { openExternalURL, showMenu, Symbol } from "@ardia/shell";
+import { openExternalURL, showMenu } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { windowShellActive } from "@ardia/settings";
 import { useTheme, type Theme } from "../../lib/theme";
 import { useNativePaneOverlay } from "../layout/nativePaneOverlays";
-import { PANEL, PanelHeader, Popover, POPOVER_MARGIN, PopoverValue, PromptButton } from "../layout/controls";
-import { useHover } from "../primitives";
+import { POPOVER_MARGIN } from "../layout/controls";
 import { closeCastPicker, useCast } from "./cast";
 import { PRODUCT } from "../../lib/productName";
 import { useWindowId } from "../../store/hooks";
-import { addMediaActions, addPickerHandler, callPickerHandler, mediaTheme, nativeMedia, NativeMediaView, type PickerHandlers } from "./nativeMedia";
+import { addMediaActions, addPickerHandler, callPickerHandler, mediaTheme, NativeMediaView, type PickerHandlers } from "./nativeMedia";
 
 const WIDTH = 340;
 
@@ -32,11 +30,7 @@ const pickSource = async (screen: boolean) => {
   return choice ? choice === "screen" : null;
 };
 
-export function CastPicker({ nativeAllowed = true, ...props }: { tabId: string; paneWidth: number; nativeAllowed?: boolean }) {
-  return nativeMedia("media.castPicker") ? <NativeCastPicker {...props} nativeAllowed={nativeAllowed} /> : <RNCastPicker {...props} />;
-}
-
-function NativeCastPicker({ tabId, paneWidth, nativeAllowed }: { tabId: string; paneWidth: number; nativeAllowed: boolean }) {
+export function CastPicker({ tabId, paneWidth, nativeAllowed = true }: { tabId: string; paneWidth: number; nativeAllowed?: boolean }) {
   const theme = useTheme();
   const windowId = useWindowId();
   const [inShell] = useState(() => nativeAllowed && windowShellActive(windowId));
@@ -95,110 +89,4 @@ function castPickerState(tabId: string, dialog: CastDialog, screen: boolean, the
     theme: mediaTheme(theme),
     popover: { width: Math.min(WIDTH, paneWidth - 24), top: POPOVER_MARGIN, right: POPOVER_MARGIN },
   };
-}
-
-function RNCastPicker({ tabId, paneWidth }: { tabId: string; paneWidth: number }) {
-  const theme = useTheme();
-  const dialog = useCast((c) => c.dialogs[tabId]);
-  const [screen, setScreen] = useState(false);
-  useEffect(() => setScreen(false), [dialog?.id]);
-  if (!dialog) return null;
-  const close = () => closeCastPicker(tabId);
-  const available = dialog.sinks.filter((s) => s.state !== "unavailable");
-  const canScreen = dialog.sinks.some((s) => s.modes & CastMode.screen);
-  const width = Math.min(WIDTH, paneWidth - 24);
-  const cast = (sink: CastSink) => {
-    const mode = castModeFor(sink, screen);
-    if (mode) void startCasting(dialog.id, sink.id, mode);
-  };
-
-  return (
-    <Popover key={dialog.id} width={width} top={POPOVER_MARGIN} right={POPOVER_MARGIN} onDismiss={close}>
-      <View style={{ paddingBottom: PANEL.inset }}>
-        <PanelHeader
-          icon={<Symbol name="tv.and.mediabox" size={14} color={theme.icon} style={{ width: PANEL.iconSlot, height: PANEL.iconSlot }} />}
-          title={screen ? "Cast screen" : dialog.header || "Cast tab"}
-          accessory={canScreen ? <SourceButton screen={screen} onChange={setScreen} /> : null}
-        />
-
-        {dialog.permissionRejected ? (
-          <Message
-            text={`${PRODUCT} needs Local Network access to find Cast devices.`}
-            link="Open Local Network Settings"
-            onLink={() => void openExternalURL(LOCAL_NETWORK_SETTINGS)}
-          />
-        ) : available.length ? (
-          <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset, gap: 2 }}>
-            {available.map((sink) => (
-              <SinkRow key={sink.id} sink={sink} onCast={() => cast(sink)} onStop={() => void stopCasting(dialog.id, sink.routeId)} />
-            ))}
-          </ScrollView>
-        ) : (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: PANEL.inset, paddingTop: 4, paddingBottom: 4 }}>
-            <ActivityIndicator size="small" style={{ transform: [{ scale: 0.6 }], width: 14, height: 14 }} />
-            <Text style={{ flex: 1, fontSize: 12, color: theme.textSecondary }}>
-              Looking for devices… Cast devices need to be on the same Wi‑Fi network as this Mac.
-            </Text>
-          </View>
-        )}
-
-        <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: PANEL.inset, marginTop: 10 }}>
-          <PromptButton title="Done" onPress={close} />
-        </View>
-      </View>
-    </Popover>
-  );
-}
-
-function SinkRow({ sink, onCast, onStop }: { sink: CastSink; onCast(): void; onStop(): void }) {
-  const theme = useTheme();
-  const { hovered, hoverProps } = useHover();
-  const active = sink.state === "connected" && !!sink.routeId;
-  const busy = sink.state === "connecting" || sink.state === "disconnecting";
-  return (
-    <View {...hoverProps}>
-      <Pressable onPress={active || busy ? undefined : onCast}>
-        <View style={{ minHeight: 42, borderRadius: PANEL.rowRadius, flexDirection: "row", alignItems: "center", gap: PANEL.iconGap, paddingHorizontal: PANEL.rowPadding, paddingVertical: 5, backgroundColor: hovered && !active ? theme.rowHover : undefined }}>
-          <View style={{ width: 28, height: 28, borderRadius: 7, alignItems: "center", justifyContent: "center", backgroundColor: active ? theme.accent : theme.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}>
-            <Symbol name={SINK_ICON[sink.icon] ?? "tv"} size={13} color={active ? "#FFFFFF" : theme.icon} style={{ width: 20, height: 20 }} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} style={{ fontSize: 13, color: theme.textPrimary }}>
-              {sink.name}
-            </Text>
-            {sink.issue || sink.status ? (
-              <Text numberOfLines={1} style={{ fontSize: 11.5, color: sink.issue ? "#FF453A" : theme.textSecondary }}>
-                {sink.issue || sink.status}
-              </Text>
-            ) : null}
-          </View>
-          {busy ? <ActivityIndicator size="small" style={{ transform: [{ scale: 0.6 }], width: 16, height: 16 }} /> : null}
-          {active ? <PromptButton title="Stop" onPress={onStop} /> : null}
-        </View>
-      </Pressable>
-    </View>
-  );
-}
-
-function SourceButton({ screen, onChange }: { screen: boolean; onChange: (screen: boolean) => void }) {
-  const pick = async () => {
-    const next = await pickSource(screen);
-    if (next !== null) onChange(next);
-  };
-  return <PopoverValue title="Sources" chevron="chevron.down" tooltip="Source" onPress={() => void pick()} />;
-}
-
-function Message({ text, link, onLink }: { text: string; link: string; onLink: () => void }) {
-  const theme = useTheme();
-  const { hovered, hoverProps } = useHover();
-  return (
-    <View style={{ paddingHorizontal: PANEL.inset, paddingTop: 4, gap: 5 }}>
-      <Text style={{ fontSize: 12.5, color: theme.textSecondary }}>{text}</Text>
-      <View {...hoverProps}>
-        <Pressable onPress={onLink}>
-          <Text style={{ fontSize: 12, fontWeight: "500", color: theme.accent, textDecorationLine: hovered ? "underline" : "none" }}>{link}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
 }

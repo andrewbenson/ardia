@@ -1,12 +1,11 @@
 import { WindowBackdrop } from "@ardia/shaders";
 import { littleSolaraShellActive, setLittleSolaraBackdrop, setLittleSolaraBar } from "@ardia/settings";
-import { ContextMenuArea, setTrafficLightsCenter, WindowDragRegion } from "@ardia/shell";
+import { setTrafficLightsCenter, WindowDragRegion } from "@ardia/shell";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { profileAccent, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useActiveTab, useTabLive, useWindowId, useWindowProfile, useWindowUi } from "../../store/hooks";
-import type { Tab } from "../../store/types";
 import { CommandPanel } from "../CommandPanel";
 import { ContentCard } from "../ContentCard";
 import { DownloadsPopover } from "../Downloads";
@@ -15,16 +14,15 @@ import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
 import { dropToolbarAnchor, setToolbarAnchor } from "../extensions/bridge";
 import { setUrlAnchor } from "../layout/windowLayout";
 import { showUrlBarMenu } from "../omnibox/paste";
-import { useHover } from "../primitives";
 import { copyPageUrl } from "../site/selection";
-import { ProfileBadge, profileSymbol } from "../profiles/icons";
-import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView } from "../media/nativeMedia";
+import { profileSymbol } from "../profiles/icons";
+import { addMediaActions, mediaTheme, NativeMediaView } from "../media/nativeMedia";
 import { breadcrumb } from "@ardia/core";
 import { usePageProgress } from "../../store/pageProgress";
 import { usePage } from "../layout/pageState";
 import { insecureLevel } from "../Toolbar";
 import { openInMainWindow, openLittleArdiaProfileMenu } from "./actions";
-import { PageLabel, SMALL_BAR_BUTTON, SMALL_BAR_HEIGHT, SMALL_INSET, SMALL_LIGHTS_CENTER, SmallBar, SmallBarBadgeButton } from "./SmallChrome";
+import { SMALL_BAR_BUTTON, SMALL_BAR_HEIGHT, SMALL_INSET, SMALL_LIGHTS_CENTER } from "./SmallChrome";
 import { PRODUCT } from "../../lib/productName";
 
 const FIELD_LEFT = 84;
@@ -103,10 +101,6 @@ const useCopied = (() => {
   };
 })();
 
-function LittleArdiaBar() {
-  return nativeMedia("littleSolara.bar") ? <NativeLittleArdiaBar /> : <RNLittleArdiaBar />;
-}
-
 function useSmallBarState() {
   const theme = useTheme();
   const windowId = useWindowId();
@@ -183,7 +177,7 @@ function ShellLittleArdiaBar({ width }: { width: number }) {
   return null;
 }
 
-function NativeLittleArdiaBar() {
+function LittleArdiaBar() {
   const { windowId, tab, state, count } = useSmallBarState();
   const { holder, anchor } = useBarAnchor(windowId, count);
   return (
@@ -191,75 +185,6 @@ function NativeLittleArdiaBar() {
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       <NativeMediaView kind="littleSolara.bar" windowId={windowId} state={state} />
       {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={(SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2} right={SMALL_INSET} /> : null}
-    </View>
-  );
-}
-
-function RNLittleArdiaBar() {
-  const windowId = useWindowId();
-  const tab = useActiveTab();
-  const panelOpen = useWindowUi().panel.open;
-  const severalProfiles = useBrowser((s) => s.profileOrder.length > 1);
-  const [copied, setCopied] = useState(false);
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => {
-    void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
-  }, [windowId]);
-  useEffect(() => () => clearTimeout(copiedTimer.current), []);
-
-  const copy = () => {
-    if (!tab?.url) return;
-    void copyPageUrl(tab.id);
-    setCopied(true);
-    clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => setCopied(false), 1400);
-  };
-
-  return (
-    <SmallBar
-      fieldLeft={FIELD_LEFT}
-      field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
-      buttons={[
-        { icon: copied ? "checkmark" : "link", size: 14, disabled: !tab?.url, tooltip: "Copy Link (⇧⌘C)", onPress: copy },
-        { icon: "arrow.up.left.and.arrow.down.right", size: 13, tooltip: `Open in ${PRODUCT} (⌘O)`, onPress: () => openInMainWindow(windowId) },
-      ]}
-      trailing={severalProfiles ? <ProfileButton windowId={windowId} /> : undefined}
-    >
-      <WindowDragRegion style={StyleSheet.absoluteFill} />
-      {tab ? <ToolbarPopupAnchor windowId={windowId} tabId={tab.id} top={(SMALL_BAR_HEIGHT - SMALL_BAR_BUTTON) / 2} right={SMALL_INSET} /> : null}
-    </SmallBar>
-  );
-}
-
-function ProfileButton({ windowId }: { windowId: string }) {
-  const profile = useWindowProfile();
-  return (
-    <SmallBarBadgeButton tooltip={`Profile: ${profile.name}`} onPress={() => void openLittleArdiaProfileMenu(windowId)}>
-      <ProfileBadge profile={profile} size={16} />
-    </SmallBarBadgeButton>
-  );
-}
-
-function PageField({ tab, windowId, hidden }: { tab: Tab; windowId: string; hidden: boolean }) {
-  const { hovered, hoverProps } = useHover();
-  const field = useRef<View>(null);
-  const anchor = () =>
-    field.current?.measureInWindow((x, y, width, height) => {
-      if (width) setUrlAnchor(windowId, { left: x, top: y, width, sidebar: { height } });
-    });
-
-  return (
-    <View ref={field} onLayout={anchor} {...hoverProps} style={{ flex: 1, opacity: hidden ? 0 : 1 }}>
-      <ContextMenuArea style={{ flex: 1 }} onContextMenu={() => tab.url && void showUrlBarMenu(tab)}>
-        <WindowDragRegion
-          clickable
-          accessibilityRole="button"
-          onRegionClick={() => useBrowser.getState().openPanel(windowId, tab.url)}
-          style={{ flex: 1 }}
-        >
-          <PageLabel tab={tab} hovered={hovered} />
-        </WindowDragRegion>
-      </ContextMenuArea>
     </View>
   );
 }

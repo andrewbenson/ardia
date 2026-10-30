@@ -1,5 +1,4 @@
 import type { ControlPress, DisplayMediaRequest, MediaCommand, NowPlaying, PictureInPictureState } from "@ardia/ardiacore";
-import { useEffect, useState } from "react";
 import type { AccessibilityActionEvent, GestureResponderEvent } from "react-native";
 import { create } from "zustand";
 import { webviews } from "../../lib/webviews";
@@ -71,21 +70,16 @@ export function positionOf(session: Session, now = Date.now()): number {
   return session.duration ? Math.min(Math.max(0, position), session.duration) : Math.max(0, position);
 }
 
-export function useTicker(active: boolean, ms = 500) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setTick((n) => n + 1), ms);
-    return () => clearInterval(t);
-  }, [active, ms]);
+export function skip(tabId: string, session: Session, seconds: number) {
+  const now = Date.now();
+  const position = Math.max(0, Math.min(session.duration ?? Infinity, positionOf(session, now) + seconds));
+  setNowPlaying(tabId, { ...session, position, timestamp: now });
+  mediaCommand(tabId, "seekBy", seconds);
 }
 
-export function formatTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = String(s % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+export function seekTo(tabId: string, session: Session, seconds: number) {
+  setNowPlaying(tabId, { ...session, position: seconds, timestamp: Date.now() });
+  mediaCommand(tabId, "seekTo", seconds);
 }
 
 export function mediaCommand(tabId: string, action: MediaCommand, seconds?: number) {
@@ -101,8 +95,6 @@ export function hostOf(url: string): string {
 }
 
 export const hasTrackControls = (session: Session) => session.actions.includes("nexttrack") || session.actions.includes("previoustrack");
-
-export const SKIP_SECONDS = 15;
 
 export function isTabShown(s: BrowserState, tabId: string, profileId?: string): boolean {
   const windowId = s.tabs[tabId]?.windowId;

@@ -23,7 +23,7 @@ import Testing
 
   @Test func theRowsAreTheRemainingInterfaceSwitchesWithTheirDependencies() {
     let model = model(defaults: scratchDefaults())
-    #expect(model.rows.map(\.name) == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeMedia, .nativeSidePanel])
+    #expect(model.rows.map(\.name) == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeSidePanel])
     #expect(!model.rows.contains { $0.name == .nativePagesPool || $0.name == .shellMainTop })
     #expect(row(model, .shellPanes).needs == "Needs Native window.")
     #expect(row(model, .nativeAutoHide).needs == "Needs Native window.")
@@ -84,7 +84,7 @@ import Testing
     empty.reveal(optionHeld: true)
     #expect(empty.revealed)
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_NATIVE_MEDIA")
+    defaults.set("1", forKey: "ARDIA_SHELL_PANES")
     let saved = model(defaults: defaults)
     saved.reveal(optionHeld: false)
     #expect(saved.revealed)
@@ -107,15 +107,15 @@ import Testing
 
   @Test func aSafeLaunchAfterFailedLaunchesSaysSoAndLeavesTheSwitchesAlone() {
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_NATIVE_MEDIA")
+    defaults.set("1", forKey: "ARDIA_SHELL_PANES")
     defaults.set(2, forKey: "SolaraLaunchSwitchFailedLaunches")
     let running = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: false, optionHeld: { false })
     let model = ExperimentsModel(running: running, stored: StoredLaunchSwitches(running, defaults: defaults))
     model.reveal(optionHeld: false)
     #expect(model.revealed)
     #expect(model.note.hasPrefix("This launch is in safe mode."))
-    #expect(row(model, .nativeShell).on && row(model, .nativeMedia).on)
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_MEDIA") == "1")
+    #expect(row(model, .nativeShell).on && row(model, .shellPanes).on)
+    #expect(defaults.string(forKey: "ARDIA_SHELL_PANES") == "1")
     #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
   }
 

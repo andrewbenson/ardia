@@ -1,16 +1,4 @@
 #!/usr/bin/env node
-// The native sidebar's hover cards in the window shell's overlay (ARDIA_NATIVE_SIDEBAR=1, ARDIA_NATIVE_SHELL=1 and
-// ARDIA_NATIVE_MEDIA=1 for the player): a
-// card shows after RN's 500 ms intent and not before, RN draws none of its own, moving onto the card keeps it past the
-// 160 ms hide delay, its buttons act, and it leaves on hover away, a click in the sidebar and a space switch (a tab
-// switch keeps it, as in RN). A group's card lists the group's tabs, takes typing and switches to the match on Return. A live
-// pull request's card opens the pull request from its comments line. A playing pinned tab's player card goes back to
-// the tab from its artwork. A pinned calendar tab's card lists the fixture's events and a click on one shows the tab.
-// The card's fade and scale follow RN's curve and springs frame by frame (presentation layers sampled in process). A
-// pinned folder's peek lists its first eight tabs and a click on one shows it. Scrolling the sidebar dismisses the card,
-// as RN's does.
-//
-//   node apps/browser/scripts/hover-card-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -45,7 +33,7 @@ const calendarFixture = {
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
   files: { "calendar-fixture.json": calendarFixture },
-  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_MEDIA: "1", ARDIA_CALENDAR_FIXTURE: "1" },
+  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_CALENDAR_FIXTURE: "1" },
   probe: true,
   session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
@@ -234,7 +222,7 @@ try {
     const c = await shown("t0");
     assert.equal(c.kind, "player");
     assert.deepEqual([c.frame[2], c.frame[3]], [320, 76]);
-    assert.equal(await run(`return acPerf.findFibers("NativeHoverPlayer", 5).length + acPerf.findFibers("RNHoverPlayer", 5).length`), 0, "RN draws no player card");
+    assert.equal(await run(`return acPerf.findFibers("HoverPlayer", 5).length`), 0, "RN draws no player card");
     const [x, y, w, h] = c.buttons["Back to Tab"];
     await point(x + w / 2, y + h / 2);
     await sleep(200);

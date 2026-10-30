@@ -2,13 +2,13 @@ import { breadcrumb } from "@ardia/core";
 import { insecureLevel } from "../Toolbar";
 import { FadeLabel, Symbol } from "@ardia/shell";
 import { useEffect, useRef, type ReactNode } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
+import { Animated, Easing, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
 import { useTabLive } from "../../store/hooks";
 import { usePageProgress } from "../../store/pageProgress";
 import type { Tab } from "../../store/types";
 import { usePage } from "../layout/pageState";
-import { Favicon, IconButton, useHover } from "../primitives";
+import { Favicon, IconButton } from "../primitives";
 
 export const SMALL_BAR_HEIGHT = 38;
 export const SMALL_INSET = 6;
@@ -51,31 +51,6 @@ export function SmallBar({
         ))}
         {trailing}
       </View>
-    </View>
-  );
-}
-
-export function SmallBarBadgeButton({ tooltip, onPress, children }: { tooltip: string; onPress: () => void; children: ReactNode }) {
-  const theme = useTheme();
-  const { hovered, hoverProps } = useHover();
-  return (
-    <View tooltip={tooltip} {...hoverProps}>
-      <Pressable accessibilityRole="button" accessibilityLabel={tooltip} onPress={onPress}>
-        {({ pressed }) => (
-          <View
-            style={{
-              width: SMALL_BAR_BUTTON,
-              height: SMALL_BAR_BUTTON,
-              borderRadius: 7,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: pressed ? theme.toolbarPressed : hovered ? theme.toolbarHover : undefined,
-            }}
-          >
-            {children}
-          </View>
-        )}
-      </Pressable>
     </View>
   );
 }

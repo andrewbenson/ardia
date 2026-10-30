@@ -22,7 +22,6 @@ public final class ExperimentsModel {
     .nativeAutoHide: ("Native auto-hide", "Hiding the toolbar and sidebar, in the native window."),
     .nativeSidebar: ("Native sidebar", "The sidebar's tabs, pins, folders and hover cards."),
     .nativeTopStrip: ("Native tab strip", "The tab strip at the top of the window."),
-    .nativeMedia: ("Native media controls", "The sidebar and mini players, the command line pill, and the share and cast pickers."),
     .nativeSidePanel: ("Native side panel", "An extension's side panel, beside the page."),
   ]
 

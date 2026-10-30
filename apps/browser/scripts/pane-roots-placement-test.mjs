@@ -105,6 +105,7 @@ const first = (name) => { const f = acPerf.findFibers(name, 50).find((f) => !!f.
 const patchA = (p) => acLayout.pages.setState((s) => ({ pages: { ...s.pages, a: { ...(s.pages.a || {}), ...p } } }));
 const openControls = () => acPerf.findFibers("SiteControls", 50).filter((f) => f.memoizedProps && f.memoizedProps.open).length;
 const shot = (p) => ac.shell.devSnapshotWindow("w1", p);
+const pillFrame = () => globalThis.expo.modules.SolaraMedia.probe("media.cliPill", "w1").then(JSON.parse).then((rows) => rows.find((row) => row.opacity > 0.99)?.frame ?? null);
 const statusShift = () => {
   const f = acPerf.findFibers("PageOverlays", 50).find((f) => f.memoizedProps && f.memoizedProps.tabId === "a" && !f.memoizedProps.peek);
   const t = f && f.memoizedProps.statusStyle && f.memoizedProps.statusStyle.transform && f.memoizedProps.statusStyle.transform[0].translateY;
@@ -149,7 +150,7 @@ try {
   for (const { key: panes, panes: shellPanes, pool } of LEGS) {
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${panes}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: pool, ARDIA_SHELL_PANES: shellPanes, ARDIA_NATIVE_MEDIA: "0" },
+      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: pool, ARDIA_SHELL_PANES: shellPanes },
       ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acLayout && !!globalThis.acCli",
     });
     const g = got[panes];
@@ -180,12 +181,12 @@ try {
     await rep.check(`${panes}-split-overlays`, async () => {
       await run(`S().createSplit(["a", "b"]); S().activate("a"); S().setFind("a", { open: true, query: "selectable" }); patchA({ status: "https://example.com/a-link" }); acCli.indicator.setState({ shown: true }); return true;`);
       await sleep(1200);
-      g.split = { find: await until("find bar", `return first("FindBarPanel");`), pill: await run(`return first("RNCliControlPill");`) };
+      g.split = { find: await until("find bar", `return first("FindBarPanel");`), pill: await until("native CLI pill", `return pillFrame();`) };
       await snap("split");
       const id = await run(`return Object.keys(S().splits)[0];`);
       await run(`S().updateSplit(${JSON.stringify(id)}, { sizes: [0.35, 0.65] }); return true;`);
       await sleep(1000);
-      g["split-resized"] = { find: await run(`return first("FindBarPanel");`), pill: await run(`return first("RNCliControlPill");`) };
+      g["split-resized"] = { find: await run(`return first("FindBarPanel");`), pill: await until("native CLI pill", `return pillFrame();`) };
       await snap("split-resized");
       await run(`for (const id of Object.keys(S().splits)) S().separateSplit(id); S().activate("a"); S().setFind("a", { open: false, query: "" }); acCli.indicator.setState({ shown: false }); return true;`);
       await sleep(800);

@@ -1,20 +1,13 @@
-import { hostedKinds, nativeCliIndicatorShown, nativeSettingsAvailable, SolaraHostedView } from "@ardia/settings";
+import { nativeCliIndicatorShown, SolaraHostedView } from "@ardia/settings";
 import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { toggleMute } from "../../lib/actions";
 import { stopCliControl, useCliIndicator } from "../../lib/cliControl";
 import type { Theme } from "../../lib/theme";
 import type { Tab } from "../../store/types";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
-import { seekTo, skip } from "./MiniPlayer";
-import { hasTrackControls, hostOf, mediaCommand, useMedia, type Session } from "./state";
+import { hasTrackControls, hostOf, mediaCommand, seekTo, skip, useMedia, type Session } from "./state";
 
 export type NativeMediaKind = "media.cliPill" | "media.sidebarPlayer" | "media.hoverPlayer" | "media.shareBar" | "media.castPicker" | "media.sharePicker" | "littleSolara.bar";
-
-const kinds: Partial<Record<NativeMediaKind, boolean>> = {};
-
-export function nativeMedia(kind: NativeMediaKind): boolean {
-  return (kinds[kind] ??= hostedKinds().includes(kind) && nativeSettingsAvailable());
-}
 
 const THEME_KEYS = [
   "panel",
@@ -121,4 +114,4 @@ addNativeSettingsHandlers({
   "media.action": (windowId: string, name: string, tabId: string, extra: Record<string, unknown>) => actions[name]?.(windowId, tabId, extra ?? {}),
 });
 
-if (__DEV__) (globalThis as { acNativeMedia?: unknown }).acNativeMedia = { nativeMedia, actions };
+if (__DEV__) (globalThis as { acNativeMedia?: unknown }).acNativeMedia = { actions };

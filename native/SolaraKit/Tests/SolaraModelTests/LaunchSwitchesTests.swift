@@ -6,7 +6,7 @@ import Testing
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
     .nativeShell, .nativeTopStrip, .nativeSidePanel,
-    .nativeSidebar, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
+    .nativeSidebar, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]
   static let shippedSurfaces = defaultOn.filter { !$0.storable(distribution: false) && !$0.storable(distribution: true) }
 
@@ -81,11 +81,11 @@ import Testing
   @Test func storedValuesCountOnlyAsOneOrZero() {
     let defaults = scratchDefaults()
     defaults.set(true, forKey: "ARDIA_NATIVE_SIDEBAR")
-    defaults.set("on", forKey: "ARDIA_NATIVE_MEDIA")
+    defaults.set("on", forKey: "ARDIA_SHELL_PANES")
     defaults.set(1, forKey: "ARDIA_NATIVE_TOP_STRIP")
     let switches = LaunchSwitches(environment: [:], defaults: defaults, distribution: false, skipStored: false)
     #expect(switches.isOn(.nativeSidebar, defaultOn: false))
-    #expect(!switches.isOn(.nativeMedia, defaultOn: false))
+    #expect(!switches.isOn(.shellPanes, defaultOn: false))
     #expect(switches.isOn(.nativeTopStrip, defaultOn: false))
   }
 

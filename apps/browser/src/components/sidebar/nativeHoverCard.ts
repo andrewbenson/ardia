@@ -12,7 +12,7 @@ import { useShallow } from "zustand/react/shallow";
 import { awayFromPin } from "../../store/organize";
 import { openInSplit } from "../layout/splitActions";
 import { useArtwork } from "../media/artwork";
-import { mediaTheme, nativeMedia, playerState } from "../media/nativeMedia";
+import { mediaTheme, playerState } from "../media/nativeMedia";
 import { togglePictureInPicture, useMedia, useSession } from "../media/state";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import { openLiveItem } from "../../live/engine";
@@ -67,7 +67,7 @@ export function useNativeHoverCardActive(windowId: string): boolean {
 export function nativeCardKind(active: boolean, hover: Hover | null, dia: boolean, player: boolean, calendar: boolean): NativeCardKind | null {
   if (!active || !hover) return null;
   if (dia) return "tab";
-  if (hover.kind === "tab" && player && nativeMedia("media.hoverPlayer")) return "player";
+  if (hover.kind === "tab" && player) return "player";
   if (hover.kind === "tab" && !player && calendar) return "calendar";
   if (hover.kind === "group") return "group";
   if (hover.kind === "live") return "live";

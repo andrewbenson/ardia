@@ -1,18 +1,17 @@
-import { Surface } from "@ardia/shell";
 import { View } from "react-native";
-import { hex, layout, useTheme } from "../../lib/theme";
+import { layout, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { clickTab } from "../sidebar/actions";
 import { cardHoverProps, dismissHover } from "../sidebar/hover";
 import { hoverCardOrigin } from "../sidebar/hoverMotion";
 import { measureRow, setSidebarUi, type Anchor } from "../sidebar/state";
 import { useSidebarWidth } from "../sidebar/tokens";
-import { MINI_PLAYER_HEIGHT, MINI_PLAYER_WIDTH, MiniPlayer } from "./MiniPlayer";
 import { useArtwork } from "./artwork";
-import { addMediaActions, mediaTheme, nativeMedia, NativeMediaView, playerState, runPlayerAction } from "./nativeMedia";
+import { addMediaActions, mediaTheme, NativeMediaView, playerState, runPlayerAction } from "./nativeMedia";
 import { useMedia, useSession } from "./state";
 import { useTab } from "../../store/hooks";
-import { useMediaTokens } from "./tokens";
+const MINI_PLAYER_WIDTH = 320;
+const MINI_PLAYER_HEIGHT = 76;
 
 export function useShowsMiniPlayer(tabId: string | undefined): boolean {
   const pinned = useBrowser((s) => !!tabId && !!s.tabs[tabId]?.pinned && s.settings.sidebarMediaControls);
@@ -28,10 +27,6 @@ export function usePlayerEdge(windowId: string, anchor: Anchor | undefined): num
   return anchor ? Math.max(anchor.x + anchor.width, sidebarWidth - layout.sidebarInset) : 0;
 }
 
-export function HoverPlayer(props: { tabId: string; windowId: string; anchor: Anchor }) {
-  return nativeMedia("media.hoverPlayer") ? <NativeHoverPlayer {...props} /> : <RNHoverPlayer {...props} />;
-}
-
 addMediaActions({
   hoverPlayer: (windowId, tabId, extra) =>
     runPlayerAction(tabId, extra, () => {
@@ -40,7 +35,7 @@ addMediaActions({
     }),
 });
 
-function NativeHoverPlayer({ tabId, windowId, anchor }: { tabId: string; windowId: string; anchor: Anchor }) {
+export function HoverPlayer({ tabId, windowId, anchor }: { tabId: string; windowId: string; anchor: Anchor }) {
   const theme = useTheme();
   const edge = usePlayerEdge(windowId, anchor);
   const session = useSession(tabId);
@@ -51,34 +46,6 @@ function NativeHoverPlayer({ tabId, windowId, anchor }: { tabId: string; windowI
     <View {...cardHoverProps} style={{ position: "absolute", ...hoverCardOrigin(anchor, edge), width: MINI_PLAYER_WIDTH, height: MINI_PLAYER_HEIGHT }}>
       <NativeMediaView kind="media.hoverPlayer" windowId={windowId} state={playerState(session, tab, artwork, mediaTheme(theme))} />
     </View>
-  );
-}
-
-function RNHoverPlayer({ tabId, windowId, anchor }: { tabId: string; windowId: string; anchor: Anchor }) {
-  const theme = useTheme();
-  const tokens = useMediaTokens();
-  const edge = usePlayerEdge(windowId, anchor);
-  return (
-    <Surface
-      {...cardHoverProps}
-      fill={tokens.background}
-      cornerRadius={12}
-      borderColor={hex(tokens.border)}
-      borderWidth={0.5}
-      shadowColor="#000000"
-      shadowOpacity={theme.panelShadowOpacity * 0.8}
-      shadowRadius={16}
-      shadowOffset={[0, 6]}
-      style={{ position: "absolute", ...hoverCardOrigin(anchor, edge), width: MINI_PLAYER_WIDTH, height: MINI_PLAYER_HEIGHT }}
-    >
-      <MiniPlayer
-        tabId={tabId}
-        onBackToTab={() => {
-          dismissHover();
-          clickTab(windowId, tabId);
-        }}
-      />
-    </Surface>
   );
 }
 

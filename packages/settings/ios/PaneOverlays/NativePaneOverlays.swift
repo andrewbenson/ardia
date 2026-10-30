@@ -45,7 +45,7 @@ enum NativePaneOverlays {
     let windows = ((value as? [String: Any])?["windows"] as? [String: Any]) ?? [:]
     for (windowId, host) in hosts where windows[windowId] == nil {
       host.apply([:])
-      if !PanePrompts.holds(windowId) { hosts[windowId] = nil }
+      if !PanePrompts.draws(windowId) { hosts[windowId] = nil }
     }
     for (windowId, tabs) in windows {
       guard let tabs = tabs as? [String: Any] else { continue }

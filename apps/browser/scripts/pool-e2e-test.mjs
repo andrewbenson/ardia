@@ -86,7 +86,7 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
 try {
   app = await launch(resolve(appArg), {
     data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_MEDIA: "0" },
+    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acPerf",
   });
   await until("page ONE", `return S().tabs.a.title === "ONE" || null;`, 15000);

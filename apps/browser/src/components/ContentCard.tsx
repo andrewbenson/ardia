@@ -60,7 +60,6 @@ import { startMedia, useAutoPictureInPicture } from "./media/pip";
 import { SharePicker } from "./media/SharePicker";
 import { ShareBar } from "./media/ShareBar";
 import { CastPicker } from "./media/CastPicker";
-import { nativeMedia } from "./media/nativeMedia";
 import { DeviceChooser } from "./site/DeviceChooser";
 import { Toolbar, ToolbarBackdrop, urlFieldRight } from "./Toolbar";
 import { AutoHideBackdrop, AutoHideToolbar, useToolbarMode, useToolbarMotion } from "./AutoHideToolbar";
@@ -539,7 +538,7 @@ function PageOverlays({
   const zoom = useTabValue(tabId, (t) => t?.zoom ?? 1);
   const popoverSide = toolbar ? { right: POPOVER_MARGIN } : { left: POPOVER_MARGIN };
   useNativePanePopups(nativePrompts, windowId, tabId, popovers && popover === "popups", toolbar ? "right" : "left");
-  const nativeCli = nativePrompts && nativeMedia("media.cliPill");
+  const nativeCli = nativePrompts;
   const engineOffer = useEngineOffers((offers) => offers[tabId] ?? null);
   useNativePaneHint(nativePrompts, windowId, tabId, {
     zoom,

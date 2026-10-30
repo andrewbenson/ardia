@@ -6,27 +6,24 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
-if (!appArg) {
-  console.error(`usage: node little-solara-test.mjs <Debug Solara.app> [--native] [--keep-data]
+if (!appArg || args.some((arg) => arg.startsWith("--") && arg !== "--keep-data")) {
+  console.error(`usage: node little-solara-test.mjs <Debug Solara.app> [--keep-data]
 
 Little Solara on a local page: the window opens with its bar and card where SmallChrome puts them (field at 84, 5,
 28 high, the buttons at the right, the card inset 6 below a 38 pt bar), a click on the field opens the command panel,
 the panel grows from the field box to RN's dropdown frame (left and top of the field, max(350, field + 137) wide, 12
-from the window's right edge at most; port-omnibox's native panel draws it, RN's Grow under
-the removed fallback) with its field taking a click inside the 38 pt bar and a click on the card closing it,
-a click on the bar's blank part leaves the window alone, and Open in Solara (its button natively, ⌘O's command under RN) moves the tab to the main window and closes the small one;
+from the window's right edge at most) with its field taking a click inside the 38 pt bar and a click on the card closing it,
+a click on the bar's blank part leaves the window alone, and Open in Solara moves the tab to the main window and closes the small one;
 then a relaunch handed a link, as another app hands it (ARDIA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
 passes outside links on to another copy), opens it in Little Solara and not the main window, through the early link window
-(the Debug-only engineInfo().earlyLinkWindow says "shown", not the reason it was skipped). --native runs with ARDIA_NATIVE_MEDIA=1, where the window is the native Little Solara shell:
+(the Debug-only engineInfo().earlyLinkWindow says "shown", not the reason it was skipped). The window is the native Little Solara shell:
 its backdrop, bar and RN slots in that order and the bar fed from JS.`);
   process.exit(2);
 }
-const native = args.includes("--native");
-const omnibox = true;
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-little-solara-"));
 const data = join(scratch, "data");
-const rep = reporter(join(scratch, "little-solara-test.log"), { name: `little-solara-test${native ? " --native" : ""}` });
+const rep = reporter(join(scratch, "little-solara-test.log"), { name: "little-solara-test" });
 
 const server = createServer((req, res) => {
   const name = req.url.slice(1) || "root";
@@ -50,8 +47,6 @@ const small = () => Object.values(st().windows).find((w) => w.kind === "small") 
 const win = (n) => C.chromeWindows().then((ws) => ws.find((w) => w.window === n));
 const act = (n, a) => C.devWindow(n, a);
 const fibers = (name) => acPerf.findFibers(name, 500).filter((f) => !!f.child);
-const hostOf = (fiber) => { let f = fiber; while (f && !(f.stateNode && f.stateNode.measureInWindow)) f = f.child; return f && f.stateNode; };
-const measure = (fiber) => new Promise((r) => { const n = hostOf(fiber); return n ? n.measureInWindow((x, y, w, h) => r([x, y, w, h])) : r(null); });
 const centre = (f) => [Math.round(f[0] + f[2] / 2), Math.round(f[1] + f[3] / 2)];
 const click = (id, n, p) => ac.shell.devSetPointer(id, { x: p[0], y: p[1] }).then(() => act(n, "mouse:moved:" + p[0] + "," + p[1])).then(() => settle(60))
   .then(() => act(n, "mouse:down:" + p[0] + "," + p[1])).then(() => settle(60)).then(() => act(n, "mouse:up:" + p[0] + "," + p[1]));
@@ -87,7 +82,6 @@ let little = null;
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_MEDIA: native ? "1" : "0" },
     ready: "return !!ac.store.getState().windows.w1",
   });
 
@@ -110,8 +104,8 @@ try {
 
   await rep.check("shell", async () => {
     const active = await run(`return !!M && !!M.littleActive && M.littleActive(${JSON.stringify(little.id)});`);
-    if (active !== native) throw new Error(`littleActive ${active} with the switch ${native ? "on" : "off"}`);
-    if (!native) return { active };
+    if (!active) throw new Error("the native Little Solara shell is inactive");
+
     const info = await until("the shell's bar", `return M.describeLittle(${JSON.stringify(little.id)}).then(JSON.parse).then((d) => d && d.barShown && d.backdrop ? d : null);`);
     const slots = info.slots.map(([slot]) => slot).join(",");
     if (slots !== "backdrop,bar,react") throw new Error(`slots ${slots}`);
@@ -120,26 +114,23 @@ try {
     if (!near(info.bar, [0, 0, w, 38])) throw new Error(`bar ${info.bar}`);
     if (info.blankBarHit !== "SolaraUI.LittleSolaraDragStrip") throw new Error(`a click on the bar's blank part reaches ${info.blankBarHit}, not the drag strip`);
     if (info.reactFill !== null) throw new Error(`the RN root keeps its fill over the backdrop and bar: ${info.reactFill}`);
-    const bars = await run(`return [acPerf.findFibers("ShellLittleArdiaBar", 5).length, fibers("NativeLittleArdiaBar").length, fibers("RNLittleArdiaBar").length];`);
-    if (bars.join() !== "1,0,0") throw new Error(`JS bars (shell, hosted, RN) ${bars}`);
+    const bars = await run(`return [acPerf.findFibers("ShellLittleArdiaBar", 5).length, fibers("LittleArdiaBar").length];`);
+    if (bars.join() !== "1,0") throw new Error(`JS bars (shell, hosted) ${bars}`);
     const drawn = await run(`return acPerf.findFibers("ShellLittleArdiaBar", 5).filter((f) => !!f.child).length;`);
     if (drawn) throw new Error("the shell's JS bar still mounts RN views");
     return { slots, card: info.card, bounds: info.bounds, blankBarHit: info.blankBarHit };
   });
 
   const fieldRect = async () => {
-    if (native) return (await until("native bar frames", `return bar(${JSON.stringify(little.id)}).then((r) => r && r.frames.field ? r.frames : null);`)).field;
-    return until("RN field", `const [f] = fibers("PageField"); return f ? measure(f) : null;`);
+    return (await until("native bar frames", `return bar(${JSON.stringify(little.id)}).then((r) => r && r.frames.field ? r.frames : null);`)).field;
   };
 
   await rep.check("bar-layout", async () => {
     const field = await fieldRect();
     const want = [84, 5, little.width - 84 - (6 + 2 * 28 + 2 + 6), 28];
     if (!near(field, want)) throw new Error(`field ${field}, SmallChrome puts it at ${want}`);
-    if (native) {
-      const frames = (await bar(little.id)).frames;
-      if (!near(frames.open, [little.width - 6 - 28, 5, 28, 28]) || !near(frames.copy, [little.width - 6 - 58, 5, 28, 28])) throw new Error(`buttons ${JSON.stringify(frames)}`);
-    }
+    const frames = (await bar(little.id)).frames;
+    if (!near(frames.open, [little.width - 6 - 28, 5, 28, 28]) || !near(frames.copy, [little.width - 6 - 58, 5, 28, 28])) throw new Error(`buttons ${JSON.stringify(frames)}`);
     return { field };
   });
 
@@ -156,14 +147,12 @@ try {
     const field = await fieldRect();
     const id = JSON.stringify(little.id);
     await run(`st().openPanel(${id}, st().tabs[${JSON.stringify(little.tab)}].url); return true;`);
-    const grow = await until("the panel", `const [g] = acPerf.findFibers("Grow", 5);
-      if (g) return { renderer: "rn", from: g.memoizedProps.from, frame: g.memoizedProps.frame, radius: g.memoizedProps.radius };
-      const host = acPerf.findFibers("NativePanelHost", 5).find((f) => f.memoizedProps.windowId === ${id});
+    const grow = await until("the panel", `const host = acPerf.findFibers("NativePanelHost", 5).find((f) => f.memoizedProps.windowId === ${id});
       const bar = host && acPerf.findFibers("NativeOmniboxBar", 20).find((f) => { for (let p = f; p; p = p.return) if (p === host) return true; return false; });
       const panel = bar && bar.memoizedProps.panel && JSON.parse(bar.memoizedProps.panel);
       return panel && panel.open ? { renderer: "native", from: panel.from, frame: { left: panel.left, top: panel.top, width: panel.width }, radius: panel.radius, variant: panel.variant } : null;`, 3000);
-    if (grow.renderer !== (omnibox ? "native" : "rn")) throw new Error(`the panel is drawn by ${grow.renderer}`);
-    if (omnibox && grow.variant !== "sidebar") throw new Error(`the native panel's variant is ${grow.variant}, RN's dropdown uses the sidebar bar`);
+    if (grow.renderer !== "native") throw new Error(`the panel is drawn by ${grow.renderer}`);
+    if (grow.variant !== "sidebar") throw new Error(`the native panel's variant is ${grow.variant}, RN's dropdown uses the sidebar bar`);
     const width = Math.min(Math.max(350, field[2] + 137), little.width - field[0] - 12);
     const from = grow.from && [grow.from.left, grow.from.top, grow.from.width, grow.from.height];
     if (!near(from, field)) throw new Error(`grows from ${from}, the field is at ${field}`);
@@ -183,12 +172,8 @@ try {
   });
 
   await rep.check("open-in-main", async () => {
-    if (native) {
-      const frames = (await bar(little.id)).frames;
-      await run(`return click(${JSON.stringify(little.id)}, ${little.number}, ${JSON.stringify(centre(frames.open))}).then(() => true);`);
-    } else {
-      await run(`ac.runCommand({ command: "openFile", windowId: ${JSON.stringify(little.id)} }); return true;`);
-    }
+    const frames = (await bar(little.id)).frames;
+    await run(`return click(${JSON.stringify(little.id)}, ${little.number}, ${JSON.stringify(centre(frames.open))}).then(() => true);`);
     await until("the small window closes", `return !st().windows[${JSON.stringify(little.id)}] || null;`, 5000);
     const moved = await until("the tab in the main window", `return st().windows.w1.tabIds.includes(${JSON.stringify(little.tab)}) || null;`, 5000);
     await untilSnapshot("native tab moved to main", (state) => !state.windows.some((entry) => entry.id === little.id) && state.windows.some((entry) => entry.id === "w1" && entry.tabIds.includes(little.tab)) && state.tabs.some((entry) => entry.id === little.tab && entry.windowId === "w1"));
@@ -204,7 +189,7 @@ try {
       app = null;
       app = await launch(resolve(appArg), {
         data, probe: true, urls: [url("c")],
-        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0" },
+        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1" },
         ready: "return !!ac.store.getState().windows.w1",
       });
       outcomes.push(await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`));
@@ -216,10 +201,10 @@ try {
     const main = await run(`return st().windows.w1.tabIds.map((t) => st().tabs[t].url);`);
     if (main.includes(url("c"))) throw new Error(`the link opened in the main window too: ${main}`);
     const active = await run(`return !!M && !!M.littleActive && M.littleActive(${JSON.stringify(id)});`);
-    if (active !== native) throw new Error(`littleActive ${active} with the switch ${native ? "on" : "off"}`);
+    if (!active) throw new Error("the native Little Solara shell is inactive");
     const early = outcomes.at(-1);
     if (early !== "shown") throw new Error(`the early link window's outcomes were ${outcomes.join(", ")}, so the JS path opened this window, not the early one`);
-    const shell = native ? await until("the shell's bar", `return M.describeLittle(${JSON.stringify(id)}).then(JSON.parse).then((d) => d && d.barShown && d.blankBarHit === "SolaraUI.LittleSolaraDragStrip" ? d : null);`) : null;
+    const shell = await until("the shell's bar", `return M.describeLittle(${JSON.stringify(id)}).then(JSON.parse).then((d) => d && d.barShown && d.blankBarHit === "SolaraUI.LittleSolaraDragStrip" ? d : null);`);
     return { id, tab, early, outcomes, slots: shell?.slots.map(([slot]) => slot) };
   });
   const relaunchWithLink = async (env) => {
@@ -228,7 +213,7 @@ try {
     app = null;
     app = await launch(resolve(appArg), {
       data, probe: true, urls: [url("c")],
-      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0", ...env },
+      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...env },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const id = await until("Little Solara for the link", `return small()?.id ?? null;`, 15000);
@@ -263,7 +248,7 @@ try {
       app = null;
       app = await launch(resolve(appArg), {
         data, probe: true, urls: [url("c")],
-        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_TEST_EARLY_LINK_IGNORE_SETTING: "1", ARDIA_NATIVE_MEDIA: native ? "1" : "0" },
+        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_TEST_EARLY_LINK_IGNORE_SETTING: "1" },
         ready: "return !!ac.store.getState().windows.w1",
       });
       const tab = await until("page C loaded in the main window", `const id = st().windows.w1?.tabIds.find((t) => st().tabs[t]?.url === ${JSON.stringify(url("c"))}); return id && st().tabs[id].title === "C" ? id : null;`, 15000);

@@ -17,7 +17,7 @@ public enum OmniboxCommandSources {
       case "tab": if tab == nil { continue }
       case "profiles": if window?.incognito == true { continue }
       case "pins": if !context.canTidyPins { continue }
-      case "site": if tab == nil || Ids.isIncognitoProfile(tab!.profileId) || host == nil { continue }
+      case "site": if host == nil || tab.map({ Ids.isIncognitoProfile($0.profileId) }) != false { continue }
       default: break
       }
       var title = d.title
@@ -26,7 +26,9 @@ public enum OmniboxCommandSources {
       case "togglePin:row": title = tab?.isPinnedRow == true ? "Move to Top Apps" : "Move to Pinned in \(s.profiles[tab?.profileId ?? ""]?.name ?? "Profile")"
       case "toggleMute": title = tab?.muted == true ? "Unmute Site" : "Mute Site"
       case "bookmarkPage": title = bookmarked ? "Remove Bookmark" : "Bookmark This Page"
-      case "toggleDeveloperMode": title = developerEnabled(host!, settings: s.settings, profileId: tab!.profileId) ? "Turn off Developer Mode for this site" : "Turn on Developer Mode for this site"
+      case "toggleDeveloperMode":
+        guard let host, let tab else { continue }
+        title = developerEnabled(host, settings: s.settings, profileId: tab.profileId) ? "Turn off Developer Mode for this site" : "Turn on Developer Mode for this site"
       case "toggleFullUrl": title = s.settings.bool("showFullUrl") ? "Hide Full URL" : "Show Full URL"
       default: break
       }

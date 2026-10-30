@@ -68,11 +68,11 @@ const rootWindow = () => C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot
 const run = (body) => app.eval(`${HELPERS}\n${body}`, { timeout: 20000 });
 const textFields = (ax) => ax.split("\n").filter((line) => line.trim().startsWith("AXTextField"));
 const isField = (responder) => /NSTextView|NSTextField|FieldEditor|TextField/.test(responder);
-const untilSnapshot = async (what, accept, ms = 5000) => {
+const untilSnapshot = async (what, accept, args = {}, ms = 5000) => {
   const end = Date.now() + ms;
   let last;
   while (Date.now() < end) {
-    last = await app.snapshot().catch((error) => ({ error: error.message }));
+    last = await app.snapshot(args).catch((error) => ({ error: error.message }));
     if (!last.error && accept(last)) return last;
     await sleep(100);
   }
@@ -102,7 +102,7 @@ try {
     if (newTab) assert.ok(!isField(responder), `a text field behind the card takes the first row's keys and clicks: ${responder}`);
     else assert.deepEqual(textFields(ax), [], "a text field behind the card takes the first row's cursor and clicks");
     await untilSnapshot("home accessibility text fields", (snapshot) =>
-      snapshot.windows.some((window) => window.textFieldCount === textFields(ax).length));
+      snapshot.windows.some((window) => window.textFieldCount === textFields(ax).length), { textFields: true });
     return responder;
   });
 
@@ -137,7 +137,7 @@ try {
 
       await untilSnapshot("onboarding window accessibility text fields", (snapshot) =>
         snapshot.windows.some((window) => window.id === otherId && window.textFieldCount === textFields(otherAx).length) &&
-        snapshot.windows.some((window) => window.id !== otherId && window.textFieldCount === textFields(onboardingAx).length));
+        snapshot.windows.some((window) => window.id !== otherId && window.textFieldCount === textFields(onboardingAx).length), { textFields: true });
       await untilSnapshot("onboarding keeps another window focused", (snapshot) =>
         snapshot.windows.some((w) => w.id === otherId && isField(w.firstResponder) === isField(otherFocus)) &&
         snapshot.windows.some((w) => w.id !== otherId && isField(w.firstResponder) === isField(onboardingFocus)));
@@ -162,7 +162,7 @@ try {
     await untilSnapshot("New Tab focus after onboarding", (snapshot) =>
       snapshot.windows.some((w) => isField(w.firstResponder)));
     await untilSnapshot("New Tab accessibility text field after onboarding", (snapshot) =>
-      snapshot.windows.some((window) => window.textFieldCount === textFields(r.ax).length));
+      snapshot.windows.some((window) => window.textFieldCount === textFields(r.ax).length), { textFields: true });
     return `${r.focus}, bar ${r.during} -> ${r.after}`;
   });
 

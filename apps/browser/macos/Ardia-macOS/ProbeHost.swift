@@ -232,8 +232,11 @@ final class ProbeHost {
 
   private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
     try checkSnapshot(request)
-    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin", "hoverPresentation", "hoverArea"]),
+    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin", "hoverPresentation", "hoverArea", "textFields"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
+    if let textFields = request.args["textFields"] {
+      guard let textFields = textFields as? NSNumber, CFGetTypeID(textFields) == CFBooleanGetTypeID() else { throw ProbeFailure.invalidArgument }
+    }
     let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
     let viewFrames = request.args["viewFrames"] as? [String] ?? []
     let hitPoint = request.args["hitPoint"] as? [Double]
@@ -271,6 +274,7 @@ final class ProbeHost {
   }
 
   private func snapshot(_ request: ProbeRequest, savedLogin: [String: Any]?) throws -> [String: Any] {
+    let textFields = request.args["textFields"] as? Bool ?? false
     let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
     let viewFrames = request.args["viewFrames"] as? [String] ?? []
     let hitPoint = request.args["hitPoint"] as? [Double]
@@ -342,6 +346,7 @@ final class ProbeHost {
         let hitSlot = hitPoint.flatMap { WindowShellRead.hitSlot(windowId: id, x: $0[0], y: $0[1]) }
         let hitView = hitPoint.flatMap { WindowShellRead.hitView(windowId: id, x: $0[0], y: $0[1]) }
         let responder = (chromeWindow ?? window)?.firstResponder.map { NSStringFromClass(type(of: $0)) }
+        let textFieldCount = textFields ? chromeNumber.flatMap { WindowAccessibilityRead.textFieldCount(windowNumber: $0) } : nil
         return ["id": id, "kind": model.fields.kind ?? "browser", "profileId": model.profileId,
           "incognito": model.incognito, "order": state.windowOrder.firstIndex(of: id) ?? 0,
           "key": window?.isKeyWindow ?? false, "visible": window?.isVisible ?? false,
@@ -362,7 +367,7 @@ final class ProbeHost {
           "reactBlockers": Self.value(blockerStep.flatMap { WindowShellRead.reactBlockers(windowId: id, step: $0) }),
           "dropTargets": dropSamples, "viewFrames": frames, "hitSlot": Self.value(hitSlot), "hitView": Self.value(hitView),
           "firstResponder": Self.value(responder),
-          "textFieldCount": Self.value(chromeNumber.flatMap { WindowAccessibilityRead.textFieldCount(windowNumber: $0) }),
+          "textFieldCount": Self.value(textFieldCount),
           "media": media, "mediaEnabled": MediaRead.enabled, "mediaKinds": MediaRead.kinds,
           "paneOverlays": Self.value(PaneOverlayRead.snapshot(windowId: id)),
           "toolbarStates": toolbarStates,

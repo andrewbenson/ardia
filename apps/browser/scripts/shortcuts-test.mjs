@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
@@ -54,6 +56,41 @@ app = await launch(appPath, {
   ready: "return !!ac.shell.devKeyEquivalent",
 });
 rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
+const SHORTCUT_FIELDS = [
+  "windows.profileId", "windows.selectedTabId", "windows.tabIds", "windows.panelOpen", "windows.sidebarOpen",
+  "windows.shortcuts", "windows.shortcutTable", "windows.shortcutFields", "windows.firstResponder", "windows.omnibox",
+  "tabs.url", "tabs.find",
+];
+const untilSnapshot = async (what, accept, ms = 5000, args = {}) => {
+  const end = Date.now() + ms;
+  let last;
+  while (Date.now() < end) {
+    last = await app.snapshot({ windowId: "w1", shortcuts: true, fields: SHORTCUT_FIELDS, ...args });
+    if (last.consistent && accept(last)) return last;
+    await sleep(50);
+  }
+  throw new Error(`${what}: ${JSON.stringify(last)}`);
+};
+const nativeWindow = (snapshot, id = "w1") => snapshot.windows.find((w) => w.id === id);
+const nativeState = async (expected, id = "w1") => {
+  const s = await untilSnapshot("native shortcut window state", (s) => {
+    const w = nativeWindow(s, id);
+    return w && w.profileId === expected.profile && w.selectedTabId === expected.active && w.tabIds.length === expected.tabs && w.panelOpen === expected.panel;
+  });
+  const w = nativeWindow(s, id);
+  assert.deepEqual({ profile: w.profileId, active: w.selectedTabId, tabs: w.tabIds.length, panel: w.panelOpen }, expected);
+  return s;
+};
+const hello = await app.probe("probe.hello");
+assert.ok(hello.capabilities.includes("state.snapshot"));
+const firstSnapshot = await untilSnapshot("native shortcut table", (s) => nativeWindow(s)?.shortcutTable.length > 0, 5000, { shortcutTable: ["Quit"] });
+for (const field of ["windows.shortcuts", "windows.shortcutTable", "snapshot.fields", "windows.panelOpen", "windows.sidebarOpen", "windows.activeTabIds", "tabs.find"]) assert.ok(firstSnapshot.capabilities.available.includes(field), field);
+const fullShortcutSnapshotFits = async (when) => {
+  const bytes = Buffer.byteLength(JSON.stringify(await app.snapshot({ shortcuts: true })));
+  assert.ok(bytes < 65536, `${when}: a full {shortcuts: true} snapshot is ${bytes} bytes, over the 64 KiB reply cap`);
+};
+await fullShortcutSnapshotFits("at launch");
+
 await sleep(3000);
 
 const ac = (body, timeout = 60000) => app.eval(body, { timeout }).catch(async (error) => {
@@ -92,10 +129,34 @@ async function cdp(urlPart, expression) {
   }
 }
 
-const state = () => ac(`const s = ac.store.getState(), w = s.windows.w1;
-  return { profile: w.profileId, active: w.activeTabIds[w.profileId], tabs: w.tabIds.length, panel: !!s.windowUi.w1?.panel.open };`);
-const activeUrl = async () => (await ac(`const s = ac.store.getState(), w = s.windows.w1; return w ? s.tabs[w.activeTabIds[w.profileId]]?.url ?? "" : "no window w1";`));
-const press = (key, options) => ac(`return ac.shell.devKeyEquivalent("w1", ${JSON.stringify({ ...key, ...options })});`);
+const state = async () => {
+  const value = await ac(`const s = ac.store.getState(), w = s.windows.w1;
+    return { profile: w.profileId, active: w.activeTabIds[w.profileId], tabs: w.tabIds.length, panel: !!s.windowUi.w1?.panel.open };`);
+  await nativeState(value);
+  return value;
+};
+const activeUrl = async () => {
+  const value = await ac(`const s = ac.store.getState(), w = s.windows.w1; return w ? s.tabs[w.activeTabIds[w.profileId]]?.url ?? "" : "no window w1";`);
+  const s = await untilSnapshot("native selected tab URL", (s) => s.tabs.find((t) => t.id === nativeWindow(s)?.selectedTabId)?.url === (value === "" ? null : value));
+  assert.equal(s.tabs.find((t) => t.id === nativeWindow(s).selectedTabId).url, value === "" ? null : value);
+  return value;
+};
+const press = async (key, options) => {
+  const terminates = key.key.toLowerCase() === "q" && key.modifiers.includes("command") && !options?.dry;
+  if (terminates) {
+    const native = await untilSnapshot("native registered quit shortcut", (s) => nativeWindow(s)?.shortcutTable.some((item) => item.key.toLowerCase() === "q" && /^Quit/.test(item.title)), 5000, { shortcutTable: ["Quit"] });
+    assert.ok(nativeWindow(native).shortcutTable.some((item) => item.key.toLowerCase() === "q" && /^Quit/.test(item.title)));
+  }
+  const r = await ac(`return ac.shell.devKeyEquivalent("w1", ${JSON.stringify({ ...key, ...options })});`);
+  if (terminates) return r;
+  const s = await untilSnapshot("native shortcut dispatch result", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.press, r), 5000, { shortcutTable: (r.matched ?? []).map((item) => item.title) });
+  const native = nativeWindow(s).shortcuts;
+  assert.deepEqual(native.press, r);
+  for (const item of r.matched ?? []) {
+    assert.ok(nativeWindow(s).shortcutTable.some((entry) => entry.title === item.title && entry.command === item.command && (entry.arg ?? undefined) === item.arg), JSON.stringify(item));
+  }
+  return r;
+};
 
 const F = (code) => String.fromCharCode(code);
 const K = (key, keyCode, ...modifiers) => ({ key, keyCode, modifiers });
@@ -303,7 +364,10 @@ if (part === "matrix") {
       results.get(name)[focusName] = { result, detail: describe(r), responder: r.firstResponder };
     }
     await sleep(1000);
-    late.push(...(await ac(`return globalThis.expo.modules.ArdiaApp.devKeyEquivalentLateBounces();`)));
+    const lateBounces = await ac(`return globalThis.expo.modules.ArdiaApp.devKeyEquivalentLateBounces();`);
+    const nativeBounces = await untilSnapshot("native late key bounces", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.lateBounces, lateBounces));
+    assert.deepEqual(nativeWindow(nativeBounces).shortcuts.lateBounces, lateBounces);
+    late.push(...lateBounces);
     await focus.teardown?.();
     recordFocus(focusName, late);
   }
@@ -313,6 +377,7 @@ if (part === "matrix") {
     const row = results.get(name);
     rep.log(`${name.padEnd(8)} ${dia.padEnd(26)} ${cols.map((c) => (row[c]?.result ?? "—").padEnd(10)).join(" ")}`);
   }
+  await fullShortcutSnapshotFits("after the matrix");
   await finish(rep.summary() && !failures ? 0 : 1);
 }
 
@@ -419,12 +484,24 @@ await press(cmd("a", 0), page);
 const selection = await cdp("?t3", "(f => [f.selectionStart, f.selectionEnd, f.value.length].join())(document.getElementById('f'))");
 check("⌘A selects all of a page's text field", selection === "0,11,11", selection);
 
-const devWindow = (action) =>
-  ac(`const f = ac.store.getState().windows.w1.frame, C = globalThis.expo.modules.ArdiaCEF;
+const devWindow = async (action) => {
+  const result = await ac(`const f = ac.store.getState().windows.w1.frame, C = globalThis.expo.modules.ArdiaCEF;
     return C.chromeWindows().then((ws) => ws.filter((w) => w.hasRoot).find((w) => {
       const r = w.frame.match(/[-\\d.]+/g).map(Number); return Math.abs(r[0] - f[0]) < 2 && Math.abs(r[2] - f[2]) < 2; }))
       .then((w) => C.devWindow(w.window, ${JSON.stringify(action)}));`);
-const postKeys = (presses) => ac(`return globalThis.expo.modules.ArdiaApp.devPostKeys("w1", ${JSON.stringify(presses)});`);
+  if (action === "responder") {
+    const role = result.split(" ")[0];
+    const native = await untilSnapshot("native first responder", (s) => (nativeWindow(s)?.firstResponder ?? "nil") === role);
+    assert.equal(nativeWindow(native).firstResponder ?? "nil", role);
+  }
+  return result;
+};
+const postKeys = async (presses) => {
+  const times = await ac(`return globalThis.expo.modules.ArdiaApp.devPostKeys("w1", ${JSON.stringify(presses)});`);
+  const native = await untilSnapshot("native posted key timestamps", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.postTimes, times));
+  assert.deepEqual(nativeWindow(native).shortcuts.postTimes, times);
+  return times;
+};
 const keyPress = (key, keyCode, after = 0, modifiers = ["command"]) => ({ key, keyCode, modifiers, after });
 const post = (key, keyCode, modifiers = ["command"]) => ac(`return globalThis.expo.modules.ArdiaApp.devPostKey("w1", ${JSON.stringify(key)}, ${keyCode}, ${JSON.stringify(modifiers)});`);
 const clipboard = {
@@ -432,8 +509,24 @@ const clipboard = {
   get: () => ac(`return globalThis.nativeModuleProxy.Clipboard.getString();`),
 };
 const busyJsOnce = (ms) => ac(`const off = ac.store.subscribe(() => { off(); const t = Date.now(); while (Date.now() - t < ${ms}); }); return 1;`);
-const fieldInAx = async (text) => (await devWindow("ax")).split("\n").some((l) => /AXTextField|AXTextArea/.test(l) && l.includes(text));
-const barValue = () => ac(`const bar = ac.omnibox.get("w1:panel") ?? ac.omnibox.get("w1:sidebar"); return String(bar?.state().value ?? "");`);
+const fieldInAx = async (text) => {
+  const value = (await devWindow("ax")).split("\n").some((l) => /AXTextField|AXTextArea/.test(l) && l.includes(text));
+  const native = await untilSnapshot("native shortcut destination text field", (s) => nativeWindow(s)?.shortcutFields.some((f) => `${f.role}: ${f.label} | ${f.value}`.includes(text)) === value);
+  assert.equal(nativeWindow(native).shortcutFields.some((f) => `${f.role}: ${f.label} | ${f.value}`.includes(text)), value);
+  return value;
+};
+const barValue = async () => {
+  const value = await ac(`const bar = ac.omnibox.get("w1:panel") ?? ac.omnibox.get("w1:sidebar"); return String(bar?.state().value ?? "");`);
+  const s = await app.snapshot({ windowId: "w1", shortcuts: true, fields: SHORTCUT_FIELDS });
+  const bar = nativeWindow(s)?.omnibox;
+  const native = await untilSnapshot("native command bar text", (s) => {
+    const w = nativeWindow(s);
+    return bar ? w?.omnibox?.value === value : w?.shortcutFields.some((f) => f.value === value);
+  });
+  if (bar) assert.equal(nativeWindow(native).omnibox.value, value);
+  else assert.ok(nativeWindow(native).shortcutFields.some((f) => f.value === value));
+  return value;
+};
 const pageField = (expr) => cdp("?t3", `(f => ${expr})(document.getElementById('f'))`);
 await devWindow("fakeActiveClicks");
 const resetToPageField = async (value, selection) => {
@@ -445,7 +538,12 @@ const resetToPageField = async (value, selection) => {
   await pageField(`(f.value = ${JSON.stringify(value)}, f.focus(), f.setSelectionRange(${selection[0]}, ${selection[1]}), true)`);
   await sleep(100);
 };
-const sidebarOpen = () => ac(`return ac.store.getState().windows.w1.sidebarOpen;`);
+const sidebarOpen = async () => {
+  const value = await ac(`return ac.store.getState().windows.w1.sidebarOpen;`);
+  const s = await untilSnapshot("native sidebar visibility", (s) => nativeWindow(s)?.sidebarOpen === value);
+  assert.equal(nativeWindow(s).sidebarOpen, value);
+  return value;
+};
 for (const [label, presses, toggles] of [
   ["one ⌘S in a page's text field stays with the page", [keyPress("s", 1)], 0],
   ["two quick ⌘S in a page's text field toggle the sidebar once", [keyPress("s", 1), keyPress("s", 1, 150)], 1],
@@ -477,6 +575,10 @@ for (const busy of [0, 120]) {
       const inPage = await pageField("f.value");
       const inHero = name === "⌘T" && await ac(`return String(ac.omnibox.get("w1:hero")?.state().value ?? "").includes(${JSON.stringify(pasted)});`);
       const inDestination = inHero || (name === "⌘L" ? (await barValue()).includes(pasted) : await fieldInAx(pasted));
+      if (inHero) {
+        const nativeHero = await untilSnapshot("native new tab destination field", (s) => nativeWindow(s)?.shortcutFields.some((f) => String(f.value).includes(pasted)));
+        assert.ok(nativeWindow(nativeHero).shortcutFields.some((f) => String(f.value).includes(pasted)));
+      }
       const held = postedAt[1] - postedAt[0];
       check(`${label} ⌘V pastes into the new field, not the page`, inDestination && !String(inPage).includes(pasted) && held >= gap - 1 && held < gap + 30,
         `page "${inPage}", destination ${inDestination}, keys ${held.toFixed(1)} ms apart`);
@@ -503,6 +605,8 @@ for (let run = 1; run <= 5; run++) {
   const bar = await barValue();
   const panelOpen = (await state()).panel;
   const findQuery = await ac(`return ac.store.getState().find.t3?.query ?? "";`);
+  const nativeFind = await untilSnapshot("native find query", (s) => s.tabs.find((t) => t.id === "t3")?.find.query === findQuery);
+  assert.equal(nativeFind.tabs.find((t) => t.id === "t3").find.query, findQuery);
   check(`⌘F ⌘L ⌘V back to back (run ${run}): the paste goes to the command bar`,
     panelOpen && bar.includes(pasted) && !findQuery.includes(pasted) && (await pageField("f.value")) === "", `panel ${panelOpen}, bar "${bar}", find "${findQuery}"`);
 }
@@ -528,6 +632,12 @@ for (const busy of [0, 120]) {
     await ac(`return globalThis.expo.modules.ArdiaApp.devPostKeys(${JSON.stringify(made)}, ${JSON.stringify([keyPress("l", 37), keyPress("q", 12, 300, []), keyPress("w", 13, 15, [])])});`);
     await sleep(1200);
     bar = await ac(`const b = ac.omnibox.get(${JSON.stringify(`${made}:panel`)}) ?? ac.omnibox.get(${JSON.stringify(`${made}:sidebar`)}); return b ? String(b.state().value ?? "") : null;`);
+    const nativeBar = await untilSnapshot("native new-window command bar", (s) => {
+      const w = nativeWindow(s, made);
+      return w?.omnibox?.value === bar || w?.shortcutFields.some((f) => f.value === bar);
+    }, 5000, { windowId: made });
+    const w = nativeWindow(nativeBar, made);
+    assert.ok(w.omnibox?.value === bar || w.shortcutFields.some((f) => f.value === bar));
     await ac(`ac.store.getState().closeWindow(${JSON.stringify(made)}); return 1;`);
     await sleep(800);
   }
@@ -550,6 +660,8 @@ for (const busy of [0, 120]) {
   await postKeys([keyPress("l", 37), keyPress("\r", 36, 20, []), keyPress("v", 9, 20)]);
   await sleep(2000);
   const trace = await ac(`return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace();`);
+  const nativeTrace = await untilSnapshot("native focus handoff trace", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.focusTrace, trace), 5000, { shortcutTrace: true, fields: ["windows.shortcuts"] });
+  assert.deepEqual(nativeWindow(nativeTrace).shortcuts.focusTrace, trace);
   const replayAt = trace.findLastIndex((l) => / replay /.test(l));
   const dropped = replayAt >= 0 && trace.slice(replayAt).some((l) => / drop /.test(l));
   const inPage = await pageField("f.value");
@@ -564,6 +676,8 @@ for (const busy of [0, 120]) {
   await postKeys([keyPress("f", 3), keyPress("v", 9), keyPress("q", 12, 300, [])]);
   await sleep(1500);
   const query = await ac(`return ac.store.getState().find.t3?.query ?? "";`);
+  const nativeFind = await untilSnapshot("native find query", (s) => s.tabs.find((t) => t.id === "t3")?.find.query === query);
+  assert.equal(nativeFind.tabs.find((t) => t.id === "t3").find.query, query);
   const inPage = await pageField("f.value");
   const ordered = query === "firstq" || query === "q" || (query === "first" && inPage === "q");
   check("⌘F ⌘V, then q while the page answers late: the paste never lands after q", ordered && !query.startsWith("q" + "first"), `find "${query}", page "${inPage}"`);
@@ -598,7 +712,12 @@ for (const busy of [0, 120]) {
 const countPastes = () => Promise.all(ids.map((id) => cdp(`?${id}`, "(window.pastes ??= (addEventListener('paste', () => window.pastes.n++, true), { n: 0 })).n = 0, true")));
 const pastesIn = (id) => cdp(`?${id}`, "window.pastes?.n ?? 0");
 const pastesElsewhere = async (except) => (await Promise.all(ids.filter((id) => id !== except).map(pastesIn))).reduce((a, n) => a + (n ?? 0), 0);
-const activeId = () => ac(`const s = ac.store.getState(), w = s.windows.w1; return w.activeTabIds[w.profileId];`);
+const activeId = async () => {
+  const value = await ac(`const s = ac.store.getState(), w = s.windows.w1; return w.activeTabIds[w.profileId];`);
+  const s = await untilSnapshot("native active tab", (s) => nativeWindow(s)?.selectedTabId === value);
+  assert.equal(nativeWindow(s).selectedTabId, value);
+  return value;
+};
 const handoffEnds = [
   ["⌘L ⌘W before the bar mounts", [keyPress("l", 37), keyPress("w", 13, 30), keyPress("v", 9, 30)], 150, 0],
   ["⌘L, the bar shown, ⌘W", [keyPress("l", 37), keyPress("w", 13, 300), keyPress("v", 9, 30)], 0, 1],
@@ -638,6 +757,8 @@ for (const [name, keys, busy, firstExpected] of handoffEnds) {
   await postKeys([keyPress("\r", 36, 0, []), keyPress("v", 9, 150)]);
   await sleep(900);
   const trace = await ac(`return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace();`);
+  const nativeTrace = await untilSnapshot("native focus handoff trace", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.focusTrace, trace), 5000, { shortcutTrace: true, fields: ["windows.shortcuts"] });
+  assert.deepEqual(nativeWindow(nativeTrace).shortcuts.focusTrace, trace);
   const after = trace.slice(trace.findLastIndex((l) => / claim /.test(l)) + 1);
   const forwarded = after.some((l) => / forward paste/.test(l)), dropped = after.some((l) => / drop /.test(l));
   check("⌘L, a URL, Return, then a fresh ⌘V 150 ms later: the paste goes on to the page, not dropped", forwarded && !dropped, `trace ${after.join(" / ")}`);
@@ -673,6 +794,8 @@ await post("\u001b", 53, []);
 await sleep(500);
 const responder = await devWindow("responder");
 const closedByEscape = !(await ac(`return ac.store.getState().windowUi.w1.panel.open;`));
+const nativeClosed = await untilSnapshot("native Escape closes panel", (s) => nativeWindow(s)?.panelOpen === !closedByEscape);
+assert.equal(nativeWindow(nativeClosed).panelOpen, !closedByEscape);
 await post("v", 9);
 await sleep(600);
 const afterEscape = await pageField("f.value");
@@ -686,8 +809,17 @@ for (const where of ["the find field", "the page"]) {
   await ac(`const s = ac.store.getState(), id = s.newTab("w1"); s.navigate(id, "${pages}/?findclose"); s.closePanel("w1"); s.activate(id); return 1;`);
   await sleep(1500);
   await ac(`return ac.shell.devClick("w1", { in: "page", x: 200, y: 300, wait: 150 });`);
-  const findState = () => ac(`const s = ac.store.getState(), w = s.windows.w1, a = w.activeTabIds[w.profileId];
-    return { tabs: w.tabIds.length, active: a, url: s.tabs[a]?.url ?? "", find: !!s.find[a]?.open };`);
+  const findState = async () => {
+    const value = await ac(`const s = ac.store.getState(), w = s.windows.w1, a = w.activeTabIds[w.profileId];
+      return { tabs: w.tabIds.length, active: a, url: s.tabs[a]?.url ?? "", find: !!s.find[a]?.open };`);
+    const s = await untilSnapshot("native find/tab state", (s) => {
+      const w = nativeWindow(s), t = s.tabs.find((t) => t.id === w?.selectedTabId);
+      return w?.tabIds.length === value.tabs && t?.id === value.active && t.url === (value.url === "" ? null : value.url) && t.find.open === value.find;
+    });
+    const w = nativeWindow(s), t = s.tabs.find((t) => t.id === w.selectedTabId);
+    assert.deepEqual({ tabs: w.tabIds.length, active: t.id, url: t.url, find: t.find.open }, { ...value, url: value.url === "" ? null : value.url });
+    return value;
+  };
   const before = await findState();
   await postKeys([keyPress("f", 3), ...[..."hello"].map((c) => keyPress(c, 0, 30, []))]);
   await sleep(800);
@@ -709,7 +841,10 @@ for (const where of ["the find field", "the page"]) {
   await sleep(800);
   const after = await ac(`const s = ac.store.getState(), w = s.windows.w1, a = w.activeTabIds[w.profileId]; return { active: a, find: !!s.find[a]?.open };`);
   check("Esc closes only the find bar", after.active === "t3" && !after.find, JSON.stringify(after));
+  const native = await untilSnapshot("native Escape closes find", (s) => nativeWindow(s)?.selectedTabId === after.active && s.tabs.find((t) => t.id === after.active)?.find.open === after.find);
+  assert.equal(native.tabs.find((t) => t.id === after.active).find.open, after.find);
 }
+await fullShortcutSnapshotFits("after the presses");
 await press(cmd("q", 12), { focus: "window", wait: 0 });
 let quit = false;
 for (let i = 0; i < 150 && !quit; i++) {

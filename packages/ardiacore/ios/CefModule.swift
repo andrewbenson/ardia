@@ -516,6 +516,25 @@ public enum SavedLoginRead {
 #if SOLARA_PROBES
 @MainActor
 public enum WindowAccessibilityRead {
+  public static func shortcutFields(windowNumber: Int) -> [[String: Any]] {
+    guard let window = NSApp.window(withWindowNumber: windowNumber), let root = window.contentView else { return [] }
+    var result: [[String: Any]] = []
+    var visited = 0
+    func walk(_ view: NSView, depth: Int) {
+      guard depth <= 40, visited < 2048, result.count < 64 else { return }
+      visited += 1
+      guard !view.isHiddenOrHasHiddenAncestor, !NSStringFromClass(type(of: view)).contains("RenderWidgetHostView"), !(view is NSSecureTextField), !NSStringFromClass(type(of: view)).contains("Secure") else { return }
+      if let role = view.accessibilityRole(), [NSAccessibility.Role.textField, .textArea].contains(role) {
+        let label = String((view.accessibilityLabel() ?? "").prefix(512))
+        let value = (view as? NSTextField)?.stringValue ?? view.accessibilityValue() as? String ?? ""
+        result.append(["role": role.rawValue, "label": label, "value": String(value.prefix(512))])
+      }
+      for child in view.subviews { walk(child, depth: depth + 1) }
+    }
+    walk(root, depth: 0)
+    return result
+  }
+
   public static func textFieldCount(windowNumber: Int) -> Int? {
     guard let window = NSApp.window(withWindowNumber: windowNumber),
       let listing = ACChromeWindowHost.devAction("ax", window: window) else { return nil }

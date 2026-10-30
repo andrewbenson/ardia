@@ -164,7 +164,12 @@ public class AppModule: Module {
       ]
       var postedAt: [Double] = []
       func post(_ index: Int) {
-        guard index < presses.count else { return promise.resolve(postedAt) }
+        guard index < presses.count else {
+          #if SOLARA_PROBES
+          KeyEquivalents.probePostTimes[windowId] = postedAt
+          #endif
+          return promise.resolve(postedAt)
+        }
         let press = presses[index]
         let after = press["after"] as? Int ?? 0
         let send = {
@@ -619,6 +624,11 @@ enum KeyEquivalents {
   private static let modifierNames: [String: NSEvent.ModifierFlags] = [
     "command": .command, "shift": .shift, "option": .option, "control": .control, "function": .function,
   ]
+  #if SOLARA_PROBES
+  static var probePresses: [String: [String: Any]] = [:]
+  static var probeLateBounces: [String] = []
+  static var probePostTimes: [String: [Double]] = [:]
+  #endif
   private static var fired: [[String: Any]] = []
   private static var matched: [[String: Any]] = []
   private static var watching = false
@@ -632,6 +642,9 @@ enum KeyEquivalents {
   private static let lateDryKept = 30.0
 
   static func drainLateBounces() -> [String] {
+    #if SOLARA_PROBES
+    probeLateBounces = lateBounces
+    #endif
     defer { lateBounces = [] }
     return lateBounces
   }
@@ -733,6 +746,9 @@ enum KeyEquivalents {
       result["fired"] = fired
       result["matched"] = matched
       note("resolved")
+      #if SOLARA_PROBES
+      probePresses[windowId] = result
+      #endif
       done(result)
     }
   }
@@ -938,6 +954,43 @@ public enum HoverStatsRead {
   private static func values(_ source: [String: Any]) -> [String: Any] {
     let log = Array((source["log"] as? [[Any]] ?? []).prefix(512))
     return ["passes": source["passes"] ?? 0, "registered": source["registered"] ?? 0, "log": log]
+  }
+}
+#endif
+
+#if SOLARA_PROBES
+@MainActor
+public enum ShortcutRead {
+  public static func table(titles: [String]) -> [[String: Any]] {
+    var items: [[String: Any]] = []
+    var visited = 0
+    func walk(_ menu: NSMenu, depth: Int) {
+      guard depth < 12, items.count < 16, visited < 2048 else { return }
+      for item in menu.items {
+        guard visited < 2048 else { return }
+        visited += 1
+        if let child = item.submenu, child !== NSApp.servicesMenu { walk(child, depth: depth + 1) }
+        guard !item.keyEquivalent.isEmpty, items.count < 16,
+          titles.contains(where: { item.title.hasPrefix($0) }) else { continue }
+        var entry: [String: Any] = ["title": String(item.title.prefix(512)), "key": String(item.keyEquivalent.prefix(8))]
+        if let command = item as? CommandItem {
+          entry["command"] = command.command
+          if let arg = command.arg { entry["arg"] = arg }
+        }
+        items.append(entry)
+      }
+    }
+    if let menu = NSApp.mainMenu { walk(menu, depth: 0) }
+    return items
+  }
+
+  public static func snapshot(windowId: String, focusTrace: Bool) -> [String: Any] {
+    var result: [String: Any] = ["lateBounces": KeyEquivalents.probeLateBounces,
+      "postTimes": KeyEquivalents.probePostTimes[windowId] ?? []]
+    if let press = KeyEquivalents.probePresses[windowId] { result["press"] = press }
+    else { result["press"] = NSNull() }
+    if focusTrace { result["focusTrace"] = FocusHandoff.shared.trace }
+    return result
   }
 }
 #endif

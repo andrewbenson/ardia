@@ -121,6 +121,8 @@ final class ProbeHost {
   }
 
   private func reply(_ response: [String: Any], id: String) {
+    let response: [String: Any] = JSONSerialization.isValidJSONObject(response) ? response :
+      ["id": id, "protocol": 1, "error": ["code": ProbeFailure.invalidEnvelope.code]]
     let encoded = try? JSONSerialization.data(withJSONObject: response)
     let output = encoded.flatMap { $0.count <= 65_536 ? $0 : try? JSONSerialization.data(withJSONObject:
       ["id": id, "protocol": 1, "error": ["code": ProbeFailure.oversized.code]]) }
@@ -232,8 +234,27 @@ final class ProbeHost {
 
   private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
     try checkSnapshot(request)
-    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin", "hoverPresentation", "hoverArea", "textFields"]),
+    guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin", "hoverPresentation", "hoverArea", "textFields", "shortcuts", "shortcutTable", "shortcutTrace", "fields"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
+    if let fields = request.args["fields"] {
+      guard let fields = fields as? [String], fields.count <= 128,
+        fields.allSatisfy({ field in
+          let parts = field.split(separator: ".", omittingEmptySubsequences: false)
+          return field.utf8.count <= 80 && parts.count == 2 && ["root", "windows", "tabs"].contains(String(parts[0])) &&
+            !parts[1].isEmpty && parts[1].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) &&
+            !(parts[0] == "root" && ["windows", "tabs"].contains(String(parts[1])))
+        }) else { throw ProbeFailure.invalidArgument }
+    }
+    if let titles = request.args["shortcutTable"] {
+      guard let titles = titles as? [String], titles.count <= 16,
+        titles.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 512 }) else { throw ProbeFailure.invalidArgument }
+    }
+    if let trace = request.args["shortcutTrace"] {
+      guard let trace = trace as? NSNumber, CFGetTypeID(trace) == CFBooleanGetTypeID() else { throw ProbeFailure.invalidArgument }
+    }
+    if let shortcuts = request.args["shortcuts"] {
+      guard let shortcuts = shortcuts as? NSNumber, CFGetTypeID(shortcuts) == CFBooleanGetTypeID() else { throw ProbeFailure.invalidArgument }
+    }
     if let textFields = request.args["textFields"] {
       guard let textFields = textFields as? NSNumber, CFGetTypeID(textFields) == CFBooleanGetTypeID() else { throw ProbeFailure.invalidArgument }
     }
@@ -274,6 +295,9 @@ final class ProbeHost {
   }
 
   private func snapshot(_ request: ProbeRequest, savedLogin: [String: Any]?) throws -> [String: Any] {
+    let shortcuts = request.args["shortcuts"] as? Bool ?? false
+    let shortcutTitles = request.args["shortcutTable"] as? [String]
+    let shortcutTrace = request.args["shortcutTrace"] as? Bool ?? false
     let textFields = request.args["textFields"] as? Bool ?? false
     let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
     let viewFrames = request.args["viewFrames"] as? [String] ?? []
@@ -326,7 +350,7 @@ final class ProbeHost {
         let omnibox = OmniboxRead.bar(windowId: id).map { source -> [String: Any] in
           let items = source["items"] as? [[String: Any]] ?? []
           var rows: [[String: Any]] = []
-          for item in items.prefix(64) {
+          for item in items.prefix(shortcuts ? 0 : 64) {
             let title = (item["title"] as? String).map { String($0.prefix(512)) }
             rows.append(["kind": Self.value(item["kind"] as? String),
               "url": safeURL(item["url"] as? String ?? ""), "title": Self.value(title),
@@ -334,7 +358,7 @@ final class ProbeHost {
           }
           return ["variant": Self.value(source["variant"] as? String), "source": Self.value(source["source"] as? String),
             "open": Self.value(source["mounted"] as? Bool), "focused": Self.value(source["focused"] as? Bool),
-            "typed": omniboxText(source["typed"] as? String),
+            "typed": omniboxText(source["typed"] as? String), "value": omniboxText(source["value"] as? String),
             "completion": omniboxText(source["completion"] as? String),
             "selectedIndex": Self.value(source["selected"] as? Int), "rows": rows]
         }
@@ -360,6 +384,13 @@ final class ProbeHost {
         }
         let hitSlot = hitPoint.flatMap { WindowShellRead.hitSlot(windowId: id, x: $0[0], y: $0[1]) }
         let hitView = hitPoint.flatMap { WindowShellRead.hitView(windowId: id, x: $0[0], y: $0[1]) }
+        var shortcutFields: [[String: Any]] = []
+        if shortcuts, let chromeNumber {
+          for field in WindowAccessibilityRead.shortcutFields(windowNumber: chromeNumber) {
+            shortcutFields.append(["role": field["role"] ?? NSNull(), "label": field["label"] ?? NSNull(),
+              "value": omniboxText(field["value"] as? String)])
+          }
+        }
         let responder = (chromeWindow ?? window)?.firstResponder.map { NSStringFromClass(type(of: $0)) }
         let textFieldCount = textFields ? chromeNumber.flatMap { WindowAccessibilityRead.textFieldCount(windowNumber: $0) } : nil
         return ["id": id, "kind": model.fields.kind ?? "browser", "profileId": model.profileId,
@@ -384,6 +415,10 @@ final class ProbeHost {
           "reactBlockers": Self.value(blockerStep.flatMap { WindowShellRead.reactBlockers(windowId: id, step: $0) }),
           "dropTargets": dropSamples, "viewFrames": frames, "hitSlot": Self.value(hitSlot), "hitView": Self.value(hitView),
           "firstResponder": Self.value(responder),
+          "shortcuts": shortcuts || shortcutTrace ? ShortcutRead.snapshot(windowId: id, focusTrace: shortcutTrace) as Any : NSNull(),
+          "shortcutTable": shortcutTitles.map { ShortcutRead.table(titles: $0) } ?? [], "shortcutFields": shortcutFields,
+          "panelOpen": state.windowUi[id]?.panelOpen ?? false, "sidebarOpen": model.sidebarOpen,
+          "activeTabIds": Dictionary(uniqueKeysWithValues: model.activeTabIds.map { ($0.key, $0.value) }),
           "textFieldCount": Self.value(textFieldCount),
           "media": media, "mediaEnabled": MediaRead.enabled, "mediaKinds": MediaRead.kinds,
           "paneOverlays": Self.value(PaneOverlayRead.snapshot(windowId: id)),
@@ -391,7 +426,7 @@ final class ProbeHost {
           "contentFrame": Self.value(window?.contentView.map { Self.rectFromWindow($0.bounds) }),
           "chromeWindowNumber": Self.value(chromeNumber),
           "selectedTabId": Self.value(model.activeTabIds[model.profileId]),
-          "selectedTabIds": NSNull(), "activeTabIds": NSNull(), "tabIds": model.tabIds,
+          "selectedTabIds": NSNull(), "tabIds": model.tabIds,
           "spaces": NSNull(), "panes": NSNull(), "focus": NSNull(), "focusedURL": Self.value(focusedURL),
           "omnibox": Self.value(omnibox), "overlays": overlays,
           "views": NSNull()]
@@ -410,7 +445,9 @@ final class ProbeHost {
           "customTitle": Self.value(tab.customTitle.map { String($0.prefix(512)) }),
           "customIcon": Self.value(tab.customIcon),
           "pinned": tab.pinned, "pinnedAsRow": tab.pinnedAsRow ?? false, "loading": NSNull(), "live": Self.value(TabPoolRead.live(id)),
-          "visible": NSNull(), "zoom": tab.zoom]
+          "visible": NSNull(), "zoom": tab.zoom,
+          "find": ["open": state.find[id]?.json["open"]?.truthy ?? false,
+            "query": String((state.find[id]?.json["query"]?.string ?? "").prefix(512))]]
       }
       let upscaling = VideoUpscalingRead.snapshot()
       let upscalingTabs: [[String: Any]] = (upscaling["tabs"] as? [[String: Any]] ?? []).map { entry in
@@ -439,7 +476,7 @@ final class ProbeHost {
         let haptics: [String: Any] = ["performed": swipePerformed + shellPerformed, "suppressed": swipeSuppressed + shellSuppressed,
           "swipe": swipeHaptics, "shell": shellHaptics]
         try checkSnapshot(request)
-        return ["id": request.id, "protocol": 1, "result": ["schema": 1,
+        let result: [String: Any] = ["schema": 1,
           "storeRevision": initial.rev, "endRevision": final.rev, "capturedAtNs": DispatchTime.now().uptimeNanoseconds,
           "consistent": final.rev == initial.rev,
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
@@ -449,12 +486,36 @@ final class ProbeHost {
           "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "hoverStats": HoverStatsRead.snapshot(), "hoverStatsLive": HoverStatsRead.current(),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.omnibox", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds", "windows.hoverPresentation", "windows.hoverPresentationTrace", "windows.hoverLayout", "tabs.pinned", "tabs.pinnedAsRow", "windows.shellHover", "hoverStats", "hoverStatsLive", "windows.toolbarHosts"],
-            "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.loading", "tabs.visible", "profiles"]]]]
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.omnibox", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search", "windows.toolbarStates", "hostedKinds", "windows.hoverPresentation", "windows.hoverPresentationTrace", "windows.hoverLayout", "tabs.pinned", "tabs.pinnedAsRow", "windows.shellHover", "hoverStats", "hoverStatsLive", "windows.toolbarHosts", "windows.shortcuts", "windows.shortcutTable", "windows.shortcuts.focusTrace", "snapshot.fields", "windows.shortcutFields", "windows.omnibox.value", "windows.panelOpen", "windows.sidebarOpen", "windows.activeTabIds", "tabs.find"],
+            "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.loading", "tabs.visible", "profiles"]]]
+        return ["id": request.id, "protocol": 1, "result": Self.project(result, fields: request.args["fields"] as? [String])]
       }
       initial = final
     }
     throw ProbeFailure.timeout
+  }
+
+  private static func project(_ source: [String: Any], fields: [String]?) -> [String: Any] {
+    guard let fields else { return source }
+    let wanted = Set(fields)
+    let metadata: Set<String> = ["schema", "storeRevision", "endRevision", "capturedAtNs", "consistent", "coordinateSpace", "capabilities"]
+    var result: [String: Any] = [:]
+    for (key, value) in source where metadata.contains(key) || wanted.contains("root." + key) {
+      result[key] = value
+    }
+    for area in ["windows", "tabs"] {
+      guard fields.contains(where: { $0.hasPrefix(area + ".") }) else { continue }
+      var rows: [[String: Any]] = []
+      for sourceRow in source[area] as? [[String: Any]] ?? [] {
+        var row: [String: Any] = [:]
+        for (key, value) in sourceRow where key == "id" || wanted.contains(area + "." + key) {
+          row[key] = value
+        }
+        rows.append(row)
+      }
+      result[area] = rows
+    }
+    return result
   }
 
   private static func popover(_ source: [String: Any], kind: String, tabId: String) -> [String: Any] {

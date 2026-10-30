@@ -1,7 +1,7 @@
 import { NativeModules } from "react-native";
 import { readDocument } from "@ardia/shell";
 import { useBrowser, type BrowserState } from "../store/browser";
-import { activeTabId } from "../store/model";
+import { activeTabId, findLast } from "../store/model";
 import { perfProbeEnabled } from "./perfProbe";
 
 type NativeTiming = {
@@ -16,7 +16,10 @@ const native = NativeModules.ACFieldTiming as NativeTiming | undefined;
 const samples = new Map<string, number[]>();
 const counts = new Map<string, number>();
 const marks = new Map<string, [string, number][]>();
-const pending: ({ journey: "j2"; key: string; t0: number; heard: number; bar?: number; barSettled?: boolean; keyAt?: number; suggested?: number } | { journey: "j4"; key: string; t0: number; until?: number })[] = [];
+const pending: ({ journey: "j2"; key: string; t0: number; heard: number; bar?: number; barSettled?: boolean; keyAt?: number; suggested?: number; query?: string; generation?: string } | { journey: "j4"; key: string; t0: number; until?: number })[] = [];
+type QuerySample = { tabId: string; query: string; generation: string; keyAt: number; committedAt?: number; shownAt?: number; invalidated?: boolean };
+const queries: QuerySample[] = [];
+const queryLatencies: { query: string; generation: string; ms: number }[] = [];
 const panelMarks: [string, number][] = [];
 const probedLatency: number[] = [];
 let started = false;
@@ -42,6 +45,9 @@ function pullMarks(now: number) {
     let list = marks.get(key);
     if (!list) marks.set(key, (list = []));
     list.push([kind, at]);
+  }
+  for (const query of queries) {
+    if (!query.invalidated && query.committedAt !== undefined) query.shownAt = mark(`omnibox:${query.tabId}:${query.generation}`, "suggestFrame", query.keyAt) ?? undefined;
   }
   for (const [key, list] of marks) {
     const fresh = list.filter(([, at]) => now - at < 120_000);
@@ -95,7 +101,9 @@ function tick() {
           }
         }
         if (p.barSettled && p.suggested !== undefined) {
-          const shown = mark(p.key, "suggest", p.suggested);
+          const shown = p.generation === undefined
+            ? mark(p.key, "suggest", p.suggested)
+            : mark(`omnibox:${p.key}:${p.generation}`, "suggestFrame", p.keyAt ?? p.suggested);
           if (shown !== null || now - p.suggested >= 5000) {
             sample("j2_suggest", shown === null || p.keyAt === undefined ? null : shown - p.keyAt);
             done = true;
@@ -146,17 +154,44 @@ export function journeyBarFocused(tabId: string) {
   const p = newTabFor(tabId);
   if (p?.journey === "j2" && p.bar !== undefined) native?.markFrame(tabId, "typeable");
 }
-export function journeyKeystroke(tabId: string) {
+export function journeyKeystroke(tabId: string, query?: string, generation?: string) {
   if (!started) return;
   const p = newTabFor(tabId);
-  if (p?.journey === "j2" && p.bar !== undefined && p.keyAt === undefined) p.keyAt = lastInput() ?? Date.now();
+  const keyAt = lastInput() ?? Date.now();
+  if (query !== undefined && generation !== undefined) {
+    if (queries.length >= 500) queries.shift();
+    queries.push({ tabId, query, generation, keyAt });
+    if (p?.journey === "j2" && p.bar !== undefined) {
+      p.keyAt = keyAt;
+      p.query = query;
+      p.generation = generation;
+      p.suggested = undefined;
+    }
+  } else if (p?.journey === "j2" && p.bar !== undefined && p.keyAt === undefined) p.keyAt = keyAt;
 }
-export function journeySuggestions(tabId: string) {
+export function journeySuggestions(tabId: string, query?: string, generation?: string, at?: number) {
   if (!started) return;
   const p = newTabFor(tabId);
-  if (p?.journey !== "j2" || p.keyAt === undefined || p.suggested !== undefined) return;
+  if (query !== undefined && generation !== undefined) {
+    const sample = findLast(queries, (q) => q.tabId === tabId);
+    if (!sample || sample.invalidated || sample.query !== query || sample.generation !== generation || sample.committedAt !== undefined || !Number.isFinite(at)) return;
+    sample.committedAt = at;
+    if (p?.journey === "j2" && p.query === query && p.generation === generation) p.suggested = at;
+    return;
+  }
+  if (p?.journey !== "j2" || p.keyAt === undefined || p.suggested !== undefined || p.generation !== undefined) return;
   p.suggested = Date.now();
   native?.markFrame(tabId, "suggest");
+}
+export function journeyQueryInvalidated(tabId: string, generation?: string) {
+  if (!started || generation === undefined) return;
+  const query = findLast(queries, (q) => q.tabId === tabId && q.generation === generation);
+  if (query) {
+    query.invalidated = true;
+    query.shownAt = undefined;
+  }
+  const p = newTabFor(tabId);
+  if (p?.journey === "j2" && p.generation === generation) p.suggested = undefined;
 }
 export function journeyNavigate(tabId: string) {
   if (!started) return;
@@ -171,7 +206,11 @@ export function markPanelFrame(kind: "dispatch" | "mount" | "growStart" | "growE
   if (kind === "mount") native?.markFrame("panel", kind);
 }
 export const panelFrameMarks = () => panelMarks.splice(0);
-export function sampleOmniboxLatency(ms: number) {
+export function sampleOmniboxLatency(ms: number, query?: string, generation?: string) {
+  if (started && query !== undefined && generation !== undefined) {
+    if (queryLatencies.length < 500) queryLatencies.push({ query, generation, ms });
+    return;
+  }
   if (perfProbeEnabled && probedLatency.length < 10_000) probedLatency.push(ms);
 }
-export const devJourneys = () => ({ on: started, native: !!native, pending: pending.map((p) => ({ ...p })), samples: Object.fromEntries(samples), counts: Object.fromEntries(counts), marks: Object.fromEntries(marks) });
+export const devJourneys = () => ({ on: started, native: !!native, pending: pending.map((p) => ({ ...p })), samples: Object.fromEntries(samples), counts: Object.fromEntries(counts), marks: Object.fromEntries(marks), queries: queries.map((q) => ({ ...q })), queryLatencies: queryLatencies.map((q) => ({ ...q })) });

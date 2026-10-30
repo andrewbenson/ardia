@@ -76,6 +76,17 @@ final class NativeNewTabView: ExpoView {
     e.contextMenu = { [weak self] hasSelection, hasValue in self?.onContextMenu(["hasSelection": hasSelection, "hasValue": hasValue]) }
     e.journey = { [weak self] mark in self?.onJourney(["mark": mark.rawValue]) }
     e.latency = { [weak self] ms in self?.onLatency(["ms": ms]) }
+    if FieldTimingMarks.queryProbeEnabled {
+      let journey = e.journey
+      e.journey = { mark in if mark != .keystroke && mark != .suggestions { journey(mark) } }
+      e.latency = { _ in }
+      e.queryJourney = { [weak self] mark, tabId, query, generation, ms in
+        guard let self else { return }
+        if mark == .keystroke { FieldTimingMarks.atPresent("omnibox:\(tabId):\(generation)", "suggest") }
+        self.onJourney(["mark": mark.rawValue, "tabId": tabId, "query": query, "generation": generation, "at": Date().timeIntervalSince1970 * 1000])
+        if let ms { self.onLatency(["ms": ms, "query": query, "generation": generation]) }
+      }
+    }
     e.keyShown = { [weak self] in
       guard let self else { return }
       FieldTimingMarks.atPresent("bar:\(self.windowId)", "keyShown")

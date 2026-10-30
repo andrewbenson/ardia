@@ -23,7 +23,7 @@ public enum BarDismissal: String, Sendable {
 }
 
 public enum HeroJourney: String, Sendable {
-  case committed, focused, keystroke, suggestions, navigate
+  case committed, focused, keystroke, suggestions, navigate, queryInvalidated
 }
 
 public enum HeroMenuChoice: String, Sendable {
@@ -43,6 +43,8 @@ public struct HeroBarEvents {
   public var contextMenu: (_ hasSelection: Bool, _ hasValue: Bool) -> Void = { _, _ in }
   public var journey: (HeroJourney) -> Void = { _ in }
   public var latency: (Double) -> Void = { _ in }
+  public var queryJourney: ((HeroJourney, String, String, String, Double?) -> Void)?
+  public var queryCommit: ((@escaping @MainActor () -> Void) -> Void)?
   public var keyShown: () -> Void = {}
   public var changed: () -> Void = {}
   public var done: (BarDismissal?) -> Void = { _ in }
@@ -131,6 +133,8 @@ public final class HeroBarModel {
   @ObservationIgnored private var remote: (text: String, list: [String]) = ("", [])
   @ObservationIgnored private var fetching: String?
   @ObservationIgnored private var keyAt: ContinuousClock.Instant?
+  @ObservationIgnored private var queryEpoch: String?
+  @ObservationIgnored private var queryGeneration = 0
   @ObservationIgnored private var sourcesSeen = -1
   @ObservationIgnored private var tabScopeCache: (key: String, scope: SearchScope?)?
   @ObservationIgnored private var changeAnnounced = false
@@ -218,6 +222,7 @@ public final class HeroBarModel {
   }
 
   public func save() {
+    invalidateQueryProbe()
     guard hero else { return }
     if !typed.isEmpty || scope != nil { HeroBarModel.saved[tabId] = snapshot() } else { HeroBarModel.saved[tabId] = nil }
   }
@@ -250,6 +255,7 @@ public final class HeroBarModel {
   }
 
   public func didBlur() {
+    invalidateQueryProbe()
     editing = false
     if !hero { events.cancel() }
   }
@@ -295,6 +301,7 @@ public final class HeroBarModel {
       if scope != nil {
         leaveScope(nil)
       } else if !hero {
+        invalidateQueryProbe()
         events.done(.escape)
       } else if !shown.isEmpty {
         suppressCompletion = true
@@ -431,6 +438,7 @@ public final class HeroBarModel {
   }
 
   func dismiss() {
+    invalidateQueryProbe()
     if hero { reset() } else { events.done(nil) }
   }
 
@@ -442,6 +450,7 @@ public final class HeroBarModel {
   }
 
   func choose(_ s: SolaraOmnibox.Suggestion?, _ disposition: Disposition, byEnter: Bool) {
+    invalidateQueryProbe()
     if s != nil || scope == nil { events.chosen(s) }
     let typedSearch: Bool = {
       guard let s else { return true }
@@ -568,14 +577,41 @@ public final class HeroBarModel {
     if let keyAt {
       self.keyAt = nil
       events.keyShown()
-      HeroBarModel.afterNextCommit { [events] in
-        let elapsed = ContinuousClock.now - keyAt
-        events.latency(Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15)
+      if events.queryJourney != nil {
+        publishQueryProbe(keyAt)
+      } else {
+        HeroBarModel.afterNextCommit { [events] in
+          let elapsed = ContinuousClock.now - keyAt
+          events.latency(Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15)
+        }
       }
     }
   }
 
+  public func invalidateQueryProbe() {
+    guard let journey = events.queryJourney else { return }
+    if let queryEpoch { journey(.queryInvalidated, tabId, typed, "\(queryEpoch):\(queryGeneration)", nil) }
+    queryGeneration += 1
+  }
+
+  private func publishQueryProbe(_ keyAt: ContinuousClock.Instant) {
+    guard let journey = events.queryJourney else { return }
+    if queryEpoch == nil { queryEpoch = UUID().uuidString }
+    let generation = queryGeneration
+    let identity = "\(queryEpoch!):\(generation)"
+    let query = typed
+    journey(.keystroke, tabId, query, identity, nil)
+    guard !items.isEmpty else { return }
+    let committed: @MainActor () -> Void = { [weak self] in
+      guard let self, self.queryGeneration == generation, self.typed == query else { return }
+      let elapsed = ContinuousClock.now - keyAt
+      journey(.suggestions, self.tabId, query, identity, Double(elapsed.components.seconds) * 1000 + Double(elapsed.components.attoseconds) / 1e15)
+    }
+    if let schedule = events.queryCommit { schedule(committed) } else { HeroBarModel.afterNextCommit(committed) }
+  }
+
   private func recompute() {
+    invalidateQueryProbe()
     sourcesSeen = sources.revision
     let query = jsTrim(typed)
     requestRemote(query)

@@ -118,6 +118,19 @@ public final class NewTabSources {
 
   func bookmarks(_ profileId: String) -> [BookmarkRow] { profiles[profileId]?.bookmarks ?? [] }
 
+  public func omniboxBenchSnapshot(profileId: String) -> [String: Any] {
+    guard let profile = profiles[profileId] else { return ["sourceMode": "unpublished"] }
+    return [
+      "sourceMode": "js-feed",
+      "engineProfile": profile.engineProfile.map { $0 as Any } ?? NSNull(),
+      "bookmarkEngineProfile": profile.bookmarkEngineProfile.map { $0 as Any } ?? NSNull(),
+      "tabs": profile.tabs.count,
+      "history": profile.history.count,
+      "bookmarks": profile.bookmarks.count,
+      "revision": revision,
+    ]
+  }
+
   public func setBookmarkIcons(_ icons: [String: String], engineProfile: String, profileId: String) {
     var profile = profiles[profileId] ?? Profile()
     profile.bookmarkIconsByEngine[engineProfile] = icons

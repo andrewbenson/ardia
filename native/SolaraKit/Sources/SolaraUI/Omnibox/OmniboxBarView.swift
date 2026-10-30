@@ -54,6 +54,7 @@ public final class OmniboxBarView: NSView {
 
   public func configure(_ next: OmniboxBarIdentity, fresh: Bool = false) {
     guard identity != next || fresh else { return }
+    model?.invalidateQueryProbe()
     identity = next
     let made = HeroBarModel(
       windowId: next.windowId, tabId: next.tabId, profileId: next.profileId, incognito: incognito,
@@ -78,6 +79,7 @@ public final class OmniboxBarView: NSView {
   }
 
   public override func viewWillMove(toWindow newWindow: NSWindow?) {
+    if newWindow == nil { model?.invalidateQueryProbe() }
     if newWindow == nil, let window, model?.field?.hasFocus == true {
       NotificationCenter.default.post(name: Notification.Name("SolaraBarRemovedWithFocus"), object: window)
     }

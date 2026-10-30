@@ -206,6 +206,55 @@ struct HeroBarModelTests {
     }
   }
 
+  @Test func queryProbeRejectsSupersededAndResetCommits() {
+    let (model, _, _) = make()
+    var commits: [@MainActor () -> Void] = []
+    var journeys: [(HeroJourney, String, String)] = []
+    model.events.queryCommit = { commits.append($0) }
+    model.events.queryJourney = { mark, _, query, generation, _ in journeys.append((mark, query, generation)) }
+    model.driverType("g")
+    model.driverType("gi")
+    let keys = journeys.filter { $0.0 == .keystroke }
+    #expect(keys.map { $0.1 } == ["g", "gi"])
+    #expect(keys[0].2 != keys[1].2)
+    #expect(journeys.contains { $0.0 == .queryInvalidated && $0.2 == keys[0].2 })
+    commits[0]()
+    #expect(!journeys.contains { $0.0 == .suggestions })
+    commits[1]()
+    #expect(journeys.last?.0 == .suggestions)
+    #expect(journeys.last?.1 == "gi")
+    #expect(journeys.last?.2 == keys[1].2)
+    model.driverType("git")
+    model.reset()
+    let count = journeys.count
+    commits[2]()
+    #expect(journeys.count == count)
+  }
+
+  @Test func queryProbeRejectsBlurAndDetachedModels() {
+    var commits: [@MainActor () -> Void] = []
+    var completed = 0
+    var first: HeroBarModel? = make().0
+    first!.events.queryCommit = { commits.append($0) }
+    first!.events.queryJourney = { mark, _, _, _, _ in if mark == .suggestions { completed += 1 } }
+    first!.driverType("g")
+    first!.didBlur()
+    commits[0]()
+    #expect(completed == 0)
+    first!.driverType("g")
+    first = nil
+    commits[1]()
+    #expect(completed == 0)
+  }
+
+  @Test func queryProbeHasNoUnprobedCommitWork() {
+    let (model, _, _) = make()
+    var scheduled = 0
+    model.events.queryCommit = { _ in scheduled += 1 }
+    model.driverType("g")
+    #expect(scheduled == 0)
+  }
+
   @Test func typingCompletesInlineAndSelectsTheCompletion() {
     let (model, field, log) = make()
     type(model, field, "git")
@@ -364,6 +413,21 @@ final class NewTabHistoryClient: EngineClient {
 
 @MainActor
 struct NewTabCatalogTests {
+  @Test func benchSnapshotDescribesOnlyPublishedSources() {
+    let sources = NewTabSources()
+    #expect(sources.omniboxBenchSnapshot(profileId: "default")["sourceMode"] as? String == "unpublished")
+    sources.setEngineProfile("", profileId: "default")
+    sources.setTabs([TabRow(id: "t", url: "https://example.com", title: "Example", favicon: nil)], profileId: "default")
+    sources.setHistory([HistoryRow(url: "https://example.com", title: "Example", favicon: nil, visits: 1, lastVisit: 10)], profileId: "default")
+    sources.setBookmarks([BookmarkRow(url: "https://example.com", title: "Example", favicon: nil)], profileId: "default")
+    let snapshot = sources.omniboxBenchSnapshot(profileId: "default")
+    #expect(snapshot["sourceMode"] as? String == "js-feed")
+    #expect(snapshot["engineProfile"] as? String == "")
+    #expect(snapshot["tabs"] as? Int == 1)
+    #expect(snapshot["history"] as? Int == 1)
+    #expect(snapshot["bookmarks"] as? Int == 1)
+  }
+
   @Test func profilesUseTheirEngineSnapshotsAndWaitForReadiness() async throws {
     let client = NewTabHistoryClient()
     client.rows[""] = [.init(url: "https://personal.example/", title: "Personal", visits: 3, visitTimes: [10, 20])]

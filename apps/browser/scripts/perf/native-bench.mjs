@@ -48,6 +48,7 @@
 //                               churn      leak check: open and close 10 tabs 5 times
 //                               sample     main-thread `sample`s, idle and while switching and scrolling
 //                               prepare    prepare the app copies and exit (see --prepared)
+//                               prepare-fixture migrate and verify a big fixture once, quit, save --fixture-out
 //     --candidate-env K=V     repeatable: extra environment for the candidate's instances only
 //     --control-env K=V       repeatable: extra environment for the control's instances only; with the same app as
 //                             --app and --control, this compares two switches of one build
@@ -64,10 +65,15 @@
 //     --frames-sample         frames: `sample` the app over the first repetition of each interaction (<out>/frames-sample/*.txt)
 //     --journey-n <n>         iterations of each journey per run in newtabkey and navigate (default 10)
 //     --page-port <n>         the test pages' server port (default: any free port)
-//     --seed big              launch, newtabkey and navigate phases: start every launch from seed.mjs's big saved session (200 tabs in two
+//     --seed big              launch, prepare-fixture, frames and memslope: start from seed.mjs's big saved session (200 tabs in two
 //                             profiles, 5000 history entries, 1000 bookmarks) instead of one tab, to time what a
 //                             long-time user's launch does. Its active tab is the bench's id=seed page, so the launch
 //                             rows mean the same; the other 199 tabs point at the bench server's /static?id=p-…
+//     --fixture-template <dir> clone a migrated big data template from --only prepare-fixture; requires its fixed
+//                             --page-port and explicit --source-mode (and --control-source-mode with --control).
+//     --fixture-out <dir>     --only prepare-fixture --seed big: migrate once, verify, quit, save a new template here.
+//     --source-mode <mode>    expected actual omnibox tab route: js-feed or native-store (candidate); not store ownership.
+//     --control-source-mode <mode> expected actual omnibox tab route for --control.
 //     --fresh-copy            launch phase only: every launch runs from its own APFS clone of the app (same signature,
 //                             a new path and inodes), removed after, as the first launch after an install or update
 //                             is. Without it only the first launch of a prepared copy is cold; the rest are warm.
@@ -138,11 +144,12 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { loadavg, tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { appEnv, freePort, listenerPids, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
+import { fixtureReady, querySample, validateFixtureManifest } from "./omnibox-gate.mjs";
 import { writeSwitches } from "./js-bench.mjs";
 import { frameRows, frameTable, framesLibrary, framesRun, stallTable } from "./frames-phase.mjs";
 
@@ -170,6 +177,10 @@ const { values: opt } = parseArgs({
     "candidate-env": { type: "string", multiple: true, default: [] },
     "control-env": { type: "string", multiple: true, default: [] },
     seed: { type: "string" },
+    "fixture-template": { type: "string" },
+    "fixture-out": { type: "string" },
+    "source-mode": { type: "string" },
+    "control-source-mode": { type: "string" },
     "fresh-copy": { type: "boolean" },
     "trace-startup": { type: "string" },
     "page-port": { type: "string", default: "0" },
@@ -570,13 +581,41 @@ function writeBigSeed(side) {
     if (t.pinnedUrl) t.pinnedUrl = t.url;
   }
   for (const [name, value] of Object.entries(files)) writeFileSync(join(dir, name), JSON.stringify(value));
+  const roots = files["bookmarks.json"].bookmarks.roots.default;
+  const nodes = files["bookmarks.json"].bookmarks.nodes;
+  const urls = new Set();
+  const walk = (id) => {
+    const node = nodes[id];
+    if (node.kind === "folder") node.children.forEach(walk);
+    else urls.add(node.url);
+  };
+  walk(roots.bar);
+  walk(roots.other);
+  if (opt["fixture-out"]) side.fixture = { version: 1, seed: "big", migrated: true, offline: true, origin: base(), tabs: 200,
+    source: { tabs: 158, bookmarks: urls.size },
+    catalogs: { "": { history: 5000, bookmarks: 900 }, work: { history: 800, bookmarks: 100 } } };
+  if (opt["fixture-out"]) writeFileSync(join(dir, "bench-offline"), "1");
   log(`seeded the big session (${side.label}): ${session.tabs.length} tabs, ${files["history.json"].history.default.length} history entries`);
 }
 
 async function makeTemplate(side) {
   const dir = side.template;
+  if (opt["fixture-template"]) {
+    const source = resolve(opt["fixture-template"]);
+    const nested = (a, b) => relative(a, b) === "" || (!relative(a, b).startsWith("../") && relative(a, b) !== "..");
+    if (nested(source, resolve(dir)) || nested(resolve(dir), source)) throw new Error("fixture input must be outside the benchmark template directory");
+  }
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  if (opt["fixture-template"]) {
+    const source = resolve(opt["fixture-template"]);
+    const manifest = validateFixtureManifest(JSON.parse(readFileSync(join(source, "fixture.json"), "utf8")), base());
+    assertMigrated(source);
+    execFileSync("cp", ["-Rc", `${source}/.`, dir]);
+    side.fixture = manifest;
+    side.results.meta.fixture = { path: source, ...manifest, sourceMode: side.sourceMode };
+    return;
+  }
   if (opt.seed) return writeBigSeed(side);
   log(`seeding a session (${side.label})`);
   writeFileSync(join(dir, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
@@ -594,6 +633,51 @@ async function makeTemplate(side) {
     await app.quit();
   }
   for (const f of ["bench-cmd.js", "bench-result.json", "bench-boot.json"]) rmSync(join(dir, f), { force: true });
+}
+
+function assertMigrated(dir) {
+  if (!existsSync(join(dir, "bench-offline"))) throw new Error(`missing offline omnibox marker in ${dir}`);
+  for (const name of ["history.json", "bookmarks.json"]) if (existsSync(join(dir, name))) throw new Error(`legacy ${name} remains in ${dir}; prepare a migrated fixture first`);
+}
+
+async function awaitFixture(app, side, extraTabs = 0) {
+  let snapshot;
+  for (const end = Date.now() + 60_000; Date.now() < end; ) {
+    snapshot = await app.run("return ac.omniboxFixture();");
+    if (fixtureReady(snapshot, side.fixture, side.sourceMode, extraTabs)) return snapshot;
+    await sleep(100);
+  }
+  throw new Error(`omnibox fixture not ready for ${side.sourceMode}: ${JSON.stringify(snapshot)}`);
+}
+
+async function prepareFixture(side) {
+  const app = new Instance(side, side.template);
+  try {
+    await app.launch();
+    if (!(await app.pageState("id=seed", 30_000, (state) => state.fcp))) throw new Error("fixture seed page never painted");
+    const warm = await app.run(`return ac.store.getState().newTab(${WINDOW});`);
+    await awaitFixture(app, side, 1);
+    await app.run(`ac.store.getState().closeTab(${JSON.stringify(warm)}); return true;`);
+    const snapshot = await awaitFixture(app, side);
+    for (const end = Date.now() + 60_000; Date.now() < end && ["history.json", "bookmarks.json"].some((name) => existsSync(join(side.template, name))); ) {
+      if (!app.alive()) throw new Error("fixture preparation instance died");
+      await sleep(100);
+    }
+    assertMigrated(side.template);
+    side.fixture.preparedSourceMode = side.sourceMode;
+    side.fixture.preparedSnapshot = snapshot;
+  } finally {
+    await app.quit();
+  }
+  for (const name of ["bench-cmd.js", "bench-result.json", "bench-boot.json", "bench-marks.jsonl", "bench-perf"]) rmSync(join(side.template, name), { force: true });
+  writeFileSync(join(side.template, "fixture.json"), JSON.stringify(side.fixture, null, 2));
+  const target = resolve(opt["fixture-out"]);
+  const child = relative(resolve(side.template), target);
+  if (child === "" || (!child.startsWith("../") && child !== "..")) throw new Error("fixture output must be outside the benchmark template directory");
+  if (existsSync(target)) throw new Error(`fixture output appeared during preparation: ${target}`);
+  mkdirSync(dirname(target), { recursive: true });
+  execFileSync("cp", ["-Rc", side.template, target]);
+  console.log(`migrated fixture ${target}; --fixture-template ${target} --page-port ${server.address().port}`);
 }
 
 function freshDir(side, name) {
@@ -764,7 +848,7 @@ async function postSeen(app, spec) {
 
 const journeyState = (app) => app.run(`const j = ac.journeys(); const s = ac.store.getState();
   return { on: j.on, native: j.native, pending: j.pending, samples: j.samples, counts: j.counts, marks: j.marks,
-    tabs: Object.keys(s.tabs).length, focused: s.ui.focusedWindowId };`);
+    queries: j.queries, tabs: Object.keys(s.tabs).length, focused: s.ui.focusedWindowId };`);
 
 async function waitFor(app, accept, timeout, every = 60) {
   for (const end = Date.now() + timeout; Date.now() < end; ) {
@@ -802,16 +886,17 @@ async function openNewTab(app) {
   return { press, bar };
 }
 
-async function newTabKey(app, i, k) {
+async function newTabKey(app, side, i, k) {
   const before = await journeyState(app);
   const { press, bar } = await openNewTab(app);
   const p = bar?.pending.filter((q) => q.journey === "j2" && q.bar !== undefined && q.t0 >= press.at - 5).at(-1);
   if (!p) return { lost: "no bar" };
   if (!(await waitFor(app, (st) => markOf(st, p.key, "typeable", press.at) >= 0, 5000, 150))) return { lost: "never typeable", tab: p.key };
+  if (side.fixture) await awaitFixture(app, side, 1);
   await sleep(150);
   const key = await postSeen(app, "text:n");
   if (!key) return { lost: "key never arrived", tab: p.key };
-  const done = await waitFor(app, (st) => sampled(st, "j2_suggest") > sampled(before, "j2_suggest"), 8000, 120);
+  const done = await waitFor(app, (st) => !!querySample(st, p.key, "n", key.at, before.queries), 8000, 120);
   const barKey = `bar:${await app.run(`return ${WINDOW};`)}`;
   const shown = done && (await waitFor(app, (st) => markOf(st, barKey, "keyShown", key.at) >= 0, 1500, 60));
   if (!done) {
@@ -820,18 +905,20 @@ async function newTabKey(app, i, k) {
     const d = (v) => (v === undefined ? "-" : Math.round(v - press.at));
     return { lost: `no suggestions (pending: ${q ? `bar ${d(q.bar)} keyAt ${d(q.keyAt)} suggested ${d(q.suggested)}` : "gone"}; typed at +${Math.round(key.at - press.at)} (seen by the app after ${Math.round(delivery(app, key.at))} ms); marks ${(now.marks[p.key] ?? []).map(([k]) => k).join()})`, tab: p.key };
   }
+  const correlated = querySample(done, p.key, "n", key.at, before.queries);
   const last = (step) => (sampled(done, step) > sampled(before, step) ? done.samples[step].at(-1) : NaN);
   return {
-    tab: p.key,
+    tab: p.key, query: correlated.query, generation: correlated.generation, keyAt: correlated.keyAt,
+    committedAt: correlated.committedAt, shownAt: correlated.shownAt,
     js: p.heard - press.at,
     commit: p.bar - press.at,
     shown: markOf(done, p.key, "bar", press.at) - press.at,
     typeable: markOf(done, p.key, "typeable", press.at) - press.at,
-    suggest: markOf(done, p.key, "suggest", key.at) - key.at,
+    suggest: correlated.shownAt - key.at,
     keyShown: shown ? markOf(shown, barKey, "keyShown", key.at) - key.at : NaN,
     keyFrame: shown ? markOf(shown, barKey, "keyShownFrame", key.at) - key.at : NaN,
     appTypeable: last("j2_typeable"),
-    appSuggest: last("j2_suggest"),
+    appSuggest: correlated.shownAt - correlated.keyAt,
     t0Skew: p.t0 - press.at,
     delivery: delivery(app, press.at),
     suggestDelivery: delivery(app, key.at),
@@ -903,15 +990,18 @@ async function journeyRun(side, i, parts) {
     await sleep(6000);
     const timing = await app.run(`const j = ac.journeys(); return { on: j.on, native: j.native };`);
     if (!timing.on || !timing.native) throw new Error(`perf timing is unavailable: ${JSON.stringify(timing)}`);
+    if (side.fixture) r.fixture = await awaitFixture(app, side);
     const closeTab = (tab) => tab && app.run(`ac.store.getState().closeTab(${JSON.stringify(tab)}); return true;`);
     if (parts.has("newtabkey")) {
       for (let k = 0; k < n; k++) {
-        const x = await newTabKey(app, i, k);
+        const x = await newTabKey(app, side, i, k);
         await note("j2", x, k);
         await sleep(1200);
         await closeTab(x.tab);
         await sleep(1000);
+        if (side.fixture) await awaitFixture(app, side);
       }
+      if (r.j2.length !== n) throw new Error(`J2 has ${r.j2.length}/${n} valid correlated samples: ${r.lost.j2.join("; ")}`);
       log(`${side.tag}journeys ${i} j2:`, JSON.stringify(r.j2.map((x) => Math.round(x.typeable))));
     }
     if (parts.has("navigate")) {
@@ -1197,7 +1287,7 @@ function summary(res) {
   const pooled = (name, get) => {
     const v = J.flatMap((r) => get(r)).filter(Number.isFinite).sort((a, b) => a - b);
     if (!v.length) return;
-    rows.push({ name, median: median(v), p75: v[Math.min(v.length - 1, Math.ceil(v.length * 0.75) - 1)], min: v[0], max: v.at(-1), n: v.length, unit: "ms", digits: 0 });
+    rows.push({ name, median: median(v), p75: v[Math.min(v.length - 1, Math.ceil(v.length * 0.75) - 1)], p95: v[Math.min(v.length - 1, Math.floor(v.length * 0.95))], p99: v[Math.min(v.length - 1, Math.floor(v.length * 0.99))], min: v[0], max: v.at(-1), n: v.length, unit: "ms", digits: 0 });
   };
   const of = (kind, field) => (r) => r[kind].map((x) => x[field]);
   pooled("J2 ⌘T key → JS has the new tab", of("j2", "js"));
@@ -1234,7 +1324,7 @@ function summary(res) {
 
 function printTable(rows, other, names = ["Before", "After"]) {
   const fmt = (r) =>
-    Number.isFinite(r?.median) ? `${r.median.toFixed(r.digits)} ${r.unit}${r.p75 === undefined ? "" : `, p75 ${r.p75.toFixed(r.digits)}`} (${r.min.toFixed(r.digits)}–${r.max.toFixed(r.digits)}, n=${r.n})` : "—";
+    Number.isFinite(r?.median) ? `${r.median.toFixed(r.digits)} ${r.unit}${r.p75 === undefined ? "" : `, p75 ${r.p75.toFixed(r.digits)}, p95 ${r.p95.toFixed(r.digits)}, p99 ${r.p99.toFixed(r.digits)}`} (${r.min.toFixed(r.digits)}–${r.max.toFixed(r.digits)}, n=${r.n})` : "—";
   const lines = other
     ? [`| Metric | ${names[0]} | ${names[1]} |`, "|---|---|---|", ...rows.map((r) => `| ${r.name} | ${fmt(other.find((o) => o.name === r.name))} | ${fmt(r)} |`)]
     : ["| Metric | Median (min–max, runs) |", "|---|---|", ...rows.map((r) => `| ${r.name} | ${fmt(r)} |`)];
@@ -1253,14 +1343,29 @@ const fail = (message) => {
 if (!opt.app) fail("usage: native-bench.mjs --app <Solara.app> [--control <app>] [--out dir] [--only phases] … (--help)");
 const JOURNEY_PHASES = ["newtabkey", "navigate"];
 const FRAME_PHASES = ["frames", "framecounts"];
-const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "memslope", "throttle", "churn", "sample", "prepare"];
+const PHASES = ["launch", "session", ...SESSION_PARTS, ...JOURNEY_PHASES, ...FRAME_PHASES, "windows", "memslope", "throttle", "churn", "sample", "prepare", "prepare-fixture"];
 const only = new Set(opt.only.split(",").map((p) => p.trim()).filter(Boolean));
 for (const p of only) if (!PHASES.includes(p)) fail(`--only: no phase "${p}"; phases: ${PHASES.join(", ")}`);
 if (only.has("frames") || only.has("framecounts")) opt.seed ??= "big";
 if (opt.seed && opt.seed !== "big") fail(`--seed: only "big" exists, got "${opt.seed}"`);
 if (opt["fresh-copy"] && ![...only].every((p) => p === "launch" || p === "prepare")) fail("--fresh-copy works with --only launch");
 if (opt["trace-startup"] && ![...only].every((p) => p === "launch")) fail("--trace-startup works with --only launch");
-if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || p === "memslope" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with --only launch, newtabkey, navigate, frames, framecounts and memslope (the other phases measure a one-tab session)");
+if (opt.seed && ![...only].every((p) => p === "launch" || p === "prepare" || p === "prepare-fixture" || p === "memslope" || JOURNEY_PHASES.includes(p) || FRAME_PHASES.includes(p))) fail("--seed big works with launch, prepare-fixture, frames, framecounts and memslope; journeys use --fixture-template");
+if (only.has("prepare-fixture") && (only.size !== 1 || opt.control || opt.seed !== "big" || !opt["fixture-out"] || opt["fixture-template"])) fail("prepare-fixture requires --only prepare-fixture --seed big --fixture-out <new dir>, without --control or --fixture-template");
+if (opt["fixture-out"] && (!only.has("prepare-fixture") || existsSync(resolve(opt["fixture-out"])))) fail("--fixture-out must be a new directory used with --only prepare-fixture");
+if (opt.seed && [...only].some((phase) => JOURNEY_PHASES.includes(phase))) fail("--seed big repeats legacy import; use --only prepare-fixture --fixture-out first, then --fixture-template for journeys");
+if (opt["fixture-template"] && (opt.seed || ![...only].every((phase) => JOURNEY_PHASES.includes(phase)))) fail("--fixture-template is for newtabkey,navigate; omit --seed");
+if (opt["fixture-template"] || only.has("prepare-fixture")) {
+  if (!Number.isInteger(+opt["page-port"]) || +opt["page-port"] < 1 || +opt["page-port"] > 65535) fail("migrated fixtures require a fixed integer --page-port in 1...65535");
+  for (const name of opt.control ? ["source-mode", "control-source-mode"] : ["source-mode"]) if (!["js-feed", "native-store"].includes(opt[name])) fail(`--${name} must explicitly name js-feed or native-store`);
+}
+if (only.has("newtabkey") || only.has("navigate")) {
+  for (const name of ["runs", "journey-n"]) if (!Number.isSafeInteger(+opt[name]) || +opt[name] < 1) fail(`--${name} requires a positive integer`);
+}
+if (only.has("newtabkey") || opt["fixture-template"] || only.has("prepare-fixture")) {
+  if ([...opt.env, ...opt["candidate-env"], ...opt["control-env"]].some((entry) => entry.startsWith("AC_BENCH_OMNIBOX=") && entry !== "AC_BENCH_OMNIBOX=1")) fail("correlated omnibox timing requires AC_BENCH_OMNIBOX=1");
+  opt.env.push("AC_BENCH_OMNIBOX=1");
+}
 if (!(+opt["mem-windows"] >= 1)) fail(`--mem-windows wants a count, got "${opt["mem-windows"]}"`);
 for (const e of [...opt.env, ...opt["candidate-env"], ...opt["control-env"]]) if (!/^[A-Za-z_]\w*=/.test(e)) fail(`--env wants K=V, got "${e}"`);
 if (!(+opt.hold >= 0)) fail(`--hold wants seconds, got "${opt.hold}"`);
@@ -1270,7 +1375,7 @@ const labelOf = (app) => basename(dirname(dirname(resolve(app))));
 function makeSide(app, label, role) {
   const dir = join(opt.out, label);
   mkdirSync(dir, { recursive: true });
-  return { role, label, tag: "", src: resolve(app), dir, template: join(dir, "template"), app: null, bundle: null,
+  return { role, label, sourceMode: role === "control" ? opt["control-source-mode"] : opt["source-mode"], tag: "", src: resolve(app), dir, template: join(dir, "template"), app: null, bundle: null,
     env: role === "control" ? opt["control-env"] : opt["candidate-env"],
     results: { meta: {}, launch: [], session: [], windows: [], memslope: [], journeys: [], frames: [], throttle: [], sample: [] } };
 }
@@ -1333,35 +1438,40 @@ try {
     process.exit(0);
   }
   for (const side of sides) await makeTemplate(side);
-  if (only.has("launch")) await interleaved(+opt["launch-runs"], launchRun);
-  const parts = new Set(SESSION_PARTS.filter((p) => only.has("session") || only.has(p)));
-  if (parts.size) await interleaved(+opt.runs, (side, i) => sessionRun(side, i, parts));
-  const framesCtx = { Instance, freshDir, acperf, sleep, log, WINDOW, base, opt, toolDir, loadavg, out: opt.out };
-  if (only.has("frames")) await interleaved(+opt.runs, (side, i) => framesRun(framesCtx, side, i, { counts: false }));
-  if (only.has("framecounts")) await interleaved(+opt.runs, (side, i) => framesRun(framesCtx, side, i, { counts: true }));
-  const journeys = new Set(JOURNEY_PHASES.filter((p) => only.has(p)));
-  if (journeys.size) await interleaved(+opt.runs, (side, i) => journeyRun(side, i, journeys));
-  if (only.has("windows")) await interleaved(+opt.runs, windowsRun);
-  if (only.has("memslope")) await interleaved(+opt.runs, memSlopeRun);
-  if (only.has("throttle")) await interleaved(1, throttleRun);
-  if (only.has("churn")) await interleaved(1, churnRun);
-  if (only.has("sample")) await interleaved(1, sampleRun);
-  for (const side of sides) writeFileSync(join(side.dir, "results.json"), JSON.stringify(side.results, null, 1));
-  const rows = summary(candidate.results);
-  if (control) printTable(rows, summary(control.results), [`${control.label} (control)`, candidate.label]);
-  else printTable(rows, opt.compare ? summary(JSON.parse(readFileSync(opt.compare, "utf8"))) : null);
-  for (const { results, tag } of sides) {
-    if (results.throttle.length) console.log(`\n${tag}Hidden tabs:`, JSON.stringify(results.throttle[0].tabs));
-    if (results.churn) console.log(`\n${tag}Browser process after each open/close-10-tabs round (MB):`, results.churn.map((r) => Math.round(r.browserMB)).join(" → "));
-    if (results.sample.length) console.log(`${tag}Main thread samples:`, JSON.stringify(results.sample[0]));
-  }
-  if (sides.some((x) => x.results.frames.length)) console.log(`\n${frameTable(Object.fromEntries(sides.map((x) => [x.label, x.results])))}`);
-  if (opt["frames-stalls"]) for (const side of sides) console.log(`\n${stallTable(side.results, `Run-loop iterations by length, ${side.label}:`)}`);
-  if (control) console.log(`\nresults: ${join(candidate.dir, "results.json")}, ${join(control.dir, "results.json")}`);
-  const failedRuns = sides.reduce((n, x) => n + (x.results.errors?.length ?? 0), 0);
-  if (failedRuns) {
-    console.error(`${failedRuns} run(s) failed (see "errors" in results.json); exiting 3`);
-    process.exitCode = 3;
+  if (only.has("prepare-fixture")) {
+    await prepareFixture(candidate);
+    process.exitCode = 0;
+  } else {
+    if (only.has("launch")) await interleaved(+opt["launch-runs"], launchRun);
+    const parts = new Set(SESSION_PARTS.filter((p) => only.has("session") || only.has(p)));
+    if (parts.size) await interleaved(+opt.runs, (side, i) => sessionRun(side, i, parts));
+    const framesCtx = { Instance, freshDir, acperf, sleep, log, WINDOW, base, opt, toolDir, loadavg, out: opt.out };
+    if (only.has("frames")) await interleaved(+opt.runs, (side, i) => framesRun(framesCtx, side, i, { counts: false }));
+    if (only.has("framecounts")) await interleaved(+opt.runs, (side, i) => framesRun(framesCtx, side, i, { counts: true }));
+    const journeys = new Set(JOURNEY_PHASES.filter((p) => only.has(p)));
+    if (journeys.size) await interleaved(+opt.runs, (side, i) => journeyRun(side, i, journeys));
+    if (only.has("windows")) await interleaved(+opt.runs, windowsRun);
+    if (only.has("memslope")) await interleaved(+opt.runs, memSlopeRun);
+    if (only.has("throttle")) await interleaved(1, throttleRun);
+    if (only.has("churn")) await interleaved(1, churnRun);
+    if (only.has("sample")) await interleaved(1, sampleRun);
+    for (const side of sides) writeFileSync(join(side.dir, "results.json"), JSON.stringify(side.results, null, 1));
+    const rows = summary(candidate.results);
+    if (control) printTable(rows, summary(control.results), [`${control.label} (control)`, candidate.label]);
+    else printTable(rows, opt.compare ? summary(JSON.parse(readFileSync(opt.compare, "utf8"))) : null);
+    for (const { results, tag } of sides) {
+      if (results.throttle.length) console.log(`\n${tag}Hidden tabs:`, JSON.stringify(results.throttle[0].tabs));
+      if (results.churn) console.log(`\n${tag}Browser process after each open/close-10-tabs round (MB):`, results.churn.map((r) => Math.round(r.browserMB)).join(" → "));
+      if (results.sample.length) console.log(`${tag}Main thread samples:`, JSON.stringify(results.sample[0]));
+    }
+    if (sides.some((x) => x.results.frames.length)) console.log(`\n${frameTable(Object.fromEntries(sides.map((x) => [x.label, x.results])))}`);
+    if (opt["frames-stalls"]) for (const side of sides) console.log(`\n${stallTable(side.results, `Run-loop iterations by length, ${side.label}:`)}`);
+    if (control) console.log(`\nresults: ${join(candidate.dir, "results.json")}, ${join(control.dir, "results.json")}`);
+    const failedRuns = sides.reduce((n, x) => n + (x.results.errors?.length ?? 0), 0);
+    if (failedRuns) {
+      console.error(`${failedRuns} run(s) failed (see "errors" in results.json); exiting 3`);
+      process.exitCode = 3;
+    }
   }
 } finally {
   await cleanup();

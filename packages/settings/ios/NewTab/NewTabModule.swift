@@ -14,6 +14,21 @@ public class NewTabModule: Module {
       NativeSettingsHandle.active
     }
 
+    AsyncFunction("benchFixture") { (profileId: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        guard ProcessInfo.processInfo.environment["AC_BENCH_OMNIBOX"] == "1",
+              ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1",
+              ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"]?.isEmpty == false else { reply.resolve([:]); return }
+        reply.resolve([
+          "source": NewTabSources.shared.omniboxBenchSnapshot(profileId: profileId),
+          "catalogs": Dictionary(uniqueKeysWithValues: ["", "work"].map { engine in
+            (engine, ["history": NativeHistoryCatalog.snapshot(engineProfile: engine), "bookmarks": NativeHistoryCatalog.bookmarksSnapshot(engineProfile: engine)])
+          }),
+        ])
+      }
+    }.runOnQueue(.main)
+
     AsyncFunction("setTabs") { (profileId: String, json: String) in
       let rows = NewTabRows.tabs(json)
       await MainActor.run { NewTabSources.shared.setTabs(rows, profileId: profileId) }

@@ -8,7 +8,7 @@ import { perfProbeEnabled } from "../../lib/perfProbe";
 import type { Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { activeTabId, bookmarkProfileId, engineProfile, viewTabIds } from "../../store/model";
-import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../lib/perfMarks";
+import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions, journeyQueryInvalidated } from "../../lib/perfMarks";
 import { sampleOmniboxLatency } from "../../lib/perfMarks";
 import { currentBarActions } from "./actions";
 import { profileBookmarks } from "./useSuggestions";
@@ -209,17 +209,18 @@ export function useNativeBar({
     onOpenChip: () => void openChip(),
     onDictate: () => startDictation(),
     onContextMenu: (e: Event<{ hasSelection: boolean; hasValue: boolean }>) => void contextMenu(e.nativeEvent.hasSelection, e.nativeEvent.hasValue),
-    onJourney: (e: Event<{ mark: string }>) => {
+    onJourney: (e: Event<{ mark: string; tabId?: string; query?: string; generation?: string; at?: number }>) => {
       const mark = e.nativeEvent.mark;
       if (mark === "committed") journeyBarCommitted(tabId);
       else if (mark === "focused") {
         claim();
         journeyBarFocused(tabId);
-      } else if (mark === "keystroke") journeyKeystroke(tabId);
-      else if (mark === "suggestions") journeySuggestions(tabId);
+      } else if (mark === "keystroke") journeyKeystroke(e.nativeEvent.tabId ?? tabId, e.nativeEvent.query, e.nativeEvent.generation);
+      else if (mark === "suggestions") journeySuggestions(e.nativeEvent.tabId ?? tabId, e.nativeEvent.query, e.nativeEvent.generation, e.nativeEvent.at);
       else if (mark === "navigate") journeyNavigate(tabId);
+      else if (mark === "queryInvalidated") journeyQueryInvalidated(e.nativeEvent.tabId ?? tabId, e.nativeEvent.generation);
     },
-    onLatency: (e: Event<{ ms: number }>) => sampleOmniboxLatency(e.nativeEvent.ms),
+    onLatency: (e: Event<{ ms: number; query?: string; generation?: string }>) => sampleOmniboxLatency(e.nativeEvent.ms, e.nativeEvent.query, e.nativeEvent.generation),
   };
   return { props, claim };
 }

@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from "expo-modules-core";
 import * as shell from "@ardia/shell";
 import { readDocument, writeDocument } from "@ardia/shell";
 import * as actions from "../../src/lib/actions";
@@ -19,6 +20,14 @@ const ac = {
   shell,
   now: () => Date.now(),
   journeys: devJourneys,
+  async omniboxFixture() {
+    const native = requireOptionalNativeModule("SolaraNewTab");
+    if (!native?.benchFixture) throw new Error("omnibox fixture probe unavailable; rebuild with the probe");
+    const s = useBrowser.getState();
+    const windowId = s.ui.focusedWindowId && s.windows[s.ui.focusedWindowId] ? s.ui.focusedWindowId : s.windowOrder.find((id) => s.windows[id] && !s.windows[id].kind);
+    const w = s.windows[windowId];
+    return { ...await native.benchFixture(w?.profileId ?? ""), tabs: Object.keys(s.tabs).length, profileId: w?.profileId };
+  },
   get preload() {
     return require("../../src/lib/preload");
   },

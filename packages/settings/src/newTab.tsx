@@ -3,7 +3,7 @@ import { forwardRef, type ComponentType, type Ref } from "react";
 import type { NativeSyntheticEvent, ViewProps } from "react-native";
 
 export type NewTabDisposition = "current" | "newTab" | "newWindow";
-export type NewTabJourneyMark = "committed" | "focused" | "keystroke" | "suggestions" | "navigate";
+export type NewTabJourneyMark = "committed" | "focused" | "keystroke" | "suggestions" | "navigate" | "queryInvalidated";
 export type NewTabMenuChoice = "cut" | "copy" | "paste" | "selectAll";
 export type NativeSuggestion = { kind: string } & Record<string, unknown>;
 
@@ -33,8 +33,8 @@ export type NativeNewTabProps = ViewProps & {
   onOpenChip?(e: Event<Record<string, never>>): void;
   onDictate?(e: Event<Record<string, never>>): void;
   onContextMenu?(e: Event<{ hasSelection: boolean; hasValue: boolean }>): void;
-  onJourney?(e: Event<{ mark: NewTabJourneyMark }>): void;
-  onLatency?(e: Event<{ ms: number }>): void;
+  onJourney?(e: Event<{ mark: NewTabJourneyMark; tabId?: string; query?: string; generation?: string; at?: number }>): void;
+  onLatency?(e: Event<{ ms: number; query?: string; generation?: string }>): void;
   onBarLayout?(e: Event<{ height: number; headingHeight: number }>): void;
 };
 

@@ -33,13 +33,15 @@ public struct TabViewWanted: Equatable, Sendable {
   public var shown: Shown
   public var warm: Bool
   public var frozen: Bool
+  public var identity: String
 
-  public init(tabId: String, windowId: String, shown: Shown, warm: Bool = false, frozen: Bool = false) {
+  public init(tabId: String, windowId: String, shown: Shown, warm: Bool = false, frozen: Bool = false, identity: String = "") {
     self.tabId = tabId
     self.windowId = windowId
     self.shown = shown
     self.warm = warm
     self.frozen = frozen
+    self.identity = identity
   }
 }
 

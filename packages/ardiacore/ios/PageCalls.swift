@@ -270,6 +270,15 @@ public final class PooledPage {
     }
   }
 
+  public func discard() {
+    if let parked = WebKitHub.shared.claimParked(tabId) { WebKitHub.close(parked) }
+    if let tab = view as? WebKitTab {
+      tab.delegate = nil
+      tab.close(parking: false)
+    }
+    retire()
+  }
+
   public func retire() {
     guard !retired else { return }
     retired = true

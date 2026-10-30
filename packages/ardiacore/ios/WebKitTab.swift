@@ -201,7 +201,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     webView?.isHidden = !(visible || warm)
   }
 
-  func close() {
+  func close(parking: Bool = true) {
     guard !closed else { return }
     closed = true
     observations = []
@@ -210,7 +210,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     guard let view = webView else { return }
     webView = nil
     view.onFocus = nil
-    if let key = transferKey, WebKitHub.shared.isPrepared(key) {
+    if parking, let key = transferKey, WebKitHub.shared.isPrepared(key) {
       WebKitHub.shared.unregister(view)
       view.navigationDelegate = nil
       view.uiDelegate = nil

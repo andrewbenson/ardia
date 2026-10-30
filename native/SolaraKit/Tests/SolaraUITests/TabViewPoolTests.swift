@@ -55,8 +55,44 @@ struct TabViewPoolTests {
     }
   }
 
-  func want(_ t: String, _ shown: TabViewWanted.Shown = .card, warm: Bool = false, frozen: Bool = false) -> TabViewWanted {
-    TabViewWanted(tabId: t, windowId: "w1", shown: shown, warm: warm, frozen: frozen)
+  func want(_ t: String, _ shown: TabViewWanted.Shown = .card, warm: Bool = false, frozen: Bool = false, identity: String = "") -> TabViewWanted {
+    TabViewWanted(tabId: t, windowId: "w1", shown: shown, warm: warm, frozen: frozen, identity: identity)
+  }
+
+  @Test func aPageWhoseEngineOrProfileChangesIsMadeAgainInItsPlace() {
+    let rig = Rig()
+    var replaced: [(String, Bool)] = []
+    rig.pool.onReplace = { id in replaced.append((id, rig.made[id]?.retired ?? true)) }
+    rig.slots.set(.card("w1"), container: rig.card)
+    rig.pool.update([want("a", identity: "chromium|default"), want("b", .none, identity: "chromium|default")])
+    rig.turn()
+    let first = rig.made["a"]!
+    let other = rig.made["b"]!
+    rig.pool.update([want("a", identity: "chromium|work"), want("b", .none, identity: "chromium|default")])
+    rig.turn()
+    let moved = rig.made["a"]!
+    #expect(first.retired)
+    #expect(moved !== first)
+    #expect(moved.view.superview === rig.card)
+    #expect(moved.shownLog.last == true)
+    #expect(rig.pool.page("a") === moved)
+    #expect(!other.retired && rig.made["b"] === other)
+    rig.pool.update([want("a", identity: "chromium|default"), want("b", .none, identity: "chromium|default")])
+    rig.turn()
+    let back = rig.made["a"]!
+    #expect(moved.retired && back !== moved && back !== first)
+    #expect(back.view.superview === rig.card)
+    rig.pool.update([want("a", identity: "webkit|default"), want("b", .none, identity: "chromium|default")])
+    rig.turn()
+    #expect(back.retired && rig.made["a"] !== back)
+    let settled = rig.made["a"]!
+    rig.pool.update([want("a", .none, identity: "webkit|default"), want("b", identity: "chromium|default")])
+    rig.turn()
+    rig.pool.update([want("a", .none), want("b", identity: "chromium|default")])
+    rig.turn()
+    #expect(!settled.retired && rig.made["a"] === settled, "an entry with no identity, such as a parked one, keeps its page")
+    #expect(replaced.map(\.0) == ["a", "a", "a"])
+    #expect(replaced.allSatisfy { !$0.1 }, "the replace hook runs before the old page retires")
   }
 
   @Test func reconcilesOncePerTurnHoweverManyChanges() {

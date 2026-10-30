@@ -41,6 +41,7 @@ final class TabPoolHost {
     let pool = TabViewPool(make: { [weak self] tabId, windowId in self?.makePage(tabId, windowId) })
     pool.hiddenContainer = { NativeWindowShell.hiddenPages($0) }
     pool.onPlaced = { [weak self] places in self?.emit?("onPlaced", ["places": places]) }
+    pool.onReplace = { [weak self] tabId in self?.pages[tabId]?.page.discard() }
     self.pool = pool
     commits.host = self
     let sink = commits
@@ -107,7 +108,7 @@ final class TabPoolHost {
     wanted = fresh + parked + closing.sorted { $0.key < $1.key }.flatMap { $0.value.tabs.filter { !freshIds.contains($0.tabId) } }
     warm = Set(fresh.filter(\.warm).map(\.tabId))
     for page in pages.values { page.setWarm(warm.contains(page.tabId), neighbour: Self.neighbour(state, page.tabId)) }
-    pool.update(wanted)
+    pool.update(wanted.map { identified($0, in: state) })
     followCardPages()
   }
 
@@ -204,6 +205,13 @@ final class TabPoolHost {
     }
   }
 
+  private func identified(_ entry: TabViewWanted, in state: BrowserState) -> TabViewWanted {
+    guard let store = NativeStoreHandle.store, let tab = state.tabs[entry.tabId] else { return entry }
+    var entry = entry
+    entry.identity = "\(store.pageEngine(tab.id, in: state))|\(state.engineProfile(tab.profileId))"
+    return entry
+  }
+
   private func makePage(_ tabId: String, _ windowId: String) -> TabPoolPage? {
     guard let state, let store = NativeStoreHandle.store, let tab = state.tabs[tabId] else { return nil }
     let peek = state.peeks[windowId]
@@ -235,6 +243,7 @@ final class TabPoolHost {
     let seq = tab.adoptId == nil ? tab.navigation?.seq ?? -1 : -1
     emit?("onPageEvent", ["tabId": tabId, "name": "onPageCreated", "payload": ["engine": spec.engine, "seq": seq, "url": spec.url ?? ""]])
     pageEventObservers.forEach { $0(tabId, "onPageCreated", ["engine": spec.engine]) }
+    if let ready = token.ready { emit?("onPageEvent", ["tabId": tabId, "name": "onReady", "payload": ready]) }
     return entry
   }
 

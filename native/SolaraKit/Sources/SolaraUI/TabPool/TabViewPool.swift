@@ -16,6 +16,7 @@ public final class TabViewPool {
   public let keeper: NSView
   public var hiddenContainer: @MainActor (String) -> NSView? = { _ in nil }
   public var onPlaced: (@MainActor ([String: String]) -> Void)?
+  public var onReplace: (@MainActor (String) -> Void)?
 
   private let make: Make
   private let schedule: Schedule
@@ -23,6 +24,7 @@ public final class TabViewPool {
   private var pages: [String: TabPoolPage] = [:]
   private var places: [String: TabViewPlace] = [:]
   private var shown: [String: Bool] = [:]
+  private var identities: [String: String] = [:]
   private var scheduled = false
   private var slotObserver: NSObjectProtocol?
 
@@ -58,10 +60,11 @@ public final class TabViewPool {
 
   public func reconcile() {
     scheduled = false
+    let replaced = retireChangedIdentities()
     let ops = TabViewPlan.plan(wanted: wanted, slots: slots.keys, current: places, visible: shown)
     let rehosted = rehost()
     guard !ops.isEmpty else {
-      if rehosted { onPlaced?(places.mapValues(Self.describe)) }
+      if rehosted || replaced { onPlaced?(places.mapValues(Self.describe)) }
       return
     }
     var made: Set<String> = []
@@ -71,11 +74,13 @@ public final class TabViewPool {
     for op in ops {
       switch op {
       case .drop(let id):
+        identities[id] = nil
         guard let page = pages.removeValue(forKey: id) else { continue }
         page.retire()
       case .create(let id, let windowId):
         guard let page = make(id, windowId) else { continue }
         pages[id] = page
+        identities[id] = identity(of: id)
         made.insert(id)
         move(page.view, into: hidden(windowId), below: false)
       case .attach(let id, let key, _):
@@ -101,6 +106,30 @@ public final class TabViewPool {
     places = applied.current
     shown = applied.visible
     onPlaced?(places.mapValues(Self.describe))
+  }
+
+  private func retireChangedIdentities() -> Bool {
+    var replaced = false
+    for entry in wanted where !entry.identity.isEmpty {
+      guard pages[entry.tabId] != nil else { continue }
+      guard let had = identities[entry.tabId], !had.isEmpty else {
+        identities[entry.tabId] = entry.identity
+        continue
+      }
+      guard had != entry.identity, let page = pages.removeValue(forKey: entry.tabId) else { continue }
+      identities[entry.tabId] = nil
+      places[entry.tabId] = nil
+      shown[entry.tabId] = nil
+      page.setShown(false)
+      onReplace?(entry.tabId)
+      page.retire()
+      replaced = true
+    }
+    return replaced
+  }
+
+  private func identity(of tabId: String) -> String {
+    wanted.first { $0.tabId == tabId }?.identity ?? ""
   }
 
   private func rehost() -> Bool {

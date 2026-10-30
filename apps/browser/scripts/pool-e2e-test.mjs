@@ -15,7 +15,9 @@ window's pages and RN mounts no TabWebView; the tab's handle reaches the page (e
 zoom in and back, load and go back); the page's events reach the store (title, favicon, load progress partway and
 then done); a page's notification, clicked while another tab is active, brings its tab back
 and fires the page's onclick; a peek opens on its own pooled page and Open as Tab promotes that page into the window;
-and in a split, a click in the unfocused pane focuses it and a pane's close button closes its tab. A build whose pool doesn't serve pages fails every check.`);
+in a split, a click in the unfocused pane focuses it and a pane's close button closes its tab; a tab moved to another
+profile, and back, gets a new page each time in the right profile (cookies prove it); and an engine change makes a new
+page whose ready reaches the store, never one revived from an armed WebKit transfer. A build whose pool doesn't serve pages fails every check.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -23,14 +25,16 @@ const scratch = mkdtempSync(join(tmpdir(), "ac-pool-e2e-"));
 const rep = reporter(join(scratch, "pool-e2e-test.log"), { name: "pool-e2e-test" });
 
 const ICON = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==", "base64");
+const cookies = {};
 const server = createServer((req, res) => {
   const path = req.url.split("?")[0].slice(1);
+  cookies[path] = req.headers.cookie ?? "";
   if (path === "icon.png") {
     res.writeHead(200, { "content-type": "image/png" });
     return res.end(ICON);
   }
   if (path === "slow.png") return setTimeout(() => (res.writeHead(200, { "content-type": "image/png" }), res.end(ICON)), 2500);
-  res.writeHead(200, { "content-type": "text/html" });
+  res.writeHead(200, { "content-type": "text/html", ...(path === "set" ? { "set-cookie": "who=A; Path=/; Max-Age=3600" } : {}) });
   const slow = path === "slow" ? `<img src="/slow.png?${Date.now()}">` : "";
   res.end(`<!doctype html><title>${path.toUpperCase()}</title><link rel="icon" href="/icon.png"><body style="height:2000px;font:16px sans-serif">
 <p>a needle and another needle</p>${slow}</body>`);
@@ -50,6 +54,9 @@ const W = globalThis.expo.modules.SolaraWindowShell;
 const page = (id) => ac.webviews.get(id);
 const active = () => S().windows.w1.activeTabIds.default;
 const ev = (id, expr) => page(id).evaluate("post('result', JSON.stringify(" + expr + "))");
+const go = (id, url, extra = {}) => S().updateTab(id, { ...extra, navigation: { url, seq: (S().tabs[id].navigation?.seq ?? 0) + 1, fresh: true } });
+const live = (id) => globalThis.expo.modules.SolaraTabPool.livePages().then((pages) => pages.find((p) => p.tabId === id));
+const mapped = (id) => Object.entries(ac.pageState.getState().browsers).filter(([, tab]) => tab === id).map(([browser]) => Number(browser));
 `;
 let app = null;
 const run = (body, timeout = 20000) => app.eval(`${HELPERS}\n${body}`, { timeout });
@@ -186,6 +193,51 @@ try {
     if (click.hit !== "ToolbarButtonView") throw new Error(`the click at ${x},${y} landed on ${click.hit}`);
     await until("a closed", `return !S().tabs.a && !Object.keys(S().splits).length && S().windows.w1.tabIds.includes("b") || null;`, 3000);
     return { at: [x, y], hit: click.hit };
+  });
+
+  const loaded = (path, ms = 8000) => until(`${path} loaded`, `return live("b").then((p) => p?.navigation?.url === ${json(url(path))} && !p.navigation.isLoading ? { browser: p.ready?.browserId, engine: p.engine, back: p.navigation.canGoBack } : null);`, ms);
+  const cookie = async (path) => {
+    const end = Date.now() + 5000;
+    while (!(path in cookies) && Date.now() < end) await sleep(50);
+    return cookies[path];
+  };
+
+  await rep.check("a tab moved to another profile gets a new page in that profile, and moving it back makes another new page", async () => {
+    await run(`S().activate("b"); go("b", ${json(url("set"))}); return true;`);
+    await loaded("set");
+    await run(`go("b", ${json(url("home"))}); return true;`);
+    const home = await loaded("home");
+    if ((await cookie("home")) !== "who=A") throw new Error(`the home profile sent ${json(cookies.home)}`);
+    await run(`const before = Object.keys(S().profiles); S().createProfile({ name: "Work" }); globalThis.__work = Object.keys(S().profiles).find((k) => !before.includes(k)); S().moveTabToProfile("b", globalThis.__work); return true;`);
+    await until("a new page for b", `return live("b").then((p) => p?.ready && p.ready.browserId !== ${home.browser} ? true : null);`);
+    await run(`go("b", ${json(url("work"))}); return true;`);
+    const work = await loaded("work");
+    if ((await cookie("work")) !== "") throw new Error(`the moved tab sent the home profile's cookie ${json(cookies.work)}`);
+    await run(`S().moveTabToProfile("b", "default"); return true;`);
+    await until("another new page for b", `return live("b").then((p) => p?.ready && ![${home.browser}, ${work.browser}].includes(p.ready.browserId) ? true : null);`);
+    await run(`go("b", ${json(url("back"))}); return true;`);
+    const back = await loaded("back");
+    if ((await cookie("back")) !== "who=A") throw new Error(`back home the tab sent ${json(cookies.back)}`);
+    return { home: home.browser, work: work.browser, back: back.browser };
+  });
+
+  await rep.check("an engine change makes a new page whose ready reaches the store", async () => {
+    await run(`go("b", ${json(url("w1"))}, { engine: "webkit" }); return true;`);
+    const w1 = await loaded("w1");
+    if (w1.engine !== "webkit") throw new Error(`engine ${w1.engine}`);
+    return until("ready mapped", `return live("b").then((p) => mapped("b").includes(p?.ready?.browserId) ? mapped("b") : null);`, 3000);
+  });
+
+  await rep.check("a transfer armed on a WebKit page doesn't bring it back after a round trip through Chromium", async () => {
+    await run(`go("b", ${json(url("w2"))}); return true;`);
+    await loaded("w2");
+    await run(`globalThis.expo.modules.ArdiaWebKit.prepareTransfer("b"); go("b", ${json(url("c1"))}, { engine: "chromium" }); return true;`);
+    const c1 = await loaded("c1");
+    if (c1.engine !== "chromium") throw new Error(`engine ${c1.engine}`);
+    await run(`go("b", ${json(url("w3"))}, { engine: "webkit" }); return true;`);
+    const w3 = await loaded("w3");
+    if (w3.back) throw new Error("the WebKit page came back with its old history");
+    return { c1: c1.browser, w3: w3.browser };
   });
 } catch (e) {
   rep.record("run", { error: e });

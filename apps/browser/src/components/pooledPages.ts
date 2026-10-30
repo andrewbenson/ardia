@@ -5,6 +5,7 @@ import { holdModuleEvent } from "../lib/nativeEvents";
 import { noteGone } from "../lib/tabLifecycle";
 import { notePooledPage, webviewRef } from "../lib/webviews";
 import { useBrowser, type BrowserState } from "../store/browser";
+import { engineProfile } from "../store/model";
 import { setPageProgress } from "../store/pageProgress";
 import { followNavigation, newPageSession, pageEventHandlers, type PageEventHandlers, type PageSession } from "./pageEvents";
 
@@ -28,6 +29,9 @@ const peekSource = (s: BrowserState, tabId: string) => {
 
 const following = new Set<string>();
 
+const leftProfile = (tab: BrowserState["tabs"][string] | undefined, page: PooledPage) =>
+  !!tab && engineProfile(tab.profileId) !== engineProfile(page.session.profileId);
+
 function followLater(tabId: string) {
   if (following.size === 0) queueMicrotask(followNow);
   following.add(tabId);
@@ -39,7 +43,7 @@ function followNow() {
   following.clear();
   for (const tabId of ids) {
     const page = pooled.get(tabId);
-    if (!page) continue;
+    if (!page || leftProfile(tabs[tabId], page)) continue;
     const navigation = tabs[tabId]?.navigation;
     if (navigation?.seq === page.followed) continue;
     if (page.followed === null && navigation?.seq !== page.loadedSeq) page.session.arrived = false;
@@ -76,6 +80,7 @@ function followStore(s: BrowserState, prev: BrowserState) {
   if (s.tabs === prev.tabs && s.peeks === prev.peeks) return;
   for (const [tabId, page] of pooled) {
     const tab = s.tabs[tabId];
+    if (leftProfile(tab, page)) continue;
     const sameProfile = !tab || page.session.profileId === tab.profileId;
     if (tab) {
       page.session.profileId = tab.profileId;

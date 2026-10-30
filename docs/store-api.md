@@ -66,8 +66,29 @@ modules before using them — this is a summary from the agent that built it.
   lib/actions.ts.
   `duplicateTab` and Reopen Closed Tab set `adoptId` to `clone:<tab id>` / `restore:<tab id>` (`ClosedTab.tabId`):
   the engine copies or restores that tab's back/forward list, else the tab loads its URL.
+- Import: `importWorkspace({ profileId, theme?, pinnedAgainst?, windows })` is one native command and one commit.
+  Swift mints every window, tab, group and split id. Each window draft has `windowId?` (an existing regular window),
+  `newWindow?`, `tabs`, `group?`, `groups?`, `splits?`, `drafts?`, `pinnedAgainst?` and `skipExistingOpen?`.
+  Without a target it uses the most recently focused regular window, then the first regular window, then creates one;
+  `newWindow: true` always creates a window. Tabs carry `{ url, title, pinned?, row?, customTitle? }`.
+  Only HTTP, HTTPS and file URLs are imported. URL duplicates are skipped against native state, including parked pins
+  and pin homes; `pinnedAgainst: "tiles"` compares pinned tabs only with tiles outside groups, while the default
+  `"anyPin"` includes pinned rows and pinned groups. Unpinned tabs compare with every open or parked page.
+  `skipExistingOpen: true` also excludes already open or parked pages when importing pins, as Dia requires.
+  Window drafts run in order, so later drafts see tabs made by earlier drafts. New unpinned tabs follow the configured
+  insertion position and retain their source order; pinned tabs use the pinned insertion position.
+  `group` names a group for the new unpinned tabs. Explicit groups carry `{ name, tabIndices, pinned? }` and splits
+  carry `{ tabIndices, orientation? }` (`"horizontal"` or `"vertical"`). Indices refer to the draft's original tabs;
+  skipped tabs are omitted from groups and splits, and a split with fewer than two surviving panes is omitted.
+  Groups cannot overlap or contain individually pinned tabs. Splits cannot overlap or cross group or pin sections.
+  `drafts` accepts nested `{ title, children }` folders and `{ title, url, customTitle? }` links as pinned groups.
+  `theme` applies the imported profile theme in the same commit. The result is
+  `{ tabs, skipped, windows, tabIds, groups, splits }`; `tabIds` lists new flat tabs per processed window draft.
+  Imported tabs have no navigation or adopted page and stay unloaded until selected. The full payload is validated
+  before state changes or id allocation, so malformed input leaves the workspace untouched.
+  Bookmark, history, favicon, password, cookie and autofill import keep their existing owners.
 - Groups: `createGroup`, `addTabsToGroup`, …
-- Splits: `createSplit`, `openSplitPane(windowId, { tabId | url, anchorTabId, side, background })`, `replaceSplitPane`, `removeTabFromSplit`, `separateSplit`, `flipSplit`, `toggleSplitOrientation`, `movePane`, `focusPane`, `updateSplit`; `toggleTabLayout`. UI entry points with Dia's feedback (max-panes toast, menus): components/layout/splitActions.ts (`openSplitPane`, `openNewTabInSplit`, `openInSplit`, `openLinkInSplit`, `showSplitMenu`). Drag a tab onto the page to split: components/layout/tabDrag.ts.
+- Splits: `createSplit`, `openSplitPane(windowId, { tabId | url, anchorTabId, side, background })`, `replaceSplitPane`, `removeTabFromSplit`, `separateSplit`, `flipSplit`, `toggleSplitOrientation`, `movePane`, `focusPane`, `updateSplit`; `toggleTabLayout`; `setWindowLayout(windowId, "sidebar" | "top")` changes only that window, without choosing a global setting. UI entry points with Dia's feedback (max-panes toast, menus): components/layout/splitActions.ts (`openSplitPane`, `openNewTabInSplit`, `openInSplit`, `openLinkInSplit`, `showSplitMenu`). Drag a tab onto the page to split: components/layout/tabDrag.ts.
 - Sidebar organization (store/organize.ts): `selection[windowId]` with its ⇧-click anchor `selectionAnchors[windowId]`, both set by
   `clickTab(windowId, tabId, mods)` (plain, ⌘ and ⇧ clicks, ⌥⇧ into the shown tab's group), `placeTabs(ids, { pinned, row, beforeId, groupId, last })`
   (`last` puts a row with no `beforeId` after the pinned groups too). Drag and drop in the sidebar and the top strip

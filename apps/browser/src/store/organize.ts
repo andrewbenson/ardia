@@ -938,7 +938,7 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
       }
     };
     file(g);
-    set(closingGroup(get(), groupId));
+    get().closeGroup(groupId);
   },
 
   cleanUpTabs(windowId, options = {}) {

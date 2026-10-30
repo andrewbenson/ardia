@@ -110,7 +110,9 @@ test("foreign commits apply in order, and a gap catches up from the native store
   assert.equal(nativeStoreRev(), native.rev);
 });
 
-test("a write outside the applier is forwarded to the native store, not lost", () => {
+test("Release: a write outside the applier is forwarded to the native store, not lost", () => {
+  const heldDev = globalThis.__DEV__;
+  globalThis.__DEV__ = false;
   sent.length = 0;
   const warn = console.warn;
   const warnings = [];
@@ -119,6 +121,7 @@ test("a write outside the applier is forwarded to the native store, not lost", (
     useBrowser.setState({ settings: { ...S().settings, searchEngine: "kagi" } });
   } finally {
     console.warn = warn;
+    globalThis.__DEV__ = heldDev;
   }
   assert.equal(sent[0]?.name, "applyState");
   assert.equal(native.settings.searchEngine, "kagi");
@@ -183,7 +186,9 @@ test("a commit that only carries effects still runs them, and effects behind a r
   assert.equal(S().settings.appearance, "light");
 });
 
-test("a resync after a forwarded write doesn't skip a foreign commit it didn't apply", () => {
+test("Release: a resync after a forwarded write doesn't skip a foreign commit it didn't apply", () => {
+  const heldDev = globalThis.__DEV__;
+  globalThis.__DEV__ = false;
   let pending;
   native.beforeCatchUp = () => {
     const downloads = [{ id: "from-elsewhere", url: "https://e/x", state: "complete", profile: "" }];
@@ -200,6 +205,7 @@ test("a resync after a forwarded write doesn't skip a foreign commit it didn't a
     useBrowser.setState({ settings: { ...S().settings, searchEngine: "mojeek" } });
   } finally {
     console.warn = warn;
+    globalThis.__DEV__ = heldDev;
   }
   stop();
   assert.ok(pending, "a commit landed between dispatch and resync catch-up");
@@ -218,4 +224,42 @@ test("persist.ts marks session.json and leaves downloads.json to the native stor
   assert.equal(session.nativeExport.rev, native.rev);
   assert.equal(session.settings.appearance, "dark");
   assert.equal(docs.has("downloads.json"), false);
+});
+
+test("Debug hydration in settingsAndDownloads scope routes owned slices through commands", () => {
+  const held = globalThis.__DEV__;
+  globalThis.__DEV__ = true;
+  sent.length = 0;
+  try {
+    S().hydrate({ settings: { ...S().settings, searchEngine: "qwant" }, downloads: [{ id: "rehydrated", url: "https://download.example/", state: "complete", profile: "" }] });
+    assert.equal(S().settings.searchEngine, "qwant");
+    assert.equal(native.settings.searchEngine, "qwant");
+    assert.equal(native.downloads[0].id, "rehydrated");
+    assert.ok(sent.some((command) => command.name === "applyState" && command.args[0].settings?.searchEngine === "qwant"));
+  } finally {
+    globalThis.__DEV__ = held;
+  }
+});
+
+test("Release: writeState in settingsAndDownloads scope sends settings and downloads as a command, not a forwarded write", async () => {
+  const { nativeForwardedWrites, writeState } = await import("../store/nativeStore.ts");
+  const held = globalThis.__DEV__;
+  const warn = console.warn;
+  const warnings = [];
+  globalThis.__DEV__ = false;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  sent.length = 0;
+  const forwarded = nativeForwardedWrites();
+  try {
+    writeState(useBrowser, { settings: { ...S().settings, searchEngine: "ecosia" }, downloads: [{ id: "written", url: "https://download.example/w", state: "complete", profile: "" }] });
+    assert.equal(S().settings.searchEngine, "ecosia");
+    assert.equal(native.settings.searchEngine, "ecosia");
+    assert.equal(native.downloads[0].id, "written");
+    assert.deepEqual(sent.map((command) => command.name), ["applyState"]);
+    assert.equal(nativeForwardedWrites(), forwarded);
+    assert.deepEqual(warnings, []);
+  } finally {
+    globalThis.__DEV__ = held;
+    console.warn = warn;
+  }
 });

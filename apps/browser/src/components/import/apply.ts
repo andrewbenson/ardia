@@ -14,7 +14,8 @@ import { adoptProfileTheme } from "../../sync/engine";
 import { parseArcTheme } from "./arcTheme";
 import { liveCommand } from "@ardia/settings";
 import type { LiveSourceId } from "../../live/types";
-import { writeState } from "../../store/nativeStore";
+import { nativeOwnsWorkspace, nativeWrite, writeState } from "../../store/nativeStore";
+import { encodeCommand } from "@ardia/store";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number };
 
@@ -137,6 +138,7 @@ export function importTabs(
   group: string | null,
   pinnedAgainst: "anyPin" | "tiles" = "anyPin",
 ): number {
+  if (nativeOwnsWorkspace()) return (nativeWrite(encodeCommand("importWorkspace", [{ profileId, pinnedAgainst, windows: [{ tabs, group }] }]))?.result as { tabs: number } | undefined)?.tabs ?? 0;
   const s = useBrowser.getState();
   const pinned = pinnedAgainst === "tiles" ? tilePages(s, profileId) : pinnedPages(s, profileId);
   const open = openPages(s, profileId);
@@ -176,13 +178,25 @@ export function importArcSpace(profileId: string, space: SpaceSuggestion, favico
   const links = space.pinned.filter((n) => n.type === "url" && n.url);
   importPullRequestsFolders(profileId, space.pinned);
   const folders = withoutLiveFolders(space.pinned.filter((n) => n.type === "folder"));
+  const theme = space.theme ? parseArcTheme(space.theme) : null;
+  if (nativeOwnsWorkspace()) {
+    if (theme) adoptProfileTheme(profileId);
+    const result = nativeWrite(encodeCommand("importWorkspace", [{
+      profileId,
+      ...(theme ? { theme } : {}),
+      windows: [
+        { tabs: links.map((n) => ({ url: n.url!, title: n.pageTitle ?? n.title, pinned: true, row: true, customTitle: n.pageTitle ? n.title : undefined })) },
+        { tabs: space.tabs.map((t) => ({ ...t, pinned: false })), group: "Imported", drafts: folders.map(toGroupDraft) },
+      ],
+    }]))?.result as { tabs: number; skipped: number } | undefined;
+    return { tabs: result?.tabs ?? 0, bookmarks: 0, skipped: result?.skipped ?? 0 };
+  }
   let tabs = importTabs(
     profileId,
     links.map((n) => ({ url: n.url!, title: n.pageTitle ?? n.title, pinned: true, row: true, customTitle: n.pageTitle ? n.title : undefined })),
     null,
   );
   tabs += importTabs(profileId, space.tabs.map((t) => ({ ...t, pinned: false })), "Imported");
-  const theme = space.theme ? parseArcTheme(space.theme) : null;
   if (theme) {
     adoptProfileTheme(profileId);
     useBrowser.getState().updateProfile(profileId, { theme });
@@ -196,6 +210,14 @@ export function importArcSpace(profileId: string, space: SpaceSuggestion, favico
 
 export function importDiaProfile(profileId: string, profile: DiaTabsProfile, what: { pinned: boolean; open: boolean }, favicons?: ImportedFavicon[]): number {
   importFavicons(profileId, favicons, [...(what.pinned ? profile.pinned : []), ...(what.open ? profile.tabs : [])].map((t) => t.url));
+  if (nativeOwnsWorkspace()) {
+    const windows = [
+      ...(what.pinned ? [{ tabs: profile.pinned, skipExistingOpen: true }] : []),
+      ...(what.open ? [{ tabs: profile.tabs.map((t) => ({ ...t, pinned: false })), group: "Imported", skipExistingOpen: true }] : []),
+    ];
+    if (!windows.length) return 0;
+    return (nativeWrite(encodeCommand("importWorkspace", [{ profileId, windows }]))?.result as { tabs: number } | undefined)?.tabs ?? 0;
+  }
   const have = openPages(useBrowser.getState(), profileId);
   const fresh = (tabs: ImportedTab[]) => tabs.filter((t) => !have.has(pageKey(t.url)));
   let n = what.pinned ? importTabs(profileId, fresh(profile.pinned), null) : 0;
@@ -217,8 +239,16 @@ export async function applyResult(
   if (result.history.length) counts.history += importHistory(profileId, result.history);
   const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
   Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed));
-  if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
-  if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null, "tiles");
+  if (nativeOwnsWorkspace()) {
+    const windows = [
+      ...(result.tabs.length && !result.spaces.length ? [{ tabs: result.tabs, group: "Imported" }] : []),
+      ...(result.favorites.length ? [{ tabs: result.favorites.map((t) => ({ ...t, pinned: true })), pinnedAgainst: "tiles" }] : []),
+    ];
+    if (windows.length) counts.tabs += (nativeWrite(encodeCommand("importWorkspace", [{ profileId, windows }]))?.result as { tabs: number } | undefined)?.tabs ?? 0;
+  } else {
+    if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
+    if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null, "tiles");
+  }
   if (result.credentials.length) counts.passwords += await importPasswords(profileId, result.credentials);
   return counts;
 }

@@ -30,7 +30,7 @@ public struct Command: Sendable, Equatable {
   public var isDurable: Bool { Command.durable.contains(name) }
 
   public static let known: Set<String> = [
-    "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
+    "importWorkspace", "setWindowLayout", "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
     "duplicateTab", "togglePin", "moveTab", "moveTabBy", "createWindow", "closeWindow", "forgetClosedWindow", "setWindowFrame", "setWindowFullScreen", "toggleSidebar",
     "switchProfile", "moveTabsToWindow", "moveTabToProfile", "mergeAllWindows", "reopenClosed", "reopenClosedTab", "reopenClosedWindow",
     "restoreClosed", "createProfile", "updateProfile", "deleteProfile", "reorderProfiles", "setDefaultProfile", "profileDataDeleted",
@@ -153,6 +153,13 @@ extension Session {
   public func apply(_ command: Command) throws {
     let a = Args(name: command.name, values: command.args)
     switch command.name {
+    case "importWorkspace": result = try importWorkspace(a[0] ?? .null)
+    case "setWindowLayout":
+      let id = try a.requireString(0)
+      let layout = try a.requireString(1)
+      guard layout == "sidebar" || layout == "top", var window = state.windows[id] else { throw CommandError("setWindowLayout: invalid window or layout") }
+      window.tabLayout = layout
+      update { $0.windows[id] = window }
     case "newTab":
       result = .string(newTab(try a.requireString(0), newTabOptions(a[1]?.object)))
     case "closeTab": closeTab(try a.requireString(0))

@@ -69,7 +69,6 @@ test("a catch-up snapshot after a gap keeps the live state, panels and selection
   assert.equal(S().windowUi.w1.downloadsOpen, true);
 });
 
-
 const { nativeWrite, attachReplica, NativeStoreBusy, nativeStoreRev, withApplier } = await import("../store/nativeStore.ts");
 const { workspaceFromSnapshot } = await import("../store/nativeWorkspace.ts");
 const { asSyncOrigin, applyingFromSync } = await import("../store/syncOrigin.ts");
@@ -170,7 +169,9 @@ test("a refused workspace command cannot install its trailing live patch", () =>
   assert.equal(S().live, before);
 });
 
-test("owned API and captured reducer writes expose only the native accepted value", () => {
+test("Release: owned API and captured reducer writes expose only the native accepted value", () => {
+  const heldDev = globalThis.__DEV__;
+  globalThis.__DEV__ = false;
   const warn = console.warn;
   console.warn = () => {};
   const seen = [];
@@ -198,10 +199,13 @@ test("owned API and captured reducer writes expose only the native accepted valu
     catchUpReply = undefined;
     stop();
     console.warn = warn;
+    globalThis.__DEV__ = heldDev;
   }
 });
 
-test("a subscriber's captured reducer cannot reuse the patch applier's permission", () => {
+test("Release: a subscriber's captured reducer cannot reuse the patch applier's permission", () => {
+  const heldDev = globalThis.__DEV__;
+  globalThis.__DEV__ = false;
   const warn = console.warn;
   console.warn = () => {};
   const seen = [];
@@ -224,6 +228,7 @@ test("a subscriber's captured reducer cannot reuse the patch applier's permissio
     catchUpReply = undefined;
     stop();
     console.warn = warn;
+    globalThis.__DEV__ = heldDev;
   }
 });
 
@@ -387,7 +392,6 @@ test("repeated effect-only commits at the current revision still run", async () 
   assert.deepEqual(seen, [1, 2]);
 });
 
-
 test("cache deduplication retries a busy write with the same inputs", () => {
   let cache = false;
   const cacheCommands = () => [{ name: "setPlayingAudio", args: [[cache ? "t1" : "other"]] }];
@@ -401,8 +405,10 @@ test("cache deduplication retries a busy write with the same inputs", () => {
   assert.equal(sent.filter((name) => name === "setPlayingAudio").length, 2);
   dispatchReply = undefined;
 });
-test("a React batch flush after a guarded set never inherits the applier permission", async () => {
+test("Release: a React batch flush after a guarded set never inherits the applier permission", async () => {
   const { setStoreBatching } = await import("../store/browser.ts");
+  const heldDev = globalThis.__DEV__;
+  globalThis.__DEV__ = false;
   const warn = console.warn;
   console.warn = () => {};
   let flushOnce = true;
@@ -422,6 +428,72 @@ test("a React batch flush after a guarded set never inherits the applier permiss
     assert.deepEqual(S().windows.w1.frame, [1, 2, 3, 4]);
   } finally {
     setStoreBatching((update) => update());
+    console.warn = warn;
+    globalThis.__DEV__ = heldDev;
+  }
+});
+
+test("Debug refuses an owned API write synchronously before dispatch or publication", () => {
+  const held = globalThis.__DEV__;
+  globalThis.__DEV__ = true;
+  const before = S();
+  const beforeSent = sent.length;
+  let notifications = 0;
+  const stop = useBrowser.subscribe(() => notifications++);
+  try {
+    assert.throws(() => useBrowser.setState((s) => ({ settings: { ...s.settings, searchEngine: "refused" }, selection: { w1: ["local"] } })), /outside the native store's applier/);
+    assert.equal(S(), before);
+    assert.equal(sent.length, beforeSent);
+    assert.equal(notifications, 0);
+  } finally {
+    stop();
+    globalThis.__DEV__ = held;
+  }
+});
+
+test("Debug refuses a captured slice setter before zustand sees the owned change", () => {
+  const held = globalThis.__DEV__;
+  globalThis.__DEV__ = true;
+  const before = S();
+  const beforeSent = sent.length;
+  try {
+    assert.throws(() => capturedSetWindowFrame("w1", [9, 9, 9, 9]), /outside the native store's applier/);
+    assert.equal(S(), before);
+    assert.equal(sent.length, beforeSent);
+  } finally {
+    globalThis.__DEV__ = held;
+  }
+});
+
+test("Debug keeps sync-origin whole-slice forwards until the sync port", () => {
+  const held = globalThis.__DEV__;
+  const warn = console.warn;
+  globalThis.__DEV__ = true;
+  console.warn = () => {};
+  const beforeSent = sent.length;
+  try {
+    asSyncOrigin(() => useBrowser.setState({ settings: { ...S().settings, searchEngine: "sync" } }));
+    assert.deepEqual(sent.slice(beforeSent), ["applyState"]);
+  } finally {
+    globalThis.__DEV__ = held;
+    console.warn = warn;
+  }
+});
+
+test("Release forwards with a monotonically counted warning", async () => {
+  const { nativeForwardedWrites } = await import("../store/nativeStore.ts");
+  const held = globalThis.__DEV__;
+  const warn = console.warn;
+  globalThis.__DEV__ = false;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try {
+    const before = nativeForwardedWrites();
+    useBrowser.setState({ settings: { ...S().settings, searchEngine: "release" } });
+    assert.equal(nativeForwardedWrites(), before + 1);
+    assert.ok(warnings.some((message) => message.includes(`forwarded write ${before + 1}`)));
+  } finally {
+    globalThis.__DEV__ = held;
     console.warn = warn;
   }
 });

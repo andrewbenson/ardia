@@ -15,7 +15,7 @@ import { createProfilesSlice, DEFAULT_PROFILE, engineIdOf, type ProfilesSlice } 
 import { createSettingsSlice, DEFAULT_SETTINGS, migrateSavedSettings, type SettingsSlice } from "./settings";
 import { createSplitsSlice, sanitizeSplits, type SplitsSlice } from "./splits";
 import { activated, apply, createTabsSlice, type TabsSlice } from "./tabs";
-import { guardNativeSet, nativeOwnsWorkspace, nativeTransaction } from "./nativeStore";
+import { guardNativeSet, nativeOwnsWorkspace, nativeTransaction, writeState } from "./nativeStore";
 import { transactional } from "./transaction";
 import type { BrowserWindow, Tab } from "./types";
 import { createUiSlice, type UiSlice } from "./ui";
@@ -102,7 +102,7 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
   ...createPeekSlice(...a),
 
   hydrate(data) {
-    const [set, get] = a;
+    const [, get] = a;
     const s = get();
     const profiles = data.profiles && Object.keys(data.profiles).length ? data.profiles : { [DEFAULT_PROFILE.id]: DEFAULT_PROFILE };
     const profileOrder = [
@@ -194,7 +194,7 @@ export const useBrowser = create<BrowserState>()(transactions.middleware(batched
       },
     };
     for (const id of next.ui.focusOrder) next = apply(next, activated(next, windows[id]!.activeTabIds[windows[id]!.profileId]!));
-    set(next);
+    writeState(useBrowser, next);
   },
 }))));
 

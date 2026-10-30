@@ -8,7 +8,8 @@ import type { Settings } from "../../store/settings";
 import type { ProfileColor } from "../../store/types";
 import { pinSites } from "./sites";
 import { endToolTour, startToolTour } from "./tour/state";
-import { writeState } from "../../store/nativeStore";
+import { nativeOwnsWorkspace, nativeWrite, writeState } from "../../store/nativeStore";
+import { encodeCommand } from "@ardia/store";
 
 export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
 
@@ -153,11 +154,13 @@ type OnboardingState = {
 
 const stepAfter = (step: OnboardingStep, delta: number) => STEPS[STEPS.indexOf(step) + delta];
 
-export const setWindowLayout = (windowId: string, tabLayout: Settings["tabLayout"]) =>
-  writeState(useBrowser, (s) => {
+export const setWindowLayout = (windowId: string, tabLayout: Settings["tabLayout"]) => {
+  if (nativeOwnsWorkspace()) return nativeWrite(encodeCommand("setWindowLayout", [windowId, tabLayout]));
+  return writeState(useBrowser, (s) => {
     const w = s.windows[windowId];
     return w && w.tabLayout !== tabLayout ? { windows: { ...s.windows, [windowId]: { ...w, tabLayout } } } : {};
   });
+};
 
 export const useOnboarding = create<OnboardingState>((set, get) => ({
   windowId: null,

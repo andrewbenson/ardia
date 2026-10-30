@@ -41,6 +41,8 @@ let appliedRev = 0;
 let syncOriginsAtStart = false;
 let taggingSyncOrigins = false;
 let busyWrites = 0;
+let forwardedWrites = 0;
+export const nativeForwardedWrites = () => forwardedWrites;
 export const nativeBusyWrites = () => busyWrites;
 export const nativeOriginsKnown = () => !active || taggingSyncOrigins;
 let applying = 0;
@@ -365,14 +367,15 @@ const OWNED_KEYS: ReadonlySet<string> = new Set([...WORKSPACE_SLICES, "settings"
 export function writeState(store: Replica, update: Partial<BrowserState> | ((s: BrowserState) => Partial<BrowserState>)) {
   const s = store.getState();
   const partial = typeof update === "function" ? update(s) : update;
-  if (!nativeOwnsWorkspace()) return store.setState(partial);
+  if (!active || applying) return store.setState(partial);
+  const ownedKeys = ownsWorkspace ? OWNED_KEYS : new Set(["settings", "downloads"]);
   const before = s as unknown as Record<string, unknown>;
   const owned: Record<string, unknown> = {};
   const local: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(partial)) {
     if (value === before[key]) continue;
-    if (OWNED_KEYS.has(key)) owned[key] = value;
-    else if (key === "ui") {
+    if (ownedKeys.has(key)) owned[key] = value;
+    else if (ownsWorkspace && key === "ui") {
       const ui = value as BrowserState["ui"];
       if (UI_KEYS.some((k) => ui[k] !== s.ui[k])) owned.ui = Object.fromEntries(UI_KEYS.map((k) => [k, ui[k]]));
       if (ui.appDark !== s.ui.appDark) local.ui = { ...s.ui, appDark: ui.appDark };
@@ -380,7 +383,7 @@ export function writeState(store: Replica, update: Partial<BrowserState> | ((s: 
   }
   const applyLocal = () => {
     if (!Object.keys(local).length) return;
-    if (local.ui) local.ui = { ...store.getState().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
+    if (ownsWorkspace && local.ui) local.ui = { ...store.getState().ui, appDark: (local.ui as BrowserState["ui"]).appDark };
     store.setState(local as Partial<BrowserState>);
   };
   const nativeFirst = taggingSyncOrigins && applyingFromSync();
@@ -397,20 +400,18 @@ function resync(_store: Replica, _keys: string[]) {
 }
 
 function ownedWritePolicy(): "forward" | "refuse" {
-  return "forward";
+  return __DEV__ && !applyingFromSync() ? "refuse" : "forward";
 }
 
 function forwardOwnedWrite(changed: Record<string, unknown>) {
   const caught = new Error(`${Object.keys(changed).join(", ")} changed outside the native store's applier; route the write through nativeWrite`);
+  if (ownedWritePolicy() === "refuse") throw caught;
   const forwards = ((globalThis as { __nativeStoreForwards?: string[] }).__nativeStoreForwards ??= []);
   forwards.push(caught.stack ?? caught.message);
   if (forwards.length > 50) forwards.shift();
-  if (__DEV__) queueMicrotask(() => { throw caught; });
-  else console.warn(caught.message);
-  if (ownedWritePolicy() === "forward") {
-    nativeWrite({ name: "applyState", args: [changed] });
-    resync(replica!, Object.keys(changed));
-  }
+  console.warn(`${caught.message} (forwarded write ${++forwardedWrites})`);
+  nativeWrite({ name: "applyState", args: [changed] });
+  resync(replica!, Object.keys(changed));
 }
 
 export function guardNativeSet(

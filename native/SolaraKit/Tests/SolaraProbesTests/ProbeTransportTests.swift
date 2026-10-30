@@ -50,7 +50,7 @@ struct ProbeTransportTests {
     let root = URL(fileURLWithPath: ProbeFiles.realPath(FileManager.default.temporaryDirectory.path)!).appendingPathComponent(UUID().uuidString)
     let data = root.appendingPathComponent("data")
     let other = root.appendingPathComponent("other")
-    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
     try Data().write(to: data.appendingPathComponent(".solara-probe-scratch"))
@@ -62,7 +62,7 @@ struct ProbeTransportTests {
   @Test func checksScratchGate() throws {
     let root = URL(fileURLWithPath: ProbeFiles.realPath(FileManager.default.temporaryDirectory.path)!).appendingPathComponent(UUID().uuidString)
     let data = root.appendingPathComponent("data")
-    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     defer { try? FileManager.default.removeItem(at: root) }
     try Data().write(to: data.appendingPathComponent(".solara-probe-scratch"))
     let files = try ProbeFiles.open(dataPath: data.path, defaultPath: root.appendingPathComponent("default").path, homePath: NSHomeDirectory())
@@ -83,7 +83,7 @@ struct ProbeTransportTests {
     let root = URL(fileURLWithPath: ProbeFiles.realPath(FileManager.default.temporaryDirectory.path)!).appendingPathComponent(UUID().uuidString)
     #expect(root.path.hasPrefix("/private/"))
     let data = root.appendingPathComponent("data")
-    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: data.path)
     try Data().write(to: data.appendingPathComponent(".solara-probe-scratch"))
@@ -94,7 +94,7 @@ struct ProbeTransportTests {
   @Test func claimsRequestsAcrossPolls() throws {
     let root = URL(fileURLWithPath: ProbeFiles.realPath(FileManager.default.temporaryDirectory.path)!).appendingPathComponent(UUID().uuidString)
     let data = root.appendingPathComponent("data")
-    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     defer { try? FileManager.default.removeItem(at: root) }
     try Data().write(to: data.appendingPathComponent(".solara-probe-scratch"))
     let files = try ProbeFiles.open(dataPath: data.path, defaultPath: root.appendingPathComponent("default").path, homePath: NSHomeDirectory())
@@ -109,7 +109,7 @@ struct ProbeTransportTests {
   private func scratch() throws -> (URL, URL, ProbeFiles) {
     let root = URL(fileURLWithPath: ProbeFiles.realPath(FileManager.default.temporaryDirectory.path)!).appendingPathComponent(UUID().uuidString)
     let data = root.appendingPathComponent("data")
-    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
     try Data().write(to: data.appendingPathComponent(".solara-probe-scratch"))
     let files = try ProbeFiles.open(dataPath: data.path, defaultPath: root.appendingPathComponent("default").path, homePath: NSHomeDirectory())
     return (root, data, files)
@@ -134,5 +134,51 @@ struct ProbeTransportTests {
     #expect(files.claim().count == ProbeFiles.batch)
     #expect(files.claim().count == 8)
   }
+  @Test func rejects0755ScratchOnOpen() throws {
+    let (root, data, _) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: data.path)
+    #expect(throws: ProbeFailure.testHooksDenied) {
+      try ProbeFiles.open(dataPath: data.path, defaultPath: root.appendingPathComponent("default").path, homePath: NSHomeDirectory())
+    }
+  }
+
+  @Test func rejects0755ScratchOnRecheck() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: data.path)
+    #expect(throws: ProbeFailure.testHooksDenied) { try files.recheck() }
+  }
+
+  private func replaceMarkerWithFifo(_ data: URL) throws {
+    let marker = data.appendingPathComponent(".solara-probe-scratch").path
+    try FileManager.default.removeItem(atPath: marker)
+    #expect(mkfifo(marker, 0o600) == 0)
+    DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+      let writer = Darwin.open(marker, O_WRONLY | O_NONBLOCK | O_CLOEXEC)
+      if writer >= 0 { close(writer) }
+    }
+  }
+
+  @Test func rejectsFifoMarkerPromptlyOnOpen() throws {
+    let (root, data, _) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try replaceMarkerWithFifo(data)
+    let start = ContinuousClock.now
+    #expect(throws: ProbeFailure.testHooksDenied) {
+      try ProbeFiles.open(dataPath: data.path, defaultPath: root.appendingPathComponent("default").path, homePath: NSHomeDirectory())
+    }
+    #expect(start.duration(to: .now) < .seconds(1))
+  }
+
+  @Test func rejectsFifoMarkerPromptlyOnRecheck() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try replaceMarkerWithFifo(data)
+    let start = ContinuousClock.now
+    #expect(throws: ProbeFailure.testHooksDenied) { try files.recheck() }
+    #expect(start.duration(to: .now) < .seconds(1))
+  }
+
 }
 #endif

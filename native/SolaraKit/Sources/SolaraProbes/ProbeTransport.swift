@@ -94,7 +94,7 @@ public final class ProbeFiles {
     do {
       let owner = getuid()
       let initial = try checkedDirectory(fd, owner: owner)
-      let marker = openat(fd, ".solara-probe-scratch", O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+      let marker = openat(fd, ".solara-probe-scratch", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
       guard marker >= 0 else { throw ProbeFailure.testHooksDenied }
       defer { close(marker) }
       var mark = stat()
@@ -141,7 +141,7 @@ public final class ProbeFiles {
 
   static func checkedDirectory(_ fd: Int32, owner: uid_t) throws -> stat {
     var info = stat()
-    guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_uid == owner, info.st_mode & 0o022 == 0 else { throw ProbeFailure.testHooksDenied }
+    guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_uid == owner, info.st_mode & 0o7777 == 0o700 else { throw ProbeFailure.testHooksDenied }
     return info
   }
 
@@ -157,7 +157,7 @@ public final class ProbeFiles {
     guard Self.realPath(dataPath) == dataPath else { throw ProbeFailure.testHooksDenied }
     var current = stat()
     guard fstatat(AT_FDCWD, dataPath, &current, 0) == 0, kept.st_dev == device, kept.st_ino == inode, current.st_dev == device, current.st_ino == inode else { throw ProbeFailure.testHooksDenied }
-    let marker = openat(dataFD, ".solara-probe-scratch", O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    let marker = openat(dataFD, ".solara-probe-scratch", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
     guard marker >= 0 else { throw ProbeFailure.testHooksDenied }
     defer { close(marker) }
     var mark = stat()

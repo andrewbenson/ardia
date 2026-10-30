@@ -250,8 +250,27 @@ public enum OmniboxRead {
   }
 
   @MainActor public static func bar(windowId: String) -> [String: Any]? {
-    guard let view = NativeOmniboxView.hosts[windowId]?.view, view.bar.model != nil else { return nil }
-    return (try? JSONSerialization.jsonObject(with: Data(view.driverStateJSON().utf8))) as? [String: Any]
+    let anchor = NativeOmniboxView.hosts[windowId]?.view
+    let views = NSApp.windows.flatMap { window in window.contentView.map(omniboxViews) ?? [] }
+      .filter { $0.windowId == windowId && $0.bar.model != nil }
+    let presented = views.filter { $0 !== anchor && $0.window?.isVisible == true && !$0.isHiddenOrHasHiddenAncestor }
+    let chosen = presented.first { $0.bar.model?.field?.hasFocus == true } ?? presented.first
+    let source = chosen != nil ? "panel" : "anchor"
+    guard let view = chosen ?? anchor.flatMap({ $0.bar.model != nil ? $0 : nil }),
+      var state = (try? JSONSerialization.jsonObject(with: Data(view.driverStateJSON().utf8))) as? [String: Any]
+    else { return nil }
+    state["source"] = source
+    return state
+  }
+
+  @MainActor private static func omniboxViews(_ root: NSView) -> [NativeOmniboxView] {
+    var found: [NativeOmniboxView] = []
+    var stack = [root]
+    while let view = stack.popLast() {
+      if let omnibox = view as? NativeOmniboxView { found.append(omnibox) }
+      stack.append(contentsOf: view.subviews)
+    }
+    return found
   }
 }
 #endif

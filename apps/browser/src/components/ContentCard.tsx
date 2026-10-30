@@ -463,7 +463,7 @@ const TabPane = memo(function TabPane({
       }}
     >
       {!toolbar || fullscreen || autoLayout ? null : nativePane ? (
-        <View style={{ height: layout.toolbarHeight }} />
+        <View pointerEvents="none" style={{ height: layout.toolbarHeight }} />
       ) : visible && !windowToolbar ? (
         <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused || !inSplit} />
       ) : visible ? (

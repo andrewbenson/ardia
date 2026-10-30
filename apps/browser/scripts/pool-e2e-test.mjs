@@ -15,7 +15,7 @@ window's pages and RN mounts no TabWebView; the tab's handle reaches the page (e
 zoom in and back, load and go back); the page's events reach the store (title, favicon, load progress partway and
 then done); a page's notification, clicked while another tab is active, brings its tab back
 and fires the page's onclick; a peek opens on its own pooled page and Open as Tab promotes that page into the window;
-and in a split, a click in the unfocused pane focuses it. A build whose pool doesn't serve pages fails every check.`);
+and in a split, a click in the unfocused pane focuses it and a pane's close button closes its tab. A build whose pool doesn't serve pages fails every check.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -174,6 +174,17 @@ try {
     await until("b focused", `return active() === "b" || null;`, 3000);
     const native = await untilSnapshot("native split focus", (state) => state.windows[0]?.selectedTabId === "b" && ["a", "b"].every((id) => state.windows[0]?.split?.leaves?.[id]));
     if (native.windows[0].selectedTabId !== "b") throw new Error(`native selected ${native.windows[0].selectedTabId}`);
+    return { at: [x, y], hit: click.hit };
+  });
+
+  await rep.check("a split pane's close button closes its tab and leaves the other one alone", async () => {
+    const panes = await until("two panes placed", `return W.describe("w1").then(JSON.parse).then((d) => d.split && d.split.panes && d.split.panes.a && d.split.panes.b ? { card: d.card, panes: d.split.panes } : null);`);
+    const [cx, cy] = panes.card;
+    const [ax, ay, aw] = panes.panes.a;
+    const x = Math.round(cx + ax + aw - 8 - 15), y = Math.round(cy + ay + 20);
+    const click = await run(`return ac.shell.devClick("w1", { x: ${x}, y: ${y}, wait: 250 });`);
+    if (click.hit !== "ToolbarButtonView") throw new Error(`the click at ${x},${y} landed on ${click.hit}`);
+    await until("a closed", `return !S().tabs.a && !Object.keys(S().splits).length && S().windows.w1.tabIds.includes("b") || null;`, 3000);
     return { at: [x, y], hit: click.hit };
   });
 } catch (e) {

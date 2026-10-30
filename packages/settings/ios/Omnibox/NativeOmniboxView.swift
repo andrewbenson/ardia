@@ -244,6 +244,11 @@ public enum OmniboxRead {
     return ["field": "url", "value": editor.string,
       "selection": ["start": selection.location, "end": selection.location + selection.length]]
   }
+
+  @MainActor public static func bar(windowId: String) -> [String: Any]? {
+    guard let view = NativeOmniboxView.hosts[windowId]?.view, view.bar.model != nil else { return nil }
+    return (try? JSONSerialization.jsonObject(with: Data(view.driverStateJSON().utf8))) as? [String: Any]
+  }
 }
 #endif
 

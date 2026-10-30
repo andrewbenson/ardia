@@ -20,6 +20,7 @@ final class ProbeHost {
   private var pending: [String: Timer] = [:]
   private var snapshotTasks: [String: Task<Void, Never>] = [:]
   private var cancellations: [String: () -> Void] = [:]
+  private var swipeInFlight = false
 
   static func start() {
     guard SolaraProbeHostMarker() == 1 else { return }
@@ -65,7 +66,10 @@ final class ProbeHost {
         switch request.command {
         case "probe.hello":
           guard request.args.isEmpty else { throw ProbeFailure.invalidArgument }
-          response = ["id": id, "protocol": 1, "result": ["protocol": 1, "capabilities": ["probe.hello", "state.snapshot"], "pid": getpid()]]
+          response = ["id": id, "protocol": 1, "result": ["protocol": 1, "capabilities": ["probe.hello", "state.snapshot", "input.swipe"], "pid": getpid()]]
+        case "input.swipe":
+          try swipe(request)
+          continue
         case "state.snapshot":
           try snapshotRequests.start(id: request.id, expiresAtMs: request.expiresAtMs, checkGate: {
             try self.checkGate()
@@ -138,6 +142,69 @@ final class ProbeHost {
       cancel?()
       reply(["id": request.id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.testHooksDenied.code]], id: request.id)
     }
+  }
+
+  private static func number(_ value: Any?) -> Double? {
+    guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite else { return nil }
+    return number.doubleValue
+  }
+
+  private func swipe(_ request: ProbeRequest) throws {
+    let args = request.args
+    guard Set(args.keys) == Set(["windowId", "x", "y", "steps", "ignorePreference"]),
+      let windowId = args["windowId"] as? String, !windowId.isEmpty, windowId.utf8.count <= 256,
+      let x = Self.number(args["x"]), let y = Self.number(args["y"]),
+      x >= 0, y >= 0, x <= 32768, y <= 32768,
+      let ignore = args["ignorePreference"] as? NSNumber, CFGetTypeID(ignore) == CFBooleanGetTypeID(),
+      let steps = args["steps"] as? [[String: Any]], steps.count <= 128 else { throw ProbeFailure.invalidArgument }
+    guard NativeStoreHandle.store?.state.windows[windowId] != nil,
+      let window = WindowHost.window(id: windowId) else { throw ProbeFailure.windowGone }
+    guard let content = window.contentView, x <= content.bounds.width, y <= content.bounds.height else { throw ProbeFailure.invalidArgument }
+    var previousTime = 0.0
+    for (index, step) in steps.enumerated() {
+      guard Set(step.keys).isSubset(of: ["phase", "dx", "dy", "atMs", "timestampMs"]),
+        let phase = step["phase"] as? String, ["began", "changed", "ended", "cancelled", "swipe"].contains(phase),
+        let dx = Self.number(step["dx"]), abs(dx) <= 1000,
+        let at = Self.number(step["atMs"]), at >= previousTime, at <= 5000,
+        index != 0 || at == 0,
+        step["dy"] == nil || Self.number(step["dy"]).map({ abs($0) <= 1000 }) == true,
+        step["timestampMs"] == nil || Self.number(step["timestampMs"]) == at else { throw ProbeFailure.invalidArgument }
+      previousTime = at
+    }
+    if let first = steps.first, let last = steps.last {
+      if first["phase"] as? String == "swipe" {
+        guard steps.count == 1 else { throw ProbeFailure.invalidArgument }
+      } else {
+        guard steps.count >= 2, first["phase"] as? String == "began",
+          ["ended", "cancelled"].contains(last["phase"] as? String ?? ""),
+          steps.dropFirst().dropLast().allSatisfy({ $0["phase"] as? String == "changed" }) else { throw ProbeFailure.invalidArgument }
+      }
+    }
+    guard Int64(Date().timeIntervalSince1970 * 1000) + Int64(previousTime) + 250 < request.expiresAtMs else { throw ProbeFailure.invalidArgument }
+    guard !swipeInFlight else { throw ProbeFailure.notReady }
+    swipeInFlight = true
+    begin(request)
+    var failure: ProbeFailure?
+    let cancel = SwipeInput.perform(windowNumber: window.windowNumber, x: x, y: y, steps: steps, ignorePreference: ignore.boolValue, shouldContinue: { [weak self] in
+      guard let self else { return false }
+      do {
+        try checkGate(request)
+        guard pending[request.id] != nil else { throw ProbeFailure.timeout }
+        return true
+      } catch {
+        failure = (error as? ProbeFailure) ?? .testHooksDenied
+        return false
+      }
+    }) { [weak self] result in
+      guard let self else { return }
+      swipeInFlight = false
+      if let failure {
+        finish(request, response: ["id": request.id, "protocol": 1, "error": ["code": failure.code]])
+      } else {
+        finish(request, response: ["id": request.id, "protocol": 1, "result": result])
+      }
+    }
+    if pending[request.id] != nil { cancellations[request.id] = { failure = .timeout; cancel() } }
   }
 
   private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
@@ -309,10 +376,10 @@ final class ProbeHost {
           "consistent": final.rev == initial.rev,
           "coordinateSpace": ["origin": "windowContentTopLeft", "unit": "point", "displayScale": windowScale(ids)],
           "focusedWindowId": Self.value(state.ui.focusedWindowId), "poolAvailable": TabPoolRead.available,
-          "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot,
+          "windowDragCount": windowDragCount, "onboarding": OnboardingRead.snapshot(), "newTabAvailable": NewTabRead.available, "swipeSimulation": SwipeRead.snapshot, "haptics": SwipeRead.haptics,
           "videoUpscaling": videoUpscaling, "savedLogin": Self.value(savedLogin),
           "windows": windows, "tabs": tabs, "downloads": ["count": state.downloads.count, "finished": state.downloads.filter { $0.state == "finished" }.count], "profiles": NSNull(),
-          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
+          "capabilities": ["available": ["windows.frame", "windows.chromeWindowNumber", "windows.accessibilityLayers", "windows.focusedURL", "windows.split", "windows.tour", "windows.folderPanel", "windows.iconPicker", "windows.shell", "windows.sidebarShell", "windows.sidebarChromeMetrics", "windows.sidebarAddressBar", "windows.hoverCard", "windows.reactBlockers", "windows.dropTargets", "windows.viewFrames", "windows.hitSlot", "windows.hitView", "windows.firstResponder", "windows.textFieldCount", "windows.media", "windows.mediaEnabled", "windows.mediaKinds", "windows.paneOverlays", "poolAvailable", "onboarding", "newTabAvailable", "windowDragCount", "swipeSimulation", "haptics", "videoUpscaling", "savedLogin", "tabs.url", "tabs.title", "tabs.customTitle", "tabs.customIcon", "tabs.zoom", "windows.overlays.selection", "windows.overlays.zoom", "windows.overlays.history", "windows.overlays.downloads", "windows.overlays.sadTab", "downloads.count", "downloads.finished", "windows.settings.layout", "windows.settings.search"],
             "partial": ["tabs.live"], "unavailable": ["windows.occluded", "windows.selectedTabIds", "windows.spaces", "windows.panes", "windows.focus", "windows.views", "tabs.pinned", "tabs.loading", "tabs.visible", "profiles"]]]]
       }
       initial = final

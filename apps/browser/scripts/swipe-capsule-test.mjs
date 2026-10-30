@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -89,11 +90,20 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
   }
   throw new Error(`${what}: native snapshot never matched (${JSON.stringify(last)})`);
 };
+const readHaptics = async () => {
+  const { haptics } = await app.snapshot();
+  assert.ok(haptics && Number.isSafeInteger(haptics.performed) && Number.isSafeInteger(haptics.suppressed) && haptics.suppressed >= 0,
+    `invalid native haptics ${JSON.stringify(haptics)}`);
+  assert.equal(haptics.performed, 0, `probe-driven haptic performed: ${JSON.stringify(haptics)}`);
+  return haptics;
+};
 const got = {};
 
 try {
+  for (const inputRoute of ["js", "native"]) {
+  const prefix = inputRoute === "js" ? "" : "native-input-";
   for (const nativeShell of [false, true]) {
-    const tag = nativeShell ? "native" : "rn";
+    const tag = prefix + (nativeShell ? "native" : "rn");
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
       env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
@@ -106,9 +116,18 @@ try {
     }
     await sleep(600);
     const shown = (s) => (nativeShell ? s.native && s.native.frame : s.rn);
+    const gestureSample = async (steps, at) => {
+      if (inputRoute === "js") return run(`return gesture(${JSON.stringify(steps)}, ${at});`);
+      const sampling = run(`return new Promise((resolve) => setTimeout(() => sample().then(resolve), ${at}));`);
+      const action = app.probe("input.swipe", { windowId: "w1", x: 400, y: 400, steps, ignorePreference: true });
+      const [sampled, result] = await Promise.all([sampling, action]);
+      if (result.eventCount !== steps.length || !result.where.target) throw new Error(`native gesture ${JSON.stringify(result)}`);
+      await sleep(100);
+      return sampled;
+    };
 
     await rep.check(`${tag}-confirmed-capsule`, async () => {
-      const running = run(`return gesture(${JSON.stringify(kept)}, 620);`);
+      const running = gestureSample(kept, 620);
       let captured = null;
       if (nativeShell) {
         await sleep(620);
@@ -133,7 +152,7 @@ try {
     });
 
     await rep.check(`${tag}-destination-list`, async () => {
-      const running = run(`return gesture(${JSON.stringify(held)}, 950);`);
+      const running = gestureSample(held, 950);
       let captured = null;
       if (nativeShell) {
         await sleep(950);
@@ -160,11 +179,12 @@ try {
       got[`${tag}-list`] = frame;
       return { frame };
     });
+    await rep.check(`${tag}-no-haptics`, readHaptics);
     await app.quit();
     app = null;
   }
   app = await launch(resolve(appArg), {
-    data: join(scratch, "data-pool"), fresh: true, session: fixture, onboarded: true, probe: true,
+    data: join(scratch, `data-pool-${inputRoute}`), fresh: true, session: fixture, onboarded: true, probe: true,
     env: { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_SIDE_PANEL: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe",
   });
@@ -174,7 +194,9 @@ try {
   const back = timed([{ phase: "began", dx: 0, atMs: 0 }, ...push, { phase: "ended", dx: 0, atMs: 200 }]);
   const swipe = async (x, y, steps = back) => {
     const before = (await app.snapshot()).swipeSimulation.count;
-    const where = await run(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`);
+    const where = inputRoute === "js"
+      ? await run(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`)
+      : (await app.probe("input.swipe", { windowId: "w1", x, y, steps, ignorePreference: true })).where;
     await untilSnapshot("native swipe hit", (_, state) => state.swipeSimulation.count > before &&
       state.swipeSimulation.where.hit === where.hit && state.swipeSimulation.where.target === where.target &&
       state.swipeSimulation.where.window === where.window);
@@ -191,7 +213,7 @@ try {
   await run(`ac.store.getState().navigate("a", ${JSON.stringify(url("two"))}, { userInitiated: true }); return true;`);
   await until("page TWO", `return title() === "TWO" || null;`, 15000);
 
-  await rep.check("pool-side-panel-swipe-stays", async () => {
+  await rep.check(`${prefix}pool-side-panel-swipe-stays`, async () => {
     const { id } = await run(`return globalThis.expo.modules.ArdiaExtensions.install(${JSON.stringify(ext)}, "");`);
     await run(`return ac.extensions.refreshExtensions("").then(() => true);`);
     await until("the side panel opens", `return ac.extensions.openSidePanel("w1", ${JSON.stringify(id)}).then(() => !!ac.extensions.useExtensions.getState().sidePanels.w1 || null);`);
@@ -203,7 +225,7 @@ try {
     return where;
   });
 
-  await rep.check("pool-devtools-swipe-stays", async () => {
+  await rep.check(`${prefix}pool-devtools-swipe-stays`, async () => {
     await run(`ac.webviews.get("a").showDevTools(); return true;`);
     for (const end = Date.now() + 8000; !(await app.targets()).some((t) => t.url.startsWith("devtools://")); await sleep(150)) if (Date.now() > end) throw new Error("DevTools never opened");
     await sleep(1500);
@@ -214,14 +236,14 @@ try {
     return { scan, where: await stays("DevTools", devtools[0], 400) };
   });
 
-  await rep.check("pool-page-swipe-goes-back", async () => {
+  await rep.check(`${prefix}pool-page-swipe-goes-back`, async () => {
     const where = await swipe(300, 400);
     await until("back to ONE", `return title() === "ONE" || null;`, 4000);
     await untilSnapshot("page swipe goes back", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.url === url("one")));
     return where;
   });
 
-  await rep.check("pool-discrete-page-swipe-goes-back", async () => {
+  await rep.check(`${prefix}pool-discrete-page-swipe-goes-back`, async () => {
     await run(`ac.store.getState().navigate("a", ${JSON.stringify(url("two"))}, { userInitiated: true }); return true;`);
     await until("page TWO again", `return title() === "TWO" || null;`, 15000);
     await sleep(500);
@@ -230,13 +252,53 @@ try {
     await untilSnapshot("discrete page swipe goes back", (_, state) => state.tabs.some((tab) => tab.id === "a" && tab.url === url("one")));
     return where;
   });
+  await rep.check(`${prefix}pool-no-haptics`, readHaptics);
   await app.quit();
   app = null;
 
-  await rep.check("native-matches-rn", async () => {
-    for (const k of ["capsule", "list"]) if (!near(got[`native-${k}`], got[`rn-${k}`])) throw new Error(`${k}: native ${got[`native-${k}`]}, RN ${got[`rn-${k}`]}`);
+  await rep.check(`${prefix}native-matches-rn`, async () => {
+    for (const k of ["capsule", "list"]) if (!near(got[`${prefix}native-${k}`], got[`${prefix}rn-${k}`])) throw new Error(`${k}: native ${got[`${prefix}native-${k}`]}, RN ${got[`${prefix}rn-${k}`]}`);
     return got;
   });
+  }
+  app = await launch(resolve(appArg), {
+    data: join(scratch, "data-haptic-detent"), fresh: true, onboarded: true, probe: true,
+    session: session({
+      profiles: ["Personal", "Work"],
+      windows: [{ id: "w1", frame: [80, 80, 1280, 800] }],
+      tabs: [{ id: "a", profileId: "default", url: url("one") }, { id: "b", profileId: "work", url: url("one") }],
+      settings: { warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
+    }),
+    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_TOP_STRIP: "1", ARDIA_NATIVE_PROFILE_PAGER: "1" },
+    ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe",
+  });
+  await rep.check("native-input-pager-detent-suppresses-haptic", async () => {
+    const sidebar = await until("native sidebar pager", `return globalThis.expo.modules.SolaraProfilePager.describe("w1").then((raw) => {
+      const { sidebar, snapshot } = JSON.parse(raw);
+      return sidebar.native && !sidebar.hidden && sidebar.pageWidth > 0 && snapshot?.phase === "idle" && snapshot.position === 0 ? sidebar : null;
+    });`, 15000);
+    const [x, y, width, height] = sidebar.frame;
+    assert.ok(width > 0 && height > 0 && sidebar.pageWidth <= 1000, `unbounded pager ${JSON.stringify(sidebar)}`);
+    const before = await readHaptics();
+    const steps = timed([
+      { phase: "began", dx: 0, atMs: 0 },
+      { phase: "changed", dx: -sidebar.pageWidth, atMs: 16 },
+      { phase: "changed", dx: -sidebar.pageWidth, atMs: 32 },
+      { phase: "ended", dx: 0, atMs: 64 },
+    ]);
+    const result = await app.probe("input.swipe", { windowId: "w1", x: x + width / 2, y: y + height / 2, steps, ignorePreference: true });
+    assert.equal(result.eventCount, steps.length);
+    assert.ok(result.where.target, `pager swipe missed ${JSON.stringify(result)}`);
+    await untilSnapshot("pager crosses detent", (window) => window?.profileId === "work");
+    await until("native pager settles at Work", `return globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then((pager) =>
+      pager?.phase === "idle" && pager.position === 1 || null);`);
+    const after = await readHaptics();
+    assert.ok(after.suppressed > before.suppressed, `detent did not suppress a haptic: ${JSON.stringify({ before, after })}`);
+    return { before, after, where: result.where };
+  });
+  await rep.check("native-input-pager-no-haptics", readHaptics);
+  await app.quit();
+  app = null;
 } catch (e) {
   rep.record("run", { error: e });
 } finally {

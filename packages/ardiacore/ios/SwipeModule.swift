@@ -123,6 +123,10 @@ final class SwipeArea: ExpoView, ACSwipeTarget, ACPagerSurface {
     pager?.input(from: self, phase: phase, distance: Double(distance), direction: Int(direction), timestamp: timestamp)
   }
 
+  #if SOLARA_PROBES
+  @objc func cancelProbeSwipe() { pager?.cancelProbeSwipe(from: self) }
+  #endif
+
   func configurePager(_ value: [String: Any]?) {
     guard let value, let key = value["key"] as? String else {
       let old = pager
@@ -235,6 +239,9 @@ public final class ACPager {
   private var propSelected = 0
   private var propAck = 0
   private var drag = Drag()
+  #if SOLARA_PROBES
+  private weak var probeArea: AnyObject?
+  #endif
   private var history: [(time: TimeInterval, position: Double)] = []
   private var spring: Spring?
   private var link: CADisplayLink?
@@ -320,6 +327,9 @@ public final class ACPager {
   }
 
   public func input(from area: ACPagerSurface, phase input: String, distance: Double, direction: Int, timestamp: TimeInterval) {
+    #if SOLARA_PROBES
+    probeArea = ACSwipe.probeDelivery ? area : nil
+    #endif
     #if DEBUG
     lastInput = ["phase": input, "distance": distance, "direction": direction, "timestamp": timestamp]
     #endif
@@ -393,6 +403,20 @@ public final class ACPager {
     publish()
     emitPosition()
   }
+
+  #if SOLARA_PROBES
+  func cancelProbeSwipe(from area: ACPagerSurface) {
+    guard probeArea === area else { return }
+    probeArea = nil
+    stopSpring()
+    drag = Drag()
+    history = []
+    position = Double(selected)
+    velocity = 0
+    phase = .idle
+    publish()
+  }
+  #endif
 
   private func releaseVelocity(at timestamp: TimeInterval) -> Double {
     let recent = history.filter { timestamp - $0.time <= historyWindow }
@@ -596,11 +620,42 @@ public final class ACPager {
 
 #if SOLARA_PROBES
 @MainActor
+public enum SwipeInput {
+  public static func perform(windowNumber: Int, x: Double, y: Double, steps: [[String: Any]], ignorePreference: Bool,
+    shouldContinue: @escaping () -> Bool, completion: @escaping ([String: Any]) -> Void) -> () -> Void {
+    guard let window = NSApp.window(withWindowNumber: windowNumber) else {
+      completion(["error": "windowGone"])
+      return {}
+    }
+    var cancel: (() -> Void)?
+    var completed = false
+    let stop = ACSwipe.simulate(in: window, point: NSPoint(x: x, y: y), steps: steps, ignoreSystemPreference: ignorePreference,
+      shouldContinue: { MainActor.assumeIsolated { shouldContinue() } }) { result in
+      MainActor.assumeIsolated {
+        defer { completed = true; cancel = nil }
+        guard shouldContinue(), result["error"] == nil else {
+          if result["error"] == nil, let cancel { cancel() }
+          else { completion(["error": "testHooksDenied"]) }
+          return
+        }
+        SwipeRead.record(result)
+        completion(["where": result["where"] ?? [:], "eventCount": (result["events"] as? [Any])?.count ?? 0])
+      }
+    }
+    if !completed { cancel = stop }
+    return stop
+  }
+}
+#endif
+
+#if SOLARA_PROBES
+@MainActor
 public enum SwipeRead {
   private static var count = 0
   private static var whereHit: [String: Any] = [:]
 
   public static var snapshot: [String: Any] { ["count": count, "where": whereHit] }
+  public static var haptics: [String: Any] { ACSwipe.hapticSnapshot }
 
   static func record(_ result: Any) {
     guard let result = result as? [String: Any], let whereValue = result["where"] as? [String: Any] else { return }

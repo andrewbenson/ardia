@@ -28,6 +28,17 @@ NSMutableArray *gTrace;
     if (gTrace) [gTrace addObject:(__VA_ARGS__)];   \
   } while (0)
 
+#if SOLARA_PROBES
+BOOL gProbeDelivery;
+NSUInteger gHapticsPerformed;
+NSUInteger gHapticsSuppressed;
+struct ProbeDeliveryScope {
+  BOOL previous;
+  explicit ProbeDeliveryScope(BOOL enabled) : previous(gProbeDelivery) { gProbeDelivery = gProbeDelivery || enabled; }
+  ~ProbeDeliveryScope() { gProbeDelivery = previous; }
+};
+#endif
+
 BOOL gWrongRendererHit;
 BOOL gLegacyHitRouting;
 
@@ -748,13 +759,29 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
 
 @implementation ACSwipe
 
+#if SOLARA_PROBES
++ (BOOL)probeDelivery { return gProbeDelivery; }
++ (NSDictionary<NSString *, NSNumber *> *)hapticSnapshot {
+  return @{@"performed" : @(gHapticsPerformed), @"suppressed" : @(gHapticsSuppressed)};
+}
+#endif
+
 + (void)performHaptic:(NSString *)pattern {
+#if SOLARA_PROBES
+  if (gProbeDelivery || [NSProcessInfo.processInfo.environment[@"ARDIA_BACKGROUND"] isEqualToString:@"1"]) {
+    gHapticsSuppressed += 1;
+    return;
+  }
+#endif
   NSHapticFeedbackPattern p = [pattern isEqualToString:@"levelChange"] ? NSHapticFeedbackPatternLevelChange
                               : [pattern isEqualToString:@"alignment"]  ? NSHapticFeedbackPatternAlignment
                                                                          : NSHapticFeedbackPatternGeneric;
   NSHapticFeedbackPerformanceTime time = p == NSHapticFeedbackPatternLevelChange ? NSHapticFeedbackPerformanceTimeDefault
                                                                                   : NSHapticFeedbackPerformanceTimeNow;
   [NSHapticFeedbackManager.defaultPerformer performFeedbackPattern:p performanceTime:time];
+#if SOLARA_PROBES
+  gHapticsPerformed += 1;
+#endif
 }
 
 + (void)addTarget:(NSView<ACSwipeTarget> *)target {
@@ -771,6 +798,17 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
                    steps:(NSArray<NSDictionary<NSString *, id> *> *)steps
   ignoreSystemPreference:(BOOL)ignoreSystemPreference
               completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+#if SOLARA_PROBES
+  [self simulateInWindow:window point:point steps:steps ignoreSystemPreference:ignoreSystemPreference shouldContinue:nil completion:completion];
+}
+
++ (dispatch_block_t)simulateInWindow:(NSWindow *)window
+                              point:(NSPoint)point
+                              steps:(NSArray<NSDictionary<NSString *, id> *> *)steps
+             ignoreSystemPreference:(BOOL)ignoreSystemPreference
+                     shouldContinue:(BOOL (^)(void))shouldContinue
+                         completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+#endif
   gTrace = [NSMutableArray array];
   NSMutableArray *log = [NSMutableArray array];
   const uint64_t startNs = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
@@ -785,14 +823,50 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
   };
   __block NSUInteger index = 0;
   __block void (^next)(void);
+#if SOLARA_PROBES
+  NSMutableArray *trace = gTrace;
+  __block BOOL finished = NO;
+  __block int ownedSequence = 0;
+  dispatch_block_t cancel = ^{
+    ProbeDeliveryScope scope(shouldContinue != nil);
+    if (finished) return;
+    finished = YES;
+    if (ownedSequence != 0 && gGesture.seq == ownedSequence) {
+      NSView<ACSwipeTarget> *target = gGesture.target;
+      NSView<ACSwipeTarget> *prepared = gPrepared;
+      if ([target respondsToSelector:@selector(cancelProbeSwipe)]) [target cancelProbeSwipe];
+      if (prepared != target && [prepared respondsToSelector:@selector(cancelProbeSwipe)]) [prepared cancelProbeSwipe];
+      gPrepared = nil;
+      gGesture.renderer.scroll = RendererScroll::Idle;
+      gGesture = Gesture();
+      gMomentum = OwnedMomentum();
+    }
+    if (gTrace == trace) gTrace = nil;
+    gWrongRendererHit = NO;
+    gLegacyHitRouting = NO;
+    next = nil;
+    completion(@{@"error" : @"testHooksDenied"});
+  };
+#endif
   void (^step)(void) = ^{
+#if SOLARA_PROBES
+    ProbeDeliveryScope scope(shouldContinue != nil);
+    if (finished) return;
+    if (shouldContinue && !shouldContinue()) { cancel(); return; }
+#endif
     if (index >= steps.count) {
       NSDictionary *result = @{@"where" : where, @"startNs" : @(startNs), @"events" : log, @"acks" : gTrace ?: @[], @"responder" : ResponderReport(hit)};
       gTrace = nil;
       next = nil;
       completion(result);
+#if SOLARA_PROBES
+      finished = YES;
+#endif
       return;
     }
+#if SOLARA_PROBES
+    const int sequenceBefore = gGesture.seq;
+#endif
     NSDictionary *s = steps[index++];
     NSString *phase = s[@"phase"];
     const double atMs = (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - startNs) / 1e6;
@@ -854,6 +928,9 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
       }
       gWrongRendererHit = NO;
       gLegacyHitRouting = NO;
+#if SOLARA_PROBES
+      if (shouldContinue && (gGesture.seq != sequenceBefore || gGesture.seq == ownedSequence)) ownedSequence = gGesture.seq;
+#endif
     }
     NSDictionary *following = index < steps.count ? steps[index] : nil;
     int64_t delayNs = following[@"atMs"]
@@ -863,6 +940,9 @@ NSEvent *SyntheticScroll(NSWindow *window, NSPoint point, NSDictionary *step, ui
   };
   next = step;
   step();
+#if SOLARA_PROBES
+  return [cancel copy];
+#endif
 }
 
 @end

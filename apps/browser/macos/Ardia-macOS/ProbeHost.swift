@@ -16,6 +16,7 @@ final class ProbeHost {
   private let files: ProbeFiles
   private var seen = ProbeSeenIds()
   private var timer: Timer?
+  private let snapshotRequests = ProbeAsyncRequest()
   private var pending: [String: Timer] = [:]
   private var snapshotTasks: [String: Task<Void, Never>] = [:]
   private var cancellations: [String: () -> Void] = [:]
@@ -66,19 +67,20 @@ final class ProbeHost {
           guard request.args.isEmpty else { throw ProbeFailure.invalidArgument }
           response = ["id": id, "protocol": 1, "result": ["protocol": 1, "capabilities": ["probe.hello", "state.snapshot"], "pid": getpid()]]
         case "state.snapshot":
-          guard snapshotTasks.count < 4, snapshotTasks[request.id] == nil else { throw ProbeFailure.notReady }
-          begin(request)
-          snapshotTasks[request.id] = Task { @MainActor in
-            defer { snapshotTasks.removeValue(forKey: request.id) }
-            do {
-              try checkSnapshot(request)
-              let response = try await snapshot(request)
-              try checkSnapshot(request)
-              finish(request, response: response)
-            } catch {
-              finish(request, response: ["id": id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code]])
+          try snapshotRequests.start(id: request.id, expiresAtMs: request.expiresAtMs, checkGate: {
+            try self.checkGate()
+          }, lookup: {
+            try await self.lookupSavedLogin(request)
+          }, after: { savedLogin in
+            try self.snapshot(request, savedLogin: savedLogin)
+          }, reply: { result in
+            switch result {
+            case .success(let response):
+              self.reply(response, id: id)
+            case .failure(let error):
+              self.reply(["id": id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code]], id: id)
             }
-          }
+          })
           continue
         default:
           throw ProbeFailure.unsupported
@@ -110,8 +112,7 @@ final class ProbeHost {
   }
 
   private func checkSnapshot(_ request: ProbeRequest) throws {
-    try checkGate(request)
-    guard !Task.isCancelled, pending[request.id] != nil else { throw ProbeFailure.timeout }
+    try snapshotRequests.check(id: request.id, expiresAtMs: request.expiresAtMs) { try self.checkGate() }
   }
 
   private func begin(_ request: ProbeRequest) {
@@ -139,7 +140,7 @@ final class ProbeHost {
     }
   }
 
-  private func snapshot(_ request: ProbeRequest) async throws -> [String: Any] {
+  private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
     try checkSnapshot(request)
     guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
@@ -159,7 +160,6 @@ final class ProbeHost {
           (sample["y"] as? Double)?.isFinite == true &&
           (sample["type"] as? String).map(dropTypes.contains) == true
       }) else { throw ProbeFailure.invalidArgument }
-    var savedLogin: [String: Any]?
     if let query = request.args["savedLogin"] {
       guard let query = query as? [String: Any], Set(query.keys) == Set(["origin", "username"]),
         let origin = query["origin"] as? String, origin.utf8.count <= 2048,
@@ -171,9 +171,16 @@ final class ProbeHost {
         let url = components.url else { throw ProbeFailure.invalidArgument }
       let canonical = url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
       let exists = await SavedLoginRead.exists(origin: canonical, username: username)
-      try checkSnapshot(request)
-      savedLogin = ["exists": exists]
+      return ["exists": exists]
     }
+    return nil
+  }
+
+  private func snapshot(_ request: ProbeRequest, savedLogin: [String: Any]?) throws -> [String: Any] {
+    let dropTargets = request.args["dropTargets"] as? [[String: Any]] ?? []
+    let viewFrames = request.args["viewFrames"] as? [String] ?? []
+    let hitPoint = request.args["hitPoint"] as? [Double]
+    let blockerStep = request.args["reactBlockerStep"] as? Double
     guard let store = NativeStoreHandle.store else { throw ProbeFailure.notReady }
     let wanted = request.args["windowId"] as? String
     if let wanted, wanted != "settings", store.state.windows[wanted] == nil { throw ProbeFailure.windowGone }

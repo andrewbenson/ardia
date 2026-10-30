@@ -1,7 +1,7 @@
 import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "@ardia/ardiacore";
 import { ContextMenuArea, copyText, fileExists, fileIcon, MouseArea, moveToTrash, openFile, PopoverBubble, popoverBubbleAvailable, revealFile, showMenu, Surface, Symbol, VisualEffect, type MenuItem } from "@ardia/shell";
 import { memo, useEffect, useRef, useState } from "react";
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
 import { hex, layout, useTheme } from "../lib/theme";
 import { useShallow } from "zustand/react/shallow";
@@ -16,7 +16,7 @@ import { HoverSlot } from "./HoverSlot";
 import { anchorInside, DOWNLOADS_PANEL, downloadsPlacement, type DownloadsPlacement, type Rect, type Size } from "./downloadsPlacement";
 import { PANEL, POPOVER_MOTION, PopoverSeparator, usePopoverPresence } from "./layout/controls";
 import { IconButton, useHover } from "./primitives";
-import { hostedKinds, nativeToolbarAvailable, NativeDownloadsView, SolaraHostedView, windowShellActive, type NativeDownloadsEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativeDownloadsView, SolaraHostedView, windowShellActive, type NativeDownloadsEvent } from "@ardia/settings";
 import { useNativeDownloadsPanel } from "./nativeDownloadsPanel";
 import { usePages } from "./layout/pageState";
 
@@ -625,10 +625,8 @@ export function DownloadMagnet() {
   const sidebarWidth = useSidebarWidth(windowId);
   const topStrip = useTabLayout() === "top";
   const addressBar = useAddressBarInSidebar();
-  const [native] = useState(() => hostedKinds().includes("downloadMagnet"));
   const [flight, setFlight] = useState<{ id: string; path: string } | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const t = useRef(new Animated.Value(0)).current;
   const seen = useRef<Set<string> | null>(null);
 
   useEffect(() => {
@@ -639,47 +637,18 @@ export function DownloadMagnet() {
       s.downloads.forEach((d) => seen.current!.add(d.id));
       if (!fresh || s.ui.focusedWindowId !== windowId || !downloadVisibleIn(fresh, s.windows[windowId])) return;
       setFlight({ id: fresh.id, path: fresh.path || fresh.filename });
-      if (native) return void setTimeout(() => setFlight((f) => (f?.id === fresh.id ? null : f)), 700);
-      t.setValue(0);
-      Animated.timing(t, { toValue: 1, duration: 700, easing: Easing.bezier(0.45, 0, 0.2, 1), useNativeDriver: true }).start(({ finished }) => finished && setFlight(null));
+      setTimeout(() => setFlight((f) => (f?.id === fresh.id ? null : f)), 700);
     });
-  }, [windowId, native]);
+  }, [windowId]);
 
   const sidebar = !topStrip && sidebarOpen ? sidebarWidth : 0;
   const footer = { x: layout.sidebarInset + SIDEBAR_FOOTER_DOWNLOADS.size / 2, y: size.height - SIDEBAR_FOOTER_DOWNLOADS.bottom - SIDEBAR_FOOTER_DOWNLOADS.size / 2 };
   const target = topStrip ? { x: size.width - 25, y: 21 } : addressBar ? footer : sidebarOpen ? { x: sidebarWidth - 24, y: 27 } : { x: 24, y: 24 };
   const start = { x: sidebar + (size.width - sidebar) / 2, y: size.height * 0.45 };
-  const icon = 44;
-  const steps = [0, 0.25, 0.5, 0.75, 1];
-  const x = t.interpolate({ inputRange: steps, outputRange: steps.map((p) => start.x + (target.x - start.x) * p - icon / 2) });
-  const y = t.interpolate({ inputRange: steps, outputRange: steps.map((p) => start.y + (target.y - start.y) * p - Math.sin(Math.PI * p) * 90 - icon / 2) });
-
-  if (native) {
-    const state = JSON.stringify({ flight: flight && size.width > 0 ? { ...flight, start: [start.x, start.y], target: [target.x, target.y] } : null });
-    return (
-      <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setSize(e.nativeEvent.layout)}>
-        <SolaraHostedView kind="downloadMagnet" windowId={windowId} state={state} pointerEvents="none" style={StyleSheet.absoluteFill} />
-      </View>
-    );
-  }
-
+  const state = JSON.stringify({ flight: flight && size.width > 0 ? { ...flight, start: [start.x, start.y], target: [target.x, target.y] } : null });
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setSize(e.nativeEvent.layout)}>
-      {flight && (
-        <Animated.View
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            width: icon,
-            height: icon,
-            opacity: t.interpolate({ inputRange: [0, 0.1, 0.8, 1], outputRange: [0, 1, 1, 0] }),
-            transform: [{ translateX: x }, { translateY: y }, { scale: t.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0.6, 1.1, 0.3] }) }],
-          }}
-        >
-          <FileIcon path={flight.path} size={icon} />
-        </Animated.View>
-      )}
+      <SolaraHostedView kind="downloadMagnet" windowId={windowId} state={state} pointerEvents="none" style={StyleSheet.absoluteFill} />
     </View>
   );
 }

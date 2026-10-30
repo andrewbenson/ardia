@@ -5,7 +5,7 @@ import Testing
 
 @Suite struct LaunchSwitchesTests {
   static let defaultOn: Set<LaunchSwitch> = [
-    .nativeShell, .nativeTopStrip, .nativeDownloadMagnet, .nativeToolTour, .nativeSidePanel,
+    .nativeShell, .nativeTopStrip, .nativeToolTour, .nativeSidePanel,
     .nativeSidebar, .nativeMedia, .nativeAutoHide, .nativeProfilePager, .shellPanes, .nativePagesPool, .nativePanePrompts, .shellMainTop,
   ]
   static let shippedSurfaces = defaultOn.filter { !$0.storable(distribution: false) && !$0.storable(distribution: true) }
@@ -106,7 +106,7 @@ import Testing
 
   @Test func theKillSwitchTheShippedSurfacesAndTheScopeAreNeverReadFromDefaults() {
     let defaults = scratchDefaults()
-    #expect(Self.shippedSurfaces.contains(.nativeDownloadMagnet) && !Self.shippedSurfaces.contains(.nativeShell))
+    #expect(Self.shippedSurfaces.contains(.nativePanePrompts) && !Self.shippedSurfaces.contains(.nativeShell))
     for name in Self.shippedSurfaces { defaults.set("0", forKey: name.rawValue) }
     defaults.set("settingsAndDownloads", forKey: LaunchSwitches.scopeVariable)
     for distribution in [false, true] {
@@ -148,10 +148,10 @@ import Testing
     defaults.set("1", forKey: "ARDIA_SHELL_MAIN_TOP")
     let stored = StoredLaunchSwitches(defaults: defaults, distribution: true)
     stored.set(.nativeShell, true)
-    stored.set(.nativeDownloadMagnet, false)
+    stored.set(.nativePanePrompts, false)
     stored.set(.nativePagesPool, true)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_DOWNLOAD_MAGNET") == nil)
+    #expect(defaults.object(forKey: "ARDIA_NATIVE_PANE_PROMPTS") == nil)
     #expect(defaults.object(forKey: "ARDIA_NATIVE_PAGES_POOL") == nil)
     #expect(defaults.string(forKey: "ARDIA_NATIVE_GONE") == "1")
     #expect(defaults.string(forKey: "ARDIA_TEST_REAUTH") == "1")

@@ -7,19 +7,15 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
-if (!appArg) {
-  console.error(`usage: node download-magnet-test.mjs <Debug Solara.app> [--native | --rn] [--keep-data]
+if (!appArg || args.some((arg) => arg.startsWith("--") && arg !== "--keep-data")) {
+  console.error(`usage: node download-magnet-test.mjs <Debug Solara.app> [--keep-data]
 
-A real download from a local server into a scratch folder (ARDIA_DOWNLOADS_DIR), with the download magnet drawn
-natively (ARDIA_NATIVE_DOWNLOAD_MAGNET=1: DownloadMagnetView, read in process through SolaraHosted.downloadMagnet)
-and by RN (=0). Both legs run unless one is named.
-Native: the file icon flies once, about 0.7 s, from the page toward the downloads target on RN's arc (above the
-straight line), fading in and out, and settles at the target with nothing left animating; RN draws no flight.
-RN: its flight mounts for about 0.7 s and unmounts, and no native view exists.`);
+A real download from a local server into a scratch folder (ARDIA_DOWNLOADS_DIR), with DownloadMagnetView read
+in process through SolaraHosted.downloadMagnet. The file icon flies once, about 0.7 s, from the page toward
+the downloads target on an arc above the straight line, fades in and out, and settles with nothing left animating.`);
   process.exit(2);
 }
 const appPath = resolve(appArg);
-const legs = args.includes("--native") ? [true] : args.includes("--rn") ? [false] : [false, true];
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-download-magnet-"));
 const rep = reporter(join(scratch, "download-magnet-test.log"), { name: "download-magnet-test" });
@@ -44,7 +40,6 @@ const fixture = session({
 const HELPERS = `
 const H = globalThis.expo.modules.SolaraHosted;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
-const nameOf = (t) => !t ? "" : typeof t === "string" ? t : t.displayName || t.name || nameOf(t.type) || nameOf(t.render);
 const inMagnet = (pred) => {
   const m = acPerf.findFibers("DownloadMagnet", 5)[0];
   let hit = null;
@@ -53,7 +48,6 @@ const inMagnet = (pred) => {
   return hit;
 };
 const hostedState = () => { const f = inMagnet((c) => c.memoizedProps && c.memoizedProps.kind === "downloadMagnet"); return f ? JSON.parse(f.memoizedProps.state || "null") : null; };
-const rnFlying = () => !!inMagnet((c) => nameOf(c.type) === "FileIcon");
 const magnet = () => H.downloadMagnet("w1").then(JSON.parse);
 `;
 
@@ -71,52 +65,43 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
 };
 
 try {
-  for (const native of legs) {
-    const tag = native ? "native" : "rn";
-    const downloads = join(scratch, `downloads-${tag}`);
-    mkdirSync(downloads, { recursive: true });
-    app = await launch(appPath, {
-      data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_DOWNLOAD_MAGNET: native ? "1" : "0", ARDIA_DOWNLOADS_DIR: downloads },
-      ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acPerf",
-    });
-    rep.log(`${tag}: pid ${app.pid}`);
-    await rep.check(`${tag}: ${native ? "the native magnet flies to the downloads target and settles" : "RN's magnet flies and unmounts"}`, () => magnetChecks(native, downloads));
-    await app.quit();
-    app = null;
-  }
+  const downloads = join(scratch, "downloads");
+  mkdirSync(downloads, { recursive: true });
+  app = await launch(appPath, {
+    data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
+    env: { ARDIA_DOWNLOADS_DIR: downloads },
+    ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acPerf",
+  });
+  rep.log(`native: pid ${app.pid}`);
+  await rep.check("the native magnet flies to the downloads target and settles", () => magnetChecks(downloads));
 } finally {
   await app?.quit();
   server.close();
-  if (!keep) for (const tag of ["rn", "native"]) rmSync(join(scratch, `data-${tag}`), { recursive: true, force: true });
+  if (!keep) rmSync(join(scratch, "data"), { recursive: true, force: true });
   else rep.say(`data: ${scratch}`);
 }
 process.exit(rep.summary() ? 0 : 1);
 
-async function magnetChecks(native, downloads) {
+async function magnetChecks(downloads) {
   const kinds = await run("return H.kinds();");
-  assert.equal(kinds.includes("downloadMagnet"), native, `the downloadMagnet kind is ${native ? "missing" : "registered"}`);
-  if (native) {
-    const end = Date.now() + 10000;
-    let mounted = null;
-    while (Date.now() < end && !(mounted?.inWindow && mounted.size[0] > 0)) {
-      mounted = await run("return magnet();");
-      if (!(mounted?.inWindow && mounted.size[0] > 0)) await new Promise((r) => setTimeout(r, 200));
-    }
-    assert.ok(mounted?.inWindow && mounted.size[0] > 0, `the native magnet view is mounted and laid out (${JSON.stringify(mounted)})`);
-    assert.equal(mounted.flights, 0, "nothing flew before the download");
-  } else {
-    assert.equal(await run("return magnet();"), null, "no native magnet view with the switch off");
+  assert.ok(kinds.includes("downloadMagnet"), "the downloadMagnet kind is registered");
+  const end = Date.now() + 10000;
+  let mounted = null;
+  while (Date.now() < end && !(mounted?.inWindow && mounted.size[0] > 0)) {
+    mounted = await run("return magnet();");
+    if (!(mounted?.inWindow && mounted.size[0] > 0)) await new Promise((r) => setTimeout(r, 200));
   }
+  assert.ok(mounted?.inWindow && mounted.size[0] > 0, `the native magnet view is mounted and laid out (${JSON.stringify(mounted)})`);
+  assert.equal(mounted.flights, 0, "nothing flew before the download");
 
   const samples = await run(`
     const t0 = Date.now();
     const samples = [];
     ac.actions.openUrls([${JSON.stringify(`${base}/file.bin`)}], "w1");
-    const loop = () => (${native} ? magnet() : Promise.resolve(null)).then((d) => {
-      const s = { t: Date.now() - t0, d, state: ${native} ? hostedState() : null, rn: rnFlying() };
+    const loop = () => magnet().then((d) => {
+      const s = { t: Date.now() - t0, d, state: hostedState() };
       samples.push(s);
-      const first = samples.find((x) => (x.d && x.d.flights > 0) || x.rn);
+      const first = samples.find((x) => x.d && x.d.flights > 0);
       if (s.t > 8000 || (first && s.t - first.t > 1400)) return samples;
       return settle(25).then(loop);
     });
@@ -141,17 +126,6 @@ async function magnetChecks(native, downloads) {
   const snapshot = await untilSnapshot("download in native store", (state) => state.downloads.count === download.length && state.downloads.finished === download.filter((item) => item.state === "finished").length);
   assert.equal(snapshot.downloads.count, download.length, "native and JS download counts agree");
 
-  if (!native) {
-    const flying = samples.filter((s) => s.rn);
-    assert.ok(flying.length > 0, "RN mounted a flight");
-    const span = flying.at(-1).t - flying[0].t;
-    assert.ok(span >= 450 && span <= 1200, `RN's flight lasted about 0.7 s (${span} ms)`);
-    assert.equal(samples.at(-1).rn, false, "RN's flight unmounted");
-    rep.log(`RN flight ${span} ms`);
-    return `RN flight ${span} ms`;
-  }
-
-  assert.ok(samples.every((s) => !s.rn), "RN drew no flight with the switch on");
   const flight = samples.map((s) => s.state?.flight).find(Boolean);
   assert.ok(flight, "JS handed the native view a flight");
   const [sx, sy] = flight.start;

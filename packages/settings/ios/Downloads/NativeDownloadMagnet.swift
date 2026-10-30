@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import SolaraModel
 import SolaraUI
 
 @MainActor
@@ -8,12 +7,7 @@ enum NativeDownloadMagnet {
   static let kind = "downloadMagnet"
   private static let views = NSMapTable<NSString, DownloadMagnetView>.strongToWeakObjects()
 
-  nonisolated static var enabled: Bool {
-    LaunchSwitches.shared.isOn(.nativeDownloadMagnet)
-  }
-
   static func register() {
-    guard enabled else { return }
     HostedViews.register(kind) { windowId in
       let view = DownloadMagnetView(frame: .zero)
       views.setObject(view, forKey: windowId as NSString)

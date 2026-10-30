@@ -27,7 +27,7 @@ public final class OmniboxBarView: NSView {
   public var events = HeroBarEvents() { didSet { model?.events = events } }
   public var onHeight: (CGFloat) -> Void = { _ in }
   public var settings: () -> SolaraModel.Settings = { SolaraModel.Settings(values: [:]) }
-  public var fetcher: SuggestFetcher?
+  public var fetcher: SuggestFetcher? { didSet { if fetcher !== oldValue { model?.setFetcher(fetcher) } } }
   public var favicons: NewTabFavicons? { didSet { rebuild() } }
   public var theme = NewTabTheme.fallbackLight { didSet { if theme != oldValue { rebuild() } } }
   public var incognito = false { didSet { model?.incognito = incognito } }

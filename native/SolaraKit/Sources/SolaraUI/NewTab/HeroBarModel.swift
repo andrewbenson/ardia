@@ -115,7 +115,7 @@ public final class HeroBarModel {
   @ObservationIgnored public var settings: () -> Settings
   public var currentUrl: String
   @ObservationIgnored let sources: NewTabSources
-  @ObservationIgnored let fetcher: SuggestFetcher?
+  @ObservationIgnored private var fetcher: SuggestFetcher?
   @ObservationIgnored let bangs: () -> any BangTable
   @ObservationIgnored let now: @MainActor () -> Double
 
@@ -156,7 +156,7 @@ public final class HeroBarModel {
     self.incognito = incognito
     self.settings = settings
     self.sources = sources
-    self.fetcher = fetcher
+    self.fetcher = fetcher?.makeContext()
     self.bangs = bangs
     self.now = now
     let restored = variant == .hero ? HeroBarModel.saved[tabId] : nil
@@ -167,6 +167,19 @@ public final class HeroBarModel {
     scopeFrom = restored?.scopeFrom ?? ""
     selection = restored?.selection ?? (initialText.isEmpty ? .caret(0) : TextSelection(start: 0, end: initialText.utf16.count))
     recompute()
+  }
+
+  public func setFetcher(_ fetcher: SuggestFetcher?) {
+    self.fetcher?.cancel()
+    self.fetcher = fetcher?.makeContext()
+    fetching = nil
+    remote = ("", [])
+    recompute()
+    writeField()
+  }
+
+  isolated deinit {
+    fetcher?.cancel()
   }
 
   public var engine: SearchEngine { defaultSearchEngine(settings()) }
@@ -674,9 +687,9 @@ public final class HeroBarModel {
     let key = "\(engine.id)\u{1}\(q)"
     if fetching == key { return }
     fetching = key
-    fetcher.request(engine, q) { [weak self] list in
+    fetcher.request(engine, q) { [weak self, weak fetcher] list in
         Task { @MainActor in
-        guard let self, self.fetching == key else { return }
+        guard let self, let fetcher, self.fetcher === fetcher, self.fetching == key else { return }
         self.remote = (query, list)
         self.recompute()
         self.writeField()

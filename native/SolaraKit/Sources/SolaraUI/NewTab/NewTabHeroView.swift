@@ -21,7 +21,7 @@ public final class NewTabHeroView: NSView {
   public var events = HeroBarEvents() { didSet { model?.events = events } }
   public var onBarLayout: (_ barHeight: CGFloat, _ headingHeight: CGFloat) -> Void = { _, _ in }
   public var settings: () -> SolaraModel.Settings = { SolaraModel.Settings(values: [:]) }
-  public var fetcher: SuggestFetcher?
+  public var fetcher: SuggestFetcher? { didSet { if fetcher !== oldValue { model?.setFetcher(fetcher) } } }
   public var favicons: NewTabFavicons? { didSet { refreshEnvironment() } }
   public var theme = NewTabTheme.fallbackLight { didSet { if theme != oldValue { applyTheme() } } }
   public var incognito = false { didSet { model?.incognito = incognito; needsLayout = true } }

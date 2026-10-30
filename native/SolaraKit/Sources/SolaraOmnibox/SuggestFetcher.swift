@@ -32,6 +32,10 @@ public final class SuggestFetcher: Sendable {
     self.cacheSize = cacheSize
   }
 
+  public func makeContext() -> SuggestFetcher {
+    SuggestFetcher(fetch: fetch, delay: delay, cacheSize: cacheSize)
+  }
+
   public static func urlSession(_ session: URLSession = .shared) -> Fetch {
     { url in
       guard let target = URL(string: url) else { return FetchResponse(ok: false, body: Data()) }

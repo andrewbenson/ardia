@@ -32,6 +32,9 @@ public struct ChangeSet: Sendable, Equatable {
   public var pinChoices = TableChange()
   public var pinSync = TableChange()
   public var find = TableChange()
+  public var selection = TableChange()
+  public var selectionAnchors = TableChange()
+  public var windowUi = TableChange()
   public var lists: Set<String> = []
   public var settingsChanged: [String] = []
   public var settingsRemoved: [String] = []
@@ -60,6 +63,9 @@ public struct ChangeSet: Sendable, Equatable {
     if after.privateSiteMutes != before.privateSiteMutes { lists.insert("privateSiteMutes") }
     if after.downloads != before.downloads { lists.insert("downloads") }
     if after.find != before.find { find = TableChange(Table(after.find), Table(before.find)) }
+    if after.selection != before.selection { selection = TableChange(Table(after.selection), Table(before.selection)) }
+    if after.selectionAnchors != before.selectionAnchors { selectionAnchors = TableChange(Table(after.selectionAnchors), Table(before.selectionAnchors)) }
+    if after.windowUi != before.windowUi { windowUi = TableChange(Table(after.windowUi), Table(before.windowUi)) }
     if after.ui != before.ui { lists.insert("ui") }
     if after.caches != before.caches { lists.insert("caches") }
     if before.settings != after.settings {
@@ -70,7 +76,8 @@ public struct ChangeSet: Sendable, Equatable {
 
   public var isEmpty: Bool {
     profiles.isEmpty && windows.isEmpty && tabs.isEmpty && groups.isEmpty && splits.isEmpty && peeks.isEmpty && parkedPins.isEmpty
-      && pinChoices.isEmpty && pinSync.isEmpty && find.isEmpty && lists.isEmpty && settingsChanged.isEmpty && settingsRemoved.isEmpty
+      && pinChoices.isEmpty && pinSync.isEmpty && find.isEmpty && selection.isEmpty && selectionAnchors.isEmpty && windowUi.isEmpty
+      && lists.isEmpty && settingsChanged.isEmpty && settingsRemoved.isEmpty
   }
 
   public var downloads: Bool { lists.contains("downloads") }
@@ -165,6 +172,9 @@ public struct Patch: @unchecked Sendable {
       tables.append(("pinSync", patch))
     }
     add("find", changes.find, Table(s.find)) { id, value in ["tabId": .string(id), "state": value.jsonValue] }
+    add("selection", changes.selection, Table(s.selection)) { id, value in ["windowId": .string(id), "ids": JSONValue(value.ids)] }
+    add("selectionAnchors", changes.selectionAnchors, Table(s.selectionAnchors)) { id, value in ["windowId": .string(id), "tabId": .string(value.tabId)] }
+    add("windowUi", changes.windowUi, Table(s.windowUi)) { id, value in ["windowId": .string(id), "state": value.jsonValue] }
     for name in changes.lists.sorted() {
       switch name {
       case "profileOrder": lists.append((name, .strings(s.profileOrder)))

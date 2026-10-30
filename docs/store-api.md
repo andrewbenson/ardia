@@ -41,8 +41,10 @@ modules before using them — this is a summary from the agent that built it.
   Chrome: members are plain pinned tabs there. Mirrored, parked and synced with the pins (`tilefold:` records).
 - UI: `ui.focusedWindowId`, `ui.focusOrder`, `ui.lastProfileId` (the regular profile of the window used last, a private
   window counting as its `originalProfileId`; saved with the session; read it through `lastActiveProfile(s)`, store/small.ts),
-  `ui.appDark`, `windowUi[windowId]` (command panel, downloads popover), `find[tabId]`. `find` and `ui.appDark` are
-  Swift-owned and not persisted.
+  `ui.appDark`, `windowUi[windowId]` (command panel, downloads popover), `find[tabId]`. `find`, `ui.appDark`,
+  `windowUi`, `selection` and `selectionAnchors` are Swift-owned and not persisted; Swift prunes them when their tab
+  or window goes, and activating or opening a tab closes the window's panel, grouping clears its selection and a new
+  download opens the focused window's popover in the same commit.
 
 ## Actions
 - Windows: `createWindow`, `closeWindow`, `switchProfile`, `moveTabsToWindow`, `moveTabToProfile`,
@@ -128,6 +130,11 @@ modules before using them — this is a summary from the agent that built it.
   owns the workspace.
 - `setFind(tabId, patch)`: merges per-tab find state onto closed defaults, synchronously through Swift when it owns
   the workspace; unknown tabs are ignored and removed tabs are pruned.
+- `setSelection(windowId, ids)`: deduped and kept to the window's view; an empty selection removes the entry.
+  `setSelectionAnchor(windowId, tabId)` moves the ⇧-click anchor (the native sidebar's own clicks).
+  `clickTab(windowId, tabId, mods)` is one Swift command: anchor, selection, ⌥⇧ grouping and activation commit together.
+- `openPanel(windowId, initialText?, newTab?)` (claims the command bar's focus first), `closePanel(windowId)` and
+  `setDownloadsOpen(windowId, open)`: one `windowUi` entry per window, closing a panel that isn't open changes nothing.
 
 ## Hooks (store/hooks.ts, window-scoped)
 `useWindowId`, `useActiveTab(Id)`, `useTab(id)`,

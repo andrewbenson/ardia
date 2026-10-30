@@ -3,9 +3,9 @@ import { cancelDownload, endWebKitPrivateSession } from "@ardia/ardiacore";
 import type { BrowserState, HydrateData } from "./browser";
 import { bookmarkRoots, ensureRoots, removeBookmarkTree } from "./bookmarks";
 import { IDLE_LIVE, without } from "./model";
-import { pruneSelection } from "./organize";
 import { runPinHandoff } from "./tabs";
 import { startNavigation } from "../lib/earlyNavigate";
+import { commandBarFocus, expectFocus } from "../lib/focusClaims";
 
 export const WORKSPACE_COMMANDS: ReadonlySet<string> = new Set([
   "newTab", "closeTab", "closeTabs", "activate", "handOffPin", "activateIndex", "cycle", "navigate", "updateTab", "navigated", "faviconChanged",
@@ -19,6 +19,11 @@ export const WORKSPACE_COMMANDS: ReadonlySet<string> = new Set([
   "flipSplit", "toggleSplitOrientation", "movePane", "focusPane", "toggleTabLayout", "openPeek", "closePeek", "peekToTab", "updateSettings",
   "setFocusedWindow", "setFind", "upsertDownload", "removeDownload", "clearDownloads", "forgetDownloads", "tidyPins", "untidyPins",
   "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab",
+  "setSelection", "setSelectionAnchor", "clickTab", "openPanel", "closePanel", "setDownloadsOpen",
+]);
+
+export const COMMAND_PRELUDES: ReadonlyMap<string, (...args: unknown[]) => void> = new Map([
+  ["openPanel", (windowId: unknown) => expectFocus(windowId as string, commandBarFocus)],
 ]);
 
 export const LIVE_PATCH_COMMANDS: ReadonlySet<string> = new Set(["updateTab", "navigated"]);
@@ -60,6 +65,9 @@ export function workspaceFromPatch(s: BrowserState, patch: StorePatch): Partial<
   for (const name of [...LISTS, ...KEYED]) if (name in p) next[name] = p[name];
   if (p.ui) next.ui = retainingJSON(s.ui, { ...s.ui, ...(p.ui as object) });
   if (p.find) next.find = applyTable(state.find!, p.find as TablePatch, (entry) => [entry.tabId as string, entry.state]);
+  if (p.selection) next.selection = applyTable(state.selection!, p.selection as TablePatch, (entry) => [entry.windowId as string, entry.ids]);
+  if (p.selectionAnchors) next.selectionAnchors = applyTable(state.selectionAnchors!, p.selectionAnchors as TablePatch, (entry) => [entry.windowId as string, entry.tabId]);
+  if (p.windowUi) next.windowUi = applyTable(state.windowUi!, p.windowUi as TablePatch, (entry) => [entry.windowId as string, entry.state]);
   if (patch.settings) {
     const settings = { ...s.settings, ...(patch.settings.set ?? {}) } as Record<string, unknown>;
     for (const key of patch.settings.remove ?? []) delete settings[key];
@@ -85,40 +93,18 @@ function withDerived(prev: BrowserState, s: BrowserState, next: Record<string, u
       live[t.id] = { ...holder };
     }
     if (live !== prev.live) out.live = live;
-    if (gone.size) {
-      const selection = pruneSelection(prev.selection, gone);
-      if (selection !== prev.selection) out.selection = selection;
-    }
-  }
-  if (s.windows !== prev.windows) {
-    const closed = Object.keys(prev.windowUi).filter((id) => !s.windows[id]);
-    if (closed.length) out.windowUi = without(prev.windowUi, closed);
-    const goneSelections = Object.keys(prev.selection).filter((id) => !s.windows[id]);
-    if (goneSelections.length) out.selection = without(out.selection ?? prev.selection, goneSelections);
   }
   return out;
 }
-
-const swap = (ids: string[], a: string, b: string) => (ids.includes(a) || ids.includes(b) ? ids.map((id) => (id === a ? b : id === b ? a : id)) : ids);
 
 export function runEffects(effects: StoreEffect[] | undefined, get: () => BrowserState, set: (partial: Partial<BrowserState>) => void) {
   for (const effect of effects ?? []) {
     const s = get();
     switch (effect.type) {
-      case "openDownloads":
-        s.setDownloadsOpen(effect.windowId as string, true);
-        break;
-      case "closePanel":
-        s.closePanel(effect.windowId as string);
-        break;
-      case "clearSelection":
-        set({ selection: { ...s.selection, [effect.windowId as string]: [] } });
-        break;
       case "swapTabs": {
         const a = effect.a as string;
         const b = effect.b as string;
-        const selection = Object.fromEntries(Object.entries(s.selection).map(([w, ids]) => [w, swap(ids, a, b)]));
-        set({ selection, live: { ...s.live, [b]: { ...(s.live[a] ?? s.live[b] ?? IDLE_LIVE) } } });
+        set({ live: { ...s.live, [b]: { ...(s.live[a] ?? s.live[b] ?? IDLE_LIVE) } } });
         break;
       }
       case "startNavigation":
@@ -168,8 +154,6 @@ export const onStoreEffect = (type: string, handler: (effect: StoreEffect) => vo
   return () => effectHandlers.delete(type);
 };
 
-const keptFor = <T>(local: Record<string, T>, ids: Record<string, unknown>) => Object.fromEntries(Object.entries(local).filter(([id]) => id in ids));
-
 function retainingJSON(previous: unknown, value: unknown): unknown {
   if (previous === value || JSON.stringify(previous) === JSON.stringify(value)) return previous;
   if (Array.isArray(previous) && Array.isArray(value)) {
@@ -192,9 +176,6 @@ export function workspaceHydration(s: BrowserState, data: HydrateData): Partial<
     bookmarks,
     bookmarksReady: Object.fromEntries(Object.keys(data.bookmarks?.roots ?? {}).filter((id) => s.profiles[id]).map((id) => [id, true as const])),
     live: Object.fromEntries(Object.keys(s.tabs).map((id) => [id, IDLE_LIVE])),
-    selection: {},
-    selectionAnchors: {},
-    windowUi: {},
   };
 }
 
@@ -204,12 +185,8 @@ export function workspaceFromSnapshot(s: BrowserState, data: Record<string, unkn
   if (data.settings) next.settings = retainingJSON(s.settings, data.settings);
   if (data.ui) next.ui = retainingJSON(s.ui, { ...s.ui, ...(data.ui as object) });
   const tabs = (next.tabs ?? {}) as BrowserState["tabs"];
-  const windows = (next.windows ?? {}) as BrowserState["windows"];
   next.live = Object.fromEntries(Object.keys(tabs).map((id) => [id, (keepLocal && s.live[id]) || IDLE_LIVE]));
-  next.windowUi = keepLocal ? keptFor(s.windowUi, windows) : {};
-  next.find = retainingJSON(s.find, data.find ?? {});
-  next.selection = keepLocal ? Object.fromEntries(Object.entries(keptFor(s.selection, windows)).map(([w, ids]) => [w, ids.filter((id) => id in tabs)])) : {};
-  next.selectionAnchors = keepLocal ? keptFor(s.selectionAnchors, windows) : {};
+  for (const name of ["find", "selection", "selectionAnchors", "windowUi"] as const) next[name] = retainingJSON(s[name], data[name] ?? {});
   let bookmarks = s.bookmarks;
   for (const id of (next.profileOrder ?? []) as string[]) bookmarks = ensureRoots(bookmarks, id)[0];
   next.bookmarks = bookmarks;

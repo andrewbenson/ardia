@@ -59,14 +59,16 @@ test("the fallback last-tab policy does not write Swift-owned memory", async () 
   assert.deepEqual(sent.slice(before), []);
 });
 
-test("a catch-up snapshot after a gap keeps the live state, panels and selection of what still exists", () => {
+test("a catch-up snapshot after a gap keeps the live state of what still exists and takes window UI from Swift", () => {
   S().updateLive("t1", { playingAudio: true, isLoading: true });
-  S().setDownloadsOpen("w1", true);
   rev = 5;
+  catchUpReply = { rev, snapshot: { ...data(rev).data, windowUi: { w1: { panel: { open: false, initialText: "" }, downloadsOpen: true } }, selection: { w1: ["t1"] } } };
   for (const listener of listeners) listener({ event: JSON.stringify({ rev, patch: { rev } }) });
+  catchUpReply = undefined;
   assert.equal(S().tabs.t1.title, "A5");
   assert.equal(S().live.t1.playingAudio, true);
   assert.equal(S().windowUi.w1.downloadsOpen, true);
+  assert.deepEqual(S().selection.w1, ["t1"]);
 });
 
 const { nativeWrite, attachReplica, NativeStoreBusy, nativeStoreRev, withApplier } = await import("../store/nativeStore.ts");
@@ -115,7 +117,7 @@ test("a snapshot reuses every unchanged entity and list entry", () => {
 
 test("native hydrate installs supplied views and resets transient state only after acceptance", () => {
   S().updateLive("t1", { isLoading: true });
-  useBrowser.setState({ find: { t1: { query: "stale" } }, selection: { w1: ["t1"] } });
+  withApplier(() => useBrowser.setState({ find: { t1: { query: "stale" } }, selection: { w1: ["t1"] } }));
   const input = { ...data(rev).data, history: { default: [{ url: "https://history.example/", title: "History", visitedAt: 1 }] }, bookmarks: { nodes: {}, roots: { default: { bar: "bar", other: "other" } } } };
   const beforeForwards = globalThis.__nativeStoreForwards?.length ?? 0;
   let beforeDispatch;
@@ -186,10 +188,10 @@ test("Release: owned API and captured reducer writes expose only the native acce
   catchUpReply = { rev, patches: [] };
   try {
     const beforeFind = S().find;
-    useBrowser.setState((s) => ({ settings: { ...s.settings, searchEngine: "unforwarded-api" }, find: { t1: { query: "local" } }, selection: { w1: ["t1"] } }));
+    useBrowser.setState((s) => ({ settings: { ...s.settings, searchEngine: "unforwarded-api" }, find: { t1: { query: "local" } }, bookmarksReady: { ...s.bookmarksReady, local: true } }));
     assert.equal(S().settings.searchEngine, "native");
     assert.equal(S().find, beforeFind);
-    assert.deepEqual(S().selection.w1, ["t1"]);
+    assert.equal(S().bookmarksReady.local, true);
     capturedSetWindowFrame("w1", [9, 9, 9, 9]);
     assert.deepEqual(S().windows.w1.frame, [1, 2, 3, 4]);
     assert.equal(S().settings.searchEngine, "native");
@@ -234,156 +236,6 @@ test("Release: a subscriber's captured reducer cannot reuse the patch applier's 
   }
 });
 
-const stateChange = (at) => ({ rev: at, splits: { upsert: [], remove: [] } });
-
-test("a fresh foreign commit that changes state still delivers its UI effects", () => {
-  S().openPanel("w1", "close from a native action");
-  useBrowser.setState({ selection: { w1: ["t1"] } });
-  rev += 1;
-  emit({ rev, patch: stateChange(rev), effects: [{ type: "closePanel", windowId: "w1" }, { type: "clearSelection", windowId: "w1" }] });
-  assert.equal(S().windowUi.w1.panel.open, false);
-  assert.deepEqual(S().selection.w1, []);
-});
-
-test("an own command's UI effect always runs, even when nothing changed", () => {
-  S().openPanel("w1", "open before the command");
-  dispatchReply = { rev, patches: [], effects: [{ type: "closePanel", windowId: "w1" }] };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  assert.equal(S().windowUi.w1.panel.open, false);
-});
-
-test("a foreign effect-only commit's UI effect runs after a newer local UI change", () => {
-  S().openPanel("w1", "open after the last revision");
-  emit({ rev, patch: { rev }, effects: [{ type: "closePanel", windowId: "w1" }] });
-  assert.equal(S().windowUi.w1.panel.open, false);
-});
-
-test("a delayed closePanel cannot close a newer locally opened panel", () => {
-  rev += 1;
-  const patch = { rev, bridge: false, tabs: { upsert: [{ ...tab, title: "activate" }], remove: [] } };
-  dispatchReply = { rev, patches: [patch] };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  S().openPanel("w1", "new intent");
-  const panel = S().windowUi.w1.panel;
-  emit({ rev, patch, effects: [{ type: "closePanel", windowId: "w1" }] });
-  assert.equal(S().windowUi.w1.panel, panel);
-});
-
-test("a delayed UI effect from a skipped snapshot revision cannot close newer UI", () => {
-  rev += 2000;
-  dispatchReply = { rev, snapshot: data(rev).data };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  S().openPanel("w1", "after the snapshot");
-  const panel = S().windowUi.w1.panel;
-  emit({ rev: rev - 1, patch: stateChange(rev - 1), effects: [{ type: "closePanel", windowId: "w1" }] });
-  assert.equal(S().windowUi.w1.panel, panel);
-});
-
-test("unknown old revisions drop UI effects even for untouched windows and still deliver other effects", async () => {
-  const { onStoreEffect } = await import("../store/nativeWorkspace.ts");
-  const seen = [];
-  const stop = onStoreEffect("probe", (effect) => seen.push(effect.n));
-  rev += 2000;
-  const snapshot = data(rev).data;
-  for (const id of ["unknown-downloads", "unknown-panel", "unknown-selection"]) snapshot.windows[id] = { ...win, id };
-  dispatchReply = { rev, snapshot };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  const before = S();
-  try {
-    emit({ rev: rev - 1, patch: stateChange(rev - 1), effects: [{ type: "openDownloads", windowId: "unknown-downloads" }, { type: "closePanel", windowId: "unknown-panel" }, { type: "clearSelection", windowId: "unknown-selection" }, { type: "probe", n: 1 }] });
-    assert.deepEqual(seen, [1]);
-    assert.equal(S().windowUi, before.windowUi);
-    assert.equal(S().selection, before.selection);
-  } finally {
-    stop();
-  }
-});
-
-test("evicted revision baselines drop old UI effects while retained revisions and other effects still run", async () => {
-  const { onStoreEffect } = await import("../store/nativeWorkspace.ts");
-  const seen = [];
-  const stop = onStoreEffect("probe", (effect) => seen.push(effect.n));
-  const windows = { ...S().windows };
-  for (const id of ["evicted-downloads", "evicted-panel", "evicted-selection", "retained-downloads"]) windows[id] = { ...win, id };
-  withApplier(() => useBrowser.setState({ windows }));
-  const older = ++rev;
-  emit({ rev, patch: { rev } });
-  for (let i = 0; i < 1024; i++) {
-    rev++;
-    emit({ rev, patch: { rev } });
-  }
-  const before = S();
-  try {
-    emit({ rev: older, patch: stateChange(older), effects: [{ type: "openDownloads", windowId: "evicted-downloads" }, { type: "closePanel", windowId: "evicted-panel" }, { type: "clearSelection", windowId: "evicted-selection" }, { type: "probe", n: 2 }] });
-    assert.deepEqual(seen, [2]);
-    assert.equal(S().windowUi, before.windowUi);
-    assert.equal(S().selection, before.selection);
-    emit({ rev, patch: { rev }, effects: [{ type: "openDownloads", windowId: "retained-downloads" }] });
-    assert.equal(S().windowUi["retained-downloads"].downloadsOpen, true);
-  } finally {
-    stop();
-  }
-});
-
-test("a newer retained UI effect invalidates an older delayed panel effect", () => {
-  S().openPanel("w1", "keep this panel");
-  const older = ++rev;
-  dispatchReply = { rev, patches: [{ rev }] };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = { rev: ++rev, patches: [{ rev }] };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  emit({ rev, patch: { rev }, effects: [{ type: "openDownloads", windowId: "w1" }] });
-  assert.equal(S().windowUi.w1.downloadsOpen, true);
-  emit({ rev: older, patch: stateChange(older), effects: [{ type: "closePanel", windowId: "w1" }] });
-  assert.equal(S().windowUi.w1.panel.open, true);
-});
-
-test("UI effects from one commit run together without authorizing another window", () => {
-  S().openPanel("w1", "close this");
-  useBrowser.setState({ selection: { w1: ["t1"], w2: ["t2"] } });
-  dispatchReply = { rev: ++rev, patches: [{ rev }] };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  useBrowser.setState({ selection: { ...S().selection, w2: ["newer"] } });
-  emit({ rev, patch: stateChange(rev), effects: [{ type: "closePanel", windowId: "w1" }, { type: "clearSelection", windowId: "w1" }, { type: "clearSelection", windowId: "w2" }] });
-  assert.equal(S().windowUi.w1.panel.open, false);
-  assert.deepEqual(S().selection.w1, []);
-  assert.deepEqual(S().selection.w2, ["newer"]);
-});
-
-test("a snapshot rebuilding selection does not invalidate its own UI effects", () => {
-  S().openPanel("w1", "close on snapshot");
-  useBrowser.setState({ selection: { w1: ["t1"] } });
-  rev += 2000;
-  dispatchReply = { rev, snapshot: data(rev).data, effects: [{ type: "closePanel", windowId: "w1" }] };
-  nativeWrite({ name: "probe", args: [] });
-  dispatchReply = undefined;
-  assert.equal(S().windowUi.w1.panel.open, false);
-  assert.deepEqual(S().selection.w1, ["t1"]);
-});
-
-test("a subscriber's newer selection between sibling UI effects survives", () => {
-  S().openPanel("w1", "close this");
-  useBrowser.setState({ selection: { w1: ["t1"] } });
-  const stop = useBrowser.subscribe((s, prev) => {
-    if (prev.windowUi.w1?.panel.open && !s.windowUi.w1?.panel.open) useBrowser.setState({ selection: { w1: ["newer"] } });
-  });
-  dispatchReply = { rev: ++rev, patches: [{ rev }], effects: [{ type: "closePanel", windowId: "w1" }, { type: "clearSelection", windowId: "w1" }] };
-  try {
-    nativeWrite({ name: "probe", args: [] });
-    assert.equal(S().windowUi.w1.panel.open, false);
-    assert.deepEqual(S().selection.w1, ["newer"]);
-  } finally {
-    dispatchReply = undefined;
-    stop();
-  }
-});
-
 test("repeated effect-only commits at the current revision still run", async () => {
   const { onStoreEffect } = await import("../store/nativeWorkspace.ts");
   const seen = [];
@@ -401,9 +253,9 @@ test("cache deduplication retries a busy write with the same inputs", () => {
   sent.length = 0;
   cache = true;
   dispatchReply = { rev, busy: true };
-  assert.throws(() => S().setDownloadsOpen("w1", true), NativeStoreBusy);
+  assert.throws(() => useBrowser.setState({ historyReady: { ...S().historyReady, busy: true } }), NativeStoreBusy);
   dispatchReply = { rev, patches: [] };
-  S().setDownloadsOpen("w1", false);
+  useBrowser.setState({ historyReady: { ...S().historyReady, busy: false } });
   assert.equal(sent.filter((name) => name === "setPlayingAudio").length, 2);
   dispatchReply = undefined;
 });

@@ -87,6 +87,7 @@ export type OrganizeSlice = {
   deletedGroups: ClosedGroup[];
 
   setSelection(windowId: string, ids: string[]): void;
+  setSelectionAnchor(windowId: string, tabId: string): void;
   clickTab(windowId: string, tabId: string, mods?: ClickMods): void;
   placeTabs(ids: string[], placement: TabPlacement): void;
   dropTabs(ids: string[], drop: Drop): boolean;
@@ -784,13 +785,17 @@ export const createOrganizeSlice: StateCreator<BrowserState, [], [], OrganizeSli
     });
   },
 
+  setSelectionAnchor(windowId, tabId) {
+    set((s) => (!s.windows[windowId] || s.selectionAnchors[windowId] === tabId ? {} : { selectionAnchors: { ...s.selectionAnchors, [windowId]: tabId } }));
+  },
+
   clickTab(windowId, tabId, mods = {}) {
     const s = get();
     const intoGroup = !!mods.altKey && !!mods.shiftKey && !mods.metaKey && s.settings.optShiftClickOpensInGroup;
     const picked = intoGroup ? null : clickedSelection(s, windowId, tabId, mods);
     if (intoGroup) openInActiveGroup(s, windowId, tabId);
     const anchor = picked ? picked.anchor : tabId;
-    if (anchor && anchor !== get().selectionAnchors[windowId]) set({ selectionAnchors: { ...get().selectionAnchors, [windowId]: anchor } });
+    if (anchor) get().setSelectionAnchor(windowId, anchor);
     get().setSelection(windowId, picked?.selection ?? []);
     if (!picked) get().activate(tabId);
   },

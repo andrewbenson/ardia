@@ -22,7 +22,8 @@ import Testing
     let bridge = bridge()
     let response = try JSONValue.parse(bridge.dispatch(#"[{"name":"createWindow","args":[{}]},{"name":"upsertDownload","args":[{"id":"a","state":"complete","profile":""}]},{"name":"upsertDownload","args":[{"id":"b","state":"complete"}]}]"#, sinceRev: 0))
     #expect(response["rev"] == 1)
-    #expect(response["effects"]?.array?.contains { $0["type"] == "openDownloads" } == true)
+    #expect(response["effects"]?.array?.contains { $0["type"] == "openDownloads" } != true)
+    #expect(response["patches"]?.array?.first?["windowUi"]?["upsert"]?.array?.first?["state"]?["downloadsOpen"] == true)
     #expect(response["patches"]?.array?.first?["downloads"]?.array?.count == 2)
     #expect(response["patches"]?.array?.first?["windows"]?["upsert"]?.array?.count == 1)
   }

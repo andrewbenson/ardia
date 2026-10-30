@@ -43,14 +43,11 @@ public struct Command: Sendable, Equatable {
     "renameTileFolder", "newTileFolder", "leaveTileFolder", "dissolveTileFolder", "openDraftGroups", "forgetClosedTab", "setWindowClosing",
     "setLastTabKeepsWindow", "noteRemotePinDeletion", "setHistoryHints", "setPlayingAudio", "setLaunchBackdrop", "setEarlyLaunchTab", "nextId", "nextNavigation",
     "syncPinsApply", "settlePinChoices", "beginFromSync", "endFromSync", "beginTransaction", "endTransaction", "closeTransactions", "stripSnapshot", "stripTransaction", "projectStrips", "stripCommandSent", "applyState",
-    "setAppDark", "setFind",
+    "setAppDark", "setFind", "setSelection", "setSelectionAnchor", "clickTab", "openPanel", "closePanel", "setDownloadsOpen",
   ]
 }
 
 public enum Effect: Sendable, Hashable {
-  case openDownloads(windowId: String)
-  case closePanel(windowId: String)
-  case clearSelection(windowId: String)
   case swapTabs(a: String, b: String)
   case startNavigation(tabId: String, navigation: Navigation)
   case profileCreated(profileId: String, sharedWith: String?)
@@ -62,9 +59,6 @@ public enum Effect: Sendable, Hashable {
 
   public var json: JSONValue {
     switch self {
-    case .openDownloads(let windowId): ["type": "openDownloads", "windowId": .string(windowId)]
-    case .closePanel(let windowId): ["type": "closePanel", "windowId": .string(windowId)]
-    case .clearSelection(let windowId): ["type": "clearSelection", "windowId": .string(windowId)]
     case .swapTabs(let a, let b): ["type": "swapTabs", "a": .string(a), "b": .string(b)]
     case .startNavigation(let tabId, let navigation): ["type": "startNavigation", "tabId": .string(tabId), "navigation": navigation.jsonValue]
     case .profileCreated(let profileId, let sharedWith): ["type": "profileCreated", "profileId": .string(profileId), "sharedWith": JSONValue(sharedWith)]
@@ -316,7 +310,7 @@ extension Session {
     case "settlePinChoices": try SettledPinChoices(command.args).apply(self)
     case "applyState":
       var next = state
-      for (key, value) in a.object(0) where key != "find" { try next.applySlice(key, value) }
+      for (key, value) in a.object(0) where !Session.commandOnlySlices.contains(key) { try next.applySlice(key, value) }
       next.ui.appDark = state.ui.appDark
       let remote = a[1]?["fromSync"]?.truthy ?? false
       if remote { memory.fromSyncDepth += 1 }
@@ -329,6 +323,12 @@ extension Session {
     case "endFromSync": memory.fromSyncDepth = max(0, memory.fromSyncDepth - 1)
     case "setAppDark": setAppDark(a.bool(0))
     case "setFind": setFind(try a.requireString(0), a.update(1))
+    case "setSelection": setSelection(try a.requireString(0), a.strings(1))
+    case "setSelectionAnchor": setSelectionAnchor(try a.requireString(0), try a.requireString(1))
+    case "clickTab": clickTab(try a.requireString(0), try a.requireString(1), a.object(2))
+    case "openPanel": openPanel(try a.requireString(0), a.string(1) ?? "", a[2])
+    case "closePanel": closePanel(try a.requireString(0))
+    case "setDownloadsOpen": setDownloadsOpen(try a.requireString(0), a.bool(1))
     default:
       throw CommandError("unknown command \(command.name)")
     }

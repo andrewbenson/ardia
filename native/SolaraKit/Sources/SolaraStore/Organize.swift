@@ -646,9 +646,9 @@ extension Session {
     if moving.isEmpty { return (s, "") }
     let after = w.tabIds.jsSliced(w.tabIds.jsIndexOf(targetId) + 1).first { !moving.contains($0) }
     let placed = placing(s, moving, TabPlacement(pinned: false, beforeId: .some(after)))
-    let (next, id) = withRowsGrouped(target.isPinnedRow ? withHomesOf(placed, s, moving) : placed, [targetId] + moving, name: nil, pinned: false)
+    var (next, id) = withRowsGrouped(target.isPinnedRow ? withHomesOf(placed, s, moving) : placed, [targetId] + moving, name: nil, pinned: false)
     if id.isEmpty { return (s, "") }
-    emit(.clearSelection(windowId: w.id))
+    next.clearSelection(w.id)
     return (next, id)
   }
 

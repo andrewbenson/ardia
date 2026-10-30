@@ -21,6 +21,9 @@ import Testing
     let revision = try launch.database.meta("rev")
     try store.dispatch(Command("setAppDark", [false]))
     try store.dispatch(Command("setFind", [.string(tab), ["query": "text"]]))
+    try store.dispatch(Command("setSelectionAnchor", [.string(window), .string(tab)]))
+    try store.dispatch(Command("openPanel", [.string(window), "typed"]))
+    try store.dispatch(Command("setDownloadsOpen", [.string(window), true]))
     #expect(writer.flush(timeout: 5) == .saved)
     #expect(writer.errors.isEmpty)
     #expect(try Data(contentsOf: folder.session) == session)
@@ -40,10 +43,14 @@ import Testing
     let rows = WorkspaceRows(before)
     try store.dispatch(Command("setAppDark", [false]))
     try store.dispatch(Command("setFind", [.string(tab), ["open": true, "query": "text", "count": 4]]))
+    try store.dispatch(Command("setSelectionAnchor", [.string(window), .string(tab)]))
+    try store.dispatch(Command("openPanel", [.string(window), "typed"]))
+    try store.dispatch(Command("setDownloadsOpen", [.string(window), true]))
     let after = store.sessionDocument()
     #expect(after.json().text() == before.json().text())
     #expect(WorkspaceRows(after) == rows)
     #expect(after.json()["appDark"] == nil)
     #expect(after.json()["find"] == nil)
+    for key in ["selection", "selectionAnchors", "windowUi"] { #expect(after.json()[key] == nil) }
   }
 }

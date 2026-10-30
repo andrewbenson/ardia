@@ -79,7 +79,7 @@ struct RecordedURLs: WebAddressing {
   func parseURL(_ url: String) -> ParsedURL? { urls[url] ?? PlainWebAddressing().parseURL(url) }
 }
 
-let uiOnlySlices = ["find"]
+let uiOnlySlices = ["find", "selection", "selectionAnchors", "windowUi"]
 let uiOnlyUiKeys = ["appDark"]
 
 func replayedState(_ state: JSONValue) -> JSONValue {

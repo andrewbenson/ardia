@@ -36,3 +36,27 @@ test("settingsAndDownloads keeps JS appearance and find reducers and pruning", (
   S().closeTab(tabId);
   assert.equal(S().find[tabId], undefined);
 });
+
+test("settingsAndDownloads keeps JS selection, anchors, clicks and window UI reducers and pruning", () => {
+  const windowId = S().createWindow();
+  const first = S().windows[windowId].tabIds[0];
+  const second = S().newTab(windowId);
+  const third = S().newTab(windowId);
+  sent.length = 0;
+  S().clickTab(windowId, first);
+  S().clickTab(windowId, third, { shiftKey: true });
+  assert.deepEqual(S().selection[windowId], [first, second, third]);
+  assert.equal(S().selectionAnchors[windowId], first);
+  S().setSelectionAnchor(windowId, second);
+  assert.equal(S().selectionAnchors[windowId], second);
+  S().openPanel(windowId, "typed");
+  assert.deepEqual(S().windowUi[windowId].panel, { open: true, initialText: "typed" });
+  S().closePanel(windowId);
+  S().setDownloadsOpen(windowId, true);
+  assert.deepEqual(S().windowUi[windowId], { panel: { open: false, initialText: "" }, downloadsOpen: true });
+  assert.ok(!sent.some((c) => ["setSelection", "setSelectionAnchor", "clickTab", "openPanel", "closePanel", "setDownloadsOpen"].includes(c.name)));
+  S().closeTab(second);
+  assert.deepEqual(S().selection[windowId], [first, third]);
+  S().closeWindow(windowId);
+  assert.equal(S().windowUi[windowId], undefined);
+});

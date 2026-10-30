@@ -57,6 +57,9 @@ public struct BrowserState: Sendable, Equatable {
   public var downloads: [Download]
   public var settings: Settings
   public var find: JSMap<FindState>
+  public var selection: JSMap<TabSelection>
+  public var selectionAnchors: JSMap<SelectionAnchor>
+  public var windowUi: JSMap<WindowUi>
   public var ui: FocusState
   public var caches: JSCaches
 
@@ -87,6 +90,9 @@ public struct BrowserState: Sendable, Equatable {
     self.downloads = downloads
     self.settings = settings
     find = JSMap()
+    selection = JSMap()
+    selectionAnchors = JSMap()
+    windowUi = JSMap()
     ui = FocusState()
     caches = JSCaches()
   }

@@ -43,6 +43,7 @@ import Testing
   @Test func withNoTokenAndNoSyncOriginAHeldTransactionCommitsAndDeliversExactlyAsBefore() throws {
     let golden = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Cases/held-transaction-at-head.txt"), encoding: .utf8)
     let currentSchema = golden.replacingOccurrences(of: "\"ui\":{", with: "\"ui\":{\"appDark\":true,")
+      .replacingOccurrences(of: #"{"type":"closePanel","windowId":"w-neutral-1"}"#, with: "")
     let halves = currentSchema.components(separatedBy: "\n=====\n")
     try #require(halves.count == 2)
     #expect(try Self.transcript(origin: .native) == halves[0], "a native user's transaction is byte for byte as before")

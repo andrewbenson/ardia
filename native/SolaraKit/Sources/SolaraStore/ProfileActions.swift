@@ -170,7 +170,7 @@ extension Session {
       next.downloads = next.downloads.map { $0.id == d.id ? d : $0 }
     } else {
       next.downloads = Array(([d] + next.downloads).prefix(Download.maxKept))
-      if let focused = next.ui.focusedWindowId, downloadVisibleIn(next, d, next.windows[focused]) { emit(.openDownloads(windowId: focused)) }
+      if let focused = next.ui.focusedWindowId, downloadVisibleIn(next, d, next.windows[focused]) { next.openDownloads(focused) }
     }
     set(next)
   }

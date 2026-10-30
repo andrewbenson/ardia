@@ -20,7 +20,7 @@ extension BrowserState {
   public static let sliceKeys = [
     "profiles", "profileOrder", "orphanedProfileData", "windows", "windowOrder", "tabs", "groups", "splits", "peeks", "closedTabs", "closedWindows",
     "closedGroups", "deletedGroups", "cleanedTabs", "privateCleanedTabs", "privateSiteMutes", "parkedPins", "pinChoices", "pinSync", "downloads",
-    "settings", "ui", "find",
+    "settings", "ui", "find", "selection", "selectionAnchors", "windowUi",
   ]
 
   public mutating func applySlice(_ key: String, _ value: JSONValue?) throws {
@@ -70,6 +70,18 @@ extension BrowserState {
       var find = JSMap<FindState>()
       for (id, value) in value?.object ?? [:] { find[id] = try FindState(value: value) }
       self.find = find
+    case "selection":
+      var selection = JSMap<TabSelection>()
+      for (id, value) in value?.object ?? [:] { selection[id] = TabSelection(value.array?.compactMap(\.string) ?? []) }
+      self.selection = selection
+    case "selectionAnchors":
+      var anchors = JSMap<SelectionAnchor>()
+      for (id, value) in value?.object ?? [:] { if let tabId = value.string { anchors[id] = SelectionAnchor(tabId) } }
+      selectionAnchors = anchors
+    case "windowUi":
+      var windowUi = JSMap<WindowUi>()
+      for (id, value) in value?.object ?? [:] { windowUi[id] = try WindowUi(value: value) }
+      self.windowUi = windowUi
     case "ui":
       let ui = value?.object ?? [:]
       self.ui = FocusState(
@@ -103,6 +115,8 @@ extension BrowserState {
       "pinChoices": .object(pinChoices.map.mapValues { .object($0.mapValues(JSONValue.number)) }), "pinSync": .object(pinSync.map.mapValues { .object($0) }),
       "downloads": .array(downloads.map { .object($0.json) }), "settings": settings.json,
       "find": .object(find.mapValues(\.jsonValue)),
+      "selection": .object(selection.mapValues { JSONValue($0.ids) }), "selectionAnchors": .object(selectionAnchors.mapValues { .string($0.tabId) }),
+      "windowUi": .object(windowUi.mapValues(\.jsonValue)),
       "ui": ["appDark": .bool(ui.appDark), "focusedWindowId": JSONValue(ui.focusedWindowId), "focusOrder": JSONValue(ui.focusOrder), "lastProfileId": JSONValue(ui.lastProfileId)],
     ]
   }

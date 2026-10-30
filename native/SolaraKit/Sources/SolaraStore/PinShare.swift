@@ -95,6 +95,7 @@ extension Session {
       if opener != g.pinnedOpenerId { changed.pinnedOpenerId = opener }
       next.groups[g.id] = changed
     }
+    next.swapSelection(a, b)
     emit(.swapTabs(a: a, b: b))
     return (next, a)
   }

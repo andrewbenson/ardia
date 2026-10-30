@@ -214,9 +214,9 @@ extension Session {
   }
 
   public func groupTabs(_ ids: [String], pinned: Bool, name: String?) -> String {
-    let (next, id) = withRowsGrouped(state, ids, name: name, pinned: pinned)
+    var (next, id) = withRowsGrouped(state, ids, name: name, pinned: pinned)
     if !id.isEmpty {
-      emit(.clearSelection(windowId: next.groups[id]!.windowId))
+      next.clearSelection(next.groups[id]!.windowId)
       set(next)
     }
     return id

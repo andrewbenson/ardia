@@ -188,7 +188,7 @@ addNativeSettingsHandlers({
     dismissHover();
     switch (name) {
       case "clicked":
-        if (s.selectionAnchors[windowId] !== id) useBrowser.setState({ selectionAnchors: { ...s.selectionAnchors, [windowId]: id } });
+        if (s.selectionAnchors[windowId] !== id) s.setSelectionAnchor(windowId, id);
         if (s.selection[windowId]?.length) s.setSelection(windowId, []);
         return;
       case "click":

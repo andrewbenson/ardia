@@ -182,7 +182,10 @@ func replayOnce(_ json: JSONValue) throws -> (JSONValue, JSONValue?, [String]) {
       let name = json["command"]?["name"]?.string ?? "?"
       if ProcessInfo.processInfo.environment["REPLAY_TRACE"] != nil { print("case \(replay.testDescription)") }
       do {
-        let (state, result, missed) = try replayOnce(json)
+        let (replayed, result, missed) = try replayOnce(json)
+        var stateObject = replayed.object ?? [:]
+        for key in ["selection", "selectionAnchors", "windowUi"] { stateObject.removeValue(forKey: key) }
+        let state = JSONValue.object(stateObject)
         var expectedState = json["after"]!.object!
         if expectedState["find"] == nil { expectedState["find"] = [:] }
         var expectedUi = expectedState["ui"]?.object ?? [:]

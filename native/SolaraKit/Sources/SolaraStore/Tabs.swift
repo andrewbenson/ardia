@@ -87,7 +87,7 @@ extension Session {
     var next = s
     next.tabs[id] = nextTab
     next.windows[w.id] = window
-    emit(.closePanel(windowId: w.id))
+    next.closePanel(w.id)
     return next
   }
 
@@ -451,8 +451,8 @@ extension Session {
     if switching { t.adoptId = nil }
     var next = base
     next.tabs[id] = t
+    next.closePanel(tab.windowId)
     set(next)
-    emit(.closePanel(windowId: tab.windowId))
   }
 
   public func updateTab(_ id: String, _ patch: TabUpdate) {

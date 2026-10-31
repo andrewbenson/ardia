@@ -74,11 +74,9 @@ test("safe in-memory tabs open, navigate, and reopen with the same URL requests 
   }
 });
 
-test("launch preflights precede the locked safe decision and host startup", () => {
+test("launch rekey precedes the locked safe decision and host startup", () => {
   const text = source("apps/browser/macos/Ardia-macOS/main.swift");
   const ordered = [
-    "LegacyMigration.moveToNewName()",
-    "LegacyMigration.runAtLaunch()",
     "SafeStorageRekeyRun.runAtLaunch(",
     "NativeStore.launchAtStartup()",
     "ArdiaCoreHost.safeMode = NativeStore.safeMode",

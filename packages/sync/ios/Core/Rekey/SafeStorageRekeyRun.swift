@@ -118,8 +118,24 @@ public final class SafeStorageRekeyRun {
       gate: gate, product: product, appVersion: info?["CFBundleVersion"] as? String ?? "", environment: env, stores: stores)
     guard case .quit(let code, let message) = outcome else { return nil }
     FileHandle.standardError.write(Data("[rekey] \(message)\n".utf8))
-    if env["ARDIA_BACKGROUND"] != "1" { _ = LegacyMigration.alert("\(product) can't open yet", message, ["Quit"]) }
+    if env["ARDIA_BACKGROUND"] != "1" { _ = alert("\(product) can't open yet", message, ["Quit"]) }
     return code
+  }
+
+  static func alert(_ title: String, _ message: String, _ buttons: [String]) -> Int? {
+    var response: CFOptionFlags = 0
+    let icon = Bundle.main.url(forResource: (Bundle.main.object(forInfoDictionaryKey: "CFBundleIconName") as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "AppIcon", withExtension: "icns") as CFURL?
+    let result = CFUserNotificationDisplayAlert(
+      0, kCFUserNotificationNoteAlertLevel, icon, nil, nil, title as CFString, message as CFString,
+      buttons.first as CFString?, buttons.count > 1 ? buttons[1] as CFString : nil, buttons.count > 2 ? buttons[2] as CFString : nil,
+      &response)
+    guard result == 0 else { return nil }
+    switch response & 0x3 {
+    case CFOptionFlags(kCFUserNotificationDefaultResponse): return 0
+    case CFOptionFlags(kCFUserNotificationAlternateResponse): return 1
+    case CFOptionFlags(kCFUserNotificationOtherResponse): return 2
+    default: return nil
+    }
   }
 
   public static var buildSignedForDistribution: Bool { DeviceOwnerCheck.signedForDistribution }

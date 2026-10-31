@@ -263,11 +263,6 @@ async function killSpawned(pids) {
 export const isAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
 export const binaryOf = (app) => join(app, "Contents/MacOS",
   execFileSync("plutil", ["-extract", "CFBundleExecutable", "raw", join(app, "Contents/Info.plist")]).toString().trim());
-export const appEnv = (app, env) => {
-  if (basename(binaryOf(app)) !== "Netnyahoo") return env;
-  const legacy = Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith("ARDIA_")).map(([k, v]) => [`NETNYAHOO_${k.slice("ARDIA_".length)}`, v]));
-  return { ...env, ...legacy };
-};
 export const onScreenWindows = (pid) => JSON.parse(execFileSync("osascript", ["-l", "JavaScript", "-e",
   `ObjC.import("CoreGraphics"); JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
      .filter((w) => w.kCGWindowOwnerPID === ${pid} && w.kCGWindowLayer <= 0 && w.kCGWindowLayer > -2000000).map((w) => w.kCGWindowNumber))`], { timeout: 20000 }).toString());
@@ -587,7 +582,7 @@ export async function launch(app, opts = {}) {
   }
   const location = jsMode === "pinned" ? `localhost:${js.port}` : jsMode === "live" ? `localhost:${metroPort}` : jsMode === "none" ? null : jsMode;
   const switches = [opts.switches].flat().filter(Boolean).join(" ");
-  const env = appEnv(app, {
+  const env = {
     ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: canonicalData, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...(location ? { ARDIA_JS_LOCATION: location } : {}),
     ...(switches ? { ARDIA_CHROMIUM_SWITCHES: switches } : {}),
@@ -595,7 +590,7 @@ export async function launch(app, opts = {}) {
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_") || k.startsWith("ARDIA_SHELL_") || k.startsWith("ARDIA_SYNC_"))),
     ...(opts.urls?.length ? { ARDIA_ACCEPT_EXTERNAL_URLS: "1" } : {}),
     ...opts.env,
-  });
+  };
   const log = resolve(opts.log ?? join(data, "app.out.log"));
   gateNote(gate.state, { binary: realPath(binary), frontBefore: frontApp() });
   const before = binaryPids(binary);

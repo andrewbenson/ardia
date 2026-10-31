@@ -7,7 +7,7 @@ of its time in `swift test`'s first build. Each package also runs its own:
 | --- | --- | --- |
 | `apps/browser` | `pnpm --filter @ardia/browser test` | 228 |
 | `packages/core` | `pnpm --filter @ardia/core test` | 32 |
-| `packages/sync` | `pnpm --filter @ardia/sync test` (`swift test`, `node --test`, then the rename's launch migration end to end, `scripts/legacy-migration-e2e.mjs`) | 66 + 9 |
+| `packages/sync` | `pnpm --filter @ardia/sync test` (`swift test`, `node --test`) | Swift and JS suites |
 | `packages/import` | `pnpm --filter @ardia/import test` (`swift test`) | 26 |
 | `packages/ardiacore` | `pnpm --filter @ardia/ardiacore test` (`tests/pip-zoom.test.cc`, compiled with `clang++`) | 1 program |
 | `extras/raycast-solara` | `node --test extras/raycast-solara/src/scripts.test.ts` | 6 |

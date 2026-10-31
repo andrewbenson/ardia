@@ -3,42 +3,42 @@ import sys
 from ardia_cli import __version__, identity
 
 DESCRIPTION = f"Control a running {identity.PRODUCT} from the terminal."
-EXEC_DESCRIPTION = """\
-Run Python against the running Ardia, with top-level await.
+EXEC_DESCRIPTION = f"""\
+Run Python against the running {identity.PRODUCT}, with top-level await.
 
 In scope:
-  browser        pydoll Chrome attached to Ardia (closing it only drops the connection)
+  browser        pydoll Chrome attached to {identity.PRODUCT} (closing it only drops the connection)
   tab            the web page the user is looking at; NoPageTab on first use when there is none (New Tab)
   tabs           every web page tab (http, https, about, data, blob), plus the ones new_tab opens
   new_tab(url, background=True)   open a tab and return it once the page has loaded
   js(expression, tab=None)        evaluate JavaScript in tab (else the user's tab, else the last new_tab) and return its value
-  await pinned() the user's favorites and pinned tabs from Ardia's saved session, as dicts
+  await pinned() the user's favorites and pinned tabs from {identity.PRODUCT}'s saved session, as dicts
                  (title, url, pinned_url, kind favorite|pinned, folder, profile, parked); no incognito
   await history(days=1, limit=200, profile=None, domains=False)
                  recent history per URL, newest first: url, title, visits (in the window), total_visits,
                  last_visit (ISO, local time), profile; domains=True rolls it up per domain.
                  profile is a profile name or its folder under Chromium/ (default: all). Only http(s) pages.
-                 Both read Ardia's data dir (the token path's, or --data-dir/$ARDIA_DATA_DIR) and need control on.
+                 Both read {identity.PRODUCT}'s data dir (the token path's, or --data-dir/$ARDIA_DATA_DIR) and need control on.
   By, Key, asyncio and pydoll's exports (Tab, WebElement, PageEvent, NetworkEvent, ...)
 
 The value of the last expression is printed (strings as is, other values as repr, or JSON with --json).
-Ardia keeps running after every exec.
+{identity.PRODUCT} keeps running after every exec.
 
-Exit status: 0 done, 1 the code raised or timed out, 2 Ardia can't be reached or closed the connection, 130 interrupted.
+Exit status: 0 done, 1 the code raised or timed out, 2 {identity.PRODUCT} can't be reached or closed the connection, 130 interrupted.
 
 Examples:
-  ardia exec 'await tab.title()'
-  ardia exec 't = await new_tab("https://example.com"); await t.title()'
-  ardia exec -f script.py --json
-  echo 'len(tabs)' | ardia exec -
-  ardia exec 'await history(days=1, domains=True)' --json
+  {identity.COMMAND} exec 'await tab.title()'
+  {identity.COMMAND} exec 't = await new_tab("https://example.com"); await t.title()'
+  {identity.COMMAND} exec -f script.py --json
+  echo 'len(tabs)' | {identity.COMMAND} exec -
+  {identity.COMMAND} exec 'await history(days=1, domains=True)' --json
 """
-EXEC_EPILOG = """\
+EXEC_EPILOG = f"""\
 Endpoint: --ws, else --port (plain DevTools servers only), else $ARDIA_CDP_URL, else
-<data dir>/Chromium/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed Ardia's.
+<data dir>/Chromium/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed {identity.PRODUCT}'s.
 """
-SKILLS_DESCRIPTION = """\
-Install the ardia agent skill (SKILL.md and a pydoll reference) so coding agents know how to drive Ardia.
+SKILLS_DESCRIPTION = f"""\
+Install the {identity.COMMAND} agent skill (SKILL.md and a pydoll reference) so coding agents know how to drive {identity.PRODUCT}.
 
 Targets and where they install (user level; --project uses the current directory):
   general       ~/.agents/skills            ./.agents/skills
@@ -59,8 +59,8 @@ def build_parser():
     run = commands.add_parser(
         "exec",
         help=f"run Python against the running {identity.PRODUCT}",
-        description=identity.brand(EXEC_DESCRIPTION),
-        epilog=identity.brand(EXEC_EPILOG),
+        description=EXEC_DESCRIPTION,
+        epilog=EXEC_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     run.add_argument("code", nargs="?", metavar="CODE", help="Python code, or - to read it from stdin")
@@ -76,7 +76,7 @@ def build_parser():
     install = skill_commands.add_parser(
         "install",
         help="install the skill for one or more agents",
-        description=identity.brand(SKILLS_DESCRIPTION),
+        description=SKILLS_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     from ardia_cli.skills import TARGETS

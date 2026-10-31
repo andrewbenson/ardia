@@ -22,7 +22,7 @@ The owner has already decided the following, and the doc designs for them:
 
 | Where | What runs there |
 |---|---|
-| **Browser process, main thread** | `main.swift` → `LegacyMigration` → `ArdiaCoreHost.run` → `ChromeMain`. The main thread is AppKit's event loop, which is also **Chrome's UI thread**: `NSApp` is Chrome's `BrowserCrApplication`, and the RN host (`AppDelegate`, an `ExpoAppDelegate`) starts inside Chrome's run loop. RN mounts views here, along with every `ArdiaCoreWebView` and `ArdiaCoreWindow`, Chrome's bubbles and menus, every Expo function marked `runOnQueue(.main)`, every engine callback, and `WindowManager` (`packages/shell/ios/Windows.swift`). |
+| **Browser process, main thread** | `main.swift` → `SafeStorageRekeyRun` → `ArdiaCoreHost.run` → `ChromeMain`. The main thread is AppKit's event loop, which is also **Chrome's UI thread**: `NSApp` is Chrome's `BrowserCrApplication`, and the RN host (`AppDelegate`, an `ExpoAppDelegate`) starts inside Chrome's run loop. RN mounts views here, along with every `ArdiaCoreWebView` and `ArdiaCoreWindow`, Chrome's bubbles and menus, every Expo function marked `runOnQueue(.main)`, every engine callback, and `WindowManager` (`packages/shell/ios/Windows.swift`). |
 | Browser process, JS thread | Hermes: the zustand store (`useBrowser`), React reconciliation, every store listener, the omnibox's suggestion work (`@ardia/core`), persistence serialization (`JSON.stringify` of the whole session), the sync merge, and Live Folders. |
 | Browser process, RN shadow queue | Yoga layout (legacy architecture). |
 | Browser process, `ardia.documents` queue | `DocumentStore` file writes (`ShellModule.swift:115`). |
@@ -105,9 +105,7 @@ The owner's live data folder (`~/Library/Application Support/com.hill.solara`) h
   `keepToolbarOnScroll` (recorded in `settings.migrations`) and `withNewTabButtonPosition`. `chosen` and `inferred`
   record which keys the user set.
 - **Native readers of `session.json`:** `ArdiaCoreHost.mm:158` reads it before JS runs, for the early window
-  (`ArdiaCoreEarlyWindow prefetchForSession`: `launchTab`, `launchBackdrop`, `linkProfile`). `LegacyMigration.swift`
-  (run in `main.swift` before Chrome) rewrites its keys and URLs for the Netnyahoo → Ardia rename and checks that it
-  exists.
+  (`ArdiaCoreEarlyWindow prefetchForSession`: `launchTab`, `launchBackdrop`, `linkProfile`).
 
 ### 1.5 Sizes
 
@@ -501,9 +499,8 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 - **When.** Phase 1a imports only `settings` (through the port of `migrateSavedSettings`) and `downloads.json`. Phase
   1b imports the rest of `session.json`. In 1a, `persist.ts` (still the writer of `session.json`) adds the same
   `nativeExport` marker as the later shadow export, so the downgrade check in §3.4 works from the first nightly.
-- **Where.** `main.swift`, right after `LegacyMigration.runAtLaunch()` and before `ArdiaCoreHost.run`. That is before
-  Chrome starts, before any window, and with nothing touching `NSApp`. Same slot, same style and same test approach
-  (an executable tool plus XCTest fixtures, like `packages/sync/tools/legacy-migration`).
+- **Where.** `main.swift`, before `ArdiaCoreHost.run`. That is before Chrome starts, before any window, and with
+  nothing touching `NSApp`. Test it with an executable tool and XCTest fixtures.
 - **What.** `SessionV2Importer` is a straight port of `loadSession()` + `migrateSavedSettings` + `hydrate`'s
   repairs (§1.4), including the `restoreSession === false` branch. It produces a `BrowserState`, runs
   `SolaraModel.check`, and writes it to `solara.sqlite.importing`.
@@ -558,12 +555,11 @@ Swift importer, run through its CLI on the same file, prints the same canonical 
   `linkProfile`, ported with the exporter (`store/launchTab.ts`). `launchBackdrop` is computed in Swift
   (`SolaraStore/LaunchBackdrop.swift`, a port of `lib/launchBackdrop.ts` checked against cases recorded from it) for
   the focused public window at export time. It does this from the import until phase 6 ships plus two stable releases. That
-  keeps three things working:
+  keeps two things working:
   1. `ArdiaCoreHost.mm`'s early-window read (`launchTab`, `launchBackdrop`, `linkProfile`), unchanged until the
      window shell goes native;
   2. **rollback**: installing an older build (or one from the other channel) finds a current `session.json` and runs
-     on it as today;
-  3. upstream's `LegacyMigration` expectations.
+     on it as today.
 - **Downgrade, then upgrade.** An older (JS-store) build ignores unknown keys and drops `nativeExport` when it
   rewrites the file. So at launch, a `session.json` **without** the marker means an older build wrote it since our
   last export. The database moves aside (`solara.sqlite.superseded-<date>`) and the importer runs again on

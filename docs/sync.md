@@ -5,8 +5,7 @@ and writes sealed files in a folder the user picks; any service that syncs a fol
 between Macs. The default is `iCloud Drive › Solara Sync`
 (`~/Library/Mobile Documents/com~apple~CloudDocs/Solara Sync`: iCloud Drive syncs any folder
 under it, with no CloudKit container and no entitlement). Dropbox, a NAS or a USB drive work
-the same way. A Mac that turned sync on before the rename keeps `Netnyahoo Sync`, and one setting up after it is
-offered that folder while it holds the data (`SyncModule.defaultFolder`).
+the same way.
 
 The UX follows Dia's sync (Settings › Account › Sync in Dia 1.50.1; its strings are quoted from
 its binary below). Dia's data sits on its servers and devices pair with a 6-character code; here
@@ -77,7 +76,7 @@ reset by email, because there's no one to email.
 - The wordlist is the standard one; a test checks its SHA-256
   (`2f5eed53…dbda`) and Trezor's reference vectors.
 - Keys: HKDF-SHA256 over the entropy, salt `netnyahoo-sync/v1`. The magic and the salt keep the app's old name
-  for good: every Mac on any version reads the same files (`LegacyName` in `packages/sync/ios/Core/LegacyMigration.swift`).
+  for good: every Mac on any version reads the same files (`SyncFormat` in `packages/sync/ios/Core/SyncFormat.swift`).
   - `file-key` (AES-256-GCM) seals every file.
   - `name-key` (HMAC-SHA256) names folders: the chain tag is `HMAC("chain")` and a scope's tag
     is `HMAC("scope/<scope id>")`, each cut to 128 bits and written in base32.

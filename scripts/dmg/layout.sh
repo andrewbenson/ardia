@@ -2,9 +2,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-name="${1:-Ardia}"
-out="$here/DS_Store"
-[ -z "${1:-}" ] || out="$here/DS_Store-$name"
+name="${1:-Solara}"
+out="$here/DS_Store-$name"
 tmp="$(mktemp -d)"
 trap 'hdiutil detach "$tmp/mnt" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
 run() { "$@" > "$tmp/log" 2>&1 || { cat "$tmp/log" >&2; echo "error: $1 failed" >&2; exit 1; }; }

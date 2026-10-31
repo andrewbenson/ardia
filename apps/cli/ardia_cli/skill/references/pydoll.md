@@ -1,4 +1,4 @@
-# pydoll 3.0 API for `ardia exec`
+# pydoll 3.0 API for `solara exec`
 
 Every method below is a coroutine (`await` it) unless marked as a property. Checked against pydoll-python 3.0.0.
 

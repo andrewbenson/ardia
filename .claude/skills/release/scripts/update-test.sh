@@ -5,18 +5,15 @@ old="${1:?usage: update-test.sh <previous app> <new app> <appcast.xml> <version>
 new="${2:?}" appcast="${3:?}" version="${4:?}"
 here="$(cd "$(dirname "$0")" && pwd)"
 test_id="com.ardia.browser.updatetest"
-new_test_id="$test_id"
 [ "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$old/Contents/Info.plist")" = \
-  "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$new/Contents/Info.plist")" ] || new_test_id="$test_id.renamed"
+  "$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$new/Contents/Info.plist")" ] || { echo "error: update test requires the same bundle id" >&2; exit 1; }
 port="${UPDATE_TEST_PORT:-8796}"
 work="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/ac-update-test.XXXXXX")" && pwd -P)"
 server=""
 cleanup() {
   [ -n "$server" ] && { kill "$server"; wait "$server"; } 2>/dev/null || true
-  for id in "$test_id" "$new_test_id"; do
-    defaults delete "$id" >/dev/null 2>&1 || true
-    rm -f "$HOME/Library/Preferences/$id.plist"
-  done
+  defaults delete "$test_id" >/dev/null 2>&1 || true
+  rm -f "$HOME/Library/Preferences/$test_id.plist"
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -33,13 +30,12 @@ retag() {
 }
 installed_name="$(basename "$old")"
 root="$(git -C "$here" rev-parse --show-toplevel)"
-zip_name="$(sed -n 's/^ *public static let appFileName = "\(.*\)"$/\1/p' "$root/packages/sync/ios/Core/LegacyMigration.swift")"
-[[ "$zip_name" == *.app ]] || { echo "error: can't read the legacy app name from LegacyMigration.swift" >&2; exit 1; }
+zip_name="$(basename "$new")"
 mkdir -p "$work/installed" "$work/new" "$work/feed" "$work/home"
 ditto "$old" "$work/installed/$installed_name"
 ditto "$new" "$work/new/$zip_name"
 retag "$work/installed/$installed_name" "$test_id"
-retag "$work/new/$zip_name" "$new_test_id"
+retag "$work/new/$zip_name" "$test_id"
 ditto "$old/Contents/Frameworks/Sparkle.framework" "$work/fw/Sparkle.framework"
 pods="$root/apps/browser/macos/Pods/Sparkle"
 swiftc -O "$here/sparkle-host.swift" -F "$pods" -framework Sparkle -Xlinker -rpath -Xlinker "$work/fw" \
@@ -88,6 +84,4 @@ mtree -c -k type,mode,link,size,sha256digest -p "$work/new/$zip_name" > "$work/n
 differences="$(mtree -p "$installed" -f "$work/new.mtree" 2>&1 | head -5 || true)"
 [ -z "$differences" ] || fail "the installed bundle differs from the new build: $differences"
 ls "$work/installed" | grep -qvxF "$installed_name" && fail "left beside it: $(ls "$work/installed" | tr '\n' ' ')"
-renamed=""
-[ "$new_test_id" = "$test_id" ] || renamed="; across the bundle id change, on the EdDSA signature"
-echo "PASS  Sparkle on $from${channel:+ on the $channel channel} updates a copy in place to $version (feed, EdDSA, extraction, installer; the bundle is the new build's, sealed$renamed)"
+echo "PASS  Sparkle on $from${channel:+ on the $channel channel} updates a copy in place to $version (feed, EdDSA, extraction, installer; the bundle is the new build's, sealed)"

@@ -1,1 +1,0 @@
-../../../../packages/sync/ios/Core/LegacyName.swift

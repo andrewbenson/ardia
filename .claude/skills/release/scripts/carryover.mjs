@@ -30,11 +30,9 @@ try {
 const { pid } = instance;
 
 const step = (what) => { if (process.env.CARRYOVER_VERBOSE) console.error(`carryover ${phase}: ${what}`); };
-const legacy = path.basename(execFileSync("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleExecutable", `${app}/Contents/Info.plist`]).toString().trim()) === "Netnyahoo";
-const inLegacyNames = (body) => `const ac = nn;\n${body.replace(/expo\.modules\.Ardia(\w+)/g, "expo.modules.Netnyahoo$1").replace(/"ac_(\w+)"/g, '"nn_$1"')}`;
 async function inApp(body, timeoutMs = 30_000) {
   step(body.trim().split("\n")[0].slice(0, 100));
-  return instance.eval(legacy ? inLegacyNames(body) : body, { timeout: timeoutMs });
+  return instance.eval(body, { timeout: timeoutMs });
 }
 async function inPage(urlPart, expression) {
   for (let i = 0; i < 40; i++) {

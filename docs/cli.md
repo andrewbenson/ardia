@@ -1,7 +1,7 @@
 # The `solara` command
 
-The command is named after the identity: `solara` in Solara, `ardia` upstream (Fork identity below). This page
-uses the name the source spells, `ardia`, for the command, its tarball and its paths. It drives a running Solara
+The command is named after the identity: `solara` in Solara. This page uses the name the source still spells,
+`ardia`, for the command, its tarball and its paths. It drives a running Solara
 from the terminal with Python and [pydoll](https://pydoll.tech) 3.0. It's a separate download, not part of
 the app bundle. The app ships `install.sh`, and runs it when the user opts in from Settings ("Let the solara command control Solara").
 
@@ -205,7 +205,7 @@ two parts with an explicit flush between them gets through; that gap is accepted
 `install.sh [--version V] [--sha256 DIGEST] [--product NAME] [--repo OWNER/REPO] [--uninstall]` (run with `/bin/sh`;
 `--help`). `--product` (default `Ardia`) names the app the command drives, and the command is that name in lowercase;
 `--repo` (default `mantrakp04/ardia`) is where it downloads from. The app passes its own `CFBundleName` and
-`ACReleaseRepo`, so a fork's build installs its own command (Fork identity below). The paths here are upstream's.
+`ACReleaseRepo`, so the build installs its own command. The paths here retain the source spelling.
 
 - Downloads `https://github.com/<repo>/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` (https only)
   into a private temp dir; it runs on Apple silicon only and stops with an error anywhere else. Without `--version` it
@@ -249,26 +249,14 @@ bytecode cache, later ones about 0.15 s.
 
 It bakes the app's identity into `ardia_cli/identity.py` (product, command, bundle id, release repo): from
 `AC_PRODUCT_NAME`, `AC_BUNDLE_ID` and `AC_RELEASE_REPO` in the environment, else from `scripts/identity.sh`. The
-committed `identity.py` holds upstream's values, so a repo checkout and an upstream tarball behave the same.
+committed `identity.py` still holds the source spelling until the mechanical rename.
 
-## Fork identity
+## Product identity
 
-Everything the CLI calls itself follows the baked identity, so a fork ships its own command. Nothing else in the
-tarball changes: the asset name, its `ardia-cli-<V>/` folder, `bin/ardia` inside it and the `ardia_cli` package stay.
-
-| | Upstream | Solara |
-|---|---|---|
-| Command, `prog`, help and errors | `ardia` | `solara` |
-| Link | `~/.local/bin/ardia` | `~/.local/bin/solara` |
-| Install home | `~/Library/Application Support/Ardia/CLI` | `~/Library/Application Support/Solara/CLI` |
-| Data dir it connects to | `~/Library/Application Support/com.ardia.browser` | `~/Library/Application Support/com.hill.solara` |
-| Downloads from | `github.com/mantrakp04/ardia` releases | `github.com/andrewbenson/solara` releases |
-| Agent skill | `<skills dir>/ardia`, `name: ardia` | `<skills dir>/solara`, `name: solara` |
-
-`identity.brand()` renders the help text and the skill for a fork: `Ardia` becomes the product and `ardia` the
-command, except names the engine or the web owns (`ArdiaControl.json`, `/ardia/active`, `ardia://`, `ardia.dev`,
-the engine's `Ardia Scripts` messages and its `isn't allowed for the ardia command` error) and the `$ARDIA_*` variables, which keep
-their names in every build. With upstream's identity it returns the text unchanged.
+The CLI uses the product, command, bundle id and release repo from `identity.py`. Help text interpolates the
+product and command directly. Skill installation copies its Markdown source verbatim; it has no runtime brand
+rewrite. The source text still spells Ardia/ardia until the mechanical rename. The asset name, its
+`ardia-cli-<V>/` folder, `bin/ardia` inside it and the `ardia_cli` package keep their current names.
 
 `scripts/release.sh` builds it into the release's dist dir after the export, passing the release's identity, and writes its digest to
 `Solara.app/Contents/Resources/ardia-cli.sha256` before the app is signed. The release skill's `publish.sh` uploads the
@@ -294,9 +282,9 @@ HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1
 HOME=/tmp/ardia-cli-home ardia skills install --target claude-code
 ```
 
-A fork's tarball installs the same way with `--product Solara --repo andrewbenson/solara`, which makes `~/.local/bin/solara`
-under that `HOME`. `apps/cli/tests/test_identity.py` covers both identities and the installer:
-`python3 -m unittest discover -s apps/cli/tests`.
+Solara's tarball installs with `--product Solara --repo andrewbenson/solara`, which makes `~/.local/bin/solara`
+under that `HOME`. `apps/cli/tests/test_identity.py` covers the current product, verbatim skill installation and
+the Solara installer: `PYTHONPATH=apps/cli python3 -m unittest discover -s apps/cli/tests`.
 
 `ardia scripts test` needs a running instance; it reaches cross-origin iframes on both paths, and over `--port` also frames that show an extension's page. Install and the
 helpers need the token path: an instance launched without `ARDIA_REMOTE_DEBUGGING_PORT` (the app doesn't start its

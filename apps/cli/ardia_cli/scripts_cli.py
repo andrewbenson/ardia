@@ -4,11 +4,11 @@ from pathlib import Path
 
 from ardia_cli import identity
 
-SCRIPTS_DESCRIPTION = """\
-Write userscripts in TypeScript or JavaScript, test them against real pages, and install them so Ardia runs them.
+SCRIPTS_DESCRIPTION = f"""\
+Write userscripts in TypeScript or JavaScript, test them against real pages, and install them so {identity.PRODUCT} runs them.
 
 A script is a .ts or .js file (a .user.js from Violentmonkey or Tampermonkey works as is) that starts with a
-// ==UserScript== block. Keys Ardia reads:
+// ==UserScript== block. Keys {identity.PRODUCT} reads:
   @name @namespace @version @description
   @match, @exclude-match        Chrome match patterns (https://*.example.com/*, <all_urls>)
   @include, @exclude            globs over the whole URL: * any run, ? zero or one character, \\ escapes (http(s) only)
@@ -17,16 +17,16 @@ A script is a .ts or .js file (a .user.js from Violentmonkey or Tampermonkey wor
   @noframes                     top frame only (default: every frame)
 @grant other than none, @require and @resource are ignored with a warning: there are no GM_* APIs, and relative
 imports are bundled by esbuild instead (one IIFE, recent Chrome, not minified; types are stripped, not checked; no
-tsconfig.json is read). Imports must stay inside the script's own folder, and nothing from Ardia's data folder.
+tsconfig.json is read). Imports must stay inside the script's own folder, and nothing from {identity.PRODUCT}'s data folder.
 
 Commands:
   new NAME           scaffold NAME.user.ts in the current directory
   test FILE          run it once in a background tab of its own and report what it did
-  install FILE       build it and have Ardia run it (needs "Let the ardia command control Ardia" on)
+  install FILE       build it and have {identity.PRODUCT} run it (needs "Let the {identity.COMMAND} command control {identity.PRODUCT}" on)
   uninstall NAME     remove an installed script by @name or id
   list               the installed scripts
 """
-TEST_DESCRIPTION = """\
+TEST_DESCRIPTION = f"""\
 Build FILE, open a background tab of its own, register the script at document start, open the page, and report.
 
 The script runs where its @match/@include rules say, at its @run-at point, in the top frame and (without @noframes)
@@ -36,24 +36,24 @@ and in iframes, and the --expect value. After the script ran and the page loaded
 reports an unhandled promise rejection about a second late), retrying --expect (a JavaScript expression, awaited,
 in the page's world) until it's truthy. The tab closes at the end unless --keep.
 
-@inject-into content runs in the page's world here (ardia command connections can't create isolated worlds), with
+@inject-into content runs in the page's world here ({identity.COMMAND} command connections can't create isolated worlds), with
 a warning.
 
 Exit status: 0 the script ran without uncaught exceptions and --expect was truthy, 1 otherwise (build error, the
-page didn't match, an exception, a falsy --expect), 2 Ardia can't be reached.
+page didn't match, an exception, a falsy --expect), 2 {identity.PRODUCT} can't be reached.
 
 Examples:
-  ardia scripts test hide-sidebar.user.ts
-  ardia scripts test dark.user.ts --url https://github.com/ --expect 'document.documentElement.dataset.dark'
-  ardia scripts test x.user.ts --wait 5 --screenshot /tmp/x.png --json
+  {identity.COMMAND} scripts test hide-sidebar.user.ts
+  {identity.COMMAND} scripts test dark.user.ts --url https://github.com/ --expect 'document.documentElement.dataset.dark'
+  {identity.COMMAND} scripts test x.user.ts --wait 5 --screenshot /tmp/x.png --json
 """
-INSTALL_DESCRIPTION = """\
+INSTALL_DESCRIPTION = f"""\
 Build FILE and install it: the CLI keeps a copy under <data dir>/Scripts/scripts/<id>/ and regenerates the
-Ardia Scripts extension (<data dir>/Scripts/extension/), which Ardia loads into every profile. Installing a script
-with the same @name again updates it. Then it waits up to 10 s for Ardia to report each profile.
+{identity.PRODUCT} Scripts extension (<data dir>/Scripts/extension/), which {identity.PRODUCT} loads into every profile. Installing a script
+with the same @name again updates it. Then it waits up to 10 s for {identity.PRODUCT} to report each profile.
 
-Exit status: 0 loaded (or Ardia quit and loads it on its next launch), 1 a build or load error, 2 Ardia isn't
-running or "Let the ardia command control Ardia" is off, 3 Ardia didn't answer in 10 s (the outcome is unknown).
+Exit status: 0 loaded (or {identity.PRODUCT} quit and loads it on its next launch), 1 a build or load error, 2 {identity.PRODUCT} isn't
+running or "Let the {identity.COMMAND} command control {identity.PRODUCT}" is off, 3 {identity.PRODUCT} didn't answer in 10 s (the outcome is unknown).
 """
 NEW_TEMPLATE = """\
 // ==UserScript==
@@ -67,9 +67,9 @@ NEW_TEMPLATE = """\
 
 console.log({quoted}, "ran on", location.href);
 """
-ENDPOINT_EPILOG = """\
+ENDPOINT_EPILOG = f"""\
 Endpoint: --ws, else --port (plain DevTools servers only), else $ARDIA_CDP_URL, else
-<data dir>/Chromium/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed Ardia's.
+<data dir>/Chromium/ArdiaControl.json with --data-dir or $ARDIA_DATA_DIR, else the installed {identity.PRODUCT}'s.
 """
 UNKNOWN_EXIT = 3
 
@@ -78,7 +78,7 @@ def add_parser(commands, formatter):
     scripts = commands.add_parser(
         "scripts",
         help="write, test and install userscripts",
-        description=identity.brand(SCRIPTS_DESCRIPTION),
+        description=SCRIPTS_DESCRIPTION,
         formatter_class=formatter,
     )
     sub = scripts.add_subparsers(dest="scripts_command", metavar="<command>")
@@ -87,7 +87,7 @@ def add_parser(commands, formatter):
     new.add_argument("name", metavar="NAME", help="the script's @name; the file is NAME.user.ts")
     new.add_argument("--match", action="append", metavar="PATTERN", help="an @match pattern; repeat for several (default: https://example.com/*)")
 
-    test = sub.add_parser("test", help="run a script once in a background tab and report", description=identity.brand(TEST_DESCRIPTION), epilog=identity.brand(ENDPOINT_EPILOG), formatter_class=formatter)
+    test = sub.add_parser("test", help="run a script once in a background tab and report", description=TEST_DESCRIPTION, epilog=ENDPOINT_EPILOG, formatter_class=formatter)
     test.add_argument("file", metavar="FILE", help="the .ts or .js userscript")
     test.add_argument("--url", metavar="URL", help="the page to open (default: the first @match without wildcards in its host)")
     test.add_argument("--expect", metavar="JS", help="a JavaScript expression that must end up truthy")
@@ -97,7 +97,7 @@ def add_parser(commands, formatter):
     test.add_argument("--json", action="store_true", help="print the report as JSON")
     add_endpoint_arguments(test)
 
-    install = sub.add_parser("install", help=f"install a script so {identity.PRODUCT} runs it", description=identity.brand(INSTALL_DESCRIPTION), formatter_class=formatter)
+    install = sub.add_parser("install", help=f"install a script so {identity.PRODUCT} runs it", description=INSTALL_DESCRIPTION, formatter_class=formatter)
     install.add_argument("file", metavar="FILE", help="the .ts or .js userscript")
     install.add_argument("--data-dir", metavar="DIR", help=f"the {identity.PRODUCT} data dir (default: $ARDIA_DATA_DIR, else the installed app's)")
 

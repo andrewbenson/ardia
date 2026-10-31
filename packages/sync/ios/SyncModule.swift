@@ -411,11 +411,7 @@ public class SyncModule: Module {
   static var defaultFolder: URL {
     if let testFolder { return testFolder }
     if let dataDirectory { return dataDirectory.appendingPathComponent("\(productName) Sync", isDirectory: true) }
-    let folder = SyncFolder.iCloudDrive.appendingPathComponent("\(productName) Sync", isDirectory: true)
-    guard LegacyName.isSuccessor(Bundle.main.bundleIdentifier) else { return folder }
-    let legacy = SyncFolder.iCloudDrive.appendingPathComponent(LegacyName.syncFolderName, isDirectory: true)
-    if !FileManager.default.fileExists(atPath: folder.path), SyncFolder.hasSyncData(legacy) { return legacy }
-    return folder
+    return SyncFolder.iCloudDrive.appendingPathComponent("\(productName) Sync", isDirectory: true)
   }
 
   static let keyStore: SyncKeyStore = dataDirectory.map { FileKeyStore(directory: $0) } ?? KeychainKeyStore(service: KeychainKeyStore.service(info: Bundle.main.infoDictionary))

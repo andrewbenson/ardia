@@ -32,8 +32,6 @@ final class AppDelegate: ExpoAppDelegate {
     factory.rootViewFactory.initializeReactHost(launchOptions: nil)
 
     super.applicationDidFinishLaunching(notification)
-
-    LegacyDockTile.repointSoon()
   }
 
   override func application(_ application: NSApplication, open urls: [URL]) {

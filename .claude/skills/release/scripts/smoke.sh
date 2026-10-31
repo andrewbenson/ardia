@@ -46,37 +46,15 @@ fw="$app/Contents/Frameworks"
 check "the engine is ArdiaCore (Chrome's framework, no CEF)" $ok \
   "$(plutil -extract CFBundleShortVersionString raw "$fw/Chromium Framework.framework/Resources/Info.plist" 2>/dev/null)"
 if [ -d "$old" ]; then
-  legacy_id="$(sed -n 's/^ *public static let bundleId = "\(.*\)"$/\1/p' "$root/packages/sync/ios/Core/LegacyMigration.swift")"
-  old_id="$(info "$old" CFBundleIdentifier)" new_id="$(info "$app" CFBundleIdentifier)"
-  renamed=0
-  [ -n "$legacy_id" ] && [ "$old_id" = "$legacy_id" ] && [ "$new_id" != "$legacy_id" ] && renamed=1
-  if [ "$renamed" = 1 ]; then
-    echo "      renamed: $old_id → $new_id, $(info "$old" CFBundleExecutable) → $(info "$app" CFBundleExecutable)"
-    keys="SUPublicEDKey" what="same update key as $previous (the rename keeps it)"
-  else
-    keys="CFBundleIdentifier CFBundleExecutable SUFeedURL SUPublicEDKey" what="same bundle id, executable, feed and update key as $previous"
-  fi
+  keys="CFBundleIdentifier CFBundleExecutable SUFeedURL SUPublicEDKey" what="same bundle id, executable, feed and update key as $previous"
   same=1
   for key in $keys; do
     [ "$(info "$app" $key)" = "$(info "$old" $key)" ] || { same=0; echo "      $key: $(info "$old" $key) → $(info "$app" $key)"; }
   done
   check "$what" $same
-  if [ "$renamed" = 1 ]; then
-    old_feed="$(info "$old" SUFeedURL)" new_feed="$(info "$app" SUFeedURL)"
-    to_old="$(curl -s -o /dev/null -m 15 -w '%{redirect_url}' "$old_feed" || true)"
-    to_new="$(curl -s -o /dev/null -m 15 -w '%{redirect_url}' "$new_feed" || true)"
-    [ -n "$to_new" ] && [ "$to_new" = "$to_old" ] && ok=1 || ok=0
-    check "$previous's feed and this build's lead to the same appcast" $ok "$old_feed → ${to_old:-nothing}; $new_feed → ${to_new:-nothing}"
-  fi
   old_dr="$(codesign -d -r- "$old" 2>&1 | sed -n 's/^designated => //p')"
-  if [ "$renamed" = 1 ]; then
-    old_dr="${old_dr//\"$old_id\"/\"$new_id\"}"
-    codesign --verify -R="$old_dr" "$app" 2>"$work/dr.log" && ok=1 || ok=0
-    check "satisfies $previous's designated requirement under the new bundle id (same team and certificate)" $ok "$(head -c 160 "$work/dr.log")"
-  else
-    codesign --verify -R="$old_dr" "$app" 2>"$work/dr.log" && ok=1 || ok=0
-    check "satisfies $previous's designated requirement (Sparkle, the keychain and TCC trust it)" $ok "$(head -c 160 "$work/dr.log")"
-  fi
+  codesign --verify -R="$old_dr" "$app" 2>"$work/dr.log" && ok=1 || ok=0
+  check "satisfies $previous's designated requirement (Sparkle, the keychain and TCC trust it)" $ok "$(head -c 160 "$work/dr.log")"
   [ "$(info "$app" CFBundleVersion)" -gt "$(info "$old" CFBundleVersion)" ] && ok=1 || ok=0
   check "build number above $previous's" $ok "$(info "$old" CFBundleVersion) → $(info "$app" CFBundleVersion)"
 elif [ "$previous" = none ]; then

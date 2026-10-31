@@ -513,24 +513,6 @@ void AcceptDrops(NSView *root, BOOL accept) {
 @interface ArdiaCoreWebView () <ArdiaCoreTabDelegate>
 @end
 
-static BOOL IsWebStoreURL(NSString *url) {
-  NSURLComponents *c = url.length ? [NSURLComponents componentsWithString:url] : nil;
-  if (![c.scheme.lowercaseString isEqualToString:@"https"]) return NO;
-  NSString *host = c.host.lowercaseString;
-  if ([host isEqualToString:@"chromewebstore.google.com"]) return YES;
-  return [host isEqualToString:@"chrome.google.com"] && ([c.path isEqualToString:@"/webstore"] || [c.path hasPrefix:@"/webstore/"]);
-}
-
-static NSString *StoreProductName() {
-  static NSString *product;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    NSString *name = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleName"];
-    product = [name isKindOfClass:NSString.class] && name.length && ![name isEqualToString:@"Ardia"] ? [name copy] : nil;
-  });
-  return product;
-}
-
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
   if (!Flag(message, @"audio")) return nil;
   NSDictionary *support = [ArdiaCoreEngine respondsToSelector:@selector(desktopCaptureAudio)] ? ArdiaCoreEngine.desktopCaptureAudio : @{};
@@ -570,10 +552,6 @@ static void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId,
     if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
     static const BOOL broadThemeObserver = [@(getenv("ARDIA_THEME_OBSERVER") ?: "") isEqualToString:@"broad"];
     if (broadThemeObserver) config[@"broadThemeObserver"] = @YES;
-    if (main && verified && IsWebStoreURL(tab.url) && [OriginOf(tab.url) isEqualToString:verifiedOrigin]) {
-      NSString *product = StoreProductName();
-      if (product) config[@"storeProduct"] = product;
-    }
     [to callFrame:frameId kind:@"config" json:JSONString(config)];
   };
   if (origin && [origin hasPrefix:@"http"])

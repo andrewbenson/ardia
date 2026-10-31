@@ -9,7 +9,7 @@ import Testing
 
   @Test func everySourceIsTheArdiaSyncPodsOwnFile() throws {
     let names = try FileManager.default.contentsOfDirectory(atPath: shared.path).filter { $0.hasSuffix(".swift") }.sorted()
-    #expect(names == ["LegacyName.swift", "RecoveryPhrase.swift", "SyncCrypto.swift", "SyncKeyStore.swift", "SyncVault.swift", "Wordlist.swift"])
+    #expect(names == ["RecoveryPhrase.swift", "SyncCrypto.swift", "SyncFormat.swift", "SyncKeyStore.swift", "SyncVault.swift", "Wordlist.swift"])
     for name in names {
       let link = shared.appending(path: name)
       #expect(link.resolvingSymlinksInPath().path == pod.appending(path: name).resolvingSymlinksInPath().path, "\(name) must link to packages/sync/ios/Core")

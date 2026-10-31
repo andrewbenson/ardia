@@ -2,8 +2,8 @@ import CryptoKit
 import Foundation
 
 public struct SyncKeys {
-  static let magic = Data(LegacyName.syncMagic.utf8)
-  static let salt = Data(LegacyName.syncSalt.utf8)
+  static let magic = Data(SyncFormat.magic.utf8)
+  static let salt = Data(SyncFormat.salt.utf8)
   static let padding = 1024
 
   let fileKey: SymmetricKey

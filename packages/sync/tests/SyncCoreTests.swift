@@ -21,6 +21,16 @@ final class RecoveryPhraseTests: XCTestCase {
 final class SyncCryptoTests: XCTestCase {
   let keys = SyncKeys(entropy: RecoveryPhrase.generateEntropy())
 
+  func testSyncFormatIsUnchanged() throws {
+    let keys = SyncKeys(entropy: Data(repeating: 0, count: 32))
+    XCTAssertEqual(keys.chainTag, "gbcx4r55mk3rlaegbggknyx4ta")
+    XCTAssertEqual(keys.scopeTag("app"), "nr4ncp5iyqzqgjn6ol4zksqtne")
+    let sealed = try XCTUnwrap(Data(base64Encoded: try String(contentsOf: URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().appendingPathComponent("fixtures/sealed-0.2.32.b64"), encoding: .utf8)
+      .trimmingCharacters(in: .whitespacesAndNewlines)))
+    XCTAssertEqual(try keys.open(sealed, scopeTag: keys.scopeTag("app"), fileId: "f1"), Data("from 0.2.32".utf8))
+  }
+
   func testTamperingIsDetected() throws {
     let sealed = try keys.seal(Data("bookmark".utf8), scopeTag: "s", fileId: "f")
     for index in [4, 10, 16, 40, sealed.count - 1] {

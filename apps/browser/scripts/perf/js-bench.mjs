@@ -56,7 +56,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, stat
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appEnv, binaryOf, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
+import { binaryOf, uiGateLaunching, uiGateWatch } from "../../../../scripts/lib/instance.mjs";
 import { writeSeed } from "./seed.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -251,11 +251,11 @@ export async function launch(app, dataDir, port) {
   writeSwitches(dataDir, process.env.ARDIA_SWITCHES);
   if (pidsOf(binary).length) throw new Error(`an instance of ${app} is already running`);
   const launchedAt = Date.now();
-  const env = appEnv(app, {
+  const env = {
     ARDIA_BACKGROUND: "1", ARDIA_DRAW_WINDOWS: "1", ARDIA_DATA_DIR: dataDir, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
     ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}),
     ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_"))),
-  });
+  };
   await uiGateLaunching(binary);
   execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), app]);
   for (let i = 0; i < 200; i++) {

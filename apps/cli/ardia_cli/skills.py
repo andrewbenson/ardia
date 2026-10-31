@@ -40,9 +40,6 @@ def install_into(folder: Path) -> None:
     try:
         fresh = staging / identity.COMMAND
         shutil.copytree(skill_source(), fresh, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        if not identity.is_upstream():
-            for page in fresh.rglob("*.md"):
-                page.write_text(identity.brand(page.read_text(encoding="utf-8")), encoding="utf-8")
         if folder.exists():
             old = staging / "old"
             os.rename(folder, old)

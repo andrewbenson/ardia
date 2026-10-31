@@ -1,4 +1,4 @@
-import { onLiveAuthRequest, resolveLiveAuth, liveCommand } from "@ardia/settings";
+import { onLiveAuthRequest, resolveLiveAuth, liveCommand } from "@solara/settings";
 import { useBrowser } from "../store/browser";
 
 let started = false;

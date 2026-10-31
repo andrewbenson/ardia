@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-  name: "ArdiaImportCore",
+  name: "SolaraLegacyImportCore",
   platforms: [.macOS(.v14)],
-  products: [.library(name: "ArdiaImportCore", targets: ["ArdiaImportCore"])],
+  products: [.library(name: "SolaraLegacyImportCore", targets: ["SolaraLegacyImportCore"])],
   targets: [
-    .target(name: "ArdiaImportCore", path: "ios/Core", linkerSettings: [.linkedLibrary("sqlite3")]),
+    .target(name: "SolaraLegacyImportCore", path: "ios/Core", linkerSettings: [.linkedLibrary("sqlite3")]),
     .testTarget(
-      name: "ArdiaImportCoreTests",
-      dependencies: ["ArdiaImportCore"],
+      name: "SolaraLegacyImportCoreTests",
+      dependencies: ["SolaraLegacyImportCore"],
       path: "tests"
     ),
   ]

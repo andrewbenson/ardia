@@ -23,7 +23,7 @@ const { bookmarksAdapter } = await import(new URL("sync/adapters.ts", source).hr
 const { syncRedesign } = await import(new URL("sync/redesignSwitch.ts", source).href);
 const model = await import(new URL("store/model.ts", source).href);
 const stub = await import(new URL("test-native/index.ts", source).href);
-const { ardiaCoreNativeModules } = await import(new URL("test-native/ardiacore.ts", source).href);
+const { solaraCoreNativeModules } = await import(new URL("test-native/solaracore.ts", source).href);
 const { Clock, emptyScope, syncScope, canonical } = await import(new URL("packages/sync/src/index.ts", root).href);
 const S = () => useBrowser.getState();
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -195,7 +195,7 @@ async function wireRecords(getNow, setNow) {
   const enginePushes = [];
   const engineState = { shadow: toFlat(roots()), shown: null, busy: false, needRead: false, needPush: false, failedPushes: 0, retryTimer: null, retryPending: false };
   async function failPush() {
-    const cef = ardiaCoreNativeModules.ArdiaCEF;
+    const cef = solaraCoreNativeModules.SolaraCEF;
     const originalCall = cef.engineCall;
     const originalTimeout = globalThis.setTimeout;
     const originalWarn = console.warn;
@@ -284,7 +284,7 @@ async function serviceRecords() {
   reset();
   const timers = [];
   const realSetTimeout = globalThis.setTimeout;
-  const cef = ardiaCoreNativeModules.ArdiaCEF;
+  const cef = solaraCoreNativeModules.SolaraCEF;
   const engineCall = cef.engineCall;
   const calls = [];
   const failure = { shadow: toFlat(roots()), shown: null, busy: false, needRead: false, needPush: false, failedPushes: 0, retryTimer: null, retryPending: false };
@@ -353,7 +353,7 @@ async function partialBatchRecord() {
   db.delete(id(2));
   useBrowser.setState({ bookmarks: document(roots()) });
   const pending = { shadow: toFlat(before), shown: null, busy: false, needRead: false, needPush: false, failedPushes: 0, retryTimer: null, retryPending: false };
-  const cef = ardiaCoreNativeModules.ArdiaCEF;
+  const cef = solaraCoreNativeModules.SolaraCEF;
   const originalCall = cef.engineCall;
   const originalTimeout = globalThis.setTimeout;
   const schedules = [];
@@ -384,7 +384,7 @@ async function keptMigrationLaunchRecord() {
   reset();
   const legacy = document(tree([urlNode(1)], [id(1)]));
   stub.docs.set("bookmarks.json", JSON.stringify({ bookmarks: legacy }));
-  const cef = ardiaCoreNativeModules.ArdiaCEF;
+  const cef = solaraCoreNativeModules.SolaraCEF;
   const originalCall = cef.engineCall;
   const originalWarn = console.warn;
   const attempts = [];

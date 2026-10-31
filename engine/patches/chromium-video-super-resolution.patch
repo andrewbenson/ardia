@@ -294,7 +294,7 @@
  @protocol MTLDevice;
  
 +#if BUILDFLAG(IS_MAC)
-+namespace ardiacore {
++namespace solaracore {
 +class VideoUpscaler;
 +}
 +#endif
@@ -331,7 +331,7 @@
 +#if BUILDFLAG(IS_MAC)
 +  bool video_upscaling_allowed_ = false;
 +  base::RepeatingClosure video_upscaled_callback_;
-+  std::unique_ptr<ardiacore::VideoUpscaler> video_upscaler_;
++  std::unique_ptr<solaracore::VideoUpscaler> video_upscaler_;
 +  base::WeakPtrFactory<CALayerTreeCoordinator> video_upscaler_weak_factory_{
 +      this};
 +#endif
@@ -352,13 +352,13 @@
  #include "ui/gl/scoped_make_current.h"
  
  #if BUILDFLAG(IS_MAC)
-+#include "ardia/core/ac_video_upscaler.h"  // nogncheck
++#include "solara/core/ac_video_upscaler.h"  // nogncheck
  #include "ui/display/mac/display_link_mac.h"
  #include "ui/gl/gl_context.h"
  #endif
  
 +#if BUILDFLAG(IS_MAC)
-+std::unique_ptr<ardiacore::VideoUpscaler> (*g_ardia_create_video_upscaler)(
++std::unique_ptr<solaracore::VideoUpscaler> (*g_solara_create_video_upscaler)(
 +    base::RepeatingClosure on_upscaled) = nullptr;
 +#endif
 +
@@ -373,10 +373,10 @@
 +bool CALayerTreeCoordinator::UpscaleVideo(bool allowed) {
 +  video_upscaling_allowed_ = allowed;
 +  if (!video_upscaler_) {
-+    if (!allowed || !g_ardia_create_video_upscaler) {
++    if (!allowed || !g_solara_create_video_upscaler) {
 +      return false;
 +    }
-+    video_upscaler_ = g_ardia_create_video_upscaler(
++    video_upscaler_ = g_solara_create_video_upscaler(
 +        base::BindRepeating(&CALayerTreeCoordinator::OnVideoUpscaled,
 +                            video_upscaler_weak_factory_.GetWeakPtr()));
 +    if (!video_upscaler_) {
@@ -427,7 +427,7 @@
  @class AVSampleBufferDisplayLayer;
  
 +#if BUILDFLAG(IS_MAC)
-+namespace ardiacore {
++namespace solaracore {
 +class VideoUpscaler;
 +}
 +#endif
@@ -440,7 +440,7 @@
    }
  
 +#if BUILDFLAG(IS_MAC)
-+  bool UpscaleVideo(ardiacore::VideoUpscaler* upscaler, bool allowed);
++  bool UpscaleVideo(solaracore::VideoUpscaler* upscaler, bool allowed);
 +#endif
 +
    // Create a CALayer tree for the scheduled layers, and set |superlayer| to
@@ -473,7 +473,7 @@
  #include "ui/gl/ca_renderer_layer_params.h"
  
 +#if BUILDFLAG(IS_MAC)
-+#include "ardia/core/ac_video_upscaler.h"  // nogncheck
++#include "solara/core/ac_video_upscaler.h"  // nogncheck
 +#endif
 +
  namespace ui {
@@ -484,9 +484,9 @@
  }
  
 +#if BUILDFLAG(IS_MAC)
-+bool CARendererLayerTree::UpscaleVideo(ardiacore::VideoUpscaler* upscaler,
++bool CARendererLayerTree::UpscaleVideo(solaracore::VideoUpscaler* upscaler,
 +                                       bool allowed) {
-+  std::vector<ardiacore::VideoUpscaleCandidate> candidates;
++  std::vector<solaracore::VideoUpscaleCandidate> candidates;
 +  std::vector<ContentLayer*> layers;
 +  if (allowed) {
 +    for (auto& clip_layer : root_layer_.clip_and_sorting_layers_) {
@@ -499,7 +499,7 @@
 +              content_layer.type_ == CALayerType::kHDRCopier) {
 +            continue;
 +          }
-+          ardiacore::VideoUpscaleCandidate candidate;
++          solaracore::VideoUpscaleCandidate candidate;
 +          candidate.source = content_layer.io_surface_.get();
 +          candidate.color_space = content_layer.io_surface_color_space_;
 +          candidate.contents_rect = content_layer.contents_rect_;
@@ -525,7 +525,7 @@
 +    layers[i]->upscaled_io_surface_.reset(candidates[i].output.get(),
 +                                          base::scoped_policy::RETAIN);
 +    if (has_committed_) {
-+      TRACE_EVENT_INSTANT0("gpu", "ArdiaVSR.LateSwap", TRACE_EVENT_SCOPE_THREAD);
++      TRACE_EVENT_INSTANT0("gpu", "SolaraVSR.LateSwap", TRACE_EVENT_SCOPE_THREAD);
 +      layers[i]->CommitUpscaledToCA();
 +    }
 +  }

@@ -7,7 +7,7 @@ import type {
   ShellOptionalNativeModules,
   SystemInfo,
   WindowEvent,
-} from "@ardia/shell";
+} from "@solara/shell";
 import { nativeEvents, unfaked } from "./events";
 
 type Modules = ShellNativeModules;
@@ -33,7 +33,7 @@ export const emitAppEvent = (event: AppEvent) => shellEvents.emit("onAppEvent", 
 export const emitCommand = (event: CommandEvent) => shellEvents.emit("onCommand", event);
 export const emitOpenURLs = (urls: string[], pointer?: [number, number]) => shellEvents.emit("onOpenURLs", { urls, pointer });
 
-const shell: Modules["ArdiaShell"] = {
+const shell: Modules["SolaraShell"] = {
   addListener: shellEvents.addListener,
   showMenu: () => Promise.resolve(null),
   copyText: () => {},
@@ -94,7 +94,7 @@ const shell: Modules["ArdiaShell"] = {
 };
 
 const appEvents = nativeEvents();
-const app: Modules["ArdiaApp"] & { apiVersion: number } = {
+const app: Modules["SolaraApp"] & { apiVersion: number } = {
   apiVersion: 21,
   addListener: appEvents.addListener,
   updaterState: () => Promise.resolve({ available: false }),
@@ -134,7 +134,7 @@ const app: Modules["ArdiaApp"] & { apiVersion: number } = {
   devClick: () => Promise.resolve({}),
 };
 
-const system: Modules["ArdiaSystem"] = {
+const system: Modules["SolaraSystem"] = {
   isDefaultBrowser: () => Promise.resolve(false),
   setAsDefaultBrowser: () => Promise.resolve(false),
   launchAtLoginStatus: () => Promise.resolve("notRegistered"),
@@ -152,7 +152,7 @@ const system: Modules["ArdiaSystem"] = {
 };
 
 const calendarEvents = nativeEvents();
-const calendar: Modules["ArdiaCalendar"] = {
+const calendar: Modules["SolaraCalendar"] = {
   addListener: calendarEvents.addListener,
   authorizationStatus: () => "notDetermined",
   requestAccess: () => Promise.resolve(false),
@@ -160,13 +160,13 @@ const calendar: Modules["ArdiaCalendar"] = {
   events: () => Promise.resolve([]),
 };
 
-const keychain: Modules["ArdiaKeychain"] = {
+const keychain: Modules["SolaraKeychain"] = {
   get: () => Promise.resolve(null),
   set: () => Promise.resolve(true),
   delete: () => Promise.resolve(true),
 };
 
-const translate: Modules["ArdiaTranslate"] = {
+const translate: Modules["SolaraTranslate"] = {
   available: false,
   userLanguages: () => ["en"],
   languageName: (identifier) => identifier,
@@ -179,35 +179,35 @@ const translate: Modules["ArdiaTranslate"] = {
 };
 
 export const shellNativeModules: Modules = {
-  ArdiaShell: shell,
-  ArdiaApp: app,
-  ArdiaSystem: system,
-  ArdiaCalendar: calendar,
-  ArdiaKeychain: keychain,
-  ArdiaGlassEffect: { isLiquidGlass: () => false },
-  ArdiaDockSelection: { iconTheme: () => Promise.resolve(null) },
-  ArdiaInlineCompletion: { complete: () => Promise.resolve(0) },
-  ArdiaTranslate: translate,
+  SolaraShell: shell,
+  SolaraApp: app,
+  SolaraSystem: system,
+  SolaraCalendar: calendar,
+  SolaraKeychain: keychain,
+  SolaraGlassEffect: { isLiquidGlass: () => false },
+  SolaraDockSelection: { iconTheme: () => Promise.resolve(null) },
+  SolaraInlineCompletion: { complete: () => Promise.resolve(0) },
+  SolaraTranslate: translate,
 };
 
 const cliEvents = nativeEvents();
-const cli: ShellOptionalNativeModules["ArdiaCli"] = {
+const cli: ShellOptionalNativeModules["SolaraCli"] = {
   installedVersion: () => null,
   install: () => Promise.resolve({ ok: false, appVersion: appInfo.appVersion ?? "", error: "no installs in tests", lines: [] }),
   addListener: cliEvents.addListener,
 };
 
-const popoverBubble: ShellOptionalNativeModules["ArdiaPopoverBubble"] = { isAvailable: () => false };
-const magnifyArea: ShellOptionalNativeModules["ArdiaMagnifyArea"] = { devMagnify: () => unfaked("ArdiaMagnifyArea", "devMagnify") };
-const fileDrop: ShellOptionalNativeModules["ArdiaFileDrop"] = {
-  devDrag: () => unfaked("ArdiaFileDrop", "devDrag"),
+const popoverBubble: ShellOptionalNativeModules["SolaraPopoverBubble"] = { isAvailable: () => false };
+const magnifyArea: ShellOptionalNativeModules["SolaraMagnifyArea"] = { devMagnify: () => unfaked("SolaraMagnifyArea", "devMagnify") };
+const fileDrop: ShellOptionalNativeModules["SolaraFileDrop"] = {
+  devDrag: () => unfaked("SolaraFileDrop", "devDrag"),
   devLastFileDrag: () => Promise.resolve([]),
 };
 
 export const shellOptionalNativeModules: OptionalModules = {
-  ArdiaPopoverBubble: () => popoverBubble,
-  ArdiaMagnifyArea: () => magnifyArea,
-  ArdiaFileDrop: () => fileDrop,
-  ArdiaCli: () => cli,
-  ArdiaHairline: () => null,
+  SolaraPopoverBubble: () => popoverBubble,
+  SolaraMagnifyArea: () => magnifyArea,
+  SolaraFileDrop: () => fileDrop,
+  SolaraCli: () => cli,
+  SolaraHairline: () => null,
 };

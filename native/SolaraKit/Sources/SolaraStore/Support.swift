@@ -136,7 +136,7 @@ extension Session {
   }
 }
 
-let chromiumOnlyPrefixes = ["ardia:", "chrome:", "chrome-extension:", "chrome-untrusted:", "devtools:", "view-source:"]
+let chromiumOnlyPrefixes = ["solara:", "chrome:", "chrome-extension:", "chrome-untrusted:", "devtools:", "view-source:"]
 let protectedVideoSites = [
   "netflix.com", "disneyplus.com", "max.com", "hbomax.com", "primevideo.com", "hulu.com", "tv.apple.com", "music.apple.com", "open.spotify.com",
   "peacocktv.com", "paramountplus.com", "crunchyroll.com", "hotstar.com", "jiohotstar.com",
@@ -177,7 +177,7 @@ extension Session {
   func fromAdoption(_ s: BrowserState, _ t: Tab, _ depth: Int) -> String? {
     guard let id = t.adoptId, !id.isEmpty else { return nil }
     if id.hasPrefix("webkit:") { return "webkit" }
-    if id.hasPrefix("ardiacore:") || id.hasPrefix("tab:") { return "chromium" }
+    if id.hasPrefix("solaracore:") || id.hasPrefix("tab:") { return "chromium" }
     if id.hasPrefix("clone:") {
       guard let source = s.tabs[String(id.dropFirst("clone:".count))], depth < 8 else { return nil }
       return engineOf(s, source, depth + 1)

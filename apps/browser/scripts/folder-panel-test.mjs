@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The pinned tiles' folder panel, drawn by RN and then natively (ARDIA_NATIVE_SIDEBAR=1: SidebarFolderPanelView in
+// The pinned tiles' folder panel, drawn by RN and then natively (SOLARA_NATIVE_SIDEBAR=1: SidebarFolderPanelView in
 // the sidebar's panel layer), driven by clicks through the window: a click on the folder tile opens the panel under
 // it, its member rows sit on RN's window frames within half a point, a click on a row shows that tab and closes the panel,
 // and a click on the page, a second click on the tile and Escape each close it, as RN does.
@@ -23,12 +23,12 @@ const rep = reporter(join(scratch, "folder-panel-test.log"), { name: "folder-pan
 
 async function run(native) {
   const data = join(scratch, native ? "native" : "rn");
-  const app = await launch(resolve(appArg), { data, onboarded: true, env: native ? { ARDIA_NATIVE_SIDEBAR: "1" } : {} });
+  const app = await launch(resolve(appArg), { data, onboarded: true, env: native ? { SOLARA_NATIVE_SIDEBAR: "1" } : {} });
   try {
     await app.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame && !!ac.pages.tileFolders" });
     await sleep(4000);
-    const win = await app.eval(`return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
-    const dev = (action) => app.eval(`return globalThis.expo.modules.ArdiaCEF.devWindow(${win}, ${JSON.stringify(action)})`);
+    const win = await app.eval(`return globalThis.expo.modules.SolaraCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
+    const dev = (action) => app.eval(`return globalThis.expo.modules.SolaraCEF.devWindow(${win}, ${JSON.stringify(action)})`);
     await dev("fakeActiveClicks");
     const setup = JSON.parse(await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
       const ids = ["one", "two", "three"].map((n) => s.newTab(w, { url: "data:text/html,<title>" + n + "</title>" + n, background: true }));

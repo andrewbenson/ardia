@@ -1,6 +1,6 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import { onAppEvent, onWindowEvent } from "@ardia/shell";
-import { liveCommand, liveStart } from "@ardia/settings";
+import { onAppEvent, onWindowEvent } from "@solara/shell";
+import { liveCommand, liveStart } from "@solara/settings";
 import { useBrowser } from "../store/browser";
 import { activeTabId, viewTabIds } from "../store/model";
 import { SOURCES } from "./sources";

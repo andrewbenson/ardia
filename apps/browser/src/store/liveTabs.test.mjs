@@ -20,7 +20,7 @@ test("a busy native strip acknowledgement retries without sending the engine com
       command: (command, id) => commands.push({ command, id }),
     };
     globalThis.acTestNativeModules = {
-      ArdiaStore: {
+      SolaraStoreAdapter: {
         status: () => ({ active: true, scope: "everything", syncRedesign: true }),
         useSyncOrigins: (on) => on,
         dispatch(json) {

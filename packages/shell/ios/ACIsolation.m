@@ -27,8 +27,8 @@ static NSPasteboard *IsolatedPasteboardWithName(id self, SEL _cmd, NSPasteboardN
 }
 
 static void IsolatePasteboard(NSString *scope) {
-  gPasteboardName = [@"com.ardia.scratch:" stringByAppendingString:scope];
-  gFindPasteboardName = [@"com.ardia.scratch.find:" stringByAppendingString:scope];
+  gPasteboardName = [@"com.solara.scratch:" stringByAppendingString:scope];
+  gFindPasteboardName = [@"com.solara.scratch.find:" stringByAppendingString:scope];
   Method withName = class_getClassMethod(NSPasteboard.class, @selector(pasteboardWithName:));
   gPasteboardWithName = method_getImplementation(withName);
   method_setImplementation(withName, (IMP)IsolatedPasteboardWithName);
@@ -44,7 +44,7 @@ static void IsolatePasteboard(NSString *scope) {
 }
 
 static BOOL BackgroundInstance(void) {
-  const char *background = getenv("ARDIA_BACKGROUND");
+  const char *background = getenv("SOLARA_BACKGROUND");
   return background && !strcmp(background, "1");
 }
 
@@ -61,7 +61,7 @@ static BOOL ShouldIsolatePasteboard(void) {
 @implementation ACIsolation
 
 + (void)load {
-  const char *dir = getenv("ARDIA_DATA_DIR");
+  const char *dir = getenv("SOLARA_DATA_DIR");
   if (dir && *dir) {
     NSString *path = @(dir);
     if (!path.absolutePath)
@@ -71,7 +71,7 @@ static BOOL ShouldIsolatePasteboard(void) {
   if (ShouldIsolatePasteboard())
     IsolatePasteboard(gDataDirectory ?: [NSString stringWithFormat:@"pid-%d", getpid()]);
   if (!gDataDirectory) return;
-  NSString *domain = NSBundle.mainBundle.bundleIdentifier ?: @"com.ardia.browser";
+  NSString *domain = NSBundle.mainBundle.bundleIdentifier ?: @"com.solara.browser";
   gDefaults = [[NSUserDefaults alloc]
       initWithSuiteName:[[gDataDirectory stringByAppendingPathComponent:@"Preferences"] stringByAppendingPathComponent:domain]];
   if (!gDefaults) return;

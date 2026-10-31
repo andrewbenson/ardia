@@ -9,7 +9,7 @@ Records what JS makes of a password value's text, for the native code that conve
 in place: each random string as JSON.stringify writes it (astral and control characters, "/", quotes,
 backslashes, U+2028), the canonical text of {o, u, p} and {o, u, s} as scope.ts's canonical() writes it, the
 engine's noted digest of each (notes.ts: digest(choice(v))) and the ledger's digest of the plain value
-(passwordLedger.ts: digestOf). ArdiaSyncCore's tests replay every case and must write the same bytes.
+(passwordLedger.ts: digestOf). SolaraLegacySyncCore's tests replay every case and must write the same bytes.
 Default out: packages/sync/tests/fixtures/seal-cases.json.deflate.`;
 
 const args = process.argv.slice(2);

@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 const sent = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "settingsAndDownloads" }),
     snapshot: () => JSON.stringify({ rev: 0, data: { settings: { chosen: [], inferred: [] }, downloads: [] } }),
     dispatch: (json) => {

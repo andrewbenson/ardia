@@ -1,4 +1,4 @@
-import { ContextMenuArea, FadeLabel, Surface, Symbol } from "@ardia/shell";
+import { ContextMenuArea, FadeLabel, Surface, Symbol } from "@solara/shell";
 import { createContext, memo, useContext, useEffect, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";

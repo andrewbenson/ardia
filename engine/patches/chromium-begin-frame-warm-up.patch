@@ -46,39 +46,39 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
  #include "base/strings/strcat.h"
  #include "base/trace_event/trace_event.h"
  #include "components/viz/common/features.h"
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
-+bool g_ardia_begin_frame_bridge = false;
++bool g_solara_begin_frame_bridge = false;
 +
  namespace viz {
  namespace {
 +
-+struct ArdiaVSyncGrid {
++struct SolaraVSyncGrid {
 +  base::TimeTicks timebase;
 +  base::TimeDelta interval;
 +  base::TimeTicks recorded_at;
 +};
 +
-+constexpr int kArdiaMaxWarmUpFrames = 4;
-+constexpr base::TimeDelta kArdiaVSyncGridLifetime = base::Seconds(2);
-+constexpr base::TimeDelta kArdiaVSyncGridTolerance = base::Microseconds(500);
++constexpr int kSolaraMaxWarmUpFrames = 4;
++constexpr base::TimeDelta kSolaraVSyncGridLifetime = base::Seconds(2);
++constexpr base::TimeDelta kSolaraVSyncGridTolerance = base::Microseconds(500);
 +
-+base::flat_map<int64_t, ArdiaVSyncGrid>& ArdiaVSyncGrids() {
-+  static base::NoDestructor<base::flat_map<int64_t, ArdiaVSyncGrid>> grids;
++base::flat_map<int64_t, SolaraVSyncGrid>& SolaraVSyncGrids() {
++  static base::NoDestructor<base::flat_map<int64_t, SolaraVSyncGrid>> grids;
 +  return *grids;
 +}
 +
-+const ArdiaVSyncGrid* ArdiaFreshVSyncGrid(int64_t display_id,
++const SolaraVSyncGrid* SolaraFreshVSyncGrid(int64_t display_id,
 +                                          base::TimeDelta expected_interval,
 +                                          base::TimeTicks now) {
-+  auto found = ArdiaVSyncGrids().find(display_id);
-+  if (found == ArdiaVSyncGrids().end()) {
++  auto found = SolaraVSyncGrids().find(display_id);
++  if (found == SolaraVSyncGrids().end()) {
 +    return nullptr;
 +  }
-+  const ArdiaVSyncGrid& grid = found->second;
-+  if (now - grid.recorded_at > kArdiaVSyncGridLifetime ||
++  const SolaraVSyncGrid& grid = found->second;
++  if (now - grid.recorded_at > kSolaraVSyncGridLifetime ||
 +      (grid.interval - expected_interval).magnitude() >
-+          kArdiaVSyncGridTolerance) {
++          kSolaraVSyncGridTolerance) {
 +    return nullptr;
 +  }
 +  return &grid;
@@ -92,7 +92,7 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
    // RecordFirstFrameHistograms() is no longer required.
 -  if (ui::DisplayLinkMac::SupportsDisplayLinkMacInBrowser()) {
 +  if (ui::DisplayLinkMac::SupportsDisplayLinkMacInBrowser() ||
-+      g_ardia_begin_frame_bridge) {
++      g_solara_begin_frame_bridge) {
      base::PowerMonitor::GetInstance()->AddPowerSuspendObserver(this);
    }
  
@@ -102,7 +102,7 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
                       << "::~ExternalBeginFrameSourceMac() ID:" << display_id_;
 -  if (ui::DisplayLinkMac::SupportsDisplayLinkMacInBrowser()) {
 +  if (ui::DisplayLinkMac::SupportsDisplayLinkMacInBrowser() ||
-+      g_ardia_begin_frame_bridge) {
++      g_solara_begin_frame_bridge) {
      base::PowerMonitor::GetInstance()->RemovePowerSuspendObserver(this);
    }
  }
@@ -110,8 +110,8 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
  
    // Remove the old DisplayLinkMac.
    display_link_mac_.reset();
-+  if (force_update && g_ardia_begin_frame_bridge) {
-+    ArdiaVSyncGrids().erase(display_id);
++  if (force_update && g_solara_begin_frame_bridge) {
++    SolaraVSyncGrids().erase(display_id);
 +  }
  
    display_id_ = display_id;
@@ -157,9 +157,9 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
 +  awaiting_first_vsync_ = false;
 +  warmed_up_by_timer_ = false;
 +  warm_up_timer_.Stop();
-+  if (g_ardia_begin_frame_bridge && params.callback_times_valid &&
++  if (g_solara_begin_frame_bridge && params.callback_times_valid &&
 +      !params.callback_interval.is_zero()) {
-+    ArdiaVSyncGrids()[display_id_] = {params.callback_timebase,
++    SolaraVSyncGrids()[display_id_] = {params.callback_timebase,
 +                                      params.callback_interval,
 +                                      params.callback_timebase};
 +  }
@@ -188,9 +188,9 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
    // Create BeginFrameArgs for now so that we don't have to wait until vsync.
    if (display_link_mac_) {
      base::TimeTicks now = display_link_mac_->GetCurrentTime();
-+    const ArdiaVSyncGrid* grid =
++    const SolaraVSyncGrid* grid =
 +        CanWarmUp() && !now.is_null()
-+            ? ArdiaFreshVSyncGrid(display_id_, min_refresh_interval_,
++            ? SolaraFreshVSyncGrid(display_id_, min_refresh_interval_,
 +                                  base::TimeTicks::Now())
 +            : nullptr;
      if (last_begin_frame_args_.IsValid()) {
@@ -207,18 +207,18 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
  }
  
 +bool ExternalBeginFrameSourceMac::CanWarmUp() const {
-+  return g_ardia_begin_frame_bridge && display_link_mac_ &&
++  return g_solara_begin_frame_bridge && display_link_mac_ &&
 +         vsync_subsampling_factor_ == 1;
 +}
 +
 +void ExternalBeginFrameSourceMac::ScheduleWarmUpBeginFrame() {
 +  if (!CanWarmUp() || !needs_begin_frames_ || !awaiting_first_vsync_ ||
-+      warm_up_frames_ >= kArdiaMaxWarmUpFrames || warm_up_timer_.IsRunning()) {
++      warm_up_frames_ >= kSolaraMaxWarmUpFrames || warm_up_timer_.IsRunning()) {
 +    return;
 +  }
 +  const base::TimeTicks now = base::TimeTicks::Now();
-+  const ArdiaVSyncGrid* grid =
-+      ArdiaFreshVSyncGrid(display_id_, min_refresh_interval_, now);
++  const SolaraVSyncGrid* grid =
++      SolaraFreshVSyncGrid(display_id_, min_refresh_interval_, now);
 +  if (!grid) {
 +    return;
 +  }
@@ -237,8 +237,8 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
 +  }
 +  ++warm_up_frames_;
 +  const base::TimeTicks now = base::TimeTicks::Now();
-+  const ArdiaVSyncGrid* grid =
-+      ArdiaFreshVSyncGrid(display_id_, min_refresh_interval_, now);
++  const SolaraVSyncGrid* grid =
++      SolaraFreshVSyncGrid(display_id_, min_refresh_interval_, now);
 +  if (!grid) {
 +    return;
 +  }
@@ -268,8 +268,8 @@ diff --git a/components/viz/service/frame_sinks/external_begin_frame_source_mac.
  }
  
  void ExternalBeginFrameSourceMac::OnSuspend() {
-+  if (g_ardia_begin_frame_bridge) {
-+    ArdiaVSyncGrids().clear();
++  if (g_solara_begin_frame_bridge) {
++    SolaraVSyncGrids().clear();
 +  }
    if (first_callback_time_.is_null()) {
      first_callback_time_ = base::TimeTicks::Max();

@@ -97,7 +97,7 @@ public final class UserScriptsSync {
   public init(host: any UserScriptsHost, product: String) {
     self.host = host
     let trimmed = product.jsTrim()
-    self.product = trimmed.isEmpty ? "Ardia" : trimmed
+    self.product = trimmed.isEmpty ? "Solara" : trimmed
   }
 
   public static func targets(_ state: BrowserState) -> [UserScriptsTarget] {
@@ -141,7 +141,7 @@ public final class UserScriptsSync {
       repeat {
         again = false
         do { try await reconcile() }
-        catch { host.warn("[scripts] couldn't apply the ardia scripts", error: error) }
+        catch { host.warn("[scripts] couldn't apply the solara scripts", error: error) }
       } while again && enabled
       running = nil
     }

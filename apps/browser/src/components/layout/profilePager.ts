@@ -1,5 +1,5 @@
-import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerStateEvent, type SwipeEvent } from "@ardia/ardiacore";
-import { onProfilePagerPosition, profilePagerNative } from "@ardia/settings";
+import { pagerState, selectPager, stepPager, switchPager, type NativePagerConfig, type PagerStateEvent, type SwipeEvent } from "@solara/solaracore";
+import { onProfilePagerPosition, profilePagerNative } from "@solara/settings";
 import { useEffect, useLayoutEffect, useMemo } from "react";
 import { Animated, unstable_batchedUpdates } from "react-native";
 import { create } from "zustand";

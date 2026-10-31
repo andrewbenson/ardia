@@ -1,4 +1,4 @@
-import type { ScopeState } from "@ardia/sync";
+import type { ScopeState } from "@solara/sync";
 import { isObject } from "./readable";
 
 export const DELTA_PREFIX = "sync-state-d-";

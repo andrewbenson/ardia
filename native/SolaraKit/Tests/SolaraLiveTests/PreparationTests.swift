@@ -155,7 +155,7 @@ import Testing
     let id = await rig.engine.createFolder(profileId: "p", kind: .pullRequests, sources: [.github])
     await rig.engine.refreshFolder(id).value
     #expect(http.log.current.isEmpty)
-    #expect(await rig.engine.state.status[id]?.error?.message == "Isolated Live Folders requires a loopback ARDIA_LIVE_MOCK URL")
+    #expect(await rig.engine.state.status[id]?.error?.message == "Isolated Live Folders requires a loopback SOLARA_LIVE_MOCK URL")
   }
 
   @Test func gridFireIncludesJobsWithinFiftyMilliseconds() async {

@@ -46,7 +46,7 @@ const fixture = () => session({
 
 let app = null;
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const st = () => ac.store.getState();
 const win = (id) => C.chromeWindows().then((ws) => { const f = st().windows[id].frame; const w = ws.filter((w) => w.hasRoot).find((w) => { const r = w.frame.match(/[-\\d.]+/g).map(Number); return Math.abs(r[0] - f[0]) < 2 && Math.abs(r[2] - f[2]) < 2; }); return w && w.window; });
 const act = (id, a) => win(id).then((n) => C.devWindow(n, a));
@@ -216,7 +216,7 @@ async function check(name, fn) {
 try {
   const built = spawnSync("swiftc", ["-O", recorderSource, "-o", recorder], { encoding: "utf8" });
   if (built.status !== 0) rep.log(`(no recorder: ${built.stderr.trim().split("\n")[0]})`);
-  app = await launch(appPath, { data, port, session: fixture(), onboarded: true, probe: true, env: { ARDIA_DRAW_WINDOWS: "1" } });
+  app = await launch(appPath, { data, port, session: fixture(), onboarded: true, probe: true, env: { SOLARA_DRAW_WINDOWS: "1" } });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await sleep(2500);
   const initial = await untilSnapshot("initial native windows", (state) => ["w1", "w2"].every((id) => state.windows.some((w) => w.id === id)));

@@ -1,6 +1,6 @@
 SPDX-License-Identifier: BSD-3-Clause
 ungoogled-chromium's extra/iridium-browser/mime_util-force-text-x-suse-ymp-to-be-downloaded.patch (155.0.8059.84-1),
-which Ardia applied until Helium and Helium leaves out: text/x-suse-ymp files download instead of rendering.
+which Solara applied until Helium and Helium leaves out: text/x-suse-ymp files download instead of rendering.
 
 --- a/third_party/blink/common/mime_util/mime_util.cc
 +++ b/third_party/blink/common/mime_util/mime_util.cc

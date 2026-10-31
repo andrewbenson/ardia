@@ -4,7 +4,7 @@ import { fixedBy } from "../switchOn.mjs";
 
 globalThis.acTestNativeModules = {
   ...globalThis.acTestNativeModules,
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "settingsAndDownloads" }),
     snapshot: () => JSON.stringify({ rev: 0, data: { settings: null, downloads: [] } }),
     dispatch: () => JSON.stringify({ rev: 0, patches: [] }),

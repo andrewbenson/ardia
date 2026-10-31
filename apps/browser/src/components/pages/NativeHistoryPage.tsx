@@ -1,5 +1,5 @@
-import { NativePage, type NativePageEvent } from "@ardia/settings";
-import { confirm } from "@ardia/shell";
+import { NativePage, type NativePageEvent } from "@solara/settings";
+import { confirm } from "@solara/shell";
 import { useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
 import { useTheme } from "../../lib/theme";

@@ -5,7 +5,7 @@ diff --git a/components/performance_manager/freezing/freezing_policy.cc b/compon
  #include "components/performance_manager/public/resource_attribution/origin_in_browsing_instance_context.h"
  #include "components/performance_manager/public/resource_attribution/resource_contexts.h"
  #include "components/performance_manager/public/resource_attribution/resource_types.h"
-+#include "content/public/browser/ardia_live_connection.h"
++#include "content/public/browser/solara_live_connection.h"
 +#include "content/public/browser/render_frame_host.h"
 +#include "content/public/browser/web_contents.h"
  #include "content/public/common/url_constants.h"
@@ -15,17 +15,17 @@ diff --git a/components/performance_manager/freezing/freezing_policy.cc b/compon
        ->IsCapturingDisplay();
  }
  
-+const base::FeatureParam<base::TimeDelta> kArdiaUnconnectedUnfreezeInterval{
-+    &features::kInfiniteTabsFreezing, "ardia_unconnected_unfreeze_interval",
++const base::FeatureParam<base::TimeDelta> kSolaraUnconnectedUnfreezeInterval{
++    &features::kInfiniteTabsFreezing, "solara_unconnected_unfreeze_interval",
 +    base::TimeDelta()};
 +
-+bool ArdiaKeepsConnectedPagesLive() {
-+  return kArdiaUnconnectedUnfreezeInterval.Get() >
++bool SolaraKeepsConnectedPagesLive() {
++  return kSolaraUnconnectedUnfreezeInterval.Get() >
 +         features::kInfiniteTabsFreezing_UnfreezeInterval.Get();
 +}
 +
-+bool ArdiaPageHasLiveConnection(const PageNode* page_node) {
-+  if (!ArdiaKeepsConnectedPagesLive()) {
++bool SolaraPageHasLiveConnection(const PageNode* page_node) {
++  if (!SolaraKeepsConnectedPagesLive()) {
 +    return false;
 +  }
 +  base::WeakPtr<content::WebContents> contents = page_node->GetWebContents();
@@ -35,14 +35,14 @@ diff --git a/components/performance_manager/freezing/freezing_policy.cc b/compon
 +  bool live = false;
 +  contents->GetPrimaryMainFrame()->ForEachRenderFrameHost(
 +      [&live](content::RenderFrameHost* frame) {
-+        live = live || content::ArdiaFrameHasLiveConnection(frame);
++        live = live || content::SolaraFrameHasLiveConnection(frame);
 +      });
 +  return live;
 +}
 +
-+base::TimeDelta ArdiaUnfreezeInterval(bool has_live_connection) {
-+  return ArdiaKeepsConnectedPagesLive() && !has_live_connection
-+             ? kArdiaUnconnectedUnfreezeInterval.Get()
++base::TimeDelta SolaraUnfreezeInterval(bool has_live_connection) {
++  return SolaraKeepsConnectedPagesLive() && !has_live_connection
++             ? kSolaraUnconnectedUnfreezeInterval.Get()
 +             : features::kInfiniteTabsFreezing_UnfreezeInterval.Get();
 +}
 +
@@ -88,10 +88,10 @@ diff --git a/components/performance_manager/freezing/freezing_policy.cc b/compon
      }
  
 +    const bool page_has_live_connection =
-+        ArdiaPageHasLiveConnection(visited_page);
++        SolaraPageHasLiveConnection(visited_page);
 +    has_live_connection = has_live_connection || page_has_live_connection;
 +    page_freezing_state.unfreeze_interval =
-+        ArdiaUnfreezeInterval(page_has_live_connection);
++        SolaraUnfreezeInterval(page_has_live_connection);
      if (is_periodic_unfreezing_active &&
          page_freezing_state.IsInUnfreezePeriod(now)) {
        is_in_periodic_unfreeze = true;
@@ -109,7 +109,7 @@ diff --git a/components/performance_manager/freezing/freezing_policy.cc b/compon
    auto& state = GetFreezingState(page_node);
    CHECK(!state.periodic_unfreeze_timer.IsRunning(), base::NotFatalUntil::M141);
 +  state.unfreeze_interval =
-+      ArdiaUnfreezeInterval(ArdiaPageHasLiveConnection(page_node));
++      SolaraUnfreezeInterval(SolaraPageHasLiveConnection(page_node));
    state.periodic_unfreeze_timer.Start(
        FROM_HERE, state.GetDelayUntilNextUnfreezeStateChange(now),
        base::BindOnce(&FreezingPolicy::OnPeriodicUnfreezeTimer,
@@ -120,7 +120,7 @@ diff --git a/content/browser/BUILD.gn b/content/browser/BUILD.gn
      "reduce_accept_language/reduce_accept_language_throttle.cc",
      "reduce_accept_language/reduce_accept_language_throttle.h",
      "renderer_host/agent_scheduling_group_host.cc",
-+    "renderer_host/ardia_live_connection.cc",
++    "renderer_host/solara_live_connection.cc",
      "renderer_host/agent_scheduling_group_host.h",
      "renderer_host/agent_scheduling_group_host_factory.h",
      "renderer_host/ancestor_throttle.cc",
@@ -131,27 +131,27 @@ diff --git a/content/public/browser/BUILD.gn b/content/public/browser/BUILD.gn
      "allow_service_worker_result.cc",
      "allow_service_worker_result.h",
      "anchor_element_preconnect_delegate.h",
-+    "ardia_live_connection.h",
++    "solara_live_connection.h",
      "attribution_data_model.cc",
      "attribution_data_model.h",
      "auction_result.h",
-diff --git a/content/browser/renderer_host/ardia_live_connection.cc b/content/browser/renderer_host/ardia_live_connection.cc
+diff --git a/content/browser/renderer_host/solara_live_connection.cc b/content/browser/renderer_host/solara_live_connection.cc
 new file mode 100644
 --- /dev/null
-+++ b/content/browser/renderer_host/ardia_live_connection.cc
++++ b/content/browser/renderer_host/solara_live_connection.cc
 @@ -0,0 +1,29 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +
-+#include "content/public/browser/ardia_live_connection.h"
++#include "content/public/browser/solara_live_connection.h"
 +
 +#include "content/browser/renderer_host/render_frame_host_impl.h"
 +#include "third_party/blink/public/common/scheduler/web_scheduler_tracked_feature.h"
 +
 +namespace content {
 +
-+bool ArdiaFrameHasLiveConnection(RenderFrameHost* render_frame_host) {
++bool SolaraFrameHasLiveConnection(RenderFrameHost* render_frame_host) {
 +  using Feature = blink::scheduler::WebSchedulerTrackedFeature;
 +  const auto features =
 +      static_cast<RenderFrameHostImpl*>(render_frame_host)
@@ -169,17 +169,17 @@ new file mode 100644
 +}
 +
 +}
-diff --git a/content/public/browser/ardia_live_connection.h b/content/public/browser/ardia_live_connection.h
+diff --git a/content/public/browser/solara_live_connection.h b/content/public/browser/solara_live_connection.h
 new file mode 100644
 --- /dev/null
-+++ b/content/public/browser/ardia_live_connection.h
++++ b/content/public/browser/solara_live_connection.h
 @@ -0,0 +1,19 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +
-+#ifndef CONTENT_PUBLIC_BROWSER_ARDIA_LIVE_CONNECTION_H_
-+#define CONTENT_PUBLIC_BROWSER_ARDIA_LIVE_CONNECTION_H_
++#ifndef CONTENT_PUBLIC_BROWSER_SOLARA_LIVE_CONNECTION_H_
++#define CONTENT_PUBLIC_BROWSER_SOLARA_LIVE_CONNECTION_H_
 +
 +#include "content/common/content_export.h"
 +
@@ -187,7 +187,7 @@ new file mode 100644
 +
 +class RenderFrameHost;
 +
-+CONTENT_EXPORT bool ArdiaFrameHasLiveConnection(
++CONTENT_EXPORT bool SolaraFrameHasLiveConnection(
 +    RenderFrameHost* render_frame_host);
 +
 +}

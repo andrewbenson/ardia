@@ -112,8 +112,8 @@ private func json(_ r: AppUrlRoute?) -> ParsedJSON {
     return (m, threw)
   }
 
-  @Test func underTheUpstreamScheme() throws {
-    let (m, threw) = try run("ardia", product: nil)
+  @Test func underTheDefaultScheme() throws {
+    let (m, threw) = try run("unnamed", product: nil)
     #expect(m.total == 0, "\(m.report)")
     #expect(threw == 0)
   }

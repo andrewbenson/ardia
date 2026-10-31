@@ -20,7 +20,7 @@ if (previousBuild && !fs.existsSync(path.join(docs, "onboarding.json")))
 try {
   instance = await launch(app, {
     data: docs, port, js: "none", ready: false, probe: true, log: path.join(path.dirname(path.resolve(out)), `${phase}.app.log`),
-    env: { HOME: home, CFFIXED_USER_HOME: home, ARDIA_TEST_REAUTH: "granted", ...(previousBuild ? {} : { ARDIA_DATA_DIR: null }) },
+    env: { HOME: home, CFFIXED_USER_HOME: home, SOLARA_TEST_REAUTH: "granted", ...(previousBuild ? {} : { SOLARA_DATA_DIR: null }) },
     switches: "--disable-backgrounding-occluded-windows", args: previousBuild ? ["--mute-audio"] : [],
   });
 } catch (e) {
@@ -73,7 +73,7 @@ const show = (pattern) => inApp(`const s = ac.store.getState(); const t = Object
   if (t) { ac.actions.switchProfile(${window}, t.profileId); ac.actions.switchToTab(t.id); } return !!t;`);
 
 const READ = `
-const s = ac.store.getState(), C = globalThis.expo.modules.ArdiaCEF, X = globalThis.expo.modules.ArdiaExtensions;
+const s = ac.store.getState(), C = globalThis.expo.modules.SolaraCEF, X = globalThis.expo.modules.SolaraExtensions;
 const O = ${JSON.stringify(origin)};
 const seq = (items, f) => items.reduce((p, x) => p.then(() => f(x)), Promise.resolve());
 const safe = (p, f) => Promise.resolve().then(() => p).then(f, (e) => "error: " + e);
@@ -108,7 +108,7 @@ try {
     await inApp(`ac.actions.switchToTab(ac.store.getState().newTab(${W}, { url: "${origin}/work.html", profileId: ${JSON.stringify(work)} })); return 1;`);
     report.setWork = await inPage("work.html", `document.cookie = "w_persist=yes; max-age=31536000; path=/"; document.cookie = "w_session=yes; path=/"; localStorage.setItem("w_ls", "yes"); document.cookie`);
     report.made = await inApp(`
-      const s = ac.store.getState(), C = globalThis.expo.modules.ArdiaCEF, O = ${JSON.stringify(origin)}, work = ${JSON.stringify(work)};
+      const s = ac.store.getState(), C = globalThis.expo.modules.SolaraCEF, O = ${JSON.stringify(origin)}, work = ${JSON.stringify(work)};
       s.addBookmark({ profileId: "default", url: O + "/page2.html", title: "Carryover bookmark" });
       s.addBookmark({ profileId: work, url: O + "/work.html", title: "Work bookmark" });
       return C.savePassword("", O, "alice", "pw-personal-123")
@@ -116,7 +116,7 @@ try {
         .then(() => C.saveAddress("", { name: "Ada Lovelace", city: "London", street: "12 St James's Square", postalCode: "SW1Y 4JH", country: "GB" }))
         .then(() => C.setSiteSetting("", O, "notifications", "allow"))
         .then(() => C.setZoom("", "127.0.0.1", 1.5))
-        .then(() => globalThis.expo.modules.ArdiaExtensions.install(${JSON.stringify(extra)}, ""));`, 60_000);
+        .then(() => globalThis.expo.modules.SolaraExtensions.install(${JSON.stringify(extra)}, ""));`, 60_000);
     report.madeUbo = await inUbo(`await send({ what: "writeUserFilters", content: "||carryover-ads.example^\\n##.carryover-banner", enabled: true, trusted: false });
       await send({ what: "userSettings", name: "advancedUserEnabled", value: true });
       const w = await send({ what: "getWhitelist" }); await send({ what: "setWhitelist", whitelist: w.whitelist.concat("carryover.example").join("\\n") }); return 1;`);
@@ -128,12 +128,12 @@ try {
     await inApp(`ac.actions.switchProfile(${W}, "default"); ac.actions.switchToTab(ac.store.getState().newTab(${W}, { url: "${origin}/page3.html", profileId: "default" })); return 1;`);
     report.setNew = await inPage("page3.html", `document.cookie = "n_persist=yes; max-age=31536000; path=/"; document.cookie = "n_session=yes; path=/"; localStorage.setItem("n_ls", "yes"); document.cookie`);
     report.made = await inApp(`
-      const s = ac.store.getState(), C = globalThis.expo.modules.ArdiaCEF, X = globalThis.expo.modules.ArdiaExtensions, O = ${JSON.stringify(origin)};
+      const s = ac.store.getState(), C = globalThis.expo.modules.SolaraCEF, X = globalThis.expo.modules.SolaraExtensions, O = ${JSON.stringify(origin)};
       s.addBookmark({ profileId: "default", url: O + "/page3.html", title: "New build bookmark" });
       return C.savePassword("", O, "carol", "pw-new-789")
         .then(() => C.setZoom("", "localhost", 0.9))
         .then(() => X.list(""))
-        .then((l) => { const e = ((l && l.extensions) || []).find((e) => e.name === "ArdiaCore spike extension"); return e ? X.setEnabled(e.id, "", false) : "no extension"; });`, 60_000);
+        .then((l) => { const e = ((l && l.extensions) || []).find((e) => e.name === "SolaraCore spike extension"); return e ? X.setEnabled(e.id, "", false) : "no extension"; });`, 60_000);
     await sleep(4000);
   }
   report.read = await inApp(READ, 90_000);
@@ -151,7 +151,7 @@ try {
   const tree = [pid];
   for (let i = 0; i < tree.length; i++) { try { tree.push(...execSync(`pgrep -P ${tree[i]}`).toString().trim().split("\n").filter(Boolean)); } catch {} }
   const open = execSync(`lsof -p ${tree.join(",")} -Fn`).toString();
-  report.realHomeFiles = open.split("\n").filter((l) => l.startsWith(`n${real}/Application Support/com.ardia`) || l.startsWith(`n${real}/Caches/com.ardia`));
+  report.realHomeFiles = open.split("\n").filter((l) => l.startsWith(`n${real}/Application Support/com.solara`) || l.startsWith(`n${real}/Caches/com.solara`));
   report.processesChecked = tree.length;
 } catch (e) {
   report.error = String(e.stack || e);
@@ -174,7 +174,7 @@ if (phase === "create") {
     "profiles": '["Personal","Work"]', "Personal passwords": '["alice pw-personal-123"]', "Work passwords": '["bob pw-work-456"]',
     "Personal bookmarks": `["Carryover bookmark ${origin}/page2.html"]`, "Work bookmarks": `["Work bookmark ${origin}/work.html"]`,
     "Personal addresses": '["Ada Lovelace, London"]', "Personal notifications": '"allow"', "Personal zoom": '{"127.0.0.1":1.5}',
-    "Personal extensions": '["ArdiaCore spike extension"]',
+    "Personal extensions": '["SolaraCore spike extension"]',
     "Personal page": '"p_persist=yes; p_session=yes; localStorage yes"', "Work page": '"w_persist=yes; w_session=yes; localStorage yes"',
     "Personal uBlock Origin": '{"filters":"||carryover-ads.example^\\n##.carryover-banner","filtersOn":true,"advancedUser":true,"trusted":["carryover.example"]}',
     "settings": '{"appearance":"dark","sidebarWidth":244,"newTabPosition":"bottom"}',
@@ -195,7 +195,7 @@ const stable = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" &&
 const sessionless = (v) => (typeof v === "string" ? v.replace(/\w+_session=yes; /g, "") : v);
 const line = (ok, name, detail) => { console.log(`${ok ? "PASS" : "FAIL"}  carried over: ${name}${detail ? `  (${detail})` : ""}`); if (!ok) failed = true; };
 const expected = path.join(docs, "Chromium");
-if (phase !== "back") line(report.read?.dataDirectory?.replace(/^\/private/, "") === expected.replace(/^\/private/, ""), "the installed copy's folder, found without ARDIA_DATA_DIR", report.read?.dataDirectory);
+if (phase !== "back") line(report.read?.dataDirectory?.replace(/^\/private/, "") === expected.replace(/^\/private/, ""), "the installed copy's folder, found without SOLARA_DATA_DIR", report.read?.dataDirectory);
 for (const [key, was] of Object.entries(created)) {
   if (key === "dataDirectory") continue;
   const now = report.read?.[key];
@@ -206,6 +206,6 @@ for (const [key, was] of Object.entries(created)) {
   const shown = JSON.stringify(now ?? null);
   line(ok, key, ok ? shown.slice(0, 120) : `${JSON.stringify(was).slice(0, 150)} → ${shown.slice(0, 150)}`);
 }
-line(report.realHomeFiles?.length === 0, "nothing opened in the real home's Ardia folders", report.realHomeFiles?.slice(0, 2).join(", "));
+line(report.realHomeFiles?.length === 0, "nothing opened in the real home's Solara folders", report.realHomeFiles?.slice(0, 2).join(", "));
 line(report.quit, "it quits on the quit Apple event");
 process.exit(failed ? 1 : 0);

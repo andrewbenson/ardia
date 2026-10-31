@@ -20,7 +20,7 @@ if (!app || !scratch || app.startsWith("/Applications/")) {
 const PANES = ["tabs", "appearance", "privacy", "search", "advanced", "engines"];
 const VARIANTS = [
   { name: "native", env: {} },
-  { name: "native-unwarmed", env: { ARDIA_SETTINGS_PREWARM: "0" } },
+  { name: "native-unwarmed", env: { SOLARA_SETTINGS_PREWARM: "0" } },
 ].filter((v) => !ONLY || ONLY.includes(v.name));
 const SETTLE_MS = 8000;
 

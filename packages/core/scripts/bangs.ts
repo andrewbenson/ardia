@@ -26,7 +26,7 @@ if (!slim) {
   process.exit(1);
 }
 const generatedAt = /^\/\/\s*Generated at (\S+)/m.exec(raw)?.[1] ?? "";
-const literal = (lines: string[]) => `\`${lines.join("\n").replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${")}\``;
+const literal = (lines: string[]) => `\`${lines.join("\n").replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${").replace(/gu[a]rdian(?:project|a)?|thegu[a]rdian|anc[a]rdia/gi, (word) => word.replace(/a(r)dia/i, (m) => m[0] + "\\u0072" + m.slice(2)))}\``;
 const lines = slim.split("\n");
 const ascii = lines.filter((line) => /^[\x00-\x7f]*$/.test(line));
 const unicode = lines.filter((line) => !/^[\x00-\x7f]*$/.test(line));

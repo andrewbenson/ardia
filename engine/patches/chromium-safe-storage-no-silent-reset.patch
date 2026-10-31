@@ -76,7 +76,7 @@ diff --git a/components/os_crypt/common/keychain_password_mac.mm b/components/os
  // found in the LICENSE file.
  
  #include "components/os_crypt/common/keychain_password_mac.h"
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
  #import <Security/Security.h>
  
@@ -103,7 +103,7 @@ diff --git a/components/os_crypt/common/keychain_password_mac.mm b/components/os
  
  }  // namespace
  
-+bool (*g_ardia_safe_storage_key_may_be_created)() = nullptr;
++bool (*g_solara_safe_storage_key_may_be_created)() = nullptr;
 +
  // static
  KeychainPassword::KeychainNameType& KeychainPassword::GetServiceName() {
@@ -112,8 +112,8 @@ diff --git a/components/os_crypt/common/keychain_password_mac.mm b/components/os
  
    if (password.error() == errSecItemNotFound) {
      uma_result = FindGenericPasswordResult::kPasswordNotFound;
-+    if (g_ardia_safe_storage_key_may_be_created &&
-+        !g_ardia_safe_storage_key_may_be_created()) {
++    if (g_solara_safe_storage_key_may_be_created &&
++        !g_solara_safe_storage_key_may_be_created()) {
 +      return base::unexpected(errSecItemNotFound);
 +    }
      return AddRandomPasswordToKeychain(*keychain_, GetServiceName(),
@@ -146,7 +146,7 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider.mm b/compon
  // found in the LICENSE file.
  
  #include "components/os_crypt/async/browser/keychain_key_provider.h"
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
  #include <array>
  #include <memory>
@@ -154,10 +154,10 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider.mm b/compon
  #include "crypto/kdf.h"
  #include "crypto/subtle_passkey.h"
  
-+void (*g_ardia_safe_storage_unreadable)(int status,
++void (*g_solara_safe_storage_unreadable)(int status,
 +                                       base::OnceClosure retry) = nullptr;
 +
-+crypto::apple::KeychainV2* (*g_ardia_test_keychain)() = nullptr;
++crypto::apple::KeychainV2* (*g_solara_test_keychain)() = nullptr;
 +
  namespace os_crypt_async {
  
@@ -169,8 +169,8 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider.mm b/compon
 -      scoped_fake_keychain =
 -          std::make_unique<crypto::apple::FakeKeychainV2>("test-access-group");
 -      keychain_to_use = scoped_fake_keychain.get();
-+      if (g_ardia_test_keychain) {
-+        keychain_to_use = g_ardia_test_keychain();
++      if (g_solara_test_keychain) {
++        keychain_to_use = g_solara_test_keychain();
 +      }
 +      if (!keychain_to_use) {
 +        scoped_fake_keychain = std::make_unique<crypto::apple::FakeKeychainV2>(
@@ -198,8 +198,8 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider.mm b/compon
    // Deliberately do not run the key callback: that would let data loading proceed
    // without a key and could delete cookies or reset protected preferences.
    // Keep it waiting while the browser shows the error and exits.
-+  if (g_ardia_safe_storage_unreadable) {
-+    g_ardia_safe_storage_unreadable(
++  if (g_solara_safe_storage_unreadable) {
++    g_solara_safe_storage_unreadable(
 +        key.error(),
 +        base::BindOnce(&KeychainKeyProvider::GetKeyWithRetries,
 +                       weak_factory_.GetWeakPtr(), std::move(callback),
@@ -216,7 +216,7 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider_unittest.mm
  // found in the LICENSE file.
  
  #include "components/os_crypt/async/browser/keychain_key_provider.h"
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
 +#include <deque>
 +#include <memory>
@@ -333,14 +333,14 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider_unittest.mm
 +class KeychainKeyProviderNoResetTest : public ::testing::Test {
 + protected:
 +  void SetUp() override {
-+    g_ardia_safe_storage_key_may_be_created = &TestKeyMayBeCreated;
++    g_solara_safe_storage_key_may_be_created = &TestKeyMayBeCreated;
 +    g_test_key_may_be_created = false;
 +    g_test_start_over_allowed = false;
 +    g_test_unreadable_status = noErr;
 +  }
 +  void TearDown() override {
-+    g_ardia_safe_storage_key_may_be_created = nullptr;
-+    g_ardia_safe_storage_unreadable = nullptr;
++    g_solara_safe_storage_key_may_be_created = nullptr;
++    g_solara_safe_storage_unreadable = nullptr;
 +    g_test_start_over = nullptr;
 +  }
 +
@@ -463,7 +463,7 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider_unittest.mm
 +TEST_F(KeychainKeyProviderNoResetTest, StartOverMakesOneNewKey) {
 +  base::OnceClosure start_over;
 +  g_test_start_over = &start_over;
-+  g_ardia_safe_storage_unreadable = &TestSafeStorageUnreadable;
++  g_solara_safe_storage_unreadable = &TestSafeStorageUnreadable;
 +  ScriptedKeychain keychain;
 +  keychain.QueueFind(base::unexpected(errSecItemNotFound));
 +  std::unique_ptr<KeychainKeyProvider> provider = MakeProvider(&keychain);
@@ -495,7 +495,7 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider_unittest.mm
 +TEST_F(KeychainKeyProviderNoResetTest, StartOverKeepsAnItemThatReturned) {
 +  base::OnceClosure start_over;
 +  g_test_start_over = &start_over;
-+  g_ardia_safe_storage_unreadable = &TestSafeStorageUnreadable;
++  g_solara_safe_storage_unreadable = &TestSafeStorageUnreadable;
 +  ScriptedKeychain keychain;
 +  for (int i = 0; i < 5; ++i) {
 +    keychain.QueueFind(base::unexpected(errSecItemNotFound));
@@ -523,7 +523,7 @@ diff --git a/components/os_crypt/async/browser/keychain_key_provider_unittest.mm
 +TEST_F(KeychainKeyProviderNoResetTest, UndecodableItemOnlyRetries) {
 +  base::OnceClosure retry;
 +  g_test_start_over = &retry;
-+  g_ardia_safe_storage_unreadable = &TestSafeStorageUnreadable;
++  g_solara_safe_storage_unreadable = &TestSafeStorageUnreadable;
 +  g_test_start_over_allowed = true;
 +  ScriptedKeychain keychain;
 +  keychain.QueueFind(base::unexpected(errSecDecode));

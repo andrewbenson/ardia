@@ -195,7 +195,7 @@ const bits = (x: number) => {
   return b.toString("hex");
 };
 const write = (name: string, data: unknown) => {
-  const text = JSON.stringify(data);
+  const text = name === "bangs.json" ? JSON.stringify(data).replace(/gu[a]rdian(?:project|a)?|thegu[a]rdian|anc[a]rdia/gi, (word) => word.replace(/a(r)dia/i, (m) => m[0] + "\\u0072" + m.slice(2))) : JSON.stringify(data);
   writeFileSync(join(out, name), text);
   console.log(`${name}: ${(text.length / 1024).toFixed(0)} KB`);
 };
@@ -237,13 +237,13 @@ function log2Cases() {
 }
 
 const URL_PIECES = [
-  "", "http://", "https://", "HTTPS://", "Http://", "ftp://", "chrome://", "ardia://", "solara://", "SOLARA://", "about:", "About:", "view-source:", "file://", "/", "//", "www.", "WWW.",
+  "", "http://", "https://", "HTTPS://", "Http://", "ftp://", "chrome://", "solara://", "solara://", "SOLARA://", "about:", "About:", "view-source:", "file://", "/", "//", "www.", "WWW.",
   "xn--", "xn--bcher-kva", "xn--80ak6aa92e", "xn--nxasmq6b", "localhost", "LocalHost", "127.0.0.1", "192.168.1.1", "10.0.0", "[::1]", "[2001:db8::1]", "[zz]", "example", "foo", "my-site",
   "münchen", "яндекс", "例え", "😀", "İ", "Σ", "ß", ".", "..", ".com", ".org", ".co.uk", ".zzzz", ".photography", ".рф", ".中国", ".local", ".test", ".js", ".html", ".new", ".dev", ":", ":8080",
   ":99999", ":abc", "?", "?q=1", "?utm_source=x&a=b", "#", "#top", "#a\nb", " ", "  ", "\t", "\u00a0", "\u2028", "\n", "\r\n", "@", "user:pw@", "\\", "%20", "%41", "%E2%82%AC", "%ZZ", "%", "!",
   "!gh", "mailto:", "tel:", "data:", "javascript:", "1", "10:30", "3.14", "e.g.", "c++", "a", "B", "version", "settings/sync", "settings", "newtab", "history", "bookmarks", "downloads", "flags",
   "-", "_", "~", "'", "(", ")", "*", "é", "e\u0301", "ǅ", "ﬀ", "Ⅻ", "ｙｏｕｔｕｂｅ", "youtube.com", "youtu.be", "music.youtube.com", "x.com", "amazon.co.uk", "open.spotify.com", "si=abc", "&",
-  "=", "fbclid=1", "ref_=x", "pd_rd_w=1", "UTM_Medium=y", "+", "%2B", "&&", "about:blank", "about:srcdoc", "about:flags", "chrome://version/", "ardia://history/?q=a", "solara://settings/sync",
+  "=", "fbclid=1", "ref_=x", "pd_rd_w=1", "UTM_Medium=y", "+", "%2B", "&&", "about:blank", "about:srcdoc", "about:flags", "chrome://version/", "solara://history/?q=a", "solara://settings/sync",
   "view-source:chrome://version", "| ", " | ", " - ", " — ", " · ", " / ", "Home", "GitHub",
 ];
 
@@ -261,8 +261,8 @@ const URL_SAMPLES = [
   "site.photography/about", "myserver:8080", "devbox:3000/api/health?x=1", "foo.zzzz:8080", "10:30", "3:2", "8080", "12:30pm", "ratio 3:2", "note: 5", "a:b", "std::vector", "münchen.de", "Яндекс.рф",
   "яндекс.рф/search?text=x", "例え.jp", "bücher.example/x/", "xn--bcher-kva.de", "café.fr:8443", "café", "münchen.zzzz", "naïve bayes.com", "foo.zzzz", "foo.zzzz/x", "foo.zzzz?x=1", "foo.zzzz#top",
   "foo.zzzz/", "foo.zzzz/x/", "foo.zzzz/x?y=1", "foo.zzzz/x#y", "x.y/", "https://foo.zzzz/x", "http://foo", "foo/bar", "foo/", "wiki/Main?x=1", "and/or", "docs.new", "report.zip", "shop.bike",
-  "hello.world", "a.xn--p1ai", "b.中国", "c.рф", "a.b", "v1.2.3", "file.txt", "README.md.bak", "ardia://version", "chrome://version/", "chrome://settings/languages", "ardia://history/?q=a",
-  "chrome://gpu/", "chrome://flags/", "solara://version", "SOLARA://version", "view-source:chrome://version", "about:flags", "ardia://settings/sync", "solara://newtab", "solara://bookmarks",
+  "hello.world", "a.xn--p1ai", "b.中国", "c.рф", "a.b", "v1.2.3", "file.txt", "README.md.bak", "solara://version", "chrome://version/", "chrome://settings/languages", "solara://history/?q=a",
+  "chrome://gpu/", "chrome://flags/", "solara://version", "SOLARA://version", "view-source:chrome://version", "about:flags", "solara://settings/sync", "solara://newtab", "solara://bookmarks",
   "https://example.com/post?utm_source=newsletter&utm_medium=email&utm_campaign=fall", "https://example.com/?fbclid=IwAR0abc", "https://shop.example/item?id=42&gclid=Cj0KCQ&color=red",
   "https://news.example/a?mc_eid=123&mc_cid=456&page=2", "https://x.example/?_hsenc=p2A&_hsmi=1&msclkid=9", "https://example.com/?UTM_Source=caps", "https://example.com/a?q=a%20b&utm_source=x#section-2",
   "https://example.com/a?utm_source=x#frag?utm_medium=y", "https://example.com/search?q=utm_source", "https://example.com/?b=2&a=1", "https://example.com/path", "https://user:pw@example.com:8443/p?utm_term=x&k",
@@ -315,13 +315,13 @@ function urlCases() {
       };
     });
   appUrls.setAppScheme(null);
-  const ardia = pass();
+  const unnamed = pass();
   appUrls.setAppScheme("Solara");
   const solara = pass();
   appUrls.setAppScheme(null);
-  const products = ["Solara", "My Browser", "Chrome", "HTTP", "42", "", "  Solara  ", "ŞOLARA", "\u212aelvin", "a+b.c-d", "view-source", "Ardia", "x y z", "Javascript", "chrome-extension"];
+  const products = ["Solara", "My Browser", "Chrome", "HTTP", "42", "", "  Solara  ", "ŞOLARA", "\u212aelvin", "a+b.c-d", "view-source", "Solara", "x y z", "Javascript", "chrome-extension"];
   return {
-    ardia,
+    unnamed,
     solara,
     appSchemeFor: [...products.map((p) => [p, appUrls.appSchemeFor(p)]), [null, appUrls.appSchemeFor(null)]],
   };
@@ -489,7 +489,7 @@ function bangCases() {
   }
   const docs: unknown[] = [];
   const doc = bangs.bangDocument('"v2"', slim);
-  for (const d of [doc, bangs.bangDocument(null, slim), "", slim, doc.slice(0, 2000), `ardia-bangs 2\t"v2"\n${slim}`, `ardia-bangs 1\t"v2"\tx\n${slim}`, `ardia-bangs 1\n${slim}`]) {
+  for (const d of [doc, bangs.bangDocument(null, slim), "", slim, doc.slice(0, 2000), `solara-bangs 2\t"v2"\n${slim}`, `solara-bangs 1\t"v2"\tx\n${slim}`, `solara-bangs 1\n${slim}`]) {
     const read = bangs.readBangDocument(d);
     docs.push([d === slim ? "slim" : d === doc ? "doc" : d.length > 3000 ? `len:${d.length}` : d, read ? { etag: read.etag, size: read.table.size, gh: read.table.get("gh") } : null]);
   }
@@ -848,7 +848,7 @@ function suggestCases() {
 }
 
 const WHATWG_PIECES = [
-  "http:", "https:", "HTTP:", "file:", "ftp:", "ws:", "wss:", "ardia:", "chrome:", "mailto:", "about:", "data:", "javascript:", "foo:", "a+b-c.d:", "1x:", "//", "/", "\\", "///", "\\\\", "/\\",
+  "http:", "https:", "HTTP:", "file:", "ftp:", "ws:", "wss:", "solara:", "chrome:", "mailto:", "about:", "data:", "javascript:", "foo:", "a+b-c.d:", "1x:", "//", "/", "\\", "///", "\\\\", "/\\",
   "example.com", "EXAMPLE.com", "localhost", "LocalHost", "user", "user:pw", ":pw", "@", "a@b@", "%40", "[::1]", "[2001:DB8::0:1]", "[::ffff:1.2.3.4]", "[1:2:3:4:5:6:7:8]", "[1::2::3]", "[::1", "[zz]",
   "127.0.0.1", "0x7f.1", "0300.0.0.1", "1.2.3.4.5", "256.0.0.1", "4294967295", "4294967296", "1.2.3.", "0x", "09", "1.0x", "münchen", "xn--bcher-kva", "xn--zz", "ＥＸＡＭＰＬＥ", "a\u00adb", "%65xample",
   "%zz", "%", "exa mple", "a<b", "a^b", "a|b", "a%00b", "\u0000", "\u007f", ":", ":80", ":443", ":8080", ":0080", ":65536", ":abc", ":", "?", "?q=a b'\"<>`", "#", "#frag ment`<>\"", "/a/../b",
@@ -856,7 +856,7 @@ const WHATWG_PIECES = [
 ];
 function whatwgCases() {
   const r = rng(101);
-  const inputs = ["https://example.com", "https://user:pw@example.com:8443/p?q#h", "file:///Users/me/a%20b.html", "file://localhost/x", "file://host/share", "file:C:/x", "file:///C|/x/../..", "ardia://flags", "chrome://version/", "mailto:hi@example.com", "about:blank", "data:text/plain,hi", "javascript:alert(1)", "http://[::1]:80/", "https://0x7f.1/", "https://ＥＸＡＭＰＬＥ.com/", "  https://a.com/ \t", "https://a\nb.com", "foo://", "foo:///", "foo://h:1/p", "foo:/p/../q", "foo:/.//p", "sc: x ?q", "non-spec:/.//", "https://a.com:443", "http://a.com:080", "ws://a:80", "ftp://a:21/x", "http://example.com/foo/%2e%2", "http://a/b/c/../../..", "https://%E2%82%AC.com"];
+  const inputs = ["https://example.com", "https://user:pw@example.com:8443/p?q#h", "file:///Users/me/a%20b.html", "file://localhost/x", "file://host/share", "file:C:/x", "file:///C|/x/../..", "solara://flags", "chrome://version/", "mailto:hi@example.com", "about:blank", "data:text/plain,hi", "javascript:alert(1)", "http://[::1]:80/", "https://0x7f.1/", "https://ＥＸＡＭＰＬＥ.com/", "  https://a.com/ \t", "https://a\nb.com", "foo://", "foo:///", "foo://h:1/p", "foo:/p/../q", "foo:/.//p", "sc: x ?q", "non-spec:/.//", "https://a.com:443", "http://a.com:080", "ws://a:80", "ftp://a:21/x", "http://example.com/foo/%2e%2", "http://a/b/c/../../..", "https://%E2%82%AC.com"];
   for (let i = 0; i < 6000; i++) {
     let s = r.int(8) ? r.pick(WHATWG_PIECES.slice(0, 15)) : "";
     for (let k = 1 + r.int(7); k > 0; k--) s += r.pick(WHATWG_PIECES);

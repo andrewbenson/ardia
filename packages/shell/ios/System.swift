@@ -6,7 +6,7 @@ import ServiceManagement
 public enum SystemServices {
   public static let isolated: Bool = {
     let env = ProcessInfo.processInfo.environment
-    return env["ARDIA_BACKGROUND"] == "1" || env["ARDIA_DATA_DIR"] != nil
+    return env["SOLARA_BACKGROUND"] == "1" || env["SOLARA_DATA_DIR"] != nil
   }()
 
   public static func isDefaultBrowser() -> Bool {
@@ -17,7 +17,7 @@ public enum SystemServices {
 
   public static func setAsDefaultBrowser(_ done: @escaping (Bool) -> Void) {
     if isolated {
-      NSLog("ArdiaSystem: isolated instance, not setting the default browser")
+      NSLog("SolaraSystem: isolated instance, not setting the default browser")
       return done(false)
     }
     let app = Bundle.main.bundleURL
@@ -40,7 +40,7 @@ public enum SystemServices {
 
   public static func setLaunchAtLogin(_ enabled: Bool) throws {
     if isolated {
-      NSLog("ArdiaSystem: isolated instance, not changing launch at login")
+      NSLog("SolaraSystem: isolated instance, not changing launch at login")
       return
     }
     if enabled {
@@ -72,7 +72,7 @@ public enum SystemServices {
 
 public class SystemModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaSystem")
+    Name("SolaraSystem")
 
     Constant("backgroundInstance") { () -> Bool in FileDropView.background }
 
@@ -91,7 +91,7 @@ public class SystemModule: Module {
     AsyncFunction("openFile") { (path: String) -> Bool in
       guard FileManager.default.fileExists(atPath: path) else { return false }
       if FileDropView.background {
-        NSLog("ArdiaSystem: background instance, not opening %@", path)
+        NSLog("SolaraSystem: background instance, not opening %@", path)
         return true
       }
       return NSWorkspace.shared.open(URL(fileURLWithPath: path))
@@ -100,7 +100,7 @@ public class SystemModule: Module {
     AsyncFunction("revealFile") { (path: String) -> Bool in
       guard FileManager.default.fileExists(atPath: path) else { return false }
       if FileDropView.background {
-        NSLog("ArdiaSystem: background instance, not revealing %@", path)
+        NSLog("SolaraSystem: background instance, not revealing %@", path)
         return true
       }
       NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
@@ -240,7 +240,7 @@ final class ShortcutRecorder {
 
 public class FileDragModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaFileDrag")
+    Name("SolaraFileDrag")
 
     View(FileDragView.self) {
       Events("onMiddleClick")
@@ -302,7 +302,7 @@ enum ShellHaptics {
   #endif
 
   static func alignment() {
-    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" {
+    if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" {
       #if SOLARA_PROBES
       suppressed += 1
       #endif
@@ -325,11 +325,11 @@ public enum ShellHapticRead {
 enum HapticLog {
   private static let path: String? = {
     let env = ProcessInfo.processInfo.environment
-    guard env["ARDIA_BACKGROUND"] == "1", let dir = env["ARDIA_DATA_DIR"] else { return nil }
+    guard env["SOLARA_BACKGROUND"] == "1", let dir = env["SOLARA_DATA_DIR"] else { return nil }
     return (dir as NSString).appendingPathComponent("haptics.log")
   }()
 
-  private static let queue = DispatchQueue(label: "ardia.haptic-log", qos: .utility)
+  private static let queue = DispatchQueue(label: "solara.haptic-log", qos: .utility)
   private static let maxBytes: UInt64 = 64 * 1024
 
   static func note(_ pattern: String) {
@@ -348,7 +348,7 @@ enum HapticLog {
 }
 public class FileDropModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaFileDrop")
+    Name("SolaraFileDrop")
 
     View(FileDropView.self) {
       Events("onDropUpdate")
@@ -452,7 +452,7 @@ public enum DroppedLinks {
 }
 
 final class FileDropView: ExpoView {
-  static let background = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+  static let background = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
   static var lastFileDrag: [URL] = []
 
   let onDropUpdate = EventDispatcher()

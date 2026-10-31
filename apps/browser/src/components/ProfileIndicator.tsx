@@ -1,4 +1,4 @@
-import { Symbol, showMenu, type MenuItem } from "@ardia/shell";
+import { Symbol, showMenu, type MenuItem } from "@solara/shell";
 import { Pressable, Text, View } from "react-native";
 import { createProfile, openWindow, switchProfile } from "../lib/actions";
 import { menuCommandAlternate, menuShortcut } from "../lib/commandShortcuts";

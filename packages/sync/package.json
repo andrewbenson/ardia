@@ -1,5 +1,5 @@
 {
-  "name": "@ardia/sync",
+  "name": "@solara/sync",
   "version": "0.0.0",
   "private": true,
   "description": "End-to-end-encrypted sync through a folder the user chooses (iCloud Drive, Dropbox, a NAS, a USB drive)",
@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p .",
-    "test": "swift test --scratch-path \"${TMPDIR:-/tmp}/ardia-sync-swiftpm\" && node --test \"src/**/*.test.ts\""
+    "test": "swift test --scratch-path \"${TMPDIR:-/tmp}/solara-sync-swiftpm\" && node --test \"src/**/*.test.ts\""
   },
   "peerDependencies": {
     "expo": "*",

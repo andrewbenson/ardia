@@ -4,7 +4,7 @@ import { test } from "node:test";
 const sent = [];
 let rev = 0;
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "settingsAndDownloads", safeMode: "failedLaunches" }),
     snapshot: () => JSON.stringify({ rev, data: { settings: { searchEngine: "duckduckgo" }, downloads: [{ id: "kept", state: "complete", url: "https://download.example", profile: "" }] } }),
     dispatch: (json) => { sent.push(...[JSON.parse(json)].flat()); return JSON.stringify({ rev: ++rev }); },
@@ -16,8 +16,8 @@ globalThis.acTestNativeModules = {
 const { docs, unreadableDocs } = await import("../test-native/index.ts");
 const { shellNativeModules } = await import("../test-native/shell.ts");
 const reads = [];
-const read = shellNativeModules.ArdiaShell.readDocumentResult;
-shellNativeModules.ArdiaShell.readDocumentResult = (name) => { reads.push(name); return read(name); };
+const read = shellNativeModules.SolaraShell.readDocumentResult;
+shellNativeModules.SolaraShell.readDocumentResult = (name) => { reads.push(name); return read(name); };
 const { useBrowser } = await import("../store/browser.ts");
 const { startPersistence, flushPersistence } = await import("./persist.ts");
 const { persistenceRefused } = await import("./persistLatch.ts");

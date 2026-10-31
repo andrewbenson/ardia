@@ -1,4 +1,4 @@
-import type { LinkRoute } from "@ardia/ardiacore";
+import type { LinkRoute } from "@solara/solaracore";
 import { useBrowser } from "../store/browser";
 import { engineProfile } from "../store/model";
 import { lastActiveProfile } from "../store/small";

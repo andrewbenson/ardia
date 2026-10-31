@@ -1,6 +1,6 @@
-import { deletePassword, engineCall } from "@ardia/ardiacore";
-import { readDocument, readDocumentResult, writeDocument } from "@ardia/shell";
-import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins, type SealedValue } from "@ardia/sync";
+import { deletePassword, engineCall } from "@solara/solaracore";
+import { readDocument, readDocumentResult, writeDocument } from "@solara/shell";
+import { DOWNLOAD_HOLD_MS, type Adapter, type MarkedLogins, type SealedValue } from "@solara/sync";
 import { engineProfile } from "../store/model";
 import { digestOf, formatMark, judge, nextLedger, parseMark, readLedgerDoc, type FolderRecord, type LedgerDoc, type LedgerValue, type LocalLogin, type Mark, type StoredLedger } from "./passwordLedger";
 

@@ -338,7 +338,7 @@ function newestApp() {
   const versions = readdirSync(dist)
     .filter((d) => /^\d+\.\d+\.\d+(-rc)?$/.test(d))
     .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-  const names = [...new Set([identity("FULL_PRODUCT_NAME"), "Ardia.app"])];
+  const names = [...new Set([identity("FULL_PRODUCT_NAME"), "Solara.app"])];
   for (const v of versions) {
     const app = names.map((name) => join(dist, v, "export", name)).find(existsSync);
     if (app) return app;

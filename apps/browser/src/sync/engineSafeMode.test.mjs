@@ -10,10 +10,10 @@ const calls = { unlock: 0, write: 0, read: 0 };
 let ids = 0;
 let safeMode = null;
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: false, reason: "not launched", ...(safeMode ? { safeMode } : {}) }),
   },
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => true,

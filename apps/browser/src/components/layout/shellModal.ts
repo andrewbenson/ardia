@@ -1,4 +1,4 @@
-import { setWindowShellModal, windowShellActive } from "@ardia/settings";
+import { setWindowShellModal, windowShellActive } from "@solara/settings";
 import { useEffect, useState } from "react";
 import { useBrowser } from "../../store/browser";
 import { useBookmarkDialog } from "../bookmarks/actions";

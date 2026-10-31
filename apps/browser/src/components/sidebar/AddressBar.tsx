@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, type RefObject } from "react";
-import { NativeSidebarAddressBarView, setSidebarAddressBar, sidebarAddressBarAvailable, type ToolbarClick } from "@ardia/settings";
-import { FadeLabel } from "@ardia/shell";
+import { NativeSidebarAddressBarView, setSidebarAddressBar, sidebarAddressBarAvailable, type ToolbarClick } from "@solara/settings";
+import { FadeLabel } from "@solara/shell";
 import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShortcutHint, withShortcut } from "../../lib/commandShortcuts";
 import { layout, useTheme } from "../../lib/theme";

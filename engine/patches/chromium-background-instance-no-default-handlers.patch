@@ -1,4 +1,4 @@
-A hidden test instance (ARDIA_BACKGROUND=1) never makes itself a system default: shell_integration's
+A hidden test instance (SOLARA_BACKGROUND=1) never makes itself a system default: shell_integration's
 SetAsDefaultBrowser, SetAsDefaultClientForScheme and SetAsDefaultHandlerForUTType log a line and return false. Every
 Chrome path goes through them (chrome://settings' Make default, the default browser prompt, a protocol handler made
 default), so an agent's click in a scratch copy can't change the owner's default browser, mail client or PDF reader,
@@ -25,19 +25,19 @@ and SetAsDefaultBrowser no longer activates CoreServicesUIAgent over the owner's
    return [NSBundle bundleWithURL:default_app_url].bundleIdentifier;
  }
  
-+bool ArdiaBackgroundInstanceRefuses(const char* change) {
-+  const char* background = getenv("ARDIA_BACKGROUND");
++bool SolaraBackgroundInstanceRefuses(const char* change) {
++  const char* background = getenv("SOLARA_BACKGROUND");
 +  if (!background || strcmp(background, "1")) {
 +    return false;
 +  }
-+  LOG(WARNING) << "Ardia: background instance, not " << change;
++  LOG(WARNING) << "Solara: background instance, not " << change;
 +  return true;
 +}
 +
  }  // namespace
  
  bool SetAsDefaultBrowser() {
-+  if (ArdiaBackgroundInstanceRefuses("setting the default browser")) {
++  if (SolaraBackgroundInstanceRefuses("setting the default browser")) {
 +    return false;
 +  }
 +
@@ -48,7 +48,7 @@ and SetAsDefaultBrowser no longer activates CoreServicesUIAgent over the owner's
      return false;
    }
  
-+  if (ArdiaBackgroundInstanceRefuses("setting a scheme handler")) {
++  if (SolaraBackgroundInstanceRefuses("setting a scheme handler")) {
 +    return false;
 +  }
 +
@@ -59,7 +59,7 @@ and SetAsDefaultBrowser no longer activates CoreServicesUIAgent over the owner's
    if (type.empty()) {
      return false;
    }
-+  if (ArdiaBackgroundInstanceRefuses("setting a file type handler")) {
++  if (SolaraBackgroundInstanceRefuses("setting a file type handler")) {
 +    return false;
 +  }
    UTType* uttype = [UTType typeWithIdentifier:base::SysUTF8ToNSString(type)];

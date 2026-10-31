@@ -1,4 +1,4 @@
-import { killSwitchEnvironment } from "@ardia/shell";
+import { killSwitchEnvironment } from "@solara/shell";
 import { noteIssued, webviewMount, webviews } from "./webviews";
 
 type Navigation = { url: string; seq: number; userInitiated?: boolean };
@@ -6,7 +6,7 @@ type Navigation = { url: string; seq: number; userInitiated?: boolean };
 const started = new Map<string, { seq: number; mount: object }>();
 let enabled: boolean | undefined;
 
-const earlyNavigateOn = () => (enabled ??= killSwitchEnvironment("ARDIA_EARLY_NAVIGATE") !== "off");
+const earlyNavigateOn = () => (enabled ??= killSwitchEnvironment("SOLARA_EARLY_NAVIGATE") !== "off");
 
 export function startNavigation(tabId: string, navigation: Navigation) {
   const view = webviews.get(tabId);

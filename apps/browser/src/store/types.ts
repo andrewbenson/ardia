@@ -1,4 +1,4 @@
-import type { PageEngine } from "@ardia/ardiacore";
+import type { PageEngine } from "@solara/solaracore";
 
 export type Frame = [number, number, number, number];
 

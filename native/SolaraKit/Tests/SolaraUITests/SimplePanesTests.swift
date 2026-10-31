@@ -221,8 +221,8 @@ struct SimplePanesTests {
   @Test func aboutCopyrightShowsTheUpstreamCreditOnlyWhenSet() {
     var info = FakeAboutServices().aboutInfo
     #expect(AboutPaneModel.copyrightLine(info) == "© 2026 Andrew Benson.")
-    info.upstreamCredit = "Built on Ardia, © 2026 Mantra Patel."
-    #expect(AboutPaneModel.copyrightLine(info) == "© 2026 Andrew Benson. Built on Ardia, © 2026 Mantra Patel.")
+    info.upstreamCredit = "Built on Solara, © 2026 Mantra Patel."
+    #expect(AboutPaneModel.copyrightLine(info) == "© 2026 Andrew Benson. Built on Solara, © 2026 Mantra Patel.")
     info.copyright = nil
     info.upstreamCredit = nil
     #expect(AboutPaneModel.copyrightLine(info) == nil)

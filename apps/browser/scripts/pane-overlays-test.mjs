@@ -9,7 +9,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node pane-overlays-test.mjs <Debug Solara.app> [--keep-data]
 
-PaneOverlays, the per-pane overlay slots over the shell's card (ARDIA_NATIVE_SHELL=1, ARDIA_NATIVE_PAGES_POOL=1).
+PaneOverlays, the per-pane overlay slots over the shell's card (SOLARA_NATIVE_SHELL=1, SOLARA_NATIVE_PAGES_POOL=1).
 A two-pane split gives each pane a visible slot over its page area, below its pane toolbar, matching
 SplitPanesView's page frame. A fullscreen page in the split covers the other pane in SplitPanesView, which stays shown
 underneath so its page keeps running, and hides its slot, while the fullscreen pane's slot fills the card; leaving
@@ -70,7 +70,7 @@ const hidden = (s, id) => !s.overlays || !s.overlays[id] || s.overlays[id].hidde
 try {
   app = await launch(resolve(appArg), {
     data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acLayout && !!globalThis.expo.modules.SolaraWindowShell",
   });
   await until("page ONE", `return S().tabs.a.title === "ONE" || null;`, 15000);

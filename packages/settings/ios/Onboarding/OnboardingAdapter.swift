@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -57,7 +57,7 @@ final class OnboardingAdapter: OnboardingServices {
 
   var startsOnFirstLaunch: Bool {
     #if DEBUG
-    return ProcessInfo.processInfo.environment["ARDIA_ONBOARDING"] == "1"
+    return ProcessInfo.processInfo.environment["SOLARA_ONBOARDING"] == "1"
     #else
     return true
     #endif
@@ -121,7 +121,7 @@ final class OnboardingAdapter: OnboardingServices {
 
   func openImport(_ browserId: String) { Self.fire("onboarding.openImport", browserId) }
 
-  var backgroundInstance: Bool { ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" }
+  var backgroundInstance: Bool { ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" }
 
   func isDefaultBrowser() async -> Bool { SystemServices.isDefaultBrowser() }
 

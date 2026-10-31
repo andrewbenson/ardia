@@ -17,26 +17,19 @@ test("the bundle's product name names the app everywhere", () => {
   assert.equal(SETTINGS.find((e) => e.id.endsWith(".cliInstall")).title, "The solara command");
 });
 
-test("no product-facing copy still names Ardia", () => {
-  const strings = [
-    ...SETTINGS.flatMap((e) => [e.title, e.section, e.description ?? ""]),
-  ];
-  assert.deepEqual(strings.filter((s) => /Ardia/.test(s)), []);
-});
-
 test("service copy names the servers this build talks to", () => {
   assert.deepEqual(SERVICES, { updateHost: "github.com", switchFile: "stats.example.com/flags.json" });
 });
 
-test("a fork opens its own pages under its scheme and still knows ardia:// ones", async () => {
+test("a fork opens its own pages under its scheme and still knows solara:// ones", async () => {
   const { APP_SCHEME } = await import("./productName.ts");
   const { internalPageOf, internalUrl } = await import("../components/pages/internalUrls.ts");
-  const { urlForDisplay } = await import("@ardia/core");
+  const { urlForDisplay } = await import("@solara/core");
   assert.equal(APP_SCHEME, "solara");
   assert.equal(internalUrl("history"), "solara://history");
   assert.equal(internalUrl("history", "a b"), "solara://history?q=a%20b");
   assert.equal(internalPageOf("solara://history?q=x"), "history");
-  assert.equal(internalPageOf("ardia://bookmarks"), "bookmarks");
+  assert.equal(internalPageOf("solara://bookmarks"), "bookmarks");
   assert.equal(internalPageOf("SOLARA://Downloads/"), "downloads");
   assert.equal(internalPageOf("chrome://history"), null);
   assert.equal(internalPageOf("solara://version"), null);

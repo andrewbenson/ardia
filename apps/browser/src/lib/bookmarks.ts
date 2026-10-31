@@ -1,7 +1,7 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import { bookmarkTree, onBookmarksChanged, watchBookmarks, type BookmarkOp, type EngineBookmark } from "@ardia/ardiacore";
-import { readDocument, removeDocument, writeDocument } from "@ardia/shell";
-import { nativeApplyBookmarkOps } from "@ardia/settings";
+import { bookmarkTree, onBookmarksChanged, watchBookmarks, type BookmarkOp, type EngineBookmark } from "@solara/solaracore";
+import { readDocument, removeDocument, writeDocument } from "@solara/shell";
+import { nativeApplyBookmarkOps } from "@solara/settings";
 import { bookmarkUuidFor, isBookmarkUuid, rootIdsFor } from "../store/bookmarks";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { engineProfile, isIncognitoProfile } from "../store/model";

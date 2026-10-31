@@ -10,7 +10,7 @@ let rev = 0;
 let reply;
 const sent = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "everything" }),
     dispatch: (json) => {
       sent.push(...[JSON.parse(json)].flat());

@@ -1,4 +1,4 @@
-import { liveCommand, liveInitialReplica, onLiveReplica, type LiveReplica } from "@ardia/settings";
+import { liveCommand, liveInitialReplica, onLiveReplica, type LiveReplica } from "@solara/settings";
 import { create } from "zustand";
 import type { CompletedItem, CompletionState, FolderStatus, LiveAccount, LiveFolder, LiveFolderKind, LiveItem, LiveSourceId } from "./types";
 

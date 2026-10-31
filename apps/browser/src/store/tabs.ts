@@ -1,4 +1,4 @@
-import { resolveInput } from "@ardia/core";
+import { resolveInput } from "@solara/core";
 import type { StateCreator } from "zustand";
 import { fromLegacyUrl } from "../legacy";
 import { startNavigation } from "../lib/earlyNavigate";

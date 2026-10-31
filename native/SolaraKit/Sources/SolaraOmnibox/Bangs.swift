@@ -32,7 +32,7 @@ private let storedPlaceholder = "{s}"
 private let minBangs = 1000
 public let maxBangListChars = 4_000_000
 private let requiredTriggers = ["gh", "w", "yt"]
-private let bangDocumentMagic = "ardia-bangs 1"
+private let bangDocumentMagic = "solara-bangs 1"
 
 private func endOfString(_ text: Units, _ from: Int) -> Int {
   var at = from

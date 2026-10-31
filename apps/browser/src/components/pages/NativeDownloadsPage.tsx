@@ -1,6 +1,6 @@
-import { cancelDownload, keepDownload, pauseDownload, resumeDownload } from "@ardia/ardiacore";
-import { NativePage, type NativePageEvent } from "@ardia/settings";
-import { openFile, revealFile } from "@ardia/shell";
+import { cancelDownload, keepDownload, pauseDownload, resumeDownload } from "@solara/solaracore";
+import { NativePage, type NativePageEvent } from "@solara/settings";
+import { openFile, revealFile } from "@solara/shell";
 import { StyleSheet } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useTheme } from "../../lib/theme";

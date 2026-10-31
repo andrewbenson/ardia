@@ -86,16 +86,16 @@ import Testing
     #expect(cleanUrl("https://user:pw@example.com:8443/p?utm_term=x&k") == "https://user:pw@example.com:8443/p?k")
   }
 
-  @Test func displayedURLsSayArdiaNeverChrome() {
+  @Test func displayedURLsSaySolaraNeverChrome() {
     AppScheme.withScheme(productName: nil) {
-      #expect(urlForDisplay("ardia://version/") == "ardia://version")
-      #expect(urlForDisplay("chrome://version/") == "ardia://version")
-      #expect(urlForDisplay("chrome://settings/languages") == "ardia://settings/languages")
-      #expect(urlForDisplay("ardia://history/?q=a") == "ardia://history?q=a")
-      #expect(displayUrl("chrome://gpu/") == "ardia://gpu")
-      #expect(breadcrumb("ardia://version/", title: "About Version") == Breadcrumb(host: "ardia://version", trail: ["About Version"]))
-      #expect(breadcrumb("ardia://history", title: "History") == Breadcrumb(host: "ardia://history", trail: []))
-      #expect(breadcrumb("chrome://flags/", title: "Experiments") == Breadcrumb(host: "ardia://flags", trail: ["Experiments"]))
+      #expect(urlForDisplay("solara://version/") == "solara://version")
+      #expect(urlForDisplay("chrome://version/") == "solara://version")
+      #expect(urlForDisplay("chrome://settings/languages") == "solara://settings/languages")
+      #expect(urlForDisplay("solara://history/?q=a") == "solara://history?q=a")
+      #expect(displayUrl("chrome://gpu/") == "solara://gpu")
+      #expect(breadcrumb("solara://version/", title: "About Version") == Breadcrumb(host: "solara://version", trail: ["About Version"]))
+      #expect(breadcrumb("solara://history", title: "History") == Breadcrumb(host: "solara://history", trail: []))
+      #expect(breadcrumb("chrome://flags/", title: "Experiments") == Breadcrumb(host: "solara://flags", trail: ["Experiments"]))
     }
   }
 
@@ -168,47 +168,47 @@ import Testing
 }
 
 @Suite struct AppSchemeTests {
-  @Test func upstreamKeepsArdiaUntilAProductNameIsSet() {
+  @Test func upstreamKeepsSolaraUntilAProductNameIsSet() {
     AppScheme.withScheme(productName: nil) {
-      #expect(appScheme() == "ardia")
-      #expect(urlForDisplay("chrome://version/") == "ardia://version")
-      #expect(fixupUrl("ardia://version") == "ardia://version")
+      #expect(appScheme() == "solara")
+      #expect(urlForDisplay("chrome://version/") == "solara://version")
+      #expect(fixupUrl("solara://version") == "solara://version")
     }
   }
 
   @Test func theSchemeIsTheProductNameLowercasedAndNeverOneTheEngineOwns() {
     #expect(appSchemeFor("Solara") == "solara")
     #expect(appSchemeFor("My Browser") == "mybrowser")
-    #expect(appSchemeFor("Chrome") == "ardia")
-    #expect(appSchemeFor("HTTP") == "ardia")
-    #expect(appSchemeFor("42") == "ardia")
-    #expect(appSchemeFor("") == "ardia")
-    #expect(appSchemeFor(nil) == "ardia")
+    #expect(appSchemeFor("Chrome") == "solara")
+    #expect(appSchemeFor("HTTP") == "solara")
+    #expect(appSchemeFor("42") == "solara")
+    #expect(appSchemeFor("") == "solara")
+    #expect(appSchemeFor(nil) == "solara")
   }
 
-  @Test func aForkDisplaysChromeAndArdiaPagesUnderItsOwnScheme() {
+  @Test func aForkDisplaysChromeAndSolaraPagesUnderItsOwnScheme() {
     AppScheme.withScheme(productName: "Solara") {
       #expect(appScheme() == "solara")
       #expect(urlForDisplay("chrome://version/") == "solara://version")
-      #expect(urlForDisplay("ardia://version/") == "solara://version")
+      #expect(urlForDisplay("solara://version/") == "solara://version")
       #expect(urlForDisplay("solara://history/?q=a") == "solara://history?q=a")
       #expect(displayUrl("chrome://gpu/") == "solara://gpu")
       #expect(toAppUrl("view-source:chrome://version") == "view-source:solara://version")
       #expect(toAppUrl("about:flags") == "solara://flags")
-      #expect(appUrlOrigin("ardia://settings/sync") == "solara://settings")
+      #expect(appUrlOrigin("solara://settings/sync") == "solara://settings")
       #expect(breadcrumb("chrome://flags/", title: "Experiments") == Breadcrumb(host: "solara://flags", trail: ["Experiments"]))
       #expect(breadcrumb("solara://history", title: "History") == Breadcrumb(host: "solara://history", trail: []))
     }
   }
 
-  @Test func aForksTypedSchemeArdiaAndChromeAllResolveAndReachTheEngineAsChrome() {
+  @Test func aForksTypedSchemeSolaraAndChromeAllResolveAndReachTheEngineAsChrome() {
     AppScheme.withScheme(productName: "Solara") {
-      for typed in ["solara://version", "ardia://version", "chrome://version", "SOLARA://version"] {
+      for typed in ["solara://version", "solara://version", "chrome://version", "SOLARA://version"] {
         #expect(fixupUrl(typed) == "solara://version", "\(typed)")
         #expect(resolveInput(typed) == "solara://version", "\(typed)")
       }
       #expect(toEngineUrl("solara://version") == "chrome://version")
-      #expect(toEngineUrl("ardia://flags/#x") == "chrome://flags/#x")
+      #expect(toEngineUrl("solara://flags/#x") == "chrome://flags/#x")
       #expect(toEngineUrl("view-source:solara://version") == "view-source:chrome://version")
       #expect(toEngineUrl("https://solara.example/") == "https://solara.example/")
     }
@@ -217,7 +217,7 @@ import Testing
   @Test func aForkRoutesItsOwnPagesFromEitherScheme() {
     AppScheme.withScheme(productName: "Solara") {
       #expect(appUrlRoute("solara://history") == .page(.history))
-      #expect(appUrlRoute("ardia://bookmarks") == .page(.bookmarks))
+      #expect(appUrlRoute("solara://bookmarks") == .page(.bookmarks))
       #expect(appUrlRoute("solara://settings/sync") == .settings(section: "sync"))
       #expect(appUrlRoute("solara://newtab") == .newTab)
       #expect(appUrlRoute("solara://version") == .engine(url: "chrome://version"))
@@ -227,17 +227,17 @@ import Testing
 
   @Test func anAppOrAboutURLWhoseFragmentHasALineBreakStillParses() {
     AppScheme.withScheme(productName: "Solara") {
-      #expect(urlForDisplay("ardia://x#a\nb") == "solara://x#a\nb")
+      #expect(urlForDisplay("solara://x#a\nb") == "solara://x#a\nb")
       #expect(appUrlOrigin("about:flags#a\nb") == "solara://flags")
       #expect(breadcrumb("solara://settings/sync#a\u{2028}b", title: "Settings") == Breadcrumb(host: "solara://settings", trail: ["Settings"]))
-      #expect(appUrlRoute("ardia://settings/sync#a\nb") == .settings(section: "sync"))
+      #expect(appUrlRoute("solara://settings/sync#a\nb") == .settings(section: "sync"))
       #expect(displayUrl("chrome://version/#a\rb") == "solara://version#a\rb")
     }
   }
 
   @Test func setAppSchemeReturnsTheSchemeItSets() {
-    #expect(setAppScheme(nil) == "ardia")
-    #expect(appScheme() == "ardia")
+    #expect(setAppScheme(nil) == "solara")
+    #expect(appScheme() == "solara")
   }
 }
 

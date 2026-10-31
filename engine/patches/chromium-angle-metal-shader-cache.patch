@@ -1,6 +1,6 @@
 SPDX-License-Identifier: BSD-3-Clause
 Reverts the chrome/BUILD.gn part of ungoogled-chromium's fix-building-with-prunned-binaries.patch, which Helium applies
-(its fix-building-without-safebrowsing needs the patch's context) and Ardia skipped: the framework ships ANGLE's
+(its fix-building-without-safebrowsing needs the patch's context) and Solara skipped: the framework ships ANGLE's
 prebuilt Metal shader cache again, so the GPU process doesn't compile those shaders on first use.
 
 --- a/chrome/BUILD.gn

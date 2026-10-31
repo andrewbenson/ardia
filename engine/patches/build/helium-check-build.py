@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check a built engine for what Ardia leaves out of Helium: its uBlock Origin, its onboarding page, the non-free
+"""Check a built engine for what Solara leaves out of Helium: its uBlock Origin, its onboarding page, the non-free
 search engine data, and Helium's own hosts.
 
   helium-check-build.py [--out OUT_DIR] [--framework FRAMEWORK] [--pak PAK]…

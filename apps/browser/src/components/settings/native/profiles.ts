@@ -1,5 +1,5 @@
-import { clearBrowsingData, listExtensions, type BrowsingDataType } from "@ardia/ardiacore";
-import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
+import { clearBrowsingData, listExtensions, type BrowsingDataType } from "@solara/solaracore";
+import { publishSettingsTopic, type SettingsHandler } from "@solara/settings";
 import { pruneProfileFavicons } from "../../../lib/favicons";
 import { sanitizeTheme } from "../../../lib/profileTheme";
 import { useBrowser, type BrowserState } from "../../../store/browser";

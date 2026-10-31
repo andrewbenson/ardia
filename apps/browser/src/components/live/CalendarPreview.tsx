@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NativePage } from "@ardia/settings";
+import { NativePage } from "@solara/settings";
 
 
 import { useTheme } from "../../lib/theme";

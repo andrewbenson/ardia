@@ -33,7 +33,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const H = globalThis.expo.modules.SolaraHosted;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const ui = () => ac.sidebarRows.useSidebarUi.getState();
@@ -72,7 +72,7 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
 try {
   app = await launch(resolve(appArg), {
     data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!ac.sidebarRows",
   });
   const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);

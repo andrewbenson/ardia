@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-// A/B of Google Chrome's field-trial features (Finch) in Ardia on xbench's rows. Chrome's runs in xbench use the
-// variations seed its template profile fetched; Ardia has none (disable_fieldtrial_testing_config, no seed). This
-// reads the features Chrome actually runs with and gives them to Ardia through ARDIA_CHROMIUM_SWITCHES (a scratch
-// data dir forwards them), merged with Ardia's own --enable-features. Run only with the Mac quiet.
+// A/B of Google Chrome's field-trial features (Finch) in Solara on xbench's rows. Chrome's runs in xbench use the
+// variations seed its template profile fetched; Solara has none (disable_fieldtrial_testing_config, no seed). This
+// reads the features Chrome actually runs with and gives them to Solara through SOLARA_CHROMIUM_SWITCHES (a scratch
+// data dir forwards them), merged with Solara's own --enable-features. Run only with the Mac quiet.
 //
 //   node apps/browser/scripts/perf/finch-ab.mjs features --out <dir> [--chrome <app>] [--template <dir>]
 //       launches the Chrome copy hidden on a clone of xbench's Chrome template, reads chrome://version's variations
 //       command line, writes <dir>/chrome-variations.txt and <dir>/arms.json (all of it, and the perf subset)
 //   node apps/browser/scripts/perf/finch-ab.mjs run --out <dir> [--app <Solara.app>] [--arms all,perf] [-- <more xbench options>]
-//       xbench run --browsers ardia,ardia-finch[,ardia-perf] with each arm's switches, rows session,restore,link,
+//       xbench run --browsers solara,solara-finch[,solara-perf] with each arm's switches, rows session,restore,link,
 //       then xbench report into <dir>/table.md
 //
 //     --chrome <path>    a background-only Chrome copy that can't take focus (default
 //                        /tmp/ac-xbench/apps/chrome-bg/Google Chrome.app, made by xbench.mjs prepare-bg)
 //     --template <dir>   xbench's Chrome template (default /tmp/ac-xbench/final/templates/chrome)
-//     --app <path>       the Ardia copy (default /tmp/ac-xbench/apps/ardia/Ardia.app)
+//     --app <path>       the Solara copy (default /tmp/ac-xbench/apps/solara/Solara.app)
 //     --port <n>         CDP port for the Chrome launch (default 9471)
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -35,7 +35,7 @@ const { values: opt, positionals } = parseArgs({
     out: { type: "string" },
     chrome: { type: "string", default: "/tmp/ac-xbench/apps/chrome-bg/Google Chrome.app" },
     template: { type: "string", default: "/tmp/ac-xbench/final/templates/chrome" },
-    app: { type: "string", default: "/tmp/ac-xbench/apps/ardia/Ardia.app" },
+    app: { type: "string", default: "/tmp/ac-xbench/apps/solara/Solara.app" },
     arms: { type: "string", default: "all,perf" },
     port: { type: "string", default: "9471" },
     help: { type: "boolean", short: "h" },
@@ -56,10 +56,10 @@ function switchValue(cmd, name) {
   return m?.[1] ?? m?.[2] ?? "";
 }
 
-function ardiaFeatures() {
-  const host = readFileSync(join(repoRoot, "packages/ardiacore/ios/ArdiaCoreHost.mm"), "utf8");
+function solaraFeatures() {
+  const host = readFileSync(join(repoRoot, "packages/solaracore/ios/SolaraCoreHost.mm"), "utf8");
   const literal = host.match(/"--enable-features=([^"]*)"\s*((?:"[^"]*"\s*)*),/);
-  if (!literal) throw new Error("ArdiaCoreHost.mm's --enable-features list wasn't found");
+  if (!literal) throw new Error("SolaraCoreHost.mm's --enable-features list wasn't found");
   const rest = [...literal[2].matchAll(/"([^"]*)"/g)].map((m) => m[1]).join("");
   return [...new Set(["WebContentsDiscard", ...`${literal[1]}${rest}`.split(",")].filter(Boolean))];
 }
@@ -71,7 +71,7 @@ function names(list) {
 function armSwitches(cmd, keep) {
   const enabled = names(switchValue(cmd, "enable-features")).filter((f) => keep(f.split("<")[0].split(":")[0]));
   const disabled = names(switchValue(cmd, "disable-features")).filter((f) => keep(f.split("<")[0].split(":")[0]));
-  const ours = ardiaFeatures();
+  const ours = solaraFeatures();
   const enable = [...ours, ...enabled.filter((f) => !ours.some((o) => o.split(":")[0] === f.split("<")[0].split(":")[0]))];
   const parts = [`--enable-features=${enable.join(",")}`];
   if (disabled.length) parts.push(`--disable-features=${disabled.join(",")}`);
@@ -134,11 +134,11 @@ function run() {
   const arms = JSON.parse(readFileSync(file, "utf8"));
   const app = resolve(opt.app);
   const wanted = opt.arms.split(",").filter((a) => arms[a]);
-  const browsers = ["ardia", ...wanted.map((a) => (a === "all" ? "ardia-finch" : `ardia-${a}`))];
-  const args = ["run", "--out", join(out, "bench"), "--browsers", browsers.join(","), "--app", `ardia=${app}`, "--rows", "session,restore,link"];
+  const browsers = ["solara", ...wanted.map((a) => (a === "all" ? "solara-finch" : `solara-${a}`))];
+  const args = ["run", "--out", join(out, "bench"), "--browsers", browsers.join(","), "--app", `solara=${app}`, "--rows", "session,restore,link"];
   for (const a of wanted) {
-    const name = a === "all" ? "ardia-finch" : `ardia-${a}`;
-    args.push("--app", `${name}=${app}`, "--env", `${name}=ARDIA_CHROMIUM_SWITCHES=${arms[a].switches}`);
+    const name = a === "all" ? "solara-finch" : `solara-${a}`;
+    args.push("--app", `${name}=${app}`, "--env", `${name}=SOLARA_CHROMIUM_SWITCHES=${arms[a].switches}`);
   }
   const xbench = join(here, "xbench.mjs");
   const r = spawnSync(process.execPath, [xbench, ...args, ...more], { stdio: "inherit" });

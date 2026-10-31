@@ -1,4 +1,4 @@
-import { NativePage, type NativePageEvent } from "@ardia/settings";
+import { NativePage, type NativePageEvent } from "@solara/settings";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { useTheme } from "../../lib/theme";

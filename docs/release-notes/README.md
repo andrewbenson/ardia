@@ -93,7 +93,7 @@ The fact under it must be true.
 - 0.1.3 "Autofill starts counting clicks again." (autofill suggestions ignored clicks)
 - 0.1.4 "Chrome makes no further unscheduled appearances." (Chrome's bubbles over the page)
 - 0.2.9 "Nothing you can see has changed, on purpose." (tidied source, the same app)
-- 0.2.19 "Ardia now does less while you do nothing." (less battery while idle)
+- 0.2.19 "Solara now does less while you do nothing." (less battery while idle)
 
 Keep headlines short, calm and dry, with one outdoor phrase at most. No politics, and no jokes at the
 user's expense.
@@ -102,7 +102,7 @@ user's expense.
 
 - Lead with what the user sees, not with what the code does: "Menu commands no longer crash the app", not
   "Fix selector in MenuTarget".
-- Name the symptom people hit, so they recognize it: "every command in the menu bar crashed Ardia",
+- Name the symptom people hit, so they recognize it: "every command in the menu bar crashed Solara",
   "sites like Google waited forever at 'Complete sign-in using your passkey'".
 - One short "why" is welcome when it explains the fix in user terms ("The menu items pointed at the wrong
   method."). No file names, class names, commit hashes or internal flags.
@@ -118,7 +118,7 @@ user's expense.
 
 1. `git log --format='%h %s%n%b' v<previous>..HEAD`. The commit bodies explain the user-visible effect.
 2. Keep commits that change what someone using the app sees or can do: `apps/browser`, `packages/*`, the
-   engine (`engine/`), `Info.plist`. Drop docs, tests, refactors, merges of upstream Ardia that changed nothing
+   engine (`engine/`), `Info.plist`. Drop docs, tests, refactors, merges of upstream Solara that changed nothing
    visible, and "Release x.y.z" version bumps.
 3. Merge commits that are one change for the user into one item. Split a commit that fixes two visible
    things into two items.

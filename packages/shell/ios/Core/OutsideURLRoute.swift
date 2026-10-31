@@ -17,7 +17,7 @@ public enum OutsideURLRoute: Equatable {
   case forward(path: String, newInstance: Bool)
 
   public static func forwards(_ environment: [String: String]) -> Bool {
-    environment["ARDIA_BACKGROUND"] == "1" && environment["ARDIA_ACCEPT_EXTERNAL_URLS"] != "1"
+    environment["SOLARA_BACKGROUND"] == "1" && environment["SOLARA_ACCEPT_EXTERNAL_URLS"] != "1"
   }
 
   public static func choose(

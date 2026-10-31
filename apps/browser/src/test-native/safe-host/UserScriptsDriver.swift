@@ -1,6 +1,6 @@
 import Foundation
 
-enum ArdiaCoreHost {
+enum SolaraCoreHost {
   static var safeMode = false
 }
 
@@ -40,7 +40,7 @@ final class NativeUserScripts {
 var results: [[String: Any]] = []
 MainActor.assumeIsolated {
   for safe in [true, false] {
-    ArdiaCoreHost.safeMode = safe
+    SolaraCoreHost.safeMode = safe
     NativeStoreHandle.subscriptions = 0
     let scripts = NativeUserScripts()
     scripts.startWhenReady()

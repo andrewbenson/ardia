@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraUI
@@ -39,7 +39,7 @@ enum PanePrompts {
     started = true
     TabPoolHost.shared.pageEventObservers.append { tabId, name, payload in pageEvent(tabId, name, payload) }
     TabPoolHost.shared.stateObservers.append { tabsMoved() }
-    ArdiaCoreEventTaps.observers.append { name, payload in coreEvent(name, payload) }
+    SolaraCoreEventTaps.observers.append { name, payload in coreEvent(name, payload) }
     for name in [NSApplication.didBecomeActiveNotification, NSWindow.didBecomeKeyNotification] {
       NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
         MainActor.assumeIsolated { activatedAt = ProcessInfo.processInfo.systemUptime }
@@ -194,13 +194,13 @@ enum PanePrompts {
     case .choose(let index):
       guard let choice = chooser.choice(index, selected: page.chooserSelected), page.answerChooser() else { return }
       pages[tabId] = page
-      ArdiaCoreHost.deviceChooser(id, select: Int32(choice))
+      SolaraCoreHost.deviceChooser(id, select: Int32(choice))
     case .cancel:
       guard page.answerChooser() else { return }
       pages[tabId] = page
-      ArdiaCoreHost.deviceChooser(id, action: "cancel")
-    case .refresh: ArdiaCoreHost.deviceChooser(id, action: "refresh")
-    case .openSettings: ArdiaCoreHost.deviceChooser(id, action: "settings")
+      SolaraCoreHost.deviceChooser(id, action: "cancel")
+    case .refresh: SolaraCoreHost.deviceChooser(id, action: "refresh")
+    case .openSettings: SolaraCoreHost.deviceChooser(id, action: "settings")
     }
   }
 

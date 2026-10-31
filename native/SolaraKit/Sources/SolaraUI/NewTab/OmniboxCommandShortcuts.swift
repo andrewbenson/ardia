@@ -35,7 +35,7 @@ public struct CommandShortcutSnapshot: Sendable {
     var sources = Self.catalog.map { CommandShortcutSource(id: $0.0, keys: $0.1.map(CommandKey.parse)) }
     for (i, id) in state.profileOrder.enumerated() {
       sources.append(CommandShortcutSource(id: "switchProfile:\(id)", keys: i < 9 ? [CommandKey.parse("⌃\(i + 1)")] : []))
-      sources.append(CommandShortcutSource(id: "newLittleArdia:\(id)", keys: []))
+      sources.append(CommandShortcutSource(id: "newLittleSolara:\(id)", keys: []))
     }
     for id in overrides.keys where id.jsStartsWith("openExtension:") {
       sources.append(CommandShortcutSource(id: id, keys: []))
@@ -68,8 +68,8 @@ public struct CommandShortcutSnapshot: Sendable {
     ("newTab", ["⌘T"]),
     ("newWindow", ["⌘N"]),
     ("newIncognitoWindow", ["⇧⌘N"]),
-    ("newLittleArdia", ["⌥⌘N"]),
-    ("toggleOpenLinksInLittleArdia", []),
+    ("newLittleSolara", ["⌥⌘N"]),
+    ("toggleOpenLinksInLittleSolara", []),
     ("reopenClosedTab", ["⇧⌘T"]),
     ("reopenClosedWindow", []),
     ("restoreClosed", []),

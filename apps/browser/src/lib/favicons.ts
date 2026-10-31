@@ -1,7 +1,7 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import { faviconsFor, fetchFavicon, onHistoryChanged } from "@ardia/ardiacore";
-import { nativeStoreFavicon } from "@ardia/settings";
-import { iconTheme, readDocument, removeDocument, type IconTheme } from "@ardia/shell";
+import { faviconsFor, fetchFavicon, onHistoryChanged } from "@solara/solaracore";
+import { nativeStoreFavicon } from "@solara/settings";
+import { iconTheme, readDocument, removeDocument, type IconTheme } from "@solara/shell";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { pageOf, patchPage } from "../components/layout/pageState";

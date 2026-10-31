@@ -4,7 +4,7 @@ Reverts parts of Helium's helium/core/proxy-extension-downloads.patch and helium
 series needs for its later patches and so can't be skipped.
 
 Chrome Web Store installs and extension updates go straight to Google again, as they did before Helium: Helium sends
-them through its own proxy only after its onboarding consent, which Ardia never shows, so every install and update
+them through its own proxy only after its onboarding consent, which Solara never shows, so every install and update
 went to a dummy host and failed.
 - the store's update URL is clients2.google.com again, and the item snippet URL chromewebstore.googleapis.com;
 - installs, pending installs (sync and external ones included), effective update URLs and the standalone installer

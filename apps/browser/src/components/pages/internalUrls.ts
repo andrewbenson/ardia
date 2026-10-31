@@ -1,4 +1,4 @@
-import { appScheme, isAppScheme } from "@ardia/core";
+import { appScheme, isAppScheme } from "@solara/core";
 
 export type InternalPageId = "history" | "bookmarks" | "downloads";
 

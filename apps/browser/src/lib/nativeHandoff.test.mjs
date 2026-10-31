@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: false, reason: "another instance (pid 1) is using this data folder", handedOff: true }),
     snapshot: () => null,
     dispatch: () => null,

@@ -1,7 +1,7 @@
 import Foundation
 
-enum ArdiaCoreHost { static var safeMode = false }
-enum DocumentStore { static var safeMode: Bool { ArdiaCoreHost.safeMode } }
+enum SolaraCoreHost { static var safeMode = false }
+enum DocumentStore { static var safeMode: Bool { SolaraCoreHost.safeMode } }
 final class FileManager {
   static let `default` = FileManager()
   var outcome = "success"
@@ -24,7 +24,7 @@ __PRODUCTION__
 
 var results: [[String: Any]] = []
 for safe in [true, false] {
-  ArdiaCoreHost.safeMode = safe
+  SolaraCoreHost.safeMode = safe
   for outcome in ["success", "missing", "failure"] {
     FileManager.default.outcome = outcome
     FileManager.default.trashed = []

@@ -1,6 +1,6 @@
-# The order Ardia's changes go into the Chromium tree (docs/engine-build.md › "The patch series").
+# The order Solara's changes go into the Chromium tree (docs/engine-build.md › "The patch series").
 # The tree is Chromium with Helium's series (minus 03-helium.py's skip list), its domain and name substitution and our
-# branding; CEF's own patches are gone, but for the few ArdiaCore relies on (chromium-cef-carryover.patch).
+# branding; CEF's own patches are gone, but for the few SolaraCore relies on (chromium-cef-carryover.patch).
 #
 #   chromium <patch>  a patch to chromium/src, after Helium's series and substitutions (step 4)
 #   layer <dir>       our own files, copied in by <dir>/apply.sh (engine/<layer>/src mirrors chromium/src)
@@ -8,7 +8,7 @@
 # Lines run top to bottom; a patch is made against the tree as every line above it leaves it.
 # One concern per patch, named for it; a new patch goes where it belongs, not where its name sorts.
 
-# CEF's patches to Chrome whose behaviour ArdiaCore relies on (each hunk's origin is in the patch's header).
+# CEF's patches to Chrome whose behaviour SolaraCore relies on (each hunk's origin is in the patch's header).
 chromium chromium-helium-branding.patch
 chromium chromium-cef-carryover.patch
 chromium chromium-autofill-address-bubble-window.patch
@@ -44,7 +44,7 @@ chromium chromium-helium-devtools-inspect-shortcut.patch
 chromium chromium-neterror-game.patch
 chromium chromium-branding.patch
 # Load-bearing for every user's data: the Safe Storage item ("Solara Safe Storage" / "Solara") holds the key to
-# their saved passwords and cookies. It must survive any re-sync (plain Chromium for ArdiaCore, a version bump), unchanged.
+# their saved passwords and cookies. It must survive any re-sync (plain Chromium for SolaraCore, a version bump), unchanged.
 chromium chromium-safe-storage-name.patch
 chromium chromium-safe-storage-no-silent-reset.patch
 chromium chromium-password-bubble-hook.patch
@@ -72,8 +72,8 @@ chromium chromium-ungoogled-disable-missing-key-warning.patch
 chromium chromium-ungoogled-mime-util-ymp.patch
 chromium chromium-background-instance-no-default-handlers.patch
 chromium chromium-apple-passwords-host-skipped.patch
-chromium chromium-ardia-layer.patch
+chromium chromium-solara-layer.patch
 chromium chromium-helper-name.patch
 
 layer engine/chromium
-layer engine/ardiacore
+layer engine/solaracore

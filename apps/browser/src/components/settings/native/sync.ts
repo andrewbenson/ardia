@@ -1,5 +1,5 @@
-import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
-import { SyncNative } from "@ardia/sync";
+import { publishSettingsTopic, type SettingsHandler } from "@solara/settings";
+import { SyncNative } from "@solara/sync";
 import { profileAccent } from "../../../lib/theme";
 import { useBrowser } from "../../../store/browser";
 import {

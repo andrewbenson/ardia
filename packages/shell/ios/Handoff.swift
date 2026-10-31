@@ -35,7 +35,7 @@ public enum Handoff {
 enum SharePicker {
   private static var current: NSSharingServicePicker?
   private static let delegate = ShareDelegate()
-  private static let background = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+  private static let background = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
 
   static func show(url: String, title: String?, windowId: String?, anchor: [Double]?, done: @escaping () -> Void) {
     let window = windowId.flatMap { WindowManager.shared.windows[$0] } ?? NSApp.keyWindow
@@ -107,7 +107,7 @@ enum SharePicker {
   }
 
   private static func log(_ line: String) {
-    guard let dir = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] else { return }
+    guard let dir = ProcessInfo.processInfo.environment["SOLARA_DATA_DIR"] else { return }
     let path = (dir as NSString).appendingPathComponent("activation.log")
     let stamp = ISO8601DateFormatter().string(from: Date())
     guard let data = "\(stamp) \(line)\n".data(using: .utf8) else { return }
@@ -166,7 +166,7 @@ final class ShareMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
 
   @objc func openSharingSettings(_ sender: Any?) {
     if let url = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences?extensionPointIdentifier=com.apple.share-services") {
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[handoff] background instance, not opening %@", url.absoluteString) }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[handoff] background instance, not opening %@", url.absoluteString) }
       NSWorkspace.shared.open(url)
     }
   }

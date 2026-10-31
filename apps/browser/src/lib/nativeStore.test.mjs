@@ -19,7 +19,7 @@ const native = {
   },
 };
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true }),
     snapshot: () => {
       native.beforeSnapshot?.();

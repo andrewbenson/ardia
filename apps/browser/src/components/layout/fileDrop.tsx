@@ -1,5 +1,5 @@
-import { FileDropArea, type DroppedItem, type DropUpdate } from "@ardia/shell";
-import { fixupUrl } from "@ardia/core";
+import { FileDropArea, type DroppedItem, type DropUpdate } from "@solara/shell";
+import { fixupUrl } from "@solara/core";
 import { forwardRef, useEffect, useRef, type ReactNode } from "react";
 import type { StyleProp, View, ViewStyle } from "react-native";
 import { useBrowser } from "../../store/browser";

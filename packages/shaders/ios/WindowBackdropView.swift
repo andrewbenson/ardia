@@ -12,7 +12,7 @@ final class WindowBackdropView: MetalSurface {
     var pad = SIMD2<Float>(0, 0)
   }
 
-  private static let keepsHiddenDrawables = ProcessInfo.processInfo.environment["ARDIA_BACKDROP_DRAWABLES"] == "keep"
+  private static let keepsHiddenDrawables = ProcessInfo.processInfo.environment["SOLARA_BACKDROP_DRAWABLES"] == "keep"
 
   private var uniforms = Uniforms()
   private var treatment: WindowTreatmentView?

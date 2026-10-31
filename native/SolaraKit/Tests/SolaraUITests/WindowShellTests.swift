@@ -566,7 +566,7 @@ struct WindowShellMountTests {
   }
 
   @Test func theShellGatesHover() {
-    #expect(WindowShellView(windowId: "w").responds(to: NSSelectorFromString("ardia_gatesHover")))
+    #expect(WindowShellView(windowId: "w").responds(to: NSSelectorFromString("solara_gatesHover")))
   }
 
   @Test func theCardIsAShellOwnedContainer() {

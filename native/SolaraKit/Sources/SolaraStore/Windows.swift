@@ -167,8 +167,8 @@ extension Session {
     next.windows[id] = w
     if w.isSmall {
       let size = [frame.count > 2 ? (frame[2] + 0.5).rounded(.down) : .nan, frame.count > 3 ? (frame[3] + 0.5).rounded(.down) : .nan]
-      let current = next.settings["littleArdiaSize"]?.array?.compactMap(\.number) ?? []
-      if current != size { next.settings = next.settings.merging(["littleArdiaSize": .array(size.map(JSONValue.number))]) }
+      let current = next.settings["littleSolaraSize"]?.array?.compactMap(\.number) ?? []
+      if current != size { next.settings = next.settings.merging(["littleSolaraSize": .array(size.map(JSONValue.number))]) }
     }
     set(next)
   }

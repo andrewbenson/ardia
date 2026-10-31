@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -57,7 +57,7 @@ enum NativeSettingsWindow {
   }
 
   static func install() {
-    SettingsProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+    SettingsProbe.enabled = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
     NativeOnboarding.register()
     NativeAppStartup.shared.install()
     SettingsPrewarm.schedule()

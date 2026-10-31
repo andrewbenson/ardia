@@ -7,7 +7,7 @@ import Testing
   let pod = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../../../packages/sync/ios/Core").standardized
   let shared = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../../Sources/SolaraSyncCore").standardized
 
-  @Test func everySourceIsTheArdiaSyncPodsOwnFile() throws {
+  @Test func everySourceIsTheSolaraSyncAdapterPodsOwnFile() throws {
     let names = try FileManager.default.contentsOfDirectory(atPath: shared.path).filter { $0.hasSuffix(".swift") }.sorted()
     #expect(names == ["RecoveryPhrase.swift", "SyncCrypto.swift", "SyncFormat.swift", "SyncKeyStore.swift", "SyncVault.swift", "Wordlist.swift"])
     for name in names {

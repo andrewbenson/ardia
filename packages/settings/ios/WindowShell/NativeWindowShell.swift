@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaShaders
-import ArdiaShell
+import SolaraShaders
+import SolaraShell
 import ExpoModulesCore
 import Foundation
 import SolaraModel

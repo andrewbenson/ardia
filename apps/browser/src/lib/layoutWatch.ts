@@ -1,4 +1,4 @@
-import { writeDocument } from "@ardia/shell";
+import { writeDocument } from "@solara/shell";
 import { sidebarEntries } from "../components/sidebar/entries";
 import { rowIds, rowView } from "../components/sidebar/state";
 import { useBrowser } from "../store/browser";

@@ -1,7 +1,7 @@
-import { MouseArea, Symbol } from "@ardia/shell";
+import { MouseArea, Symbol } from "@solara/shell";
 import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { nativeToolbarAvailable, NativePanelView, windowShellActive, type NativePanelEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativePanelView, windowShellActive, type NativePanelEvent } from "@solara/settings";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { openModeFor, openUrl } from "../bookmarks/actions";

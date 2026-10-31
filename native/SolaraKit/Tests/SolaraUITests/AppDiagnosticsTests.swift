@@ -42,7 +42,7 @@ import Testing
       state: try fixture())
     #expect(text == """
       Solara 0.1.0 (42) — Debug
-      Engine: ArdiaCore, Chromium 156.0.1
+      Engine: SolaraCore, Chromium 156.0.1
       macOS 27.0.0 (27A1), arm64, Mac16,1, 16 GB
       Bundle: com.hill.solara, locale en_US
       Windows: 2 (+1 incognito), tabs: 3, profiles: 2
@@ -121,8 +121,8 @@ import Testing
     let line = { (version: String) in
       AppDiagnostics.report(app: app, engine: ["chromiumVersion": version], updates: nil, state: s).components(separatedBy: "\n")[1]
     }
-    #expect(line("") == "Engine: ArdiaCore, Chromium ")
-    #expect(line("156.0.1") == "Engine: ArdiaCore, Chromium 156.0.1")
+    #expect(line("") == "Engine: SolaraCore, Chromium ")
+    #expect(line("156.0.1") == "Engine: SolaraCore, Chromium 156.0.1")
   }
 
   @Test func unavailableStoreReportsTheReasonAndAvailableFacts() {
@@ -134,7 +134,7 @@ import Testing
       let report = AppDiagnostics.report(app: app, chromiumVersion: "156", updates: UpdaterFacts(available: true), state: nil, storeStatus: status)
       #expect(report.contains("store: not open\n\(reason)"))
       #expect(report.contains("Solara 0.1.0 (42) — Debug"))
-      #expect(report.contains("Engine: ArdiaCore, Chromium 156"))
+      #expect(report.contains("Engine: SolaraCore, Chromium 156"))
       #expect(report.contains("macOS 27.0.0 (27A1), arm64, Mac16,1, 16 GB"))
       #expect(report.contains("Bundle: com.hill.solara, locale en_US"))
       #expect(report.contains("Updates: not set up for this build"))

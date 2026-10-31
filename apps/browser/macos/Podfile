@@ -33,9 +33,9 @@ ac_parallel_post_install = lambda do |installer|
   installer.pods_project.targets.select { |t| t.name == 'ReactCodegen' }.each do |t|
     t.shell_script_build_phases.select { |p| p.name.to_s.include?('Generate Specs') }.each do |phase|
       script = phase.shell_script
-      next if script.include?('[Ardia]')
+      next if script.include?('[Solara]')
       script = script.sub('export RCT_SCRIPT_OUTPUT_DIR="$RCT_SCRIPT_POD_INSTALLATION_ROOT"', <<~'SH'.chomp)
-        # [Ardia] Generated into this build's own folder, then published by changed file (Podfile).
+        # [Solara] Generated into this build's own folder, then published by changed file (Podfile).
         export RCT_SCRIPT_OUTPUT_DIR="$DERIVED_FILE_DIR/ac-codegen"
         rm -rf "$RCT_SCRIPT_OUTPUT_DIR"
         mkdir -p "$RCT_SCRIPT_OUTPUT_DIR/build/generated/autolinking"
@@ -54,7 +54,7 @@ ac_parallel_post_install = lambda do |installer|
   if hermes && File.exist?(debug_tgz) && File.exist?(release_tgz)
     root = installer.sandbox.root.to_s
     unpack = lambda do |tgz, dir|
-      stamp = File.join(dir, '.ardia-from')
+      stamp = File.join(dir, '.solara-from')
       next if File.exist?(stamp) && File.read(stamp) == "#{File.basename(tgz)} #{File.mtime(tgz).to_i}"
       FileUtils.rm_rf(dir)
       FileUtils.mkdir_p(dir)
@@ -63,7 +63,7 @@ ac_parallel_post_install = lambda do |installer|
     end
     last = File.join(root, '.last_build_configuration')
     if File.exist?(last) && File.read(last).strip != 'Debug'
-      FileUtils.rm_rf(File.join(root, 'hermes-engine', '.ardia-from'))
+      FileUtils.rm_rf(File.join(root, 'hermes-engine', '.solara-from'))
       unpack.call(debug_tgz, File.join(root, 'hermes-engine'))
     end
     File.write(last, 'Debug')
@@ -71,7 +71,7 @@ ac_parallel_post_install = lambda do |installer|
 
     installer.pods_project.targets.select { |t| t.name == 'hermes-engine' }.each do |t|
       t.shell_script_build_phases.select { |p| p.name.to_s.include?('Replace Hermes') }.each do |phase|
-        phase.shell_script = "# [Ardia] Nothing to replace: Release builds embed Pods/hermes-engine-Release (Podfile).\n"
+        phase.shell_script = "# [Solara] Nothing to replace: Release builds embed Pods/hermes-engine-Release (Podfile).\n"
       end
     end
     Dir.glob(File.join(support, 'Pods-*', 'Pods-*-frameworks.sh')).each do |script|
@@ -80,7 +80,7 @@ ac_parallel_post_install = lambda do |installer|
       end
     end
   else
-    Pod::UI.warn("[Ardia] no Hermes #{hermes} archives in #{artifacts}: Hermes still swaps per configuration, so Debug and Release builds must not overlap")
+    Pod::UI.warn("[Solara] no Hermes #{hermes} archives in #{artifacts}: Hermes still swaps per configuration, so Debug and Release builds must not overlap")
   end
 end
 
@@ -88,12 +88,12 @@ ac_parallel_post_integrate = lambda do |installer|
   installer.aggregate_targets.each do |target|
     script = File.join(target.support_files_dir, 'expo-configure-project.sh')
     ac_patch_file.call(script) do |s|
-      next s if s.include?('[Ardia]')
+      next s if s.include?('[Solara]')
       provider = s[/--target "([^"]*ExpoModulesProvider\.swift)"/, 1]
       next s unless provider
       s = s.sub(%(--target "#{provider}"), '--target "$AC_PROVIDER_DIR/ExpoModulesProvider.swift"')
       s = s.sub("with_node \\\n", <<~SH + "with_node \\\n")
-        # [Ardia] Generated into this build's own folder, then published only if it changed (Podfile).
+        # [Solara] Generated into this build's own folder, then published only if it changed (Podfile).
         mkdir -p "${DERIVED_FILE_DIR:-${TMPDIR:-/tmp}}"
         AC_PROVIDER_DIR=$(mktemp -d "${DERIVED_FILE_DIR:-${TMPDIR:-/tmp}}/expo-provider.XXXXXX")
         trap 'rm -rf "$AC_PROVIDER_DIR"' EXIT
@@ -113,7 +113,7 @@ end
 
 ac_solara_kit = lambda do |installer|
   project = installer.pods_project
-  target = project.targets.find { |t| t.name == 'ArdiaStore' }
+  target = project.targets.find { |t| t.name == 'SolaraStoreAdapter' }
   next unless target
   kit = Pathname.new("#{ws_dir}/native/SolaraKit").relative_path_from(Pathname.new(project.project_dir.to_s)).to_s
   local = Xcodeproj::Project::Object::XCLocalSwiftPackageReference
@@ -130,7 +130,7 @@ ac_solara_kit = lambda do |installer|
     dependency.product_name = name
     target.package_product_dependencies << dependency
   end
-  project.targets.select { |t| %w[ArdiaStore ArdiaSettings].include?(t.name) }.each do |t|
+  project.targets.select { |t| %w[SolaraStoreAdapter SolaraSettingsAdapter].include?(t.name) }.each do |t|
     t.build_configurations.each do |c|
       paths = Array(c.build_settings['SWIFT_INCLUDE_PATHS'] || ['$(inherited)'])
       built = '${SYMROOT}/${CONFIGURATION}${EFFECTIVE_PLATFORM_NAME}/'
@@ -139,7 +139,7 @@ ac_solara_kit = lambda do |installer|
   end
 end
 
-target 'Ardia-macOS' do
+target 'Solara-macOS' do
   platform :macos, '26.0'
 
   use_expo_modules!

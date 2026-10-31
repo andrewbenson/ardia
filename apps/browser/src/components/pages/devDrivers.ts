@@ -11,7 +11,7 @@ import { useFolderPanel } from "../sidebar/tileFolderUi";
 import { newTileFolder } from "../../store/tileFolders";
 import { nativeOwnsWorkspace, nativeWrite } from "../../store/nativeStore";
 import { useBrowser } from "../../store/browser";
-import { encodeCommand } from "@ardia/store";
+import { encodeCommand } from "@solara/store";
 import { useClearDataRequest } from "./ClearDataDialog";
 import { openInternalPage } from "./urls";
 

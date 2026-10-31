@@ -61,8 +61,8 @@ private func finiteOrNull(_ v: ParsedJSON) -> ParsedJSON {
     }
     let doc = bangDocument(etag: "\"v2\"", slim: slim)
     let docs = [
-      doc, bangDocument(etag: nil, slim: slim), "", slim, String(units: doc.units.prefix(2000)), "ardia-bangs 2\t\"v2\"\n\(slim)",
-      "ardia-bangs 1\t\"v2\"\tx\n\(slim)", "ardia-bangs 1\n\(slim)",
+      doc, bangDocument(etag: nil, slim: slim), "", slim, String(units: doc.units.prefix(2000)), "solara-bangs 2\t\"v2\"\n\(slim)",
+      "solara-bangs 1\t\"v2\"\tx\n\(slim)", "solara-bangs 1\n\(slim)",
     ]
     for (d, c) in zip(docs, f["docs"]!.items) {
       let read = readBangDocument(d)

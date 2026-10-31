@@ -78,7 +78,7 @@ final class SyncAdapter: SyncServices {
 
   func openICloudSettings() {
     guard let url = URL(string: "x-apple.systempreferences:com.apple.preferences.AppleIDPrefPane") else { return }
-    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
+    if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
     NSWorkspace.shared.open(url)
   }
 

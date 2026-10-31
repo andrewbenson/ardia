@@ -1,4 +1,4 @@
-import type { MenuItem } from "@ardia/shell";
+import type { MenuItem } from "@solara/shell";
 import type { BrowserState } from "../../store/browser";
 import { tabLabel, viewTabIds } from "../../store/model";
 import { hiddenEmptyCard } from "../../store/newTabBar";

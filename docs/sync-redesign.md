@@ -88,7 +88,7 @@ action runs: settings, profiles, bookmarks, pins, groups, a history delete, and 
 | the store's own docs (shell.docs) | each store-backed type's items, with the journal generation `g` they reflect and the ever-seen keys of those types | by the store's persist, as today, in the same write as the items |
 
 Two more pieces live in Chrome's own data, so they roll back only with it (§ Rollback audit):
-- **Login Data:** a row `solara_sync_ledger = L@t` in its `meta` table, written through ArdiaCore
+- **Login Data:** a row `solara_sync_ledger = L@t` in its `meta` table, written through SolaraCore
   **before** `sync-pw-ledger.json` (final review 1).
 - **Bookmarks:** the generation `G` in the bookmark bar node's meta info (`solara_shadow`), and on
   each node whose record this Mac applied or published, that record's last origin
@@ -205,7 +205,7 @@ Two more pieces live in Chrome's own data, so they roll back only with it (§ Ro
 - A history delete the user makes is journaled.
 - Two removals are not deletions and must never be journaled or published:
   - the store's 5,000-entry cap (store/history.ts:53, lib/history.ts `setView`);
-  - Chrome's 90-day expiry. ArdiaCore passes `DeletionInfo::is_from_expiration()` through, and
+  - Chrome's 90-day expiry. SolaraCore passes `DeletionInfo::is_from_expiration()` through, and
     expired URLs go to the adapter's ignore rule (adapters.ts:397-401), which already ignores entries
     older than the window or below the floor.
 
@@ -244,7 +244,7 @@ the tree, and so does the echo of sync's pushes.
 - **Marks can't loop** (read, mark, change event, read). Three things stop it, any one enough:
   - Chrome sends no notification for a meta-info write that changes nothing: `SetNodeMetaInfo`
     returns before its observers when the value is the same (bookmark_model.cc:795-797).
-  - ArdiaCore's watcher doesn't forward meta-info changes at all. It overrides only node, move,
+  - SolaraCore's watcher doesn't forward meta-info changes at all. It overrides only node, move,
     reorder and removal events, not `BookmarkMetaInfoChanged` (ac_bookmarks.cc:120-150;
     bookmark_model_observer.h:105). It also drops every event while `ac_bookmarks_apply` runs
     (ac_bookmarks.cc:153, 406, 428), and a mark is only ever written inside that call.
@@ -300,7 +300,7 @@ the tree, and so does the echo of sync's pushes.
     after sync's write;
   - plus a ledger generation.
 - **Login Data generation.** Whenever the ledger changes, its generation is also written into Login
-  Data's own `meta` table (`solara_sync_ledger`), through a new ArdiaCore call
+  Data's own `meta` table (`solara_sync_ledger`), through a new SolaraCore call
   (`ac_passwords_mark`). Each read compares the two.
   - A mismatch means Login Data was restored, replaced or razed under the ledger. The inode and
     creation time can't see an in-place restore (`cp`, `rsync --inplace`); the meta row can.
@@ -591,12 +591,12 @@ rely on the date: detection is by ledger and stamping by the sync clock.
 - **Bookmark marks need an engine change, not a Chromium patch.** `ac_bookmarks_apply` gains an op
   that sets meta info on a node (`solara_shadow` on the bar node, `solara_origin` on any node), and
   `ac_bookmarks_tree` returns the bar node's `solara_shadow`. Both are in our own
-  engine/chromium/src/chrome/browser/ardia/ac_bookmarks.cc, which already reads and writes a node's
+  engine/chromium/src/chrome/browser/solara/ac_bookmarks.cc, which already reads and writes a node's
   sync key through meta info (:59, :327-329). Meta info is saved in Chrome's Bookmarks file with
   each node (bookmark_codec.cc:204-206), and the extensions API doesn't expose it.
 - **Chrome's own cleanup of undecryptable logins.** With `kClearUndecryptablePasswords` on,
   `LoginDatabase` deletes logins it can't decrypt (login_database.cc:2266). It doesn't when Chrome
-  runs with `--user-data-dir` (:1036). Solara always passes it (ArdiaCoreHost.mm:638), and ArdiaCore
+  runs with `--user-data-dir` (:1036). Solara always passes it (SolaraCoreHost.mm:638), and SolaraCore
   refuses to start without it (ac_main_delegate.cc:410). The ledger would read such a cleanup as
   deletions, so the dependency is pinned by a test that checks both lines (FR6).
 - **Keychain class.** Twins are handled by `IOPlatformUUID`; the item still copies with the Mac.
@@ -640,7 +640,7 @@ same write as that data:
 - passwords: Login Data's `meta` row gains `solara_sync_off`;
 - bookmarks: the bar node's meta info gains `solara_sync_off`;
 - history: History's own `meta` table (`sql::MetaTable`, as for Login Data) gains `solara_sync_off`,
-  through a new ArdiaCore call;
+  through a new SolaraCore call;
 - extensions: the profile's Chrome prefs.
 - **The effective state is the copy with the higher counter.** A rollback of either copy carries a
   lower counter and loses, in both directions: a sync.json rolled back to "on" doesn't resume a
@@ -990,7 +990,7 @@ nightlies start earliest. Nothing of the old guard is removed until what replace
 **Step 10. sync.json anchors** (§ Rollback audit, opt-outs).
 - Each profile's sync id and kept-out flag on the profile; opt-outs written beside their data
   (Login Data and the bar node through steps 2 and 9, History's meta table through a new
-  ArdiaCore call, extension prefs); toggle counters, the higher one wins, a missing anchor is no
+  SolaraCore call, extension prefs); toggle counters, the higher one wins, a missing anchor is no
   decision, a disagreement shown in the Sync pane.
 - Green: AUDIT-syncjson-profile, -type-off, -profile-off, the SPEC-opt-out tests ported, and engine
   versions of the settings-reset and unloaded-profile cases.

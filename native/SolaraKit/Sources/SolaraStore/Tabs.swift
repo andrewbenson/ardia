@@ -33,7 +33,7 @@ func truthy(_ s: String?) -> Bool { !(s ?? "").isEmpty }
 let maxClosedTabs = 50
 
 public func fromLegacyUrl(_ url: String) -> String {
-  let legacy: [(String, String)] = [("netnyahoo://yahu", "ardia://game"), ("chrome://yahu", "chrome://game"), ("netnyahoo://", "ardia://")]
+  let legacy: [(String, String)] = [("netnyahoo://yahu", "solara://game"), ("chrome://yahu", "chrome://game"), ("netnyahoo://", "solara://")]
   let lower = url.lowercased()
   for prefix in ["", "view-source:"] {
     for (old, now) in legacy {

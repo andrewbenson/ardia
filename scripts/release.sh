@@ -41,7 +41,7 @@ fi
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
 app_dir="$root/apps/browser"
 macos="$app_dir/macos"
-ardiacore="$root/packages/ardiacore"
+solaracore="$root/packages/solaracore"
 . "$root/scripts/identity.sh"
 product_name="$(ac_identity AC_PRODUCT_NAME)"
 team_id="$(ac_identity AC_TEAM_ID)"
@@ -59,7 +59,7 @@ case "$public_ed_key" in
     echo "error: AC_PUBLIC_ED_KEY is '$public_ed_key', not a Sparkle public key: generate the key and paste its public half into Identity.xcconfig (docs/releasing.md)" >&2
     exit 1 ;;
 esac
-notary_profile="${NOTARY_PROFILE:-ardia}"
+notary_profile="${NOTARY_PROFILE:-solara}"
 [ -f "$root/scripts/.notary.env" ] && . "$root/scripts/.notary.env"
 if [ -n "${NOTARY_KEY:-}" ]; then
   notary_auth=(--key "$NOTARY_KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER")
@@ -92,13 +92,13 @@ die() { echo "error: $*" >&2; exit 1; }
 if [ "$rc" = 1 ]; then dist="$root/dist/$version-rc"; else dist="$root/dist/$version"; fi
 [ "$rc" = 1 ] && [ -n "${RC_DIST:-}" ] && dist="$(cd "$root" && mkdir -p "$RC_DIST" && cd "$RC_DIST" && pwd)"
 build="${RELEASE_BUILD_DIR:-$app_dir/build-release}"
-archive="$dist/Ardia.xcarchive"
+archive="$dist/Solara.xcarchive"
 app="$dist/export/$app_name"
 zip="$dist/$product_name-$version.zip"
 dmg="$dist/$product_name-$version.dmg"
 chromium_src="${CHROMIUM_SRC:-$HOME/chromium-build/chromium_git/chromium/src}"
-framework_src="${ARDIACORE_FRAMEWORK:-$chromium_src/out/Release_GN_arm64/Chromium Framework.framework}"
-framework_engine="${ARDIACORE_FRAMEWORK_ENGINE:-}"
+framework_src="${SOLARACORE_FRAMEWORK:-$chromium_src/out/Release_GN_arm64/Chromium Framework.framework}"
+framework_engine="${SOLARACORE_FRAMEWORK_ENGINE:-}"
 provisioning_profile="${RELEASE_PROVISIONING_PROFILE:-}"
 read -r -a extra_build_settings <<<"${RELEASE_BUILD_SETTINGS:-}"
 case "${RELEASE_BUILD_SETTINGS:-}" in
@@ -109,7 +109,7 @@ case "${RELEASE_BUILD_SETTINGS:-}" in
 esac
 build_input="${RELEASE_BUILD_INPUT:-}"
 if [ "$phase" = sign ] && [ -n "$build_input" ]; then
-  archive="$build_input/Ardia.xcarchive"
+  archive="$build_input/Solara.xcarchive"
 fi
 if [ "$phase" = sign ] || [ "$phase" = check ]; then
   framework_src="$archive/Products/Applications/$app_name/Contents/Frameworks/Chromium Framework.framework"
@@ -121,13 +121,13 @@ launch_check() {
   check_data="$(mktemp -d "${TMPDIR:-/tmp}/ac-release.XXXXXX")"
   before="$(pgrep -f "^$app/Contents/MacOS/$executable" | sort || true)"
   check_port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
-  open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR="$check_data" --env ARDIA_REMOTE_DEBUGGING_PORT="$check_port" "$app"
+  open -g -n --env SOLARA_BACKGROUND=1 --env SOLARA_DATA_DIR="$check_data" --env SOLARA_REMOTE_DEBUGGING_PORT="$check_port" "$app"
   ubo_ok=0
   node "$root/scripts/lib/ubo-ready.mjs" "$check_port" 90 && ubo_ok=1
   sleep 5
   pid=""
   for p in $(pgrep -f "^$app/Contents/MacOS/$executable\$" || true); do
-    ps -E -ww -o command= -p "$p" 2>/dev/null | grep -qF "ARDIA_DATA_DIR=$check_data" && { pid="$p"; break; }
+    ps -E -ww -o command= -p "$p" 2>/dev/null | grep -qF "SOLARA_DATA_DIR=$check_data" && { pid="$p"; break; }
   done
   [ -n "$pid" ] || pid="$(comm -13 <(echo "$before") <(pgrep -f "^$app/Contents/MacOS/$executable" | sort || true) | head -1)"
   [ -n "$pid" ] || die "the app didn't start (or quit)"
@@ -146,7 +146,7 @@ if [ "$phase" = check ]; then
   exit 0
 fi
 
-pbx="$macos/Ardia.xcodeproj/project.pbxproj"
+pbx="$macos/Solara.xcodeproj/project.pbxproj"
 project_version="$(sed -n 's/.*MARKETING_VERSION = "\{0,1\}\([^";]*\)"\{0,1\};/\1/p' "$pbx" | sort -u)"
 project_build="$(sed -n 's/.*CURRENT_PROJECT_VERSION = \(.*\);/\1/p' "$pbx" | sort -u)"
 version_settings=()
@@ -183,17 +183,17 @@ if [ -n "$dirty" ]; then
   echo "$dirty" >&2
 fi
 
-[ -d "$framework_src" ] || die "no ArdiaCore framework at $framework_src (engine/ardiacore/apply.sh, then build chrome_framework)"
+[ -d "$framework_src" ] || die "no SolaraCore framework at $framework_src (engine/solaracore/apply.sh, then build chrome_framework)"
 [ "$phase" = sign ] || [[ " $(lipo -archs "$framework_src/Versions/Current/Chromium Framework" 2>/dev/null) " == *" arm64 "* ]] \
-  || die "the ArdiaCore framework at $framework_src has no arm64 slice"
+  || die "the SolaraCore framework at $framework_src has no arm64 slice"
 if [ "$phase" = sign ]; then
   [ -n "$provisioning_profile" ] || die "--phase sign exports the ad hoc archive --phase build made: set RELEASE_PROVISIONING_PROFILE"
 elif [ -n "$framework_engine" ]; then
-  [ -n "${ARDIACORE_FRAMEWORK:-}" ] || die "ARDIACORE_FRAMEWORK_ENGINE names the engine tree a prebuilt ARDIACORE_FRAMEWORK was built from; set both or neither"
+  [ -n "${SOLARACORE_FRAMEWORK:-}" ] || die "SOLARACORE_FRAMEWORK_ENGINE names the engine tree a prebuilt SOLARACORE_FRAMEWORK was built from; set both or neither"
   [ "$framework_engine" = "$(git -C "$root" rev-parse HEAD:engine)" ] \
-    || die "ARDIACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's engine tree is $(git -C "$root" rev-parse HEAD:engine): that framework wasn't built from this commit's engine"
+    || die "SOLARACORE_FRAMEWORK_ENGINE is $framework_engine but HEAD's engine tree is $(git -C "$root" rev-parse HEAD:engine): that framework wasn't built from this commit's engine"
 fi
-if [ "$phase" = all ] && [ -z "${ARDIACORE_FRAMEWORK:-}" ]; then
+if [ "$phase" = all ] && [ -z "${SOLARACORE_FRAMEWORK:-}" ]; then
   "$root/scripts/lib/engine-fresh.sh" "$framework_src" "$chromium_src" || exit 1
 fi
 
@@ -229,12 +229,12 @@ newest_listed="$(grep -o '<sparkle:version>[0-9]*<' "$base_feed" | tr -dc '0-9\n
   || die "the build number ($release_build) must be above every build in the feed, nightly or stable (newest: $newest_listed): bump CURRENT_PROJECT_VERSION"
 
 build_cli() {
-  echo "==> ardia CLI"
+  echo "==> solara CLI"
   AC_PRODUCT_NAME="$product_name" AC_BUNDLE_ID="$bundle_id" AC_RELEASE_REPO="$repo" \
     "$root/apps/cli/scripts/build.sh" "$version" "$dist" >"$dist/cli-build.log" 2>&1 \
-    || { tail -20 "$dist/cli-build.log" >&2; die "building the ardia CLI failed ($dist/cli-build.log)"; }
+    || { tail -20 "$dist/cli-build.log" >&2; die "building the solara CLI failed ($dist/cli-build.log)"; }
 }
-cli_tarball="$dist/ardia-cli-$version-macos-arm64.tar.gz"
+cli_tarball="$dist/solara-cli-$version-macos-arm64.tar.gz"
 if [ "$phase" != sign ]; then
   rm -rf "$dist"
   mkdir -p "$dist"
@@ -246,8 +246,8 @@ if [ "$phase" != sign ]; then
   } > "$dist/provenance.txt"
 
   echo "==> Content blocker"
-  "$ardiacore/scripts/ubo.sh"
-  [ -f "$ardiacore/vendor/ubo/ext/manifest.json" ] || die "uBlock Origin isn't installed ($ardiacore/scripts/ubo.sh)"
+  "$solaracore/scripts/ubo.sh"
+  [ -f "$solaracore/vendor/ubo/ext/manifest.json" ] || die "uBlock Origin isn't installed ($solaracore/scripts/ubo.sh)"
 
   if [ -n "$provisioning_profile" ] || [ "$phase" = build ]; then
     archive_signing=(-xcconfig macos/AdHoc.xcconfig)
@@ -255,9 +255,9 @@ if [ "$phase" != sign ]; then
     archive_signing=(-allowProvisioningUpdates)
   fi
   echo "==> Archive"
-  (cd "$app_dir" && ARDIACORE_FRAMEWORK="$framework_src" "$root/scripts/agent/locked" pod --wait 1800 -- \
-    "$root/scripts/verify-pods.sh" -- "$root/scripts/agent/locked" xcodebuild --wait 1800 -- xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS \
-    -configuration Release -destination 'generic/platform=macOS' ARCHS=arm64 ARDIACORE_STAGE_DIR="$build/ArdiaCoreFramework" \
+  (cd "$app_dir" && SOLARACORE_FRAMEWORK="$framework_src" "$root/scripts/agent/locked" pod --wait 1800 -- \
+    "$root/scripts/verify-pods.sh" -- "$root/scripts/agent/locked" xcodebuild --wait 1800 -- xcodebuild -workspace macos/Solara.xcworkspace -scheme Solara-macOS \
+    -configuration Release -destination 'generic/platform=macOS' ARCHS=arm64 SOLARACORE_STAGE_DIR="$build/SolaraCoreFramework" \
     ${version_settings[@]+"${version_settings[@]}"} AC_UPDATE_CHANNEL="$channel" \
     ${extra_build_settings[@]+"${extra_build_settings[@]}"} \
     -derivedDataPath "$build" -archivePath "$archive" "${archive_signing[@]}" archive) \
@@ -292,8 +292,8 @@ grants_browser_passkeys() {
     | plutil -extract 'Entitlements.com\.apple\.developer\.web-browser\.public-key-credential' raw -o - - 2>/dev/null | grep -qx true
 }
 if [ -n "$provisioning_profile" ]; then
-  app_entitlements="$macos/Ardia-macOS/Ardia.entitlements"
-  grants_browser_passkeys "$provisioning_profile" && app_entitlements="$macos/Ardia-macOS/Ardia-ICloudPasskeys.entitlements"
+  app_entitlements="$macos/Solara-macOS/Solara.entitlements"
+  grants_browser_passkeys "$provisioning_profile" && app_entitlements="$macos/Solara-macOS/Solara-ICloudPasskeys.entitlements"
   echo "==> Export (Developer ID, $(basename "$provisioning_profile"), $(basename "$app_entitlements"))"
   "$root/scripts/lib/export-developer-id.sh" "$archive/Products/Applications/$app_name" "$app" "$provisioning_profile" \
     "$app_entitlements" "$identity" "$bundle_id" > "$dist/export.log" 2>&1 || { cat "$dist/export.log" >&2; exit 1; }
@@ -326,7 +326,7 @@ else
   fi
   [ -f "$cli_tarball.sha256" ] || die "no $cli_tarball.sha256 from --phase build"
 fi
-awk '{ print $1 }' "$cli_tarball.sha256" >"$app/Contents/Resources/ardia-cli.sha256"
+awk '{ print $1 }' "$cli_tarball.sha256" >"$app/Contents/Resources/solara-cli.sha256"
 
 echo "==> Licenses"
 licenses="$app/Contents/Resources/Licenses"
@@ -334,13 +334,13 @@ mkdir -p "$licenses"
 cp "$root"/LICENSE* "$root/NOTICE" "$licenses/"
 
 echo "==> Sign Chrome's framework"
-entitlements_dir="$ardiacore/scripts/signing"
+entitlements_dir="$solaracore/scripts/signing"
 fw="$app/Contents/Frameworks/Chromium Framework.framework"
 fwv="$(cd "$fw/Versions/Current" && pwd -P)" || die "no Chromium Framework.framework in the export"
-"$ardiacore/scripts/strip-engine.sh" "$app" "$dist/symbols"
+"$solaracore/scripts/strip-engine.sh" "$app" "$dist/symbols"
 unpruned_engine="$dist/engine-unpruned"
 rm -rf "$unpruned_engine" && mkdir -p "$unpruned_engine" && cp -cR "$fw" "$unpruned_engine/"
-"$ardiacore/scripts/prune-bundle.sh" "$app"
+"$solaracore/scripts/prune-bundle.sh" "$app"
 for lib in "$fwv"/Libraries/*.dylib; do sign "$lib"; done
 for helper in "$fwv"/Helpers/*.app; do
   case "$(basename "$helper")" in
@@ -412,13 +412,13 @@ done < <(find "$app" \( -name "*.app" -o -name "*.framework" -o -name "*.dylib" 
   -o -path "*/Helpers/*" -type f -perm -u+x -o -path "*/MacOS/*" -type f \) -print0)
 
 engine_tree="$(git -C "$root" rev-parse HEAD:engine)"
-engine_archive="$dist/ArdiaCore-${engine_tree:0:12}.tar.xz"
-engine_source="$dist/ArdiaCore-${engine_tree:0:12}-source.tar.xz"
-engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$ardiacore/prebuilt-engines.tsv")"
+engine_archive="$dist/SolaraCore-${engine_tree:0:12}.tar.xz"
+engine_source="$dist/SolaraCore-${engine_tree:0:12}-source.tar.xz"
+engine_release="$(awk -v t="$engine_tree" '$1 == t { print $2; exit }' "$solaracore/prebuilt-engines.tsv")"
 helium_engine=""
 LC_ALL=C grep -q -a -F helium.services.enabled "$framework_src/Versions/Current/Chromium Framework" && helium_engine=1
 engine_pack=""
-if [ "$phase" = all ] && [ "$rc" = 0 ] && { [ -z "${ARDIACORE_FRAMEWORK:-}" ] || [ -n "$framework_engine" ]; } && [ -z "$engine_release" ]; then
+if [ "$phase" = all ] && [ "$rc" = 0 ] && { [ -z "${SOLARACORE_FRAMEWORK:-}" ] || [ -n "$framework_engine" ]; } && [ -z "$engine_release" ]; then
   engine_release="$version"
   echo "==> Pack the engine (background)"
   (
@@ -438,7 +438,7 @@ else
   rm -rf "$unpruned_engine"
 fi
 [ -z "$helium_engine" ] || [ "$rc" = 1 ] || [ -n "$engine_release" ] \
-  || die "no published release carries this engine ($engine_tree) and its source: build it from the Chromium tree, without ARDIACORE_FRAMEWORK, or name the engine tree it was built from in ARDIACORE_FRAMEWORK_ENGINE"
+  || die "no published release carries this engine ($engine_tree) and its source: build it from the Chromium tree, without SOLARACORE_FRAMEWORK, or name the engine tree it was built from in SOLARACORE_FRAMEWORK_ENGINE"
 
 [ "$phase" = sign ] || launch_check
 
@@ -483,7 +483,7 @@ for attempt in 1 2 3 4 5; do
   sleep 2
 done
 dmg_chunks=(-imagekey udif-chunk-size=8192)
-[ "${ARDIA_DMG_CHUNK:-on}" = off ] && dmg_chunks=()
+[ "${SOLARA_DMG_CHUNK:-on}" = off ] && dmg_chunks=()
 hdiutil convert "$dmg_rw" -format ULMO ${dmg_chunks[@]+"${dmg_chunks[@]}"} -ov -o "$dmg" >/dev/null
 rm -rf "$dmg_rw" "$dmg_mnt"
 sign "$dmg"
@@ -506,7 +506,7 @@ fi
 case "$engine_release" in engine-*) engine_tag="$engine_release" ;; *) engine_tag="v$engine_release" ;; esac
 source_line="This build's source, with the engine's patches and build scripts: https://github.com/$repo/tree/v$version (LICENSE and NOTICE there cover the licenses)."
 engine_repo="$repo"
-[ -n "$engine_pack" ] || engine_repo="${ARDIACORE_PREBUILT_REPO:-$repo}"
+[ -n "$engine_pack" ] || engine_repo="${SOLARACORE_PREBUILT_REPO:-$repo}"
 [ -n "$helium_engine" ] && [ -n "$engine_release" ] && source_line="$source_line The engine's Helium and uBlock sources as built, and where Chromium's is: https://github.com/$engine_repo/releases/download/$engine_tag/$(basename "$engine_source")"
 {
   notes_body
@@ -562,7 +562,7 @@ fi
 
 echo
 [ "$notarize" = 1 ] && echo "Notarized and stapled." || echo "NOT notarized."
-[ -n "$engine_pack" ] && echo "New engine: publish $(basename "$engine_archive")${helium_engine:+ and $(basename "$engine_source")} with the release, then add prebuilt-engine.tsv's line to packages/ardiacore/prebuilt-engines.tsv."
+[ -n "$engine_pack" ] && echo "New engine: publish $(basename "$engine_archive")${helium_engine:+ and $(basename "$engine_source")} with the release, then add prebuilt-engine.tsv's line to packages/solaracore/prebuilt-engines.tsv."
 [ "$rc" = 1 ] && echo "Release candidate: never publish dist/$version-rc."
 [ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed follows)."
 [ "$phase" = sign ] && echo "Not launched yet: remove the signing keys, then run the launch check (--phase check)."

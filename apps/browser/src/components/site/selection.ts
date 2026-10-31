@@ -1,6 +1,6 @@
-import { setSearchEngineName, setSelectionPopover } from "@ardia/ardiacore";
-import { chooseTextFragment, cleanUrl, searchUrl, withTextFragment, type SelectionContext } from "@ardia/core";
-import { copyText } from "@ardia/shell";
+import { setSearchEngineName, setSelectionPopover } from "@solara/solaracore";
+import { chooseTextFragment, cleanUrl, searchUrl, withTextFragment, type SelectionContext } from "@solara/core";
+import { copyText } from "@solara/shell";
 import { create } from "zustand";
 import { webviews } from "../../lib/webviews";
 import { useBrowser } from "../../store/browser";

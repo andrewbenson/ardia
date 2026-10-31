@@ -1,4 +1,4 @@
-import type { AreaLightPalette } from "@ardia/shaders";
+import type { AreaLightPalette } from "@solara/shaders";
 import { createContext, createElement, useContext, useMemo, type ReactNode } from "react";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { PageProfileContext, WindowContext } from "../store/hooks";

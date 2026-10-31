@@ -5,7 +5,7 @@ import { registerHooks } from "node:module";
 registerHooks({
   resolve(specifier, context, next) {
     if (specifier === "./tour/state" && context.parentURL?.endsWith("/onboarding/state.ts")) return { url: "data:text/javascript,export const endToolTour = () => {}; export const startToolTour = () => {};", shortCircuit: true };
-    if (context.parentURL?.endsWith("/pages/devDrivers.ts") && !["../import/apply", "../../store/browser", "../../store/nativeStore", "../../store/tileFolders", "@ardia/store"].includes(specifier)) return { url: `data:text/javascript,${encodeURIComponent("export const importModule = null, openImport = null, openSettings = null, useBookmarkDialog = null, useBookmarkEditor = null, useMeetingAlert = null, useCalendar = null, useEngineOffers = null, measureRow = null, setSidebarUi = null, useFolderPanel = null, useClearDataRequest = null, openInternalPage = null;")}`, shortCircuit: true };
+    if (context.parentURL?.endsWith("/pages/devDrivers.ts") && !["../import/apply", "../../store/browser", "../../store/nativeStore", "../../store/tileFolders", "@solara/store"].includes(specifier)) return { url: `data:text/javascript,${encodeURIComponent("export const importModule = null, openImport = null, openSettings = null, useBookmarkDialog = null, useBookmarkEditor = null, useMeetingAlert = null, useCalendar = null, useEngineOffers = null, measureRow = null, setSidebarUi = null, useFolderPanel = null, useClearDataRequest = null, openInternalPage = null;")}`, shortCircuit: true };
     return next(specifier, context);
   },
 });
@@ -15,7 +15,7 @@ let result;
 let onDispatch;
 globalThis.__DEV__ = true;
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "everything" }),
     dispatch: (json, rev) => {
       const commands = [JSON.parse(json)].flat();

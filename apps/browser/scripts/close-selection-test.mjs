@@ -12,7 +12,7 @@ if (!appArg) {
 ⌘W with several tabs selected in the sidebar, through a real key press on the window: the File menu's item reads
 "Close 3 Tabs", the press closes all 3 selected tabs (not just the active one) and clears the selection, and one
 ⇧⌘T brings all 3 back in their places. Then, with a New Tab among the selection so the close would take the window,
-⌘W asks once (ArdiaShell.confirm, stubbed to count calls and answer Cancel) and cancelling closes nothing. Run two ways: the RN sidebar and the native sidebar (ARDIA_NATIVE_SIDEBAR=1).`);
+⌘W asks once (SolaraShell.confirm, stubbed to count calls and answer Cancel) and cancelling closes nothing. Run two ways: the RN sidebar and the native sidebar (SOLARA_NATIVE_SIDEBAR=1).`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -60,7 +60,7 @@ const until = async (what, body, ms = 8000) => {
 
 const modes = [
   ["rn-sidebar", {}],
-  ["native-sidebar", { ARDIA_NATIVE_SIDEBAR: "1" }],
+  ["native-sidebar", { SOLARA_NATIVE_SIDEBAR: "1" }],
 ];
 try {
   for (const [tag, env] of modes) {
@@ -114,7 +114,7 @@ try {
     await rep.check(`${tag}-closing-the-window-asks-once`, async () => {
       await run(`const s = ac.store.getState(); s.updateSettings({ warnBeforeClosingLastTab: true }); s.newTab("w1"); return true;`);
       const ids = await until("a New Tab", `const s = ac.store.getState(), w = s.windows.w1; return w.tabIds.length === 6 ? w.tabIds : null;`);
-      await run(`const M = globalThis.expo.modules.ArdiaShell; globalThis.__asked = []; M.confirm = (o) => { globalThis.__asked.push(o.title ?? ""); return Promise.resolve({ confirmed: false, suppressed: false }); }; ac.store.getState().setSelection("w1", ${JSON.stringify(ids)}); return true;`);
+      await run(`const M = globalThis.expo.modules.SolaraShell; globalThis.__asked = []; M.confirm = (o) => { globalThis.__asked.push(o.title ?? ""); return Promise.resolve({ confirmed: false, suppressed: false }); }; ac.store.getState().setSelection("w1", ${JSON.stringify(ids)}); return true;`);
       await sleep(300);
       await press(K("w", 13));
       await sleep(800);

@@ -24,7 +24,7 @@ reflects every choice so far and animates from one state to the next.
 | 8 | Make it home | Default browser (7-day trial), Dock, open at login, links from other apps in Little Solara / a tab |
 | 9 | Outro | postcard listing what you picked · Get Started / Take the Tour |
 
-Every screen has Skip, which keeps the preset, and the progress dots. Going back keeps your choices. The `ardia`
+Every screen has Skip, which keeps the preset, and the progress dots. Going back keeps your choices. The `solara`
 CLI step leaves onboarding and stays in Settings › Advanced.
 
 ## Presets
@@ -38,7 +38,7 @@ CLI step leaves onboarding and stays in Settings › Advanced.
 | `balancedTopApps` | false | true |
 | `shareTabsAcrossWindows` | false | true |
 | `cleanUpInactiveTabsAfterHours` | null | 12 |
-| `openLinksInLittleArdia` | true | true |
+| `openLinksInLittleSolara` | true | true |
 
 A preset fills an onboarding draft. A screen writes its keys with `updateSettings` when you press Continue, so
 only the keys someone actually saw land in `chosen`. A skipped screen writes nothing, so later default changes

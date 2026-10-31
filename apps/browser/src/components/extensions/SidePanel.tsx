@@ -1,7 +1,7 @@
-import { unwrapPageEvent, WebView, type OpenWindowRequest } from "@ardia/ardiacore";
-import { toEngineUrl } from "@ardia/core";
-import { focusPageIfUnclaimed, hostedKinds, onHostedEvent, setWindowShellLayout, SolaraHostedView } from "@ardia/settings";
-import { Hairline } from "@ardia/shell";
+import { unwrapPageEvent, WebView, type OpenWindowRequest } from "@solara/solaracore";
+import { toEngineUrl } from "@solara/core";
+import { focusPageIfUnclaimed, hostedKinds, onHostedEvent, setWindowShellLayout, SolaraHostedView } from "@solara/settings";
+import { Hairline } from "@solara/shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, Image, PanResponder, StyleSheet, Text, View } from "react-native";
 import { layout, useTheme } from "../../lib/theme";

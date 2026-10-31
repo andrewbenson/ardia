@@ -1,4 +1,4 @@
-import { clearBrowsingData, type BrowsingDataType } from "@ardia/ardiacore";
+import { clearBrowsingData, type BrowsingDataType } from "@solara/solaracore";
 import { create } from "zustand";
 import { pruneProfileFavicons } from "../../lib/favicons";
 import { useBrowser } from "../../store/browser";

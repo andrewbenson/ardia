@@ -2,7 +2,7 @@ import { useBrowser, type BrowserState } from "../store/browser";
 import { bookmarkDraft, hasLinks, MAX_DRAFT_LINKS, withDraftGroups, type DraftGroups, type GroupDraft } from "../store/draftGroups";
 import { bookmarkProfileId, plural } from "../store/model";
 import { mainWindowFor } from "../store/small";
-import { encodeCommand } from "@ardia/store";
+import { encodeCommand } from "@solara/store";
 import { nativeOwnsWorkspace, nativeWrite } from "../store/nativeStore";
 
 export const ARC_HOLDER = " (Arc)";

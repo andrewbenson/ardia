@@ -4,7 +4,7 @@ const { useBrowser } = await import("../store/browser.ts");
 const model = await import("../store/model.ts");
 const folders = await import("../store/tileFolders.ts");
 const { sidebarEntries } = await import("../components/sidebar/entries.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const pinnedArea = await import("./pinned.ts");
 const shipped = await import("../../../../packages/sync/src/fixtures/scope-v0.2.38.ts");
 const { pinnedAdapter: shippedPinnedAdapter } = await import("./fixtures/pinned-v0.2.38.ts");
@@ -310,7 +310,7 @@ test("a fresh Mac joining takes the folder and its name and publishes nothing, e
 });
 
 async function folderMemberDeletedWhileAway(members) {
-  const { compact } = await import("@ardia/sync");
+  const { compact } = await import("@solara/sync");
   const realNow = Date.now;
   let shift = 0;
   Date.now = () => realNow() + shift;

@@ -16,7 +16,7 @@ public final class WindowShellView: NSView {
     static let reactOnTop: [Slot] = [.backdrop, .tint, .card, .splitChrome, .peek, .sidebar, .topStrip, .react, .overlay]
   }
 
-  public static let hoverCoverChanged = Notification.Name("ArdiaHoverCoverChanged")
+  public static let hoverCoverChanged = Notification.Name("SolaraHoverCoverChanged")
 
   public let windowId: String
   public let reactOnTop: Bool
@@ -80,7 +80,7 @@ public final class WindowShellView: NSView {
 
   @objc public var backgroundColor: NSColor?
   @objc public var drawsWholeWindow: Bool { true }
-  @objc public var ardia_gatesHover: Bool { true }
+  @objc public var solara_gatesHover: Bool { true }
 
   public func mount(_ slot: Slot, _ view: NSView?) {
     if let view, let container = ownedContainer(slot), view !== container {

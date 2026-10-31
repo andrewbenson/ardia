@@ -10,7 +10,7 @@ const downloading = new Set();
 const damaged = new Set();
 let ids = 0;
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `id${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => true,

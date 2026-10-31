@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -93,7 +93,7 @@ final class NativeAppIntegration {
       case .sendFeedback: sendFeedback(windowId, storeStatus: status)
       case .copyDiagnostics: Self.copy(diagnostics(storeStatus: status))
       case .recordPerformanceIssue: recordPerformanceIssue()
-      case .taskManager: ArdiaCoreServices.call("ac_task_manager_open", profile: "", args: nil) { @Sendable _ in }
+      case .taskManager: SolaraCoreServices.call("ac_task_manager_open", profile: "", args: nil) { @Sendable _ in }
       }
     }
   }
@@ -126,7 +126,7 @@ final class NativeAppIntegration {
     let status = storeStatus ?? Self.storeStatus
     let state = status == .ready ? NativeStoreHandle.store?.state : nil
     return AppDiagnostics.report(
-      app: AppFacts(AppModule.systemInfo), engine: ArdiaCoreHost.engineInfo,
+      app: AppFacts(AppModule.systemInfo), engine: SolaraCoreHost.engineInfo,
       updates: UpdaterFacts(AppUpdater.shared.state), state: state, storeStatus: status)
   }
 
@@ -139,14 +139,14 @@ final class NativeAppIntegration {
     case .page(let url):
       openTab(url, in: windowId)
     case .mail(let draft, let body):
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[services] background instance, not opening the feedback mail draft") }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[services] background instance, not opening the feedback mail draft") }
       if !(URL(string: draft).map { NSWorkspace.shared.open($0) } ?? false) { Self.copy(body) }
     }
   }
 
   private func openTab(_ url: String, in windowId: String?) {
     guard Self.storeStatus == .ready, let store = NativeStoreHandle.store else {
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[services] background instance, not opening the feedback page") }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[services] background instance, not opening the feedback page") }
       if let target = URL(string: url) { NSWorkspace.shared.open(target) }
       return
     }
@@ -159,20 +159,20 @@ final class NativeAppIntegration {
   }
 
   private func recordPerformanceIssue() {
-    guard !ArdiaCoreHost.isTracing else { return }
+    guard !SolaraCoreHost.isTracing else { return }
     let name = AppFacts(AppModule.systemInfo).appName.jsTrim()
-    let product = name.isEmpty ? "Ardia" : name
+    let product = name.isEmpty ? "Solara" : name
     guard Self.confirm(
       "Record a performance issue?",
       "\(product) records what the engine does while you reproduce the problem. The recording is saved to your Downloads folder.",
       confirm: "Start Recording")
     else { return }
-    ArdiaCoreHost.beginTracing { started in
+    SolaraCoreHost.beginTracing { started in
       guard started else { return }
       let keep = Self.confirm("Recording…", "Reproduce the problem now, then click Stop.", confirm: "Stop", cancel: "Discard")
-      ArdiaCoreHost.endTracing(keep: keep) { path in
+      SolaraCoreHost.endTracing(keep: keep) { path in
         guard let path, FileManager.default.fileExists(atPath: path) else { return }
-        if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[services] recording saved to %@", path) }
+        if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[services] recording saved to %@", path) }
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
       }
     }

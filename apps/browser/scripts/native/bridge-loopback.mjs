@@ -80,7 +80,7 @@ process.on("exit", () => {
 
 globalThis.acTestNativeModules = {
   ...(globalThis.acTestNativeModules ?? {}),
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => {
       if (withData) relaunch();
       return { active: true, scope: "everything" };

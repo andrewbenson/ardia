@@ -18,7 +18,7 @@ let windowShown = false;
 let recentFatals: number[] = [];
 let stormHandedOff = false;
 
-const shell = () => (globalThis as { expo?: { modules?: { ArdiaShell?: Shell } } }).expo?.modules?.ArdiaShell;
+const shell = () => (globalThis as { expo?: { modules?: { SolaraShell?: Shell } } }).expo?.modules?.SolaraShell;
 
 function describe(error: unknown) {
   if (error instanceof Error) return { message: `${error.name}: ${error.message}`, stack: error.stack ?? "" };

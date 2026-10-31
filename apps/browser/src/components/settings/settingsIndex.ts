@@ -38,7 +38,7 @@ const ROWS: Record<SettingsPane, Section[]> = {
           description: "Asks before ⇧⌘W or the close button closes its tabs.",
           keywords: ["close window", "confirm"],
         },
-        openLinksFrom: { title: "Open links from other apps in", keywords: ["little ardia", "external links", "mini window", "discord", "slack", "mail"] },
+        openLinksFrom: { title: "Open links from other apps in", keywords: ["little solara", "external links", "mini window", "discord", "slack", "mail"] },
       },
     },
     {
@@ -493,7 +493,7 @@ const ROWS: Record<SettingsPane, Section[]> = {
     {
       section: "Web engine",
       rows: {
-        chromium: { title: "Chromium", keywords: ["engine", "version", "ardiacore"] },
+        chromium: { title: "Chromium", keywords: ["engine", "version", "solaracore"] },
         widevine: { title: "Widevine (protected video)", keywords: ["drm", "netflix", "disney", "spotify"] },
       },
     },

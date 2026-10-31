@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import ExpoModulesCore
 import SolaraUI
 

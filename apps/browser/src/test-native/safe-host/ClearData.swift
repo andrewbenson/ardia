@@ -1,6 +1,6 @@
 import Foundation
 
-enum ArdiaCoreHost {
+enum SolaraCoreHost {
   static var safeMode = false
 }
 let WKWebsiteDataTypeDiskCache = "disk"
@@ -56,7 +56,7 @@ __PRODUCTION__
 
 var results: [[String: Any]] = []
 for safe in [true, false] {
-  ArdiaCoreHost.safeMode = safe
+  SolaraCoreHost.safeMode = safe
   for types in [["siteData"], ["cache"], ["siteData", "cache"]] {
     let hub = WebKitHub()
     var callbacks = 0

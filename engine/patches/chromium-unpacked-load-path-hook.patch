@@ -1,6 +1,6 @@
 Every unpacked load (UnpackedInstaller::Load: install, reload, Chromium-triggered reloads; LoadFromCommandLine:
---load-extension) asks g_ardia_unpacked_path_allowed with the path it was given and the path it resolved to,
-before it reads the extension. //chrome/browser/ardia (ac_scripts_policy.cc) sets it: a load that names the Ardia
+--load-extension) asks g_solara_unpacked_path_allowed with the path it was given and the path it resolved to,
+before it reads the extension. //chrome/browser/solara (ac_scripts_policy.cc) sets it: a load that names the Solara
 Scripts folder must resolve to exactly that real folder, so swapping it for a symlink can't load another
 extension under its name.
 
@@ -10,7 +10,7 @@ extension under its name.
  using extensions::Extension;
  using extensions::SharedModuleInfo;
  
-+bool (*g_ardia_unpacked_path_allowed)(const base::FilePath& requested,
++bool (*g_solara_unpacked_path_allowed)(const base::FilePath& requested,
 +                                      const base::FilePath& resolved,
 +                                      std::u16string* error) = nullptr;
 +
@@ -24,10 +24,10 @@ extension under its name.
 +    return false;
 +  }
 +
-+  if (std::u16string ardia_error;
-+      g_ardia_unpacked_path_allowed &&
-+      !g_ardia_unpacked_path_allowed(path_in, extension_path_, &ardia_error)) {
-+    ReportExtensionLoadError(ardia_error);
++  if (std::u16string solara_error;
++      g_solara_unpacked_path_allowed &&
++      !g_solara_unpacked_path_allowed(path_in, extension_path_, &solara_error)) {
++    ReportExtensionLoadError(solara_error);
      return false;
    }
  
@@ -35,14 +35,14 @@ extension under its name.
      return;
    }
  
-+  if (std::u16string ardia_error;
-+      g_ardia_unpacked_path_allowed &&
-+      !g_ardia_unpacked_path_allowed(extension_path_, resolved_absolute_path,
-+                                     &ardia_error)) {
++  if (std::u16string solara_error;
++      g_solara_unpacked_path_allowed &&
++      !g_solara_unpacked_path_allowed(extension_path_, resolved_absolute_path,
++                                     &solara_error)) {
 +    content::GetUIThreadTaskRunner({base::TaskPriority::USER_BLOCKING})
 +        ->PostTask(FROM_HERE,
 +                   base::BindOnce(&UnpackedInstaller::ReportExtensionLoadError,
-+                                  this, ardia_error));
++                                  this, solara_error));
 +    return;
 +  }
 +

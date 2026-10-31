@@ -1,4 +1,4 @@
-import { showMenu, type MenuItem } from "@ardia/shell";
+import { showMenu, type MenuItem } from "@solara/shell";
 import { closeTab } from "../../lib/actions";
 import { menuShortcut } from "../../lib/commandShortcuts";
 import { useBrowser } from "../../store/browser";

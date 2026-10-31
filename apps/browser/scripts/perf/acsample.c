@@ -62,7 +62,7 @@ static void *sampler(void *arg) {
     g_count++;
     usleep(900);
   }
-  const char *dir = getenv("ARDIA_DATA_DIR");
+  const char *dir = getenv("SOLARA_DATA_DIR");
   if (!dir) return NULL;
   char path[2048];
   snprintf(path, sizeof path, "%s/acsample.txt", dir);
@@ -201,7 +201,7 @@ static int read_arm(const char *path, char *scenario, size_t size) {
 }
 
 static void *scenario_sampler(void *arg) {
-  const char *dir = getenv("ARDIA_DATA_DIR");
+  const char *dir = getenv("SOLARA_DATA_DIR");
   if (!dir) return NULL;
   char arm[2048], out[2048], scenario[256] = {0}, armed[256] = {0};
   snprintf(arm, sizeof arm, "%s/acsample-arm", dir);
@@ -289,7 +289,7 @@ static int is_app_executable(void) {
   uint32_t size = sizeof exe;
   if (_NSGetExecutablePath(exe, &size) != 0) return 0;
   const char *slash = strrchr(exe, '/');
-  return slash && (strcmp(slash, "/Ardia") == 0 || strcmp(slash, "/Solara") == 0) && strstr(exe, ".app/Contents/MacOS/") && !strstr(exe, "Helper");
+  return slash && (strcmp(slash, "/Solara") == 0 || strcmp(slash, "/Solara") == 0) && strstr(exe, ".app/Contents/MacOS/") && !strstr(exe, "Helper");
 }
 
 __attribute__((constructor)) static void start(void) {

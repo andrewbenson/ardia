@@ -1,4 +1,4 @@
-import { systemInfo } from "@ardia/shell";
+import { systemInfo } from "@solara/shell";
 import { create } from "zustand";
 import { openUrls } from "../../../lib/actions";
 import { useBrowser } from "../../../store/browser";

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Animated, StyleSheet, type ViewStyle } from "react-native";
 import { cliCommand, cliProduct, useCliIndicator } from "../lib/cliControl";
 import { useTheme } from "../lib/theme";
-import { windowShellActive } from "@ardia/settings";
+import { windowShellActive } from "@solara/settings";
 import { useWindowId } from "../store/hooks";
 import { useNativePaneOverlay } from "./layout/nativePaneOverlays";
 import { mediaTheme, NativeMediaView } from "./media/nativeMedia";

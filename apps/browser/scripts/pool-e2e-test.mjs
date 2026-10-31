@@ -10,7 +10,7 @@ if (!appArg || resolve(appArg).startsWith("/Applications/")) {
   console.error(`usage: node pool-e2e-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
 
 The page pool end to end (docs/native/page-contract.md › Checks), in a hidden instance under the native shell with
-pane roots and the pool on (ARDIA_NATIVE_SHELL=1 ARDIA_SHELL_PANES=1 ARDIA_NATIVE_PAGES_POOL=1): the pool serves the
+pane roots and the pool on (SOLARA_NATIVE_SHELL=1 SOLARA_SHELL_PANES=1 SOLARA_NATIVE_PAGES_POOL=1): the pool serves the
 window's pages and RN mounts no TabWebView; the tab's handle reaches the page (evaluate, find and its match count,
 zoom in and back, load and go back); the page's events reach the store (title, favicon, load progress partway and
 then done); a page's notification, clicked while another tab is active, brings its tab back
@@ -87,7 +87,7 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
 try {
   app = await launch(resolve(appArg), {
     data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_SHELL_PANES: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_TAB_POOL: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acPerf",
   });
   await until("page ONE", `return S().tabs.a.title === "ONE" || null;`, 15000);
@@ -147,7 +147,7 @@ try {
   });
 
   await rep.check("a notification click brings its tab back and reaches the page", async () => {
-    await run(`return globalThis.expo.modules.ArdiaCEF.setSiteSetting("", ${json(origin)}, "notifications", "allow").then(() => true);`);
+    await run(`return globalThis.expo.modules.SolaraCEF.setSiteSetting("", ${json(origin)}, "notifications", "allow").then(() => true);`);
     await run(`return ev("a", "(() => { const n = new Notification('Ping', { body: 'pool', tag: 'pool' }); n.onclick = () => { document.title = 'CLICKED'; }; return true; })()");`);
     const shown = await until("the notification reaches the app", `const n = acWebNotifications.received().find((n) => n.title === "Ping"); return n ? { id: n.id, tag: n.tag, origin: n.origin } : null;`);
     await run(`S().activate("b"); return true;`);
@@ -233,7 +233,7 @@ try {
   await rep.check("a transfer armed on a WebKit page doesn't bring it back after a round trip through Chromium", async () => {
     await run(`go("b", ${json(url("w2"))}); return true;`);
     await loaded("w2");
-    await run(`globalThis.expo.modules.ArdiaWebKit.prepareTransfer("b"); go("b", ${json(url("c1"))}, { engine: "chromium" }); return true;`);
+    await run(`globalThis.expo.modules.SolaraWebKit.prepareTransfer("b"); go("b", ${json(url("c1"))}, { engine: "chromium" }); return true;`);
     const c1 = await loaded("c1");
     if (c1.engine !== "chromium") throw new Error(`engine ${c1.engine}`);
     await run(`go("b", ${json(url("w3"))}, { engine: "webkit" }); return true;`);
@@ -251,7 +251,7 @@ try {
     await run(`go("b", ${json(url("f2"))}, { engine: "webkit" }); return true;`);
     await loaded("f2");
     await run(`return page("b").evaluate("window.__keys = []; addEventListener('keydown', (e) => __keys.push(e.key)); post('result', 'ok')");`);
-    await run(`return globalThis.expo.modules.ArdiaApp.devPostKeys("w1", [{ key: "k", keyCode: 40, send: true }]).then(() => true);`);
+    await run(`return globalThis.expo.modules.SolaraApp.devPostKeys("w1", [{ key: "k", keyCode: 40, send: true }]).then(() => true);`);
     await sleep(300);
     const keys = await run(`return page("b").evaluate("post('result', JSON.stringify(__keys))");`);
     if (!String(keys).includes("k")) throw new Error(`the new page got ${json(keys)}`);
@@ -260,9 +260,9 @@ try {
 
   const drawnPages = () => run(`
     const P = globalThis.expo.modules.SolaraPages;
-    return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((all) => {
+    return globalThis.expo.modules.SolaraCEF.chromeWindows().then((all) => {
       const n = all.find((w) => w.hasRoot).window;
-      const probes = ["WKWebView", "ArdiaCoreWebView"].flatMap((kind) => [0, 1, 2, 3].map((i) => P.devViewFrame(n, kind + "#" + i)));
+      const probes = ["WKWebView", "SolaraCoreWebView"].flatMap((kind) => [0, 1, 2, 3].map((i) => P.devViewFrame(n, kind + "#" + i)));
       return Promise.all(probes).then((found) => found.map(JSON.parse).filter((v) => v.found && v.alpha > 0).map((v) => v.class));
     });`);
   for (const engine of ["webkit", "chromium"]) {

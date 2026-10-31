@@ -1,4 +1,4 @@
-import { Surface, Symbol } from "@ardia/shell";
+import { Surface, Symbol } from "@solara/shell";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";

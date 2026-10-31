@@ -1,21 +1,30 @@
 {
   "Adapters": {
-    "apps/browser/src/sync/adapters.ts": "e61cef6edd35b7f3f202aaca47f8434bb96ba6984ac9bbab9187b9ef5f54795d",
-    "apps/browser/src/sync/pinned.ts": "58cd0c14e0d7ad0c047ffb18c5673ec6e18b38a9bf027f04dd6c26ead6c9cfb9",
-    "apps/browser/src/sync/extensions.ts": "11c156c7bed0ae74298c020f76bda436a6e99d8fdedac9041237b44fb8fc3497"
+    "apps/browser/src/sync/adapters.ts": "56f9d4d72ecc7f285b44e7baf261c55a5810b020fc561d2aca37849fe9f0e3bd",
+    "apps/browser/src/sync/pinned.ts": "2d2979d89fbc5bf46a8b7ccadaf38f8b989f15f953862d5c2878326fbec8498c",
+    "apps/browser/src/sync/extensions.ts": "cacdd4a017e4abd5ada02e0b9e26a4fd7ccc11aff4c61dcd88231f8e48fbf688"
+  },
+  "Cases/SyncPinsApply": {
+    "apps/browser/src/sync/pinned.ts": "49ede6b7fadea6337f623ae478e786401a87e7c18c29ba6e1ba27484096529a0",
+    "apps/browser/src/sync/pairs.test.mjs": "0e38785cf2e5a4c8a90956b96ff3540b0e11f7ee68812f4dfc823b4d0784ed47",
+    "apps/browser/src/sync/pinned.test.mjs": "a503a8822f262d8304163af230cd4452686c739d72984d2360006cb70465832d",
+    "apps/browser/src/sync/fixtures/pinned-v0.2.38.ts": "e8863c15f631570ba7a5632c1a7d86912261047bc8a0823b08739253c6a31e76",
+    "apps/browser/src/sync/fixtures/pinned-v0.2.40.ts": "821abd74f1f4c92face88ef293e62a9468c1d7a9ccd720d8a0fccb8551816e62",
+    "apps/browser/src/sync/recordPinsApply.mjs": "f3d765f6cbde3d49c631b8275f8c2e33a1d6654325cffd4a45ce0fcf2f405aba",
+    "apps/browser/src/sync/normalizeLegacyPinsApply.mjs": "4dea75781d5df1540d4ba890bcfdbb162be77fb13208f7a95fbd474c81dd4e55"
   },
   "Cases/journal.json.deflate": {
-    "apps/browser/src/sync/editJournal.ts": "bd7fb6eaf268357831edc3907572b894e7b39c6c2c37b077d2ead5f61c3c5607"
+    "apps/browser/src/sync/editJournal.ts": "1fda346b1027d5ddcb34fb59e277bf7f7a8bfee586467be8bdd67f1c4137ea4c"
   },
   "Cases/ledger.json.deflate": {
-    "apps/browser/src/sync/passwordLedger.ts": "6b295a464fb795e47bb90fdcb8bd94823b8b0305322a1d3f110fd9629c64818b"
+    "apps/browser/src/sync/passwordLedger.ts": "9ee55850e6eeb265e51640c5794f03da23525c29336ecf9074cfb6ab45c2ea33"
   },
   "Cases/ledgerAdapter.json.deflate": {
     "apps/browser/src/sync/ledgerPasswords.ts": "e5e0c81a3242e354e40b61f8fc815691bd2a6215a148e6cd0f21434232425851",
     "apps/browser/src/sync/passwordLedger.ts": "6b295a464fb795e47bb90fdcb8bd94823b8b0305322a1d3f110fd9629c64818b"
   },
   "Cases/state.json.deflate": {
-    "apps/browser/src/sync/readable.ts": "8a2dd478f595499dfc8093d877e2feeeee34709f9dfbea510a2818a61753356e"
+    "apps/browser/src/sync/readable.ts": "5d9365ddf7e00a85dcba0f45de5dfce7f13517e2589948f838b0ec1737d21637"
   },
   "Scenarios/extensions.json.deflate": {
     "packages/sync/src/extensions.ts": "45fc934056f519406ed37a984b7cd290326830ea2fd9808b401d772063063058"
@@ -34,16 +43,7 @@
   },
   "seal-cases": {
     "packages/sync/src/canon.ts": "8f5059064d488bdca755b53fef5a3220b06a7cd24327022d7abe420e310fab20",
-    "apps/browser/src/sync/notes.ts": "b94e9f73af50b9daf91b44ff9b8c43775dd33ba1f92776b13974925656fdaeb6",
-    "apps/browser/src/sync/passwordLedger.ts": "6b295a464fb795e47bb90fdcb8bd94823b8b0305322a1d3f110fd9629c64818b"
-  },
-  "Cases/SyncPinsApply": {
-    "apps/browser/src/sync/pinned.ts": "49ede6b7fadea6337f623ae478e786401a87e7c18c29ba6e1ba27484096529a0",
-    "apps/browser/src/sync/pairs.test.mjs": "0e38785cf2e5a4c8a90956b96ff3540b0e11f7ee68812f4dfc823b4d0784ed47",
-    "apps/browser/src/sync/pinned.test.mjs": "a503a8822f262d8304163af230cd4452686c739d72984d2360006cb70465832d",
-    "apps/browser/src/sync/fixtures/pinned-v0.2.38.ts": "e8863c15f631570ba7a5632c1a7d86912261047bc8a0823b08739253c6a31e76",
-    "apps/browser/src/sync/fixtures/pinned-v0.2.40.ts": "821abd74f1f4c92face88ef293e62a9468c1d7a9ccd720d8a0fccb8551816e62",
-    "apps/browser/src/sync/recordPinsApply.mjs": "f3d765f6cbde3d49c631b8275f8c2e33a1d6654325cffd4a45ce0fcf2f405aba",
-    "apps/browser/src/sync/normalizeLegacyPinsApply.mjs": "4dea75781d5df1540d4ba890bcfdbb162be77fb13208f7a95fbd474c81dd4e55"
+    "apps/browser/src/sync/notes.ts": "55120ea68b736af125541d430b52d7bef6d06cb68983479e8e41338976af60ad",
+    "apps/browser/src/sync/passwordLedger.ts": "9ee55850e6eeb265e51640c5794f03da23525c29336ecf9074cfb6ab45c2ea33"
   }
 }

@@ -4,7 +4,7 @@
  
  #include "chrome/browser/ui/extensions/extension_side_panel_utils.h"
  
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
 +
  #include "chrome/browser/tab_list/tab_list_interface.h"
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
@@ -13,9 +13,9 @@
  #include "chrome/browser/ui/views/tabs/organizer/organizer_panel_utils.h"
  #endif
  
-+// Ardia: ArdiaCore (engine/ardiacore) shows extension side panels in its own
++// Solara: SolaraCore (engine/solaracore) shows extension side panels in its own
 +// panel for the tabs it hosts.
-+bool (*g_ardia_extension_side_panel)(
++bool (*g_solara_extension_side_panel)(
 +    BrowserWindowInterface* browser_window,
 +    content::WebContents* web_contents,
 +    const extensions::ExtensionId& extension_id,
@@ -28,9 +28,9 @@
      return;
    }
  
-+  // Ardia: ArdiaCore may draw extension side panels itself.
-+  if (g_ardia_extension_side_panel &&
-+      g_ardia_extension_side_panel(browser_window, nullptr, extension_id,
++  // Solara: SolaraCore may draw extension side panels itself.
++  if (g_solara_extension_side_panel &&
++      g_solara_extension_side_panel(browser_window, nullptr, extension_id,
 +                                       /*open=*/true)) {
 +    return;
 +  }
@@ -42,9 +42,9 @@
  void OpenGlobalExtensionSidePanel(BrowserWindowInterface& browser_window,
                                    content::WebContents* web_contents,
                                    const ExtensionId& extension_id) {
-+  // Ardia: ArdiaCore may draw extension side panels itself.
-+  if (g_ardia_extension_side_panel &&
-+      g_ardia_extension_side_panel(&browser_window, web_contents, extension_id,
++  // Solara: SolaraCore may draw extension side panels itself.
++  if (g_solara_extension_side_panel &&
++      g_solara_extension_side_panel(&browser_window, web_contents, extension_id,
 +                                       /*open=*/true)) {
 +    return;
 +  }
@@ -56,9 +56,9 @@
  void OpenContextualExtensionSidePanel(BrowserWindowInterface& browser_window,
                                        content::WebContents& web_contents,
                                        const ExtensionId& extension_id) {
-+  // Ardia: ArdiaCore may draw extension side panels itself.
-+  if (g_ardia_extension_side_panel &&
-+      g_ardia_extension_side_panel(&browser_window, &web_contents, extension_id,
++  // Solara: SolaraCore may draw extension side panels itself.
++  if (g_solara_extension_side_panel &&
++      g_solara_extension_side_panel(&browser_window, &web_contents, extension_id,
 +                                       /*open=*/true)) {
 +    return;
 +  }
@@ -70,9 +70,9 @@
      return;
    }
  
-+  // Ardia: ArdiaCore may draw extension side panels itself.
-+  if (g_ardia_extension_side_panel &&
-+      g_ardia_extension_side_panel(browser_window, nullptr, extension_id,
++  // Solara: SolaraCore may draw extension side panels itself.
++  if (g_solara_extension_side_panel &&
++      g_solara_extension_side_panel(browser_window, nullptr, extension_id,
 +                                       /*open=*/false)) {
 +    return;
 +  }
@@ -84,9 +84,9 @@
      return;
    }
  
-+  // Ardia: ArdiaCore may draw extension side panels itself.
-+  if (g_ardia_extension_side_panel &&
-+      g_ardia_extension_side_panel(browser_window, web_contents, extension_id,
++  // Solara: SolaraCore may draw extension side panels itself.
++  if (g_solara_extension_side_panel &&
++      g_solara_extension_side_panel(browser_window, web_contents, extension_id,
 +                                       /*open=*/false)) {
 +    return;
 +  }

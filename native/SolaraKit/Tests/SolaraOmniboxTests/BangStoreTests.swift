@@ -123,7 +123,7 @@ private func bangFixture(_ name: String) throws -> String {
     #expect(store.table.get("fixture7")?.name == "Fixture 7")
     #expect(store.etag == "\"http-v1\"")
     let saved = try String(contentsOf: directory.appendingPathComponent("bangs.txt"), encoding: .utf8)
-    #expect(saved.hasPrefix("ardia-bangs 1\t\"http-v1\"\n"))
+    #expect(saved.hasPrefix("solara-bangs 1\t\"http-v1\"\n"))
     #expect(readBangDocument(saved)?.table.get("gh")?.name == "Stored gh")
     #expect(store.revision == 2)
     #expect(server.requests[0].lowercased().contains("accept: application/json"))
@@ -203,7 +203,7 @@ private func bangFixture(_ name: String) throws -> String {
   @Test func corruptStoredDocumentsFallBackAndTheJSFixtureRoundTrips() throws {
     let directory = try directory()
     defer { try? FileManager.default.removeItem(at: directory) }
-    for text in ["garbage", "ardia-bangs 1\tbad\ngh\tBad\tbad.example/{s}", "ardia-bangs 2\tbad\ninvalid"] {
+    for text in ["garbage", "solara-bangs 1\tbad\ngh\tBad\tbad.example/{s}", "solara-bangs 2\tbad\ninvalid"] {
       try write(text, "bangs.txt", to: directory)
       let store = BangStore(directory: directory, fetch: { _ in throw URLError(.notConnectedToInternet) })
       #expect(store.load().get("gh")?.name == "GitHub")

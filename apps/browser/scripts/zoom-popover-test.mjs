@@ -9,7 +9,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node zoom-popover-test.mjs <Debug Solara.app> [--keep-data]
 
-The zoom popover over a local page, under RN's shell and then the native one (ARDIA_NATIVE_SHELL=1, where the
+The zoom popover over a local page, under RN's shell and then the native one (SOLARA_NATIVE_SHELL=1, where the
 ZoomPanelView's PopoverView sits in the pane overlay container on top of the shell's card, framed to the page area
 RN measures). Both open it with the page's popover state; the native card sits where RN's Popover puts it (236 wide,
 8 from the page's right and top, the 48 pt bar plus its 0.5 border), fades in over PopoverMetrics.open, Zoom In
@@ -34,7 +34,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const popover = () => ac.pageState.getState().popover.a ?? null;
@@ -78,7 +78,7 @@ try {
     const tag = nativeShell ? "native" : "rn";
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
+      env: { SOLARA_NATIVE_SHELL: nativeShell ? "1" : "0" },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);

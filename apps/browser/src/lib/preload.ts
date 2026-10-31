@@ -1,4 +1,4 @@
-import { engineCall } from "@ardia/ardiacore";
+import { engineCall } from "@solara/solaracore";
 import { useEffect, useState } from "react";
 import { switchOn } from "./killSwitches";
 

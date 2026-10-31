@@ -1,6 +1,6 @@
-import { breadcrumb } from "@ardia/core";
-import { WindowBackdrop } from "@ardia/shaders";
-import { MagnifyArea, Surface, type MagnifyUpdate } from "@ardia/shell";
+import { breadcrumb } from "@solara/core";
+import { WindowBackdrop } from "@solara/shaders";
+import { MagnifyArea, Surface, type MagnifyUpdate } from "@solara/shell";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, View } from "react-native";
 import { hex, layout, useTheme } from "../../lib/theme";
@@ -9,7 +9,7 @@ import { useTab } from "../../store/hooks";
 import type { Peek } from "../../store/peek";
 import { MAX_SPLIT_PANES, splitOf } from "../../store/splits";
 import { springConfig } from "../layout/dockMotion";
-import { PageLabel, SMALL_INSET, SMALL_WINDOW_FRAME, SMALL_WINDOW_RADIUS, SmallBar } from "../littleArdia/SmallChrome";
+import { PageLabel, SMALL_INSET, SMALL_WINDOW_FRAME, SMALL_WINDOW_RADIUS, SmallBar } from "../littleSolara/SmallChrome";
 import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, registerPeekMotion } from "./actions";
 import { pinchFollow, pinchOutcome } from "./pinch";
 

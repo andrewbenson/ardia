@@ -3,7 +3,7 @@ Changes code from Helium's helium/core/services-prefs.patch, services-schema-nag
 (GPL-3.0, The Helium Authors).
 
 Settings has no Helium services page: no route (chrome://settings/privacy/services opens Settings itself), no view,
-and no "set up services" button that opened chrome://setup, which isn't built. Helium services stay off in Ardia
+and no "set up services" button that opened chrome://setup, which isn't built. Helium services stay off in Solara
 (the branding patch, which also removes its row), so the page could only offer switches that do nothing.
 
 --- a/chrome/browser/resources/settings/privacy_page/privacy_page.ts

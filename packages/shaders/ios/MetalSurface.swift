@@ -99,7 +99,7 @@ class MetalSurface: ExpoView, MTKViewDelegate {
       pipelines[ObjectIdentifier(self)] = state
       return state
     } catch {
-      NSLog("[ArdiaShaders] \(self) pipeline failed: \(error)")
+      NSLog("[SolaraShaders] \(self) pipeline failed: \(error)")
       return nil
     }
   }
@@ -162,10 +162,10 @@ extension SIMD4 where Scalar == Float {
 }
 
 final class WindowActivity {
-  static var override: Bool? = ProcessInfo.processInfo.environment["ARDIA_SHADERS_FORCE_KEY"] == "1" ? true : nil {
+  static var override: Bool? = ProcessInfo.processInfo.environment["SOLARA_SHADERS_FORCE_KEY"] == "1" ? true : nil {
     didSet { NotificationCenter.default.post(name: changed, object: nil) }
   }
-  static let changed = Notification.Name("ArdiaShadersWindowActivityChanged")
+  static let changed = Notification.Name("SolaraShadersWindowActivityChanged")
 
   static var reduceMotion: Bool {
     NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

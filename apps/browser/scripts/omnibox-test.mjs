@@ -203,7 +203,7 @@ try {
   }, 100000);
   launching = launch(appPath, { data: join(scratch, "data"), session: fixture, onboarded: true, probe: true,
     startTimeout: 25000, ready: { timeout: 20000, test: "return !!ac.store && !!ac.omnibox && !!globalThis.acPerf" },
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_OMNIBOX: "1", ARDIA_NATIVE_NEWTAB: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_OMNIBOX: "1", SOLARA_NATIVE_NEWTAB: "1" },
     files: { "bench-offline": "1" } });
   instance = await launching;
   assert.ok(!stopping, "launch interrupted");

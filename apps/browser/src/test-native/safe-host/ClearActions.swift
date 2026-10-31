@@ -1,6 +1,6 @@
 import Foundation
 
-enum ArdiaCoreHost {
+enum SolaraCoreHost {
   static var safeMode = false
 }
 final class Services {
@@ -23,7 +23,7 @@ __PRODUCTION__
 
 var results: [[String: Any]] = []
 for safe in [true, false] {
-  ArdiaCoreHost.safeMode = safe
+  SolaraCoreHost.safeMode = safe
   let services = Services()
   let profiles = Profiles(services: services, safeMode: safe)
   await profiles.clearData(profileId: "work", range: .all, history: true, siteData: true)

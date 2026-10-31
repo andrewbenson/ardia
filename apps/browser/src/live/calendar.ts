@@ -1,4 +1,4 @@
-import type { CalendarAuthorization, SystemCalendar } from "@ardia/shell";
+import type { CalendarAuthorization, SystemCalendar } from "@solara/shell";
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import type { CalendarEvent } from "./meetings";

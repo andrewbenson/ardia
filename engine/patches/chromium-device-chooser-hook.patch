@@ -4,7 +4,7 @@
  #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
  #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
  #include "chrome/browser/ui/dialogs/browser_dialogs.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
  #include "chrome/browser/ui/views/bubble_anchor_util_views.h"
  #include "chrome/browser/ui/views/chrome_widget_sublevel.h"
@@ -13,8 +13,8 @@
  BEGIN_METADATA(ChooserBubbleUiViewDelegate)
  END_METADATA
 +
-+// Ardia: ArdiaCore (engine/ardiacore) shows its own chooser for the tabs it hosts.
-+bool (*g_ardia_device_chooser)(
++// Solara: SolaraCore (engine/solaracore) shows its own chooser for the tabs it hosts.
++bool (*g_solara_device_chooser)(
 +    content::WebContents* contents,
 +    std::unique_ptr<permissions::ChooserController>* controller,
 +    base::ScopedClosureRunner* fullscreen_blocker,
@@ -26,12 +26,12 @@
    return ChooserDialogHost{browser, contents, std::move(*fullscreen_blocker)};
  }
  
-+bool ShowArdiaDeviceChooser(
++bool ShowSolaraDeviceChooser(
 +    ChooserDialogHost& host,
 +    std::unique_ptr<permissions::ChooserController>& controller,
 +    base::OnceClosure* close_closure) {
-+  return g_ardia_device_chooser &&
-+         g_ardia_device_chooser(host.contents, &controller,
++  return g_solara_device_chooser &&
++         g_solara_device_chooser(host.contents, &controller,
 +                                &host.fullscreen_blocker, close_closure);
 +}
 +
@@ -42,9 +42,9 @@
    if (!host) {
      return base::DoNothing();
    }
-+  base::OnceClosure ardia_close_closure;
-+  if (ShowArdiaDeviceChooser(*host, controller, &ardia_close_closure)) {
-+    return ardia_close_closure;
++  base::OnceClosure solara_close_closure;
++  if (ShowSolaraDeviceChooser(*host, controller, &solara_close_closure)) {
++    return solara_close_closure;
 +  }
  
    auto* browser_view = BrowserView::GetBrowserViewForBrowser(host->browser);
@@ -53,9 +53,9 @@
    if (!host) {
      return base::DoNothing();
    }
-+  base::OnceClosure ardia_close_closure;
-+  if (ShowArdiaDeviceChooser(*host, controller, &ardia_close_closure)) {
-+    return ardia_close_closure;
++  base::OnceClosure solara_close_closure;
++  if (ShowSolaraDeviceChooser(*host, controller, &solara_close_closure)) {
++    return solara_close_closure;
 +  }
    BrowserWindowInterface* browser = host->browser;
  

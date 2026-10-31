@@ -1,4 +1,4 @@
-import { ContextMenuArea, MouseArea, Symbol } from "@ardia/shell";
+import { ContextMenuArea, MouseArea, Symbol } from "@solara/shell";
 import { memo } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { closeTab } from "../../lib/actions";

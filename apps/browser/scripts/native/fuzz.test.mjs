@@ -42,7 +42,7 @@ function scenario(seed) {
     return [...new Set(Array.from({ length: n }, () => pick(list)).filter(Boolean))];
   };
   const coin = (p = 0.5) => rand() < p;
-  const url = () => pick(["https://a.example/", "https://b.example/x", "https://a.example/#h", "b.example", "search words", "ardia://settings", "https://www.c.example/"]);
+  const url = () => pick(["https://a.example/", "https://b.example/x", "https://a.example/#h", "b.example", "search words", "solara://settings", "https://www.c.example/"]);
 
   start(starts[seed % starts.length]);
   for (let step = 0; step < steps; step++) {

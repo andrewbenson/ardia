@@ -113,7 +113,7 @@ public struct LiveEnvironment: Sendable, Equatable {
     guard let mockBase, let mock = URLComponents(string: mockBase), mock.scheme == "http",
       ["127.0.0.1", "::1", "localhost"].contains(mock.host ?? ""), mock.user == nil, mock.password == nil,
       let target = URLComponents(string: url), target.host == mock.host, target.port == mock.port, target.scheme == mock.scheme else {
-      throw LiveError(.network, "Isolated Live Folders requires a loopback ARDIA_LIVE_MOCK URL")
+      throw LiveError(.network, "Isolated Live Folders requires a loopback SOLARA_LIVE_MOCK URL")
     }
   }
 

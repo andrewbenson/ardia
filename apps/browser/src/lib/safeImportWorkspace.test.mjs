@@ -25,8 +25,8 @@ function harness(safe, profiles = 1) {
     readDiaTabs: async () => ({ windowCount: 1, profiles: [{ id: "dia", name: "Dia", tabs: [{}], pinned: [] }] }),
   };
   const handlers = load("apps/browser/src/components/settings/native/import.ts", {
-    "@ardia/shell": { confirm: async (options) => { messages.push(options); return { confirmed: true }; } },
-    "@ardia/settings": { publishSettingsTopic() {} },
+    "@solara/shell": { confirm: async (options) => { messages.push(options); return { confirmed: true }; } },
+    "@solara/settings": { publishSettingsTopic() {} },
     "../../../store/nativeStore": { nativeSafeMode: () => safe },
     "../../../store/browser": { useBrowser: { getState: () => state } },
     "../../../store/model": { plural: (n, word) => `${n} ${word}` },
@@ -77,8 +77,8 @@ function applyHarness(safe, native = false) {
   const writes = [];
   const state = { history: {}, importHistory() {}, createGroup() {}, tabs: {}, windows: { window: { incognito: false, tabIds: [] } }, windowOrder: ["window"], ui: { focusOrder: [] }, groups: {}, profiles: { existing: {} } };
   const api = load("apps/browser/src/components/import/apply.ts", {
-    "@ardia/shell": { confirm: async (options) => { messages.push(options); return { confirmed: true }; } },
-    "@ardia/store": { encodeCommand: (op, args) => ({ op, args }) },
+    "@solara/shell": { confirm: async (options) => { messages.push(options); return { confirmed: true }; } },
+    "@solara/store": { encodeCommand: (op, args) => ({ op, args }) },
     "../../store/nativeStore": { nativeSafeMode: () => safe, nativeOwnsWorkspace: () => native, nativeWrite: (command) => { writes.push(command); return { result: { tabs: command.args[0].windows.reduce((n, w) => n + w.tabs.length, 0), skipped: 0 } }; }, writeState: (store, next) => { writes.push("workspace"); Object.assign(state, next); } },
     "../../store/browser": { useBrowser: { getState: () => state } },
     "../../store/pageKeys": { openPages: () => new Set(), pinnedPages: () => new Set(), tilePages: () => new Set(), pageKey: (url) => url },

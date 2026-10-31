@@ -39,7 +39,7 @@ const fixture = session({
 
 let app = null;
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const st = () => ac.store.getState();
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const win = () => C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window);

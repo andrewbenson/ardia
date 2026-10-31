@@ -5,8 +5,8 @@ diff --git a/cc/scheduler/scheduler_state_machine.h b/cc/scheduler/scheduler_sta
    base::TimeTicks last_begin_impl_frame_time_;
    base::TimeTicks last_sent_begin_main_frame_time_;
    base::TimeDelta main_frame_throttled_interval_;
-+  bool ardia_unthrottle_after_show_pending_ = true;
-+  base::TimeTicks ardia_unthrottled_main_frames_until_;
++  bool solara_unthrottle_after_show_pending_ = true;
++  base::TimeTicks solara_unthrottled_main_frames_until_;
    base::TimeDelta unthrottled_frame_interval_;
    base::TimeDelta main_frame_consecutive_no_damage_throttled_interval_;
  
@@ -19,7 +19,7 @@ diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_st
    bool result = false;
 -  auto throttled_interval = MainFrameThrottledInterval();
 +  auto throttled_interval =
-+      last_begin_impl_frame_time_ < ardia_unthrottled_main_frames_until_
++      last_begin_impl_frame_time_ < solara_unthrottled_main_frames_until_
 +          ? base::TimeDelta()
 +          : MainFrameThrottledInterval();
  
@@ -29,9 +29,9 @@ diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_st
    // consistent, and insensitive to e.g. descheduling between receiving a
    // BeginFrame() call, and actually getting to BeginImplFrame().
    last_begin_impl_frame_time_ = args.frame_time;
-+  if (ardia_unthrottle_after_show_pending_) {
-+    ardia_unthrottle_after_show_pending_ = false;
-+    ardia_unthrottled_main_frames_until_ = args.frame_time + base::Seconds(1);
++  if (solara_unthrottle_after_show_pending_) {
++    solara_unthrottle_after_show_pending_ = false;
++    solara_unthrottled_main_frames_until_ = args.frame_time + base::Seconds(1);
 +  }
  
    // Cache the values from the previous impl frame before reseting them for this
@@ -40,7 +40,7 @@ diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_st
    if (visible) {
      main_thread_missed_last_deadline_ = false;
      should_warm_up_ = false;
-+    ardia_unthrottle_after_show_pending_ = true;
++    solara_unthrottle_after_show_pending_ = true;
    }
  
    did_prepare_tiles_ = false;

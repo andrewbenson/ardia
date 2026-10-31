@@ -63,8 +63,8 @@ final class DeviceOwnerCheck {
 
   static func unavailable() -> DeviceOwnerUnavailable? {
     let environment = ProcessInfo.processInfo.environment
-    if environment["ARDIA_BACKGROUND"] == "1" {
-      return testHonoured(environment) && environment["ARDIA_TEST_REAUTH"] == "noLoginPassword" ? .noLoginPassword : nil
+    if environment["SOLARA_BACKGROUND"] == "1" {
+      return testHonoured(environment) && environment["SOLARA_TEST_REAUTH"] == "noLoginPassword" ? .noLoginPassword : nil
     }
     var problem: NSError?
     guard !LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: &problem) else { return nil }
@@ -73,8 +73,8 @@ final class DeviceOwnerCheck {
 
   static func system(_ reason: String, _ done: @escaping (Bool) -> Void) {
     let environment = ProcessInfo.processInfo.environment
-    if environment["ARDIA_BACKGROUND"] == "1" {
-      let granted = testHonoured(environment) && environment["ARDIA_TEST_REAUTH"] == "granted"
+    if environment["SOLARA_BACKGROUND"] == "1" {
+      let granted = testHonoured(environment) && environment["SOLARA_TEST_REAUTH"] == "granted"
       NSLog("[sync] device owner check (%@) in a hidden test instance, no prompt: %@", reason, granted ? "granted" : "denied")
       return done(granted)
     }
@@ -90,7 +90,7 @@ final class DeviceOwnerCheck {
   }
 
   private static func testHonoured(_ environment: [String: String]) -> Bool {
-    environment["ARDIA_DATA_DIR"] != nil && !signedForDistribution
+    environment["SOLARA_DATA_DIR"] != nil && !signedForDistribution
   }
 
   static let signedForDistribution: Bool = {

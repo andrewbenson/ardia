@@ -38,7 +38,7 @@ test("a cached value is read synchronously; unknown names and non-booleans are i
   assert.equal(ks.switchOn("sidebarSlide"), true);
 });
 
-test("ARDIA_SWITCHES text parses to values, and ignores what it doesn't know", () => {
+test("SOLARA_SWITCHES text parses to values, and ignores what it doesn't know", () => {
   assert.deepEqual(ks.parseOverride("sidebarSlide=off, lazySidebarRows=on,nope=off,newTabPrewarm=maybe,=1"), {
     sidebarSlide: false,
     lazySidebarRows: true,

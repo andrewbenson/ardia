@@ -1,5 +1,5 @@
-import { permissionWarnings, WebView, type InstalledExtension, type WebViewHandle } from "@ardia/ardiacore";
-import { Surface } from "@ardia/shell";
+import { permissionWarnings, WebView, type InstalledExtension, type WebViewHandle } from "@solara/solaracore";
+import { Surface } from "@solara/shell";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Easing, findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { hex, useTheme } from "../../lib/theme";
@@ -10,7 +10,7 @@ import { useWindowId } from "../../store/hooks";
 import { openFromPage, pageProfileId } from "../layout/openFromPage";
 import { PANEL, PromptButton } from "../layout/controls";
 import { Checkbox, useFormColors } from "../settings/controls";
-import { nativeToolbarAvailable, NativePanelView, type NativePanelEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativePanelView, type NativePanelEvent } from "@solara/settings";
 import {
   cancelInstall,
   closeExtensionPopup,
@@ -52,17 +52,17 @@ const measure = () => {
   const d = document.documentElement, b = document.body;
   return { w: Math.ceil(Math.max(d.scrollWidth, b ? b.scrollWidth : 0)), h: Math.ceil(Math.max(d.scrollHeight, b ? b.scrollHeight : 0)) };
 };
-const last = window.__ardiaSize;
+const last = window.__solaraSize;
 const now = measure();
 if (!last || last.w !== now.w || last.h !== now.h) {
-  window.__ardiaSize = now;
+  window.__solaraSize = now;
   post("result", JSON.stringify(now));
 } else {
   const ro = new ResizeObserver(() => {
     const m = measure();
-    if (m.w === window.__ardiaSize.w && m.h === window.__ardiaSize.h) return;
+    if (m.w === window.__solaraSize.w && m.h === window.__solaraSize.h) return;
     ro.disconnect();
-    window.__ardiaSize = m;
+    window.__solaraSize = m;
     post("result", JSON.stringify(m));
   });
   ro.observe(document.documentElement);

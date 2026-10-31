@@ -1,4 +1,4 @@
-import { hostedKinds, tabPoolAvailable, windowPagesPoolActive, windowPaneRootsActive, windowShellActive } from "@ardia/settings";
+import { hostedKinds, tabPoolAvailable, windowPagesPoolActive, windowPaneRootsActive, windowShellActive } from "@solara/settings";
 
 export const pagesPooledIn = (windowId: string) =>
   windowShellActive(windowId) && windowPaneRootsActive(windowId) && windowPagesPoolActive() && tabPoolAvailable();

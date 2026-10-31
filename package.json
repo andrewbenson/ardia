@@ -1,14 +1,14 @@
 {
-  "name": "ardia",
+  "name": "solara",
   "private": true,
   "packageManager": "pnpm@11.1.3",
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "dev": "turbo run dev --filter=@ardia/browser",
-    "macos": "pnpm --filter @ardia/browser macos",
-    "pods": "pnpm --filter @ardia/browser pods",
+    "dev": "turbo run dev --filter=@solara/browser",
+    "macos": "pnpm --filter @solara/browser macos",
+    "pods": "pnpm --filter @solara/browser pods",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "shaders:check": "turbo run shaders:check",

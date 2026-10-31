@@ -24,7 +24,7 @@ let fixture = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
 let pngFixture = Data("png fixture".utf8)
 let app = fixture.appendingPathComponent("Browser.app", isDirectory: true)
 
-enum ArdiaCoreHost { static var safeMode = false }
+enum SolaraCoreHost { static var safeMode = false }
 final class FileManager {
   static let \`default\` = FileManager()
   private let manager = Foundation.FileManager.default
@@ -82,7 +82,7 @@ ${importer}()
 }
 
 try Foundation.FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
-let cache = fixture.appendingPathComponent("caches/Ardia/ImportIcons", isDirectory: true)
+let cache = fixture.appendingPathComponent("caches/Solara/ImportIcons", isDirectory: true)
 try Foundation.FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
 let old = cache.appendingPathComponent("fixture-old.png")
 let other = cache.appendingPathComponent("another-old.png")
@@ -90,7 +90,7 @@ try Data("old icon".utf8).write(to: old)
 try Data("another icon".utf8).write(to: other)
 var rows: [[String: Any]] = []
 for safe in [true, false, true] {
-  ArdiaCoreHost.safeMode = safe
+  SolaraCoreHost.safeMode = safe
   let value = ImportModule().icon()
   let image = ImportFileIcon.image(at: value)
   let files = try Foundation.FileManager.default.contentsOfDirectory(atPath: cache.path).sorted()
@@ -105,7 +105,7 @@ for safe in [true, false, true] {
   ])
 }
 let absent = fixture.appendingPathComponent("absent-cache", isDirectory: true)
-ArdiaCoreHost.safeMode = true
+SolaraCoreHost.safeMode = true
 let fresh = AppIcons.png(for: app, id: "fresh", directory: absent, safeMode: true)
 let result: [String: Any] = ["rows": rows, "absentCreated": Foundation.FileManager.default.fileExists(atPath: absent.path), "fresh": fresh ?? ""]
 let output = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])

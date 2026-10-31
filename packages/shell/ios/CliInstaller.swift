@@ -3,7 +3,7 @@ import Foundation
 
 public class CliModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaCli")
+    Name("SolaraCli")
 
     Events("onInstallLine")
 
@@ -41,7 +41,7 @@ final class CliInstaller {
 
   static var product: String {
     let name = (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "").trimmingCharacters(in: .whitespaces)
-    return name.isEmpty ? "Ardia" : name
+    return name.isEmpty ? "Solara" : name
   }
 
   static var command: String { product.lowercased() }
@@ -61,7 +61,7 @@ final class CliInstaller {
   }
 
   static var home: URL? {
-    if let path = setting("ARDIA_CLI_HOME") { return URL(fileURLWithPath: path, isDirectory: true) }
+    if let path = setting("SOLARA_CLI_HOME") { return URL(fileURLWithPath: path, isDirectory: true) }
     if isolated { return nil }
     return FileManager.default.homeDirectoryForCurrentUser
       .appendingPathComponent("Library/Application Support/\(product)/CLI", isDirectory: true)
@@ -76,21 +76,21 @@ final class CliInstaller {
   }
 
   private static func script() -> URL? {
-    if isolated, let path = setting("ARDIA_CLI_INSTALL_SCRIPT") {
+    if isolated, let path = setting("SOLARA_CLI_INSTALL_SCRIPT") {
       return URL(fileURLWithPath: path).resolvingSymlinksInPath()
     }
-    return Bundle.main.url(forResource: "ardia-cli-install", withExtension: "sh")?.resolvingSymlinksInPath()
+    return Bundle.main.url(forResource: "solara-cli-install", withExtension: "sh")?.resolvingSymlinksInPath()
   }
 
   private static func pinnedDigest() -> String? {
-    guard let url = Bundle.main.url(forResource: "ardia-cli", withExtension: "sha256"),
+    guard let url = Bundle.main.url(forResource: "solara-cli", withExtension: "sha256"),
       let text = try? String(contentsOf: url, encoding: .utf8)
     else { return nil }
     let digest = text.split(whereSeparator: { $0.isWhitespace }).first.map(String.init)?.lowercased() ?? ""
     return digest.range(of: digestPattern, options: .regularExpression) != nil ? digest : nil
   }
 
-  private let queue = DispatchQueue(label: "dev.ardia.cli-installer")
+  private let queue = DispatchQueue(label: "dev.solara.cli-installer")
   private var waiting: [([String: Any]) -> Void] = []
   private var lineListeners: [(String) -> Void] = []
 
@@ -116,8 +116,8 @@ final class CliInstaller {
   }
 
   private func run() {
-    if Self.isolated && (Self.setting("ARDIA_CLI_HOME") == nil || Self.setting("ARDIA_CLI_BIN_DIR") == nil) {
-      return finish(failure("A test instance installs only with ARDIA_CLI_HOME and ARDIA_CLI_BIN_DIR set."))
+    if Self.isolated && (Self.setting("SOLARA_CLI_HOME") == nil || Self.setting("SOLARA_CLI_BIN_DIR") == nil) {
+      return finish(failure("A test instance installs only with SOLARA_CLI_HOME and SOLARA_CLI_BIN_DIR set."))
     }
     let version = Self.appVersion
     guard version.range(of: Self.versionPattern, options: .regularExpression) != nil else {

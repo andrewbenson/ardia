@@ -32,8 +32,8 @@ const runs = Number(option("--runs", "600"));
 const firstSeed = Number(option("--seed", "1"));
 
 const REWRITES = [
-  ['import { deletePassword, engineCall } from "@ardia/ardiacore";', "const deletePassword = (...a) => globalThis.__ledgerHost.deletePassword(...a);\nconst engineCall = (...a) => globalThis.__ledgerHost.engineCall(...a);"],
-  ['import { readDocument, readDocumentResult, writeDocument } from "@ardia/shell";', "const readDocument = (...a) => globalThis.__ledgerHost.readDocument(...a);\nconst readDocumentResult = (...a) => globalThis.__ledgerHost.readDocumentResult(...a);\nconst writeDocument = (...a) => globalThis.__ledgerHost.writeDocument(...a);"],
+  ['import { deletePassword, engineCall } from "@solara/solaracore";', "const deletePassword = (...a) => globalThis.__ledgerHost.deletePassword(...a);\nconst engineCall = (...a) => globalThis.__ledgerHost.engineCall(...a);"],
+  ['import { readDocument, readDocumentResult, writeDocument } from "@solara/shell";', "const readDocument = (...a) => globalThis.__ledgerHost.readDocument(...a);\nconst readDocumentResult = (...a) => globalThis.__ledgerHost.readDocumentResult(...a);\nconst writeDocument = (...a) => globalThis.__ledgerHost.writeDocument(...a);"],
   ["await new Promise((r) => setTimeout(r, 250));", "await globalThis.__ledgerHost.sleep(250);"],
   [
     "  return {\n    held: () => held.size,",

@@ -3,7 +3,7 @@ Changes code from Helium's helium/core/onboarding-page.patch and helium/ui/licen
 The Helium Authors).
 
 Helium's onboarding page (chrome://setup, helium-onboarding) isn't built: the build doesn't fetch helium-onboarding,
-and Ardia has its own onboarding and always starts Chrome with --no-first-run, so Helium's services consent the page
+and Solara has its own onboarding and always starts Chrome with --no-first-run, so Helium's services consent the page
 would set stays off. Its WebUI target, resources, strings, chrome://chrome-urls entry and first-run opener are gone (the branding patch drops its
 pak and its WebUI registration). chrome://credits keeps Helium's GPL-3.0 entry, with its licence text now in
 third_party/helium/LICENSE (it pointed into helium-onboarding), and leaves out Instrument Sans, the onboarding page's
@@ -831,7 +831,7 @@ font, which isn't shipped.
 -The browser. We assume that it has the same license as helium-onboarding,
 -which is released under the same license and is a direct component of Helium.
 +The browser: helium-chromium (github.com/imputnet/helium-chromium, tag 0.19.4),
-+whose patches Ardia's engine is built from, and its licence.
++whose patches Solara's engine is built from, and its licence.
  
  Local Modifications:
  None

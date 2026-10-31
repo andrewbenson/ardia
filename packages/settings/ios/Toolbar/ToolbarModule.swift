@@ -80,7 +80,7 @@ public class SidebarAddressBarModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraSidebarAddressBar")
 
-    Function("available") { () -> Bool in ToolbarModule.available && ProcessInfo.processInfo.environment["ARDIA_NATIVE_SIDEBAR_ADDRESS"] != "0" }
+    Function("available") { () -> Bool in ToolbarModule.available && ProcessInfo.processInfo.environment["SOLARA_NATIVE_SIDEBAR_ADDRESS"] != "0" }
 
     OnCreate { DispatchQueue.main.async { MainActor.assumeIsolated { SidebarAddressBridge.install() } } }
 

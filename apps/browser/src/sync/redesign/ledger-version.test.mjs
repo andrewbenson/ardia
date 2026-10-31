@@ -21,7 +21,7 @@ test("LEDGER-v: a sync-pw-ledger.json from a newer version is refused, not read 
     const text = JSON.stringify(unread);
     shell.docs.set("sync-pw-ledger.json", text);
     let reads = 0;
-    const adapter = ledgerPasswordsAdapter("default", () => true, sealMarked(async () => (reads++, { logins: [], mark: "1@1" })), () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
+    const adapter = ledgerPasswordsAdapter("default", () => true, sealMarked(async () => (reads++, { logins: [], mark: "1@1" })), () => "scope", sealedCalls(() => shell.solaraCoreNativeModules.SolaraCEF));
     const extraction = await adapter.extract(() => undefined, () => false, Date.now(), () => false, () => undefined, () => undefined, () => false);
     assert.equal(extraction, null, `v${unread.v}: nothing is extracted, so nothing publishes`);
     assert.equal(await adapter.apply(new Map(), new Set(["pw:https://a.example\nme"]), () => undefined, { known: () => false, now: Date.now(), horizon: 0, joined: true }), false, `v${unread.v}: nothing is applied`);
@@ -38,7 +38,7 @@ test("LEDGER-unwritable: a ledger that wouldn't read back isn't written, and the
   const value = { o: "https://a.example", u: "me", s: seal("https://a.example", "me", "pw") };
   let dated = false;
   const read = async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s, ...(dated ? { created: 1, modified: 1 } : {}) }], mark: null });
-  const adapter = ledgerPasswordsAdapter("default", () => true, read, () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
+  const adapter = ledgerPasswordsAdapter("default", () => true, read, () => "scope", sealedCalls(() => shell.solaraCoreNativeModules.SolaraCEF));
   const extraction = await adapter.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
   assert.equal(extraction, null, "a cycle whose ledger can't be written sends nothing");
   assert.equal(shell.docs.get("sync-pw-ledger.json"), undefined, "a login with no time would give m: null, so that ledger isn't written");
@@ -58,7 +58,7 @@ test("LEDGER-unwritable-profiles: one profile's good write doesn't clear another
   const value = { o: "https://a.example", u: "me", s: seal("https://a.example", "me", "pw") };
   const dated = { default: false, work: true };
   const adapterFor = (profileId) =>
-    ledgerPasswordsAdapter(profileId, () => true, async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s, ...(dated[profileId] ? { created: 1, modified: 1 } : {}) }], mark: null }), () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
+    ledgerPasswordsAdapter(profileId, () => true, async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s, ...(dated[profileId] ? { created: 1, modified: 1 } : {}) }], mark: null }), () => "scope", sealedCalls(() => shell.solaraCoreNativeModules.SolaraCEF));
   const extract = (adapter) => adapter.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
   const a = adapterFor("default");
   const b = adapterFor("work");
@@ -77,7 +77,7 @@ test("LEDGER-unwritable-gone: a profile that stops syncing passwords takes its u
   const { seal } = await import("./fakeSeal.mjs");
   const key = "pw:https://a.example\nme";
   const value = { o: "https://a.example", u: "me", s: seal("https://a.example", "me", "pw") };
-  const work = ledgerPasswordsAdapter("work", () => true, async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s }], mark: null }), () => "scope", sealedCalls(() => shell.ardiaCoreNativeModules.ArdiaCEF));
+  const work = ledgerPasswordsAdapter("work", () => true, async () => ({ logins: [{ origin: value.o, username: value.u, s: value.s }], mark: null }), () => "scope", sealedCalls(() => shell.solaraCoreNativeModules.SolaraCEF));
   const extract = () => work.extract(() => undefined, () => false, Date.now(), (k) => k === key, (k) => (k === key ? value : undefined), (k) => (k === key ? "0mubd9tsh.0000.dev1" : undefined), () => false);
   assert.equal(await extract(), null, "control: the work profile's ledger can't be written");
   assert.equal(ledgerPauseReason(["", "work"]), "unwritable", "control: while work syncs passwords, the reason shows");

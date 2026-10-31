@@ -11,7 +11,7 @@ let unlocks = true;
 let fullStateFails = false;
 const seals = [];
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => true,

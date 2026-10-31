@@ -12,7 +12,7 @@ repo="$(ac_identity AC_RELEASE_REPO)"
 product="$(ac_identity AC_PRODUCT_NAME)"
 [ -n "$product" ] || die "the app's identity has no AC_PRODUCT_NAME"
 case "$version" in
-  engine-*) ref="$version" shipped="the ArdiaCore engine ${version#engine-}" ;;
+  engine-*) ref="$version" shipped="the SolaraCore engine ${version#engine-}" ;;
   *) ref="v$version" shipped="$product $version" ;;
 esac
 pinned() { [ -n "${!1:-}" ] && echo "${!1}" || sed -n "s/^export $1=//p" "$root/engine/patches/build/env.sh"; }
@@ -24,7 +24,7 @@ helium_macos="$(pinned HELIUM_MACOS_TAG)"
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/ac-engine-source.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
-name="ardia-engine-source-$version"
+name="solara-engine-source-$version"
 src="$work/$name"
 mkdir -p "$src"
 fetch() {

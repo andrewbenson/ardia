@@ -4,8 +4,8 @@ import "./switchOn.mjs";
 const { useBrowser } = await import("../../store/browser.ts");
 const { reloadBookmarks, startBookmarks } = await import("../../lib/bookmarks.ts");
 const stub = await import("../../test-native/index.ts");
-const { ardiaCoreNativeModules } = await import("../../test-native/ardiacore.ts");
-const cef = ardiaCoreNativeModules.ArdiaCEF;
+const { solaraCoreNativeModules } = await import("../../test-native/solaracore.ts");
+const cef = solaraCoreNativeModules.SolaraCEF;
 const realEngineCall = cef.engineCall;
 let applyGate = null;
 cef.engineCall = async (name, profile, json) => {

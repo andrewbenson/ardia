@@ -25,9 +25,9 @@ export type WindowBackdropProps = ViewProps & {
   themeAngle?: number;
 };
 
-const NativeBackdrop = requireNativeViewManager<WindowBackdropProps>("ArdiaWindowBackdrop");
+const NativeBackdrop = requireNativeViewManager<WindowBackdropProps>("SolaraWindowBackdrop");
 
-const BackdropModule = requireOptionalNativeModule<{ holdKeyLook?: (on: boolean) => Promise<void> }>("ArdiaWindowBackdrop");
+const BackdropModule = requireOptionalNativeModule<{ holdKeyLook?: (on: boolean) => Promise<void> }>("SolaraWindowBackdrop");
 
 export function holdThemedWindowsKeyLook(on: boolean) {
   void BackdropModule?.holdKeyLook?.(on);
@@ -49,7 +49,7 @@ export type PowerUpProps = ViewProps & {
 
 type NativePowerUpProps = Omit<PowerUpProps, "palette" | "halo"> & { palette?: string[]; haloFrame: number[] };
 
-const NativePowerUp = requireNativeViewManager<NativePowerUpProps>("ArdiaPowerUp");
+const NativePowerUp = requireNativeViewManager<NativePowerUpProps>("SolaraPowerUp");
 
 export function PowerUp({ palette = "pink", halo = null, ...props }: PowerUpProps) {
   return (
@@ -71,8 +71,8 @@ export type ThemeSwatchProps = ViewProps & {
   angle?: number;
 };
 
-const hasThemeSwatch = !!(globalThis as { expo?: { getViewConfig?: (name: string) => unknown } }).expo?.getViewConfig?.("ArdiaThemeSwatch");
-const NativeThemeSwatch = hasThemeSwatch ? requireNativeViewManager<ThemeSwatchProps>("ArdiaThemeSwatch") : null;
+const hasThemeSwatch = !!(globalThis as { expo?: { getViewConfig?: (name: string) => unknown } }).expo?.getViewConfig?.("SolaraThemeSwatch");
+const NativeThemeSwatch = hasThemeSwatch ? requireNativeViewManager<ThemeSwatchProps>("SolaraThemeSwatch") : null;
 
 export function ThemeSwatch({ grain = 0, padLightness = -1, angle = 135, style, ...props }: ThemeSwatchProps) {
   if (!NativeThemeSwatch) return <View pointerEvents="none" style={[style, { backgroundColor: "#80808040" }]} />;

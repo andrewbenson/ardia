@@ -1,45 +1,45 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import ExpoModulesCore
 
 public class ImportModule: Module {
   private let importer: Importer = {
     let env = ProcessInfo.processInfo.environment
-    let support = env["ARDIA_IMPORT_SOURCE_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+    let support = env["SOLARA_IMPORT_SOURCE_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
       ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     let icons = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("\(Bundle.main.bundleIdentifier ?? "Ardia")/ImportIcons", isDirectory: true)
+      .appendingPathComponent("\(Bundle.main.bundleIdentifier ?? "Solara")/ImportIcons", isDirectory: true)
     return Importer(discovery: BrowserDiscovery(
       applicationSupport: support,
       locateApp: AppIcons.locate,
-      iconFor: { app, id in AppIcons.png(for: app, id: id, directory: icons, safeMode: ArdiaCoreHost.safeMode) }
+      iconFor: { app, id in AppIcons.png(for: app, id: id, directory: icons, safeMode: SolaraCoreHost.safeMode) }
     ))
   }()
 
   private static let safariHome: URL = {
     let env = ProcessInfo.processInfo.environment
-    if let home = env["ARDIA_IMPORT_SAFARI_HOME"] { return URL(fileURLWithPath: home, isDirectory: true) }
-    if let support = env["ARDIA_IMPORT_SOURCE_DIR"] {
+    if let home = env["SOLARA_IMPORT_SAFARI_HOME"] { return URL(fileURLWithPath: home, isDirectory: true) }
+    if let support = env["SOLARA_IMPORT_SOURCE_DIR"] {
       return URL(fileURLWithPath: support, isDirectory: true).deletingLastPathComponent().deletingLastPathComponent()
     }
     return FileManager.default.homeDirectoryForCurrentUser
   }()
 
   private static let secret: Importer.SecretProvider = {
-    if let fixed = ProcessInfo.processInfo.environment["ARDIA_IMPORT_TEST_SECRET"] {
+    if let fixed = ProcessInfo.processInfo.environment["SOLARA_IMPORT_TEST_SECRET"] {
       return { _, _ in Data(fixed.utf8) }
     }
     return SafeStorageKeychain.secret
   }()
 
-  private static let diaBundleId = ProcessInfo.processInfo.environment["ARDIA_IMPORT_DIA_BUNDLE_ID"] ?? DiaAutomation.bundleIdentifier
+  private static let diaBundleId = ProcessInfo.processInfo.environment["SOLARA_IMPORT_DIA_BUNDLE_ID"] ?? DiaAutomation.bundleIdentifier
 
   private let jobs = ImportJobs()
   private let vault = ImportVault()
-  private static let work = DispatchQueue(label: "ardia.import", qos: .userInitiated, attributes: .concurrent)
+  private static let work = DispatchQueue(label: "solara.import", qos: .userInitiated, attributes: .concurrent)
 
   public func definition() -> ModuleDefinition {
-    Name("ArdiaImport")
+    Name("SolaraImportAdapter")
     Events("onImportEvent")
 
     AsyncFunction("listBrowsers") { (promise: Promise) in
@@ -102,7 +102,7 @@ public class ImportModule: Module {
 
     AsyncFunction("openFullDiskAccessSettings") { (promise: Promise) in
       let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { NSLog("[import] background instance, not opening %@", url.absoluteString) } else { NSWorkspace.shared.open(url) }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { NSLog("[import] background instance, not opening %@", url.absoluteString) } else { NSWorkspace.shared.open(url) }
       promise.resolve(nil)
     }.runOnQueue(.main)
 
@@ -120,18 +120,18 @@ public class ImportModule: Module {
     }
 
     AsyncFunction("requestDiaAutomation") { (promise: Promise) in
-      let ask = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] != "1"
+      let ask = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] != "1"
       self.run(promise) { try Self.json(DiaAutomation.status(Self.diaBundleId, ask: ask)) }
     }
 
     AsyncFunction("openAutomationSettings") { (promise: Promise) in
       let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { NSLog("[import] background instance, not opening %@", url.absoluteString) } else { NSWorkspace.shared.open(url) }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { NSLog("[import] background instance, not opening %@", url.absoluteString) } else { NSWorkspace.shared.open(url) }
       promise.resolve(nil)
     }.runOnQueue(.main)
 
     AsyncFunction("openDia") { (promise: Promise) in
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return promise.reject("background", "a background instance doesn't open Dia") }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return promise.reject("background", "a background instance doesn't open Dia") }
       guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.diaBundleId) else {
         return promise.reject("notFound", "Dia isn't installed")
       }

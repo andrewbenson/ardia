@@ -24,7 +24,7 @@ const guard = () => {
   if (fake.locked) throw new Error("locked");
 };
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => {
@@ -74,7 +74,7 @@ globalThis.acTestNativeModules = {
 };
 
 const shell = await import("../test-native/index.ts");
-const sync = await import("@ardia/sync");
+const sync = await import("@solara/sync");
 const { useBrowser } = await import("../store/browser.ts");
 const S = () => useBrowser.getState();
 const settle = async (n = 30) => {

@@ -9,9 +9,9 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node main-top-test.mjs <Debug Solara.app> [--keep-data]
 
-The window's RN main root on top of the native shell's layers (ARDIA_SHELL_MAIN_TOP=1, with ARDIA_NATIVE_SHELL=1,
-ARDIA_SHELL_PANES=1 and ARDIA_NATIVE_PAGES_POOL=1), once with the native sidebar column (ARDIA_NATIVE_SIDEBAR=1,
-ARDIA_NATIVE_TOP_STRIP=1, ARDIA_NATIVE_PROFILE_PAGER=1: the column must be up), once with the native sidebar alone and once
+The window's RN main root on top of the native shell's layers (SOLARA_SHELL_MAIN_TOP=1, with SOLARA_NATIVE_SHELL=1,
+SOLARA_SHELL_PANES=1 and SOLARA_NATIVE_PAGES_POOL=1), once with the native sidebar column (SOLARA_NATIVE_SIDEBAR=1,
+SOLARA_NATIVE_TOP_STRIP=1, SOLARA_NATIVE_PROFILE_PAGER=1: the column must be up), once with the native sidebar alone and once
 with RN's: the root is stacked under the overlay and above every other slot (the profile pager's swipe targets, which
 draw nothing and hit nothing, sit above the overlay as the shell keeps views it doesn't own, and don't count);
 no React Native view that draws nothing and handles nothing catches the pointer over the card, the sidebar or the top
@@ -26,7 +26,7 @@ the click check.`);
 const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-main-top-"));
 const rep = reporter(join(scratch, "main-top-test.log"), { name: "main-top-test" });
-const WEB = /RenderWidgetHostViewCocoa|WebContentsViewCocoa|ArdiaCoreWebView/;
+const WEB = /RenderWidgetHostViewCocoa|WebContentsViewCocoa|SolaraCoreWebView/;
 const TYPES = ["public.file-url", "public.url", "public.utf8-plain-text"];
 
 const server = createServer((req, res) => {
@@ -76,7 +76,7 @@ const rectNear = (a, b) => a && b && a.length === b.length && a.every((v, i) => 
 async function pass(label, env) {
   app = await launch(resolve(appArg), {
     data: join(scratch, `data-${label}`), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_SHELL_MAIN_TOP: "1", ...env },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_SHELL_MAIN_TOP: "1", ...env },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.expo.modules.SolaraWindowShell && !!globalThis.acPerf",
   });
   await until("page ONE", `return S().tabs.a.title === "ONE" || null;`, 15000);
@@ -84,19 +84,19 @@ async function pass(label, env) {
   const shell = await run(`return describe();`);
 
   await rep.check(`${label}: the-main-root-is-under-the-overlay-and-above-the-rest`, async () => {
-    const order = shell.order.filter((name) => name !== "ArdiaSettings.NativeSwipeTarget");
+    const order = shell.order.filter((name) => name !== "SolaraSettingsAdapter.NativeSwipeTarget");
     if (!shell.reactOnTop) throw new Error(`the flag didn't take: ${JSON.stringify(shell)}`);
     if (order.at(-1) !== "SolaraUI.ShellOverlayView" || order.at(-2) !== "RCTRootView") throw new Error(`order ${order.join(" < ")}`);
     const snapshot = await untilSnapshot("shell layer order", (state) => {
       const native = state.windows.find((w) => w.id === "w1")?.shell;
       return native?.reactOnTop === shell.reactOnTop &&
-        JSON.stringify(native.order.filter((name) => name !== "ArdiaSettings.NativeSwipeTarget")) === JSON.stringify(order) &&
+        JSON.stringify(native.order.filter((name) => name !== "SolaraSettingsAdapter.NativeSwipeTarget")) === JSON.stringify(order) &&
         rectNear(native.card, shell.card);
     }, { windowId: "w1" });
     return { order: order.join(" < "), native: snapshot.windows.find((w) => w.id === "w1").shell.order };
   });
 
-  if (env.ARDIA_NATIVE_PROFILE_PAGER === "1")
+  if (env.SOLARA_NATIVE_PROFILE_PAGER === "1")
     await rep.check(`${label}: the-native-sidebar-column-is-up`, async () => {
       const column = await run(`return globalThis.expo.modules.SolaraHosted.sidebarShell("w1").then(JSON.parse);`);
       if (!column?.chrome) throw new Error(`no native column: ${JSON.stringify(column)}`);
@@ -157,7 +157,7 @@ async function pass(label, env) {
   });
 
   await rep.check(`${label}: drops-on-the-page-reach-the-web-contents`, async () => {
-    const win = await run(`return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window);`);
+    const win = await run(`return globalThis.expo.modules.SolaraCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window);`);
     const [x, y, w, h] = shell.card;
     const at = [Math.round(x + w / 2), Math.round(y + h * 0.6)];
     const seen = {};
@@ -177,9 +177,9 @@ async function pass(label, env) {
 }
 
 try {
-  await pass("native-column", { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_TOP_STRIP: "1", ARDIA_NATIVE_PROFILE_PAGER: "1" });
-  await pass("native-sidebar", { ARDIA_NATIVE_SIDEBAR: "1" });
-  await pass("rn-sidebar", { ARDIA_NATIVE_SIDEBAR: "0" });
+  await pass("native-column", { SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_TOP_STRIP: "1", SOLARA_NATIVE_PROFILE_PAGER: "1" });
+  await pass("native-sidebar", { SOLARA_NATIVE_SIDEBAR: "1" });
+  await pass("rn-sidebar", { SOLARA_NATIVE_SIDEBAR: "0" });
 } catch (e) {
   rep.record("run", { error: e });
 } finally {

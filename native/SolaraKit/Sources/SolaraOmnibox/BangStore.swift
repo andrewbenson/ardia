@@ -164,10 +164,10 @@ public final class BangStore {
   }
 
   private static func documentDirectory() -> URL {
-    if let dataDir = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"], !dataDir.isEmpty {
+    if let dataDir = ProcessInfo.processInfo.environment["SOLARA_DATA_DIR"], !dataDir.isEmpty {
       return URL(fileURLWithPath: dataDir, isDirectory: true)
     }
     let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    return root.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Ardia", isDirectory: true)
+    return root.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Solara", isDirectory: true)
   }
 }

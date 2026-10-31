@@ -1,5 +1,5 @@
-import { setProfilePagerLooks, setWindowShellBackdrop, windowShellActive } from "@ardia/settings";
-import { WindowBackdrop } from "@ardia/shaders";
+import { setProfilePagerLooks, setWindowShellBackdrop, windowShellActive } from "@solara/settings";
+import { WindowBackdrop } from "@solara/shaders";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { profileTheme, spaceLookSource, useTheme, type Theme } from "../../lib/theme";

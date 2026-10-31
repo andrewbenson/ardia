@@ -9,7 +9,7 @@ const sent = [];
 let files = new Map();
 let logins = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "everything", syncRedesign: redesign }),
     useSyncOrigins: () => true,
     snapshot: () => JSON.stringify({ rev: 0, data }),
@@ -20,7 +20,7 @@ globalThis.acTestNativeModules = {
       return JSON.stringify({ rev: 0, result: command.name === "syncPinsApply" && command.args[1].kind === "homes" ? [] : true });
     },
   },
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => "local",
     deviceName: () => "Test Mac",
     unlock: async () => true,
@@ -42,7 +42,7 @@ globalThis.acTestNativeModules = {
 };
 
 const { useBrowser } = await import("../../store/browser.ts");
-const { emptyScope, Clock } = await import("@ardia/sync");
+const { emptyScope, Clock } = await import("@solara/sync");
 const { docs } = await import("../../test-native/index.ts");
 const { digest, choice } = await import("../notes.ts");
 const { startNativeStore, standDown } = await import("../../store/nativeStore.ts");

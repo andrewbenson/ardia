@@ -70,7 +70,7 @@ import Testing
 
   @Test func missingUrlRejectsAnAdoptedPage() throws {
     var state = fixture()
-    state.tabs["a"] = try Tab(json: ["id": "a", "windowId": "w", "profileId": "p", "adoptId": "ardiacore:7"])
+    state.tabs["a"] = try Tab(json: ["id": "a", "windowId": "w", "profileId": "p", "adoptId": "solaracore:7"])
     #expect(hasPage(state.tabs["a"]!))
     #expect(cliActiveBrowserId(state, browsers: browsers) == nil)
   }
@@ -79,7 +79,7 @@ import Testing
     var state = fixture()
     state.tabs["a"]!.navigation = nil
     #expect(cliActiveBrowserId(state, browsers: browsers) == nil)
-    state.tabs["a"]!.adoptId = "ardiacore:7"
+    state.tabs["a"]!.adoptId = "solaracore:7"
     #expect(cliActiveBrowserId(state, browsers: browsers) == 11)
     state.tabs.remove(["a"])
     #expect(cliActiveBrowserId(state, browsers: browsers) == nil)
@@ -87,7 +87,7 @@ import Testing
 
   @Test func internalPagesMatchThePoolRuleAndUseNavigationUrl() {
     AppScheme.withScheme(productName: "Solara") {
-      for url in ["ardia://history", "solara://BOOKMARKS/path?x=1", "SOLARA://downloads#today"] {
+      for url in ["solara://history", "solara://BOOKMARKS/path?x=1", "SOLARA://downloads#today"] {
         var state = fixture()
         state.tabs["a"]!.navigation = Navigation(url: url, seq: 2)
         #expect(cliActiveBrowserId(state, browsers: browsers) == nil)
@@ -99,7 +99,7 @@ import Testing
       }
       var adopted = fixture()
       adopted.tabs["a"]!.navigation = nil
-      adopted.tabs["a"]!.adoptId = "ardiacore:7"
+      adopted.tabs["a"]!.adoptId = "solaracore:7"
       adopted.tabs["a"]!.url = "solara://history"
       #expect(cliActiveBrowserId(adopted, browsers: browsers) == nil)
     }

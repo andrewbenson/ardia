@@ -1,4 +1,4 @@
-import type { AutofillPrompt, BlockedPopup, CrashInfo, ExternalAppRequest, MediaAccess, NavigationState, PageEngine, PasswordPrompt, PermissionRequest, SecurityInfo } from "@ardia/ardiacore";
+import type { AutofillPrompt, BlockedPopup, CrashInfo, ExternalAppRequest, MediaAccess, NavigationState, PageEngine, PasswordPrompt, PermissionRequest, SecurityInfo } from "@solara/solaracore";
 import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";

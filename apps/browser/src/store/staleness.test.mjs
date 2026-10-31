@@ -5,9 +5,9 @@ import { mount } from "../test-hooks.mjs";
 
 globalThis.__DEV__ = false;
 
-const ardiacore = import.meta.resolve("@ardia/ardiacore");
+const solaracore = import.meta.resolve("@solara/solaracore");
 const stubs = {
-  "@ardia/ardiacore": `export * from ${JSON.stringify(ardiacore)};
+  "@solara/solaracore": `export * from ${JSON.stringify(solaracore)};
     export const listTasks = async () => [];
     export const onSystemState = () => ({ remove() {} });
     export const systemState = async () => null;

@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../store/browser.ts");
 const model = await import("../store/model.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const adapters = await import("./adapters.ts");
 const pinnedArea = await import("./pinned.ts");
 const stub = await import("../test-native/index.ts");
-const ardiacore = await import("@ardia/ardiacore");
+const solaracore = await import("@solara/solaracore");
 
 const S = () => useBrowser.getState();
 
@@ -964,8 +964,8 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   const folder = new Folder();
   const a = new Device("devA", folder);
   const b = new Device("devB", folder);
-  const save = (d, origin, user, password) => d.with(() => ardiacore.savePassword("", origin, user, password));
-  const remove = (d, origin, user) => d.with(() => ardiacore.deletePassword("", origin, user));
+  const save = (d, origin, user, password) => d.with(() => solaracore.savePassword("", origin, user, password));
+  const remove = (d, origin, user) => d.with(() => solaracore.deletePassword("", origin, user));
   const list = (d) => [...stub.passwordStores.get(d.id).values()].map((l) => `${l.url} ${l.username}=${l.password}`).sort();
   await save(a, "https://bank.example", "alice", "hunter2");
   await save(a, "https://mail.example", "alice", "m41l");
@@ -987,7 +987,7 @@ test("history: two Macs settle on the union of their visits in Chrome, publish n
   for (const d of [a, b]) stub.historyDbs.delete(d.id);
   const readChrome = async (d) => {
     stub.current.device = d.id;
-    const entries = await ardiacore.queryHistory("");
+    const entries = await solaracore.queryHistory("");
     d.with(() =>
       useBrowser.setState({
         history: { default: entries.map((e) => ({ ...e, favicon: null, lastVisit: e.visitTimes.at(-1) })) },
@@ -1768,7 +1768,7 @@ test("only evidence that the anchor left the rows after the order record ends th
   assert.deepEqual(decide({ [orderKey]: order, "pinrow:x": { v: 1, h: after } }), { a: "x" }, "but a newer row marker means it's still a row");
 });
 
-const { compact } = await import("@ardia/sync");
+const { compact } = await import("@solara/sync");
 
 async function deletedWhileAway(OldMac, withGroup) {
   const realNow = Date.now;

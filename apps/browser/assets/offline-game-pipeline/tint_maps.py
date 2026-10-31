@@ -3,7 +3,7 @@
 Usage (from this folder; build_assets.py runs it too):
   uv run --with numpy --with pillow tint_maps.py
 
-The recolour is the New Tab mark's (docs/brand/ardia/build.py `tinted_marks`): every pixel's luminance,
+The recolour is the New Tab mark's (docs/brand/artwork/build.py `tinted_marks`): every pixel's luminance,
 stretched between the scene's 1st and 99.5th percentiles, runs a ramp from colour × 0.4 through colour × 0.78
 to colour + (1 − colour) × 0.6, except the sun's gold, which stays (orange and yellow profiles get their own sun).
 The mark's sun mask (hue 0.06–0.18) also caught a scene's sunlit grass, so here it is hue 0.06–0.13 with a wider

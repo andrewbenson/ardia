@@ -1,5 +1,5 @@
 import { NativeModules } from "react-native";
-import { readDocument } from "@ardia/shell";
+import { readDocument } from "@solara/shell";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { activeTabId, findLast } from "../store/model";
 import { perfProbeEnabled } from "./perfProbe";

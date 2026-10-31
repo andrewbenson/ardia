@@ -1,5 +1,5 @@
-import { displayUrl } from "@ardia/core";
-import { publishSettingsTopic, windowShellActive } from "@ardia/settings";
+import { displayUrl } from "@solara/core";
+import { publishSettingsTopic, windowShellActive } from "@solara/settings";
 import { useLayoutEffect, useState } from "react";
 import type { LayoutChangeEvent } from "react-native";
 import { hex, useTheme } from "../../lib/theme";

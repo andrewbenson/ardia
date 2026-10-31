@@ -41,7 +41,7 @@ dmg="$dist/$product-$version.dmg"
 zip="$dist/$product-$version.zip"
 nightly_dmg="$product-Nightly.dmg"
 feed="$dist/appcast.xml"
-cli="$dist/ardia-cli-$version-macos-arm64.tar.gz"
+cli="$dist/solara-cli-$version-macos-arm64.tar.gz"
 
 assets=()
 for file in "$dmg" "$zip" "$feed" "$cli" "$cli.sha256"; do
@@ -56,7 +56,7 @@ else
   ! grep -q '<sparkle:channel>' <<<"$item" || die "$version's item in $feed is on a channel, so stable copies would skip it"
 fi
 [ -f "$dist/release-notes.md" ] || die "no $dist/release-notes.md"
-for archive in "$dist"/ArdiaCore-*.tar.xz; do [ -f "$archive" ] && assets+=("$archive"); done
+for archive in "$dist"/SolaraCore-*.tar.xz; do [ -f "$archive" ] && assets+=("$archive"); done
 if ! git -C "$root" ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
   [ "$dry" = 1 ] && echo "note: v$version isn't on origin yet (git tag v$version && git push origin main v$version)" \
     || die "push the tag first: git tag v$version && git push origin main v$version"

@@ -160,7 +160,7 @@ const fixtures = {
     ],
   }),
   "legacy-settings": session({
-    settings: { batterySaver: true, newTabPosition: "top", hideToolbarWhileScrolling: true, openLinksInLittleArdia: false },
+    settings: { batterySaver: true, newTabPosition: "top", hideToolbarWhileScrolling: true, openLinksInLittleSolara: false },
     windows: [win("w1", ["a"])],
     windowOrder: ["w1"],
     tabs: [tab("a", "w1")],

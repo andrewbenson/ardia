@@ -1,6 +1,6 @@
-import { engineCall, onEngineEvent } from "@ardia/ardiacore";
-import { readDocument, writeDocument } from "@ardia/shell";
-import { extensionsAdapter, type ExtensionChange, type ExtensionIntent, type ExtensionsAdapter, type LocalExtensions } from "@ardia/sync";
+import { engineCall, onEngineEvent } from "@solara/solaracore";
+import { readDocument, writeDocument } from "@solara/shell";
+import { extensionsAdapter, type ExtensionChange, type ExtensionIntent, type ExtensionsAdapter, type LocalExtensions } from "@solara/sync";
 import { engineProfile } from "../store/model";
 
 const DOC = "sync-extensions.json";

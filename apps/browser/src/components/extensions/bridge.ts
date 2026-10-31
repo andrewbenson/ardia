@@ -11,8 +11,8 @@ import {
   webStoreExtensionId,
   type TabsRequest,
   type CloseCancelledTab,
-} from "@ardia/ardiacore";
-import { killSwitchEnvironment } from "@ardia/shell";
+} from "@solara/solaracore";
+import { killSwitchEnvironment } from "@solara/shell";
 import { AppState } from "react-native";
 import { openWindow } from "../../lib/actions";
 import { webviews } from "../../lib/webviews";
@@ -262,7 +262,7 @@ function pollActionStates() {
   }, ACTION_POLL_MS);
 }
 
-const pollsActions = () => killSwitchEnvironment("ARDIA_EXTENSION_ACTION_POLL") === "on";
+const pollsActions = () => killSwitchEnvironment("SOLARA_EXTENSION_ACTION_POLL") === "on";
 
 function watchActionsOf(profile: string) {
   if (pollsActions()) return pollActionStates();
@@ -374,8 +374,8 @@ function startSidePanels() {
 
 const STORE_SCRIPT = `
 const g = window;
-if (!g.__ardiaStore) {
-  const store = (g.__ardiaStore = { waiting: null, queued: [] });
+if (!g.__solaraStore) {
+  const store = (g.__solaraStore = { waiting: null, queued: [] });
   const request = (id) => {
     if (!id) return;
     if (store.waiting) { const w = store.waiting; store.waiting = null; w(id); } else store.queued.push(id);
@@ -401,7 +401,7 @@ if (!g.__ardiaStore) {
   relabel();
   new MutationObserver(relabel).observe(document.documentElement, { subtree: true, childList: true, characterData: true });
 }
-const store = g.__ardiaStore;
+const store = g.__solaraStore;
 if (store.queued.length) post("result", JSON.stringify(store.queued.shift()));
 else store.waiting = (id) => post("result", JSON.stringify(id));
 `;

@@ -15,8 +15,8 @@ import {
   setZoom,
   type SiteSettingType,
   type SiteSettingValue,
-} from "@ardia/ardiacore";
-import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
+} from "@solara/solaracore";
+import { publishSettingsTopic, type SettingsHandler } from "@solara/settings";
 
 export const privacyHandlers: Record<string, SettingsHandler> = {
   "privacy.contentBlocker": () => getContentBlocker().catch(() => null),

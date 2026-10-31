@@ -1,5 +1,5 @@
 import XCTest
-@testable import ArdiaSyncCore
+@testable import SolaraLegacySyncCore
 
 final class DeviceOwnerCheckTests: XCTestCase {
   final class Prompts {

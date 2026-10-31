@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-globalThis.acTestNativeModules = { ArdiaStore: { status: () => ({ active: false, safeMode: "option", refusedSession: "/data/session.json", reason: "no usable database" }), freeze: () => true } };
+globalThis.acTestNativeModules = { SolaraStoreAdapter: { status: () => ({ active: false, safeMode: "option", refusedSession: "/data/session.json", reason: "no usable database" }), freeze: () => true } };
 const { shellNativeModules } = await import("../test-native/shell.ts");
 const reads = [];
-shellNativeModules.ArdiaShell.readDocumentResult = (name) => { reads.push(name); return { path: `/data/${name}`, failure: "permission denied" }; };
+shellNativeModules.SolaraShell.readDocumentResult = (name) => { reads.push(name); return { path: `/data/${name}`, failure: "permission denied" }; };
 const { startPersistence } = await import("./persist.ts");
 const { persistenceRefused } = await import("./persistLatch.ts");
 

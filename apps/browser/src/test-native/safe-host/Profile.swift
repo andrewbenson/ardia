@@ -1,9 +1,9 @@
 import Foundation
 
-enum ArdiaCoreHost {
+enum SolaraCoreHost {
   static var safeMode = false
 }
-enum ArdiaCoreServices {
+enum SolaraCoreServices {
   static var calls: [String] = []
   static func clearBrowsingData(profile: String, types: [String], since: Int, completion: () -> Void) { calls.append("clearBrowsingData"); completion() }
   static func call(_ name: String, profile: String, args: [String: Any], completion: ([String: Any]) -> Void) { calls.append(name); completion(["ok": true]) }
@@ -25,12 +25,12 @@ __PRODUCTION__
 
 var results: [[String: Any]] = []
 for safe in [true, false] {
-  ArdiaCoreHost.safeMode = safe
-  ArdiaCoreServices.calls = []
+  SolaraCoreHost.safeMode = safe
+  SolaraCoreServices.calls = []
   var callbacks = 0
   var remaining: [String] = []
-  ArdiaCoreProfileData.deleteDefault { callbacks += 1; remaining = $0 }
-  results.append(["safe": safe, "remaining": remaining, "callbacks": callbacks, "calls": ArdiaCoreServices.calls])
+  SolaraCoreProfileData.deleteDefault { callbacks += 1; remaining = $0 }
+  results.append(["safe": safe, "remaining": remaining, "callbacks": callbacks, "calls": SolaraCoreServices.calls])
 }
 let data = try JSONSerialization.data(withJSONObject: results)
 print(String(data: data, encoding: .utf8)!)

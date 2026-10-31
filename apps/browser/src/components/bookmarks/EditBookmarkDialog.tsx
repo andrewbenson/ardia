@@ -1,4 +1,4 @@
-import { resolveInput } from "@ardia/core";
+import { resolveInput } from "@solara/core";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";
 import { searchUrlPrefix } from "../../store/settings";

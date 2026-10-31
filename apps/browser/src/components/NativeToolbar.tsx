@@ -1,6 +1,6 @@
-import { appUrlOrigin, breadcrumb, urlForDisplay } from "@ardia/core";
-import { NativeToolbarView, type ToolbarClick } from "@ardia/settings";
-import { translation, WindowDragRegion } from "@ardia/shell";
+import { appUrlOrigin, breadcrumb, urlForDisplay } from "@solara/core";
+import { NativeToolbarView, type ToolbarClick } from "@solara/settings";
+import { translation, WindowDragRegion } from "@solara/shell";
 import { useEffect, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";

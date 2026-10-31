@@ -1,4 +1,4 @@
-import { Symbol } from "@ardia/shell";
+import { Symbol } from "@solara/shell";
 import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";

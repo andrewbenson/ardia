@@ -23,7 +23,7 @@ const INSET = 8.5;
 async function start() {
   const app = await launch(resolve(appArg), {
     data: join(scratch, "native"),
-    env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1" },
+    env: { SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_SHELL: "1" },
     probe: true,
     session: session(layout),
     ready: "return !!ac.store",

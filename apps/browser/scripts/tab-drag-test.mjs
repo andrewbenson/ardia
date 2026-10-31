@@ -38,7 +38,7 @@ const fixture = () => session({
 let app = null;
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const st = () => ac.store.getState();
 const win = (id) => C.chromeWindows().then((ws) => { const f = st().windows[id].frame; const w = ws.filter((w) => w.hasRoot).find((w) => { const r = w.frame.match(/[-\\d.]+/g).map(Number); return Math.abs(r[0] - f[0]) < 2 && Math.abs(r[2] - f[2]) < 2; }); return w && w.window; });
 const act = (id, a) => win(id).then((n) => C.devWindow(n, a));
@@ -111,7 +111,7 @@ try {
   assert.equal(strip.length, 6, `strip items ${JSON.stringify(strip)}`);
   const mid = (i) => Math.round((strip[i][0] + strip[i][1]) / 2);
 
-  const PREVIEW = `const preview = () => globalThis.expo.modules.ArdiaShell.devDragPreviewState();`;
+  const PREVIEW = `const preview = () => globalThis.expo.modules.SolaraShell.devDragPreviewState();`;
   const watch = (w, path, ms) => run(`${PREVIEW}
     const seen = [];
     const iv = setInterval(() => preview().then((p) => seen.push(p)), 30);
@@ -137,7 +137,7 @@ try {
       return wait(100);`);
     const path = [[at(2), 21], [at(2) + 20, 21], [at(3), 21], [at(3) + 75, 21]];
     const seen = await run(`
-      const cef = globalThis.expo.modules.ArdiaCEF;
+      const cef = globalThis.expo.modules.SolaraCEF;
       const send = cef.tabStripCommand;
       const t0 = performance.now();
       const log = { commands: [], windows: [], drag: [], picture: [] };
@@ -413,7 +413,7 @@ try {
     }
   });
 
-  const nativeSidebar = process.env.ARDIA_NATIVE_SIDEBAR === "1";
+  const nativeSidebar = process.env.SOLARA_NATIVE_SIDEBAR === "1";
   const twoWindows = (a, b) => run(`for (const id of Object.keys(st().windows)) if (id !== "w1") st().closeWindow(id);
       st().updateSettings({ tabLayout: "sidebar" });
       const page = (n) => "data:text/html,<title>" + n + "</title>" + n;
@@ -478,7 +478,7 @@ try {
       const after = await live();
       assert.ok(!after.windows.includes(wb), "the source closed");
       assert.equal(after.dragging, 0, "no drag left");
-      const preview = await run(`return globalThis.expo.modules.ArdiaShell.devDragPreviewState();`);
+      const preview = await run(`return globalThis.expo.modules.SolaraShell.devDragPreviewState();`);
       assert.equal(preview.visible, false, "no drag picture left");
       if (nativeSidebar) assert.equal((await nativeProbe("w1"))?.escaping, false, "Esc is no longer captured");
     } finally {

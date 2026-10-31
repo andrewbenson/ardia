@@ -1,4 +1,4 @@
-import type { PageEngine } from "@ardia/ardiacore";
+import type { PageEngine } from "@solara/solaracore";
 import type { BrowserState } from "./browser";
 import type { Tab } from "./types";
 
@@ -20,7 +20,7 @@ export function siteOf(url: string | undefined | null): string | null {
 }
 
 export const canSwitchEngine = (url: string | undefined | null) => !!url && /^(https?|file):/i.test(url);
-export const chromiumOnly = (url: string | undefined | null) => !!url && /^(ardia|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
+export const chromiumOnly = (url: string | undefined | null) => !!url && /^(solara|chrome|chrome-extension|chrome-untrusted|devtools|view-source):/i.test(url);
 
 export const defaultEngine = (s: Pick<BrowserState, "settings">): PageEngine => (s.settings.pageEngine === "webkit" ? "webkit" : "chromium");
 
@@ -66,7 +66,7 @@ const fromAdoption = (s: EngineState, t: Tab, depth: number): PageEngine | undef
   const id = t.adoptId;
   if (!id) return undefined;
   if (id.startsWith("webkit:")) return "webkit";
-  if (id.startsWith("ardiacore:") || id.startsWith("tab:")) return "chromium";
+  if (id.startsWith("solaracore:") || id.startsWith("tab:")) return "chromium";
   if (id.startsWith("clone:")) {
     const source = s.tabs[id.slice("clone:".length)];
     return source && depth < 8 ? engineOf(s, source, depth + 1) : undefined;

@@ -1,4 +1,4 @@
-import { dragPreview, hapticTick, windowFrame, type DragPreviewShape } from "@ardia/shell";
+import { dragPreview, hapticTick, windowFrame, type DragPreviewShape } from "@solara/shell";
 import { create } from "zustand";
 import { focus } from "../../lib/actions";
 import { lastPicture, startTabPictures } from "../../lib/tabPictures";

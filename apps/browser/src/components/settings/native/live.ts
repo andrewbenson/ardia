@@ -1,5 +1,5 @@
-import { focusWindow } from "@ardia/shell";
-import type { SettingsHandler } from "@ardia/settings";
+import { focusWindow } from "@solara/shell";
+import type { SettingsHandler } from "@solara/settings";
 import { deleteLiveFolder } from "../../../live/engine";
 import { connectGoogleDrive } from "../../../live/googleAuth";
 import { useBrowser } from "../../../store/browser";

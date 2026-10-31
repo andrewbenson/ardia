@@ -1,4 +1,4 @@
-import { iconTheme, type IconTheme } from "@ardia/shell";
+import { iconTheme, type IconTheme } from "@solara/shell";
 import { useEffect, useState } from "react";
 import { useAppearanceDark, useFavicon, useFaviconTheme } from "./favicons";
 

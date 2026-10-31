@@ -1,7 +1,7 @@
-import { setAppScheme } from "@ardia/core";
-import { systemInfo, type SystemInfo } from "@ardia/shell";
+import { setAppScheme } from "@solara/core";
+import { systemInfo, type SystemInfo } from "@solara/shell";
 
-export const DEFAULT_PRODUCT = "Ardia";
+export const DEFAULT_PRODUCT = "Solara";
 
 function readInfo(): Partial<SystemInfo> {
   try {

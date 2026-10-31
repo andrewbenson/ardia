@@ -99,15 +99,15 @@ test("cleanUrl keeps the rest of the URL exactly as it was", () => {
   assert.equal(cleanUrl("https://user:pw@example.com:8443/p?utm_term=x&k"), "https://user:pw@example.com:8443/p?k");
 });
 
-test("displayed URLs say ardia://, never chrome://", () => {
-  assert.equal(urlForDisplay("ardia://version/"), "ardia://version");
-  assert.equal(urlForDisplay("chrome://version/"), "ardia://version");
-  assert.equal(urlForDisplay("chrome://settings/languages"), "ardia://settings/languages");
-  assert.equal(urlForDisplay("ardia://history/?q=a"), "ardia://history?q=a");
-  assert.equal(displayUrl("chrome://gpu/"), "ardia://gpu");
-  assert.deepEqual(breadcrumb("ardia://version/", "About Version"), { host: "ardia://version", trail: ["About Version"] });
-  assert.deepEqual(breadcrumb("ardia://history", "History"), { host: "ardia://history", trail: [] });
-  assert.deepEqual(breadcrumb("chrome://flags/", "Experiments"), { host: "ardia://flags", trail: ["Experiments"] });
+test("displayed URLs say solara://, never chrome://", () => {
+  assert.equal(urlForDisplay("solara://version/"), "solara://version");
+  assert.equal(urlForDisplay("chrome://version/"), "solara://version");
+  assert.equal(urlForDisplay("chrome://settings/languages"), "solara://settings/languages");
+  assert.equal(urlForDisplay("solara://history/?q=a"), "solara://history?q=a");
+  assert.equal(displayUrl("chrome://gpu/"), "solara://gpu");
+  assert.deepEqual(breadcrumb("solara://version/", "About Version"), { host: "solara://version", trail: ["About Version"] });
+  assert.deepEqual(breadcrumb("solara://history", "History"), { host: "solara://history", trail: [] });
+  assert.deepEqual(breadcrumb("chrome://flags/", "Experiments"), { host: "solara://flags", trail: ["Experiments"] });
 });
 
 test("host:port navigates: single-label intranet hosts over http, a number or a time never", () => {

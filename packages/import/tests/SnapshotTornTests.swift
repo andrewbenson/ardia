@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 import XCTest
-@testable import ArdiaImportCore
+@testable import SolaraLegacyImportCore
 
 final class SnapshotTornTests: XCTestCase {
   func exec(_ db: OpaquePointer?, _ sql: String) {

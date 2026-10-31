@@ -1,5 +1,5 @@
-import { importWebKitCookies, webKitCookieStoreKey, type WebViewHandle } from "@ardia/ardiacore";
-import { launchEnvironment } from "@ardia/shell";
+import { importWebKitCookies, webKitCookieStoreKey, type WebViewHandle } from "@solara/solaracore";
+import { launchEnvironment } from "@solara/shell";
 import { useBrowser } from "../store/browser";
 import { tabEngine } from "../store/engines";
 import { engineProfile } from "../store/model";
@@ -10,7 +10,7 @@ const CARRY_DEADLINE_MS = 1500;
 
 let carryOn: boolean | undefined;
 
-export const signInCarryOn = () => (carryOn ??= launchEnvironment("ARDIA_WEBKIT_SIGN_IN") === "on");
+export const signInCarryOn = () => (carryOn ??= launchEnvironment("SOLARA_WEBKIT_SIGN_IN") === "on");
 
 function stillChromiumPage(tabId: string, profile: string, web: WebViewHandle) {
   const s = useBrowser.getState();

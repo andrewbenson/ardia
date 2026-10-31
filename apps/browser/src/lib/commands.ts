@@ -1,4 +1,4 @@
-import { nativeAppIntegrationCommand } from "@ardia/settings";
+import { nativeAppIntegrationCommand } from "@solara/settings";
 import { showNativePanelNow } from "../components/CommandPanel";
 import { markPanelFrame } from "./perfMarks";
 import {
@@ -9,8 +9,8 @@ import {
   prompt,
   setAppearance,
   type CommandEvent,
-} from "@ardia/shell";
-import { markdownLink } from "@ardia/core";
+} from "@solara/shell";
+import { markdownLink } from "@solara/core";
 import { useBrowser } from "../store/browser";
 import { activeTabId, bookmarkProfileId, isPinnedRow, resolveWindowId } from "../store/model";
 import {
@@ -41,7 +41,7 @@ import { webviews } from "./webviews";
 import { togglePageEngine } from "./engines";
 import { goBack, goForward } from "../components/layout/history";
 import { openSplitPane } from "../components/layout/splitActions";
-import { LITTLE_ARDIA_PAGE_COMMANDS } from "./commandCatalog";
+import { LITTLE_SOLARA_PAGE_COMMANDS } from "./commandCatalog";
 import { runSidebarCommand } from "../components/sidebar/commands";
 import { numberedTabs } from "../components/sidebar/entries";
 import { openExtensionFromMenu } from "../components/extensions/bridge";
@@ -55,13 +55,13 @@ import { groupOf, multiSelection } from "../store/organize";
 import { reopenClosedTogether } from "../store/closedTogether";
 import { isSmall, mainWindowFor, originalProfile } from "../store/small";
 import {
-  closeLittleArdia,
-  cycleLittleArdiaProfile,
-  moveLittleArdiaToProfile,
+  closeLittleSolara,
+  cycleLittleSolaraProfile,
+  moveLittleSolaraToProfile,
   openInMainWindow,
-  openLittleArdia,
-  openLittleArdiaProfileMenu,
-} from "../components/littleArdia/actions";
+  openLittleSolara,
+  openLittleSolaraProfileMenu,
+} from "../components/littleSolara/actions";
 import { runPeekCommand } from "../components/peek/actions";
 import { startUrlEdit, tabInDeveloperMode, toggleDeveloperModeFor } from "../components/site/developerMode";
 import { peekTabId } from "../store/peek";
@@ -88,7 +88,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     if (command === "findInPage" && requested === SETTINGS_WINDOW_ID) return focusSettingsSearch();
     requested = null;
   }
-  if (isSmall(s, requested) && runLittleArdiaCommand(command, arg, requested!)) return;
+  if (isSmall(s, requested) && runLittleSolaraCommand(command, arg, requested!)) return;
   if (runPeekCommand(command, resolveWindowId(s, requested) ?? "")) return;
 
   switch (command) {
@@ -96,10 +96,10 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
       return void openWindow({ profileId: arg ?? undefined });
     case "newIncognitoWindow":
       return void openWindow({ incognito: true, profileId: originalProfile(s, s.windows[requested ?? ""]) });
-    case "newLittleArdia":
-      return void openLittleArdia(undefined, arg ?? undefined);
-    case "toggleOpenLinksInLittleArdia":
-      return s.updateSettings({ openLinksInLittleArdia: !s.settings.openLinksInLittleArdia });
+    case "newLittleSolara":
+      return void openLittleSolara(undefined, arg ?? undefined);
+    case "toggleOpenLinksInLittleSolara":
+      return s.updateSettings({ openLinksInLittleSolara: !s.settings.openLinksInLittleSolara });
     case "reopenClosedWindow":
       return s.reopenClosedWindow();
     case "setAppearance":
@@ -137,7 +137,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
   }
 
   const invokedFrom = requested;
-  if (isSmall(s, requested) && !LITTLE_ARDIA_PAGE_COMMANDS.has(command)) {
+  if (isSmall(s, requested) && !LITTLE_SOLARA_PAGE_COMMANDS.has(command)) {
     requested = mainWindowFor(s, s.windows[requested!]!.profileId) ?? null;
     if (requested) focus(requested);
   }
@@ -158,7 +158,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
     }
     return;
   }
-  const tabId = (LITTLE_ARDIA_PAGE_COMMANDS.has(command) && peekTabId(s, windowId)) || activeTabId(s, windowId);
+  const tabId = (LITTLE_SOLARA_PAGE_COMMANDS.has(command) && peekTabId(s, windowId)) || activeTabId(s, windowId);
   const tab = tabId ? s.tabs[tabId] : undefined;
   const page = tab?.url ? tab : undefined;
   const web = tabId ? webviews.get(tabId) : undefined;
@@ -349,14 +349,14 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent) 
   }
 }
 
-function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
+function runLittleSolaraCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
   const s = useBrowser.getState();
   const tabId = activeTabId(s, windowId);
   const tab = tabId ? s.tabs[tabId] : undefined;
   switch (command) {
     case "closeTab":
       if (s.windowUi[windowId]?.panel.open && tab?.url) s.closePanel(windowId);
-      else closeLittleArdia(windowId);
+      else closeLittleSolara(windowId);
       return true;
     case "focusCommandBar":
       s.openPanel(windowId, tab?.url ?? "");
@@ -365,16 +365,16 @@ function runLittleArdiaCommand(command: string, arg: string | null | undefined, 
       openInMainWindow(windowId);
       return true;
     case "switchProfile":
-      if (arg) moveLittleArdiaToProfile(windowId, arg);
+      if (arg) moveLittleSolaraToProfile(windowId, arg);
       return true;
     case "nextProfile":
-      cycleLittleArdiaProfile(windowId, 1);
+      cycleLittleSolaraProfile(windowId, 1);
       return true;
     case "previousProfile":
-      cycleLittleArdiaProfile(windowId, -1);
+      cycleLittleSolaraProfile(windowId, -1);
       return true;
     case "openProfileMenu":
-      void openLittleArdiaProfileMenu(windowId);
+      void openLittleSolaraProfileMenu(windowId);
       return true;
   }
   return false;

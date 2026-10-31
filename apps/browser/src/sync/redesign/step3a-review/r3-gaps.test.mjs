@@ -31,9 +31,9 @@ test("UNFORCED-quiet: a login Chrome never confirms doesn't stop another login's
     const realSave = shell.passwordStores;
     b.store.set(syncKey("stuck"), { o: SITE, u: "stuck", p: "s2 from B" });
     await b.sync();
-    const ardia = globalThis.acTestNativeModules?.ArdiaCEF;
-    const save = ardia?.savePassword;
-    if (ardia) ardia.savePassword = async (p, o, u, pw) => (u === "stuck" ? (w.here.set(loginKey("stuck"), stuck), { ok: true }) : save(p, o, u, pw));
+    const solara = globalThis.acTestNativeModules?.SolaraCEF;
+    const save = solara?.savePassword;
+    if (solara) solara.savePassword = async (p, o, u, pw) => (u === "stuck" ? (w.here.set(loginKey("stuck"), stuck), { ok: true }) : save(p, o, u, pw));
     try {
       await w.unforced(3);
       w.later(2);
@@ -42,7 +42,7 @@ test("UNFORCED-quiet: a login Chrome never confirms doesn't stop another login's
       await b.sync();
       assert.equal(b.store.get(syncKey("me"))?.p, "v2 here", "the other edit went out");
     } finally {
-      if (ardia) ardia.savePassword = save;
+      if (solara) solara.savePassword = save;
       void realSave;
     }
   }));

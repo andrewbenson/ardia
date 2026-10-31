@@ -1,5 +1,5 @@
 import XCTest
-@testable import ArdiaSyncCore
+@testable import SolaraLegacySyncCore
 
 final class RekeyCoreFakeStores: RekeyStoreOperations {
   static let listed: [(String, RekeyStoreKind)] = [
@@ -517,7 +517,7 @@ final class RekeyCoreCrashFlag: @unchecked Sendable {
 
 final class SafeStorageRekeyGateTests: XCTestCase {
   let installed = URL(fileURLWithPath: "/Users/x/Library/Application Support/com.hill.solara/Chromium")
-  let testEnv = ["ARDIA_TEST_REKEY": "1", "ARDIA_DATA_DIR": "/tmp/scratch/./a", "ARDIA_TEST_KEYCHAIN": "file"]
+  let testEnv = ["SOLARA_TEST_REKEY": "1", "SOLARA_DATA_DIR": "/tmp/scratch/./a", "SOLARA_TEST_KEYCHAIN": "file"]
 
   func gate(_ env: [String: String], real: Bool = false, distribution: Bool = false) -> SafeStorageRekeyGate {
     SafeStorageRekeyGate.resolve(environment: env, chromeUsesRealKeychain: real, signedForDistribution: distribution, installedUserDataDir: installed, currentDirectory: "/cwd")
@@ -527,28 +527,28 @@ final class SafeStorageRekeyGateTests: XCTestCase {
     XCTAssertEqual(gate([:], real: true).mode, .real)
     XCTAssertEqual(gate([:], real: true).userDataDir, installed)
     XCTAssertEqual(gate([:]).mode, .off)
-    XCTAssertEqual(gate(["ARDIA_DATA_DIR": "/tmp/s"]).mode, .off)
+    XCTAssertEqual(gate(["SOLARA_DATA_DIR": "/tmp/s"]).mode, .off)
   }
 
   func testTheTestModeNeedsEverything() {
     let honoured = gate(testEnv)
     XCTAssertEqual(honoured.mode, .test)
     XCTAssertEqual(honoured.userDataDir.path, "/tmp/scratch/a/Chromium")
-    XCTAssertEqual(gate(testEnv.merging(["ARDIA_DATA_DIR": "rel"]) { $1 }).userDataDir.path, "/cwd/rel/Chromium")
+    XCTAssertEqual(gate(testEnv.merging(["SOLARA_DATA_DIR": "rel"]) { $1 }).userDataDir.path, "/cwd/rel/Chromium")
     XCTAssertEqual(
-      gate(testEnv.merging(["ARDIA_DATA_DIR": "~/scratch"]) { $1 }).userDataDir.path,
+      gate(testEnv.merging(["SOLARA_DATA_DIR": "~/scratch"]) { $1 }).userDataDir.path,
       (NSHomeDirectory() as NSString).appendingPathComponent("scratch/Chromium"))
     for broken in [
-      testEnv.merging(["ARDIA_TEST_REKEY": "yes"]) { $1 }, testEnv.merging(["ARDIA_DATA_DIR": ""]) { $1 },
-      testEnv.filter { $0.key != "ARDIA_DATA_DIR" }, testEnv.filter { $0.key != "ARDIA_TEST_KEYCHAIN" },
-      testEnv.merging(["ARDIA_TEST_KEYCHAIN": "login"]) { $1 },
+      testEnv.merging(["SOLARA_TEST_REKEY": "yes"]) { $1 }, testEnv.merging(["SOLARA_DATA_DIR": ""]) { $1 },
+      testEnv.filter { $0.key != "SOLARA_DATA_DIR" }, testEnv.filter { $0.key != "SOLARA_TEST_KEYCHAIN" },
+      testEnv.merging(["SOLARA_TEST_KEYCHAIN": "login"]) { $1 },
     ] {
       let refused = gate(broken)
       XCTAssertEqual(refused.mode, .off, "\(broken)")
       XCTAssertNotNil(refused.refusal)
     }
     XCTAssertEqual(gate(testEnv, distribution: true).mode, .off)
-    XCTAssertEqual(gate(testEnv.filter { $0.key != "ARDIA_DATA_DIR" }, real: true).mode, .off)
+    XCTAssertEqual(gate(testEnv.filter { $0.key != "SOLARA_DATA_DIR" }, real: true).mode, .off)
   }
 
   func testOnlyTheRealModeBuildsTheLoginKeychain() {
@@ -565,20 +565,20 @@ final class SafeStorageRekeyGateTests: XCTestCase {
     defer { try? FileManager.default.removeItem(at: scratch) }
     let chromium = scratch.appendingPathComponent("Chromium")
     try FileManager.default.createDirectory(at: chromium, withIntermediateDirectories: true)
-    let env = testEnv.merging(["ARDIA_DATA_DIR": scratch.path]) { $1 }
+    let env = testEnv.merging(["SOLARA_DATA_DIR": scratch.path]) { $1 }
     func secret(_ env: [String: String], real: Bool = false, distribution: Bool = false) -> Data? {
       SafeStorageRekeyGate.testKeychainSecret(environment: env, chromeUsesRealKeychain: real, signedForDistribution: distribution, currentDirectory: "/cwd")
     }
     XCTAssertNil(secret(env))
     try Data("bmV3LXNlY3JldC1rZXkxMg==".utf8).write(to: chromium.appendingPathComponent("Test Safe Storage Key"))
     XCTAssertEqual(secret(env), Data("bmV3LXNlY3JldC1rZXkxMg==".utf8))
-    XCTAssertEqual(secret(env.filter { $0.key != "ARDIA_TEST_REKEY" }), Data("bmV3LXNlY3JldC1rZXkxMg==".utf8))
-    XCTAssertNil(secret(env.filter { $0.key != "ARDIA_DATA_DIR" }))
-    XCTAssertNil(secret(env.merging(["ARDIA_DATA_DIR": ""]) { $1 }))
-    XCTAssertNil(secret(env.filter { $0.key != "ARDIA_TEST_KEYCHAIN" }))
+    XCTAssertEqual(secret(env.filter { $0.key != "SOLARA_TEST_REKEY" }), Data("bmV3LXNlY3JldC1rZXkxMg==".utf8))
+    XCTAssertNil(secret(env.filter { $0.key != "SOLARA_DATA_DIR" }))
+    XCTAssertNil(secret(env.merging(["SOLARA_DATA_DIR": ""]) { $1 }))
+    XCTAssertNil(secret(env.filter { $0.key != "SOLARA_TEST_KEYCHAIN" }))
     XCTAssertNil(secret(env, real: true))
     XCTAssertNil(secret(env, distribution: true))
-    XCTAssertNil(SafeStorageRekeyGate.testKeychainSecret(environment: env.filter { $0.key != "ARDIA_TEST_KEYCHAIN" }, chromeUsesRealKeychain: false))
+    XCTAssertNil(SafeStorageRekeyGate.testKeychainSecret(environment: env.filter { $0.key != "SOLARA_TEST_KEYCHAIN" }, chromeUsesRealKeychain: false))
     XCTAssertNil(SafeStorageRekeyGate.testKeychainSecret(environment: env, chromeUsesRealKeychain: true))
   }
 

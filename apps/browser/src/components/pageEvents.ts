@@ -1,4 +1,4 @@
-import type { OpenWindowRequest, PageEngine, WebViewProps } from "@ardia/ardiacore";
+import type { OpenWindowRequest, PageEngine, WebViewProps } from "@solara/solaracore";
 import { focus, switchToTab } from "../lib/actions";
 import { adoptIconPage, dropOutlivedFavicon, noteFavicon, noteIconPage } from "../lib/favicons";
 import { restoredThemeColor } from "../lib/launchLook";
@@ -23,7 +23,7 @@ import { requestDisplayMedia } from "./media/SharePicker";
 import { setNowPlaying, setPictureInPictureState } from "./media/state";
 import { noteScroll, revealToolbar } from "./layout/toolbarAutoHide";
 import { closeWebNotification, showWebNotification } from "../lib/webNotifications";
-import { closeLittleArdiaOnEscape } from "./littleArdia/actions";
+import { closeLittleSolaraOnEscape } from "./littleSolara/actions";
 import { closePeekOnEscape } from "./peek/actions";
 
 export type PageSession = {
@@ -253,7 +253,7 @@ export function pageEventHandlers(session: PageSession): PageEventHandlers {
       if (command === "search") searchSelection(tabId, text, modifiers);
       else if (command === "copyLinkToHighlight") void copyLinkToSelection(tabId);
       else if (command === "escape" && usePages.getState().popover[tabId]) setPopover(tabId, null);
-      else if (command === "escape" && !closeFolderPanelIn(tab()?.windowId) && !closePeekOnEscape(tabId)) closeLittleArdiaOnEscape(tabId);
+      else if (command === "escape" && !closeFolderPanelIn(tab()?.windowId) && !closePeekOnEscape(tabId)) closeLittleSolaraOnEscape(tabId);
     },
     onPageMessage: (kind, data) => {
       if (kind === "selection") setPageSelection(tabId, data as PageSelection | null);

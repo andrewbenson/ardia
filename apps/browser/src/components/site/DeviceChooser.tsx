@@ -5,11 +5,11 @@ import {
   refreshDeviceChooser,
   selectDevice,
   type DeviceChooser as Chooser,
-} from "@ardia/ardiacore";
-import { Symbol } from "@ardia/shell";
+} from "@solara/solaracore";
+import { Symbol } from "@solara/shell";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { nativeToolbarAvailable, NativeDeviceChooserView, type NativeDeviceChooserEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativeDeviceChooserView, type NativeDeviceChooserEvent } from "@solara/settings";
 import { create } from "zustand";
 import { useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";

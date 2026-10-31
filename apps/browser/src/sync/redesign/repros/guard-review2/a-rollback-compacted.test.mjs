@@ -24,7 +24,7 @@ const guard = () => {
   if (fake.locked) throw new Error("locked");
 };
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => {

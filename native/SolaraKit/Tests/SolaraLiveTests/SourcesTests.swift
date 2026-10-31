@@ -117,7 +117,7 @@ import Testing
     await #expect(throws: LiveAuthError("access_denied")) { try await rig.engine.connectGoogleDrive(clientId: "c", clientSecret: "s") }
     let opened = rig.auth.opened.current.last!
     let q = GoogleAuth.query(opened)
-    #expect(opened.hasPrefix("\(MockServer.base)/google/auth?client_id=c&redirect_uri=http%3A%2F%2F127.0.0.1%3A53682%2Fardia-oauth"))
+    #expect(opened.hasPrefix("\(MockServer.base)/google/auth?client_id=c&redirect_uri=http%3A%2F%2F127.0.0.1%3A53682%2Fsolara-oauth"))
     #expect(q["code_challenge"]?.count == 64 && q["state"]?.count == 24 && q["code_challenge_method"] == "plain")
   }
 

@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import CoreGraphics
 import Foundation
 import SolaraStore
@@ -39,7 +39,7 @@ final class NativeMemoryTrim {
     let baseline = store.snapshot
     baselineRevision = baseline.rev
     schedule = MemoryTrimSchedule(tabCount: baseline.state.tabs.count)
-    for (name, quitting) in [("SolaraWillQuit", true), ("ArdiaCoreQuitCancelled", false)] {
+    for (name, quitting) in [("SolaraWillQuit", true), ("SolaraCoreQuitCancelled", false)] {
       quitObservers.append(NotificationCenter.default.addObserver(forName: Notification.Name(name), object: nil, queue: .main) { _ in
         MainActor.assumeIsolated {
           let trim = NativeMemoryTrim.shared
@@ -63,8 +63,8 @@ final class NativeMemoryTrim {
       guard !quitting, quitGeneration == requestedGeneration else { return }
       _ = try? await SettingsJS.shared.invoke("memory.compact", [], timeout: 3)
       guard !quitting, quitGeneration == requestedGeneration else { return }
-      guard !["off", "0", "false"].contains(ProcessInfo.processInfo.environment["ARDIA_MEMORY_TRIM_ENGINE"] ?? "") else { return }
-      ArdiaCoreServices.call("ac_memory_trim", profile: "", args: nil) { @Sendable _ in }
+      guard !["off", "0", "false"].contains(ProcessInfo.processInfo.environment["SOLARA_MEMORY_TRIM_ENGINE"] ?? "") else { return }
+      SolaraCoreServices.call("ac_memory_trim", profile: "", args: nil) { @Sendable _ in }
     }
   }
 

@@ -15,15 +15,15 @@ public struct SafeStorageRekeyGate: Equatable {
     environment env: [String: String], chromeUsesRealKeychain: Bool, signedForDistribution: Bool,
     installedUserDataDir: URL, currentDirectory: String = FileManager.default.currentDirectoryPath
   ) -> SafeStorageRekeyGate {
-    let scratch = env["ARDIA_DATA_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+    let scratch = env["SOLARA_DATA_DIR"].flatMap { $0.isEmpty ? nil : $0 }
     let userDataDir = scratch.map { scratchUserDataDir($0, currentDirectory: currentDirectory) } ?? installedUserDataDir
-    guard let test = env["ARDIA_TEST_REKEY"] else {
+    guard let test = env["SOLARA_TEST_REKEY"] else {
       return SafeStorageRekeyGate(mode: chromeUsesRealKeychain ? .real : .off, userDataDir: userDataDir, refusal: nil)
     }
     var missing: [String] = []
-    if test != "1" { missing.append("ARDIA_TEST_REKEY isn't 1") }
-    if scratch == nil { missing.append("ARDIA_DATA_DIR isn't set") }
-    if env["ARDIA_TEST_KEYCHAIN"] != "file" { missing.append("ARDIA_TEST_KEYCHAIN isn't file") }
+    if test != "1" { missing.append("SOLARA_TEST_REKEY isn't 1") }
+    if scratch == nil { missing.append("SOLARA_DATA_DIR isn't set") }
+    if env["SOLARA_TEST_KEYCHAIN"] != "file" { missing.append("SOLARA_TEST_KEYCHAIN isn't file") }
     if signedForDistribution { missing.append("the build is signed for distribution") }
     if chromeUsesRealKeychain { missing.append("Chrome runs on the real keychain") }
     guard missing.isEmpty else {
@@ -33,7 +33,7 @@ public struct SafeStorageRekeyGate: Equatable {
   }
 
   public static func testKeychainSecret(environment env: [String: String], chromeUsesRealKeychain: Bool) -> Data? {
-    guard !chromeUsesRealKeychain, env["ARDIA_TEST_KEYCHAIN"] == "file" else { return nil }
+    guard !chromeUsesRealKeychain, env["SOLARA_TEST_KEYCHAIN"] == "file" else { return nil }
     return testKeychainSecret(
       environment: env, chromeUsesRealKeychain: chromeUsesRealKeychain,
       signedForDistribution: SafeStorageRekeyRun.buildSignedForDistribution)
@@ -43,8 +43,8 @@ public struct SafeStorageRekeyGate: Equatable {
     environment env: [String: String], chromeUsesRealKeychain: Bool, signedForDistribution: Bool,
     currentDirectory: String = FileManager.default.currentDirectoryPath
   ) -> Data? {
-    guard !chromeUsesRealKeychain, !signedForDistribution, env["ARDIA_TEST_KEYCHAIN"] == "file",
-      let scratch = env["ARDIA_DATA_DIR"], !scratch.isEmpty
+    guard !chromeUsesRealKeychain, !signedForDistribution, env["SOLARA_TEST_KEYCHAIN"] == "file",
+      let scratch = env["SOLARA_DATA_DIR"], !scratch.isEmpty
     else { return nil }
     let key = scratchUserDataDir(scratch, currentDirectory: currentDirectory).appendingPathComponent("Test Safe Storage Key")
     guard let secret = try? Data(contentsOf: key), !secret.isEmpty else { return nil }
@@ -65,7 +65,7 @@ public struct SafeStorageRekeyGate: Equatable {
       return RekeyFileKeychain(
         file: userDataDir.appendingPathComponent("Test Safe Storage Key"),
         log: userDataDir.appendingPathComponent("Test Safe Storage Log"),
-        failure: RekeyFileKeychain.failure(named: env["ARDIA_TEST_KEYCHAIN_FAIL"]))
+        failure: RekeyFileKeychain.failure(named: env["SOLARA_TEST_KEYCHAIN_FAIL"]))
     case .off:
       return nil
     }

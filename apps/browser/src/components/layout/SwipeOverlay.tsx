@@ -1,6 +1,6 @@
-import { SwipeArea, swipeHaptic, type SwipeAreaHandle, type SwipeEvent } from "@ardia/ardiacore";
-import { sendPaneSwipe, windowShellActive } from "@ardia/settings";
-import { Surface, Symbol, VisualEffect } from "@ardia/shell";
+import { SwipeArea, swipeHaptic, type SwipeAreaHandle, type SwipeEvent } from "@solara/solaracore";
+import { sendPaneSwipe, windowShellActive } from "@solara/settings";
+import { Surface, Symbol, VisualEffect } from "@solara/shell";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";

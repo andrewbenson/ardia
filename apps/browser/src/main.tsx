@@ -1,7 +1,7 @@
 import "./lib/jsErrors";
 import "./lib/productName";
 import "./lib/nativeEvents";
-import { tabPool, tabPoolAvailable, windowPagesPoolActive } from "@ardia/settings";
+import { tabPool, tabPoolAvailable, windowPagesPoolActive } from "@solara/settings";
 import { useEffect, useState } from "react";
 import { AppRegistry, unstable_batchedUpdates } from "react-native";
 import { WindowRoot } from "./App";

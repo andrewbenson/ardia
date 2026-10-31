@@ -24,7 +24,7 @@ const guard = () => {
   if (fake.locked) throw new Error("locked");
 };
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => {
@@ -74,7 +74,7 @@ globalThis.acTestNativeModules = {
 };
 
 const shell = await import("../test-native/index.ts");
-const sync = await import("@ardia/sync");
+const sync = await import("@solara/sync");
 const { useBrowser } = await import("../store/browser.ts");
 const S = () => useBrowser.getState();
 const emptyBookmarks = S().bookmarks;
@@ -488,7 +488,7 @@ test("B35: a sync.json from a newer format is left alone instead of being rebuil
   assert.ok("error" in (await engine.turnOnSync("/sync")));
 });
 
-const native = globalThis.acTestNativeModules.ArdiaSync;
+const native = globalThis.acTestNativeModules.SolaraSyncAdapter;
 
 test("B36: a rebuild whose baseline is taken before bookmarks are ready republishes every stale bookmark over newer remote edits", async () => {
   reset();

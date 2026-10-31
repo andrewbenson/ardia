@@ -102,9 +102,9 @@ import Testing
 
   @Test func environmentOnlyDisablesTheSameExactValues() {
     #expect(MemoryTrimSchedule.enabled(environment: [:]))
-    #expect(MemoryTrimSchedule.enabled(environment: ["ARDIA_MEMORY_TRIM_HEAP": "off"]))
-    #expect(MemoryTrimSchedule.enabled(environment: ["ARDIA_MEMORY_TRIM_ENGINE": "off"]))
-    for key in ["ARDIA_MEMORY_TRIM"] {
+    #expect(MemoryTrimSchedule.enabled(environment: ["SOLARA_MEMORY_TRIM_HEAP": "off"]))
+    #expect(MemoryTrimSchedule.enabled(environment: ["SOLARA_MEMORY_TRIM_ENGINE": "off"]))
+    for key in ["SOLARA_MEMORY_TRIM"] {
       for off in ["off", "0", "false"] {
         #expect(!MemoryTrimSchedule.enabled(environment: [key: off]))
       }

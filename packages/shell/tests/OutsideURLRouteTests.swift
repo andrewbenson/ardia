@@ -1,10 +1,10 @@
 import XCTest
-@testable import ArdiaShellCore
+@testable import SolaraShellCore
 
 final class OutsideURLRouteTests: XCTestCase {
   let own = "/build/test/Solara.app"
   let id = "com.hill.solara"
-  let background = ["ARDIA_BACKGROUND": "1"]
+  let background = ["SOLARA_BACKGROUND": "1"]
 
   func route(
     _ environment: [String: String], running: [OutsideURLCandidate] = [], handler: OutsideURLCandidate? = nil,
@@ -19,7 +19,7 @@ final class OutsideURLRouteTests: XCTestCase {
   }
 
   func testOptingInKeepsTheLinksInTheBackgroundInstance() {
-    let environment = background.merging(["ARDIA_ACCEPT_EXTERNAL_URLS": "1"]) { $1 }
+    let environment = background.merging(["SOLARA_ACCEPT_EXTERNAL_URLS": "1"]) { $1 }
     XCTAssertEqual(route(environment, running: [OutsideURLCandidate(path: "/owner/Solara.app", bundleId: id)]), .open)
   }
 
@@ -33,7 +33,7 @@ final class OutsideURLRouteTests: XCTestCase {
   }
 
   func testTheOwnersDefaultSolaraOutsideApplicationsIsLaunchedForThem() {
-    let handler = OutsideURLCandidate(path: "/Users/owner/ardia/apps/browser/build-solara-engine/Solara.app", bundleId: id)
+    let handler = OutsideURLCandidate(path: "/Users/owner/solara/apps/browser/build-solara-engine/Solara.app", bundleId: id)
     XCTAssertEqual(route(background, handler: handler), .forward(path: handler.path, newInstance: true))
   }
 

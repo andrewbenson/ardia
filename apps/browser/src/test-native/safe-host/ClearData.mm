@@ -9,30 +9,30 @@ static int pictureCalls = 0;
 static NSMutableArray *received;
 static NSMutableArray *symbols;
 
-@interface ArdiaCoreHost : NSObject
+@interface SolaraCoreHost : NSObject
 @property(class) BOOL safeMode;
 @property(class, readonly) BOOL isStarted;
 @end
-@implementation ArdiaCoreHost
+@implementation SolaraCoreHost
 static BOOL safe = NO;
 + (BOOL)safeMode { return safe; }
 + (void)setSafeMode:(BOOL)value { safe = value; }
 + (BOOL)isStarted { return YES; }
 @end
 
-@interface ArdiaCoreEarlyWindow : NSObject
+@interface SolaraCoreEarlyWindow : NSObject
 + (void)forgetPictures;
 @end
-@implementation ArdiaCoreEarlyWindow
+@implementation SolaraCoreEarlyWindow
 + (void)forgetPictures { pictureCalls++; }
 @end
 
-@interface ArdiaCoreProfile : NSObject
+@interface SolaraCoreProfile : NSObject
 @property(copy) NSString *path;
 @property BOOL offTheRecord;
 - (void)clearBrowsingData:(NSArray<NSString *> *)types since:(NSDate *)since completion:(void (^)(void))completion;
 @end
-@implementation ArdiaCoreProfile
+@implementation SolaraCoreProfile
 - (void)clearBrowsingData:(NSArray<NSString *> *)types since:(NSDate *)since completion:(void (^)(void))completion {
   engineCalls++;
   [received addObject:@{ @"profile": self.path, @"types": types, @"since": @(since.timeIntervalSince1970) }];
@@ -40,26 +40,26 @@ static BOOL safe = NO;
 }
 @end
 
-typedef void (^ArdiaCoreResult)(NSDictionary *);
-@interface ArdiaCoreServices : NSObject
-+ (void)call:(NSString *)name profile:(NSString *)profile args:(NSDictionary *)args completion:(ArdiaCoreResult)completion;
+typedef void (^SolaraCoreResult)(NSDictionary *);
+@interface SolaraCoreServices : NSObject
++ (void)call:(NSString *)name profile:(NSString *)profile args:(NSDictionary *)args completion:(SolaraCoreResult)completion;
 + (void)clearBrowsingData:(NSString *)profile types:(NSArray<NSString *> *)types since:(double)sinceMs completion:(void (^)(void))completion;
-+ (void)clearSiteData:(NSString *)profile origin:(NSString *)origin completion:(ArdiaCoreResult)completion;
++ (void)clearSiteData:(NSString *)profile origin:(NSString *)origin completion:(SolaraCoreResult)completion;
 @end
 
-namespace ardiacore_host {
+namespace solaracore_host {
 BOOL IsIncognito(NSString *) { return NO; }
-NSArray<ArdiaCoreProfile *> *LoadedProfiles() { return @[]; }
-NSString *ProfileName(ArdiaCoreProfile *) { return @""; }
+NSArray<SolaraCoreProfile *> *LoadedProfiles() { return @[]; }
+NSString *ProfileName(SolaraCoreProfile *) { return @""; }
 NSString *OriginalProfileName(NSString *profile) { return profile; }
-ArdiaCoreProfile *LoadedProfile(NSString *name) {
+SolaraCoreProfile *LoadedProfile(NSString *name) {
   if (![name isEqualToString:@"fixture-profile-id"]) abort();
   profileCalls++;
-  ArdiaCoreProfile *profile = [ArdiaCoreProfile new];
+  SolaraCoreProfile *profile = [SolaraCoreProfile new];
   profile.path = @"fixture-profile";
   return profile;
 }
-void WithProfile(NSString *name, void (^done)(ArdiaCoreProfile *)) { done(LoadedProfile(name)); }
+void WithProfile(NSString *name, void (^done)(SolaraCoreProfile *)) { done(LoadedProfile(name)); }
 }
 
 void FakeEngine(const char *profile, const char *args, void (*reply)(void *, const char *), void *context) {
@@ -82,7 +82,7 @@ int main() {
     symbols = [NSMutableArray array];
     NSMutableArray *results = [NSMutableArray array];
     for (NSNumber *mode in @[ @YES, @NO ]) {
-      ArdiaCoreHost.safeMode = mode.boolValue;
+      SolaraCoreHost.safeMode = mode.boolValue;
       for (NSString *path in @[ @"browsing", @"browsingCache", @"site", @"bridge" ]) {
         profileCalls = engineCalls = pictureCalls = 0;
         [received removeAllObjects];
@@ -91,11 +91,11 @@ int main() {
         __block NSDictionary *reply = @{};
         BOOL history = [path isEqualToString:@"browsing"];
         if ([path hasPrefix:@"browsing"]) {
-          [ArdiaCoreServices clearBrowsingData:@"fixture-profile-id" types:history ? @[ @"history", @"siteData", @"cache" ] : @[ @"cache" ] since:123000 completion:^{ callbacks++; }];
+          [SolaraCoreServices clearBrowsingData:@"fixture-profile-id" types:history ? @[ @"history", @"siteData", @"cache" ] : @[ @"cache" ] since:123000 completion:^{ callbacks++; }];
         } else if ([path isEqualToString:@"site"]) {
-          [ArdiaCoreServices clearSiteData:@"fixture-profile-id" origin:@"https://example.test" completion:^(NSDictionary *result) { callbacks++; reply = result; }];
+          [SolaraCoreServices clearSiteData:@"fixture-profile-id" origin:@"https://example.test" completion:^(NSDictionary *result) { callbacks++; reply = result; }];
         } else {
-          [ArdiaCoreServices call:@"ac_browsing_data_clear" profile:@"fixture-profile-id" args:@{ @"types": @[ @"cache" ] } completion:^(NSDictionary *result) { callbacks++; reply = result; }];
+          [SolaraCoreServices call:@"ac_browsing_data_clear" profile:@"fixture-profile-id" args:@{ @"types": @[ @"cache" ] } completion:^(NSDictionary *result) { callbacks++; reply = result; }];
         }
         [results addObject:@{ @"safe": mode, @"path": [path hasPrefix:@"browsing"] ? @"browsing" : path, @"history": @(history), @"engineCalls": @(engineCalls), @"profileCalls": @(profileCalls),
                              @"pictureCalls": @(pictureCalls), @"callbacks": @(callbacks), @"reply": reply, @"symbols": [symbols copy], @"received": [received copy] }];

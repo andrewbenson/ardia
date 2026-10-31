@@ -7,7 +7,7 @@ import { launch, reporter, session, sleep } from "../../../scripts/lib/instance.
 const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
-  console.error("usage: node sidebar-bulk-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data]\n\nMany tabs duplicated, opened or closed at once leave the sidebar's rows at an even pitch, in store order, with no slide left part way and the row under the pointer the one hovered. ARDIA_NATIVE_SIDEBAR=1 runs it on the native sidebar.");
+  console.error("usage: node sidebar-bulk-test.mjs <Debug Solara.app> [--port=<DevTools port>] [--keep-data]\n\nMany tabs duplicated, opened or closed at once leave the sidebar's rows at an even pitch, in store order, with no slide left part way and the row under the pointer the one hovered. SOLARA_NATIVE_SIDEBAR=1 runs it on the native sidebar.");
   process.exit(2);
 }
 const appPath = resolve(appArg);

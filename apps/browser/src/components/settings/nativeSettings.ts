@@ -1,4 +1,4 @@
-import { nativeSettingsAvailable, publishSettingsTopic, serveNativeSettings, type SettingsHandler } from "@ardia/settings";
+import { nativeSettingsAvailable, publishSettingsTopic, serveNativeSettings, type SettingsHandler } from "@solara/settings";
 import { openUrls } from "../../lib/actions";
 import { installCliInBackground, useCli } from "../../lib/cliControl";
 import { compactMemory } from "../../lib/memoryTrim";

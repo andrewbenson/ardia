@@ -3,7 +3,7 @@ import ExpoModulesCore
 
 public final class InlineCompletionModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaInlineCompletion")
+    Name("SolaraInlineCompletion")
 
     AsyncFunction("complete") { (tag: Int, typed: String, completion: String) -> Int in
       guard let host = self.appContext?.findView(withTag: tag, ofType: NSView.self),

@@ -10,11 +10,11 @@ if (!appArg) {
   console.error(`usage: node selection-popover-test.mjs <Debug Solara.app> [--keep-data]
 
 The selection search bar over a local page whose custom search engine is a local URL, drawn by RN and then natively
-(ARDIA_NATIVE_SHELL=1: SelectionBarView in the tab's pane overlay container on top of the shell's card). A word selected in the page, as a mouse selection reports it, brings the bar up 6 above it
+(SOLARA_NATIVE_SHELL=1: SelectionBarView in the tab's pane overlay container on top of the shell's card). A word selected in the page, as a mouse selection reports it, brings the bar up 6 above it
 (and below a word near the top), centred on it and kept 8 inside the page; the bar and its Search button sit on the same window frames in both
 within half a point, RN draws no bar with the switch on, the native bar fades in, and a click on Search through the
 window searches the custom engine for the word and takes the bar down. A third run pools the page with
-ARDIA_NATIVE_PANE_PROMPTS=1: RN mounts no SelectionPopover and the bar comes from the pool's page messages, on the same
+SOLARA_NATIVE_PANE_PROMPTS=1: RN mounts no SelectionPopover and the bar comes from the pool's page messages, on the same
 frames, and searches the same way.`);
   process.exit(2);
 }
@@ -38,7 +38,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const fibers = (name) => acPerf.findFibers(name, 500).filter((f) => !!f.child);
@@ -97,8 +97,8 @@ try {
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
       env: tag === "prompts"
-        ? { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" }
-        : { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0", ARDIA_NATIVE_PANE_PROMPTS: "0" },
+        ? { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1", SOLARA_NATIVE_PANE_PROMPTS: "1" }
+        : { SOLARA_NATIVE_SHELL: nativeShell ? "1" : "0", SOLARA_NATIVE_PANE_PROMPTS: "0" },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);

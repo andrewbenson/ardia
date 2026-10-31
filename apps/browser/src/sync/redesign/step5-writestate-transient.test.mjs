@@ -18,7 +18,7 @@ const fake = {
   catchUp: () => null, flush: () => true, freeze: () => true, useSyncOrigins: () => true,
   addListener: () => ({ remove() {} }),
 };
-globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, ArdiaStore: fake };
+globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, SolaraStoreAdapter: fake };
 
 const { useBrowser } = await import(`${SRC}/store/browser.ts`);
 const nativeStore = await import(`${SRC}/store/nativeStore.ts`);

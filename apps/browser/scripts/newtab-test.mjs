@@ -161,7 +161,7 @@ try {
     settings: { newTabOpens: "page", addressBar: "toolbar", commandBarPlacement: "field", searchSuggestions: false, warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
   });
   launching = launch(appPath, { data, fresh: true, onboarded: true, probe: true, session: fixture, files: { "bench-offline": "" },
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_NEWTAB: "1", ARDIA_NATIVE_OMNIBOX: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_NEWTAB: "1", SOLARA_NATIVE_OMNIBOX: "1" },
     ready: false, startTimeout: 20_000 });
   app = await launching;
   assert.ok(!stopping, "launch interrupted");

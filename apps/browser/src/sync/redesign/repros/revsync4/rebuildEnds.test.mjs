@@ -3,7 +3,7 @@ import { test } from "node:test";
 import "../../switchOn.mjs";
 import { fake, folder, shell, sync, S, settle, launch, reset, files, otherMac, useBrowser, onAndSynced, rawTransport, realSetTimeout } from "./harness.mjs";
 
-const native = globalThis.acTestNativeModules.ArdiaSync;
+const native = globalThis.acTestNativeModules.SolaraSyncAdapter;
 const realReadPasswords = native.readPasswords;
 
 test("R-unapplied: a rebuild that ends while bookmarks couldn't be applied republishes stale local bookmarks on the next cycle", async () => {

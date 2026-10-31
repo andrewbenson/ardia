@@ -1,4 +1,4 @@
-import { onWindowEvent, setTrafficLightsCenter, Surface, watchLeftEdge, WindowDragRegion } from "@ardia/shell";
+import { onWindowEvent, setTrafficLightsCenter, Surface, watchLeftEdge, WindowDragRegion } from "@solara/shell";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";

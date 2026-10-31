@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 
 final class NativeSwipeTarget: NSView, @preconcurrency ACSwipeTarget, @preconcurrency ACPagerSurface {
   var canSwipeBack = false

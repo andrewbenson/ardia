@@ -1,4 +1,4 @@
-import { setAutoPictureInPicture, setDisplayMediaPicker, setVideoUpscaling } from "@ardia/ardiacore";
+import { setAutoPictureInPicture, setDisplayMediaPicker, setVideoUpscaling } from "@solara/solaracore";
 import { useRef } from "react";
 import { useBrowser } from "../../store/browser";
 import { useStoreWhile } from "../../store/tabWatch";

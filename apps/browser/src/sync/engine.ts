@@ -1,4 +1,4 @@
-import { listDocuments, readDocument, removeDocument, saveDocument, writeDocument } from "@ardia/shell";
+import { listDocuments, readDocument, removeDocument, saveDocument, writeDocument } from "@solara/shell";
 import {
   canonical,
   Clock,
@@ -20,7 +20,7 @@ import {
   type ScopeState,
   type Transport,
   hlcWall,
-} from "@ardia/sync";
+} from "@solara/sync";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
 import { nativeBusyWrites, nativeOwnsWorkspace, nativeSafeMode } from "../store/nativeStore";

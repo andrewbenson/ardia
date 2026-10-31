@@ -1,5 +1,5 @@
-import { searchEngineList } from "@ardia/ardiacore";
-import { extensionEnginesFromChrome } from "@ardia/core";
+import { searchEngineList } from "@solara/solaracore";
+import { extensionEnginesFromChrome } from "@solara/core";
 import { useBrowser } from "../../store/browser";
 import { useExtensions } from "./state";
 

@@ -4,7 +4,7 @@ import { test } from "node:test";
 globalThis.__DEV__ = false;
 
 const { useBrowser } = await import("../store/browser.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const adapters = await import("./adapters.ts");
 
 const S = () => useBrowser.getState();

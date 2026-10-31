@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 import { identity } from "../../../scripts/lib/identity.mjs";
 import { launch, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 
-const HELP = `sealed-e2e: password sync across the ARDIA_SYNC_REDESIGN switch, between hidden instances of one build.
+const HELP = `sealed-e2e: password sync across the SOLARA_SYNC_REDESIGN switch, between hidden instances of one build.
 
   node packages/sync/scripts/sealed-e2e.mjs [<Debug app> [work dir]]
 
-A Mac launched with ARDIA_SYNC_REDESIGN=1 seals passwords; one launched without it stands in for an older build,
+A Mac launched with SOLARA_SYNC_REDESIGN=1 seals passwords; one launched without it stands in for an older build,
 since the folder format is the same. Cases: an older and a newer Mac converge; a realm saved with a trailing slash
 syncs and settles; a password that reads "s1.abc" arrives as written; going back to the older build changes no
 password; a deletion made before the upgrade and never published goes out after it; a held mass change stays held
@@ -40,7 +40,7 @@ async function start(name, sealed) {
   if (apps[name]) await quit(name);
   apps[name] = await launch(APP, {
     data: `${WORK}/${name}`,
-    env: { ARDIA_SYNC_DEFAULT_FOLDER: FOLDER, ARDIA_TEST_REAUTH: "granted", ARDIA_SYNC_REDESIGN: sealed ? "1" : null },
+    env: { SOLARA_SYNC_DEFAULT_FOLDER: FOLDER, SOLARA_TEST_REAUTH: "granted", SOLARA_SYNC_REDESIGN: sealed ? "1" : null },
     ready: { timeout: 120_000, test: "return !!globalThis.acSync && Object.keys(ac.store.getState().windows).length > 0" },
   });
   note(`${name}: pid ${apps[name].pid}, sealed ${sealed}, log ${apps[name].log}`);
@@ -64,12 +64,12 @@ const sync = async (...names) => {
   for (const n of names) await ev(n, "return acSync.syncNow()");
 };
 const save = (name, origin, user, password) =>
-  ev(name, `const c = globalThis.expo.modules.ArdiaCEF; return c.deletePassword("", ${text(origin)}, ${text(user)}).then(() => c.savePassword("", ${text(origin)}, ${text(user)}, ${text(password)}));`);
-const remove = (name, origin, user) => ev(name, `return globalThis.expo.modules.ArdiaCEF.deletePassword("", ${text(origin)}, ${text(user)})`);
+  ev(name, `const c = globalThis.expo.modules.SolaraCEF; return c.deletePassword("", ${text(origin)}, ${text(user)}).then(() => c.savePassword("", ${text(origin)}, ${text(user)}, ${text(password)}));`);
+const remove = (name, origin, user) => ev(name, `return globalThis.expo.modules.SolaraCEF.deletePassword("", ${text(origin)}, ${text(user)})`);
 async function passwords(name) {
   const answer = await ev(
     name,
-    `const c = globalThis.expo.modules.ArdiaCEF;
+    `const c = globalThis.expo.modules.SolaraCEF;
     return c.listPasswords("").then((list) => Array.isArray(list?.passwords)
       ? Promise.all(list.passwords.map((p) => c.getPassword("", p.origin, p.username).then((r) => r?.error
           ? { error: "getPassword " + p.origin + " " + p.username + ": " + r.error }

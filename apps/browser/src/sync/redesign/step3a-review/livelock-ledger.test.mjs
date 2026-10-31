@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 await import("../../../store/browser.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const { ledgerPasswordsAdapter } = await import("../../../sync/ledgerPasswords.ts");
 const stub = await import("../../../test-native/index.ts");
 const { plainOf, sealMarked, sealedCalls } = await import("../fakeSeal.mjs");
@@ -43,7 +43,7 @@ function device(id, transport, slowChrome) {
     const logins = [...stub.passwordStores.get(id).values()].map((l) => ({ ...l }));
     return { logins, mark: marks.get(profile) ?? null };
   };
-  const pw = ledgerPasswordsAdapter(id, () => forced, sealMarked(readMarked), () => "s", sealedCalls(() => stub.ardiaCoreNativeModules.ArdiaCEF));
+  const pw = ledgerPasswordsAdapter(id, () => forced, sealMarked(readMarked), () => "s", sealedCalls(() => stub.solaraCoreNativeModules.SolaraCEF));
   return {
     state,
     store: () => stub.passwordStores.get(id),

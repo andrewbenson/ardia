@@ -16,7 +16,7 @@ const out = resolve(flags.out ?? join(tmpdir(), "ac-layout-shift"));
 mkdirSync(out, { recursive: true });
 let app = resolve(appArg);
 if (flags.bundle) {
-  const clone = join(out, "app", "Ardia.app");
+  const clone = join(out, "app", "Solara.app");
   rmSync(dirname(clone), { recursive: true, force: true });
   mkdirSync(dirname(clone), { recursive: true });
   execFileSync("cp", ["-cR", app, clone]);

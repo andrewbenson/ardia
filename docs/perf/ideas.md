@@ -12,7 +12,7 @@ may be) and took it out again: it gained nothing, for two reasons.
 - This engine keeps Chrome's "Preload pages" setting off by default (the ungoogled patches set
   `NetworkPredictionOptions::kDefault = kDisabled`), and both preconnect and prerender respect it.
 - With it on, every prerender is cancelled as its page loads (`PrerenderFinalStatus::kMojoBinderPolicy`): the page
-  binds ArdiaCore's page channel, `ardiacore.mojom.ACPageHost`, which Chrome doesn't allow in a prerendered page. That cancels
+  binds SolaraCore's page channel, `solaracore.mojom.ACPageHost`, which Chrome doesn't allow in a prerendered page. That cancels
   sites' own speculation-rules prerenders too.
 
 To take it up again:

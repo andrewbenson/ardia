@@ -5,7 +5,7 @@ import { emitAppEvent, windows } from "../test-native/shell.ts";
 let safeMode = "option";
 const calls = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: { status: () => ({ active: false, safeMode }) },
+  SolaraStoreAdapter: { status: () => ({ active: false, safeMode }) },
   SolaraSettings: {
     liveInitialReplica: () => ({ revision: 0, replicaJSON: "{}" }),
     liveStart: async () => { calls.push("start"); },

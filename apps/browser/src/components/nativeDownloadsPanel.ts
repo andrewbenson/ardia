@@ -1,4 +1,4 @@
-import { publishSettingsTopic, type NativeDownloadsEvent } from "@ardia/settings";
+import { publishSettingsTopic, type NativeDownloadsEvent } from "@solara/settings";
 import { useEffect, useRef } from "react";
 import { addNativeSettingsHandlers } from "./settings/nativeSettings";
 

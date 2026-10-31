@@ -6,7 +6,7 @@ move (§4), the plan phase by phase (§5), the measurements to take before any c
 [baseline.md](baseline.md)), and the risks and open questions (§7).
 
 The owner has already decided the following, and the doc designs for them:
-- Fully native, diverging from Ardia. Upstream UI changes stop merging for each surface once it goes native; engine
+- Fully native, diverging from Solara. Upstream UI changes stop merging for each surface once it goes native; engine
   and native-module work can still be merged.
 - All Swift, macOS first. The core is a Swift package (model, GRDB persistence, sync, omnibox, importers) built on
   Observation and strict concurrency. SwiftUI is used for forms and lists, AppKit for the sidebar, tab rows, drag and
@@ -22,10 +22,10 @@ The owner has already decided the following, and the doc designs for them:
 
 | Where | What runs there |
 |---|---|
-| **Browser process, main thread** | `main.swift` → `SafeStorageRekeyRun` → `ArdiaCoreHost.run` → `ChromeMain`. The main thread is AppKit's event loop, which is also **Chrome's UI thread**: `NSApp` is Chrome's `BrowserCrApplication`, and the RN host (`AppDelegate`, an `ExpoAppDelegate`) starts inside Chrome's run loop. RN mounts views here, along with every `ArdiaCoreWebView` and `ArdiaCoreWindow`, Chrome's bubbles and menus, every Expo function marked `runOnQueue(.main)`, every engine callback, and `WindowManager` (`packages/shell/ios/Windows.swift`). |
-| Browser process, JS thread | Hermes: the zustand store (`useBrowser`), React reconciliation, every store listener, the omnibox's suggestion work (`@ardia/core`), persistence serialization (`JSON.stringify` of the whole session), the sync merge, and Live Folders. |
+| **Browser process, main thread** | `main.swift` → `SafeStorageRekeyRun` → `SolaraCoreHost.run` → `ChromeMain`. The main thread is AppKit's event loop, which is also **Chrome's UI thread**: `NSApp` is Chrome's `BrowserCrApplication`, and the RN host (`AppDelegate`, an `ExpoAppDelegate`) starts inside Chrome's run loop. RN mounts views here, along with every `SolaraCoreWebView` and `SolaraCoreWindow`, Chrome's bubbles and menus, every Expo function marked `runOnQueue(.main)`, every engine callback, and `WindowManager` (`packages/shell/ios/Windows.swift`). |
+| Browser process, JS thread | Hermes: the zustand store (`useBrowser`), React reconciliation, every store listener, the omnibox's suggestion work (`@solara/core`), persistence serialization (`JSON.stringify` of the whole session), the sync merge, and Live Folders. |
 | Browser process, RN shadow queue | Yoga layout (legacy architecture). |
-| Browser process, `ardia.documents` queue | `DocumentStore` file writes (`ShellModule.swift:115`). |
+| Browser process, `solara.documents` queue | `DocumentStore` file writes (`ShellModule.swift:115`). |
 | Browser process, Chrome's IO thread and thread pool | Chrome's own work: history, passwords, network. |
 | Renderer, GPU and utility processes | Chrome's. |
 
@@ -51,33 +51,33 @@ page reports for one batch) → store → React → mount.
 | Downloads list | JS store (`store/ui.ts`) | `downloads.json` |
 | Live tab facts (which tabs each Chrome strip holds, their order, the active tab, Chrome's groups) | Chrome's `TabStripModel`, mirrored into JS (`lib/chromeTabs.ts`, `store/liveTabs.ts`) | Chrome's session |
 | Live page state (loading, progress, back/forward, audio, theme color) | JS store `live` | not saved |
-| History, bookmarks, favicons, passwords, autofill, extensions, site settings, zoom, cookies | **Chrome** (`Chromium/` in the data folder), reached through `ac_*` calls and `ArdiaCoreServices` | Chrome's profile. JS keeps views of them (`history[profileId]`, `bookmarks`), plus `bookmarks-cache.json` for display only. |
-| Sync | JS (`sync/engine.ts`, `adapters.ts`, `packages/sync/src` merge). Crypto, vault and keychain are Swift (`ArdiaSyncCore`). | `sync.json`, `sync-state.nns`, `sync-journal.nns`, the Keychain service `Ardia Sync Key` |
+| History, bookmarks, favicons, passwords, autofill, extensions, site settings, zoom, cookies | **Chrome** (`Chromium/` in the data folder), reached through `ac_*` calls and `SolaraCoreServices` | Chrome's profile. JS keeps views of them (`history[profileId]`, `bookmarks`), plus `bookmarks-cache.json` for display only. |
+| Sync | JS (`sync/engine.ts`, `adapters.ts`, `packages/sync/src` merge). Crypto, vault and keychain are Swift (`SolaraLegacySyncCore`). | `sync.json`, `sync-state.nns`, `sync-journal.nns`, the Keychain service `Solara Sync Key` |
 | Live Folders and Calendar | JS (`live/`) | `live.json` |
-| Small documents | JS | `onboarding.json`, `release-notes.json`, `ardia-cli.json`, `launch-look.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json` and kill-switch caches |
-| Launch picture | Native (`ArdiaCoreEarlyWindow.mm`) | `launch-layout.json`, `launch-picture-*.png` |
+| Small documents | JS | `onboarding.json`, `release-notes.json`, `solara-cli.json`, `launch-look.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json` and kill-switch caches |
+| Launch picture | Native (`SolaraCoreEarlyWindow.mm`) | `launch-layout.json`, `launch-picture-*.png` |
 
 The owner's live data folder (`~/Library/Application Support/com.hill.solara`) holds only `session.json` (21 KB),
-`launch-layout.json`, `onboarding.json`, `release-notes.json`, `bookmarks-cache.json`, `ardia-cli.json` and
+`launch-layout.json`, `onboarding.json`, `release-notes.json`, `bookmarks-cache.json`, `solara-cli.json` and
 `Chromium/`. Sync and Live Folders are off. The plan doesn't rely on that.
 
 ### 1.3 How state reaches native views and the engine
 
-- **Windows.** JS calls `openWindow(id, …)`. `WindowManager.open` makes an `ArdiaCoreWindow` (`ChromeWindows.makeWindow`)
+- **Windows.** JS calls `openWindow(id, …)`. `WindowManager.open` makes an `SolaraCoreWindow` (`ChromeWindows.makeWindow`)
   and embeds an RN root view for that id (`WindowHost.makeContentView` → `superView(withModuleName: "main",
   initialProperties: ["windowId": id])`). Every window, Settings and Import included, is an RN root on **one** JS
   runtime.
-- **Tabs.** Each tab's page is an `ArdiaCoreWebView`. That is a plain `NSView` with a delegate
-  (`ArdiaCoreWebView.h`), created by RN's `WebView` component (`packages/ardiacore/src/WebView.tsx`) and driven by
+- **Tabs.** Each tab's page is an `SolaraCoreWebView`. That is a plain `NSView` with a delegate
+  (`SolaraCoreWebView.h`), created by RN's `WebView` component (`packages/solaracore/src/WebView.tsx`) and driven by
   props (`profile`, `initialURL`, `adoptId`, `transferKey`, `visible`, `frozen`, …). This matters for the move: native
   code can host it with no RN involved.
 - **Chrome's tab strips.** The contract is in `docs/store-api.md` › "Live tabs". JS sends `activate`, `arrange` and
   `group` commands (`sendTabStripCommand`). Chrome answers with ordered transactions `{rev, cmd, strips}`, and
   `chromeChanged` folds Chrome's own changes (extensions, Chrome's successor pick) into the workspace. There is one
   writer per fact.
-- **Services.** JS → Expo module (`CefModule.swift` and friends) → `ArdiaCoreServices` (Obj-C, typed) or
-  `ArdiaCoreEngineBridge` (`ac_*` C calls in `engine/chromium`, JSON in and JSON out, found through dlsym). Events
-  come back through `ArdiaCoreEngineBridge.observe` and the event switch in `CefModule.swift`.
+- **Services.** JS → Expo module (`CefModule.swift` and friends) → `SolaraCoreServices` (Obj-C, typed) or
+  `SolaraCoreEngineBridge` (`ac_*` C calls in `engine/chromium`, JSON in and JSON out, found through dlsym). Events
+  come back through `SolaraCoreEngineBridge.observe` and the event switch in `CefModule.swift`.
 - **Menus and app state.** `lib/native.ts` (`startNativeSync`) pushes the menu state, appearance and scroll-bar style
   to `Menus.swift` and the other shell modules on a 120 ms debounce.
 
@@ -104,8 +104,8 @@ The owner's live data folder (`~/Library/Application Support/com.hill.solara`) h
 - **Settings migrations** are named and idempotent. `migrateSavedSettings` runs `withoutBatterySaver`,
   `keepToolbarOnScroll` (recorded in `settings.migrations`) and `withNewTabButtonPosition`. `chosen` and `inferred`
   record which keys the user set.
-- **Native readers of `session.json`:** `ArdiaCoreHost.mm:158` reads it before JS runs, for the early window
-  (`ArdiaCoreEarlyWindow prefetchForSession`: `launchTab`, `launchBackdrop`, `linkProfile`).
+- **Native readers of `session.json`:** `SolaraCoreHost.mm:158` reads it before JS runs, for the early window
+  (`SolaraCoreEarlyWindow prefetchForSession`: `launchTab`, `launchBackdrop`, `linkProfile`).
 
 ### 1.5 Sizes
 
@@ -121,8 +121,8 @@ Lines of code, from `wc -l` on 2026-10-26.
 | ↳ sidebar / layout / settings / onboarding / site / extensions / media / import / omnibox / pages | 6,906 / 5,695 / 6,337 / 5,074 / 2,744 / 1,594 / 1,610 / 1,548 / 1,356 / 1,312 | |
 | `packages/core` (omnibox): logic, plus `bangList.ts` data | about 3,000 + 10,706 | 1,079 |
 | `packages/sync/src` (merge, TS) | 1,821 | |
-| Native Swift / Obj-C++: `packages/shell/ios`, `packages/ardiacore/ios`, `packages/sync/ios`, `packages/import/ios` | 9,894 / 18,804 / about 2,300 / about 5,100 | Swift tests in sync and import |
-| Engine: `engine/chromium` (`ac_*`), `engine/ardiacore` (`//ardia/core`) | 10,889 / 17,042 | |
+| Native Swift / Obj-C++: `packages/shell/ios`, `packages/solaracore/ios`, `packages/sync/ios`, `packages/import/ios` | 9,894 / 18,804 / about 2,300 / about 5,100 | Swift tests in sync and import |
+| Engine: `engine/chromium` (`ac_*`), `engine/solaracore` (`//solara/core`) | 10,889 / 17,042 | |
 
 About 70k lines of TypeScript go away by the end. About 37k lines of native app code and 28k lines of engine code stay.
 
@@ -143,7 +143,7 @@ About 70k lines of TypeScript go away by the end. About 37k lines of native app 
 - On macOS 27.2, `performWindowDragWithEvent:` is broken. Solara's fallback moves the window from the main thread one
   event at a time (17ca55fe). It trailed by up to 57 pt until 746664cf, and it now installs only from 27.2 on
   (be42c43a).
-- Native views make the fix simpler (the `ServerWindowDrag` approach behind `ARDIA_SERVER_WINDOW_DRAG`, with
+- Native views make the fix simpler (the `ServerWindowDrag` approach behind `SOLARA_SERVER_WINDOW_DRAG`, with
   geometry we own instead of walking RN's z-order), but going native doesn't make that work unnecessary.
 
 **Launch.**
@@ -167,19 +167,19 @@ between Swift and the app.
 ### 2.1 Module layout
 
 There is one Swift package, `native/SolaraKit/Package.swift`, plus the app target. The core targets import neither
-AppKit nor ArdiaCore, so a future WebKit-based iPhone or iPad app can reuse them.
+AppKit nor SolaraCore, so a future WebKit-based iPhone or iPad app can reuse them.
 
 ```
 SolaraModel        value types, ids, invariants                      (Foundation)
   └─ SolaraStore       commands, reducers, settle passes, commits, rev log
        ├─ SolaraPersistence  GRDB schema, migrator, writer, session.json v2 import/export   (+ GRDB)
        ├─ SolaraOmnibox      packages/core port: parse, fix-up, suggest, bangs, calculator, IDN
-       ├─ SolaraSync         ArdiaSyncCore (moved as-is) + the merge (port of packages/sync/src) + adapters
+       ├─ SolaraSync         SolaraLegacySyncCore (moved as-is) + the merge (port of packages/sync/src) + adapters
        ├─ SolaraImport       packages/import/ios/Core (already plain Swift with a Package.swift), moved
        ├─ SolaraBridgeCore   the bridge's logic in plain Swift (snapshot, dispatch, catch-up, foreign commits), tested without Expo
 SolaraSignposts      the fixed perf endpoints and counters of docs/native/baseline.md (Foundation + os)
-SolaraEngine (macOS)  typed Swift over ArdiaCoreEngineBridge, ArdiaCoreServices, ArdiaCoreTabStrip,
-                      ArdiaCoreWebView, ArdiaCoreHost; EngineClient, TabViewPool, LiveTabs
+SolaraEngine (macOS)  typed Swift over SolaraCoreEngineBridge, SolaraCoreServices, SolaraCoreTabStrip,
+                      SolaraCoreWebView, SolaraCoreHost; EngineClient, TabViewPool, LiveTabs
 SolaraUI (macOS)      AppKit + SwiftUI surfaces: SettingsUI, OnboardingUI, NewTabUI, ToolbarUI, SidebarUI, WindowShell
 SolaraRNBridge        Expo module over SolaraBridgeCore exposing the store to JS (deleted in phase 6)
 App target            main.swift, AppDelegate (Chrome-hosted), menus (Menus.swift moves here)
@@ -197,8 +197,8 @@ All targets build for macOS 26 and iOS 26, the owner's minimum.
 | SolaraImport | Model | macOS (it reads other Mac browsers) |
 | SolaraBridgeCore | Model, Store, Persistence | macOS, iOS |
 | SolaraSignposts | — | macOS, iOS |
-| SolaraEngine | Store, Omnibox; ArdiaCore headers (pod until phase 6) | macOS |
-| SolaraUI | Model for now; Engine, Store, Omnibox, Sync, Import and `ArdiaShaders` as its surfaces need them | macOS |
+| SolaraEngine | Store, Omnibox; SolaraCore headers (pod until phase 6) | macOS |
+| SolaraUI | Model for now; Engine, Store, Omnibox, Sync, Import and `SolaraShaders` as its surfaces need them | macOS |
 
 Reasons:
 - `SolaraStore` doesn't import `SolaraOmnibox`. The few reducers that parse URLs (`navigate`'s same-page check,
@@ -361,17 +361,17 @@ How each kind of UI reads them:
 
 ```
 Chrome (UI thread = main)
-  ArdiaCoreWebView delegate ─┐            ┌─▶ LiveTabs (not stored)
-  ArdiaCoreTabStrip txns ────┼─▶ EngineClient ─┤
+  SolaraCoreWebView delegate ─┐            ┌─▶ LiveTabs (not stored)
+  SolaraCoreTabStrip txns ────┼─▶ EngineClient ─┤
   EngineBridge topics ───────┤            └─▶ Store.dispatch(.engine(…)) ─▶ Commit ─▶ projections
-  ArdiaCoreServices handlers ┘                                               └▶ effects ─▶ EngineClient ─▶ Chrome
+  SolaraCoreServices handlers ┘                                               └▶ effects ─▶ EngineClient ─▶ Chrome
 ```
 
 - **`EngineClient`** (main actor) gives the C and Obj-C surface typed async Swift. `ac_*` calls become `Codable`
-  request/response pairs over `ArdiaCoreEngineBridge.call`, guarded by `exports:`. `ArdiaCoreServices` callbacks
+  request/response pairs over `SolaraCoreEngineBridge.call`, guarded by `exports:`. `SolaraCoreServices` callbacks
   become `async` functions. Topic events (`history.changed`, `tabs.strip`, bookmarks, extensions, downloads) become
   `AsyncStream`s.
-- **`TabViewPool`** owns one `ArdiaCoreWebView` per loaded tab, keyed by tab id (`transferKey`). It is the delegate
+- **`TabViewPool`** owns one `SolaraCoreWebView` per loaded tab, keyed by tab id (`transferKey`). It is the delegate
   in place of the RN view module, and it sets `visible`, `warm`, `frozen` and the rest from the window's projection.
 - **The tab-strip contract stays exactly as `docs/store-api.md` defines it.** `chromeChanged` (a port of
   `store/liveTabs.ts`) is a reducer. `stripPlan` and the "one command per strip at a time, never resend unchanged"
@@ -381,7 +381,7 @@ Chrome (UI thread = main)
   navigation) must be applied in the order Chrome emitted them, which `lib/nativeEvents.ts` keeps today. While WebView
   events still reach the store through JS (phases 1b–4), strip transactions do too: JS forwards each one as a
   `stripTransaction` command, and Swift's `chromeChanged` and `stripPlan` run on it. Only in phase 5, when
-  `TabViewPool` is the WebView delegate, does `EngineClient` subscribe to `ArdiaCoreTabStrip` directly, so both
+  `TabViewPool` is the WebView delegate, does `EngineClient` subscribe to `SolaraCoreTabStrip` directly, so both
   sources arrive on main in emission order.
 - **Omnibox.**
   - `SuggestionEngine` (actor) keeps an in-memory index built from `ac_history_query` plus `history.changed`,
@@ -393,7 +393,7 @@ Chrome (UI thread = main)
 
 ### 2.7 Persistence: GRDB
 
-The database is one file, `solara.sqlite`, in the data folder (`ARDIA_DATA_DIR` is honored), opened as a GRDB
+The database is one file, `solara.sqlite`, in the data folder (`SOLARA_DATA_DIR` is honored), opened as a GRDB
 `DatabasePool` in WAL mode with `synchronous = NORMAL`, `fullfsync = ON`, `checkpoint_fullfsync = ON` and
 `foreign_keys = ON`. Durable writes temporarily use `synchronous = FULL` and finish with a FULL WAL checkpoint.
 Ordinary writes stay at NORMAL; a power loss can lose uncheckpointed commits while preserving consistency.
@@ -488,9 +488,9 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 |---|---|
 | `session.json` v2 (profiles, settings, windows, tabs, groups, splits, closed / cleaned / deleted items, parked pins, `pinChoices`, `pinSync`, focus, last profile) | Imported into `solara.sqlite` once, in phase 1b, when Swift owns everything in the file. |
 | `downloads.json` | Imported (`download`). |
-| `sync.json`, `sync-state.nns`, `sync-journal.nns`, Keychain `Ardia Sync Key` | **Untouched.** The sync engine keeps reading them in every phase. Only the record source changes (§4.5). |
+| `sync.json`, `sync-state.nns`, `sync-journal.nns`, Keychain `Solara Sync Key` | **Untouched.** The sync engine keeps reading them in every phase. Only the record source changes (§4.5). |
 | `live.json` | Imported into `document` when Live Folders port (phase 2). |
-| `onboarding.json`, `ardia-cli.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json`, `release-notes.json` | Imported into `document` when their owner ports. |
+| `onboarding.json`, `solara-cli.json`, `default-browser-offer.json`, `bangs-state.json`, `sync-extensions.json`, `release-notes.json` | Imported into `document` when their owner ports. |
 | `launch-layout.json`, `launch-picture-*.png`, `bookmarks-cache.json`, `switches-cache.json` | Caches. Not migrated: rebuilt or deleted. |
 | `Chromium/` (history, bookmarks, passwords, autofill, extensions, cookies, site settings) | **Chrome's. Never touched.** The engine reads it as it does today. |
 
@@ -499,7 +499,7 @@ today's `{...DEFAULT_SETTINGS, ...saved}` keeps them. Unknown JSON fields in `ar
 - **When.** Phase 1a imports only `settings` (through the port of `migrateSavedSettings`) and `downloads.json`. Phase
   1b imports the rest of `session.json`. In 1a, `persist.ts` (still the writer of `session.json`) adds the same
   `nativeExport` marker as the later shadow export, so the downgrade check in §3.4 works from the first nightly.
-- **Where.** `main.swift`, before `ArdiaCoreHost.run`. That is before Chrome starts, before any window, and with
+- **Where.** `main.swift`, before `SolaraCoreHost.run`. That is before Chrome starts, before any window, and with
   nothing touching `NSApp`. Test it with an executable tool and XCTest fixtures.
 - **What.** `SessionV2Importer` is a straight port of `loadSession()` + `migrateSavedSettings` + `hydrate`'s
   repairs (§1.4), including the `restoreSession === false` branch. It produces a `BrowserState`, runs
@@ -556,7 +556,7 @@ Swift importer, run through its CLI on the same file, prints the same canonical 
   (`SolaraStore/LaunchBackdrop.swift`, a port of `lib/launchBackdrop.ts` checked against cases recorded from it) for
   the focused public window at export time. It does this from the import until phase 6 ships plus two stable releases. That
   keeps two things working:
-  1. `ArdiaCoreHost.mm`'s early-window read (`launchTab`, `launchBackdrop`, `linkProfile`), unchanged until the
+  1. `SolaraCoreHost.mm`'s early-window read (`launchTab`, `launchBackdrop`, `linkProfile`), unchanged until the
      window shell goes native;
   2. **rollback**: installing an older build (or one from the other channel) finds a current `session.json` and runs
      on it as today.
@@ -571,7 +571,7 @@ over. A marker whose `rev` is
   database, and imports the shadow `session.json`. Nothing is lost, because the shadow is always current.
 - **Moved-aside copies.** Each label (`corrupt`, `newer`, `superseded`, `unreadable`, `orphan`) keeps its newest
   three copies; older ones are deleted at launch. The `.pre-native` originals are never pruned.
-- **No kill switch.** `ARDIA_NATIVE_STORE` is gone: the store is the only one. When it can't open, the app saves
+- **No kill switch.** `SOLARA_NATIVE_STORE` is gone: the store is the only one. When it can't open, the app saves
   nothing that launch and Settings shows why (`StoreUnavailable`).
 
 ---
@@ -625,7 +625,7 @@ All of these become commands, or move into the Swift transaction, in the sub-pha
 | `useBrowser.setState` in `sync/adapters.ts`, `sync/pinned.ts` | A `sync.apply(records)` command; Swift keeps the invariants (group contiguity, pinned-first) |
 | `lib/chromeTabs.ts` (`chromeChanged`) | Swift's reducer, fed natively; deleted from JS (1b) |
 | `lib/history.ts`, `lib/bookmarks.ts`, `lib/bookmarkGroups.ts`, `lib/launchLook.ts` | Their own JS-owned slices stay JS until their surface ports; the bookmark-to-group action becomes a command |
-| `components/import/apply.ts`, `onboarding/state.ts`, `littleArdia/actions.ts`, `sidebar/tidyPinsUi.ts`, `sidebar/tileFolderUi.ts`, `store/pinOrderChoices.ts` | Commands |
+| `components/import/apply.ts`, `onboarding/state.ts`, `littleSolara/actions.ts`, `sidebar/tidyPinsUi.ts`, `sidebar/tileFolderUi.ts`, `store/pinOrderChoices.ts` | Commands |
 
 That covers 29 `setState` sites in 14 files (test fixtures excluded). A Debug-build guard wraps `setState`: writing a Swift-owned key outside
 the patch applier throws, with the call site, so a missed writer fails the first test that hits it.
@@ -655,7 +655,7 @@ the patch applier throws, with the call site, so a missed writer fails the first
 
 #### Page views: static ownership
 
-Behind `ARDIA_NATIVE_PAGES_POOL` (which needs `ARDIA_NATIVE_SHELL`), `TabViewPool` owns every page view in a
+Behind `SOLARA_NATIVE_PAGES_POOL` (which needs `SOLARA_NATIVE_SHELL`), `TabViewPool` owns every page view in a
 shell-wrapped window from the moment the window exists, and RN mounts no page view there: no card, no warm or
 neighbour page, no New Tab prewarm. No page moves between RN and the pool while a window is open. Where RN mounts a
 page view today, and what each becomes:
@@ -668,7 +668,7 @@ page view today, and what each becomes:
 | the kept-mounted set and the hidden-pane prewarm | pool, in the window's hidden container |
 | New Tab prewarm (`usePrewarm`) | pool hidden tab, or off in shell windows |
 | Peek (`PeekOverlay` → `PeekPage`) | pool peek slot |
-| Little Solara (`LittleArdiaWindow` mounts its own ContentCard) | stays RN: the one boundary |
+| Little Solara (`LittleSolaraWindow` mounts its own ContentCard) | stays RN: the one boundary |
 | extension popup frame, extension side panel | unchanged: no `transferKey`, so nothing is handed over |
 
 Little Solara is the one boundary. A tab moving between a shell window and a small window crosses it through the
@@ -702,18 +702,18 @@ Things the code that wires a native module into the app must do. Each one fails 
 
 | Module | At | Do |
 |---|---|---|
-| `SolaraOmnibox` | Launch, before the first URL is parsed or shown | Call `setAppScheme(productName)` (or `AppScheme.set(productName:)`) with the product identity, the same name `setAppScheme` gets in JS today. Until then `appUrlOrigin`, `toAppUrl`, `fixupUrl` and `urlForDisplay` use upstream's `ardia://`. |
+| `SolaraOmnibox` | Launch, before the first URL is parsed or shown | Call `setAppScheme(productName)` (or `AppScheme.set(productName:)`) with the product identity, the same name `setAppScheme` gets in JS today. Until then `appUrlOrigin`, `toAppUrl`, `fixupUrl` and `urlForDisplay` use upstream's `solara://`. |
 | `SolaraOmnibox` | Remote suggestions, Chrome's engine list | Parse the raw JSON text with `SolaraModel.JSONValue.parse`, which keeps JS key order. A `JSONSerialization` dictionary loses it, and `extensionEnginesFromChrome` keeps the first engine per extension in that order. |
 | `SolaraPersistence` | Launch | Call `Launcher.open` in `main.swift` before Chrome starts. If it throws `ImportRefused`, show the saved session read-only and save nothing; if anything else fails, save nothing that launch. Log the reason either way; never start the native store on a partial import. |
 | `SolaraPersistence` | The writer | Build `PersistenceWriter` from `Launch.persisted`, never from the store's state, so a launch-time repair committed before the writer exists still reaches the database. Wire its `trouble` callback to the log and an error report. Call `flush` from `willTerminate`. |
 | `persist.ts` | Phase 1a | Keep writing `session.json`, with `"nativeExport": {"rev", "at"}` added, and stop writing `downloads.json` (the native writer's shadow does). Without the marker, every launch would take a re-import as if an older build had run. |
 | `persist.ts` | Phase 1b | With the native store on, never write `session.json` or `downloads.json`. The shadow export owns both, and a JS write would look like a downgrade and re-import at every launch. |
 | `SolaraStore` | Store creation | Inject a `WebAddressing` built on `SolaraOmnibox` (`WhatwgURL`, `resolveInput` with `searchUrlPrefix(settings)`). The default `PlainWebAddressing` is for tests and parses only simple URLs. |
-| `@ardia/store` (JS) | Phase 1b, every state change | Push the one cache the core reads but JS computes: `setPlayingAudio` (tabs whose live state plays audio). `persist.ts`'s `nativeCaches` does it; a missing push leaves the core's guess stale without an error. History hints, the launch backdrop, the early launch tab and the last-tab policy are Swift's own (`NativeCaches.swift`, `HistoryHints.swift`, `NativeCacheFeeds.swift`); their old commands are accepted and ignored. |
-| `@ardia/store` (JS) | Phase 1b, JS module memory | Mirror each setter of memory the core reads: `setWindowClosing` (closing windows), `noteRemotePinDeletion`, and bracket sync writes with `beginFromSync`/`endFromSync` (`fromSync`). |
-| `@ardia/store` (JS) | Phase 1b, writes outside actions | Use `writeState` (owned slices go as `applyState`, JS-owned ones stay local) or the command. Anything else is forwarded by the guard, logged in `globalThis.__nativeStoreForwards` with its stack, and raised in Debug. |
-| `NativeStore` | Scope switch | The whole workspace runs on the native store by default (1b), and the shadow export owns `session.json` and `downloads.json`. `ARDIA_NATIVE_SCOPE=settingsAndDownloads` falls back to the 1a scope. |
-| `SolaraUI` New Tab | While a native New Tab is mounted | JS publishes the suggestion data the hero can't read natively: the profile's tabs, history and bookmarks, and the window's bar actions and extensions (`newTabSources` in `@ardia/settings`, driven by `NativeNewTabHero.tsx`). A missing push leaves the hero's suggestions stale without an error. Settings come from `NativeStore.settingsModel`, so the hero is off (`SolaraNewTab.available()` is false) whenever native settings are. `ARDIA_NATIVE_NEWTAB=0` forces the RN page. |
+| `@solara/store` (JS) | Phase 1b, every state change | Push the one cache the core reads but JS computes: `setPlayingAudio` (tabs whose live state plays audio). `persist.ts`'s `nativeCaches` does it; a missing push leaves the core's guess stale without an error. History hints, the launch backdrop, the early launch tab and the last-tab policy are Swift's own (`NativeCaches.swift`, `HistoryHints.swift`, `NativeCacheFeeds.swift`); their old commands are accepted and ignored. |
+| `@solara/store` (JS) | Phase 1b, JS module memory | Mirror each setter of memory the core reads: `setWindowClosing` (closing windows), `noteRemotePinDeletion`, and bracket sync writes with `beginFromSync`/`endFromSync` (`fromSync`). |
+| `@solara/store` (JS) | Phase 1b, writes outside actions | Use `writeState` (owned slices go as `applyState`, JS-owned ones stay local) or the command. Anything else is forwarded by the guard, logged in `globalThis.__nativeStoreForwards` with its stack, and raised in Debug. |
+| `NativeStore` | Scope switch | The whole workspace runs on the native store by default (1b), and the shadow export owns `session.json` and `downloads.json`. `SOLARA_NATIVE_SCOPE=settingsAndDownloads` falls back to the 1a scope. |
+| `SolaraUI` New Tab | While a native New Tab is mounted | JS publishes the suggestion data the hero can't read natively: the profile's tabs, history and bookmarks, and the window's bar actions and extensions (`newTabSources` in `@solara/settings`, driven by `NativeNewTabHero.tsx`). A missing push leaves the hero's suggestions stale without an error. Settings come from `NativeStore.settingsModel`, so the hero is off (`SolaraNewTab.available()` is false) whenever native settings are. `SOLARA_NATIVE_NEWTAB=0` forces the RN page. |
 | `SolaraUI` Pages | While a native internal page is mounted | JS sends the page's whole state as one JSON `state` prop (`NativeDownloadsPage`, `NativeHistoryPage`, `NativeBookmarksPage`): its rows, the theme tokens, and counters the page watches (history's selection reset, clear request and clear done; bookmarks' undo count). It runs every action the page sends as `onPageEvent` (open, delete, move, restore, clear), so the store stays JS's. A field the decoder can't read drops the whole update and the page keeps its last state without an error. `SolaraPages.available()` is false when native settings are. |
 | `SolaraSignposts` | Each surface's endpoint | Call `SolaraSignposts.emit` at "selection shown", "suggestions shown", "core ready" and "New Tab painted", and `count` per store commit, Core Animation commit, layout pass and view update. In the RN era these are the `perfProbe` sites, through a native call. The baseline's `acmark.m` reads them, so a metric keeps its endpoint when its surface moves. |
 
@@ -733,7 +733,7 @@ metrics (§6) are re-run.
 | **1a. Core: settings, downloads** | SwiftPM package; Model / Store / Persistence (settings, downloads); RN bridge; JS settings actions → `dispatch`; `persist.ts` keeps writing `session.json` from the replica | Same UI, `solara.sqlite` source of truth for settings and downloads | Launch (J1) not worse; bridge round trip per `updateSettings` | 4–5k |
 | **1b. Core: profiles + workspace** | All 114 actions; settle pipeline; `chromeChanged` / `stripPlan` in Swift (transactions forwarded by JS); the hidden writers removed; `session.json` importer + oracle; shadow export with `launchTab` / `launchBackdrop`; golden replay of the store tests | Same UI on the Swift store; `persist.ts` deleted | J1, J3, the ratchet's exact counts (must not rise); store dispatch p99 < 1 ms on the seed; save cost off the JS thread | 11–13k |
 | **2. Settings, onboarding, utility windows** | Native Settings window (15 panes + sub-surfaces, below); Live engine port (`live/` → Swift, for Live Folders and Calendar); onboarding (5k TS); Import window | Native Settings; RN panes hosted until each ports; then no RN in utility windows | Settings open-to-content, pane switch, typing in search; memory with Settings open | 9–11k |
-| **3. New Tab + internal pages** | New Tab (`NewTabPage.tsx`, `ntp/`, the sun hero, shader backdrop), `ardia://history`, `bookmarks`, `downloads` pages | Native New Tab hosted in the RN window | ⌘T → typeable, ⌘T → painted | 3–4k |
+| **3. New Tab + internal pages** | New Tab (`NewTabPage.tsx`, `ntp/`, the sun hero, shader backdrop), `solara://history`, `bookmarks`, `downloads` pages | Native New Tab hosted in the RN window | ⌘T → typeable, ⌘T → painted | 3–4k |
 | **4. Toolbar + omnibox** | `SolaraOmnibox` (port of `packages/core`, property tests against the frozen reference); toolbar, URL field, command bar, Developer Mode, find bar, downloads popover, site prompts, extension toolbar and overlays | Native toolbar and omnibox in the RN window | Keystroke → suggestions, compute per key, ⌘L, J4 | 8–10k |
 | **5. Sidebar + window shell + sync port** | Sidebar (rows, tiles, groups, splits, Live Folders, DnD, list motion, swipes), top tab strip, content card, splits, Peek, media/PiP controls, Little Solara, `TabViewPool`; drag via `ServerWindowDrag`; sync merge to Swift | Browser windows with no RN; the early window reads the store | Tab switch, hover frames, drag pacing, stalls, memory per window, launch | 15–18k |
 
@@ -781,19 +781,19 @@ Timings in frames are measured from 30 fps recordings.
 
 | Pane | Lines | Kind | Native data source |
 |---|---|---|---|
-| General | 260 | Simple + system | `SettingsModel`; login item (`SMAppService`), default browser, `Updater.swift` (channel, auto-update), `ArdiaCoreEngineBridge` `ac_downloads_settings` / `ac_downloads_set_settings`, default profile |
+| General | 260 | Simple + system | `SettingsModel`; login item (`SMAppService`), default browser, `Updater.swift` (channel, auto-update), `SolaraCoreEngineBridge` `ac_downloads_settings` / `ac_downloads_set_settings`, default profile |
 | Tabs | 198 | Simple | `SettingsModel` (`tabLayout`, `newTabPosition`, `newTabButtonPosition`, `newTabOpens`, `cleanUpInactiveTabsAfterHours`, sidebar button, haptics, website color, ⌘-click groups, meeting groups) |
 | Appearance | 278 | Simple + app icon | `SettingsModel` (`appearance`, `addressBar`, `commandBarPlacement`, `pageScrollBars`, `selectedTabGlow`, `spacesFollowAppearance`); app icon list from `AppIcon.swift` |
 | Search Engine | 165 | Medium | `SettingsModel` + custom engine add/edit sheet (`addCustomEngine` validation from `SolaraOmnibox`); extension-controlled engine from `ac_search_engines` |
 | Engines | 154 | Simple | `SettingsModel` (`pageEngine`, `websiteEngines`, `protectedVideoInWebKit`) |
-| Advanced | 155 | Simple + info | `SettingsModel`; CLI install and control (`CliInstaller.swift`, `ac_cli_control`); `ArdiaCoreHost.engineInfo`; Widevine from `ArdiaCoreServices.components` |
+| Advanced | 155 | Simple + info | `SettingsModel`; CLI install and control (`CliInstaller.swift`, `ac_cli_control`); `SolaraCoreHost.engineInfo`; Widevine from `SolaraCoreServices.components` |
 | Privacy & Security | 366 | Data-heavy | Content blocker, site permissions, external app allowances, zoom levels and clear browsing data |
 | Keyboard Shortcuts | 197 | Medium | Menu item list from `Menus.swift` (direct), `settings.shortcuts` remaps, recorder control |
-| Passwords | 250 | Data-heavy, secrets | `ArdiaCoreServices.listPasswords` / `unlockPasswords` (reauth) / `password` / `save` / `update` / `delete` / `neverSaveOrigins` / `exportPasswords`; CSV import via `SolaraImport` (`PasswordsCSV.swift`); password-autofill toggle via `boolPreference` |
-| Autofill | 308 | Data-heavy, secrets | `ArdiaCoreServices.addresses` / `saveAddress` / `cards` / `saveCard` / `deleteAutofillEntry` / `revealCardNumber`; enable toggles |
-| Extensions | 213 | Data-heavy, live | `ArdiaCoreServices.listExtensions` / `setExtension` / `uninstall` / `reload` / `configure`, `extensionsHandler` events; Web Store link, load unpacked (`inspectUnpacked`) |
-| Profiles + details + Theme editor | 318 + 571 | Data-heavy | `AppModel` profiles; create / share-with / reorder / delete commands; clear data (`clearBrowsingData`, `deleteProfileData`); theme editor on `ArdiaShaders` Metal views (already native) |
-| Sync + sheets | 282 + 294 | Data-heavy, setup flows | `SyncModule` / `ArdiaSyncCore` (folder info, recovery phrase, recovery kit PDF/QR); sync state and devices from the TS engine until phase 5 (through the bridge), then `SolaraSync` |
+| Passwords | 250 | Data-heavy, secrets | `SolaraCoreServices.listPasswords` / `unlockPasswords` (reauth) / `password` / `save` / `update` / `delete` / `neverSaveOrigins` / `exportPasswords`; CSV import via `SolaraImport` (`PasswordsCSV.swift`); password-autofill toggle via `boolPreference` |
+| Autofill | 308 | Data-heavy, secrets | `SolaraCoreServices.addresses` / `saveAddress` / `cards` / `saveCard` / `deleteAutofillEntry` / `revealCardNumber`; enable toggles |
+| Extensions | 213 | Data-heavy, live | `SolaraCoreServices.listExtensions` / `setExtension` / `uninstall` / `reload` / `configure`, `extensionsHandler` events; Web Store link, load unpacked (`inspectUnpacked`) |
+| Profiles + details + Theme editor | 318 + 571 | Data-heavy | `AppModel` profiles; create / share-with / reorder / delete commands; clear data (`clearBrowsingData`, `deleteProfileData`); theme editor on `SolaraShaders` Metal views (already native) |
+| Sync + sheets | 282 + 294 | Data-heavy, setup flows | `SyncModule` / `SolaraLegacySyncCore` (folder info, recovery phrase, recovery kit PDF/QR); sync state and devices from the TS engine until phase 5 (through the bridge), then `SolaraSync` |
 | Live Folders | 348 | Data-heavy, OAuth | Live engine (ported in this phase): sources (GitHub, Notion, Google Drive; Bitbucket and Confluence dropped 2026-10-30), Google auth, connected accounts in the Keychain |
 | Calendar | 114 | Data-heavy | `Calendar.swift` (EventKit) + Live state (`hiddenCalendarIds`, alert options), `autoGroupMeetingTabs` |
 
@@ -868,7 +868,7 @@ Each has a recommendation.
    (`liquidGlassOnly` rows) and possibly the helper in §2.5.
 11. **Where the package lives.**
     → Recommendation: `native/SolaraKit`, outside `packages/` (Expo's workspace), so phase 6 deletes `packages/*`
-    except ArdiaCore without moving the core. *Open question if the owner prefers `packages/solara-core`.*
+    except SolaraCore without moving the core. *Open question if the owner prefers `packages/solara-core`.*
 12. **Hermes-side services nobody sees.** `main.tsx` starts: translate, user scripts, CLI control, memory trim, tab
     lifecycle, app integration (AppleScript), kill switches.
     → Each gets a row in phase 6's checklist and is ported, except kill switches, which are deleted (Solara has no

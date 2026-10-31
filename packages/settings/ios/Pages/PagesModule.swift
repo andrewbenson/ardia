@@ -87,7 +87,7 @@ final class NativePageView: ExpoView {
     createProfile.onEvent = { [weak self] event in self?.send(event) }
     liveCard.onEvent = { [weak self] event in self?.send(event) }
     Self.live.add(self)
-    PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+    PageProbe.enabled = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
   }
 
   static func devState() -> String {

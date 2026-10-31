@@ -174,7 +174,7 @@ test("making a split from a shared tab live in another window brings its page in
 
 test("the ⌘T bar's open tabs rank a shared tab by its last use in any window, listing it once", async () => {
   reset();
-  const { recentTabSuggestions } = await import("@ardia/core");
+  const { recentTabSuggestions } = await import("@solara/core");
   const { openTabsByUse } = await import("./tabShare.ts");
   const { b, a1, a2 } = twoWindows();
   share(true);

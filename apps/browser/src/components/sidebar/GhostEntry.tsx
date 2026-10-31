@@ -1,4 +1,4 @@
-import { FadeLabel, Symbol } from "@ardia/shell";
+import { FadeLabel, Symbol } from "@solara/shell";
 import { Image, Text, View } from "react-native";
 import { resolveFavicon, useFavicons } from "../../lib/favicons";
 import { layout, useTheme } from "../../lib/theme";

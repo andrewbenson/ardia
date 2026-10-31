@@ -9,7 +9,7 @@ if (!appArg) {
   console.error(`usage: node profile-pager-test.mjs <Debug Solara.app> [--keep-data]
 
 The profile pager under the native shell, sidebar and top strip, run by RN's SwipeArea, ProfileTint and WindowProfile
-(ARDIA_NATIVE_PROFILE_PAGER=0) and then by the shell itself (=1): RN mounts none of the three in the native run; the
+(SOLARA_NATIVE_PROFILE_PAGER=0) and then by the shell itself (=1): RN mounts none of the three in the native run; the
 same simulated gestures give the same pager position while held, on the sidebar, at the first profile's rubber band
 and on a top-tabs window's strip, with the native sidebar's pages at the same x; a flick moves to the next profile frame
 by frame as RN's does, with each native tint layer at the opacity RN's interpolation gives for that frame's position
@@ -22,7 +22,7 @@ const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-profile-pager-"));
 const rep = reporter(join(scratch, "profile-pager-test.log"), { name: "profile-pager-test" });
 
-const tab = (id, profileId, windowId = "w1") => ({ id, profileId, windowId, url: "ardia://newtab", title: "New Tab" });
+const tab = (id, profileId, windowId = "w1") => ({ id, profileId, windowId, url: "solara://newtab", title: "New Tab" });
 const fixture = session({
   profiles: ["Personal", "Work", "Play"],
   windows: [{ id: "w1", frame: [80, 80, 1280, 800] }, { id: "w2", frame: [120, 120, 1200, 760], tabLayout: "top" }],
@@ -31,8 +31,8 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
-const S = globalThis.expo.modules.ArdiaSwipe;
+const C = globalThis.expo.modules.SolaraCEF;
+const S = globalThis.expo.modules.SolaraSwipe;
 const P = globalThis.expo.modules.SolaraProfilePager;
 const H = globalThis.expo.modules.SolaraHosted;
 const st = () => ac.store.getState();
@@ -107,7 +107,7 @@ try {
     const rn = seen.rn;
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_TOP_STRIP: "1", ARDIA_NATIVE_PROFILE_PAGER: native ? "1" : "0" },
+      env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_TOP_STRIP: "1", SOLARA_NATIVE_PROFILE_PAGER: native ? "1" : "0" },
       ready: "return !!ac.store.getState().windows.w1 && !!ac.store.getState().windows.w2",
     });
     await until("both windows", `return Promise.all([win("w1"), win("w2")]).then((ws) => ws.every(Boolean) || null);`, 15000);

@@ -16,7 +16,7 @@ public struct GithubDeviceFlow: Sendable {
 }
 
 public enum GoogleAuth {
-  public static let redirect = "http://127.0.0.1:53682/ardia-oauth"
+  public static let redirect = "http://127.0.0.1:53682/solara-oauth"
   public static let scope = "https://www.googleapis.com/auth/drive.metadata.readonly"
   static let chars = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 

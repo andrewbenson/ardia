@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { emptyScope } = await import("@ardia/sync");
+const { emptyScope } = await import("@solara/sync");
 const d = await import("./stateDeltas.ts");
 
 const clone = (x) => JSON.parse(JSON.stringify(x));

@@ -3,7 +3,7 @@ import CoreImage
 import Foundation
 
 public enum RecoveryKit {
-  static let product = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Ardia"
+  static let product = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Solara"
   public static let title = "\(product) Recovery Kit"
   public static let pdfName = "\(title).pdf"
   public static let textName = "\(title).txt"

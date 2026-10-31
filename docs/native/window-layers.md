@@ -1,6 +1,6 @@
 # Window layers in a shell window
 
-Behind `ARDIA_NATIVE_SHELL=1` a browser window's content view is `WindowShellView`
+Behind `SOLARA_NATIVE_SHELL=1` a browser window's content view is `WindowShellView`
 (`native/SolaraKit/Sources/SolaraUI/WindowShell`). This is the v2 plan: one full-window RN root stays, moved to the
 top and made transparent to the mouse, and everything inside the content card is native, with a small RN root per tab
 for what RN still draws over a page. [architecture.md](architecture.md) › 4.4 has the page-view ownership.
@@ -15,7 +15,7 @@ for what RN still draws over a page. [architecture.md](architecture.md) › 4.4 
 | 3 | `splitChrome` | dividers, the split toast, the drop hints | port-sidebar-live |
 | 4 | `peek` | Peek's page and frame (`TabSlots` `peek(w)`) | port-omnibox |
 | 5 | `sidebar`, `topStrip` | the native sidebar and the top tab strip | port-sidebar, port-strip |
-| 6 | main root | the window's RN root, full window, `passThroughTouches`, a box-none root. Here only with `ARDIA_SHELL_MAIN_TOP=1` (which needs `ARDIA_SHELL_PANES=1` and `ARDIA_NATIVE_PAGES_POOL=1`); otherwise it sits between `backdrop` and `card`, since its pages, card fill and toolbar are still RN's and the card's layers draw over them | port-shell |
+| 6 | main root | the window's RN root, full window, `passThroughTouches`, a box-none root. Here only with `SOLARA_SHELL_MAIN_TOP=1` (which needs `SOLARA_SHELL_PANES=1` and `SOLARA_NATIVE_PAGES_POOL=1`); otherwise it sits between `backdrop` and `card`, since its pages, card fill and toolbar are still RN's and the card's layers draw over them | port-shell |
 | 7 | `overlay` | `shell.overlay` (`NativeWindowShell.overlay(w)`), one shared box-none container for window-level native overlays: popovers, hover cards. It tells hover, once per run-loop turn, when a child is added, removed, moved or hidden; owners call `shell.coverChanged()` only for motion inside a child (a layer animating its own contents) | port-shell (container), port-media, port-sidebar |
 | 8 | foreign | views the shell didn't mount (the PiP overlay) stay above every slot | port-media |
 
@@ -49,7 +49,7 @@ behind the active page, since Chrome throttles a page under a hidden view.
 | extension popup | ExtensionOverlays.tsx:151 | 6, its page in `TabSlots` `popup` | port-omnibox (page) |
 | `DownloadsPopover` | App.tsx:81 | native, `DownloadsPanelView` in the shell's overlay container (`downloads.panel` topic) | port-media |
 | `CommandPanel`, `DownloadMagnet`, bookmark dialogs, `CreateProfileHost`, `SidebarOverlays`, `OnboardingOverlay` | App.tsx:80 | 6 | their areas |
-| Little Solara | `LittleArdiaWindow` | not a shell window: stays RN | port-media |
+| Little Solara | `LittleSolaraWindow` | not a shell window: stays RN | port-media |
 
 ## Rules
 
@@ -63,7 +63,7 @@ behind the active page, since Chrome throttles a page under a hidden view.
   it draws nothing, and a layer that shows, hides or moves on its own (Peek, popovers, hover cards) calls
   `shell.coverChanged()` when it does, so hover updates under a still pointer. Cursor rects are still open: covered
   views' rects are to be dropped when the cover changes, and native layers set their own cursor.
-- **Pane roots** (behind `ARDIA_SHELL_PANES` until the main root moves to the top) are keyed by tab, never by pane,
+- **Pane roots** (behind `SOLARA_SHELL_PANES` until the main root moves to the top) are keyed by tab, never by pane,
   and live in that tab's PaneOverlays container. Each is created hidden and shown on `RCTContentDidAppear`, keeps its
   content size across reloads, and runs no first-window, launch-committed or after-first-window effects. A root goes
   1 s after its tab stops being shown in the window, and at once when the tab closes.

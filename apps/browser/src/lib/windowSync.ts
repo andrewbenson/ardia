@@ -1,4 +1,4 @@
-import type { OpenWindowOptions, WindowEvent } from "@ardia/shell";
+import type { OpenWindowOptions, WindowEvent } from "@solara/shell";
 import type { BrowserState } from "../store/browser";
 import { engineProfile, windowTitle } from "../store/model";
 import { windowOpens } from "./windowOpenOrder";
@@ -61,7 +61,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       const profile = engineProfile(w.profileId);
       const claim = w.kind === "small" ? s.tabs[w.tabIds[0] ?? ""]?.adoptId : undefined;
       const small = w.kind === "small"
-        ? { kind: "small" as const, size: s.settings.littleArdiaSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}) }
+        ? { kind: "small" as const, size: s.settings.littleSolaraSize, ...(claim?.startsWith("link:") ? { claim } : {}), ...(w.linkPointer ? { pointer: w.linkPointer } : {}) }
         : {};
       const made = w.chromeWindow ? { chromeWindow: w.chromeWindow } : {};
       port.open(

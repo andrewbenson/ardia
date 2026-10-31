@@ -80,7 +80,7 @@ public struct SettingsIndex: Sendable {
             description: "Asks before ⇧⌘W or the close button closes its tabs.",
             keywords: ["close window", "confirm"]
           ),
-          Row(key: "openLinksFrom", title: "Open links from other apps in", keywords: ["little ardia", "little \(cli)", "external links", "mini window", "discord", "slack", "mail"]),
+          Row(key: "openLinksFrom", title: "Open links from other apps in", keywords: ["little solara", "little \(cli)", "external links", "mini window", "discord", "slack", "mail"]),
         ]),
         Section(section: "When quitting \(app):", rows: [
           Row(
@@ -522,7 +522,7 @@ public struct SettingsIndex: Sendable {
           Row(key: "cliInstall", title: "The \(cli) command", keywords: ["cli", "terminal", "install"]),
         ]),
         Section(section: "Web engine", rows: [
-          Row(key: "chromium", title: "Chromium", keywords: ["engine", "version", "ardiacore"]),
+          Row(key: "chromium", title: "Chromium", keywords: ["engine", "version", "solaracore"]),
           Row(key: "widevine", title: "Widevine (protected video)", keywords: ["drm", "netflix", "disney", "spotify"]),
         ]),
         Section(section: "Licenses", rows: [

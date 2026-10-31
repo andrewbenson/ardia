@@ -1,5 +1,5 @@
-import { hostedKinds, hostedSidebarShell, nativeOmniboxAvailable, publishSettingsTopic, sidebarAddressBarAvailable, SolaraHostedView, windowShellActive } from "@ardia/settings";
-import type { DroppedItem } from "@ardia/shell";
+import { hostedKinds, hostedSidebarShell, nativeOmniboxAvailable, publishSettingsTopic, sidebarAddressBarAvailable, SolaraHostedView, windowShellActive } from "@solara/settings";
+import type { DroppedItem } from "@solara/shell";
 import { memo, useEffect, useMemo } from "react";
 import { Image, StyleSheet } from "react-native";
 import { useShallow } from "zustand/react/shallow";

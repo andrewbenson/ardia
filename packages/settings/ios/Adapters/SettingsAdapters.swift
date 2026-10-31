@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import Foundation
 import SolaraModel
 import SolaraOmnibox
@@ -20,7 +20,7 @@ enum SettingsAdapters {
     context.panes[.autofill] = AutofillPaneModel(services: AutofillAdapter(), store: store)
     context.panes[.extensions] = ExtensionsPaneModel(services: ExtensionsAdapter(), store: store)
     context.panes[.shortcuts] = ShortcutsPaneModel(services: ShortcutsAdapter(), store: store)
-    context.panes[.profiles] = ProfilesPaneModel(services: ProfilesAdapter(store: store), store: store, safeMode: ArdiaCoreHost.safeMode)
+    context.panes[.profiles] = ProfilesPaneModel(services: ProfilesAdapter(store: store), store: store, safeMode: SolaraCoreHost.safeMode)
     context.panes[.sync] = SyncPaneModel(services: SyncAdapter())
     let live = LiveAdapter()
     context.panes[.liveFolders] = LiveFoldersPaneModel(services: live, store: store)

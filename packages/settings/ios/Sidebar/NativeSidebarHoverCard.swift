@@ -142,7 +142,7 @@ final class SidebarHoverCardHost {
     return card
   }()
   private lazy var calendarCard: SidebarCalendarCardView = {
-    PageProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+    PageProbe.enabled = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
     let card = SidebarCalendarCardView()
     card.onEvent = { [weak self, weak card] event in
       guard let self, let tabId = card?.tabId else { return }

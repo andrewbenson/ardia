@@ -1,6 +1,6 @@
-import type { BrowserSource, DiaAutomationStatus, DiaTabsResult, ImportedExtension, ImportKind, ImportResult } from "@ardia/import";
-import { closeWindow, confirm } from "@ardia/shell";
-import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
+import type { BrowserSource, DiaAutomationStatus, DiaTabsResult, ImportedExtension, ImportKind, ImportResult } from "@solara/import";
+import { closeWindow, confirm } from "@solara/shell";
+import { publishSettingsTopic, type SettingsHandler } from "@solara/settings";
 import { allArcHolders, restoreArcFolders } from "../../../lib/bookmarkGroups";
 import { nativeSafeMode } from "../../../store/nativeStore";
 import { useBrowser } from "../../../store/browser";

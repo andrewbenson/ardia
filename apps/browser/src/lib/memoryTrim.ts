@@ -1,5 +1,5 @@
-import { inputIdleSeconds } from "@ardia/ardiacore";
-import { killSwitchEnvironment } from "@ardia/shell";
+import { inputIdleSeconds } from "@solara/solaracore";
+import { killSwitchEnvironment } from "@solara/shell";
 import { isQuitting } from "./native";
 
 const STEP_MS = 250;
@@ -14,7 +14,7 @@ const runtime = globalThis as { gc?: () => void; HermesInternal?: { getInstrumen
 const heapSize = () => runtime.HermesInternal?.getInstrumentedStats?.().js_heapSize ?? null;
 
 export async function compactMemory(): Promise<void> {
-  if (["off", "0", "false"].includes(killSwitchEnvironment("ARDIA_MEMORY_TRIM_HEAP") ?? "")) return;
+  if (["off", "0", "false"].includes(killSwitchEnvironment("SOLARA_MEMORY_TRIM_HEAP") ?? "")) return;
   if (typeof runtime.gc !== "function" || isQuitting()) return;
   const before = heapSize();
   if (before === null) return;

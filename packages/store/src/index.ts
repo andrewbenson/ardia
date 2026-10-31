@@ -42,14 +42,14 @@ export type DispatchResponse = {
 
 export type ForeignCommit = { rev: number; patch: StorePatch; effects?: StoreEffect[] };
 
-const native = requireOptionalNativeModule<NativeStoreModule>("ArdiaStore");
+const native = requireOptionalNativeModule<NativeStoreModule>("SolaraStoreAdapter");
 
 export function nativeStoreModulePresent(): boolean {
   return native != null;
 }
 
 export function nativeStoreStatus(): StoreStatus {
-  if (!native) return { active: false, reason: "the ArdiaStore module isn't in this build" };
+  if (!native) return { active: false, reason: "the SolaraStoreAdapter module isn't in this build" };
   try {
     return native.status();
   } catch (error) {

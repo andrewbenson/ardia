@@ -18,7 +18,7 @@ Code:
   - `SyncVault.swift`: the folder, with file coordination and partial files.
   - `SyncKeyStore.swift`: Keychain.
   - `RecoveryKit.swift`: PDF, text sheet and QR code.
-- `packages/sync/ios/SyncModule.swift`: the Expo module (`ArdiaSync`). It also reads this app's saved passwords.
+- `packages/sync/ios/SyncModule.swift`: the Expo module (`SolaraSyncAdapter`). It also reads this app's saved passwords.
 - `packages/sync/src`: the merge, in TypeScript with no dependencies.
   - `scope.ts`: replica, logs, snapshots, compaction.
   - `hlc.ts`: hybrid logical clocks.
@@ -89,7 +89,7 @@ reset by email, because there's no one to email.
     keeps both the key and the device id. The owner approved moving the item to the
     data-protection keychain, so it's truly this device's only (2026-10-27). The move is scheduled
     after the sync redesign ships (docs/sync-redesign.md § Implementation plan, step 13).
-  - Test instances (`ARDIA_DATA_DIR`) keep it in a 0600 file in their data folder instead,
+  - Test instances (`SOLARA_DATA_DIR`) keep it in a 0600 file in their data folder instead,
     as Chrome's mock keychain does for them.
   - A Debug build can't read an item an earlier build saved (no prompt, by design). Sync then
     shows "not syncing" with Enter Recovery Phrase…, and the same device carries on.
@@ -272,7 +272,7 @@ Profiles).
 | `share:<sync id>` | app | `{ o }`: the sync id of the profile whose data this one shares | its own key, not a field of `prof:`, so Macs before 0.2.39 keep it untouched instead of republishing `prof:` without it on every cycle; written once, while both sync; never deleted |
 | `dev:<device id>` | app | a device's name | removed when it stops syncing |
 | `bm:<sync key>` | profile | `{ k, p (parent: its sync key, "bar" or "other"), t, u, a (added), pos }` | Bookmarks are Chrome's (BookmarkModel). A node's sync key is its Chrome UUID, or, for a bookmark synced before 0.2.20, its old id (`bm-…`, kept on Chrome's node as meta info `ac_sync_key`); every Mac makes an old key the node `bookmarkUuidFor` gives it, so Macs on either version name a bookmark alike (no renames, no duplicates; tested). Favicons stay local. A node whose folder was deleted elsewhere lands in Other Bookmarks; a cycle from two concurrent moves is broken the same way on every Mac (tested). Nothing is published or applied until the tree has been read from Chrome |
-| `h:<url>` | profile | `{ t, n (visits), vt (last 50 visit times) }` for pages visited in the last 90 days | History is Chrome's (HistoryService). Applying a record adds the visits Chrome lacks; a local edit is a visit the record doesn't have, so Macs settle on the union of their visits (tested). Not deletions: older history (it stays on the Mac that has it and is dropped from snapshots), Chrome's 90-day expiry, URLs past the newest 5,000 the app reads, and pages Chrome doesn't keep (`ardia://`) |
+| `h:<url>` | profile | `{ t, n (visits), vt (last 50 visit times) }` for pages visited in the last 90 days | History is Chrome's (HistoryService). Applying a record adds the visits Chrome lacks; a local edit is a visit the record doesn't have, so Macs settle on the union of their visits (tested). Not deletions: older history (it stays on the Mac that has it and is dropped from snapshots), Chrome's 90-day expiry, URLs past the newest 5,000 the app reads, and pages Chrome doesn't keep (`solara://`) |
 | `tabs:<device id>` | profile | `{ n (device name), tabs: [{ u, t }] }`: that device's 30 most recent open tabs | only its device writes it. It feeds the overflow menu's "Your Devices" |
 | `pin:t:<tab id>`, `pin:g:<group id>` | profile | pinned tabs `{ g, u, t, i, ti, pos }` and pinned groups `{ n, i, c, pos }` (Dia's pinned container) | they arrive as unloaded tiles in the window showing the profile and load when selected; when no window shows the profile they join its parked pins. A pinned group's members always live in the group's window, and sync never moves a tab between two open windows: a pin synced into a parked group is parked with it, a parked member joins a group open in a window, a group whose member is open in another window moves to that page's window (the mirror then gives the profile's other windows unloaded copies), and a member open in a third window stays there as a regular tab while the group gets an unloaded copy. A key resolves to the profile's pinned tab or pinned-group member; only when there is none does it fall back to a regular tab that still carries the key (a pin unpinned on this Mac, kept open), preferring one with a page, so another Mac's re-pin takes that page back instead of adding a second tab. A tab sync pins as a tile or row leaves any regular group it was in, as pinning it here would. A member whose pinned group has a tombstone (unpinned or deleted elsewhere) becomes a standalone pin, even if a regular group with that id is still here; one whose group has no record yet (its batch hasn't arrived) shows as a standalone pin meanwhile, its record keeps that group and position while local edits to its other fields (a rename, a new icon) still publish, and it joins the group when the group arrives. A missing group counts as not arrived only when this Mac never had it, has no record of it, and first saw the wait less than 90 days ago, by its own clock (the deadline is saved with the session), as long as a gap holds tombstones (Compaction). Past it the member publishes as a standalone pin, checked on every sync, so an idle Mac gets there too (tested). A tombstone removes only what is still in the pinned container: a group or tab this Mac already kept as regular stays. A pinned group record for a group this Mac keeps as regular (it unpinned it, and another Mac restyled or re-pinned the pinned one) becomes a separate pinned group, so the regular group keeps its name, style and tabs (tested); a member record that names such a group while its pinned group has a tombstone leaves the regular member where it is. One conflict is left: a page change on a member made while another Mac unpins its group can win the member's record. Depending on which Mac syncs first, the member then either follows the unpin, or stays pinned on its own and the unpinning Mac's regular group goes if that was its only tab; both Macs agree and the tab is kept (tested). Settling it needs placement times in the records. Pinning, unpinning into or out of a pinned group, moving a tab between tiles, rows and groups, re-pinning a group or moving a pin to another profile records a pending placement choice (`pinChoices`, like the row choices), so the next sync republishes that record with a fresh timestamp even when its value is unchanged and a later explicit choice outranks an older edit still in transit. A pin's page is published as 0.2.38 does: a member sends the page its copy shows, a tile sends its home URL, both send the copy's title, and applying a record sets the page of a copy that isn't loaded. The copy published is the one in the profile's frontmost window. Known residual: two Macs with the same pin loaded at different pages keep sending their own page on each sync, so the record moves back and forth between them (tested). Nothing is lost, and it stops once either copy unloads or both show the same page. Earlier builds held a page back until it changed locally, but every version of that (a per-copy baseline) let a real navigation go unsent in some case, so it's gone. The group a member waits for and its deadline live in `pinSync`, a side table by profile and pin key saved with the session and pruned like `pinChoices`, so parking, reopening, mirroring and relaunching keep them. A pull applies the view it took before it applied anything, so a pinned-group member added here in between has no record in it: it stays where it was put, in the innermost group it joined and that group's parents as the view nests them, and becomes a tile, keeping its pinned page, when another Mac deleted every group it was in (tested, nested groups included). Known residual: a local removal or move of a member the view already lists is undone by that apply, as the view's placement of a key it knows still wins (pinned as a todo test in sync/pinnedFrozenMembers.test.mjs). Unpinning on one Mac removes the tile on the others. A record's key is matched only to that profile's tabs and groups: when the id is already another profile's tab or group on this Mac (a pin moved between profiles), the pin gets a new local id with the key kept as `pinKey`, so neither profile's records touch the other's pin. A group's `c`, here and in a nested pinned group's `pinn:g:` record, is `null` for Neutral or one of Chrome's nine colors, the values every released version can draw; a group set to None (no background or outline, issue #206) sends `null` there and its None in a `pgc:` record |
 | `pinrow:<tab id>` | profile | `1` for a pinned tab shown as a row, `0` for one this Mac chose as a tile | Rows are pinned tabs: their `pin:t:` record is the same as a tile's (order included), so a Mac on a version before rows shows them as tiles, and since it never writes `pinrow:` keys its edits can't turn a row into a tile. A Mac publishes `0` for a tile once it has seen a mark for it. Each tile or row the user chooses there (pins it, or moves it between tiles and rows) is a pending choice kept per profile and pin key (`pinChoices`, saved with the session, so closing windows, parking and mirroring can't lose it); the next sync republishes its mark with a fresh timestamp even when the value is unchanged (unless that mark is already queued in the scope's outbox or journal), and drops the choice only once that batch is on disk, so a later choice outranks an older mark still in transit and survives a crash. A pin moved to another profile takes a new choice there, and the source keeps its own while a window there (or the parked set) still has the pin; a choice goes when its pin is unpinned or its profile deleted (also when loading a session, which also raises the generation counter above every loaded choice); a tile it only received publishes nothing, and a mark for a tab it has never had is never deleted. A mark that arrives before its tab is applied when the tab's `pin:t:` record lands, also when that tab is still open there from before an unpin. Unpinning deletes the mark (the rows adapter runs before `pin:`, so it still sees the tab's `pin:t:` record). A mark deleted by a pull (an unpin on another Mac, or a snapshot that left it out) changes nothing here: the `pin:` adapter applies the unpin, so the tab is never turned into a tile first and sent back over the deletion as a local edit (a pinned row deleted on another Mac while this one was away past tombstone retention came back as a tile; tested). A tab unpinned on an older Mac leaves its mark behind, unused unless that tab id is pinned again |
@@ -291,7 +291,7 @@ can therefore survive a restart and be published again.
 ### Extensions
 
 What Chrome Sync does for extensions, through our folder (`packages/sync/src/extensions.ts`, the app's host in
-`apps/browser/src/sync/extensions.ts`, Chrome's side in `engine/chromium/…/ardia/ac_extensions_sync.cc`).
+`apps/browser/src/sync/extensions.ts`, Chrome's side in `engine/chromium/…/solara/ac_extensions_sync.cc`).
 - **What syncs.** Extensions from the Chrome Web Store that Chrome itself would sync (`sync_util::ShouldSync`:
   installed by the user from the store, not by default, policy or a component, not blocklisted, no other update
   URL), and not themes or apps. Unpacked extensions, Solara Scripts and uBlock Origin (bundled) stay on their Mac. Per
@@ -331,8 +331,8 @@ What Chrome Sync does for extensions, through our folder (`packages/sync/src/ext
 Saved passwords are Chrome's (its password manager).
 - **Reading.** Chrome's own API (`passwordsPrivate`) reveals a password only after device
   authentication, so sync reads the profile's `Login Data` with the importer's reader
-  (`ChromiumSecrets`, `packages/import`). Chrome's key is its "Ardia Safe Storage" item, or
-  the mock keychain's where ArdiaCoreHost uses that (test instances, ad hoc builds). No Touch ID prompt is needed each cycle, and no
+  (`ChromiumSecrets`, `packages/import`). Chrome's key is its "Solara Safe Storage" item, or
+  the mock keychain's where SolaraCoreHost uses that (test instances, ad hoc builds). No Touch ID prompt is needed each cycle, and no
   Chromium change.
   - The reader copies `Login Data` and its `-journal` and `-wal` (Chrome holds the file with an
     exclusive lock, so no second connection can read it). A copy taken while Chrome commits could
@@ -343,7 +343,7 @@ Saved passwords are Chrome's (its password manager).
     two copies must match byte for byte (`SQLiteSnapshot.copyUnchanged`, in packages/import and
     the native port's SolaraImport).
 - **Writing.** Writes go through Chrome's API (`savePassword`, `deletePassword` in
-  `@ardia/ardiacore`), so Chrome's in-memory store and autofill see them at once. A changed
+  `@solara/solaracore`), so Chrome's in-memory store and autofill see them at once. A changed
   password is a delete plus an add: the update API needs the device check.
 - **Safety.**
   - A read that finds any row it can't decrypt is skipped (a partial list would read as
@@ -361,8 +361,8 @@ Saved passwords are Chrome's (its password manager).
   for its login and JS only holds the sealed value; once sealing is on it stays on until the app quits, and the
   plain read refuses. The guarantee that even a compromised JS can't read a password lands with step 11, which
   removes the plain path.
-- **The switch.** `ARDIA_SYNC_REDESIGN=1` in the environment turns the redesign on, through `LaunchSwitches`. Only an
-  instance with its own data folder (`ARDIA_DATA_DIR`; `ARDIA_BACKGROUND` alone isn't enough, since that launch still
+- **The switch.** `SOLARA_SYNC_REDESIGN=1` in the environment turns the redesign on, through `LaunchSwitches`. Only an
+  instance with its own data folder (`SOLARA_DATA_DIR`; `SOLARA_BACKGROUND` alone isn't enough, since that launch still
   opens the real folder) of a build not signed for distribution reads it. A
   Developer ID build ignores it, and so does any launch on the real data folder, including the owner's ad hoc builds,
   because turning it on is one-way for that data (the ledger goes to v2, and the state and journal are sealed under
@@ -526,7 +526,7 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
 
 ## Tests
 
-- `pnpm --filter @ardia/sync test`:
+- `pnpm --filter @solara/sync test`:
   - `swift test`: 5 tests. BIP39 reference vectors; tampering and truncation are detected; the
     wrong phrase opens nothing; the folder holds no plaintext in names or contents; deleting one
     chain leaves another.
@@ -543,7 +543,7 @@ each scope's cycle (`guard` in `engine.ts`) holds that back.
     an old snapshot put back after its tombstones were collected; a tombstone kept past its age
     limit while an older log is missing, for twice the limit at most; a write that fails before or
     after the file lands; 40 randomized three-device runs with flaky delivery, compaction and crashes.
-- `pnpm --filter @ardia/browser test` runs `src/sync/adapters.test.mjs` (4 tests against the real
+- `pnpm --filter @solara/browser test` runs `src/sync/adapters.test.mjs` (4 tests against the real
   store: delete versus add, concurrent moves that would make a cycle, parked pinned tabs, passwords
   both ways), `src/sync/pinned.test.mjs` (the pinned area's adapters in their order: a row and a tile folder land as
   such, an unpin deletes the marks with the pin, the app's old names are read as today's, pinned group tabs' homes go across and

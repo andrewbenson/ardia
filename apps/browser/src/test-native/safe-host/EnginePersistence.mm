@@ -3,33 +3,33 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 
-@interface ArdiaCoreHost : NSObject
+@interface SolaraCoreHost : NSObject
 @property(class) BOOL safeMode;
 @property(class, readonly) BOOL isStarted;
 @end
-@implementation ArdiaCoreHost
+@implementation SolaraCoreHost
 static BOOL safe = NO;
 + (BOOL)safeMode { return safe; }
 + (void)setSafeMode:(BOOL)value { safe = value; }
 + (BOOL)isStarted { return YES; }
 @end
 
-@interface ArdiaCoreProfile : NSObject
+@interface SolaraCoreProfile : NSObject
 @property(copy) NSString *path;
 @property BOOL offTheRecord;
 @end
-@implementation ArdiaCoreProfile
+@implementation SolaraCoreProfile
 @end
 
 static NSString *fixture;
 static NSMutableArray *received;
-namespace ardiacore_host {
+namespace solaracore_host {
 BOOL IsIncognito(NSString *) { return NO; }
-NSArray<ArdiaCoreProfile *> *LoadedProfiles() { return @[]; }
-NSString *ProfileName(ArdiaCoreProfile *) { return @"1"; }
+NSArray<SolaraCoreProfile *> *LoadedProfiles() { return @[]; }
+NSString *ProfileName(SolaraCoreProfile *) { return @"1"; }
 NSString *OriginalProfileName(NSString *profile) { return profile; }
-void WithProfile(NSString *, void (^done)(ArdiaCoreProfile *)) {
-  ArdiaCoreProfile *profile = [ArdiaCoreProfile new];
+void WithProfile(NSString *, void (^done)(SolaraCoreProfile *)) {
+  SolaraCoreProfile *profile = [SolaraCoreProfile new];
   profile.path = [fixture stringByAppendingPathComponent:@"Profile 1"];
   done(profile);
 }
@@ -178,24 +178,24 @@ __PRODUCTION__
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
     fixture = @(argv[1]);
-    ArdiaCoreHost.safeMode = [@(argv[2]) isEqual:@"safe"];
+    SolaraCoreHost.safeMode = [@(argv[2]) isEqual:@"safe"];
     NSString *category = @(argv[3]);
     received = [NSMutableArray array];
     NSMutableArray *results = [NSMutableArray array];
-    ArdiaCoreResult done = ^(NSDictionary *value) { [results addObject:value ?: @{}]; };
+    SolaraCoreResult done = ^(NSDictionary *value) { [results addObject:value ?: @{}]; };
     if ([category isEqual:@"passwords"]) {
-      if (ArdiaCoreHost.safeMode) {
-        [ArdiaCoreServices savePassword:@"1" origin:@"https://login.example/path?query" username:@"before" password:@"secret" completion:done];
-        [ArdiaCoreServices updatePassword:@"1" origin:@"https://login.example/another" username:@"before" newUsername:@"after" newPassword:@"edited" completion:done];
-        [ArdiaCoreServices savePassword:@"1" origin:@"https://obsolete.example/path" username:@"deleted" password:@"gone" completion:done];
-        [ArdiaCoreServices deletePassword:@"1" origin:@"https://obsolete.example/path" username:@"deleted" completion:done];
+      if (SolaraCoreHost.safeMode) {
+        [SolaraCoreServices savePassword:@"1" origin:@"https://login.example/path?query" username:@"before" password:@"secret" completion:done];
+        [SolaraCoreServices updatePassword:@"1" origin:@"https://login.example/another" username:@"before" newUsername:@"after" newPassword:@"edited" completion:done];
+        [SolaraCoreServices savePassword:@"1" origin:@"https://obsolete.example/path" username:@"deleted" password:@"gone" completion:done];
+        [SolaraCoreServices deletePassword:@"1" origin:@"https://obsolete.example/path" username:@"deleted" completion:done];
       } else {
-        [ArdiaCoreServices password:@"1" origin:@"https://login.example/normal" username:@"after" completion:done];
-        [ArdiaCoreServices password:@"1" origin:@"https://login.example/normal" username:@"before" completion:done];
-        [ArdiaCoreServices password:@"1" origin:@"https://obsolete.example/normal" username:@"deleted" completion:done];
+        [SolaraCoreServices password:@"1" origin:@"https://login.example/normal" username:@"after" completion:done];
+        [SolaraCoreServices password:@"1" origin:@"https://login.example/normal" username:@"before" completion:done];
+        [SolaraCoreServices password:@"1" origin:@"https://obsolete.example/normal" username:@"deleted" completion:done];
       }
     } else if ([category isEqual:@"bookmarks"] || [category isEqual:@"history"]) {
-      if (ArdiaCoreHost.safeMode) {
+      if (SolaraCoreHost.safeMode) {
         NSArray *calls = [category isEqual:@"bookmarks"] ? @[
           @[ @"ac_bookmarks_apply", @{ @"ops": @[
             @{ @"op": @"add", @"id": @"fixture-bookmark", @"k": @"u", @"t": @"Before", @"u": @"https://before.example/", @"parent": @"bar", @"a": @42 },
@@ -209,30 +209,30 @@ int main(int argc, const char *argv[]) {
         ];
         for (NSArray *call in calls) {
           NSString *body = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:call[1] options:0 error:nil] encoding:NSUTF8StringEncoding];
-          [ArdiaCoreEngineBridge call:call[0] profile:@"1" args:body completion:^(NSString *json) {
+          [SolaraCoreEngineBridge call:call[0] profile:@"1" args:body completion:^(NSString *json) {
             [results addObject:[NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]];
           }];
         }
       }
     } else if ([category isEqual:@"autofill"]) {
-      if (ArdiaCoreHost.safeMode) {
-        [ArdiaCoreServices saveAddress:@{ @"id": @"home", @"name": @"Safe edit", @"street": @42, @"ignored": @[] } profile:@"1" completion:done];
-        [ArdiaCoreServices saveAddress:@{ @"id": @"obsolete", @"name": @"Delete me" } profile:@"1" completion:done];
-        [ArdiaCoreServices deleteAutofillEntry:@"obsolete" profile:@"1" completion:done];
-        [ArdiaCoreServices saveCard:@{ @"id": @"card", @"name": @"Safe card", @"expMonth": @12, @"expYear": @2030 } number:@"4111111111111111" profile:@"1" completion:done];
+      if (SolaraCoreHost.safeMode) {
+        [SolaraCoreServices saveAddress:@{ @"id": @"home", @"name": @"Safe edit", @"street": @42, @"ignored": @[] } profile:@"1" completion:done];
+        [SolaraCoreServices saveAddress:@{ @"id": @"obsolete", @"name": @"Delete me" } profile:@"1" completion:done];
+        [SolaraCoreServices deleteAutofillEntry:@"obsolete" profile:@"1" completion:done];
+        [SolaraCoreServices saveCard:@{ @"id": @"card", @"name": @"Safe card", @"expMonth": @12, @"expYear": @2030 } number:@"4111111111111111" profile:@"1" completion:done];
       } else {
-        [ArdiaCoreServices addresses:@"1" completion:done];
-        [ArdiaCoreServices cards:@"1" completion:done];
+        [SolaraCoreServices addresses:@"1" completion:done];
+        [SolaraCoreServices cards:@"1" completion:done];
       }
     } else if ([category isEqual:@"import"]) {
-      if (ArdiaCoreHost.safeMode) {
+      if (SolaraCoreHost.safeMode) {
         for (NSArray *call in @[
           @[ @"ac_cookies_import", @{ @"cookies": @[ @{ @"name": @"fixture", @"value": @"safe import", @"domain": @".example.test", @"path": @"/" } ] } ],
           @[ @"ac_autofill_import", @{ @"addresses": @[ @{ @"name": @"Imported address", @"street": @"42 Fixture Street" } ], @"cards": @[ @{ @"number": @"4111111111111111", @"name": @"Imported card" } ] } ]
         ]) {
           NSMutableData *args = [[NSJSONSerialization dataWithJSONObject:call[1] options:0 error:nil] mutableCopy];
           [args appendBytes:"" length:1];
-          [ArdiaCoreEngineBridge callWithSecret:call[0] profile:@"1" args:args completion:^(NSString *json) {
+          [SolaraCoreEngineBridge callWithSecret:call[0] profile:@"1" args:args completion:^(NSString *json) {
             [results addObject:[NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil]];
           }];
           BOOL wiped = YES;
@@ -240,11 +240,11 @@ int main(int argc, const char *argv[]) {
           [results addObject:@{ @"wiped": @(wiped) }];
         }
       } else {
-        [ArdiaCoreServices addresses:@"1" completion:done];
-        [ArdiaCoreServices cards:@"1" completion:done];
+        [SolaraCoreServices addresses:@"1" completion:done];
+        [SolaraCoreServices cards:@"1" completion:done];
       }
     }
-    NSDictionary *output = @{ @"safe": @(ArdiaCoreHost.safeMode), @"received": received, @"results": results,
+    NSDictionary *output = @{ @"safe": @(SolaraCoreHost.safeMode), @"received": received, @"results": results,
       @"files": [NSFileManager.defaultManager contentsOfDirectoryAtPath:fixture error:nil] ?: @[],
       @"login": FixtureRead(@"Login Data"), @"web": FixtureRead(@"Web Data"), @"cookies": FixtureRead(@"Cookies"),
       @"bookmarks": FixtureRead(@"Bookmarks"), @"history": FixtureRead(@"History") };

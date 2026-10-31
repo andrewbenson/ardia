@@ -1,6 +1,6 @@
-import { confirm } from "@ardia/shell";
-import { savePassword } from "@ardia/ardiacore";
-import type { BookmarkNode as ImportedNode, Credential, DiaTabsProfile, ImportedFavicon, ImportedTab, ImportKind, ImportResult, SafariExport, SpaceSuggestion } from "@ardia/import";
+import { confirm } from "@solara/shell";
+import { savePassword } from "@solara/solaracore";
+import type { BookmarkNode as ImportedNode, Credential, DiaTabsProfile, ImportedFavicon, ImportedTab, ImportKind, ImportResult, SafariExport, SpaceSuggestion } from "@solara/import";
 import { addGroupsFromDrafts } from "../../lib/bookmarkGroups";
 import { adoptFavicons, pageKey as faviconPage } from "../../lib/favicons";
 import type { BookmarkDraft } from "../../store/bookmarks";
@@ -13,10 +13,10 @@ import type { ProfileColor } from "../../store/types";
 import { importModule } from "./module";
 import { adoptProfileTheme } from "../../sync/engine";
 import { parseArcTheme } from "./arcTheme";
-import { liveCommand } from "@ardia/settings";
+import { liveCommand } from "@solara/settings";
 import type { LiveSourceId } from "../../live/types";
 import { nativeOwnsWorkspace, nativeSafeMode, nativeWrite, writeState } from "../../store/nativeStore";
-import { encodeCommand } from "@ardia/store";
+import { encodeCommand } from "@solara/store";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number };
 

@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import SolaraModel
 import SolaraOmnibox
 import SolaraStore
@@ -10,7 +10,7 @@ final class TabPoolHost {
   static let shared = TabPoolHost()
 
   nonisolated static var available: Bool { NativeSplitChrome.panesEnabled && NativePaneRoots.available && NativeStoreHandle.opened
-    && ProcessInfo.processInfo.environment["ARDIA_TAB_POOL"] != "0" }
+    && ProcessInfo.processInfo.environment["SOLARA_TAB_POOL"] != "0" }
 
   var emit: ((String, [String: Any]) -> Void)?
   var onPageGone: ((String) -> Void)?
@@ -52,12 +52,12 @@ final class TabPoolHost {
     overlaysObserver = NotificationCenter.default.addObserver(forName: PaneOverlays.changed, object: PaneOverlays.shared, queue: nil) { [weak self] _ in
       MainActor.assumeIsolated { self?.followCardPages() }
     }
-    ArdiaCoreWebView.setOwnedTabStillWanted { view in MainActor.assumeIsolated { TabPoolHost.shared.stillWants(view) } }
+    SolaraCoreWebView.setOwnedTabStillWanted { view in MainActor.assumeIsolated { TabPoolHost.shared.stillWants(view) } }
     receive(store.state)
   }
 
   private func startWhenSlotsChange() {
-    guard slotObserver == nil, NativeSplitChrome.panesEnabled, ProcessInfo.processInfo.environment["ARDIA_TAB_POOL"] != "0" else { return }
+    guard slotObserver == nil, NativeSplitChrome.panesEnabled, ProcessInfo.processInfo.environment["SOLARA_TAB_POOL"] != "0" else { return }
     slotObserver = NotificationCenter.default.addObserver(forName: TabSlots.changed, object: TabSlots.shared, queue: nil) { [weak self] _ in
       MainActor.assumeIsolated { self?.start() }
     }

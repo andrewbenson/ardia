@@ -1,5 +1,5 @@
-import { cleanUrl, markdownLink } from "@ardia/core";
-import { copyText, prompt, showMenu, type MenuItem } from "@ardia/shell";
+import { cleanUrl, markdownLink } from "@solara/core";
+import { copyText, prompt, showMenu, type MenuItem } from "@solara/shell";
 import { closeTab } from "../../lib/actions";
 import { menuShortcut } from "../../lib/commandShortcuts";
 import { calendarConnected, connectCalendar, setCalendarHidden, useCalendar } from "../../live/calendar";

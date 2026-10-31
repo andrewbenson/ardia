@@ -1,25 +1,25 @@
 #import <Foundation/Foundation.h>
 
-@interface ArdiaCoreHost : NSObject
+@interface SolaraCoreHost : NSObject
 @property(class) BOOL safeMode;
 @property(class, readonly) NSString *dataDirectory;
 @end
-@implementation ArdiaCoreHost
+@implementation SolaraCoreHost
 static BOOL safe = NO;
 + (BOOL)safeMode { return safe; }
 + (void)setSafeMode:(BOOL)value { safe = value; }
 + (NSString *)dataDirectory { return @(getenv("TMPDIR")); }
 @end
-namespace ardiacore_host { BOOL IsIncognito(NSString *) { return NO; } }
+namespace solaracore_host { BOOL IsIncognito(NSString *) { return NO; } }
 __PRODUCTION__
 int main() {
   @autoreleasepool {
     NSMutableArray *results = [NSMutableArray array];
-    NSString *dir = [ArdiaCoreHost.dataDirectory stringByAppendingPathComponent:@"Profile 1"];
-    NSString *path = [dir stringByAppendingPathComponent:@"Ardia Favicons/icon.png"];
+    NSString *dir = [SolaraCoreHost.dataDirectory stringByAppendingPathComponent:@"Profile 1"];
+    NSString *path = [dir stringByAppendingPathComponent:@"Solara Favicons/icon.png"];
     [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     for (NSNumber *mode in @[ @YES, @NO ]) {
-      ArdiaCoreHost.safeMode = mode.boolValue;
+      SolaraCoreHost.safeMode = mode.boolValue;
       NSDictionary *result = Store([@"png fixture" dataUsingEncoding:NSUTF8StringEncoding], 32, 32, @"1", @"icon");
       NSArray *files = [NSFileManager.defaultManager subpathsAtPath:dir];
       NSData *data = [NSData dataWithContentsOfFile:path];

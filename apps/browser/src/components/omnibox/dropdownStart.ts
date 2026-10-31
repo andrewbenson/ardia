@@ -1,4 +1,4 @@
-import { recentTabSuggestions, type Suggestion } from "@ardia/core";
+import { recentTabSuggestions, type Suggestion } from "@solara/core";
 import { useMemo } from "react";
 import { useBrowser } from "../../store/browser";
 import { openTabsByUse } from "../../store/tabShare";

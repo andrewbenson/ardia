@@ -146,8 +146,8 @@
     dirty = true;
   }
 
-  applyPageColor(window.ardiaPageColor || params.get("color"));
-  addEventListener("ardiapagecolor", () => applyPageColor(window.ardiaPageColor));
+  applyPageColor(window.solaraPageColor || params.get("color"));
+  addEventListener("solarapagecolor", () => applyPageColor(window.solaraPageColor));
 
   const injected = window.GAME_ERROR || {};
   const errorCode = injected.code || params.get("code");
@@ -169,7 +169,7 @@
 
   function retry() {
     try {
-      const host = window.ardia;
+      const host = window.solara;
       if (host && typeof host.retry === "function") return void host.retry();
       const epc = window.errorPageController;
       if (epc && typeof epc.reloadButtonClick === "function") return void epc.reloadButtonClick();
@@ -182,7 +182,7 @@
   addEventListener("online", () => { if (errorCode || failedUrl) $("online").hidden = false; });
   addEventListener("offline", () => { $("online").hidden = true; });
 
-  const BEST_KEY = "ardia.lamb.best";
+  const BEST_KEY = "solara.lamb.best";
   function loadBest() {
     try { return Math.max(0, parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0); } catch (_) { return 0; }
   }

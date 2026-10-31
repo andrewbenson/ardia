@@ -6,8 +6,8 @@ import {
   nativeAppIntegrationNotification,
   onAppIntegrationPresentation,
   startNativeAppStartup,
-} from "@ardia/settings";
-import { onNotificationResponse, setScriptLoading } from "@ardia/shell";
+} from "@solara/settings";
+import { onNotificationResponse, setScriptLoading } from "@solara/shell";
 import { startOnboarding, resumeOnboarding, useOnboarding } from "../components/onboarding/state";
 import { startToolTour } from "../components/onboarding/tour/state";
 import { applyPendingReleaseNotes, releaseNotesVersions } from "../components/ntp/releaseNotes";

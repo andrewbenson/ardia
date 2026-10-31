@@ -1,5 +1,5 @@
-import { cancelDownload, endWebKitPrivateSession, leftDownloadStaging, removeLeftDownloadStaging, type Download } from "@ardia/ardiacore";
-import { readDocumentResult, writeDocument, type DocumentRead } from "@ardia/shell";
+import { cancelDownload, endWebKitPrivateSession, leftDownloadStaging, removeLeftDownloadStaging, type Download } from "@solara/solaracore";
+import { readDocumentResult, writeDocument, type DocumentRead } from "@solara/shell";
 import { showNotice, showToast } from "../components/layout/toasts";
 import { persistenceRefused, refusePersistence } from "./persistLatch";
 import { useBrowser, type BrowserState, type HydrateData } from "../store/browser";
@@ -15,7 +15,7 @@ import { startFavicons } from "./favicons";
 import { startBookmarks } from "./bookmarks";
 import { startHistory } from "./history";
 import { startProfileDataCleanup } from "./profileData";
-import { flushNativeStore, flushProblem } from "@ardia/store";
+import { flushNativeStore, flushProblem } from "@solara/store";
 import {
   adoptRepairs,
   attachReplica,
@@ -32,7 +32,7 @@ import {
   startNativeStore,
   withApplier,
 } from "../store/nativeStore";
-import type { StoreCommand } from "@ardia/store";
+import type { StoreCommand } from "@solara/store";
 import { journalAnchor, journalVersion, onJournalChange } from "../sync/journalHost";
 
 const SAVE_DELAY_MS = 800;

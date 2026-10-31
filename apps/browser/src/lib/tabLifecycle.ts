@@ -1,5 +1,5 @@
-import { listTasks, onSystemState, releaseProfile, setBatterySaver, systemState, type SystemState, type WebViewHandle } from "@ardia/ardiacore";
-import { onAppEvent, onWindowEvent } from "@ardia/shell";
+import { listTasks, onSystemState, releaseProfile, setBatterySaver, systemState, type SystemState, type WebViewHandle } from "@solara/solaracore";
+import { onAppEvent, onWindowEvent } from "@solara/shell";
 import { create } from "zustand";
 import { pageOf, usePages } from "../components/layout/pageState";
 import { showToast } from "../components/layout/splitActions";

@@ -295,7 +295,7 @@ struct LiveFoldersPane: View {
 
       if model.state?.mocked == true {
         Section {
-          Text("Development build: services are served by ARDIA_LIVE_MOCK.")
+          Text("Development build: services are served by SOLARA_LIVE_MOCK.")
             .font(.caption)
             .foregroundStyle(Color(red: 0xD2 / 255, green: 0x99 / 255, blue: 0x22 / 255))
         }

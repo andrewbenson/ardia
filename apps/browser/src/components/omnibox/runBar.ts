@@ -1,5 +1,5 @@
-import type { Suggestion } from "@ardia/core";
-import { prompt, showMenu, type BrowserCommand, type MenuItem } from "@ardia/shell";
+import type { Suggestion } from "@solara/core";
+import { prompt, showMenu, type BrowserCommand, type MenuItem } from "@solara/shell";
 import { moveTabToProfile } from "../../lib/actions";
 import { runCommand } from "../../lib/commands";
 import { useBrowser } from "../../store/browser";

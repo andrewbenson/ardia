@@ -1,5 +1,5 @@
-import { WebView, type PageEngine } from "@ardia/ardiacore";
-import { nativeToolbarAvailable, tabPool, windowPaneRootsActive, windowShellActive } from "@ardia/settings";
+import { WebView, type PageEngine } from "@solara/solaracore";
+import { nativeToolbarAvailable, tabPool, windowPaneRootsActive, windowShellActive } from "@solara/settings";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";

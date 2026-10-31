@@ -185,8 +185,8 @@ test("FR5: a pinned tab's page title changing here doesn't send its old group an
 
 test("FR6: Solara always launches Chrome with --user-data-dir, so Chrome never deletes undecryptable logins on its own", async () => {
   const fs = await import("node:fs");
-  const host = fs.readFileSync(new URL("../../../../../packages/ardiacore/ios/ArdiaCoreHost.mm", import.meta.url), "utf8");
-  const delegate = fs.readFileSync(new URL("../../../../../engine/ardiacore/src/ardia/core/ac_main_delegate.cc", import.meta.url), "utf8");
+  const host = fs.readFileSync(new URL("../../../../../packages/solaracore/ios/SolaraCoreHost.mm", import.meta.url), "utf8");
+  const delegate = fs.readFileSync(new URL("../../../../../engine/solaracore/src/solara/core/ac_main_delegate.cc", import.meta.url), "utf8");
   assert.match(host, /"--user-data-dir=" \+ std::string\(gDataDirectory\.UTF8String\)/, "the host passes --user-data-dir");
-  assert.match(delegate, /CHECK\(!dir\.empty\(\)\) << "ArdiaCore needs --user-data-dir"/, "and the engine refuses to start without it");
+  assert.match(delegate, /CHECK\(!dir\.empty\(\)\) << "SolaraCore needs --user-data-dir"/, "and the engine refuses to start without it");
 });

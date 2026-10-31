@@ -1,4 +1,4 @@
-import { killSwitchEnvironment } from "@ardia/shell";
+import { killSwitchEnvironment } from "@solara/shell";
 
 type Unsubscribe = () => void;
 
@@ -21,7 +21,7 @@ let clock = () => Date.now();
 let separate: boolean | null = null;
 let firing = false;
 
-const separateTimers = () => (separate ??= killSwitchEnvironment("ARDIA_SLOW_TIMERS") === "separate");
+const separateTimers = () => (separate ??= killSwitchEnvironment("SOLARA_SLOW_TIMERS") === "separate");
 
 const slotAfter = (t: number, every: number) => (Math.floor(t / every) + 1) * every;
 

@@ -6,7 +6,7 @@ diff --git a/content/browser/media/session/media_session_impl.cc b/content/brows
  #include "content/browser/media/session/media_session_android.h"
  #endif  // BUILDFLAG(IS_ANDROID)
 +
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
  namespace content {
  
@@ -15,7 +15,7 @@ diff --git a/content/browser/media/session/media_session_impl.cc b/content/brows
  
  WEB_CONTENTS_USER_DATA_KEY_IMPL(MediaSessionImpl);
 +
-+bool ArdiaMainFrameHandlesEnterPictureInPicture(WebContents* contents) {
++bool SolaraMainFrameHandlesEnterPictureInPicture(WebContents* contents) {
 +  MediaSessionImpl* session = contents ? MediaSessionImpl::Get(contents) : nullptr;
 +  return session &&
 +         session->ShouldRouteAction(

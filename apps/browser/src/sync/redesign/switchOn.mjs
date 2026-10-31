@@ -36,8 +36,8 @@ const loginDataMark = {
 };
 globalThis.acTestLoginDataMark = loginDataMark;
 const withMarkedRead = (value) => {
-  const native = value?.ArdiaSync;
-  if (syncRedesign.on) withSealedPasswords(native, () => globalThis.acTestNativeModules?.ArdiaCEF ?? shell.ardiaCoreNativeModules.ArdiaCEF, () => loginDataMark.value);
+  const native = value?.SolaraSyncAdapter;
+  if (syncRedesign.on) withSealedPasswords(native, () => globalThis.acTestNativeModules?.SolaraCEF ?? shell.solaraCoreNativeModules.SolaraCEF, () => loginDataMark.value);
   else if (native && !native.readPasswordsWithMark)
     native.readPasswordsWithMark = async (profile) => {
       const logins = await native.readPasswords(profile);

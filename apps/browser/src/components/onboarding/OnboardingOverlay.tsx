@@ -1,4 +1,4 @@
-import { hostedKinds, SolaraHostedView } from "@ardia/settings";
+import { hostedKinds, SolaraHostedView } from "@solara/settings";
 import { StyleSheet } from "react-native";
 import { useWindowId } from "../../store/hooks";
 import { useOnboarding } from "./state";

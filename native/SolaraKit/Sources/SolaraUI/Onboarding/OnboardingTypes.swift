@@ -30,7 +30,7 @@ public enum OnboardingPreset: String, Sendable, Hashable {
         "balancedTopApps": false,
         "shareTabsAcrossWindows": false,
         "cleanUpInactiveTabsAfterHours": nil,
-        "openLinksInLittleArdia": true,
+        "openLinksInLittleSolara": true,
       ]
     case .arc:
       [
@@ -42,7 +42,7 @@ public enum OnboardingPreset: String, Sendable, Hashable {
         "balancedTopApps": true,
         "shareTabsAcrossWindows": true,
         "cleanUpInactiveTabsAfterHours": 12,
-        "openLinksInLittleArdia": true,
+        "openLinksInLittleSolara": true,
       ]
     }
   }
@@ -78,7 +78,7 @@ public enum OnboardingQuestion: String, CaseIterable, Sendable, Hashable {
     case .lookMore: ["hideToolbarWhileScrolling", "bookmarksBar"]
     case .engine: ["searchEngine"]
     case .typed: ["commandBarPreference"]
-    case .links: ["openLinksInLittleArdia"]
+    case .links: ["openLinksInLittleSolara"]
     case .source, .color, .pins, .defaultBrowser, .outro: []
     }
   }

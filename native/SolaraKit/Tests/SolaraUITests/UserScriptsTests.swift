@@ -485,7 +485,7 @@ private final class ScriptsHost: UserScriptsHost {
   }
 
   @Test func blockedFallbackTrimsProductAndUsesTheOriginalDefault() async {
-    for (product, expected) in [(" \u{feff}Solara\u{a0}", "Solara"), (" \t", "Ardia")] {
+    for (product, expected) in [(" \u{feff}Solara\u{a0}", "Solara"), (" \t", "Solara")] {
       let host = ScriptsHost()
       host.installed = UserScriptsExtension(id: "abc", path: host.folder.path, enabled: false, state: "DISABLED", blockedByPolicy: true)
       let sync = UserScriptsSync(host: host, product: product)

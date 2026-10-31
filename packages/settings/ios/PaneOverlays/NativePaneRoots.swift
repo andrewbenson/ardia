@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import SolaraModel
 import SolaraStore
 import SolaraUI

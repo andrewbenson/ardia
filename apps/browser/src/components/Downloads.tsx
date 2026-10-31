@@ -1,5 +1,5 @@
-import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "@ardia/ardiacore";
-import { ContextMenuArea, copyText, fileExists, fileIcon, MouseArea, moveToTrash, openFile, PopoverBubble, popoverBubbleAvailable, revealFile, showMenu, Surface, Symbol, VisualEffect, type MenuItem } from "@ardia/shell";
+import { cancelDownload, keepDownload, pauseDownload, resumeDownload, type Download } from "@solara/solaracore";
+import { ContextMenuArea, copyText, fileExists, fileIcon, MouseArea, moveToTrash, openFile, PopoverBubble, popoverBubbleAvailable, revealFile, showMenu, Surface, Symbol, VisualEffect, type MenuItem } from "@solara/shell";
 import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
@@ -16,7 +16,7 @@ import { HoverSlot } from "./HoverSlot";
 import { anchorInside, DOWNLOADS_PANEL, downloadsPlacement, type DownloadsPlacement, type Rect, type Size } from "./downloadsPlacement";
 import { PANEL, POPOVER_MOTION, PopoverSeparator, usePopoverPresence } from "./layout/controls";
 import { IconButton, useHover } from "./primitives";
-import { nativeToolbarAvailable, NativeDownloadsView, SolaraHostedView, windowShellActive, type NativeDownloadsEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativeDownloadsView, SolaraHostedView, windowShellActive, type NativeDownloadsEvent } from "@solara/settings";
 import { useNativeDownloadsPanel } from "./nativeDownloadsPanel";
 import { usePages } from "./layout/pageState";
 

@@ -1,4 +1,4 @@
-import { endTopStripIncoming, hostedKinds, SolaraHostedView, topStripIncoming, topStripPeek } from "@ardia/settings";
+import { endTopStripIncoming, hostedKinds, SolaraHostedView, topStripIncoming, topStripPeek } from "@solara/settings";
 import { memo, useEffect, useMemo, useRef } from "react";
 import { registerDownloadsAnchor } from "../Downloads";
 import { openProfileMenu } from "../ProfileIndicator";

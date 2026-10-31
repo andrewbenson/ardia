@@ -1,5 +1,5 @@
-import { onExtensionsChanged } from "@ardia/ardiacore";
-import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
+import { onExtensionsChanged } from "@solara/solaracore";
+import { publishSettingsTopic, type SettingsHandler } from "@solara/settings";
 import { useBrowser } from "../../../store/browser";
 import { resolveWindowId } from "../../../store/model";
 import { addFromWebStore, closeExtensionPopup, closeSidePanelsOf, refreshExtensionsAfterChange, useExtensions } from "../../extensions/state";

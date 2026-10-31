@@ -52,12 +52,12 @@ const fake = {
     for (const listener of this.commitListeners) listener({ event: JSON.stringify(commit) });
   },
 };
-globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, ArdiaStore: fake };
+globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, SolaraStoreAdapter: fake };
 
 const { useBrowser } = await import("../../store/browser.ts");
 const settingsModule = await import("../../store/settings.ts");
 const nativeStore = await import("../../store/nativeStore.ts");
-const { Clock } = await import("@ardia/sync");
+const { Clock } = await import("@solara/sync");
 const { openJournal } = await import("../editJournal.ts");
 const { journalCommands } = await import("../commandJournal.ts");
 const { settingsAdapter } = await import("../adapters.ts");

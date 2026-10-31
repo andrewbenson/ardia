@@ -1,4 +1,4 @@
-import { hlcWall, type HLC } from "@ardia/sync";
+import { hlcWall, type HLC } from "@solara/sync";
 
 export type LedgerValue = { o: string; u: string; s: string };
 export type LedgerEntry = { d: string[]; h: HLC | null; m: number };

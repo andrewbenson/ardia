@@ -61,7 +61,7 @@ type SyncNative = {
   readPasswordsWithMark?(engineProfile: string): Promise<MarkedLogins | null>;
 };
 
-export const SyncNative = requireOptionalNativeModule<SyncNative>("ArdiaSync");
+export const SyncNative = requireOptionalNativeModule<SyncNative>("SolaraSyncAdapter");
 
 export const folderTransport = (native: SyncNative, folder: string): Transport => ({
   write: (scope, payload) => native.write(folder, scope, payload),

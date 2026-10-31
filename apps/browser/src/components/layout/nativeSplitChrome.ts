@@ -1,4 +1,4 @@
-import { publishSettingsTopic, windowPagesPoolActive, type ToolbarClick } from "@ardia/settings";
+import { publishSettingsTopic, windowPagesPoolActive, type ToolbarClick } from "@solara/settings";
 import { useEffect, type RefObject } from "react";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";
 import type { Theme } from "../../lib/theme";

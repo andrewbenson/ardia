@@ -1,5 +1,5 @@
-import { terminateCastRoute, type ActionState, type CastRoute, type InstalledExtension } from "@ardia/ardiacore";
-import { ContextMenuArea, showMenu, Symbol } from "@ardia/shell";
+import { terminateCastRoute, type ActionState, type CastRoute, type InstalledExtension } from "@solara/solaracore";
+import { ContextMenuArea, showMenu, Symbol } from "@solara/shell";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";

@@ -9,9 +9,9 @@
           "guid": "00000000-0000-4000-8000-000000000101",
           "id": "0101",
           "meta_info": {},
-          "name": "Ardia",
+          "name": "Solara",
           "type": "url",
-          "url": "https://ardia.example/"
+          "url": "https://solara.example/"
         },
         {
           "children": [

@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaShaders
-import ArdiaShell
+import SolaraShaders
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -19,7 +19,7 @@ enum NativeOnboarding {
 
   static func register() {
     guard enabled else { return }
-    OnboardingProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+    OnboardingProbe.enabled = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
     HostedViews.register(kind) { windowId in
       guard let settings = NativeSettingsHandle.model else { return nil }
       let session = OnboardingSession(windowId: windowId, settings: settings)

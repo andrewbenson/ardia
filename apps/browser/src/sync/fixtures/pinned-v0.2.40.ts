@@ -1,4 +1,4 @@
-import { assignPositions, type Adapter, type Extraction } from "@ardia/sync";
+import { assignPositions, type Adapter, type Extraction } from "@solara/sync";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { ancestorIds, depthOf, leaveGroups, syncGroupOrder, withParent } from "../../store/groups";
 import { makeTab, newId, pinSection, without } from "../../store/model";

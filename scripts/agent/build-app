@@ -148,9 +148,9 @@ native_stamp() {
     git ls-files -co --exclude-standard -- \
       apps/browser/macos apps/browser/app.json apps/browser/react-native.config.js \
       'packages/*/ios/*' 'packages/*/expo-module.config.json' packages/shell/docktile \
-      packages/ardiacore/scripts/embed.sh packages/ardiacore/scripts/stage-framework.sh packages/ardiacore/scripts/ubo.sh \
-      packages/ardiacore/extensions \
-      packages/ardiacore/scripts/signing engine/ardiacore/src/ardia/core/public patches pnpm-lock.yaml \
+      packages/solaracore/scripts/embed.sh packages/solaracore/scripts/stage-framework.sh packages/solaracore/scripts/ubo.sh \
+      packages/solaracore/extensions \
+      packages/solaracore/scripts/signing engine/solaracore/src/solara/core/public patches pnpm-lock.yaml \
       native/SolaraKit/Package.swift native/SolaraKit/Package.resolved native/SolaraKit/Sources
     echo apps/browser/macos/Pods/Manifest.lock
   ) | python3 -c '
@@ -166,7 +166,7 @@ if os.path.exists(binary):
     st = os.stat(binary)
     h.update(("engine %s %d %d" % (framework, st.st_mtime, st.st_size)).encode())
 print(h.hexdigest())
-' "$repo" "${ARDIACORE_FRAMEWORK:-$HOME/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64/Chromium Framework.framework}"
+' "$repo" "${SOLARACORE_FRAMEWORK:-$HOME/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64/Chromium Framework.framework}"
 }
 
 pod_drift() {
@@ -261,7 +261,7 @@ echo "build-app: $config into ${dd#"$repo"/} (log: ${log#"$repo"/})"
 (
   cd "$app_dir" &&
     "$repo/scripts/agent/locked" xcodebuild --wait "$wait" --as "$name" -- \
-      xcodebuild -workspace macos/Ardia.xcworkspace -scheme Ardia-macOS -derivedDataPath "$dd" \
+      xcodebuild -workspace macos/Solara.xcworkspace -scheme Solara-macOS -derivedDataPath "$dd" \
       -destination 'platform=macOS,arch=arm64' -configuration "$config" ${signing[@]+"${signing[@]}"} -hideShellScriptEnvironment build
 ) >"$log" 2>&1
 status=$?

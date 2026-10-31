@@ -21,7 +21,7 @@ __PRODUCTION__
 var results: [[String: Any]] = []
 for safe in [true, false] {
   DocumentStore.safeMode = safe
-  for name in ["live.json", "session.json", "bookmarks-cache.json", "bangs.txt", "onboarding.json", "release-notes.json", "ardia-cli.json", "sync-state-local.nns"] {
+  for name in ["live.json", "session.json", "bookmarks-cache.json", "bangs.txt", "onboarding.json", "release-notes.json", "solara-cli.json", "sync-state-local.nns"] {
     let before = "existing \(name)"
     let after = "changed \(name)"
     let url = try ShellModule.documentURL(name)

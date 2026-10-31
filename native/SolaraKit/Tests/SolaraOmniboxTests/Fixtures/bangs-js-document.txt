@@ -1,4 +1,4 @@
-ardia-bangs 1	"js-fixture-v1"
+solara-bangs 1	"js-fixture-v1"
 gh	Stored gh	gh.stored.example/?q={s}
 w	Stored w	w.stored.example/?q={s}
 yt	Stored yt	yt.stored.example/?q={s}

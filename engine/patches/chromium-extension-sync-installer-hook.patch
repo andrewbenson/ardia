@@ -1,9 +1,9 @@
-The updater's sync installs tell ArdiaCore which CrxInstaller is theirs, and every CrxInstaller says which extension
-it is about to hand the registrar. ExtensionUpdater::CreateUpdateInstaller calls g_ardia_sync_installer_created with
+The updater's sync installs tell SolaraCore which CrxInstaller is theirs, and every CrxInstaller says which extension
+it is about to hand the registrar. ExtensionUpdater::CreateUpdateInstaller calls g_solara_sync_installer_created with
 the profile, the id and the installer when it makes the installer for a pending install that came from sync
-(PendingExtensionInfo::is_from_sync); CrxInstaller::ReportSuccessFromUIThread calls g_ardia_crx_installing with the
+(PendingExtensionInfo::is_from_sync); CrxInstaller::ReportSuccessFromUIThread calls g_solara_crx_installing with the
 context, the installer and its extension on the UI thread, just before registrar_->OnExtensionInstalled.
-//chrome/browser/ardia (ac_extensions_sync.cc) keeps the sync installers until their callback runs, so an install
+//chrome/browser/solara (ac_extensions_sync.cc) keeps the sync installers until their callback runs, so an install
 is a sync install exactly when the installer completing it is one of them, and the user's own Web Store install of
 the same id is told apart from a sync install that was cancelled or is still running.
 
@@ -14,7 +14,7 @@ the same id is told apart from a sync install that was cancelled or is still run
  using Error = extensions::ExtensionDownloaderDelegate::Error;
  using PingResult = extensions::ExtensionDownloaderDelegate::PingResult;
 +
-+void (*g_ardia_sync_installer_created)(content::BrowserContext* context,
++void (*g_solara_sync_installer_created)(content::BrowserContext* context,
 +                                       const std::string& extension_id,
 +                                       extensions::CrxInstaller* installer) =
 +    nullptr;
@@ -25,9 +25,9 @@ the same id is told apart from a sync install that was cancelled or is still run
  
    installer->set_delete_source(file_ownership_passed);
  
-+  if (g_ardia_sync_installer_created && pending_extension_info &&
++  if (g_solara_sync_installer_created && pending_extension_info &&
 +      pending_extension_info->is_from_sync()) {
-+    g_ardia_sync_installer_created(profile_, id, installer.get());
++    g_solara_sync_installer_created(profile_, id, installer.get());
 +  }
 +
    return installer;
@@ -39,7 +39,7 @@ the same id is told apart from a sync install that was cancelled or is still run
  
  using content::BrowserThread;
  
-+void (*g_ardia_crx_installing)(content::BrowserContext* context,
++void (*g_solara_crx_installing)(content::BrowserContext* context,
 +                               extensions::CrxInstaller* installer,
 +                               const extensions::Extension* extension) =
 +    nullptr;
@@ -51,8 +51,8 @@ the same id is told apart from a sync install that was cancelled or is still run
                                true);
    }
  
-+  if (g_ardia_crx_installing) {
-+    g_ardia_crx_installing(browser_context(), this, extension());
++  if (g_solara_crx_installing) {
++    g_solara_crx_installing(browser_context(), this, extension());
 +  }
 +
    registrar_->OnExtensionInstalled(extension(), page_ordinal_, install_flags_,

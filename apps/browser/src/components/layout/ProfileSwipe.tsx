@@ -1,5 +1,5 @@
-import { SwipeArea, type SwipeAreaHandle, type SwipeEvent } from "@ardia/ardiacore";
-import { WindowBackdrop } from "@ardia/shaders";
+import { SwipeArea, type SwipeAreaHandle, type SwipeEvent } from "@solara/solaracore";
+import { WindowBackdrop } from "@solara/shaders";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";

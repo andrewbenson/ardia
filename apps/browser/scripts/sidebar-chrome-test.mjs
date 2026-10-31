@@ -27,7 +27,7 @@ const fixture = session({
   settings: { warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false, addressBar: "sidebar" },
 });
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const H = globalThis.expo.modules.SolaraHosted;
 const st = () => ac.store.getState();
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -70,7 +70,7 @@ try {
     fresh: true,
     session: fixture,
     onboarded: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_TOP_STRIP: "1", ARDIA_NATIVE_PROFILE_PAGER: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_TOP_STRIP: "1", SOLARA_NATIVE_PROFILE_PAGER: "1" },
     ready: "return !!ac.store.getState().windows.w1",
   });
   await sleep(2500);

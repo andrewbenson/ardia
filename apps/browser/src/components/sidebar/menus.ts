@@ -1,4 +1,4 @@
-import { showMenu, type MenuItem } from "@ardia/shell";
+import { showMenu, type MenuItem } from "@solara/shell";
 import { closeGroup, closeTab, closeTabs, moveTabToProfile, moveTabToWindow, switchToTab, toggleMute } from "../../lib/actions";
 import { menuShortcut } from "../../lib/commandShortcuts";
 import { folderChildren } from "../../store/bookmarks";

@@ -1,5 +1,5 @@
 {
-  "name": "@ardia/core",
+  "name": "@solara/core",
   "version": "0.0.0",
   "private": true,
   "main": "src/index.ts",

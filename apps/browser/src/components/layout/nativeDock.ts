@@ -1,4 +1,4 @@
-import { hostedKinds, publishSettingsTopic } from "@ardia/settings";
+import { hostedKinds, publishSettingsTopic } from "@solara/settings";
 import { useEffect, useRef, useState } from "react";
 import { Animated } from "react-native";
 import { addNativeSettingsHandlers } from "../settings/nativeSettings";

@@ -87,7 +87,7 @@ public final class SafeStorageRekeyRun {
       return unfinished(userDataDir: gate.userDataDir) ? .quit(code: undoFailedExitCode, message: unfinishedMessage) : .proceed
     }
     let testing = gate.mode == .test
-    let crashAt = testing ? env["ARDIA_TEST_REKEY_CRASH"] : nil
+    let crashAt = testing ? env["SOLARA_TEST_REKEY_CRASH"] : nil
     let point = { (name: String) in
       if testing { NSLog("[rekey] point %@", name) }
       if name == crashAt { _exit(crashExitCode) }
@@ -99,7 +99,7 @@ public final class SafeStorageRekeyRun {
     }
     let rekey = SafeStorageRekeyRun(
       userDataDir: gate.userDataDir, keychain: keychain, stores: operations, appVersion: appVersion, point: point,
-      say: { NSLog("%@", $0) }, plantedFailureAfterKey: testing && env["ARDIA_TEST_REKEY_FAIL_AFTER_KEY"] == "1")
+      say: { NSLog("%@", $0) }, plantedFailureAfterKey: testing && env["SOLARA_TEST_REKEY_FAIL_AFTER_KEY"] == "1")
     holding = rekey
     return rekey.run()
   }
@@ -109,16 +109,16 @@ public final class SafeStorageRekeyRun {
   ) -> Int32? {
     let env = ProcessInfo.processInfo.environment
     let info = Bundle.main.infoDictionary
-    let product = info?["CFBundleName"] as? String ?? "Ardia"
+    let product = info?["CFBundleName"] as? String ?? "Solara"
     let gate = SafeStorageRekeyGate.resolve(
       environment: env, chromeUsesRealKeychain: chromeUsesRealKeychain,
-      signedForDistribution: env["ARDIA_TEST_REKEY"] == nil ? false : buildSignedForDistribution,
+      signedForDistribution: env["SOLARA_TEST_REKEY"] == nil ? false : buildSignedForDistribution,
       installedUserDataDir: URL(fileURLWithPath: installedUserDataDir, isDirectory: true))
     let outcome = runAtLaunch(
       gate: gate, product: product, appVersion: info?["CFBundleVersion"] as? String ?? "", environment: env, stores: stores)
     guard case .quit(let code, let message) = outcome else { return nil }
     FileHandle.standardError.write(Data("[rekey] \(message)\n".utf8))
-    if env["ARDIA_BACKGROUND"] != "1" { _ = alert("\(product) can't open yet", message, ["Quit"]) }
+    if env["SOLARA_BACKGROUND"] != "1" { _ = alert("\(product) can't open yet", message, ["Quit"]) }
     return code
   }
 

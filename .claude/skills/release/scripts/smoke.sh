@@ -43,7 +43,7 @@ cdhash() { codesign -dvvv "$1" 2>&1 | sed -n 's/^CDHash=//p'; }
 
 fw="$app/Contents/Frameworks"
 [ -d "$fw/Chromium Framework.framework" ] && [ ! -e "$fw/Chromium Embedded Framework.framework" ] && ok=1 || ok=0
-check "the engine is ArdiaCore (Chrome's framework, no CEF)" $ok \
+check "the engine is SolaraCore (Chrome's framework, no CEF)" $ok \
   "$(plutil -extract CFBundleShortVersionString raw "$fw/Chromium Framework.framework/Resources/Info.plist" 2>/dev/null)"
 if [ -d "$old" ]; then
   keys="CFBundleIdentifier CFBundleExecutable SUFeedURL SUPublicEDKey" what="same bundle id, executable, feed and update key as $previous"
@@ -132,7 +132,7 @@ printf '{"profile":{"last_used":"Profile p-work"}}' > "$work/data/Chromium/Local
 
 codesign --verify --deep --strict "$app"
 launched="$("$root/scripts/agent/ac" launch "$app" --data "$work/data" --port "$port" --js none --no-wait \
-  --env ARDIA_RELEASE_NOTES=1 --env ARDIA_DRAW_WINDOWS=1 --env ARDIA_PIP_SELFTEST=close --env ARDIA_ACCEPT_EXTERNAL_URLS=1 --switch --disable-backgrounding-occluded-windows)" \
+  --env SOLARA_RELEASE_NOTES=1 --env SOLARA_DRAW_WINDOWS=1 --env SOLARA_PIP_SELFTEST=close --env SOLARA_ACCEPT_EXTERNAL_URLS=1 --switch --disable-backgrounding-occluded-windows)" \
   || { echo "error: the app didn't start" >&2; exit 1; }
 pid="$(sed -n 's/^pid \([0-9]*\) .*/\1/p' <<<"$launched")"
 [ -n "$pid" ] || { echo "error: the app didn't start ($launched)" >&2; exit 1; }
@@ -181,7 +181,7 @@ fi
 logger=""
 kill -KILL "$pid" 2>/dev/null || true
 pid=""
-node "$root/packages/ardiacore/scripts/popup-check.mjs" "$app" "$work/popup-check" || status=1
+node "$root/packages/solaracore/scripts/popup-check.mjs" "$app" "$work/popup-check" || status=1
 codesign --verify --deep --strict "$app" && echo "PASS  bundle still sealed after running" || { echo "FAIL  running the app changed its bundle"; status=1; }
 "$here/feed.sh" "$version" --before-publish "$app" || status=1
 exit $status

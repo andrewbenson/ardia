@@ -1,4 +1,4 @@
-import { nativeCliIndicatorShown, SolaraHostedView } from "@ardia/settings";
+import { nativeCliIndicatorShown, SolaraHostedView } from "@solara/settings";
 import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { toggleMute } from "../../lib/actions";
 import { stopCliControl, useCliIndicator } from "../../lib/cliControl";

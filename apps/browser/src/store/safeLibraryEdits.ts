@@ -1,4 +1,4 @@
-import { confirm, readDocumentResult } from "@ardia/shell";
+import { confirm, readDocumentResult } from "@solara/shell";
 import { nativeSafeMode } from "./nativeStore";
 import { engineProfile } from "./model";
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: false, reason: "the native store refused to import: session.json could not be parsed", refusedSession: "/data/session.json" }),
     snapshot: () => null,
     dispatch: () => null,

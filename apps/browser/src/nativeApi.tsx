@@ -3,7 +3,7 @@ import { AppRegistry, Text, View } from "react-native";
 
 export const NATIVE_API_VERSION = 30;
 
-const built = requireOptionalNativeModule<{ apiVersion?: number }>("ArdiaApp")?.apiVersion ?? 0;
+const built = requireOptionalNativeModule<{ apiVersion?: number }>("SolaraApp")?.apiVersion ?? 0;
 
 export const nativeApiSkew =
   built === NATIVE_API_VERSION
@@ -18,7 +18,7 @@ type Shell = {
 };
 
 export function startSkewed(message: string) {
-  console.error(`[ardia] ${message}`);
+  console.error(`[solara] ${message}`);
   AppRegistry.registerComponent("main", () => () => (
     <View style={{ flex: 1, backgroundColor: "#1b1416", padding: 24, paddingTop: 48 }}>
       <Text selectable style={{ color: "#ff8a8a", fontSize: 14, fontFamily: "Menlo" }}>
@@ -26,12 +26,12 @@ export function startSkewed(message: string) {
       </Text>
     </View>
   ));
-  void requireNativeModule<Shell>("ArdiaShell").openWindow("native-api-skew", { kind: "settings", title: "Ardia", focus: false });
+  void requireNativeModule<Shell>("SolaraShell").openWindow("native-api-skew", { kind: "settings", title: "Solara", focus: false });
   if (__DEV__) answerWithSkew(message, "dev-eval.js", "dev-eval-result.json");
 }
 
 export function answerWithSkew(message: string, command: string, result: string) {
-  const shell = requireNativeModule<Shell>("ArdiaShell");
+  const shell = requireNativeModule<Shell>("SolaraShell");
   const idOf = (source: string | null) => source?.match(/^\/\/ *(\S+)/)?.[1];
   let lastId = idOf(shell.readDocument(command)) ?? "";
   setInterval(() => {

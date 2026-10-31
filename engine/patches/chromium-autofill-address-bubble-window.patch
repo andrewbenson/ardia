@@ -1,5 +1,5 @@
 Autofill's address bubbles find the tab's AutofillBubbleHandler through its Browser (the handler is the
-Browser window's unowned user data, as the save-card bubble already looks it up), so they reach ArdiaCore's
+Browser window's unowned user data, as the save-card bubble already looks it up), so they reach SolaraCore's
 handler: BrowserWindow::FindBrowserWindowWithWebContents finds BrowserViews only. A tab with no window, or a
 handler that shows nothing, gets no bubble instead of a null dereference; the save-card bubble likewise.
 Includes CEF's chrome_autofill_bubble_3796, folded in when CEF left the tree.

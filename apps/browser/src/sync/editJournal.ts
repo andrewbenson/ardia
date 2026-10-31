@@ -1,4 +1,4 @@
-import type { HLC } from "@ardia/sync";
+import type { HLC } from "@solara/sync";
 
 export const JOURNAL_DOC = "sync-edits.json";
 export const GEN_DOC = "sync-edits.gen";

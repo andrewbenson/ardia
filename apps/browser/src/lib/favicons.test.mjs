@@ -5,15 +5,15 @@ import { mount } from "../test-hooks.mjs";
 
 globalThis.__DEV__ = false;
 
-const native = import.meta.resolve("@ardia/ardiacore");
+const native = import.meta.resolve("@solara/solaracore");
 const stub = `export * from ${JSON.stringify(native)};
 export const faviconsFor = (profile, pages) => globalThis.faviconsForTest(profile, pages);
 `;
 registerHooks({
   resolve(specifier, context, next) {
-    if (specifier === "@ardia/ardiacore" && context.parentURL?.endsWith("/lib/favicons.ts"))
+    if (specifier === "@solara/solaracore" && context.parentURL?.endsWith("/lib/favicons.ts"))
       return { url: `data:text/javascript,${encodeURIComponent(stub)}`, shortCircuit: true };
-    if (specifier === "@ardia/settings" && context.parentURL?.endsWith("/lib/favicons.ts"))
+    if (specifier === "@solara/settings" && context.parentURL?.endsWith("/lib/favicons.ts"))
       return { url: `data:text/javascript,${encodeURIComponent(`export const nativeStoreFavicon = (...args) => (globalThis.storedFavicons.push(args), Promise.resolve());`)}`, shortCircuit: true };
     return next(specifier, context);
   },

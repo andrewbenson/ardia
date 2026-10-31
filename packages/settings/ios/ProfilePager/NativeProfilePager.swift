@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShaders
+import SolaraCore
+import SolaraShaders
 import ExpoModulesCore
 import Foundation
 import QuartzCore
@@ -123,7 +123,7 @@ final class ProfilePagerHost {
     }
     shell.mount(.tint, tint)
     commits.host = self
-    positionObserver = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) {
+    positionObserver = NotificationCenter.default.addObserver(forName: Notification.Name("SolaraPagerPosition"), object: nil, queue: nil) {
       [weak self] note in
       guard note.userInfo?["key"] as? String == windowId, let position = note.userInfo?["position"] as? Double else { return }
       MainActor.assumeIsolated {
@@ -288,7 +288,7 @@ final class ProfilePagerHost {
       host.perform(NSSelectorFromString("showProfile:inWindow:"), with: w.engineProfile, with: nsWindow)
     }
     if let applied, applied.profile != w.engineProfile || applied.selection != w.profileId {
-      NotificationCenter.default.post(name: Notification.Name("ArdiaPagerActivity"), object: nsWindow)
+      NotificationCenter.default.post(name: Notification.Name("SolaraPagerActivity"), object: nsWindow)
     }
     if applied?.neighbours != w.neighbours, !w.neighbours.isEmpty {
       host.perform(NSSelectorFromString("prepareProfiles:forWindow:"), with: w.neighbours, with: nsWindow)
@@ -433,7 +433,7 @@ enum PagerTrace {
     let taken = samples
     samples = []
     if on {
-      observer = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) { note in
+      observer = NotificationCenter.default.addObserver(forName: Notification.Name("SolaraPagerPosition"), object: nil, queue: nil) { note in
         guard note.userInfo?["key"] as? String == windowId, let position = note.userInfo?["position"] as? Double else { return }
         MainActor.assumeIsolated {
           let tint = NativeProfilePager.hosts[windowId]?.tint.opacities ?? []

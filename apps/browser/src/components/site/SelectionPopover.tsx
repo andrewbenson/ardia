@@ -1,5 +1,5 @@
-import { windowShellActive } from "@ardia/settings";
-import { Surface, Symbol, VisualEffect } from "@ardia/shell";
+import { windowShellActive } from "@solara/settings";
+import { Surface, Symbol, VisualEffect } from "@solara/shell";
 import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";

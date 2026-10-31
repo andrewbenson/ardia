@@ -1,7 +1,7 @@
-diff --git a/chrome/app/theme/ardia/BRANDING b/chrome/app/theme/ardia/BRANDING
+diff --git a/chrome/app/theme/solara/BRANDING b/chrome/app/theme/solara/BRANDING
 new file mode 100644
 --- /dev/null
-+++ b/chrome/app/theme/ardia/BRANDING
++++ b/chrome/app/theme/solara/BRANDING
 @@ -0,0 +1,10 @@
 +COMPANY_FULLNAME=The Chromium Authors
 +COMPANY_SHORTNAME=The Chromium Authors

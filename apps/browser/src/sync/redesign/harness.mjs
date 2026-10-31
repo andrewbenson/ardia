@@ -23,7 +23,7 @@ const guard = () => {
 };
 globalThis.acTestNativeModules = {
   ...(globalThis.acTestNativeModules ?? {}),
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => {
@@ -201,7 +201,7 @@ function appMacWithState(prefix) {
   };
 }
 
-const native = globalThis.acTestNativeModules.ArdiaSync;
+const native = globalThis.acTestNativeModules.SolaraSyncAdapter;
 const realReadPasswords = native.readPasswords;
 const loginDataMark = globalThis.acTestLoginDataMark ?? { value: null, refuse: false, marks: [] };
 const titles = () => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title).sort();

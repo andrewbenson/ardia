@@ -10,7 +10,7 @@ enum SettingsAdapters {
     return nil
   }
 }
-enum ArdiaCoreServices {
+enum SolaraCoreServices {
   static func clearBrowsingData(profile: String, types: [String], since: Double, completion: () -> Void) {
     SettingsAdapters.effects += 1
     completion()

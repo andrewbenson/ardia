@@ -8,7 +8,7 @@ import { binaryPids, binaryOf, commandIsBinary, isAlive, launch, realPath } from
 const lowerHome = (path) => path.replace(/^\/Users\/([^/]+)\/Developer\/Personal\//, "/Users/$1/Developer/personal/");
 
 test("a binary matches its command line whatever the path's case", () => {
-  const binary = "/Users/me/Developer/Personal/ardia/apps/browser/build-x/Solara.app/Contents/MacOS/Solara";
+  const binary = "/Users/me/Developer/Personal/solara/apps/browser/build-x/Solara.app/Contents/MacOS/Solara";
   assert.ok(commandIsBinary(binary, binary.toLowerCase()));
   assert.ok(commandIsBinary(`${binary} --flag`, binary.replace("Personal", "personal")));
   assert.ok(!commandIsBinary(`${binary}Helper --type=renderer`, binary));

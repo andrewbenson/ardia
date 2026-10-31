@@ -17,5 +17,5 @@ if ! python3 "$(dirname "$0")/pathguard.py" classify "$CHROMIUM_SRC" "$game_out"
   AC_CHROMIUM_BUILD="$(cd "$game_tree/../../.." && pwd -P)" source "$(dirname "$0")/step-guard.sh" --apply
 fi
 game_repo="$(cd "$(dirname "$0")/../../.." && pwd)"
-[[ -f "$game_repo/apps/browser/assets/offline-game-pipeline/inline.py" ]] || game_repo="$game_home/Documents/ardia"
+[[ -f "$game_repo/apps/browser/assets/offline-game-pipeline/inline.py" ]] || game_repo="$game_home/Documents/solara"
 python3 "${AC_REPO:-$game_repo}/apps/browser/assets/offline-game-pipeline/inline.py" "$game_out"

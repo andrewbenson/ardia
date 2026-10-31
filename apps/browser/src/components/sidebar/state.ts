@@ -1,4 +1,4 @@
-import { sidebarRowFrame } from "@ardia/settings";
+import { sidebarRowFrame } from "@solara/settings";
 import type { View } from "react-native";
 import { create } from "zustand";
 

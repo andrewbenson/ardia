@@ -8,12 +8,12 @@ probe reads an RN surface and its native replacement the same way.
 
 ## Conditions
 
-- Run on the shipped stable build (`dist/<v>/export/Solara.app`; `Ardia.app` in dists from before the rename), never a local Release or a nightly
+- Run on the shipped stable build (`dist/<v>/export/Solara.app`; `Solara.app` in dists from before the rename), never a local Release or a nightly
   (`docs/perf/README.md` › "Gating a release" explains why).
 - Wait until the overnight Chromium build and every other agent's build or bench are done. Hold the perflab lock for
   every timing phase, and keep the display awake (`caffeinate -d`). Record the load average with each run
   (native-bench already does).
-- Use hidden instances (`ARDIA_BACKGROUND=1`, a scratch `ARDIA_DATA_DIR`, own port). The drag phase is the one
+- Use hidden instances (`SOLARA_BACKGROUND=1`, a scratch `SOLARA_DATA_DIR`, own port). The drag phase is the one
   exception (below).
 - Profiles: the one-tab session, and the seed (`apps/browser/scripts/perf/seed.mjs`: 200 tabs in two profiles, 5,000
   history entries, 1,000 bookmarks).
@@ -78,7 +78,7 @@ Every phase reruns this script with `--control <previous stable>`, interleaved. 
 ## Phase 2 results: Settings
 
 Measured 2026-10-26 with `packages/settings/scripts/settings-bench.mjs --variants native,rn` on a local Release build
-(both windows in the same build, `ARDIA_NATIVE_SETTINGS=0` for RN), interleaved under the perflab lock, 6 launches per
+(both windows in the same build, `SOLARA_NATIVE_SETTINGS=0` for RN), interleaved under the perflab lock, 6 launches per
 variant, 6 panes visited twice each. Medians in ms.
 
 | | Native | RN |

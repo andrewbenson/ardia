@@ -7,7 +7,7 @@ public class CalendarModule: Module {
   private var observer: NSObjectProtocol?
 
   public func definition() -> ModuleDefinition {
-    Name("ArdiaCalendar")
+    Name("SolaraCalendar")
     Events("onCalendarChanged")
 
     OnStartObserving("onCalendarChanged") {
@@ -24,7 +24,7 @@ public class CalendarModule: Module {
     }
 
     AsyncFunction("requestAccess") { (promise: Promise) in
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return promise.resolve(false) }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return promise.resolve(false) }
       self.store.requestFullAccessToEvents { granted, _ in
         DispatchQueue.main.async {
           if granted { self.store = EKEventStore(); self.observe() }
@@ -66,7 +66,7 @@ public class CalendarModule: Module {
   @MainActor public static func liveAuthorization() -> String { status() }
 
   @MainActor public static func liveRequestAccess() async -> Bool {
-    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return false }
+    if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return false }
     return await withCheckedContinuation { continuation in
       liveStore.requestFullAccessToEvents { granted, _ in
         Task { @MainActor in

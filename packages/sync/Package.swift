@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-  name: "ArdiaSyncCore",
+  name: "SolaraLegacySyncCore",
   platforms: [.macOS(.v14)],
   products: [
-    .library(name: "ArdiaSyncCore", targets: ["ArdiaSyncCore"]),
+    .library(name: "SolaraLegacySyncCore", targets: ["SolaraLegacySyncCore"]),
   ],
   targets: [
-    .target(name: "ArdiaSyncCore", path: "ios/Core"),
-    .testTarget(name: "ArdiaSyncCoreTests", dependencies: ["ArdiaSyncCore"], path: "tests", exclude: ["fixtures"]),
+    .target(name: "SolaraLegacySyncCore", path: "ios/Core"),
+    .testTarget(name: "SolaraLegacySyncCoreTests", dependencies: ["SolaraLegacySyncCore"], path: "tests", exclude: ["fixtures"]),
   ]
 )

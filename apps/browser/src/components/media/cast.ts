@@ -6,7 +6,7 @@ import {
   watchCastRoutes,
   type CastDialog,
   type CastRoute,
-} from "@ardia/ardiacore";
+} from "@solara/solaracore";
 import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { engineProfile } from "../../store/model";

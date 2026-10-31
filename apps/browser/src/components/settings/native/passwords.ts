@@ -1,4 +1,4 @@
-import { publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
+import { publishSettingsTopic, type SettingsHandler } from "@solara/settings";
 import { importModule } from "../../import/module";
 
 export const passwordsHandlers: Record<string, SettingsHandler> = {

@@ -1,5 +1,5 @@
-import type { InstalledExtension } from "@ardia/ardiacore";
-import type { ExtensionCandidate } from "@ardia/core";
+import type { InstalledExtension } from "@solara/solaracore";
+import type { ExtensionCandidate } from "@solara/core";
 import { useMemo } from "react";
 import { useWindowExtensions } from "../extensions/store";
 

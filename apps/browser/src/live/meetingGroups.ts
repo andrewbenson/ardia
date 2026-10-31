@@ -1,6 +1,6 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import { confirm } from "@ardia/shell";
-import { liveMeetingBrowser, onLiveCloseGroup } from "@ardia/settings";
+import { confirm } from "@solara/shell";
+import { liveMeetingBrowser, onLiveCloseGroup } from "@solara/settings";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { changedIds } from "../store/changes";
 import { activeTabId } from "../store/model";

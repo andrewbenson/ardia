@@ -1,6 +1,6 @@
 import Security
 import XCTest
-@testable import ArdiaShellCore
+@testable import SolaraShellCore
 
 final class VerifiedLaunchTests: XCTestCase {
   var root: URL!

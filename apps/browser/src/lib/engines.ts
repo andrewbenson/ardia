@@ -1,7 +1,7 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import type { PageEngine } from "@ardia/ardiacore";
-import { nativeAddHistoryVisits } from "@ardia/settings";
-import { confirm } from "@ardia/shell";
+import type { PageEngine } from "@solara/solaracore";
+import { nativeAddHistoryVisits } from "@solara/settings";
+import { confirm } from "@solara/shell";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
 import { pageOf, patchPage } from "../components/layout/pageState";

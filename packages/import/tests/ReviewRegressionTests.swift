@@ -1,5 +1,5 @@
 import XCTest
-@testable import ArdiaImportCore
+@testable import SolaraLegacyImportCore
 
 final class ReviewRegressionTests: XCTestCase {
   func testMalformedFirefoxOriginAttributesDoNotTrap() {

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Step 3: turn a Chromium $CHROMIUM_VERSION tree into Helium's, as Ardia takes it, ready for our series (step 4).
+"""Step 3: turn a Chromium $CHROMIUM_VERSION tree into Helium's, as Solara takes it, ready for our series (step 4).
 
 Helium is helium-chromium $HELIUM_TAG plus helium-macos $HELIUM_MACOS_TAG (helium-pins.ini pins both by commit).
-Helium's downloads (its uBlock Origin, the onboarding page, the non-free search engine data) stay out of Ardia
+Helium's downloads (its uBlock Origin, the onboarding page, the non-free search engine data) stay out of Solara
 entirely: no stage fetches them, and the hunks of Helium's patches that edit them are left out. Stages, in order:
 
   pins           the Helium checkouts are at the pinned commits, unmodified, made for this Chromium; deps.ini
-                 downloads nothing Ardia doesn't omit
+                 downloads nothing Solara doesn't omit
   guard          every skipped patch is still in Helium's series, and no applied patch's added lines touch what a
                  skip protects (Safe Storage, passwords, Sparkle, the product dir, mDNS) beyond the reviewed allowlist
   patches        helium-chromium's series, then helium-macos's, minus SKIP and minus the omitted downloads' files;
@@ -14,9 +14,9 @@ entirely: no stage fetches them, and the hunks of Helium's patches that edit the
   fixups         saving passwords, addresses and cards on by default
   domsub         Helium's domain substitution, minus domsub-keep-store.txt (the Web Store and extension updates)
   namesub        Helium's name_substitution.py --sub and i18n_apply.py
-  brand-namesub  ardia_namesub.py: Helium -> the app's product name (identity.sh: Ardia, or a fork's) in the string files
+  brand-namesub  solara_namesub.py: Helium -> the app's product name (identity.sh: Solara, or a fork's) in the string files
   version        HELIUM_* in chrome/VERSION, equal to Chromium's own version, so Helium's version is never shown
-  resources      Helium's icons (its generated ones made with sips), then ardia_resources.txt over them
+  resources      Helium's icons (its generated ones made with sips), then solara_resources.txt over them
 
 Run once on a fresh tree (step 1), then step 4. The changing stages run once per tree: a record beside the tree
 (.helium-stages-<dir>) refuses a second run, and a run that died mid-stage. The live tree needs --apply and the
@@ -45,13 +45,13 @@ REPO = pathlib.Path(os.environ.get('AC_REPO') or HERE.parent.parent.parent)
 
 SKIP = {
     'helium/core/disable-password-manager.patch':
-        'forces password saving and passkeys off as managed prefs; Ardia uses Chrome\'s password manager',
+        'forces password saving and passkeys off as managed prefs; Solara uses Chrome\'s password manager',
     'helium/ui/remove-autofill-link-to-password-manager.patch': 'drops "Manage passwords" from the fill dropdown',
     'ungoogled-chromium/fix-building-without-mdns-and-service-discovery.patch':
         'empties DnsSdDeviceLister; the Cast dialog needs mDNS (enable_mdns stays true)',
-    'helium/core/memory-saving-by-default.patch': 'Memory Saver would fight Ardia\'s own tab sleeping',
+    'helium/core/memory-saving-by-default.patch': 'Memory Saver would fight Solara\'s own tab sleeping',
     'helium/macos/change-keychain-name.patch':
-        'renames the Safe Storage item; every user\'s passwords and cookies are encrypted with "Ardia Safe Storage"',
+        'renames the Safe Storage item; every user\'s passwords and cookies are encrypted with "Solara Safe Storage"',
     'helium/macos/change-product-dir-name.patch': 'moves the fallback product dir to net.imput.helium',
     'rebel/macos/sparkle-integration.patch': 'Sparkle inside the framework; the app has its own updater',
     'helium/macos/updater/fixup-sparkle-glue.patch': 'Sparkle inside the framework',
@@ -61,7 +61,7 @@ SKIP = {
     'helium/core/use-system-python3.patch': 'Helium\'s build setup: .gn script_executable (reruns every action)',
     'helium/core/rbe-nativelink-config.patch': 'Helium\'s remote build setup',
     'helium/macos/rbe-linux-clang-wrapper.patch': 'Helium\'s remote build setup',
-    'helium/macos/chromium-signing.patch': 'Helium\'s signing flow; scripts/release.sh signs Ardia',
+    'helium/macos/chromium-signing.patch': 'Helium\'s signing flow; scripts/release.sh signs Solara',
 }
 
 GUARD_MARKERS = [
@@ -153,7 +153,7 @@ def stage_pins(ctx):
     for section in deps.sections():
         out = deps[section].get('output_path', '').lstrip('./').rstrip('/') + '/'
         if not out.startswith(OMITTED):
-            problems.append(f'deps.ini [{section}] downloads into {out}, which Ardia doesn\'t omit: decide on it')
+            problems.append(f'deps.ini [{section}] downloads into {out}, which Solara doesn\'t omit: decide on it')
     if problems:
         raise StageError('\n'.join(problems))
     print(f'Helium {config["helium-chromium"]["tag"]} / macOS {config["helium-macos"]["tag"]} on Chromium {chromium}')
@@ -370,16 +370,16 @@ def product_name():
 
 
 def stage_brand_namesub(ctx):
-    script = HERE / 'ardia_namesub.py'
+    script = HERE / 'solara_namesub.py'
     if ctx.no_brand:
         print('skipped (--no-brand)')
         return
     if not script.exists():
-        raise StageError(f'{script} is missing; --no-brand skips the Ardia branding')
+        raise StageError(f'{script} is missing; --no-brand skips the Solara branding')
     p = subprocess.run([sys.executable, str(script), '--tree', str(ctx.tree), '--helium', str(ctx.hc),
                         '--product', product_name()], cwd=ctx.work, capture_output=True, text=True)
     if p.returncode:
-        raise StageError(f'ardia_namesub.py failed:\n{p.stdout[-3000:]}{p.stderr[-3000:]}')
+        raise StageError(f'solara_namesub.py failed:\n{p.stdout[-3000:]}{p.stderr[-3000:]}')
     print((p.stdout.strip().splitlines() or ['done'])[-1])
 
 
@@ -438,14 +438,14 @@ def stage_resources(ctx):
     generated = generate_icons(ctx)
     count = copy_resources(ctx, ctx.hc / 'resources/helium_resources.txt', [generated, ctx.hc / 'resources'])
     print(f'Helium: {count} resources')
-    listing = HERE / 'ardia_resources.txt'
+    listing = HERE / 'solara_resources.txt'
     if ctx.no_brand:
-        print('Ardia resources skipped (--no-brand)')
+        print('Solara resources skipped (--no-brand)')
         return
     if not listing.exists():
-        raise StageError(f'{listing} is missing; --no-brand skips the Ardia branding')
+        raise StageError(f'{listing} is missing; --no-brand skips the Solara branding')
     roots = list(dict.fromkeys([REPO, HERE.parent.parent.parent]))
-    print(f'Ardia: {copy_resources(ctx, listing, roots)} resources')
+    print(f'Solara: {copy_resources(ctx, listing, roots)} resources')
 
 
 def write_marker(marker, lines):

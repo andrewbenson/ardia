@@ -1,15 +1,15 @@
 #!/bin/sh
-# Builds the ardia CLI tarball: a relocatable CPython 3.13 with ardia_cli, its pinned dependencies and esbuild.
+# Builds the solara CLI tarball: a relocatable CPython 3.13 with solara_cli, its pinned dependencies and esbuild.
 #
 #   apps/cli/scripts/build.sh <version> <out dir>
 #   apps/cli/scripts/build.sh -h | --help
 #
-# Writes <out dir>/ardia-cli-<version>-macos-arm64.tar.gz and its .sha256. The app's identity (product name, bundle id
-# and release repo) is baked into ardia_cli/identity.py: from AC_PRODUCT_NAME, AC_BUNDLE_ID and AC_RELEASE_REPO when
+# Writes <out dir>/solara-cli-<version>-macos-arm64.tar.gz and its .sha256. The app's identity (product name, bundle id
+# and release repo) is baked into solara_cli/identity.py: from AC_PRODUCT_NAME, AC_BUNDLE_ID and AC_RELEASE_REPO when
 # all three are set (release.sh passes them), else from scripts/identity.sh (Identity.xcconfig).
 # Needs the network (python-build-standalone from GitHub, wheels and esbuild from npm) and uv (~/.local/bin/uv or on
 # PATH). The Python and esbuild downloads are pinned by sha256 (esbuild also by npm's sha512 integrity) and cached in
-# ~/Library/Caches/ardia-cli-build.
+# ~/Library/Caches/solara-cli-build.
 set -eu
 
 python_release=20261013
@@ -47,7 +47,7 @@ uv=$(command -v uv 2>/dev/null || true)
 [ -n "$uv" ] || uv=$HOME/.local/bin/uv
 [ -x "$uv" ] || { echo "build.sh: uv not found" >&2; exit 1; }
 
-cache=$HOME/Library/Caches/ardia-cli-build
+cache=$HOME/Library/Caches/solara-cli-build
 mkdir -p "$cache" "$out"
 out=$(cd "$out" && pwd)
 if ! [ -f "$cache/$python_asset" ] || [ "$(shasum -a 256 "$cache/$python_asset" | awk '{ print $1 }')" != "$python_sha256" ]; then
@@ -65,9 +65,9 @@ actual=$(shasum -a 256 "$cache/$esbuild_asset" | awk '{ print $1 }')
 actual=$(openssl dgst -sha512 -binary "$cache/$esbuild_asset" | base64)
 [ "$actual" = "$esbuild_sha512" ] || { echo "build.sh: $esbuild_asset sha512 mismatch ($actual)" >&2; exit 1; }
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/ardia-cli-build.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/solara-cli-build.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-root=$work/ardia-cli-$version
+root=$work/solara-cli-$version
 mkdir -p "$root/bin"
 tar -xzf "$cache/$python_asset" -C "$root"
 python=$root/python/bin/python3
@@ -77,9 +77,9 @@ site=$lib/site-packages
 
 UV_CACHE_DIR=$cache/uv "$uv" pip install --quiet --python "$python" --break-system-packages --link-mode copy \
   --no-build --require-hashes -r "$cli_dir/requirements.lock"
-cp -R "$cli_dir/ardia_cli" "$site/ardia_cli"
-printf '__version__ = "%s"\n' "$version" >"$site/ardia_cli/__init__.py"
-"$python" -I - "$site/ardia_cli/identity.py" "$AC_PRODUCT_NAME" "$AC_BUNDLE_ID" "$AC_RELEASE_REPO" <<'EOF'
+cp -R "$cli_dir/solara_cli" "$site/solara_cli"
+printf '__version__ = "%s"\n' "$version" >"$site/solara_cli/__init__.py"
+"$python" -I - "$site/solara_cli/identity.py" "$AC_PRODUCT_NAME" "$AC_BUNDLE_ID" "$AC_RELEASE_REPO" <<'EOF'
 import json, re, sys
 path, product, bundle_id, repo = sys.argv[1:]
 values = {"PRODUCT": product, "COMMAND": product.lower(), "BUNDLE_ID": bundle_id, "RELEASE_REPO": repo}
@@ -89,12 +89,12 @@ for key, value in values.items():
     assert count == 1, key
 open(path, "w", encoding="utf-8").write(source)
 EOF
-mkdir "$work/esbuild" "$site/ardia_cli/bin"
+mkdir "$work/esbuild" "$site/solara_cli/bin"
 tar -xzf "$cache/$esbuild_asset" -C "$work/esbuild" package/bin/esbuild
-cp "$work/esbuild/package/bin/esbuild" "$site/ardia_cli/bin/esbuild"
-chmod 755 "$site/ardia_cli/bin/esbuild"
+cp "$work/esbuild/package/bin/esbuild" "$site/solara_cli/bin/esbuild"
+chmod 755 "$site/solara_cli/bin/esbuild"
 rm -rf "$work/esbuild"
-[ "$("$site/ardia_cli/bin/esbuild" --version)" = "$esbuild_version" ] || { echo "build.sh: the bundled esbuild doesn't run" >&2; exit 1; }
+[ "$("$site/solara_cli/bin/esbuild" --version)" = "$esbuild_version" ] || { echo "build.sh: the bundled esbuild doesn't run" >&2; exit 1; }
 
 rm -rf "$lib/test" "$lib/idlelib" "$lib/tkinter" "$lib/turtledemo" "$lib/ensurepip" "$lib/lib2to3" \
   "$lib/turtle.py" "$lib/pydoc_data" "$lib"/config-* "$lib/lib-dynload"/_tkinter* \
@@ -112,11 +112,11 @@ find "$root" -type l | while IFS= read -r link; do
     /*|..|../*|*/../*|*/..) rm -f "$link" ;;
   esac
 done
-"$python" -I -c 'import ardia_cli.cli, ardia_cli.scripts_cli, ardia_cli.scripts_test, ardia_cli.scripts_store, ardia_cli.browsing, pydoll, sqlite3, ssl, zoneinfo, ctypes, lzma; from ardia_cli.userscript import find_esbuild; assert find_esbuild().endswith("ardia_cli/bin/esbuild")' >/dev/null
-"$python" -I -c 'import sys; from ardia_cli import identity; assert (identity.PRODUCT, identity.COMMAND, identity.BUNDLE_ID, identity.RELEASE_REPO) == (sys.argv[1], sys.argv[1].lower(), sys.argv[2], sys.argv[3])' \
+"$python" -I -c 'import solara_cli.cli, solara_cli.scripts_cli, solara_cli.scripts_test, solara_cli.scripts_store, solara_cli.browsing, pydoll, sqlite3, ssl, zoneinfo, ctypes, lzma; from solara_cli.userscript import find_esbuild; assert find_esbuild().endswith("solara_cli/bin/esbuild")' >/dev/null
+"$python" -I -c 'import sys; from solara_cli import identity; assert (identity.PRODUCT, identity.COMMAND, identity.BUNDLE_ID, identity.RELEASE_REPO) == (sys.argv[1], sys.argv[1].lower(), sys.argv[2], sys.argv[3])' \
   "$AC_PRODUCT_NAME" "$AC_BUNDLE_ID" "$AC_RELEASE_REPO" || { echo "build.sh: the baked identity doesn't match" >&2; exit 1; }
 
-cat >"$root/bin/ardia" <<'EOF'
+cat >"$root/bin/solara" <<'EOF'
 #!/bin/sh
 self=$0
 while [ -L "$self" ]; do
@@ -127,16 +127,16 @@ while [ -L "$self" ]; do
   esac
 done
 root=$(cd -P "$(dirname "$self")/.." && pwd -P)
-exec "$root/python/bin/python3" -I -m ardia_cli "$@"
+exec "$root/python/bin/python3" -I -m solara_cli "$@"
 EOF
-chmod 755 "$root/bin/ardia"
+chmod 755 "$root/bin/solara"
 mkdir "$root/.leases"
-"$root/bin/ardia" --version >/dev/null
+"$root/bin/solara" --version >/dev/null
 find "$root" -name __pycache__ -type d -prune -exec rm -rf {} +
 
-tarball=ardia-cli-$version-macos-arm64.tar.gz
+tarball=solara-cli-$version-macos-arm64.tar.gz
 COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs --uid 0 --gid 0 --uname root --gname wheel \
-  -czf "$out/$tarball.part" -C "$work" "ardia-cli-$version"
+  -czf "$out/$tarball.part" -C "$work" "solara-cli-$version"
 mv "$out/$tarball.part" "$out/$tarball"
 (cd "$out" && shasum -a 256 "$tarball" >"$tarball.sha256")
 printf '%s\n' "$out/$tarball"

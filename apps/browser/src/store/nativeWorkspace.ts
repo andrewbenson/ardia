@@ -1,5 +1,5 @@
-import type { StorePatch, StoreEffect } from "@ardia/store";
-import { cancelDownload, endWebKitPrivateSession } from "@ardia/ardiacore";
+import type { StorePatch, StoreEffect } from "@solara/store";
+import { cancelDownload, endWebKitPrivateSession } from "@solara/solaracore";
 import type { BrowserState, HydrateData } from "./browser";
 import { bookmarkRoots, ensureRoots, removeBookmarkTree } from "./bookmarks";
 import { IDLE_LIVE, without } from "./model";

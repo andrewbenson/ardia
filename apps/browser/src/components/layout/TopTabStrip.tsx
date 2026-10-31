@@ -1,4 +1,4 @@
-import { ContextMenuArea, DockSelection, FadeLabel, raiseView, setTrafficLightsCenter, Surface, Symbol, WindowDragRegion } from "@ardia/shell";
+import { ContextMenuArea, DockSelection, FadeLabel, raiseView, setTrafficLightsCenter, Surface, Symbol, WindowDragRegion } from "@solara/shell";
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Easing, findNodeHandle, PanResponder, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { create } from "zustand";
@@ -34,7 +34,7 @@ import { usePeek } from "./usePeek";
 import { devPeeks, lightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import { NativeStripControls, nativeStripControlsEnabled, NativeStripDropGlow } from "./NativeStripControls";
 import { NativeStripPeek, nativeStripPeekEnabled, NativeTopStrip, nativeTopStripEnabled } from "./NativeTopStrip";
-import { topStripPeek } from "@ardia/settings";
+import { topStripPeek } from "@solara/settings";
 import {
   aimDrop,
   dockCellOf,

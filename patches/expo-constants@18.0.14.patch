@@ -6,9 +6,9 @@ index f79eaae77b93b49bed5ded8498b64db71f3dd7dc..6d447c1918cbfe108fd66a6fe2d8a9cb
    // Remove duplicates and sort alphabetically
    return [[[NSSet setWithArray:fontNames] allObjects] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
  #elif TARGET_OS_OSX
-+  // [Ardia: enumerating every font family costs 15-40 ms of the main thread at launch and nothing reads systemFonts;
-+  // ARDIA_SYSTEM_FONTS=on lists them again. Ardia]
-+  const char *listFonts = getenv("ARDIA_SYSTEM_FONTS");
++  // [Solara: enumerating every font family costs 15-40 ms of the main thread at launch and nothing reads systemFonts;
++  // SOLARA_SYSTEM_FONTS=on lists them again. Solara]
++  const char *listFonts = getenv("SOLARA_SYSTEM_FONTS");
 +  if (!listFonts || strcmp(listFonts, "on") != 0) return @[];
    return [[NSFontManager sharedFontManager] availableFontFamilies];
  #endif

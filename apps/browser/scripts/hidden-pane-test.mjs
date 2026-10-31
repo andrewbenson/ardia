@@ -17,7 +17,7 @@ const out = resolve(flags.out ?? join(tmpdir(), "ac-hidden-pane"));
 mkdirSync(out, { recursive: true });
 let app = resolve(positionals[0]);
 if (flags.bundle) {
-  const clone = join(out, "app", "Ardia.app");
+  const clone = join(out, "app", "Solara.app");
   rmSync(dirname(clone), { recursive: true, force: true });
   mkdirSync(dirname(clone), { recursive: true });
   execFileSync("cp", ["-cR", app, clone]);
@@ -61,14 +61,14 @@ const loadingPage = (name) => `http://127.0.0.1:${stillLoading.address().port}/$
 
 const port = Number(flags.port ?? 9795);
 const switches = {};
-for (const part of (process.env.ARDIA_SWITCHES ?? "").split(",")) {
+for (const part of (process.env.SOLARA_SWITCHES ?? "").split(",")) {
   const [name, value] = part.split("=").map((text) => text.trim());
   if (name && value) switches[name] = !["off", "0", "false"].includes(value);
 }
 const instance = await launch(app, {
   data, port, session: fixture, onboarded: true, ready: false, js: "none",
-  env: { ARDIA_DRAW_WINDOWS: "1", ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}) },
-  files: { "perf-probe": "", ...(process.env.ARDIA_SWITCHES ? { "switches-cache.json": { version: 1, switches } } : {}) },
+  env: { SOLARA_DRAW_WINDOWS: "1", ...(process.env.SOLARA_SWITCHES ? { SOLARA_SWITCHES: process.env.SOLARA_SWITCHES } : {}) },
+  files: { "perf-probe": "", ...(process.env.SOLARA_SWITCHES ? { "switches-cache.json": { version: 1, switches } } : {}) },
 });
 const { pid } = instance;
 const untilSnapshot = async (what, accept, ms = 8000) => {

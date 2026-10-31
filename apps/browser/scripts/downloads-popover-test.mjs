@@ -8,7 +8,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node downloads-popover-test.mjs <Debug Solara.app> [--keep-data]
 
-The Downloads popover with two finished downloads, drawn by RN and then natively (ARDIA_NATIVE_SHELL=1:
+The Downloads popover with two finished downloads, drawn by RN and then natively (SOLARA_NATIVE_SHELL=1:
 DownloadsPanelView in the shell's overlay container). In each the card sits where its placement says (left, width,
 top or bottom, the arrow's height on the button's side) and is fully faded in; the native list is as tall as RN's for
 the same rows and the native card lands on RN's frame when the placements match; RN draws no panel with the switch
@@ -31,7 +31,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const st = () => ac.store.getState();
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -83,7 +83,7 @@ try {
     const tag = nativeShell ? "native" : "rn";
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
+      env: { SOLARA_NATIVE_SHELL: nativeShell ? "1" : "0" },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);

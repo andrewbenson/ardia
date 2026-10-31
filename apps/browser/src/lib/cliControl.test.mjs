@@ -13,8 +13,8 @@ test("Stop turns off the native-backed CLI setting", () => {
 
 test("the command is the app's name in lowercase, so a fork ships its own", async () => {
   const { appInfo } = await import("../test-native/index.ts");
-  assert.equal(cli.cliProduct(), "Ardia");
-  assert.equal(cli.cliCommand(), "ardia");
+  assert.equal(cli.cliProduct(), "Solara");
+  assert.equal(cli.cliCommand(), "solara");
   appInfo.appName = "Solara";
   try {
     assert.equal(cli.cliProduct(), "Solara");
@@ -22,5 +22,5 @@ test("the command is the app's name in lowercase, so a fork ships its own", asyn
   } finally {
     delete appInfo.appName;
   }
-  assert.equal(cli.cliCommand(), "ardia");
+  assert.equal(cli.cliCommand(), "solara");
 });

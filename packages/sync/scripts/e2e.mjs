@@ -27,7 +27,7 @@ async function start(name) {
   const { dir } = DEV[name];
   const app = (apps[name] = await launch(APP, {
     data: dir,
-    env: { ARDIA_SYNC_DEFAULT_FOLDER: FOLDER, ARDIA_TEST_REAUTH: "granted" },
+    env: { SOLARA_SYNC_DEFAULT_FOLDER: FOLDER, SOLARA_TEST_REAUTH: "granted" },
     ready: { timeout: 120_000, test: "return !!globalThis.acSync && Object.keys(ac.store.getState().windows).length > 0" },
   }));
   note(`${name}: pid ${app.pid}, DevTools ${app.port}, log ${app.log}`);
@@ -66,7 +66,7 @@ const sync = async (...names) => {
 
 const EXT = "hkgfoiooedgoejojocmhlaklaeopbecg";
 const engine = (name, call, args = null) =>
-  ev(name, `return globalThis.expo.modules.ArdiaCEF.engineCall(${JSON.stringify(call)}, "", ${JSON.stringify(args === null ? null : JSON.stringify(args))}).then(JSON.parse)`);
+  ev(name, `return globalThis.expo.modules.SolaraCEF.engineCall(${JSON.stringify(call)}, "", ${JSON.stringify(args === null ? null : JSON.stringify(args))}).then(JSON.parse)`);
 const extension = async (name) => (await engine(name, "ac_extensions_sync_state")).extensions?.find((e) => e.id === EXT) ?? null;
 async function until(what, test, names = [], timeout = 120_000) {
   const end = Date.now() + timeout;
@@ -87,7 +87,7 @@ async function state(name) {
     const b = s.bookmarks; const roots = b.roots.default;
     const walk = (id) => { const n = b.nodes[id]; return n.kind === "url" ? n.title + " " + n.url : { [n.title]: n.children.map(walk) }; };
     const u = acSync.useSync.getState();
-    const c = globalThis.expo.modules.ArdiaCEF;
+    const c = globalThis.expo.modules.SolaraCEF;
     return c.listPasswords("").then((list) => Promise.all(((list && list.passwords) || []).map((p) => c.getPassword("", p.origin, p.username).then((r) => ({ ...p, password: r && !r.error ? r.password : "unreadable: " + (r && r.error) })))).then((pw) => [pw, list])).then(([pw, list]) => ({
       status: u.status, error: u.error, enabled: u.enabled, pending: u.pending,
       bookmarks: [walk(roots.bar), walk(roots.other)],
@@ -119,7 +119,7 @@ function bip39(entropy) {
 }
 
 const savePassword = (origin, user, password) =>
-  `const c = globalThis.expo.modules.ArdiaCEF; return c.deletePassword("", "${origin}", "${user}").then(() => c.savePassword("", "${origin}", "${user}", "${password}"));`;
+  `const c = globalThis.expo.modules.SolaraCEF; return c.deletePassword("", "${origin}", "${user}").then(() => c.savePassword("", "${origin}", "${user}", "${password}"));`;
 
 fs.mkdirSync(FOLDER, { recursive: true });
 const swift = fs.readFileSync(`${repo}/packages/sync/ios/Core/Wordlist.swift`, "utf8");
@@ -163,7 +163,7 @@ try {
   const swapped = [...words];
   [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
   const typo = [...words];
-  typo[3] = "ardia";
+  typo[3] = "solara";
   const wrong = {
     "a valid phrase of someone else": [bip39(crypto.randomBytes(32)), "mismatch"],
     "two words swapped": [swapped[0] === swapped[1] ? [...words].reverse().join(" ") : swapped.join(" "), "checksum"],
@@ -208,7 +208,7 @@ try {
     s.addBookmark({ profileId: "default", url: "${W}/delta.html?nne2e=bmD", title: "ACE2E Bookmark Delta from B" });
     s.removeHistory("default", ["${W}/visited.html?nne2e=hist1"]);
     s.updateSettings({ showFullUrl: true, cleanUpInactiveTabsAfterHours: 24 });
-    return globalThis.expo.modules.ArdiaCEF.deletePassword("", "https://nne2e-shop.example", "nne2e-bob");`,
+    return globalThis.expo.modules.SolaraCEF.deletePassword("", "https://nne2e-shop.example", "nne2e-bob");`,
   );
   await visit("B", `${W}/visited2.html?nne2e=hist2`);
   await ev("B", savePassword("https://nne2e-bank.example", "nne2e-alice", "ACE2E-changed-on-B"));

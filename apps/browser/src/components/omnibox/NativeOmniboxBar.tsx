@@ -1,4 +1,4 @@
-import { NativeOmnibox, type NativeOmniboxHandle, type NativeOmniboxVariant } from "@ardia/settings";
+import { NativeOmnibox, type NativeOmniboxHandle, type NativeOmniboxVariant } from "@solara/settings";
 import { useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { commandBarFocus } from "../../lib/focusClaims";

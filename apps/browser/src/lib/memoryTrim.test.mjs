@@ -22,13 +22,13 @@ registerHooks({
   resolve(specifier, context, next) {
     if (context.parentURL === settingsURL && specifier === "expo-modules-core") return fake(`export const requireOptionalNativeModule = () => ({ available: () => true, addListener: (name, listener) => { globalThis.memoryTrimTest.call = listener; return { remove() {} }; }, publish: async () => {}, reply: async (id, result, error) => { globalThis.memoryTrimTest.replies.push({ id, result, error }); } });`);
     if (context.parentURL?.endsWith("/lib/memoryTrim.ts")) {
-      if (specifier === "@ardia/ardiacore") return fake(`export const inputIdleSeconds = () => globalThis.memoryTrimTest.idle; export const trimEngineMemory = async () => { globalThis.memoryTrimTest.engine++; };`);
-      if (specifier === "@ardia/shell") return fake(`export const killSwitchEnvironment = (name) => globalThis.memoryTrimTest.env[name] ?? null;`);
+      if (specifier === "@solara/solaracore") return fake(`export const inputIdleSeconds = () => globalThis.memoryTrimTest.idle; export const trimEngineMemory = async () => { globalThis.memoryTrimTest.engine++; };`);
+      if (specifier === "@solara/shell") return fake(`export const killSwitchEnvironment = (name) => globalThis.memoryTrimTest.env[name] ?? null;`);
       if (specifier === "./native") return fake(`export const isQuitting = () => globalThis.memoryTrimTest.quitting;`);
       if (specifier === "../store/browser") return fake(store);
     }
     if (context.parentURL !== registrationURL) return next(specifier, context);
-    if (specifier === "@ardia/settings") return { url: settingsURL, shortCircuit: true };
+    if (specifier === "@solara/settings") return { url: settingsURL, shortCircuit: true };
     if (specifier === "../../store/browser") return fake(store);
     if (specifier in unrelated) return fake(unrelated[specifier].map((name) => `export const ${name} = ${name === "useCli" ? "{ getState: () => ({}), subscribe: () => () => {} }" : name.endsWith("Handlers") ? "{}" : "() => null"};`).join("\n"));
     return next(specifier, context);
@@ -148,7 +148,7 @@ test("quitting completes before or between collections", async () => {
 });
 test("only exact heap off spellings disable compaction", async () => {
   for (const value of ["off", "0", "false", "OFF", "False", " off", "false ", "on", undefined]) {
-    f.env = { ARDIA_MEMORY_TRIM_HEAP: value, ARDIA_MEMORY_TRIM: "off", ARDIA_MEMORY_TRIM_ENGINE: "off" };
+    f.env = { SOLARA_MEMORY_TRIM_HEAP: value, SOLARA_MEMORY_TRIM: "off", SOLARA_MEMORY_TRIM_ENGINE: "off" };
     f.gc = 0;
     f.replies = [];
     const id = await request();

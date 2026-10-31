@@ -35,7 +35,7 @@ test("sidebar footer button: the panel opens upward from it", () => {
   assert.equal(p.room, button.y - arrowGap - arrowHeight - margin);
 });
 
-test("no visible button (sidebar hidden, Little Ardia): the old fixed spot, no arrow", () => {
+test("no visible button (sidebar hidden, Little Solara): the old fixed spot, no arrow", () => {
   assert.deepEqual(downloadsPlacement(WINDOW, null, FALLBACK), { width, left: 10, top: 44, arrow: "none", arrowX: width / 2, room: WINDOW.height - 44 - margin });
   const strip = downloadsPlacement(WINDOW, null, { ...FALLBACK, topStrip: true });
   assert.equal(strip.left + strip.width, WINDOW.width - margin);

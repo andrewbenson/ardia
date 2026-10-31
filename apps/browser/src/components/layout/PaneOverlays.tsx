@@ -1,5 +1,5 @@
-import { SolaraHostedView, windowShellActive } from "@ardia/settings";
-import { Surface, Symbol } from "@ardia/shell";
+import { SolaraHostedView, windowShellActive } from "@solara/settings";
+import { Surface, Symbol } from "@solara/shell";
 import { memo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { hex, useTheme } from "../../lib/theme";

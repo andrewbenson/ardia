@@ -184,7 +184,7 @@ test("device tabs over random windows, tabs and peeks", () => {
 
 const pinned = await import("../../src/sync/pinned.ts");
 const tileFolders = await import("../../src/store/tileFolders.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 
 const PIN_URLS = ["https://mail.example/", "https://cal.example/inbox", "https://docs.example/", "https://news.example/#top", "netnyahoo://settings", "https://row.example/", ""];
 const POSITIONS = ["V", "l", "t", "x", "z", "0", "a0", "Vk", "", "zz", "A", "￿", "V0", "lV"];

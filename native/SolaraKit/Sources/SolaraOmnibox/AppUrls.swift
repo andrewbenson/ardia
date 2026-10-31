@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 
-public let upstreamAppScheme = "ardia"
+public let upstreamAppScheme = "solara"
 
 public enum AppPageHost: String, Sendable, Equatable, CaseIterable {
   case history, bookmarks, downloads

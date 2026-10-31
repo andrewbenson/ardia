@@ -8,7 +8,7 @@ enum SettingsPrewarm {
   private static var done = false
   private(set) static var warming = false
 
-  static var enabled: Bool { ProcessInfo.processInfo.environment["ARDIA_SETTINGS_PREWARM"] != "0" }
+  static var enabled: Bool { ProcessInfo.processInfo.environment["SOLARA_SETTINGS_PREWARM"] != "0" }
 
   static func schedule() {
     guard enabled, !done else { return }

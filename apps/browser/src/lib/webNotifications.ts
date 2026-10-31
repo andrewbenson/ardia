@@ -1,4 +1,4 @@
-import type { WebNotification } from "@ardia/ardiacore";
+import type { WebNotification } from "@solara/solaracore";
 import {
   confirm,
   notificationPermission,
@@ -7,7 +7,7 @@ import {
   removeNotifications,
   requestNotificationPermission,
   type NotificationResponse,
-} from "@ardia/shell";
+} from "@solara/shell";
 import { useBrowser } from "../store/browser";
 import { focus, switchToTab } from "./actions";
 import { webviews } from "./webviews";

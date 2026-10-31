@@ -25,7 +25,7 @@ public final class NativeStore: Sendable {
 
   static func earlyLaunchTabSwitch(_ folder: URL) -> Bool {
     EarlyLaunchTabProvider.resolve(
-      environment: ProcessInfo.processInfo.environment["ARDIA_SWITCHES"],
+      environment: ProcessInfo.processInfo.environment["SOLARA_SWITCHES"],
       cache: try? Data(contentsOf: folder.appending(path: "switches-cache.json")))
   }
 
@@ -51,17 +51,17 @@ public final class NativeStore: Sendable {
   public static func productName() -> String {
     let info = Bundle.main.infoDictionary ?? [:]
     let name = (info["CFBundleDisplayName"] as? String) ?? (info["CFBundleName"] as? String) ?? ""
-    return name.trimmingCharacters(in: .whitespaces).isEmpty ? "Ardia" : name
+    return name.trimmingCharacters(in: .whitespaces).isEmpty ? "Solara" : name
   }
 
   static func dataFolder() -> URL? {
     let environment = ProcessInfo.processInfo.environment
-    if let scratch = environment["ARDIA_DATA_DIR"], !scratch.isEmpty {
+    if let scratch = environment["SOLARA_DATA_DIR"], !scratch.isEmpty {
       let path = scratch.hasPrefix("/") ? scratch : FileManager.default.currentDirectoryPath + "/" + scratch
       return URL(fileURLWithPath: (path as NSString).standardizingPath, isDirectory: true)
     }
     guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
-    return support.appending(path: Bundle.main.bundleIdentifier ?? "Ardia", directoryHint: .isDirectory)
+    return support.appending(path: Bundle.main.bundleIdentifier ?? "Solara", directoryHint: .isDirectory)
   }
 
   static let handOffWait: TimeInterval = 15

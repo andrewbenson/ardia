@@ -1,4 +1,4 @@
-import { WindowProfile as NativeWindowProfile } from "@ardia/shell";
+import { WindowProfile as NativeWindowProfile } from "@solara/shell";
 import { useShallow } from "zustand/react/shallow";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";

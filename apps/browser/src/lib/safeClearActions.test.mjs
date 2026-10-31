@@ -23,7 +23,7 @@ function fixture(mode) {
   };
   const nativeStore = { nativeSafeMode: () => mode !== null, nativeSafeModeAfterFailedLaunches: () => mode === "failedLaunches" };
   const modules = {
-    "@ardia/ardiacore": {
+    "@solara/solaracore": {
       clearBrowsingData: async (...args) => { effects.push(["browsing", ...args]); },
       clearSiteData: async (...args) => { effects.push(["site", ...args]); return { cookies: 2, storage: true }; },
     },

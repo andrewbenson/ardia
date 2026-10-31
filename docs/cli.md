@@ -1,7 +1,7 @@
 # The `solara` command
 
 The command is named after the identity: `solara` in Solara. This page uses the name the source still spells,
-`ardia`, for the command, its tarball and its paths. It drives a running Solara
+`solara`, for the command, its tarball and its paths. It drives a running Solara
 from the terminal with Python and [pydoll](https://pydoll.tech) 3.0. It's a separate download, not part of
 the app bundle. The app ships `install.sh`, and runs it when the user opts in from Settings ("Let the solara command control Solara").
 
@@ -11,16 +11,16 @@ last one closes, so a burst of commands shows one steady pill; turning the setti
 window: the focused pane of a split, the full screen page, or the Peek while one is open
 (`apps/browser/src/components/CliControlPill.tsx`, `useCliIndicator` in `lib/cliControl.ts`).
 
-Code: `apps/cli` (`ardia_cli`, `install.sh`, `scripts/build.sh`). Dependencies are pinned with hashes in
+Code: `apps/cli` (`solara_cli`, `install.sh`, `scripts/build.sh`). Dependencies are pinned with hashes in
 `apps/cli/requirements.lock` (regenerate with `uv pip compile requirements.in --python-version 3.13
 --python-platform aarch64-apple-darwin --generate-hashes --no-annotate --no-header -o requirements.lock`, then copy
 the pins into `pyproject.toml`).
 
 ## Commands
 
-- `ardia exec [CODE | -] [-f FILE] [--data-dir DIR] [--port N] [--ws URL] [--timeout S] [--json]` runs Python with
+- `solara exec [CODE | -] [-f FILE] [--data-dir DIR] [--port N] [--ws URL] [--timeout S] [--json]` runs Python with
   top-level `await`. In scope: `browser` (pydoll `Chrome`), `tab` (the page shown in Solara's last focused window,
-  from `GET /ardia/active?token=…` on the token path, so it holds while the window is covered; `--port`/`--ws` test
+  from `GET /solara/active?token=…` on the token path, so it holds while the window is covered; `--port`/`--ws` test
   servers fall back to visible and focused, else visible; with no page, as on New Tab, it's a placeholder that raises
   `NoPageTab` on first use), `tabs` (http, https, about, data and blob pages, plus what `new_tab` opens, minus
   the New Tab's prewarmed `about:blank`: on the token path every `about:blank` that isn't the active page, on test
@@ -30,12 +30,12 @@ the pins into `pyproject.toml`).
   `asyncio`, pydoll's exports and its common exceptions. It prints the last expression's value. Exit 0 done, 1 the
   code raised or timed out (default 300 s), 2 Solara can't be reached or closed the browser socket (it watches the
   socket, so turning the setting off ends an idle run at once), 130 interrupted.
-- `ardia skills install --target general|codex|claude-code|cursor|opencode [--target …] [--project]` installs the
-  agent skill (`ardia_cli/skill`: `SKILL.md` and `references/pydoll.md`) into `~/.agents/skills` (general, codex),
+- `solara skills install --target general|codex|claude-code|cursor|opencode [--target …] [--project]` installs the
+  agent skill (`solara_cli/skill`: `SKILL.md` and `references/pydoll.md`) into `~/.agents/skills` (general, codex),
   `~/.claude/skills`, `~/.cursor/skills` or `~/.config/opencode/skills`; with `--project`, into `./.agents/skills`,
-  `./.claude/skills`, `./.cursor/skills` or `./.opencode/skills`. It replaces only its own `ardia` folder.
-- `ardia scripts new|test|install|uninstall|list` writes, tests and installs userscripts (see Userscripts).
-- `ardia --version`, `ardia --help`, `ardia exec --help`, `ardia scripts <command> --help`.
+  `./.claude/skills`, `./.cursor/skills` or `./.opencode/skills`. It replaces only its own `solara` folder.
+- `solara scripts new|test|install|uninstall|list` writes, tests and installs userscripts (see Userscripts).
+- `solara --version`, `solara --help`, `solara exec --help`, `solara scripts <command> --help`.
 
 `exec` never quits Solara: it refuses `browser.stop()`, and every WebSocket it opens checks each outgoing message (and
 refuses fragmented sends), so
@@ -53,9 +53,9 @@ live (`await history()`; a bare last expression is awaited anyway), `exec --time
 is stuck, and the worker deletes its temp snapshot in its own `finally`. At exit a hook sets a closing flag first
 (workers check it before making a temp folder and at every backup or copy step), waits up to 1 s for live workers,
 then deletes any temp folder still registered. The data dir is the token path's
-(`--data-dir`, `$ARDIA_DATA_DIR`, else the installed app's); with `--port`, `--ws` or `$ARDIA_CDP_URL` it's only
-`--data-dir` or `$ARDIA_DATA_DIR`, and without one they raise `BrowsingDataError`. Both run the same
-`ArdiaControl.json` checks as the token path first (regular file, owned, 0600, live pid), so they work only while
+(`--data-dir`, `$SOLARA_DATA_DIR`, else the installed app's); with `--port`, `--ws` or `$SOLARA_CDP_URL` it's only
+`--data-dir` or `$SOLARA_DATA_DIR`, and without one they raise `BrowsingDataError`. Both run the same
+`SolaraControl.json` checks as the token path first (regular file, owned, 0600, live pid), so they work only while
 Solara runs with control on. Neither reads cookies, passwords, Login Data or Web Data.
 
 - `await pinned()` reads `<data dir>/session.json` (the app's persisted state, `apps/browser/src/lib/persist.ts`) and returns
@@ -76,7 +76,7 @@ Solara runs with control on. Neither reads cookies, passwords, Login Data or Web
 
 ## Userscripts
 
-`ardia scripts` runs Violentmonkey-style userscripts written in TypeScript or JavaScript. A `.user.js` from
+`solara scripts` runs Violentmonkey-style userscripts written in TypeScript or JavaScript. A `.user.js` from
 Violentmonkey or Tampermonkey works as is. Keys read from the `// ==UserScript==` block: `@name` (the id is its slug),
 `@namespace`, `@version`, `@description`, `@match`/`@exclude-match` (Chrome match patterns for content scripts:
 `*`, `http`, `https`, `file`, `ftp` schemes, checked when parsed the way `URLPattern::Parse` does, a bit stricter:
@@ -93,19 +93,19 @@ Builds go through esbuild: `--bundle --format=iife --platform=browser --target=c
 minified, so relative imports bundle in and no `tsconfig.json` is read (no `paths` aliases). Types are stripped, not
 checked. Every input esbuild reports in its metafile must be a `.ts .tsx .mts .cts .js .jsx .mjs .cjs .css` source
 (JSON, text and other loader types are refused), a regular file with no other hard links, and inside the script's
-own folder tree; nothing may come from Solara's data dir (the `--data-dir`/`$ARDIA_DATA_DIR` one and the installed
+own folder tree; nothing may come from Solara's data dir (the `--data-dir`/`$SOLARA_DATA_DIR` one and the installed
 app's), even inside the tree. Both are decided by file identity (`st_dev`, `st_ino` of each ancestor after
 resolving symlinks), not by path spelling, since APFS is case-insensitive. A script directly in the home folder or
 `/` may import nothing. Otherwise the build fails
-before anything is injected or published, so a script can't bundle `ArdiaControl.json` or other files and send
-them to a page. `data:` imports are allowed. The tarball ships esbuild in `ardia_cli/bin/esbuild` and an installed
-CLI uses only that one; from the repo (`python -m ardia_cli`) it falls back to
+before anything is injected or published, so a script can't bundle `SolaraControl.json` or other files and send
+them to a page. `data:` imports are allowed. The tarball ships esbuild in `solara_cli/bin/esbuild` and an installed
+CLI uses only that one; from the repo (`python -m solara_cli`) it falls back to
 `node_modules/@esbuild/darwin-arm64/bin/esbuild` in a parent folder of the package, then `esbuild` on PATH. It never
 looks in the cwd.
 
-- `ardia scripts new NAME [--match PATTERN]…` writes `NAME.user.ts` in the cwd (default match
+- `solara scripts new NAME [--match PATTERN]…` writes `NAME.user.ts` in the cwd (default match
   `https://example.com/*`), never over an existing file.
-- `ardia scripts test FILE [--url URL] [--expect JS] [--wait S] [--screenshot PATH] [--keep] [--json] [--data-dir DIR]
+- `solara scripts test FILE [--url URL] [--expect JS] [--wait S] [--screenshot PATH] [--keep] [--json] [--data-dir DIR]
   [--port N] [--ws URL]` finds Solara like `exec` (same exit 2), opens its own background target at `about:blank`,
   attaches a flat session, turns on Runtime and Page, registers the script with `Page.addScriptToEvaluateOnNewDocument`
   (no `worldName`: the token policy refuses named worlds), and only then navigates to `--url` (default: the first
@@ -132,13 +132,13 @@ looks in the cwd.
   the test stops there. Then, in a bounded cleanup, it removes the registration and
   closes the target it made, unless `--keep`. `@inject-into content` is tested in the page's world, with a warning.
   Exit 0 ran without uncaught exceptions and `--expect` truthy, 1 otherwise, 2 Solara unreachable.
-- `ardia scripts install FILE [--data-dir DIR]`, `ardia scripts uninstall NAME [--data-dir DIR]` (by `@name` or id),
-  `ardia scripts list [--json] [--data-dir DIR]`. Install and uninstall need control on (the `ArdiaControl.json`
+- `solara scripts install FILE [--data-dir DIR]`, `solara scripts uninstall NAME [--data-dir DIR]` (by `@name` or id),
+  `solara scripts list [--json] [--data-dir DIR]`. Install and uninstall need control on (the `SolaraControl.json`
   checks, else the exit-2 line); list doesn't.
 
 ### Install contract with the app
 
-The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Application Support/com.ardia.browser`.
+The data dir is `--data-dir`, else `$SOLARA_DATA_DIR`, else `~/Library/Application Support/com.solara.browser`.
 
 1. The CLI takes an exclusive `flock` on `<data dir>/Scripts/.lock` (polled, 30 s deadline). The app takes a shared
    one while it reads and validates. `Scripts/`, `Scripts/scripts/`, record folders and `extension/` must be real
@@ -161,7 +161,7 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
 4. It writes `Scripts/generation` (temp file and rename): one more than the largest of `Scripts/generation`,
    `extension/generation` and the last reported one. A crashed run is repaired by the next install or
    uninstall (they rebuild from the records) or `list`: when its data dir was named (`--data-dir`,
-   `$ARDIA_DATA_DIR`) or has a live control file, it takes the lock, rebuilds the extension from the records if
+   `$SOLARA_DATA_DIR`) or has a live control file, it takes the lock, rebuilds the extension from the records if
    they disagree (`manifest.json` entries, the `js/` files and their bytes), and otherwise publishes
    `Scripts/generation = extension/generation` when the extension is ahead, rebuilds when it is behind, and
    publishes the next generation when there are no records and no `extension/` but `status.json` still reports the
@@ -180,20 +180,20 @@ The data dir is `--data-dir`, else `$ARDIA_DATA_DIR`, else `~/Library/Applicatio
 
 1. `--ws URL`, a browser WebSocket URL.
 2. `--port N`, a plain DevTools server on 127.0.0.1 (`/json/version`). For test servers only.
-3. `$ARDIA_CDP_URL`, like `--ws`.
-4. `<data dir>/Chromium/ArdiaControl.json`, with `--data-dir` or `$ARDIA_DATA_DIR`, else the installed app's
-   `~/Library/Application Support/com.ardia.browser/Chromium/ArdiaControl.json` (`com.hill.solara` in Solara).
+3. `$SOLARA_CDP_URL`, like `--ws`.
+4. `<data dir>/Chromium/SolaraControl.json`, with `--data-dir` or `$SOLARA_DATA_DIR`, else the installed app's
+   `~/Library/Application Support/com.solara.browser/Chromium/SolaraControl.json` (`com.hill.solara` in Solara).
 
-The active-page route is `GET http://127.0.0.1:P/ardia/active?token=<token>`: `{"targetId": "<id>"}`, or `null` when
+The active-page route is `GET http://127.0.0.1:P/solara/active?token=<token>`: `{"targetId": "<id>"}`, or `null` when
 New Tab or a Solara view is showing; anything else is a 404. The CLI calls it directly (no proxy, no Origin header)
 with the token redacted like everywhere else, and falls back to the visibility check if it fails.
 
-The app writes `ArdiaControl.json` when the setting is on:
+The app writes `SolaraControl.json` when the setting is on:
 `{"port":P,"browser":"/devtools/browser/<guid>","token":"…","pid":…,"generation":N}`. The CLI opens it without
 following links and trusts it only when it's a regular file the user owns, mode 0600, and `pid` is alive. It connects
 to `ws://127.0.0.1:P<browser>?token=<token>`; pydoll keeps the query on every `/devtools/page/<id>` URL, so page
 sockets carry the token too. A missing, stale or unsafe file, or a refused connection, prints one line and exits 2:
-`Ardia isn't running, or "Let the ardia command control Ardia" is off in Settings.` There's no port scanning and no
+`Solara isn't running, or "Let the solara command control Solara" is off in Settings.` There's no port scanning and no
 `/json` fallback on this path. The token never reaches the output: stdout and stderr are redacted as a stream (a token
 split across writes is held back until it's complete), and so are log records and everything a logging handler
 formats, tracebacks included. pydoll's loggers stay at ERROR. The stream holds back only a tail that could start a
@@ -203,51 +203,51 @@ two parts with an explicit flush between them gets through; that gap is accepted
 ## Install and upgrade
 
 `install.sh [--version V] [--sha256 DIGEST] [--product NAME] [--repo OWNER/REPO] [--uninstall]` (run with `/bin/sh`;
-`--help`). `--product` (default `Ardia`) names the app the command drives, and the command is that name in lowercase;
-`--repo` (default `mantrakp04/ardia`) is where it downloads from. The app passes its own `CFBundleName` and
+`--help`). `--product` (default `Solara`) names the app the command drives, and the command is that name in lowercase;
+`--repo` (default `mantrakp04/solara`) is where it downloads from. The app passes its own `CFBundleName` and
 `ACReleaseRepo`, so the build installs its own command. The paths here retain the source spelling.
 
-- Downloads `https://github.com/<repo>/releases/download/v<V>/ardia-cli-<V>-macos-arm64.tar.gz` (https only)
+- Downloads `https://github.com/<repo>/releases/download/v<V>/solara-cli-<V>-macos-arm64.tar.gz` (https only)
   into a private temp dir; it runs on Apple silicon only and stops with an error anywhere else. Without `--version` it
   takes the latest release that has the asset. `--sha256` is the only
-  digest it trusts (the app passes `Solara.app/Contents/Resources/ardia-cli.sha256`, which the signed bundle pins), and
+  digest it trusts (the app passes `Solara.app/Contents/Resources/solara-cli.sha256`, which the signed bundle pins), and
   a download needs it: a `.sha256` from the same release would only prove the tarball came from wherever the tarball
-  came from. Only a `file://` `ARDIA_CLI_URL` (tests) may go without it, reading `<url>.sha256`. A Debug build has no
+  came from. Only a `file://` `SOLARA_CLI_URL` (tests) may go without it, reading `<url>.sha256`. A Debug build has no
   pinned digest, so it installs only that way.
-- Verifies the digest, refuses entries outside `ardia-cli-<V>/`, `..` paths, hard links and links pointing outside the
-  tree, plus names with control characters, backslashes or ` -> `, extracts to `$ARDIA_CLI_HOME/<V>.partial`, checks
-  the extracted tree again (`find`, no line parsing), checks that its `bin/ardia --version` says `<command> <V>` (a
+- Verifies the digest, refuses entries outside `solara-cli-<V>/`, `..` paths, hard links and links pointing outside the
+  tree, plus names with control characters, backslashes or ` -> `, extracts to `$SOLARA_CLI_HOME/<V>.partial`, checks
+  the extracted tree again (`find`, no line parsing), checks that its `bin/solara --version` says `<command> <V>` (a
   tarball baked for another app is refused), renames it to `<V>`, and swaps `current` atomically.
-- It keeps the current and the previous version, and any version a running `ardia` uses: `ardia_cli` writes
-  `<V>/.leases/<pid>` when it starts (from the launcher or `python -m ardia_cli`) and removes it at exit. A lease
+- It keeps the current and the previous version, and any version a running `solara` uses: `solara_cli` writes
+  `<V>/.leases/<pid>` when it starts (from the launcher or `python -m solara_cli`) and removes it at exit. A lease
   counts only while a process with that pid runs and started no later than the lease was written (`ps -o lstart`
   against the lease's mtime), so a reused pid doesn't pin a version.
-- Links `$ARDIA_CLI_BIN_DIR/<command>` (default `~/.local/bin/ardia`) to `current/bin/ardia`. It replaces only a link that
-  already points into `$ARDIA_CLI_HOME` and refuses anything else. With the default bin dir off the login shell's
+- Links `$SOLARA_CLI_BIN_DIR/<command>` (default `~/.local/bin/solara`) to `current/bin/solara`. It replaces only a link that
+  already points into `$SOLARA_CLI_HOME` and refuses anything else. With the default bin dir off the login shell's
   PATH, it adds `export PATH="$HOME/.local/bin:$PATH"` to `~/.zprofile` once.
 - A version that is already current is a no-op. Two runs never overlap: each takes a flock on
-  `$ARDIA_CLI_HOME/.lock` through fd 9 (`/usr/bin/lockf -s -t 120 9`). The kernel drops it when the run exits, even on
+  `$SOLARA_CLI_HOME/.lock` through fd 9 (`/usr/bin/lockf -s -t 120 9`). The kernel drops it when the run exits, even on
   SIGKILL; a run that waits 120 s prints `error another install is still running`. Uninstall leaves the empty `.lock`
   file, since deleting a lock file other runs may have open would split the lock.
 - Output for the app, one line each: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
   then `installed <bin path>` or `uninstalled`, or `error <message>` with exit 1.
 
-`$ARDIA_CLI_HOME` defaults to `~/Library/Application Support/<product>/CLI`. The installed version is
-`basename "$(readlink "$ARDIA_CLI_HOME/current")"`; the app reads that link to decide whether to upgrade, and after an
+`$SOLARA_CLI_HOME` defaults to `~/Library/Application Support/<product>/CLI`. The installed version is
+`basename "$(readlink "$SOLARA_CLI_HOME/current")"`; the app reads that link to decide whether to upgrade, and after an
 app update it runs `install.sh --version <app version> --sha256 <pinned digest>` in the background. The CLI never
 updates itself.
 
 ## Build and release
 
-`apps/cli/scripts/build.sh <version> <out dir>` writes `ardia-cli-<version>-macos-arm64.tar.gz` and its `.sha256`:
+`apps/cli/scripts/build.sh <version> <out dir>` writes `solara-cli-<version>-macos-arm64.tar.gz` and its `.sha256`:
 python-build-standalone CPython 3.13 (release and sha256 pinned in the script), the locked dependencies and
-`ardia_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython dylib and
-`__pycache__`, plus `bin/ardia`, an sh launcher that resolves its links and runs `python3 -I -m ardia_cli`, and
+`solara_cli` in its site-packages, pruned of tests, idlelib, Tk, ensurepip, the unused libpython dylib and
+`__pycache__`, plus `bin/solara`, an sh launcher that resolves its links and runs `python3 -I -m solara_cli`, and
 esbuild (the npm `@esbuild/darwin-arm64` tarball, version, sha256 and sha512 pinned in the script) in
-`ardia_cli/bin/esbuild`. About 18 MB; 52 MB installed. `ardia --version` takes about 10 ms; the first `exec` about 1 s while Python writes its
+`solara_cli/bin/esbuild`. About 18 MB; 52 MB installed. `solara --version` takes about 10 ms; the first `exec` about 1 s while Python writes its
 bytecode cache, later ones about 0.15 s.
 
-It bakes the app's identity into `ardia_cli/identity.py` (product, command, bundle id, release repo): from
+It bakes the app's identity into `solara_cli/identity.py` (product, command, bundle id, release repo): from
 `AC_PRODUCT_NAME`, `AC_BUNDLE_ID` and `AC_RELEASE_REPO` in the environment, else from `scripts/identity.sh`. The
 committed `identity.py` still holds the source spelling until the mechanical rename.
 
@@ -255,11 +255,11 @@ committed `identity.py` still holds the source spelling until the mechanical ren
 
 The CLI uses the product, command, bundle id and release repo from `identity.py`. Help text interpolates the
 product and command directly. Skill installation copies its Markdown source verbatim; it has no runtime brand
-rewrite. The source text still spells Ardia/ardia until the mechanical rename. The asset name, its
-`ardia-cli-<V>/` folder, `bin/ardia` inside it and the `ardia_cli` package keep their current names.
+rewrite. The source text still spells Solara/solara until the mechanical rename. The asset name, its
+`solara-cli-<V>/` folder, `bin/solara` inside it and the `solara_cli` package keep their current names.
 
 `scripts/release.sh` builds it into the release's dist dir after the export, passing the release's identity, and writes its digest to
-`Solara.app/Contents/Resources/ardia-cli.sha256` before the app is signed. The release skill's `publish.sh` uploads the
+`Solara.app/Contents/Resources/solara-cli.sha256` before the app is signed. The release skill's `publish.sh` uploads the
 tarball and its `.sha256`.
 
 ## Test
@@ -267,28 +267,28 @@ tarball and its `.sha256`.
 Never against the real home. A hidden instance's plain DevTools port works with `--port`:
 
 ```sh
-scripts/agent/ac launch <Solara.app> --data /tmp/ardia-cli-test --onboarded
-ardia exec --port <port> 't = await new_tab("https://example.com"); await t.title()'
-scripts/agent/ac quit /tmp/ardia-cli-test
+scripts/agent/ac launch <Solara.app> --data /tmp/solara-cli-test --onboarded
+solara exec --port <port> 't = await new_tab("https://example.com"); await t.title()'
+scripts/agent/ac quit /tmp/solara-cli-test
 ```
 
-The `ArdiaControl.json` path needs the app's token server: Chrome's plain server accepts `?token=` on the browser
+The `SolaraControl.json` path needs the app's token server: Chrome's plain server accepts `?token=` on the browser
 socket but answers 500 on page sockets with a query. For the installer:
 
 ```sh
-apps/cli/scripts/build.sh 0.0.1 /tmp/ardia-cli-out
-HOME=/tmp/ardia-cli-home ARDIA_CLI_URL=file:///tmp/ardia-cli-out/ardia-cli-0.0.1-macos-arm64.tar.gz \
+apps/cli/scripts/build.sh 0.0.1 /tmp/solara-cli-out
+HOME=/tmp/solara-cli-home SOLARA_CLI_URL=file:///tmp/solara-cli-out/solara-cli-0.0.1-macos-arm64.tar.gz \
   /bin/sh apps/cli/install.sh
-HOME=/tmp/ardia-cli-home ardia skills install --target claude-code
+HOME=/tmp/solara-cli-home solara skills install --target claude-code
 ```
 
 Solara's tarball installs with `--product Solara --repo andrewbenson/solara`, which makes `~/.local/bin/solara`
 under that `HOME`. `apps/cli/tests/test_identity.py` covers the current product, verbatim skill installation and
 the Solara installer: `PYTHONPATH=apps/cli python3 -m unittest discover -s apps/cli/tests`.
 
-`ardia scripts test` needs a running instance; it reaches cross-origin iframes on both paths, and over `--port` also frames that show an extension's page. Install and the
-helpers need the token path: an instance launched without `ARDIA_REMOTE_DEBUGGING_PORT` (the app doesn't start its
+`solara scripts test` needs a running instance; it reaches cross-origin iframes on both paths, and over `--port` also frames that show an extension's page. Install and the
+helpers need the token path: an instance launched without `SOLARA_REMOTE_DEBUGGING_PORT` (the app doesn't start its
 control server when the port switch is set) and with control on, for example a scratch dir whose `session.json` has
-`"settings": {"cliControl": true}`, opened with `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<dir>`.
+`"settings": {"cliControl": true}`, opened with `open -g -n --env SOLARA_BACKGROUND=1 --env SOLARA_DATA_DIR=<dir>`.
 Unit tests (matching parity with node, import confinement, store rollback and recovery, symlink refusal):
 `python -m unittest discover -s apps/cli/tests` with the locked dependencies installed.

@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -142,9 +142,9 @@ final class NativeSiteMenu {
     let profile = c["profile"]?.string ?? ""
     let result: JSONValue
     if c["pageEngine"] == "webkit" {
-      result = NativeSiteControls.json(ArdiaCoreSiteControlsBridge.webKitSettings(profile: profile, origin: origin))
+      result = NativeSiteControls.json(SolaraCoreSiteControlsBridge.webKitSettings(profile: profile, origin: origin))
     } else {
-      result = await EngineCalls.result({ done in ArdiaCoreServices.siteSettings(profile: profile, origin: origin, completion: done) }, NativeSiteControls.json)
+      result = await EngineCalls.result({ done in SolaraCoreServices.siteSettings(profile: profile, origin: origin, completion: done) }, NativeSiteControls.json)
     }
     guard session.receivePermissions(context: context, settings: result, token: token) else { return }
     settings = result
@@ -153,8 +153,8 @@ final class NativeSiteMenu {
 
   private func readBlocker(_ c: JSONValue, token: Int) async {
     let host = SiteControlsLogic.host(c["url"]?.string ?? "")
-    let state = await EngineCalls.result({ done in ArdiaCoreContentBlocker.state(done) }, NativeSiteControls.json)
-    let allowed = await EngineCalls.result({ done in ArdiaCoreContentBlocker.isAllowed(host: host) { done(["allowed": $0]) } }, { $0["allowed"] as? Bool == true })
+    let state = await EngineCalls.result({ done in SolaraCoreContentBlocker.state(done) }, NativeSiteControls.json)
+    let allowed = await EngineCalls.result({ done in SolaraCoreContentBlocker.isAllowed(host: host) { done(["allowed": $0]) } }, { $0["allowed"] as? Bool == true })
     let result: JSONValue = ["enabled": .bool(state["enabled"]?.bool == true), "allowed": .bool(allowed)]
     guard session.accepts(token: token) else { return }
     blocker = result
@@ -223,15 +223,15 @@ final class NativeSiteMenu {
       guard let origin = SiteControlsLogic.origin(captured["url"]?.string ?? "") else { return }
       let profile = captured["profile"]?.string ?? ""
       if captured["pageEngine"] == "webkit" {
-        ArdiaCoreSiteControlsBridge.setWebKitPermission(profile: profile, origin: origin, kind: type, value: choice)
+        SolaraCoreSiteControlsBridge.setWebKitPermission(profile: profile, origin: origin, kind: type, value: choice)
       } else {
-        ArdiaCoreServices.setSiteSetting(choice, profile: profile, origin: origin, type: type)
+        SolaraCoreServices.setSiteSetting(choice, profile: profile, origin: origin, type: type)
       }
       let refreshed: JSONValue
       if captured["pageEngine"] == "webkit" {
-        refreshed = NativeSiteControls.json(ArdiaCoreSiteControlsBridge.webKitSettings(profile: profile, origin: origin))
+        refreshed = NativeSiteControls.json(SolaraCoreSiteControlsBridge.webKitSettings(profile: profile, origin: origin))
       } else {
-        refreshed = await EngineCalls.result({ done in ArdiaCoreServices.siteSettings(profile: profile, origin: origin, completion: done) }, NativeSiteControls.json)
+        refreshed = await EngineCalls.result({ done in SolaraCoreServices.siteSettings(profile: profile, origin: origin, completion: done) }, NativeSiteControls.json)
       }
       settings = refreshed
       render()
@@ -262,10 +262,10 @@ final class NativeSiteMenu {
     let captured = context
     let host = SiteControlsLogic.host(captured["url"]?.string ?? "")
     let error: String? = await withCheckedContinuation { continuation in
-      ArdiaCoreContentBlocker.setAllowed(blocker["allowed"]?.bool != true, host: host) { continuation.resume(returning: $0) }
+      SolaraCoreContentBlocker.setAllowed(blocker["allowed"]?.bool != true, host: host) { continuation.resume(returning: $0) }
     }
     let allowed: Bool = await withCheckedContinuation { continuation in
-      ArdiaCoreContentBlocker.isAllowed(host: host) { continuation.resume(returning: $0) }
+      SolaraCoreContentBlocker.isAllowed(host: host) { continuation.resume(returning: $0) }
     }
     self.blocker = ["enabled": blocker["enabled"] ?? false, "allowed": .bool(allowed)]
     render()

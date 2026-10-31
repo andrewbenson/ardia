@@ -1,4 +1,4 @@
-import { NativePage } from "@ardia/settings";
+import { NativePage } from "@solara/settings";
 import { useState } from "react";
 import { StyleSheet } from "react-native";
 import { create } from "zustand";

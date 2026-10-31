@@ -22,9 +22,9 @@ index ea3b62a023..67fa4b8dd9 100644
        switches::kForceAppMode);
  }
  
-+// Ardia: "Where's the lamb?" takes the dino's place. Wherever Chrome would
++// Solara: "Where's the lamb?" takes the dino's place. Wherever Chrome would
 +// start the dino (an offline error in a main frame, the easter egg allowed),
-+// the page is IDR_ARDIA_GAME_HTML instead, one self-contained document
++// the page is IDR_SOLARA_GAME_HTML instead, one self-contained document
 +// whose JSON block receives the failed load.
 +constexpr char kGameErrorBlock[] =
 +    "<script type=\"application/json\" id=\"game-error\">null</script>";
@@ -41,7 +41,7 @@ index ea3b62a023..67fa4b8dd9 100644
 +std::string GameHtml(const error_page::Error& error) {
 +  std::string html =
 +      ui::ResourceBundle::GetSharedInstance().LoadDataResourceString(
-+          IDR_ARDIA_GAME_HTML);
++          IDR_SOLARA_GAME_HTML);
 +  const size_t block = html.find(kGameErrorBlock);
 +  if (block == std::string::npos) {
 +    return std::string();
@@ -111,9 +111,9 @@ index d13a11bfa2..d67bef3692 100644
  <?xml version="1.0" encoding="utf-8"?>
  <grit-part>
    <include name="IDR_NET_ERROR_HTML" file="../neterror/resources/neterror.html" flattenhtml="true" type="BINDATA"/>
-+  <!-- Ardia: "Where's the lamb?", shown instead of the dino. Generated from the app's
++  <!-- Solara: "Where's the lamb?", shown instead of the dino. Generated from the app's
 +       offline-game folder by its inline.py before each build (untracked here). -->
-+  <include name="IDR_ARDIA_GAME_HTML" file="../neterror/resources/game/game.html" type="BINDATA" compress="brotli"/>
++  <include name="IDR_SOLARA_GAME_HTML" file="../neterror/resources/game/game.html" type="BINDATA" compress="brotli"/>
  </grit-part>
 diff --git a/content/browser/webui/network_error_url_loader.cc b/content/browser/webui/network_error_url_loader.cc
 index 80ccb77bde..8b18c320a8 100644
@@ -151,7 +151,7 @@ index 75eb817c98..bbd6b1cdea 100644
  inline constexpr char kChromeUIBrowserCrashHost[] =
      "inducebrowsercrashforrealz";
  inline constexpr char kChromeUIDinoHost[] = "dino";
-+// Ardia: chrome://game, the offline game on its own (as chrome://dino).
++// Solara: chrome://game, the offline game on its own (as chrome://dino).
 +inline constexpr char kChromeUIGameHost[] = "game";
  inline constexpr char kChromeUIGpuHost[] = "gpu";
  inline constexpr char kChromeUIHistogramHost[] = "histograms";

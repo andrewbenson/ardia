@@ -1,6 +1,6 @@
-import { deletePassword, savePassword } from "@ardia/ardiacore";
-import { nativeAddHistoryVisits, nativeDeleteHistoryUrls } from "@ardia/settings";
-import { assignPositions, canonical, SyncNative, type Adapter, type SavedLogin, type SyncRecord } from "@ardia/sync";
+import { deletePassword, savePassword } from "@solara/solaracore";
+import { nativeAddHistoryVisits, nativeDeleteHistoryUrls } from "@solara/settings";
+import { assignPositions, canonical, SyncNative, type Adapter, type SavedLogin, type SyncRecord } from "@solara/sync";
 import { bookmarkUuidFor, ensureRoots, isBookmarkUuid } from "../store/bookmarks";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "../store/history";
 import { useBrowser } from "../store/browser";

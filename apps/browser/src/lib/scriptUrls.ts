@@ -1,4 +1,4 @@
-import { resolveInput } from "@ardia/core";
+import { resolveInput } from "@solara/core";
 import { fromLegacyUrl } from "../legacy";
 import { searchUrlPrefix, type Settings } from "../store/settings";
 

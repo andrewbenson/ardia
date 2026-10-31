@@ -1,6 +1,6 @@
 import AppKit
 
-@objc(ArdiaEarlyBackdrop)
+@objc(SolaraEarlyBackdrop)
 public final class EarlyBackdrop: NSObject {
   @objc public static func make(_ props: NSDictionary) -> NSView? {
     var tint = WindowTreatmentView.Tint()

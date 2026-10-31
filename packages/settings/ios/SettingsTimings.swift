@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 enum SettingsTimings {
-  static var recording: Bool { ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" }
+  static var recording: Bool { ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" }
   private static var marks: [[String: Any]] = []
   private static var navigated: [String: Double] = [:]
 

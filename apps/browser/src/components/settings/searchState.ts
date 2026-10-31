@@ -1,5 +1,5 @@
 import type { View } from "react-native";
-import { focusNativeSettingsSearch } from "@ardia/settings";
+import { focusNativeSettingsSearch } from "@solara/settings";
 import { create } from "zustand";
 
 type SearchUi = {

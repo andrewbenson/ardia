@@ -1,6 +1,6 @@
 import Foundation
 
-enum ArdiaCoreHost {
+enum SolaraCoreHost {
   static var safeMode = false
 }
 
@@ -27,7 +27,7 @@ enum DocumentStore {
 @MainActor
 final class NativeCliControl {
   static let shared = NativeCliControl()
-  static let document = "ardia-cli.json"
+  static let document = "solara-cli.json"
   var binPath: String?
   var error: String?
   var running: [([String: Any]) -> Void] = []
@@ -47,7 +47,7 @@ final class NativeCliControl {
 var results: [[String: Any]] = []
 MainActor.assumeIsolated {
   for safe in [true, false] {
-    ArdiaCoreHost.safeMode = safe
+    SolaraCoreHost.safeMode = safe
     for reason in ["settings", "upgrade", "startup"] {
       CliTool.installs = 0
       DocumentStore.json = nil

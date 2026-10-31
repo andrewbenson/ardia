@@ -4,12 +4,12 @@
  @property(assign, nonatomic) BOOL drawMenuBackgroundForBlur;
  @property(strong, nonatomic) NSEvent* keyDownEventForTesting;
  
-+// Ardia: a view the embedder added as a subview of this one to show its
-+// own UI over the widget's views (ArdiaCore's windows, engine/ardiacore). Hit
++// Solara: a view the embedder added as a subview of this one to show its
++// own UI over the widget's views (SolaraCore's windows, engine/solaracore). Hit
 +// testing and accessibility ask it first, so
 +// the points it covers reach its views and assistive technologies see its
 +// tree rather than the widget's views underneath.
-+@property(weak, nonatomic) NSView* ardiaEmbeddedView;
++@property(weak, nonatomic) NSView* solaraEmbeddedView;
 +
  // Initialize the NSView -> views::View bridge. |viewToHost| must be non-NULL.
  - (instancetype)initWithBridge:(remote_cocoa::NativeWidgetNSWindowBridge*)bridge
@@ -20,7 +20,7 @@
  @synthesize bridge = _bridge;
  @synthesize drawMenuBackgroundForBlur = _drawMenuBackgroundForBlur;
  @synthesize keyDownEventForTesting = _keyDownEvent;
-+@synthesize ardiaEmbeddedView = _ardiaEmbeddedView;
++@synthesize solaraEmbeddedView = _solaraEmbeddedView;
  
  - (instancetype)initWithBridge:(remote_cocoa::NativeWidgetNSWindowBridge*)bridge
                          bounds:(gfx::Rect)bounds {
@@ -29,8 +29,8 @@
    // superview is taller than the contentView.
    NSPoint pointInView = [self convertPoint:point fromView:self.superview];
 +
-+  // Ardia: the embedder's views come first.
-+  if (NSView* embedded = [self ardiaEmbeddedSubview]) {
++  // Solara: the embedder's views come first.
++  if (NSView* embedded = [self solaraEmbeddedSubview]) {
 +    if (NSView* hit = [embedded hitTest:pointInView]) {
 +      return hit;
 +    }
@@ -42,8 +42,8 @@
  // NSAccessibility formal protocol implementation:
  
  - (NSArray*)accessibilityChildren {
-+  // Ardia: the embedder's views cover the widget's.
-+  if (NSView* embedded = [self ardiaEmbeddedSubview]) {
++  // Solara: the embedder's views cover the widget's.
++  if (NSView* embedded = [self solaraEmbeddedSubview]) {
 +    return NSAccessibilityUnignoredChildren(@[ embedded ]);
 +  }
    if (id accessible = _bridge->host_helper()->GetNativeViewAccessible())
@@ -53,7 +53,7 @@
  // NSAccessibility informal protocol implementation:
  
  - (id)accessibilityHitTest:(NSPoint)point {
-+  if (NSView* embedded = [self ardiaEmbeddedSubview]) {
++  if (NSView* embedded = [self solaraEmbeddedSubview]) {
 +    if (id hit = [embedded accessibilityHitTest:point]) {
 +      return hit;
 +    }
@@ -62,9 +62,9 @@
        accessibilityHitTest:point];
  }
  
-+// Ardia: ardiaEmbeddedView while it is a visible subview of this view.
-+- (NSView*)ardiaEmbeddedSubview {
-+  NSView* embedded = self.ardiaEmbeddedView;
++// Solara: solaraEmbeddedView while it is a visible subview of this view.
++- (NSView*)solaraEmbeddedSubview {
++  NSView* embedded = self.solaraEmbeddedView;
 +  return embedded && embedded.superview == self && !embedded.hidden ? embedded
 +                                                                     : nil;
 +}
@@ -78,15 +78,15 @@
    OnActiveTabChanged(change, selection);
  }
  
-+// Ardia: ArdiaCore (engine/ardiacore) keeps its windows open without tabs.
-+bool (*g_ardia_keeps_window_without_tabs)(
++// Solara: SolaraCore (engine/solaracore) keeps its windows open without tabs.
++bool (*g_solara_keeps_window_without_tabs)(
 +    const BrowserWindowInterface* browser) = nullptr;
 +
  void Browser::TabStripEmpty() {
-+  // Ardia: a window ArdiaCore shows its own UI in stays open without tabs,
++  // Solara: a window SolaraCore shows its own UI in stays open without tabs,
 +  // unless it is closing.
-+  if (g_ardia_keeps_window_without_tabs &&
-+      g_ardia_keeps_window_without_tabs(this) &&
++  if (g_solara_keeps_window_without_tabs &&
++      g_solara_keeps_window_without_tabs(this) &&
 +      !UnloadController::From(this)->is_attempting_to_close_browser()) {
 +    return;
 +  }
@@ -99,7 +99,7 @@
  // found in the LICENSE file.
  
  #include "chrome/browser/ui/unload_controller.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  
  #include <algorithm>
  
@@ -107,13 +107,13 @@
    return false;
  }
  
-+void (*g_ardia_browser_close_starting)(BrowserWindowInterface* browser) =
++void (*g_solara_browser_close_starting)(BrowserWindowInterface* browser) =
 +    nullptr;
-+bool (*g_ardia_keeps_tab_on_close)(const BrowserWindowInterface* browser,
++bool (*g_solara_keeps_tab_on_close)(const BrowserWindowInterface* browser,
 +                                   content::WebContents* contents) = nullptr;
-+bool (*g_ardia_browser_will_close_tabs)(BrowserWindowInterface* browser) =
++bool (*g_solara_browser_will_close_tabs)(BrowserWindowInterface* browser) =
 +    nullptr;
-+void (*g_ardia_browser_close_cancelled)(BrowserWindowInterface* browser) =
++void (*g_solara_browser_close_cancelled)(BrowserWindowInterface* browser) =
 +    nullptr;
 +
  void UnloadController::OnWindowClosing() {
@@ -123,20 +123,20 @@
      return;
    }
  
-+  if (state_ == State::kIdle && g_ardia_browser_close_starting) {
-+    g_ardia_browser_close_starting(browser_.get());
++  if (state_ == State::kIdle && g_solara_browser_close_starting) {
++    g_solara_browser_close_starting(browser_.get());
 +  }
 +
    if (!HandleBeforeClose()) {
-+    if (state_ == State::kIdle && g_ardia_browser_close_cancelled) {
-+      g_ardia_browser_close_cancelled(browser_.get());
++    if (state_ == State::kIdle && g_solara_browser_close_cancelled) {
++      g_solara_browser_close_cancelled(browser_.get());
 +    }
      return;
 +  }
 +
-+  if (g_ardia_browser_will_close_tabs &&
++  if (g_solara_browser_will_close_tabs &&
 +      !browser_->GetTabStripModel()->empty()) {
-+    const bool kept_tabs_moved = g_ardia_browser_will_close_tabs(browser_.get());
++    const bool kept_tabs_moved = g_solara_browser_will_close_tabs(browser_.get());
 +    if (is_delete_scheduled_) {
 +      return;
 +    }
@@ -151,8 +151,8 @@
    for (int i = 0; i < browser_->tab_strip_model()->count(); ++i) {
      content::WebContents* const contents =
          browser_->tab_strip_model()->GetWebContentsAt(i);
-+    if (g_ardia_keeps_tab_on_close &&
-+        g_ardia_keeps_tab_on_close(browser_.get(), contents)) {
++    if (g_solara_keeps_tab_on_close &&
++        g_solara_keeps_tab_on_close(browser_.get(), contents)) {
 +      continue;
 +    }
      const bool should_fire_beforeunload =
@@ -162,10 +162,10 @@
    }
  
    chrome::OnClosingAllBrowsers(false);
-+  if (g_ardia_browser_close_cancelled &&
++  if (g_solara_browser_close_cancelled &&
 +      (previous_state == State::kRunningBeforeUnloadForWindowClose ||
 +       previous_state == State::kUnloadCompleted)) {
-+    g_ardia_browser_close_cancelled(browser_.get());
++    g_solara_browser_close_cancelled(browser_.get());
 +  }
  }
  
@@ -174,10 +174,10 @@
  }
  
  void UnloadController::TabStripEmpty() {
-+  // Ardia: see Browser::TabStripEmpty. The window stays open for new tabs.
++  // Solara: see Browser::TabStripEmpty. The window stays open for new tabs.
 +  if (!is_attempting_to_close_browser() &&
-+      g_ardia_keeps_window_without_tabs &&
-+      g_ardia_keeps_window_without_tabs(browser_.get())) {
++      g_solara_keeps_window_without_tabs &&
++      g_solara_keeps_window_without_tabs(browser_.get())) {
 +    return;
 +  }
    // Set state_ here, so that extensions, etc, do not attempt to add tabs to the

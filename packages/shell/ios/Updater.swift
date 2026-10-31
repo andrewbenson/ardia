@@ -13,8 +13,8 @@ public final class AppUpdater: NSObject {
 
   static var feedOverride: String? {
     let env = ProcessInfo.processInfo.environment
-    if let feed = env["ARDIA_UPDATE_FEED_URL"] ?? UserDefaults.standard.string(forKey: "ACUpdateFeedURL") { return feed }
-    guard env["ARDIA_BACKGROUND"] == "1", let repository = releaseRepository else { return nil }
+    if let feed = env["SOLARA_UPDATE_FEED_URL"] ?? UserDefaults.standard.string(forKey: "ACUpdateFeedURL") { return feed }
+    guard env["SOLARA_BACKGROUND"] == "1", let repository = releaseRepository else { return nil }
     return "\(repository)/releases/latest/download/appcast.xml"
   }
 
@@ -149,7 +149,7 @@ public final class AppUpdater: NSObject {
   }
 
   private static var isOff: Bool {
-    ACIsolatedDataDirectory() != nil && ProcessInfo.processInfo.environment["ARDIA_UPDATE_FEED_URL"] == nil
+    ACIsolatedDataDirectory() != nil && ProcessInfo.processInfo.environment["SOLARA_UPDATE_FEED_URL"] == nil
   }
 
   #if canImport(Sparkle)
@@ -203,7 +203,7 @@ public final class AppUpdater: NSObject {
   @objc public func checkForUpdates(_ sender: Any?) {
     #if canImport(Sparkle)
     guard isConfigured else {
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" {
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" {
         return NSLog("\(Bundle.main.productName): update checks are off in this instance")
       }
       return showNotSetUp()
@@ -310,7 +310,7 @@ enum KillSwitch {
     environment: [String: String] = ProcessInfo.processInfo.environment,
     cache: () -> String? = { DocumentStore.read(cacheDocument) }
   ) -> Bool {
-    for part in (environment["ARDIA_SWITCHES"] ?? "").split(separator: ",") {
+    for part in (environment["SOLARA_SWITCHES"] ?? "").split(separator: ",") {
       let pair = part.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
       guard pair.count == 2, pair[0] == name else { continue }
       if ["off", "0", "false"].contains(pair[1]) { return false }
@@ -474,8 +474,8 @@ enum UpdatePrewarm {
     let tried = Attempt(version: version)
     attempt = tried
     runningVersion = version
-    var env = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("ARDIA_") && !$0.key.hasPrefix("DYLD_") }
-    env["ARDIA_PREWARM"] = "1"
+    var env = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("SOLARA_") && !$0.key.hasPrefix("DYLD_") }
+    env["SOLARA_PREWARM"] = "1"
     DispatchQueue.global(qos: .utility).async {
       guard signedLikeThisApp(bundle), let requirement = ownRequirement else {
         tried.record(status: statusRejected)

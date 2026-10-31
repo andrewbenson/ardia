@@ -7,33 +7,33 @@ static int profileLookups = 0;
 static int engineCalls = 0;
 static BOOL loaded = NO;
 
-@interface ArdiaCoreProfile : NSObject
+@interface SolaraCoreProfile : NSObject
 @end
-@implementation ArdiaCoreProfile
-@end
-
-@interface ArdiaCoreEngine : NSObject
-@property(class, readonly) ArdiaCoreEngine *sharedEngine;
-- (void)deleteProfile:(ArdiaCoreProfile *)profile completion:(void (^)(BOOL))done;
-@end
-@implementation ArdiaCoreEngine
-+ (ArdiaCoreEngine *)sharedEngine { engineLookups++; return [ArdiaCoreEngine new]; }
-- (void)deleteProfile:(ArdiaCoreProfile *)profile completion:(void (^)(BOOL))done { engineCalls++; done(YES); }
+@implementation SolaraCoreProfile
 @end
 
-namespace ardiacore_host {
+@interface SolaraCoreEngine : NSObject
+@property(class, readonly) SolaraCoreEngine *sharedEngine;
+- (void)deleteProfile:(SolaraCoreProfile *)profile completion:(void (^)(BOOL))done;
+@end
+@implementation SolaraCoreEngine
++ (SolaraCoreEngine *)sharedEngine { engineLookups++; return [SolaraCoreEngine new]; }
+- (void)deleteProfile:(SolaraCoreProfile *)profile completion:(void (^)(BOOL))done { engineCalls++; done(YES); }
+@end
+
+namespace solaracore_host {
 BOOL IsIncognito(NSString *) { return NO; }
-ArdiaCoreProfile *LoadedProfile(NSString *) { profileLookups++; return loaded ? [ArdiaCoreProfile new] : nil; }
+SolaraCoreProfile *LoadedProfile(NSString *) { profileLookups++; return loaded ? [SolaraCoreProfile new] : nil; }
 }
 NSMutableSet *DeletedProfiles() { static NSMutableSet *value = [NSMutableSet set]; return value; }
 NSMutableDictionary *Profiles() { static NSMutableDictionary *value = [NSMutableDictionary dictionary]; return value; }
 NSMutableDictionary *ProfileWaiters() { static NSMutableDictionary *value = [NSMutableDictionary dictionary]; return value; }
 NSMutableDictionary *DeletionsAfterLoad() { static NSMutableDictionary *value = [NSMutableDictionary dictionary]; return value; }
 
-@interface ArdiaCoreHost : NSObject
+@interface SolaraCoreHost : NSObject
 + (void)deleteProfileData:(NSString *)profile completion:(void (^)(NSArray<NSString *> *))completion;
 @end
-@implementation ArdiaCoreHost
+@implementation SolaraCoreHost
 __PRODUCTION__
 @end
 
@@ -57,7 +57,7 @@ int main() {
         engineLookups = profileLookups = engineCalls = 0;
         __block int callbacks = 0;
         __block NSArray *remaining;
-        [ArdiaCoreHost deleteProfileData:@"1" completion:^(NSArray *value) { callbacks++; remaining = value; }];
+        [SolaraCoreHost deleteProfileData:@"1" completion:^(NSArray *value) { callbacks++; remaining = value; }];
         [results addObject:@{ @"safe": mode, @"loaded": isLoaded, @"remaining": remaining ?: @[], @"callbacks": @(callbacks),
                              @"engineLookups": @(engineLookups), @"profileLookups": @(profileLookups), @"engineCalls": @(engineCalls),
                              @"bookmarksKept": @([[NSData dataWithContentsOfFile:bookmarkPath] isEqualToData:bookmarks]),

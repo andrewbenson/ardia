@@ -9,25 +9,25 @@ The rules are in `AGENTS.md`; this is the detail behind them. Solara aims at ful
 - `apps/browser`: Expo SDK 54 + react-native-macos 0.81 (Legacy architecture), zustand store,
   inline styles.
 - Native code lives in Expo modules under `packages/*/ios` (Swift / Objective-C++):
-  - `packages/ardiacore`: the web engine, **ArdiaCore**: Chrome's own framework (`Chromium Framework.framework`,
+  - `packages/solaracore`: the web engine, **SolaraCore**: Chrome's own framework (`Chromium Framework.framework`,
     Chromium 156.0.8078.47 + Helium 0.20.1 + our patch series, `docs/engine-build.md`) with our layer linked
-    in, and the Expo modules and JS API the app uses (`docs/ardiacore-spike.md`, `docs/ardiacore-parity.md`).
-    - **Chromium runs the process.** `main.swift` calls `ArdiaCoreHost.run`: `ChromeMain` starts with our
+    in, and the Expo modules and JS API the app uses (`docs/solaracore-spike.md`, `docs/solaracore-parity.md`).
+    - **Chromium runs the process.** `main.swift` calls `SolaraCoreHost.run`: `ChromeMain` starts with our
       `ACMainDelegate`, `NSApp` is Chrome's `BrowserCrApplication`, and the React Native host (`AppDelegate`) starts
       inside Chrome's run loop. Nothing may touch `NSApp` before that.
-    - **Every app window is one `ArdiaCoreWindow`** (a Views-backed `NSWindow`, so Chrome's bubbles, dialogs, menus and
+    - **Every app window is one `SolaraCoreWindow`** (a Views-backed `NSWindow`, so Chrome's bubbles, dialogs, menus and
       autofill dropdowns attach to it) holding a Chrome `Browser` per profile shown in it, each with no
-      `BrowserView`, tab strip or toolbar (`ArdiaCoreChromeWindow.mm`, the `ACChromeWindowHost` packages/shell looks
+      `BrowserView`, tab strip or toolbar (`SolaraCoreChromeWindow.mm`, the `ACChromeWindowHost` packages/shell looks
       up). Paging between profiles changes the active profile; the window stays.
     - Every tab is a real Chrome tab of its window's Browser; its `WebContents` view is hosted in our React Native
-      views (`ArdiaCoreWebView`). Popups, `target=_blank` and ⌘-click keep Chrome's own new `WebContents`.
+      views (`SolaraCoreWebView`). Popups, `target=_blank` and ⌘-click keep Chrome's own new `WebContents`.
     - Passwords, autofill, extensions, zoom and search engines call Chrome's services directly through our
-      own Chromium code, `//chrome/browser/ardia` (`engine/chromium`), exported as plain C
-      (`ArdiaCoreEngineBridge`, `ArdiaCoreServices`); ArdiaCore's own layer is `//ardia/core` (`engine/ardiacore`).
+      own Chromium code, `//chrome/browser/solara` (`engine/chromium`), exported as plain C
+      (`SolaraCoreEngineBridge`, `SolaraCoreServices`); SolaraCore's own layer is `//solara/core` (`engine/solaracore`).
       No chrome:// page is scripted.
-    - JS API in `packages/ardiacore/src` (`WebView`, downloads, permissions, profiles, extensions, Chrome UI); its
-      native modules keep their CEF-era names: `ArdiaCEF` is `packages/ardiacore/ios/CefModule.swift`, and
-      `ArdiaExtensions`, `ArdiaSwipe` and `ArdiaChromeUI` are `ExtensionsModule.swift`,
+    - JS API in `packages/solaracore/src` (`WebView`, downloads, permissions, profiles, extensions, Chrome UI); its
+      native modules keep their CEF-era names: `SolaraCEF` is `packages/solaracore/ios/CefModule.swift`, and
+      `SolaraExtensions`, `SolaraSwipe` and `SolaraChromeUI` are `ExtensionsModule.swift`,
       `SwipeModule.swift` and `ChromeUIModule.swift` there.
   - `packages/shell`: menus, shortcuts, windows, native primitives (Surface, Symbol, FadeLabel,
     VisualEffect, WindowDragRegion, ContextMenuArea, ActivitySpinner…).
@@ -44,19 +44,19 @@ The rules are in `AGENTS.md`; this is the detail behind them. Solara aims at ful
   only if a patch adds or removes files). To change one: `pnpm patch <pkg>@<version> --edit-dir <scratch dir>`,
   edit there, then `scripts/agent/locked pod -- pnpm patch-commit <scratch dir>`, and read the new `.patch`:
   pnpm can add bogus `deleted file` entries (drop them and run `pnpm install` again under the same lock).
-  Mark edits `[Ardia: … Ardia]`. Current patches: `react-native-macos` (a view's `transform` survives
-  AppKit layout and applies from its center; RCTTiming's display link, c7ebd600; a view in a scroll view observes its bounds once, not once per re-add; focus() on a text field being edited keeps its edit, caret and selection; a placeholder change on an empty field being edited isn't a blur; a placeholder color change on a field being edited reaches its field editor, so it shows once the field is emptied, and its text keeps the field's own color; a single-line field with pastedTypes pastes only those as plain text, line breaks folded as in Chrome's omnibox, a088913e; a container whose children change leaves the ones already in place alone instead of re-adding every one, 6d7277fd; a mouse touch matches its own down on the same button and is never recorded twice, so JS never gets a null touch, 8bd086c8; mounts go through one queue in layout order, and a live-resize layout, which React Native mounts on the main thread at once, first mounts every older one still queued, so a zoomed window never keeps an older layout and its views track the window during the animation, 2f4aa603; a view retains its shadow color, so LogBox no longer crashes Debug with a SIGBUS; in a window whose content view isn't a root (a native window shell), a view under a native view stacked above its root isn't hovered, and the shell posts `ArdiaHoverCoverChanged` when the pointer crosses a layer or the layers move) and `expo-modules-core` (the JS
+  Mark edits `[Solara: … Solara]`. Current patches: `react-native-macos` (a view's `transform` survives
+  AppKit layout and applies from its center; RCTTiming's display link, c7ebd600; a view in a scroll view observes its bounds once, not once per re-add; focus() on a text field being edited keeps its edit, caret and selection; a placeholder change on an empty field being edited isn't a blur; a placeholder color change on a field being edited reaches its field editor, so it shows once the field is emptied, and its text keeps the field's own color; a single-line field with pastedTypes pastes only those as plain text, line breaks folded as in Chrome's omnibox, a088913e; a container whose children change leaves the ones already in place alone instead of re-adding every one, 6d7277fd; a mouse touch matches its own down on the same button and is never recorded twice, so JS never gets a null touch, 8bd086c8; mounts go through one queue in layout order, and a live-resize layout, which React Native mounts on the main thread at once, first mounts every older one still queued, so a zoomed window never keeps an older layout and its views track the window during the animation, 2f4aa603; a view retains its shadow color, so LogBox no longer crashes Debug with a SIGBUS; in a window whose content view isn't a root (a native window shell), a view under a native view stacked above its root isn't hovered, and the shell posts `SolaraHoverCoverChanged` when the pointer crosses a layer or the layers move) and `expo-modules-core` (the JS
   runtime is prepared on the JS thread only, 364f5f7e).
   On a react-native-macos upgrade, check that `RCTTouchHandler` still doesn't implement
-  `gestureRecognizer:shouldAttemptToRecognizeWithEvent:`. ArdiaCore's `RCTTouchHandler+Pages.mm` adds it so a
+  `gestureRecognizer:shouldAttemptToRecognizeWithEvent:`. SolaraCore's `RCTTouchHandler+Pages.mm` adds it so a
   left press on a page never puts AppKit in event-tracking mode, and a version of RN's own would be silently replaced.
 
 ## The engine
-- ArdiaCore is built outside the repo in `~/chromium-build` (the tree and its patches: `engine/patches`,
-  `docs/engine-build.md` › "Rebuilding"; `engine/chromium/apply.sh` and `engine/ardiacore/apply.sh` copy our code in).
+- SolaraCore is built outside the repo in `~/chromium-build` (the tree and its patches: `engine/patches`,
+  `docs/engine-build.md` › "Rebuilding"; `engine/chromium/apply.sh` and `engine/solaracore/apply.sh` copy our code in).
   The app's build stages a copy of `out/Release_GN_arm64/Chromium Framework.framework`
-  (`packages/ardiacore/scripts/stage-framework.sh`: copied and signed once per engine build into
-  `apps/browser/build-ardiacore/staged`, then cloned into each build's own derived data, `ARDIACORE_STAGE_DIR`), links it
+  (`packages/solaracore/scripts/stage-framework.sh`: copied and signed once per engine build into
+  `apps/browser/build-solaracore/staged`, then cloned into each build's own derived data, `SOLARACORE_STAGE_DIR`), links it
   and embeds it (`embed.sh`), so every agent's next build picks up a new framework.
 - One agent at a time edits or builds `~/chromium-build`: hold the chromium lock for the whole edit → build cycle
   (`scripts/agent/locked chromium --take <you>`, then each command as `scripts/agent/locked chromium --as <you> --
@@ -67,54 +67,54 @@ The rules are in `AGENTS.md`; this is the detail behind them. Solara aims at ful
   `cd ~/chromium-build/chromium_git/chromium/src && PATH=$HOME/chromium-build/depot_tools:$PATH DEPOT_TOOLS_UPDATE=0 <repo>/scripts/agent/locked chromium [--as <you>] -- autoninja -C out/Release_GN_arm64 chrome_framework`.
   `apply.sh` copies the whole working tree, so other agents' uncommitted engine files get compiled too.
   A new framework changes every agent's next build, so say so in your report. To try one privately, build the app with
-  `ARDIACORE_FRAMEWORK=<framework> scripts/agent/build-app --as <you>` (it stages into your own derived data).
-- New engine code goes in `//chrome/browser/ardia` (`engine/chromium/src`) or `//ardia/core`
-  (`engine/ardiacore/src`), never straight into the tree (`docs/engine-build.md` › "Our own code in the tree").
+  `SOLARACORE_FRAMEWORK=<framework> scripts/agent/build-app --as <you>` (it stages into your own derived data).
+- New engine code goes in `//chrome/browser/solara` (`engine/chromium/src`) or `//solara/core`
+  (`engine/solaracore/src`), never straight into the tree (`docs/engine-build.md` › "Our own code in the tree").
   `engine/patches/series` is the apply order of our patches to Chromium; `engine/patches/series.py check` proves the
-  series reproduces the tree. Hooks in Chrome's code are `g_ardia_*` pointers ArdiaCore sets (`ac_seams.mm`). CEF
+  series reproduces the tree. Hooks in Chrome's code are `g_solara_*` pointers SolaraCore sets (`ac_seams.mm`). CEF
   left the tree on 2026-10-09: the few of its patches we keep are `chromium-cef-carryover.patch`, and the seams of its
-  that ArdiaCore used are our hooks H1–H6 in `engine/ardiacore/apply.sh` (`docs/engine-build.md` › "Our hooks in Chrome's
-  code"). Whether a Browser is ArdiaCore's is `WindowHost::ForBrowser`.
+  that SolaraCore used are our hooks H1–H6 in `engine/solaracore/apply.sh` (`docs/engine-build.md` › "Our hooks in Chrome's
+  code"). Whether a Browser is SolaraCore's is `WindowHost::ForBrowser`.
 
-### ArdiaCore code map
-Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ardiacore/ios`, JS in `apps/browser/src`.
+### SolaraCore code map
+Engine files are in `engine/solaracore/src/solara/core`, app files in `packages/solaracore/ios`, JS in `apps/browser/src`.
 
 | Concern | Engine | App | JS |
 | --- | --- | --- | --- |
-| Windows, tab ownership | `ac_browser.h` (`WindowHost`, `ACWebContentsDelegate`, `TabBridge`), `ac_browser_window.mm` | `ArdiaCoreChromeWindow.mm`, `ArdiaCoreTabStrip.mm` | `lib/chromeTabs.ts`, `store/liveTabs.ts` |
-| Tab activation | `ardiacore_api.mm` `-activateTab:`, `ac_browser.mm` `ActiveTabChanged` | `ArdiaCoreWebView.mm` `-activate`, `ArdiaCoreTabStrip.mm` | same |
-| Focus guard (test instances) | `ac_browser.mm` (`WindowHost` activation) | `ArdiaCoreActivation.mm` (`activation.log`), `ArdiaCoreChromeWindow.mm` | `packages/shell/ios/Windows.swift` |
-| Fullscreen | `ac_browser_window.mm` (`ExclusiveAccessContext`), `ac_browser.mm` `FullscreenChanged` | `ArdiaCoreChromeWindow.mm` (acted out in test instances) | `components/ContentCard.tsx`, `components/layout/pageState.ts` |
-| Picture in Picture | `ac_picture_in_picture.mm`; Dia's window and controls in `engine/chromium/…/ardia/pip/`; the auto-PiP hook in `engine/ardiacore/apply.sh` | `ArdiaCorePictureInPicture.mm` | `components/media/pip.ts` |
-| Password and autofill bubbles | `ac_password_prompt.mm`, `ac_browser_window.h` (`ACAutofillBubbleHandler`), `ac_autofill_trigger.mm` (dropdown) | `ArdiaCoreChromeWindow.mm` (`window:passwordPrompt:forTab:`) → `ArdiaCoreWebView` event | `components/site/Prompts.tsx`, `site/Autofill.tsx` |
-| Share tab, screen share | `ardiacore_api.mm` (`TabSharingDelegateFor`), `ac_desktop_capture.mm` | `ArdiaCoreHost.mm` `shareTabInstead`, `ChromeUIModule.swift` | `components/media/ShareBar.tsx`, `SharePicker.tsx` |
-| Restore, discard | `engine/chromium/…/ac_tab_restore.cc` (closed tabs) | `ArdiaCoreWebView.mm` (`discard:`, `transferKey`) | `lib/tabLifecycle.ts`, `store/windows.ts` |
-| Permissions | `ac_permissions.mm` | `ArdiaCoreHost.mm` (`permissionRequest`) | `components/site/permissions.ts`, `Prompts.tsx` |
-| Page script | `ac_page_channel.mm`, `renderer/ac_content_renderer_client.cc` | `page_script.js`, `ArdiaCoreWebView.mm` | `onPageMessage` (`packages/ardiacore/src/WebView.tsx`) |
+| Windows, tab ownership | `ac_browser.h` (`WindowHost`, `ACWebContentsDelegate`, `TabBridge`), `ac_browser_window.mm` | `SolaraCoreChromeWindow.mm`, `SolaraCoreTabStrip.mm` | `lib/chromeTabs.ts`, `store/liveTabs.ts` |
+| Tab activation | `solaracore_api.mm` `-activateTab:`, `ac_browser.mm` `ActiveTabChanged` | `SolaraCoreWebView.mm` `-activate`, `SolaraCoreTabStrip.mm` | same |
+| Focus guard (test instances) | `ac_browser.mm` (`WindowHost` activation) | `SolaraCoreActivation.mm` (`activation.log`), `SolaraCoreChromeWindow.mm` | `packages/shell/ios/Windows.swift` |
+| Fullscreen | `ac_browser_window.mm` (`ExclusiveAccessContext`), `ac_browser.mm` `FullscreenChanged` | `SolaraCoreChromeWindow.mm` (acted out in test instances) | `components/ContentCard.tsx`, `components/layout/pageState.ts` |
+| Picture in Picture | `ac_picture_in_picture.mm`; Dia's window and controls in `engine/chromium/…/solara/pip/`; the auto-PiP hook in `engine/solaracore/apply.sh` | `SolaraCorePictureInPicture.mm` | `components/media/pip.ts` |
+| Password and autofill bubbles | `ac_password_prompt.mm`, `ac_browser_window.h` (`ACAutofillBubbleHandler`), `ac_autofill_trigger.mm` (dropdown) | `SolaraCoreChromeWindow.mm` (`window:passwordPrompt:forTab:`) → `SolaraCoreWebView` event | `components/site/Prompts.tsx`, `site/Autofill.tsx` |
+| Share tab, screen share | `solaracore_api.mm` (`TabSharingDelegateFor`), `ac_desktop_capture.mm` | `SolaraCoreHost.mm` `shareTabInstead`, `ChromeUIModule.swift` | `components/media/ShareBar.tsx`, `SharePicker.tsx` |
+| Restore, discard | `engine/chromium/…/ac_tab_restore.cc` (closed tabs) | `SolaraCoreWebView.mm` (`discard:`, `transferKey`) | `lib/tabLifecycle.ts`, `store/windows.ts` |
+| Permissions | `ac_permissions.mm` | `SolaraCoreHost.mm` (`permissionRequest`) | `components/site/permissions.ts`, `Prompts.tsx` |
+| Page script | `ac_page_channel.mm`, `renderer/ac_content_renderer_client.cc` | `page_script.js`, `SolaraCoreWebView.mm` | `onPageMessage` (`packages/solaracore/src/WebView.tsx`) |
 
-- **Call path:** JS (`packages/ardiacore/src`) → `*Module.swift` → `ArdiaCoreHost` / `ArdiaCoreWebView` → `public/ArdiaCore.h` →
-  `ardiacore_api.mm` → `ac_*.mm`. Events come back through an `ArdiaCore*Delegate` method, `-emit:payload:`, and the event
+- **Call path:** JS (`packages/solaracore/src`) → `*Module.swift` → `SolaraCoreHost` / `SolaraCoreWebView` → `public/SolaraCore.h` →
+  `solaracore_api.mm` → `ac_*.mm`. Events come back through an `SolaraCore*Delegate` method, `-emit:payload:`, and the event
   switch in `CefModule.swift`.
-- **Adding to `ArdiaCore.h`:** implement it in `ardiacore_api.mm` (a new file goes in `BUILD.gn` `sources`); a new class
-  must be named `ArdiaCore*` to be exported (the `ardiacore.exports` wildcard). The pod reads `ArdiaCore.h` from the repo and
+- **Adding to `SolaraCore.h`:** implement it in `solaracore_api.mm` (a new file goes in `BUILD.gn` `sources`); a new class
+  must be named `SolaraCore*` to be exported (the `solaracore.exports` wildcard). The pod reads `SolaraCore.h` from the repo and
   the staged framework may be older, so the app guards new selectors with `respondsToSelector:`.
 - **Adding an engine call** (Chrome's services are `ac_*` C calls in `engine/chromium`, which the app finds with
-  dlsym through `ArdiaCoreEngineBridge`): (1) write `AC_ENGINE_CALL(ac_<domain>_<verb>)` in
-  `engine/chromium/src/chrome/browser/ardia/ac_<domain>.cc` (conventions in `public/ac_engine.h`; a new file goes
+  dlsym through `SolaraCoreEngineBridge`): (1) write `AC_ENGINE_CALL(ac_<domain>_<verb>)` in
+  `engine/chromium/src/chrome/browser/solara/ac_<domain>.cc` (conventions in `public/ac_engine.h`; a new file goes
   in that `BUILD.gn`; `ac_engine.exports` exports every `ac_*`); (2) `scripts/agent/engine-build`; (3) call it with
-  `ArdiaCoreEngineBridge call:` (`callWithSecret:` for secrets), guarded by `exports:`; for JS's `engineCall`, add it to
-  `ArdiaCoreEngineCalls.swift`.
-- **The page script** is `packages/ardiacore/ios/page_script.js`, a pod resource: `ArdiaCoreHost.mm` hands it to the
+  `SolaraCoreEngineBridge call:` (`callWithSecret:` for secrets), guarded by `exports:`; for JS's `engineCall`, add it to
+  `SolaraCoreEngineCalls.swift`.
+- **The page script** is `packages/solaracore/ios/page_script.js`, a pod resource: `SolaraCoreHost.mm` hands it to the
   engine at launch and the renderer runs it in every http(s) and file frame. Changing it needs an app rebuild, not an
-  engine one. Its `post(kind, json)` crosses the page channel to `-[ArdiaCoreWebView tab:didReceivePageMessage:…]`,
+  engine one. Its `post(kind, json)` crosses the page channel to `-[SolaraCoreWebView tab:didReceivePageMessage:…]`,
   which handles it or emits `pageMessage` (JS `onPageMessage`).
 - **CEF-era code** (removed in 6bdf66ce): `git show 6bdf66ce^:packages/cef/ios/<file>`. Comments citing
-  `packages/cef/…` mean: `ACBrowserView.mm`, `ACClient.mm` → `ArdiaCoreWebView.mm`; `ACChromeWindow.mm`,
-  `ACPopupWindow.mm` → `ArdiaCoreChromeWindow.mm`; `ACActivation`, `ACTabStrip`, `ACPictureInPicture`,
-  `ACContentBlocker`, `ACEngineBridge` → `ArdiaCore<same>.mm`; `ACPasswords`, `ACAutofill`, `ACZoom` →
-  `ArdiaCoreServices.mm`; `ACExtensions.mm` → `ExtensionsModule.swift`; `ACCef.mm` → `ArdiaCoreHost.mm`,
-  `ArdiaCoreStartup.mm`; `ACEngine.mm` → `ardiacore_api.mm`; `helper/page_script.js` → `packages/ardiacore/ios/`;
-  `packages/cef/src` → `packages/ardiacore/src`.
+  `packages/cef/…` mean: `ACBrowserView.mm`, `ACClient.mm` → `SolaraCoreWebView.mm`; `ACChromeWindow.mm`,
+  `ACPopupWindow.mm` → `SolaraCoreChromeWindow.mm`; `ACActivation`, `ACTabStrip`, `ACPictureInPicture`,
+  `ACContentBlocker`, `ACEngineBridge` → `SolaraCore<same>.mm`; `ACPasswords`, `ACAutofill`, `ACZoom` →
+  `SolaraCoreServices.mm`; `ACExtensions.mm` → `ExtensionsModule.swift`; `ACCef.mm` → `SolaraCoreHost.mm`,
+  `SolaraCoreStartup.mm`; `ACEngine.mm` → `solaracore_api.mm`; `helper/page_script.js` → `packages/solaracore/ios/`;
+  `packages/cef/src` → `packages/solaracore/src`.
 
 ## Rules
 - **Stay inside the files you own** (listed in your task). If you need a change elsewhere,
@@ -124,14 +124,14 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
 - **Never steal focus from the user.** They are working in other apps.
   - A background instance never keeps a link from outside (another app, a click in Mail, Handoff): LaunchServices
     may route it there because the bundle id matches, so the app hands it to a running copy that isn't a test instance
-    (`ARDIA_BACKGROUND=1` or `ARDIA_DATA_DIR`), else to the link's default handler wherever it lives, else to a copy in
+    (`SOLARA_BACKGROUND=1` or `SOLARA_DATA_DIR`), else to the link's default handler wherever it lives, else to a copy in
     /Applications, and opens it itself only when there is none (`OutsideURLRoute`, `pnpm -C packages/shell test`). A test that sends it links on purpose (the smoke test's GURL event) launches it with
-    `ARDIA_ACCEPT_EXTERNAL_URLS=1`.
+    `SOLARA_ACCEPT_EXTERNAL_URLS=1`.
   - Launch the app only with `open -g` (never plain `open`, never `activate`) **and** with
-    `ARDIA_BACKGROUND=1`: `open -g` alone does not stop LaunchServices from making the app
+    `SOLARA_BACKGROUND=1`: `open -g` alone does not stop LaunchServices from making the app
     frontmost once its windows appear (this stole the user's keystrokes). With it the process is
-    BackgroundOnly and every activation path is guarded (`packages/ardiacore/ios/ArdiaCoreActivation.mm`); each
-    attempt is logged to `$ARDIA_DATA_DIR/activation.log`. `lsappinfo front` must never show
+    BackgroundOnly and every activation path is guarded (`packages/solaracore/ios/SolaraCoreActivation.mm`); each
+    attempt is logged to `$SOLARA_DATA_DIR/activation.log`. `lsappinfo front` must never show
     your pid. Its windows never come up over the owner's: every window (Chrome's bubbles and popups, panels, PiP,
     Little Solara, sheets) has its level set a band below normal (normal at layer -1000000, floating at -999997), so
     it sits behind every other app's window, above the desktop, in production's order among its own and out of Mission
@@ -163,13 +163,13 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
   - Run: `scripts/agent/ac launch apps/browser/build-<you>/Build/Products/Debug/Solara.app --data <scratch>/data`
-    (hidden: `open -g -n`, `ARDIA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
+    (hidden: `open -g -n`, `SOLARA_BACKGROUND=1`, its own data dir and DevTools port; prints the pid and port).
     A URL handed to a hidden instance (`open -a <app> <url>`) is forwarded to the owner's running app unless it runs
-    with `ARDIA_ACCEPT_EXTERNAL_URLS=1`; `launch({ urls })` sets it and refuses without it.
+    with `SOLARA_ACCEPT_EXTERNAL_URLS=1`; `launch({ urls })` sets it and refuses without it.
     `ac eval|page|quit|status` take that data dir (`--help`); scripts use `scripts/lib/instance.mjs` (`launch`,
     `attach`, `session`, `reporter`), whose pid is the DevTools port's listener, never a process-list diff
-    (`ARDIA_DATA_DIR` isolates Chrome's and the app's data; a Debug build refuses to start without one).
-    Quit only your own instance (`ac quit`), never `pkill Ardia` or `pkill Solara`.
+    (`SOLARA_DATA_DIR` isolates Chrome's and the app's data; a Debug build refuses to start without one).
+    Quit only your own instance (`ac quit`), never `pkill Solara` or `pkill Solara`.
   - Open a URL in your instance: CDP `Target.createTarget`, or the dev harness
     (`ac.actions.openUrls([url])`); `open -a` routes to whichever instance macOS picks.
   - Metro (JS dev server) is already running on :8081 and serves this working tree to every
@@ -197,9 +197,9 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     the module provider).
 - **Shared files** several agents must touch — `packages/shell/ios/Menus.swift`,
   `apps/browser/src/lib/commands.ts`, `apps/browser/src/App.tsx`, `apps/browser/src/store/settings.ts`,
-  `apps/browser/src/lib/theme.ts`, `packages/ardiacore/ios/ArdiaCoreInternal.h`, `packages/ardiacore/ios/ArdiaCore.podspec`,
-  `packages/ardiacore/ios/ArdiaCoreWebView.mm`, `packages/ardiacore/scripts/acceptance.mjs`, ArdiaCore's `public/ArdiaCore.h`,
-  `ardiacore_api.mm` and `ac_browser*.mm`, the `expo-module.config.json` files: re-read right before each edit, keep
+  `apps/browser/src/lib/theme.ts`, `packages/solaracore/ios/SolaraCoreInternal.h`, `packages/solaracore/ios/SolaraCore.podspec`,
+  `packages/solaracore/ios/SolaraCoreWebView.mm`, `packages/solaracore/scripts/acceptance.mjs`, SolaraCore's `public/SolaraCore.h`,
+  `solaracore_api.mm` and `ac_browser*.mm`, the `expo-module.config.json` files: re-read right before each edit, keep
   edits small and additive (add your case/item/field; don't restructure), and never undo someone else's lines.
   Native files there compile into everyone's build: check one pod with `scripts/agent/typecheck-pod <Pod>` before saving more.
 - **Scratch files** go in a subdirectory of the session scratchpad named for your task; clean up only that
@@ -218,8 +218,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     (`lib/devHarness.ts`); Expo modules are on `globalThis.expo.modules`. `ac.runCommand` takes an object:
     `ac.runCommand({ command: "importBrowserData", arg: null, windowId: null })`; the utility windows' ids are
     `"settings"` and `"import"`.
-  - The ArdiaCore acceptance run (`docs/ardiacore-parity.md` › "How to build and check it"): `node
-    packages/ardiacore/scripts/acceptance.mjs <Debug app> <scratch dir> --keep [check…]` once, then `--attach <scratch
+  - The SolaraCore acceptance run (`docs/solaracore-parity.md` › "How to build and check it"): `node
+    packages/solaracore/scripts/acceptance.mjs <Debug app> <scratch dir> --keep [check…]` once, then `--attach <scratch
     dir> [check…]` for each try (no boot: seconds). `--list` names every check and what it needs; each check prints
     one line, the details go to `<scratch dir>/data/acceptance.log`.
   - Camera and microphone: a hidden instance captures only from Chrome's fake devices (`docs/testing.md`). Run
@@ -232,27 +232,27 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     `node apps/browser/scripts/shortcuts-test.mjs <Debug app> matrix` checks every shortcut in every focus (`presses`
     runs the real presses and focus handoffs).
   - Page content: `scripts/agent/ac page <data dir> <url part> '<expression>'`, or CDP on the instance's port
-    (`http://localhost:<port>/json`, `Runtime.evaluate`, `Page.captureScreenshot`). A `ARDIA_BACKGROUND` instance's windows answer NO to
-    `-[NSWindow isOccluded]` (`ArdiaCoreHost.mm`), so a covered window shows a tab at once instead of after Chrome's 1 s
-    occlusion delay; set `ARDIA_ALLOW_OCCLUSION=1` to test occlusion itself.
-  - CDP (`ARDIA_REMOTE_DEBUGGING_PORT`), argv and `ARDIA_CHROMIUM_SWITCHES` only reach Chrome where it runs on its mock
-    keychain: a scratch `ARDIA_DATA_DIR`, a dev build (`ACDevBuild` in its Info.plist), or a build without a team
+    (`http://localhost:<port>/json`, `Runtime.evaluate`, `Page.captureScreenshot`). A `SOLARA_BACKGROUND` instance's windows answer NO to
+    `-[NSWindow isOccluded]` (`SolaraCoreHost.mm`), so a covered window shows a tab at once instead of after Chrome's 1 s
+    occlusion delay; set `SOLARA_ALLOW_OCCLUSION=1` to test occlusion itself.
+  - CDP (`SOLARA_REMOTE_DEBUGGING_PORT`), argv and `SOLARA_CHROMIUM_SWITCHES` only reach Chrome where it runs on its mock
+    keychain: a scratch `SOLARA_DATA_DIR`, a dev build (`ACDevBuild` in its Info.plist), or a build without a team
     signature (ad hoc copies such as carryover.sh's). A
-    team-signed build on its real data dir forwards none of them (`ArdiaCoreHost.mm`), and its browser process removes
+    team-signed build on its real data dir forwards none of them (`SolaraCoreHost.mm`), and its browser process removes
     every switch that opens the profile to outside control (remote debugging, unpacked extensions, automation, proxies,
     certificate overrides, net-log), also after chrome://flags have been applied, and unsets `SSLKEYLOGFILE`
     (`ac_main_delegate.cc`), so nothing drives or records the real profile, with its real Safe Storage key; Chrome 136
     did the same for its default profile.
   - Native UI: `ac.shell.devSnapshotWindow(windowId, path)` (below). A test window draws at alpha 0, so
-    `screencapture -l <windowID> -o` needs an instance launched with `ARDIA_DRAW_WINDOWS=1` (find the id with
+    `screencapture -l <windowID> -o` needs an instance launched with `SOLARA_DRAW_WINDOWS=1` (find the id with
     CGWindowList by owner PID; a test window's layer is negative); that window then shows wherever the owner's desktop is
     uncovered. It captures the window's own content even while the owner's windows cover it. Wrap every capture in
     `timeout 20`: with the screen locked they can hang instead of failing.
-    For the New Tab intro, launch with `ARDIA_SHADERS_FORCE_KEY=1` (it only plays in a key window).
+    For the New Tab intro, launch with `SOLARA_SHADERS_FORCE_KEY=1` (it only plays in a key window).
   - The user's screen may be locked: screen captures then fail or deliver no frames. Fall back to
     `ac.shell.devSnapshotWindow(windowId, path)` (`false` means it failed; the window's layers at 2x; Metal views
     render blank; text opacity is applied twice, so a label at α reads 1 − (1 − α)², don't match colors on it),
-    `globalThis.expo.modules.ArdiaAreaLight.debugSnapshot(dir)` (every Metal view, offscreen, with its frame),
+    `globalThis.expo.modules.SolaraAreaLight.debugSnapshot(dir)` (every Metal view, offscreen, with its frame),
     the accessibility tree and store state, and list "needs visual check" items in your report.
 - Code style: read the surrounding code first and match its naming and idioms. Keep files cohesive; new features go
   in new files where sensible.

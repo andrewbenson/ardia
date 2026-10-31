@@ -1,4 +1,4 @@
-import { DockSelection, Surface } from "@ardia/shell";
+import { DockSelection, Surface } from "@solara/shell";
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { hex, layout, useTheme } from "../../lib/theme";

@@ -1,6 +1,6 @@
-import { breadcrumb } from "@ardia/core";
-import { nativeToolbarAvailable, windowShellActive } from "@ardia/settings";
-import { Hairline } from "@ardia/shell";
+import { breadcrumb } from "@solara/core";
+import { nativeToolbarAvailable, windowShellActive } from "@solara/settings";
+import { Hairline } from "@solara/shell";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { layout, useTheme } from "../lib/theme";

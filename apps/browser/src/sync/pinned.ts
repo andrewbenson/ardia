@@ -1,5 +1,5 @@
-import { assignPositions, type Adapter, type ApplyRecords, type Extraction } from "@ardia/sync";
-import { nativeSnapshot } from "@ardia/store";
+import { assignPositions, type Adapter, type ApplyRecords, type Extraction } from "@solara/sync";
+import { nativeSnapshot } from "@solara/store";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { ancestorIds, depthOf, leaveGroups, orderSections, syncGroupOrder, withParent } from "../store/groups";
 import { makeTab, newId, pinnedFirst, without } from "../store/model";

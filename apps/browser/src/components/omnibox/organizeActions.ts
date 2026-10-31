@@ -1,4 +1,4 @@
-import type { CommandAction } from "@ardia/core";
+import type { CommandAction } from "@solara/core";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { activeTab, isIncognitoProfile, viewTabIds } from "../../store/model";
 import { hiddenEmptyCard } from "../../store/newTabBar";

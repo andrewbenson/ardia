@@ -168,12 +168,12 @@ test("closing the last tab keeps the window with one selected New Tab page; ⌘W
   }
 });
 
-test("closing the last tab still closes Little Ardia and private windows", () => {
+test("closing the last tab still closes Little Solara and private windows", () => {
   reset();
   setup("main");
   const small = S().createWindow({ small: true, url: "https://link.com/" });
   S().closeTab(S().windows[small].tabIds[0]);
-  assert.equal(S().windows[small], undefined, "Little Ardia");
+  assert.equal(S().windows[small], undefined, "Little Solara");
   const priv = S().createWindow({ incognito: true, url: "https://secret.com/" });
   S().closeTab(S().windows[priv].tabIds[0]);
   assert.equal(S().windows[priv], undefined, "private");
@@ -200,7 +200,7 @@ test("a tab close that takes the window asks first only when other tabs would go
   assert.equal(windowClosingWithTab(S(), workBlank), y, "another profile's page in the window would close with it");
 
   const small = S().createWindow({ small: true, url: "https://link.com/" });
-  assert.equal(windowClosingWithTab(S(), S().windows[small].tabIds[0]), null, "Little Ardia's only tab");
+  assert.equal(windowClosingWithTab(S(), S().windows[small].tabIds[0]), null, "Little Solara's only tab");
   const priv = S().createWindow({ incognito: true, url: "https://one.com/" });
   const second = S().newTab(priv, { url: "https://two.com/" });
   S().closeTab(second);

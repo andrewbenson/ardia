@@ -4,7 +4,7 @@
  // found in the LICENSE file.
  
  #include "chrome/browser/devtools/devtools_ui_controller.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  
  #include "base/memory/raw_ptr.h"
  #include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
@@ -16,9 +16,9 @@
  #include "chrome/browser/ui/views/frame/scrim_view.h"
  #include "ui/views/focus/external_focus_tracker.h"
  
-+// Ardia: ArdiaCore (engine/ardiacore) shows the docked DevTools of the tabs it
++// Solara: SolaraCore (engine/solaracore) shows the docked DevTools of the tabs it
 +// hosts itself.
-+void (*g_ardia_devtools_dock_changed)(BrowserWindowInterface* browser,
++void (*g_solara_devtools_dock_changed)(BrowserWindowInterface* browser,
 +                                          content::WebContents* inspected,
 +                                          content::WebContents* devtools) =
 +    nullptr;
@@ -30,17 +30,17 @@
  bool DevtoolsUIController::UpdateDevtools(
      content::WebContents* web_contents,
      bool update_devtools_web_contents) {
-+  // Ardia: ArdiaCore, which shows its tabs itself, shows their docked
++  // Solara: SolaraCore, which shows its tabs itself, shows their docked
 +  // DevTools too, whether or not the tab is the one Chrome's contents view
 +  // shows.
-+  if (g_ardia_devtools_dock_changed && web_contents &&
++  if (g_solara_devtools_dock_changed && web_contents &&
 +      update_devtools_web_contents) {
 +    BrowserWindowInterface* browser =
 +        GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(
 +            web_contents);
 +    if (browser) {
 +      DevToolsContentsResizingStrategy strategy;
-+      g_ardia_devtools_dock_changed(
++      g_solara_devtools_dock_changed(
 +          browser, web_contents,
 +          DevToolsWindow::GetInTabWebContents(web_contents, &strategy));
 +    }

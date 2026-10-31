@@ -3,11 +3,11 @@ import { test } from "node:test";
 import { declaration, runNative, source } from "../test-native/safe-host/run.mjs";
 
 function nativeClears() {
-  const bridge = source("packages/ardiacore/ios/ArdiaCoreEngineBridge.mm")
-    .replace('#import "ArdiaCoreEngineBridge.h"', "")
-    .replace('#import "ArdiaCoreInternal.h"', "")
-    .replace('#include "../../../engine/chromium/src/chrome/browser/ardia/public/ac_engine.h"', "");
-  const services = source("packages/ardiacore/ios/ArdiaCoreServices.mm");
+  const bridge = source("packages/solaracore/ios/SolaraCoreEngineBridge.mm")
+    .replace('#import "SolaraCoreEngineBridge.h"', "")
+    .replace('#import "SolaraCoreInternal.h"', "")
+    .replace('#include "../../../engine/chromium/src/chrome/browser/solara/public/ac_engine.h"', "");
+  const services = source("packages/solaracore/ios/SolaraCoreServices.mm");
   const helpers = ["NSDictionary *Parse(", "NSString *JSON(NSDictionary *"]
     .map((signature) => declaration(services, signature)).join("\n");
   const methods = [
@@ -15,14 +15,14 @@ function nativeClears() {
     "+ (void)clearBrowsingData:", "+ (void)clearSiteData:",
   ].map((signature) => declaration(services, signature)).join("\n");
   return runNative("ClearData.mm", [
-    source("engine/chromium/src/chrome/browser/ardia/public/ac_engine.h"),
-    source("packages/ardiacore/ios/ArdiaCoreEngineBridge.h"), bridge, helpers,
-    "@implementation ArdiaCoreServices", methods, "@end",
+    source("engine/chromium/src/chrome/browser/solara/public/ac_engine.h"),
+    source("packages/solaracore/ios/SolaraCoreEngineBridge.h"), bridge, helpers,
+    "@implementation SolaraCoreServices", methods, "@end",
   ].join("\n"));
 }
 
 function webKitClears() {
-  const hub = source("packages/ardiacore/ios/WebKitHub.swift");
+  const hub = source("packages/solaracore/ios/WebKitHub.swift");
   const methods = ["func clearBrowsingData(", "static func covers(", "func clearSiteData("]
     .map((signature) => declaration(hub, signature)).join("\n");
   return runNative("ClearData.swift", methods, [], true);

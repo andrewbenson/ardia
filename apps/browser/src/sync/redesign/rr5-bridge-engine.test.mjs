@@ -4,10 +4,10 @@ import "./switchOn.mjs";
 import { S, settle, launch, reset, onAndSynced, otherMac, realSetTimeout, titles, files } from "./harness.mjs";
 
 const stub = await import("../../test-native/index.ts");
-const { ardiaCoreNativeModules } = await import("../../test-native/ardiacore.ts");
+const { solaraCoreNativeModules } = await import("../../test-native/solaracore.ts");
 const { reloadBookmarks, startBookmarks } = await import("../../lib/bookmarks.ts");
 
-const cef = ardiaCoreNativeModules.ArdiaCEF;
+const cef = solaraCoreNativeModules.SolaraCEF;
 const realEngineCall = cef.engineCall;
 const gate = { apply: null, refuse: null, refused: 0, scaleRetries: false };
 cef.engineCall = async (name, profile, json) => {

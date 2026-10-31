@@ -8,7 +8,7 @@ const f = globalThis.appIntegrationTest = {
 };
 const fake = (source) => ({ url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true });
 const sources = {
-  "@ardia/settings": `
+  "@solara/settings": `
     const f = globalThis.appIntegrationTest;
     export const hostedKinds = () => ["onboarding"];
     export const nativeAppIntegrationCommand = async (command, windowId) => {
@@ -24,7 +24,7 @@ const sources = {
     export const nativeAppIntegrationFirstWindow = async (active) => { f.offers.push(active); };
     export const nativeAppIntegrationNotification = async (response) => { f.notifications.push(response); };
   `,
-  "@ardia/shell": `
+  "@solara/shell": `
     const f = globalThis.appIntegrationTest;
     export const onNotificationResponse = (fn) => { f.notification = fn; };
     export const setScriptLoading = async (ids) => { f.loading.push(ids); };

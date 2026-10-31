@@ -12,8 +12,8 @@ export type BrowserCommand =
   | "newTab"
   | "newWindow"
   | "newIncognitoWindow"
-  | "newLittleArdia"
-  | "toggleOpenLinksInLittleArdia"
+  | "newLittleSolara"
+  | "toggleOpenLinksInLittleSolara"
   | "reopenClosedTab"
   | "reopenClosedWindow"
   | "restoreClosed"
@@ -273,7 +273,7 @@ export type ShellNative = {
   prompt(options: PromptOptions): Promise<string | null>;
 };
 
-const Shell = nativeModule("ArdiaShell");
+const Shell = nativeModule("SolaraShell");
 
 export const readDocument = (name: string) => Shell.readDocument(name);
 export type DocumentRead = { contents: string } | { missing: true } | { failure: string; path: string };
@@ -339,7 +339,7 @@ export type WindowProfileProps = ViewProps & {
   selection?: string;
   neighbours: string[];
 };
-export const WindowProfile = requireNativeViewManager<WindowProfileProps>("ArdiaWindowProfile");
+export const WindowProfile = requireNativeViewManager<WindowProfileProps>("SolaraWindowProfile");
 
 export const closeWindow = (id: string) => Shell.closeWindow(id);
 export const animateWindowClose = (id: string, after: string | null = null) => Shell.animateWindowClose?.(id, after) ?? Promise.resolve();
@@ -387,9 +387,9 @@ export const onOpenURLs = (listener: (urls: string[], pointer?: [number, number]
 
 export const WindowDragRegion = requireNativeViewManager<
   ViewProps & { titleBarDoubleClick?: boolean; onRegionDoubleClick?: () => void; clickable?: boolean; onRegionClick?: () => void }
->("ArdiaShell");
+>("SolaraShell");
 
-export const OutsidePressArea = requireNativeViewManager<ViewProps & { onOutsidePress?: (event: { nativeEvent: { timestamp?: number } }) => void }>("ArdiaOutsidePressArea");
+export const OutsidePressArea = requireNativeViewManager<ViewProps & { onOutsidePress?: (event: { nativeEvent: { timestamp?: number } }) => void }>("SolaraOutsidePressArea");
 
 export type SymbolProps = ViewProps & {
   name: string;
@@ -398,7 +398,7 @@ export type SymbolProps = ViewProps & {
   color?: string;
 };
 
-export const Symbol = requireNativeViewManager<SymbolProps>("ArdiaSymbol");
+export const Symbol = requireNativeViewManager<SymbolProps>("SolaraSymbol");
 
 export type FadeLabelProps = ViewProps & {
   text: string;
@@ -408,16 +408,16 @@ export type FadeLabelProps = ViewProps & {
   fadeWidth?: number;
 };
 
-export const FadeLabel = requireNativeViewManager<FadeLabelProps>("ArdiaFadeLabel");
+export const FadeLabel = requireNativeViewManager<FadeLabelProps>("SolaraFadeLabel");
 
-export const ActivitySpinner = requireNativeViewManager<ViewProps>("ArdiaActivitySpinner");
+export const ActivitySpinner = requireNativeViewManager<ViewProps>("SolaraActivitySpinner");
 
 export type HairlineProps = ViewProps & { color: ColorValue; edge?: "top" | "bottom"; thickness?: number };
 
 export type HairlineNative = Record<string, never>;
 
-const NativeHairline = optionalNativeModule("ArdiaHairline")
-  ? requireNativeViewManager<Omit<HairlineProps, "color"> & { color: ReturnType<typeof processColor> }>("ArdiaHairline")
+const NativeHairline = optionalNativeModule("SolaraHairline")
+  ? requireNativeViewManager<Omit<HairlineProps, "color"> & { color: ReturnType<typeof processColor> }>("SolaraHairline")
   : null;
 
 export function Hairline({ color, edge = "bottom", thickness, style, ...props }: HairlineProps) {
@@ -433,7 +433,7 @@ export type ContextMenuAreaProps = ViewProps & {
 };
 
 const NativeContextMenuArea = requireNativeViewManager<Omit<ContextMenuAreaProps, "onContextMenu"> & { onContextMenu?: () => void }>(
-  "ArdiaContextMenuArea",
+  "SolaraContextMenuArea",
 );
 
 export function ContextMenuArea(props: ContextMenuAreaProps) {
@@ -459,7 +459,7 @@ type NativeSurfaceProps = Omit<SurfaceProps, "shadowColor" | "shadowOpacity" | "
   surfaceShadowOffset?: [number, number];
 };
 
-const NativeSurface = requireNativeViewManager<NativeSurfaceProps>("ArdiaSurface");
+const NativeSurface = requireNativeViewManager<NativeSurfaceProps>("SolaraSurface");
 
 export function Surface({ shadowColor, shadowOpacity, shadowRadius, shadowOffset, ...props }: SurfaceProps) {
   return (
@@ -479,7 +479,7 @@ export type VisualEffectProps = ViewProps & {
   cornerRadius?: number;
 };
 
-export const VisualEffect = requireNativeViewManager<VisualEffectProps>("ArdiaVisualEffect");
+export const VisualEffect = requireNativeViewManager<VisualEffectProps>("SolaraVisualEffect");
 
 export type GlassEffectProps = ViewProps & {
   cornerRadius?: number;
@@ -490,11 +490,11 @@ export type GlassEffectProps = ViewProps & {
 
 export type GlassEffectNative = { isLiquidGlass(): boolean };
 
-const GlassEffectModule = nativeModule("ArdiaGlassEffect");
+const GlassEffectModule = nativeModule("SolaraGlassEffect");
 
 export const isLiquidGlass = (): boolean => GlassEffectModule.isLiquidGlass();
 
-export const GlassEffect = requireNativeViewManager<GlassEffectProps>("ArdiaGlassEffect");
+export const GlassEffect = requireNativeViewManager<GlassEffectProps>("SolaraGlassEffect");
 
 export type PopoverBubbleProps = ViewProps & {
   material?: "popover" | "menu" | "hudWindow" | "sheet" | "toolTip";
@@ -520,9 +520,9 @@ type NativePopoverBubbleProps = Omit<PopoverBubbleProps, "shadowOpacity" | "shad
 
 export type PopoverBubbleNative = { isAvailable(): boolean };
 
-export const popoverBubbleAvailable = !!optionalNativeModule("ArdiaPopoverBubble")?.isAvailable();
+export const popoverBubbleAvailable = !!optionalNativeModule("SolaraPopoverBubble")?.isAvailable();
 
-const NativePopoverBubble = popoverBubbleAvailable ? requireNativeViewManager<NativePopoverBubbleProps>("ArdiaPopoverBubble") : null;
+const NativePopoverBubble = popoverBubbleAvailable ? requireNativeViewManager<NativePopoverBubbleProps>("SolaraPopoverBubble") : null;
 
 export function PopoverBubble({ shadowOpacity, shadowRadius, shadowOffsetY, ...props }: PopoverBubbleProps) {
   if (!NativePopoverBubble) return null;
@@ -535,7 +535,7 @@ export type DockSelectionNative = {
   iconTheme(uri: string | null, emoji: string | null): Promise<IconTheme | null>;
 };
 
-const DockSelectionModule = nativeModule("ArdiaDockSelection");
+const DockSelectionModule = nativeModule("SolaraDockSelection");
 
 export const iconTheme = (source: { uri: string } | { emoji: string }): Promise<IconTheme | null> =>
   DockSelectionModule.iconTheme("uri" in source ? source.uri : null, "emoji" in source ? source.emoji : null);
@@ -553,13 +553,13 @@ export type DockSelectionProps = ViewProps & {
   glass?: boolean;
 };
 
-export const DockSelection = requireNativeViewManager<DockSelectionProps>("ArdiaDockSelection");
+export const DockSelection = requireNativeViewManager<DockSelectionProps>("SolaraDockSelection");
 
 export type InlineCompletionNative = {
   complete(tag: number, typed: string, completion: string): Promise<InlineWrite>;
 };
 
-const InlineCompletionModule = nativeModule("ArdiaInlineCompletion");
+const InlineCompletionModule = nativeModule("SolaraInlineCompletion");
 
 export type InlineWrite = 0 | 1 | 2;
 
@@ -577,6 +577,6 @@ export type TranslationModule = {
   translate(source: string, target: string, texts: string[]): Promise<(string | null)[]>;
   translateBlocks(source: string, target: string, blocks: string[][]): Promise<(string[] | null)[]>;
 };
-const TranslationNative = nativeModule("ArdiaTranslate");
+const TranslationNative = nativeModule("SolaraTranslate");
 
 export const translation: Omit<TranslationModule, "available"> | null = TranslationNative.available ? TranslationNative : null;

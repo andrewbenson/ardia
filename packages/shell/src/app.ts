@@ -115,7 +115,7 @@ export type AppModule = {
 };
 
 
-const App = nativeModule("ArdiaApp");
+const App = nativeModule("SolaraApp");
 
 export const updaterState = () => App.updaterState();
 export const checkForUpdates = () => App.checkForUpdates();

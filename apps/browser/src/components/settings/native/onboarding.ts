@@ -1,5 +1,5 @@
-import { addToDock, currentAppIcon, isInDock, playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues } from "@ardia/shell";
-import { hostedKinds, publishSettingsTopic, type SettingsHandler } from "@ardia/settings";
+import { addToDock, currentAppIcon, isInDock, playIntroMusic, setIntroMusicMuted, stopIntroMusic, type IntroMusicCues } from "@solara/shell";
+import { hostedKinds, publishSettingsTopic, type SettingsHandler } from "@solara/settings";
 import { useBrowser } from "../../../store/browser";
 import { tabLayoutOf } from "../../../store/model";
 import type { ProfileColor } from "../../../store/types";

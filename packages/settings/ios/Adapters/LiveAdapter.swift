@@ -132,7 +132,7 @@ final class LiveAdapter: LiveFoldersServices, CalendarServices {
 
   func openCalendarPrivacySettings() {
     guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") else { return }
-    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
+    if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
     NSWorkspace.shared.open(url)
   }
 

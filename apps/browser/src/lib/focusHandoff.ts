@@ -1,5 +1,5 @@
-import { tabPool } from "@ardia/settings";
-import { cancelFocusMove, type CommandEvent } from "@ardia/shell";
+import { tabPool } from "@solara/settings";
+import { cancelFocusMove, type CommandEvent } from "@solara/shell";
 import { useBrowser } from "../store/browser";
 import { resolveWindowId } from "../store/model";
 import { peekTabId } from "../store/peek";

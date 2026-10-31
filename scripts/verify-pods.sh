@@ -45,8 +45,8 @@ if [ "$print" = 1 ]; then
   echo "SPARKLE_TREE=\"$(tree "$pods/Sparkle")\""
   echo "HERMES_DEBUG_SHA256=\"$(file_sha256 "$pods/hermes-engine-artifacts/hermes-ios-$HERMES_VERSION-debug.tar.gz")\""
   echo "HERMES_RELEASE_SHA256=\"$(file_sha256 "$pods/hermes-engine-artifacts/hermes-ios-$HERMES_VERSION-release.tar.gz")\""
-  echo "HERMES_DEBUG_TREE=\"$(tree "$pods/hermes-engine" .ardia-from)\""
-  echo "HERMES_RELEASE_TREE=\"$(tree "$pods/hermes-engine-Release" .ardia-from)\""
+  echo "HERMES_DEBUG_TREE=\"$(tree "$pods/hermes-engine" .solara-from)\""
+  echo "HERMES_RELEASE_TREE=\"$(tree "$pods/hermes-engine-Release" .solara-from)\""
   echo "SOURCE_PODS=\""
   while read -r name version _; do
     [ -n "$name" ] && echo "$name $version $(tree "$pods/$name")"
@@ -74,8 +74,8 @@ check_tree() {
 check_file "$pods/hermes-engine-artifacts/hermes-ios-$HERMES_VERSION-debug.tar.gz" "$HERMES_DEBUG_SHA256"
 check_file "$pods/hermes-engine-artifacts/hermes-ios-$HERMES_VERSION-release.tar.gz" "$HERMES_RELEASE_SHA256"
 check_tree "$pods/Sparkle" "$SPARKLE_TREE"
-check_tree "$pods/hermes-engine" "$HERMES_DEBUG_TREE" .ardia-from
-check_tree "$pods/hermes-engine-Release" "$HERMES_RELEASE_TREE" .ardia-from
+check_tree "$pods/hermes-engine" "$HERMES_DEBUG_TREE" .solara-from
+check_tree "$pods/hermes-engine-Release" "$HERMES_RELEASE_TREE" .solara-from
 while read -r name version want; do
   [ -n "$name" ] || continue
   grep -qE "^  - $name \($version\):?$" "$macos/Podfile.lock" \

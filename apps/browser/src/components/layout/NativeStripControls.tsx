@@ -1,4 +1,4 @@
-import { hostedKinds, SolaraHostedView } from "@ardia/settings";
+import { hostedKinds, SolaraHostedView } from "@solara/settings";
 import { memo, useEffect, useMemo, useRef } from "react";
 import { View, type ViewStyle } from "react-native";
 import { withShortcut, useShortcutHint } from "../../lib/commandShortcuts";

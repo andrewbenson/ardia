@@ -6,7 +6,7 @@ import { sealedState } from "../../sealedState.mjs";
 
 test("V-failing-save: one login Chrome refuses to save doesn't keep the others unapplied", fixedBy("step 3"), () =>
   world(async (w) => {
-    const cef = shell.ardiaCoreNativeModules.ArdiaCEF;
+    const cef = shell.solaraCoreNativeModules.SolaraCEF;
     const realSave = cef.savePassword;
     const engine = await onAndSynced();
     const syncId = engine.useSync.getState().profiles.default.syncId;

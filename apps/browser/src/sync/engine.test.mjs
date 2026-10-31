@@ -9,7 +9,7 @@ const folder = new Map();
 let onWrite = null;
 let ids = 0;
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => true,

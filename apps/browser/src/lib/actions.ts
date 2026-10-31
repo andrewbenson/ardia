@@ -1,5 +1,5 @@
-import { listExtensions, stepPager } from "@ardia/ardiacore";
-import { confirm, focusWindow } from "@ardia/shell";
+import { listExtensions, stepPager } from "@solara/solaracore";
+import { confirm, focusWindow } from "@solara/shell";
 import { pageToProfile } from "../components/layout/profilePager";
 import { profileNames, requestCreateProfile, type CreateProfilePreset } from "../components/profiles/CreateProfile";
 import { useBrowser, type CreateWindowOptions } from "../store/browser";

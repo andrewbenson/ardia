@@ -1,8 +1,8 @@
 # Contributing to Solara
 
 Solara is a macOS browser with Dia's polish and Arc's sidebar, running on Chrome's own framework (Chromium 156) built from source. Hill
-Technologies ships it, with a lot of help from coding agents. It's built on Ardia (mantrakp04/ardia, Apache-2.0), whose
-upstream lives at https://github.com/mantrakp04/ardia. Pull requests are welcome. This page is what the owner keeps
+Technologies ships it, with a lot of help from coding agents. It's built on Solara (mantrakp04/solara, Apache-2.0), whose
+upstream lives at https://github.com/mantrakp04/solara. Pull requests are welcome. This page is what the owner keeps
 asking for, written down so you don't have to learn it from a review.
 
 ## What we will and won't take
@@ -32,16 +32,16 @@ pnpm macos    # builds the Debug app and opens it
 
 The app links a Chromium framework you build yourself: `docs/engine-build.md` has the whole thing, and a first build
 takes about five hours. Without a Chromium tree at `~/chromium-build`, the app's build falls back to a prebuilt engine
-from upstream Ardia's releases (`packages/ardiacore/scripts/fetch-engine.sh`), which only exists while `engine/`
-matches a tree Ardia published.
+from upstream Solara's releases (`packages/solaracore/scripts/fetch-engine.sh`), which only exists while `engine/`
+matches a tree Solara published.
 
-`pnpm macos` runs the app on its own data folder, `~/Library/Application Support/Ardia Dev`, so it never touches the
-Solara you browse with. Keep it that way. A Debug build refuses to start without `ARDIA_DATA_DIR`, and every test
+`pnpm macos` runs the app on its own data folder, `~/Library/Application Support/Solara Dev`, so it never touches the
+Solara you browse with. Keep it that way. A Debug build refuses to start without `SOLARA_DATA_DIR`, and every test
 instance should get a throwaway one. To run a build without it popping up over your work:
 
 ```sh
-open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=/tmp/ardia-test \
-  --env ARDIA_REMOTE_DEBUGGING_PORT=9333 apps/browser/build/Build/Products/Debug/Solara.app
+open -g -n --env SOLARA_BACKGROUND=1 --env SOLARA_DATA_DIR=/tmp/solara-test \
+  --env SOLARA_REMOTE_DEBUGGING_PORT=9333 apps/browser/build/Build/Products/Debug/Solara.app
 ```
 
 A JS-only change doesn't need a rebuild. Metro reloads it, though relaunch the instance before you judge the result.
@@ -51,7 +51,7 @@ Where things live:
 | Path | What |
 | --- | --- |
 | `apps/browser` | The React Native macOS app: UI, store, actions |
-| `packages/ardiacore` | The engine, ArdiaCore: Chrome's framework and the native modules the app calls |
+| `packages/solaracore` | The engine, SolaraCore: Chrome's framework and the native modules the app calls |
 | `packages/shell` | Menus, shortcuts, windows, native views |
 | `packages/core` | Omnibox parsing and suggestions, pure TypeScript with tests |
 | `packages/import`, `packages/sync`, `packages/shaders` | Importing from other browsers, iCloud sync, Metal views |
@@ -82,7 +82,7 @@ Parity covers behavior too. Most bugs the owner reports are UX that any browser 
 - Motion animates. Sidebars slide, the toolbar eases away, the command bar grows out of the URL field. Nothing snaps
   into place or flickers, traffic lights included.
 - Shortcuts match Chrome and Dia, in every focus. ⌘-scroll never zooms in Solara: it scrolls with a trackpad and a
-  mouse alike (upstream Ardia zooms on ⌘-wheel with a mouse).
+  mouse alike (upstream Solara zooms on ⌘-wheel with a mouse).
 - Check every layout you touched: address bar in the sidebar, address bar on top, horizontal tabs. Several bugs only
   showed up in one of them.
 
@@ -145,7 +145,7 @@ neutral pages, never someone's feed or personal data.
 
 Chromium builds are incremental. Never run `gn clean` or `gclient sync` on a tree you care about, and don't delete
 `out/`: a full rebuild costs about five hours. Patches go in `engine/patches/` in the order `engine/patches/series`
-gives, and our Chrome-side code lives in `engine/chromium` and `engine/ardiacore`. `docs/engine-build.md` covers
+gives, and our Chrome-side code lives in `engine/chromium` and `engine/solaracore`. `docs/engine-build.md` covers
 both. A PR that changes `engine/` means the next release publishes a new prebuilt engine, so say so in the
 description.
 
@@ -190,7 +190,7 @@ follow `docs/release-notes/README.md`.
 
 ## Working with a coding agent
 
-Plenty of Solara, and of Ardia before it, was written by agents, so using one is fine. Point it at `AGENTS.md` and `docs/agent-brief.md`
+Plenty of Solara, and of Solara before it, was written by agents, so using one is fine. Point it at `AGENTS.md` and `docs/agent-brief.md`
 first. Those files hold the owner's standing rules (hidden test instances, no focus stealing, isolated builds, the
 no-comments rule), and they're why a change goes in without a long back-and-forth. For risky logic (races, object
 lifetimes, security, migrations, sync), get a second model to review the change before and after, and reproduce each
@@ -198,7 +198,7 @@ finding before acting on it. Check the agent's diff yourself before you open the
 
 ## License
 
-Solara's own files are Apache-2.0, as are Ardia's, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
-work is released under Apache-2.0, and so may ship in the GPL-3.0 app. A change meant for upstream Ardia goes to
-[mantrakp04/ardia](https://github.com/mantrakp04/ardia), where you sign its [Contributor License Agreement](https://github.com/mantrakp04/ardia/blob/main/CLA.md)
+Solara's own files are Apache-2.0, as are Solara's, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
+work is released under Apache-2.0, and so may ship in the GPL-3.0 app. A change meant for upstream Solara goes to
+[mantrakp04/solara](https://github.com/mantrakp04/solara), where you sign its [Contributor License Agreement](https://github.com/mantrakp04/solara/blob/main/CLA.md)
 before your first pull request is merged.

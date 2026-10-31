@@ -1,4 +1,4 @@
-import { onHostedEvent, SolaraHostedView } from "@ardia/settings";
+import { onHostedEvent, SolaraHostedView } from "@solara/settings";
 import { useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
 import { useTheme } from "../../../lib/theme";

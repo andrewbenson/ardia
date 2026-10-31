@@ -1,7 +1,7 @@
 # Speed sprint baseline: 0.2.27, per journey
 
 Lab numbers for the four journeys in [sprint.md](sprint.md), on the shipped 0.2.27 build
-(`dist/0.2.27/export/Ardia.app`, commit dfff107f, NATIVE_API 8), 2026-10-06, hidden instances, display awake
+(`dist/0.2.27/export/Solara.app`, commit dfff107f, NATIVE_API 8), 2026-10-06, hidden instances, display awake
 (`caffeinate -d`), perflab lock held for every timing run (released between rounds).
 
 Cells are median, p75 (nearest rank), min–max, n. Phase rows are differences of samples taken in the same run.
@@ -32,7 +32,7 @@ Cells are median, p75 (nearest rank), min–max, n. Phase rows are differences o
 - Apple M5 Pro (5 performance + 10 efficiency cores), 48 GiB, macOS 27.2, AC power (battery 11%, charging).
 - Rebooted 10 minutes before the first run. `dasd` was at 93% CPU when the first round started (post-boot
   housekeeping); load average 8 to 9 and falling during the first native-bench round.
-- From about 10:28 other agents' builds (SWBBuildService, ld, hermesc), Ardia test instances (ratchet,
+- From about 10:28 other agents' builds (SWBBuildService, ld, hermesc), Solara test instances (ratchet,
   field build), OrbStack and XprotectService ran at the same time: load average 25 to 50. native-bench now records
   the 1-minute load average with every launch (`load` in results.json). The rounds below say which load they ran at.
   The "calm" rounds ran at load 7 to 9 (still not an idle machine; a bare machine has load 2 to 4).
@@ -58,7 +58,7 @@ Phases (medians, same runs):
 
 | Phase | 1 tab, warm (round A) | big session, warm |
 |---|---|---|
-| t0 → JS running (process start, framework, ArdiaCore, bundle eval) | 387 ms (79% of content) | 499 ms |
+| t0 → JS running (process start, framework, SolaraCore, bundle eval) | 387 ms (79% of content) | 499 ms |
 | JS running → window's content committed (first React commit) | 113 | 601 |
 | content committed → page's first frame | 94 | 107 |
 | first frame → first paint | 30 | 70 |
@@ -110,7 +110,7 @@ after the commit), so the lab and the field agree. Each key renders 63 component
 
 native-bench `--only newtabkey`: a real ⌘T posted to the instance's pid (nnperf `postkeys`, `CGEventPostToPid`), one
 real key `n` once the bar is focused, 10 per run, 3 runs. Rows start at the key down's own timestamp (what the field's
-`perf_journeys` starts from) and end at the app's field-timing marks (`ArdiaCoreFieldTiming.mm`: a post-commit handler on
+`perf_journeys` starts from) and end at the app's field-timing marks (`SolaraCoreFieldTiming.mm`: a post-commit handler on
 the Core Animation transaction carrying the change). Cumulative from the key, n=30, median, p75, min–max:
 
 | Step (`perf_journeys` name) | All 3 runs | Run 1 (load 15 to 55) | Run 2 (load 55 to 5) | Run 3 (load 5 to 12) |
@@ -186,7 +186,7 @@ All from the repo root. `$S` is the scratch dir; the 0.2.27 bench bundle is kept
 (built from the tree, NATIVE_API 8, same as 0.2.27).
 
 ```sh
-A=dist/0.2.27/export/Ardia.app
+A=dist/0.2.27/export/Solara.app
 B=dist/0.2.27/bench/main.jsbundle
 # warm, one tab, plus the session and windows rows (J1, J2 new tab, J3)
 scripts/agent/locked perflab -- node apps/browser/scripts/perf/native-bench.mjs --app $A --bundle $B --out $S/native \
@@ -205,7 +205,7 @@ scripts/agent/locked perflab -- node apps/browser/scripts/perf/native-bench.mjs 
 ```sh
 # J2 and J4 from real key events, on a Release build of the tree (scripts/agent/build-app --as <you> --config Release);
 # first `--only prepare` (or any run) makes the signed copy, then --prepared reuses it
-scripts/agent/locked perflab --as <you> -- node apps/browser/scripts/perf/native-bench.mjs --app $S/prepared/Ardia.app --prepared \
+scripts/agent/locked perflab --as <you> -- node apps/browser/scripts/perf/native-bench.mjs --app $S/prepared/Solara.app --prepared \
   --label rel --out $S/journeys --port 9684 --page-port 47881 --only newtabkey,navigate --runs 3 --journey-n 10
 ```
 

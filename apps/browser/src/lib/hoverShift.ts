@@ -100,7 +100,7 @@ function ownerName(f: Fiber): string {
   }
   return "";
 }
-const isTitle = (f: Fiber) => typeof f.type === "string" && f.type.endsWith("ArdiaFadeLabel");
+const isTitle = (f: Fiber) => typeof f.type === "string" && f.type.endsWith("SolaraFadeLabel");
 const isHoverSlot = (f: Fiber) => ownerName(f) === "HoverSlot";
 const trailingShrinks = ([x, y, w, h]: Frame, [x2, y2, w2, h2]: Frame) => same(x, x2) && same(y, y2) && same(h, h2) && w2 < w;
 const leadingGrows = ([x, y, w, h]: Frame, [x2, y2, w2, h2]: Frame) => same(x + w, x2 + w2) && same(y, y2) && same(h, h2) && w2 > w;

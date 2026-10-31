@@ -1,5 +1,5 @@
 {
-  "name": "@ardia/store",
+  "name": "@solara/store",
   "version": "0.0.0",
   "private": true,
   "description": "The native Swift store (SolaraKit) exposed to JS: snapshot, dispatch and foreign commits",

@@ -9,7 +9,7 @@ const args = process.argv.slice(2);
 const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(
-    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with ARDIA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, the two strips' pixels compared, every tooltip and VoiceOver name along the strip, the docked profile and downloads controls and the drop glow (pixels, and the glow's fade frame for frame), and the peek over a hidden strip: its slide in and out frame for frame at 30 fps, its downloads button holding it out, and a press in it reaching only what was pressed, not the address field under it.",
+    "usage: node top-strip-test.mjs <Debug Solara.app> [--keep-data] [--only=rn|native]\n\nThe top tab strip with pinned tabs, groups (expanded, collapsed, one holding a nested folder) and a split, once on React Native and once with SOLARA_NATIVE_TOP_STRIP=1: every item's span at the strip's middle within 0.5 pt of RN's, the store's strip entries, a click on a tab selects it, a click on a group's chip collapses it, hovering moves nothing, the two strips' pixels compared, every tooltip and VoiceOver name along the strip, the docked profile and downloads controls and the drop glow (pixels, and the glow's fade frame for frame), and the peek over a hidden strip: its slide in and out frame for frame at 30 fps, its downloads button holding it out, and a press in it reaching only what was pressed, not the address field under it.",
   );
   process.exit(2);
 }
@@ -38,7 +38,7 @@ const fixture = () =>
   });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const st = () => ac.store.getState();
 const win = (id) => C.chromeWindows().then((ws) => { const f = st().windows[id].frame; const w = ws.filter((w) => w.hasRoot).find((w) => { const r = w.frame.match(/[-\\d.]+/g).map(Number); return Math.abs(r[0] - f[0]) < 2 && Math.abs(r[2] - f[2]) < 2; }); return w && w.window; });
 const act = (id, a) => win(id).then((n) => C.devWindow(n, a));
@@ -135,7 +135,7 @@ const LOOKS = [
 
 async function measure(native) {
   const data = join(scratch, native ? "native" : "rn", "data");
-  const app = await launch(appPath, { data, session: fixture(), env: { ARDIA_NATIVE_TOP_STRIP: native ? "1" : "0", ARDIA_NATIVE_PROFILE_PAGER: "0" } });
+  const app = await launch(appPath, { data, session: fixture(), env: { SOLARA_NATIVE_TOP_STRIP: native ? "1" : "0", SOLARA_NATIVE_PROFILE_PAGER: "0" } });
   const run = (body) => app.eval(`${HELPERS}\n${body}`);
   try {
     await sleep(2500);
@@ -195,12 +195,12 @@ async function measure(native) {
       const seen = {};
       st().toggleSidebar("w1");
       return settle(600).then(() => peek().show()).then(() => settle(400)).then(() => win("w1"))
-        .then((n) => globalThis.expo.modules.ArdiaSwipe.devSimulate(700, 22, n, flick, true)).then((r) => (seen.where = r.where))
+        .then((n) => globalThis.expo.modules.SolaraSwipe.devSimulate(700, 22, n, flick, true)).then((r) => (seen.where = r.where))
         .then(() => settle(700)).then(() => { seen.profile = st().windows.w1.profileId; seen.live = peek().live; st().switchProfile("w1", "default"); return settle(600); })
         .then(() => { peek().hide(); return settle(600); }).then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);
     out.peekFile = await run(`
       const peek = () => globalThis.acLayout.peek["strip:w1"];
-      const drag = (action, x, payload) => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", action, x, 27, payload);
+      const drag = (action, x, payload) => globalThis.expo.modules.SolaraFileDrop.devDrag("w1", action, x, 27, payload);
       const before = st().windows.w1.tabIds.slice();
       const seen = {};
       st().toggleSidebar("w1");
@@ -252,12 +252,12 @@ async function measure(native) {
           hits.forEach((h, i) => { const k = /WindowDragRegion/.test(h) ? "drag" : /SwipeArea/.test(h) ? "swipe" : "item"; if (k !== prev) edges.push(xs[i] + " " + k); prev = k; });
           seen.edges = edges;
           seen.downloadsHit = hits[xs.indexOf(W - 25)];
-          return globalThis.expo.modules.ArdiaSwipe.devSimulate(W - 25, 21, n, flick, true);
+          return globalThis.expo.modules.SolaraSwipe.devSimulate(W - 25, 21, n, flick, true);
         });
       }).then((r) => settle(600).then(() => { seen.swipe = r.where; seen.swipedTo = st().windows.w1.profileId; st().switchProfile("w1", "default"); return settle(600); }))
         .then(() => {
           const before = st().windows.w1.tabIds.slice();
-          const drag = (action, payload) => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", action, W - 25, 21, payload);
+          const drag = (action, payload) => globalThis.expo.modules.SolaraFileDrop.devDrag("w1", action, W - 25, 21, payload);
           return drag("move", { urls: ["https://dropped.example/"] }).then((r) => (seen.over = r)).then(() => settle(200)).then(() => drag("drop")).then(() => settle(800)).then(() => {
             const ids = st().windows.w1.tabIds;
             const added = ids.find((id) => !before.includes(id));
@@ -325,9 +325,9 @@ async function measure(native) {
         return settle(800).then(() => win("w1")).then((n) => points.reduce((chain, [x, y]) => chain.then(() => {
             const at = { x, y };
             return act("w1", "hit:" + x + "," + y).then((hit) => (at.hit = hit))
-              .then(() => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", "move", x, y, { urls: ["https://dropped.example/"] })).then((r) => (at.drag = r))
-              .then(() => globalThis.expo.modules.ArdiaFileDrop.devDrag("w1", "cancel", x, y, {}))
-              .then(() => globalThis.expo.modules.ArdiaSwipe.devSimulate(x, y, n, flick, true)).then((r) => (at.swipe = r.where))
+              .then(() => globalThis.expo.modules.SolaraFileDrop.devDrag("w1", "move", x, y, { urls: ["https://dropped.example/"] })).then((r) => (at.drag = r))
+              .then(() => globalThis.expo.modules.SolaraFileDrop.devDrag("w1", "cancel", x, y, {}))
+              .then(() => globalThis.expo.modules.SolaraSwipe.devSimulate(x, y, n, flick, true)).then((r) => (at.swipe = r.where))
               .then(() => settle(500)).then(() => { at.profile = st().windows.w1.profileId; at.live = globalThis.acLayout.peek["strip:w1"]?.live ?? null; st().switchProfile("w1", "default"); seen.points.push(at); return settle(300); });
           }), Promise.resolve()))
           .then(() => { st().toggleSidebar("w1"); return settle(600); }).then(() => seen);`);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// JS/React benchmark for Ardia on a production (Hermes) bundle: what each interaction costs the JS thread
+// JS/React benchmark for Solara on a production (Hermes) bundle: what each interaction costs the JS thread
 // (React commits and renders, store updates, native→JS tasks, timers, document writes), counted by the opt-in probe
 // in src/lib/perfProbe.ts. Gate recipe and the other benches: docs/perf/README.md.
 //
@@ -248,13 +248,13 @@ export function writeSwitches(dataDir, text) {
 
 export async function launch(app, dataDir, port) {
   const binary = binaryOf(realpathSync(app));
-  writeSwitches(dataDir, process.env.ARDIA_SWITCHES);
+  writeSwitches(dataDir, process.env.SOLARA_SWITCHES);
   if (pidsOf(binary).length) throw new Error(`an instance of ${app} is already running`);
   const launchedAt = Date.now();
   const env = {
-    ARDIA_BACKGROUND: "1", ARDIA_DRAW_WINDOWS: "1", ARDIA_DATA_DIR: dataDir, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
-    ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}),
-    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_"))),
+    SOLARA_BACKGROUND: "1", SOLARA_DRAW_WINDOWS: "1", SOLARA_DATA_DIR: dataDir, SOLARA_REMOTE_DEBUGGING_PORT: String(port),
+    ...(process.env.SOLARA_SWITCHES ? { SOLARA_SWITCHES: process.env.SOLARA_SWITCHES } : {}),
+    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("SOLARA_NATIVE_"))),
   };
   await uiGateLaunching(binary);
   execFileSync("open", ["-g", "-n", ...Object.entries(env).flatMap(([k, v]) => ["--env", `${k}=${v}`]), app]);
@@ -328,7 +328,7 @@ async function run() {
   const { app, bundle: jsbundle, label, runs = "5", port = "47817", out = defaultOut } = flags;
   if (!app || !jsbundle || !label) throw new Error("run needs --app, --bundle and --label");
   const scenarios = flags.scenarios ? flags.scenarios.split(",") : ALL;
-  const clone = join(out, "apps", label, "Ardia.app");
+  const clone = join(out, "apps", label, "Solara.app");
   rmSync(dirname(clone), { recursive: true, force: true });
   mkdirSync(dirname(clone), { recursive: true });
   execFileSync("cp", ["-cR", app, clone]);
@@ -387,7 +387,7 @@ async function run() {
   console.log(`\nwrote ${file}`);
 }
 
-const HOST = /^(View|Text|Pressable|Image|ScrollView|TextInput|InternalTextInput|Animated\(.*\)|(Ardia|Netnyahoo).*|Surface|Symbol|MouseArea|ContextMenuArea|FadeLabel|VirtualizedList.*|CellRenderer.*)$/;
+const HOST = /^(View|Text|Pressable|Image|ScrollView|TextInput|InternalTextInput|Animated\(.*\)|(Solara|Netnyahoo).*|Surface|Symbol|MouseArea|ContextMenuArea|FadeLabel|VirtualizedList.*|CellRenderer.*)$/;
 const appOnly = (counter) => Object.fromEntries(Object.entries(counter ?? {}).filter(([k]) => !HOST.test(k)));
 
 const top = (counter, n = 6) =>

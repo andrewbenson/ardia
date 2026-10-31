@@ -11,7 +11,7 @@ final class ShortcutsAdapter: ShortcutsServices {
 
   func menuShortcutChanges() -> AsyncStream<Void> {
     AsyncStream { continuation in
-      let token = NotificationCenter.default.addObserver(forName: .init("ArdiaMenuShortcutsChanged"), object: nil, queue: .main) { _ in
+      let token = NotificationCenter.default.addObserver(forName: .init("SolaraMenuShortcutsChanged"), object: nil, queue: .main) { _ in
         continuation.yield()
       }
       let box = ObserverToken(token)

@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 const reason = "couldn't lock the data folder: busy";
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: false, reason }),
     snapshot: () => null,
     dispatch: () => null,

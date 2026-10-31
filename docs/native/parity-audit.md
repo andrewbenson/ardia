@@ -1,8 +1,8 @@
 # Native surfaces against RN: parity audit, phases 0–4 (2026-10-26)
 
-Every finished Swift surface turned on (`ARDIA_NATIVE_OMNIBOX=1 ARDIA_NATIVE_ONBOARDING=1`, the rest on by default)
-against the RN versions (`ARDIA_NATIVE_OMNIBOX=0 ARDIA_NATIVE_ONBOARDING=0 ARDIA_NATIVE_NEWTAB=0
-ARDIA_NATIVE_STATUS_BUBBLE=0 ARDIA_NATIVE_SETTINGS=0`), one Debug build (`build-parity-dbg`) run as two hidden
+Every finished Swift surface turned on (`SOLARA_NATIVE_OMNIBOX=1 SOLARA_NATIVE_ONBOARDING=1`, the rest on by default)
+against the RN versions (`SOLARA_NATIVE_OMNIBOX=0 SOLARA_NATIVE_ONBOARDING=0 SOLARA_NATIVE_NEWTAB=0
+SOLARA_NATIVE_STATUS_BUBBLE=0 SOLARA_NATIVE_SETTINGS=0`), one Debug build (`build-parity-dbg`) run as two hidden
 instances with the same seeded session and fixtures (a white page, a dark page with `theme-color #191A1E`, a dangerous
 download, a MIDI prompt on example.com, a pinned unpacked extension with a badge and a popup). Captures are 2x
 `screencapture -l`; the in-process `devSnapshotWindow` confirmed the ones that looked wrong. Pixel numbers are raw 2x

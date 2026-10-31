@@ -1,4 +1,4 @@
-import type { MenuItem, MenuShortcut } from "@ardia/shell";
+import type { MenuItem, MenuShortcut } from "@solara/shell";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
 import { shortcutSources } from "./commandCatalog";

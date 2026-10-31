@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import Darwin
 import Foundation
 internal import SolaraModel
@@ -17,7 +17,7 @@ final class NativeCacheFeeds {
   init(store: Store, folder: URL) {
     self.store = store
     let cache = folder.appending(path: "switches-cache.json")
-    launchTab = EarlyLaunchTabProvider(store: store, environment: ProcessInfo.processInfo.environment["ARDIA_SWITCHES"], readCache: { try? Data(contentsOf: cache) })
+    launchTab = EarlyLaunchTabProvider(store: store, environment: ProcessInfo.processInfo.environment["SOLARA_SWITCHES"], readCache: { try? Data(contentsOf: cache) })
     lastTab = LastTabPolicyProvider(store: store)
     let fd = open(folder.path, O_EVTONLY)
     if fd >= 0 {
@@ -54,7 +54,7 @@ final class NativeCacheFeeds {
   }
 
   private func queryLastTabPolicy(attempt: Int) {
-    ArdiaCoreEngineBridge.call("ac_tabs_last_tab_policy", profile: "", args: nil) { [weak self] text in
+    SolaraCoreEngineBridge.call("ac_tabs_last_tab_policy", profile: "", args: nil) { [weak self] text in
       Task { @MainActor [weak self] in
         guard let self else { return }
         let reply = (try? JSONValue.parse(text)) ?? .null

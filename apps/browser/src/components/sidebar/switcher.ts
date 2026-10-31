@@ -1,5 +1,5 @@
-import { takeSwitcherPress } from "@ardia/settings";
-import { restartSwitcherPointer, setSwitcherCapture, switcherPointerMoved } from "@ardia/shell";
+import { takeSwitcherPress } from "@solara/settings";
+import { restartSwitcherPointer, setSwitcherCapture, switcherPointerMoved } from "@solara/shell";
 import { useBrowser } from "../../store/browser";
 import { recentTabIds } from "../../store/organize";
 import { setSidebarUi, sidebarUi } from "./state";

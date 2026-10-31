@@ -1,4 +1,4 @@
-import { ContextMenuArea, Symbol } from "@ardia/shell";
+import { ContextMenuArea, Symbol } from "@solara/shell";
 import { memo, useRef } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";

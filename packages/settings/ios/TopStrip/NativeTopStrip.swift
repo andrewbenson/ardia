@@ -216,7 +216,7 @@ final class TopStripHost {
     view.onAction = { [weak self] action in self?.handle(action) }
     view.dragBridge = TopStripDrag.shared
     commits.host = self
-    pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) {
+    pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("SolaraPagerPosition"), object: nil, queue: nil) {
       [weak self] note in
       guard note.userInfo?["key"] as? String == windowId, let position = note.userInfo?["position"] as? Double else { return }
       MainActor.assumeIsolated { self?.view.setPagerPosition(position) }

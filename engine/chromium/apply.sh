@@ -2,7 +2,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 src=${CHROMIUM_SRC:-$HOME/chromium-build/chromium_git/chromium/src}
-owned=(chrome/browser/ardia)
+owned=(chrome/browser/solara)
 
 replaced() {
   local prune=() dir

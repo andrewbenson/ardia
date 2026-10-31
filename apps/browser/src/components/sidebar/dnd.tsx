@@ -1,4 +1,4 @@
-import { hapticTick, onAppEvent, setDragEscapeCapture } from "@ardia/shell";
+import { hapticTick, onAppEvent, setDragEscapeCapture } from "@solara/shell";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Animated, Easing, PanResponder, type ScrollView, type View } from "react-native";
 import { create, useStore } from "zustand";
@@ -18,7 +18,7 @@ import { overPins, pinGrid, pinGridHeight, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
 import { closeFolderPanel, folderPanel } from "./tileFolderUi";
 import { folderIdOfCell } from "../../store/tileFolders";
-import { hostedKinds } from "@ardia/settings";
+import { hostedKinds } from "@solara/settings";
 import { installNativeDragProbe, nativeSidebarDrag, useNativeDragMarks } from "./nativeDrag";
 
 const nativeSidebar = () => hostedKinds().includes("sidebar");

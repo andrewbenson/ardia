@@ -33,7 +33,7 @@ const calendarFixture = {
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
   files: { "calendar-fixture.json": calendarFixture },
-  env: { ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_SHELL: "1", ARDIA_CALENDAR_FIXTURE: "1" },
+  env: { SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_SHELL: "1", SOLARA_CALENDAR_FIXTURE: "1" },
   probe: true,
   session: session({ profiles: ["Personal", "Work"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t1" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
@@ -187,7 +187,7 @@ try {
     await gone("hover away");
     const folder = await run(`
       const { store } = ac.live;
-      const pr = { number: 7, repo: "ardia/app", author: "octocat", authorAvatar: null, draft: false, headRef: "h7", baseRef: "main", review: "approved",
+      const pr = { number: 7, repo: "solara/app", author: "octocat", authorAvatar: null, draft: false, headRef: "h7", baseRef: "main", review: "approved",
         mergeable: "mergeable", checks: [{ name: "lint", state: "failure", url: "https://ci.example/lint" }], comments: 2, unresolvedThreads: 0, additions: 4, deletions: 1, changedFiles: 1 };
       return store.createFolder("default", "pullRequests").then((folder) =>
         store.applyFetch(folder, [{ id: "pr7", source: "github", url: "https://example.com/pr/7", title: "Pull request 7", subtitle: "", icon: null, updatedAt: Date.now(), section: "authored", pr }], {})

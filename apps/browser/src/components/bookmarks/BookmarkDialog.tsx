@@ -1,4 +1,4 @@
-import { prompt } from "@ardia/shell";
+import { prompt } from "@solara/shell";
 import { layout } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useWindowId } from "../../store/hooks";

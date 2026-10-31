@@ -1,4 +1,4 @@
-import { setWindowShellLayout, windowShellActive } from "@ardia/settings";
+import { setWindowShellLayout, windowShellActive } from "@solara/settings";
 import { useEffect, useState } from "react";
 import type { Animated } from "react-native";
 

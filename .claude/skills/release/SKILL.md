@@ -15,7 +15,7 @@ Solara releases from this Mac: `scripts/release.sh`, then `publish.sh`, to `andr
 
 Versions start at 0.1.0 and each stable bumps the patch (0.1.0, 0.1.1, 0.1.2…); a nightly is a prerelease of the next
 patch (`0.1.1-nightly.1`). The build number (`CURRENT_PROJECT_VERSION`) goes up by one every release and is never reset:
-it continues from Ardia's (80 at the fork), above every Solara already installed. Ardia's own 0.1.x and 0.2.x versions
+it continues from Solara's (80 at the fork), above every Solara already installed. Solara's own 0.1.x and 0.2.x versions
 named below (regressions the smoke test guards) are upstream's history, not Solara releases.
 
 There are two channels (`docs/releasing.md` › Channels):
@@ -66,13 +66,13 @@ everything since the previous stable, nightlies included.
 ## Ground rules (why they exist)
 
 - **Never touch the Chromium build cache.** release.sh only reads the engine framework from
-  `~/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64` (and refuses one older than the tree's ArdiaCore
+  `~/chromium-build/chromium_git/chromium/src/out/Release_GN_arm64` (and refuses one older than the tree's SolaraCore
   sources: rebuilding it is an incremental `chrome_framework` build under the chromium lock). Never delete or clean
   `~/chromium-build/chromium_git/chromium/src/out`, run `gclient sync` or `gn clean`: a full Chromium
   rebuild costs ~5 hours and the user has been emphatic about it.
-- **Never launch or touch `/Applications/Ardia.app`** (`Netnyahoo.app` until the owner updates past the rename), nor
+- **Never launch or touch `/Applications/Solara.app`** (`Netnyahoo.app` until the owner updates past the rename), nor
   an installed `/Applications/Solara.app` — the user is using them. Test only the exported
-  build in `dist/`, only hidden (`ARDIA_BACKGROUND=1`, throwaway `ARDIA_DATA_DIR`), never with
+  build in `dist/`, only hidden (`SOLARA_BACKGROUND=1`, throwaway `SOLARA_DATA_DIR`), never with
   plain `open`. The smoke script does this for you.
 - **Build from a clean tree.** release.sh archives the working tree, so another agent's half-finished
   edit would ship. Check `git status` first (below).
@@ -134,11 +134,11 @@ update themselves from the network, as uBO's do everywhere):
 
 ```bash
 scripts/update-ubo.sh     # "uBO <x> is the latest release", or "uBO <old> -> <new> (sha256 …)"
-git add packages/ardiacore/scripts/ubo.sh && git commit -m "Content blocker: uBlock Origin <new>"   # only if it moved
+git add packages/solaracore/scripts/ubo.sh && git commit -m "Content blocker: uBlock Origin <new>"   # only if it moved
 ```
 
 It checks the zip against GitHub's SHA-256 digest and the manifest's version, rewrites the pin in
-`packages/ardiacore/scripts/ubo.sh` and installs it into `packages/ardiacore/vendor/ubo`. Verify after release.sh
+`packages/solaracore/scripts/ubo.sh` and installs it into `packages/solaracore/vendor/ubo`. Verify after release.sh
 that the export carries it: `python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])'
 dist/<version>/export/Solara.app/Contents/Resources/Extensions/ublock/manifest.json` prints the
 pinned `UBO_VERSION` followed by ubo.sh's patch level as a fourth part (`1.75.0.8`: uBO refreshes its cached
@@ -147,8 +147,8 @@ the release is odd (no digest, a version mismatch): keep the old pin and say so 
 
 ```bash
 sed -i '' 's/MARKETING_VERSION = <previous>;/MARKETING_VERSION = <version>;/; s/CURRENT_PROJECT_VERSION = <n>;/CURRENT_PROJECT_VERSION = <n+1>;/' \
-  apps/browser/macos/Ardia.xcodeproj/project.pbxproj
-git add docs/release-notes/<version>.md apps/browser/macos/Ardia.xcodeproj/project.pbxproj
+  apps/browser/macos/Solara.xcodeproj/project.pbxproj
+git add docs/release-notes/<version>.md apps/browser/macos/Solara.xcodeproj/project.pbxproj
 git commit -m "Release <version>"
 scripts/release.sh <version>     # ~15–25 min with notarization; run it in the background and wait
 ```
@@ -160,9 +160,9 @@ and run `scripts/release.sh <version> --channel nightly`.
 (release.sh refuses one that isn't above every build in the published feed; read the current value with `grep CURRENT_PROJECT_VERSION …project.pbxproj | sort -u`). release.sh refuses to run
 if `MARKETING_VERSION` doesn't match, the notes file is missing, the tree has uncommitted app or engine
 changes, or the engine framework is stale (`docs/releasing.md` lists what it checks). It notarizes the app and the DMG with the
-`ardia` notarytool profile (an App Store Connect API key in the login keychain, set up 2026-09-26) and
+`solara` notarytool profile (an App Store Connect API key in the login keychain, set up 2026-09-26) and
 ends with "Notarized and stapled." If it says "NOT notarized.", the profile is gone or invalid
-(`xcrun notarytool history --keychain-profile ardia` shows why): stop and tell the user rather than
+(`xcrun notarytool history --keychain-profile solara` shows why): stop and tell the user rather than
 shipping an unnotarized build. Never store or re-create the credential yourself; that's the user's step.
 Notarization adds a few minutes per submission.
 
@@ -174,7 +174,7 @@ Notarization adds a few minutes per submission.
 
 First it checks the update from `<previous>` (its export in `dist/<previous>/export`):
 
-- the engine is ArdiaCore (Chrome's framework, no CEF);
+- the engine is SolaraCore (Chrome's framework, no CEF);
 - the identity Sparkle, the keychain and TCC compare: same bundle id, executable, feed and EdDSA key, the build
   satisfies `<previous>`'s designated requirement, and its build number is higher;
 - the appcast's EdDSA signature of the zip verifies with the app's key, and the zip holds this very app, sealed and
@@ -183,7 +183,7 @@ First it checks the update from `<previous>` (its export in `dist/<previous>/exp
   the appcast's item (test bundle id and key; no relaunch, no UI);
 - `carryover.sh`: `<previous>`'s data, made where an installed copy keeps it (two profiles: tabs, cookies including
   session ones, localStorage, passwords, bookmarks, history, an address, a site permission, zoom, an extension),
-  opens in this build started without `ARDIA_DATA_DIR` (test copies in a fake home; never the real data).
+  opens in this build started without `SOLARA_DATA_DIR` (test copies in a fake home; never the real data).
 
 Then it launches `dist/<version>/export/Solara.app` hidden with a data dir that says `<previous>` ran last,
 and a session whose window was left on its second profile, and checks, over CDP and the window list:
@@ -195,9 +195,9 @@ and a session whose window was left on its second profile, and checks, over CDP 
   sat behind it), and the window restores as the Work profile's Chrome window, alone on screen, its pages
   in the Work context;
 - a passkey dialog comes in front, directly over the visible window it belongs to, and closes when the
-  page navigates (Ardia's 0.1.2–0.1.4 regressions);
-- the autofill dropdown accepts a suggestion (Ardia 0.1.3), the offline page is Where's the lamb?, chrome://version;
-- right-click shows the native context menu (Ardia 0.1.5);
+  page navigates (Solara's 0.1.2–0.1.4 regressions);
+- the autofill dropdown accepts a suggestion (Solara 0.1.3), the offline page is Where's the lamb?, chrome://version;
+- right-click shows the native context menu (Solara 0.1.5);
 - with Chrome's last-used profile left at Work (as quitting with Work's window in front does), Personal's pages
   still run in Personal's profile (0.2.19 and earlier ran them in Work's);
 - a page that stops responding is reported (Chrome's hang monitor reaches the app; 0.2.20 attached a DevTools client to
@@ -205,11 +205,11 @@ and a session whose window was left on its second profile, and checks, over CDP 
 - quitting the way ⌘Q and Sparkle's update do (the quit Apple event, sent to this instance's pid only) exits
   within 15 s with status 0 and no crash report (0.2.6 and 0.2.7 crashed on every quit, so every update
   ended in "<product> quit unexpectedly");
-- the bundle's signature is still valid after running (Ardia 0.1.0 wrote into its own bundle);
+- the bundle's signature is still valid after running (Solara 0.1.0 wrote into its own bundle);
 - the feed in the build's Info.plist (`SUFeedURL`: GitHub's `releases/latest/download/appcast.xml`) answers with an
   appcast (`.claude/skills/release/scripts/feed.sh --before-publish`).
 
-smoke.sh launches with `ARDIA_DRAW_WINDOWS=1`: these checks read the window server's own alpha and stacking, so its windows are
+smoke.sh launches with `SOLARA_DRAW_WINDOWS=1`: these checks read the window server's own alpha and stacking, so its windows are
 drawn (and show wherever the desktop is uncovered) rather than kept at alpha 0 like other hidden instances.
 
 Everything must pass before publishing. One known exception: the two passkey window-order checks read
@@ -270,16 +270,16 @@ git tag v<version> && git push origin main v<version>
 .claude/skills/release/scripts/feed.sh <version>
 ```
 
-When engine/ changed since the last prebuilt engine, release.sh also packed `ArdiaCore-<tree>.tar.xz` (the command
-above uploads it, with `ArdiaCore-<tree>-source.tar.xz` for a Helium engine) and wrote its table line. Every release's
+When engine/ changed since the last prebuilt engine, release.sh also packed `SolaraCore-<tree>.tar.xz` (the command
+above uploads it, with `SolaraCore-<tree>-source.tar.xz` for a Helium engine) and wrote its table line. Every release's
 notes end with a Source section linking its tag, so never delete or move a published tag
 (`docs/releasing.md` › Source and licenses). Once the release is up, commit that line, so builds without a Chromium tree
-find it (`packages/ardiacore/scripts/fetch-engine.sh`):
+find it (`packages/solaracore/scripts/fetch-engine.sh`):
 
 ```bash
 if [ -f dist/<version>/prebuilt-engine.tsv ]; then
-  cat dist/<version>/prebuilt-engine.tsv >> packages/ardiacore/prebuilt-engines.tsv
-  git add packages/ardiacore/prebuilt-engines.tsv && git commit -m "Prebuilt engine: <version>'s" && git push origin main
+  cat dist/<version>/prebuilt-engine.tsv >> packages/solaracore/prebuilt-engines.tsv
+  git add packages/solaracore/prebuilt-engines.tsv && git commit -m "Prebuilt engine: <version>'s" && git push origin main
 fi
 ```
 
@@ -288,7 +288,7 @@ this release was being tested stay listed (it rewrites `dist/<version>/appcast.x
 Both must show the new version. feed.sh reads the URL from the built Info.plist, so it checks what this build will
 poll.
 
-### 5b. Staged rollout (an ArdiaCore-sized or risky release)
+### 5b. Staged rollout (an SolaraCore-sized or risky release)
 
 Three steps, in this order. Nothing here publishes by itself; each needs the owner's go-ahead (the first is the standing
 rule that a release which changes the engine or something users would notice publishes only after the owner has tested

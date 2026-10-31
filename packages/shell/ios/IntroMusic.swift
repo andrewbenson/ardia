@@ -34,7 +34,7 @@ final class IntroMusic {
 
   private static let silent: Bool = {
     let env = ProcessInfo.processInfo.environment
-    return env["ARDIA_BACKGROUND"] == "1" && env["ARDIA_ALLOW_AUDIO"] != "1"
+    return env["SOLARA_BACKGROUND"] == "1" && env["SOLARA_ALLOW_AUDIO"] != "1"
   }()
 
   func play(cues: [String: Double], muted: Bool) {

@@ -1,4 +1,4 @@
-import type { Download } from "@ardia/ardiacore";
+import type { Download } from "@solara/solaracore";
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "./browser";
 import { engineProfile, isIncognitoProfile, privateSession } from "./model";

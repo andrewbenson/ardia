@@ -37,7 +37,7 @@ const fake = {
   freeze: () => true,
   addListener: () => ({ remove() {} }),
 };
-globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, ArdiaStore: fake };
+globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, SolaraStoreAdapter: fake };
 
 const { useBrowser } = await import("../../store/browser.ts");
 const settingsModule = await import("../../store/settings.ts");
@@ -60,7 +60,7 @@ test("FALLBACK: against a native store that doesn't advertise sync origins, a sy
 });
 
 test("FALLBACK-journal: with the native store unable to tag origins, the command journal stays off, so a change Swift derives from a sync apply isn't journaled as this Mac's", fixedBy("step 5"), async () => {
-  const { Clock } = await import("@ardia/sync");
+  const { Clock } = await import("@solara/sync");
   const { openJournal } = await import("../editJournal.ts");
   const { journalCommands } = await import("../commandJournal.ts");
   const { settingsAdapter } = await import("../adapters.ts");

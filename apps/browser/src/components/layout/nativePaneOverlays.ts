@@ -1,5 +1,5 @@
-import { resolveExternalApp, type AutofillPromptAnswer, type PasswordPromptAnswer, type PermissionResult } from "@ardia/ardiacore";
-import { publishSettingsTopic } from "@ardia/settings";
+import { resolveExternalApp, type AutofillPromptAnswer, type PasswordPromptAnswer, type PermissionResult } from "@solara/solaracore";
+import { publishSettingsTopic } from "@solara/settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { View } from "react-native";
 import { webviews } from "../../lib/webviews";

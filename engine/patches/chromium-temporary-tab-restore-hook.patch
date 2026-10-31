@@ -6,9 +6,9 @@ diff --git a/components/sessions/core/tab_restore_service_helper.cc b/components
  #include "ui/base/mojom/window_show_state.mojom.h"
  #include "ui/base/window_open_disposition.h"
 +
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
 +
-+bool (*g_ardia_live_tab_skips_restore)(sessions::LiveTab* live_tab,
++bool (*g_solara_live_tab_skips_restore)(sessions::LiveTab* live_tab,
 +                                       SessionID* source) = nullptr;
  
  namespace sessions {
@@ -23,9 +23,9 @@ diff --git a/components/sessions/core/tab_restore_service_helper.cc b/components
 +  int kept_source = -1;
 +  int kept_before = -1;
 +  int kept_after = -1;
-+  if (g_ardia_live_tab_skips_restore && selected >= 0 &&
++  if (g_solara_live_tab_skips_restore && selected >= 0 &&
 +      selected < context->GetTabCount()) {
-+    g_ardia_live_tab_skips_restore(context->GetLiveTabAt(selected),
++    g_solara_live_tab_skips_restore(context->GetLiveTabAt(selected),
 +                                   &selected_source);
 +  }
    for (int tab_index = 0; tab_index < context->GetTabCount(); ++tab_index) {
@@ -70,8 +70,8 @@ diff --git a/components/sessions/core/tab_restore_service_helper.cc b/components
                                            LiveTab* live_tab) {
    tab->current_navigation_index = 0;
 -  if (!live_tab->IsInitialBlankNavigation() && live_tab->GetEntryCount() > 0) {
-+  const bool skips_restore = g_ardia_live_tab_skips_restore &&
-+                             g_ardia_live_tab_skips_restore(live_tab, nullptr);
++  const bool skips_restore = g_solara_live_tab_skips_restore &&
++                             g_solara_live_tab_skips_restore(live_tab, nullptr);
 +  if (!skips_restore && !live_tab->IsInitialBlankNavigation() &&
 +      live_tab->GetEntryCount() > 0) {
      AddSerializedNavigationEntries(

@@ -1,4 +1,4 @@
-import type { newTabSources, NewTabSourceStatus } from "@ardia/settings";
+import type { newTabSources, NewTabSourceStatus } from "@solara/settings";
 import type { BrowserState, useBrowser } from "../../store/browser";
 import { bookmarkProfileId, engineProfile } from "../../store/model";
 

@@ -110,9 +110,9 @@ async function diagnoseHang() {
   const js = await app.eval("return Math.round(performance.now() / 1000)", { timeout: 3000 })
     .then((up) => `the JS thread answers (JS context up ${up} s, test up ${Math.round((Date.now() - startedAt) / 1000)} s)`, () => "the JS thread doesn't answer either");
   try { copyFileSync(join(data, "app.out.log"), join(scratch, "app.out.log")); } catch {}
-  const main = await app.eval("return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace().then(() => 1)", { timeout: 3000 })
+  const main = await app.eval("return globalThis.expo.modules.SolaraApp.devFocusHandoffTrace().then(() => 1)", { timeout: 3000 })
     .then(() => "the main thread answers", () => "the main thread doesn't answer");
-  const presses = await app.eval("return globalThis.expo.modules.ArdiaApp.devKeyEquivalentTrace()", { timeout: 3000 }).catch(() => []);
+  const presses = await app.eval("return globalThis.expo.modules.SolaraApp.devKeyEquivalentTrace()", { timeout: 3000 }).catch(() => []);
   const seen = await app.eval("return (globalThis.__devEvalLog ?? []).join(' | ')", { timeout: 3000 }).catch(() => null);
   const proxy = app.js?.pid ? (isAlive(app.js.pid) ? `Metro proxy ${app.js.pid} alive` : `Metro proxy ${app.js.pid} gone`) : "no Metro proxy";
   return `hang: ${js}; ${main}; ${proxy}; pending eval ${pending}, result file ${landed}, JS evals: ${seen}; native presses: ${presses.slice(-6).join(" / ")}; main-thread sample in ${sampleFile} (kept: ${scratch})`;
@@ -209,7 +209,7 @@ const shortcuts = [
   ["⌘S", cmd("s", 1), { command: "toggleSidebar" }, "⌘S", "page-field"],
   ["⇧⌘L", cmd("L", 37, "shift"), { command: "toggleSidebar" }, "(Chrome's)", "page-field"],
   ["⇧⌘F", cmd("F", 3, "shift"), { command: "toggleSidebar" }, "(Chrome's)", "page-field"],
-  ["⌥⌘N", cmd("n", 45, "option"), { command: "newLittleArdia" }, "Arc's Little Arc"],
+  ["⌥⌘N", cmd("n", 45, "option"), { command: "newLittleSolara" }, "Arc's Little Arc"],
   ["⌃⇧=", K("+", 24, "control", "shift"), { command: "openSplitPane" }, "⌃⇧="],
   ["⌃⇧]", K("}", 30, "control", "shift"), { command: "focusNextPane" }, "⌃⇧]"],
   ["⌃⇧[", K("{", 33, "control", "shift"), { command: "focusPreviousPane" }, "⌃⇧["],
@@ -364,7 +364,7 @@ if (part === "matrix") {
       results.get(name)[focusName] = { result, detail: describe(r), responder: r.firstResponder };
     }
     await sleep(1000);
-    const lateBounces = await ac(`return globalThis.expo.modules.ArdiaApp.devKeyEquivalentLateBounces();`);
+    const lateBounces = await ac(`return globalThis.expo.modules.SolaraApp.devKeyEquivalentLateBounces();`);
     const nativeBounces = await untilSnapshot("native late key bounces", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.lateBounces, lateBounces));
     assert.deepEqual(nativeWindow(nativeBounces).shortcuts.lateBounces, lateBounces);
     late.push(...lateBounces);
@@ -496,7 +496,7 @@ const selection = await cdp("?t3", "(f => [f.selectionStart, f.selectionEnd, f.v
 check("⌘A selects all of a page's text field", selection === "0,11,11", selection);
 
 const devWindow = async (action) => {
-  const result = await ac(`const f = ac.store.getState().windows.w1.frame, C = globalThis.expo.modules.ArdiaCEF;
+  const result = await ac(`const f = ac.store.getState().windows.w1.frame, C = globalThis.expo.modules.SolaraCEF;
     return C.chromeWindows().then((ws) => ws.filter((w) => w.hasRoot).find((w) => {
       const r = w.frame.match(/[-\\d.]+/g).map(Number); return Math.abs(r[0] - f[0]) < 2 && Math.abs(r[2] - f[2]) < 2; }))
       .then((w) => C.devWindow(w.window, ${JSON.stringify(action)}));`);
@@ -508,13 +508,13 @@ const devWindow = async (action) => {
   return result;
 };
 const postKeys = async (presses) => {
-  const times = await ac(`return globalThis.expo.modules.ArdiaApp.devPostKeys("w1", ${JSON.stringify(presses)});`);
+  const times = await ac(`return globalThis.expo.modules.SolaraApp.devPostKeys("w1", ${JSON.stringify(presses)});`);
   const native = await untilSnapshot("native posted key timestamps", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.postTimes, times));
   assert.deepEqual(nativeWindow(native).shortcuts.postTimes, times);
   return times;
 };
 const keyPress = (key, keyCode, after = 0, modifiers = ["command"]) => ({ key, keyCode, modifiers, after });
-const post = (key, keyCode, modifiers = ["command"]) => ac(`return globalThis.expo.modules.ArdiaApp.devPostKey("w1", ${JSON.stringify(key)}, ${keyCode}, ${JSON.stringify(modifiers)});`);
+const post = (key, keyCode, modifiers = ["command"]) => ac(`return globalThis.expo.modules.SolaraApp.devPostKey("w1", ${JSON.stringify(key)}, ${keyCode}, ${JSON.stringify(modifiers)});`);
 const clipboard = {
   set: (text) => ac(`globalThis.nativeModuleProxy.Clipboard.setString(${JSON.stringify(text)}); return 1;`),
   get: () => ac(`return globalThis.nativeModuleProxy.Clipboard.getString();`),
@@ -640,7 +640,7 @@ for (const busy of [0, 120]) {
   const made = await ac(`return ac.store.getState().createWindow({ url: ${JSON.stringify(`${pages}/?t3`)} });`);
   let bar = null;
   if (made) {
-    await ac(`return globalThis.expo.modules.ArdiaApp.devPostKeys(${JSON.stringify(made)}, ${JSON.stringify([keyPress("l", 37), keyPress("q", 12, 300, []), keyPress("w", 13, 15, [])])});`);
+    await ac(`return globalThis.expo.modules.SolaraApp.devPostKeys(${JSON.stringify(made)}, ${JSON.stringify([keyPress("l", 37), keyPress("q", 12, 300, []), keyPress("w", 13, 15, [])])});`);
     await sleep(1200);
     bar = await ac(`const b = ac.omnibox.get(${JSON.stringify(`${made}:panel`)}) ?? ac.omnibox.get(${JSON.stringify(`${made}:sidebar`)}); return b ? String(b.state().value ?? "") : null;`);
     const nativeBar = await untilSnapshot("native new-window command bar", (s) => {
@@ -670,7 +670,7 @@ for (const busy of [0, 120]) {
   await busyJsOnce(150);
   await postKeys([keyPress("l", 37), keyPress("\r", 36, 20, []), keyPress("v", 9, 20)]);
   await sleep(2000);
-  const trace = await ac(`return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace();`);
+  const trace = await ac(`return globalThis.expo.modules.SolaraApp.devFocusHandoffTrace();`);
   const nativeTrace = await untilSnapshot("native focus handoff trace", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.focusTrace, trace), 5000, { shortcutTrace: true, fields: ["windows.shortcuts"] });
   assert.deepEqual(nativeWindow(nativeTrace).shortcuts.focusTrace, trace);
   const replayAt = trace.findLastIndex((l) => / replay /.test(l));
@@ -753,7 +753,7 @@ for (const [name, keys, busy, firstExpected] of handoffEnds) {
   await sleep(600);
   const second = await pastesIn(active);
   const responder = await devWindow("responder");
-  const trace = first === firstExpected ? "" : `; trace ${(await ac(`return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace();`)).slice(-8).join(" / ")}`;
+  const trace = first === firstExpected ? "" : `; trace ${(await ac(`return globalThis.expo.modules.SolaraApp.devFocusHandoffTrace();`)).slice(-8).join(" / ")}`;
   check(`${name} then ⌘V: ${firstExpected ? "pastes once into the page that has the focus" : "dropped with a beep, nowhere else"}; the next ⌘V pastes`,
     first === firstExpected && strays === 0 && second === firstExpected + 1 && responder.startsWith("RenderWidgetHostViewCocoa"),
     `active ${active}, pastes ${first} then ${second}, elsewhere ${strays}, first responder ${responder}${trace}`);
@@ -767,7 +767,7 @@ for (const [name, keys, busy, firstExpected] of handoffEnds) {
   await ac(`const d = ac.omnibox.get("w1:panel") ?? ac.omnibox.get("w1:sidebar"); return d ? Promise.resolve(d.type(${JSON.stringify(`${pages}/?t3#after-return`)})).then(() => new Promise((r) => setTimeout(r, 400))).then(() => 1) : 0;`);
   await postKeys([keyPress("\r", 36, 0, []), keyPress("v", 9, 150)]);
   await sleep(900);
-  const trace = await ac(`return globalThis.expo.modules.ArdiaApp.devFocusHandoffTrace();`);
+  const trace = await ac(`return globalThis.expo.modules.SolaraApp.devFocusHandoffTrace();`);
   const nativeTrace = await untilSnapshot("native focus handoff trace", (s) => isDeepStrictEqual(nativeWindow(s)?.shortcuts.focusTrace, trace), 5000, { shortcutTrace: true, fields: ["windows.shortcuts"] });
   assert.deepEqual(nativeWindow(nativeTrace).shortcuts.focusTrace, trace);
   const after = trace.slice(trace.findLastIndex((l) => / claim /.test(l)) + 1);

@@ -9,15 +9,15 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node sad-tab-test.mjs <Debug Solara.app> [--keep-data]
 
-The sad tab over a local page, drawn by RN and then natively (ARDIA_NATIVE_SHELL=1, where SadTabView sits in a
+The sad tab over a local page, drawn by RN and then natively (SOLARA_NATIVE_SHELL=1, where SadTabView sits in a
 container on top of the shell's card, framed to the pane): a crashed tab covers the pane with "This tab needs to
 reload" and a Reload button, an unresponsive one dims it under a 320 wide card with Exit Page and Wait. The native
 overlay, its buttons and RN's are the same frames in the window (within half a point: one pixel of Yoga rounding), a click on Reload clears the
 crash and a click on Wait clears the hang, and once both are gone the native container leaves the card. A third instance
-serves the page from the pool (ARDIA_NATIVE_PAGES_POOL=1 ARDIA_SHELL_PANES=1): the renderer really crashes
+serves the page from the pool (SOLARA_NATIVE_PAGES_POOL=1 SOLARA_SHELL_PANES=1): the renderer really crashes
 (chrome://crash through the pooled handle) and really hangs (a 40 second busy loop and a key press), both reach the
 store as page events, the native sad tab sits where RN's does, Reload reloads the pooled page back to A and Wait clears
-the hang. A fourth adds ARDIA_NATIVE_PANE_PROMPTS=1: RN no longer mounts
+the hang. A fourth adds SOLARA_NATIVE_PANE_PROMPTS=1: RN no longer mounts
 its SadTab wrapper for the pooled pane at all, the native sad tab comes from the pool's page events alone (a real
 renderer crash, then a real hang: a 40 second busy loop and a key press, so onUnresponsive comes from the engine), it
 stays up while JS publishes an unrelated pane overlay (the zoom popover), and Reload and Wait clear it.`);
@@ -40,7 +40,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const page = () => ac.pageState.getState().pages.a || {};
@@ -89,10 +89,10 @@ const modes = [
 const labels = { 0: ["Reload"], 1: ["Exit Page", "Wait"] };
 const measured = { rn: [], native: [], pool: [], prompts: [] };
 const LEGS = [
-  { tag: "rn", env: { ARDIA_NATIVE_SHELL: "0", ARDIA_NATIVE_PAGES_POOL: "0", ARDIA_SHELL_PANES: "0", ARDIA_NATIVE_PANE_PROMPTS: "0" } },
-  { tag: "native", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "0", ARDIA_SHELL_PANES: "0" } },
-  { tag: "pool", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } },
-  { tag: "prompts", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_PANE_PROMPTS: "1" } },
+  { tag: "rn", env: { SOLARA_NATIVE_SHELL: "0", SOLARA_NATIVE_PAGES_POOL: "0", SOLARA_SHELL_PANES: "0", SOLARA_NATIVE_PANE_PROMPTS: "0" } },
+  { tag: "native", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "0", SOLARA_SHELL_PANES: "0" } },
+  { tag: "pool", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1" } },
+  { tag: "prompts", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1", SOLARA_NATIVE_PANE_PROMPTS: "1" } },
 ];
 
 async function frames(nativeShell, i) {

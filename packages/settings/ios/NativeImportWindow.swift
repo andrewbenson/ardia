@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraUI
@@ -22,7 +22,7 @@ enum NativeImportWindow {
 
   static weak var current: ImportModel?
 
-  nonisolated static var drivable: Bool { ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" }
+  nonisolated static var drivable: Bool { ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" }
 
   static func drive(_ action: String, _ argument: String?) async -> [String: Any] {
     guard drivable, let model = current else { return ["error": "no native import window"] }

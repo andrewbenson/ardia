@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import ExpoModulesCore
 import SolaraModel
 import SolaraOmnibox
@@ -278,7 +278,7 @@ public enum OmniboxRead {
 enum FieldTimingMarks {
   static let queryProbeEnabled: Bool = {
     let env = ProcessInfo.processInfo.environment
-    return env["ARDIA_BACKGROUND"] == "1" && env["ARDIA_DATA_DIR"]?.isEmpty == false && env["AC_BENCH_OMNIBOX"] == "1"
+    return env["SOLARA_BACKGROUND"] == "1" && env["SOLARA_DATA_DIR"]?.isEmpty == false && env["AC_BENCH_OMNIBOX"] == "1"
   }()
 
   static func now(_ key: String, _ kind: String) {

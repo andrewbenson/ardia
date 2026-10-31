@@ -9,8 +9,8 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node pane-roots-test.mjs <Debug Solara.app> [--keep-data]
 
-Per-tab RN pane roots in the PaneOverlays .rn slots (ARDIA_NATIVE_SHELL=1, ARDIA_NATIVE_PAGES_POOL=1,
-ARDIA_SHELL_PANES=1). The active tab gets one root, shown once its content appears and sized to its slot; switching tabs shows the new
+Per-tab RN pane roots in the PaneOverlays .rn slots (SOLARA_NATIVE_SHELL=1, SOLARA_NATIVE_PAGES_POOL=1,
+SOLARA_SHELL_PANES=1). The active tab gets one root, shown once its content appears and sized to its slot; switching tabs shows the new
 tab's root and retires the old one, which ends after the 1 s grace; a split gives each pane a root; a fullscreen pane
 retires the other pane's root and leaving fullscreen brings one back; closing a tab ends its root at once, without the
 grace. A tab whose pane root can't be made (forced here through devRefusePaneRoot) keeps its overlays in the main root,
@@ -75,7 +75,7 @@ const shownOnly = (ids) => `return roots().then((r) => {
 try {
   app = await launch(resolve(appArg), {
     data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acLayout && !!globalThis.expo.modules.SolaraWindowShell",
   });
   await until("page ONE", `return S().tabs.a.title === "ONE" || null;`, 15000);

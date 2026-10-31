@@ -1,4 +1,4 @@
-import { discardKeyResponder, FadeLabel, restoreKeyResponder, saveKeyResponder, Symbol } from "@ardia/shell";
+import { discardKeyResponder, FadeLabel, restoreKeyResponder, saveKeyResponder, Symbol } from "@solara/shell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { useShallow } from "zustand/react/shallow";

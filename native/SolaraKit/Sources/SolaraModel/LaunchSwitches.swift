@@ -8,17 +8,17 @@ import CoreGraphics
 #endif
 
 public enum LaunchSwitch: String, CaseIterable, Sendable {
-  case nativeShell = "ARDIA_NATIVE_SHELL"
-  case shellPanes = "ARDIA_SHELL_PANES"
-  case nativePagesPool = "ARDIA_NATIVE_PAGES_POOL"
-  case shellMainTop = "ARDIA_SHELL_MAIN_TOP"
-  case nativeSidebar = "ARDIA_NATIVE_SIDEBAR"
-  case nativeTopStrip = "ARDIA_NATIVE_TOP_STRIP"
-  case nativeSidePanel = "ARDIA_NATIVE_SIDE_PANEL"
-  case nativePanePrompts = "ARDIA_NATIVE_PANE_PROMPTS"
-  case nativeProfilePager = "ARDIA_NATIVE_PROFILE_PAGER"
-  case syncRedesign = "ARDIA_SYNC_REDESIGN"
-  case nativeServices = "ARDIA_NATIVE_SERVICES"
+  case nativeShell = "SOLARA_NATIVE_SHELL"
+  case shellPanes = "SOLARA_SHELL_PANES"
+  case nativePagesPool = "SOLARA_NATIVE_PAGES_POOL"
+  case shellMainTop = "SOLARA_SHELL_MAIN_TOP"
+  case nativeSidebar = "SOLARA_NATIVE_SIDEBAR"
+  case nativeTopStrip = "SOLARA_NATIVE_TOP_STRIP"
+  case nativeSidePanel = "SOLARA_NATIVE_SIDE_PANEL"
+  case nativePanePrompts = "SOLARA_NATIVE_PANE_PROMPTS"
+  case nativeProfilePager = "SOLARA_NATIVE_PROFILE_PAGER"
+  case syncRedesign = "SOLARA_SYNC_REDESIGN"
+  case nativeServices = "SOLARA_NATIVE_SERVICES"
 
   public static let experiments: [LaunchSwitch] = [
     .nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeSidePanel,
@@ -49,10 +49,10 @@ public enum LaunchSwitch: String, CaseIterable, Sendable {
 }
 
 public struct LaunchSwitches: Sendable {
-  public static let scopeVariable = "ARDIA_NATIVE_SCOPE"
-  public static let defaultsVariable = "ARDIA_LAUNCH_SWITCHES_DEFAULTS"
-  public static let optionVariable = "ARDIA_LAUNCH_SWITCHES_OPTION"
-  static let storedPrefixes = ["ARDIA_NATIVE_", "ARDIA_SHELL_"]
+  public static let scopeVariable = "SOLARA_NATIVE_SCOPE"
+  public static let defaultsVariable = "SOLARA_LAUNCH_SWITCHES_DEFAULTS"
+  public static let optionVariable = "SOLARA_LAUNCH_SWITCHES_OPTION"
+  static let storedPrefixes = ["SOLARA_NATIVE_", "SOLARA_SHELL_"]
 
   public let isolated: Bool
   public let defaultsSuite: String?
@@ -65,14 +65,14 @@ public struct LaunchSwitches: Sendable {
   let stored: [LaunchSwitch: Bool]
 
   public init(environment env: [String: String], defaults: UserDefaults?, distribution: Bool, skipStored: Bool) {
-    let isolated = env["ARDIA_BACKGROUND"] == "1" || env["ARDIA_DATA_DIR"] != nil
+    let isolated = env["SOLARA_BACKGROUND"] == "1" || env["SOLARA_DATA_DIR"] != nil
     self.isolated = isolated
     let suite = distribution ? nil : env[Self.defaultsVariable].flatMap { $0.isEmpty ? nil : $0 }
     self.defaultsSuite = suite
     self.distribution = distribution
     self.scope = env[Self.scopeVariable]
     var environment: [LaunchSwitch: Bool] = [:]
-    let ownDataFolder = env["ARDIA_DATA_DIR"].map { !$0.isEmpty } ?? false
+    let ownDataFolder = env["SOLARA_DATA_DIR"].map { !$0.isEmpty } ?? false
     for name in LaunchSwitch.allCases where (!LaunchSwitch.developmentOnly.contains(name) || (ownDataFolder && !distribution))
       && (!distribution || !LaunchSwitch.onByDefault.contains(name)) {
       if let value = env[name.rawValue].flatMap(Self.parse) { environment[name] = value }

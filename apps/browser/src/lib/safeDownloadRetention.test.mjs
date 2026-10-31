@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { declaration, runNative, source } from "../test-native/safe-host/run.mjs";
 
 let safeMode = "option";
-globalThis.acTestNativeModules = { ArdiaStore: { status: () => ({ active: false, safeMode }) } };
+globalThis.acTestNativeModules = { SolaraStoreAdapter: { status: () => ({ active: false, safeMode }) } };
 const { useBrowser } = await import("../store/browser.ts");
 const { startNativeStore } = await import("../store/nativeStore.ts");
 

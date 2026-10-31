@@ -1,4 +1,4 @@
-import { menuShown, watchMenus } from "@ardia/shell";
+import { menuShown, watchMenus } from "@solara/shell";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
 import { pointerOnCard } from "../sidebar/hover";

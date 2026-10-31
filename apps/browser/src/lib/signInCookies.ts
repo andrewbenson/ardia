@@ -1,4 +1,4 @@
-import type { PageCookie } from "@ardia/ardiacore";
+import type { PageCookie } from "@solara/solaracore";
 
 export function cookieAddresses(url: string): string[] {
   let parsed: URL;

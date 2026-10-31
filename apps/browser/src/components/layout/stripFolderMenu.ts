@@ -1,4 +1,4 @@
-import { showMenu } from "@ardia/shell";
+import { showMenu } from "@solara/shell";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
 import { clickTab } from "../sidebar/actions";

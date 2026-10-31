@@ -1,6 +1,6 @@
-ArdiaCore registers its own extension management policy providers on every profile's ManagementPolicy, before
-the profile loads any extension (//chrome/browser/ardia, ac_scripts_policy.cc). Not a GN dependency: the function
-resolves at link time in the binary we build (ArdiaCore's chrome_dll links that target).
+SolaraCore registers its own extension management policy providers on every profile's ManagementPolicy, before
+the profile loads any extension (//chrome/browser/solara, ac_scripts_policy.cc). Not a GN dependency: the function
+resolves at link time in the binary we build (SolaraCore's chrome_dll links that target).
 
 --- a/chrome/browser/extensions/chrome_extension_system.cc
 +++ b/chrome/browser/extensions/chrome_extension_system.cc
@@ -8,7 +8,7 @@ resolves at link time in the binary we build (ArdiaCore's chrome_dll links that 
  
  static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
  
-+namespace ardia {
++namespace solara {
 +void RegisterManagementPolicyProviders(Profile* profile,
 +                                        extensions::ManagementPolicy* policy);
 +}
@@ -21,7 +21,7 @@ resolves at link time in the binary we build (ArdiaCore's chrome_dll links that 
      management_policy_->RegisterProvider(extension_install_policy_service);
    }
 +
-+  ardia::RegisterManagementPolicyProviders(profile_, management_policy_.get());
++  solara::RegisterManagementPolicyProviders(profile_, management_policy_.get());
  }
  
  void ChromeExtensionSystem::Shared::InitInstallGates() {

@@ -1,5 +1,5 @@
-import { getSiteSettings, resolveExternalApp, setSiteSetting, type AutofillPrompt as ChromeAutofillPrompt, type AutofillPromptAnswer, type PasswordPrompt as ChromePasswordPrompt, type PasswordPromptAnswer } from "@ardia/ardiacore";
-import { Symbol } from "@ardia/shell";
+import { getSiteSettings, resolveExternalApp, setSiteSetting, type AutofillPrompt as ChromeAutofillPrompt, type AutofillPromptAnswer, type PasswordPrompt as ChromePasswordPrompt, type PasswordPromptAnswer } from "@solara/solaracore";
+import { Symbol } from "@solara/shell";
 import { useState } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";
@@ -11,7 +11,7 @@ import { PANEL, PanelCloseButton, Popover, PopoverRow, PopoverSeparator, PromptB
 import { Checkbox } from "../settings/controls";
 import { patchPage, pageOf, setPopover, usePage } from "../layout/pageState";
 import { answerPermission, describePermission } from "./permissions";
-import { nativeToolbarAvailable } from "@ardia/settings";
+import { nativeToolbarAvailable } from "@solara/settings";
 import { NativePromptBody, nativePromptFrames, PromptPopover } from "./NativePromptBody";
 import { usePromptInputGuard } from "./promptGuard";
 

@@ -1,11 +1,11 @@
-import { prompt, showMenu } from "@ardia/shell";
+import { prompt, showMenu } from "@solara/shell";
 import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
 import { plural } from "../../store/model";
 import { dissolveTileFolder, folderIn, folderLabel, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../../store/tileFolders";
 import { dismissHover } from "./hover";
 import { measureRow } from "./state";
-import { encodeCommand } from "@ardia/store";
+import { encodeCommand } from "@solara/store";
 import { nativeOwnsWorkspace, nativeWrite } from "../../store/nativeStore";
 
 type Open = { windowId: string; folderId: string; anchor: { x: number; y: number; width: number; height: number } };

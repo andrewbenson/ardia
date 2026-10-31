@@ -1,4 +1,4 @@
-import { animateWindowClose, focusWindow } from "@ardia/shell";
+import { animateWindowClose, focusWindow } from "@solara/shell";
 import { useBrowser } from "../store/browser";
 import { isWindowClosing, startClosingWindow, stopClosingWindow } from "../store/closingWindows";
 

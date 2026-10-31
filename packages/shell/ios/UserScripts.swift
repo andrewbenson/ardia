@@ -2,7 +2,7 @@ import Foundation
 
 public final class UserScripts: @unchecked Sendable {
   public static let shared = UserScripts()
-  public static let work = DispatchQueue(label: "ardia.userscripts", qos: .utility)
+  public static let work = DispatchQueue(label: "solara.userscripts", qos: .utility)
 
   private static let manifestLimit = 1 << 20
   private static let lockAttempts = 200

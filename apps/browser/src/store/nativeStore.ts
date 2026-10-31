@@ -12,8 +12,8 @@ import {
   type StoreCommand,
   type StoreEffect,
   type StorePatch,
-} from "@ardia/store";
-import type { Download } from "@ardia/ardiacore";
+} from "@solara/store";
+import type { Download } from "@solara/solaracore";
 import { clearNativeClosingLocals, nativeClosingLiveAtApply, nativeClosingUndo, pruneClosingLocals, restoredNativeClosingLocals } from "./closingWindowRestore";
 import { syncRedesign } from "../sync/redesignSwitch";
 import { applyingFromSync, asSyncOrigin, asUserChange } from "./syncOrigin";

@@ -31,7 +31,7 @@ import Testing
     let start = sync.settingChanged(true)!
     var off = sync.settled(start.request, CliControlServer(state: "starting", generation: 2), settingOn: true)
     #expect(!off)
-    off = sync.event(CliControlServer(state: "off", generation: 2, reason: "Couldn't write ArdiaControl.json: is a directory"), settingOn: true)
+    off = sync.event(CliControlServer(state: "off", generation: 2, reason: "Couldn't write SolaraControl.json: is a directory"), settingOn: true)
     #expect(off)
     #expect(sync.server?.reason?.contains("is a directory") == true)
     let next = sync.settingChanged(false)

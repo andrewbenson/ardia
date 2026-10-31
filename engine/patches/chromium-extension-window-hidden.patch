@@ -4,7 +4,7 @@
  // found in the LICENSE file.
  
  #include "chrome/browser/extensions/browser_extension_window_controller.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  
  #include <optional>
  #include <string>
@@ -13,9 +13,9 @@
  
  static_assert(BUILDFLAG(ENABLE_EXTENSIONS_CORE));
 +
-+// Ardia: ArdiaCore (engine/ardiacore) keeps the windows of its own pages (its
++// Solara: SolaraCore (engine/solaracore) keeps the windows of its own pages (its
 +// popups, side panels, the content blocker's page) from extensions.
-+bool (*g_ardia_hidden_from_extensions)(
++bool (*g_solara_hidden_from_extensions)(
 +    const BrowserWindowInterface* browser) = nullptr;
  
  namespace extensions {
@@ -24,9 +24,9 @@
      return false;
    }
  
-+  // Ardia: windows ArdiaCore uses internally.
-+  if (extension && g_ardia_hidden_from_extensions &&
-+      g_ardia_hidden_from_extensions(&*browser_)) {
++  // Solara: windows SolaraCore uses internally.
++  if (extension && g_solara_hidden_from_extensions &&
++      g_solara_hidden_from_extensions(&*browser_)) {
 +    return false;
 +  }
 +
@@ -39,7 +39,7 @@
  // found in the LICENSE file.
  
  #include "chrome/browser/extensions/api/tabs/tabs_event_router.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  
  #include <memory>
  #include <set>
@@ -49,8 +49,8 @@
    return profile_->IsSameOrParent(browser.GetProfile()) &&
 -         ExtensionTabUtil::BrowserSupportsTabs(&browser);
 +         ExtensionTabUtil::BrowserSupportsTabs(&browser) &&
-+         !(g_ardia_hidden_from_extensions &&
-+           g_ardia_hidden_from_extensions(&browser));
++         !(g_solara_hidden_from_extensions &&
++           g_solara_hidden_from_extensions(&browser));
  }
  
  void TabsEventRouter::TrackTabList(TabListInterface& tab_list) {
@@ -60,7 +60,7 @@
  // Implements the Chrome Extensions WebNavigation API.
  
  #include "chrome/browser/extensions/api/web_navigation/web_navigation_api_helpers.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  
  #include <memory>
  #include <utility>
@@ -92,12 +92,12 @@
  }  // namespace
  
 +bool IsHiddenFromExtensions(content::WebContents* web_contents) {
-+  if (!web_contents || !g_ardia_hidden_from_extensions) {
++  if (!web_contents || !g_solara_hidden_from_extensions) {
 +    return false;
 +  }
 +  BrowserWindowInterface* browser =
 +      GlobalBrowserCollection::GetInstance()->FindBrowserWithTab(web_contents);
-+  return browser && g_ardia_hidden_from_extensions(browser);
++  return browser && g_solara_hidden_from_extensions(browser);
 +}
 +
  // Constructs an onBeforeNavigate event.
@@ -228,7 +228,7 @@
  // found in the LICENSE file.
  
  #include "chrome/browser/extensions/extension_tab_util.h"
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
  
  #include <stddef.h>
  
@@ -237,8 +237,8 @@
  }
  
 +bool HiddenFromExtensions(WindowController* window) {
-+  return g_ardia_hidden_from_extensions && window->GetBrowserWindowInterface() &&
-+         g_ardia_hidden_from_extensions(window->GetBrowserWindowInterface());
++  return g_solara_hidden_from_extensions && window->GetBrowserWindowInterface() &&
++         g_solara_hidden_from_extensions(window->GetBrowserWindowInterface());
 +}
 +
  }  // namespace

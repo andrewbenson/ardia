@@ -1,5 +1,5 @@
-import { pooledWebViewHandle, unwrapPageEvent, type PageEngine, type ViewEventName } from "@ardia/ardiacore";
-import type { TabPool } from "@ardia/settings";
+import { pooledWebViewHandle, unwrapPageEvent, type PageEngine, type ViewEventName } from "@solara/solaracore";
+import type { TabPool } from "@solara/settings";
 import { persistEngine } from "../lib/engines";
 import { holdModuleEvent } from "../lib/nativeEvents";
 import { noteGone } from "../lib/tabLifecycle";

@@ -1,6 +1,6 @@
-import type { CliControlStatus } from "@ardia/ardiacore";
-import { nativeInstallCli } from "@ardia/settings";
-import { installedCliVersion, readDocument, systemInfo, type CliInstallResult } from "@ardia/shell";
+import type { CliControlStatus } from "@solara/solaracore";
+import { nativeInstallCli } from "@solara/settings";
+import { installedCliVersion, readDocument, systemInfo, type CliInstallResult } from "@solara/shell";
 import { create } from "zustand";
 import { useBrowser } from "../store/browser";
 import { nativeSafeMode } from "../store/nativeStore";
@@ -9,7 +9,7 @@ type Saved = { binPath?: string | null; error?: string | null };
 
 export type CliInstallReason = "onboarding" | "settings" | "upgrade";
 
-export const cliProduct = (): string => systemInfo().appName?.trim() || "Ardia";
+export const cliProduct = (): string => systemInfo().appName?.trim() || "Solara";
 
 export const cliCommand = (): string => cliProduct().toLowerCase();
 
@@ -24,7 +24,7 @@ type CliState = {
 
 function readSaved(): Saved {
   try {
-    const json = readDocument("ardia-cli.json");
+    const json = readDocument("solara-cli.json");
     return json ? (JSON.parse(json) as Saved) : {};
   } catch {
     return {};

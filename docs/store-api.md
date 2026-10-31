@@ -147,7 +147,7 @@ don't re-render every tab.
 - Dialogs / native side effects go through lib/actions.ts (`closeTab`, `switchToTab`, `moveTabToProfile`,
   `moveTabToWindow`, `createProfile`, `deleteProfile`, `openWindow`).
 - Menu commands: lib/commands.ts (JS) + packages/shell/ios/Menus.swift (native menu bar).
-- Tests: `pnpm --filter @ardia/browser test` (`docs/testing.md`).
+- Tests: `pnpm --filter @solara/browser test` (`docs/testing.md`).
 
 ## Native events (lib/nativeEvents.ts)
 Every native→JS call is its own task, and React Native commits after each, so a page's reports used to cost a commit
@@ -165,7 +165,7 @@ listeners and subscriptions hear them together at the end, except a write that c
 ends its load, which is heard as it lands (a value that flips back within the flush stays visible to the listeners
 that act on it: translate's detection, the web store's script, a screen-share request going with its page).
 
-## Live tabs: Chrome's tab strips (lib/chromeTabs.ts, store/liveTabs.ts, packages/ardiacore/src/tabStrip.ts)
+## Live tabs: Chrome's tab strips (lib/chromeTabs.ts, store/liveTabs.ts, packages/solaracore/src/tabStrip.ts)
 
 One writer per fact. The store owns the **workspace**: sidebar order, pins, groups, splits, Little Solara, unloaded
 and parked tiles, and which tab each window shows per profile (`activeTabIds`). Chrome's `TabStripModel` owns
@@ -174,7 +174,7 @@ the active one, pins (and groups, once the engine reports them). JS never writes
 caused a report: it sends commands with ids, the engine commits them in Chrome, and every change comes back as one
 ordered transaction that names its cause. There are no echo windows, timers or "was that us" flags.
 
-**The engine contract** (`@ardia/ardiacore`; ArdiaCore implements it in `packages/ardiacore/ios/ArdiaCoreTabStrip.mm`):
+**The engine contract** (`@solara/solaracore`; SolaraCore implements it in `packages/solaracore/ios/SolaraCoreTabStrip.mm`):
 - `sendTabStripCommand(command): number` sends a command and returns its id (unique for the app's lifetime, also
   across JS reloads). Commands:
   - `{ op: "activate", strip, key }`: make that tab the strip's active tab.
@@ -205,8 +205,8 @@ ordered transaction that names its cause. There are no echo windows, timers or "
     order as `{ key, browser, index, active, pinned, group? }`, and `groups?: [{ id, title, color, collapsed }]`. `key` is the WebView's `transferKey` (the store's tab
     id), bound when a view first shows the browser and kept while the browser moves between views; `null` for a tab
     no view has shown (one Chrome made, before the app adopts it; an engine placeholder). `group` (Chrome's group id,
-    null for none) and `groups` are absent while an engine doesn't report groups. ArdiaCore reports Chrome's
-    groups (the engine layer's `ac_tabs` in `//chrome/browser/ardia`: event `tabs.strip`, call `ac_tabs_group`). A strip left without tabs is sent with `tabs: []`; a strip whose
+    null for none) and `groups` are absent while an engine doesn't report groups. SolaraCore reports Chrome's
+    groups (the engine layer's `ac_tabs` in `//chrome/browser/solara`: event `tabs.strip`, call `ac_tabs_group`). A strip left without tabs is sent with `tabs: []`; a strip whose
     window closed comes once more with `closed: true`.
 - `tabStrips()` answers every strip as a transaction with `cmd: null` and the last `rev` sent: the starting point
   after a JS (re)load. Transactions that arrive before it are held, then applied if newer.
@@ -214,7 +214,7 @@ ordered transaction that names its cause. There are no echo windows, timers or "
   becomes visible; a tab moved to another window goes there in the background). Showing a page still tells the
   engine where Chrome's views go (layout).
 - A tab Chrome made in a window on its own (an extension's `tabs.create`) reaches the app as `onOpenWindow` with
-  `adoptId: "tab:<browser>"`; a page's new tabs and popups come as `adoptId: "ardiacore:<id>"`, already made by Chrome.
+  `adoptId: "tab:<browser>"`; a page's new tabs and popups come as `adoptId: "solaracore:<id>"`, already made by Chrome.
 
 **How the app applies them** (lib/chromeTabs.ts): it keeps a mirror of every strip.
 - A transaction with a `cmd` (the app's own) only updates the mirror: the store already holds that intent.
@@ -250,7 +250,7 @@ ordered transaction that names its cause. There are no echo windows, timers or "
   one command per strip at a time; no `activate` while Chrome's active tab has no key (a tab Chrome made in front,
   before the app adopts it: its activation is Chrome's, above); the same command isn't sent
   again until something other than the app's commands changed that strip (a plan Chrome can't reach doesn't loop).
-- ArdiaCore (`ArdiaCoreTabStrip.mm`) takes the strips from Chrome's own tab strip models, which name the Browser, so a
+- SolaraCore (`SolaraCoreTabStrip.mm`) takes the strips from Chrome's own tab strip models, which name the Browser, so a
   strip's window is never inferred from its tabs.
 - Tests: `src/store/liveTabs.test.mjs` runs the real wiring against a fake engine that keeps this contract.
 
@@ -266,47 +266,47 @@ ordered transaction that names its cause. There are no echo windows, timers or "
 
 ## Dev tooling (DEV builds)
 - LogBox is disabled (its shadows crash react-native-macos); console errors/warnings go to
-  `$ARDIA_DATA_DIR/dev-console.log`.
-- lib/devHarness.ts runs `$ARDIA_DATA_DIR/dev-eval.js` against the store — use it to drive a running instance.
+  `$SOLARA_DATA_DIR/dev-console.log`.
+- lib/devHarness.ts runs `$SOLARA_DATA_DIR/dev-eval.js` against the store — use it to drive a running instance.
 - Menus per instance: scratchpad `axmenus` tool (System Events confuses instances sharing a bundle id).
-- Swipes (layout/SwipeOverlay, layout/ProfileSwipe, packages/ardiacore/ios/ACSwipe.mm): `globalThis.acSwipe.pane(tabId).devSimulate(steps, { ignorePreference: true })`
+- Swipes (layout/SwipeOverlay, layout/ProfileSwipe, packages/solaracore/ios/ACSwipe.mm): `globalThis.acSwipe.pane(tabId).devSimulate(steps, { ignorePreference: true })`
   and `.sidebar(windowId)` play synthetic trackpad gestures through the real tracker (pages scroll and ack for real); `acSwipe.history` opens the back/forward list.
 
 ## Internal pages, Settings, Import (components/pages, settings, import)
-- `ardia://history|bookmarks|downloads` tabs render React pages instead of a web view
+- `solara://history|bookmarks|downloads` tabs render React pages instead of a web view
   (`openInternalPage(page, windowId)`, `isInternalTab(tab)` in components/pages).
 - Settings (⌘,) and Import are utility NSWindows with ids `settings` / `import` (`openSettings(pane)`,
   `openImport()` in components/settings/windows.ts); `runCommand` routes ⌘W there to close them.
 
-## ardia:// URLs (core appUrls.ts, like Dia's dia:// and Brave's brave://)
-- **The app's form is `ardia://`**, everywhere: `tab.url`, `navigation.url`, history, bookmarks,
+## solara:// URLs (core appUrls.ts, like Dia's dia:// and Brave's brave://)
+- **The app's form is `solara://`**, everywhere: `tab.url`, `navigation.url`, history, bookmarks,
   closed tabs, the bar, AppleScript. Nothing in the store is `chrome://`.
-  - Input: `resolveInput` / `fixupUrl` turn `chrome://x`, `chrome:x`, `about:x` and `ardia:x` into
-    `ardia://x`. about:blank and about:srcdoc stay as they are.
-  - The engine boundary is packages/ardiacore `WebView`. Loading maps `ardia://` → `chrome://`
-    (`url` prop, `loadUrl`). Reporting maps `chrome://` → `ardia://` (navigation, open-window,
+  - Input: `resolveInput` / `fixupUrl` turn `chrome://x`, `chrome:x`, `about:x` and `solara:x` into
+    `solara://x`. about:blank and about:srcdoc stay as they are.
+  - The engine boundary is packages/solaracore `WebView`. Loading maps `solara://` → `chrome://`
+    (`url` prop, `loadUrl`). Reporting maps `chrome://` → `solara://` (navigation, open-window,
     popup, load-error, download and discard events, `navigationEntries`).
-  - Pages linking to `ardia://`: the engine (`ac_page_channel.h`) only follows these from a WebUI page (chrome://,
+  - Pages linking to `solara://`: the engine (`ac_page_channel.h`) only follows these from a WebUI page (chrome://,
     devtools://) and drops them from web pages, like Chrome does for chrome://. That covers links,
     ⌘-clicks and popups.
-  - Display: `urlForDisplay` / `displayUrl` / `breadcrumb` show `ardia://version`, keeping the
+  - Display: `urlForDisplay` / `displayUrl` / `breadcrumb` show `solara://version`, keeping the
     scheme and dropping a root "/". `tabLabel` (window title) and `hostLabel` (History / Bookmarks
-    pages) show `ardia://<host>`.
-  - History is Chrome's, which doesn't record its WebUI pages (`ardia://`).
+    pages) show `solara://<host>`.
+  - History is Chrome's, which doesn't record its WebUI pages (`solara://`).
 - **Where each host goes** (`appUrlRoute`):
 
   | URL | Opens |
   | --- | --- |
-  | `ardia://history`, `bookmarks`, `downloads` | Our React pages in the tab (components/pages). They take precedence over Chrome's pages, and `chrome://history` typed or reported lands here too. |
-  | `ardia://settings` | Our Settings window (components/pages/appUrls.ts). The tab doesn't change. |
-  | `ardia://settings/<pane>` | Our Settings window at that pane: general, profiles (also `people`, `manageProfile`), sync (also `syncSetup`), tabs, appearance, privacy, passwords, autofill (also `addresses`, `payments`), extensions, search (also `searchEngines`), shortcuts, liveFolders, calendar, advanced. |
-  | `ardia://settings/<anything else>` | Chrome's settings page (e.g. `settings/languages`, `settings/content`). |
-  | `ardia://newtab` | A New Tab page (a new tab). |
-  | `ardia://extensions` | Chrome's extensions page (as dia://extensions is in Dia): developer mode, load unpacked, errors, shortcuts. Our Settings › Extensions stays at `ardia://settings/extensions`. |
-  | Everything else: `version`, `gpu`, `net-internals`, `flags`, `inspect`, `about`, `chrome-urls`, `password-manager`, `downloads-internals`, … | Chrome's WebUI page, shown as `ardia://<host>`. |
+  | `solara://history`, `bookmarks`, `downloads` | Our React pages in the tab (components/pages). They take precedence over Chrome's pages, and `chrome://history` typed or reported lands here too. |
+  | `solara://settings` | Our Settings window (components/pages/appUrls.ts). The tab doesn't change. |
+  | `solara://settings/<pane>` | Our Settings window at that pane: general, profiles (also `people`, `manageProfile`), sync (also `syncSetup`), tabs, appearance, privacy, passwords, autofill (also `addresses`, `payments`), extensions, search (also `searchEngines`), shortcuts, liveFolders, calendar, advanced. |
+  | `solara://settings/<anything else>` | Chrome's settings page (e.g. `settings/languages`, `settings/content`). |
+  | `solara://newtab` | A New Tab page (a new tab). |
+  | `solara://extensions` | Chrome's extensions page (as dia://extensions is in Dia): developer mode, load unpacked, errors, shortcuts. Our Settings › Extensions stays at `solara://settings/extensions`. |
+  | Everything else: `version`, `gpu`, `net-internals`, `flags`, `inspect`, `about`, `chrome-urls`, `password-manager`, `downloads-internals`, … | Chrome's WebUI page, shown as `solara://<host>`. |
 - `settings` and `newtab` are handled in the store's `navigate` / `newTab` through `setAppUrlOpener`
   (store/tabs.ts). That covers every way a URL gets in: the bar, bookmarks, history, AppleScript,
-  opened URLs and links. A restored tab at `ardia://settings/…` loads Chrome's page.
-- The OS doesn't route `ardia:` to us. Like Dia and Brave, the app doesn't register the scheme,
-  so a web page can't open `ardia://quit` through Launch Services. `open -a Ardia 'ardia://version'`
+  opened URLs and links. A restored tab at `solara://settings/…` loads Chrome's page.
+- The OS doesn't route `solara:` to us. Like Dia and Brave, the app doesn't register the scheme,
+  so a web page can't open `solara://quit` through Launch Services. `open -a Solara 'solara://version'`
   and AppleScript work, because those go to the app directly.

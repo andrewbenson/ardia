@@ -8,7 +8,7 @@ globalThis.__DEV__ = false;
 const folder = new Map();
 let ids = 0;
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `id${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => true,
@@ -320,7 +320,7 @@ test("a profile whose owner hasn't synced here yet waits instead of getting data
 });
 
 const scopeLevel = async () => {
-  const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+  const { Clock, emptyScope, syncScope } = await import("@solara/sync");
   const shipped = await import("../../../../packages/sync/src/fixtures/scope-v0.2.38.ts");
   const { profilesAdapter, sharedDataAdapter } = await import("./adapters.ts");
   const files = new Map();

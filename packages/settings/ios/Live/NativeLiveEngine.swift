@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import Foundation
 import SolaraLive
 
@@ -160,15 +160,15 @@ final class NativeLiveEngine: @unchecked Sendable {
     let result = DocumentStore.readResult("live.json")
     box = NativeLiveReplicaBox(text: result["contents"], failure: result["failure"])
     #if DEBUG
-    let mockBase = ProcessInfo.processInfo.environment["ARDIA_LIVE_MOCK"]
-    let fixture = ProcessInfo.processInfo.environment["ARDIA_CALENDAR_FIXTURE"] == "1"
-    let separate = ProcessInfo.processInfo.environment["ARDIA_SLOW_TIMERS"] == "separate"
+    let mockBase = ProcessInfo.processInfo.environment["SOLARA_LIVE_MOCK"]
+    let fixture = ProcessInfo.processInfo.environment["SOLARA_CALENDAR_FIXTURE"] == "1"
+    let separate = ProcessInfo.processInfo.environment["SOLARA_SLOW_TIMERS"] == "separate"
     #else
     let mockBase: String? = nil
     let fixture = false
     let separate = false
     #endif
-    let isolated = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] != nil
+    let isolated = ProcessInfo.processInfo.environment["SOLARA_DATA_DIR"] != nil
     calendarProvider = NativeLiveCalendar(fixture: fixture, launchedAt: SystemLiveClock().now())
     engine = LiveEngine(effects: LiveEffects(
       http: NativeLiveHTTP(followsRedirects: !isolated), secrets: NativeLiveSecrets(), clock: SystemLiveClock(), calendar: calendarProvider,

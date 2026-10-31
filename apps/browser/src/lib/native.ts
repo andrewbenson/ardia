@@ -1,4 +1,4 @@
-import { lastTabClosesWindow, onDownload, releaseProfile } from "@ardia/ardiacore";
+import { lastTabClosesWindow, onDownload, releaseProfile } from "@solara/solaracore";
 import {
   cancelFocusMove,
   claimFocus,
@@ -20,7 +20,7 @@ import {
   windowIds,
   type MenuBookmark,
   type MenuState,
-} from "@ardia/shell";
+} from "@solara/shell";
 import { Appearance } from "react-native";
 import { nativeOwnsWorkspace } from "../store/nativeStore";
 import { folderChildren, isBookmarked } from "../store/bookmarks";
@@ -39,10 +39,10 @@ import { isInternalTab } from "../components/pages/urls";
 import { sidebarMenuState } from "../components/sidebar/commands";
 import { openWindow as createWindow } from "./actions";
 import { createWindowSync, type WindowPort } from "./windowSync";
-import { openExternalUrls } from "../components/littleArdia/actions";
-import { SMALL_LIGHTS_CENTER } from "../components/littleArdia/SmallChrome";
+import { openExternalUrls } from "../components/littleSolara/actions";
+import { SMALL_LIGHTS_CENTER } from "../components/littleSolara/SmallChrome";
 import { runCommand } from "./commands";
-import { LITTLE_ARDIA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, WINDOW_COMMANDS } from "./commandCatalog";
+import { LITTLE_SOLARA_DISABLED_COMMANDS, PAGE_COMMANDS, PAGE_COMMANDS_OFF_INTERNAL_PAGES, WINDOW_COMMANDS } from "./commandCatalog";
 import { setMenuBarShortcuts } from "./commandShortcuts";
 import { finishAnimatedCloses } from "./closeAnimated";
 import { setFocusSenders } from "./focusClaims";
@@ -241,7 +241,7 @@ export function menuState(s: BrowserState): MenuState {
     titles.bookmarkPage = "Edit Bookmark…";
   }
 
-  if (!s.settings.openLinksInLittleArdia) titles.toggleOpenLinksInLittleArdia = `Open Links from Other Apps in Little ${PRODUCT}`;
+  if (!s.settings.openLinksInLittleSolara) titles.toggleOpenLinksInLittleSolara = `Open Links from Other Apps in Little ${PRODUCT}`;
 
   const sidebar = sidebarMenuState(s, windowId);
   disabled.push(...sidebar.disabled);
@@ -253,7 +253,7 @@ export function menuState(s: BrowserState): MenuState {
     titles.closeTab = "Close Peek";
   }
   if (w?.kind === "small") {
-    disabled.push(...LITTLE_ARDIA_DISABLED_COMMANDS);
+    disabled.push(...LITTLE_SOLARA_DISABLED_COMMANDS);
     titles.openFile = `Open in ${PRODUCT}`;
   }
 

@@ -12,7 +12,7 @@ if (!appArg) {
   console.error(`usage: node pane-roots-placement-test.mjs <Debug Solara.app> [--keep-data]
 
 The page overlays land in the same place whether the main root draws them or the per-tab pane roots do. Two hidden
-instances under the native shell (ARDIA_NATIVE_SHELL=1 ARDIA_NATIVE_PAGES_POOL=1), ARDIA_SHELL_PANES=0 and then =1,
+instances under the native shell (SOLARA_NATIVE_SHELL=1 SOLARA_NATIVE_PAGES_POOL=1), SOLARA_SHELL_PANES=0 and then =1,
 each in turn: a two-pane split with the find bar, a link's status and the CLI pill up on the left pane; the same
 after the split is resized; one pane with the toolbar hidden while scrolling, scrolled down and then up (as the page reports it), where the status
 bubble's offset follows the toolbar's slide frame by frame as far with pane roots as without; and the dock peek (RN's, or the native dock's shown from the window's left edge when the native sidebar column is on) over a closed sidebar with the address bar in the sidebar, sampled
@@ -22,7 +22,7 @@ the window snapshots (2x) of each state match pixel for pixel. In a split the fi
 left pane (status bubble, CLI pill) are left out of the pixel match: without pane roots the shell draws the main root's
 overlays under the native split pane, dimmed, which pane roots fix; their frames still have to match.
 
-Both legs pin the page pool off (ARDIA_TAB_POOL=0), so they compare RN's pages; a leg the pool still serves fails.
+Both legs pin the page pool off (SOLARA_TAB_POOL=0), so they compare RN's pages; a leg the pool still serves fails.
 A third instance, pane roots on and the pool on, takes the split and resized-split snapshots with the pool's page
 views, and pooled-same-split(-resized) require them to match the pane-roots leg pixel for pixel: both panes' pages
 placed and painted without a relayout. On a build whose SolaraTabPool doesn't serve pages they are pending (SKIP).`);
@@ -150,7 +150,7 @@ try {
   for (const { key: panes, panes: shellPanes, pool } of LEGS) {
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${panes}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: pool, ARDIA_SHELL_PANES: shellPanes },
+      env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_TAB_POOL: pool, SOLARA_SHELL_PANES: shellPanes },
       ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acLayout && !!globalThis.acCli",
     });
     const g = got[panes];
@@ -158,7 +158,7 @@ try {
     const initialSnapshot = await untilSnapshot("page pool capability", (s) => typeof s.poolAvailable === "boolean");
     assert.equal(initialSnapshot.poolAvailable, serving, "native/JS page pool availability");
     if (pool === "1") poolServing = serving;
-    else if (serving) throw new Error(`leg ${panes}: SolaraTabPool serves pages with ARDIA_TAB_POOL=0, so this leg can't test RN's pages`);
+    else if (serving) throw new Error(`leg ${panes}: SolaraTabPool serves pages with SOLARA_TAB_POOL=0, so this leg can't test RN's pages`);
     const snap = async (state) => {
       const path = join(scratch, `${panes}-${state}.png`);
       if (!(await run(`return shot(${JSON.stringify(path)});`))) throw new Error(`no snapshot for ${state}`);

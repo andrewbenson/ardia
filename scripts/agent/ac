@@ -10,7 +10,7 @@
 //   scripts/agent/ac -h | --help
 //
 // launch prints `pid port data log` and records the instance in <data>/instance.json; every other command finds it
-// there, and only ever signals that process (pid, start time and binary). The app runs hidden (ARDIA_BACKGROUND=1,
+// there, and only ever signals that process (pid, start time and binary). The app runs hidden (SOLARA_BACKGROUND=1,
 // `open -g -n`) with Metro pinned by default (a proxy that refuses reloads: other agents' edits don't restart it).
 // After a quit that ends the app, quit removes a data dir under $TMPDIR/ac-* (AC_KEEP_DATA=1 keeps it); a test
 // run removes those of the instances it quit when it exits 0.
@@ -95,10 +95,10 @@ try {
       // Every running instance of any build, by its data dir (the browser process: helpers carry --type=).
       const ps = spawnSync("ps", ["-E", "-ww", "-ax", "-o", "pid=,command="], { encoding: "utf8" }).stdout.split("\n");
       for (const line of ps) {
-        const m = /^\s*(\d+)\s+(\S.*?\/Contents\/MacOS\/(?:Ardia|Solara))(?:\s|$)/.exec(line);
+        const m = /^\s*(\d+)\s+(\S.*?\/Contents\/MacOS\/(?:Solara|Solara))(?:\s|$)/.exec(line);
         if (!m || line.includes("--type=")) continue;
-        const data = / ARDIA_DATA_DIR=(\S+)/.exec(line)?.[1] ?? "(no data dir: not a test instance)";
-        console.log(`${m[1]}  ${data}  ${m[2].replace(/\/Contents\/MacOS\/(?:Ardia|Solara)$/, "")}`);
+        const data = / SOLARA_DATA_DIR=(\S+)/.exec(line)?.[1] ?? "(no data dir: not a test instance)";
+        console.log(`${m[1]}  ${data}  ${m[2].replace(/\/Contents\/MacOS\/(?:Solara|Solara)$/, "")}`);
       }
     }
   } else {

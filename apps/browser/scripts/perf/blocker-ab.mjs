@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// A/B of Ardia's content blocker (uBlock Origin) on xbench's rows: the same app with the blocker on (as shipped)
+// A/B of Solara's content blocker (uBlock Origin) on xbench's rows: the same app with the blocker on (as shipped)
 // and off, interleaved. Run only with the Mac quiet (no other benchmark, build or instance running).
 //
 //   node apps/browser/scripts/perf/blocker-ab.mjs prepare --out <dir> [--app <Solara.app>]
-//       makes <dir>/off-home: a HOME whose Ardia profile has the blocker switched off (uBO trusts every site and
-//       doesn't update its lists, as Ardia's own switch leaves it), by
+//       makes <dir>/off-home: a HOME whose Solara profile has the blocker switched off (uBO trusts every site and
+//       doesn't update its lists, as Solara's own switch leaves it), by
 //       launching the app hidden once on it
 //   node apps/browser/scripts/perf/blocker-ab.mjs run --out <dir> [--app <Solara.app>] [-- <more xbench options>]
-//       xbench run --browsers ardia,ardia-off with --base ardia-off=<dir>/off-home, rows session,restore,link,
+//       xbench run --browsers solara,solara-off with --base solara-off=<dir>/off-home, rows session,restore,link,
 //       then xbench report into <dir>/table.md
 //
-//     --app <path>   the Ardia copy (default /tmp/ac-xbench/apps/ardia/Ardia.app); never a bundle in /Applications
+//     --app <path>   the Solara copy (default /tmp/ac-xbench/apps/solara/Solara.app); never a bundle in /Applications
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -27,7 +27,7 @@ const { values: opt, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     out: { type: "string" },
-    app: { type: "string", default: "/tmp/ac-xbench/apps/ardia/Ardia.app" },
+    app: { type: "string", default: "/tmp/ac-xbench/apps/solara/Solara.app" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -38,7 +38,7 @@ if (opt.help || !positionals[0] || !opt.out) {
 }
 
 const EXTENSION = "fajbdaomknpkicfjcpipdmcpoamdmilh";
-const OFF = "/^(?:ardia-blocking-off|)/";
+const OFF = "/^(?:solara-blocking-off|)/";
 const out = resolve(opt.out);
 const app = realpathSync(resolve(opt.app));
 const offHome = join(out, "off-home");
@@ -92,8 +92,8 @@ async function prepare() {
 function run() {
   if (!existsSync(join(out, "off-home.json"))) throw new Error(`run prepare first (no ${join(out, "off-home.json")})`);
   const xbench = join(here, "xbench.mjs");
-  const args = ["run", "--out", join(out, "bench"), "--browsers", "ardia,ardia-off", "--app", `ardia=${app}`, "--app", `ardia-off=${app}`,
-    "--base", `ardia-off=${offHome}`, "--rows", "session,restore,link", ...more];
+  const args = ["run", "--out", join(out, "bench"), "--browsers", "solara,solara-off", "--app", `solara=${app}`, "--app", `solara-off=${app}`,
+    "--base", `solara-off=${offHome}`, "--rows", "session,restore,link", ...more];
   const r = spawnSync(process.execPath, [xbench, ...args], { stdio: "inherit" });
   if (r.status !== 0) process.exit(r.status ?? 1);
   execFileSync(process.execPath, [xbench, "report", "--out", join(out, "bench"), "--json", join(out, "bench.json"), "--md", join(out, "table.md")], { stdio: "inherit" });

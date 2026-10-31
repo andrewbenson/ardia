@@ -11,10 +11,10 @@ import {
   type SiteSettingType,
   type SiteSettingValue,
   type SiteSettings,
-} from "@ardia/ardiacore";
-import { displayHost } from "@ardia/core";
-import { nativeToolbarAvailable } from "@ardia/settings";
-import { confirm, showMenu } from "@ardia/shell";
+} from "@solara/solaracore";
+import { displayHost } from "@solara/core";
+import { nativeToolbarAvailable } from "@solara/settings";
+import { confirm, showMenu } from "@solara/shell";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useTheme } from "../../lib/theme";

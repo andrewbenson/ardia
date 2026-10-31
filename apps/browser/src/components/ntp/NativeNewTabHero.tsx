@@ -1,4 +1,4 @@
-import { NativeNewTab, type NativeNewTabHandle } from "@ardia/settings";
+import { NativeNewTab, type NativeNewTabHandle } from "@solara/settings";
 import { useEffect, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { heroBarFocus } from "../../lib/focusClaims";

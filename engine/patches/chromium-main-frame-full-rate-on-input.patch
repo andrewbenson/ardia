@@ -26,16 +26,16 @@ diff --git a/cc/scheduler/scheduler_state_machine.h b/cc/scheduler/scheduler_sta
    void DidDrawInternal(DrawResult draw_result);
    void UpdateConsecutiveNoDamageThrottlingInterval();
    bool DisableThrottlingDueToHighFramerateRequests() const;
-+  void ArdiaKeepMainFramesUnthrottledUntil(base::TimeTicks until);
++  void SolaraKeepMainFramesUnthrottledUntil(base::TimeTicks until);
  
    const SchedulerSettings settings_;
  
 @@ -461,6 +462,7 @@
    base::TimeTicks last_sent_begin_main_frame_time_;
    base::TimeDelta main_frame_throttled_interval_;
-   bool ardia_unthrottle_after_show_pending_ = true;
-+  const base::TimeDelta ardia_full_rate_after_input_;
-   base::TimeTicks ardia_unthrottled_main_frames_until_;
+   bool solara_unthrottle_after_show_pending_ = true;
++  const base::TimeDelta solara_full_rate_after_input_;
+   base::TimeTicks solara_unthrottled_main_frames_until_;
    base::TimeDelta unthrottled_frame_interval_;
    base::TimeDelta main_frame_consecutive_no_damage_throttled_interval_;
 diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_state_machine.cc
@@ -46,9 +46,9 @@ diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_st
  constexpr float kFrameThrottlingSlackFactor = 0.9;
  
 +BASE_FEATURE_PARAM(base::TimeDelta,
-+                   kArdiaFullRateAfterInput,
++                   kSolaraFullRateAfterInput,
 +                   &features::kThrottleMainFrameTo60Hz,
-+                   "ardia_full_rate_after_input",
++                   "solara_full_rate_after_input",
 +                   base::Seconds(1));
 +
  bool IsEligibleToThrottleMainFrameRate() {
@@ -58,20 +58,20 @@ diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_st
  
  SchedulerStateMachine::SchedulerStateMachine(const SchedulerSettings& settings)
      : settings_(settings),
-+      ardia_full_rate_after_input_(kArdiaFullRateAfterInput.Get()),
++      solara_full_rate_after_input_(kSolaraFullRateAfterInput.Get()),
        throttle_repeated_no_damage_frames_(base::FeatureList::IsEnabled(
            features::kThrottleRepeatedNoDamageFrames)) {}
  
 @@ -1277,8 +1284,12 @@
    last_begin_impl_frame_time_ = args.frame_time;
-   if (ardia_unthrottle_after_show_pending_) {
-     ardia_unthrottle_after_show_pending_ = false;
--    ardia_unthrottled_main_frames_until_ = args.frame_time + base::Seconds(1);
-+    ArdiaKeepMainFramesUnthrottledUntil(args.frame_time + base::Seconds(1));
+   if (solara_unthrottle_after_show_pending_) {
+     solara_unthrottle_after_show_pending_ = false;
+-    solara_unthrottled_main_frames_until_ = args.frame_time + base::Seconds(1);
++    SolaraKeepMainFramesUnthrottledUntil(args.frame_time + base::Seconds(1));
    }
 +  if (is_scrolling_) {
-+    ArdiaKeepMainFramesUnthrottledUntil(args.frame_time +
-+                                        ardia_full_rate_after_input_);
++    SolaraKeepMainFramesUnthrottledUntil(args.frame_time +
++                                        solara_full_rate_after_input_);
 +  }
  
    // Cache the values from the previous impl frame before reseting them for this
@@ -89,19 +89,19 @@ diff --git a/cc/scheduler/scheduler_state_machine.cc b/cc/scheduler/scheduler_st
    // regressions on input when we do actually want to unthrottle.
    consecutive_no_damage_main_frames_ = 0;
    UpdateConsecutiveNoDamageThrottlingInterval();
-+  if (ardia_full_rate_after_input_.is_positive()) {
-+    ArdiaKeepMainFramesUnthrottledUntil(
++  if (solara_full_rate_after_input_.is_positive()) {
++    SolaraKeepMainFramesUnthrottledUntil(
 +        (begin_impl_frame_state_ != BeginImplFrameState::IDLE
 +             ? last_begin_impl_frame_time_
 +             : now) +
-+        ardia_full_rate_after_input_);
++        solara_full_rate_after_input_);
 +  }
  }
  
-+void SchedulerStateMachine::ArdiaKeepMainFramesUnthrottledUntil(
++void SchedulerStateMachine::SolaraKeepMainFramesUnthrottledUntil(
 +    base::TimeTicks until) {
-+  ardia_unthrottled_main_frames_until_ =
-+      std::max(ardia_unthrottled_main_frames_until_, until);
++  solara_unthrottled_main_frames_until_ =
++      std::max(solara_unthrottled_main_frames_until_, until);
 +}
 +
  void SchedulerStateMachine::SetNeedsOneBeginImplFrame() {
@@ -216,7 +216,7 @@ diff --git a/cc/scheduler/scheduler_state_machine_unittest.cc b/cc/scheduler/sch
 +  base::test::ScopedFeatureList scoped_feature_list_;
 +  scoped_feature_list_.InitAndEnableFeatureWithParameters(
 +      features::kThrottleMainFrameTo60Hz,
-+      {{"ardia_full_rate_after_input", "0s"}});
++      {{"solara_full_rate_after_input", "0s"}});
 +
 +  SchedulerSettings default_scheduler_settings;
 +  StateMachine state(default_scheduler_settings);

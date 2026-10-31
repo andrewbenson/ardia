@@ -18,7 +18,7 @@ export type CliNative = {
   addListener(name: "onInstallLine", listener: (e: { line: string }) => void): EventSubscription;
 };
 
-const Cli = optionalNativeModule("ArdiaCli");
+const Cli = optionalNativeModule("SolaraCli");
 
 export const installedCliVersion = () => Cli?.installedVersion() ?? null;
 

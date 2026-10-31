@@ -1,7 +1,7 @@
 [project]
-name = "ardia-cli"
+name = "solara-cli"
 version = "0.0.0.dev0"
-description = "The ardia command: drive a running Ardia from Python."
+description = "The solara command: drive a running Solara from Python."
 license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
@@ -25,7 +25,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ardia = "ardia_cli.cli:main"
+solara = "solara_cli.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12,<0.13"]

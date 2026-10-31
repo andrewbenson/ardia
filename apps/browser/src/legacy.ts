@@ -1,16 +1,16 @@
 export const LEGACY_BOOKMARK_SEED = "netnyahoo-bookmark:";
 
 export const LEGACY_URLS: [string, string][] = [
-  ["netnyahoo://yahu", "ardia://game"],
+  ["netnyahoo://yahu", "solara://game"],
   ["chrome://yahu", "chrome://game"],
-  ["netnyahoo://", "ardia://"],
+  ["netnyahoo://", "solara://"],
 ];
 
 export const LEGACY_KEYS: Record<string, string> = {
-  openLinksInSmallYahu: "openLinksInLittleArdia",
-  smallYahuSize: "littleArdiaSize",
-  newSmallYahu: "newLittleArdia",
-  toggleOpenLinksInSmallYahu: "toggleOpenLinksInLittleArdia",
+  openLinksInSmallYahu: "openLinksInLittleSolara",
+  smallYahuSize: "littleSolaraSize",
+  newSmallYahu: "newLittleSolara",
+  toggleOpenLinksInSmallYahu: "toggleOpenLinksInLittleSolara",
 };
 
 export function fromLegacyUrl(url: string): string {

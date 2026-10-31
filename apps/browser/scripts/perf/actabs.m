@@ -238,7 +238,7 @@ static unsigned short ModKeyCode(NSEventModifierFlags f) {
     if (!w.isVisible || w.frame.size.width < 300) continue;
     NSMutableArray *webs = [NSMutableArray array];
     NSMutableArray<NSView *> *found = [NSMutableArray array];
-    CollectClass(w.contentView, @"ArdiaCoreWebView", found);
+    CollectClass(w.contentView, @"SolaraCoreWebView", found);
     NSView *content = w.contentView;
     for (NSView *v in found) {
       if (v.isHiddenOrHasHiddenAncestor || v.frame.size.width < 50) continue;
@@ -285,7 +285,7 @@ static void CountAdds(void) {
 }
 
 __attribute__((constructor)) static void Start(void) {
-  const char *dir = getenv("ARDIA_DATA_DIR");
+  const char *dir = getenv("SOLARA_DATA_DIR");
   if (!dir || !getenv("AC_BENCH_TABS")) return;
   if (![NSBundle.mainBundle.bundlePath hasSuffix:@".app"] || [NSBundle.mainBundle.bundlePath containsString:@"Helper"]) return;
   gDir = [NSString stringWithUTF8String:dir];

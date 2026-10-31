@@ -10,7 +10,7 @@ if (!appArg) {
   console.error(`usage: node history-popover-test.mjs <Debug Solara.app> [--keep-data]
 
 The back button's history popover on a tab that went ONE, TWO, THREE on local pages, under RN's shell (RN hosting
-the native panel) and then the native one (ARDIA_NATIVE_SHELL=1: HistoryPanelView's PopoverView in the pane overlay
+the native panel) and then the native one (SOLARA_NATIVE_SHELL=1: HistoryPanelView's PopoverView in the pane overlay
 container on top of the shell's card, framed to the page area RN measures). The native card sits where the hosted
 one is told to (300 wide, 8 from the page's top, the left RN works out from the back button's anchor), lists TWO and
 ONE and fades in; a click on ONE through the window goes back two entries and closes it; reopened, a click on the
@@ -35,7 +35,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const menu = () => globalThis.acSwipe.history.menu.getState().menu;
@@ -80,7 +80,7 @@ try {
     const tag = nativeShell ? "native" : "rn";
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
+      env: { SOLARA_NATIVE_SHELL: nativeShell ? "1" : "0" },
       ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe?.history",
     });
     const number = await until("the window", `return C.chromeWindows().then((ws) => ws.find((w) => w.visible)?.window ?? null);`, 15000);

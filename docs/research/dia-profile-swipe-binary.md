@@ -38,7 +38,7 @@ At `0x100597ba0` it reads `scrollingDeltaX`, multiplies by **−0.5** at
 `0x100597ba4`, adds it to the current native position, and publishes that position
 without a JavaScript bridge.
 
-Ardia 0.2.17 still sends each event through `ACSwipe.mm` →
+Solara 0.2.17 still sends each event through `ACSwipe.mm` →
 `SwipeArea.swipeEvent` / Expo `EventDispatcher` → `ProfileSwipeArea.onSwipe` →
 `ProfilePager.track` → `Animated.Value.setValue` → native animation graph.
 Only the settle animation was moved fully native. Native-driven `Animated.Value`

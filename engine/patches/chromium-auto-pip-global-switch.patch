@@ -5,9 +5,9 @@ diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_helpe
  #include "components/safe_browsing/core/browser/db/v5_get_hash_protocol_manager.h"
  #endif
  
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
 +
-+bool g_ardia_auto_picture_in_picture_off = false;
++bool g_solara_auto_picture_in_picture_off = false;
 +
  using OcclusionState =
      AutoPictureInPictureWindowOcclusionHelperBase::OcclusionState;
@@ -16,7 +16,7 @@ diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_helpe
  }
  
  ContentSetting AutoPictureInPictureTabHelper::GetCurrentContentSetting() const {
-+  if (g_ardia_auto_picture_in_picture_off) {
++  if (g_solara_auto_picture_in_picture_off) {
 +    return CONTENT_SETTING_BLOCK;
 +  }
    GURL url = web_contents()->GetLastCommittedURL();

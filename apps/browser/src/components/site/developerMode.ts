@@ -1,5 +1,5 @@
 import { developerModeOf, isDeveloperMode, NO_DEVELOPER_MODE, withDeveloperMode, developerHostOf, type DeveloperModeState, type DeveloperReload } from "../../lib/developerMode";
-import { resolveInput } from "@ardia/core";
+import { resolveInput } from "@solara/core";
 import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
 import { useTabLive } from "../../store/hooks";

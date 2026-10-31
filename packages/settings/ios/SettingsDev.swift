@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 #if DEBUG
 import Carbon
 import SwiftUI
@@ -150,7 +150,7 @@ enum SettingsDev {
     #if DEBUG
     case "script":
       let env = ProcessInfo.processInfo.environment
-      guard env["ARDIA_BACKGROUND"] == "1", env["ARDIA_DATA_DIR"]?.isEmpty == false else { return #"{"error":"test instances only"}"# }
+      guard env["SOLARA_BACKGROUND"] == "1", env["SOLARA_DATA_DIR"]?.isEmpty == false else { return #"{"error":"test instances only"}"# }
       guard let data = argument?.data(using: .utf8), let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
         let run = ShellScripting.nativeCommand
       else { return #"{"error":"no native scripting"}"# }
@@ -165,7 +165,7 @@ enum SettingsDev {
       return json(answer)
     case "secureFieldProbe":
       let env = ProcessInfo.processInfo.environment
-      guard env["ARDIA_BACKGROUND"] == "1", env["ARDIA_DATA_DIR"]?.isEmpty == false else { return #"{"error":"test instances only"}"# }
+      guard env["SOLARA_BACKGROUND"] == "1", env["SOLARA_DATA_DIR"]?.isEmpty == false else { return #"{"error":"test instances only"}"# }
       return json(SecureFieldProbe.run(argument ?? "window", settings: window))
     case "focusState":
       return json(SecureFieldProbe.focusState())

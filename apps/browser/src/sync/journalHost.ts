@@ -1,7 +1,7 @@
-import { readDocument, writeDocument } from "@ardia/shell";
-import type { ScopeState } from "@ardia/sync";
+import { readDocument, writeDocument } from "@solara/shell";
+import type { ScopeState } from "@solara/sync";
 import { GEN_DOC, openJournal, type EditJournal } from "./editJournal";
-import { nativeSyncAnchor, nativeSyncAnchorSupported, setNativeSyncAnchor } from "@ardia/store";
+import { nativeSyncAnchor, nativeSyncAnchorSupported, setNativeSyncAnchor } from "@solara/store";
 import { nativeOwnsWorkspace, nativeStoreActive } from "../store/nativeStore";
 import { syncRedesign } from "./redesignSwitch";
 

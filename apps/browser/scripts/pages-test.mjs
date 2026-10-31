@@ -13,7 +13,7 @@
 // opens the meeting and Ignore dismisses it. The page prompts (permission, password, autofill, external app, engine
 // offer, device chooser, blocked pop-ups) open in a native frame; Esc or a click on the page leaves the first six
 // unanswered and closes the pop-ups list, and a pop-up's row opens just that one. The native frame is
-// the PopoverView, or the pane prompts when ARDIA_NATIVE_PANE_PROMPTS hosts them: those read only what the engine and
+// the PopoverView, or the pane prompts when SOLARA_NATIVE_PANE_PROMPTS hosts them: those read only what the engine and
 // the page send, so the page really asks for the permission and the pool's page events bring the password, autofill
 // and external app prompts. The pane prompts have no test input for the device chooser; it is reported unmeasured. A
 // click on the native frame's Allow less than 0.5 s after the prompt shows is ignored (promptGuard) and one 0.8 s
@@ -69,7 +69,7 @@ const downloads = [download("d1", "report.pdf", "finished"), download("d2", "pho
 let app = null;
 let nativePrompts = null;
 const dev = (action) =>
-  app.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, ${JSON.stringify(action)}))`);
+  app.eval(`const C = globalThis.expo.modules.SolaraCEF; return C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, ${JSON.stringify(action)}))`);
 const page = async () => JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devPages()`)).pages[0];
 const until = async (test, ms = 3000) => {
   const end = Date.now() + ms;
@@ -118,8 +118,8 @@ const POPUPS = JSON.stringify([1, 2, 3].map((n) => ({ id: `pop${n}`, url: `https
 
 async function promptOutcomes(instance) {
   const run = (action) =>
-    instance.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, ${JSON.stringify(action)}))`);
-  const ids = JSON.parse(await instance.eval(`const C = globalThis.expo.modules.ArdiaCEF; const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
+    instance.eval(`const C = globalThis.expo.modules.SolaraCEF; return C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, ${JSON.stringify(action)}))`);
+  const ids = JSON.parse(await instance.eval(`const C = globalThis.expo.modules.SolaraCEF; const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
     const tab = s.newTab(w, { url: ${JSON.stringify(`${base}/prompts`)} });
     return C.chromeWindows().then((ws) => JSON.stringify({ tab, win: ws.find((x) => x.hasRoot).window }))`));
   await run("fakeActiveClicks");
@@ -213,7 +213,7 @@ async function promptOutcomes(instance) {
 }
 
 try {
-  app = await launch(resolve(appArg), { data, onboarded: true, env: { ARDIA_CALENDAR_FIXTURE: "1" } });
+  app = await launch(resolve(appArg), { data, onboarded: true, env: { SOLARA_CALENDAR_FIXTURE: "1" } });
   await app.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devPages" });
   await sleep(5000);
   await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; for (const d of ${JSON.stringify(downloads)}) s.upsertDownload(d); s.setDownloadsOpen(w, false); ac.pages.openInternalPage("downloads", w); return true`);
@@ -585,7 +585,7 @@ try {
   const alertButtons = async () => {
     const page = await kindPage("meetingAlert");
     if (page) return { join: frameOf(page, "Join"), ignore: frameOf(page, "Ignore") };
-    const win = await app.eval(`return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
+    const win = await app.eval(`return globalThis.expo.modules.SolaraCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
     const f = JSON.parse(await app.eval(`return globalThis.expo.modules.SolaraPages.devViewFrame(${win}, "MeetingAlertFrameView")`));
     if (!f.found || f.height <= 100) return null;
     return { join: { x: f.x + 150 - 50, y: f.y + f.height - 27 - 10, width: 100, height: 20 }, ignore: { x: f.x + 283 - 6, y: f.y + 19 - 6, width: 12, height: 12 } };
@@ -655,7 +655,7 @@ try {
   });
 
   await rep.check("a click on the native frame's Allow within 0.5 s of the prompt is ignored, and 0.8 s later it answers", async () => {
-    const ids = JSON.parse(await app.eval(`const C = globalThis.expo.modules.ArdiaCEF; const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
+    const ids = JSON.parse(await app.eval(`const C = globalThis.expo.modules.SolaraCEF; const s = ac.store.getState(); const w = Object.keys(s.windows)[0];
       const tab = s.newTab(w, { url: ${JSON.stringify(`${base}/guard`)} });
       return C.chromeWindows().then((ws) => JSON.stringify({ tab, win: ws.find((x) => x.hasRoot).window }))`));
     await sleep(2000);
@@ -701,12 +701,12 @@ mkdirSync(shellData, { recursive: true });
 writeFileSync(join(shellData, "calendar-fixture.json"), calendarFixture);
 let shell = null;
 try {
-  shell = await launch(resolve(appArg), { data: shellData, onboarded: true, env: { ARDIA_NATIVE_SHELL: "1", ARDIA_CALENDAR_FIXTURE: "1" } });
+  shell = await launch(resolve(appArg), { data: shellData, onboarded: true, env: { SOLARA_NATIVE_SHELL: "1", SOLARA_CALENDAR_FIXTURE: "1" } });
   await shell.ready({ test: "return !!globalThis.expo?.modules?.SolaraPages?.devViewFrame" });
   await sleep(4000);
   await rep.check("under the native shell the meeting alert is in a native frame at RN's spot; Join opens the meeting, ✕ dismisses it", async () => {
-    const win = await shell.eval(`return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
-    const run = (action) => shell.eval(`return globalThis.expo.modules.ArdiaCEF.devWindow(${win}, ${JSON.stringify(action)})`);
+    const win = await shell.eval(`return globalThis.expo.modules.SolaraCEF.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
+    const run = (action) => shell.eval(`return globalThis.expo.modules.SolaraCEF.devWindow(${win}, ${JSON.stringify(action)})`);
     const press = async (x, y) => {
       await run(`mouse:down:${x},${y}`);
       await sleep(60);
@@ -722,7 +722,7 @@ try {
       return { ok: f.found && f.height > 100, f };
     }, 3000);
     assert.ok(shown.ok, `a native frame: ${JSON.stringify(shown.f)}`);
-    const width = await shell.eval(`return globalThis.expo.modules.ArdiaCEF.devWindow(${win}, "winfo").then((s) => JSON.parse(s).frame)`);
+    const width = await shell.eval(`return globalThis.expo.modules.SolaraCEF.devWindow(${win}, "winfo").then((s) => JSON.parse(s).frame)`);
     const windowWidth = Number(String(width).replace(/[{}]/g, "").split(",")[2]);
     assert.equal(shown.f.width, 300);
     assert.equal(shown.f.y, 52, "52 from the top, as RN");

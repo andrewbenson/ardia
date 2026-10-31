@@ -1,7 +1,7 @@
-import { CastMode, preferredCastMode, startCasting, stopCasting, type CastDialog, type CastSink } from "@ardia/ardiacore";
-import { openExternalURL, showMenu } from "@ardia/shell";
+import { CastMode, preferredCastMode, startCasting, stopCasting, type CastDialog, type CastSink } from "@solara/solaracore";
+import { openExternalURL, showMenu } from "@solara/shell";
 import { useEffect, useRef, useState } from "react";
-import { windowShellActive } from "@ardia/settings";
+import { windowShellActive } from "@solara/settings";
 import { useTheme, type Theme } from "../../lib/theme";
 import { useNativePaneOverlay } from "../layout/nativePaneOverlays";
 import { POPOVER_MARGIN } from "../layout/controls";

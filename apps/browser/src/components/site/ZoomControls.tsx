@@ -1,7 +1,7 @@
-import { Symbol } from "@ardia/shell";
+import { Symbol } from "@solara/shell";
 import { memo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { nativeToolbarAvailable, NativePanelView, windowShellActive } from "@ardia/settings";
+import { nativeToolbarAvailable, NativePanelView, windowShellActive } from "@solara/settings";
 import { useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";
 import { useTab, useWindowId } from "../../store/hooks";

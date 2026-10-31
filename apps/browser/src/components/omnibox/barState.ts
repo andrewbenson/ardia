@@ -1,4 +1,4 @@
-import type { SearchScope } from "@ardia/core";
+import type { SearchScope } from "@solara/core";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
 import { expectFocus, heroBarFocus } from "../../lib/focusClaims";

@@ -1,4 +1,4 @@
-import { launchEnvironment, readDocument, systemInfo, writeDocument } from "@ardia/shell";
+import { launchEnvironment, readDocument, systemInfo, writeDocument } from "@solara/shell";
 import { persistenceRefused } from "../../lib/persistLatch";
 import { nativeSafeMode } from "../../store/nativeStore";
 import { create } from "zustand";
@@ -73,7 +73,7 @@ export function trackAppVersion(): boolean {
   const updated = saved ? saved.lastVersion !== version : !!readDocument("session.json");
   let pending = saved?.pending ?? null;
   if (__DEV__) {
-    if (launchEnvironment("ARDIA_WHATS_NEW") === "1") pending = { version, since: Date.now() };
+    if (launchEnvironment("SOLARA_WHATS_NEW") === "1") pending = { version, since: Date.now() };
   } else if (updated) {
     pending = notesFor(version) ? { version, since: Date.now() } : null;
   }

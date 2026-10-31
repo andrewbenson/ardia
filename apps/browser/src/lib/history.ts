@@ -1,7 +1,7 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import { onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "@ardia/ardiacore";
-import { readDocument, removeDocument } from "@ardia/shell";
-import { nativeAddHistoryVisits, startNativeHistoryCatalog } from "@ardia/settings";
+import { onHistoryChanged, queryHistory, watchHistory, type EngineHistoryEntry, type HistoryChange } from "@solara/solaracore";
+import { readDocument, removeDocument } from "@solara/shell";
+import { nativeAddHistoryVisits, startNativeHistoryCatalog } from "@solara/settings";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { afterFirstWindow } from "./afterFirstWindow";
 import { MAX_HISTORY, MAX_VISIT_TIMES } from "../store/history";

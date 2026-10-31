@@ -9,7 +9,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node shell-modal-a11y-test.mjs <Debug Solara.app> [--keep-data]
 
-What the accessibility tree reaches in a shell window (ARDIA_NATIVE_SHELL=1 with the main root on top, the pool and
+What the accessibility tree reaches in a shell window (SOLARA_NATIVE_SHELL=1 with the main root on top, the pool and
 the pane roots) while the main root shows a modal. The shell's WindowShellAccessibility walks the window's
 accessibilityChildren the way VoiceOver does and counts the elements by the shell layer they live in. At rest and in a
 split the card's native layers (and the native sidebar's, when it is on) are reachable; in a split the main root has
@@ -36,13 +36,13 @@ const fixture = session({
   ],
   settings: { warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
 });
-const SHELL = { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_MAIN_TOP: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1" };
+const SHELL = { SOLARA_NATIVE_SHELL: "1", SOLARA_SHELL_MAIN_TOP: "1", SOLARA_SHELL_PANES: "1", SOLARA_NATIVE_PAGES_POOL: "1" };
 const layersOf = (reach) => Object.keys(reach ?? {}).filter((k) => !k.startsWith("outside:") && k !== "truncated");
 
 let instance = null;
 try {
   for (const leg of ["shell", "rn"]) {
-    instance = await launch(app, { data: join(scratch, `data-${leg}`), fresh: true, session: fixture, onboarded: true, env: leg === "shell" ? SHELL : { ARDIA_NATIVE_SHELL: "0" } });
+    instance = await launch(app, { data: join(scratch, `data-${leg}`), fresh: true, session: fixture, onboarded: true, env: leg === "shell" ? SHELL : { SOLARA_NATIVE_SHELL: "0" } });
     const run = (body) => instance.eval(body, { timeout: 20000 });
     const reach = () => run(`return globalThis.expo.modules.SolaraWindowShell.accessibilityReach("w1")`);
     const settle = () => sleep(1200);

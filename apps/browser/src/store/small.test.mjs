@@ -27,7 +27,7 @@ const openInMainWindow = (id) => {
 const smallWindows = () => Object.values(S().windows).filter((w) => w.kind === "small");
 const lastSmall = () => smallWindows().at(-1);
 
-test("a link from another app opens Little Ardia in the profile of the last active window, not the default one", () => {
+test("a link from another app opens Little Solara in the profile of the last active window, not the default one", () => {
   const { work, a } = twoProfilesTwoWindows();
   assert.equal(S().settings.defaultProfileId, "default");
   assert.equal(lastActiveProfile(S()), work);
@@ -69,7 +69,7 @@ test("several links, or the setting off, go to the last active window and its pr
   assert.equal(mainWindowFor(S(), lastActiveProfile(S())), a);
 });
 
-test("a private window counts as the regular profile it was opened from; Little Ardia is never private", () => {
+test("a private window counts as the regular profile it was opened from; Little Solara is never private", () => {
   const { work, a, b } = twoProfilesTwoWindows();
   const priv = S().createWindow({ incognito: true });
   assert.equal(S().windows[priv].originalProfileId, work);

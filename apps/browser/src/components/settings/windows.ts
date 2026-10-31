@@ -1,5 +1,5 @@
-import { openWindow } from "@ardia/shell";
-import { navigateNativeSettings } from "@ardia/settings";
+import { openWindow } from "@solara/shell";
+import { navigateNativeSettings } from "@solara/settings";
 
 export const SETTINGS_WINDOW_ID = "settings";
 export const IMPORT_WINDOW_ID = "import";

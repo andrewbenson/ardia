@@ -1,4 +1,4 @@
-import { changeCaptureSource, stopCapture } from "@ardia/ardiacore";
+import { changeCaptureSource, stopCapture } from "@solara/solaracore";
 import { useEffect, useRef } from "react";
 import { Animated, Easing } from "react-native";
 import { useTheme } from "../../lib/theme";

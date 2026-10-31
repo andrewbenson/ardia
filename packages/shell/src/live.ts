@@ -40,7 +40,7 @@ export type CalendarNative = {
   events(start: number, end: number, calendarIds: string[]): Promise<SystemCalendarEvent[]>;
 };
 
-const Calendar = nativeModule("ArdiaCalendar");
+const Calendar = nativeModule("SolaraCalendar");
 
 export const calendarAuthorization = (): CalendarAuthorization => Calendar.authorizationStatus();
 export const requestCalendarAccess = () => Calendar.requestAccess();
@@ -55,7 +55,7 @@ export type KeychainNative = {
   delete(account: string): Promise<boolean>;
 };
 
-const Keychain = nativeModule("ArdiaKeychain");
+const Keychain = nativeModule("SolaraKeychain");
 
 export const keychainGet = (account: string) => Keychain.get(account);
 export const keychainSet = (account: string, secret: string) => Keychain.set(account, secret);

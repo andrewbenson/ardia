@@ -37,22 +37,22 @@ import Testing
     #expect(row(model, .nativeSidebar).enabled)
     #expect(!model.pendingRelaunch)
     model.set(.nativeShell, false)
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
+    #expect(defaults.string(forKey: "SOLARA_NATIVE_SHELL") == "0")
     #expect(!row(model, .shellPanes).enabled)
     #expect(model.pendingRelaunch)
     model.set(.nativeShell, true)
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
+    #expect(defaults.object(forKey: "SOLARA_NATIVE_SHELL") == nil)
     #expect(row(model, .shellPanes).enabled)
     #expect(!model.pendingRelaunch)
   }
 
   @Test func aSwitchSetWithoutItsDependencyShowsOffAndSaysWhy() {
-    let environment = model(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "1"], defaults: scratchDefaults())
+    let environment = model(environment: ["SOLARA_NATIVE_SHELL": "0", "SOLARA_SHELL_PANES": "1"], defaults: scratchDefaults())
     #expect(!row(environment, .shellPanes).on)
     #expect(row(environment, .shellPanes).waiting == "Off until Native window is on.")
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_SHELL_PANES")
-    defaults.set("0", forKey: "ARDIA_NATIVE_SHELL")
+    defaults.set("1", forKey: "SOLARA_SHELL_PANES")
+    defaults.set("0", forKey: "SOLARA_NATIVE_SHELL")
     let saved = model(defaults: defaults)
     #expect(!row(saved, .shellPanes).on)
     #expect(!row(saved, .shellPanes).enabled)
@@ -66,12 +66,12 @@ import Testing
 
   @Test func turnAllOffClearsEverySavedSwitch() {
     let defaults = scratchDefaults()
-    defaults.set("0", forKey: "ARDIA_NATIVE_SIDEBAR")
-    defaults.set("1", forKey: "ARDIA_SHELL_MAIN_TOP")
+    defaults.set("0", forKey: "SOLARA_NATIVE_SIDEBAR")
+    defaults.set("1", forKey: "SOLARA_SHELL_MAIN_TOP")
     let model = model(defaults: defaults)
     model.turnAllOff()
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_SIDEBAR") == nil)
-    #expect(defaults.object(forKey: "ARDIA_SHELL_MAIN_TOP") == nil)
+    #expect(defaults.object(forKey: "SOLARA_NATIVE_SIDEBAR") == nil)
+    #expect(defaults.object(forKey: "SOLARA_SHELL_MAIN_TOP") == nil)
     #expect(model.pendingRelaunch)
   }
 
@@ -82,30 +82,30 @@ import Testing
     empty.reveal(optionHeld: true)
     #expect(empty.revealed)
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_SHELL_PANES")
+    defaults.set("1", forKey: "SOLARA_SHELL_PANES")
     let saved = model(defaults: defaults)
     saved.reveal(optionHeld: false)
     #expect(saved.revealed)
-    let environment = model(environment: ["ARDIA_NATIVE_SIDEBAR": "1"], defaults: scratchDefaults())
+    let environment = model(environment: ["SOLARA_NATIVE_SIDEBAR": "1"], defaults: scratchDefaults())
     environment.reveal(optionHeld: false)
     #expect(environment.revealed)
   }
 
   @Test func anIsolatedInstanceShowsItsEnvironmentAndCannotSave() {
     let defaults = scratchDefaults()
-    let model = model(environment: ["ARDIA_DATA_DIR": "/tmp/x", "ARDIA_NATIVE_SHELL": "1"], defaults: defaults)
+    let model = model(environment: ["SOLARA_DATA_DIR": "/tmp/x", "SOLARA_NATIVE_SHELL": "1"], defaults: defaults)
     #expect(!model.stored.writable)
     #expect(model.note.hasPrefix("This instance has its own data folder"))
     #expect(row(model, .nativeShell).on)
     #expect(row(model, .nativeShell).fromEnvironment)
     #expect(model.rows.allSatisfy { !$0.enabled })
     model.set(.nativeSidebar, true)
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_SIDEBAR") == nil)
+    #expect(defaults.object(forKey: "SOLARA_NATIVE_SIDEBAR") == nil)
   }
 
   @Test func aSafeLaunchAfterFailedLaunchesSaysSoAndLeavesTheSwitchesAlone() {
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_SHELL_PANES")
+    defaults.set("1", forKey: "SOLARA_SHELL_PANES")
     defaults.set(2, forKey: "SolaraLaunchSwitchFailedLaunches")
     let running = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: false, optionHeld: { false })
     let model = ExperimentsModel(running: running, stored: StoredLaunchSwitches(running, defaults: defaults))
@@ -113,17 +113,17 @@ import Testing
     #expect(model.revealed)
     #expect(model.note.hasPrefix("This launch is in safe mode."))
     #expect(row(model, .nativeShell).on && row(model, .shellPanes).on)
-    #expect(defaults.string(forKey: "ARDIA_SHELL_PANES") == "1")
-    #expect(defaults.object(forKey: "ARDIA_NATIVE_SHELL") == nil)
+    #expect(defaults.string(forKey: "SOLARA_SHELL_PANES") == "1")
+    #expect(defaults.object(forKey: "SOLARA_NATIVE_SHELL") == nil)
   }
 
   @Test func aDistributionBuildShowsTheDefaultOnSwitchesOnAndLocked() {
     let defaults = scratchDefaults()
-    defaults.set("0", forKey: "ARDIA_NATIVE_SHELL")
+    defaults.set("0", forKey: "SOLARA_NATIVE_SHELL")
     let running = LaunchSwitches.launching(environment: [:], defaults: defaults, distribution: true, optionHeld: { true })
     let model = ExperimentsModel(running: running, stored: StoredLaunchSwitches(running, defaults: defaults))
     #expect(model.note.hasPrefix("This launch is in safe mode."))
     #expect(model.rows.allSatisfy { $0.on && !$0.enabled })
-    #expect(defaults.string(forKey: "ARDIA_NATIVE_SHELL") == "0")
+    #expect(defaults.string(forKey: "SOLARA_NATIVE_SHELL") == "0")
   }
 }

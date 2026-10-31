@@ -25,7 +25,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   var emit: ((String, [String: Any]) -> Void)?
   private var closingFromJS = Set<String>()
   private weak var lastPlaced: NSWindow?
-  private static let lastFrameKey = "ArdiaLastWindowFrame"
+  private static let lastFrameKey = "SolaraLastWindowFrame"
   private var lastFrame = UserDefaults.standard.string(forKey: WindowManager.lastFrameKey) ?? UserDefaults.standard.string(forKey: "NSWindow Frame BrowserWindow")
   private(set) var auxKinds: [String: String] = [:]
   private(set) var smallIds = Set<String>()
@@ -455,15 +455,15 @@ final class WindowManager: NSObject, NSWindowDelegate {
     window.delegate = self
     auxKinds[id] = kind
     windows[id] = window
-    if !window.setFrameUsingName("Ardia\(kind.capitalized)") { window.center() }
-    window.setFrameAutosaveName("Ardia\(kind.capitalized)")
+    if !window.setFrameUsingName("Solara\(kind.capitalized)") { window.center() }
+    window.setFrameAutosaveName("Solara\(kind.capitalized)")
     if native == nil { keepContentSizedAcrossReloads(id: id, root: root) }
     relayoutRoot(window)
     window.makeKeyAndOrderFront(nil)
   }
 
   private func configureSmall(_ window: NSWindow) {
-    window.identifier = NSUserInterfaceItemIdentifier("ardia.window.small")
+    window.identifier = NSUserInterfaceItemIdentifier("solara.window.small")
     window.minSize = NSSize(width: 420, height: 300)
     window.tabbingMode = .disallowed
     window.collectionBehavior.insert(.moveToActiveSpace)
@@ -727,7 +727,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private var saveWait: Timer?
   private var lateSaveAlert: NSAlert?
-  private let background = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+  private let background = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
 
   private func waitForSave() {
     let timer = Timer(timeInterval: 5, repeats: false) { [weak self] _ in self?.saveIsLate() }
@@ -817,8 +817,8 @@ enum WindowMotion {
     static let main = Style(entranceDuration: 0.25, exitDuration: 0.18, entranceScale: 0.98, exitScale: 0.99)
   }
   private static let settleAfter: TimeInterval = 0.5
-  private static let entranceKey = "ardia.window.entrance"
-  private static let exitKey = "ardia.window.exit"
+  private static let entranceKey = "solara.window.entrance"
+  private static let exitKey = "solara.window.exit"
   private static let curve = CAMediaTimingFunction(controlPoints: 0.23, 1, 0.32, 1)
 
   private final class Look {
@@ -954,8 +954,8 @@ public enum FocusMoves {
 
 final class FocusHandoff {
   static let shared = FocusHandoff()
-  static let outgoingFocus = Notification.Name("ArdiaOutgoingFocus")
-  static let handoffEnded = Notification.Name("ArdiaFocusHandoffEnded")
+  static let outgoingFocus = Notification.Name("SolaraOutgoingFocus")
+  static let handoffEnded = Notification.Name("SolaraFocusHandoffEnded")
   static let editActions: Set<Selector> = [
     #selector(NSText.cut(_:)), #selector(NSText.copy(_:)), #selector(NSText.paste(_:)), #selector(NSText.selectAll(_:)),
     Selector(("pasteAndMatchStyle:")),
@@ -1290,7 +1290,7 @@ final class FocusHandoff {
   }
 
   private static let focusPageSelector = NSSelectorFromString("focusPage")
-  private static let webViewClass: AnyClass? = NSClassFromString("ArdiaCoreWebView")
+  private static let webViewClass: AnyClass? = NSClassFromString("SolaraCoreWebView")
 
   private static func webView(in view: NSView) -> NSView? {
     guard let webViewClass else { return nil }
@@ -1397,7 +1397,7 @@ final class DragPreview {
   private var lastPoint = NSPoint.zero
   private var shownAt = 0.0
   private var generation = 0
-  private let background = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
+  private let background = ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1"
   private var animation: Timer?
   private var desired = NSRect.zero
 

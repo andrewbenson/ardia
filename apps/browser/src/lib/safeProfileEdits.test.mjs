@@ -4,7 +4,7 @@ import { test } from "node:test";
 let status = { active: false, safeMode: null };
 const sent = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => status,
     dispatch: (json) => { sent.push(...[JSON.parse(json)].flat()); return JSON.stringify({ rev: 0 }); },
     addListener: () => ({ remove() {} }),
@@ -12,7 +12,7 @@ globalThis.acTestNativeModules = {
 };
 const { shellNativeModules } = await import("../test-native/shell.ts");
 const notices = [];
-shellNativeModules.ArdiaShell.confirm = async (options) => { notices.push(options); return { confirmed: false, suppressed: false }; };
+shellNativeModules.SolaraShell.confirm = async (options) => { notices.push(options); return { confirmed: false, suppressed: false }; };
 const { createProfilesSlice } = await import("../store/profiles.ts");
 const { startNativeStore, attachReplica } = await import("../store/nativeStore.ts");
 

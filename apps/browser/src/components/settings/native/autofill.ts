@@ -9,8 +9,8 @@ import {
   setAutofillSettings,
   type AddressInput,
   type CardInput,
-} from "@ardia/ardiacore";
-import type { SettingsHandler } from "@ardia/settings";
+} from "@solara/solaracore";
+import type { SettingsHandler } from "@solara/settings";
 import { load, resource, store } from "./resources";
 
 export const addresses = resource("addresses", (profile: string) => listAddresses(profile).catch(() => []));

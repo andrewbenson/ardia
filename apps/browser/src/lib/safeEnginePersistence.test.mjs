@@ -12,12 +12,12 @@ function persistence(category) {
   try {
     const original = process.env.SOLARA_ENGINE_BRIDGE_FIXTURE
       ? readFileSync(process.env.SOLARA_ENGINE_BRIDGE_FIXTURE, "utf8")
-      : source("packages/ardiacore/ios/ArdiaCoreEngineBridge.mm");
+      : source("packages/solaracore/ios/SolaraCoreEngineBridge.mm");
     const bridge = original
-      .replace('#import "ArdiaCoreEngineBridge.h"', "")
-      .replace('#import "ArdiaCoreInternal.h"', "")
-      .replace('#include "../../../engine/chromium/src/chrome/browser/ardia/public/ac_engine.h"', "");
-    const services = source("packages/ardiacore/ios/ArdiaCoreServices.mm");
+      .replace('#import "SolaraCoreEngineBridge.h"', "")
+      .replace('#import "SolaraCoreInternal.h"', "")
+      .replace('#include "../../../engine/chromium/src/chrome/browser/solara/public/ac_engine.h"', "");
+    const services = source("packages/solaracore/ios/SolaraCoreServices.mm");
     const helpers = services.slice(services.indexOf("NSDictionary *Parse("), services.indexOf("void (^gExtensionsHandler)"));
     const methods = [
       "+ (void)call:(NSString *)name profile:(NSString *)profile args:(NSDictionary *)args completion:",
@@ -26,13 +26,13 @@ function persistence(category) {
       "+ (void)addresses:", "+ (void)saveAddress:", "+ (void)cards:", "+ (void)saveCard:", "+ (void)deleteAutofillEntry:",
     ].map((signature) => declaration(services, signature));
     const production = [
-      source("engine/chromium/src/chrome/browser/ardia/public/ac_engine.h"),
-      source("packages/ardiacore/ios/ArdiaCoreEngineBridge.h"),
-      "typedef void (^ArdiaCoreResult)(NSDictionary *);",
-      "@interface ArdiaCoreServices : NSObject",
+      source("engine/chromium/src/chrome/browser/solara/public/ac_engine.h"),
+      source("packages/solaracore/ios/SolaraCoreEngineBridge.h"),
+      "typedef void (^SolaraCoreResult)(NSDictionary *);",
+      "@interface SolaraCoreServices : NSObject",
       ...methods.map((method) => `${method.slice(0, method.indexOf("{")).trim()};`),
       "@end", bridge, helpers,
-      "@implementation ArdiaCoreServices", ...methods, "@end",
+      "@implementation SolaraCoreServices", ...methods, "@end",
     ].join("\n");
     const program = `${directory}/test.mm`;
     const binary = `${directory}/test`;

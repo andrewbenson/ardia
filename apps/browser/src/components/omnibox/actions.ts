@@ -1,5 +1,5 @@
-import type { CommandAction } from "@ardia/core";
-import type { BrowserCommand } from "@ardia/shell";
+import type { CommandAction } from "@solara/core";
+import type { BrowserCommand } from "@solara/shell";
 import { isBookmarked } from "../../store/bookmarks";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { activeTab, bookmarkProfileId, isPinnedRow, pinnedSectionTitle } from "../../store/model";

@@ -3,12 +3,12 @@ import { test } from "node:test";
 import { declaration, runNative, source } from "../test-native/safe-host/run.mjs";
 
 function bridge(name) {
-  const header = source("packages/ardiacore/ios/ArdiaCoreEngineBridge.h");
-  const abi = source("engine/chromium/src/chrome/browser/ardia/public/ac_engine.h");
-  const implementation = source("packages/ardiacore/ios/ArdiaCoreEngineBridge.mm")
-    .replace('#import "ArdiaCoreEngineBridge.h"', "")
-    .replace('#import "ArdiaCoreInternal.h"', "")
-    .replace('#include "../../../engine/chromium/src/chrome/browser/ardia/public/ac_engine.h"', "");
+  const header = source("packages/solaracore/ios/SolaraCoreEngineBridge.h");
+  const abi = source("engine/chromium/src/chrome/browser/solara/public/ac_engine.h");
+  const implementation = source("packages/solaracore/ios/SolaraCoreEngineBridge.mm")
+    .replace('#import "SolaraCoreEngineBridge.h"', "")
+    .replace('#import "SolaraCoreInternal.h"', "")
+    .replace('#include "../../../engine/chromium/src/chrome/browser/solara/public/ac_engine.h"', "");
   return runNative("Engine.mm", `${abi}\n${header}\n${implementation}`, [name]);
 }
 
@@ -52,8 +52,8 @@ test("SyncModule refuses vault access with a reason before reading keys or reach
   ]);
 });
 
-test("ArdiaCoreFavicons returns an in-memory image without creating profile files in safe mode", () => {
-  const text = source("packages/ardiacore/ios/ArdiaCoreFavicons.mm");
+test("SolaraCoreFavicons returns an in-memory image without creating profile files in safe mode", () => {
+  const text = source("packages/solaracore/ios/SolaraCoreFavicons.mm");
   const production = ["NSString *FaviconDirectory(", "bool SafeName(", "NSDictionary *Store("].map((signature) => declaration(text, signature)).join("\n");
   const [safe, normal] = runNative("Favicon.mm", production);
   assert.equal(safe.safe, true);
@@ -63,7 +63,7 @@ test("ArdiaCoreFavicons returns an in-memory image without creating profile file
   assert.equal(safe.result.width, 32);
   assert.equal(safe.result.height, 32);
   assert.equal(normal.safe, false);
-  assert.deepEqual(normal.files.sort(), ["Ardia Favicons", "Ardia Favicons/icon.png"]);
+  assert.deepEqual(normal.files.sort(), ["Solara Favicons", "Solara Favicons/icon.png"]);
   assert.equal(normal.stored, "png fixture");
   assert.match(normal.result.uri, /^file:.*icon\.png\?v=/);
 });

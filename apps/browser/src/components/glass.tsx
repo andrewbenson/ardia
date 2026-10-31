@@ -1,4 +1,4 @@
-import { GlassEffect, isLiquidGlass } from "@ardia/shell";
+import { GlassEffect, isLiquidGlass } from "@solara/shell";
 import { memo } from "react";
 import { useTheme, type Theme } from "../lib/theme";
 

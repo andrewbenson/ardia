@@ -14,7 +14,7 @@ Little Solara on a local page: the window opens with its bar and card where Smal
 the panel grows from the field box to RN's dropdown frame (left and top of the field, max(350, field + 137) wide, 12
 from the window's right edge at most) with its field taking a click inside the 38 pt bar and a click on the card closing it,
 a click on the bar's blank part leaves the window alone, and Open in Solara moves the tab to the main window and closes the small one;
-then a relaunch handed a link, as another app hands it (ARDIA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
+then a relaunch handed a link, as another app hands it (SOLARA_ACCEPT_EXTERNAL_URLS=1, since a hidden instance otherwise
 passes outside links on to another copy), opens it in Little Solara and not the main window, through the early link window
 (the Debug-only engineInfo().earlyLinkWindow says "shown", not the reason it was skipped). The window is the native Little Solara shell:
 its backdrop, bar and RN slots in that order and the bar fed from JS.`);
@@ -39,7 +39,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const st = () => ac.store.getState();
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -87,7 +87,7 @@ try {
 
   await rep.check("opens", async () => {
     const before = await run(`return C.chromeWindows().then((ws) => ws.map((w) => w.window));`);
-    await run(`ac.runCommand({ command: "newLittleArdia" }); return true;`);
+    await run(`ac.runCommand({ command: "newLittleSolara" }); return true;`);
     const id = await until("a Little Solara window", `return small()?.id ?? null;`);
     const tab = await until("its tab", `return st().windows[${JSON.stringify(id)}]?.tabIds[0] ?? null;`);
     await run(`st().navigate(${JSON.stringify(tab)}, ${JSON.stringify(url("b"))}, { userInitiated: true }); return true;`);
@@ -114,9 +114,9 @@ try {
     if (!near(info.bar, [0, 0, w, 38])) throw new Error(`bar ${info.bar}`);
     if (info.blankBarHit !== "SolaraUI.LittleSolaraDragStrip") throw new Error(`a click on the bar's blank part reaches ${info.blankBarHit}, not the drag strip`);
     if (info.reactFill !== null) throw new Error(`the RN root keeps its fill over the backdrop and bar: ${info.reactFill}`);
-    const bars = await run(`return [acPerf.findFibers("ShellLittleArdiaBar", 5).length, fibers("LittleArdiaBar").length];`);
+    const bars = await run(`return [acPerf.findFibers("ShellLittleSolaraBar", 5).length, fibers("LittleSolaraBar").length];`);
     if (bars.join() !== "1,0") throw new Error(`JS bars (shell, hosted) ${bars}`);
-    const drawn = await run(`return acPerf.findFibers("ShellLittleArdiaBar", 5).filter((f) => !!f.child).length;`);
+    const drawn = await run(`return acPerf.findFibers("ShellLittleSolaraBar", 5).filter((f) => !!f.child).length;`);
     if (drawn) throw new Error("the shell's JS bar still mounts RN views");
     return { slots, card: info.card, bounds: info.bounds, blankBarHit: info.blankBarHit };
   });
@@ -189,7 +189,7 @@ try {
       app = null;
       app = await launch(resolve(appArg), {
         data, probe: true, urls: [url("c")],
-        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1" },
+        env: { SOLARA_ACCEPT_EXTERNAL_URLS: "1" },
         ready: "return !!ac.store.getState().windows.w1",
       });
       outcomes.push(await run(`return C.engineInfo().then((i) => i.earlyLinkWindow ?? null);`));
@@ -213,7 +213,7 @@ try {
     app = null;
     app = await launch(resolve(appArg), {
       data, probe: true, urls: [url("c")],
-      env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ...env },
+      env: { SOLARA_ACCEPT_EXTERNAL_URLS: "1", ...env },
       ready: "return !!ac.store.getState().windows.w1",
     });
     const id = await until("Little Solara for the link", `return small()?.id ?? null;`, 15000);
@@ -229,26 +229,26 @@ try {
   };
 
   await rep.check("link-when-js-starts-first", async () => {
-    const result = await relaunchWithLink({ ARDIA_TEST_EARLY_LINK_AFTER_JS: "1" });
+    const result = await relaunchWithLink({ SOLARA_TEST_EARLY_LINK_AFTER_JS: "1" });
     if (result.outcome !== "shownAfterJS") throw new Error(`outcome ${result.outcome}, expected the early window shown after JS started`);
     return result;
   });
 
   await rep.check("link-when-the-early-window-fails", async () => {
-    const result = await relaunchWithLink({ ARDIA_TEST_EARLY_LINK_FAILS: "1" });
+    const result = await relaunchWithLink({ SOLARA_TEST_EARLY_LINK_FAILS: "1" });
     if (result.outcome !== "showFailed") throw new Error(`outcome ${result.outcome}, expected showFailed`);
     return result;
   });
 
   await rep.check("link-adopted-into-the-main-window-closes-the-early-window", async () => {
-    await run(`st().updateSettings({ openLinksInLittleArdia: false }); return true;`);
+    await run(`st().updateSettings({ openLinksInLittleSolara: false }); return true;`);
     try {
       await sleep(1500);
       await app.quit();
       app = null;
       app = await launch(resolve(appArg), {
         data, probe: true, urls: [url("c")],
-        env: { ARDIA_ACCEPT_EXTERNAL_URLS: "1", ARDIA_TEST_EARLY_LINK_IGNORE_SETTING: "1" },
+        env: { SOLARA_ACCEPT_EXTERNAL_URLS: "1", SOLARA_TEST_EARLY_LINK_IGNORE_SETTING: "1" },
         ready: "return !!ac.store.getState().windows.w1",
       });
       const tab = await until("page C loaded in the main window", `const id = st().windows.w1?.tabIds.find((t) => st().tabs[t]?.url === ${JSON.stringify(url("c"))}); return id && st().tabs[id].title === "C" ? id : null;`, 15000);
@@ -272,7 +272,7 @@ try {
       }
       return { tab, outcome };
     } finally {
-      if (app) await run(`st().updateSettings({ openLinksInLittleArdia: true }); return true;`).catch((e) => console.error(`could not turn openLinksInLittleArdia back on: ${e.message}`));
+      if (app) await run(`st().updateSettings({ openLinksInLittleSolara: true }); return true;`).catch((e) => console.error(`could not turn openLinksInLittleSolara back on: ${e.message}`));
     }
   });
 } catch (e) {

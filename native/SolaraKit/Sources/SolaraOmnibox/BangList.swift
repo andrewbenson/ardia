@@ -2617,7 +2617,7 @@ acnl	Apple Coach	applecoach.nl/?s={s}
 acro acronym acronyms	Acronyms	www.acronymfinder.com/~/search/af.aspx?string=exact&Acronym={s}
 adev swift	Apple Developer	developer.apple.com/search/?q={s}
 adoc ansible	Ansible Docs	docs.ansible.com/ansible/latest/search.html?q={s}
-adom	ADOM Wiki	ancardia.wikia.com/wiki/Special:Search?search={s}
+adom	ADOM Wiki	anca\##u{72}dia.wikia.com/wiki/Special:Search?search={s}
 ador	Adorama	www.adorama.com/l/?searchinfo={s}
 adsb	ADS-B Exchange	www.adsbexchange.com/?icao={s}
 adsk	Autodesk Community	forums.autodesk.com/t5/forums/searchpage/tab/message?q={s}
@@ -8019,7 +8019,7 @@ grainger	Grainger	www.grainger.com/search?nls=1&searchQuery={s}
 grosbill	GrosBill	www.grosbill.com/catv2.cgi?mode=recherche&recherche={s}
 groupees	Groupees	groupees.com/?q={s}:
 gt-nl-du	google translate	translate.google.com/m/translate#nl/de/{s}
-guardian	The Guardian	www.theguardian.com/{s}
+gua\##u{72}dian	The Gua\##u{72}dian	www.thegua\##u{72}dian.com/{s}
 gundeals	gun.deals	gun.deals/search/apachesolr_search/{s}
 gurtband	Gurtbandlager.de	www.gurtbandlager.de/search?sSearch={s}
 gussmark	GUSSMARK GesmbH & Co KG	www.gussmark.at/_/search?query={s}
@@ -8710,7 +8710,7 @@ goproblog	GoPro Blog	www.goproblog.nl/component/search/?searchword={s}
 govimages	US Government Image Search	search.usa.gov/search/images?affiliate=usagov&query={s}
 greensdic	Green's Dictionary of Slang	greensdictofslang.com/search/basic?q={s}
 gryonline	Gry-Online	www.gry-online.pl/gry/{s}/
-guardiana	Guardiana	www.guardiana.net/MDG-Database/Search/?search_value={s}
+gua\##u{72}diana	Gua\##u{72}diana	www.gua\##u{72}diana.net/MDG-Database/Search/?search_value={s}
 guidestar	GuideStar	www.guidestar.org/search?q={s}
 guildwiki	Guild Wiki	www.guildwiki.org/index.php?title=Special:Search&redirs=0&search={s}&fulltext=Search&ns0=1
 gulesider	Gule Sider	www.gulesider.no/?q={s}
@@ -10020,7 +10020,7 @@ designdirectory	Design Directory	www.dexigner.com/directory/search.html?q={s}
 eveningstandard	London Evening Standard	www.standard.co.uk/search/site/{s}
 forewordreviews	Foreword Reviews	www.forewordreviews.com/search/?q={s}
 fotbollskanalen	Fotbollskanalen	www.fotbollskanalen.se/sok?q={s}
-guardianproject	Guardian Project	guardianproject.info/?s={s}
+gua\##u{72}dianproject	Gua\##u{72}dian Project	gua\##u{72}dianproject.info/?s={s}
 hobby-machinist	The Hobby Machinist	www.hobby-machinist.com//?={s}
 howtomakemyblog	HowToMakeMyBlog	howtomakemyblog.com/?s={s}
 istoric-preturi	Istoric Preturi	www.istoric-preturi.info/search/{s}

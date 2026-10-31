@@ -1,4 +1,4 @@
-import { readDocument, writeDocument } from "@ardia/shell";
+import { readDocument, writeDocument } from "@solara/shell";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { isIncognitoProfile } from "../store/model";
 import { isPeekTab } from "../store/peek";

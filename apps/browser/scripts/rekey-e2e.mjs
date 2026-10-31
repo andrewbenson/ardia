@@ -13,7 +13,7 @@ const USAGE = `usage:
   node apps/browser/scripts/rekey-e2e.mjs scan <user data dir> [--key <secret> | --key-file <file>]
   node apps/browser/scripts/rekey-e2e.mjs --list
 
-The Safe Storage re-key (option D) end to end, on scratch dirs and the file keychain only (ARDIA_TEST_KEYCHAIN=file):
+The Safe Storage re-key (option D) end to end, on scratch dirs and the file keychain only (SOLARA_TEST_KEYCHAIN=file):
 the login keychain is never touched.
 
 fixture  makes <fixture dir>/template, a read-only data dir made by the app on Chrome's mock keychain (no test
@@ -31,29 +31,29 @@ scan     decrypts every v10 value under a key (default mock_password) and prints
 const CHECKS = {
   "baseline-a": "the template with the file keychain seeded with mock_password and no re-key: everything reads back (validates the harness; option A by hand)",
   "today": "the template on the file keychain with no item and no re-key: Chrome's Safe Storage dialog (today's problem)",
-  "migrate": "ARDIA_TEST_REKEY=1: no dialog, every planted value reads back through Chrome, nothing mock-keyed left, one 'add created' in the file keychain log, a real key",
-  "crash": "ARDIA_TEST_REKEY_CRASH=<point> for every point, then a relaunch: the migrated end state or the abort message with the dir intact",
+  "migrate": "SOLARA_TEST_REKEY=1: no dialog, every planted value reads back through Chrome, nothing mock-keyed left, one 'add created' in the file keychain log, a real key",
+  "crash": "SOLARA_TEST_REKEY_CRASH=<point> for every point, then a relaunch: the migrated end state or the abort message with the dir intact",
   "truncated": "a staged file truncated as after a power loss, then a relaunch: the migrated end state or the abort message with the dir intact",
   "item-present": "a real-looking key already in the file keychain: no migration, data untouched",
-  "keychain-denied": "ARDIA_TEST_KEYCHAIN_FAIL=denied: no migration, data untouched",
-  "keychain-interaction": "ARDIA_TEST_KEYCHAIN_FAIL=interaction (locked): no migration, data untouched",
+  "keychain-denied": "SOLARA_TEST_KEYCHAIN_FAIL=denied: no migration, data untouched",
+  "keychain-interaction": "SOLARA_TEST_KEYCHAIN_FAIL=interaction (locked): no migration, data untouched",
   "fresh": "a fresh data dir: no migration; Chrome makes its own key once",
   "other-key": "data under a key that isn't mock_password, the item gone: no migration, data untouched",
   "singleton": "a live process holding SingletonLock: the quit message, nothing changed, no key",
   "unknown-column": "a mock-keyed value in a column the re-key doesn't list, in a listed store: falls back to A (mock_password item), data intact and readable",
   "unlisted-v10": "a v10-looking title in a database the re-key doesn't list: logged, no block, migrated",
-  "undo": "ARDIA_TEST_REKEY_FAIL_AFTER_KEY=1: a failure after the key is undone to A (mock_password item, journal abandoned), data intact and readable",
+  "undo": "SOLARA_TEST_REKEY_FAIL_AFTER_KEY=1: a failure after the key is undone to A (mock_password item, journal abandoned), data intact and readable",
   "undo-crash": "every after-undo point the undo run logs, crashed, then a relaunch: undone to A or the abort message, dir intact",
   "sync-reads": "after the re-key, sync's own password read (acSync.native.readPasswords) decrypts every planted password with the key file's bytes",
-  "sync-pause": "after the re-key, the key file replaced by another key (a reset or Start Over), sync on with ARDIA_SYNC_REDESIGN=1: sync's read is nil, it logs the pause, no login or note is deleted",
-  "sync-ledger": "re-key, then the first sealed ledger (ARDIA_SYNC_REDESIGN=1): each profile's Login Data mark equals its ledger L@t, nothing held, Login Data otherwise unchanged, and a second Mac joining gets exactly the fixture's passwords",
-  "a-then-d": "the file keychain seeded with mock_password, then ARDIA_TEST_REKEY=1: the item is updated (no add), everything reads back",
+  "sync-pause": "after the re-key, the key file replaced by another key (a reset or Start Over), sync on with SOLARA_SYNC_REDESIGN=1: sync's read is nil, it logs the pause, no login or note is deleted",
+  "sync-ledger": "re-key, then the first sealed ledger (SOLARA_SYNC_REDESIGN=1): each profile's Login Data mark equals its ledger L@t, nothing held, Login Data otherwise unchanged, and a second Mac joining gets exactly the fixture's passwords",
+  "a-then-d": "the file keychain seeded with mock_password, then SOLARA_TEST_REKEY=1: the item is updated (no add), everything reads back",
   "a-crash": "the file keychain seeded with mock_password, a crash after keying, after the update and after keyed, then a relaunch: migrated with an update and no add, or back to A",
   "version-change": "re-key, then a copy with another CFBundleVersion (and a crash at before-cleanup on it): .rekey-old removed, no keychain write, everything reads",
   "rare-points": "the crash points the fixture alone never reaches: after-discard-N (a planted GCM Store), after-restage-keyed (a truncated staged file fails verify) and after-undo-N (the key gone mid-swap), each crashed and recovered",
   "key-overwrite": "re-key, then the key file overwritten with another valid key, two launches with sealed sync: reports tracked prefs and their encrypted hashes, the off extension, rows on disk, what Chrome reads, the sync pause",
   "off-mode": "a re-key stopped at staged, then a build that can't re-key (mock keychain, no test mode): the quit message, nothing touched; then the test build finishes it",
-  "test-refused": "ARDIA_TEST_REKEY=1 without the file keychain, and ARDIA_TEST_REKEY=yes: refused and logged, no re-key, data untouched",
+  "test-refused": "SOLARA_TEST_REKEY=1 without the file keychain, and SOLARA_TEST_REKEY=yes: refused and logged, no re-key, data untouched",
   "rollback": "re-key, then the manual rollback (originals back from .rekey-old, item and journal deleted): the next launch re-keys again",
   "leftover-old": "a .rekey-old with no journal and no item: logged and left alone, the A item added, everything reads on the mock key",
 };
@@ -277,7 +277,7 @@ const PLANT = [
     history: ["work.html"], extensionOff: false },
 ];
 
-const HELP = `const S = () => ac.store.getState(); const C = globalThis.expo.modules.ArdiaCEF; const X = globalThis.expo.modules.ArdiaExtensions;
+const HELP = `const S = () => ac.store.getState(); const C = globalThis.expo.modules.SolaraCEF; const X = globalThis.expo.modules.SolaraExtensions;
 const W = () => Object.keys(S().windows)[0]; const P = (id) => (id === "default" ? "" : id);
 const seq = (items, f) => items.reduce((p, x) => p.then(() => f(x)), Promise.resolve());`;
 const inApp = (app, body, timeout = 20000) => app.eval(`${HELP}\n${body}`, { timeout });
@@ -423,11 +423,11 @@ async function makeFixture(app, dir) {
   const userDataDir = join(data, "Chromium");
   mkdirSync(work, { recursive: true });
   const { server, origin } = await serve();
-  const env = { ARDIA_TEST_REAUTH: "granted", ARDIA_TEST_KEYCHAIN: null, ARDIA_TEST_REKEY: null };
+  const env = { SOLARA_TEST_REAUTH: "granted", SOLARA_TEST_KEYCHAIN: null, SOLARA_TEST_REKEY: null };
   const opts = (log) => ({ data, onboarded: true, env, log: join(work, log), switches: "--disable-backgrounding-occluded-windows" });
   const profiles = [];
   const extension = join(dir, "extension");
-  execFileSync("cp", ["-R", resolve(new URL("../../../packages/ardiacore/scripts/fixtures/ext", import.meta.url).pathname), extension]);
+  execFileSync("cp", ["-R", resolve(new URL("../../../packages/solaracore/scripts/fixtures/ext", import.meta.url).pathname), extension]);
   let instance = await launch(app, opts("make.app.log"));
   try {
     await waitWindow(instance);
@@ -453,7 +453,7 @@ async function makeFixture(app, dir) {
       plant.extensionsOff = [];
       if (plant.extensionOff) {
         const off = await inApp(instance, `const p = P(${JSON.stringify(id)});
-          return X.install(${JSON.stringify(extension)}, p).then(() => X.list(p)).then((l) => { const e = ((l && l.extensions) || []).find((e) => e.name === "ArdiaCore spike extension"); if (!e) throw new Error("the fixture extension didn't install: " + JSON.stringify(l)); return X.setEnabled(e.id, p, false).then(() => e.id); });`, 60000);
+          return X.install(${JSON.stringify(extension)}, p).then(() => X.list(p)).then((l) => { const e = ((l && l.extensions) || []).find((e) => e.name === "SolaraCore spike extension"); if (!e) throw new Error("the fixture extension didn't install: " + JSON.stringify(l)); return X.setEnabled(e.id, p, false).then(() => e.id); });`, 60000);
         plant.extensionsOff.push(off);
       }
       profiles.push({ id, name: plant.name, page: plant.page, plant });
@@ -516,7 +516,7 @@ async function makeOtherKey(app, dir) {
   const userDataDir = join(data, "Chromium");
   mkdirSync(work, { recursive: true });
   const { server, origin } = await serve();
-  const instance = await launch(app, { data, onboarded: true, env: { ARDIA_TEST_REAUTH: "granted", ARDIA_TEST_KEYCHAIN: "file", ARDIA_TEST_REKEY: null }, log: join(work, "make.app.log") });
+  const instance = await launch(app, { data, onboarded: true, env: { SOLARA_TEST_REAUTH: "granted", SOLARA_TEST_KEYCHAIN: "file", SOLARA_TEST_REKEY: null }, log: join(work, "make.app.log") });
   try {
     await waitWindow(instance);
     const page = await pageIn(instance, "default", `${origin}/other.html`);
@@ -604,7 +604,7 @@ async function start(app, run, env, { until = "devtools", timeout = 120000 } = {
   const log = join(run.dir, `launch-${++run.launches}.log`);
   run.logs.push(log);
   writeFileSync(join(run.data, "onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
-  const full = { ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: run.data, ARDIA_REMOTE_DEBUGGING_PORT: String(port), ARDIA_JS_LOCATION: "localhost:8081", ARDIA_TEST_REAUTH: "granted", ...env };
+  const full = { SOLARA_BACKGROUND: "1", SOLARA_DATA_DIR: run.data, SOLARA_REMOTE_DEBUGGING_PORT: String(port), SOLARA_JS_LOCATION: "localhost:8081", SOLARA_TEST_REAUTH: "granted", ...env };
   const before = binaryPids(binary);
   if (before.size) throw new Error(`${binary} is already running (${[...before]})`);
   await uiGateLaunching(binary);
@@ -683,8 +683,8 @@ function intactState(run, manifest, { key = [null] } = {}) {
   return { wrong, snapshot: s, scanned: mock };
 }
 
-const REKEY = { ARDIA_TEST_KEYCHAIN: "file", ARDIA_TEST_REKEY: "1" };
-const FILE_ONLY = { ARDIA_TEST_KEYCHAIN: "file" };
+const REKEY = { SOLARA_TEST_KEYCHAIN: "file", SOLARA_TEST_REKEY: "1" };
+const FILE_ONLY = { SOLARA_TEST_KEYCHAIN: "file" };
 
 function seedKey(run, secret) {
   writeFileSync(join(run.udd, KEY_FILE), secret, { mode: 0o600 });
@@ -752,7 +752,7 @@ const CASES = {
     const only = ctx.only.filter((c) => c.startsWith("crash:")).map((c) => c.slice(6));
     for (const point of only.length ? only : ctx.points) {
       const run = prepare(ctx.root, `crash-${point}`, ctx.fixture);
-      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: point });
+      run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: point });
       const died = run.started.outcome === "exited" && points(snapshot(run).appLog).at(-1) === point;
       if (!died) { lines.push({ ok: false, name: `crash at ${point}`, detail: `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
       const result = await recoverAndCheck(ctx, run, `crash at ${point}`);
@@ -763,7 +763,7 @@ const CASES = {
   },
   async truncated(ctx) {
     const run = prepare(ctx.root, "truncated", ctx.fixture);
-    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-staged" });
+    run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: "after-staged" });
     const staged = join(run.udd, ".rekey-staging", "Default", "Login Data");
     if (run.started.outcome !== "exited" || !existsSync(staged)) return [{ ok: false, name: "a staged Login Data to truncate", detail: `${run.started.outcome}, staged ${existsSync(staged)}` }];
     const size = statSync(staged).size;
@@ -779,12 +779,12 @@ const CASES = {
   },
   async "keychain-denied"(ctx) {
     const run = prepare(ctx.root, "keychain-denied", ctx.fixture);
-    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_KEYCHAIN_FAIL: "denied" }, { until: "decision", timeout: 60000 });
+    run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_KEYCHAIN_FAIL: "denied" }, { until: "decision", timeout: 60000 });
     return notMigrated(ctx, run, "keychain access denied", /can't be looked up \(-25293\): not migrating/, [null]);
   },
   async "keychain-interaction"(ctx) {
     const run = prepare(ctx.root, "keychain-interaction", ctx.fixture);
-    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_KEYCHAIN_FAIL: "interaction" }, { until: "decision", timeout: 60000 });
+    run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_KEYCHAIN_FAIL: "interaction" }, { until: "decision", timeout: 60000 });
     return notMigrated(ctx, run, "keychain locked", /can't be looked up \(-25315\): not migrating/, [null]);
   },
   async fresh(ctx) {
@@ -853,7 +853,7 @@ const CASES = {
   },
   async undo(ctx) {
     const run = prepare(ctx.root, "undo", ctx.fixture);
-    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_FAIL_AFTER_KEY: "1" });
+    run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_FAIL_AFTER_KEY: "1" });
     let r = null;
     if (run.started.outcome === "running") r = await settle(ctx.app, run, ctx.origin, ctx.profiles).catch((e) => ({ error: String(e.message) }));
     const s = snapshot(run);
@@ -871,10 +871,10 @@ const CASES = {
     const lines = [];
     for (const point of ctx.undoPoints ?? []) {
       const run = prepare(ctx.root, `undo-crash-${point}`, ctx.fixture);
-      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_FAIL_AFTER_KEY: "1", ARDIA_TEST_REKEY_CRASH: point });
+      run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_FAIL_AFTER_KEY: "1", SOLARA_TEST_REKEY_CRASH: point });
       const died = run.started.outcome === "exited" && points(snapshot(run).appLog).at(-1) === point;
       if (!died) { lines.push({ ok: false, name: `undo crash at ${point}`, detail: `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
-      const result = await recoverAndCheck(ctx, run, `undo crash at ${point}`, { ARDIA_TEST_REKEY_FAIL_AFTER_KEY: "1" });
+      const result = await recoverAndCheck(ctx, run, `undo crash at ${point}`, { SOLARA_TEST_REKEY_FAIL_AFTER_KEY: "1" });
       lines.push(...result);
       if (!ctx.keep && result.every((l) => l.ok)) discard([run]);
     }
@@ -907,7 +907,7 @@ const CASES = {
     if (run.started.outcome !== "running") return [{ ok: false, name: "the launch over a replaced key reaches Chrome", detail: run.started.outcome }];
     let read = null;
     try { read = await syncRead(ctx, run); } finally { await run.started.instance.quit(); }
-    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder });
+    run.started = await start(ctx.app, run, { ...REKEY, SOLARA_SYNC_REDESIGN: "1", SOLARA_SYNC_DEFAULT_FOLDER: folder });
     if (run.started.outcome !== "running") return [{ ok: false, name: "the sealed launch over a replaced key reaches Chrome", detail: run.started.outcome }];
     const app = run.started.instance;
     let state = null;
@@ -940,7 +940,7 @@ const CASES = {
     const run = prepare(ctx.root, "sync-ledger", ctx.fixture);
     const folder = join(run.dir, "folder");
     mkdirSync(folder);
-    const env = { ...REKEY, ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder };
+    const env = { ...REKEY, SOLARA_SYNC_REDESIGN: "1", SOLARA_SYNC_DEFAULT_FOLDER: folder };
     run.started = await start(ctx.app, run, env);
     if (run.started.outcome !== "running") return [{ ok: false, name: "the migrating sealed launch reaches Chrome", detail: run.started.outcome }];
     const a = run.started.instance;
@@ -948,7 +948,7 @@ const CASES = {
     try {
       await waitWindow(a);
       const sealing = await a.eval("return acSync.sealing()", { timeout: 20000 });
-      if (sealing !== true) throw new Error(`launched with ARDIA_SYNC_REDESIGN=1 but sealing is ${sealing}`);
+      if (sealing !== true) throw new Error(`launched with SOLARA_SYNC_REDESIGN=1 but sealing is ${sealing}`);
       const on = await a.eval(`return acSync.turnOnSync(${JSON.stringify(folder)})`, { timeout: 90000 });
       if (JSON.stringify(on) !== '{"ok":true}') throw new Error(`turnOnSync ${JSON.stringify(on)}`);
       phrase = (await a.eval("return acSync.native.recoveryWords()", { timeout: 20000 })).join(" ");
@@ -981,7 +981,7 @@ const CASES = {
     const b = prepare(ctx.root, "sync-ledger-b", ctx.fixture, { from: null });
     const bApp = join(ctx.root, "B.app");
     if (!existsSync(bApp)) execFileSync("cp", ["-c", "-R", ctx.app, bApp]);
-    b.started = await start(bApp, b, { ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder });
+    b.started = await start(bApp, b, { SOLARA_SYNC_REDESIGN: "1", SOLARA_SYNC_DEFAULT_FOLDER: folder });
     if (b.started.outcome !== "running") return [...lines, { ok: false, name: "a second Mac starts", detail: b.started.outcome }];
     let seen = null;
     try {
@@ -992,7 +992,7 @@ const CASES = {
       const want = ctx.manifest.want.Personal.passwords.map((p) => `${p.username}=${p.password}`).sort();
       for (let i = 0; i < 20; i++) {
         await bi.eval("return acSync.syncNow()", { timeout: 90000 });
-        seen = await bi.eval(`const c = globalThis.expo.modules.ArdiaCEF; return c.listPasswords("").then((l) => Promise.all(((l && l.passwords) || []).map((p) => c.getPassword("", p.origin, p.username).then((r) => p.username + "=" + (r && r.password))))).then((all) => all.sort());`, { timeout: 60000 });
+        seen = await bi.eval(`const c = globalThis.expo.modules.SolaraCEF; return c.listPasswords("").then((l) => Promise.all(((l && l.passwords) || []).map((p) => c.getPassword("", p.origin, p.username).then((r) => p.username + "=" + (r && r.password))))).then((all) => all.sort());`, { timeout: 60000 });
         if (JSON.stringify(seen) === JSON.stringify(want)) break;
         await sleep(1500);
       }
@@ -1012,7 +1012,7 @@ const CASES = {
     for (const point of ["after-keying", "after-key-write", "after-keyed"]) {
       const run = prepare(ctx.root, `a-crash-${point}`, ctx.fixture);
       seedKey(run, MOCK);
-      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: point });
+      run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: point });
       const s = snapshot(run);
       if (run.started.outcome !== "exited" || points(s.appLog).at(-1) !== point) { lines.push({ ok: false, name: `from A, crash at ${point}`, detail: `${run.started.outcome}, last point ${points(s.appLog).at(-1)}` }); continue; }
       const result = await recoverAndCheck(ctx, run, `from A, crash at ${point}`, {}, { fromA: true });
@@ -1041,7 +1041,7 @@ const CASES = {
       const first = snapshot(run);
       if (first.journal?.phase !== "done" || !first.old) { lines.push({ ok: false, name: `${label}a re-key to start from`, detail: `${run.started.outcome}, journal ${JSON.stringify(first.journal?.phase)}, old ${first.old}` }); continue; }
       if (crashAt) {
-        run.started = await start(next, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: crashAt });
+        run.started = await start(next, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: crashAt });
         const c = snapshot(run);
         if (run.started.outcome !== "exited" || points(c.appLog).at(-1) !== crashAt) { lines.push({ ok: false, name: `crash at ${crashAt} on the next version`, detail: `${run.started.outcome}, last point ${points(c.appLog).at(-1)}` }); continue; }
       }
@@ -1070,17 +1070,17 @@ const CASES = {
     for (const point of discardPoints) {
       const run = prepare(ctx.root, `rare-${point}`, ctx.fixture);
       plantGcm(run);
-      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: point });
+      run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: point });
       if (run.started.outcome !== "exited" || points(snapshot(run).appLog).at(-1) !== point) { lines.push({ ok: false, name: `crash at ${point}`, detail: `${run.started.outcome}, last point ${points(snapshot(run).appLog).at(-1)}` }); continue; }
       lines.push(...await recoverAndCheck(ctx, run, `crash at ${point}`));
     }
     const restage = prepare(ctx.root, "rare-restage", ctx.fixture);
-    restage.started = await start(ctx.app, restage, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-staged" });
+    restage.started = await start(ctx.app, restage, { ...REKEY, SOLARA_TEST_REKEY_CRASH: "after-staged" });
     const staged = join(restage.udd, ".rekey-staging", "Default", "Login Data");
     if (restage.started.outcome !== "exited" || !existsSync(staged)) lines.push({ ok: false, name: "a staged Login Data to truncate", detail: restage.started.outcome });
     else {
       truncateSync(staged, Math.floor(statSync(staged).size / 2));
-      restage.started = await start(ctx.app, restage, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-restage-keyed" });
+      restage.started = await start(ctx.app, restage, { ...REKEY, SOLARA_TEST_REKEY_CRASH: "after-restage-keyed" });
       const s = snapshot(restage);
       const died = restage.started.outcome === "exited" && points(s.appLog).at(-1) === "after-restage-keyed";
       lines.push({ ok: died && /didn't verify: staging again from the originals/.test(s.rekeyLog), name: "a truncated staged Login Data fails verify and stages again (after-restage-keyed)", detail: `${restage.started.outcome}, last point ${points(s.appLog).at(-1)}; ${s.rekeyLog.trim().split("\n").slice(-2).join(" | ")}` });
@@ -1088,10 +1088,10 @@ const CASES = {
     }
     const undoRun = async (name, crashAt) => {
       const run = prepare(ctx.root, name, ctx.fixture);
-      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-aside-4" });
+      run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: "after-aside-4" });
       if (run.started.outcome !== "exited" || points(snapshot(run).appLog).at(-1) !== "after-aside-4") return { run, failed: `crash at after-aside-4: ${run.started.outcome}` };
       unlinkSync(join(run.udd, KEY_FILE));
-      run.started = await start(ctx.app, run, crashAt ? { ...REKEY, ARDIA_TEST_REKEY_CRASH: crashAt } : REKEY, crashAt ? {} : { until: "devtools" });
+      run.started = await start(ctx.app, run, crashAt ? { ...REKEY, SOLARA_TEST_REKEY_CRASH: crashAt } : REKEY, crashAt ? {} : { until: "devtools" });
       return { run };
     };
     const first = await undoRun("rare-undo", null);
@@ -1133,7 +1133,7 @@ const CASES = {
     mkdirSync(folder);
     const observations = [];
     for (let launch = 1; launch <= 2; launch++) {
-      run.started = await start(ctx.app, run, { ...REKEY, ARDIA_SYNC_REDESIGN: "1", ARDIA_SYNC_DEFAULT_FOLDER: folder });
+      run.started = await start(ctx.app, run, { ...REKEY, SOLARA_SYNC_REDESIGN: "1", SOLARA_SYNC_DEFAULT_FOLDER: folder });
       if (run.started.outcome !== "running") return [{ ok: false, name: `launch ${launch} over the overwritten key reaches Chrome`, detail: `${run.started.outcome}; dialog ${dialogShown(snapshot(run).appLog)}` }];
       const app = run.started.instance;
       let read = null, sync = null;
@@ -1173,7 +1173,7 @@ const CASES = {
   },
   async "off-mode"(ctx) {
     const run = prepare(ctx.root, "off-mode", ctx.fixture);
-    run.started = await start(ctx.app, run, { ...REKEY, ARDIA_TEST_REKEY_CRASH: "after-staged" });
+    run.started = await start(ctx.app, run, { ...REKEY, SOLARA_TEST_REKEY_CRASH: "after-staged" });
     const before = snapshot(run);
     if (run.started.outcome !== "exited" || before.journal?.phase !== "staged") return [{ ok: false, name: "an unfinished journal to open in off mode", detail: `${run.started.outcome}, journal ${JSON.stringify(before.journal?.phase)}` }];
     run.started = await start(ctx.app, run, {}, { until: "exit", timeout: 60000 });
@@ -1188,16 +1188,16 @@ const CASES = {
   async "test-refused"(ctx) {
     const lines = [];
     const mock = prepare(ctx.root, "test-refused-mock", ctx.fixture);
-    mock.started = await start(ctx.app, mock, { ARDIA_TEST_REKEY: "1" });
+    mock.started = await start(ctx.app, mock, { SOLARA_TEST_REKEY: "1" });
     if (mock.started.outcome === "running") { await waitWindow(mock.started.instance); await mock.started.instance.quit(); }
     const a = snapshot(mock);
     const aState = intactState(mock, ctx.manifest);
-    lines.push({ ok: mock.started.outcome === "running" && /test re-key refused: ARDIA_TEST_KEYCHAIN isn't file/.test(a.appLog) && !a.journal && !a.rekeyLog && !aState.wrong.length && !points(a.appLog).length, name: "ARDIA_TEST_REKEY=1 without the file keychain: refused and logged, no journal, no key, data on the mock key", detail: `${mock.started.outcome}; ${aState.wrong.join("; ")}; journal ${JSON.stringify(a.journal)}` });
+    lines.push({ ok: mock.started.outcome === "running" && /test re-key refused: SOLARA_TEST_KEYCHAIN isn't file/.test(a.appLog) && !a.journal && !a.rekeyLog && !aState.wrong.length && !points(a.appLog).length, name: "SOLARA_TEST_REKEY=1 without the file keychain: refused and logged, no journal, no key, data on the mock key", detail: `${mock.started.outcome}; ${aState.wrong.join("; ")}; journal ${JSON.stringify(a.journal)}` });
     const word = prepare(ctx.root, "test-refused-word", ctx.fixture);
-    word.started = await start(ctx.app, word, { ...REKEY, ARDIA_TEST_REKEY: "yes" }, { until: "dialog", timeout: 90000 });
+    word.started = await start(ctx.app, word, { ...REKEY, SOLARA_TEST_REKEY: "yes" }, { until: "dialog", timeout: 90000 });
     const b = snapshot(word);
     const bState = intactState(word, ctx.manifest);
-    lines.push({ ok: word.started.outcome === "dialog" && /test re-key refused: ARDIA_TEST_REKEY isn't 1/.test(b.appLog) && !b.journal && !bState.wrong.length, name: "ARDIA_TEST_REKEY=yes: refused and logged, no re-key (Chrome's dialog), data untouched", detail: `${word.started.outcome}; ${bState.wrong.join("; ")}` });
+    lines.push({ ok: word.started.outcome === "dialog" && /test re-key refused: SOLARA_TEST_REKEY isn't 1/.test(b.appLog) && !b.journal && !bState.wrong.length, name: "SOLARA_TEST_REKEY=yes: refused and logged, no re-key (Chrome's dialog), data untouched", detail: `${word.started.outcome}; ${bState.wrong.join("; ")}` });
     return lines;
   },
   async rollback(ctx) {

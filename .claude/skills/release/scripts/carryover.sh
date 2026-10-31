@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-unset ARDIA_DATA_DIR ARDIA_UPDATE_FEED_URL
+unset SOLARA_DATA_DIR SOLARA_UPDATE_FEED_URL
 
 old="${1:?usage: carryover.sh <previous app> <new app>}"
 new="${2:?usage: carryover.sh <previous app> <new app>}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
-test_id="com.ardia.browser.carryover"
+test_id="com.solara.browser.carryover"
 cdp_old="${CARRYOVER_CDP_PORT:-9394}" cdp_new="$(( ${CARRYOVER_CDP_PORT:-9394} + 1 ))"
 pages_port="${CARRYOVER_PAGES_PORT:-8794}"
 work="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/ac-carryover.XXXXXX")" && pwd -P)"
@@ -25,14 +25,14 @@ copy() {
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $test_id" "$2/Contents/Info.plist"
   codesign --force --deep --sign - "$2" 2>/dev/null
 }
-copy "$old" "$work/old/Ardia.app"
-copy "$new" "$work/new/Ardia.app"
+copy "$old" "$work/old/Solara.app"
+copy "$new" "$work/new/Solara.app"
 swiftc -O "$here/quit.swift" -o "$work/quit" 2>/dev/null
 mkdir -p "$work/home" "$work/pages"
 for page in page1 page2 work; do
   printf '<!doctype html><title>Carryover %s</title><h1>%s</h1><form><input name="username" autocomplete="username"><input type="password" autocomplete="current-password"></form>\n' "$page" "$page" > "$work/pages/$page.html"
 done
-cp -R "$root/packages/ardiacore/scripts/fixtures/ext" "$work/extension"
+cp -R "$root/packages/solaracore/scripts/fixtures/ext" "$work/extension"
 if nc -z -G 2 127.0.0.1 "$pages_port" 2>/dev/null; then
   echo "error: port $pages_port is taken (CARRYOVER_PAGES_PORT)" >&2
   exit 1
@@ -42,5 +42,5 @@ server=$!
 sleep 1
 origin="http://127.0.0.1:$pages_port"
 export CARRYOVER_QUIT="$work/quit"
-timeout 300 node "$here/carryover.mjs" create "$work/old/Ardia.app" "$work/home" "$cdp_old" "$origin" "$work/extension" "$work/created.json"
-timeout 300 node "$here/carryover.mjs" read "$work/new/Ardia.app" "$work/home" "$cdp_new" "$origin" "$work/created.json" "$work/read.json"
+timeout 300 node "$here/carryover.mjs" create "$work/old/Solara.app" "$work/home" "$cdp_old" "$origin" "$work/extension" "$work/created.json"
+timeout 300 node "$here/carryover.mjs" read "$work/new/Solara.app" "$work/home" "$cdp_new" "$origin" "$work/created.json" "$work/read.json"

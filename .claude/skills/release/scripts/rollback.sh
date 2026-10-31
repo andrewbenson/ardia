@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-unset ARDIA_DATA_DIR ARDIA_UPDATE_FEED_URL
+unset SOLARA_DATA_DIR SOLARA_UPDATE_FEED_URL
 
 old="${1:?usage: rollback.sh <previous app> <new app>}"
 new="${2:?usage: rollback.sh <previous app> <new app>}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
-test_id="com.ardia.browser.rollback"
+test_id="com.solara.browser.rollback"
 cdp="${ROLLBACK_CDP_PORT:-9391}"
 pages_port="${ROLLBACK_PAGES_PORT:-8793}"
 work="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/ac-rollback.XXXXXX")" && pwd -P)"
@@ -25,14 +25,14 @@ copy() {
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $test_id" "$2/Contents/Info.plist"
   codesign --force --deep --sign - "$2" 2>/dev/null
 }
-copy "$old" "$work/old/Ardia.app"
-copy "$new" "$work/new/Ardia.app"
+copy "$old" "$work/old/Solara.app"
+copy "$new" "$work/new/Solara.app"
 swiftc -O "$here/quit.swift" -o "$work/quit" 2>/dev/null
 mkdir -p "$work/home" "$work/pages"
 for page in page1 page2 page3 work; do
   printf '<!doctype html><title>Rollback %s</title><h1>%s</h1>\n' "$page" "$page" > "$work/pages/$page.html"
 done
-cp -R "$root/packages/ardiacore/scripts/fixtures/ext" "$work/extension"
+cp -R "$root/packages/solaracore/scripts/fixtures/ext" "$work/extension"
 for p in "$cdp" "$pages_port"; do
   nc -z -G 2 127.0.0.1 "$p" 2>/dev/null && { echo "error: port $p is taken (ROLLBACK_CDP_PORT, ROLLBACK_PAGES_PORT)" >&2; exit 1; }
 done
@@ -60,13 +60,13 @@ PY
 }
 touch "$work/start"
 status=0
-timeout 300 node "$here/carryover.mjs" create "$work/old/Ardia.app" "$work/home" "$cdp" "$origin" "$work/extension" "$work/created.json"
+timeout 300 node "$here/carryover.mjs" create "$work/old/Solara.app" "$work/home" "$cdp" "$origin" "$work/extension" "$work/created.json"
 state "the previous build"
-timeout 300 node "$here/carryover.mjs" read "$work/new/Ardia.app" "$work/home" "$cdp" "$origin" "$work/created.json" "$work/read.json" \
+timeout 300 node "$here/carryover.mjs" read "$work/new/Solara.app" "$work/home" "$cdp" "$origin" "$work/created.json" "$work/read.json" \
   > "$work/read.log" || { grep -v '^PASS' "$work/read.log"; status=1; }
-timeout 300 node "$here/carryover.mjs" use "$work/new/Ardia.app" "$work/home" "$cdp" "$origin" - "$work/used.json" || status=1
+timeout 300 node "$here/carryover.mjs" use "$work/new/Solara.app" "$work/home" "$cdp" "$origin" - "$work/used.json" || status=1
 state "the new build"
-timeout 300 node "$here/carryover.mjs" back "$work/old/Ardia.app" "$work/home" "$cdp" "$origin" "$work/used.json" "$work/back.json" \
+timeout 300 node "$here/carryover.mjs" back "$work/old/Solara.app" "$work/home" "$cdp" "$origin" "$work/used.json" "$work/back.json" \
   | sed 's/carried over:/kept going back:/' || status=1
 state "the previous build again"
 reports="$(find ~/Library/Logs/DiagnosticReports -maxdepth 1 -newer "$work/start" -name '*.ips' -exec grep -l "$test_id" {} + 2>/dev/null || true)"

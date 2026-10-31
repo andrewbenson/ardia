@@ -6,12 +6,12 @@ public class StoreModule: Module {
   private var subscription: Int?
 
   public func definition() -> ModuleDefinition {
-    Name("ArdiaStore")
+    Name("SolaraStoreAdapter")
 
     Events("onStoreCommit")
 
     Function("status") { () -> [String: Any] in
-      let syncRedesign = LaunchSwitch(rawValue: "ARDIA_SYNC_REDESIGN").map { LaunchSwitches.shared.isOn($0, defaultOn: false) } ?? false
+      let syncRedesign = LaunchSwitch(rawValue: "SOLARA_SYNC_REDESIGN").map { LaunchSwitches.shared.isOn($0, defaultOn: false) } ?? false
       var status: [String: Any]
       if NativeStore.shared != nil {
         status = ["active": true, "scope": NativeStore.ownsWorkspace ? "everything" : "settingsAndDownloads", "syncRedesign": syncRedesign]

@@ -305,7 +305,7 @@ struct OnboardingModelTests {
     model.go(.home, sub: 1)
     model.choose(.links, false)
     model.confirmCurrent()
-    #expect(store.patches.last == ["openLinksInLittleArdia": false])
+    #expect(store.patches.last == ["openLinksInLittleSolara": false])
     #expect(model.picked[.links] == ["Links from other apps open in a tab"])
     #expect(model.step == .outro)
     model.finish(tour: true)

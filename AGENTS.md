@@ -13,11 +13,11 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
 | Path | Holds |
 | --- | --- |
 | `apps/browser` | The app: Expo SDK 54 + react-native-macos 0.81, zustand store (`src/store`), UI (`src/components`), Xcode project (`macos/`) |
-| `packages/ardiacore` | ArdiaCore, the engine as the app sees it: Chrome's framework linked in, its Expo modules and JS API |
+| `packages/solaracore` | SolaraCore, the engine as the app sees it: Chrome's framework linked in, its Expo modules and JS API |
 | `packages/shell` | Menus, shortcuts, windows, native views |
 | `packages/core` | Omnibox parsing and suggestions, pure TypeScript with tests |
 | `packages/{import,sync,shaders}` | Importing from other browsers, iCloud sync, Metal views |
-| `engine/` | Our Chromium patch series (`engine/patches`), our Chrome-side code (`engine/chromium`, the `ac_*` C calls) and ArdiaCore's window and tab layer (`engine/ardiacore`) |
+| `engine/` | Our Chromium patch series (`engine/patches`), our Chrome-side code (`engine/chromium`, the `ac_*` C calls) and SolaraCore's window and tab layer (`engine/solaracore`) |
 | `apps/cli` | The `solara` command-line tool (Python), shipped in each release |
 | `scripts/` | `release.sh`, the DMG layout, and `scripts/agent/*`, the tools for parallel agents (each takes `--help`) |
 | `.claude/skills/release` | The release skill and its smoke, update and publish scripts |
@@ -49,7 +49,7 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
 - **Never launch or touch other browsers' installed apps or the owner's own Solara install** (`/Applications/Solara.app`),
   or the preview builds in `apps/browser/build-vista`.
 - **Never steal focus.** Launch builds only hidden: `scripts/agent/ac launch`, or
-  `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<scratch> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
+  `open -g -n --env SOLARA_BACKGROUND=1 --env SOLARA_DATA_DIR=<scratch> --env SOLARA_REMOTE_DEBUGGING_PORT=<port> <app>`.
   Never plain `open`, never `activate`. Test data lives in a scratch dir, never in `~/Documents`. Never give an
   extension shortcut Global scope in a test instance.
 - **No comments in code.** None in source, scripts or config (`//`, `/* */`, `#`, `<!-- -->`, doc comments). Name
@@ -75,7 +75,7 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
   build. Run independent work in parallel (agents, builds, instances, tool calls); only timing measurements run one
   at a time, interleaved with their control.
 - **Orchestrate.** The main session plans, hands implementation to subagents, and verifies what they return. Each agent
-  gets its own files, its own build dir (`--as <name>`) and its own `ARDIA_DATA_DIR`. The main session checks on any
+  gets its own files, its own build dir (`--as <name>`) and its own `SOLARA_DATA_DIR`. The main session checks on any
   agent it hasn't heard from in about 30 minutes; a stuck agent means a root cause to fix (a lock, a wait, a hang).
   New feedback goes to the agent that owns the area (SendMessage).
 - **Second opinion.** Risky logic (races, lifetimes, security, migrations, sync) gets an independent model review
@@ -118,7 +118,7 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
 | --- | --- |
 | change anything, the first time | [docs/agent-brief.md](docs/agent-brief.md) |
 | touch app state | [docs/store-api.md](docs/store-api.md) |
-| change or build the engine | [docs/engine-build.md](docs/engine-build.md), [docs/ardiacore-parity.md](docs/ardiacore-parity.md) |
+| change or build the engine | [docs/engine-build.md](docs/engine-build.md), [docs/solaracore-parity.md](docs/solaracore-parity.md) |
 | claim a change works | [docs/testing.md](docs/testing.md) |
 | touch timing-sensitive code or a release's perf | [docs/perf/README.md](docs/perf/README.md) |
 | touch sync or import | [docs/sync.md](docs/sync.md), [packages/import/README.md](packages/import/README.md) |

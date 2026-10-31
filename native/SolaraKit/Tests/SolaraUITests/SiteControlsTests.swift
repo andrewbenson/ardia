@@ -75,7 +75,7 @@ import SolaraStore
     let ids = all.compactMap(\.id)
     #expect(try #require(ids.firstIndex(of: "other-engine")) < #require(ids.firstIndex(of: "translate:toggle")))
     #expect(try #require(ids.firstIndex(of: "translate:toggle")) < #require(ids.firstIndex(of: "clear")))
-    let internalRows = try rows(context(["url": "ardia://settings"]), section: "more")
+    let internalRows = try rows(context(["url": "solara://settings"]), section: "more")
     #expect(!internalRows.contains { $0.id == "engine" || $0.id == "clear" })
     #expect(internalRows.contains { $0.id == "full-url" })
   }
@@ -179,7 +179,7 @@ import SolaraStore
     let file = try rows(context(["url": "file:///a.pdf", "video": true, "extensions": contribution]))
     #expect(file.first?.tiles?.map(\.id) == ["copy", "find", "pip"])
     #expect(file.first { $0.kind == "extensions" }?.columns == 3)
-    let internalPage = try rows(context(["url": "ardia://settings", "extensions": contribution]))
+    let internalPage = try rows(context(["url": "solara://settings", "extensions": contribution]))
     #expect(internalPage.first?.tiles?.map(\.id) == ["copy"])
     #expect(internalPage.first { $0.kind == "extensions" }?.columns == 4)
     #expect(internalPage.last?.top == 14)

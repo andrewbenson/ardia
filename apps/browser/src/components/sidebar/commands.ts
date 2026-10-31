@@ -1,4 +1,4 @@
-import type { BrowserCommand, MenuEntry } from "@ardia/shell";
+import type { BrowserCommand, MenuEntry } from "@solara/shell";
 import { useBrowser, type BrowserState } from "../../store/browser";
 import { activeTabId, pinSection, plural } from "../../store/model";
 import { awayFromPin, groupOf, selectedTabIds } from "../../store/organize";

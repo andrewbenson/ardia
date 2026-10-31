@@ -31,7 +31,7 @@ if (!cli) {
   };
   const snapshot = () => request({ op: "snapshot" });
   globalThis.acTestNativeModules = {
-    ArdiaStore: {
+    SolaraStoreAdapter: {
       status: () => ({ active: true, scope: "everything", syncRedesign: redesign }),
       useSyncOrigins: () => true,
       snapshot: () => JSON.stringify(snapshot()),
@@ -49,7 +49,7 @@ if (!cli) {
   const { workspaceFromSnapshot } = await import("../store/nativeWorkspace.ts");
   const { pinnedRowsAdapter } = await import("./pinned.ts");
   const { syncRedesign } = await import("./redesignSwitch.ts");
-  const { Clock, emptyScope, publish, flush } = await import("@ardia/sync");
+  const { Clock, emptyScope, publish, flush } = await import("@solara/sync");
 
   for (const on of [false, true]) {
     test(`durable publication queues native settlement through a held newer user choice, redesign ${on}`, async () => {

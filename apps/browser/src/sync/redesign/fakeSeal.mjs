@@ -82,19 +82,19 @@ export const sealMarked = (read) => async (profile) => {
 
 export const plainOf = (v) => (v && typeof v.s === "string" ? open(v.s, v.o, v.u) : v?.p);
 
-export const sealedCalls = (ardiaCEF) => ({
+export const sealedCalls = (solaraCEF) => ({
   check: async (values) => values.map((v) => open(v.s, v.o, v.u) !== null),
   save: async (profile, origin, username, s, replacing) => {
     const p = open(s, origin, username);
     if (p === null) return false;
-    const cef = ardiaCEF();
+    const cef = solaraCEF();
     const ok = (result) => !!result && !result.error;
     if (replacing && !ok(await cef.deletePassword(profile, origin, username))) return false;
     return ok(await cef.savePassword(profile, origin, username, p));
   },
 });
 
-export function withSealedPasswords(native, ardiaCEF, mark) {
+export function withSealedPasswords(native, solaraCEF, mark) {
   if (!native || native.useSealedPasswords) return native;
   let plainRead = native.readPasswords?.bind(native);
   let markedRead = async (profile) => {
@@ -141,7 +141,7 @@ export function withSealedPasswords(native, ardiaCEF, mark) {
     if (latched && plainInside(JSON.parse(text))) throw refusal(`a plain password in the local ${kind}`);
     return sealLocal(text, kind);
   };
-  const calls = sealedCalls(ardiaCEF);
+  const calls = sealedCalls(solaraCEF);
   native.checkSealed = calls.check;
   native.saveSealedPassword = async (...args) => latched && calls.save(...args);
   native.migrateLedger = async (ledger, scopes, state) => {

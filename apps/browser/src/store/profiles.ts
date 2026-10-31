@@ -1,4 +1,4 @@
-import { confirm } from "@ardia/shell";
+import { confirm } from "@solara/shell";
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "./browser";
 import { bookmarkRoots, ensureRoots, removeBookmarkTree } from "./bookmarks";

@@ -13,7 +13,7 @@ for (const safe of [true, false]) {
     let next = 0;
     const state = { tabs: { fixture: { profileId: "work" } } };
     const modules = {
-      "@ardia/settings": { nativeAddHistoryVisits: async (...args) => calls.push(args) },
+      "@solara/settings": { nativeAddHistoryVisits: async (...args) => calls.push(args) },
       zustand: { create: () => () => ({}) },
       "../store/browser": { useBrowser: { getState: () => state, subscribe: () => () => {} } },
       "../store/engines": { visitRecorder },

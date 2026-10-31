@@ -1,4 +1,4 @@
-export const UPSTREAM_APP_SCHEME = "ardia";
+export const UPSTREAM_APP_SCHEME = "solara";
 
 let APP_SCHEME = UPSTREAM_APP_SCHEME;
 let APP_PREFIX = prefixFor(APP_SCHEME);

@@ -1,4 +1,4 @@
-import { onWindowEvent } from "@ardia/shell";
+import { onWindowEvent } from "@solara/shell";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { AppState } from "react-native";
 import { POPOVER_MOTION } from "../layout/controls";

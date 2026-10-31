@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import ArdiaImportCore
+@testable import SolaraLegacyImportCore
 
 enum Fixtures {
   static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()

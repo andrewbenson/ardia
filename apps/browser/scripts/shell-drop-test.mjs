@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// With the native window shell on (ARDIA_NATIVE_SHELL=1), a file, link or text dragged over the page still lands on
+// With the native window shell on (SOLARA_NATIVE_SHELL=1), a file, link or text dragged over the page still lands on
 // Chromium's web contents: no shell view above the page registers those drag types, as in RN. Checked with the page
 // alone, with the zoom popover open in the pane overlays, with the native sidebar's hover card shown in the shell
-// overlay (ARDIA_NATIVE_SIDEBAR=1; its frame, opacity and pixels are checked before and after the drops), and with two
+// overlay (SOLARA_NATIVE_SIDEBAR=1; its frame, opacity and pixels are checked before and after the drops), and with two
 // tabs in the native split chrome. A drop on the zoom popover's card must go where RN's does: the same point is probed in an RN
 // instance (shell and native toolbar off), and the shell must hand the drop to the same kind of view.
 //
@@ -24,7 +24,7 @@ const keep = args.includes("--keep-data");
 const scratch = mkdtempSync(join(tmpdir(), "ac-shell-drop-"));
 const rep = reporter(join(scratch, "shell-drop-test.log"), { name: "shell-drop-test" });
 const TYPES = ["public.file-url", "public.url", "public.utf8-plain-text"];
-const WEB = /RenderWidgetHostViewCocoa|WebContentsViewCocoa|ArdiaCoreWebView/;
+const WEB = /RenderWidgetHostViewCocoa|WebContentsViewCocoa|SolaraCoreWebView/;
 const PAGE = "data:text/html,<body style='height:2000px'>drop here</body>";
 
 async function open(env, dir) {
@@ -33,8 +33,8 @@ async function open(env, dir) {
   await sleep(4000);
   await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; s.newTab(w, { url: ${JSON.stringify(PAGE)} }); return true`);
   await sleep(3000);
-  const win = await app.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
-  const info = JSON.parse(await app.eval(`const C = globalThis.expo.modules.ArdiaCEF; return C.devWindow(${win}, "winfo")`));
+  const win = await app.eval(`const C = globalThis.expo.modules.SolaraCEF; return C.chromeWindows().then((ws) => ws.find((w) => w.hasRoot).window)`);
+  const info = JSON.parse(await app.eval(`const C = globalThis.expo.modules.SolaraCEF; return C.devWindow(${win}, "winfo")`));
   const [, , w, h] = info.frame.replace(/[{}]/g, "").split(",").map(Number);
   const tab = await app.eval(`const s = ac.store.getState(); const w = Object.keys(s.windows)[0]; return s.windows[w].activeTabIds[s.windows[w].profileId]`);
   const windowId = await app.eval(`return Object.keys(ac.store.getState().windows)[0]`);
@@ -74,7 +74,7 @@ async function open(env, dir) {
 let shell = null;
 let rn = null;
 try {
-  shell = await open({ ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1" }, "shell-data");
+  shell = await open({ SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDEBAR: "1" }, "shell-data");
   const { w, h } = shell;
   const page = [Math.round(w * 0.6), Math.round(h * 0.6)];
   const pageGoesToWeb = async (label, at = page) => {
@@ -167,7 +167,7 @@ try {
 
   await rep.check("a drop on the zoom popover goes where RN's does", async () => {
     assert.ok(onPopover, "the shell's popover point");
-    rn = await open({ ARDIA_NATIVE_SHELL: "0" }, "rn-data");
+    rn = await open({ SOLARA_NATIVE_SHELL: "0" }, "rn-data");
     await rn.zoom(true);
     await sleep(800);
     const rnOnPopover = {};

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const HELP = `Video upscaling (Settings › Tabs › Video upscaling) end to end, in a hidden instance: what the GPU process upscales
-in every state the gate decides, read from its trace events (ArdiaVSR.* in the "gpu" category) and the engine's gate.
+in every state the gate decides, read from its trace events (SolaraVSR.* in the "gpu" category) and the engine's gate.
 
   node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--out DIR] [--keep] [--attach] [--seconds N] [check…]
   node apps/browser/scripts/video-upscaling-test.mjs --list
@@ -43,7 +43,7 @@ const CHECKS = {
   "hdr-pq": "an HDR10 (PQ) clip: declined",
   "hdr-hlg": "an HLG clip: declined",
   fullscreen: "page full screen (acted): upscaled to the screen",
-  "little-ardia": "a Little Ardia window: nothing",
+  "little-solara": "a Little Solara window: nothing",
   teardown: "the gate closing frees the scaler, its session and buffers within a few seconds",
   "idle-teardown": "a paused video that stops presenting still frees everything after 3 s, with no new frame",
   "idle-quiet": "once freed, a page that keeps drawing (no video, or the gate closed) never wakes the idle timer again",
@@ -147,11 +147,11 @@ else {
   instance = await launch(app, {
     data, fresh: true, onboarded: true,
     session: session({ tabs: [{ id: "home", url: "about:blank", title: "Home" }] }),
-    ready: "return !!globalThis.expo?.modules?.ArdiaCEF && Object.keys(ac.store.getState().windows).length > 0",
+    ready: "return !!globalThis.expo?.modules?.SolaraCEF && Object.keys(ac.store.getState().windows).length > 0",
   });
 }
 const evalApp = (body, timeout) => instance.eval(body, { timeout });
-const cef = (call) => evalApp(`return globalThis.expo.modules.ArdiaCEF.${call}`);
+const cef = (call) => evalApp(`return globalThis.expo.modules.SolaraCEF.${call}`);
 const store = () => evalApp(`const s = ac.store.getState(); const w = Object.values(s.windows).find((w) => w.kind !== "small"); return { windowId: w.id, active: w.activeTabIds[w.profileId], tabs: w.tabIds.map((id) => ({ id, url: s.tabs[id]?.url })) }`);
 const until = async (what, test, ms = 15000) => {
   for (const end = Date.now() + ms; Date.now() < end; await sleep(150)) {
@@ -191,7 +191,7 @@ const untilSnapshot = async (what, accept, ms = 5000) => {
 };
 const windowFacts = (windows) => windows.map((window) => ({
   key: window.key, visible: window.visible, miniaturized: window.miniaturized,
-  occlusionVisible: window.occlusionVisible, littleArdia: window.littleArdia,
+  occlusionVisible: window.occlusionVisible, littleSolara: window.littleSolara,
   internal: window.internal, focusedTab: window.focusedTab || null,
 })).map(JSON.stringify).sort();
 const gate = async (v) => {
@@ -209,7 +209,7 @@ const gate = async (v) => {
 async function watch(ms = seconds * 1000, during) {
   const browser = await instance.browser();
   const events = [];
-  browser.on("Tracing.dataCollected", (p) => events.push(...p.value.filter((e) => String(e.name).startsWith("ArdiaVSR"))));
+  browser.on("Tracing.dataCollected", (p) => events.push(...p.value.filter((e) => String(e.name).startsWith("SolaraVSR"))));
   const done = new Promise((r) => browser.on("Tracing.tracingComplete", r));
   await browser.send("Tracing.start", { traceConfig: { includedCategories: ["gpu"], recordMode: "recordAsMuchAsPossible" }, transferMode: "ReportEvents" });
   const extra = during ? await during() : null;
@@ -217,7 +217,7 @@ async function watch(ms = seconds * 1000, during) {
   await browser.send("Tracing.end");
   await Promise.race([done, sleep(10000)]);
   browser.close();
-  const named = (n) => events.filter((e) => e.name === `ArdiaVSR.${n}`);
+  const named = (n) => events.filter((e) => e.name === `SolaraVSR.${n}`);
   const jobs = named("Job");
   const median = (xs) => (xs.length ? xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)] : null);
   return {
@@ -388,10 +388,10 @@ await check("fullscreen", async () => {
   }
 });
 
-await check("little-ardia", async () => {
+await check("little-solara", async () => {
   const before = await evalApp("return Object.keys(ac.store.getState().windows)");
-  await evalApp(`ac.runCommand({ command: "newLittleArdia", arg: null, windowId: null }); return true`);
-  const small = await until("a Little Ardia window", () => evalApp(`const s = ac.store.getState(); return Object.values(s.windows).find((w) => w.kind === "small" && !${JSON.stringify(before)}.includes(w.id))?.id ?? null`));
+  await evalApp(`ac.runCommand({ command: "newLittleSolara", arg: null, windowId: null }); return true`);
+  const small = await until("a Little Solara window", () => evalApp(`const s = ac.store.getState(); return Object.values(s.windows).find((w) => w.kind === "small" && !${JSON.stringify(before)}.includes(w.id))?.id ?? null`));
   const url = `${base}/index.html?${q480}&n=${Date.now()}`;
   const smallTab = await until("its tab", () => evalApp(`return ac.store.getState().windows[${JSON.stringify(small)}]?.tabIds?.[0] ?? null`));
   await evalApp(`ac.store.getState().navigate(${JSON.stringify(smallTab)}, ${JSON.stringify(url)}, { userInitiated: true }); return true`);
@@ -402,11 +402,11 @@ await check("little-ardia", async () => {
   await win(smallTab, "fakeOcclusion:visible");
   await sleep(2000);
   const g = await gate({ url });
-  if (!g.state.windows.some((w) => w.littleArdia && w.key && w.occlusionVisible)) throw new Error(`Little Ardia isn't the focused, visible window: ${JSON.stringify(g.state.windows)}`);
-  if (g.allowed) throw new Error("the gate is open in Little Ardia");
+  if (!g.state.windows.some((w) => w.littleSolara && w.key && w.occlusionVisible)) throw new Error(`Little Solara isn't the focused, visible window: ${JSON.stringify(g.state.windows)}`);
+  if (g.allowed) throw new Error("the gate is open in Little Solara");
   const w = await watch();
   await evalApp(`ac.store.getState().closeWindow?.(${JSON.stringify(small)}); return true`).catch(() => null);
-  if (w.jobs || w.setups.length) throw new Error(`work in Little Ardia: ${fmt(w)}`);
+  if (w.jobs || w.setups.length) throw new Error(`work in Little Solara: ${fmt(w)}`);
   return fmt(w);
 });
 

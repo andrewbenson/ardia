@@ -6,23 +6,23 @@ import type { CalendarNative, KeychainNative } from "./live";
 import type { FileDropNative, MagnifyAreaNative, SystemNative } from "./system";
 
 export type ShellNativeModules = {
-  ArdiaShell: ShellNative;
-  ArdiaApp: AppModule;
-  ArdiaSystem: SystemNative;
-  ArdiaCalendar: CalendarNative;
-  ArdiaKeychain: KeychainNative;
-  ArdiaGlassEffect: GlassEffectNative;
-  ArdiaDockSelection: DockSelectionNative;
-  ArdiaInlineCompletion: InlineCompletionNative;
-  ArdiaTranslate: TranslationModule;
+  SolaraShell: ShellNative;
+  SolaraApp: AppModule;
+  SolaraSystem: SystemNative;
+  SolaraCalendar: CalendarNative;
+  SolaraKeychain: KeychainNative;
+  SolaraGlassEffect: GlassEffectNative;
+  SolaraDockSelection: DockSelectionNative;
+  SolaraInlineCompletion: InlineCompletionNative;
+  SolaraTranslate: TranslationModule;
 };
 
 export type ShellOptionalNativeModules = {
-  ArdiaPopoverBubble: PopoverBubbleNative;
-  ArdiaHairline: HairlineNative;
-  ArdiaMagnifyArea: MagnifyAreaNative;
-  ArdiaFileDrop: FileDropNative;
-  ArdiaCli: CliNative;
+  SolaraPopoverBubble: PopoverBubbleNative;
+  SolaraHairline: HairlineNative;
+  SolaraMagnifyArea: MagnifyAreaNative;
+  SolaraFileDrop: FileDropNative;
+  SolaraCli: CliNative;
 };
 
 export const nativeModule = <Name extends keyof ShellNativeModules>(name: Name) => requireNativeModule<ShellNativeModules[Name]>(name);

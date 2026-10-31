@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../store/browser.ts");
-const { Clock, compact, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, compact, emptyScope, syncScope } = await import("@solara/sync");
 const pinnedArea = await import("./pinned.ts");
 const stub = await import("../test-native/index.ts");
 const { flushPersistence, loadSession, startPersistence } = await import("../lib/persist.ts");

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
-const script = readFileSync(new URL("../../../../packages/ardiacore/ios/page_script.js", import.meta.url), "utf8");
+const script = readFileSync(new URL("../../../../packages/solaracore/ios/page_script.js", import.meta.url), "utf8");
 const start = script.indexOf("  const parse = (css) =>");
 const end = script.indexOf("  if (window.visualViewport)");
 assert.ok(start > 0 && end > start, "page_script.js has the theme block");

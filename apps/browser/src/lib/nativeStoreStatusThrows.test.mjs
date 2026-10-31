@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 const reason = "the store module threw";
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => {
       throw new Error(reason);
     },

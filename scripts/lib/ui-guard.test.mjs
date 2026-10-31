@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { capBanner, joinWouldExtend, liveMaxHold, newSuppressed, orphanMaxHold, overHeld, waitingOthers, parseFront, prune, readState, stillNeeded, violation } from "./ui-guard.mjs";
 
 const lsappinfo = (name, pid, executable) => `"${name}" ASN:0x0-0xb2db2d: (in front) \n    bundleID="x"\n    bundle path="${executable.replace(/\/Contents\/MacOS\/.*$/, "")}"\n    executable path="${executable}"\n    pid = ${pid} token=[sess=1 pid=${pid}] type="Foreground" flavor=3\n`;
-const build = "/Users/me/Developer/Personal/ardia/apps/browser/build-x/Build/Products/Debug/Solara.app/Contents/MacOS/Solara";
+const build = "/Users/me/Developer/Personal/solara/apps/browser/build-x/Build/Products/Debug/Solara.app/Contents/MacOS/Solara";
 const state = (lines) => readState(lines.map((l) => JSON.stringify(l)).join("\n"));
 
 test("the front app's pid, executable and name come from lsappinfo info", () => {

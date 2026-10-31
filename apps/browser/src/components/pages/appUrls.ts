@@ -1,4 +1,4 @@
-import { appUrlRoute } from "@ardia/core";
+import { appUrlRoute } from "@solara/core";
 import { useBrowser } from "../../store/browser";
 import { setAppUrlOpener } from "../../store/tabs";
 import { openSettings, type SettingsPane } from "../settings/windows";

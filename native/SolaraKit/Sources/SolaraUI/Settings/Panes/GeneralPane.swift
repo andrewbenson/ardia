@@ -112,13 +112,13 @@ struct GeneralPane: View {
         SettingToggle("general.warnBeforeClosingWindow", key: "warnBeforeClosingWindow")
         SettingRow(
           "general.openLinksFrom",
-          description: .text(store.bool("openLinksInLittleArdia")
+          description: .text(store.bool("openLinksInLittleSolara")
             ? "Links from other apps open in a small Little \(app) window."
             : "Links from other apps open in the \(app) window you used last.")
         ) {
           SettingPicker(
             [SettingOption("small", "Little \(app)"), SettingOption("tab", "A new tab")],
-            selection: Binding(get: { store.bool("openLinksInLittleArdia") ? "small" : "tab" }, set: { store.set("openLinksInLittleArdia", $0 == "small") })
+            selection: Binding(get: { store.bool("openLinksInLittleSolara") ? "small" : "tab" }, set: { store.set("openLinksInLittleSolara", $0 == "small") })
           )
         }
       }

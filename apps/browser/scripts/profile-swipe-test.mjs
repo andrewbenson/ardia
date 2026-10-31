@@ -27,7 +27,7 @@ try { port = portArg && parsePort(portArg); } catch (error) {
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
-const nativePager = process.env.ARDIA_NATIVE_PROFILE_PAGER !== "0";
+const nativePager = process.env.SOLARA_NATIVE_PROFILE_PAGER !== "0";
 const stale = args.includes("--stale-window");
 const only = args.find((a) => a.startsWith("--only="))?.slice("--only=".length).toLowerCase();
 let matched = 0;
@@ -52,7 +52,7 @@ const server = createServer((req, res) => {
   res.end('<!doctype html><title>Swipe scroll fixture</title><body style="margin:0"><div style="width:2600px;height:4000px;background:linear-gradient(120deg,#ffd9dd,#addbff)">Native scroll fixture</div>');
 });
 
-const tab = (id, profileId) => ({ id, profileId, url: "ardia://newtab", title: "New Tab" });
+const tab = (id, profileId) => ({ id, profileId, url: "solara://newtab", title: "New Tab" });
 const fixture = session({ profiles: ["Personal", "Work"], tabs: [tab("t1", "default"), tab("t2", "work")] });
 
 const ac = (body, timeout = 15000) => owned.eval(body, { timeout });
@@ -69,12 +69,12 @@ async function reset() {
   await waitProfile("default");
   await sleep(250);
 }
-const windows = () => ac('return globalThis.expo.modules.ArdiaCEF.chromeWindows();');
+const windows = () => ac('return globalThis.expo.modules.SolaraCEF.chromeWindows();');
 async function nativeWindow() {
   const all = await windows();
   return all.find((w) => w.hasRoot && w.profile === "" && w.group) ?? all.find((w) => w.hasRoot);
 }
-const action = (window, act) => ac(`return globalThis.expo.modules.ArdiaCEF.devWindow(${window}, ${JSON.stringify(act)});`);
+const action = (window, act) => ac(`return globalThis.expo.modules.SolaraCEF.devWindow(${window}, ${JSON.stringify(act)});`);
 const gesture = (sign, wobble = false, drift = false) => [
   { phase: "began", dx: wobble ? sign : 0, dy: wobble ? 5 : 0 },
   { phase: "changed", dx: 18 * sign, dy: 1 },
@@ -107,7 +107,7 @@ function fixtureFidelity(steps, result) {
     maxLateMs: Math.max(0, ...events.map((e) => e.lateMs ?? 0)), errors };
 }
 const simulate = (steps, source) => ac(source
-  ? `return globalThis.expo.modules.ArdiaSwipe.devSimulate(120, 400, ${source}, ${JSON.stringify(steps)}, true);`
+  ? `return globalThis.expo.modules.SolaraSwipe.devSimulate(120, 400, ${source}, ${JSON.stringify(steps)}, true);`
   : `return globalThis.acSwipe.sidebar("w1").devSimulate(${JSON.stringify(steps)}, {ignorePreference:true});`);
 function alternatingGestures(count, gapMs = 112) {
   return Array.from({ length: count }, (_, n) => gesture(n % 2 ? 1 : -1).map((step) => ({
@@ -124,7 +124,7 @@ async function nativeBatch(steps, blockedMs = 0) {
       const until=performance.now()+${blockedMs}; while(performance.now()<until){}
     },20);
     return simulation.then(result=>new Promise(resolve=>setTimeout(()=>{
-      globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then(state=>${PAGER_DEBUG}.then(pager=>resolve({result,state,
+      globalThis.expo.modules.SolaraSwipe.devPagerState("w1").then(state=>${PAGER_DEBUG}.then(pager=>resolve({result,state,
         profile:ac.store.getState().windows.w1.profileId,pager})));
     },650)));
   `, 15000);
@@ -168,9 +168,9 @@ try {
     ready: nativePager ? 'return !!globalThis.acPager?.("w1") && !!globalThis.acSwipe;' : 'return !!globalThis.acSwipe?.sidebar("w1");',
   });
   if (nativePager) await ac(`
-    const at = (x, y) => () => ({ devSimulate: (steps) => Promise.resolve(globalThis.expo.modules.ArdiaCEF.chromeWindows())
+    const at = (x, y) => () => ({ devSimulate: (steps) => Promise.resolve(globalThis.expo.modules.SolaraCEF.chromeWindows())
       .then((all) => (all.find((w) => w.hasRoot && w.profile === "" && w.group) ?? all.find((w) => w.hasRoot)).window)
-      .then((n) => globalThis.expo.modules.ArdiaSwipe.devSimulate(x, y, n, steps, true)) });
+      .then((n) => globalThis.expo.modules.SolaraSwipe.devSimulate(x, y, n, steps, true)) });
     const strip = at(700, 22);
     globalThis.acSwipe.sidebar = at(120, 400);
     globalThis.acSwipe.strip = () => ac.store.getState().settings.tabLayout === "top" ? strip() : null;
@@ -276,7 +276,7 @@ try {
     await ac('ac.runCommand({command:"nextProfile",windowId:"w1"}); ac.runCommand({command:"nextProfile",windowId:"w1"}); ac.runCommand({command:"nextProfile",windowId:"w1"}); return true;');
     await waitProfile("work");
     await sleep(450);
-    const result = await ac('return globalThis.expo.modules.ArdiaSwipe.devPagerState("w1");');
+    const result = await ac('return globalThis.expo.modules.SolaraSwipe.devPagerState("w1");');
     assert.equal(result.profileId, "work");
     assert.equal(result.selected, 1);
     assert.equal(result.phase, "idle");
@@ -290,7 +290,7 @@ try {
       setTimeout(()=>ac.store.getState().switchProfile("w1","work"),40);
       setTimeout(()=>ac.store.getState().switchProfile("w1","default"),56);
       return simulation.then(native=>new Promise(resolve=>setTimeout(()=>{
-        globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then(state=>resolve({native,state,
+        globalThis.expo.modules.SolaraSwipe.devPagerState("w1").then(state=>resolve({native,state,
           profile:ac.store.getState().windows.w1.profileId}));
       },650)));
     `);
@@ -305,7 +305,7 @@ try {
     await ac('const p=globalThis.acPager("w1"); p.switchTo("default"); p.switchTo("work"); return true;');
     await waitProfile("work");
     await sleep(650);
-    const result = await ac('return globalThis.expo.modules.ArdiaSwipe.devPagerState("w1");');
+    const result = await ac('return globalThis.expo.modules.SolaraSwipe.devPagerState("w1");');
     assert.equal(result.selected, 1);
     assert.equal(result.phase, "idle");
     assert.ok(Math.abs(result.position - 1) < 0.003);
@@ -455,7 +455,7 @@ try {
   await test("a real web hit inside the renderer keeps page ownership", async () => {
     await reset();
     const source = (await nativeWindow()).window;
-    const result = await ac(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(700, 400, ${source}, ${JSON.stringify(gesture(-1))}, true);`);
+    const result = await ac(`return globalThis.expo.modules.SolaraSwipe.devSimulate(700, 400, ${source}, ${JSON.stringify(gesture(-1))}, true);`);
     await sleep(600);
     assert.equal(routing(result)?.raw?.[0]?.class, "RenderWidgetHostViewCocoa", "the point should hit the page renderer");
     assert.equal(routing(result)?.fallback, false, "a hit inside the renderer must not fall back");
@@ -501,7 +501,7 @@ try {
           ac.store.getState().reorderProfiles(["work","default"]);
         },20);
         return simulation.then(native=>new Promise(resolve=>setTimeout(()=>{
-          globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then(state=>resolve({native,state,
+          globalThis.expo.modules.SolaraSwipe.devPagerState("w1").then(state=>resolve({native,state,
             profile:ac.store.getState().windows.w1.profileId,order:ac.store.getState().profileOrder}));
         },650)));
       `);
@@ -520,7 +520,7 @@ try {
     await sleep(350);
     await ac('ac.store.getState().deleteProfile("default"); return true;');
     await sleep(350);
-    const result = await ac('return globalThis.expo.modules.ArdiaSwipe.devPagerState("w1");');
+    const result = await ac('return globalThis.expo.modules.SolaraSwipe.devPagerState("w1");');
     assert.equal(await profile(), "work");
     assert.equal(result.count, 1);
     assert.equal(result.selected, 0);

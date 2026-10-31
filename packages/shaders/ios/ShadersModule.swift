@@ -2,7 +2,7 @@ import ExpoModulesCore
 
 public class AreaLightModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaAreaLight")
+    Name("SolaraAreaLight")
 
     AsyncFunction("debugSnapshot") { (dir: String) -> [[String: Any]] in
       try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
@@ -24,7 +24,7 @@ public class AreaLightModule: Module {
 
 public class WindowBackdropModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaWindowBackdrop")
+    Name("SolaraWindowBackdrop")
 
     AsyncFunction("holdKeyLook") { (on: Bool) in WindowTreatmentView.holdsKeyLook = on }.runOnQueue(.main)
 
@@ -54,7 +54,7 @@ public class WindowBackdropModule: Module {
 
 public class ThemeSwatchModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaThemeSwatch")
+    Name("SolaraThemeSwatch")
 
     View(ThemeSwatchView.self) {
       Prop("colors") { (view: ThemeSwatchView, flat: [Double]) in view.setColors(flat) }
@@ -68,7 +68,7 @@ public class ThemeSwatchModule: Module {
 
 public class PowerUpModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaPowerUp")
+    Name("SolaraPowerUp")
 
     View(PowerUpView.self) {
       Prop("palette") { (view: PowerUpView, v: [String]) in view.setPalette(v) }

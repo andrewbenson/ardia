@@ -1,10 +1,10 @@
-import { confirm, onWindowEvent } from "@ardia/shell";
+import { confirm, onWindowEvent } from "@solara/shell";
 import { useBrowser } from "../store/browser";
 import { tabsClosingWithWindow } from "../store/model";
 import type { Tab } from "../store/types";
 import { closeWindowDialog } from "./closeWindowDialog";
 import { isSmall } from "../store/small";
-import { closeLittleArdia } from "../components/littleArdia/actions";
+import { closeLittleSolara } from "../components/littleSolara/actions";
 import { closeWindowAnimated } from "./closeAnimated";
 import { closeSnapshots as snapshots, type CloseSnapshot } from "./closeSnapshots";
 import { usePages } from "../components/layout/pageState";
@@ -57,7 +57,7 @@ async function requestClose(windowId: string) {
   if (!w) return;
   if (isSmall(s, windowId)) {
     rememberClose(windowId);
-    return closeLittleArdia(windowId);
+    return closeLittleSolara(windowId);
   }
   const count = closingTabs(windowId).length;
   if (s.settings.warnBeforeClosingWindow && count >= MIN_TABS) {

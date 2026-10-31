@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraUI
@@ -48,10 +48,10 @@ struct SidePanelState: Decodable {
 }
 
 @MainActor
-final class SidePanelHost: NSObject, ArdiaCoreWebViewDelegate {
+final class SidePanelHost: NSObject, SolaraCoreWebViewDelegate {
   let view = ExtensionSidePanelView()
   private let windowId: String
-  private var page: ArdiaCoreWebView?
+  private var page: SolaraCoreWebView?
   private var key: String?
   private var iconSource: String?
   private var icon: NSImage?
@@ -119,7 +119,7 @@ final class SidePanelHost: NSObject, ArdiaCoreWebViewDelegate {
     guard !state.url.isEmpty else { return }
     key = state.key
     view.layoutSubtreeIfNeeded()
-    let web = ArdiaCoreWebView(frame: view.content.bounds)
+    let web = SolaraCoreWebView(frame: view.content.bounds)
     web.standalone = true
     web.extensionHost = "sidePanel"
     web.profile = state.pageProfile
@@ -143,7 +143,7 @@ final class SidePanelHost: NSObject, ArdiaCoreWebViewDelegate {
     return hadFocus
   }
 
-  nonisolated func webView(_ web: ArdiaCoreWebView, event name: String, payload: [String: Any]) {
+  nonisolated func webView(_ web: SolaraCoreWebView, event name: String, payload: [String: Any]) {
     nonisolated(unsafe) let body = payload
     MainActor.assumeIsolated {
       guard web === page else { return }
@@ -166,15 +166,15 @@ final class SidePanelHost: NSObject, ArdiaCoreWebViewDelegate {
 enum SidePanelFocus {
   static func focus(windowId: String, tabId: String) -> Bool {
     guard let window = ShellDrag.window(windowId), window.isVisible, window.firstResponder === window else { return false }
-    let page = (TabPoolHost.shared.pageView(tabId) as? ArdiaCoreWebView) ?? find(tabId, in: window.contentView?.superview ?? window.contentView)
+    let page = (TabPoolHost.shared.pageView(tabId) as? SolaraCoreWebView) ?? find(tabId, in: window.contentView?.superview ?? window.contentView)
     guard let page, page.window === window, !page.isHiddenOrHasHiddenAncestor else { return false }
     page.focusPage()
     return true
   }
 
-  private static func find(_ tabId: String, in view: NSView?) -> ArdiaCoreWebView? {
+  private static func find(_ tabId: String, in view: NSView?) -> SolaraCoreWebView? {
     guard let view, !view.isHidden else { return nil }
-    if let web = view as? ArdiaCoreWebView, web.transferKey == tabId, web.window != nil, !web.isHiddenOrHasHiddenAncestor { return web }
+    if let web = view as? SolaraCoreWebView, web.transferKey == tabId, web.window != nil, !web.isHiddenOrHasHiddenAncestor { return web }
     for child in view.subviews { if let found = find(tabId, in: child) { return found } }
     return nil
   }

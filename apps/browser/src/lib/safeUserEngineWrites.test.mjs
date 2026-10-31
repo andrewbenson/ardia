@@ -20,12 +20,12 @@ const writes = [
 ];
 
 function bridge(name, args) {
-  const header = source("packages/ardiacore/ios/ArdiaCoreEngineBridge.h");
-  const abi = source("engine/chromium/src/chrome/browser/ardia/public/ac_engine.h");
-  const implementation = source("packages/ardiacore/ios/ArdiaCoreEngineBridge.mm")
-    .replace('#import "ArdiaCoreEngineBridge.h"', "")
-    .replace('#import "ArdiaCoreInternal.h"', "")
-    .replace('#include "../../../engine/chromium/src/chrome/browser/ardia/public/ac_engine.h"', "");
+  const header = source("packages/solaracore/ios/SolaraCoreEngineBridge.h");
+  const abi = source("engine/chromium/src/chrome/browser/solara/public/ac_engine.h");
+  const implementation = source("packages/solaracore/ios/SolaraCoreEngineBridge.mm")
+    .replace('#import "SolaraCoreEngineBridge.h"', "")
+    .replace('#import "SolaraCoreInternal.h"', "")
+    .replace('#include "../../../engine/chromium/src/chrome/browser/solara/public/ac_engine.h"', "");
   return runNative("Engine.mm", `${abi}\n${header}\n${implementation}`, [name, JSON.stringify(args)]);
 }
 

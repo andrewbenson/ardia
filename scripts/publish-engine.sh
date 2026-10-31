@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Publishes this checkout's arm64 engine for CI releases: packs the local Chromium Framework (stripped, unpruned, as
 # release.sh packs it) and, for a Helium engine, its source, then uploads both to the GitHub prerelease
-# engine-<engine tree:12> (never latest) and appends the tree's line to packages/ardiacore/prebuilt-engines.tsv.
+# engine-<engine tree:12> (never latest) and appends the tree's line to packages/solaracore/prebuilt-engines.tsv.
 #
 #   scripts/publish-engine.sh [--dry-run] [--out <dir>] [<Chromium Framework.framework>]
 #   scripts/publish-engine.sh -h | --help
@@ -15,7 +15,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
 repo="$(sed -n 's/^AC_RELEASE_REPO *= *//p' "$root/apps/browser/macos/Identity.xcconfig" | tr -d '[:space:]')"
 [ -n "$repo" ] || { echo "error: apps/browser/macos/Identity.xcconfig has no AC_RELEASE_REPO" >&2; exit 1; }
-table="$root/packages/ardiacore/prebuilt-engines.tsv"
+table="$root/packages/solaracore/prebuilt-engines.tsv"
 chromium_src="${CHROMIUM_SRC:-$HOME/chromium-build/chromium_git/chromium/src}"
 die() { echo "error: $*" >&2; exit 1; }
 dry=0 out="" framework=""
@@ -52,23 +52,23 @@ existing="$(awk -v t="$tree" '$1 == t { print $2; exit }' "$table")"
 out="${out:-$root/dist/$tag}"
 rm -rf "$out" && mkdir -p "$out"
 out="$(cd "$out" && pwd -P)"
-archive="$out/ArdiaCore-$short.tar.xz"
-source_archive="$out/ArdiaCore-$short-source.tar.xz"
+archive="$out/SolaraCore-$short.tar.xz"
+source_archive="$out/SolaraCore-$short-source.tar.xz"
 work="$out/pack"
-mkdir -p "$work/Ardia.app/Contents/Frameworks"
+mkdir -p "$work/Solara.app/Contents/Frameworks"
 echo "==> Copy the engine"
-copy=(cp -cR "$framework" "$work/Ardia.app/Contents/Frameworks/")
+copy=(cp -cR "$framework" "$work/Solara.app/Contents/Frameworks/")
 case "$framework" in
   "$HOME/chromium-build/"*) "$root/scripts/agent/locked" chromium --wait 500 -- "${copy[@]}" ;;
   *) "${copy[@]}" ;;
 esac
 echo "==> Strip"
-"$root/packages/ardiacore/scripts/strip-engine.sh" "$work/Ardia.app" "$out/symbols"
+"$root/packages/solaracore/scripts/strip-engine.sh" "$work/Solara.app" "$out/symbols"
 helium_engine=""
-LC_ALL=C grep -q -a -F helium.services.enabled "$work/Ardia.app/Contents/Frameworks/Chromium Framework.framework/Versions/Current/Chromium Framework" \
+LC_ALL=C grep -q -a -F helium.services.enabled "$work/Solara.app/Contents/Frameworks/Chromium Framework.framework/Versions/Current/Chromium Framework" \
   && helium_engine=1
 echo "==> Pack"
-tar --no-mac-metadata -cf - -C "$work/Ardia.app/Contents/Frameworks" "Chromium Framework.framework" | xz -T0 -9 >"$archive"
+tar --no-mac-metadata -cf - -C "$work/Solara.app/Contents/Frameworks" "Chromium Framework.framework" | xz -T0 -9 >"$archive"
 rm -rf "$work"
 sha="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
 echo "$sha  $(basename "$archive")" >"$archive.sha256"
@@ -81,7 +81,7 @@ fi
 line="$(printf '%s\t%s\t%s' "$tree" "$tag" "$sha")"
 
 echo "==> Publish"
-notes="ArdiaCore's engine for engine/ tree $tree (commit $commit), for builds without a Chromium tree (packages/ardiacore/scripts/fetch-engine.sh). Not an app release."
+notes="SolaraCore's engine for engine/ tree $tree (commit $commit), for builds without a Chromium tree (packages/solaracore/scripts/fetch-engine.sh). Not an app release."
 if [ "$dry" = 1 ] || ! gh release view "$tag" -R "$repo" >/dev/null 2>&1; then
   run gh release create "$tag" -R "$repo" --prerelease --latest=false --target "$commit" --title "Engine $short" --notes "$notes"
 fi
@@ -92,6 +92,6 @@ if [ "$dry" = 1 ]; then
 else
   [ "$(gh release view "$tag" -R "$repo" --json isPrerelease -q .isPrerelease)" = true ] || die "$tag isn't a prerelease"
   printf '%s\n' "$line" >>"$table"
-  echo "Published $tag. Commit packages/ardiacore/prebuilt-engines.tsv (appended: $line)."
+  echo "Published $tag. Commit packages/solaracore/prebuilt-engines.tsv (appended: $line)."
 fi
 du -sh "${assets[@]}"

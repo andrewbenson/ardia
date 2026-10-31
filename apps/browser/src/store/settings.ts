@@ -9,8 +9,8 @@ import {
   type EngineInput,
   type ExtensionSearchEngine,
   type SearchEngine,
-} from "@ardia/core";
-import type { PageEngine } from "@ardia/ardiacore";
+} from "@solara/core";
+import type { PageEngine } from "@solara/solaracore";
 import type { StateCreator } from "zustand";
 import type { DeveloperModeState } from "../lib/developerMode";
 import type { BrowserState } from "./browser";
@@ -82,8 +82,8 @@ export type Settings = {
 
   shortcuts: Record<string, string[]>;
 
-  openLinksInLittleArdia: boolean;
-  littleArdiaSize: [number, number];
+  openLinksInLittleSolara: boolean;
+  littleSolaraSize: [number, number];
 
   pageEngine: PageEngine;
   websiteEngines: Record<string, PageEngine>;
@@ -171,8 +171,8 @@ export const DEFAULT_SETTINGS: Settings = {
   spacesFollowAppearance: true,
   defaultProfileId: DEFAULT_PROFILE_ID,
   shortcuts: {},
-  openLinksInLittleArdia: true,
-  littleArdiaSize: [900, 640],
+  openLinksInLittleSolara: true,
+  littleSolaraSize: [900, 640],
   pageEngine: "chromium",
   websiteEngines: {},
   migrations: [TOOLBAR_STAYS_ON_SCROLL],

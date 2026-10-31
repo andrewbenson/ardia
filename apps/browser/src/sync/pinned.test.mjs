@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../store/browser.ts");
 const folders = await import("../store/tileFolders.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const pinnedArea = await import("./pinned.ts");
 const previous = await import("./fixtures/pinned-v0.2.40.ts");
 
@@ -137,7 +137,7 @@ test("a pin another Mac published under the app's old name arrives with today's"
   const value = { g: null, u: "netnyahoo://history", t: null, i: null, ti: "History", pos: "V" };
   folder.files.set("old1", { scope: "p", payload: JSON.stringify({ v: 1, kind: "log", device: "devOld", seq: 1, at: Date.now(), ops: [{ k: "pin:t:oldpin", h, v: value }] }) });
   await b.sync();
-  assert.equal(b.with(() => S().tabs.oldpin?.pinnedUrl), "ardia://history");
+  assert.equal(b.with(() => S().tabs.oldpin?.pinnedUrl), "solara://history");
 });
 
 const previousVersion = () => [previous.pinnedRowsAdapter("default"), previous.pinnedAdapter("default")];

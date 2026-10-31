@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 let status = { active: false, safeMode: "option" };
-globalThis.acTestNativeModules = { ArdiaStore: { status: () => status } };
+globalThis.acTestNativeModules = { SolaraStoreAdapter: { status: () => status } };
 const stub = await import("../test-native/index.ts");
 const { shellNativeModules } = await import("../test-native/shell.ts");
 const { useBrowser } = await import("../store/browser.ts");
@@ -12,7 +12,7 @@ const { refuseSafeHistoryDeletion } = await import("../store/safeLibraryEdits.ts
 const { migrateBookmarksFile, reloadBookmarks, startBookmarks } = await import("./bookmarks.ts");
 const { migrateHistoryFile, reloadHistory, startHistory } = await import("./history.ts");
 const notices = [];
-shellNativeModules.ArdiaShell.confirm = async (options) => { notices.push(options); return { confirmed: false, suppressed: false }; };
+shellNativeModules.SolaraShell.confirm = async (options) => { notices.push(options); return { confirmed: false, suppressed: false }; };
 const S = () => useBrowser.getState();
 const settle = async () => { for (let i = 0; i < 12; i++) await new Promise((resolve) => setImmediate(resolve)); };
 const nodeId = bookmarkUuidFor("legacy-link");

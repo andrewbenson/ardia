@@ -25,7 +25,7 @@ const rep = reporter(join(scratch, "onboarding-test.log"), { name: "onboarding-t
 
 let app = null;
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const act = (a) => C.chromeWindows().then((ws) => C.devWindow(ws.find((w) => w.hasRoot).window, a));
 const hook = globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__;
@@ -80,7 +80,7 @@ const untilSnapshot = async (what, accept, args = {}, ms = 5000) => {
 };
 
 try {
-  app = await launch(appPath, { data, port, env: { ARDIA_ONBOARDING: "1", ...overlay, ...extraEnv } });
+  app = await launch(appPath, { data, port, env: { SOLARA_ONBOARDING: "1", ...overlay, ...extraEnv } });
   rep.log(`instance: pid ${app.pid}, DevTools port ${app.port}, data ${data}`);
   await app.ready({ test: "return !!globalThis.acOnboarding?.store.getState().windowId" });
   rep.log(`overlay: ${(await run("return nativeOverlay();")) ? "native" : "RN"}`);

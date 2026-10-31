@@ -7,7 +7,7 @@ let redesign = false;
 let response = { result: true };
 let snapshot = {};
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope, syncRedesign: redesign }),
     useSyncOrigins: () => true,
     snapshot: () => JSON.stringify({ rev: 0, data: snapshot }),

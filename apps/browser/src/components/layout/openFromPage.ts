@@ -1,4 +1,4 @@
-import type { OpenWindowRequest } from "@ardia/ardiacore";
+import type { OpenWindowRequest } from "@solara/solaracore";
 import { openWindow } from "../../lib/actions";
 import { useBrowser } from "../../store/browser";
 import { engineProfile } from "../../store/model";

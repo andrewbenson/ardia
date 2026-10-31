@@ -10,7 +10,7 @@ const fakes = new Map([
   ["react-native", new URL("./test-native/reactNative.ts", import.meta.url).href],
 ]);
 
-const tsxCache = new URL("../node_modules/.cache/ardia-test-tsx/", import.meta.url);
+const tsxCache = new URL("../node_modules/.cache/solara-test-tsx/", import.meta.url);
 let typescript;
 
 function transpiledTsx(url) {

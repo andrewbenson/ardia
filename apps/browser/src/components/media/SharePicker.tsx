@@ -1,6 +1,6 @@
-import { getDisplayMediaSources, type DisplayMediaAudio, type DisplayMediaRequest, type DisplayMediaSource } from "@ardia/ardiacore";
-import { runningAppIcon } from "@ardia/shell";
-import { windowShellActive } from "@ardia/settings";
+import { getDisplayMediaSources, type DisplayMediaAudio, type DisplayMediaRequest, type DisplayMediaSource } from "@solara/solaracore";
+import { runningAppIcon } from "@solara/shell";
+import { windowShellActive } from "@solara/settings";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../lib/theme";
 import { webviews } from "../../lib/webviews";

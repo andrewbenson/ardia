@@ -51,7 +51,7 @@
 // Conditions it checks: the display awake and unlocked (macOS gives no display-link frames otherwise), caffeinate -d for
 // the whole run, the load average and seconds of HID input recorded per phase. It notes other processes of the same
 // executable name (the owner's app, never touched); native-bench refuses to launch while one of its own copies runs.
-// Hidden instances only (ARDIA_BACKGROUND=1, scratch data folders), except --drag.
+// Hidden instances only (SOLARA_BACKGROUND=1, scratch data folders), except --drag.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
@@ -387,7 +387,7 @@ const phases = {
     };
     if (!ownerAway(60)) throw new Error("someone used the mouse or keyboard in the last minute; the drag phase waits for the owner to be away");
     await holdUiGate();
-    execFileSync("open", ["-g", "-n", "--env", `ARDIA_DATA_DIR=${data}`, "--env", `ARDIA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
+    execFileSync("open", ["-g", "-n", "--env", `SOLARA_DATA_DIR=${data}`, "--env", `SOLARA_REMOTE_DEBUGGING_PORT=${port}`, app, "--args", "--mute-audio"]);
     let pid = 0;
     for (let i = 0; i < 400 && !pid; i++) {
       const r = spawnSync("pgrep", ["-f", pattern], { encoding: "utf8" });

@@ -1,4 +1,4 @@
-import { nativePagesAvailable, nativeToolbarAvailable, NativePromptView, type NativePromptEvent } from "@ardia/settings";
+import { nativePagesAvailable, nativeToolbarAvailable, NativePromptView, type NativePromptEvent } from "@solara/settings";
 import { createContext, useContext, useState, type ComponentProps, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useTheme } from "../../lib/theme";

@@ -1,12 +1,12 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import Foundation
 import SolaraEngine
 import SolaraStore
 import SolaraUI
 
 @MainActor
-final class ArdiaHistoryClient: EngineClient {
+final class SolaraHistoryClient: EngineClient {
   enum Failure: Error {
     case invalidReply
     case engine(String)
@@ -17,7 +17,7 @@ final class ArdiaHistoryClient: EngineClient {
   func observeHistory(_ handler: @escaping @MainActor @Sendable (HistoryChange) -> Void) {
     guard !observing else { return }
     observing = true
-    ArdiaCoreEngineBridge.observe("history.changed") { payload in
+    SolaraCoreEngineBridge.observe("history.changed") { payload in
       nonisolated(unsafe) let payload = payload
       let deliver: @MainActor @Sendable () -> Void = {
         MainActor.assumeIsolated {
@@ -50,7 +50,7 @@ final class ArdiaHistoryClient: EngineClient {
   }
 
   func observeBookmarks(_ handler: @escaping @MainActor @Sendable (String) -> Void) {
-    ArdiaCoreEngineBridge.observe("bookmarks.changed") { payload in
+    SolaraCoreEngineBridge.observe("bookmarks.changed") { payload in
       nonisolated(unsafe) let payload = payload
       let deliver: @MainActor @Sendable () -> Void = {
         MainActor.assumeIsolated {
@@ -122,7 +122,7 @@ final class ArdiaHistoryClient: EngineClient {
     if source.hasPrefix("/") { return validImageData(try? Data(contentsOf: URL(fileURLWithPath: source))) }
     guard source.hasPrefix("https://") || source.hasPrefix("http://") else { return nil }
     return await withCheckedContinuation { continuation in
-      ArdiaCoreFavicons.fetch(source, profile: engineProfile, name: nil) { result in
+      SolaraCoreFavicons.fetch(source, profile: engineProfile, name: nil) { result in
         guard let uri = result?["uri"] as? String, let comma = uri.firstIndex(of: ",") else {
           continuation.resume(returning: nil)
           return
@@ -150,7 +150,7 @@ final class ArdiaHistoryClient: EngineClient {
   private func call(_ name: String, profile: String, args: [String: Any] = [:]) async throws -> Data {
     let body = String(decoding: try JSONSerialization.data(withJSONObject: args), as: UTF8.self)
     return try await withCheckedThrowingContinuation { continuation in
-      ArdiaCoreEngineBridge.call(name, profile: profile, args: body) { json in
+      SolaraCoreEngineBridge.call(name, profile: profile, args: body) { json in
         let data = Data(json.utf8)
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
           continuation.resume(throwing: Failure.invalidReply)
@@ -168,7 +168,7 @@ final class ArdiaHistoryClient: EngineClient {
 
 @MainActor
 enum NativeHistoryCatalog {
-  static let catalog = LibraryCatalog(client: ArdiaHistoryClient())
+  static let catalog = LibraryCatalog(client: SolaraHistoryClient())
 
   static func favicon(page: String, source: String? = nil, profileId: String, dark: Bool) async -> NSImage? {
     let profile = NativeStoreHandle.store?.state.engineProfile(profileId) ?? (profileId == "default" ? "" : profileId)
@@ -192,7 +192,7 @@ enum NativeHistoryCatalog {
     let data = try JSONSerialization.data(withJSONObject: payload)
     switch kind {
     case "deleteHistory":
-      guard let urls = payload["urls"] as? [String] else { throw ArdiaHistoryClient.Failure.invalidReply }
+      guard let urls = payload["urls"] as? [String] else { throw SolaraHistoryClient.Failure.invalidReply }
       try await catalog.deleteHistory(urls: urls, engineProfile: engineProfile)
       return NSNull()
     case "importHistory":
@@ -208,11 +208,11 @@ enum NativeHistoryCatalog {
       return ["applied": result.applied, "skipped": result.skipped, "invalid": result.invalid]
     case "storeFavicon":
       guard let page = payload["page"] as? String, let source = payload["icon"] as? String,
-        let png = payload["png"] as? String, let bytes = Data(base64Encoded: png) else { throw ArdiaHistoryClient.Failure.invalidReply }
+        let png = payload["png"] as? String, let bytes = Data(base64Encoded: png) else { throw SolaraHistoryClient.Failure.invalidReply }
       try await catalog.storeFavicon(page: page, source: source, data: bytes, engineProfile: engineProfile)
       return ["stored": true]
     default:
-      throw ArdiaHistoryClient.Failure.invalidReply
+      throw SolaraHistoryClient.Failure.invalidReply
     }
   }
 

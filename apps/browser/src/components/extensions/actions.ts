@@ -1,4 +1,4 @@
-import { extensionActionStates } from "@ardia/ardiacore";
+import { extensionActionStates } from "@solara/solaracore";
 import { useBrowser } from "../../store/browser";
 import { activeTabId } from "../../store/model";
 import { browserIdOf, extensionProfile, useExtensions, windowExtensions } from "./store";

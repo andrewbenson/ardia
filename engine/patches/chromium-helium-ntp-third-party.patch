@@ -1,9 +1,9 @@
 SPDX-License-Identifier: GPL-3.0-only
 Reverts the chrome/browser/search/search.cc hunks of helium/ui/always-use-better-ntp.patch (GPL-3.0, The Helium
 Authors) and puts back the search.cc part of ungoogled-chromium's inox-patchset/0008-restore-classic-ntp.patch
-(155.0.8059.84-1, BSD-3-Clause), which Helium leaves out: chrome://newtab is the New Tab page Ardia 0.2.39 opens
+(155.0.8059.84-1, BSD-3-Clause), which Helium leaves out: chrome://newtab is the New Tab page Solara 0.2.39 opens
 (chrome://new-tab-page-third-party unless Google is the default search engine), never Chrome's WebUI NTP for every
-engine. The WebUI NTP needs a BrowserView, which ArdiaCore's browsers lack.
+engine. The WebUI NTP needs a BrowserView, which SolaraCore's browsers lack.
 
 --- a/chrome/browser/search/search.cc
 +++ b/chrome/browser/search/search.cc

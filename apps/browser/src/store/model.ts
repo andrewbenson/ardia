@@ -1,4 +1,4 @@
-import { appUrlOrigin, displayHost } from "@ardia/core";
+import { appUrlOrigin, displayHost } from "@solara/core";
 import type { BrowserState } from "./browser";
 import { DEFAULT_PROFILE_ID } from "./settings";
 import type { BrowserWindow, Profile, Tab, TabGroup, TabLive, TabSnapshot } from "./types";

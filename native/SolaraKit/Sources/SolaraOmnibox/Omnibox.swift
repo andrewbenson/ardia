@@ -73,7 +73,7 @@ public func hostOf(_ url: String) -> String { hostOf(url.units).string }
 
 private let knownSchemes: Set<Units> = Set([
   "http", "https", "file", "about", "data", "blob", "mailto", "tel", "sms", "facetime", "ftp", "view-source",
-  "ardia", "chrome", "chrome-extension", "devtools", "x-apple.systempreferences", "itms-apps", "slack", "zoommtg", "vscode",
+  "solara", "chrome", "chrome-extension", "devtools", "x-apple.systempreferences", "itms-apps", "slack", "zoommtg", "vscode",
   "cursor", "notion", "figma", "spotify", "linear", "obsidian", "raycast",
 ].map(Units.init))
 

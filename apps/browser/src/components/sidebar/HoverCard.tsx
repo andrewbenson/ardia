@@ -1,7 +1,7 @@
-import { FadeLabel, Surface, Symbol } from "@ardia/shell";
+import { FadeLabel, Surface, Symbol } from "@solara/shell";
 import { useLayoutEffect, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View, type AccessibilityActionEvent, type GestureResponderEvent } from "react-native";
-import { displayUrl } from "@ardia/core";
+import { displayUrl } from "@solara/core";
 import { hex, useTheme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { useStoreWhile } from "../../store/tabWatch";

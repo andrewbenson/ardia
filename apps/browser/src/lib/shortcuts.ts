@@ -1,4 +1,4 @@
-import type { ShortcutModifier } from "@ardia/shell";
+import type { ShortcutModifier } from "@solara/shell";
 
 export type Shortcut = { key: string; modifiers: ShortcutModifier[] };
 export type ShortcutSource = { id: string; keys: Shortcut[]; fixed?: boolean };

@@ -1,4 +1,4 @@
-import type { WebViewHandle } from "@ardia/ardiacore";
+import type { WebViewHandle } from "@solara/solaracore";
 import { requestPinHandOff } from "../components/layout/pinHandoff";
 import { useBrowser } from "../store/browser";
 import { activeTabId } from "../store/model";

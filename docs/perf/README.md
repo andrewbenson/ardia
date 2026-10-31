@@ -32,7 +32,7 @@ All of them are in `apps/browser/scripts/perf/`.
 The app side of the JS benches is `apps/browser/src/lib/perfProbe.ts`. It only turns on in an isolated instance
 whose data folder holds a `perf-probe` file.
 
-Each bench drives the app through files in the instance's `ARDIA_DATA_DIR`:
+Each bench drives the app through files in the instance's `SOLARA_DATA_DIR`:
 
 | Files | Used by | Written by |
 |---|---|---|
@@ -48,7 +48,7 @@ Each bench drives the app through files in the instance's `ARDIA_DATA_DIR`:
 The previous stable release is the control and the new release candidate is the candidate. The gate passes when every
 row is the same or better. Only stable releases are gated, and only against stable: a nightly is never a control, so
 the control stays `dist/<previous stable>/export/Solara.app` however many nightlies shipped in between. Dists from
-before the rename hold `Ardia.app` instead, so the commands below find the control with a glob.
+before the rename hold `Solara.app` instead, so the commands below find the control with a glob.
 
 1. **Build the candidate with `scripts/release.sh <v> --rc`.** That gives you `dist/<v>-rc/export/Solara.app`.
    A local Release build is a different app: it's unstripped (about 18 MB against 8.9 MB) and has no secure
@@ -407,9 +407,9 @@ shape.
 
 | Row | Why | Compare instead |
 |---|---|---|
-| launch → window shown, new window → on screen | CEF builds put a window on screen empty and fill it after. ArdiaCore keeps it transparent until its content commits. The same row times an empty window on one engine and a full one on the other. | the "with its content" rows |
-| launch → first page painted, new tab → first paint, new window → first paint | CEF stamps first-contentful-paint with the start of the frame. Chrome (ArdiaCore) stamps it with the frame on screen, about a frame later. | the "first frame" rows |
-| main-thread samples `engineWork` | The engine's main-thread work goes through different functions: CEF's `CefDoMessageLoopWork` against ArdiaCore's `RunWorkSource`. | treat as indicative only |
+| launch → window shown, new window → on screen | CEF builds put a window on screen empty and fill it after. SolaraCore keeps it transparent until its content commits. The same row times an empty window on one engine and a full one on the other. | the "with its content" rows |
+| launch → first page painted, new tab → first paint, new window → first paint | CEF stamps first-contentful-paint with the start of the frame. Chrome (SolaraCore) stamps it with the frame on screen, about a frame later. | the "first frame" rows |
+| main-thread samples `engineWork` | The engine's main-thread work goes through different functions: CEF's `CefDoMessageLoopWork` against SolaraCore's `RunWorkSource`. | treat as indicative only |
 | js-bench `taskMs`, `tasks`, `otherJsMs`, `startup.*` task counts | Probe revision 1 (0.2.21) didn't time Expo module events as tasks. Revision 2 (6232fa43) does. | numbers from bundles of one probe revision |
 
 The JS reports stamp `probeRevision` (from `PERF_PROBE_REVISION` in `perfProbe.ts`, inferred for older bundles)

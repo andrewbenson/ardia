@@ -1,4 +1,4 @@
-import { killSwitchEnvironment, readDocument } from "@ardia/shell";
+import { killSwitchEnvironment, readDocument } from "@solara/shell";
 
 type SwitchDef = {
   about: string;
@@ -63,7 +63,7 @@ export const SWITCHES = {
 type SwitchName = keyof typeof SWITCHES;
 
 const CACHE_DOC = "switches-cache.json";
-const SWITCHES_ENV = "ARDIA_SWITCHES";
+const SWITCHES_ENV = "SOLARA_SWITCHES";
 
 type Values = Partial<Record<SwitchName, boolean>>;
 

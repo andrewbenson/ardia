@@ -1,5 +1,5 @@
-import { cleanUrl } from "@ardia/core";
-import { ContextMenuArea, copyText, MouseArea, prompt, showMenu, Symbol, type MenuItem } from "@ardia/shell";
+import { cleanUrl } from "@solara/core";
+import { ContextMenuArea, copyText, MouseArea, prompt, showMenu, Symbol, type MenuItem } from "@solara/shell";
 import { memo, useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View, type LayoutRectangle } from "react-native";
 import { addFolderToSidebar, restorableArcHolder, makesGroup, restoreArcFolders } from "../../lib/bookmarkGroups";

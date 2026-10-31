@@ -5,7 +5,7 @@ old="${1:?usage: channel-test.sh <installed app> [new app]}"
 new="${2:-$old}"
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
-test_id="com.ardia.browser.channeltest"
+test_id="com.solara.browser.channeltest"
 port="${CHANNEL_TEST_PORT:-8797}"
 work="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/ac-channel-test.XXXXXX")" && pwd -P)"
 server=""
@@ -69,7 +69,7 @@ candidate() {
   plist -c "Delete :ACUpdateChannel" "$info_plist" >/dev/null 2>&1 || true
   [ "$channel" = stable ] || plist -c "Add :ACUpdateChannel string $channel" "$info_plist"
   codesign --force --deep --timestamp=none --sign "$identity" "$dir/$zip_name" 2>/dev/null
-  (cd "$dir" && ditto -c -k --keepParent "$zip_name" "$work/candidates/Ardia-$short.zip")
+  (cd "$dir" && ditto -c -k --keepParent "$zip_name" "$work/candidates/Solara-$short.zip")
   rm -rf "$dir"
 }
 candidate "$nightly1" $((build + 1)) nightly
@@ -83,11 +83,11 @@ publish() {
   for short in "$@"; do
     channel_args=()
     case "$short" in *-nightly.*) channel_args=(--channel nightly) ;; esac
-    cp -c "$work/candidates/Ardia-$short.zip" "$feed/archives/"
+    cp -c "$work/candidates/Solara-$short.zip" "$feed/archives/"
     "$pods/bin/generate_appcast" --ed-key-file "$work/key" ${channel_args[@]+"${channel_args[@]}"} \
       --download-url-prefix "http://127.0.0.1:$port/$(basename "$feed")/" "$feed/archives" > "$feed/generate.log" 2>&1 \
       || { cat "$feed/generate.log" >&2; exit 1; }
-    mv "$feed/archives/Ardia-$short.zip" "$feed/"
+    mv "$feed/archives/Solara-$short.zip" "$feed/"
     rm -rf "$feed/archives/old_updates"
   done
   mv "$feed/archives/appcast.xml" "$feed/appcast.xml"

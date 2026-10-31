@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaShaders
-import ArdiaShell
+import SolaraShaders
+import SolaraShell
 import Foundation
 import SolaraStore
 import SolaraUI

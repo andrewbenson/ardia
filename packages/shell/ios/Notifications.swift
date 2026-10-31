@@ -6,7 +6,7 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
 
   var onResponse: ((String, String, [String: Any]) -> Void)?
   private var pending: [(String, String, [String: Any])] = []
-  private static let dismissibleCategory = "ardia.dismissible"
+  private static let dismissibleCategory = "solara.dismissible"
 
   private var center: UNUserNotificationCenter { .current() }
 
@@ -37,7 +37,7 @@ final class NotificationHub: NSObject, UNUserNotificationCenterDelegate {
   }
 
   func requestPermission(_ completion: @escaping (Bool) -> Void) {
-    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return completion(false) }
+    if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return completion(false) }
     center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
       DispatchQueue.main.async { completion(granted) }
     }

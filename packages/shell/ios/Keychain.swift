@@ -6,7 +6,7 @@ public class KeychainModule: Module {
   private static let service = ConnectedAccounts.keychainService(info: Bundle.main.infoDictionary)
 
   public func definition() -> ModuleDefinition {
-    Name("ArdiaKeychain")
+    Name("SolaraKeychain")
 
     AsyncFunction("get") { (account: String) -> String? in Self.readSecret(account) }
 

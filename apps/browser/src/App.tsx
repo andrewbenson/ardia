@@ -1,4 +1,4 @@
-import { windowMainOnTop } from "@ardia/settings";
+import { windowMainOnTop } from "@solara/settings";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { CommandPanel } from "./components/CommandPanel";
@@ -18,7 +18,7 @@ import { useTabLayout } from "./components/layout/windowLayout";
 import { WindowProfile } from "./components/layout/WindowProfile";
 import { DockedLayout } from "./components/layout/SidebarDock";
 import { ShellBackdrop, useWindowShell } from "./components/layout/ShellBackdrop";
-import { LittleArdiaWindow } from "./components/littleArdia/LittleArdiaWindow";
+import { LittleSolaraWindow } from "./components/littleSolara/LittleSolaraWindow";
 import { SidebarOverlays } from "./components/sidebar/Overlays";
 import { layout, ThemeScope, useTheme } from "./lib/theme";
 import { useBrowser } from "./store/browser";
@@ -36,7 +36,7 @@ function BrowserWindowRoot({ windowId }: { windowId?: string }) {
   if (!id || !exists) return null;
   return (
     <WindowContext.Provider value={id}>
-      <ThemeScope>{small ? <LittleArdiaWindow /> : <BrowserWindow />}</ThemeScope>
+      <ThemeScope>{small ? <LittleSolaraWindow /> : <BrowserWindow />}</ThemeScope>
     </WindowContext.Provider>
   );
 }

@@ -28,7 +28,7 @@ test("other sites are off until switched on, per host", () => {
 });
 
 test("only http and https pages have Developer Mode", () => {
-  for (const url of ["file:///Users/me/index.html", "about:blank", "ardia://settings", "not a url", "", "chrome://version"]) {
+  for (const url of ["file:///Users/me/index.html", "about:blank", "solara://settings", "not a url", "", "chrome://version"]) {
     assert.equal(developerHostOf(url), null, url);
     assert.equal(isDeveloperMode(url, none), false, url);
     assert.equal(withDeveloperMode(none, url, true), none, url);

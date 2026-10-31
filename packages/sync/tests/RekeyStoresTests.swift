@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import SQLite3
 import XCTest
-@testable import ArdiaSyncCore
+@testable import SolaraLegacySyncCore
 
 final class RekeyStoresTests: XCTestCase {
   typealias R = RekeyStores

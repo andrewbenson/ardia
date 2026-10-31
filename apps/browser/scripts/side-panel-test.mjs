@@ -11,7 +11,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node side-panel-test.mjs <Debug Solara.app> [--keep-data] [--legs rn,native,pool]
 
-An extension's side panel drawn by RN and natively (ARDIA_NATIVE_SIDE_PANEL=1), each with the page pool off and on. In
+An extension's side panel drawn by RN and natively (SOLARA_NATIVE_SIDE_PANEL=1), each with the page pool off and on. In
 each leg a fixture MV3 extension with a side_panel opens its panel in window w1 and the test checks: the card sits
 where RN's does and the panel page gets the same size; a drag on the grip resizes it and the width is saved; a
 double-click on the grip resets it to 360; the page's window.close() closes it; its window.open() opens a tab; the ✕
@@ -26,7 +26,7 @@ const legsArg = args.includes("--legs") ? args[args.indexOf("--legs") + 1] : nul
 const scratch = mkdtempSync(join(tmpdir(), "ac-side-panel-"));
 const rep = reporter(join(scratch, "side-panel-test.log"), { name: "side-panel-test" });
 
-const fixtureExt = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/ardiacore/scripts/fixtures/ext");
+const fixtureExt = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/solaracore/scripts/fixtures/ext");
 const extA = join(scratch, "ext-a");
 const extB = join(scratch, "ext-b");
 for (const [dir, name] of [[extA, "Side panel A"], [extB, "Side panel B"]]) {
@@ -57,8 +57,8 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
-const X = globalThis.expo.modules.ArdiaExtensions;
+const C = globalThis.expo.modules.SolaraCEF;
+const X = globalThis.expo.modules.SolaraExtensions;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const fibers = (name) => acPerf.findFibers(name, 500).filter((f) => !!f.child);
 const hostOf = (fiber) => { let f = fiber; while (f && !(f.stateNode && f.stateNode.measureInWindow)) f = f.child; return f && f.stateNode; };
@@ -117,10 +117,10 @@ const focused = async (urlPart) => {
 };
 
 const LEGS = [
-  { tag: "rn", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDE_PANEL: "0" } },
-  { tag: "rn-pool", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDE_PANEL: "0", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } },
-  { tag: "native", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDE_PANEL: "1", ARDIA_NATIVE_PAGES_POOL: "0" } },
-  { tag: "pool", env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDE_PANEL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } },
+  { tag: "rn", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDE_PANEL: "0" } },
+  { tag: "rn-pool", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDE_PANEL: "0", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1" } },
+  { tag: "native", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDE_PANEL: "1", SOLARA_NATIVE_PAGES_POOL: "0" } },
+  { tag: "pool", env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDE_PANEL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1" } },
 ].filter((l) => !legsArg || legsArg.split(",").includes(l.tag));
 const measured = {};
 

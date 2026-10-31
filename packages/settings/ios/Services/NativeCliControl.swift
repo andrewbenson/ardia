@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import Observation
 import SolaraModel
@@ -11,7 +11,7 @@ import SolaraUI
 @Observable
 final class NativeCliControl {
   static let shared = NativeCliControl()
-  static let document = "ardia-cli.json"
+  static let document = "solara-cli.json"
   static let upgradeDelay: TimeInterval = 8
   static let indicatorHold: TimeInterval = 3
 
@@ -70,7 +70,7 @@ final class NativeCliControl {
     self.model = model
     CliPillIndicator.shared.onStop = { NativeCliControl.shared.stop() }
     showPill()
-    ArdiaCoreEngineBridge.observe("cliControl") { @Sendable payload in
+    SolaraCoreEngineBridge.observe("cliControl") { @Sendable payload in
       let status = CliControlServer(payload)
       Task { @MainActor in NativeCliControl.shared.heard(status) }
     }
@@ -92,7 +92,7 @@ final class NativeCliControl {
     case .status: nil
     case .set(let on): ["on": on]
     }
-    ArdiaCoreServices.call("ac_cli_control", profile: "", args: args) { @Sendable result in
+    SolaraCoreServices.call("ac_cli_control", profile: "", args: args) { @Sendable result in
       let status = CliControlServer(result)
       Task { @MainActor in NativeCliControl.shared.settled(call.request, status) }
     }
@@ -115,13 +115,13 @@ final class NativeCliControl {
   }
 
   private func observeActiveTabs() {
-    if let transaction = Self.stripTransaction(ArdiaCoreTabStrip.allStrips) {
+    if let transaction = Self.stripTransaction(SolaraCoreTabStrip.allStrips) {
       activeBrowsers = CliActiveTabBrowsers(snapshot: transaction)
     }
     NativeStoreHandle.store?.subscribe { _ in
       DispatchQueue.main.async { MainActor.assumeIsolated { NativeCliControl.shared.pushActiveTab() } }
     }
-    ArdiaCoreEventTaps.observers.append { [weak self] name, payload in
+    SolaraCoreEventTaps.observers.append { [weak self] name, payload in
       guard name == "tabStrip", let transaction = Self.stripTransaction(payload) else { return }
       self?.activeBrowsers.receive(transaction)
       self?.pushActiveTab()
@@ -143,14 +143,14 @@ final class NativeCliControl {
       let memory = store.memory.chromeTabs
       let browsers = activeBrowsers.map(memory)
       if let browserId = cliActiveBrowserId(store.state, browsers: browsers), let bridgeId = Int32(exactly: browserId),
-        ArdiaCoreHost.responds(to: #selector(ArdiaCoreHost.chromeTabId(browserId:)))
+        SolaraCoreHost.responds(to: #selector(SolaraCoreHost.chromeTabId(browserId:)))
       {
-        let id = Int(ArdiaCoreHost.chromeTabId(browserId: bridgeId))
+        let id = Int(SolaraCoreHost.chromeTabId(browserId: bridgeId))
         if id >= 0 { chromeId = id }
       }
     }
     guard let args = activeTabSync.update(serverState: server?.state, chromeId: chromeId) else { return }
-    ArdiaCoreServices.call("ac_cli_control", profile: "", args: args) { @Sendable _ in }
+    SolaraCoreServices.call("ac_cli_control", profile: "", args: args) { @Sendable _ in }
   }
 
   func stop() {
@@ -180,7 +180,7 @@ final class NativeCliControl {
   }
 
   func install(reason: String, done: (([String: Any]) -> Void)? = nil) {
-    if reason == "upgrade", ArdiaCoreHost.safeMode {
+    if reason == "upgrade", SolaraCoreHost.safeMode {
       done?(["ok": false, "appVersion": CliTool.appVersion, "error": "Automatic CLI upgrades are paused in safe mode.", "lines": [String]()])
       return
     }
@@ -220,7 +220,7 @@ final class NativeCliControl {
   }
 
   private func upgradeIfBehind() {
-    guard !ArdiaCoreHost.safeMode else { return }
+    guard !SolaraCoreHost.safeMode else { return }
     let installed = CliTool.installedVersion()
     installedVersion = installed
     let app = CliTool.appVersion

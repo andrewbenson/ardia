@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShaders
+import SolaraCore
+import SolaraShaders
 import Foundation
 import Observation
 import SolaraModel
@@ -51,7 +51,7 @@ final class ProfilesAdapter: ProfilesServices {
     if let icon = patch.icon { arg["icon"] = jsonArg(icon) }
     if let theme = patch.theme { arg["theme"] = theme.flatMap(Self.json) ?? NSNull() }
     guard !arg.isEmpty else { return }
-    if ArdiaCoreHost.safeMode {
+    if SolaraCoreHost.safeMode {
       SettingsJS.shared.fire("profiles.update", id, arg)
       return
     }
@@ -73,7 +73,7 @@ final class ProfilesAdapter: ProfilesServices {
   }
 
   func reorderProfiles(_ ids: [String]) {
-    if ArdiaCoreHost.safeMode {
+    if SolaraCoreHost.safeMode {
       SettingsJS.shared.fire("profiles.reorder", ids)
       return
     }
@@ -97,7 +97,7 @@ final class ProfilesAdapter: ProfilesServices {
   }
 
   func extensionsKeptOnDelete() async -> [String]? {
-    await EngineCalls.result({ done in ArdiaCoreServices.listExtensions(profile: "") { done($0) } }) {
+    await EngineCalls.result({ done in SolaraCoreServices.listExtensions(profile: "") { done($0) } }) {
       EngineCalls.failed($0, "listExtensions") ? nil : $0.list("extensions").filter { $0.bool("mayModify") == true }.compactMap { $0.string("name") }
     }
   }

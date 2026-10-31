@@ -12,8 +12,8 @@ extension Store: PinnedSyncStore {
 }
 
 let legacyKeys = JSMap<String>([
-  ("openLinksInSmallYahu", "openLinksInLittleArdia"), ("smallYahuSize", "littleArdiaSize"), ("newSmallYahu", "newLittleArdia"),
-  ("toggleOpenLinksInSmallYahu", "toggleOpenLinksInLittleArdia"),
+  ("openLinksInSmallYahu", "openLinksInLittleSolara"), ("smallYahuSize", "littleSolaraSize"), ("newSmallYahu", "newLittleSolara"),
+  ("toggleOpenLinksInSmallYahu", "toggleOpenLinksInLittleSolara"),
 ])
 
 public func fromLegacy(_ value: JSONValue) -> JSONValue {

@@ -1,4 +1,4 @@
-# GN args for the Ardia engine build, all of them (02-gn-args.sh writes args.gn from this list).
+# GN args for the Solara engine build, all of them (02-gn-args.sh writes args.gn from this list).
 _gn_args=(
   is_official_build=true
   chrome_pgo_phase=2
@@ -42,8 +42,8 @@ _gn_args=(
   enable_resource_allowlist_generation=false
   enable_rlz=true
   optimize_webui=true
-  # Ardia's bundle and team id (webauthn/payments keychain access groups);
+  # Solara's bundle and team id (webauthn/payments keychain access groups);
   # product names stay "Chromium" (chromium-branding.patch).
-  'branding_file_path="//chrome/app/theme/ardia/BRANDING"'
+  'branding_file_path="//chrome/app/theme/solara/BRANDING"'
 )
 export GN_DEFINES="${_gn_args[*]}"

@@ -65,8 +65,8 @@ function record(spec: any) {
     "lib/tabLifecycle": { noteDiscarded: () => push("lifecycle", { value: "discarded" }), noteReady: () => push("lifecycle", { value: "ready" }), noteGone: noop },
     "components/layout/pageState": { pageOf: (id: string) => pages[id] ?? {}, patchPage: (id: string, patch: any) => { pages[id] = { ...pages[id], ...patch }; }, setBrowserId: noop, setPopover: noop, usePages: { getState: () => ({ popover: {} }) } },
     "lib/favicons": { pageKey: (url: string) => url.replace(/#.*$/, ""), seedFavicons: noop, adoptIconPage: noop, dropOutlivedFavicon: noop },
-    "@ardia/shell": { readDocument: () => JSON.stringify({ version: 2, themes: spec.themes ?? [], favicons: {} }) },
-    "@ardia/ardiacore": { pooledWebViewHandle: (call: any) => ({ loadUrl: (url: string, options: any) => call("loadUrl", [url, options]), setMuted: (muted: boolean) => call("setMuted", [muted]) }), unwrapPageEvent: (_: string, payload: any) => Array.isArray(payload) ? payload : [payload] },
+    "@solara/shell": { readDocument: () => JSON.stringify({ version: 2, themes: spec.themes ?? [], favicons: {} }) },
+    "@solara/solaracore": { pooledWebViewHandle: (call: any) => ({ loadUrl: (url: string, options: any) => call("loadUrl", [url, options]), setMuted: (muted: boolean) => call("setMuted", [muted]) }), unwrapPageEvent: (_: string, payload: any) => Array.isArray(payload) ? payload : [payload] },
   };
   const load = (name: string): any => {
     if (mocks[name]) return mocks[name];

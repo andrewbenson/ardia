@@ -117,8 +117,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -628,7 +628,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -813,8 +813,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -1087,7 +1087,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -1271,8 +1271,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -1545,7 +1545,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -1744,8 +1744,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -2018,7 +2018,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -2219,8 +2219,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -2608,7 +2608,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -2809,8 +2809,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -3309,7 +3309,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -3510,8 +3510,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -4010,7 +4010,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -4211,8 +4211,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -4722,7 +4722,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -4923,8 +4923,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -5434,7 +5434,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -5635,8 +5635,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -6146,7 +6146,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -6347,8 +6347,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -6858,7 +6858,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -7059,8 +7059,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -7570,7 +7570,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -7771,8 +7771,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -8282,7 +8282,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -8483,8 +8483,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -8983,7 +8983,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -9184,8 +9184,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -9684,7 +9684,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -9885,8 +9885,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -10396,7 +10396,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -10597,8 +10597,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -11108,7 +11108,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -11309,8 +11309,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -11820,7 +11820,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -12022,8 +12022,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -12533,7 +12533,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -12734,8 +12734,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -13245,7 +13245,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -13446,8 +13446,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -13957,7 +13957,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -14158,8 +14158,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -14482,7 +14482,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -14686,8 +14686,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -15075,7 +15075,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -15277,8 +15277,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -15666,7 +15666,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -15867,8 +15867,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -16256,7 +16256,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -16458,8 +16458,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -16847,7 +16847,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -17048,8 +17048,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -17437,7 +17437,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -17639,8 +17639,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -18085,7 +18085,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -18320,8 +18320,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -18963,7 +18963,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -19198,8 +19198,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -19731,7 +19731,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -19933,8 +19933,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -20455,7 +20455,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -20657,8 +20657,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -21101,7 +21101,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -21302,8 +21302,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -21759,7 +21759,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -21961,8 +21961,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -22416,7 +22416,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -22618,8 +22618,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -23073,7 +23073,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -23274,8 +23274,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -23799,7 +23799,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -24000,8 +24000,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -24274,7 +24274,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -24491,8 +24491,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -25046,7 +25046,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -25265,8 +25265,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -25812,7 +25812,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -26015,8 +26015,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -26289,7 +26289,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -26515,8 +26515,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -27040,7 +27040,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -27272,8 +27272,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -27809,7 +27809,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -28011,8 +28011,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -28524,7 +28524,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -28725,8 +28725,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -29249,7 +29249,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -29450,8 +29450,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -29974,7 +29974,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -30175,8 +30175,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -30690,7 +30690,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -30891,8 +30891,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -31417,7 +31417,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -31618,8 +31618,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -32160,7 +32160,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -32361,8 +32361,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -32885,7 +32885,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -33086,8 +33086,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -33610,7 +33610,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -33811,8 +33811,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -34335,7 +34335,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -34548,8 +34548,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -35059,7 +35059,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -35274,8 +35274,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -35785,7 +35785,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -35990,8 +35990,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -36501,7 +36501,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -36708,8 +36708,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -37219,7 +37219,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -38428,8 +38428,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -38939,7 +38939,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -40147,8 +40147,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -40658,7 +40658,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -40860,8 +40860,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -41371,7 +41371,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -41591,8 +41591,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -42124,7 +42124,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -42344,8 +42344,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -42877,7 +42877,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -43097,8 +43097,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -43619,7 +43619,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -43839,8 +43839,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -44372,7 +44372,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -44604,8 +44604,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -45137,7 +45137,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -45387,8 +45387,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -45950,7 +45950,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -46207,8 +46207,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -46759,7 +46759,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -47016,8 +47016,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -47568,7 +47568,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -47837,8 +47837,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -48368,7 +48368,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -48644,8 +48644,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -49175,7 +49175,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -49451,8 +49451,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -49982,7 +49982,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -50232,8 +50232,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -50795,7 +50795,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -51052,8 +51052,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -51604,7 +51604,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -51861,8 +51861,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -52413,7 +52413,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -52682,8 +52682,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -53213,7 +53213,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -53489,8 +53489,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -54020,7 +54020,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -54296,8 +54296,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -54827,7 +54827,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -55060,8 +55060,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -55490,7 +55490,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -55727,8 +55727,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -56290,7 +56290,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -56511,8 +56511,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -56957,7 +56957,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -57178,8 +57178,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -57633,7 +57633,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -57894,8 +57894,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -58427,7 +58427,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -58659,8 +58659,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -59192,7 +59192,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -59460,8 +59460,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -59982,7 +59982,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -60215,8 +60215,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -60539,7 +60539,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -60759,8 +60759,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -61270,7 +61270,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -61488,8 +61488,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -61999,7 +61999,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -62217,8 +62217,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -62728,7 +62728,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -62929,8 +62929,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -63597,7 +63597,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -63799,8 +63799,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -64379,7 +64379,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -64566,8 +64566,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -64997,7 +64997,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -65198,8 +65198,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -66001,7 +66001,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -66202,8 +66202,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -66722,7 +66722,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -66923,8 +66923,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -67439,7 +67439,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -67640,8 +67640,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -68168,7 +68168,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -68369,8 +68369,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -68893,7 +68893,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -69094,8 +69094,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -69614,7 +69614,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -69815,8 +69815,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -70339,7 +70339,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -70540,8 +70540,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -71056,7 +71056,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -71257,8 +71257,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -71781,7 +71781,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -71982,8 +71982,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -72502,7 +72502,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -72703,8 +72703,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -73227,7 +73227,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -73456,8 +73456,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -74016,7 +74016,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -74246,8 +74246,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -74728,7 +74728,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -74958,8 +74958,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -75453,7 +75453,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -75640,8 +75640,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -75941,7 +75941,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -76170,8 +76170,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -76730,7 +76730,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -76959,8 +76959,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -77519,7 +77519,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -77706,8 +77706,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -78007,7 +78007,7 @@
           "newTab": "⌘T",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -78218,8 +78218,8 @@
               "command"
             ]
           },
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -78755,7 +78755,7 @@
           "newTab": "⌘R",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -78965,8 +78965,8 @@
               "command"
             ]
           },
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -79502,7 +79502,7 @@
           "newTab": "🌐F12",
           "newWindow": "⌘N",
           "newIncognitoWindow": "⇧⌘N",
-          "newLittleArdia": "⌥⌘N",
+          "newLittleSolara": "⌥⌘N",
           "reopenClosedTab": "⇧⌘T",
           "focusCommandBar": "⌘L",
           "closeTab": "⌘W",
@@ -79702,8 +79702,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -80323,8 +80323,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -81022,8 +81022,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -81669,8 +81669,8 @@
               "command"
             ]
           },
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -82367,8 +82367,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],
@@ -83119,8 +83119,8 @@
           "spacesFollowAppearance": true,
           "defaultProfileId": "default",
           "shortcuts": {},
-          "openLinksInLittleArdia": true,
-          "littleArdiaSize": [
+          "openLinksInLittleSolara": true,
+          "littleSolaraSize": [
             900,
             640
           ],

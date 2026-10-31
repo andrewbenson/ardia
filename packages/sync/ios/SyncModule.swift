@@ -1,17 +1,17 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import ExpoModulesCore
-import ArdiaImport
+import SolaraImportAdapter
 import Security
 
 public class SyncModule: Module {
   private let state = KeyState()
   private let owner = DeviceOwnerCheck()
-  private static let work = DispatchQueue(label: "ardia.sync", qos: .utility)
+  private static let work = DispatchQueue(label: "solara.sync", qos: .utility)
   private static let sealed = SealedPasswords()
 
   public func definition() -> ModuleDefinition {
-    Name("ArdiaSync")
+    Name("SolaraSyncAdapter")
 
     OnCreate { Self.work.async { Self.removeTemporaryKits() } }
 
@@ -47,7 +47,7 @@ public class SyncModule: Module {
     Function("deviceName") { Host.current().localizedName ?? "This Mac" }
 
     AsyncFunction("createPhrase") { (account: String) -> Bool in
-      guard !ArdiaCoreHost.safeMode else { return false }
+      guard !SolaraCoreHost.safeMode else { return false }
       let entropy = RecoveryPhrase.generateEntropy()
       guard Self.keyStore.save(entropy, account: account) else { return false }
       self.owner.revoke()
@@ -56,7 +56,7 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("enterPhrase") { (account: String, text: String, folder: String) -> [String: Any] in
-      guard !ArdiaCoreHost.safeMode else { return ["error": "safe mode"] }
+      guard !SolaraCoreHost.safeMode else { return ["error": "safe mode"] }
       let entropy: Data
       do {
         entropy = try RecoveryPhrase.entropy(from: text)
@@ -84,7 +84,7 @@ public class SyncModule: Module {
     }.runOnQueue(Self.work)
 
     AsyncFunction("forget") { (account: String) in
-      guard !ArdiaCoreHost.safeMode else { return }
+      guard !SolaraCoreHost.safeMode else { return }
       Self.keyStore.delete(account: account)
       self.state.set(nil)
       self.owner.revoke()
@@ -163,11 +163,11 @@ public class SyncModule: Module {
       }
       let ok = { (result: [String: Any]?) in result != nil && result?["error"] == nil }
       let save = {
-        ArdiaCoreServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { promise.resolve(ok($0)) }
+        SolaraCoreServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { promise.resolve(ok($0)) }
       }
       DispatchQueue.main.async {
         guard replacing else { return save() }
-        ArdiaCoreServices.deletePassword(profile: engineProfile, origin: origin, username: username) { deleted in
+        SolaraCoreServices.deletePassword(profile: engineProfile, origin: origin, username: username) { deleted in
           guard ok(deleted) else { return promise.resolve(false) }
           save()
         }
@@ -205,7 +205,7 @@ public class SyncModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("saveRecoveryKit") { (format: String, promise: Promise) in
-      guard !ArdiaCoreHost.safeMode else { return promise.reject("safe mode", "Sync is paused in safe mode.") }
+      guard !SolaraCoreHost.safeMode else { return promise.reject("safe mode", "Sync is paused in safe mode.") }
       guard (try? self.words()) != nil else { return promise.reject("locked", "Sync isn't set up on this Mac.") }
       let panel = NSSavePanel()
       let text = format == "text"
@@ -254,7 +254,7 @@ public class SyncModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("revealFolder") { (path: String) in
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[sync] background instance, not revealing %@", path) }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[sync] background instance, not revealing %@", path) }
       NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path, isDirectory: true)])
     }.runOnQueue(.main)
 
@@ -351,7 +351,7 @@ public class SyncModule: Module {
   }
 
   private func vault(_ folder: String) throws -> SyncVault {
-    guard !ArdiaCoreHost.safeMode else { throw Exception(name: "safe mode", description: "Sync is paused in safe mode.") }
+    guard !SolaraCoreHost.safeMode else { throw Exception(name: "safe mode", description: "Sync is paused in safe mode.") }
     guard let keys = state.keys else { throw Exception(name: "locked", description: "Sync isn't set up on this Mac.") }
     return SyncVault(folder: URL(fileURLWithPath: folder, isDirectory: true), keys: keys)
   }
@@ -403,10 +403,10 @@ public class SyncModule: Module {
   }
 
   private static let environment = ProcessInfo.processInfo.environment
-  private static let dataDirectory = environment["ARDIA_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
-  private static let testFolder = environment["ARDIA_SYNC_DEFAULT_FOLDER"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+  private static let dataDirectory = environment["SOLARA_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+  private static let testFolder = environment["SOLARA_SYNC_DEFAULT_FOLDER"].map { URL(fileURLWithPath: $0, isDirectory: true) }
 
-  private static let productName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Ardia"
+  private static let productName = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Solara"
 
   static var defaultFolder: URL {
     if let testFolder { return testFolder }
@@ -419,13 +419,13 @@ public class SyncModule: Module {
   static func profileDirectory(_ engineProfile: String) -> URL {
     let root = dataDirectory?.appendingPathComponent("Chromium", isDirectory: true)
       ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.ardia.browser", isDirectory: true)
+      .appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.solara.browser", isDirectory: true)
       .appendingPathComponent("Chromium", isDirectory: true)
     return root.appendingPathComponent(engineProfile.isEmpty ? "Default" : "Profile \(engineProfile)", isDirectory: true)
   }
 
   static func safeStorageSecret() throws -> Data {
-    if !ArdiaCoreHost.chromeUsesRealKeychain {
+    if !SolaraCoreHost.chromeUsesRealKeychain {
       return SafeStorageRekeyGate.testKeychainSecret(environment: ProcessInfo.processInfo.environment, chromeUsesRealKeychain: false)
         ?? Data("mock_password".utf8)
     }

@@ -1,4 +1,4 @@
-import { ContextMenuArea, FadeLabel, OutsidePressArea, Surface } from "@ardia/shell";
+import { ContextMenuArea, FadeLabel, OutsidePressArea, Surface } from "@solara/shell";
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, Text, View } from "react-native";

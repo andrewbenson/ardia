@@ -1,7 +1,7 @@
 # Releasing
 
 Releases are GitHub releases of the identity's repo (`AC_RELEASE_REPO`: `andrewbenson/solara` for Solara,
-`mantrakp04/ardia` upstream), tagged `v<version>`, on two channels: **stable** (`0.1.2`, a full
+`mantrakp04/solara` upstream), tagged `v<version>`, on two channels: **stable** (`0.1.2`, a full
 release) and **nightly** (`0.1.3-nightly.1`, a GitHub prerelease: one fix, shipped the day it's made; "Channels" below).
 Solara builds and publishes from a Mac with `scripts/release.sh` and the release skill's `publish.sh`; upstream also has
 a GitHub Actions workflow ("CI releases" below), which Solara doesn't carry. Each release has these assets:
@@ -9,27 +9,27 @@ a GitHub Actions workflow ("CI releases" below), which Solara doesn't carry. Eac
 - `<Product>-<version>.dmg` (`Solara-0.1.1.dmg`): what people download (the app and an `/Applications` link, in a window with the
   site's poster behind them: `scripts/dmg`, where `render.sh` redraws the picture and `layout.sh` the layout).
 - `<Product>-<version>.zip`: the archive Sparkle installs updates from.
-- `ardia-cli-<version>-macos-arm64.tar.gz` and its `.sha256`: the `ardia` command (`docs/cli.md`).
+- `solara-cli-<version>-macos-arm64.tar.gz` and its `.sha256`: the `solara` command (`docs/cli.md`).
 - `appcast.xml`: the Sparkle feed, both channels' items in one file. The latest stable release's appcast is the feed
   (a nightly rewrites that asset; "Channels" below). Solara polls it straight from GitHub (`AC_FEED_URL`). Upstream
   builds after 0.2.13 poll
-  `https://ardia.dev/appcast.xml` (`SUFeedURL`), which counts the check by version and day (and whether
+  `https://solara.dev/appcast.xml` (`SUFeedURL`), which counts the check by version and day (and whether
   it's the copy's first) and redirects to
-  `https://github.com/mantrakp04/ardia/releases/latest/download/appcast.xml`, the URL 0.2.13 and
+  `https://github.com/mantrakp04/solara/releases/latest/download/appcast.xml`, the URL 0.2.13 and
   earlier poll directly. The count can't block an update: see `infra/site/nginx.conf` and `docs/growth.md`
   › Installs.
-- `ArdiaCore-<engine tree>.tar.xz`, only in a release built locally from a Chromium tree whose `engine/` changed since
+- `SolaraCore-<engine tree>.tar.xz`, only in a release built locally from a Chromium tree whose `engine/` changed since
   the last one: the release's engine (Chrome's framework, stripped), so the app builds without a Chromium tree. Engines
-  for CI releases go to their own prerelease instead, `engine-<engine tree:12>` ("Engines" below). `packages/ardiacore/prebuilt-engines.tsv` maps
-  `engine/`'s git tree to the release and the archive's SHA-256; `packages/ardiacore/scripts/fetch-engine.sh` downloads
+  for CI releases go to their own prerelease instead, `engine-<engine tree:12>` ("Engines" below). `packages/solaracore/prebuilt-engines.tsv` maps
+  `engine/`'s git tree to the release and the archive's SHA-256; `packages/solaracore/scripts/fetch-engine.sh` downloads
   it (the app's build runs it when there's no local engine build).
-- `ArdiaCore-<engine tree>-source.tar.xz`, with that archive when the engine is built on Helium (release.sh finds
+- `SolaraCore-<engine tree>-source.tar.xz`, with that archive when the engine is built on Helium (release.sh finds
   Helium's code in the framework): copies of the GitHub tags `engine/patches/build/env.sh` pins that aren't in this
   repo (`scripts/engine-source.sh`), and where Chromium's source is. See "Source and licenses" below.
 
 Each version's notes are a file in the repo, `docs/release-notes/<version>.md` (how to write one:
 `docs/release-notes/README.md`). The GitHub release, the update dialog and upstream's
-`https://ardia.dev/release-notes` all come from it. The first launch after an update opens `AC_NOTES_URL` in a new
+`https://solara.dev/release-notes` all come from it. The first launch after an update opens `AC_NOTES_URL` in a new
 tab (`apps/browser/src/lib/releaseNotesPage.ts`): Solara's GitHub releases page, or upstream's
 `/release-notes#<version>`, so upstream's site has to be deployed with the new entry by the time the update reaches
 people. Solara has no site yet.
@@ -49,14 +49,14 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   Stable never downgrades: Sparkle only offers a higher build number, so the copy waits for the next stable.
 - **Versions.** Solara's versions start at 0.1.0 and each stable bumps the patch: 0.1.0, 0.1.1, 0.1.2. Sparkle
   compares `sparkle:version`, the build number (`CURRENT_PROJECT_VERSION`), which goes up by one every release on either
-  channel and is never reset: Solara's continue from Ardia's (80 at the fork; the owner's own Solara is build 78), so every
+  channel and is never reset: Solara's continue from Solara's (80 at the fork; the owner's own Solara is build 78), so every
   copy already installed sees the first release as newer. The version string is only shown. A nightly is
   `<next stable>-nightly.<n>`, so 0.1.0 (81) < 0.1.1-nightly.1 (82) < 0.1.1-nightly.2 (83) < 0.1.1 (84). Sparkle's comparator can't order the
   strings themselves (it reads `0.2.37-nightly.1` and `0.2.37-nightly.2` as equal), which is why it never sees them.
   `release.sh` refuses a build number that isn't above every build already in the feed, nightly or stable. About Solara
   and Settings show a nightly as "0.1.1 Nightly 1".
 - **The feed.** It stays where every shipped build reads it (upstream's URLs here; Solara's `AC_FEED_URL` is the GitHub
-  URL itself): `https://ardia.dev/appcast.xml` redirects to
+  URL itself): `https://solara.dev/appcast.xml` redirects to
   `releases/latest/download/appcast.xml`, and GitHub's "latest" skips prereleases, so it's always the newest stable
   release's `appcast.xml`. A stable release publishes the merged feed as its own asset and becomes latest; a nightly
   re-uploads the merged feed onto that same latest stable release (`gh release upload … --clobber`). Nothing moved:
@@ -65,7 +65,7 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   `appcast-merge.sh` puts the new item onto the feed as published at that moment, so a nightly that shipped while a
   stable was being tested isn't dropped. `generate_appcast` keeps 3 items per channel.
 - **Downloads.** Stable keeps its versioned link (`releases/latest/download/<Product>-<version>.dmg`, from
-  `apps/site/src/data/release.ts`, upstream's site). Upstream's nightly has one fixed link, `https://ardia.dev/nightly` (`infra/site/nginx.conf`),
+  `apps/site/src/data/release.ts`, upstream's site). Upstream's nightly has one fixed link, `https://solara.dev/nightly` (`infra/site/nginx.conf`),
   which redirects to the `nightly` prerelease's `<Product>-Nightly.dmg`; each nightly re-uploads that asset, so the site
   never redeploys for a nightly.
 - **Proof.** `.claude/skills/release/scripts/channel-test.sh dist/<stable>/export/Solara.app` runs that build's own
@@ -81,8 +81,8 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 
 - Every release's notes end with a Source section (`release.sh` writes it). It links the tag's tree: the app, the
   engine's patches, `gn_defines.sh`, the step scripts and this release flow. Once the engine is built on Helium, it
-  also links the `ArdiaCore-<tree>-source.tar.xz` asset of the release that carries that engine (the `v<version>` that first shipped it, or its `engine-<tree:12>` prerelease)
-  (`packages/ardiacore/prebuilt-engines.tsv`); `release.sh` refuses such an engine when it can't name that release.
+  also links the `SolaraCore-<tree>-source.tar.xz` asset of the release that carries that engine (the `v<version>` that first shipped it, or its `engine-<tree:12>` prerelease)
+  (`packages/solaracore/prebuilt-engines.tsv`); `release.sh` refuses such an engine when it can't name that release.
 - The `nightly` release's body names the nightly its `<Product>-Nightly.dmg` is and links that release
   (`publish.sh` rewrites it each time).
 - Never delete or move a `v*` tag, or a release's source asset, while its release is up. A release can come down;
@@ -97,34 +97,34 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
   (`-allowProvisioningUpdates`) that the keychain-group entitlements need.
 - The **Sparkle EdDSA key**, a login keychain item (service `https://sparkle-project.org`, account
   `AC_SPARKLE_ACCOUNT`: `solara`; `SPARKLE_ACCOUNT` overrides). Its public half is `SUPublicEDKey` in
-  `apps/browser/macos/Ardia-macOS/Info.plist`. Every update must be signed with it, so keep a backup:
+  `apps/browser/macos/Solara-macOS/Info.plist`. Every update must be signed with it, so keep a backup:
   `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account <account> -x <file>` exports it, and `-f <file>`
   imports it on another machine.
 - For notarization, an App Store Connect API key (Team Keys, Developer role). Keep `AuthKey_<id>.p8`
   outside the repo (e.g. `~/.private_keys/`, mode 600) and point `scripts/.notary.env` (untracked) at it:
   `NOTARY_KEY=<path>`, `NOTARY_KEY_ID=<id>`, `NOTARY_ISSUER=<issuer id>`. release.sh prefers it to the
   keychain profile below, which notarytool keeps in the data-protection keychain: that reads as
-  missing while the screen is locked. Otherwise, a notarytool profile named `ardia`:
-  `xcrun notarytool store-credentials ardia --apple-id <id> --team-id U5L5T3NGVV` (it asks for an
+  missing while the screen is locked. Otherwise, a notarytool profile named `solara`:
+  `xcrun notarytool store-credentials solara --apple-id <id> --team-id U5L5T3NGVV` (it asks for an
   app-specific password). Without it, the script still builds and signs, but the release is unnotarized and
   Gatekeeper blocks the first launch.
-- The engine: ArdiaCore's `Chromium Framework.framework` built in `~/chromium-build` (`scripts/agent/engine-build`;
+- The engine: SolaraCore's `Chromium Framework.framework` built in `~/chromium-build` (`scripts/agent/engine-build`;
   `docs/engine-build.md`), and `pod install` in `apps/browser/macos`. A framework built elsewhere goes in through
-  `ARDIACORE_FRAMEWORK`. That skips the tree checks and ships no engine archive, unless `ARDIACORE_FRAMEWORK_ENGINE`
+  `SOLARACORE_FRAMEWORK`. That skips the tree checks and ships no engine archive, unless `SOLARACORE_FRAMEWORK_ENGINE`
   names the `engine/` git tree it was built from (`git rev-parse HEAD:engine`, checked against HEAD). Then the
   release packs that engine, and its source when it's Helium, as a build from the tree would.
 
 ## Cutting a release
 
 1. Bump `MARKETING_VERSION` (the version) and `CURRENT_PROJECT_VERSION` (the build number, which Sparkle
-   compares: it must go up every release) in both configurations of the `Ardia-macOS` target in
-   `apps/browser/macos/Ardia.xcodeproj`. The helpers and the Dock tile plug-in take the same values.
+   compares: it must go up every release) in both configurations of the `Solara-macOS` target in
+   `apps/browser/macos/Solara.xcodeproj`. The helpers and the Dock tile plug-in take the same values.
 2. Write `docs/release-notes/<version>.md` from `git log v<previous>..HEAD` (`docs/release-notes/README.md`; for the
    first release, "The first release" below).
 3. Commit both ("Release <version>" or "Nightly <version>") and run `scripts/release.sh <version>` (`--channel nightly`
    for a nightly). It stops right away if the notes file is missing or lacks its `date` and
    `headline`, if the tree under `apps/browser`, `packages`, `engine` or `scripts/dmg` has uncommitted changes, or if the engine
-   framework is older than the tree's ArdiaCore sources or the Chromium tree differs from `engine/ardiacore`
+   framework is older than the tree's SolaraCore sources or the Chromium tree differs from `engine/solaracore`
    (`apply.sh --check`), if the version doesn't fit the channel or the notes' `channel`, if it can't read the published
    appcast, or if the build number isn't above every build in it. It writes `dist/<version>/`:
    - archives the Release configuration of `apps/browser/macos` for arm64, staging the engine into its own derived
@@ -133,14 +133,14 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
      the archive is signed ad hoc (`AdHoc.xcconfig`) and `scripts/lib/export-developer-id.sh` does the export: it embeds
      that profile and re-signs inside out with Developer ID, the same identifiers, entitlements, flags and designated
      requirements Xcode's export gives (`xcodebuild -exportArchive` refuses an Xcode-managed profile with manual signing),
-   - leaves out what Solara never loads (`packages/ardiacore/scripts/prune-bundle.sh`, after `strip-engine.sh`): Chrome's
+   - leaves out what Solara never loads (`packages/solaracore/scripts/prune-bundle.sh`, after `strip-engine.sh`): Chrome's
      locales other than English and the app's own languages (Chrome takes its locale from the app bundle's
      localizations, and Solara has none, so it runs in en-US whatever the Mac's language), SwiftShader and its Vulkan
      loader (WebGL and WebGPU run on Metal; Chrome dropped SwiftShader's WebGL fallback), Chrome's first-run sounds
      and pictures inside `resources.pak` (blanked by hash, `first-run-resources.sha256`; Solara always passes
      `--no-first-run`), uBlock Origin's other locales, React Native's `@3x` images (Macs draw at 1x or 2x) and hermes's
-     local symbols. Each step has a kill switch: `ARDIA_PRUNE_LOCALES`, `ARDIA_PRUNE_SWIFTSHADER`,
-     `ARDIA_PRUNE_FIRST_RUN`, `ARDIA_PRUNE_UBO_LOCALES`, `ARDIA_PRUNE_RN_3X`, `ARDIA_STRIP_HERMES` (or `ARDIA_PRUNE` for
+     local symbols. Each step has a kill switch: `SOLARA_PRUNE_LOCALES`, `SOLARA_PRUNE_SWIFTSHADER`,
+     `SOLARA_PRUNE_FIRST_RUN`, `SOLARA_PRUNE_UBO_LOCALES`, `SOLARA_PRUNE_RN_3X`, `SOLARA_STRIP_HERMES` (or `SOLARA_PRUNE` for
      all) set to `off`. Chrome's opt-in software GPU modes are unsupported in a release build: with
      `--use-angle=swiftshader`, `--enable-unsafe-swiftshader --disable-gpu` or WebGPU's
      `requestAdapter({forceFallbackAdapter: true})` under `--enable-unsafe-webgpu`, WebGL and WebGPU are unavailable
@@ -149,19 +149,19 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
      gets every locale, SwiftShader and the first-run resources, and the kill switches work there too,
    - signs Chrome's framework inside out as Chrome signs its own (`chrome/installer/mac/signing/parts.py`): the
      helpers under the hardened runtime with library validation, except the renderer and GPU ones (Aperitif's too),
-     which get `allow-jit` (`packages/ardiacore/scripts/signing`) instead; then the framework, then the app again with
+     which get `allow-jit` (`packages/solaracore/scripts/signing`) instead; then the framework, then the app again with
      the entitlements the export gave it,
-   - checks what an in-place update depends on: the identity's bundle id (`com.hill.solara`; upstream `com.ardia.browser`), executable `Ardia`, the
+   - checks what an in-place update depends on: the identity's bundle id (`com.hill.solara`; upstream `com.solara.browser`), executable `Solara`, the
      designated requirement (the identity's team), the keychain groups, Sparkle's feed and key and the usage strings in
      `Info.plist`; that every piece of code is Developer ID with a timestamp and no `get-task-allow`; and that the app
      is signed with `com.apple.developer.web-browser.public-key-credential` exactly when its provisioning profile
      grants it. Apple hasn't granted it yet; once it has, a `RELEASE_PROVISIONING_PROFILE` downloaded again carries it
-     and the export signs with `Ardia-ICloudPasskeys.entitlements` on its own (the Xcode-managed export still needs
+     and the export signs with `Solara-ICloudPasskeys.entitlements` on its own (the Xcode-managed export still needs
      `CODE_SIGN_ENTITLEMENTS` switched to that file),
    - launches the app once in the background (throwaway data dir), waits for uBlock's rulesets to be indexed,
      quits it and checks the signature again: the app must never write into its own bundle,
    - notarizes and staples the app and the DMG,
-   - packages the DMG (lzma in 4 MB chunks, `udif-chunk-size=8192`, hdiutil's largest; `ARDIA_DMG_CHUNK=off` goes back
+   - packages the DMG (lzma in 4 MB chunks, `udif-chunk-size=8192`, hdiutil's largest; `SOLARA_DMG_CHUNK=off` goes back
      to its 1 MB default) and the zip, and signs `appcast.xml` (`generate_appcast` names the feed after the app's
      `SUFeedURL`, so release.sh passes it `-o`) with the Sparkle key. It starts from the
      published appcast, so earlier versions and the other channel's items stay listed; a nightly's item gets
@@ -181,7 +181,7 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
    nightly as a prerelease that's never latest) with the DMG, zip, appcast, CLI tarball and a local engine archive,
    and checks the feed lists the version on GitHub. A nightly also re-uploads the merged feed onto the
    latest stable release and `<Product>-Nightly.dmg` onto the `nightly` release. With an engine packed here, append
-   `dist/<version>/prebuilt-engine.tsv` to `packages/ardiacore/prebuilt-engines.tsv` and commit it.
+   `dist/<version>/prebuilt-engine.tsv` to `packages/solaracore/prebuilt-engines.tsv` and commit it.
 
 Before publishing, run the smoke test: `.claude/skills/release/scripts/smoke.sh <version> <previous> [--rc]` (the
 `release` skill runs the whole flow). Besides the hidden launch over CDP, it checks the update itself against
@@ -189,13 +189,13 @@ Before publishing, run the smoke test: `.claude/skills/release/scripts/smoke.sh 
 previous build's designated requirement, a higher build number), the appcast's EdDSA signature of the zip, Gatekeeper
 on the app and the DMG, Sparkle actually updating a copy of the previous build (`update-test.sh`) and the previous
 build's data opening in the new one (`carryover.sh`). By hand, check the build the way the script can't: launch
-`dist/<version>/export/Solara.app` with `ARDIA_BACKGROUND=1`, a throwaway `ARDIA_DATA_DIR` and
-`ARDIA_REMOTE_DEBUGGING_PORT`, and load a page over CDP. Afterwards `codesign --verify --deep --strict` must still
+`dist/<version>/export/Solara.app` with `SOLARA_BACKGROUND=1`, a throwaway `SOLARA_DATA_DIR` and
+`SOLARA_REMOTE_DEBUGGING_PORT`, and load a page over CDP. Afterwards `codesign --verify --deep --strict` must still
 pass on it.
 
 To check the after-update tab too: in that data dir, set `lastVersion` in `release-notes.json` to the
 previous version (`{"version":1,"lastVersion":"<previous>","pending":null}`) and relaunch with
-`ARDIA_RELEASE_NOTES=1` added (test instances skip the tab without it). `curl localhost:<port>/json` must
+`SOLARA_RELEASE_NOTES=1` added (test instances skip the tab without it). `curl localhost:<port>/json` must
 list one `…/release-notes#<version>` page; a second launch opens none.
 
 ## The app's identity
@@ -221,7 +221,7 @@ are named after the product. Scripts take the name from the identity (`scripts/i
 or from a bundle's `CFBundleExecutable`. The release assets are named for the product too (`Solara-<version>.dmg`,
 `Solara-Nightly.dmg`).
 
-release.sh bakes the product, bundle id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same
+release.sh bakes the product, bundle id and repo into the CLI tarball (`solara-cli-<version>-macos-arm64.tar.gz`, same
 name in every build) and pins its digest into the app; the app's installer passes its own product and repo. So the
 app installs `~/.local/bin/solara` into `~/Library/Application Support/Solara/CLI`, downloads from
 `andrewbenson/solara`'s releases and drives `~/Library/Application Support/com.hill.solara`. The tarball must be
@@ -231,14 +231,14 @@ The Sparkle key was generated on 2026-10-24 (account `solara` in the login keych
 `AC_PUBLIC_ED_KEY`); release.sh refuses to sign with a key whose public half isn't `AC_PUBLIC_ED_KEY`. An xcconfig
 reads `//` as the start of a comment, so a value that contains `//` is written with `/$()/`, as the URLs are. Check
 what the identity resolves to:
-`xcodebuild -showBuildSettings -project apps/browser/macos/Ardia.xcodeproj -target Ardia-macOS -configuration Release | grep ' AC_'`.
+`xcodebuild -showBuildSettings -project apps/browser/macos/Solara.xcodeproj -target Solara-macOS -configuration Release | grep ' AC_'`.
 
 Once per release machine:
 
 1. Apple: the team's **Developer ID Application** certificate in the login keychain (release.sh takes the identity whose
    name ends in `(<team id>)`), and Xcode signed in to the team. The App ID `<bundle id>` has a Developer ID
    provisioning profile that allows the keychain groups `<team id>.<bundle id>.webauthn`, `.unexportable-keys`
-   and `.secure-payment-confirmation` (`Ardia.entitlements`); the export fetches it with `-allowProvisioningUpdates`,
+   and `.secure-payment-confirmation` (`Solara.entitlements`); the export fetches it with `-allowProvisioningUpdates`,
    and release.sh stops without an `embedded.provisionprofile`.
 2. Notarization: an App Store Connect API key for the team in `scripts/.notary.env`, or a notarytool profile
    (`NOTARY_PROFILE=<profile>`), as in "Once per machine".
@@ -268,7 +268,7 @@ refuses a nightly while the repo has no stable release. With no `v*` tag yet:
 
 ## CI releases
 
-Upstream only: `release.yml` and `deploy.yml` run only in `mantrakp04/ardia` (their jobs check
+Upstream only: `release.yml` and `deploy.yml` run only in `mantrakp04/solara` (their jobs check
 `github.repository`), so nothing runs in `andrewbenson/solara`, which releases from this machine.
 
 `.github/workflows/release.yml` is the release pipeline, run by hand only (Actions › Release › Run workflow, or
@@ -288,7 +288,7 @@ the engine if `engine/` changed (below).
   treats the build as untrusted: `.github/release/unpack-build.py` unpacks it into a new directory outside the checkout
   only if every member is the archive, `provenance.txt` or the CLI tarball and its `.sha256`, with no absolute or `..`
   path, hard link, device or path through a symlink, and every symlink resolving inside its own app or dSYM bundle;
-  the app's bundle id, executable and version must be `com.ardia.browser`, `Ardia` and the input version.
+  the app's bundle id, executable and version must be `com.solara.browser`, `Solara` and the input version.
   `release.sh --phase sign` reads it from there (`RELEASE_BUILD_INPUT`) into a `dist` it creates fresh, and the export
   takes the expected bundle id as an argument instead of reading it from the build. It takes Sparkle's tools from Sparkle's own 2.9.6 release (SHA-256 pinned; `SPARKLE_BIN`), sets up
   signing (`.github/release/signing.sh`: a temporary keychain with the Developer ID identity, the provisioning profile,
@@ -324,7 +324,7 @@ Secrets (repository secrets, these names):
 |---|---|
 | `MACOS_CERTIFICATE_P12` | base64 of a .p12 with the Developer ID Application certificate and its key |
 | `MACOS_CERTIFICATE_PASSWORD` | that .p12's password |
-| `MACOS_PROVISIONING_PROFILE` | base64 of the Developer ID provisioning profile for `com.ardia.browser` (the keychain groups need it) |
+| `MACOS_PROVISIONING_PROFILE` | base64 of the Developer ID provisioning profile for `com.solara.browser` (the keychain groups need it) |
 | `NOTARY_KEY_P8` | base64 of the App Store Connect API key `AuthKey_<id>.p8` |
 | `NOTARY_KEY_ID`, `NOTARY_ISSUER` | that key's id and issuer id |
 | `SPARKLE_ED_PRIVATE_KEY` | the file `generate_keys -x` writes (as is) |
@@ -342,25 +342,25 @@ The app links a prebuilt Chromium Framework, which a normal CI job can't build. 
 (`docs/engine-build.md`); after building it, `scripts/publish-engine.sh` (`--dry-run` first) packs it as release.sh
 packs one (stripped, unpruned) with its Helium source, uploads both to the prerelease `engine-<engine tree:12>` (never
 latest, so the feed and the download links never move to it) and appends `<tree> engine-<tree:12> <sha256>` to
-`packages/ardiacore/prebuilt-engines.tsv`: commit and push that line before dispatching. A release whose `engine/`
+`packages/solaracore/prebuilt-engines.tsv`: commit and push that line before dispatching. A release whose `engine/`
 tree has no engine fails its build at once, saying which script to run.
 
 ## The engine switch (0.2.21 → 0.2.22)
 
-0.2.22 is the first release on ArdiaCore; 0.2.21 and earlier ran on CEF. It's the same app to macOS and Sparkle (bundle
+0.2.22 is the first release on SolaraCore; 0.2.21 and earlier ran on CEF. It's the same app to macOS and Sparkle (bundle
 id, executable, Developer ID team, designated requirement, feed and key), so Sparkle updates a CEF copy in place and
 macOS keeps its permissions, keychain items and passkeys.
 
-Nothing is migrated. A release build without `ARDIA_DATA_DIR` opens the CEF build's data where it is
-(`InstalledDataDirectory` in `packages/ardiacore/ios/ArdiaCoreHost.mm`): Chrome's user data dir
-`~/Library/Application Support/com.ardia.browser/Chromium` (profiles `Default` and `Profile <id>`), with the app's
+Nothing is migrated. A release build without `SOLARA_DATA_DIR` opens the CEF build's data where it is
+(`InstalledDataDirectory` in `packages/solaracore/ios/SolaraCoreHost.mm`): Chrome's user data dir
+`~/Library/Application Support/com.solara.browser/Chromium` (profiles `Default` and `Profile <id>`), with the app's
 own documents (session, settings) in the folder above. Both engines are Chromium 154.0.8037.58, so every store keeps its
-format, and both read the same "Ardia Safe Storage" keychain item, which trusts the app by its designated
-requirement. Only Developer ID builds use the login keychain; test instances (`ARDIA_DATA_DIR` or
-`ARDIA_BACKGROUND`) and ad hoc builds use Chrome's mock keychain. `carryover.sh` checks it: the previous build makes
+format, and both read the same "Solara Safe Storage" keychain item, which trusts the app by its designated
+requirement. Only Developer ID builds use the login keychain; test instances (`SOLARA_DATA_DIR` or
+`SOLARA_BACKGROUND`) and ad hoc builds use Chrome's mock keychain. `carryover.sh` checks it: the previous build makes
 two profiles with tabs, persistent and session cookies, localStorage, saved passwords, bookmarks, history, an address,
-a site permission, a zoom level and an unpacked extension, and the new build, started without `ARDIA_DATA_DIR`,
-must find and read all of it. Both run as test copies (bundle id `com.ardia.browser.carryover`, signed ad hoc) in
+a site permission, a zoom level and an unpacked extension, and the new build, started without `SOLARA_DATA_DIR`,
+must find and read all of it. Both run as test copies (bundle id `com.solara.browser.carryover`, signed ad hoc) in
 a fake home (`HOME` and `CFFIXED_USER_HOME`), so the real app's data, defaults and keychain are never touched.
 `rollback.sh <previous app> <new app>` (not part of smoke.sh) checks going back on the same setup: the previous build,
 then the new one adding a second session, then the previous one again must show both sessions' data without crashing
@@ -376,12 +376,12 @@ are involved; the real identity and signature are what smoke.sh's other update c
 The framework keeps Chrome's name (`Chromium Framework`); its helpers are the product's (`Solara Helper (Renderer)`,
 from `engine/identity`), as is the Alerts helper's display name. Their bundle ids and team are ours, and the keychain
 and macOS permissions belong to the app itself. Their
-icon is upstream Ardia's, in Solara too until it builds its own engine (the Alerts helpers' shows on every
+icon is upstream Solara's, in Solara too until it builds its own engine (the Alerts helpers' shows on every
 notification): `engine/chromium` replaces Chromium's logo.
 
 ## Unnotarized builds
 
-Releases are notarized since 0.2.1 (upstream's `ardia` profile holds an App Store Connect API key; with an
+Releases are notarized since 0.2.1 (upstream's `solara` profile holds an App Store Connect API key; with an
 Apple ID it's `--apple-id … --team-id …` and an app-specific password, which also works but locks the
 Apple ID after repeated failures). If a build ever ships unnotarized, Gatekeeper refuses to open the download. Either open it once from System Settings › Privacy &
 Security › Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Solara.app`.

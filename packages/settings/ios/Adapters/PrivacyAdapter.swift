@@ -1,4 +1,4 @@
-import ArdiaCore
+import SolaraCore
 import Foundation
 import Observation
 import SolaraUI
@@ -6,12 +6,12 @@ import SolaraUI
 @MainActor
 final class PrivacyAdapter: PrivacyServices {
   func contentBlocker() async -> ContentBlockerState? {
-    await EngineCalls.result({ done in ArdiaCoreContentBlocker.state { done($0) } }) { EngineCalls.failed($0, "contentBlocker") ? nil : Self.blocker($0) }
+    await EngineCalls.result({ done in SolaraCoreContentBlocker.state { done($0) } }) { EngineCalls.failed($0, "contentBlocker") ? nil : Self.blocker($0) }
   }
 
   func contentBlockerChanges() -> AsyncStream<Void> {
     AsyncStream { continuation in
-      let observer = NotificationCenter.default.addObserver(forName: ArdiaCoreSettingsBridge.contentBlockerChanged, object: nil, queue: .main) { _ in
+      let observer = NotificationCenter.default.addObserver(forName: SolaraCoreSettingsBridge.contentBlockerChanged, object: nil, queue: .main) { _ in
         continuation.yield()
       }
       nonisolated(unsafe) let token = observer
@@ -20,25 +20,25 @@ final class PrivacyAdapter: PrivacyServices {
   }
 
   func setContentBlockerEnabled(_ on: Bool) async throws {
-    try await EngineCalls.settle { done in ArdiaCoreContentBlocker.setEnabled(on) { done($0) } }
+    try await EngineCalls.settle { done in SolaraCoreContentBlocker.setEnabled(on) { done($0) } }
   }
 
   func setFilterListEnabled(_ id: String, enabled: Bool) async throws {
-    try await EngineCalls.settle { done in ArdiaCoreContentBlocker.setList(id, enabled: enabled) { done($0) } }
+    try await EngineCalls.settle { done in SolaraCoreContentBlocker.setList(id, enabled: enabled) { done($0) } }
   }
 
   func setContentBlockerAllowed(host: String, allowed: Bool) async throws {
-    try await EngineCalls.settle { done in ArdiaCoreContentBlocker.setAllowed(allowed, host: host) { done($0) } }
+    try await EngineCalls.settle { done in SolaraCoreContentBlocker.setAllowed(allowed, host: host) { done($0) } }
   }
 
   func siteSettingsOrigins(profile: String) async -> [String] {
     await withCheckedContinuation { continuation in
-      ArdiaCoreServices.siteSettingsOrigins(profile: profile) { continuation.resume(returning: $0) }
+      SolaraCoreServices.siteSettingsOrigins(profile: profile) { continuation.resume(returning: $0) }
     }
   }
 
   func siteSettings(profile: String, origin: String) async -> [SiteSettingType: SiteSettingState]? {
-    await EngineCalls.result({ done in ArdiaCoreServices.siteSettings(profile: profile, origin: origin) { done($0) } }) {
+    await EngineCalls.result({ done in SolaraCoreServices.siteSettings(profile: profile, origin: origin) { done($0) } }) {
       EngineCalls.failed($0, "siteSettings") ? nil : Self.siteSettings($0)
     }
   }
@@ -54,15 +54,15 @@ final class PrivacyAdapter: PrivacyServices {
   }
 
   func setSiteSetting(profile: String, origin: String, type: SiteSettingType, value: SiteSettingValue) async {
-    ArdiaCoreServices.setSiteSetting(value.rawValue, profile: profile, origin: origin, type: type.rawValue)
+    SolaraCoreServices.setSiteSetting(value.rawValue, profile: profile, origin: origin, type: type.rawValue)
   }
 
   func resetSiteSettings(profile: String, origin: String) async {
-    ArdiaCoreServices.resetSiteSettings(profile: profile, origin: origin)
+    SolaraCoreServices.resetSiteSettings(profile: profile, origin: origin)
   }
 
   func clearSiteData(profile: String, origin: String) async -> ClearSiteDataResult {
-    await EngineCalls.result({ done in ArdiaCoreServices.clearSiteData(profile: profile, origin: origin) { done($0) } }) { result in
+    await EngineCalls.result({ done in SolaraCoreServices.clearSiteData(profile: profile, origin: origin) { done($0) } }) { result in
       let cookies = (result["cookies"] as? NSNumber).flatMap { CFGetTypeID($0) == CFBooleanGetTypeID() ? nil : $0.intValue }
       return ClearSiteDataResult(cookies: cookies, storage: result.bool("storage") ?? false)
     }
@@ -70,12 +70,12 @@ final class PrivacyAdapter: PrivacyServices {
 
   func externalAppAllowances(profile: String) async -> [ExternalAppAllowance] {
     let chromium: [ExternalAppAllowance] = await withCheckedContinuation { continuation in
-      ArdiaCoreServices.externalAppAllowances(profile: profile) { list in
+      SolaraCoreServices.externalAppAllowances(profile: profile) { list in
         continuation.resume(returning: Self.allowances(list as? [[String: Any]] ?? []))
       }
     }
     let seen = Set(chromium.map { "\($0.origin)|\($0.scheme)" })
-    let webkit = Self.allowances(ArdiaCoreSettingsBridge.webKitExternalAppAllowances(profile: profile))
+    let webkit = Self.allowances(SolaraCoreSettingsBridge.webKitExternalAppAllowances(profile: profile))
     return chromium + webkit.filter { !seen.contains("\($0.origin)|\($0.scheme)") }
   }
 
@@ -87,18 +87,18 @@ final class PrivacyAdapter: PrivacyServices {
   }
 
   func removeExternalAppAllowance(profile: String, origin: String, scheme: String) async {
-    ArdiaCoreServices.removeExternalAppAllowance(profile: profile, origin: origin, scheme: scheme)
-    ArdiaCoreSettingsBridge.removeWebKitExternalAppAllowance(profile: profile, origin: origin, scheme: scheme)
+    SolaraCoreServices.removeExternalAppAllowance(profile: profile, origin: origin, scheme: scheme)
+    SolaraCoreSettingsBridge.removeWebKitExternalAppAllowance(profile: profile, origin: origin, scheme: scheme)
   }
 
   func zoomLevels(profile: String) async -> [String: Double] {
     await withCheckedContinuation { continuation in
-      ArdiaCoreServices.zoomLevels(profile: profile) { levels in continuation.resume(returning: levels.mapValues(\.doubleValue)) }
+      SolaraCoreServices.zoomLevels(profile: profile) { levels in continuation.resume(returning: levels.mapValues(\.doubleValue)) }
     }
   }
 
   func setZoom(profile: String, host: String, zoom: Double) async {
-    ArdiaCoreServices.setZoom(zoom, profile: profile, host: host)
+    SolaraCoreServices.setZoom(zoom, profile: profile, host: host)
   }
 
   nonisolated static func blocker(_ dict: [String: Any]) -> ContentBlockerState {

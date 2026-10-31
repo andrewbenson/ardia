@@ -1,5 +1,5 @@
-import { hostedKinds } from "@ardia/settings";
-import { launchEnvironment, readDocument, stopIntroMusic, writeDocument } from "@ardia/shell";
+import { hostedKinds } from "@solara/settings";
+import { launchEnvironment, readDocument, stopIntroMusic, writeDocument } from "@solara/shell";
 import { persistenceRefused } from "../../lib/persistLatch";
 import { create } from "zustand";
 import { useBrowser } from "../../store/browser";
@@ -9,7 +9,7 @@ import type { ProfileColor } from "../../store/types";
 import { pinSites } from "./sites";
 import { endToolTour, startToolTour } from "./tour/state";
 import { nativeOwnsWorkspace, nativeSafeMode, nativeWrite, writeState } from "../../store/nativeStore";
-import { encodeCommand } from "@ardia/store";
+import { encodeCommand } from "@solara/store";
 
 export type OnboardingStep = "intro" | "source" | "layout" | "tabs" | "look" | "searchPrivacy" | "pins" | "home" | "outro";
 
@@ -29,7 +29,7 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     balancedTopApps: false,
     shareTabsAcrossWindows: false,
     cleanUpInactiveTabsAfterHours: null,
-    openLinksInLittleArdia: true,
+    openLinksInLittleSolara: true,
   },
   arc: {
     addressBar: "sidebar",
@@ -40,7 +40,7 @@ export const PRESETS: Record<Preset, Partial<Settings>> = {
     balancedTopApps: true,
     shareTabsAcrossWindows: true,
     cleanUpInactiveTabsAfterHours: 12,
-    openLinksInLittleArdia: true,
+    openLinksInLittleSolara: true,
   },
 };
 
@@ -96,7 +96,7 @@ const QUESTIONS: Record<Exclude<OnboardingStep, "intro">, Question[]> = {
   pins: [{ id: "pins", keys: [] }],
   home: [
     { id: "default", keys: [] },
-    { id: "links", keys: ["openLinksInLittleArdia"] },
+    { id: "links", keys: ["openLinksInLittleSolara"] },
   ],
   outro: [{ id: "outro", keys: [] }],
 };
@@ -378,7 +378,7 @@ export function maybeStartOnboarding() {
   if (saved?.startedAt) return resumeOnboarding(saved);
   if (persistenceRefused()) return;
   if (readDocument("session.json")) return markCompleted();
-  if (__DEV__ && launchEnvironment("ARDIA_ONBOARDING") !== "1") return;
+  if (__DEV__ && launchEnvironment("SOLARA_ONBOARDING") !== "1") return;
   save({ startedAt: Date.now() });
   startOnboarding();
 }

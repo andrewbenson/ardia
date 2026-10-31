@@ -10,7 +10,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg || args.some((arg) => arg.startsWith("--") && arg !== "--keep-data")) {
   console.error(`usage: node download-magnet-test.mjs <Debug Solara.app> [--keep-data]
 
-A real download from a local server into a scratch folder (ARDIA_DOWNLOADS_DIR), with DownloadMagnetView read
+A real download from a local server into a scratch folder (SOLARA_DOWNLOADS_DIR), with DownloadMagnetView read
 in process through SolaraHosted.downloadMagnet. The file icon flies once, about 0.7 s, from the page toward
 the downloads target on an arc above the straight line, fades in and out, and settles with nothing left animating.`);
   process.exit(2);
@@ -69,7 +69,7 @@ try {
   mkdirSync(downloads, { recursive: true });
   app = await launch(appPath, {
     data: join(scratch, "data"), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_DOWNLOADS_DIR: downloads },
+    env: { SOLARA_DOWNLOADS_DIR: downloads },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acPerf",
   });
   rep.log(`native: pid ${app.pid}`);

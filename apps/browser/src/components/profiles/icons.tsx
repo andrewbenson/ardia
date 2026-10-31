@@ -1,4 +1,4 @@
-import { Symbol, type MenuItem } from "@ardia/shell";
+import { Symbol, type MenuItem } from "@solara/shell";
 import { Text, View } from "react-native";
 import { profileAccent } from "../../lib/theme";
 import type { Profile } from "../../store/types";

@@ -1,5 +1,5 @@
 import { nativeSafeMode } from "../store/nativeStore";
-import { deleteProfileData } from "@ardia/ardiacore";
+import { deleteProfileData } from "@solara/solaracore";
 import { useBrowser } from "../store/browser";
 import { engineIdOf } from "../store/profiles";
 

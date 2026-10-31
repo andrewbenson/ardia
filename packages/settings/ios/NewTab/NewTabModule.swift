@@ -58,8 +58,8 @@ public class NewTabModule: Module {
       nonisolated(unsafe) let reply = promise
       MainActor.assumeIsolated {
         guard ProcessInfo.processInfo.environment["AC_BENCH_OMNIBOX"] == "1",
-              ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1",
-              ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"]?.isEmpty == false else { reply.resolve([:]); return }
+              ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1",
+              ProcessInfo.processInfo.environment["SOLARA_DATA_DIR"]?.isEmpty == false else { reply.resolve([:]); return }
         reply.resolve([
           "source": NewTabSources.shared.omniboxBenchSnapshot(profileId: profileId),
           "catalogs": Dictionary(uniqueKeysWithValues: ["", "work"].map { engine in

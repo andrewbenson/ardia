@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// With ARDIA_NATIVE_SIDEBAR=1, a click on the empty sidebar under the rows ends a tab's rename the way RN's does since
+// With SOLARA_NATIVE_SIDEBAR=1, a click on the empty sidebar under the rows ends a tab's rename the way RN's does since
 // c69941d5: the typed name is kept, the field closes, and the click opens no tab. Esc still cancels.
 //
 //   node apps/browser/scripts/sidebar-rename-test.mjs <Debug Solara.app under apps/browser/build-*> [--keep-data]
@@ -23,7 +23,7 @@ const tabs = ids.map((id) => ({ id, url: `data:text/html,<title>Tab ${id}</title
 
 const app = await launch(resolve(appArg), {
   data: join(scratch, "data"),
-  env: { ARDIA_NATIVE_SIDEBAR: "1" },
+  env: { SOLARA_NATIVE_SIDEBAR: "1" },
   session: session({ profiles: ["Personal"], windows: [{ id: "w1", tabIds: ids, activeTabIds: { default: "t0" }, frame: [60, 60, 1200, 800] }], tabs }),
   ready: "return !!ac.store",
 });

@@ -94,7 +94,7 @@ final class ChromiumChannelTests: XCTestCase {
   }
 
   func testAnIncompleteCleartextSessionStillAsksForTheKey() throws {
-    let profile = FileManager.default.temporaryDirectory.appendingPathComponent("ardia-sessions-\(UUID().uuidString)")
+    let profile = FileManager.default.temporaryDirectory.appendingPathComponent("solara-sessions-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: profile) }
     let fm = FileManager.default
     try fm.createDirectory(at: profile.appendingPathComponent("Sessions"), withIntermediateDirectories: true)

@@ -1,4 +1,4 @@
-import { breadcrumb } from "@ardia/core";
+import { breadcrumb } from "@solara/core";
 import { requireOptionalNativeModule, type EventSubscription } from "expo-modules-core";
 import { useEffect } from "react";
 import { layout, useTheme } from "../lib/theme";

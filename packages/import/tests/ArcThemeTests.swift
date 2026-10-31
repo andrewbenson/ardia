@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import ArdiaImportCore
+@testable import SolaraLegacyImportCore
 
 final class ArcThemeTests: XCTestCase {
   private func firstBaseRed(_ theme: Any) -> Double? {

@@ -176,7 +176,7 @@ enum DockTile {
 
   static func relabel() {
     let env = ProcessInfo.processInfo.environment
-    guard env["ARDIA_BACKGROUND"] == nil, env["ARDIA_DATA_DIR"] == nil else { return }
+    guard env["SOLARA_BACKGROUND"] == nil, env["SOLARA_DATA_DIR"] == nil else { return }
     var changed = false
     let updated: [[String: Any]] = tiles.map { tile in
       guard isOurs(tile), var data = tile["tile-data"] as? [String: Any], data["file-label"] as? String != label else { return tile }
@@ -196,7 +196,7 @@ enum DockTile {
   static func add(isolated: Bool) -> Bool {
     guard !isInDock else { return true }
     if isolated {
-      NSLog("ArdiaSystem: isolated instance, not adding to the Dock")
+      NSLog("SolaraSystem: isolated instance, not adding to the Dock")
       return false
     }
     let tile: [String: Any] = [

@@ -9,7 +9,7 @@ const appArg = args.find((a) => !a.startsWith("--"));
 if (!appArg) {
   console.error(`usage: node pane-prompts-test.mjs <Debug Solara.app> [--defaults] [--keep-data]
 
-The pooled pane's prompts drawn from pool page events with ARDIA_NATIVE_PANE_PROMPTS=1 (page pool on), against the
+The pooled pane's prompts drawn from pool page events with SOLARA_NATIVE_PANE_PROMPTS=1 (page pool on), against the
 same page with the switch off. Password: a real form submission brings Chrome's save prompt; with the switch on RN
 mounts no PasswordPrompt and the native popover sits 8 points from the pane's top right at 350 wide, with Never on
 This Site, Not Now and Save; a click on Save, after the input guard's delay, saves the login and closes it; a second
@@ -50,7 +50,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const act = (n, a) => C.devWindow(n, a);
@@ -103,12 +103,12 @@ const crossPrompt = (windowId, kind, shown) => {
 const promptGone = (windowId, kind) => untilSnapshot(`${kind} gone`, (window) =>
   !window?.paneOverlays?.tabs?.a?.[kind], windowId);
 const POOL = {
-  ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1",
-  ARDIA_CHROMIUM_SWITCHES: `--ardia-test-bluetooth-chooser ${process.env.ARDIA_CHROMIUM_SWITCHES ?? ""}`.trim(),
+  SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1",
+  SOLARA_CHROMIUM_SWITCHES: `--solara-test-bluetooth-chooser ${process.env.SOLARA_CHROMIUM_SWITCHES ?? ""}`.trim(),
 };
-const LEGS = args.includes("--defaults") ? [{ tag: "native", env: { ARDIA_CHROMIUM_SWITCHES: POOL.ARDIA_CHROMIUM_SWITCHES } }] : [
-  { tag: "rn", env: { ...POOL, ARDIA_NATIVE_PANE_PROMPTS: "0" } },
-  { tag: "native", env: { ...POOL, ARDIA_NATIVE_PANE_PROMPTS: "1" } },
+const LEGS = args.includes("--defaults") ? [{ tag: "native", env: { SOLARA_CHROMIUM_SWITCHES: POOL.SOLARA_CHROMIUM_SWITCHES } }] : [
+  { tag: "rn", env: { ...POOL, SOLARA_NATIVE_PANE_PROMPTS: "0" } },
+  { tag: "native", env: { ...POOL, SOLARA_NATIVE_PANE_PROMPTS: "1" } },
 ];
 
 async function submit(user, pass) {
@@ -194,7 +194,7 @@ try {
       const target = await until("its DevTools target", async () => (await app.pageTarget(`${base}/other`)) ?? null, 5000);
       const cdp = await devtools(target);
       try {
-        await cdp.send("Runtime.evaluate", { expression: "location.href = 'ardiacore-no-such-app://hello'", userGesture: true });
+        await cdp.send("Runtime.evaluate", { expression: "location.href = 'solaracore-no-such-app://hello'", userGesture: true });
       } finally {
         cdp.close();
       }
@@ -383,7 +383,7 @@ try {
 
     await rep.check(`${tag}-device-chooser`, async () => {
       const browserId = await run(`return Number(Object.entries(ac.pageState.getState().browsers).find(([, t]) => t === "a")?.[0]);`);
-      const UI = `globalThis.expo.modules.ArdiaChromeUI`;
+      const UI = `globalThis.expo.modules.SolaraChromeUI`;
       const chooserId = `return globalThis.acDeviceChoosers.useChoosers.getState().byTab.a?.id ?? null;`;
       if (!(await run(`return ${UI}.devShowBluetoothChooser(${browserId}, false);`))) throw new Error("the DEBUG chooser hook is missing");
       const id = await until("the chooser reaches JS", chooserId, 6000);

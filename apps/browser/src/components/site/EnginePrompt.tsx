@@ -6,7 +6,7 @@ import { PRODUCT } from "../../lib/productName";
 import { PanelCloseButton, Popover, PromptButton } from "../layout/controls";
 import { Checkbox } from "../settings/controls";
 import { PromptBody } from "./Prompts";
-import { nativeToolbarAvailable } from "@ardia/settings";
+import { nativeToolbarAvailable } from "@solara/settings";
 import { NativePromptBody, PromptPopover } from "./NativePromptBody";
 
 export function EngineOfferPrompt({ tabId, left, top }: { tabId: string; left: number; top: number }) {

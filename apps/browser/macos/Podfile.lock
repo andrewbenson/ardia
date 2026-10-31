@@ -1,27 +1,4 @@
 PODS:
-  - ArdiaCore (0.0.0):
-    - ExpoModulesCore
-  - ArdiaImport (0.0.0):
-    - ArdiaCore
-    - ExpoModulesCore
-  - ArdiaSettings (0.0.0):
-    - ArdiaCore
-    - ArdiaShaders
-    - ArdiaShell
-    - ArdiaStore
-    - ExpoModulesCore
-  - ArdiaShaders (0.0.0):
-    - ExpoModulesCore
-  - ArdiaShell (0.0.0):
-    - ExpoModulesCore
-    - Sparkle (~> 2.9)
-  - ArdiaStore (0.0.0):
-    - ArdiaCore
-    - ExpoModulesCore
-  - ArdiaSync (0.0.0):
-    - ArdiaCore
-    - ArdiaImport
-    - ExpoModulesCore
   - boost (1.84.0)
   - DoubleConversion (1.1.6)
   - EXConstants (18.0.14):
@@ -2320,17 +2297,33 @@ PODS:
     - React-utils (= 0.81.9)
     - SocketRocket
   - SocketRocket (0.7.1)
+  - SolaraCore (0.0.0):
+    - ExpoModulesCore
+  - SolaraImportAdapter (0.0.0):
+    - ExpoModulesCore
+    - SolaraCore
+  - SolaraSettingsAdapter (0.0.0):
+    - ExpoModulesCore
+    - SolaraCore
+    - SolaraShaders
+    - SolaraShell
+    - SolaraStoreAdapter
+  - SolaraShaders (0.0.0):
+    - ExpoModulesCore
+  - SolaraShell (0.0.0):
+    - ExpoModulesCore
+    - Sparkle (~> 2.9)
+  - SolaraStoreAdapter (0.0.0):
+    - ExpoModulesCore
+    - SolaraCore
+  - SolaraSyncAdapter (0.0.0):
+    - ExpoModulesCore
+    - SolaraCore
+    - SolaraImportAdapter
   - Sparkle (2.9.6)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
-  - ArdiaCore (from `../../../packages/ardiacore/ios`)
-  - ArdiaImport (from `../../../packages/import/ios`)
-  - ArdiaSettings (from `../../../packages/settings/ios`)
-  - ArdiaShaders (from `../../../packages/shaders/ios`)
-  - ArdiaShell (from `../../../packages/shell/ios`)
-  - ArdiaStore (from `../../../packages/store/ios`)
-  - ArdiaSync (from `../../../packages/sync/ios`)
   - boost (from `../../../node_modules/react-native-macos/third-party-podspecs/boost.podspec`)
   - DoubleConversion (from `../../../node_modules/react-native-macos/third-party-podspecs/DoubleConversion.podspec`)
   - EXConstants (from `../../../node_modules/expo-constants/ios`)
@@ -2410,6 +2403,13 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../../../node_modules/react-native-macos/ReactCommon`)
   - SocketRocket (~> 0.7.1)
+  - SolaraCore (from `../../../packages/solaracore/ios`)
+  - SolaraImportAdapter (from `../../../packages/import/ios`)
+  - SolaraSettingsAdapter (from `../../../packages/settings/ios`)
+  - SolaraShaders (from `../../../packages/shaders/ios`)
+  - SolaraShell (from `../../../packages/shell/ios`)
+  - SolaraStoreAdapter (from `../../../packages/store/ios`)
+  - SolaraSyncAdapter (from `../../../packages/sync/ios`)
   - Yoga (from `../../../node_modules/react-native-macos/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -2418,20 +2418,6 @@ SPEC REPOS:
     - Sparkle
 
 EXTERNAL SOURCES:
-  ArdiaCore:
-    :path: "../../../packages/ardiacore/ios"
-  ArdiaImport:
-    :path: "../../../packages/import/ios"
-  ArdiaSettings:
-    :path: "../../../packages/settings/ios"
-  ArdiaShaders:
-    :path: "../../../packages/shaders/ios"
-  ArdiaShell:
-    :path: "../../../packages/shell/ios"
-  ArdiaStore:
-    :path: "../../../packages/store/ios"
-  ArdiaSync:
-    :path: "../../../packages/sync/ios"
   boost:
     :podspec: "../../../node_modules/react-native-macos/third-party-podspecs/boost.podspec"
   DoubleConversion:
@@ -2587,17 +2573,24 @@ EXTERNAL SOURCES:
     :path: build/generated/ios
   ReactCommon:
     :path: "../../../node_modules/react-native-macos/ReactCommon"
+  SolaraCore:
+    :path: "../../../packages/solaracore/ios"
+  SolaraImportAdapter:
+    :path: "../../../packages/import/ios"
+  SolaraSettingsAdapter:
+    :path: "../../../packages/settings/ios"
+  SolaraShaders:
+    :path: "../../../packages/shaders/ios"
+  SolaraShell:
+    :path: "../../../packages/shell/ios"
+  SolaraStoreAdapter:
+    :path: "../../../packages/store/ios"
+  SolaraSyncAdapter:
+    :path: "../../../packages/sync/ios"
   Yoga:
     :path: "../../../node_modules/react-native-macos/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
-  ArdiaCore: 5238364a8669034510574dbc9d447700b1407ba2
-  ArdiaImport: 535f03b8bdc5866eb05d6d177597e9583bfe7d47
-  ArdiaSettings: 6741863d6f15baea02cbf81938347f09aced3ac0
-  ArdiaShaders: d8dc0512dec3ed9d4af792579b320249ef035924
-  ArdiaShell: 4de45ace9c0e11ff56d51c81cf9ec9a2fd6bac7c
-  ArdiaStore: f997d0a555ae953296c12dd04398aca9507453f4
-  ArdiaSync: 509d66d89649bd40bcedaf235056c7910e508e2a
   boost: cea1d4f90a3a59537f3deb03ff5656489d7133dd
   DoubleConversion: d31b1eb37f6d6f456530c4fd9124b857d6889cab
   EXConstants: 18ac927605517285307ea8f7ffe6fe7ca538eb5d
@@ -2676,9 +2669,16 @@ SPEC CHECKSUMS:
   ReactCodegen: e0a9b01eae258647e0146514d137b1e304aec015
   ReactCommon: bc273d1cfc32a36ea662e81293e0961de8c21c77
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
+  SolaraCore: 4c41e7159ec6dee2633f3eeedd4bb7eb61802555
+  SolaraImportAdapter: 10af0a10b16d0102876d7684dfdfaa80a896705c
+  SolaraSettingsAdapter: 05a1d97099ce8c184827a142cb53db7f748fe585
+  SolaraShaders: 371449cdf23d0316cfe58f6047646f13ddb6e511
+  SolaraShell: 88bdfbf6101f10c90feec7aea235ba7a97f7041a
+  SolaraStoreAdapter: 5d95e3f9ef9ad661a578d71ab2c952b8a0fe4e03
+  SolaraSyncAdapter: ef4f4558f00e0ba9f64a1d8db351417f6c8f4435
   Sparkle: b8c9cf4ced217ffc708a1ca5f988a7ba877658db
   Yoga: a88f30ac6f89fded00f9840e7d043315e5ab4fe0
 
-PODFILE CHECKSUM: b6fe1cc0bd737a4ee29e677de75999abd99c4ee5
+PODFILE CHECKSUM: 5c598c57f570503b97190696ffab4db1248e0ac7
 
 COCOAPODS: 1.17.0

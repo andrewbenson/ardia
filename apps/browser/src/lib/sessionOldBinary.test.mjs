@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 const { docs, shellNativeModules } = await import("../test-native/index.ts");
-delete shellNativeModules.ArdiaShell.readDocumentResult;
+delete shellNativeModules.SolaraShell.readDocumentResult;
 const { useBrowser } = await import("../store/browser.ts");
 const { useToasts } = await import("../components/layout/toasts.ts");
 const { flushPersistence, startPersistence } = await import("./persist.ts");

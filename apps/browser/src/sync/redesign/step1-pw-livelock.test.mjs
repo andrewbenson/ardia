@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 await import("../../store/browser.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const adapters = await import("../adapters.ts");
 const stub = await import("../../test-native/index.ts");
 const { syncRedesign } = await import("../redesignSwitch.ts");

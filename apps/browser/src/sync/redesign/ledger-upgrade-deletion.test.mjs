@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 await import("../../store/browser.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const { ledgerPasswordsAdapter } = await import("../ledgerPasswords.ts");
 const stub = await import("../../test-native/index.ts");
 const { plainOf, sealMarked, sealedCalls } = await import("./fakeSeal.mjs");
@@ -39,7 +39,7 @@ async function world(run) {
       },
       remove: async () => {},
     };
-    const calls = sealedCalls(() => stub.ardiaCoreNativeModules.ArdiaCEF);
+    const calls = sealedCalls(() => stub.solaraCoreNativeModules.SolaraCEF);
     const device = (name) => {
       stub.passwordStores.set(name, new Map());
       const store = stub.passwordStores.get(name);

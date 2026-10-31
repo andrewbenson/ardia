@@ -38,7 +38,7 @@ export type SystemNative = {
   setThinScrollBars?(thin: boolean): Promise<void>;
 };
 
-const System = nativeModule("ArdiaSystem");
+const System = nativeModule("SolaraSystem");
 
 export const backgroundInstance = System.backgroundInstance === true;
 export const isDefaultBrowser = () => System.isDefaultBrowser();
@@ -67,7 +67,7 @@ export type MouseAreaProps = ViewProps & {
 
 type NativeMouseAreaProps = Omit<MouseAreaProps, "onMiddleClick"> & { onMiddleClick?: (e: { nativeEvent: MiddleClickEvent }) => void };
 
-const NativeMouseArea = System ? requireNativeViewManager<NativeMouseAreaProps>("ArdiaFileDrag") : null;
+const NativeMouseArea = System ? requireNativeViewManager<NativeMouseAreaProps>("SolaraFileDrag") : null;
 
 export function MouseArea({ path, onMiddleClick, ...props }: MouseAreaProps) {
   if (!NativeMouseArea) return <View {...props} />;
@@ -85,8 +85,8 @@ type NativeFileDropAreaProps = ViewProps & {
   onDropUpdate?: (e: { nativeEvent: DropUpdate }) => void;
 };
 
-const fileDropBuilt = !!NativeModules.NativeUnimoduleProxy?.viewManagersMetadata?.ArdiaFileDrop;
-const NativeFileDropArea = fileDropBuilt ? requireNativeViewManager<NativeFileDropAreaProps>("ArdiaFileDrop") : null;
+const fileDropBuilt = !!NativeModules.NativeUnimoduleProxy?.viewManagersMetadata?.SolaraFileDrop;
+const NativeFileDropArea = fileDropBuilt ? requireNativeViewManager<NativeFileDropAreaProps>("SolaraFileDrop") : null;
 
 export type MagnifyPhase = "began" | "changed" | "ended" | "cancelled";
 export type MagnifyUpdate = { phase: MagnifyPhase; magnification: number };
@@ -97,13 +97,13 @@ export type MagnifyAreaProps = ViewProps & {
 
 type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
 
-const magnifyBuilt = !!NativeModules.NativeUnimoduleProxy?.viewManagersMetadata?.ArdiaMagnifyArea;
-const NativeMagnifyArea = magnifyBuilt ? requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea") : null;
+const magnifyBuilt = !!NativeModules.NativeUnimoduleProxy?.viewManagersMetadata?.SolaraMagnifyArea;
+const NativeMagnifyArea = magnifyBuilt ? requireNativeViewManager<NativeMagnifyAreaProps>("SolaraMagnifyArea") : null;
 export type MagnifyAreaNative = {
   devMagnify(windowId: string, x: number, y: number, steps: MagnifyUpdate[]): Promise<{ claimed?: boolean[]; hit?: string; error?: string }>;
 };
 
-const MagnifyModule = optionalNativeModule("ArdiaMagnifyArea");
+const MagnifyModule = optionalNativeModule("SolaraMagnifyArea");
 
 export function MagnifyArea({ onMagnify, enabled = true, ...props }: MagnifyAreaProps) {
   if (!NativeMagnifyArea) return <View {...props} />;
@@ -137,10 +137,10 @@ export type FileDropNative = {
   devLastFileDrag(): Promise<string[]>;
 };
 
-const FileDrop = optionalNativeModule("ArdiaFileDrop");
+const FileDrop = optionalNativeModule("SolaraFileDrop");
 
 export const devFileDrag = {
   drag: (windowId: string, action: DevDragAction, x: number, y: number, payload?: DevDragPayload) =>
-    FileDrop ? FileDrop.devDrag(windowId, action, x, y, payload ?? null) : Promise.resolve("no ArdiaFileDrop"),
+    FileDrop ? FileDrop.devDrag(windowId, action, x, y, payload ?? null) : Promise.resolve("no SolaraFileDrop"),
   lastFileDrag: () => (FileDrop ? FileDrop.devLastFileDrag() : Promise.resolve([])),
 };

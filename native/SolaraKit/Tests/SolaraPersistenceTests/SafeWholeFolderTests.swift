@@ -84,7 +84,7 @@ import Testing
       "launch-look.json": #"{"version":1,"appearance":"light"}"#,
       "launch-layout.json": #"{"version":1,"sidebarWidth":240}"#,
       "launch-picture-saved.png": "saved launch picture bytes",
-      "Chromium/Default/Ardia Favicons/saved.png": "saved favicon bytes",
+      "Chromium/Default/Solara Favicons/saved.png": "saved favicon bytes",
       "release-notes.json": #"{"version":"1.0"}"#,
       "onboarding.json": #"{"complete":true}"#,
       "Chromium/NavigationDownloads.json": #"{"https://saved.example/file.zip":1793016000}"#,

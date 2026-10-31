@@ -1,5 +1,5 @@
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import ExpoModulesCore
 
 public class TabPoolModule: Module {

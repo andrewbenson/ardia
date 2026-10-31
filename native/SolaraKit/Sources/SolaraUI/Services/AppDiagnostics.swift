@@ -82,7 +82,7 @@ public enum AppDiagnostics {
     }
     var lines = [
       "\(app.appName) \(app.appVersion) (\(app.appBuild)) — \(app.configuration)",
-      "Engine: ArdiaCore, Chromium \(chromiumVersion)",
+      "Engine: SolaraCore, Chromium \(chromiumVersion)",
       "macOS \(app.osVersion) (\(app.osBuild)), \(app.arch), \(app.model), \(Int(app.memoryGB.rounded(.toNearestOrAwayFromZero))) GB",
       "Bundle: \(app.bundleId), locale \(app.locale)",
     ]

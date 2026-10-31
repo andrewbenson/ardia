@@ -1,6 +1,6 @@
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
 import { claimFocusTag, findFocus } from "../lib/focusClaims";
-import { Surface, Symbol } from "@ardia/shell";
+import { Surface, Symbol } from "@solara/shell";
 import { memo, useEffect, useRef, useState } from "react";
 import { Animated, Easing, findNodeHandle, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { hex, useTheme } from "../lib/theme";
@@ -10,7 +10,7 @@ import { useFind } from "../store/hooks";
 import type { FindState } from "../store/types";
 import { IconButton, useHover } from "./primitives";
 import { replaceInField } from "./site/selection";
-import { nativeToolbarAvailable, NativeFindBarView, type NativeFindEvent } from "@ardia/settings";
+import { nativeToolbarAvailable, NativeFindBarView, type NativeFindEvent } from "@solara/settings";
 
 export const FindBar = memo(function FindBar({ tabId }: { tabId: string }) {
   const hasPage = useBrowser((s) => !!s.tabs[tabId]?.url);

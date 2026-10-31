@@ -183,7 +183,7 @@ page (light, active window); behaviour from the binary (`DiaStatusText`, `Status
   - Position: the host's ink starts 68 px (34 pt) after the reload glyph's ink. Measured from the reload glyph's ink
     centre, the text origin is 56.5 px to the right and the host's ink top is 9.5 px above it. Ours (RN) is 53 px
     and 11 px.
-  - Native toolbar (`ARDIA_NATIVE_OMNIBOX=1`, hidden instance, `screencapture -l`, 2x), apple.com/mac and a dark
+  - Native toolbar (`SOLARA_NATIVE_OMNIBOX=1`, hidden instance, `screencapture -l`, 2x), apple.com/mac and a dark
     page whose sampler reports #131414 under a #191A1E theme-color: host `apple.com` 123 px wide (SF 13 regular
     renders 123, medium 127), (51, 51, 51), path (178, 178, 178). Dark host 90 px wide (regular 90, medium 93),
     (149, 149, 149), path (67, 67, 67). Origin 56 px right of the reload centre, ink top 9.5 px above it. Divider
@@ -313,7 +313,7 @@ the same as top"), so if a Dia capture ever differs, the owner's equal insets wi
   the group's tabs 16 pt further in (icon at x 31), their right edge with the other rows'. The box appears while the pointer
   is over the group: `TabGroupNeutralBackground` (white 0.10 dark / black 0.05 light), edge `TabGroupSidebarStroke`
   (white / black 0.10), header hover `TabGroupNeutralBackgroundHovered` (white 0.12 dark / 0.40 light). Fade time not
-  recovered; Ardia uses the hover card's 0.1 s curve.
+  recovered; Solara uses the hover card's 0.1 s curve.
 
 ### Tab hover card motion (Dia's binary, 2026-10-20)
 
@@ -395,7 +395,7 @@ Regular rows on the 37 pt pitch; the same for "+ New Tab" and ⌘T, and for the 
   just under a new one is clipped at the new row's bottom edge while it slides, which gives Dia's look over our
   translucent selected fill. Hover is checked again after every layout (react-native-macos patch, `RCTView.m`), so it
   follows the final layout during the slide. Collapsed groups, pins and moves between windows don't animate.
-- Native sidebar (`SidebarView.swift`, behind `ARDIA_NATIVE_SIDEBAR=1`): the same curves and durations with Core
+- Native sidebar (`SidebarView.swift`, behind `SOLARA_NATIVE_SIDEBAR=1`): the same curves and durations with Core
   Animation. Rows in the scroll area that keep their slot's size slide, a closed row (rows and group boxes) drops its
   selected fill and fades behind the others, and the row under a new one is masked at the new row's bottom edge. Hover
   is checked against the final layout right after. Measured with `SolaraHosted.sidebarMotion` in a hidden instance
@@ -935,7 +935,7 @@ theme, a group "X" of five tabs after the pinned dock. Positions in points from 
 #### Dragging tabs and split targets (1.50.1, owner's 2× recordings, 2026-10-01)
 
 Two recordings, dark, tabs on top (3024 × 1964, variable frame rate, every frame's own timestamp): one with three
-"New Tab" tabs dragged within and out of the strip (rec1026, 0–8 s; then Ardia 0.2.18), one with the active tab
+"New Tab" tabs dragged within and out of the strip (rec1026, 0–8 s; then Solara 0.2.18), one with the active tab
 dragged onto the page and into a split (rec1027, 7.6 s). The page card spans x 6 … 1505.5 and y 38 … 908.5 (1499.5 ×
 870.5). Classes: `DragDrop.SplitTargetView` (`leftSplitTarget` / `rightSplitTarget`), titles "Add left split" / "Add
 right split"; the numbers are from the pixels.
@@ -974,12 +974,12 @@ right split"; the numbers are from the pixels.
   into the new window in 0.2 s, then fades in 0.1 s. A background tab's card shows its own page: its last picture
   (taken 1.5 s after it was shown or went to another page; memory only, not in private windows), else its icon
   and title.
-- **Reordering, frame by frame** (the owner's 60 fps phone video of Dia and Ardia 0.2.22, 2026-10-02; frame strips in
+- **Reordering, frame by frame** (the owner's 60 fps phone video of Dia and Solara 0.2.22, 2026-10-02; frame strips in
   `output/tab-drag/`): Dia's tab moves with the pointer from the first move and stays within about a frame of it
   (motion blur limits the reading); it's opaque, so the tab it passes doesn't show through. Once its leading edge
   passes a neighbor's center, the neighbor slides into the place it left while the drag goes on: 91 % of the way
   in 43 ms, 97 % in 60, all of it by ~76 ms (a critically damped spring, ω ≈ 90 rad/s, ~0.07 s). Let go at its
-  place, nothing else moves. Ardia 0.2.22 in the same video: the tab stood still for 20 frames (333 ms) after the
+  place, nothing else moves. Solara 0.2.22 in the same video: the tab stood still for 20 frames (333 ms) after the
   pointer set off (the drag picture's window snapshot, 0.13–0.35 s of the main thread at the press), the neighbors
   never moved (the dragged tab, at 0.92 opacity, slid over them), and the drop snapped everything in one frame. Now
   (`layout/stripReorder.ts`): the snapshot waits until the tab leaves the strip and costs ~17 ms (the window at
@@ -1037,12 +1037,12 @@ Measured from a 13 s recording of the user's Dia (3024 × 1964, YouTube video, d
 window 468 × 263 pt at (1034, 43), where the user had left it. Dia draws its own video PiP window (`PIP.VideoPIPContentController`,
 `PIPWindowController`) and keeps where it was last left (`LastVideoPIPPosition`); the first-ever default wasn't
 recovered (Solara keeps Chrome's: a fifth of the work area, bottom right). Solara restyles Chrome's own window
-to these numbers (`chrome/browser/ardia/pip/` (`engine/chromium`)); a same-crop comparison is in the table.
+to these numbers (`chrome/browser/solara/pip/` (`engine/chromium`)); a same-crop comparison is in the table.
 - **At rest**: only the video. Corners circular, **6 pt** (the outline fits a circle to 0.1 px at 2×), with a 1 pt rim
   of white **17 %** just inside the edge (content + 32…40 levels) and a faint shadow that follows the rounded corners
   (the backdrop is 3–4 levels darker next to the window, with a 1 px dark contact line). No title, host label or badge.
   Solara: Chrome's square, transparent window gets its content view clipped to 6 pt, the rim drawn over it and its
-  shadow invalidated (`ArdiaCorePictureInPicture.mm`); measured on a window capture: 6.0 pt radius, rim + 32…36 levels.
+  shadow invalidated (`SolaraCorePictureInPicture.mm`); measured on a window capture: 6.0 pt radius, rim + 32…36 levels.
 - **Appears** about 125 ms after the tab switch, at full opacity (one black frame, then the video): no fade, no slide.
 - **Hover**: an even black scrim at **35 %** over the whole video (content × 0.645, same pixels before and after),
   fading in over **200 ms**, ease-in-out (2, 7, 14, 24, 40, 55, 69, 80, 90, 96, 99 % at 60 fps).
@@ -1114,11 +1114,11 @@ on its window.
   `LastVideoPIPPosition`. A thrown window is remembered by its corner and a dropped one by its frame.
 - **Tilt**: Dia also tilts the window while it's dragged (`dragAngleAnimation`, 0.005 × speed).
 
-**Solara** (`ArdiaCorePictureInPicture.mm`, the maths in `ArdiaCorePiPThrow.h`, tested by `pnpm -C packages/ardiacore test`)
+**Solara** (`SolaraCorePictureInPicture.mm`, the maths in `SolaraCorePiPThrow.h`, tested by `pnpm -C packages/solaracore test`)
 does the same on Chrome's video PiP window, using the same thresholds, corner rule, 10 pt inset and spring. It
 differs in a few places:
 - Chrome's window can't tilt.
-- The window is remembered by its frame (Chrome's `ArdiaPictureInPicture.plist`), not by its corner.
+- The window is remembered by its frame (Chrome's `SolaraPictureInPicture.plist`), not by its corner.
 - A drag or swipe past a screen side keeps Solara's 28 pt peek stash rather than Dia's off-screen one.
 - A swipe whose fingers rested more than 0.1 s before lifting doesn't throw.
 - Its screen is the one the window overlaps most.

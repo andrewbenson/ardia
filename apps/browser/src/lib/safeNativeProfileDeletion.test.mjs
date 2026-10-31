@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 const sent = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "everything", safeMode: "option" }),
     dispatch: (json) => { sent.push(...[JSON.parse(json)].flat()); return JSON.stringify({ rev: 0 }); },
     addListener: () => ({ remove() {} }),
@@ -12,7 +12,7 @@ globalThis.acTestNativeModules = {
 };
 const { shellNativeModules } = await import("../test-native/shell.ts");
 const notices = [];
-shellNativeModules.ArdiaShell.confirm = async (options) => { notices.push(options); return { confirmed: false, suppressed: false }; };
+shellNativeModules.SolaraShell.confirm = async (options) => { notices.push(options); return { confirmed: false, suppressed: false }; };
 const { useBrowser } = await import("../store/browser.ts");
 const { startNativeStore, attachReplica } = await import("../store/nativeStore.ts");
 
@@ -28,8 +28,8 @@ test("native workspace action wrapping keeps the safe profile-deletion explanati
   assert.deepEqual(useBrowser.getState().orphanedProfileData, []);
 });
 
-test("ArdiaCoreHost refuses loaded and unloaded profile deletion with a reason before engine or disk access", () => {
-  const method = declaration(source("packages/ardiacore/ios/ArdiaCoreHost.mm"), "+ (void)deleteProfileData:");
+test("SolaraCoreHost refuses loaded and unloaded profile deletion with a reason before engine or disk access", () => {
+  const method = declaration(source("packages/solaracore/ios/SolaraCoreHost.mm"), "+ (void)deleteProfileData:");
   const results = runNative("Profile.mm", method);
   assert.equal(results.length, 4);
   for (const result of results) {
@@ -56,8 +56,8 @@ test("ArdiaCoreHost refuses loaded and unloaded profile deletion with a reason b
   }
 });
 
-test("ArdiaCoreProfileData refuses default-profile deletion with a reason before calling services", () => {
-  const results = runNative("Profile.swift", source("packages/ardiacore/ios/ArdiaCoreProfileData.swift"), [], true);
+test("SolaraCoreProfileData refuses default-profile deletion with a reason before calling services", () => {
+  const results = runNative("Profile.swift", source("packages/solaracore/ios/SolaraCoreProfileData.swift"), [], true);
   assert.deepEqual(results[0], { safe: true, remaining: ["safe mode"], callbacks: 1, calls: [] });
   assert.equal(results[1].safe, false);
   assert.deepEqual(results[1].remaining, []);

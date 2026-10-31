@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-  name: "ArdiaShellCore",
+  name: "SolaraShellCore",
   platforms: [.macOS(.v14)],
-  products: [.library(name: "ArdiaShellCore", targets: ["ArdiaShellCore"])],
+  products: [.library(name: "SolaraShellCore", targets: ["SolaraShellCore"])],
   targets: [
-    .target(name: "ArdiaShellCore", path: "ios/Core"),
-    .testTarget(name: "ArdiaShellCoreTests", dependencies: ["ArdiaShellCore"], path: "tests"),
+    .target(name: "SolaraShellCore", path: "ios/Core"),
+    .testTarget(name: "SolaraShellCoreTests", dependencies: ["SolaraShellCore"], path: "tests"),
   ]
 )

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Real-world energy: Ardia against Helium and Dia on public, logged-out websites, in the window states a user's day
+// Real-world energy: Solara against Helium and Dia on public, logged-out websites, in the window states a user's day
 // has. Every browser gets the same tabs, window size, fresh copy of a template profile and phases, one instance at a
 // time, browsers interleaved and rotated each round, holding the perflab lock for a round and giving it back after.
 //
@@ -7,14 +7,14 @@
 //   node apps/browser/scripts/perf/energy.mjs report --out <dir> [--md <file>]                medians, ranges, kinds
 //   node apps/browser/scripts/perf/energy.mjs clean  --out <dir> --browsers <a,b>             quit leftovers, delete runs
 //
-//     --browsers <a,b>     names: ardia[-tag], helium, dia (default ardia,helium,dia)
+//     --browsers <a,b>     names: solara[-tag], helium, dia (default solara,helium,dia)
 //     --app <name>=<path>  repeatable: the bundle of a browser (default <apps>/<base>/<Base>.app; Helium's -bg copy)
 //     --apps <dir>         default /tmp/ac-xbench/apps
 //     --base <name>=<home> repeatable: its template starts from a copy of this HOME (Dia: a throwaway signed-in home)
 //     --env <name>=K=V     repeatable: extra environment for one browser
 //     --args <name>=<sw>   repeatable: one extra switch for one browser
 //     --video-only <name>  repeatable: that browser runs only the video phase (no hidden launch)
-//     --setting <name>=K=V repeatable: an Ardia setting in each run's session.json (V is JSON: videoUpscaling=false)
+//     --setting <name>=K=V repeatable: an Solara setting in each run's session.json (V is JSON: videoUpscaling=false)
 //     --rounds <n>         default 3
 //     --launches <a,b>     visible,hidden (default both). visible: idle in view, scroll, switch, video; hidden: minimized
 //     --idle <secs>        each idle phase (default 180)
@@ -29,9 +29,9 @@
 //     --allow-focus        record a browser making itself the frontmost app instead of stopping (only when the owner
 //                          agreed to it for this run)
 //
-// Window states: visible launches run every browser as if in view whatever covers it (Ardia's background mode with
+// Window states: visible launches run every browser as if in view whatever covers it (Solara's background mode with
 // its forced visibility; Helium and Dia with --disable-backgrounding-occluded-windows), hidden launches let occlusion
-// act (ARDIA_ALLOW_OCCLUSION=1; no switch) and minimize the window through CDP. All get --mute-audio.
+// act (SOLARA_ALLOW_OCCLUSION=1; no switch) and minimize the window through CDP. All get --mute-audio.
 // Metrics per process, summed per kind: CPU time, idle + interrupt wakeups, ri_energy_nj (macOS's per-process energy
 // estimate), ri_billed_energy, and GPU time from the AGX user clients the process created.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -48,7 +48,7 @@ const { values: opt, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     out: { type: "string", default: "/tmp/ac-energy/out" },
-    browsers: { type: "string", default: "ardia,helium,dia" },
+    browsers: { type: "string", default: "solara,helium,dia" },
     apps: { type: "string", default: "/tmp/ac-xbench/apps" },
     app: { type: "string", multiple: true, default: [] },
     base: { type: "string", multiple: true, default: [] },
@@ -109,13 +109,13 @@ const IDLE_TAB = "canvas";
 const SCROLL_TAB = "verge";
 
 const BROWSERS = {
-  ardia: { name: "Ardia", bundle: "ardia/Ardia.app" },
+  solara: { name: "Solara", bundle: "solara/Solara.app" },
   helium: { name: "Helium", bundle: "helium-bg/Helium.app" },
   dia: { name: "Dia", bundle: "dia/Dia.app", guardPrefs: true },
 };
 const baseOf = (name) => name.split("-")[0];
 const spec = (name) => BROWSERS[baseOf(name)];
-const isArdia = (name) => baseOf(name) === "ardia";
+const isSolara = (name) => baseOf(name) === "solara";
 const perName = (list, name) => list.filter((e) => e.startsWith(`${name}=`)).map((e) => e.slice(name.length + 1));
 
 const PROBE = `import AppKit
@@ -430,16 +430,16 @@ class Instance {
   }
   env() {
     const env = { HOME: this.home, CFFIXED_USER_HOME: this.home };
-    if (isArdia(this.name)) {
-      Object.assign(env, { ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: join(this.home, "data"), ARDIA_REMOTE_DEBUGGING_PORT: String(port), ARDIA_UPDATE_FEED_URL: `http://127.0.0.1:${opt["page-port"]}/appcast.xml`, ARDIA_DRAW_WINDOWS: "1" });
-      if (this.mode === "hidden") env.ARDIA_ALLOW_OCCLUSION = "1";
+    if (isSolara(this.name)) {
+      Object.assign(env, { SOLARA_BACKGROUND: "1", SOLARA_DATA_DIR: join(this.home, "data"), SOLARA_REMOTE_DEBUGGING_PORT: String(port), SOLARA_UPDATE_FEED_URL: `http://127.0.0.1:${opt["page-port"]}/appcast.xml`, SOLARA_DRAW_WINDOWS: "1" });
+      if (this.mode === "hidden") env.SOLARA_ALLOW_OCCLUSION = "1";
     }
     for (const e of perName(opt.env, this.name)) env[e.slice(0, e.indexOf("="))] = e.slice(e.indexOf("=") + 1);
     return env;
   }
   args() {
     const extra = perName(opt.args, this.name);
-    if (isArdia(this.name)) return ["--no-first-run", "--no-default-browser-check", ...extra];
+    if (isSolara(this.name)) return ["--no-first-run", "--no-default-browser-check", ...extra];
     return [`--user-data-dir=${join(this.home, "udd")}`, `--remote-debugging-port=${port}`, "--remote-allow-origins=*", "--no-first-run",
       "--no-default-browser-check", "--password-store=basic", "--use-mock-keychain", "--mute-audio", `--window-size=${WIN.w},${WIN.h}`,
       `--window-position=${WIN.x},${WIN.y}`, ...(this.mode === "visible" ? ["--disable-backgrounding-occluded-windows"] : []), ...extra];
@@ -584,7 +584,7 @@ async function makeTemplate(name) {
   const baseHome = perName(opt.base, name)[0];
   if (baseHome) execFileSync("cp", ["-Rc", resolve(baseHome), join(dir, "home")]);
   else mkdirSync(join(dir, "home"), { recursive: true });
-  if (isArdia(name)) {
+  if (isSolara(name)) {
     mkdirSync(join(dir, "home/data"), { recursive: true });
     writeFileSync(join(dir, "home/data/onboarding.json"), JSON.stringify({ version: 1, completedAt: 1 }));
   }
@@ -600,11 +600,11 @@ async function makeTemplate(name) {
   } finally {
     await app.quit();
   }
-  if (isArdia(name)) fixArdiaSession(join(dir, "home/data/session.json"));
+  if (isSolara(name)) fixSolaraSession(join(dir, "home/data/session.json"));
   for (const f of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) rmSync(join(dir, "home/udd", f), { force: true });
 }
 
-function fixArdiaSession(file) {
+function fixSolaraSession(file) {
   if (!existsSync(file)) return;
   const session = JSON.parse(readFileSync(file, "utf8"));
   const { h } = probe("screen");
@@ -655,7 +655,7 @@ async function mapRenderers(app, ids) {
 }
 
 async function placeWindow(app, targetId) {
-  if (isArdia(app.name)) return null;
+  if (isSolara(app.name)) return null;
   const w = await app.cdp.call("Browser.getWindowForTarget", { targetId }).catch(() => null);
   if (!w) return null;
   await app.cdp.call("Browser.setWindowBounds", { windowId: w.windowId, bounds: { windowState: "normal" } }).catch(() => null);

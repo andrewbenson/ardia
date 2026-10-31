@@ -3,27 +3,27 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 
-@interface ArdiaCoreHost : NSObject
+@interface SolaraCoreHost : NSObject
 @property(class) BOOL safeMode;
 @property(class, readonly) BOOL isStarted;
 @end
-@implementation ArdiaCoreHost
+@implementation SolaraCoreHost
 static BOOL safe = NO;
 + (BOOL)safeMode { return safe; }
 + (void)setSafeMode:(BOOL)value { safe = value; }
 + (BOOL)isStarted { return YES; }
 @end
 
-@interface ArdiaCoreProfile : NSObject
+@interface SolaraCoreProfile : NSObject
 @property(copy) NSString *path;
 @property BOOL offTheRecord;
 @end
-@implementation ArdiaCoreProfile
+@implementation SolaraCoreProfile
 @end
 
-typedef void (^ArdiaCoreResult)(NSDictionary *);
-@interface ArdiaCoreServices : NSObject
-+ (void)call:(NSString *)name profile:(NSString *)profile args:(NSDictionary *)args completion:(ArdiaCoreResult)completion;
+typedef void (^SolaraCoreResult)(NSDictionary *);
+@interface SolaraCoreServices : NSObject
++ (void)call:(NSString *)name profile:(NSString *)profile args:(NSDictionary *)args completion:(SolaraCoreResult)completion;
 + (void)downloadCommand:(NSString *)command id:(NSString *)downloadId;
 @end
 
@@ -31,15 +31,15 @@ static int profileCalls = 0;
 static int engineCalls = 0;
 static NSMutableArray *received;
 static NSMutableArray *symbols;
-namespace ardiacore_host {
+namespace solaracore_host {
 BOOL IsIncognito(NSString *) { return NO; }
-NSArray<ArdiaCoreProfile *> *LoadedProfiles() { return @[]; }
-NSString *ProfileName(ArdiaCoreProfile *) { return @""; }
+NSArray<SolaraCoreProfile *> *LoadedProfiles() { return @[]; }
+NSString *ProfileName(SolaraCoreProfile *) { return @""; }
 NSString *OriginalProfileName(NSString *profile) { return profile; }
-void WithProfile(NSString *name, void (^done)(ArdiaCoreProfile *)) {
+void WithProfile(NSString *name, void (^done)(SolaraCoreProfile *)) {
   if (![name isEqualToString:@"fixture-profile-id"]) abort();
   profileCalls++;
-  ArdiaCoreProfile *profile = [ArdiaCoreProfile new];
+  SolaraCoreProfile *profile = [SolaraCoreProfile new];
   profile.path = @"fixture-profile";
   done(profile);
 }
@@ -66,12 +66,12 @@ int main() {
     DownloadProfiles()[@"download-42"] = @"fixture-profile-id";
     NSMutableArray *results = [NSMutableArray array];
     for (NSNumber *mode in @[ @YES, @NO ]) {
-      ArdiaCoreHost.safeMode = mode.boolValue;
+      SolaraCoreHost.safeMode = mode.boolValue;
       for (NSString *command in @[ @"remove", @"cancel" ]) {
         profileCalls = engineCalls = 0;
         [received removeAllObjects];
         [symbols removeAllObjects];
-        [ArdiaCoreServices downloadCommand:command id:@"download-42"];
+        [SolaraCoreServices downloadCommand:command id:@"download-42"];
         [results addObject:@{ @"safe": mode, @"command": command, @"engineCalls": @(engineCalls), @"profileCalls": @(profileCalls),
                              @"symbols": [symbols copy], @"received": [received copy] }];
       }

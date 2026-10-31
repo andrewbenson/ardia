@@ -27,10 +27,10 @@
 //   display+CA commit   the blocks' end → Core Animation's commit of that transaction (AppKit layout, views drawn, commit)
 //   first paint         event → that commit, for the first React commit after the store change
 //   selection shown     event → the Core Animation commit that shows the new active row: the native sidebar's
-//                       (ARDIA_NATIVE_SIDEBAR=1, its SolaraSidebarSelectionShown notification), else first paint
+//                       (SOLARA_NATIVE_SIDEBAR=1, its SolaraSidebarSelectionShown notification), else first paint
 //   ui                  event → the commit of the last React commit within 500 ms that changed anything on screen (a flush
 //                       Core Animation doesn't commit within 60 ms had nothing to draw)
-//                       or, with the native top strip (ARDIA_NATIVE_TOP_STRIP=1), the commit that shows the strip's change
+//                       or, with the native top strip (SOLARA_NATIVE_TOP_STRIP=1), the commit that shows the strip's change
 //                       (its SolaraTopStripShown notification) when that is later
 //   page                event → the shown page's second requestAnimationFrame after it turned visible (CDP; switches)
 //   total               the later of ui and page
@@ -76,7 +76,7 @@ function toolLibrary(out) {
 }
 
 function prepare(app, bundle, dir) {
-  const copy = join(dir, "Ardia.app");
+  const copy = join(dir, "Solara.app");
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   execFileSync("cp", ["-Rc", app, copy]);

@@ -1,4 +1,4 @@
-import { closeWindowPeek, expandWindowPeek, publishSettingsTopic } from "@ardia/settings";
+import { closeWindowPeek, expandWindowPeek, publishSettingsTopic } from "@solara/settings";
 import { useEffect, useRef } from "react";
 import { AccessibilityInfo } from "react-native";
 import { useTheme } from "../../lib/theme";

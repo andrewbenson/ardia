@@ -1,4 +1,4 @@
-import { onAppEvent, onWindowEvent } from "@ardia/shell";
+import { onAppEvent, onWindowEvent } from "@solara/shell";
 import { everySlowly } from "../../lib/slowTimers";
 import { webviews } from "../../lib/webviews";
 import { startLive } from "../../live";

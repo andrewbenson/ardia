@@ -1,5 +1,5 @@
 import XCTest
-@testable import ArdiaShellCore
+@testable import SolaraShellCore
 
 final class ConnectedAccountsTests: XCTestCase {
   func testOwnerBuildKeepsItsService() {

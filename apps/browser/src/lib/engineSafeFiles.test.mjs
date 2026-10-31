@@ -18,9 +18,9 @@ const body = (text, signature) => {
 };
 
 test("host refuses tab-history mutations before engine dispatch in safe mode", () => {
-  const text = source("packages/ardiacore/ios/ArdiaCoreEngineBridge.mm");
+  const text = source("packages/solaracore/ios/SolaraCoreEngineBridge.mm");
   const policy = body(text, "bool RefusesSafeModeCall(");
-  assert.match(policy, /^\s*if \(!ArdiaCoreHost.safeMode\) return false;/);
+  assert.match(policy, /^\s*if \(!SolaraCoreHost.safeMode\) return false;/);
   const refused = new Set([...policy.matchAll(/@"(ac_[^"]+)"/g)].map((match) => match[1]));
   for (const name of ["ac_tab_restore_tag", "ac_tab_restore_take", "ac_tab_restore_load", "ac_favicons_set", "ac_extensions_sync_state", "ac_extensions_sync_apply"]) {
     assert.ok(refused.has(name), name);
@@ -35,8 +35,8 @@ test("host refuses tab-history mutations before engine dispatch in safe mode", (
 });
 
 test("host leaves saved-history reads available and falls back to opening a tab when restore is refused", () => {
-  const text = source("packages/ardiacore/ios/ArdiaCoreWebView.mm");
-  assert.equal(body(text, "static ArdiaCoreTab *RestoreSavedHistory(").includes("safeMode"), false);
+  const text = source("packages/solaracore/ios/SolaraCoreWebView.mm");
+  assert.equal(body(text, "static SolaraCoreTab *RestoreSavedHistory(").includes("safeMode"), false);
   const ensure = body(text, "- (void)ensureTab {");
   assert.equal(ensure.includes("safeMode"), false);
   assert.ok(ensure.includes("RestoreSavedHistory("));
@@ -46,7 +46,7 @@ test("host leaves saved-history reads available and falls back to opening a tab 
 });
 
 let status = { active: false };
-globalThis.acTestNativeModules = { ArdiaStore: { status: () => status } };
+globalThis.acTestNativeModules = { SolaraStoreAdapter: { status: () => status } };
 const { useBrowser } = await import("../store/browser.ts");
 const { nativeSafeMode, startNativeStore, withApplier } = await import("../store/nativeStore.ts");
 
@@ -75,12 +75,12 @@ test("safe in-memory tabs open, navigate, and reopen with the same URL requests 
 });
 
 test("launch rekey precedes the locked safe decision and host startup", () => {
-  const text = source("apps/browser/macos/Ardia-macOS/main.swift");
+  const text = source("apps/browser/macos/Solara-macOS/main.swift");
   const ordered = [
     "SafeStorageRekeyRun.runAtLaunch(",
     "NativeStore.launchAtStartup()",
-    "ArdiaCoreHost.safeMode = NativeStore.safeMode",
-    "ArdiaCoreHost.run(",
+    "SolaraCoreHost.safeMode = NativeStore.safeMode",
+    "SolaraCoreHost.run(",
   ];
   let previous = -1;
   for (const step of ordered) {

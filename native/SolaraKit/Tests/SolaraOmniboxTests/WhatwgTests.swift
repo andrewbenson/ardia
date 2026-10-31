@@ -34,7 +34,7 @@ import Testing
     #expect(WhatwgURL("https://Example.com:443/a")?.host == "example.com")
     #expect(WhatwgURL("https://example.com:8443/a")?.host == "example.com:8443")
     #expect(WhatwgURL("file:///Users/me/My%20File.html")?.pathname == "/Users/me/My%20File.html")
-    #expect(WhatwgURL("ardia://flags")?.hostname == "flags")
+    #expect(WhatwgURL("solara://flags")?.hostname == "flags")
     #expect(WhatwgURL("about:blank")?.hostname == "")
     #expect(WhatwgURL("not a url") == nil)
     #expect(WhatwgURL("https://exa mple.com/") == nil)

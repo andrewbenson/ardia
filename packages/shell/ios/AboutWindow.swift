@@ -73,7 +73,7 @@ struct AboutLinkButton: View {
 
   var body: some View {
     Button(link.title) {
-      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[about] background instance, not opening %@", link.url.absoluteString) }
+      if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[about] background instance, not opening %@", link.url.absoluteString) }
       NSWorkspace.shared.open(link.url)
     }
       .buttonStyle(.plain)

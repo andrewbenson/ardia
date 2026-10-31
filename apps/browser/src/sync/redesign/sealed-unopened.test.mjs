@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 await import("../../store/browser.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, syncScope } = await import("@solara/sync");
 const { ledgerPasswordsAdapter } = await import("../ledgerPasswords.ts");
 const stub = await import("../../test-native/index.ts");
 const { plainOf, sealMarked, sealedCalls } = await import("./fakeSeal.mjs");
@@ -30,7 +30,7 @@ test("SEALED-unopened: a login whose seal doesn't open is ignored, not removed, 
     stub.passwordStores.set("A", new Map());
     const here = stub.passwordStores.get("A");
     const unopened = new Set();
-    const calls = sealedCalls(() => stub.ardiaCoreNativeModules.ArdiaCEF);
+    const calls = sealedCalls(() => stub.solaraCoreNativeModules.SolaraCEF);
     const check = async (values) => (await calls.check(values)).map((opens, i) => opens && !unopened.has(`pw:${values[i].o}\n${values[i].u}`));
     const read = sealMarked(async () => ({ logins: [...here.values()], mark }));
     const pw = ledgerPasswordsAdapter("A", () => true, read, () => "s", { ...calls, check });
@@ -91,7 +91,7 @@ test("SEALED-unopened: a newer folder record doesn't overwrite a login whose sea
       remove: async () => {},
     };
     const unopened = new Set();
-    const calls = sealedCalls(() => stub.ardiaCoreNativeModules.ArdiaCEF);
+    const calls = sealedCalls(() => stub.solaraCoreNativeModules.SolaraCEF);
     const check = async (values) => (await calls.check(values)).map((opens, i) => opens && !unopened.has(`pw:${values[i].o}\n${values[i].u}`));
     const reapplied = [];
     const device = (name) => {

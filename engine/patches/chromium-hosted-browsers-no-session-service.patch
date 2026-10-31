@@ -6,9 +6,9 @@ diff --git a/chrome/browser/sessions/session_service_base.cc b/chrome/browser/se
  #include "ui/ozone/public/platform_session_manager.h"
  #endif
 +
-+#include "ardia/core/ac_hooks.h"  // nogncheck
++#include "solara/core/ac_hooks.h"  // nogncheck
 +
-+bool (*g_ardia_omits_from_session_service)(
++bool (*g_solara_omits_from_session_service)(
 +    const BrowserWindowInterface* browser) = nullptr;
  
  using base::Time;
@@ -17,8 +17,8 @@ diff --git a/chrome/browser/sessions/session_service_base.cc b/chrome/browser/se
      return false;
    }
  
-+  if (g_ardia_omits_from_session_service &&
-+      g_ardia_omits_from_session_service(browser)) {
++  if (g_solara_omits_from_session_service &&
++      g_solara_omits_from_session_service(browser)) {
 +    return false;
 +  }
 +

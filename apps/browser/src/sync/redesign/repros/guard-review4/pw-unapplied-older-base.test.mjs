@@ -26,7 +26,7 @@ const guard = () => {
   if (fake.locked) throw new Error("locked");
 };
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => {
@@ -150,7 +150,7 @@ function otherMac(scope) {
   return { store, sync: () => sync.syncScope({ scope, state, transport: rawTransport, adapters: [adapter], clock, device: "otherMac" }) };
 }
 
-const native = globalThis.acTestNativeModules.ArdiaSync;
+const native = globalThis.acTestNativeModules.SolaraSyncAdapter;
 const realReadPasswords = native.readPasswords;
 
 function passwordMac(scope) {

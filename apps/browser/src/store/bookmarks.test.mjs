@@ -4,7 +4,7 @@ const { useBrowser } = await import("./browser.ts");
 const { bookmarkUuidFor } = await import("./bookmarks.ts");
 const { migrateBookmarksFile, reloadBookmarks, startBookmarks } = await import("../lib/bookmarks.ts");
 const stub = await import("../test-native/index.ts");
-const { ardiaCoreNativeModules } = await import("../test-native/ardiacore.ts");
+const { solaraCoreNativeModules } = await import("../test-native/solaracore.ts");
 
 const S = () => useBrowser.getState();
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -111,7 +111,7 @@ test("while Chrome refuses every push, the bridge retries once at once and then 
   S().hydrate({ bookmarks: { nodes: {}, roots: {} } });
   stub.docs.clear();
   stub.bookmarkDbs.clear();
-  const cef = ardiaCoreNativeModules.ArdiaCEF;
+  const cef = solaraCoreNativeModules.SolaraCEF;
   const realEngineCall = cef.engineCall;
   const refusing = { on: false, calls: 0 };
   cef.engineCall = async (name, profile, json) => {

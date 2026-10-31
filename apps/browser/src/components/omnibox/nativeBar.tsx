@@ -1,6 +1,6 @@
-import { displayUrl, type Suggestion } from "@ardia/core";
-import { newTabSources, type NewTabMenuChoice } from "@ardia/settings";
-import { pickFiles, readDocument, showMenu, startDictation } from "@ardia/shell";
+import { displayUrl, type Suggestion } from "@solara/core";
+import { newTabSources, type NewTabMenuChoice } from "@solara/settings";
+import { pickFiles, readDocument, showMenu, startDictation } from "@solara/shell";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { findNodeHandle } from "react-native";
 import { claimFocusTag } from "../../lib/focusClaims";

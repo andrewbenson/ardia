@@ -10,7 +10,7 @@ final class AutofillTests: XCTestCase {
   func testWebDataAddressesAndCards() throws {
     let outcome = try ChromiumAutofill.load(profile: chrome, key: Fixtures.chromiumKey)
     XCTAssertEqual(outcome.addresses, [
-      ImportedAddress(name: "Alex Example", organization: "Ardia Ltd", street: "1 Example Way\nSuite 2",
+      ImportedAddress(name: "Alex Example", organization: "Solara Ltd", street: "1 Example Way\nSuite 2",
                       city: "Cupertino", state: "CA", postalCode: "95014", country: "US", phone: "+14155550100",
                       email: "alex@example.com"),
       ImportedAddress(name: "Sam Smith", street: "10 High Street\nFlat 1", city: "London", postalCode: "SW1A 1AA",

@@ -16,7 +16,7 @@ Each PNG is rendered with `rsvg-convert` (`brew install librsvg`) from the neare
 | 256, 512, 1024 | `classic.svg` | the rest of `SolaraIcon.appiconset`, and `apps/browser/assets/app-icon-solara.png` at 512 |
 
 ```sh
-set=apps/browser/macos/Ardia-macOS/Assets.xcassets/SolaraIcon.appiconset
+set=apps/browser/macos/Solara-macOS/Assets.xcassets/SolaraIcon.appiconset
 r() { rsvg-convert -w "$2" -h "$2" -o "$3" "docs/brand/solara/$1.svg"; }
 r classic-16 16 $set/icon_16x16_1x.png
 r classic-32 32 $set/icon_16x16_2x.png
@@ -48,7 +48,7 @@ Settings › Appearance › App Icon offers it as "Calm" (id `calm`), beside "Cl
 small masters are kept for a bundle icon or a document icon later.
 
 ```sh
-set=apps/browser/macos/Ardia-macOS/Assets.xcassets/SolaraCalm.imageset
+set=apps/browser/macos/Solara-macOS/Assets.xcassets/SolaraCalm.imageset
 rsvg-convert -w 512 -h 512 -o $set/calm_512.png docs/brand/solara/calm.svg
 rsvg-convert -w 1024 -h 1024 -o $set/calm_1024.png docs/brand/solara/calm.svg
 ```

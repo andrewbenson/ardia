@@ -122,7 +122,7 @@ final class StandardItem: NSMenuItem, Rebindable {
     let shortcut = MainMenu.keyEquivalent(key, mods)
     super.init(title: title, action: action, keyEquivalent: shortcut.key)
     keyEquivalentModifierMask = shortcut.mods
-    identifier = NSUserInterfaceItemIdentifier("ardia.shortcut." + shortcutId)
+    identifier = NSUserInterfaceItemIdentifier("solara.shortcut." + shortcutId)
   }
 
   override init(title: String, action: Selector?, keyEquivalent: String) {
@@ -131,7 +131,7 @@ final class StandardItem: NSMenuItem, Rebindable {
     defaultKey = keyEquivalent
     defaultModifiers = .command
     super.init(title: title, action: action, keyEquivalent: keyEquivalent)
-    identifier = NSUserInterfaceItemIdentifier("ardia.shortcut." + shortcutId)
+    identifier = NSUserInterfaceItemIdentifier("solara.shortcut." + shortcutId)
   }
 
   required init(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -160,7 +160,7 @@ final class CommandItem: NSMenuItem, Rebindable {
     let shortcut = MainMenu.keyEquivalent(key, mods)
     super.init(title: title, action: #selector(MenuTarget.performCommand(_:)), keyEquivalent: shortcut.key)
     keyEquivalentModifierMask = shortcut.mods
-    identifier = NSUserInterfaceItemIdentifier("ardia.command." + command)
+    identifier = NSUserInterfaceItemIdentifier("solara.command." + command)
     target = MenuTarget.shared
     tag = Self.chromeMenuTag
   }
@@ -343,8 +343,8 @@ enum MainMenu {
   private static var profiles = NSMenu(title: "Profiles")
   private static var profilesItem = NSMenuItem(title: "Profiles", action: nil, keyEquivalent: "")
   private static var profilesSeparator = NSMenuItem.separator()
-  private static var littleArdiaInProfile = NSMenu(title: "New Little \(Bundle.main.productName) Window in Profile")
-  private static var littleArdiaInProfileItem = NSMenuItem(title: "New Little \(Bundle.main.productName) Window in Profile", action: nil, keyEquivalent: "")
+  private static var littleSolaraInProfile = NSMenu(title: "New Little \(Bundle.main.productName) Window in Profile")
+  private static var littleSolaraInProfileItem = NSMenuItem(title: "New Little \(Bundle.main.productName) Window in Profile", action: nil, keyEquivalent: "")
   private static var bookmarks = NSMenu(title: "Bookmarks")
   private static var bookmarksFixedCount = 0
   private static var history = NSMenu(title: "History")
@@ -360,7 +360,7 @@ enum MainMenu {
     bookmarkToFolder = NSMenu(title: "Add Bookmark to Folder")
     profiles = NSMenu(title: "Profiles")
     profilesSeparator = NSMenuItem.separator()
-    littleArdiaInProfile = NSMenu(title: "New Little \(Bundle.main.productName) Window in Profile")
+    littleSolaraInProfile = NSMenu(title: "New Little \(Bundle.main.productName) Window in Profile")
 
     func std(_ title: String, _ action: Selector, _ key: String = "", _ mods: NSEvent.ModifierFlags = .command) -> StandardItem {
       StandardItem(title, action, key: key, mods)
@@ -407,15 +407,15 @@ enum MainMenu {
       quit,
     ])
 
-    littleArdiaInProfileItem = sub("New Little \(Bundle.main.productName) Window in Profile", [], menu: littleArdiaInProfile)
+    littleSolaraInProfileItem = sub("New Little \(Bundle.main.productName) Window in Profile", [], menu: littleSolaraInProfile)
     _ = top("File", [
       cmd("New Tab", "newTab", "t"),
       cmd("New Tab in Group", "newTabInGroup", "t", [.command, .option]),
       cmd("New Window", "newWindow", "n"),
       cmd("New Incognito Window", "newIncognitoWindow", "n", [.command, .shift]),
-      cmd("New Little \(Bundle.main.productName) Window", "newLittleArdia", "n", [.command, .option]),
-      littleArdiaInProfileItem,
-      cmd("Open Links from Other Apps in Main Window", "toggleOpenLinksInLittleArdia"),
+      cmd("New Little \(Bundle.main.productName) Window", "newLittleSolara", "n", [.command, .option]),
+      littleSolaraInProfileItem,
+      cmd("Open Links from Other Apps in Main Window", "toggleOpenLinksInLittleSolara"),
       cmd("Reopen Closed Tab", "reopenClosedTab", "t", [.command, .shift]),
       cmd("Reopen Closed Window", "reopenClosedWindow"),
       cmd("Open File…", "openFile", "o"),
@@ -803,9 +803,9 @@ enum MainMenu {
     profiles.addItem(.separator())
     profiles.addItem(CommandItem("New Profile…", "newProfile"))
 
-    littleArdiaInProfile.removeAllItems()
-    littleArdiaInProfileItem.isHidden = state.profiles.count < 2
-    for p in state.profiles { littleArdiaInProfile.addItem(CommandItem(p.title, "newLittleArdia", arg: p.id)) }
+    littleSolaraInProfile.removeAllItems()
+    littleSolaraInProfileItem.isHidden = state.profiles.count < 2
+    for p in state.profiles { littleSolaraInProfile.addItem(CommandItem(p.title, "newLittleSolara", arg: p.id)) }
   }
 
   private static func buildMoveToWindow(_ state: MenuState) {
@@ -935,7 +935,7 @@ enum MainMenu {
     }
     if bound != announcedShortcuts {
       announcedShortcuts = bound
-      NotificationCenter.default.post(name: .init("ArdiaMenuShortcutsChanged"), object: nil)
+      NotificationCenter.default.post(name: .init("SolaraMenuShortcutsChanged"), object: nil)
     }
   }
 
@@ -1065,13 +1065,13 @@ enum MainMenu {
     let incognito = CommandItem("New Incognito Window", "newIncognitoWindow")
     incognito.windowless = true
     menu.addItem(incognito)
-    let small = CommandItem("New Little \(Bundle.main.productName) Window", "newLittleArdia")
+    let small = CommandItem("New Little \(Bundle.main.productName) Window", "newLittleSolara")
     small.windowless = true
     menu.addItem(small)
     if state.profiles.count > 1 {
       let inProfile = NSMenu(title: "New Little \(Bundle.main.productName) Window in Profile")
       for p in state.profiles {
-        let item = CommandItem(p.title, "newLittleArdia", arg: p.id)
+        let item = CommandItem(p.title, "newLittleSolara", arg: p.id)
         item.windowless = true
         inProfile.addItem(item)
       }

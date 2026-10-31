@@ -136,7 +136,7 @@ private struct OneBang: BangTable {
     #expect(readBangDocument(doc)?.table.get("gh")?.name == "GitHub")
     #expect(readBangDocument(bangDocument(etag: nil, slim: fixture)) != nil)
     #expect(readBangDocument(bangDocument(etag: nil, slim: fixture))?.etag == nil)
-    for bad in [nil, "", fixture, String(doc.prefix(2000)), "ardia-bangs 2\t\"v2\"\n\(fixture)", "ardia-bangs 1\t\"v2\"\tx\n\(fixture)"] {
+    for bad in [nil, "", fixture, String(doc.prefix(2000)), "solara-bangs 2\t\"v2\"\n\(fixture)", "solara-bangs 1\t\"v2\"\tx\n\(fixture)"] {
       #expect(readBangDocument(bad) == nil)
     }
   }

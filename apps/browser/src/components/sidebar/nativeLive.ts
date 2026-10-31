@@ -1,4 +1,4 @@
-import { publishSettingsTopic } from "@ardia/settings";
+import { publishSettingsTopic } from "@solara/settings";
 import { closeTab } from "../../lib/actions";
 import { manualRefresh, openLiveItem } from "../../live/engine";
 import { live, setExpandedStack, setLive, updateFolder, useLive } from "../../live/store";

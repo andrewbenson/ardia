@@ -171,7 +171,7 @@ async function environment(prefix, sharedFolderOps) {
     folderInfo: async () => ({ path: "/sync", defaultPath: "/sync", iCloudAvailable: false, inICloud: false, exists: true, writable: true, hasSyncData: true }),
     chooseFolder: async () => null,
   };
-  globalThis.acTestNativeModules = { ArdiaSync: native };
+  globalThis.acTestNativeModules = { SolaraSyncAdapter: native };
   await import(pathToFileURL(join(app, "src/test-loader.mjs")).href);
   registerHooks({
     load(url, context, next) {
@@ -230,7 +230,7 @@ async function environment(prefix, sharedFolderOps) {
     const marks = new WeakMap();
     const loginData = () => shell.passwordStores.get(shell.current.device);
     const { withSealedPasswords } = await import(pathToFileURL(join(app, "src/sync/redesign/fakeSeal.mjs")).href);
-    withSealedPasswords(native, () => shell.ardiaCoreNativeModules.ArdiaCEF, () => marks.get(loginData()) ?? null);
+    withSealedPasswords(native, () => shell.solaraCoreNativeModules.SolaraCEF, () => marks.get(loginData()) ?? null);
     globalThis.acTestEngineCall = (name, _profile, args) => {
       if (name !== "ac_passwords_mark") return undefined;
       marks.set(loginData(), args.value);
@@ -271,7 +271,7 @@ async function environment(prefix, sharedFolderOps) {
     if (!docMode.fail) landing.push(...retrying.splice(0));
     while (landing.length) landOne(landing.shift());
   };
-  const shellModule = shell.shellNativeModules.ArdiaShell;
+  const shellModule = shell.shellNativeModules.SolaraShell;
   shellModule.readDocument = (name) => staged.get(name)?.contents ?? disk.get(name) ?? null;
   shellModule.writeDocument = (name, contents) => stage(name, contents, null);
   shellModule.saveDocument = (name, contents) => new Promise((resolve, reject) => stage(name, contents, (error) => (error ? reject(error) : resolve())));

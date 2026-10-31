@@ -14,12 +14,12 @@ if (!appArg || args.some((arg) => arg.startsWith("--") && !["--shell", "--sideba
 The media controls on a local tone page: the sidebar player shows for a playing tab that isn't shown, its play
 button pauses and plays, Close Player hides it without pausing or moving to the tab, a new play brings it back, Back
 to Tab shows the tab and ends the player; the pinned tab's hover player scrolls a long title and ticks its time; the
-CLI pill appears and hides with RN's timing (and, under --shell, holds still while the toolbar hides and shows); the cast and share pickers open at RN's size and answer their buttons. The native controls are clicked directly. --shell adds ARDIA_NATIVE_SHELL=1: the pickers
+CLI pill appears and hides with RN's timing (and, under --shell, holds still while the toolbar hides and shows); the cast and share pickers open at RN's size and answer their buttons. The native controls are clicked directly. --shell adds SOLARA_NATIVE_SHELL=1: the pickers
 and the CLI pill then live in the pane overlay container on the shell's card, with no RN-hosted NativeMediaView.
 --prompts is --shell with the page pool: RN mounts no CliControlPill and the pill comes
-from the window's published CLI state. --sidebar is --shell with ARDIA_NATIVE_SIDEBAR=1: the sidebar player is the
-native column's own, with no RN-hosted one. Every other mode pins ARDIA_NATIVE_SIDEBAR=0, and every mode but --prompts
-pins ARDIA_NATIVE_PAGES_POOL=0, so the page is RN's TabWebView.`);
+from the window's published CLI state. --sidebar is --shell with SOLARA_NATIVE_SIDEBAR=1: the sidebar player is the
+native column's own, with no RN-hosted one. Every other mode pins SOLARA_NATIVE_SIDEBAR=0, and every mode but --prompts
+pins SOLARA_NATIVE_PAGES_POOL=0, so the page is RN's TabWebView.`);
   process.exit(2);
 }
 const prompts = args.includes("--prompts");
@@ -62,7 +62,7 @@ const fixture = session({
 });
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const st = () => ac.store.getState();
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -222,8 +222,8 @@ const pressPlayer = async (control) => {
 try {
   app = await launch(resolve(appArg), {
     data, fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_ALLOW_AUDIO: "1", ARDIA_NATIVE_SIDEBAR: nativeSidebar ? "1" : "0", ARDIA_NATIVE_SHELL: shell ? "1" : "0",
-      ...(prompts ? { ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_SHELL_PANES: "1", ARDIA_TAB_POOL: "1" } : { ARDIA_NATIVE_PAGES_POOL: "0" }) },
+    env: { SOLARA_ALLOW_AUDIO: "1", SOLARA_NATIVE_SIDEBAR: nativeSidebar ? "1" : "0", SOLARA_NATIVE_SHELL: shell ? "1" : "0",
+      ...(prompts ? { SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_SHELL_PANES: "1", SOLARA_TAB_POOL: "1" } : { SOLARA_NATIVE_PAGES_POOL: "0" }) },
     switches: "--disable-audio-output --autoplay-policy=no-user-gesture-required",
     ready: "return !!ac.store.getState().windows.w1",
   });
@@ -635,7 +635,7 @@ try {
   });
   await rep.check("small-bar-hover-state", async () => {
     const before = await run(`return Object.keys(st().windows);`);
-    await run(`ac.runCommand({ command: "newLittleArdia" }); return true;`);
+    await run(`ac.runCommand({ command: "newLittleSolara" }); return true;`);
     const id = await until("small window for bar hover", `return Object.values(st().windows).find((w) => w.kind === "small" && !${JSON.stringify(before)}.includes(w.id))?.id ?? null;`, 8000);
     try {
       await run(`st().closePanel(${JSON.stringify(id)}); return true;`);

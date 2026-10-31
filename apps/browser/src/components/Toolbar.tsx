@@ -1,5 +1,5 @@
-import { appUrlOrigin, breadcrumb, urlForDisplay } from "@ardia/core";
-import { ContextMenuArea, FadeLabel, Hairline, MouseArea, Symbol, WindowDragRegion } from "@ardia/shell";
+import { appUrlOrigin, breadcrumb, urlForDisplay } from "@solara/core";
+import { ContextMenuArea, FadeLabel, Hairline, MouseArea, Symbol, WindowDragRegion } from "@solara/shell";
 import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
@@ -29,7 +29,7 @@ import { DeveloperUrlInput } from "./site/DeveloperUrlInput";
 import { TranslateButton } from "./site/TranslateControls";
 import { ZoomIndicator } from "./site/ZoomControls";
 import { useShortcutHint, withShortcut } from "../lib/commandShortcuts";
-import { nativeToolbarAvailable } from "@ardia/settings";
+import { nativeToolbarAvailable } from "@solara/settings";
 import { NativeToolbar } from "./NativeToolbar";
 
 type ToolbarTab = Pick<Tab, "id" | "url" | "title" | "windowId" | "zoom">;

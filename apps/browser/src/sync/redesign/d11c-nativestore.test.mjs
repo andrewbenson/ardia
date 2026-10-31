@@ -31,7 +31,7 @@ const replicaFake = {
   freeze: () => true,
   addListener: () => ({ remove() {} }),
 };
-globalThis.acTestNativeModules = { ArdiaStore: replicaFake };
+globalThis.acTestNativeModules = { SolaraStoreAdapter: replicaFake };
 
 const { S, settle, reset, onAndSynced, appMac, files, useBrowser } = await import("./harness.mjs");
 const settingsModule = await import("../../store/settings.ts");

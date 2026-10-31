@@ -1,6 +1,6 @@
 import Foundation
 
-enum ArdiaCoreHost { static var safeMode = false }
+enum SolaraCoreHost { static var safeMode = false }
 struct Exception: Error { let name: String; let description: String }
 final class KeyState {
   var reads = 0
@@ -26,7 +26,7 @@ var results: [[String: Any]] = []
 let folder = ProcessInfo.processInfo.environment["TMPDIR"]!
 let marker = URL(fileURLWithPath: folder).appendingPathComponent("marker")
 for safe in [true, false] {
-  ArdiaCoreHost.safeMode = safe
+  SolaraCoreHost.safeMode = safe
   SyncVault.calls = 0
   try Data("preserved".utf8).write(to: marker)
   var result = Probe().run(folder)

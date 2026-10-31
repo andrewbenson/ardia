@@ -175,7 +175,7 @@ struct AdvancedPane: View {
 
       SettingsSection("Web engine") {
         let chromium: String? = model.chromium ?? nil
-        SettingRow("advanced.chromium", description: chromium != nil ? "ArdiaCore" : nil) {
+        SettingRow("advanced.chromium", description: chromium != nil ? "SolaraCore" : nil) {
           Text(chromium ?? "…")
             .foregroundStyle(.secondary)
             .textSelection(.enabled)

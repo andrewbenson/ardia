@@ -1,6 +1,6 @@
 SPDX-License-Identifier: GPL-3.0-only
 Reverts the elements-meta.ts hunk of helium/core/keyboard-shortcuts.patch (GPL-3.0, The Helium Authors): DevTools'
-Select an Element (elements.toggle-element-search) is ⇧⌘C again, as in Chrome and Ardia 0.2.39, so the key stays in
+Select an Element (elements.toggle-element-search) is ⇧⌘C again, as in Chrome and Solara 0.2.39, so the key stays in
 DevTools instead of falling through to the app's Copy URL.
 
 --- a/third_party/devtools-frontend/src/front_end/panels/elements/elements-meta.ts

@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -42,7 +42,7 @@ final class NativeAppStartup {
       let saved = read("onboarding.json")
       let decision = AppStartupPolicy.onboarding(
         saved: saved, hasSession: hasSession, refused: refused, safeMode: safeMode,
-        hosted: hosted, development: development, force: Self.debugEnvironment("ARDIA_ONBOARDING"))
+        hosted: hosted, development: development, force: Self.debugEnvironment("SOLARA_ONBOARDING"))
       let pending = AppStartupPolicy.version(
         current: version, saved: read("release-notes.json"), hasSession: hasSession, refused: refused,
         safeMode: true, development: true, forcePostcard: false, now: Self.now, knownVersions: versions).pending
@@ -54,7 +54,7 @@ final class NativeAppStartup {
     }
     let tracked = AppStartupPolicy.version(
       current: version, saved: read("release-notes.json"), hasSession: hasSession, refused: refused,
-      safeMode: safeMode, development: development, forcePostcard: Self.debugEnvironment("ARDIA_WHATS_NEW"),
+      safeMode: safeMode, development: development, forcePostcard: Self.debugEnvironment("SOLARA_WHATS_NEW"),
       now: Self.now, knownVersions: versions)
     updated = tracked.updated
     if let document = tracked.document { save("release-notes.json", document) }
@@ -62,7 +62,7 @@ final class NativeAppStartup {
     let onboarding = AppStartupPolicy.onboarding(
       saved: saved, hasSession: hasSession, refused: refused, safeMode: safeMode,
       hosted: hosted,
-      development: development, force: Self.debugEnvironment("ARDIA_ONBOARDING"))
+      development: development, force: Self.debugEnvironment("SOLARA_ONBOARDING"))
     var action = "none"
     switch onboarding {
     case .none: break

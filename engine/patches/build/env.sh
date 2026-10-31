@@ -1,6 +1,6 @@
 export CB="${AC_CHROMIUM_BUILD:-$HOME/chromium-build}"
 _ac_repo="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../../.." && pwd)"
-[[ -f "$_ac_repo/engine/patches/series" ]] || _ac_repo="$HOME/Documents/ardia"
+[[ -f "$_ac_repo/engine/patches/series" ]] || _ac_repo="$HOME/Documents/solara"
 export AC_REPO="${AC_REPO:-$_ac_repo}"
 unset _ac_repo
 export DEPOT_TOOLS_UPDATE=0

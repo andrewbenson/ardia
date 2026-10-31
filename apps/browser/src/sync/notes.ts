@@ -1,4 +1,4 @@
-import { canonical } from "@ardia/sync";
+import { canonical } from "@solara/sync";
 import { isObject } from "./readable";
 
 export function digest(text: string): string {

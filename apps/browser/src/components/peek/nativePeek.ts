@@ -1,4 +1,4 @@
-import { breadcrumb } from "@ardia/core";
+import { breadcrumb } from "@solara/core";
 import { hex, type Theme } from "../../lib/theme";
 import { useBrowser } from "../../store/browser";
 import { MAX_SPLIT_PANES, splitOf } from "../../store/splits";

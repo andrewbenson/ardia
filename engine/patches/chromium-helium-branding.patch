@@ -1,28 +1,28 @@
 SPDX-License-Identifier: GPL-3.0-only
 
-Helium shows as Ardia, and Helium's own services, update feed and crash server can't be reached.
-Applied first in the series, on the tree 03-helium.py leaves (strings already renamed by ardia_namesub.py,
-icons already replaced from ardia_resources.txt); it covers what those can't reach, literals in source:
+Helium shows as Solara, and Helium's own services, update feed and crash server can't be reached.
+Applied first in the series, on the tree 03-helium.py leaves (strings already renamed by solara_namesub.py,
+icons already replaced from solara_resources.txt); it covers what those can't reach, literals in source:
 - Helium's internal-page scheme alias is unregistered: the engine neither registers, rewrites nor shows it, and shows
-  chrome:// as chrome:// (the app shows those as ardia:// and owns ardia:// itself, as before Helium);
-- the crash product is Ardia, there is no crash upload URL and no switch to set one; the browser update feed is empty;
+  chrome:// as chrome:// (the app shows those as solara:// and owns solara:// itself, as before Helium);
+- the crash product is Solara, there is no crash upload URL and no switch to set one; the browser update feed is empty;
 - Helium services are off for good: ShouldAccessServices is false whatever the prefs say, every services URL is
   an unresolvable placeholder, the settings row that opens them is gone and the page's input has no Helium host;
 - extension update pings are enabled for no domain (they were for helium.computer);
-- chrome://credits names Ardia and its source repository; Helium's GPL-3.0 licence entry stays in the list;
-- chrome://crashes files bugs on Ardia's issue tracker; the Safari import dialog has no help link (it pointed at
+- chrome://credits names Solara and its source repository; Helium's GPL-3.0 licence entry stays in the list;
+- chrome://crashes files bugs on Solara's issue tracker; the Safari import dialog has no help link (it pointed at
   Helium's wiki);
-- screenshots save as ardia_screenshot*.png; the Web Store's button says "Add to Ardia";
-- chrome://flags: descriptions say Ardia, Helium's flag ids are ardia-*, and the updater channel and update server
+- screenshots save as solara_screenshot*.png; the Web Store's button says "Add to Solara";
+- chrome://flags: descriptions say Solara, Helium's flag ids are solara-*, and the updater channel and update server
   flags are gone (the app has its own updater), as are the Proxy server and Proxy bypass list flags (on a real profile
-  ArdiaCore drops --proxy-server from the browser's command line, after chrome://flags apply);
-- cr:chrome-product is Ardia's mark (traced from docs/brand/ardia/source/mark-small.png), as are the product
-  vector icons and logos ardia_resources.txt copies in;
+  SolaraCore drops --proxy-server from the browser's command line, after chrome://flags apply);
+- cr:chrome-product is Solara's mark (traced from docs/brand/artwork/source/mark-small.png), as are the product
+  vector icons and logos solara_resources.txt copies in;
 - Helium's indigo palette is undone (helium-color-scheme.patch reversed): chrome:// pages and dialogs use
-  Chromium's colours, as Ardia does today;
-- the onboarding page and Helium's uBlock Origin aren't packed or registered (Ardia has its own onboarding and its
+  Chromium's colours, as Solara does today;
+- the onboarding page and Helium's uBlock Origin aren't packed or registered (Solara has its own onboarding and its
   own uBlock Origin);
-- chrome/app/theme/chromium/BRANDING is Chromium's again (Ardia builds with chrome/app/theme/ardia/BRANDING).
+- chrome/app/theme/chromium/BRANDING is Chromium's again (Solara builds with chrome/app/theme/solara/BRANDING).
 
 --- a/chrome/app/chrome_crash_reporter_client.cc
 +++ b/chrome/app/chrome_crash_reporter_client.cc
@@ -105,24 +105,24 @@ icons already replaced from ardia_resources.txt); it covers what those can't rea
 -constexpr const char kHeliumNoiseCommandLine[] = "helium-noise";
 -constexpr const char kHeliumNoiseCanvasCommandLine[] = "helium-noise-canvas";
 -constexpr const char kHeliumNoiseAudioCommandLine[] = "helium-noise-audio";
-+constexpr const char kHeliumNoiseCommandLine[] = "ardia-noise";
-+constexpr const char kHeliumNoiseCanvasCommandLine[] = "ardia-noise-canvas";
-+constexpr const char kHeliumNoiseAudioCommandLine[] = "ardia-noise-audio";
++constexpr const char kHeliumNoiseCommandLine[] = "solara-noise";
++constexpr const char kHeliumNoiseCanvasCommandLine[] = "solara-noise-canvas";
++constexpr const char kHeliumNoiseAudioCommandLine[] = "solara-noise-audio";
  constexpr const char kHeliumNoiseCpuCoresCommandLine[] =
 -    "helium-noise-hw-concurrency";
-+    "ardia-noise-hw-concurrency";
++    "solara-noise-hw-concurrency";
  
  constexpr const char kDisableEchCommandLine[] = "disable-ech";
  constexpr const char kHeliumSplitClientHelloCommandLine[] =
 -    "helium-split-clienthello";
-+    "ardia-split-clienthello";
++    "solara-split-clienthello";
  
  constexpr const char kHeliumNativeFrameMaterialsCommandLine[] =
 -    "helium-native-frame-materials";
-+    "ardia-native-frame-materials";
++    "solara-native-frame-materials";
  constexpr const char kHeliumHidePageActionsCommandLine[] =
 -    "helium-hide-page-actions";
-+    "ardia-hide-page-actions";
++    "solara-hide-page-actions";
  }  // namespace helium
  
  #endif /* CHROME_BROWSER_HELIUM_FLAG_CHOICES_H_ */

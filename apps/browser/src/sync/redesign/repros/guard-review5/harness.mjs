@@ -23,7 +23,7 @@ export const guard = () => {
   if (fake.locked) throw new Error("locked");
 };
 globalThis.acTestNativeModules = {
-  ArdiaSync: {
+  SolaraSyncAdapter: {
     newDeviceId: () => `dev${++ids}`,
     deviceName: () => "Test Mac",
     createPhrase: async () => {
@@ -146,7 +146,7 @@ export function otherMac(scope) {
   };
   return { store, sync: () => sync.syncScope({ scope, state, transport: rawTransport, adapters: [adapter], clock, device: "otherMac" }) };
 }
-export const native = globalThis.acTestNativeModules.ArdiaSync;
+export const native = globalThis.acTestNativeModules.SolaraSyncAdapter;
 export const bookmarkOps = (syncId) => files().filter(({ scope }) => scope === `p:${syncId}`).flatMap(({ file }) => file.ops ?? Object.entries(file.records ?? {}).map(([k, r]) => ({ k, v: r.v })));
 export const titles = () => Object.values(S().bookmarks.nodes).filter((n) => n.kind === "url").map((n) => n.title).sort();
 export function appMac(prefix) {

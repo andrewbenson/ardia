@@ -1,5 +1,5 @@
 {
-  "name": "@ardia/settings",
+  "name": "@solara/settings",
   "version": "0.0.0",
   "private": true,
   "description": "The native Settings window (SolaraUI) and the calls it makes into JS",

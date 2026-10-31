@@ -2,7 +2,7 @@ import { forwardRef, type ReactNode } from "react";
 import type { StyleProp, View, ViewStyle } from "react-native";
 import { useWindowId } from "../../store/hooks";
 import { TabDropArea, type TabDropTarget } from "../layout/fileDrop";
-import { hostedKinds } from "@ardia/settings";
+import { hostedKinds } from "@solara/settings";
 import { useDragController } from "./dnd";
 import { nativeSidebarDrag } from "./nativeDrag";
 

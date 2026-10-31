@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaShell
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -110,7 +110,7 @@ final class SidebarShellColumn: NSView, DevDropDestination {
     chrome.onAction = { [weak self] action in self?.chromeAction(action) }
     chrome.onBlankMouseDown = { event in Self.blankMouseDown(event) }
     addSubview(chrome)
-    pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("ArdiaPagerPosition"), object: nil, queue: nil) {
+    pagerObserver = NotificationCenter.default.addObserver(forName: Notification.Name("SolaraPagerPosition"), object: nil, queue: nil) {
       [weak self] note in
       guard note.userInfo?["key"] as? String == windowId, let position = note.userInfo?["position"] as? Double else { return }
       MainActor.assumeIsolated { self?.chrome.setPagerPosition(position) }

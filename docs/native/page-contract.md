@@ -7,13 +7,13 @@ to happen. This is who does each part. Native side: port-omnibox. JS side: port-
 ## Gate
 
 One check, `pagesPooledIn(windowId)` in `apps/browser/src/lib/pagesPool.ts`: the shell, pane roots,
-`ARDIA_NATIVE_PAGES_POOL=1` and `SolaraTabPool.available()`. ContentCard, Peek and the JS pool session read it, so a
+`SOLARA_NATIVE_PAGES_POOL=1` and `SolaraTabPool.available()`. ContentCard, Peek and the JS pool session read it, so a
 build where the pool can't serve pages keeps RN's. `windowPagesPoolActive()` is the switch alone: native split chrome
-keys off it, and it stays on when `ARDIA_TAB_POOL=0` turns the pool off.
+keys off it, and it stays on when `SOLARA_TAB_POOL=0` turns the pool off.
 
 ## Page events
 
-The pool is each page view's delegate and sends every event the `ArdiaCEF` and `ArdiaWebKit` view managers send,
+The pool is each page view's delegate and sends every event the `SolaraCEF` and `SolaraWebKit` view managers send,
 as one feed: `SolaraTabPool` event `onPageEvent` with `{ tabId, name, payload }`.
 
 - `name` is the view manager's prop name (`onNavigationChange`, `onProgress`, … `onPagePress`, `onReady`), every one.
@@ -25,7 +25,7 @@ as one feed: `SolaraTabPool` event `onPageEvent` with `{ tabId, name, payload }`
   switch, a re-create after a crash): JS starts the tab's session over, so the pool never sends one for a view it
   already reported. A transferred page with `seq` -1 counts whatever navigation the store holds as already loaded.
 
-JS turns `{ name, payload }` into the prop's arguments with `@ardia/ardiacore`'s `unwrapPageEvent`, the same table the
+JS turns `{ name, payload }` into the prop's arguments with `@solara/solaracore`'s `unwrapPageEvent`, the same table the
 RN component uses, and calls the tab's handler from `pageEvents.ts`, the same function `EngineWebView` calls.
 
 ## The handle
@@ -37,7 +37,7 @@ The ~40 callers of `webviews.get(tabId)` keep working: JS registers a pooled `We
   name (`goBack`, `loadUrl`, `find`, `focus`, …) and `args` its arguments, as the RN view's native handle passes them
   (engine URLs, `loadUrl(url, userInitiated)`). It resolves to what that AsyncFunction resolves to. Both kinds of page
   run one Swift dispatcher.
-- `@ardia/ardiacore` builds both handles from one typed function over that native handle (`pooledWebViewHandle`), so
+- `@solara/solaracore` builds both handles from one typed function over that native handle (`pooledWebViewHandle`), so
   URL conversion, `evaluate`'s JSON and fallbacks match, and TypeScript checks every method and argument.
 - A call for a tab the pool has no view for rejects with code `ERR_NO_PAGE`; the handle returns the same fallback the
   RN handle returns for a missing view.

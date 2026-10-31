@@ -14,7 +14,7 @@ function documents() {
 }
 
 test("safe-mode Live and calendar save reports success only after live.json reaches the next normal launch", () => {
-  for (const row of documents().filter(({ name }) => ["live.json", "onboarding.json", "release-notes.json", "ardia-cli.json"].includes(name))) {
+  for (const row of documents().filter(({ name }) => ["live.json", "onboarding.json", "release-notes.json", "solara-cli.json"].includes(name))) {
     assert.equal(row.failure, "");
     assert.equal(row.threw, false);
     assert.equal(row.callbacks, 1);
@@ -25,7 +25,7 @@ test("safe-mode Live and calendar save reports success only after live.json reac
 });
 
 test("safe-mode automatic document writes fail explicitly and preserve the file; normal writes and removals run", () => {
-  for (const row of documents().filter(({ name }) => !["live.json", "onboarding.json", "release-notes.json", "ardia-cli.json"].includes(name))) {
+  for (const row of documents().filter(({ name }) => !["live.json", "onboarding.json", "release-notes.json", "solara-cli.json"].includes(name))) {
     if (row.safe) {
       assert.match(row.failure, /safe mode/i);
       assert.equal(row.threw, true);

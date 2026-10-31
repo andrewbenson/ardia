@@ -1,4 +1,4 @@
-import { hapticTick, onAppEvent, setDragEscapeCapture } from "@ardia/shell";
+import { hapticTick, onAppEvent, setDragEscapeCapture } from "@solara/shell";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import { create } from "zustand";
 import type { TabPlacement } from "../../store/organize";

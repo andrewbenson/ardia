@@ -1,5 +1,5 @@
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import SolaraModel
 import SolaraStore
@@ -18,13 +18,13 @@ final class NativeUserScripts: UserScriptsHost {
   private init() {}
 
   func startWhenReady() {
-    guard !ArdiaCoreHost.safeMode, !requested else { return }
+    guard !SolaraCoreHost.safeMode, !requested else { return }
     requested = true
     lifecycle = NativeStoreHandle.subscribeLifecycle { NativeUserScripts.shared.prepare() }
   }
 
   private func prepare() {
-    guard !ArdiaCoreHost.safeMode, !started, NativeSettingsHandle.model != nil, let store = NativeStoreHandle.store else { return }
+    guard !SolaraCoreHost.safeMode, !started, NativeSettingsHandle.model != nil, let store = NativeStoreHandle.store else { return }
     started = true
     UserScripts.shared.emit = {
       DispatchQueue.main.async { MainActor.assumeIsolated { NativeUserScripts.shared.sync.schedule() } }
@@ -36,7 +36,7 @@ final class NativeUserScripts: UserScriptsHost {
   }
 
   private func stateChanged(_ state: BrowserState) {
-    guard !ArdiaCoreHost.safeMode else { return }
+    guard !SolaraCoreHost.safeMode else { return }
     sync.sync(enabled: state.settings["cliControl"]?.bool ?? false, targets: UserScriptsSync.targets(state))
   }
 
@@ -69,7 +69,7 @@ final class NativeUserScripts: UserScriptsHost {
 
   func list(_ profile: String) async throws -> [UserScriptsExtension] {
     try await withCheckedThrowingContinuation { continuation in
-      ArdiaCoreServices.listExtensions(profile: profile) { result in
+      SolaraCoreServices.listExtensions(profile: profile) { result in
         if let error = result["error"] as? String { return continuation.resume(throwing: ScriptsEngineFailure(error)) }
         let extensions = (result["extensions"] as? [[String: Any]] ?? []).map(UserScriptsExtension.init)
         continuation.resume(returning: extensions)
@@ -79,7 +79,7 @@ final class NativeUserScripts: UserScriptsHost {
 
   func install(_ path: String, profile: String) async throws -> String {
     try await withCheckedThrowingContinuation { continuation in
-      ArdiaCoreServices.installExtension(path: path, profile: profile) { result in
+      SolaraCoreServices.installExtension(path: path, profile: profile) { result in
         if let error = result["error"] as? String { return continuation.resume(throwing: ScriptsEngineFailure(error)) }
         continuation.resume(returning: result["id"] as? String ?? "")
       }
@@ -88,7 +88,7 @@ final class NativeUserScripts: UserScriptsHost {
 
   func reload(_ id: String, profile: String) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-      ArdiaCoreServices.reloadExtension(id, profile: profile) { result in
+      SolaraCoreServices.reloadExtension(id, profile: profile) { result in
         if let error = result["error"] as? String { continuation.resume(throwing: ScriptsEngineFailure(error)) }
         else { continuation.resume() }
       }
@@ -97,7 +97,7 @@ final class NativeUserScripts: UserScriptsHost {
 
   func uninstall(_ id: String, profile: String) async throws {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-      ArdiaCoreServices.uninstallExtension(id, profile: profile) { result in
+      SolaraCoreServices.uninstallExtension(id, profile: profile) { result in
         if let error = result["error"] as? String { continuation.resume(throwing: ScriptsEngineFailure(error)) }
         else { continuation.resume() }
       }

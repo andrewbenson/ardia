@@ -1,5 +1,5 @@
-import { displayUrl } from "@ardia/core";
-import { publishSettingsTopic, takeSwitcherPress } from "@ardia/settings";
+import { displayUrl } from "@solara/core";
+import { publishSettingsTopic, takeSwitcherPress } from "@solara/settings";
 import { useEffect, useState } from "react";
 import { switchToTab } from "../../lib/actions";
 import { hex, useTheme } from "../../lib/theme";

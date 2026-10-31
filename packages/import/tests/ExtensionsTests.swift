@@ -1,5 +1,5 @@
 import XCTest
-@testable import ArdiaImportCore
+@testable import SolaraLegacyImportCore
 
 final class ExtensionsTests: XCTestCase {
   func testListsWebStoreExtensionsWithNames() {

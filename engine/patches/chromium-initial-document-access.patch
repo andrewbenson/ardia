@@ -6,10 +6,10 @@ diff --git a/content/browser/renderer_host/render_frame_host_impl.cc b/content/b
  #include "ui/accessibility/accessibility_switches.h"
  #endif
 +
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
 +#include "content/public/browser/web_contents.h"
  
-+void (*g_ardia_initial_main_document_accessed)(content::WebContents* contents) =
++void (*g_solara_initial_main_document_accessed)(content::WebContents* contents) =
 +    nullptr;
 +
  namespace features {
@@ -19,8 +19,8 @@ diff --git a/content/browser/renderer_host/render_frame_host_impl.cc b/content/b
  
  void RenderFrameHostImpl::DidAccessInitialMainDocument() {
    frame_tree_->DidAccessInitialMainDocument();
-+  if (g_ardia_initial_main_document_accessed && frame_tree_->is_primary()) {
-+    g_ardia_initial_main_document_accessed(WebContents::FromRenderFrameHost(this));
++  if (g_solara_initial_main_document_accessed && frame_tree_->is_primary()) {
++    g_solara_initial_main_document_accessed(WebContents::FromRenderFrameHost(this));
 +  }
  }
  
@@ -33,7 +33,7 @@ diff --git a/content/browser/web_contents/web_contents_impl.cc b/content/browser
  #include "content/browser/ios/nfc_host.h"
  #endif
 +
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
  namespace content {
  
@@ -41,7 +41,7 @@ diff --git a/content/browser/web_contents/web_contents_impl.cc b/content/browser
    return GetPrimaryFrameTree().has_accessed_initial_main_document();
  }
  
-+bool ArdiaHasAccessedInitialMainDocument(WebContents* contents) {
++bool SolaraHasAccessedInitialMainDocument(WebContents* contents) {
 +  return contents &&
 +         static_cast<WebContentsImpl*>(contents)->HasAccessedInitialDocument();
 +}

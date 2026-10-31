@@ -1,5 +1,5 @@
 import type * as Expo from "expo-modules-core";
-import { ardiaCoreNativeModules, ardiaCoreOptionalNativeModules } from "./ardiacore";
+import { solaraCoreNativeModules, solaraCoreOptionalNativeModules } from "./solaracore";
 import { shellNativeModules, shellOptionalNativeModules } from "./shell";
 import { nativeEvents } from "./events";
 import type { LiveFolder } from "../live/types";
@@ -64,7 +64,7 @@ const settingsModule = {
       : kind === "addHistoryVisits"
         ? { pages: (payload.pages as { url: string; title: string; visitTimes: number[] }[]).map((p) => ({ u: p.url, t: p.title, v: p.visitTimes })), toleranceMs: payload.toleranceMs }
         : payload;
-    const json = await ardiaCoreNativeModules.ArdiaCEF.engineCall(name, profile, JSON.stringify(args));
+    const json = await solaraCoreNativeModules.SolaraCEF.engineCall(name, profile, JSON.stringify(args));
     const result = JSON.parse(json);
     if (result?.error) throw new Error(result.error);
     return kind === "addHistoryVisits" ? result.added : result;
@@ -85,8 +85,8 @@ const newTabModule = {
   forgetWindow: async (_windowId: string) => {},
 };
 
-const nativeModules: Record<string, object> = { ...shellNativeModules, ...ardiaCoreNativeModules, SolaraSettings: settingsModule, SolaraNewTab: newTabModule };
-const optionalNativeModules: Record<string, () => object | null> = { ...shellOptionalNativeModules, ...ardiaCoreOptionalNativeModules };
+const nativeModules: Record<string, object> = { ...shellNativeModules, ...solaraCoreNativeModules, SolaraSettings: settingsModule, SolaraNewTab: newTabModule };
+const optionalNativeModules: Record<string, () => object | null> = { ...shellOptionalNativeModules, ...solaraCoreOptionalNativeModules };
 const testModules = () => (globalThis as { acTestNativeModules?: Record<string, object> }).acTestNativeModules;
 
 export const requireNativeModule: typeof Expo.requireNativeModule = <Module,>(name: string) => (nativeModules[name] ?? {}) as Module;

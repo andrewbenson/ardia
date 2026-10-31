@@ -21,7 +21,7 @@ const retitle = () => {
   return commit({ tabs: { upsert: [{ ...tab, title }], remove: [] } });
 };
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "everything" }),
     snapshot: () => JSON.stringify({ rev, data: snapshot() }),
     dispatch(json, sinceRev) {

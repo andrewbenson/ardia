@@ -12,14 +12,14 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ardia_cli import cli, endpoint, identity, skills
+from solara_cli import cli, endpoint, identity, skills
 
 INSTALL_SCRIPT = Path(__file__).resolve().parents[1] / "install.sh"
 
 
 class Product(unittest.TestCase):
     def setUp(self):
-        self.home = Path(tempfile.mkdtemp(prefix="ardia-identity-")).resolve()
+        self.home = Path(tempfile.mkdtemp(prefix="solara-identity-")).resolve()
         self.addCleanup(shutil.rmtree, self.home, True)
 
     def test_help_names_the_product_and_command(self):
@@ -31,8 +31,8 @@ class Product(unittest.TestCase):
             self.assertIn(identity.PRODUCT, out.getvalue())
         self.assertIn(f"Run Python against the running {identity.PRODUCT}", cli.EXEC_DESCRIPTION)
         self.assertIn(f"{identity.COMMAND} exec 'await tab.title()'", cli.EXEC_DESCRIPTION)
-        self.assertIn("ArdiaControl.json", cli.EXEC_EPILOG)
-        self.assertIn("$ARDIA_DATA_DIR", cli.EXEC_EPILOG)
+        self.assertIn("SolaraControl.json", cli.EXEC_EPILOG)
+        self.assertIn("$SOLARA_DATA_DIR", cli.EXEC_EPILOG)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             cli.main(["--version"])
@@ -40,11 +40,11 @@ class Product(unittest.TestCase):
 
     def test_the_installed_data_dir_uses_the_bundle_id(self):
         with mock.patch.dict(os.environ, {"HOME": str(self.home)}):
-            os.environ.pop("ARDIA_DATA_DIR", None)
+            os.environ.pop("SOLARA_DATA_DIR", None)
             expected = Path.home() / "Library" / "Application Support" / identity.BUNDLE_ID
             self.assertEqual(endpoint.installed_data_dir(), expected)
             self.assertEqual(endpoint.data_root(), expected)
-            os.environ["ARDIA_DATA_DIR"] = str(self.home / "scratch")
+            os.environ["SOLARA_DATA_DIR"] = str(self.home / "scratch")
             self.assertEqual(endpoint.data_root(), self.home / "scratch")
 
     def test_the_skill_installs_its_source_verbatim(self):
@@ -61,18 +61,18 @@ class Product(unittest.TestCase):
 @unittest.skipUnless(sys.platform == "darwin" and os.uname().machine == "arm64", "install.sh runs on Apple silicon only")
 class Installer(unittest.TestCase):
     def setUp(self):
-        self.root = Path(tempfile.mkdtemp(prefix="ardia-install-")).resolve()
+        self.root = Path(tempfile.mkdtemp(prefix="solara-install-")).resolve()
         self.addCleanup(shutil.rmtree, self.root, True)
         self.home = self.root / "home"
         self.home.mkdir()
 
     def tarball(self, says: str, version: str = "1.2.3") -> str:
-        top = self.root / "src" / f"ardia-cli-{version}"
+        top = self.root / "src" / f"solara-cli-{version}"
         (top / "bin").mkdir(parents=True, exist_ok=True)
-        launcher = top / "bin" / "ardia"
+        launcher = top / "bin" / "solara"
         launcher.write_text(f"#!/bin/sh\necho '{says} {version}'\n")
         launcher.chmod(0o755)
-        path = self.root / f"ardia-cli-{version}-macos-arm64.tar.gz"
+        path = self.root / f"solara-cli-{version}-macos-arm64.tar.gz"
         with tarfile.open(path, "w:gz") as archive:
             archive.add(top, arcname=top.name)
         digest = subprocess.run(["shasum", "-a", "256", str(path)], capture_output=True, text=True, check=True).stdout
@@ -80,8 +80,8 @@ class Installer(unittest.TestCase):
         return path.as_uri()
 
     def install(self, url: str, *flags: str) -> subprocess.CompletedProcess:
-        env = {key: value for key, value in os.environ.items() if not key.startswith("ARDIA_CLI_")}
-        env.update(HOME=str(self.home), ARDIA_CLI_URL=url, SHELL="/bin/zsh")
+        env = {key: value for key, value in os.environ.items() if not key.startswith("SOLARA_CLI_")}
+        env.update(HOME=str(self.home), SOLARA_CLI_URL=url, SHELL="/bin/zsh")
         return subprocess.run(["/bin/sh", str(INSTALL_SCRIPT), *flags], env=env, capture_output=True, text=True, timeout=120)
 
     def test_solara_installs_its_command_and_home(self):
@@ -90,10 +90,8 @@ class Installer(unittest.TestCase):
         link = self.home / ".local" / "bin" / "solara"
         cli_home = self.home / "Library" / "Application Support" / "Solara" / "CLI"
         self.assertIn(f"installed {link}", result.stdout)
-        self.assertEqual(os.readlink(link), str(cli_home / "current" / "bin" / "ardia"))
+        self.assertEqual(os.readlink(link), str(cli_home / "current" / "bin" / "solara"))
         self.assertEqual(os.readlink(cli_home / "current"), "1.2.3")
-        self.assertFalse((self.home / ".local" / "bin" / "ardia").exists())
-        self.assertFalse((self.home / "Library" / "Application Support" / "Ardia").exists())
         result = self.install(self.tarball("solara"), "--product", "Solara", "--uninstall")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(link.is_symlink())

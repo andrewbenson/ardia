@@ -1,4 +1,4 @@
-import { ContextMenuArea, Symbol } from "@ardia/shell";
+import { ContextMenuArea, Symbol } from "@solara/shell";
 import { Children, forwardRef, type ReactNode } from "react";
 import { Image, Pressable, Text, View, type AccessibilityActionEvent, type GestureResponderEvent } from "react-native";
 import { useTheme, type Theme } from "../../lib/theme";

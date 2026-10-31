@@ -1,6 +1,6 @@
 import AppKit
-import ArdiaCore
-import ArdiaShell
+import SolaraCore
+import SolaraShell
 import Foundation
 import Observation
 import SolaraModel
@@ -31,7 +31,7 @@ final class GeneralAdapter: GeneralServices {
 
   private static func downloadsCall(_ name: String, profile: String, args: [String: Any]?) async -> DownloadSettings? {
     guard !profile.hasPrefix("incognito") else { return nil }
-    return await EngineCalls.result({ done in ArdiaCoreServices.call(name, profile: profile, args: args) { done($0) } }) {
+    return await EngineCalls.result({ done in SolaraCoreServices.call(name, profile: profile, args: args) { done($0) } }) {
       EngineCalls.failed($0, name) ? nil : Self.downloads($0)
     }
   }
@@ -133,7 +133,7 @@ final class SearchEngineAdapter: SearchEngineServices {
   func manageExtensions(profile: String) { SettingsJS.shared.fire("search.manageExtensions", profile) }
 
   func disableExtension(profile: String, extensionId: String) async {
-    _ = await EngineCalls.result({ done in ArdiaCoreServices.setExtension(extensionId, enabled: false, profile: profile) { done($0) } }) {
+    _ = await EngineCalls.result({ done in SolaraCoreServices.setExtension(extensionId, enabled: false, profile: profile) { done($0) } }) {
       EngineCalls.failed($0, "search.disableExtension")
     }
     SettingsJS.shared.fire("extensions.refresh", profile)
@@ -186,16 +186,16 @@ final class EnginesAdapter: EnginesServices {
   }
 
   func passkeyAccess() async -> PasskeyAccess? {
-    Self.passkeys(ArdiaCoreSettingsBridge.passkeyAccess())
+    Self.passkeys(SolaraCoreSettingsBridge.passkeyAccess())
   }
 
   func requestPasskeyAccess() async -> PasskeyAccess? {
-    await EngineCalls.result({ done in ArdiaCoreSettingsBridge.requestPasskeyAccess { done($0) } }) { Self.passkeys($0) }
+    await EngineCalls.result({ done in SolaraCoreSettingsBridge.requestPasskeyAccess { done($0) } }) { Self.passkeys($0) }
   }
 
   func openPasskeySystemSettings() {
     guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") else { return }
-    if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
+    if ProcessInfo.processInfo.environment["SOLARA_BACKGROUND"] == "1" { return NSLog("[settings] background instance, not opening %@", url.absoluteString) }
     NSWorkspace.shared.open(url)
   }
 
@@ -220,12 +220,12 @@ final class AdvancedAdapter: AdvancedServices {
 
   func chromiumVersion() async -> String? {
     if let version = AboutInfo.read().chromiumVersion { return version }
-    return ArdiaCoreHost.engineInfo["chromiumVersion"] as? String
+    return SolaraCoreHost.engineInfo["chromiumVersion"] as? String
   }
 
   func widevineVersion() async -> String?? {
     let version = await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
-      ArdiaCoreServices.components { list in continuation.resume(returning: Self.widevine(list)) }
+      SolaraCoreServices.components { list in continuation.resume(returning: Self.widevine(list)) }
     }
     return .some(version)
   }

@@ -23,7 +23,7 @@ import Testing
     }
     #expect(handled)
     #expect(report?.contains("store: not open\nfailed to open: database refused") == true)
-    #expect(report?.contains("Engine: ArdiaCore, Chromium 156") == true)
+    #expect(report?.contains("Engine: SolaraCore, Chromium 156") == true)
   }
 
   @Test func feedbackRunsWithTheStoreNotOpened() {

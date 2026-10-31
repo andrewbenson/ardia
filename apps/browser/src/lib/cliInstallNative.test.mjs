@@ -14,7 +14,7 @@ globalThis.acTestNativeModules = {
       return new Promise((resolve, reject) => replies.push({ resolve, reject }));
     },
   },
-  ArdiaCli: {
+  SolaraCli: {
     installedVersion: () => installedVersion,
     install: async () => {
       legacyInstalls++;

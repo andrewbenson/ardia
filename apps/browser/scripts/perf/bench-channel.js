@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
-import * as shell from "@ardia/shell";
-import { readDocument, writeDocument } from "@ardia/shell";
+import * as shell from "@solara/shell";
+import { readDocument, writeDocument } from "@solara/shell";
 import * as actions from "../../src/lib/actions";
 import { runCommand } from "../../src/lib/commands";
 import { webviews } from "../../src/lib/webviews";

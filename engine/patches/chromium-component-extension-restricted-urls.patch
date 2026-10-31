@@ -4,7 +4,7 @@
  // found in the LICENSE file.
  
  #include "extensions/common/permissions/permissions_data.h"
-+#include "ardia/core/ac_content_hooks.h"  // nogncheck
++#include "solara/core/ac_content_hooks.h"  // nogncheck
  
  #include <algorithm>
  #include <memory>
@@ -12,7 +12,7 @@
  
  using extensions::mojom::APIPermissionID;
  
-+bool (*g_ardia_restricted_component_extension)(
++bool (*g_solara_restricted_component_extension)(
 +    const extensions::ExtensionId& extension_id) = nullptr;
 +
  namespace extensions {
@@ -25,8 +25,8 @@
 -  if (CanExecuteScriptEverywhere(extension_id_, location_))
 +  if (CanExecuteScriptEverywhere(extension_id_, location_) &&
 +      !(location_ == mojom::ManifestLocation::kComponent &&
-+        g_ardia_restricted_component_extension &&
-+        g_ardia_restricted_component_extension(extension_id_))) {
++        g_solara_restricted_component_extension &&
++        g_solara_restricted_component_extension(extension_id_))) {
      return false;
 +  }
  

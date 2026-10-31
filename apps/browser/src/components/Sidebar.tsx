@@ -1,4 +1,4 @@
-import { ContextMenuArea, FadeLabel, Symbol, WindowDragRegion } from "@ardia/shell";
+import { ContextMenuArea, FadeLabel, Symbol, WindowDragRegion } from "@solara/shell";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { switchOn } from "../lib/killSwitches";

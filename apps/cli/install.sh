@@ -1,41 +1,41 @@
 #!/bin/sh
-# Installs the ardia command, which controls a running Ardia from the terminal.
+# Installs the solara command, which controls a running Solara from the terminal.
 #
 #   install.sh [--version V] [--sha256 DIGEST] [--product NAME] [--repo OWNER/REPO] [--uninstall]
 #   install.sh -h | --help
 #
 # --version V        install that release (default: the latest release that ships the CLI).
 # --sha256 DIGEST    the tarball's digest; required for a download (the app passes the one pinned in its signed bundle).
-# --product NAME     the app the command drives (default: Ardia); the command is its name in lowercase (ardia).
-# --repo OWNER/REPO  the GitHub repository whose releases ship the CLI (default: mantrakp04/ardia).
-# --uninstall        remove the installed CLI and its ardia link.
+# --product NAME     the app the command drives (default: Solara); the command is its name in lowercase (solara).
+# --repo OWNER/REPO  the GitHub repository whose releases ship the CLI (default: mantrakp04/solara).
+# --uninstall        remove the installed CLI and its solara link.
 #
 # A fork's app passes its own --product and --repo, so Solara installs a solara command from its own releases into
 # ~/Library/Application Support/Solara/CLI. The paths below are for the defaults.
-# Installs into ${ARDIA_CLI_HOME:-~/Library/Application Support/Ardia/CLI}/<version>, points its `current` link
-# there and links ${ARDIA_CLI_BIN_DIR:-~/.local/bin}/ardia to current/bin/ardia. When the default bin dir isn't on
+# Installs into ${SOLARA_CLI_HOME:-~/Library/Application Support/Solara/CLI}/<version>, points its `current` link
+# there and links ${SOLARA_CLI_BIN_DIR:-~/.local/bin}/solara to current/bin/solara. When the default bin dir isn't on
 # the login shell's PATH, it adds one PATH line to ~/.zprofile (~/.bash_profile for bash), once.
 # Re-running it upgrades: a version that is already current is left alone; a new one is verified, staged in
-# <version>.partial, renamed, and `current` is swapped atomically (a running ardia keeps its old dir). It keeps the
-# current and the previous version and prunes the rest, except versions a running ardia uses (it leaves a lease in
+# <version>.partial, renamed, and `current` is swapped atomically (a running solara keeps its old dir). It keeps the
+# current and the previous version and prunes the rest, except versions a running solara uses (it leaves a lease in
 # <version>/.leases/<pid>, live while that pid runs and started before the lease was written). Two runs never overlap:
-# each holds a flock on $ARDIA_CLI_HOME/.lock (lockf), which the kernel drops when the run exits.
-# The installed version is `basename "$(readlink "$ARDIA_CLI_HOME/current")"`.
+# each holds a flock on $SOLARA_CLI_HOME/.lock (lockf), which the kernel drops when the run exits.
+# The installed version is `basename "$(readlink "$SOLARA_CLI_HOME/current")"`.
 # Downloads are https only, and never trust a checksum from the same place as the tarball: without --sha256 it refuses
-# to download. ARDIA_CLI_URL overrides the tarball URL; a file:// one may go without --sha256, and its checksum is read
-# from $ARDIA_CLI_URL.sha256.
+# to download. SOLARA_CLI_URL overrides the tarball URL; a file:// one may go without --sha256, and its checksum is read
+# from $SOLARA_CLI_URL.sha256.
 #
 # Prints one line per event: `step resolve|download|verify|install|link`, `version <v>`, `path <rc file>`,
 # then `installed <bin path>` (or `uninstalled`), or `error <message>` and exits 1.
 set -eu
 umask 022
 
-repo=mantrakp04/ardia
-product=Ardia
+repo=mantrakp04/solara
+product=Solara
 asset_suffix=-macos-arm64.tar.gz
 version_pattern='^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(-[a-z]{1,16}\.[0-9]{1,4})?$'
 default_bin_dir=$HOME/.local/bin
-bin_dir=${ARDIA_CLI_BIN_DIR:-$default_bin_dir}
+bin_dir=${SOLARA_CLI_BIN_DIR:-$default_bin_dir}
 version=
 pinned_sha=
 uninstall=0
@@ -86,7 +86,7 @@ done
 printf '%s\n' "$product" | grep -Eq '^[A-Za-z][A-Za-z0-9-]{0,31}$' || fail "bad --product name: $product"
 printf '%s\n' "$repo" | grep -Eq '^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$' || fail "bad --repo: $repo"
 command=$(printf '%s' "$product" | tr '[:upper:]' '[:lower:]')
-cli_home=${ARDIA_CLI_HOME:-$HOME/Library/Application Support/$product/CLI}
+cli_home=${SOLARA_CLI_HOME:-$HOME/Library/Application Support/$product/CLI}
 link=$bin_dir/$command
 
 if [ -n "$version" ] && ! is_version "$version"; then
@@ -96,7 +96,7 @@ if [ -n "$pinned_sha" ] && ! printf '%s\n' "$pinned_sha" | grep -Eq '^[0-9a-f]{6
   fail "bad --sha256 digest: $pinned_sha"
 fi
 
-if [ -n "${ARDIA_CLI_URL:-}" ]; then
+if [ -n "${SOLARA_CLI_URL:-}" ]; then
   protocols==https,file
 else
   protocols==https
@@ -129,7 +129,7 @@ check_bin_free() {
 }
 
 link_bin() {
-  target=$cli_home/current/bin/ardia
+  target=$cli_home/current/bin/solara
   [ -L "$link" ] && [ "$(readlink "$link")" = "$target" ] && return 0
   printf 'step link\n'
   mkdir -p "$bin_dir" || fail "couldn't create $bin_dir"
@@ -173,8 +173,8 @@ check_archive() {
   if grep -q -e '\\' -e ' -> ' -e '[[:cntrl:]]' "$work/names"; then
     fail "the tarball has entry names with control characters, backslashes or arrows"
   fi
-  if grep -Ev "^ardia-cli-$version(/|$)" "$work/names" | grep -q .; then
-    fail "the tarball has entries outside ardia-cli-$version/"
+  if grep -Ev "^solara-cli-$version(/|$)" "$work/names" | grep -q .; then
+    fail "the tarball has entries outside solara-cli-$version/"
   fi
   if grep -Eq '(^|/)\.\.(/|$)' "$work/names"; then
     fail "the tarball has .. entries"
@@ -230,24 +230,24 @@ fi
 [ "$(uname -m)" = arm64 ] || fail "the $command CLI runs on Apple silicon only, not $(uname -m)"
 
 printf 'step resolve\n'
-if [ -n "${ARDIA_CLI_URL:-}" ]; then
-  url=$ARDIA_CLI_URL
+if [ -n "${SOLARA_CLI_URL:-}" ]; then
+  url=$SOLARA_CLI_URL
   if [ -z "$version" ]; then
     name=${url##*/}
-    version=${name#ardia-cli-}
+    version=${name#solara-cli-}
     version=${version%"$asset_suffix"}
   fi
 elif [ -n "$version" ]; then
-  url=https://github.com/$repo/releases/download/v$version/ardia-cli-$version$asset_suffix
+  url=https://github.com/$repo/releases/download/v$version/solara-cli-$version$asset_suffix
 else
-  pattern="https://github\.com/$repo/releases/download/v[0-9a-z.-]*/ardia-cli-[0-9a-z.-]*-macos-arm64\.tar\.gz"
+  pattern="https://github\.com/$repo/releases/download/v[0-9a-z.-]*/solara-cli-[0-9a-z.-]*-macos-arm64\.tar\.gz"
   url=$(fetch https://api.github.com/repos/$repo/releases/latest 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
   if [ -z "$url" ]; then
     url=$(fetch "https://api.github.com/repos/$repo/releases?per_page=30" 2>/dev/null | grep -o "$pattern" | head -n 1 || true)
   fi
   [ -n "$url" ] || fail "no $product release ships the CLI yet (or GitHub is unreachable)"
   name=${url##*/}
-  version=${name#ardia-cli-}
+  version=${name#solara-cli-}
   version=${version%"$asset_suffix"}
 fi
 is_version "$version" || fail "bad version: $version"
@@ -260,11 +260,11 @@ check_bin_free
 
 mkdir -p "$cli_home" || fail "couldn't create $cli_home"
 take_lock
-work=$(mktemp -d "${TMPDIR:-/tmp}/ardia-cli-install.XXXXXX") || fail "couldn't create a temporary folder"
+work=$(mktemp -d "${TMPDIR:-/tmp}/solara-cli-install.XXXXXX") || fail "couldn't create a temporary folder"
 chmod 700 "$work"
 
 previous=$(readlink "$cli_home/current" 2>/dev/null || true)
-if [ "$previous" = "$version" ] && [ -x "$cli_home/$version/bin/ardia" ]; then
+if [ "$previous" = "$version" ] && [ -x "$cli_home/$version/bin/solara" ]; then
   link_bin
   reported=1
   printf 'installed %s\n' "$link"
@@ -291,15 +291,15 @@ staged=$cli_home/$version.partial
 dest=$cli_home/$version
 rm -rf "$staged"
 mkdir "$staged" || fail "couldn't create $staged"
-tar -xzf "$work/cli.tar.gz" -C "$staged" --strip-components 1 --no-same-owner "ardia-cli-$version" \
-  || fail "couldn't extract ardia-cli-$version from the tarball"
+tar -xzf "$work/cli.tar.gz" -C "$staged" --strip-components 1 --no-same-owner "solara-cli-$version" \
+  || fail "couldn't extract solara-cli-$version from the tarball"
 check_tree "$staged"
-[ -x "$staged/bin/ardia" ] || fail "the tarball has no ardia-cli-$version/bin/ardia"
+[ -x "$staged/bin/solara" ] || fail "the tarball has no solara-cli-$version/bin/solara"
 xattr -dr com.apple.quarantine "$staged" 2>/dev/null || true
-"$staged/bin/ardia" --version >"$work/check.out" 2>&1 9>&- || fail "the downloaded $command doesn't run: $(tail -n 1 "$work/check.out")"
+"$staged/bin/solara" --version >"$work/check.out" 2>&1 9>&- || fail "the downloaded $command doesn't run: $(tail -n 1 "$work/check.out")"
 [ "$(head -n 1 "$work/check.out")" = "$command $version" ] \
   || fail "the tarball is for another app: it says $(head -n 1 "$work/check.out"), not $command $version"
-if [ -d "$dest" ] && ! [ -L "$dest" ] && [ -x "$dest/bin/ardia" ] && in_use "$dest"; then
+if [ -d "$dest" ] && ! [ -L "$dest" ] && [ -x "$dest/bin/solara" ] && in_use "$dest"; then
   rm -rf "$staged"
 else
   if [ -e "$dest" ] || [ -L "$dest" ]; then

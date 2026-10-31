@@ -1,4 +1,4 @@
-import { OutsidePressArea, Surface } from "@ardia/shell";
+import { OutsidePressArea, Surface } from "@solara/shell";
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { AccessibilityInfo, Animated, Easing, View, type LayoutChangeEvent } from "react-native";
 import { hex, useTheme } from "../lib/theme";
@@ -13,8 +13,8 @@ import { barWidth } from "./NewTabPage";
 import { markPanelFrame } from "../lib/perfMarks";
 import { closeNewTabBar } from "./omnibox/newTabBar";
 import type { NewTabTarget } from "../store/types";
-import { breadcrumb } from "@ardia/core";
-import { nativeOmniboxAvailable, nativeUrlPrefixWidth, showNativePanel, sidebarAddressBarAvailable } from "@ardia/settings";
+import { breadcrumb } from "@solara/core";
+import { nativeOmniboxAvailable, nativeUrlPrefixWidth, showNativePanel, sidebarAddressBarAvailable } from "@solara/settings";
 import { NativeOmniboxBar } from "./omnibox/NativeOmniboxBar";
 import { closePanelToHeroBar, type BarDismissal } from "./omnibox/barState";
 import { insecureLevel, URL_FIELD, urlTextLeft } from "./Toolbar";

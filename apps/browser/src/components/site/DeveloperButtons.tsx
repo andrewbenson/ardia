@@ -1,4 +1,4 @@
-import { showMenu } from "@ardia/shell";
+import { showMenu } from "@solara/shell";
 import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 import { withLivePage } from "../../lib/livePage";

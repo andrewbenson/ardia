@@ -606,7 +606,7 @@ struct MiniWindow<Content: View>: View {
   }
 }
 
-struct MiniArdia: View {
+struct MiniSolara: View {
   let g: KitGeo
   let look: PreviewLook
   let rect: KitRect
@@ -650,13 +650,13 @@ struct WindowsScene: View {
     let to = (x: a.x + 70, y: a.y + Kit.rowY(2) + 14)
     KitStack {
       DesktopBackdrop(look: look)
-      MiniArdia(
+      MiniSolara(
         g: g, look: look, rect: a, tabs: list,
         rowStyle: { i in shared && i == 1 ? RNTransform(opacity: 0.4) : .none },
         extra: AnyView(KitHighlight(g: g, look: look).row(g, y: Kit.rowY(0), w: Demo.miniSide - 12, RNTransform(ty: t([(520, 0), (820, 2 * Kit.rowPitch * g.s)])))),
         cardContent: AnyView(TwoPages(g: g, look: look, t: t, top: Kit.toolbarH, outAt: 560, inAt: 600, inLength: 260))
       )
-      MiniArdia(
+      MiniSolara(
         g: g, look: look, rect: b, tabs: other, sel: shared ? 1 : 0,
         rowStyle: { i in
           guard shared else { return .none }
@@ -850,16 +850,16 @@ struct LinksScene: View {
 
   var body: some View {
     let chat = KitRect(x: 18, y: 40, w: 300, h: g.H - 80)
-    let ardia = KitRect(x: 300, y: 22, w: g.W - 318, h: g.H - 44)
+    let solara = KitRect(x: 300, y: 22, w: g.W - 318, h: g.H - 44)
     let from = (x: chat.x + 250, y: chat.y + chat.h - 40)
     let to = (x: chat.x + 120, y: chat.y + 228)
-    let float = KitRect(x: ardia.x + 70, y: 70, w: 430, h: g.H - 120)
+    let float = KitRect(x: solara.x + 70, y: 70, w: 430, h: g.H - 120)
     let arrived = RNTransform(opacity: t.fadeIn(560, 240), tx: t([(560, -12 * g.s), (860, 0)]))
     let bubbleMax = (chat.w - 28) * 0.82 * g.s
     KitStack {
       DesktopBackdrop(look: look)
-      MiniArdia(
-        g: g, look: look, rect: ardia,
+      MiniSolara(
+        g: g, look: look, rect: solara,
         tabs: little ? [1, 3, 4].map(KitTab.at) : [1, 3, 4, 0].map(KitTab.at),
         sel: little ? 0 : 3,
         rowStyle: { i in !little && i == 3 ? arrived : .none },

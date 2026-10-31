@@ -81,7 +81,7 @@ public extension OnboardingModel {
     case .tabs: Self.tabsKeys + Self.tabsMoreKeys
     case .look: Self.lookKeys
     case .searchPrivacy: Self.searchKeys
-    case .home: ["openLinksInLittleArdia"]
+    case .home: ["openLinksInLittleSolara"]
     default: []
     }
   }
@@ -173,7 +173,7 @@ public extension OnboardingModel {
     case .appearance: value("appearance")
     case .siteColor: .bool(bool("extendWebsiteColor"))
     case .typed: value("commandBarPreference")
-    case .links: .bool(bool("openLinksInLittleArdia"))
+    case .links: .bool(bool("openLinksInLittleSolara"))
     default: .null
     }
   }
@@ -193,7 +193,7 @@ public extension OnboardingModel {
     case .appearance: change(["appearance": choice], live: true)
     case .siteColor: change(["extendWebsiteColor": choice], live: true)
     case .typed: setDraft(["commandBarPreference": choice])
-    case .links: setDraft(["openLinksInLittleArdia": choice])
+    case .links: setDraft(["openLinksInLittleSolara": choice])
     default: break
     }
   }
@@ -270,7 +270,7 @@ public extension OnboardingModel {
     case .appearance:
       return ["Appearance \(["auto": "automatic", "light": "always light", "dark": "always dark"][string("appearance")] ?? "automatic")"]
     case .engine: return ["Search with \(selectedEngine?.name ?? "your engine")"]
-    case .links: return [bool("openLinksInLittleArdia") ? copy.linksInLittleWindow : "Links from other apps open in a tab"]
+    case .links: return [bool("openLinksInLittleSolara") ? copy.linksInLittleWindow : "Links from other apps open in a tab"]
     case .pins:
       let n = selectedPins.count
       return n > 0 ? ["\(n) \(n == 1 ? "app" : "apps") pinned"] : []

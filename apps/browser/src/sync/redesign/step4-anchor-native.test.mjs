@@ -12,7 +12,7 @@ const storeFake = {
   syncAnchor: () => nativeAnchor.value,
   setSyncAnchor: (text) => (nativeAnchor.writes++, (nativeAnchor.value = text), true),
 };
-globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, ArdiaStore: storeFake };
+globalThis.acTestNativeModules = { ...globalThis.acTestNativeModules, SolaraStoreAdapter: storeFake };
 const R = new URL("../../", import.meta.url).href;
 const { fixedBy } = await import("./switchOn.mjs");
 const shell = await import(R + "test-native/index.ts");

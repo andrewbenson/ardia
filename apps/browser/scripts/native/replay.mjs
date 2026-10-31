@@ -86,7 +86,7 @@ const INSTRUMENT = [
   ["/src/store/closingWindows.ts", "globalThis.__replayClosing = { read: () => [...closing].sort() };"],
   ["/src/store/newTabBar.ts", "globalThis.__replayNewTabBar = { read: () => lastTabKeepsWindow };"],
   ["/src/store/tabs.ts", "const __replayDefaultHandoff = pinHandoff; const __replayDefaultOpener = openOutsideTab; globalThis.__replayTabs = { immediateHandoff: () => pinHandoff === __replayDefaultHandoff, defaultOpener: () => openOutsideTab === __replayDefaultOpener };", [
-    ['import { resolveInput } from "@ardia/core";', 'import { resolveInput as __resolveInput } from "@ardia/core";\nconst resolveInput = (input, prefix) => { const out = __resolveInput(input, prefix); globalThis.__replayCalls?.resolve.push([input, prefix, out]); return out; };'],
+    ['import { resolveInput } from "@solara/core";', 'import { resolveInput as __resolveInput } from "@solara/core";\nconst resolveInput = (input, prefix) => { const out = __resolveInput(input, prefix); globalThis.__replayCalls?.resolve.push([input, prefix, out]); return out; };'],
     ['import { searchUrlPrefix } from "./settings";', 'import { searchUrlPrefix as __searchUrlPrefix } from "./settings";\nconst searchUrlPrefix = (settings) => { const out = __searchUrlPrefix(settings); if (globalThis.__replayCalls) globalThis.__replayCalls.prefix = out; return out; };'],
   ]],
   ["/src/store/syncOrigin.ts", "globalThis.__replayOrderChoices = { read: () => remote };"],
@@ -124,8 +124,8 @@ const RECORDED_ADAPTERS = new Map([
 const HOSTED_ADAPTERS = new Set(["bookmarksAdapter", "historyAdapter", "passwordsAdapter"]);
 
 const HOST_IMPORTS = [
-  ['import { deletePassword, savePassword } from "@ardia/ardiacore";', "@ardia/ardiacore", [["deletePassword", "deletePassword"], ["savePassword", "savePassword"]]],
-  ['import { nativeAddHistoryVisits, nativeDeleteHistoryUrls } from "@ardia/settings";', "@ardia/settings", [["nativeAddHistoryVisits", "addHistoryVisits"], ["nativeDeleteHistoryUrls", "deleteHistoryUrls"]]],
+  ['import { deletePassword, savePassword } from "@solara/solaracore";', "@solara/solaracore", [["deletePassword", "deletePassword"], ["savePassword", "savePassword"]]],
+  ['import { nativeAddHistoryVisits, nativeDeleteHistoryUrls } from "@solara/settings";', "@solara/settings", [["nativeAddHistoryVisits", "addHistoryVisits"], ["nativeDeleteHistoryUrls", "deleteHistoryUrls"]]],
 ];
 
 function instrumentAdapters(source) {

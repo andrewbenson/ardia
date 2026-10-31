@@ -4,7 +4,7 @@ import { test } from "node:test";
 const imports = [];
 const storeKeys = [];
 globalThis.acTestNativeModules = {
-  ArdiaWebKit: {
+  SolaraWebKit: {
     addListener: () => ({ remove() {} }),
     endPrivateSession: () => Promise.resolve(),
     cookieStoreKey: (profile) => (storeKeys.push(profile), Promise.resolve(profile)),
@@ -13,7 +13,7 @@ globalThis.acTestNativeModules = {
 };
 
 const { environment } = await import("../test-native/shell.ts");
-environment.set("ARDIA_WEBKIT_SIGN_IN", "on");
+environment.set("SOLARA_WEBKIT_SIGN_IN", "on");
 const { useBrowser } = await import("../store/browser.ts");
 const model = await import("../store/model.ts");
 const { webviews } = await import("./webviews.ts");

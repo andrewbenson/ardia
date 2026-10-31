@@ -69,7 +69,7 @@ enum OutsideURLs {
     guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { return true }
     var buffer = [UInt8](repeating: 0, count: size)
     guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return true }
-    let background = Array("ARDIA_BACKGROUND=1".utf8), dataDir = Array("ARDIA_DATA_DIR=".utf8)
+    let background = Array("SOLARA_BACKGROUND=1".utf8), dataDir = Array("SOLARA_DATA_DIR=".utf8)
     return buffer[MemoryLayout<Int32>.size..<size].split(separator: 0).contains { Array($0) == background || $0.starts(with: dataDir) }
   }
 }
@@ -91,7 +91,7 @@ final class BangListFetch: NSObject, URLSessionDataDelegate {
 
   private static var url: URL {
     #if DEBUG
-    if let override = ProcessInfo.processInfo.environment["ARDIA_BANGS_URL"], let url = URL(string: override) { return url }
+    if let override = ProcessInfo.processInfo.environment["SOLARA_BANGS_URL"], let url = URL(string: override) { return url }
     #endif
     return listURL
   }
@@ -152,12 +152,12 @@ final class BangListFetch: NSObject, URLSessionDataDelegate {
       Self.running.remove(self)
       Self.lock.unlock()
     }
-    if let failure { return done(.failure(NSError(domain: "ArdiaBangs", code: 1, userInfo: [NSLocalizedDescriptionKey: failure]))) }
+    if let failure { return done(.failure(NSError(domain: "SolaraBangs", code: 1, userInfo: [NSLocalizedDescriptionKey: failure]))) }
     if let error { return done(.failure(error)) }
-    guard let response else { return done(.failure(NSError(domain: "ArdiaBangs", code: 2, userInfo: [NSLocalizedDescriptionKey: "no response"]))) }
+    guard let response else { return done(.failure(NSError(domain: "SolaraBangs", code: 2, userInfo: [NSLocalizedDescriptionKey: "no response"]))) }
     let text = response.statusCode == 200 ? String(data: body, encoding: .utf8) : nil
     if response.statusCode == 200 && text == nil {
-      return done(.failure(NSError(domain: "ArdiaBangs", code: 3, userInfo: [NSLocalizedDescriptionKey: "not UTF-8"])))
+      return done(.failure(NSError(domain: "SolaraBangs", code: 3, userInfo: [NSLocalizedDescriptionKey: "not UTF-8"])))
     }
     let orNull = { (value: String?) -> Any in value.map { $0 as Any } ?? NSNull() }
     done(.success([
@@ -173,7 +173,7 @@ final class BangListFetch: NSObject, URLSessionDataDelegate {
 public enum DocumentStore {
   public typealias Done = (Error?) -> Void
   public static var safeMode: Bool {
-    guard let host = NSClassFromString("ArdiaCoreHost") as? NSObject.Type else { return false }
+    guard let host = NSClassFromString("SolaraCoreHost") as? NSObject.Type else { return false }
     return (host as AnyObject).value(forKey: "safeMode") as? Bool ?? false
   }
   private struct Staged {
@@ -183,7 +183,7 @@ public enum DocumentStore {
     var waiters: [Done]
   }
 
-  private static let queue = DispatchQueue(label: "ardia.documents", qos: .utility)
+  private static let queue = DispatchQueue(label: "solara.documents", qos: .utility)
   private static let lock = NSLock()
   private static var staged: [String: Staged] = [:]
   private static var removing: [String: Int] = [:]
@@ -330,11 +330,11 @@ public enum DocumentStore {
 public class ShellModule: Module {
   static func documentURL(_ name: String) throws -> URL {
     let dir: URL
-    if let custom = ProcessInfo.processInfo.environment["ARDIA_DATA_DIR"] {
+    if let custom = ProcessInfo.processInfo.environment["SOLARA_DATA_DIR"] {
       dir = URL(fileURLWithPath: custom, isDirectory: true)
     } else {
       let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-      dir = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Ardia", isDirectory: true)
+      dir = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Solara", isDirectory: true)
     }
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir.appendingPathComponent((name as NSString).lastPathComponent)
@@ -348,7 +348,7 @@ public class ShellModule: Module {
   private let switcherPointer = SwitcherPointer()
 
   public func definition() -> ModuleDefinition {
-    Name("ArdiaShell")
+    Name("SolaraShell")
     Events("onCommand", "onOpenURLs", "onWindowEvent", "onAppEvent")
 
     OnCreate {
@@ -378,7 +378,7 @@ public class ShellModule: Module {
         }
         self?.observeForSidebar()
         let quitCancelled = NotificationCenter.default.addObserver(
-          forName: Notification.Name("ArdiaCoreQuitCancelled"), object: nil, queue: .main
+          forName: Notification.Name("SolaraCoreQuitCancelled"), object: nil, queue: .main
         ) { _ in self?.sendEvent("onAppEvent", ["type": "quitCancelled"]) }
         self?.sidebarObservers.append((NotificationCenter.default, quitCancelled))
       }
@@ -802,7 +802,7 @@ public enum ShellApp {
 
 public class FadeLabelModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaFadeLabel")
+    Name("SolaraFadeLabel")
 
     View(FadeLabel.self) {
       Prop("text") { (view: FadeLabel, v: String) in view.text = v }
@@ -876,7 +876,7 @@ final class FadeLabel: ExpoView {
 
 public class ActivitySpinnerModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaActivitySpinner")
+    Name("SolaraActivitySpinner")
 
     View(ActivitySpinner.self) {}
   }
@@ -952,7 +952,7 @@ final class ActivitySpinner: ExpoView {
 
 public class HairlineModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaHairline")
+    Name("SolaraHairline")
 
     View(Hairline.self) {
       Prop("color") { (view: Hairline, color: NSColor?) in view.color = color }
@@ -1015,7 +1015,7 @@ final class Hairline: ExpoView {
 
 public class SymbolModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaSymbol")
+    Name("SolaraSymbol")
 
     View(SymbolView.self) {
       Prop("name") { (view: SymbolView, name: String) in view.name = name }
@@ -1030,7 +1030,7 @@ enum ServerWindowDrag {
   private static let regions = NSHashTable<NSView>.weakObjects()
   private static let opaqueRectSelector = NSSelectorFromString("_opaqueRectForWindowMoveWhenInTitlebar")
   private static let refreshSelector = NSSelectorFromString("_updateDragRegionForHiddenStateChange")
-  private static let enabled = ["1", "all"].contains(ProcessInfo.processInfo.environment["ARDIA_SERVER_WINDOW_DRAG"] ?? "")
+  private static let enabled = ["1", "all"].contains(ProcessInfo.processInfo.environment["SOLARA_SERVER_WINDOW_DRAG"] ?? "")
 
   private static let refreshEvery: CFTimeInterval = 0.1
   private static var targets: [ObjectIdentifier: (blocking: [ObjectIdentifier: Bool], open: [NSRect])] = [:]
@@ -1240,7 +1240,7 @@ enum ServerWindowDrag {
     regions.allObjects.contains { $0 === view || $0.isDescendant(of: view) }
   }
 
-  private static let embeddedSelector = NSSelectorFromString("ardiaEmbeddedSubview")
+  private static let embeddedSelector = NSSelectorFromString("solaraEmbeddedSubview")
 
   static func embeddedRoot(_ window: NSWindow?) -> NSView? {
     guard let content = window?.contentView, content.responds(to: embeddedSelector) else { return nil }
@@ -1303,7 +1303,7 @@ enum ServerWindowDrag {
   private static func install(_ host: AnyClass) {
     replaceRect(host) { view, original in hostsRoot(view) ? .zero : original() }
     replaceCanMove(host) { view, original in hostsRoot(view) ? true : original() }
-    let allOpen = ProcessInfo.processInfo.environment["ARDIA_SERVER_WINDOW_DRAG"] == "all"
+    let allOpen = ProcessInfo.processInfo.environment["SOLARA_SERVER_WINDOW_DRAG"] == "all"
     replaceRect(NSView.self) { view, original in
       guard inRoot(view) else { return original() }
       return !allOpen && blocks(view) ? view.bounds : .zero
@@ -1510,7 +1510,7 @@ final class WindowDragRegion: ExpoView {
 
 public class OutsidePressAreaModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaOutsidePressArea")
+    Name("SolaraOutsidePressArea")
 
     View(OutsidePressArea.self) {
       Events("onOutsidePress")
@@ -1555,7 +1555,7 @@ let installOutsidePressMonitor: Void = {
 
 public class MagnifyAreaModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaMagnifyArea")
+    Name("SolaraMagnifyArea")
 
     AsyncFunction("devMagnify") { (windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] in
       #if DEBUG
@@ -1798,7 +1798,7 @@ let installScrollViewInsetFix: Void = {
 
 public class ContextMenuAreaModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaContextMenuArea")
+    Name("SolaraContextMenuArea")
 
     View(ContextMenuArea.self) {
       Events("onContextMenu")
@@ -1835,7 +1835,7 @@ final class ContextMenuArea: ExpoView {
 
 public class VisualEffectModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaVisualEffect")
+    Name("SolaraVisualEffect")
 
     View(VisualEffect.self) {
       Prop("material") { (view: VisualEffect, name: String) in view.setMaterial(name) }
@@ -1887,7 +1887,7 @@ final class VisualEffect: ExpoView {
 
 public class GlassEffectModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaGlassEffect")
+    Name("SolaraGlassEffect")
 
     Function("isLiquidGlass") { () -> Bool in
       if #available(macOS 26.0, *) { return true }
@@ -1953,7 +1953,7 @@ final class GlassEffect: ExpoView {
 
 public class SurfaceModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaSurface")
+    Name("SolaraSurface")
 
     View(Surface.self) {
       Prop("fill") { (view: Surface, hex: String?) in view.surfaceFill = hex.flatMap(NSColor.init(hex:)) }
@@ -2147,7 +2147,7 @@ final class SavedKeyResponders {
 
 public class PopoverBubbleModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaPopoverBubble")
+    Name("SolaraPopoverBubble")
 
     Function("isAvailable") { () -> Bool in true }
 

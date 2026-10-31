@@ -15,7 +15,7 @@ const out = resolve(flags.out ?? join(tmpdir(), "ac-window-toolbar"));
 mkdirSync(out, { recursive: true });
 let app = resolve(positionals[0]);
 if (flags.bundle) {
-  const clone = join(out, "app", "Ardia.app");
+  const clone = join(out, "app", "Solara.app");
   rmSync(dirname(clone), { recursive: true, force: true });
   mkdirSync(dirname(clone), { recursive: true });
   execFileSync("cp", ["-cR", app, clone]);
@@ -48,9 +48,9 @@ const fixture = {
     closedWindows: [],
 };
 const files = { "perf-probe": "" };
-if (process.env.ARDIA_SWITCHES) {
+if (process.env.SOLARA_SWITCHES) {
   const switches = {};
-  for (const part of process.env.ARDIA_SWITCHES.split(",")) {
+  for (const part of process.env.SOLARA_SWITCHES.split(",")) {
     const [name, value] = part.split("=").map((value) => value.trim());
     if (name && value) switches[name] = !["off", "0", "false"].includes(value);
   }
@@ -58,7 +58,7 @@ if (process.env.ARDIA_SWITCHES) {
 }
 const instance = await launch(app, { data, port: Number(flags.port ?? 9796), session: fixture,
   onboarded: true, files, js: "none", ready: false,
-  env: { ARDIA_DRAW_WINDOWS: "1", ...(process.env.ARDIA_SWITCHES ? { ARDIA_SWITCHES: process.env.ARDIA_SWITCHES } : {}) } });
+  env: { SOLARA_DRAW_WINDOWS: "1", ...(process.env.SOLARA_SWITCHES ? { SOLARA_SWITCHES: process.env.SOLARA_SWITCHES } : {}) } });
 const { pid } = instance;
 const ac = (body, ms) => evaluate(data, pid, body, ms);
 const untilSnapshot = async (what, accept, ms = 5000) => {

@@ -11,13 +11,13 @@ if (!appArg) {
   console.error(`usage: node swipe-capsule-test.mjs <Debug Solara.app> [--keep-data]
 
 The back-swipe capsule on a tab that went ONE, TWO, THREE on local pages, drawn by RN and then natively
-(ARDIA_NATIVE_SHELL=1: SwipeCapsuleView in the pane overlay container on top of the shell's card, fed by RN's
+(SOLARA_NATIVE_SHELL=1: SwipeCapsuleView in the pane overlay container on top of the shell's card, fed by RN's
 SwipeOverlay, which keeps the gesture). The same simulated gestures in both: one kept moving past the threshold
 shows the confirmed 82 pt capsule centred on the page at the rubber-banded offset, and cancelling it navigates
 nowhere; one held still past the threshold turns into the 200 wide destination list (2 rows of 38 plus 8 above and
 below, its first row centred on the page), and ending it goes back one entry. The native frames match RN's within
 half a point, RN draws no capsule with the switch on, and the native container leaves the card once it fades.
-With pane roots and the page pool on (ARDIA_SHELL_PANES=1 ARDIA_NATIVE_PAGES_POOL=1), a back swipe on the page goes
+With pane roots and the page pool on (SOLARA_SHELL_PANES=1 SOLARA_NATIVE_PAGES_POOL=1), a back swipe on the page goes
 back (a tracked one and a discrete one), and the same swipe over the native extension side panel or over docked\nDevTools starts nothing and stays put.`);
   process.exit(2);
 }
@@ -32,7 +32,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const url = (n) => `http://127.0.0.1:${server.address().port}/${n}`;
 const ext = join(scratch, "ext");
-cpSync(resolve(import.meta.dirname, "../../../packages/ardiacore/scripts/fixtures/ext"), ext, { recursive: true });
+cpSync(resolve(import.meta.dirname, "../../../packages/solaracore/scripts/fixtures/ext"), ext, { recursive: true });
 const manifest = JSON.parse(readFileSync(join(ext, "manifest.json"), "utf8"));
 delete manifest.content_scripts;
 delete manifest.declarative_net_request;
@@ -51,7 +51,7 @@ const kept = timed([{ phase: "began", dx: 0, atMs: 0 }, ...push, ...Array.from({
 const held = timed([{ phase: "began", dx: 0, atMs: 0 }, ...push, { phase: "ended", dx: 0, atMs: 1100 }]);
 
 const HELPERS = `
-const C = globalThis.expo.modules.ArdiaCEF;
+const C = globalThis.expo.modules.SolaraCEF;
 const M = globalThis.expo.modules.SolaraMedia;
 const title = () => ac.store.getState().tabs.a.title;
 const hostOf = (fiber) => { let f = fiber; while (f && !(f.stateNode && f.stateNode.measureInWindow)) f = f.child; return f && f.stateNode; };
@@ -106,7 +106,7 @@ try {
     const tag = prefix + (nativeShell ? "native" : "rn");
     app = await launch(resolve(appArg), {
       data: join(scratch, `data-${tag}`), fresh: true, session: fixture, onboarded: true, probe: true,
-      env: { ARDIA_NATIVE_SHELL: nativeShell ? "1" : "0" },
+      env: { SOLARA_NATIVE_SHELL: nativeShell ? "1" : "0" },
       ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe",
     });
     await until("page ONE", `return title() === "ONE" || null;`, 15000);
@@ -185,7 +185,7 @@ try {
   }
   app = await launch(resolve(appArg), {
     data: join(scratch, `data-pool-${inputRoute}`), fresh: true, session: fixture, onboarded: true, probe: true,
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_SHELL_PANES: "1", ARDIA_NATIVE_PAGES_POOL: "1", ARDIA_TAB_POOL: "1", ARDIA_NATIVE_SIDE_PANEL: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_SHELL_PANES: "1", SOLARA_NATIVE_PAGES_POOL: "1", SOLARA_TAB_POOL: "1", SOLARA_NATIVE_SIDE_PANEL: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe",
   });
   await until("page ONE", `return title() === "ONE" || null;`, 15000);
@@ -195,7 +195,7 @@ try {
   const swipe = async (x, y, steps = back) => {
     const before = (await app.snapshot()).swipeSimulation.count;
     const where = inputRoute === "js"
-      ? await run(`return globalThis.expo.modules.ArdiaSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`)
+      ? await run(`return globalThis.expo.modules.SolaraSwipe.devSimulate(${x}, ${y}, ${number}, ${JSON.stringify(steps)}, true).then((r) => r.where);`)
       : (await app.probe("input.swipe", { windowId: "w1", x, y, steps, ignorePreference: true })).where;
     await untilSnapshot("native swipe hit", (_, state) => state.swipeSimulation.count > before &&
       state.swipeSimulation.where.hit === where.hit && state.swipeSimulation.where.target === where.target &&
@@ -214,7 +214,7 @@ try {
   await until("page TWO", `return title() === "TWO" || null;`, 15000);
 
   await rep.check(`${prefix}pool-side-panel-swipe-stays`, async () => {
-    const { id } = await run(`return globalThis.expo.modules.ArdiaExtensions.install(${JSON.stringify(ext)}, "");`);
+    const { id } = await run(`return globalThis.expo.modules.SolaraExtensions.install(${JSON.stringify(ext)}, "");`);
     await run(`return ac.extensions.refreshExtensions("").then(() => true);`);
     await until("the side panel opens", `return ac.extensions.openSidePanel("w1", ${JSON.stringify(id)}).then(() => !!ac.extensions.useExtensions.getState().sidePanels.w1 || null);`);
     await sleep(1200);
@@ -269,7 +269,7 @@ try {
       tabs: [{ id: "a", profileId: "default", url: url("one") }, { id: "b", profileId: "work", url: url("one") }],
       settings: { warnBeforeClosingLastTab: false, warnBeforeClosingWindow: false },
     }),
-    env: { ARDIA_NATIVE_SHELL: "1", ARDIA_NATIVE_SIDEBAR: "1", ARDIA_NATIVE_TOP_STRIP: "1", ARDIA_NATIVE_PROFILE_PAGER: "1" },
+    env: { SOLARA_NATIVE_SHELL: "1", SOLARA_NATIVE_SIDEBAR: "1", SOLARA_NATIVE_TOP_STRIP: "1", SOLARA_NATIVE_PROFILE_PAGER: "1" },
     ready: "return !!ac.store.getState().windows.w1 && !!globalThis.acSwipe",
   });
   await rep.check("native-input-pager-detent-suppresses-haptic", async () => {
@@ -290,7 +290,7 @@ try {
     assert.equal(result.eventCount, steps.length);
     assert.ok(result.where.target, `pager swipe missed ${JSON.stringify(result)}`);
     await untilSnapshot("pager crosses detent", (window) => window?.profileId === "work");
-    await until("native pager settles at Work", `return globalThis.expo.modules.ArdiaSwipe.devPagerState("w1").then((pager) =>
+    await until("native pager settles at Work", `return globalThis.expo.modules.SolaraSwipe.devPagerState("w1").then((pager) =>
       pager?.phase === "idle" && pager.position === 1 || null);`);
     const after = await readHaptics();
     assert.ok(after.suppressed > before.suppressed, `detent did not suppress a haptic: ${JSON.stringify({ before, after })}`);

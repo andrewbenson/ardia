@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const script = readFileSync(new URL("../../../../packages/ardiacore/ios/page_script.js", import.meta.url), "utf8");
+const script = readFileSync(new URL("../../../../packages/solaracore/ios/page_script.js", import.meta.url), "utf8");
 const start = script.indexOf("    const NavigatorType = window.Navigator;\n");
 const end = script.indexOf("  } catch (e) {}\n", start);
 assert.ok(start > 0 && end > start, "page_script.js has the DRM block");

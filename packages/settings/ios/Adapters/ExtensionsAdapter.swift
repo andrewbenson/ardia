@@ -1,5 +1,5 @@
 import AppKit
-import ArdiaCore
+import SolaraCore
 import Foundation
 import Observation
 import SolaraUI
@@ -22,7 +22,7 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func listExtensions(profile: String) async throws -> [InstalledExtension] {
-    let listed = await EngineCalls.result({ done in ArdiaCoreServices.listExtensions(profile: profile) { done($0) } }) {
+    let listed = await EngineCalls.result({ done in SolaraCoreServices.listExtensions(profile: profile) { done($0) } }) {
       (error: Self.engineError($0), list: Self.sorted($0.list("extensions").compactMap(Self.installed)))
     }
     if let error = listed.error { throw ExtensionServiceError(error) }
@@ -30,15 +30,15 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func setExtensionEnabled(_ id: String, enabled: Bool, profile: String) async throws {
-    try await changing(profile) { done in ArdiaCoreServices.setExtension(id, enabled: enabled, profile: profile) { done($0) } }
+    try await changing(profile) { done in SolaraCoreServices.setExtension(id, enabled: enabled, profile: profile) { done($0) } }
   }
 
   func uninstallExtension(_ id: String, profile: String) async throws {
-    try await changing(profile) { done in ArdiaCoreServices.uninstallExtension(id, profile: profile) { done($0) } }
+    try await changing(profile) { done in SolaraCoreServices.uninstallExtension(id, profile: profile) { done($0) } }
   }
 
   func reloadExtension(_ id: String, profile: String) async throws {
-    try await changing(profile) { done in ArdiaCoreServices.reloadExtension(id, profile: profile) { done($0) } }
+    try await changing(profile) { done in SolaraCoreServices.reloadExtension(id, profile: profile) { done($0) } }
   }
 
   func configureExtension(_ id: String, profile: String, options: ExtensionConfiguration) async throws {
@@ -47,7 +47,7 @@ final class ExtensionsAdapter: ExtensionsServices {
     if let incognito = options.incognito { patch["incognito"] = incognito }
     if let siteAccess = options.siteAccess { patch["siteAccess"] = siteAccess.rawValue }
     let options = patch
-    try await changing(profile) { done in ArdiaCoreServices.configureExtension(id, profile: profile, options: options) { done($0) } }
+    try await changing(profile) { done in SolaraCoreServices.configureExtension(id, profile: profile, options: options) { done($0) } }
   }
 
   func chooseExtensionFolder() async -> String? {
@@ -62,7 +62,7 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func inspectUnpackedExtension(path: String) async throws -> ExtensionPackage {
-    let dict = ArdiaCoreServices.inspectUnpacked(path)
+    let dict = SolaraCoreServices.inspectUnpacked(path)
     if let error = Self.engineError(dict) { throw ExtensionServiceError(error) }
     return ExtensionPackage(
       name: dict.string("name") ?? "Extension",
@@ -75,7 +75,7 @@ final class ExtensionsAdapter: ExtensionsServices {
   }
 
   func installExtension(path: String, profile: String) async throws {
-    try await changing(profile) { done in ArdiaCoreServices.installExtension(path: path, profile: profile) { done($0) } }
+    try await changing(profile) { done in SolaraCoreServices.installExtension(path: path, profile: profile) { done($0) } }
   }
 
   func extensionChanges() -> AsyncStream<ExtensionsChange> {

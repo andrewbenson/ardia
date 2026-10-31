@@ -9,7 +9,7 @@ public struct MemoryTrimSchedule: Sendable {
   }
 
   public static func enabled(environment: [String: String]) -> Bool {
-    !["off", "0", "false"].contains(environment["ARDIA_MEMORY_TRIM"] ?? "")
+    !["off", "0", "false"].contains(environment["SOLARA_MEMORY_TRIM"] ?? "")
   }
 
   @discardableResult

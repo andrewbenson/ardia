@@ -1,4 +1,4 @@
-import { PowerUp } from "@ardia/shaders";
+import { PowerUp } from "@solara/shaders";
 import { useEffect, useState } from "react";
 import { AccessibilityInfo, Image, StyleSheet, View } from "react-native";
 import { PRODUCT } from "../lib/productName";

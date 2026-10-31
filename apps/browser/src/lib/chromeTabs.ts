@@ -8,7 +8,7 @@ import {
   type StripState,
   type TabStripCommand,
   type TabStripTransaction,
-} from "@ardia/ardiacore";
+} from "@solara/solaracore";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { changedIds } from "../store/changes";
 import { chromeChanged, groupStep, stripActual, stripPlan, type GroupBindings } from "../store/liveTabs";

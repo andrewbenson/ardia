@@ -41,7 +41,7 @@ Pods/
 .swiftpm/
 .build/
 
-packages/ardiacore/vendor/
+packages/solaracore/vendor/
 
 output/
 

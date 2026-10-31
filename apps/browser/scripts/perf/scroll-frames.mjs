@@ -6,8 +6,8 @@
 //   node apps/browser/scripts/perf/scroll-frames.mjs --out <dir> --arm <label>=<app>[,K=V...] [--arm ...] [options]
 //
 //     --arm <label>=<app>[,K=V][,battery]
-//                        repeatable: an app and extra environment for it (ARDIA_MAIN_FRAME_THROTTLE=off, ...); battery
-//                        turns Chrome's Battery Saver on, as Ardia does on battery or in Low Power Mode, and needs a copy
+//                        repeatable: an app and extra environment for it (SOLARA_MAIN_FRAME_THROTTLE=off, ...); battery
+//                        turns Chrome's Battery Saver on, as Solara does on battery or in Low Power Mode, and needs a copy
 //                        with the bench channel (native-bench.mjs --only prepare)
 //     --reps <n>         gestures per case (default 3)
 //     --rounds <n>       default 1; odd rounds run the arms in reverse order
@@ -29,7 +29,7 @@
 // (ProxyImpl::ScheduledActionDraw: drawHz, drawsLate = gaps over 1.5 refresh intervals), its main frames
 // (ProxyMain::BeginMainFrame: mainHz) and stale draws (stalePct: draws with no main-frame activation since the one
 // before, so whatever script or rAF placed shows the old scroll position for that frame), the renderer main thread's
-// busy time (mainBusyMs) and the part of it in Ardia's page script (pageScriptMs, ardia://page-script) and in extension
+// busy time (mainBusyMs) and the part of it in Solara's page script (pageScriptMs, solara://page-script) and in extension
 // scripts (extensionMs, uBlock Origin's); from the page, rAF rate and gaps over 12.5 ms, and scroll events per second.
 // A 60 Hz display makes every row 60; the display row says which. --cpu-throttle <n> slows the page's renderer n times
 // (Emulation.setCPUThrottlingRate), so per-frame script costs show as they would on a slower Mac.
@@ -195,7 +195,7 @@ async function benchCommand(data, body, timeout = 20000) {
   throw new Error("the bench channel never answered: battery arms need a copy from native-bench.mjs --only prepare");
 }
 const batterySaver = (data, mode) =>
-  benchCommand(data, `return globalThis.expo.modules.ArdiaCEF.engineCall("ac_battery_saver", "", ${JSON.stringify(JSON.stringify(mode ? { mode } : {}))}).then(JSON.parse);`);
+  benchCommand(data, `return globalThis.expo.modules.SolaraCEF.engineCall("ac_battery_saver", "", ${JSON.stringify(JSON.stringify(mode ? { mode } : {}))}).then(JSON.parse);`);
 
 async function keys(d) {
   const press = (key, code, autoRepeat, type) => d.send("Input.dispatchKeyEvent", { type, key, code: key, windowsVirtualKeyCode: code, autoRepeat });
@@ -260,7 +260,7 @@ function analyse(events, rep, refreshMs) {
     rafOver12: rafGaps.length ? Math.round((100 * rafGaps.filter((g) => g > 12.5).length) / rafGaps.length) : null,
     scrollHz: rate(scrolls),
     mainBusyMs: Math.round(events.filter((e) => inGesture(e) && e.name === "ThreadControllerImpl::RunTask").reduce((sum, e) => sum + (e.dur ?? 0), 0) / 1000),
-    pageScriptMs: scriptMs((url) => url.startsWith("ardia://page-script")),
+    pageScriptMs: scriptMs((url) => url.startsWith("solara://page-script")),
     extensionMs: scriptMs((url) => /^chrome-extension:|^extensions::/.test(url)),
   };
 }
@@ -285,7 +285,7 @@ try {
   for (let round = 0; round < +opt.rounds; round++) {
     for (const arm of round % 2 ? [...arms].reverse() : arms) {
       const data = join(out, `data-${arm.label}`);
-      const inst = await launch(arm.app, { data, port, js: "none", ready: false, fresh: true, onboarded: true, env: { ARDIA_DRAW_WINDOWS: "1", ...arm.env } });
+      const inst = await launch(arm.app, { data, port, js: "none", ready: false, fresh: true, onboarded: true, env: { SOLARA_DRAW_WINDOWS: "1", ...arm.env } });
       try {
         let b = null;
         for (const end = Date.now() + 60000; !b && Date.now() < end; await sleep(200)) b = await inst.browser().catch(() => null);

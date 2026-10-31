@@ -1,4 +1,4 @@
-import { publishSettingsTopic } from "@ardia/settings";
+import { publishSettingsTopic } from "@solara/settings";
 import { useEffect } from "react";
 import { hex, useTheme } from "../../lib/theme";
 import { useLive } from "../../live/store";

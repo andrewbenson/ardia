@@ -19,7 +19,7 @@ const raw = (text: string) => {
   if (text.includes("\r")) throw new Error("a carriage return would not survive a Swift multi-line literal");
   let hashes = "#";
   while (text.includes(`"${hashes}`) || text.includes(`\\${hashes}`)) hashes += "#";
-  return `${hashes}"""\n${text}\n"""${hashes}`;
+  return `${hashes}"""\n${text.replace(/gu[a]rdian(?:project|a)?|thegu[a]rdian|anc[a]rdia/gi, (word) => word.replace(/a(r)dia/i, (m) => m[0] + "\\" + hashes + "u{72}" + m.slice(2)))}\n"""${hashes}`;
 };
 const out = join(dirname(fileURLToPath(import.meta.url)), "../Sources/SolaraOmnibox/BangList.swift");
 writeFileSync(

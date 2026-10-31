@@ -1,5 +1,5 @@
 import XCTest
-@testable import ArdiaShellCore
+@testable import SolaraShellCore
 
 final class SafeLaunchDocumentsTests: XCTestCase {
   func testSafeLaunchPreservesSavedDocuments() {
@@ -12,7 +12,7 @@ final class SafeLaunchDocumentsTests: XCTestCase {
   }
 
   func testSafeLaunchAllowsUserDocuments() {
-    for name in ["live.json", "onboarding.json", "release-notes.json", "ardia-cli.json"] {
+    for name in ["live.json", "onboarding.json", "release-notes.json", "solara-cli.json"] {
       XCTAssertTrue(SafeLaunchDocuments.mayWrite(name, safeMode: true), name)
       XCTAssertFalse(SafeLaunchDocuments.mayRemove(name, safeMode: true), name)
     }

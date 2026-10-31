@@ -136,7 +136,7 @@ test("switching the window's profile closes the peek", () => {
   assert.equal(S().tabs[id], undefined);
 });
 
-test("Little Ardia doesn't peek", () => {
+test("Little Solara doesn't peek", () => {
   S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
   const small = S().createWindow({ small: true, url: "https://small.example/" });
   const tab = S().windows[small].tabIds[0];

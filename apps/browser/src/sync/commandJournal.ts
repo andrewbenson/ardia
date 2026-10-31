@@ -1,4 +1,4 @@
-import { canonical, type Adapter, type Clock } from "@ardia/sync";
+import { canonical, type Adapter, type Clock } from "@solara/sync";
 import { useBrowser, type BrowserState } from "../store/browser";
 import { pinnedGroupMembers } from "../store/pinHomes";
 import { nativeOriginsKnown } from "../store/nativeStore";

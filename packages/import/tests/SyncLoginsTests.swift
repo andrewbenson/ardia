@@ -1,7 +1,7 @@
 import Foundation
 import SQLite3
 import XCTest
-@testable import ArdiaImportCore
+@testable import SolaraLegacyImportCore
 
 final class SyncLoginsTests: XCTestCase {
   let chrome = Fixtures.support("Google/Chrome/Default")

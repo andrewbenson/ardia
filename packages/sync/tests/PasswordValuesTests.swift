@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import ArdiaSyncCore
+@testable import SolaraLegacySyncCore
 
 final class PasswordValuesTests: XCTestCase {
   let keys = SyncKeys(entropy: Data(repeating: 7, count: 32))

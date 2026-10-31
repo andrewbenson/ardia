@@ -445,7 +445,7 @@ static void FindJSThread(void) {
 @end
 
 __attribute__((constructor)) static void Start(void) {
-  const char *dir = getenv("ARDIA_DATA_DIR");
+  const char *dir = getenv("SOLARA_DATA_DIR");
   if (!dir || !getenv("AC_BENCH_FRAMES")) return;
   if (![NSBundle.mainBundle.bundlePath hasSuffix:@".app"] || [NSBundle.mainBundle.bundlePath containsString:@"Helper"]) return;
   gMainThread = mach_thread_self();

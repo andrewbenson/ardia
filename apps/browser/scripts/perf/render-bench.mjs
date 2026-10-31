@@ -113,7 +113,7 @@ async function run() {
   if (!app || !jsbundle || !label) throw new Error("run needs --app, --bundle and --label");
   const only = flags.only ? new Set(flags.only.split(",")) : null;
   const want = (name) => !only || only.has(name);
-  const clone = join(out, "apps", label, "Ardia.app");
+  const clone = join(out, "apps", label, "Solara.app");
   rmSync(dirname(clone), { recursive: true, force: true });
   mkdirSync(dirname(clone), { recursive: true });
   execFileSync("cp", ["-cR", app, clone]);
@@ -239,7 +239,7 @@ async function run() {
   console.log(`\nwrote ${file}`);
 }
 
-const HOST = /^(View|Text|Pressable|Image|ScrollView|TextInput|InternalTextInput|Animated\(.*\)|Ardia.*|Surface|Symbol|MouseArea|ContextMenuArea|FadeLabel|VirtualizedList.*|CellRenderer.*|ScrollViewBase|TouchableOpacity|AnimatedComponent.*)$/;
+const HOST = /^(View|Text|Pressable|Image|ScrollView|TextInput|InternalTextInput|Animated\(.*\)|Solara.*|Surface|Symbol|MouseArea|ContextMenuArea|FadeLabel|VirtualizedList.*|CellRenderer.*|ScrollViewBase|TouchableOpacity|AnimatedComponent.*)$/;
 
 function line(stats) {
   if (!stats) return null;

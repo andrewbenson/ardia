@@ -542,8 +542,8 @@ export async function launch(app, opts = {}) {
   const installed = (path) => /^\/Applications\/[^/]+\.app(\/|$)/.test(path);
   if (installed(app) || (opts.runsFrom && installed(resolve(opts.runsFrom))))
     throw new Error("never an installed app: pass a build (apps/browser/build-*)");
-  if (opts.urls?.length && (opts.env?.ARDIA_ACCEPT_EXTERNAL_URLS ?? "1") !== "1")
-    throw new Error("refusing to hand URLs to a hidden instance without ARDIA_ACCEPT_EXTERNAL_URLS=1: it would forward them to the owner's running app");
+  if (opts.urls?.length && (opts.env?.SOLARA_ACCEPT_EXTERNAL_URLS ?? "1") !== "1")
+    throw new Error("refusing to hand URLs to a hidden instance without SOLARA_ACCEPT_EXTERNAL_URLS=1: it would forward them to the owner's running app");
   app = realPath(app);
   const gate = await holdUiGate(uiGateKey(app));
   const data = resolve(opts.data ?? join(process.env.TMPDIR ?? "/tmp", `ac-instance-${process.pid}-${Date.now()}`));
@@ -583,12 +583,12 @@ export async function launch(app, opts = {}) {
   const location = jsMode === "pinned" ? `localhost:${js.port}` : jsMode === "live" ? `localhost:${metroPort}` : jsMode === "none" ? null : jsMode;
   const switches = [opts.switches].flat().filter(Boolean).join(" ");
   const env = {
-    ARDIA_BACKGROUND: "1", ARDIA_DATA_DIR: canonicalData, ARDIA_REMOTE_DEBUGGING_PORT: String(port),
-    ...(location ? { ARDIA_JS_LOCATION: location } : {}),
-    ...(switches ? { ARDIA_CHROMIUM_SWITCHES: switches } : {}),
-    ...(process.env.ARDIA_NATIVE_SIDEBAR ? { ARDIA_NATIVE_SIDEBAR: process.env.ARDIA_NATIVE_SIDEBAR } : {}),
-    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("ARDIA_NATIVE_") || k.startsWith("ARDIA_SHELL_") || k.startsWith("ARDIA_SYNC_"))),
-    ...(opts.urls?.length ? { ARDIA_ACCEPT_EXTERNAL_URLS: "1" } : {}),
+    SOLARA_BACKGROUND: "1", SOLARA_DATA_DIR: canonicalData, SOLARA_REMOTE_DEBUGGING_PORT: String(port),
+    ...(location ? { SOLARA_JS_LOCATION: location } : {}),
+    ...(switches ? { SOLARA_CHROMIUM_SWITCHES: switches } : {}),
+    ...(process.env.SOLARA_NATIVE_SIDEBAR ? { SOLARA_NATIVE_SIDEBAR: process.env.SOLARA_NATIVE_SIDEBAR } : {}),
+    ...Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("SOLARA_NATIVE_") || k.startsWith("SOLARA_SHELL_") || k.startsWith("SOLARA_SYNC_"))),
+    ...(opts.urls?.length ? { SOLARA_ACCEPT_EXTERNAL_URLS: "1" } : {}),
     ...opts.env,
   };
   const log = resolve(opts.log ?? join(data, "app.out.log"));
@@ -706,7 +706,7 @@ if (process.argv[1] === here) {
   const args = process.argv.slice(2);
   if (args[0] === "--metro-proxy") await metroProxyMain(args[1], Number(args[2]));
   else if (args[0] === "--self-test") {
-    const bin = "/tmp/Ardia.app/Contents/MacOS/Ardia";
+    const bin = "/tmp/Solara.app/Contents/MacOS/Solara";
     const cmd = (map) => (pid) => map[pid];
     assert.equal(parsePort("9474"), 9474);
     const made = mkdtempSync(join(tmpdir(), "ac-self-test-"));
@@ -735,7 +735,7 @@ if (process.argv[1] === here) {
     assert.ok(commandIsBinary(bin, bin));
     assert.ok(commandIsBinary(`${bin} --flag`, bin));
     assert.ok(!commandIsBinary(`${bin}2`, bin));
-    assert.ok(!commandIsBinary(`/tmp/Ardia.app/Contents/Frameworks/Ardia Helper.app/Contents/MacOS/Ardia Helper`, bin));
+    assert.ok(!commandIsBinary(`/tmp/Solara.app/Contents/Frameworks/Solara Helper.app/Contents/MacOS/Solara Helper`, bin));
     const solara = "/tmp/Solara.app/Contents/MacOS/Solara";
     assert.ok(commandIsBinary(`${solara} --flag`, solara));
     assert.ok(!commandIsBinary(`/tmp/Solara.app/Contents/Frameworks/Chromium Framework.framework/Helpers/Solara Helper (Renderer).app/Contents/MacOS/Solara Helper (Renderer) --type=renderer`, solara));

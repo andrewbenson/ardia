@@ -28,7 +28,7 @@ const inst = await launch(app, {
   js: "none",
   probe: true,
   onboarded: true,
-  env: { ARDIA_IMPORT_SOURCE_DIR: `${HOME}/Library/Application Support`, ARDIA_IMPORT_TEST_SECRET: SECRET },
+  env: { SOLARA_IMPORT_SOURCE_DIR: `${HOME}/Library/Application Support`, SOLARA_IMPORT_TEST_SECRET: SECRET },
 });
 const run = (body) => inst.eval(body);
 const results = [];

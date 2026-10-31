@@ -4,7 +4,7 @@ import SolaraUI
 
 public class DockSelectionModule: Module {
   public func definition() -> ModuleDefinition {
-    Name("ArdiaDockSelection")
+    Name("SolaraDockSelection")
 
     AsyncFunction("iconTheme") { (uri: String?, emoji: String?) -> [String: String]? in
       guard let source = IconRingSource(uri: uri, emoji: emoji) else { return nil }

@@ -1,5 +1,5 @@
-import { cleanUrl, markdownLink } from "@ardia/core";
-import { copyText, prompt } from "@ardia/shell";
+import { cleanUrl, markdownLink } from "@solara/core";
+import { copyText, prompt } from "@solara/shell";
 import { updateFolder } from "../../live/store";
 import { useBrowser } from "../../store/browser";
 import { ancestorIds } from "../../store/groups";

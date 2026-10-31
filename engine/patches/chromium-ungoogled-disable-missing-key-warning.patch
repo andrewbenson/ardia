@@ -1,5 +1,5 @@
 SPDX-License-Identifier: BSD-3-Clause
-ungoogled-chromium's extra/inox-patchset/0013-disable-missing-key-warning.patch (155.0.8059.84-1), which Ardia applied
+ungoogled-chromium's extra/inox-patchset/0013-disable-missing-key-warning.patch (155.0.8059.84-1), which Solara applied
 until Helium and Helium leaves out: no infobar about missing Google API keys.
 
 --- a/chrome/browser/ui/startup/google_api_keys_infobar_delegate.cc

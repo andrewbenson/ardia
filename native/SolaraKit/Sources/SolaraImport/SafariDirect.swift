@@ -24,7 +24,7 @@ public enum SafariDirect {
                           cancellation: Cancellation = .init()) throws -> SafariExport {
     let dir = directory(home: home)
     guard hasAccess(home: home) else {
-      throw ImportError.locked("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Ardia") needs Full Disk Access to read Safari's data.")
+      throw ImportError.locked("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Solara") needs Full Disk Access to read Safari's data.")
     }
     var out = SafariExport()
     var history: [HistoryEntry] = []

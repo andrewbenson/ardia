@@ -11,7 +11,7 @@ let catchUpReply;
 let dispatchHook;
 const sent = [];
 globalThis.acTestNativeModules = {
-  ArdiaStore: {
+  SolaraStoreAdapter: {
     status: () => ({ active: true, scope: "everything" }),
     snapshot: () => JSON.stringify(data(rev)),
     dispatch: (json, sinceRev) => {

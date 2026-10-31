@@ -102,7 +102,7 @@ try {
   await new Promise((r) => setTimeout(r, 6000));
 
   await ac(`
-    const cef = globalThis.expo.modules.ArdiaCEF;
+    const cef = globalThis.expo.modules.SolaraCEF;
     return Promise.all([
       cef.setZoom("", "example.com", 1.25),
       cef.setSiteSetting("", "https://example.com", "notifications", "block"),

@@ -2,7 +2,7 @@ import { useBrowser } from "../../store/browser";
 import { plural } from "../../store/model";
 import { tidyingPins, untidyingPins, type TidiedPins } from "../../store/tidyPins";
 import { showToast } from "../layout/splitActions";
-import { encodeCommand } from "@ardia/store";
+import { encodeCommand } from "@solara/store";
 import { nativeOwnsWorkspace, nativeWrite } from "../../store/nativeStore";
 
 export function tidyPins(windowId: string, profileId?: string) {

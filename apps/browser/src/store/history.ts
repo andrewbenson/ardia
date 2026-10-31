@@ -1,4 +1,4 @@
-import { nativeDeleteHistoryUrls, nativeImportHistoryRows } from "@ardia/settings";
+import { nativeDeleteHistoryUrls, nativeImportHistoryRows } from "@solara/settings";
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "./browser";
 import { engineProfile, isIncognitoProfile } from "./model";

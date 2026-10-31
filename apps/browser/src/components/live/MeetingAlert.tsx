@@ -1,4 +1,4 @@
-import { hideNativeMeetingAlert, nativePagesAvailable, onNativeMeetingAlert, showNativeMeetingAlert } from "@ardia/settings";
+import { hideNativeMeetingAlert, nativePagesAvailable, onNativeMeetingAlert, showNativeMeetingAlert } from "@solara/settings";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated } from "react-native";
 import { useTheme } from "../../lib/theme";

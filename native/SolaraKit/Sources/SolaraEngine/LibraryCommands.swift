@@ -109,8 +109,7 @@ public extension LibraryCatalog {
     if let claim = bookmarkClaim {
       try claim.validate(engine: engineProfile)
       let (receipt, result) = try await claim.pump.submit(operations: ops, engine: engineProfile)
-      try claim.validate(engine: engineProfile)
-      publishDesired(receipt.view)
+      if bookmarkClaim === claim, (try? claim.validate(engine: engineProfile)) != nil { publishDesired(receipt.view) }
       return result
     }
     admittedRawBookmarkCommand = true

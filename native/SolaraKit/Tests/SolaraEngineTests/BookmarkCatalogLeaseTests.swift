@@ -4,6 +4,134 @@ import Testing
 @testable import SolaraEngine
 
 @Suite @MainActor struct BookmarkCatalogLeaseTests {
+  @Test func claimSurvivesARemapThroughANewerPump() async throws {
+    let f = CatalogLeaseFixture()
+    try f.claim()
+    await f.catalog.start(engineProfiles: [""])
+    f.owner.remap(profiles: ["p": "", "alias": "", "new": "extra"], defaultProfile: "p")
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try f.claim() }
+    let replacement = f.makePump()
+    try f.catalog.claimBookmarks(coordinator: f.owner, pump: replacement)
+    for engine in f.owner.catalogEngines { replacement.requestRead(engine: engine) }
+    await replacement.settle(engine: "")
+    await replacement.settle(engine: "extra")
+    let result = try await f.catalog.applyBookmarks(ops: [.init(op: "update", id: "b0", title: "After remap")], engineProfile: "")
+    #expect(result == BookmarkApplyResult(applied: 1, skipped: 0, invalid: []))
+    #expect(f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title == "After remap")
+    try f.owner.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Stream after remap"]])])
+    for _ in 0..<2000 where f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title != "Stream after remap" { try await Task.sleep(nanoseconds: 1_000_000) }
+    #expect(f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title == "Stream after remap")
+    #expect(f.catalog.bookmarks(engineProfile: "extra").hasView)
+    #expect(f.client.rawBatches.isEmpty)
+    await f.transport.releaseApply()
+    await replacement.settle(engine: "")
+  }
+
+  @Test func reclaimByAnOlderOrForeignPumpIsRefused() async throws {
+    let f = CatalogLeaseFixture()
+    try f.claim()
+    let replacement = f.makePump()
+    let otherCatalog = LibraryCatalog(client: f.client)
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try otherCatalog.claimBookmarks(coordinator: f.owner, pump: replacement) }
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try f.claim() }
+    let foreign = CatalogLeaseFixture()
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try f.catalog.claimBookmarks(coordinator: foreign.owner, pump: foreign.pump) }
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try f.catalog.claimBookmarks(coordinator: f.owner, pump: foreign.pump) }
+    try f.catalog.claimBookmarks(coordinator: f.owner, pump: replacement)
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try f.claim() }
+    #expect(throws: BookmarkCoordinatorError.ownershipUnavailable) { try f.catalog.claimBookmarks(coordinator: f.owner, pump: replacement) }
+    let next = f.makePump()
+    try f.catalog.claimBookmarks(coordinator: f.owner, pump: next)
+    #expect(f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title == "Page")
+  }
+
+  @Test func engineAddedAfterClaimGetsAStream() async throws {
+    let f = CatalogLeaseFixture()
+    try f.claim()
+    f.owner.remap(profiles: ["p": "", "new": "extra"], defaultProfile: "p")
+    let replacement = f.makePump()
+    try f.catalog.claimBookmarks(coordinator: f.owner, pump: replacement)
+    for engine in f.owner.catalogEngines { replacement.requestRead(engine: engine) }
+    await replacement.settle(engine: "")
+    await replacement.settle(engine: "extra")
+    await f.catalog.start(engineProfiles: ["extra"])
+    await f.catalog.start(engineProfiles: ["extra"])
+    try f.owner.submit(profile: "new", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "New engine stream"]])])
+    for _ in 0..<2000 where f.catalog.bookmarks(engineProfile: "extra").nodes["b0"]?.title != "New engine stream" { try await Task.sleep(nanoseconds: 1_000_000) }
+    #expect(f.catalog.bookmarks(engineProfile: "extra").nodes["b0"]?.title == "New engine stream")
+    #expect(f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title == "Page")
+    #expect(f.client.reads == 0)
+    replacement.stop()
+  }
+
+  @Test func startOpensAMissingClaimedEngineStream() async throws {
+    let f = CatalogLeaseFixture()
+    f.catalog.bookmarkClaim = try f.pump.claimCatalog(coordinator: f.owner)
+    await f.catalog.start(engineProfiles: [""])
+    try f.owner.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Started stream"]])])
+    for _ in 0..<2000 where f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title != "Started stream" { try await Task.sleep(nanoseconds: 1_000_000) }
+    #expect(f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title == "Started stream")
+  }
+
+  @Test func badOpMidBatchKeepsThePrefixAndSkipsTheRest() async throws {
+    for bad: JSONValue in [["op": "unknown", "id": "oops"], ["id": "oops"]] {
+      let f = CatalogLeaseFixture()
+      try f.claim()
+      let receipt = try f.owner.submit(profile: "p", mutations: [.init(method: "applyBookmarkOperations", args: [[
+        ["op": "add", "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "k": "u", "u": "", "parent": "bar"],
+        ["op": "update", "id": "b0", "t": "Prefix"],
+        bad,
+        ["op": "update", "id": "b0", "t": "Suffix"]
+      ]])])
+      #expect(receipt.results == [["applied": 1, "skipped": 2, "invalid": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"]]])
+      #expect(receipt.view.document["nodes"]?["b0"]?["title"] == "Prefix")
+      #expect(receipt.view.document["nodes"]?["oops"] == nil)
+      for _ in 0..<2000 where f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title != "Prefix" { try await Task.sleep(nanoseconds: 1_000_000) }
+      #expect(f.catalog.bookmarks(engineProfile: "").nodes["b0"]?.title == "Prefix")
+    }
+  }
+
+  @Test func staleClaimAfterDurableAcceptStillReturnsTheResult() async throws {
+    for _ in 0..<10 {
+      let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("journal-\(UUID().uuidString)")
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let gate = CatalogJournalGate()
+      let f = CatalogLeaseFixture(directory: directory, operations: gate.operations)
+      try f.claim()
+      let stream = f.owner.desiredViews(engine: "")
+      var stoppedAfterAccept = false
+      let stopAfterAccept = Task(priority: .high) {
+        for await view in stream where view.document["nodes"]?["b0"]?["title"] == "Durable" {
+          f.pump.stop()
+          stoppedAfterAccept = true
+          return
+        }
+      }
+      defer { stopAfterAccept.cancel() }
+      let command = Task(priority: .low) {
+        let result = try await f.catalog.applyBookmarks(ops: [.init(op: "update", id: "b0", title: "Durable")], engineProfile: "")
+        return (result, stoppedAfterAccept)
+      }
+      for _ in 0..<2000 where !gate.holding { try await Task.sleep(nanoseconds: 1_000_000) }
+      #expect(gate.holding)
+      gate.release()
+      let (result, stoppedBeforeReturn) = try await command.value
+      await stopAfterAccept.value
+      await f.transport.releaseApply()
+      await f.pump.settle(engine: "")
+      guard stoppedBeforeReturn else { continue }
+      #expect(result == BookmarkApplyResult(applied: 1, skipped: 0, invalid: []))
+      #expect(throws: BookmarkCoordinatorError.staleRevision) { try f.catalog.bookmarkClaim?.validate(engine: "") }
+      #expect(f.owner.desiredView(engine: "").document["nodes"]?["b0"]?["title"] == "Durable")
+      let restored = BookmarkCoordinator(profiles: ["p": ""], defaultProfile: "p", pendingStore: BookmarkPendingStore(directory: directory))
+      #expect(restored.desiredView(engine: "").document["nodes"]?["b0"]?["title"] == "Durable")
+      #expect(f.client.rawBatches.isEmpty)
+      return
+    }
+    Issue.record("The claim did not become stale before the accepted command returned")
+  }
+
   @Test func claimedCatalogPublishesDesiredViewBeforeChromeConfirms() async throws {
     let f = CatalogLeaseFixture()
     try f.claim()
@@ -199,9 +327,8 @@ import Testing
   @Test func claimedUnknownOperationDoesNotBecomeAnAddition() async throws {
     let f = CatalogLeaseFixture()
     try f.claim()
-    await #expect(throws: BookmarkCoordinatorError.invalidOperation("unknown")) {
-      try await f.catalog.applyBookmarks(ops: [.init(op: "unknown", id: "oops", parent: "bar")], engineProfile: "")
-    }
+    let result = try await f.catalog.applyBookmarks(ops: [.init(op: "unknown", id: "oops", parent: "bar")], engineProfile: "")
+    #expect(result == BookmarkApplyResult(applied: 0, skipped: 1, invalid: []))
     #expect(f.owner.desiredView(engine: "").document["nodes"]?["oops"] == nil)
     #expect(f.client.rawBatches.isEmpty)
     #expect(f.transport.batches.isEmpty)
@@ -304,6 +431,11 @@ import Testing
     let transport = transport
     pump = BookmarkPump(coordinator: owner, client: BookmarkEngineClient(readTree: { _ in await transport.read() }, apply: { _, ops in await transport.apply(ops) }), clock: .init(wallTimeMs: { 0 }, monotonicTimeMs: { 0 }), scheduler: .init(schedule: { _, _ in {} }))
     catalog = LibraryCatalog(client: client)
+  }
+
+  func makePump() -> BookmarkPump {
+    let transport = transport
+    return BookmarkPump(coordinator: owner, client: BookmarkEngineClient(readTree: { _ in await transport.read() }, apply: { _, ops in await transport.apply(ops) }), clock: .init(wallTimeMs: { 0 }, monotonicTimeMs: { 0 }), scheduler: .init(schedule: { _, _ in {} }))
   }
 
   func claim() throws { try catalog.claimBookmarks(coordinator: owner, pump: pump) }

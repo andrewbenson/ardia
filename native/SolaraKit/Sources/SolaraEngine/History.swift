@@ -229,18 +229,30 @@ public final class LibraryCatalog {
   deinit { for task in bookmarkTasks.values { task.cancel() } }
 
   public func claimBookmarks(coordinator: BookmarkCoordinator, pump: BookmarkPump) throws {
-    guard bookmarkClaim == nil, !observing, !admittedRawBookmarkCommand else { throw BookmarkCoordinatorError.ownershipUnavailable }
-    let claim = try pump.claimCatalog(coordinator: coordinator)
+    if let claim = bookmarkClaim {
+      guard claim.coordinator === coordinator else { throw BookmarkCoordinatorError.ownershipUnavailable }
+    } else {
+      guard !observing, !admittedRawBookmarkCommand else { throw BookmarkCoordinatorError.ownershipUnavailable }
+    }
+    let claim = try pump.claimCatalog(coordinator: coordinator, replacing: bookmarkClaim?.epoch)
+    for task in bookmarkTasks.values { task.cancel() }
+    bookmarkTasks.removeAll()
     bookmarkClaim = claim
     for engine in coordinator.catalogEngines {
+      guard (try? claim.validate(engine: engine)) != nil else { continue }
       publishDesired(coordinator.desiredView(engine: engine))
-      let stream = coordinator.desiredViews(engine: engine)
-      bookmarkTasks[engine] = Task { [weak self, weak claim] in
-        for await view in stream {
-          guard let self, let claim, self.bookmarkClaim === claim else { break }
-          guard (try? claim.validate(engine: engine)) != nil else { continue }
-          self.publishDesired(view)
-        }
+      observeDesired(engine: engine, claim: claim)
+    }
+  }
+
+  private func observeDesired(engine: String, claim: BookmarkCatalogClaim) {
+    guard bookmarkTasks[engine] == nil else { return }
+    let stream = claim.coordinator.desiredViews(engine: engine)
+    bookmarkTasks[engine] = Task { [weak self, weak claim] in
+      for await view in stream {
+        guard let self, let claim, self.bookmarkClaim === claim else { break }
+        guard (try? claim.validate(engine: engine)) != nil else { continue }
+        self.publishDesired(view)
       }
     }
   }
@@ -306,6 +318,7 @@ public final class LibraryCatalog {
       if libraries[profile]?.snapshot.ready != true { await libraries[profile]?.reload() }
       if let claim = bookmarkClaim {
         if (try? claim.validate(engine: profile)) != nil {
+          observeDesired(engine: profile, claim: claim)
           publishDesired(claim.coordinator.desiredView(engine: profile))
           if !claim.coordinator.desiredView(engine: profile).readyForSync { claim.pump.requestRead(engine: profile) }
         }

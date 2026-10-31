@@ -79,7 +79,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
     try await withCheckedThrowingContinuation { continuation in journalQueue.async { continuation.resume(with: Result { try body() }) } }
   }
   private var pumpEpoch: UInt64 = 0
-  private var catalogClaimed = false
+  private var catalogClaimEpoch: UInt64?
   private let lock = NSRecursiveLock()
   private let writerLock = NSLock()
   private var profiles: JSMap<String>
@@ -303,10 +303,11 @@ public final class BookmarkCoordinator: @unchecked Sendable {
 
   func catalogProfile(engine: String) -> String? { locked { aliases(engine).first } }
 
-  func claimCatalog(epoch: UInt64) throws {
+  func claimCatalog(epoch: UInt64, replacing previousEpoch: UInt64?) throws {
     try locked {
-      guard !catalogClaimed, epoch == pumpEpoch else { throw BookmarkCoordinatorError.ownershipUnavailable }
-      catalogClaimed = true
+      guard epoch == pumpEpoch, catalogClaimEpoch == previousEpoch,
+            previousEpoch.map({ epoch > $0 }) ?? true else { throw BookmarkCoordinatorError.ownershipUnavailable }
+      catalogClaimEpoch = epoch
     }
   }
 
@@ -712,7 +713,7 @@ private struct BookmarkReducer {
       for source in operations {
         var operation = source
         let kind = operation["op"]?.string ?? ""
-        guard ["add", "update", "move", "remove"].contains(kind) else { throw BookmarkCoordinatorError.invalidOperation(kind) }
+        guard ["add", "update", "move", "remove"].contains(kind) else { break }
         let id = operation["id"]?.string ?? ""
         let existing = flat.nodes[id]
         if kind == "add", existing == nil {

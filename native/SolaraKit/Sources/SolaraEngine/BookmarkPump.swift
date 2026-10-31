@@ -95,9 +95,9 @@ public final class BookmarkPump {
     return receipt
   }
 
-  func claimCatalog(coordinator: BookmarkCoordinator) throws -> BookmarkCatalogClaim {
+  func claimCatalog(coordinator: BookmarkCoordinator, replacing previousEpoch: UInt64? = nil) throws -> BookmarkCatalogClaim {
     guard self.coordinator === coordinator, !stopped else { throw BookmarkCoordinatorError.ownershipUnavailable }
-    try coordinator.claimCatalog(epoch: epoch)
+    try coordinator.claimCatalog(epoch: epoch, replacing: previousEpoch)
     return BookmarkCatalogClaim(coordinator: coordinator, pump: self, epoch: epoch)
   }
 
@@ -329,7 +329,7 @@ private final class BookmarkEngineAdapter {
 final class BookmarkCatalogClaim {
   let coordinator: BookmarkCoordinator
   let pump: BookmarkPump
-  private let epoch: UInt64
+  let epoch: UInt64
 
   init(coordinator: BookmarkCoordinator, pump: BookmarkPump, epoch: UInt64) {
     self.coordinator = coordinator

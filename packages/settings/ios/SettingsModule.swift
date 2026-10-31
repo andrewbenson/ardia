@@ -21,9 +21,16 @@ public class SettingsModule: Module {
       NativeCliControl.active
     }
 
-    Function("appServicesActive") { () -> Bool in
-      NativeAppIntegration.active
-    }
+    AsyncFunction("appIntegrationCommand") { (command: String, windowId: String?, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        NativeAppIntegration.shared.startWhenReady()
+        guard NativeAppIntegration.shared.perform(command, windowId: windowId) else {
+          return reply.reject("ERR_APP_INTEGRATION", "unknown native app integration command: \(command)")
+        }
+        reply.resolve(nil)
+      }
+    }.runOnQueue(.main)
 
     AsyncFunction("installCli") { (reason: String, promise: Promise) in
       nonisolated(unsafe) let reply = promise

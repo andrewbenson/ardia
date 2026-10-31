@@ -5,7 +5,7 @@ type SettingsCall = { id: number; name: string; args: string };
 type NativeSettingsModule = {
   available(): boolean;
   servicesActive?(): boolean;
-  appServicesActive?(): boolean;
+  appIntegrationCommand(command: AppIntegrationCommand, windowId: string | null): Promise<void>;
   installCli?(reason: string): Promise<Record<string, unknown>>;
   navigate(pane: string | null, profileId: string | null, detail: string | null): Promise<void>;
   focusSearch(): Promise<void>;
@@ -67,13 +67,10 @@ export function nativeServicesActive(): boolean {
 export const nativeInstallCli = (reason: string) =>
   native?.installCli ? native.installCli(reason) : Promise.reject(new Error("native services are off"));
 
-export function nativeAppServicesActive(): boolean {
-  try {
-    return native?.appServicesActive?.() ?? false;
-  } catch {
-    return false;
-  }
-}
+export type AppIntegrationCommand = "sendFeedback" | "copyDiagnostics" | "recordPerformanceIssue" | "taskManager";
+
+export const nativeAppIntegrationCommand = (command: AppIntegrationCommand, windowId?: string | null): Promise<void> =>
+  native?.appIntegrationCommand(command, windowId ?? null) ?? Promise.reject(new Error("native app integration unavailable"));
 
 export const navigateNativeSettings = (pane: string | null, profileId: string | null, detail: string | null = null) =>
   native?.navigate(pane, profileId, detail).catch(() => {});

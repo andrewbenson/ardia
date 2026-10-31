@@ -1,3 +1,4 @@
+import { nativeAppIntegrationCommand } from "@ardia/settings";
 import { showNativePanelNow } from "../components/CommandPanel";
 import { markPanelFrame } from "./perfMarks";
 import {
@@ -67,6 +68,15 @@ import { peekTabId } from "../store/peek";
 import { expectFocus, findFocus, urlEditFocus } from "./focusClaims";
 
 export function runCommand({ command, arg, windowId: requested }: CommandEvent) {
+  switch (command) {
+    case "sendFeedback":
+    case "copyDiagnostics":
+    case "recordPerformanceIssue":
+    case "taskManager":
+      return void nativeAppIntegrationCommand(command, requested).catch((error) => {
+        console.warn(`Native app integration command ${command} failed`, error);
+      });
+  }
   const s = useBrowser.getState();
 
   if (isUtilityWindowId(requested)) {

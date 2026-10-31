@@ -73,38 +73,13 @@ export type SystemInfo = {
   inApplicationsFolder?: boolean;
 };
 
-export type ScriptState = {
-  windows: {
-    id: string;
-    title: string;
-    profileId: string;
-    incognito: boolean;
-    activeTabId: string | null;
-    tabs: { id: string; title: string; url: string; loading: boolean; pinned: boolean }[];
-  }[];
-  profiles: { id: string; name: string }[];
-};
-
-export type ScriptCommand = { id: string } & (
-  | { command: "newWindow"; url?: string; incognito: boolean; profileId?: string }
-  | { command: "newTab"; windowId?: string; url?: string; index?: number }
-  | { command: "setURL"; tabId: string; url: string }
-  | { command: "closeTab" | "reload" | "back" | "forward" | "focusTab"; tabId: string }
-  | { command: "closeWindow"; windowId: string }
-  | { command: "setActiveTabIndex"; windowId: string; index: number }
-  | { command: "execute"; tabId: string; code: string }
-  | { command: "focusProfile"; profileId: string }
-);
-
 export type AppModule = {
   addListener(name: "onNotificationResponse", listener: (e: NotificationResponse) => void): EventSubscription;
-  addListener(name: "onScriptCommand", listener: (e: ScriptCommand) => void): EventSubscription;
   updaterState(): Promise<UpdaterState>;
   checkForUpdates(): Promise<void>;
   setAutomaticUpdateChecks(on: boolean): Promise<void>;
   setAutomaticUpdateDownloads(on: boolean): Promise<void>;
   setUpdateChannel(channel: UpdateChannel): Promise<void>;
-  setWindowActivity(windowId: string, url: string | null, title: string | null): Promise<void>;
   share(url: string, title: string | null, windowId: string | null, anchor: ShareAnchor | null): Promise<void>;
   shareVia(service: string, url: string, title: string | null, windowId: string | null): Promise<void>;
   isInDock(): Promise<boolean>;
@@ -117,9 +92,7 @@ export type AppModule = {
   postNotification(options: NotificationOptions): Promise<string | null>;
   removeNotifications(ids: string[]): Promise<void>;
   openNotificationSettings(): Promise<void>;
-  setScriptState(state: ScriptState): Promise<void>;
-  setScriptLoading?(ids: string[]): Promise<void>;
-  replyToScript(id: string, result: Record<string, unknown> | null, error: string | null): Promise<void>;
+  setScriptLoading(ids: string[]): Promise<void>;
   systemInfo(): SystemInfo;
   openExternalURL(url: string): Promise<boolean>;
   launchEnvironment(name: string): string | null;
@@ -150,9 +123,6 @@ export const setAutomaticUpdateChecks = (on: boolean) => App.setAutomaticUpdateC
 export const setAutomaticUpdateDownloads = (on: boolean) => App.setAutomaticUpdateDownloads(on);
 export const setUpdateChannel = (channel: UpdateChannel) => App.setUpdateChannel(channel);
 
-export const setWindowActivity = (windowId: string, url: string | null, title: string | null) =>
-  App.setWindowActivity(windowId, url, title);
-
 export type ShareAnchor = [number, number, number, number];
 
 export const sharePage = (url: string, title?: string | null, windowId?: string | null, anchor?: ShareAnchor | null) =>
@@ -176,11 +146,7 @@ export const removeNotifications = (ids: string[]) => App.removeNotifications(id
 export const openNotificationSettings = () => App.openNotificationSettings();
 export const onNotificationResponse = (listener: (e: NotificationResponse) => void) => App.addListener("onNotificationResponse", listener);
 
-export const setScriptState = (state: ScriptState) => App.setScriptState(state);
-export const setScriptLoading = (ids: string[]) => App.setScriptLoading?.(ids) ?? Promise.resolve();
-export const replyToScript = (id: string, result: Record<string, unknown> | null, error: string | null = null) =>
-  App.replyToScript(id, result, error);
-export const onScriptCommand = (listener: (e: ScriptCommand) => void) => App.addListener("onScriptCommand", listener);
+export const setScriptLoading = (ids: string[]) => App.setScriptLoading(ids);
 
 export const systemInfo = () => App.systemInfo();
 export const openExternalURL = (url: string) => App.openExternalURL(url);

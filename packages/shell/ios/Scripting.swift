@@ -27,14 +27,17 @@ public enum ShellScripting {
   private static var pushedWindows: [WindowInfo] = []
   private static var pushedProfiles: [ProfileInfo] = []
   nonisolated(unsafe) public static var refresh: (() -> Void)?
+  nonisolated(unsafe) public static var availabilityError: (() -> String?)?
   nonisolated(unsafe) public private(set) static var loadingTabs: Set<String> = []
 
   static var windowInfos: [WindowInfo] {
+    guard requireReady() else { return [] }
     refresh?()
     return pushedWindows
   }
 
   static var profileInfos: [ProfileInfo] {
+    guard requireReady() else { return [] }
     refresh?()
     return pushedProfiles
   }
@@ -43,7 +46,6 @@ public enum ShellScripting {
     loadingTabs = Set(ids)
   }
 
-  static var send: (([String: Any]) -> Void)?
   nonisolated(unsafe) public static var nativeCommand: (([String: Any], @escaping (Any?, String?) -> Void) -> Bool)?
   private static var pending: [String: (Any?, String?) -> Void] = [:]
   private static var seq = 0
@@ -69,6 +71,7 @@ public enum ShellScripting {
   }
 
   static var orderedWindowInfos: [WindowInfo] {
+    guard requireReady() else { return [] }
     let byId = Dictionary(windowInfos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     let front = NSApp.orderedWindows.compactMap { WindowManager.shared.id(of: $0) }.compactMap { byId[$0] }
     let seen = Set(front.map(\.id))
@@ -92,17 +95,35 @@ public enum ShellScripting {
 
   public static var windows: [NSObject] { orderedWindowInfos.map { ScriptWindow(id: $0.id) } }
   public static var profiles: [NSObject] { profileInfos.map { ScriptProfile(id: $0.id) } }
-  public static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
+  public static var version: String {
+    guard requireReady() else { return "" }
+    return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+  }
+
+  static func requireReady() -> Bool {
+    let error: String?
+    if let availabilityError {
+      error = availabilityError()
+    } else {
+      error = "\(Bundle.main.productName) isn't ready yet."
+    }
+    guard let error else { return true }
+    NSScriptCommand.current()?.setError(error)
+    return false
+  }
 
   static func reply(_ id: String, result: Any?, error: String?) {
-    pending.removeValue(forKey: id)?(result, error)
+    guard let complete = pending.removeValue(forKey: id) else { return }
+    refresh?()
+    complete(result, error)
   }
 
   static func perform(_ body: [String: Any], transform: @escaping ([String: Any]) -> Any? = { _ in nil }) -> Any? {
     #if DEBUG
     if !Thread.isMainThread { NSLog("\(Bundle.main.productName): an Apple event is being handled off the main thread") }
     #endif
-    guard send != nil || nativeCommand != nil else {
+    guard requireReady() else { return nil }
+    guard let nativeCommand else {
       NSScriptCommand.current()?.setError("\(Bundle.main.productName) isn't ready yet.")
       return nil
     }
@@ -123,19 +144,17 @@ public enum ShellScripting {
         NSLog("\(Bundle.main.productName): AppleScript reply failed: \(failure)")
       }
     }
-    if let nativeCommand, nativeCommand(body, { result, error in reply(id, result: result, error: error) }) {
-      return nil
-    }
-    guard let send else {
-      reply(id, result: nil, error: "\(Bundle.main.productName) isn't ready yet.")
-      return nil
-    }
-    var request = body
-    request["id"] = id
-    send(request)
     DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
       reply(id, result: nil, error: "\(Bundle.main.productName) didn't respond in time.")
     }
+    let handled = nativeCommand(body) { result, error in
+      if Thread.isMainThread {
+        reply(id, result: result, error: error)
+      } else {
+        DispatchQueue.main.async { reply(id, result: result, error: error) }
+      }
+    }
+    if !handled { reply(id, result: nil, error: "\(Bundle.main.productName) isn't ready yet.") }
     return nil
   }
 }
@@ -164,10 +183,14 @@ final class ScriptWindow: NSObject {
   }
 
   private var info: ShellScripting.WindowInfo? { ShellScripting.window(uniqueID) }
-  private var nsWindow: NSWindow? { WindowManager.shared.windows[uniqueID] }
+  private var nsWindow: NSWindow? {
+    guard ShellScripting.requireReady() else { return nil }
+    return WindowManager.shared.windows[uniqueID]
+  }
 
   override var objectSpecifier: NSScriptObjectSpecifier? {
-    NSUniqueIDSpecifier(containerClassDescription: appDescription!, containerSpecifier: nil, key: "appleScriptWindows", uniqueID: uniqueID)
+    guard ShellScripting.requireReady() else { return nil }
+    return NSUniqueIDSpecifier(containerClassDescription: appDescription!, containerSpecifier: nil, key: "appleScriptWindows", uniqueID: uniqueID)
   }
 
   @objc var name: String { info?.title ?? "" }
@@ -257,6 +280,7 @@ final class ScriptTab: NSObject {
   }
 
   @objc func handleExecuteScriptCommand(_ command: NSScriptCommand) -> Any? {
+    guard ShellScripting.requireReady() else { return nil }
     guard let code = command.evaluatedArguments?["javascript"] as? String else {
       command.setError("Missing the “javascript” parameter.")
       return nil
@@ -274,7 +298,8 @@ final class ScriptProfile: NSObject {
   }
 
   override var objectSpecifier: NSScriptObjectSpecifier? {
-    NSUniqueIDSpecifier(containerClassDescription: appDescription!, containerSpecifier: nil, key: "appleScriptProfiles", uniqueID: uniqueID)
+    guard ShellScripting.requireReady() else { return nil }
+    return NSUniqueIDSpecifier(containerClassDescription: appDescription!, containerSpecifier: nil, key: "appleScriptProfiles", uniqueID: uniqueID)
   }
 
   @objc var name: String { ShellScripting.profileInfos.first { $0.id == uniqueID }?.name ?? "" }
@@ -292,6 +317,7 @@ final class ScriptProfile: NSObject {
 @objc(ACScriptCreateCommand)
 final class ScriptCreateCommand: NSCreateCommand {
   override func performDefaultImplementation() -> Any? {
+    guard ShellScripting.requireReady() else { return nil }
     let properties = resolvedKeyDictionary
     let url = properties["URL"] as? String
     switch createClassDescription.className {

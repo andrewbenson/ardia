@@ -23,6 +23,24 @@ public protocol ScriptPages: AnyObject {
   func call(_ tabId: String, _ method: String, _ args: [Any], done: @escaping (Any?, String?) -> Void)
 }
 
+@MainActor
+public final class PoolScriptPages<Page>: ScriptPages {
+  private let page: (String) -> Page?
+  private let invoke: (Page, String, [Any], @escaping (Any?, String?) -> Void) -> Void
+
+  public init(page: @escaping (String) -> Page?, invoke: @escaping (Page, String, [Any], @escaping (Any?, String?) -> Void) -> Void) {
+    self.page = page
+    self.invoke = invoke
+  }
+
+  public func has(_ tabId: String) -> Bool { page(tabId) != nil }
+
+  public func call(_ tabId: String, _ method: String, _ args: [Any], done: @escaping (Any?, String?) -> Void) {
+    guard let page = page(tabId) else { return done(nil, ScriptCommandRunner.notLoaded) }
+    invoke(page, method, args, done)
+  }
+}
+
 public enum ScriptReply {
   case result([String: Any])
   case failure(String)
@@ -30,6 +48,7 @@ public enum ScriptReply {
 
 @MainActor
 public struct ScriptCommandRunner {
+  public static let notLoaded = "The tab hasn't loaded yet; focus it first."
   public static let refused: [String: Any] = ["refused": "javaScriptFromAppleEvents"]
 
   let writer: WorkspaceWriter
@@ -102,7 +121,7 @@ public struct ScriptCommandRunner {
       return reply()
     case "reload", "back", "forward":
       guard s.tabs[tabId] != nil else { return fail(tabGone) }
-      guard pages.has(tabId) else { return false }
+      guard pages.has(tabId) else { return fail(Self.notLoaded) }
       let method = ["reload": "reload", "back": "goBack", "forward": "goForward"][request["command"] as! String]!
       pages.call(tabId, method, []) { _, error in done(error.map(ScriptReply.failure) ?? .result([:])) }
       return true
@@ -126,12 +145,12 @@ public struct ScriptCommandRunner {
     case "execute":
       guard s.tabs[tabId] != nil else { return fail(tabGone) }
       if !allowed { return reply(Self.refused) }
-      guard pages.has(tabId) else { return false }
+      guard pages.has(tabId) else { return fail(Self.notLoaded) }
       pages.call(tabId, "evaluate", [Self.executeWrapper(request["code"] as? String ?? "")]) { value, error in
         if let error { return done(.failure(error)) }
         let outcome = (value as? String).flatMap { $0.data(using: .utf8) }.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
         guard let outcome else { return done(.failure("The page didn't answer.")) }
-        if let message = outcome["error"] as? String { return done(.failure(message)) }
+        if let message = outcome["error"] as? String, !message.isEmpty { return done(.failure(message)) }
         done(.result(["value": outcome["value"] as? String ?? ""]))
       }
       return true

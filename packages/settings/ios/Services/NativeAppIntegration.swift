@@ -9,36 +9,66 @@ import SolaraUI
 @MainActor
 final class NativeAppIntegration {
   static let shared = NativeAppIntegration()
+  static var active: Bool { shared.started }
   static let handoffDelay: TimeInterval = 0.25
   static let firstHandoffDelay: TimeInterval = 1
-
-  nonisolated static var enabled: Bool { LaunchSwitches.shared.isOn(.nativeServices, defaultOn: false) }
-  nonisolated static let active: Bool = enabled && NativeStoreHandle.opened && NativeStoreHandle.ownedWorkspaceAtLaunch
 
   private var handoff = HandoffTracker()
   private var handoffQueued = false
   private var started = false
+  private var retryInFlight = false
   private var scriptRev = -1
   private var scriptLoading: Set<String> = []
 
-  private init() {}
+  private static var storeStatus: AppIntegrationStoreStatus {
+    AppIntegrationPolicy.storeStatus(
+      opened: NativeStoreHandle.opened, ownsWorkspace: NativeStoreHandle.ownedWorkspaceAtLaunch,
+      storeAvailable: NativeStoreHandle.store != nil, failureReason: NativeSettingsHandle.unavailable?.detail)
+  }
+
+  private init() {
+    ShellScripting.availabilityError = {
+      MainActor.assumeIsolated {
+        AppIntegrationPolicy.scriptError(
+          storeStatus: Self.storeStatus, handlerAvailable: ShellScripting.nativeCommand != nil, productName: Bundle.main.productName)
+      }
+    }
+    for action in AppIntegrationMenuAction.allCases {
+      NativeMenuCommands.handlers[action.rawValue] = { windowId in _ = NativeAppIntegration.shared.perform(action.rawValue, windowId: windowId) }
+    }
+  }
 
   func startWhenReady(tries: Int = 40) {
-    guard Self.active, !started else { return }
-    guard let store = NativeStoreHandle.store else {
-      guard tries > 0 else { return NSLog("[services] the native store never opened, so app services stay in JS") }
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.startWhenReady(tries: tries - 1) }
+    guard !started, !retryInFlight else { return }
+    retryInFlight = true
+    continueStartup(tries: tries)
+  }
+
+  private func continueStartup(tries: Int) {
+    let readiness = AppIntegrationPolicy.readiness(storeStatus: Self.storeStatus)
+    switch readiness {
+    case .waiting:
+      guard tries > 0 else {
+        retryInFlight = false
+        return NSLog("[services] the native store never became ready for app integration")
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.continueStartup(tries: tries - 1) }
       return
+    case .unavailable:
+      retryInFlight = false
+      return
+    case .ready:
+      break
     }
+    retryInFlight = false
+    guard let store = NativeStoreHandle.store else { return }
     started = true
-    NativeMenuCommands.handlers = [
-      "sendFeedback": { windowId in NativeAppIntegration.shared.sendFeedback(windowId) },
-      "copyDiagnostics": { _ in NativeAppIntegration.copy(NativeAppIntegration.shared.diagnostics()) },
-      "recordPerformanceIssue": { _ in NativeAppIntegration.shared.recordPerformanceIssue() },
-      "taskManager": { _ in ArdiaCoreServices.call("ac_task_manager_open", profile: "", args: nil) { @Sendable _ in } },
-    ]
     let writer = StoreWorkspaceWriter(store: store, showWindow: ShellScripting.showWindow)
-    let pages = PooledScriptPages()
+    let pages = PoolScriptPages(
+      page: { TabPoolHost.shared.pageView($0) },
+      invoke: { page, method, args, done in
+        PageCalls.run(page, method, args, resolve: { done($0, nil) }, reject: { _, message in done(nil, message) })
+      })
     ShellScripting.nativeCommand = { body, done in
       MainActor.assumeIsolated {
         ScriptCommandRunner(writer: writer, pages: pages).run(body) { reply in
@@ -50,10 +80,22 @@ final class NativeAppIntegration {
       }
     }
     ShellScripting.refresh = { MainActor.assumeIsolated { NativeAppIntegration.shared.refreshScriptState() } }
-    store.subscribe { _ in
+    store.subscribe { commit in
+      guard AppIntegrationPolicy.handoffNeedsUpdate(commit.changes) else { return }
       DispatchQueue.main.async { MainActor.assumeIsolated { NativeAppIntegration.shared.queueHandoff() } }
     }
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstHandoffDelay) { self.syncHandoff() }
+  }
+
+  func perform(_ command: String, windowId: String?) -> Bool {
+    AppIntegrationPolicy.performMenuCommand(command, storeStatus: Self.storeStatus) { action, status in
+      switch action {
+      case .sendFeedback: sendFeedback(windowId, storeStatus: status)
+      case .copyDiagnostics: Self.copy(diagnostics(storeStatus: status))
+      case .recordPerformanceIssue: recordPerformanceIssue()
+      case .taskManager: ArdiaCoreServices.call("ac_task_manager_open", profile: "", args: nil) { @Sendable _ in }
+      }
+    }
   }
 
   private func queueHandoff() {
@@ -80,19 +122,20 @@ final class NativeAppIntegration {
     ShellScripting.setState(ScriptState.build(state, loading: loading))
   }
 
-  func diagnostics() -> String {
-    let state = NativeStoreHandle.store?.state ?? BrowserState()
+  func diagnostics(storeStatus: AppIntegrationStoreStatus? = nil) -> String {
+    let status = storeStatus ?? Self.storeStatus
+    let state = status == .ready ? NativeStoreHandle.store?.state : nil
     return AppDiagnostics.report(
-      app: AppFacts(AppModule.systemInfo), chromiumVersion: ArdiaCoreHost.engineInfo["chromiumVersion"] as? String ?? "",
-      updates: UpdaterFacts(AppUpdater.shared.state), state: state)
+      app: AppFacts(AppModule.systemInfo), engine: ArdiaCoreHost.engineInfo,
+      updates: UpdaterFacts(AppUpdater.shared.state), state: state, storeStatus: status)
   }
 
-  func feedbackTarget() -> FeedbackTarget {
-    AppDiagnostics.feedback(report: diagnostics(), app: AppFacts(AppModule.systemInfo))
+  func feedbackTarget(storeStatus: AppIntegrationStoreStatus? = nil) -> FeedbackTarget {
+    AppDiagnostics.feedback(report: diagnostics(storeStatus: storeStatus), app: AppFacts(AppModule.systemInfo))
   }
 
-  func sendFeedback(_ windowId: String?) {
-    switch feedbackTarget() {
+  func sendFeedback(_ windowId: String?, storeStatus: AppIntegrationStoreStatus? = nil) {
+    switch feedbackTarget(storeStatus: storeStatus) {
     case .page(let url):
       openTab(url, in: windowId)
     case .mail(let draft, let body):
@@ -102,7 +145,11 @@ final class NativeAppIntegration {
   }
 
   private func openTab(_ url: String, in windowId: String?) {
-    guard let store = NativeStoreHandle.store else { return }
+    guard Self.storeStatus == .ready, let store = NativeStoreHandle.store else {
+      if ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1" { return NSLog("[services] background instance, not opening the feedback page") }
+      if let target = URL(string: url) { NSWorkspace.shared.open(target) }
+      return
+    }
     let state = store.state
     if let target = state.resolveWindowId(windowId), state.windows[target]?.incognito != true {
       _ = try? store.dispatch(Command("newTab", [.string(target), ["url": .string(url)]]), origin: .native)
@@ -113,7 +160,8 @@ final class NativeAppIntegration {
 
   private func recordPerformanceIssue() {
     guard !ArdiaCoreHost.isTracing else { return }
-    let product = Bundle.main.productName
+    let name = AppFacts(AppModule.systemInfo).appName.jsTrim()
+    let product = name.isEmpty ? "Ardia" : name
     guard Self.confirm(
       "Record a performance issue?",
       "\(product) records what the engine does while you reproduce the problem. The recording is saved to your Downloads folder.",
@@ -142,15 +190,5 @@ final class NativeAppIntegration {
   static func copy(_ text: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
-  }
-}
-
-@MainActor
-final class PooledScriptPages: ScriptPages {
-  func has(_ tabId: String) -> Bool { TabPoolHost.shared.pageView(tabId) != nil }
-
-  func call(_ tabId: String, _ method: String, _ args: [Any], done: @escaping (Any?, String?) -> Void) {
-    guard let page = TabPoolHost.shared.pageView(tabId) else { return done(nil, "The tab hasn't loaded yet; focus it first.") }
-    PageCalls.run(page, method, args, resolve: { done($0, nil) }, reject: { _, message in done(nil, message) })
   }
 }

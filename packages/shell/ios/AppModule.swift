@@ -9,8 +9,8 @@ extension Bundle {
 public class AppModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaApp")
-    Constant("apiVersion") { () -> Int in 28 }
-    Events("onNotificationResponse", "onScriptCommand")
+    Constant("apiVersion") { () -> Int in 29 }
+    Events("onNotificationResponse")
 
     OnCreate {
       DispatchQueue.main.async {
@@ -32,21 +32,11 @@ public class AppModule: Module {
       }
     }
 
-    OnStartObserving("onScriptCommand") {
-      DispatchQueue.main.async { [weak self] in
-        ShellScripting.send = { body in self?.sendEvent("onScriptCommand", body) }
-      }
-    }
-
     AsyncFunction("updaterState") { () -> [String: Any] in AppUpdater.shared.state }.runOnQueue(.main)
     AsyncFunction("checkForUpdates") { AppUpdater.shared.checkForUpdates(nil) }.runOnQueue(.main)
     AsyncFunction("setAutomaticUpdateChecks") { (on: Bool) in AppUpdater.shared.setAutomaticChecks(on) }.runOnQueue(.main)
     AsyncFunction("setAutomaticUpdateDownloads") { (on: Bool) in AppUpdater.shared.setAutomaticDownloads(on) }.runOnQueue(.main)
     AsyncFunction("setUpdateChannel") { (channel: String) in AppUpdater.shared.setChannel(channel) }.runOnQueue(.main)
-
-    AsyncFunction("setWindowActivity") { (windowId: String, url: String?, title: String?) in
-      Handoff.setActivity(windowId: windowId, url: url, title: title)
-    }.runOnQueue(.main)
 
     AsyncFunction("share") { (url: String, title: String?, windowId: String?, anchor: [Double]?, promise: Promise) in
       SharePicker.show(url: url, title: title, windowId: windowId, anchor: anchor) { promise.resolve(nil) }
@@ -84,11 +74,7 @@ public class AppModule: Module {
       }
     }.runOnQueue(.main)
 
-    AsyncFunction("setScriptState") { (state: [String: Any]) in ShellScripting.setState(state) }.runOnQueue(.main)
     AsyncFunction("setScriptLoading") { (ids: [String]) in ShellScripting.setLoading(ids) }.runOnQueue(.main)
-    AsyncFunction("replyToScript") { (id: String, result: [String: Any]?, error: String?) in
-      ShellScripting.reply(id, result: result, error: error)
-    }.runOnQueue(.main)
 
     Function("systemInfo") { () -> [String: Any] in Self.systemInfo }
 

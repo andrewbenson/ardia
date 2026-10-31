@@ -52,12 +52,11 @@ import Testing
 
   @Test func updateLines() throws {
     let s = try fixture()
-    let line = { (u: UpdaterFacts?) in AppDiagnostics.report(app: app, chromiumVersion: nil, updates: u, state: s).split(separator: "\n").last! }
+    let line = { (u: UpdaterFacts?) in AppDiagnostics.report(app: app, chromiumVersion: "", updates: u, state: s).split(separator: "\n").last! }
     #expect(line(nil) == "Updates: not built in")
     #expect(line(UpdaterFacts(available: false, configured: true)) == "Updates: not built in")
     #expect(line(UpdaterFacts(available: true)) == "Updates: not set up for this build")
     #expect(line(UpdaterFacts(available: true, configured: true, feedURL: "https://f/appcast.xml")) == "Updates: automatic checks off, feed https://f/appcast.xml")
-    #expect(AppDiagnostics.report(app: app, chromiumVersion: nil, updates: nil, state: s).contains("Engine: unavailable"))
   }
 
   @Test func encodesLikeEncodeURIComponent() {
@@ -92,5 +91,54 @@ import Testing
       HandoffActivity(windowId: "i", url: nil, title: "Secret"),
     ])
     #expect(tracker.changes(s).isEmpty)
+  }
+  @Test func feedbackEmailUsesJavaScriptWhitespace() {
+    var facts = app
+    facts.feedbackURL = nil
+    for email in ["me\u{FEFF}@example.com", "me\u{00A0}@example.com", "me@example.com&cc=x", "me @example.com"] {
+      facts.feedbackEmail = email
+      guard case .mail(let draft, _) = AppDiagnostics.feedback(report: "R", app: facts) else { Issue.record("expected mail"); return }
+      #expect(draft.hasPrefix("mailto:?subject="))
+    }
+    facts.feedbackEmail = "me\u{0085}@example.com"
+    guard case .mail(let draft, _) = AppDiagnostics.feedback(report: "R", app: facts) else { Issue.record("expected mail"); return }
+    #expect(draft.hasPrefix("mailto:me\u{0085}@example.com?subject="))
+  }
+
+  @Test func handoffUpdatesCanonicallyEquivalentTitles() throws {
+    var tracker = HandoffTracker()
+    var s = try fixture()
+    s.tabs["a"]?.customTitle = "caf\u{00E9}"
+    _ = tracker.changes(s)
+    s.tabs["a"]?.customTitle = "cafe\u{0301}"
+    let changes = tracker.changes(s)
+    #expect(changes.count == 1)
+    #expect(changes.first?.title?.jsEquals("cafe\u{0301}") == true)
+  }
+
+  @Test func engineAdapterPreservesTheReachableEmptyVersion() throws {
+    let s = try fixture()
+    let line = { (version: String) in
+      AppDiagnostics.report(app: app, engine: ["chromiumVersion": version], updates: nil, state: s).components(separatedBy: "\n")[1]
+    }
+    #expect(line("") == "Engine: ArdiaCore, Chromium ")
+    #expect(line("156.0.1") == "Engine: ArdiaCore, Chromium 156.0.1")
+  }
+
+  @Test func unavailableStoreReportsTheReasonAndAvailableFacts() {
+    for (status, reason) in [
+      (AppIntegrationStoreStatus.opening, "still opening"),
+      (.failed("database refused"), "failed to open: database refused"),
+      (.notOwned, "not owned because settingsAndDownloads is scoped off"),
+    ] {
+      let report = AppDiagnostics.report(app: app, chromiumVersion: "156", updates: UpdaterFacts(available: true), state: nil, storeStatus: status)
+      #expect(report.contains("store: not open\n\(reason)"))
+      #expect(report.contains("Solara 0.1.0 (42) — Debug"))
+      #expect(report.contains("Engine: ArdiaCore, Chromium 156"))
+      #expect(report.contains("macOS 27.0.0 (27A1), arm64, Mac16,1, 16 GB"))
+      #expect(report.contains("Bundle: com.hill.solara, locale en_US"))
+      #expect(report.contains("Updates: not set up for this build"))
+      #expect(!report.contains("Windows:"))
+    }
   }
 }

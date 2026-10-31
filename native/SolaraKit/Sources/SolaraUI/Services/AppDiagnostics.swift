@@ -63,9 +63,15 @@ public enum FeedbackTarget: Equatable, Sendable {
 }
 
 public enum AppDiagnostics {
-  public static func report(app: AppFacts, chromiumVersion: String?, updates: UpdaterFacts?, state: BrowserState) -> String {
-    let regular = state.windowOrder.filter { state.windows[$0]?.incognito != true }.count
-    let incognito = state.windowOrder.count - regular
+  public static func report(
+    app: AppFacts, engine: [String: Any], updates: UpdaterFacts?, state: BrowserState?, storeStatus: AppIntegrationStoreStatus = .ready
+  ) -> String {
+    report(app: app, chromiumVersion: engine["chromiumVersion"] as? String ?? "", updates: updates, state: state, storeStatus: storeStatus)
+  }
+
+  public static func report(
+    app: AppFacts, chromiumVersion: String, updates: UpdaterFacts?, state: BrowserState?, storeStatus: AppIntegrationStoreStatus = .ready
+  ) -> String {
     let updateLine: String
     if let updates, updates.available {
       updateLine = updates.configured
@@ -74,14 +80,22 @@ public enum AppDiagnostics {
     } else {
       updateLine = "Updates: not built in"
     }
-    return [
+    var lines = [
       "\(app.appName) \(app.appVersion) (\(app.appBuild)) — \(app.configuration)",
-      chromiumVersion.map { "Engine: ArdiaCore, Chromium \($0)" } ?? "Engine: unavailable",
+      "Engine: ArdiaCore, Chromium \(chromiumVersion)",
       "macOS \(app.osVersion) (\(app.osBuild)), \(app.arch), \(app.model), \(Int(app.memoryGB.rounded(.toNearestOrAwayFromZero))) GB",
       "Bundle: \(app.bundleId), locale \(app.locale)",
-      "Windows: \(regular) (+\(incognito) incognito), tabs: \(state.tabs.count), profiles: \(state.profileOrder.count)",
-      updateLine,
-    ].joined(separator: "\n")
+    ]
+    if let reason = storeStatus.unavailableReason {
+      lines.append("store: not open")
+      lines.append(reason)
+    } else if let state {
+      let regular = state.windowOrder.filter { state.windows[$0]?.incognito != true }.count
+      let incognito = state.windowOrder.count - regular
+      lines.append("Windows: \(regular) (+\(incognito) incognito), tabs: \(state.tabs.count), profiles: \(state.profileOrder.count)")
+    }
+    lines.append(updateLine)
+    return lines.joined(separator: "\n")
   }
 
   public static func feedbackBody(_ report: String) -> String {
@@ -95,7 +109,7 @@ public enum AppDiagnostics {
       return .page(page.replacingCharacters(in: marker, with: encodeURIComponent(body)))
     }
     let email = app.feedbackEmail ?? ""
-    let to = email.isEmpty || email.range(of: #"[\s?&]"#, options: .regularExpression) != nil ? "" : email
+    let to = email.isEmpty || email.utf16.contains { JS.isWhitespace($0) || $0 == 0x3F || $0 == 0x26 } ? "" : email
     let draft = "mailto:\(to)?subject=\(encodeURIComponent("\(app.appName) Feedback"))&body=\(encodeURIComponent(body))"
     return .mail(draft: draft, body: body)
   }
@@ -134,7 +148,7 @@ public struct HandoffTracker: Sendable {
       let url = !window.incognito ? tab.map(\.url).flatMap { $0.range(of: "^https?:", options: [.regularExpression, .caseInsensitive]) != nil ? $0 : nil } : nil
       let title = tab.map { $0.customTitle.flatMap { $0.isEmpty ? nil : $0 } ?? $0.title } ?? ""
       let key = "\(url ?? "null")\n\(title)"
-      if last[id] == key { continue }
+      if last[id]?.jsEquals(key) == true { continue }
       last[id] = key
       out.append(HandoffActivity(windowId: id, url: url, title: title.isEmpty ? nil : title))
     }

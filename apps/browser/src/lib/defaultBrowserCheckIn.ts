@@ -32,7 +32,9 @@ export function useDefaultBrowserCheckIn(windowId: string) {
     visible: due && !incognito,
     leaveFeedback() {
       dismissDefaultBrowserCheckIn();
-      void sendFeedback(windowId);
+      void sendFeedback(windowId).catch((error) => {
+        console.warn("Default-browser check-in feedback failed", error);
+      });
     },
     dismiss: dismissDefaultBrowserCheckIn,
   };

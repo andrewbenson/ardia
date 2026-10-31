@@ -74,7 +74,7 @@ final class FakePages: ScriptPages {
     return try BrowserState(stateJSON: try JSONValue.parse(text).object ?? [:])
   }
 
-  private func run(_ request: [String: Any], _ writer: FakeWriter, _ pages: FakePages = FakePages()) -> (handled: Bool, reply: ScriptReply?) {
+  private func run(_ request: [String: Any], _ writer: FakeWriter, _ pages: any ScriptPages = FakePages()) -> (handled: Bool, reply: ScriptReply?) {
     var reply: ScriptReply?
     let handled = ScriptCommandRunner(writer: writer, pages: pages).run(request) { reply = $0 }
     return (handled, reply)
@@ -168,10 +168,9 @@ final class FakePages: ScriptPages {
     #expect(writer.calls.last == "switchProfile w q")
   }
 
-  @Test func pageCommandsUsePooledPagesAndForwardTheRest() throws {
+  @Test func pageCommandsUsePooledPages() throws {
     let writer = FakeWriter(try state(allowJS: true))
     let pages = FakePages()
-    #expect(run(["command": "back", "tabId": "a"], writer, pages).handled == false)
     pages.pooled = ["a"]
     #expect(run(["command": "back", "tabId": "a"], writer, pages).handled)
     #expect(run(["command": "reload", "tabId": "a"], writer, pages).handled)
@@ -180,9 +179,63 @@ final class FakePages: ScriptPages {
     #expect(result(executed.reply)?["value"] as? String == "42")
     pages.answer = #"{"error":"ReferenceError: x"}"#
     #expect(failure(run(["command": "execute", "tabId": "a", "code": "x"], writer, pages).reply) == "ReferenceError: x")
+    pages.answer = #"{"error":"","value":"ok"}"#
+    #expect(result(run(["command": "execute", "tabId": "a", "code": "1"], writer, pages).reply)?["value"] as? String == "ok")
     pages.answer = nil
     #expect(failure(run(["command": "execute", "tabId": "a", "code": "1"], writer, pages).reply) == "The page didn't answer.")
-    #expect(pages.calls == ["goBack a", "reload a", "evaluate a", "evaluate a", "evaluate a"])
+    #expect(pages.calls == ["goBack a", "reload a", "evaluate a", "evaluate a", "evaluate a", "evaluate a"])
+  }
+
+  @Test func poolOffPageReportsNotLoadedForEveryPageOperation() throws {
+    let writer = FakeWriter(try state(allowJS: true))
+    let poolEnabled = false
+    let pooled = ["a": "pool-page"]
+    var invoked = false
+    let pages = PoolScriptPages<String>(
+      page: { poolEnabled ? pooled[$0] : nil },
+      invoke: { _, _, _, _ in invoked = true })
+    for command in ["reload", "back", "forward", "execute"] {
+      let reply = run(["command": command, "tabId": "a", "code": "1"], writer, pages)
+      #expect(reply.handled)
+      #expect(failure(reply.reply) == "The tab hasn't loaded yet; focus it first.")
+    }
+    #expect(!invoked)
+    #expect(writer.calls.isEmpty)
+  }
+
+  @Test func rnMountedLittleSolaraPageReportsNotLoaded() throws {
+    var s = try state(allowJS: true)
+    s.windows["x"]?.kind = "small"
+    let writer = FakeWriter(s)
+    let pooled = ["a": "pool-page"]
+    let rnMounted = ["d": "rn-page"]
+    var invoked = false
+    let pages = PoolScriptPages<String>(
+      page: { pooled[$0] },
+      invoke: { _, _, _, _ in invoked = true })
+    #expect(rnMounted["d"] != nil)
+    #expect(!pages.has("d"))
+    for command in ["reload", "back", "forward", "execute"] {
+      let reply = run(["command": command, "tabId": "d", "code": "1"], writer, pages)
+      #expect(reply.handled)
+      #expect(failure(reply.reply) == "The tab hasn't loaded yet; focus it first.")
+    }
+    #expect(!invoked)
+    #expect(writer.calls.isEmpty)
+  }
+
+  @Test func poolPageDisappearingBeforeCallStillAnswers() {
+    var pooled = ["a": "pool-page"]
+    var invoked = false
+    let pages = PoolScriptPages<String>(
+      page: { pooled[$0] },
+      invoke: { _, _, _, _ in invoked = true })
+    #expect(pages.has("a"))
+    pooled.removeValue(forKey: "a")
+    var failure: String?
+    pages.call("a", "evaluate", []) { _, error in failure = error }
+    #expect(failure == "The tab hasn't loaded yet; focus it first.")
+    #expect(!invoked)
   }
 
   @Test func executeIsRefusedWhenTurnedOff() throws {

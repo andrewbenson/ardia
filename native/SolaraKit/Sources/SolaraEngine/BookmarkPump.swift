@@ -85,10 +85,12 @@ public final class BookmarkPump {
   }
 
   @discardableResult
-  public func submit(profile: String, mutations: [BookmarkMutation], fromSync: Bool = false, requestID: String? = nil) throws -> BookmarkReceipt {
+  public func submit(profile: String, mutations: [BookmarkMutation], fromSync: Bool = false, requestID: String? = nil) async throws -> BookmarkReceipt {
     let engine = coordinator.engine(profile: profile)
     guard !stopped, coordinator.ownsPump(engine: engine, epoch: epoch) else { throw BookmarkCoordinatorError.staleRevision }
-    let receipt = try coordinator.submit(profile: profile, mutations: mutations, fromSync: fromSync, requestID: requestID, expectedPumpEpoch: epoch)
+    let coordinator = coordinator
+    let epoch = epoch
+    let receipt = try await coordinator.offMain { try coordinator.submit(profile: profile, mutations: mutations, fromSync: fromSync, requestID: requestID, expectedPumpEpoch: epoch) }
     requestPush(engine: engine)
     return receipt
   }

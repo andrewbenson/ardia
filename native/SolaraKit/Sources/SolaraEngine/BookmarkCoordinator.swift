@@ -73,6 +73,9 @@ public final class BookmarkCoordinator: @unchecked Sendable {
   func offMain<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
     await withCheckedContinuation { continuation in journalQueue.async { continuation.resume(returning: body()) } }
   }
+  func offMain<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
+    try await withCheckedThrowingContinuation { continuation in journalQueue.async { continuation.resume(with: Result { try body() }) } }
+  }
   private var pumpEpoch: UInt64 = 0
   private let lock = NSRecursiveLock()
   private let writerLock = NSLock()

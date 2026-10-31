@@ -26,10 +26,10 @@ extension BookmarkPumpTests {
   @Test func failedPushRetriesWithBackoff() async throws {
     let f = PumpFixture()
     f.engine.reject = true
-    try f.rename("First")
+    try await f.rename("First")
     await f.pump.settle(engine: "")
     #expect(f.engine.batches.count == 2)
-    try f.pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Second", "url": "https://second.test"]])])
+    try await f.pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Second", "url": "https://second.test"]])])
     #expect(f.owner.membership(profile: "p", url: "https://second.test"))
     #expect(!f.owner.membership(profile: "p", url: "https://a.test"))
     #expect(f.owner.desiredView(engine: "").document["nodes"]?["b0"]?["title"] == "Second")
@@ -47,7 +47,7 @@ extension BookmarkPumpTests {
     #expect(f.owner.desiredView(engine: "").retryNotBeforeMs == nil)
     #expect(f.engine.document["nodes"]?["b0"]?["title"] == "Second")
     f.engine.reject = true
-    try f.rename("Third")
+    try await f.rename("Third")
     await f.pump.settle(engine: "")
     #expect(f.engine.batches.count == 12)
     #expect(f.owner.desiredView(engine: "").retryNotBeforeMs == 216000)
@@ -59,7 +59,7 @@ extension BookmarkPumpTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let f = PumpFixture(directory: directory)
     f.engine.reject = true
-    try f.rename("Pending")
+    try await f.rename("Pending")
     await f.pump.settle(engine: "")
     f.pump.stop()
     let relaunched = PumpFixture(directory: directory, time: 500, seed: false)
@@ -79,7 +79,7 @@ extension BookmarkPumpTests {
   @Test func partialBatchRereadsBeforeFreshDiff() async throws {
     let f = PumpFixture(urls: ["https://a.test", "https://b.test", "https://c.test"])
     f.engine.loseBeforeApply = "b1"
-    try f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
+    try await f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
     await f.pump.settle(engine: "")
     #expect(f.engine.events == ["apply", "read", "apply"])
     #expect(f.engine.batches.map { $0.map(\.id) } == [["b0", "b1", "b2"], ["b2"]])
@@ -89,7 +89,7 @@ extension BookmarkPumpTests {
 
   @Test func suppressedApplyEventStillReconciles() async throws {
     let f = PumpFixture()
-    try f.rename("Accepted")
+    try await f.rename("Accepted")
     await f.pump.settle(engine: "")
     f.pump.requestPush(engine: "")
     await f.pump.settle(engine: "")
@@ -101,9 +101,9 @@ extension BookmarkPumpTests {
   @Test func newCommandDuringApplySurvivesOldSuccess() async throws {
     let f = PumpFixture()
     f.engine.hold = true
-    try f.rename("Older")
+    try await f.rename("Older")
     await f.engine.entered()
-    try f.rename("Newer")
+    try await f.rename("Newer")
     f.pump.requestRead(engine: "")
     #expect(f.engine.events == ["apply"])
     f.engine.release()
@@ -134,7 +134,7 @@ extension BookmarkPumpTests {
   @Test func oldEpochTimerAndCompletionIgnored() async throws {
     let f = PumpFixture()
     f.engine.reject = true
-    try f.rename("Pending")
+    try await f.rename("Pending")
     await f.pump.settle(engine: "")
     f.owner.remap(profiles: ["p": "other"], defaultProfile: "p")
     let before = f.owner.desiredView(engine: "")
@@ -144,7 +144,7 @@ extension BookmarkPumpTests {
     #expect(f.owner.desiredView(engine: "") == before)
     let g = PumpFixture()
     g.engine.hold = true
-    try g.rename("Held")
+    try await g.rename("Held")
     await g.engine.entered()
     g.pump.stop()
     let stopped = g.owner.desiredView(engine: "")
@@ -176,10 +176,10 @@ extension BookmarkPumpTests {
   @Test func replacementOwnerWaitsForOldFlight() async throws {
     let f = PumpFixture()
     f.engine.hold = true
-    try f.rename("Old owner")
+    try await f.rename("Old owner")
     await f.engine.entered()
     let replacement = BookmarkPump(coordinator: f.owner, client: f.engine.client, clock: f.time.clock, scheduler: f.time.scheduler)
-    try replacement.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "New owner"]])])
+    try await replacement.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "New owner"]])])
     replacement.requestRead(engine: "")
     await Task.yield()
     #expect(f.engine.events == ["apply"])
@@ -196,7 +196,7 @@ extension BookmarkPumpTests {
     f.engine.holdRead = true
     f.pump.requestRead(engine: "")
     await f.engine.entered()
-    try f.rename("Newer than read")
+    try await f.rename("Newer than read")
     f.engine.release()
     await f.pump.settle(engine: "")
     #expect(f.engine.maximumActive == 1)
@@ -210,7 +210,7 @@ extension BookmarkPumpTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let f = PumpFixture(directory: directory, time: 100_000)
     f.engine.reject = true
-    try f.rename("Pending")
+    try await f.rename("Pending")
     await f.pump.settle(engine: "")
     f.pump.stop()
     let relaunched = PumpFixture(directory: directory, time: 0, seed: false)
@@ -227,10 +227,10 @@ extension BookmarkPumpTests {
   @Test func inSessionWallClockChangeDoesNotMoveRetry() async throws {
     let f = PumpFixture()
     f.engine.reject = true
-    try f.rename("Pending")
+    try await f.rename("Pending")
     await f.pump.settle(engine: "")
     f.time.now = 100_000
-    try f.rename("Latest")
+    try await f.rename("Latest")
     await f.pump.settle(engine: "")
     #expect(f.engine.batches.count == 2)
     f.time.advance(to: 101_499)
@@ -270,7 +270,7 @@ extension BookmarkPumpTests {
   @Test func thrownApplyRereadsBeforeRetry() async throws {
     let f = PumpFixture(urls: ["https://a.test", "https://b.test", "https://c.test"])
     f.engine.throwAfterApply = true
-    try f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
+    try await f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
     await f.pump.settle(engine: "")
     #expect(f.engine.events == ["apply", "read"])
     #expect(f.engine.batches.count == 1)
@@ -296,7 +296,7 @@ extension BookmarkPumpTests {
     f.owner.seed(engine: "", document: initial, ready: true)
     f.engine.document = initial
     f.engine.hold = true
-    let removed = try f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["folder"]])])
+    let removed = try await f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["folder"]])])
     await f.engine.entered()
     try f.owner.submit(profile: "p", mutations: [.init(method: "restoreBookmarks", args: [removed.results[0]]), .init(method: "moveBookmark", args: ["kept", "bar@default", 0]), .init(method: "removeBookmark", args: ["folder"])])
     let replacement = BookmarkPump(coordinator: f.owner, client: f.engine.client, clock: f.time.clock, scheduler: f.time.scheduler)
@@ -318,9 +318,9 @@ extension BookmarkPumpTests {
     let f = PumpFixture(urls: ["https://a.test", "https://b.test", "https://c.test"])
     f.engine.hold = true
     f.engine.loseBeforeApply = "b1"
-    let removal = try f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
+    let removal = try await f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
     await f.engine.entered()
-    try f.pump.submit(profile: "p", mutations: [.init(method: "restoreBookmarks", args: [removal.results[0]])])
+    try await f.pump.submit(profile: "p", mutations: [.init(method: "restoreBookmarks", args: [removal.results[0]])])
     f.engine.release()
     await f.pump.settle(engine: "")
     #expect(f.owner.desiredView(engine: "").document["nodes"]?["bar@default"]?["children"] == ["b0", "b1", "b2"])
@@ -337,7 +337,7 @@ extension BookmarkPumpTests {
     let f = PumpFixture(urls: ["https://a.test", "https://b.test", "https://c.test"], directory: directory)
     f.engine.hold = true
     f.engine.loseBeforeApply = "b1"
-    let removal = try f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
+    let removal = try await f.pump.submit(profile: "p", mutations: [.init(method: "removeBookmarks", args: [["b0", "b1", "b2"]])])
     await f.engine.entered()
     try f.owner.submit(profile: "p", mutations: [.init(method: "restoreBookmarks", args: [removal.results[0]])])
     f.pump.stop()
@@ -367,7 +367,7 @@ extension BookmarkPumpTests {
       }.value
     })
     let pump = BookmarkPump(coordinator: f.owner, client: client, clock: f.time.clock, scheduler: f.time.scheduler)
-    try pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Held"]])])
+    try await pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Held"]])])
     await Task.detached { #expect(pumpWait(entered, seconds: 10)) }.value
     let owner = f.owner
     Thread.detachNewThread {
@@ -421,7 +421,7 @@ private final class PumpFixture {
     if seed { owner.seed(engine: "", document: engine.document, ready: true) }
     pump = BookmarkPump(coordinator: owner, client: engine.client, clock: self.time.clock, scheduler: self.time.scheduler)
   }
-  func rename(_ title: String) throws { try pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": .string(title)]])]) }
+  func rename(_ title: String) async throws { try await pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": .string(title)]])]) }
 }
 
 @MainActor
@@ -504,7 +504,7 @@ extension BookmarkPumpTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let gate = PumpJournalGate(holdingSync: 2)
     let f = PumpFixture(directory: directory, fileOperations: gate.operations)
-    try f.rename("Held")
+    try await f.rename("Held")
     var sawHeldWriteFromMain = false
     for _ in 0..<2000 where !sawHeldWriteFromMain {
       try await Task.sleep(nanoseconds: 1_000_000)
@@ -571,7 +571,7 @@ extension BookmarkPumpTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let journal = PumpJournalFault()
     let f = PumpFixture(directory: directory, fileOperations: journal.operations)
-    try f.rename("Held")
+    try await f.rename("Held")
     journal.failing = true
     await f.pump.settle(engine: "")
     #expect(f.engine.batches.isEmpty)
@@ -583,7 +583,7 @@ extension BookmarkPumpTests {
     await f.pump.settle(engine: "")
     #expect(f.engine.batches.count == 1)
     #expect(f.engine.document["nodes"]?["b0"]?["title"] == "Held")
-    try f.rename("After")
+    try await f.rename("After")
     await f.pump.settle(engine: "")
     #expect(f.engine.document["nodes"]?["b0"]?["title"] == "After")
   }
@@ -635,5 +635,43 @@ private final class PumpJournalFault: @unchecked Sendable {
       try liveWrite(url, data)
     }
     return operations
+  }
+}
+
+@MainActor
+extension BookmarkPumpTests {
+  @Test func mainActorKeepsRunningWhileASubmitJournalWriteIsHeld() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("pump-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let gate = PumpJournalGate(holdingSync: 1)
+    let f = PumpFixture(directory: directory, fileOperations: gate.operations)
+    let submitted = Task { try await f.rename("Held") }
+    var sawHeldWriteFromMain = false
+    for _ in 0..<2000 where !sawHeldWriteFromMain {
+      try await Task.sleep(nanoseconds: 1_000_000)
+      if gate.holding {
+        sawHeldWriteFromMain = true
+        #expect(f.owner.desiredView(engine: "").document["nodes"]?["b0"]?["title"] == "Page")
+      }
+    }
+    gate.release()
+    #expect(sawHeldWriteFromMain)
+    try await submitted.value
+    #expect(f.owner.desiredView(engine: "").document["nodes"]?["b0"]?["title"] == "Held")
+    await f.pump.settle(engine: "")
+    #expect(f.engine.document["nodes"]?["b0"]?["title"] == "Held")
+  }
+
+  @Test func concurrentSubmitsSerializeAndTheLaterReceiptWins() async throws {
+    let f = PumpFixture(urls: ["https://a.test", "https://b.test"])
+    async let first: BookmarkReceipt = f.pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "One"]])])
+    async let second: BookmarkReceipt = f.pump.submit(profile: "p", mutations: [.init(method: "updateBookmark", args: ["b0", ["title": "Two"]])])
+    let receipts = try await [first, second]
+    #expect(receipts[0].view.revision != receipts[1].view.revision)
+    let later = receipts.max { $0.view.revision < $1.view.revision }!
+    #expect(f.owner.desiredView(engine: "").document == later.view.document)
+    await f.pump.settle(engine: "")
+    #expect(f.engine.document["nodes"]?["b0"]?["title"] == later.view.document["nodes"]?["b0"]?["title"])
   }
 }

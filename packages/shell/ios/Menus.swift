@@ -569,8 +569,6 @@ enum MainMenu {
       cmd("Previous Tab", "previousTab", "[", [.command, .shift]),
       cmd("Next Tab", "nextTab", "}").hiddenShortcut(),
       cmd("Previous Tab", "previousTab", "{").hiddenShortcut(),
-      cmd("Next Tab", "nextTab", functionKey(NSRightArrowFunctionKey), [.command, .option]).hiddenShortcut(),
-      cmd("Previous Tab", "previousTab", functionKey(NSLeftArrowFunctionKey), [.command, .option]).hiddenShortcut(),
       cmd("Next Tab", "nextTab", functionKey(NSPageDownFunctionKey), .control).hiddenShortcut(),
       cmd("Previous Tab", "previousTab", functionKey(NSPageUpFunctionKey), .control).hiddenShortcut(),
       cmd("Next Tab", "nextTab", functionKey(NSDownArrowFunctionKey), [.command, .option]).hiddenShortcut(),
@@ -800,8 +798,8 @@ enum MainMenu {
       profiles.addItem(newWindow)
     }
     profiles.addItem(.separator())
-    profiles.addItem(CommandItem("Next Profile", "nextProfile"))
-    profiles.addItem(CommandItem("Previous Profile", "previousProfile"))
+    profiles.addItem(CommandItem("Next Profile", "nextProfile", key: rightArrow, [.command, .option]))
+    profiles.addItem(CommandItem("Previous Profile", "previousProfile", key: leftArrow, [.command, .option]))
     profiles.addItem(.separator())
     profiles.addItem(CommandItem("New Profile…", "newProfile"))
 

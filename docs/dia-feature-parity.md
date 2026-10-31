@@ -704,7 +704,7 @@ Chrome; n/t = not pressed there by the test (clipboard and window-level AppKit i
 | Developer Tools / F12 / View Source / Console / Inspect | ⌥⌘I, F12 / ⌥⌘U / ⌥⌘J / ⌥⌘C | same | same | ✓ ✓ ✓ ✓ (and in DevTools) | ✅ |
 | Caret browsing | — | F7 | F7 (hidden) | ✓ ✓ ✓ ✓ | ✅ new |
 | Back / Forward | ⌘[ / ⌘], ⌘← / ⌘→ | same | same (⌘← / ⌘→ hidden; a text field keeps them) | ○ ○ ○/– ○/– (no history) | ✅ ⌘←/→ new |
-| Next / Previous Tab | ⇧⌘] / ⇧⌘[, ⌥⌘→ / ⌥⌘←, ⌥⌘↓ / ⌥⌘↑ | ⇧⌘] / ⇧⌘[, ⌥⌘→ / ⌥⌘←, ⌃⇟ / ⌃⇞ | all of them (alternates hidden); whatever is bound to them is reserved, so it wins over the page as ⌘W does, except a ⌘ or ⇧⌘ arrow binding, which a text field keeps for the caret | ✓ ✓ ✓ ✓; selects: checked | ✅ |
+| Next / Previous Tab | ⇧⌘] / ⇧⌘[, ⌥⌘→ / ⌥⌘←, ⌥⌘↓ / ⌥⌘↑ | ⇧⌘] / ⇧⌘[, ⌥⌘→ / ⌥⌘←, ⌃⇟ / ⌃⇞ | all of them except ⌥⌘→ / ⌥⌘←, which switch to the next / previous profile by default (owner, 2026-10-30; a remapped binding is kept) (alternates hidden); whatever is bound to them is reserved, so it wins over the page as ⌘W does, except a ⌘ or ⇧⌘ arrow binding, which a text field keeps for the caret | ✓ ✓ ✓ ✓; selects: checked | ✅ |
 | Tab Switcher | ⌃Tab / ⌃⇧Tab | ⌃Tab / ⌃⇧Tab = next / previous tab | Dia's switcher | ✓ ✓ ✓ ✓ | ✅ |
 | Move Tab Down / Up | — | ⌃⇧⇟ / ⌃⇧⇞ | same (hidden) | ✓ ✓ ✓ ✓ | ✅ new |
 | Select Tab 1–8 / Last Tab | ⌘1–⌘8 / ⌘9 (sidebar order) | same (tab strip) | the sidebar's rows: pinned tiles, pinned groups, then the list (a split view is one row) | ✓ ✓ ✓ ✓; selects: checked in each focus | ✅ fixed |

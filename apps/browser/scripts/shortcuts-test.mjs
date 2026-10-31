@@ -232,8 +232,8 @@ const shortcuts = [
   ["⌘→", cmd(F(0xf703), 124, "function"), { command: "forward" }, "⌘→", "not-field"],
   ["⇧⌘]", cmd("}", 30, "shift"), { command: "nextTab" }, "⇧⌘]"],
   ["⇧⌘[", cmd("{", 33, "shift"), { command: "previousTab" }, "⇧⌘["],
-  ["⌥⌘→", cmd(F(0xf703), 124, "option", "function"), { command: "nextTab" }, "(Chrome's)"],
-  ["⌥⌘←", cmd(F(0xf702), 123, "option", "function"), { command: "previousTab" }, "(Chrome's)"],
+  ["⌥⌘→", cmd(F(0xf703), 124, "option", "function"), { command: "nextProfile" }, "(Chrome's next tab)"],
+  ["⌥⌘←", cmd(F(0xf702), 123, "option", "function"), { command: "previousProfile" }, "(Chrome's previous tab)"],
   ["⌃⇟", K(F(0xf72d), 121, "control", "function"), { command: "nextTab" }, "(Chrome's)"],
   ["⌃⇞", K(F(0xf72c), 116, "control", "function"), { command: "previousTab" }, "(Chrome's)"],
   ["⌥⌘↓", cmd(F(0xf701), 125, "option", "function"), { command: "nextTab" }, "⌥⌘↓ (alternate)"],
@@ -438,8 +438,19 @@ check("…and the command bar closes", !(await state()).panel, "");
 }
 await real("⇧⌘] (Next Tab)", cmd("}", 30, "shift"), sidebar, "t1");
 await real("⇧⌘[ (Previous Tab)", cmd("{", 33, "shift"), sidebar, "pin2");
-await real("⌥⌘→ (Next Tab)", cmd(F(0xf703), 124, "option", "function"), sidebar, "t1");
+await real("⌥⌘↓ (Next Tab)", cmd(F(0xf701), 125, "option", "function"), sidebar, "t1");
 await real("⌃⇟ (Next Tab)", K(F(0xf72d), 121, "control", "function"), sidebar, "t2");
+{
+  const before = (await state()).profile;
+  await press(cmd(F(0xf703), 124, "option", "function"), sidebar);
+  await sleep(800);
+  const next = (await state()).profile;
+  check("⌥⌘→ switches to the next profile", next !== before, `${before} → ${next}`);
+  await press(cmd(F(0xf702), 123, "option", "function"), sidebar);
+  await sleep(800);
+  const back = await state();
+  check("⌥⌘← switches back to the previous profile, on the same tab", back.profile === before && (await activeUrl()).endsWith("?t2"), `${next} → ${back.profile}`);
+}
 await showPage("t3");
 await sleep(2000);
 {

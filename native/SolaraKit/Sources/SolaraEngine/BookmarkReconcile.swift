@@ -158,17 +158,71 @@ public enum BookmarkReconcile {
     return true
   }
 
+  private final class SourceChildren {
+    private let values: [String]
+    private var first: [JSKey: Int] = [:]
+    private var next: [Int]
+    private var removed: [Bool]
+    private var tail: Int
+
+    init(_ values: [String]) {
+      self.values = values
+      next = Array(repeating: -1, count: values.count)
+      removed = Array(repeating: false, count: values.count)
+      tail = values.count - 1
+      for index in values.indices.reversed() {
+        let key = JSKey(values[index])
+        next[index] = first[key] ?? -1
+        first[key] = index
+      }
+    }
+
+    func remove(_ id: String) {
+      let key = JSKey(id)
+      var index = first[key] ?? -1
+      while index >= 0 && removed[index] { index = next[index] }
+      first[key] = index >= 0 && next[index] >= 0 ? next[index] : nil
+      let position = index >= 0 ? index : tail
+      guard position >= 0 else { return }
+      removed[position] = true
+      while tail >= 0 && removed[tail] { tail -= 1 }
+    }
+
+    var remaining: [String] {
+      values.indices.compactMap { removed[$0] ? nil : values[$0] }
+    }
+  }
+
   public static func operations(from: BookmarkFlat, to: BookmarkFlat, engine: String) -> [JSONValue] {
     let roots = BookmarkFlat.roots(engine)
     var parents = from.nodes.mapValues { $0["parent"] ?? .null }
     var kids = from.children
+    var sources: [JSKey: SourceChildren] = [:]
     var ops: [JSONValue] = []
     var queue = [roots.bar, roots.other]
     var cursor = 0
     func opParent(_ id: String) -> String { same(id, roots.bar) ? "bar" : same(id, roots.other) ? "other" : id }
+    func restoreChildren(_ folder: String) {
+      if let source = sources.removeValue(forKey: JSKey(folder)) { kids[folder] = source.remaining }
+    }
+    func removeFromSource(_ id: String, parent: String) {
+      let key = JSKey(parent)
+      if let source = sources[key] {
+        source.remove(id)
+      } else if let values = kids.removeValue(forKey: parent) {
+        let source = SourceChildren(values)
+        source.remove(id)
+        sources[key] = source
+      }
+    }
+    func resetChildren(_ folder: String) {
+      sources.removeValue(forKey: JSKey(folder))
+      kids[folder] = []
+    }
     while cursor < queue.count {
       let folder = queue[cursor]
       cursor += 1
+      restoreChildren(folder)
       if kids[folder] == nil { kids[folder] = [] }
       let targets = to.children[folder] ?? []
       if alignedTargets(targets, folder: folder, nodes: to.nodes) {
@@ -179,7 +233,7 @@ public enum BookmarkReconcile {
             ops.append(addOperation(id, node: node, parent: opParent(folder), index: index))
             current.insert(id, at: min(index, current.count))
             parents[id] = .string(folder)
-            if node["kind"] == "folder" { kids[id] = [] }
+            if node["kind"] == "folder" { resetChildren(id) }
           } else {
             let inFolder = parents[id] == .string(folder)
             if !(inFolder && index < current.count && same(current[index], id)) {
@@ -189,10 +243,7 @@ public enum BookmarkReconcile {
                   current.insert(id, at: min(index, current.count))
                 }
               } else {
-                if let parent = parents[id]?.string, var old = kids[parent] {
-                  removeSplice(&old, id)
-                  kids[parent] = old
-                }
+                if let parent = parents[id]?.string { removeFromSource(id, parent: parent) }
                 current.insert(id, at: min(index, current.count))
               }
               parents[id] = .string(folder)
@@ -213,12 +264,17 @@ public enum BookmarkReconcile {
           list.insert(id, at: min(index, list.count))
           kids[folder] = list
           parents[id] = .string(folder)
-          if node["kind"] == "folder" { kids[id] = [] }
+          if node["kind"] == "folder" { resetChildren(id) }
         } else {
           if parents[id] != .string(folder) || (kids[folder] ?? []).firstIndex(where: { same($0, id) }) != index {
-            if let parent = parents[id]?.string, var old = kids[parent] {
-              removeSplice(&old, id)
-              kids[parent] = old
+            if let parent = parents[id]?.string {
+              if same(parent, folder) {
+                var old = kids[parent] ?? []
+                removeSplice(&old, id)
+                kids[parent] = old
+              } else {
+                removeFromSource(id, parent: parent)
+              }
             }
             var list = kids[folder] ?? []
             list.insert(id, at: min(index, list.count))

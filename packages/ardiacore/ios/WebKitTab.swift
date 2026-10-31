@@ -199,6 +199,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
 
   private func updateHidden() {
     webView?.isHidden = !(visible || warm)
+    webView?.alphaValue = visible ? 1 : 0
   }
 
   func close(parking: Bool = true) {

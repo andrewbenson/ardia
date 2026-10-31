@@ -18,7 +18,8 @@ and fires the page's onclick; a peek opens on its own pooled page and Open as Ta
 in a split, a click in the unfocused pane focuses it and a pane's close button closes its tab; a tab moved to another
 profile, and back, gets a new page each time in the right profile (cookies prove it); and an engine change makes a new
 page whose ready reaches the store, never one revived from an armed WebKit transfer, and that keeps keyboard focus
-when the old page had it. A build whose pool doesn't serve pages fails every check.`);
+when the old page had it; and a switch to a profile showing a New Tab draws no page from the previous profile, WebKit or
+Chromium, while switching back draws its page again. A build whose pool doesn't serve pages fails every check.`);
   process.exit(2);
 }
 const keep = args.includes("--keep-data");
@@ -256,6 +257,33 @@ try {
     if (!String(keys).includes("k")) throw new Error(`the new page got ${json(keys)}`);
     return { keys };
   });
+
+  const drawnPages = () => run(`
+    const P = globalThis.expo.modules.SolaraPages;
+    return globalThis.expo.modules.ArdiaCEF.chromeWindows().then((all) => {
+      const n = all.find((w) => w.hasRoot).window;
+      const probes = ["WKWebView", "ArdiaCoreWebView"].flatMap((kind) => [0, 1, 2, 3].map((i) => P.devViewFrame(n, kind + "#" + i)));
+      return Promise.all(probes).then((found) => found.map(JSON.parse).filter((v) => v.found && v.alpha > 0).map((v) => v.class));
+    });`);
+  for (const engine of ["webkit", "chromium"]) {
+    await rep.check(`a switch to a profile showing a New Tab draws no page from the previous profile (${engine})`, async () => {
+      await run(`S().switchProfile("w1", "default"); S().activate("b"); go("b", ${json(url(`switch-${engine}`))}, { engine: ${json(engine)} }); return true;`);
+      const before = await loaded(`switch-${engine}`);
+      if (before.engine !== engine) throw new Error(`engine ${before.engine}`);
+      const shown = await sleep(300).then(drawnPages);
+      if (shown.length !== 1) throw new Error(`before the switch the card draws ${json(shown)}`);
+      await run(`S().switchProfile("w1", globalThis.__work); const w = S().windows.w1; if (!w.activeTabIds[w.profileId]) S().newTab("w1", {}); return true;`);
+      const target = await until("the Work window on a New Tab", `const w = S().windows.w1; const t = S().tabs[w.activeTabIds[w.profileId]]; return w.profileId === globalThis.__work && t && t.profileId === w.profileId && !t.navigation ? { tab: t.id, url: t.url } : null;`);
+      await untilSnapshot("native Work profile", (state) => state.windows.some((w) => w.id === "w1" && w.profileId !== "default"));
+      await sleep(500);
+      const after = await drawnPages();
+      if (after.length) throw new Error(`the New Tab shows ${json(after)} from the previous profile`);
+      await run(`S().switchProfile("w1", "default"); return true;`);
+      const back = await until("b drawn again", `return S().windows.w1.profileId === "default" || null;`).then(() => sleep(300)).then(drawnPages);
+      if (back.length !== 1) throw new Error(`back on the home profile the card draws ${json(back)}`);
+      return { engine, target, back };
+    });
+  }
 } catch (e) {
   rep.record("run", { error: e });
 } finally {

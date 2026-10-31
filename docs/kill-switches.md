@@ -2,7 +2,7 @@
 
 A speed change people can feel ships behind a switch, so it can be turned off for a bench, a bisect or a Mac where it
 misbehaves. `apps/browser/src/lib/killSwitches.ts` is the registry. The app never fetches a switch file: Solara has no
-switches URL, and the remote check upstream Solara runs was removed with the port off React Native. A switch's value comes
+switches URL, and the remote check was removed with the port off React Native. A switch's value comes
 from `SOLARA_SWITCHES`, else from `switches-cache.json` in the data dir (written only by tests and benches), else on.
 
 ## Rules

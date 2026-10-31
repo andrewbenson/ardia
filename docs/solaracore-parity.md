@@ -11,11 +11,11 @@ change: `packages/solaracore` registers the same Expo modules and view names (`S
 
 The switch shipped in 0.2.22; this was the list it shipped against, kept for the checks each item names.
 
-1. ~~**Cutover commits**~~ done: C1, the fold (8f1074f1: one project, `Solara-macOS`, `com.solara.browser`),
+1. ~~**Cutover commits**~~ done: C1, the fold (8f1074f1: one project, `Solara-macOS`),
    and C2 (6bdf66ce, 4b0d0697: `packages/cef` deleted, its JS in `packages/solaracore/src`, the patch series in
    `engine/patches`, `apps/browser/macos-solaracore` gone). Left: release.sh/smoke on SolaraCore. *Release-pipeline agent.*
 2. ~~**Production data dir and migration**~~ done: a release build without `SOLARA_DATA_DIR` opens
-   `~/Library/Application Support/com.solara.browser/Chromium` in place (`InstalledDataDirectory`), with the
+   `~/Library/Application Support/<bundle id>/Chromium` in place (`InstalledDataDirectory`), with the
    login keychain only when Developer ID-signed and the app's documents in the folder above, as on CEF. No migration
    step: both engines are Chromium 154.0.8037.58 and read the same "Solara Safe Storage" item. Proven by
    `carryover.sh` (the release smoke test): 0.2.21 made two profiles' tabs, persistent and session cookies,
@@ -113,10 +113,10 @@ scripts/agent/build-app --as <you>     # into apps/browser/build-<you>; --help
 METRO_PORT=8081 node packages/solaracore/scripts/acceptance.mjs apps/browser/build-<you>/Build/Products/Debug/Solara.app <scratch dir> [check…]
 ```
 
-The app (bundle id `com.solara.browser`, Apple Development signing with the hardened runtime in
+The app (bundle id `com.hill.solara.dev` in Debug, Apple Development signing with the hardened runtime in
 Debug; `scripts/release.sh` signs releases with Developer ID). A Debug build refuses to start without
 `SOLARA_DATA_DIR` (it never falls back to a real profile). A test run hands it its Metro in `SOLARA_JS_LOCATION`
-(that launch's argument domain, never written); never `defaults write com.solara.browser`, the installed app's. Its build stages a copy of the engine framework
+(that launch's argument domain, never written); never `defaults write com.hill.solara`, the installed app's. Its build stages a copy of the engine framework
 (`packages/solaracore/scripts/stage-framework.sh`, under the chromium lock, into `SOLARACORE_STAGE_DIR`), links that, and
 `embed.sh` signs the embedded copy with the build's identity.
 

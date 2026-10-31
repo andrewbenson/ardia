@@ -6,8 +6,7 @@ move (§4), the plan phase by phase (§5), the measurements to take before any c
 [baseline.md](baseline.md)), and the risks and open questions (§7).
 
 The owner has already decided the following, and the doc designs for them:
-- Fully native, diverging from Solara. Upstream UI changes stop merging for each surface once it goes native; engine
-  and native-module work can still be merged.
+- Fully native.
 - All Swift, macOS first. The core is a Swift package (model, GRDB persistence, sync, omnibox, importers) built on
   Observation and strict concurrency. SwiftUI is used for forms and lists, AppKit for the sidebar, tab rows, drag and
   the toolbar. Chrome is reached through the existing C interface. Rust is out for now.
@@ -843,38 +842,35 @@ Each has a recommendation.
    number. The target is per interaction: no app work over 1 ms on main.
 3. **Two writers creep back during the bridge** (29 `setState` sites, sync adapters, listeners).
    → The Debug guard (§4.3) plus the ratchet's exact counts.
-4. **Upstream store fixes stop merging** once 1b lands, since the Swift core replaces `store/*.ts`.
-   → The upstream-merge agent lists upstream changes to `store/`, `lib/chromeTabs.ts` and `packages/core` as port
-   candidates with replay cases. Engine and native-module merges continue.
-5. **Sync wire compatibility.**
+4. **Sync wire compatibility.**
    → The merge stays TS until phase 5, then is held by cross-implementation fixtures (§4.5).
-6. **Rollback depends on the shadow `session.json`.**
+5. **Rollback depends on the shadow `session.json`.**
    → Keep it until phase 6 plus two stable releases. It costs one 21 KB write every 2 s at most, off main.
    *Open question: is that window long enough?*
-7. **Event order between strip transactions and WebView events** while the views are still RN's.
+6. **Event order between strip transactions and WebView events** while the views are still RN's.
    → JS forwards transactions as commands until phase 5 (§2.6). The `liveTabs.test.mjs` replay cases include
    adoption-then-transaction orderings.
-8. **Mixed RN / native focus and key handling** (hosted views in phases 2–4).
+7. **Mixed RN / native focus and key handling** (hosted views in phases 2–4).
    → A focus case per hosted kind in `shortcuts-test.mjs`. Native key equivalents go first through `Menus.swift`,
    as today.
-9. **Drag pacing can't be measured hidden.** Real HID drags need a visible, unoccluded window, and posting in-process
+8. **Drag pacing can't be measured hidden.** Real HID drags need a visible, unoccluded window, and posting in-process
    skips the window server path that matters.
    → *Open question:* may we schedule a 10-minute run with the owner away from the Mac but the screen unlocked, with
    the instance visible? Otherwise the drag row stays "needs owner run".
-10. **Deployment target.** The app targets macOS 14. Observation works there; `Mutex` needs macOS 15, and newer
+9. **Deployment target.** The app targets macOS 14. Observation works there; `Mutex` needs macOS 15, and newer
    SwiftUI APIs and (unverified, to check first) AppKit's own Observation tracking need later releases.
    → *Open question:* raise the minimum for the native app? Recommendation: yes, to the newest macOS whose APIs we
    confirm we use, since Solara has no users to migrate yet. It removes the Liquid Glass fallbacks
    (`liquidGlassOnly` rows) and possibly the helper in §2.5.
-11. **Where the package lives.**
+10. **Where the package lives.**
     → Recommendation: `native/SolaraKit`, outside `packages/` (Expo's workspace), so phase 6 deletes `packages/*`
     except SolaraCore without moving the core. *Open question if the owner prefers `packages/solara-core`.*
-12. **Hermes-side services nobody sees.** `main.tsx` starts: translate, user scripts, CLI control, memory trim, tab
+11. **Hermes-side services nobody sees.** `main.tsx` starts: translate, user scripts, CLI control, memory trim, tab
     lifecycle, app integration (AppleScript), kill switches.
     → Each gets a row in phase 6's checklist and is ported, except kill switches, which are deleted (Solara has no
     switches URL).
-13. **GRDB as a dependency.**
+12. **GRDB as a dependency.**
     → Pin the exact version and checksum in `Package.resolved`, and add it to the supply-chain review. Owner's choice
     already; noted only for the pin.
-14. **Size of onboarding** (5k lines, demos).
+13. **Size of onboarding** (5k lines, demos).
     → Port it last in phase 2. It reuses the Metal views as they are.

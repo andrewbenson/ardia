@@ -31,7 +31,7 @@ Raycast's fallback commands and text typed in Raycast's root search can go strai
 matter, and the start of a name is enough when no other profile starts the same way; when several
 do, it names them and opens nothing). **New Incognito Window** opens an incognito one.
 
-It talks to Solara through its AppleScript dictionary (`Solara.sdef` in the app, a name it keeps from upstream), so
+It talks to Solara through its AppleScript dictionary (`Solara.sdef` in the app), so
 Solara has to be running. The first time, macOS asks whether Raycast may control Solara
 (System Settings › Privacy & Security › Automation); allow it.
 
@@ -71,5 +71,4 @@ The scripts address the app by bundle id (`com.hill.solara`, the `AC_BUNDLE_ID` 
 against a running build with the app's DEV AppleScript runner (`ac.shell.devRunAppleScript`, the
 same text with `tell current application`), which avoids macOS's Automation prompt.
 
-Based on upstream Solara's extension (`extras/raycast-solara` in mantrakp04/solara) by Mantra Patel and
-ridemountainpig. It isn't published to the Raycast Store.
+Based on the Raycast extension by Mantra Patel and ridemountainpig in the code Solara began from. It isn't published to the Raycast Store.

@@ -118,7 +118,7 @@ user's expense.
 
 1. `git log --format='%h %s%n%b' v<previous>..HEAD`. The commit bodies explain the user-visible effect.
 2. Keep commits that change what someone using the app sees or can do: `apps/browser`, `packages/*`, the
-   engine (`engine/`), `Info.plist`. Drop docs, tests, refactors, merges of upstream Solara that changed nothing
+   engine (`engine/`), `Info.plist`. Drop docs, tests, refactors that changed nothing
    visible, and "Release x.y.z" version bumps.
 3. Merge commits that are one change for the user into one item. Split a commit that fixes two visible
    things into two items.

@@ -98,6 +98,23 @@ class Installer(unittest.TestCase):
         self.assertFalse((cli_home / "current").is_symlink())
         self.assertFalse((cli_home / "1.2.3").exists())
 
+    def test_without_repo_it_downloads_from_solaras_releases(self):
+        shims = self.root / "shims"
+        shims.mkdir()
+        record = self.root / "curl-args"
+        curl = shims / "curl"
+        curl.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{record}'\nexit 22\n")
+        curl.chmod(0o755)
+        env = {key: value for key, value in os.environ.items() if not key.startswith("SOLARA_CLI_")}
+        env.update(HOME=str(self.home), SHELL="/bin/zsh", PATH=f"{shims}:{env.get('PATH', '/usr/bin:/bin')}")
+        result = subprocess.run(["/bin/sh", str(INSTALL_SCRIPT)], env=env, capture_output=True, text=True, timeout=120)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        urls = [line for line in record.read_text().splitlines() if line.startswith("https://")]
+        self.assertTrue(urls, result.stdout + result.stderr)
+        self.assertEqual(identity.RELEASE_REPO, "andrewbenson/solara")
+        for url in urls:
+            self.assertTrue(url.startswith(f"https://github.com/{identity.RELEASE_REPO}/") or url.startswith(f"https://api.github.com/repos/{identity.RELEASE_REPO}/"), url)
+
     def test_a_tarball_baked_for_another_app_is_refused(self):
         result = self.install(self.tarball("other"), "--product", "Solara")
         self.assertEqual(result.returncode, 1)

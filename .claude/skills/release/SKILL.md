@@ -15,8 +15,8 @@ Solara releases from this Mac: `scripts/release.sh`, then `publish.sh`, to `andr
 
 Versions start at 0.1.0 and each stable bumps the patch (0.1.0, 0.1.1, 0.1.2…); a nightly is a prerelease of the next
 patch (`0.1.1-nightly.1`). The build number (`CURRENT_PROJECT_VERSION`) goes up by one every release and is never reset:
-it continues from Solara's (80 at the fork), above every Solara already installed. Solara's own 0.1.x and 0.2.x versions
-named below (regressions the smoke test guards) are upstream's history, not Solara releases.
+it starts at 81, above every build from before Solara's first release (the last was 80). The 0.1.x and 0.2.x versions
+named below (regressions the smoke test guards) are from those earlier builds, not Solara releases.
 
 There are two channels (`docs/releasing.md` › Channels):
 
@@ -84,7 +84,7 @@ With no `v*` tag (`git describe --tags --match 'v*'` finds nothing), the release
 (`MARKETING_VERSION` is already 0.1.0; still bump the build number). Follow the steps below with these differences
 (`docs/releasing.md` › The first release):
 
-- Notes: from every commit Solara made since the fork, `git log --no-merges --format='%h %s%n%b' main --not c508a9f33566
+- Notes: from every commit since the code Solara began from, `git log --no-merges --format='%h %s%n%b' main --not c508a9f33566
   -- apps/browser packages engine` (c508a9f33566 is the last commit Solara took from the code it began from), written for people meeting Solara for the first time.
 - Build: `APPCAST_BASE=none scripts/release.sh 0.1.0` (there's no published feed to build on).
 - Smoke test: `smoke.sh 0.1.0 none` (no earlier export: the update, carryover and same-identity checks are skipped).
@@ -116,8 +116,8 @@ the README's Voice section), then `## New` / `## Faster` (the
 perf-gate table, step 4c) / `## Fixed` / `## Smaller` bullets written from the user's side.
 
 Source material: `git log --format='%h %s%n%b' v<previous>..HEAD -- apps/browser packages`. The commit
-bodies already describe the user-visible symptom; translate them, don't paste them. Leave out docs,
-version bumps and upstream merges that changed nothing visible. Each bold lead says what the user can do or what stopped being
+bodies already describe the user-visible symptom; translate them, don't paste them. Leave out docs
+and version bumps that changed nothing visible. Each bold lead says what the user can do or what stopped being
 broken; no file names, flags or commit hashes. Items that came from an outside contributor's PR, or a
 commit co-authored by one, end with `Thanks, [@handle](<PR url>).` (README step 5); check
 `git log --format='%h %an %(trailers:key=Co-authored-by)' v<previous>..HEAD` and the merged PRs

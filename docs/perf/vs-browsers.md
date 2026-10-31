@@ -1,8 +1,8 @@
 # Solara against Dia, Helium and Chrome
 
-A cross-browser benchmark for solara.dev on the release gate's rows (docs/perf/0.2.36-to-0.2.37.md) that can be
+A cross-browser benchmark on the release gate's rows (docs/perf/0.2.36-to-0.2.37.md) that can be
 measured the same way in any Chromium browser. Harness: `apps/browser/scripts/perf/xbench.mjs` (`--help`). Results:
-`apps/site/src/data/bench.json` (written by `xbench.mjs report`).
+`<out>/bench.json` (written by `xbench.mjs report`).
 
 ## Results (2026-10-16)
 

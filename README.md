@@ -21,13 +21,6 @@ copies Dia's look and behavior, measured against Dia, with Arc's sidebar for tab
 
 It needs macOS 26 or later on Apple Silicon.
 
-## Solara and Ardia
-
-Solara is a fork of [Ardia](https://github.com/mantrakp04/ardia) by Mantra Patel, which did the hard part: the engine
-build, the shell and most of the features. Solara has its own name, icon, signing and update feed, drops Ardia's site,
-telemetry and project tooling, and keeps going its own way while merging Ardia's changes now and then. Thanks to
-everyone who built Ardia.
-
 ## Getting it
 
 No release is published yet. Once there is one, the DMG will be on
@@ -49,9 +42,9 @@ pnpm macos    # builds the Debug app and opens it on its own data folder
 
 The app links a Chromium framework. With a Chromium tree at `~/chromium-build`, the build uses the framework you built
 there; [docs/engine-build.md](docs/engine-build.md) covers building it (a first build takes about five hours).
-Without one, it falls back to a prebuilt engine from upstream Ardia's releases
-(`packages/ardiacore/scripts/fetch-engine.sh`), which only exists while `engine/` matches a tree Ardia published, so
-plan on building the engine yourself. Releases are built, signed and notarized by `scripts/release.sh`
+Without one, it falls back to a prebuilt engine from this repo's releases
+(`packages/solaracore/scripts/fetch-engine.sh`) when one matches `engine/`'s tree. None is published yet, so plan on
+building the engine yourself. Releases are built, signed and notarized by `scripts/release.sh`
 ([docs/releasing.md](docs/releasing.md)).
 
 [CONTRIBUTING.md](CONTRIBUTING.md) explains how changes are made, and [docs/agent-brief.md](docs/agent-brief.md) how
@@ -61,7 +54,9 @@ the pieces fit together.
 
 Solara as distributed, the app together with its engine, is licensed under the
 [GNU General Public License v3](LICENSE), because the engine is built with Helium's patches, which are GPL-3.0. Its
-own source files, Ardia's and Solara's, are under the [Apache License 2.0](LICENSE.Apache-2.0). It also builds on
+own source files are under the [Apache License 2.0](LICENSE.Apache-2.0). It also builds on
 Chromium (BSD-3-Clause and others), ungoogled-chromium and a few Chromium Embedded Framework patches (BSD-3-Clause),
 and bundles uBlock Origin (GPL-3.0) and Sparkle (MIT), each under its own license. [NOTICE](NOTICE) has the full list
 and where each release's corresponding source is.
+
+Solara began from [Ardia](https://github.com/mantrakp04/ardia) by Mantra Patel (Apache-2.0); see NOTICE.

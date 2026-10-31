@@ -138,7 +138,7 @@ looks in the cwd.
 
 ### Install contract with the app
 
-The data dir is `--data-dir`, else `$SOLARA_DATA_DIR`, else `~/Library/Application Support/com.solara.browser`.
+The data dir is `--data-dir`, else `$SOLARA_DATA_DIR`, else `~/Library/Application Support/com.hill.solara`.
 
 1. The CLI takes an exclusive `flock` on `<data dir>/Scripts/.lock` (polled, 30 s deadline). The app takes a shared
    one while it reads and validates. `Scripts/`, `Scripts/scripts/`, record folders and `extension/` must be real
@@ -182,7 +182,7 @@ The data dir is `--data-dir`, else `$SOLARA_DATA_DIR`, else `~/Library/Applicati
 2. `--port N`, a plain DevTools server on 127.0.0.1 (`/json/version`). For test servers only.
 3. `$SOLARA_CDP_URL`, like `--ws`.
 4. `<data dir>/Chromium/SolaraControl.json`, with `--data-dir` or `$SOLARA_DATA_DIR`, else the installed app's
-   `~/Library/Application Support/com.solara.browser/Chromium/SolaraControl.json` (`com.hill.solara` in Solara).
+   `~/Library/Application Support/com.hill.solara/Chromium/SolaraControl.json`.
 
 The active-page route is `GET http://127.0.0.1:P/solara/active?token=<token>`: `{"targetId": "<id>"}`, or `null` when
 New Tab or a Solara view is showing; anything else is a 404. The CLI calls it directly (no proxy, no Origin header)
@@ -204,7 +204,7 @@ two parts with an explicit flush between them gets through; that gap is accepted
 
 `install.sh [--version V] [--sha256 DIGEST] [--product NAME] [--repo OWNER/REPO] [--uninstall]` (run with `/bin/sh`;
 `--help`). `--product` (default `Solara`) names the app the command drives, and the command is that name in lowercase;
-`--repo` (default `mantrakp04/solara`) is where it downloads from. The app passes its own `CFBundleName` and
+`--repo` (default `andrewbenson/solara`) is where it downloads from. The app passes its own `CFBundleName` and
 `ACReleaseRepo`, so the build installs its own command. The paths here retain the source spelling.
 
 - Downloads `https://github.com/<repo>/releases/download/v<V>/solara-cli-<V>-macos-arm64.tar.gz` (https only)

@@ -1,8 +1,7 @@
 # Contributing to Solara
 
 Solara is a macOS browser with Dia's polish and Arc's sidebar, running on Chrome's own framework (Chromium 156) built from source. Hill
-Technologies ships it, with a lot of help from coding agents. It's built on Solara (mantrakp04/solara, Apache-2.0), whose
-upstream lives at https://github.com/mantrakp04/solara. Pull requests are welcome. This page is what the owner keeps
+Technologies ships it, with a lot of help from coding agents. Pull requests are welcome. This page is what the owner keeps
 asking for, written down so you don't have to learn it from a review.
 
 ## What we will and won't take
@@ -32,8 +31,7 @@ pnpm macos    # builds the Debug app and opens it
 
 The app links a Chromium framework you build yourself: `docs/engine-build.md` has the whole thing, and a first build
 takes about five hours. Without a Chromium tree at `~/chromium-build`, the app's build falls back to a prebuilt engine
-from upstream Solara's releases (`packages/solaracore/scripts/fetch-engine.sh`), which only exists while `engine/`
-matches a tree Solara published.
+from this repo's releases (`packages/solaracore/scripts/fetch-engine.sh`) when one matches `engine/`'s tree.
 
 `pnpm macos` runs the app on its own data folder, `~/Library/Application Support/Solara Dev`, so it never touches the
 Solara you browse with. Keep it that way. A Debug build refuses to start without `SOLARA_DATA_DIR`, and every test
@@ -82,7 +80,7 @@ Parity covers behavior too. Most bugs the owner reports are UX that any browser 
 - Motion animates. Sidebars slide, the toolbar eases away, the command bar grows out of the URL field. Nothing snaps
   into place or flickers, traffic lights included.
 - Shortcuts match Chrome and Dia, in every focus. ⌘-scroll never zooms in Solara: it scrolls with a trackpad and a
-  mouse alike (upstream Solara zooms on ⌘-wheel with a mouse).
+  mouse alike.
 - Check every layout you touched: address bar in the sidebar, address bar on top, horizontal tabs. Several bugs only
   showed up in one of them.
 
@@ -198,7 +196,5 @@ finding before acting on it. Check the agent's diff yourself before you open the
 
 ## License
 
-Solara's own files are Apache-2.0, as are Solara's, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
-work is released under Apache-2.0, and so may ship in the GPL-3.0 app. A change meant for upstream Solara goes to
-[mantrakp04/solara](https://github.com/mantrakp04/solara), where you sign its [Contributor License Agreement](https://github.com/mantrakp04/solara/blob/main/CLA.md)
-before your first pull request is merged.
+Solara's own files are Apache-2.0, and Solara as distributed is GPL-3.0 (see NOTICE). By contributing you agree your
+work is released under Apache-2.0, and so may ship in the GPL-3.0 app.

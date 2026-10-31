@@ -7,10 +7,10 @@
 # --version V        install that release (default: the latest release that ships the CLI).
 # --sha256 DIGEST    the tarball's digest; required for a download (the app passes the one pinned in its signed bundle).
 # --product NAME     the app the command drives (default: Solara); the command is its name in lowercase (solara).
-# --repo OWNER/REPO  the GitHub repository whose releases ship the CLI (default: mantrakp04/solara).
+# --repo OWNER/REPO  the GitHub repository whose releases ship the CLI (default: andrewbenson/solara).
 # --uninstall        remove the installed CLI and its solara link.
 #
-# A fork's app passes its own --product and --repo, so Solara installs a solara command from its own releases into
+# The app passes its own --product and --repo, so Solara installs a solara command from its own releases into
 # ~/Library/Application Support/Solara/CLI. The paths below are for the defaults.
 # Installs into ${SOLARA_CLI_HOME:-~/Library/Application Support/Solara/CLI}/<version>, points its `current` link
 # there and links ${SOLARA_CLI_BIN_DIR:-~/.local/bin}/solara to current/bin/solara. When the default bin dir isn't on
@@ -30,7 +30,7 @@
 set -eu
 umask 022
 
-repo=mantrakp04/solara
+repo=andrewbenson/solara
 product=Solara
 asset_suffix=-macos-arm64.tar.gz
 version_pattern='^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}(-[a-z]{1,16}\.[0-9]{1,4})?$'

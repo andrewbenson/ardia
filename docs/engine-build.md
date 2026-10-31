@@ -16,8 +16,8 @@ What the build adds:
   mac-arm profile).
 - **Helium** (`HELIUM_TAG` and `HELIUM_MACOS_TAG` in `env.sh`, pinned by commit in `helium-pins.ini`). It is built on
   ungoogled-chromium: its series, domain substitution and name substitution strip Google's background services and
-  rename the product, and we rename it again, to the app's product name: Solara upstream, and a fork's own name when
-  the fork builds its engine ([The engine's identity](#the-engines-identity)). Helium's own services stay off, and the
+  rename the product, and we rename it again, to the app's product name, Solara
+  ([The engine's identity](#the-engines-identity)). Helium's own services stay off, and the
   Chrome Web Store, extension updates and the security components still reach Google. See [Helium](#helium).
 - **Our patches**, in `engine/patches/`, applied in the order `engine/patches/series` gives (see
   [The patch series](#the-patch-series)):
@@ -481,8 +481,8 @@ After the patches, `fixups` turns saving passwords, addresses and cards back on 
   strings, chrome:// becomes helium://, and the translations follow.
 - `brand-namesub`: `solara_namesub.py` runs Helium's machinery again with our rules over every `.grd`, `.grdp` and
   `.xtb`: "The Helium Authors" goes back to "The Chromium Authors" (first, so "Die Helium-Autoren" becomes "Die
-  Chromium-Autoren"), Helium becomes the app's product name (Solara, or a fork's), helium:// shown to the user becomes
-  its scheme (solara://, solara://), and links inside strings go back to chrome:// so they keep opening in the engine.
+  Chromium-Autoren"), Helium becomes the app's product name (Solara), helium:// shown to the user becomes
+  its scheme (solara://), and links inside strings go back to chrome:// so they keep opening in the engine.
   It fails if any string still says helium or imput.
 - `version`: `HELIUM_*` lines in `chrome/VERSION` equal to Chromium's own version, so Helium's version never shows.
 - `resources`: Helium's icons (its generated ones made with `sips`), then `solara_resources.txt` over them: Solara's

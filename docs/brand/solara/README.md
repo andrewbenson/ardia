@@ -31,7 +31,7 @@ r classic 1024 $set/icon_512x512_2x.png
 r classic 512 apps/browser/assets/app-icon-solara.png
 ```
 
-The fork picks the set with `AC_APP_ICON = SolaraIcon` (`docs/releasing.md` › Shipping your own fork).
+The app picks the set with `AC_APP_ICON = SolaraIcon` (`docs/releasing.md` › The app's identity).
 
 ## Calm
 

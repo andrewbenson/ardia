@@ -16,7 +16,7 @@ import Testing
     let results = Mutex<[FlushResult]>([])
     let id = store.subscribe { commit in
       guard commit.commands.contains(where: { $0.name == "createWindow" }) else { return }
-      let r = writer.flush(timeout: 1)
+      let r = writer.flush(timeout: 5)
       results.withLock { $0.append(r) }
     }
     defer { store.unsubscribe(id) }

@@ -8,8 +8,7 @@
 # Steps, stopping at the first that fails (it names the step and exits with its status):
 #   1. take the chromium lock (scripts/agent/locked chromium; with --as WHO, inside WHO's --take if there is one,
 #      as is AC_LOCKED_AS; a call nested in one that already holds chromium runs straight through);
-#   2. engine/chromium/apply.sh, engine/ardiacore/apply.sh, then engine/identity/apply.sh (copy our code, hooks and
-#      the app's identity in), then the offline page
+#   2. engine/chromium/apply.sh, then engine/ardiacore/apply.sh (copy our code and hooks in), then the offline page
 #      (apps/browser/assets/offline-game-pipeline/inline.py into components/neterror/resources/game/game.html);
 #   3. each of those apply.sh --check (the tree matches the repo);
 #   4. engine/patches/series.py check (the patch series reproduces the tree; ~5 s, no writes outside a scratch
@@ -85,12 +84,10 @@ step() {
 [[ -d "$src/$out" ]] || { echo "engine-build: FAILED: no $src/$out (this script only builds incrementally)" >&2; exit 1; }
 step "engine/chromium/apply.sh" "$repo/engine/chromium/apply.sh"
 step "engine/ardiacore/apply.sh" "$repo/engine/ardiacore/apply.sh"
-step "engine/identity/apply.sh" "$repo/engine/identity/apply.sh"
 step "offline-game-pipeline/inline.py" python3 "$repo/apps/browser/assets/offline-game-pipeline/inline.py" \
   "$src/components/neterror/resources/game/game.html"
 step "engine/chromium/apply.sh --check" "$repo/engine/chromium/apply.sh" --check
 step "engine/ardiacore/apply.sh --check" "$repo/engine/ardiacore/apply.sh" --check
-step "engine/identity/apply.sh --check" "$repo/engine/identity/apply.sh" --check
 if [[ -n "$series_check" ]]; then
   step "engine/patches/series.py check" python3 "$repo/engine/patches/series.py" check
 fi

@@ -18,7 +18,7 @@ export const documentWrites: string[] = [];
 export const unreadableDocs = new Map<string, string>();
 export const heldSaves = { on: false, fail: false, only: null as string | null, queue: [] as (() => void)[] };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
-export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", switchesURL: "https://ardia.dev/switches.json" };
+export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", switchesURL: "https://stats.example.com/switches.json" };
 export const environment = new Map<string, string>();
 
 export type FakeWindow = OpenWindowOptions & { title?: string; trafficLightsCenter?: [number, number] | null };

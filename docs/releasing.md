@@ -180,18 +180,9 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
    then `.claude/skills/release/scripts/publish.sh <version>` (`--dry-run` prints what it would do). It reads the repo and the product from the identity, merges the
    appcast onto the feed as published right now (`appcast-merge.sh`), creates the release (a stable one as latest, a
    nightly as a prerelease that's never latest) with the DMG, zip, appcast, CLI tarball and a local engine archive,
-   and checks the feed lists the version on GitHub (and on ardia.dev, upstream only). A nightly also re-uploads the merged feed onto the
+   and checks the feed lists the version on GitHub. A nightly also re-uploads the merged feed onto the
    latest stable release and `<Product>-Nightly.dmg` onto the `nightly` release. With an engine packed here, append
-   `dist/<version>/prebuilt-engine.tsv` to `packages/ardiacore/prebuilt-engines.tsv` and commit it. Last,
-   `update-tap.sh <version>` points the Homebrew tap's `ardia` or `ardia@nightly` cask
-   (https://github.com/mantrakp04/homebrew-tap) at the new DMG: it sets `version` and `sha256` from GitHub's
-   digest of the published DMG and pushes the tap (`PUBLISH_TAP=0` skips it). Solara has no Homebrew tap, so
-   `publish.sh` skips the tap and the ardia.dev checks unless the repo is upstream's.
-5. Upstream only (Solara has no site yet, so it skips this step): deploy the site so `/release-notes` shows the new version (for a nightly too: the updated app opens its entry) (the updated app opens it on its first launch):
-   `pnpm -C apps/site run deploy` builds `apps/site` with `SITE_URL=https://ardia.dev` and ships it
-   (`infra/site/hexclave.deploy.ts`). Also bump `VERSION` and `DMG_SIZE` in `apps/site/src/data/release.ts`
-   first so the download button points at the new DMG. The owner has authorized releases to go all the way
-   through, so an agent cutting a release deploys too; a site deploy outside a release needs the owner's OK.
+   `dist/<version>/prebuilt-engine.tsv` to `packages/ardiacore/prebuilt-engines.tsv` and commit it.
 
 Before publishing, run the smoke test: `.claude/skills/release/scripts/smoke.sh <version> <previous> [--rc]` (the
 `release` skill runs the whole flow). Besides the hidden launch over CDP, it checks the update itself against
@@ -208,95 +199,56 @@ previous version (`{"version":1,"lastVersion":"<previous>","pending":null}`) and
 `ARDIA_RELEASE_NOTES=1` added (test instances skip the tab without it). `curl localhost:<port>/json` must
 list one `…/release-notes#<version>` page; a second launch opens none.
 
-## Shipping your own fork
+## The app's identity
 
-Everything that names the app comes from one file, `apps/browser/macos/Identity.xcconfig`, which holds upstream's
-values. It's the base configuration of the project (not the target's, so `pod install` never touches it), and it ends
-by including `apps/browser/macos/Fork.xcconfig` when that file exists. Upstream never has a `Fork.xcconfig`, so with
-none the build is upstream's, and merging upstream never conflicts with a fork's. A fork commits its `Fork.xcconfig`,
-so any machine releases the same app.
+Everything that names the app comes from one file, `apps/browser/macos/Identity.xcconfig`. It's the base
+configuration of the project (not the target's, so `pod install` never touches it).
 
-| Setting | Read by | Upstream |
+| Setting | Read by | Value |
 |---|---|---|
-| `AC_PRODUCT_NAME` | `CFBundleName`, `CFBundleDisplayName`, the DMG's app and volume, the update zip, keychain items and the iCloud sync folder the app itself names, the CLI's command (lowercased) and install home | `Ardia` |
-| `AC_TEAM_ID` | `DEVELOPMENT_TEAM`, the export, release.sh's signing identity and checks | `U5L5T3NGVV` |
-| `AC_BUNDLE_ID` | `PRODUCT_BUNDLE_IDENTIFIER` (so the data folders, the defaults and the keychain groups), release.sh's checks, the data dir the CLI connects to | `com.ardia.browser` |
-| `AC_FEED_URL` | `SUFeedURL` | `https://ardia.dev/appcast.xml` |
-| `AC_PUBLIC_ED_KEY` | `SUPublicEDKey`, checked against the Sparkle key release.sh signs with | upstream's key |
-| `AC_SPARKLE_ACCOUNT` | the keychain account release.sh finds the Sparkle key under | `ardia` |
-| `AC_RELEASE_REPO` | release.sh and the release skill's scripts (`gh`, the feed, download URLs, the Source line), About's and Settings' source links, Send Feedback, where the CLI's installer downloads | `mantrakp04/ardia` |
-| `AC_NOTES_URL` | the page opened after an update, Help › Release Notes, the appcast's notes link | `https://ardia.dev/release-notes` |
-| `AC_SWITCHES_URL` | the kill-switch file read at launch; empty never fetches, so every switch stays on | `https://ardia.dev/switches.json` |
-| `AC_APP_ICON` | `ASSETCATALOG_COMPILER_APPICON_NAME`, so the `.appiconset` in `Assets.xcassets` that becomes the bundle's icon (`CFBundleIconName`, `<name>.icns`), the DMG's volume icon and the Dock tile plug-in's artwork. Any other name than `AppIcon` also hides Settings › Appearance › App Icon, whose variants are drawn from upstream's hills, and the in-app copy of the icon (onboarding, What's New, the check-in banner) comes from `apps/browser/src/lib/appIcon.ts`, keyed by `AC_PRODUCT_NAME` | `AppIcon` |
+| `AC_PRODUCT_NAME` | `CFBundleName`, `CFBundleDisplayName`, the DMG's app and volume, the update zip, keychain items and the iCloud sync folder the app itself names, the CLI's command (lowercased) and install home | `Solara` |
+| `AC_TEAM_ID` | `DEVELOPMENT_TEAM`, the export, release.sh's signing identity and checks | `33W8BDN775` |
+| `AC_BUNDLE_ID` | `PRODUCT_BUNDLE_IDENTIFIER` (so the data folders, the defaults and the keychain groups), release.sh's checks, the data dir the CLI connects to | `com.hill.solara` |
+| `AC_FEED_URL` | `SUFeedURL` | `https://github.com/andrewbenson/solara/releases/latest/download/appcast.xml` |
+| `AC_PUBLIC_ED_KEY` | `SUPublicEDKey`, checked against the Sparkle key release.sh signs with | Solara's key |
+| `AC_SPARKLE_ACCOUNT` | the keychain account release.sh finds the Sparkle key under | `solara` |
+| `AC_RELEASE_REPO` | release.sh and the release skill's scripts (`gh`, the feed, download URLs, the Source line), About's and Settings' source links, Send Feedback, where the CLI's installer downloads, where `fetch-engine.sh` and `publish-engine.sh` find prebuilt engines | `andrewbenson/solara` |
+| `AC_NOTES_URL` | the page opened after an update, Help › Release Notes, the appcast's notes link | `https://github.com/andrewbenson/solara/releases` |
+| `AC_SWITCHES_URL` | the kill-switch file read at launch; empty never fetches, so every switch stays on | empty |
+| `AC_APP_ICON` | `ASSETCATALOG_COMPILER_APPICON_NAME`, so the `.appiconset` in `Assets.xcassets` that becomes the bundle's icon (`CFBundleIconName`, `<name>.icns`), the DMG's volume icon and the Dock tile plug-in's artwork. Any other name than `AppIcon` also hides Settings › Appearance › App Icon, and the in-app copy of the icon (onboarding, What's New, the check-in banner) comes from `apps/browser/src/lib/appIcon.ts`, keyed by `AC_PRODUCT_NAME` | `SolaraIcon` (the Outrun synthwave sun, `docs/brand/solara`) |
 
 `PRODUCT_NAME` is `$(AC_PRODUCT_NAME)`, so the bundle (`Solara.app` in `dist/<v>/export/`), its executable and the dSYM
 are named after the product. Scripts take the name from the identity (`scripts/identity.sh`, `scripts/lib/identity.mjs`)
-or from a bundle's `CFBundleExecutable`, and still accept builds from before the rename (`Ardia.app`, executable
-`Ardia`). The release assets are named for the product too (`Solara-<version>.dmg`, `Solara-Nightly.dmg`);
-releases from before the rename have `Ardia-` ones.
+or from a bundle's `CFBundleExecutable`. The release assets are named for the product too (`Solara-<version>.dmg`,
+`Solara-Nightly.dmg`).
 
-The command-line tool follows the identity too (`docs/cli.md` › Fork identity). release.sh bakes the product, bundle
-id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same name in every build) and pins its
-digest into the app; the app's installer passes its own product and repo. So Solara installs `~/.local/bin/solara` into
-`~/Library/Application Support/Solara/CLI`, downloads from `andrewbenson/solara`'s releases and drives
-`~/Library/Application Support/com.hill.solara`. The tarball must be uploaded to the same release as the app:
-`publish.sh` reads the repo from the identity.
+release.sh bakes the product, bundle id and repo into the CLI tarball (`ardia-cli-<version>-macos-arm64.tar.gz`, same
+name in every build) and pins its digest into the app; the app's installer passes its own product and repo. So the
+app installs `~/.local/bin/solara` into `~/Library/Application Support/Solara/CLI`, downloads from
+`andrewbenson/solara`'s releases and drives `~/Library/Application Support/com.hill.solara`. The tarball must be
+uploaded to the same release as the app: `publish.sh` reads the repo from the identity.
 
-This fork is **Solara**: `apps/browser/macos/Fork.xcconfig.example` is filled in (`Solara`, `com.hill.solara`, team
-`33W8BDN775`, Sparkle account `solara`, repo `andrewbenson/solara`, its GitHub feed and releases page, switches empty, icon `SolaraIcon`: the Outrun synthwave sun, `docs/brand/solara`) and committed as `apps/browser/macos/Fork.xcconfig`, so this checkout always builds Solara. Its Sparkle key was
-generated on 2026-10-24 (account `solara` in the login keychain, public half in `AC_PUBLIC_ED_KEY`); release.sh
-refuses to run with a placeholder key, which is what the steps below are for in another fork.
+The Sparkle key was generated on 2026-10-24 (account `solara` in the login keychain, public half in
+`AC_PUBLIC_ED_KEY`); release.sh refuses to sign with a key whose public half isn't `AC_PUBLIC_ED_KEY`. An xcconfig
+reads `//` as the start of a comment, so a value that contains `//` is written with `/$()/`, as the URLs are. Check
+what the identity resolves to:
+`xcodebuild -showBuildSettings -project apps/browser/macos/Ardia.xcodeproj -target Ardia-macOS -configuration Release | grep ' AC_'`.
 
-To turn it on:
-
-1. Generate the Sparkle key on a machine with Pods:
-   `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account solara`. It makes the key in the login keychain and
-   prints its public half. Back it up at once (`generate_keys --account solara -x <file>`, kept outside the repo):
-   without it no copy can ever be updated again.
-2. Paste the public half into `AC_PUBLIC_ED_KEY` in `Fork.xcconfig.example`. An xcconfig reads `//` as the start of a
-   comment, so a key that contains `//` is written with `/$()/` there, as the URLs are.
-3. `git mv apps/browser/macos/Fork.xcconfig.example apps/browser/macos/Fork.xcconfig` and commit it, so every machine
-   builds Solara. Check what it resolves to:
-   `xcodebuild -showBuildSettings -project apps/browser/macos/Ardia.xcodeproj -target Ardia-macOS -configuration Release | grep ' AC_'`.
-   Keep `AC_SWITCHES_URL` empty unless the fork runs its own: a fork must never obey upstream's kill switches.
-   release.sh refuses to sign with a Sparkle key whose public half isn't `AC_PUBLIC_ED_KEY`.
-
-Then, once per release machine:
+Once per release machine:
 
 1. Apple: the team's **Developer ID Application** certificate in the login keychain (release.sh takes the identity whose
-   name ends in `(<team id>)`), and Xcode signed in to the team. Register the App ID `<bundle id>` and make a Developer ID
-   provisioning profile for it that allows the keychain groups `<team id>.<bundle id>.webauthn`, `.unexportable-keys`
+   name ends in `(<team id>)`), and Xcode signed in to the team. The App ID `<bundle id>` has a Developer ID
+   provisioning profile that allows the keychain groups `<team id>.<bundle id>.webauthn`, `.unexportable-keys`
    and `.secure-payment-confirmation` (`Ardia.entitlements`); the export fetches it with `-allowProvisioningUpdates`,
    and release.sh stops without an `embedded.provisionprofile`.
 2. Notarization: an App Store Connect API key for the team in `scripts/.notary.env`, or a notarytool profile
    (`NOTARY_PROFILE=<profile>`), as in "Once per machine".
-3. The DMG's layout positions icons by name: run `scripts/dmg/layout.sh Solara` once and commit
-   `scripts/dmg/DS_Store-Solara`, which release.sh prefers over upstream's `DS_Store`.
-4. The first release has no published feed to build on: `APPCAST_BASE=none scripts/release.sh <version>`. Later ones
-   read `https://github.com/<repo>/releases/latest/download/appcast.xml`, which `AC_FEED_URL` should point at.
+3. The DMG's layout positions icons by name: `scripts/dmg/DS_Store-Solara`, made by `scripts/dmg/layout.sh Solara`.
 
-Still upstream's in a fork:
+The engine compiles in the same identity (`docs/engine-build.md` › "The engine's identity"): the keychain groups'
+bundle and team id and the "Solara Safe Storage" item. Prebuilt engines come only from Solara's own releases
+(`prebuilt-engines.tsv`, appended by `publish-engine.sh` or a release that packed one).
 
-- **The engine.** `packages/ardiacore/scripts/fetch-engine.sh` still downloads the prebuilt engines from
-  `mantrakp04/ardia` (`ARDIACORE_PREBUILT_REPO`), and release.sh signs them with the fork's identity; the release notes'
-  engine-source link points there too. What the engine compiles in can't change without building it:
-  `engine/patches/chromium-branding.patch` sets `MAC_BUNDLE_ID=com.ardia.browser` and `MAC_TEAM_ID=U5L5T3NGVV`, which
-  name the keychain groups the engine itself asks for (passkeys saved in the profile, device-bound session keys,
-  secure payment confirmation). A fork is entitled only to its own team's groups, so those features fail in a fork
-  until it builds its own engine with its own `BRANDING`. `chromium-safe-storage-name.patch` names the key to saved
-  passwords and cookies "Ardia Safe Storage" / "Ardia", so on a Mac that also runs upstream Ardia, the fork's first
-  launch finds upstream's item: macOS asks whether the fork may use it, and if the user denies it the fork can only
-  quit or try again. The Chrome Web Store fixup (`components/extstore_fixups/chrome-webstore.js`, patched in
-  `chromium-helium-branding.patch`) writes the literal "Ardia" into the store's install button ("Add to Ardia"). The
-  app covers it: on the store's main frame, when the product isn't Ardia, native passes the product name in the page
-  script's config (`storeProduct`, `AnswerHello` in `ArdiaCoreWebView.mm`) and `page_script.js` rewrites that button's
-  "Ardia" to it, with the same selectors and observer as the engine's fixup. An engine the fork builds itself takes
-  all three from the fork's identity (`docs/engine-build.md` › "The engine's identity"), and the app then reads its
-  Safe Storage item as "<Product> Safe Storage", so a fork's app and a fork-built engine go together.
-- **The legacy migration** from Netnyahoo (`LegacyMigration.swift`, `LegacyDockTile.swift`) runs only when the bundle id is
-  `LegacyName.successorBundleId`, upstream's own. A fork never moves, copies or regroups another app's data.
-- **First install.** A new bundle id is a new app to macOS: its own data folder and defaults, fresh keychain and privacy
-  (TCC) prompts, and a fresh Developer ID profile. Nothing carries over from upstream Ardia.
 ## The first release
 
 Solara's first release is a stable one, 0.1.0: the feed lives on the latest stable release
@@ -304,8 +256,8 @@ Solara's first release is a stable one, 0.1.0: the feed lives on the latest stab
 refuses a nightly while the repo has no stable release. With no `v*` tag yet:
 
 - **Notes** come from every commit Solara made since the fork, not from a tag:
-  `git log --no-merges main --not upstream/main -- apps/browser packages engine` (upstream's own commits reach Solara
-  through merges and aren't listed one by one).
+  `git log --no-merges main --not c508a9f33566 -- apps/browser packages engine` (c508a9f33566 is the last commit
+  Solara took from the code it began from; those commits aren't listed).
 - **The feed** has nothing to build on: `APPCAST_BASE=none scripts/release.sh 0.1.0` starts a new one, and `publish.sh`
   sees no release yet and publishes this one's appcast as the feed.
 - **The smoke test** has no earlier export: `smoke.sh 0.1.0 none` skips the update test, carryover and the

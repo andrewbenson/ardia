@@ -39,8 +39,8 @@ What the build adds:
 | `chromium-helium-devtools-inspect-shortcut.patch` | DevTools' Select an Element (`elements.toggle-element-search`) is ⇧⌘C again, as in Chrome and 0.2.39: it reverts the `elements-meta.ts` hunk of Helium's `keyboard-shortcuts`, which moved it to ⇧⌘E, so ⇧⌘C in a focused DevTools fell through to the app's Copy URL. Helium's other changes there (`IDC_COPY_OR_INSPECT_SHORTCUT`, its reserved commands and global shortcut table) don't reach ArdiaCore's windows, whose keys go through ArdiaCore's own command dispatcher and the app's menu |
 | `chromium-password-bubble-hook.patch` | ArdiaCore may replace Chrome's password bubble (`g_ardia_password_bubble`) |
 | `chromium-extension-install-prompt-hook.patch` | ArdiaCore may replace Chrome's extension install dialog (`g_ardia_extension_install_prompt`) |
-| `chromium-branding.patch` | Ardia's bundle and team id (`branding_file_path`), for the passkey and payments keychain access groups; product names stay "Chromium". A fork's engine gets its own ids from `engine/identity` ([The engine's identity](#the-engines-identity)) |
-| `chromium-safe-storage-name.patch` | The Safe Storage key lives in its own "Ardia Safe Storage" keychain item, account "Ardia" (a fork's engine: "<Product> Safe Storage" / "<Product>", from `engine/identity`). **Load-bearing:** it's Chromium's own `os_crypt` code, so ArdiaCore uses it too, and every user's saved passwords and cookies are encrypted with that item's key. Keep it, unchanged, through every re-sync and version bump; without it Chrome reads "Chromium Safe Storage" and nothing decrypts |
+| `chromium-branding.patch` | Solara's bundle and team id (`branding_file_path`), for the passkey and payments keychain access groups; product names stay "Chromium" ([The engine's identity](#the-engines-identity)) |
+| `chromium-safe-storage-name.patch` | The Safe Storage key lives in its own "Solara Safe Storage" keychain item, account "Solara". **Load-bearing:** it's Chromium's own `os_crypt` code, so ArdiaCore uses it too, and every user's saved passwords and cookies are encrypted with that item's key. Keep it, unchanged, through every re-sync and version bump; without it Chrome reads "Chromium Safe Storage" and nothing decrypts |
 | `chromium-safe-storage-no-silent-reset.patch` | Solara never replaces its Safe Storage key. Chromium added a new key whenever the item didn't show up, and its add looked the item up again and overwrote it if it was there by then, so an item briefly invisible at login left every saved password and cookie undecryptable. Now a missing item may be created only when `g_ardia_safe_storage_key_may_be_created` says so: ArdiaCore (`ac_safe_storage.mm`) allows it when, at startup, the user data dir had no `Local State` and no entry holding `Preferences`, `Cookies`, `Network/Cookies`, `Login Data` or `Web Data` and every check answered cleanly (any error but "not found", and any link that doesn't resolve, counts as existing data), or once after the user chose to start over. The add is add-only (`KeychainV2::AddGenericPasswordIfAbsent`): an item that appeared meanwhile is read back, never overwritten. Otherwise the key provider retries 3 × 1 s and fails closed; `g_ardia_safe_storage_unreadable` then gets the error and the retry, and ArdiaCore asks: a missing item, "Ardia can't read its Safe Storage key." with Quit (the default) or Start Over with a New Key, the only choice that lets one key be made; a locked keychain or denied access, unlock it or allow Ardia in Keychain Access; a missing entitlement, reinstall Ardia from ardia.dev; an undecodable secret, "Ardia's Safe Storage key is damaged." (restore the keychain from a backup, or delete the item and try again, which then reaches the missing-item dialog); anything else, a neutral try-again. Each of those offers Quit or Try Again and creates nothing. Test instances can use a file-backed keychain (`ARDIA_TEST_KEYCHAIN=file`, `ARDIA_TEST_KEYCHAIN_HIDDEN_READS=<n>`, `ARDIA_TEST_KEYCHAIN_FAIL=decode|denied|interaction|entitlement|io`, `ARDIA_TEST_SAFE_STORAGE_ANSWER=start-over`), honored only on the mock keychain with `--user-data-dir` resolving to `$ARDIA_DATA_DIR/Chromium` |
 | `chromium-device-chooser-hook.patch` | `chrome::ShowDeviceChooserDialog` (and its extension-page variant) asks ArdiaCore (`g_ardia_device_chooser`) once Chrome's `DropFullscreenForChooserDialog` has dropped the page's full screen and revalidated the frame and active tab: ArdiaCore gets that WebContents and the full-screen blocker, which its chooser holds until it closes |
 | `chromium-cast-dialog-hook.patch` | The Media Router's Cast dialog (and Presentation API requests) asks ArdiaCore first (`g_ardia_wants_cast_dialog`, `g_ardia_cast_dialog`). Both paths reach `CreateMediaRouterDialog`, which asks ArdiaCore only after Chrome's `ForSecurityDropFullscreen` has dropped the page's full screen and the window has survived the drop; ArdiaCore gets the full-screen blocker and its Cast dialog (`ac_cast_dialog.mm`) holds it until it closes, so a page can't re-enter full screen over the picker |
@@ -107,31 +107,23 @@ Removed, all in git history:
 
 ## The engine's identity
 
-The engine compiles in the app's identity in a few places. Upstream's patches carry Ardia's values, and the last line of
-the series, `layer engine/identity`, rewrites exactly those literals from the app's identity, so a fork's engine is its
-own and upstream's engine is byte for byte what the patches say. `engine/patches/build/identity.sh` reads the identity
-once, from `scripts/identity.sh` (the app's `AC_PRODUCT_NAME`, `AC_BUNDLE_ID`, `AC_TEAM_ID` and `AC_RELEASE_REPO`, so
-`Fork.xcconfig` when there is one); the same variables in the environment override it, which is how to try upstream's
-values in a fork's checkout. Upstream's identity makes every rewrite a no-op.
+The engine compiles in Solara's identity in a few places, and the patches and `engine/chromium/src` carry Solara's
+values directly. Step 3's `brand-namesub` reads the product name from `engine/patches/build/identity.sh` (the app's
+`AC_PRODUCT_NAME`, from `scripts/identity.sh` and `apps/browser/macos/Identity.xcconfig`).
 
-| What | Where | Upstream | A fork (Solara) |
-|---|---|---|---|
-| Bundle and team id, the keychain access groups for passkeys, device-bound session keys and secure payment confirmation | `chrome/app/theme/ardia/BRANDING` (`chromium-branding.patch`) | `com.ardia.browser`, `U5L5T3NGVV` | `AC_BUNDLE_ID`, `AC_TEAM_ID` |
-| The Safe Storage item | `keychain_password_mac.mm` (`chromium-safe-storage-name.patch`) | "Ardia Safe Storage" / "Ardia" | "<Product> Safe Storage" / "<Product>" |
-| Chrome's strings | every `.grd`, `.grdp` and `.xtb` (step 3's `brand-namesub`, `ardia_namesub.py --product`) | Ardia, ardia:// | the product, and its scheme as `appSchemeFor` makes it (solara://) |
-| The product logo and favicon (chrome://version, About, the NTP favicon, notifications) | `engine/chromium/src`'s logos and `ardia_resources.txt`'s step-3 copies; a file in `engine/identity/<product>` (the product name lower-cased, alphanumerics only) replaces `engine/chromium/src`'s at the same path, and `engine/identity/apply.sh` copies it over `product_logo_22_mono.png` and `favicon_ntp.png` | Ardia's | `engine/identity/solara` |
-| The helper apps' and processes' names ("Solara Helper (Renderer)"…) and the Alerts helper's display name | `chrome/BUILD.gn`'s `chrome_helper_name` and alerts `InfoPlist.strings`, `chrome/app/helper-Info.plist`, `chrome/common/chrome_constants.cc` (the identity layer) | "Ardia Helper…" | "<Product> Helper…" |
-| The Web Store's "Add to …" and its console lines, chrome://flags descriptions, screenshot file names, chrome://credits' project and link, chrome://crashes' issue tracker, the crash product, the services notice | `chromium-helium-branding.patch`'s literals | Ardia, `ardia_screenshot`, `mantrakp04/ardia` | the product, its lower-case name, `AC_RELEASE_REPO` |
+| What | Where | Value |
+|---|---|---|
+| Bundle and team id, the keychain access groups for passkeys, device-bound session keys and secure payment confirmation | `chrome/app/theme/ardia/BRANDING` (`chromium-branding.patch`) | `com.hill.solara`, `33W8BDN775` |
+| The Safe Storage item | `keychain_password_mac.mm` (`chromium-safe-storage-name.patch`) | "Solara Safe Storage" / "Solara" |
+| Chrome's strings | every `.grd`, `.grdp` and `.xtb` (step 3's `brand-namesub`, `ardia_namesub.py --product`) | Solara, solara:// |
+| The product logo and favicon (chrome://version, About, the NTP favicon, notifications) | `engine/chromium/src`'s logos, `favicon_ntp.png` and `product_logo_22_mono.png`, and `ardia_resources.txt`'s step-3 copies | Solara's |
+| The helper apps' and processes' names ("Solara Helper (Renderer)"…) and the Alerts helper's display name | `chrome/BUILD.gn`'s `chrome_helper_name` and alerts `InfoPlist.strings`, `chrome/app/helper-Info.plist`, `chrome/common/chrome_constants.cc` (`chromium-helper-name.patch`) | "Solara Helper…" |
+| The Web Store's "Add to …" and its console lines, chrome://flags descriptions, screenshot file names, chrome://credits' project and link, chrome://crashes' issue tracker, the crash product, the services notice | `chromium-helium-branding.patch`'s literals | Solara, `solara_screenshot`, `andrewbenson/solara` |
 
-The strings come from step 3, so a tree takes the identity it had when step 3 ran: changing the product name means a new
-tree (steps 1, 3, 4, 2, 5). The other rows follow the identity at step 4. The app reads the same names: `SyncModule`
-decrypts with "<CFBundleName> Safe Storage", and ArdiaCore's Safe Storage dialogs name the app's `CFBundleName`, so a
-fork's app needs a fork-built engine. ArdiaCore's and `chrome/browser/ardia`'s own strings read the product from the app's `CFBundleName` at run time
-(`ardia::ProductName`, `ac_product.mm`). Flag ids (`ardia-*`), the `Chromium Framework` name and
-the vector `.icon` logos (`ardia-icons`) stay upstream's. The engine hands the app both `ardia://` and the app's own
-scheme (`IsAppURL`, `ac_page_channel.mm`, from `CFBundleName` by `appSchemeFor`'s rule), so a link to
-`solara://history` or `ardia://history` in an engine page opens the app's page. Since the layer rewrites lines our patches added, `series.py
-apply` can't run again over a fork's tree; `engine-build` and `series.py check` don't need it to.
+The strings come from step 3, so a tree takes the product name it had when step 3 ran: changing it means a new tree
+(steps 1, 3, 4, 2, 5). The app reads the same names: `SyncModule` decrypts with "<CFBundleName> Safe Storage", and
+ArdiaCore's Safe Storage dialogs name the app's `CFBundleName`. ArdiaCore's and `chrome/browser/ardia`'s own strings
+read the product from the app's `CFBundleName` at run time (`ardia::ProductName`, `ac_product.mm`).
 
 ## Using it
 

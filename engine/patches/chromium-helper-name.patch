@@ -1,0 +1,55 @@
+The helper apps are named "Solara Helper" whatever Chromium's product name is: chrome/BUILD.gn's helper name and
+its alerts strings, the helper's CFBundleName and the executable names chrome_constants.cc looks the helpers up by.
+
+--- a/chrome/BUILD.gn
++++ b/chrome/BUILD.gn
+@@ -484,7 +484,7 @@
+     outputs = [ "$root_out_dir/First Run" ]
+   }
+ } else if (is_mac) {
+-  chrome_helper_name = chrome_product_full_name + " Helper"
++  chrome_helper_name = "Solara Helper"
+   chrome_framework_name = chrome_product_full_name + " Framework"
+   chrome_framework_version = chrome_version_full
+ 
+@@ -935,7 +935,7 @@
+   compile_plist("chrome_helper_app_alerts_plist_strings") {
+     format = "binary1"
+     plist_templates = [ "app/helper-alerts-InfoPlist.strings" ]
+-    substitutions = [ "CHROMIUM_FULL_NAME=$chrome_product_full_name" ]
++    substitutions = [ "CHROMIUM_FULL_NAME=Solara" ]
+     output_name = "$target_gen_dir/helper_alerts_infoplist_strings/base.lproj/InfoPlist.strings"
+   }
+ 
+--- a/chrome/app/helper-Info.plist
++++ b/chrome/app/helper-Info.plist
+@@ -13,7 +13,7 @@
+ 	<key>CFBundleInfoDictionaryVersion</key>
+ 	<string>6.0</string>
+ 	<key>CFBundleName</key>
+-	<string>${CHROMIUM_SHORT_NAME} Helper${CHROMIUM_HELPER_SUFFIX}</string>
++	<string>Solara Helper${CHROMIUM_HELPER_SUFFIX}</string>
+ 	<key>CFBundlePackageType</key>
+ 	<string>APPL</string>
+ 	<key>CFBundleSignature</key>
+--- a/chrome/common/chrome_constants.cc
++++ b/chrome/common/chrome_constants.cc
+@@ -39,7 +39,7 @@
+ const base::FilePath::CharType kBrowserProcessExecutableName[] =
+     FPL(PRODUCT_FULLNAME_STRING);
+ const base::FilePath::CharType kHelperProcessExecutableName[] =
+-    FPL(PRODUCT_FULLNAME_STRING " Helper");
++    FPL("Solara Helper");
+ #elif BUILDFLAG(IS_ANDROID)
+ // NOTE: Keep it synced with the process names defined in AndroidManifest.xml.
+ const base::FilePath::CharType kBrowserProcessExecutableName[] = FPL("chrome");
+@@ -69,8 +69,7 @@
+ const base::FilePath::CharType kChromiumBrowserProcessExecutablePath[] =
+     FPL("Chromium.app/Contents/MacOS/Chromium");
+ const base::FilePath::CharType kHelperProcessExecutablePath[] =
+-    FPL(PRODUCT_FULLNAME_STRING
+-        " Helper.app/Contents/MacOS/" PRODUCT_FULLNAME_STRING " Helper");
++    FPL("Solara Helper.app/Contents/MacOS/Solara Helper");
+ #elif BUILDFLAG(IS_ANDROID)
+ const base::FilePath::CharType kBrowserProcessExecutablePath[] = FPL("chrome");
+ const base::FilePath::CharType kHelperProcessExecutablePath[] = FPL("chrome");

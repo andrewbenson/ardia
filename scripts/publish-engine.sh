@@ -13,7 +13,8 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd -P)"
-repo="mantrakp04/ardia"
+repo="$(sed -n 's/^AC_RELEASE_REPO *= *//p' "$root/apps/browser/macos/Identity.xcconfig" | tr -d '[:space:]')"
+[ -n "$repo" ] || { echo "error: apps/browser/macos/Identity.xcconfig has no AC_RELEASE_REPO" >&2; exit 1; }
 table="$root/packages/ardiacore/prebuilt-engines.tsv"
 chromium_src="${CHROMIUM_SRC:-$HOME/chromium-build/chromium_git/chromium/src}"
 die() { echo "error: $*" >&2; exit 1; }

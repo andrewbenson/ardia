@@ -52,11 +52,11 @@ public_ed_key="$(ac_identity AC_PUBLIC_ED_KEY)"
 app_name="$(ac_identity FULL_PRODUCT_NAME)"
 executable="$(ac_identity EXECUTABLE_NAME)"
 for setting in product_name team_id bundle_id repo notes_page public_ed_key app_name executable; do
-  [ -n "${!setting}" ] || { echo "error: the app's identity has no $setting (apps/browser/macos/Identity.xcconfig, Fork.xcconfig)" >&2; exit 1; }
+  [ -n "${!setting}" ] || { echo "error: the app's identity has no $setting (apps/browser/macos/Identity.xcconfig)" >&2; exit 1; }
 done
 case "$public_ed_key" in
   PLACEHOLDER* | *[!A-Za-z0-9+/=]*)
-    echo "error: AC_PUBLIC_ED_KEY is '$public_ed_key', not a Sparkle public key: generate the key and paste its public half into Fork.xcconfig (docs/releasing.md › Shipping your own fork)" >&2
+    echo "error: AC_PUBLIC_ED_KEY is '$public_ed_key', not a Sparkle public key: generate the key and paste its public half into Identity.xcconfig (docs/releasing.md)" >&2
     exit 1 ;;
 esac
 notary_profile="${NOTARY_PROFILE:-ardia}"
@@ -76,12 +76,7 @@ elif [ -n "$sparkle_key_file" ]; then
 elif [ -n "${SPARKLE_ACCOUNT:-}" ]; then
   sparkle_account="$SPARKLE_ACCOUNT"
 else
-  legacy_account="$(sed -n 's/^ *public static let appName = "\(.*\)"$/\1/p' "$root/packages/sync/ios/Core/LegacyMigration.swift" | tr '[:upper:]' '[:lower:]')"
-  identity_account="$(ac_identity AC_SPARKLE_ACCOUNT)"
-  sparkle_account="$identity_account"
-  for account in $identity_account $legacy_account; do
-    if "$sparkle/generate_keys" --account "$account" -p >/dev/null 2>&1; then sparkle_account="$account"; break; fi
-  done
+  sparkle_account="$(ac_identity AC_SPARKLE_ACCOUNT)"
 fi
 [ "$phase" = build ] || [ "$phase" = check ] || [ -n "$sparkle_key_file" ] \
   || "$sparkle/generate_keys" --account "$sparkle_account" -p >/dev/null 2>&1 || {
@@ -574,7 +569,7 @@ echo
 [ "$notarize" = 1 ] && echo "Notarized and stapled." || echo "NOT notarized."
 [ -n "$engine_pack" ] && echo "New engine: publish $(basename "$engine_archive")${helium_engine:+ and $(basename "$engine_source")} with the release, then add prebuilt-engine.tsv's line to packages/ardiacore/prebuilt-engines.tsv."
 [ "$rc" = 1 ] && echo "Release candidate: never publish dist/$version-rc."
-[ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed and ardia.dev/nightly follow)."
+[ "$channel" = nightly ] && [ "$rc" = 0 ] && echo "Nightly: publish it with .claude/skills/release/scripts/publish.sh $version (a prerelease; the feed follows)."
 [ "$phase" = sign ] && echo "Not launched yet: remove the signing keys, then run the launch check (--phase check)."
 [ -n "$phased" ] && echo "Phased rollout: $phased s between steps (the appcast item has phasedRolloutInterval; the whole release takes $((phased * 7)) s)."
 du -sh "$app" "$dmg" "$zip" "$cli_tarball" "$dist/appcast.xml" "$dist/release-notes.md" ${engine_files[@]+"${engine_files[@]}"}

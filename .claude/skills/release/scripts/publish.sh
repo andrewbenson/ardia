@@ -136,32 +136,20 @@ if [ "$channel" = nightly ]; then
   run gh release upload "$stable_tag" -R "$repo" --clobber "$feed"
 fi
 
-upstream=0
-[ "$repo" = mantrakp04/ardia ] && upstream=1
-tap() { [ "$upstream" = 1 ] || return 0; [ "${PUBLISH_TAP:-1}" = 0 ] && { echo "note: the Homebrew tap is left alone (PUBLISH_TAP=0): run update-tap.sh $version"; return 0; }; "$here/update-tap.sh" "$@"; }
-[ "$dry" = 1 ] && { tap "$version" --dry-run || true; echo "dry run: nothing published"; exit 0; }
+[ "$dry" = 1 ] && { echo "dry run: nothing published"; exit 0; }
 status=0
-feeds=("$latest_url/appcast.xml")
-[ "$upstream" = 1 ] && feeds+=("https://ardia.dev/appcast.xml")
-for url in "${feeds[@]}"; do
-  for _ in $(seq 1 18); do
-    xml="$(curl -fsSL --max-time 20 "$url" 2>/dev/null || true)"
-    grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && break
-    sleep 10
-  done
-  grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && echo "PASS  $url lists $version" \
-    || { echo "FAIL  $url lists $version"; status=1; }
+url="$latest_url/appcast.xml"
+for _ in $(seq 1 18); do
+  xml="$(curl -fsSL --max-time 20 "$url" 2>/dev/null || true)"
+  grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && break
+  sleep 10
 done
+grep -q "<sparkle:shortVersionString>$version<" <<<"$xml" && echo "PASS  $url lists $version" \
+  || { echo "FAIL  $url lists $version"; status=1; }
 if [ "$channel" = nightly ]; then
   url="$nightly_url/$nightly_dmg"
   size="$(curl -fsSLI --max-time 30 "$url" | awk 'tolower($1) == "content-length:" { n = $2 } END { print n + 0 }')"
   [ "$size" = "$(stat -f %z "$dmg")" ] && echo "PASS  $url is $version's DMG" \
     || { echo "FAIL  $url is $version's DMG (size $size, expected $(stat -f %z "$dmg"))"; status=1; }
-  if [ "$upstream" = 1 ]; then
-    to="$(curl -s -o /dev/null --max-time 15 -w '%{redirect_url}' https://ardia.dev/nightly || true)"
-    [ "$to" = "$nightly_url/$nightly_dmg" ] && echo "PASS  https://ardia.dev/nightly leads there" \
-      || { echo "FAIL  https://ardia.dev/nightly leads there (goes to ${to:-nothing}: deploy the site, infra/site/nginx.conf)"; status=1; }
-  fi
 fi
-tap "$version" || { echo "FAIL  the Homebrew tap's cask is $version"; status=1; }
 exit $status

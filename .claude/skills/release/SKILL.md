@@ -11,8 +11,7 @@ opens the identity's `AC_NOTES_URL`: for Solara that's the GitHub releases page 
 release's notes must be on its GitHub release.
 
 Solara releases from this Mac: `scripts/release.sh`, then `publish.sh`, to `andrewbenson/solara` (the
-`AC_RELEASE_REPO` in `apps/browser/macos/Fork.xcconfig`). It has no site, no Homebrew tap and no telemetry, so the
-scripts skip the steps that only run in upstream Ardia's repo.
+`AC_RELEASE_REPO` in `apps/browser/macos/Identity.xcconfig`). It has no site, no Homebrew tap and no telemetry.
 
 Versions start at 0.1.0 and each stable bumps the patch (0.1.0, 0.1.1, 0.1.2…); a nightly is a prerelease of the next
 patch (`0.1.1-nightly.1`). The build number (`CURRENT_PROJECT_VERSION`) goes up by one every release and is never reset:
@@ -85,8 +84,8 @@ With no `v*` tag (`git describe --tags --match 'v*'` finds nothing), the release
 (`MARKETING_VERSION` is already 0.1.0; still bump the build number). Follow the steps below with these differences
 (`docs/releasing.md` › The first release):
 
-- Notes: from every commit Solara made since the fork, `git log --no-merges --format='%h %s%n%b' main --not upstream/main
-  -- apps/browser packages engine`, written for people meeting Solara for the first time.
+- Notes: from every commit Solara made since the fork, `git log --no-merges --format='%h %s%n%b' main --not c508a9f33566
+  -- apps/browser packages engine` (c508a9f33566 is the last commit Solara took from the code it began from), written for people meeting Solara for the first time.
 - Build: `APPCAST_BASE=none scripts/release.sh 0.1.0` (there's no published feed to build on).
 - Smoke test: `smoke.sh 0.1.0 none` (no earlier export: the update, carryover and same-identity checks are skipped).
 - Perf: run the ratchet as usual. There's no previous stable to gate against, so run native-bench and js-bench on

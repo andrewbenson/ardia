@@ -6,7 +6,7 @@
 #
 # Writes <out dir>/ardia-cli-<version>-macos-arm64.tar.gz and its .sha256. The app's identity (product name, bundle id
 # and release repo) is baked into ardia_cli/identity.py: from AC_PRODUCT_NAME, AC_BUNDLE_ID and AC_RELEASE_REPO when
-# all three are set (release.sh passes them), else from scripts/identity.sh (Identity.xcconfig and Fork.xcconfig).
+# all three are set (release.sh passes them), else from scripts/identity.sh (Identity.xcconfig).
 # Needs the network (python-build-standalone from GitHub, wheels and esbuild from npm) and uv (~/.local/bin/uv or on
 # PATH). The Python and esbuild downloads are pinned by sha256 (esbuild also by npm's sha512 integrity) and cached in
 # ~/Library/Caches/ardia-cli-build.

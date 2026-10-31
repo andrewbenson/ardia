@@ -5,7 +5,7 @@
 
 "Ours" is every process whose command line mentions this checkout or the agents' scratch folders (/private/tmp/claude-*)
 plus all their descendants: builds (xcodebuild, clang, swift, ld, hermesc), benches, Metro, hidden test instances,
-Codex runs started from here. The owner's apps (/Applications/Ardia.app, /Applications/Solara.app, Claude, games) are never touched.
+Codex runs started from here. The owner's apps (/Applications/Solara.app, Claude, games) are never touched.
 
   - Every process of ours is moved to background QoS (taskpolicy -b -p): efficiency cores, lowest I/O. Except
     processes whose command line holds "/perf-gate/" (put a release gate's app copies in such a folder) so its
@@ -28,7 +28,7 @@ import argparse, os, re, signal, subprocess, sys, time
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MARKERS = (REPO + "/", REPO + " ", "/private/tmp/claude-", "/tmp/ac-")
-NEVER = ("/Applications/Ardia.app/", "/Applications/Solara.app/", "/Applications/Claude.app/", "/Applications/League of Legends.app/",
+NEVER = ("/Applications/Solara.app/", "/Applications/Claude.app/", "/Applications/League of Legends.app/",
          "/System/", "/usr/libexec/", "/sbin/launchd")
 COORD = {"SWBBuildService", "ibtoold", "xcodebuild", "XCBBuildService", "lockf", "siso", "ninja", "autoninja", "gn"}
 TOOLS = COORD | {"bash", "zsh", "sh", "-zsh", "top", "ps", "git", "perl", "lockf", "timeout", "sleep", "python3", "Python",

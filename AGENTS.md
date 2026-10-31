@@ -1,10 +1,8 @@
 # AGENTS.md
 
 Solara is a macOS browser by Andrew Benson: Arc's sidebar and Dia's polish on Chrome's own framework, built from
-source (Chromium 156 with Helium's patches and ours), with no account, no AI features and no telemetry. It is a fork
-of [Ardia](https://github.com/mantrakp04/ardia) (Apache-2.0, the `upstream` remote); this repo is
-`andrewbenson/solara`. Solara keeps diverging from Ardia but still merges it now and then
-([docs/upstream-merge.md](docs/upstream-merge.md)).
+source (Chromium 156 with Helium's patches and ours), with no account, no AI features and no telemetry. This repo is
+`andrewbenson/solara`; NOTICE credits the code it began from.
 
 `CLAUDE.md` is a symlink to this file: edit this one. It holds the rules every session needs and points to the docs
 that hold the detail. The architecture, the isolated build and test tooling, and how to drive a running instance are
@@ -48,8 +46,8 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
   decide which keychain item holds the key to every saved password and cookie, and that it is never silently
   replaced. Keep both unchanged through every re-sync and version bump, and don't change when the key may be created
   (`ac_safe_storage.mm`) without the owner ([docs/engine-build.md](docs/engine-build.md) › The patch series).
-- **Never launch or touch the owner's apps:** `/Applications/Solara.app`, `/Applications/Ardia.app` (`Netnyahoo.app`
-  on older installs), or the preview builds in `apps/browser/build-vista`.
+- **Never launch or touch other browsers' installed apps or the owner's own Solara install** (`/Applications/Solara.app`),
+  or the preview builds in `apps/browser/build-vista`.
 - **Never steal focus.** Launch builds only hidden: `scripts/agent/ac launch`, or
   `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<scratch> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
   Never plain `open`, never `activate`. Test data lives in a scratch dir, never in `~/Documents`. Never give an
@@ -111,8 +109,8 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
   checks only) and **stable** (smoke, update test, perf ratchet and perf gate against the previous stable).
 - Solara releases from this Mac to `andrewbenson/solara`'s GitHub releases; Sparkle reads the appcast there. It has no
   site, no Homebrew tap and no telemetry. The owner has authorized releases to go all the way through.
-- No announcement or tweet drafts. Any other public action (posting anywhere, a PR or issue upstream) needs the
-  owner's OK. Upstream PRs close an issue there (`Closes #N`), so open the issue first.
+- No announcement or tweet drafts. Any other public action (posting anywhere, a PR or issue in another project)
+  needs the owner's OK.
 
 ## Read when
 
@@ -127,5 +125,4 @@ in [docs/agent-brief.md](docs/agent-brief.md): read it before your first change.
 | work on the omnibox | [docs/omnibox-ux.md](docs/omnibox-ux.md) |
 | touch the CLI | [docs/cli.md](docs/cli.md) |
 | write release notes | [docs/release-notes/README.md](docs/release-notes/README.md) |
-| merge upstream Ardia | [docs/upstream-merge.md](docs/upstream-merge.md) |
 | change a dependency patch | [docs/agent-brief.md](docs/agent-brief.md) › Stack (`patches/`) |

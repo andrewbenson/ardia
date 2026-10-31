@@ -23,13 +23,9 @@ for dir in "${owned[@]}"; do
   fi
 done
 
-. "$here/../patches/build/identity.sh"
-brand="$here/../identity/$(printf %s "$AC_PRODUCT_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
-
 while IFS= read -r path; do
   [[ -f "$src/$path" ]] || { echo "error: $path isn't in the tree: src/ replaces Chromium's files, it adds none" >&2; exit 1; }
   from="$here/src/$path"
-  [[ -f "$brand/$path" ]] && from="$brand/$path"
   if [[ "${1:-}" == --check ]]; then
     cmp -s "$from" "$src/$path" || { echo "drift: $path" >&2; exit 1; }
   else

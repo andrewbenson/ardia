@@ -2,7 +2,7 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
-repo=${ARDIACORE_PREBUILT_REPO:-mantrakp04/ardia}
+repo=${ARDIACORE_PREBUILT_REPO:-$(sed -n 's/^AC_RELEASE_REPO *= *//p' "$root/apps/browser/macos/Identity.xcconfig" | tr -d '[:space:]')}
 assets=${ARDIACORE_PREBUILT_ASSETS:-https://github.com/$repo/releases/download}
 table="$here/../prebuilt-engines.tsv"
 store="$root/apps/browser/build-ardiacore/prebuilt"
@@ -15,13 +15,6 @@ case "${1:-}" in
   --nearest) nearest=1 ;;
   *) die "usage: fetch-engine.sh [--nearest]" ;;
 esac
-
-fork_repo=$(sed -n 's/^AC_RELEASE_REPO *= *//p' "$root/apps/browser/macos/Fork.xcconfig" 2>/dev/null | tr -d '[:space:]')
-if [ -z "${ARDIACORE_PREBUILT_REPO:-}" ] && [ -n "$fork_repo" ] && [ "$fork_repo" != "$repo" ]; then
-  die "this checkout is $fork_repo, a fork, and $repo's prebuilt engines carry $repo's identity (its Safe Storage \
-keychain item and keychain groups), so they don't fit this app: build the engine (docs/engine-build.md), or set \
-ARDIACORE_PREBUILT_REPO to a repository that publishes engines built for this fork"
-fi
 
 git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || die "$root isn't a git checkout: a prebuilt engine is matched to engine/'s git tree"
 [ -z "$(git -C "$root" status --porcelain -- engine)" ] \

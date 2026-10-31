@@ -154,7 +154,7 @@ public final class PersistenceWriter: Sendable {
       return (p.rows, p.durable, p.syncAnchor)
     }
     guard dirty else { return nil }
-    let (rev, state) = store.snapshot
+    let (rev, state) = store.committedSnapshot
     let rows = scope == .everything ? WorkspaceRows(store.sessionDocument(of: state)) : WorkspaceRows()
     let settings = state.settings.values
     let downloads = state.downloads.filter { !$0.isPrivate }.map { $0.persisted() }
@@ -204,7 +204,7 @@ public final class PersistenceWriter: Sendable {
       return p.shadow
     }
     guard dirty else { return nil }
-    let (rev, state) = store.snapshot
+    let (rev, state) = store.committedSnapshot
     let marker: JSONValue = ["rev": JSONValue(rev), "at": JSONValue(clock().rounded()), "scope": .string(scope.markerName)]
     let document = scope == .everything ? store.sessionDocument(of: state) : nil
     let session = document?.json()

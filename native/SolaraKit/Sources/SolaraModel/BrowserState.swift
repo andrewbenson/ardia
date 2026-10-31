@@ -41,6 +41,7 @@ public struct BrowserState: Sendable, Equatable {
   public var windows: Table<BrowserWindow>
   public var windowOrder: [String]
   public var tabs: Table<Tab>
+  public var live: [String: PageLiveFacts]
   public var groups: Table<TabGroup>
   public var splits: Table<SplitView>
   public var peeks: Table<Peek>
@@ -74,6 +75,7 @@ public struct BrowserState: Sendable, Equatable {
     windows = Table()
     windowOrder = []
     tabs = Table()
+    live = [:]
     groups = Table()
     splits = Table()
     peeks = Table()

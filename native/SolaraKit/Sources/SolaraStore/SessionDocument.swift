@@ -98,7 +98,7 @@ extension Session {
 extension Store {
   public func sessionDocument(of state: BrowserState? = nil) -> SessionDocument {
     let s = state ?? self.state
-    let session = Session(state: s, memory: memory, env: env, config: config, now: 0)
+    let session = Session(state: s, memory: committedMemory, env: env, config: config, now: 0)
     return session.sessionDocument(s)
   }
 }

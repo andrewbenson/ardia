@@ -47,6 +47,8 @@ public final class Store: Sendable {
     var heldFromSync = false
     var queuedFromSync: [QueuedSyncApply] = []
     var replaying = false
+    var sequencedCommands: [(command: Command, origin: Origin)] = []
+    var sequencedHead = 0
 
     mutating func record(_ patch: Patch, state next: BrowserState) {
       state = next
@@ -62,22 +64,40 @@ public final class Store: Sendable {
 
   public static let heldTransactionLimit: Double = 10_000
 
+  enum DeliveryEvent {
+    case commit(Commit)
+    case sequencedFailure(Command, Error, [@Sendable (Command, Error) -> Void])
+  }
+
   struct Delivery {
-    var queue: [Commit] = []
+    var queue: [DeliveryEvent] = []
     var draining = false
+  }
+
+  struct Sequencing {
+    var depth = 0
+    var replaySync = false
+    var persistenceRefusals: [String] = []
+    var invariantReports: [(found: [String], commands: [Command])] = []
+    var syncFailures: [String] = []
+    var failedSequenced = false
   }
 
   public typealias Listener = @Sendable (Commit) -> Void
 
+  private let ingress = NSRecursiveLock()
+  private let sequencing = Mutex(Sequencing())
   private let core: Mutex<Core>
   private let delivery = Mutex(Delivery())
   private let listeners = Mutex<[(id: Int, listener: Listener)]>([])
   private let nextListener = Atomic<Int>(0)
+  private let sequencedFailures = Mutex<[(id: Int, listener: @Sendable (Command, Error) -> Void)]>([])
   private let syncOriginsOn: Atomic<Bool>
   private let clock: @Sendable () -> Double
   public let env: WebAddressing
   public let config: StoreConfig
   public let checksInvariants: Bool
+  public let sequencedFailure: @Sendable (Command, Error) -> Void
   public let invariantHandler: @Sendable ([String], [Command]) -> Void
   private let onPersistenceRefusal: @Sendable (String) -> Void
 
@@ -88,10 +108,12 @@ public final class Store: Sendable {
     env: WebAddressing = PlainWebAddressing(),
     config: StoreConfig = StoreConfig(),
     checksInvariants: Bool = Store.debugBuild,
+    sequencedFailure: @escaping @Sendable (Command, Error) -> Void = Store.logSequencedFailure,
     invariantHandler: @escaping @Sendable ([String], [Command]) -> Void = Store.logInvariants,
     onPersistenceRefusal: @escaping @Sendable (String) -> Void = { _ in },
     clock: @escaping @Sendable () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }
   ) {
+    self.sequencedFailure = sequencedFailure
     self.invariantHandler = invariantHandler
     self.onPersistenceRefusal = onPersistenceRefusal
     self.clock = clock
@@ -108,6 +130,10 @@ public final class Store: Sendable {
     FileHandle.standardError.write(Data("SolaraStore invariants after \(names): \(found.joined(separator: "; "))\n".utf8))
   }
 
+  public static let logSequencedFailure: @Sendable (Command, Error) -> Void = { command, error in
+    FileHandle.standardError.write(Data("SolaraStore ordered ingress \(command.name): \(error)\n".utf8))
+  }
+
   public static var debugBuild: Bool {
     #if DEBUG
       true
@@ -116,10 +142,13 @@ public final class Store: Sendable {
     #endif
   }
 
-  public var rev: Int { core.withLock { $0.rev } }
-  public var state: BrowserState { core.withLock { $0.state } }
-  public var snapshot: (rev: Int, state: BrowserState) { core.withLock { ($0.rev, $0.state) } }
-  public var memory: StoreMemory { core.withLock { $0.memory } }
+  public var rev: Int { sequence { core.withLock { $0.rev } } }
+  public var state: BrowserState { sequence { core.withLock { $0.state } } }
+  public var snapshot: (rev: Int, state: BrowserState) { sequence { core.withLock { ($0.rev, $0.state) } } }
+  public var memory: StoreMemory { sequence { core.withLock { $0.memory } } }
+
+  package var committedSnapshot: (rev: Int, state: BrowserState) { core.withLock { ($0.rev, $0.state) } }
+  var committedMemory: StoreMemory { core.withLock { $0.memory } }
 
   @discardableResult
   public func dispatch(_ command: Command, origin: Origin = .native, fromSync: Bool = false) throws -> Commit {
@@ -128,16 +157,22 @@ public final class Store: Sendable {
 
   @discardableResult
   public func dispatch(_ commands: [Command], origin: Origin = .native, fromSync: Bool = false) throws -> Commit {
+    try notifyingPersistenceRefusal {
+      try sequence { try dispatchUnsequenced(commands, origin: origin, fromSync: fromSync) }
+    }
+  }
+
+  private func dispatchUnsequenced(_ commands: [Command], origin: Origin, fromSync: Bool) throws -> Commit {
     let pinned = commands.contains { $0.name == "syncPinsApply" || $0.name == "settlePinChoices" }
     if pinned && commands.count != 1 { throw CommandError("pinned sync commands must be dispatched alone") }
     if let command = commands.first, command.name == "settlePinChoices" {
       let settled = try SettledPinChoices(command.args)
-      return try transact(commands: commands, origin: origin, durable: false, fromSync: true, waiting: { settled.apply($0) }, replaying: false) {
+      return try transactUnsequenced(commands: commands, origin: origin, durable: false, fromSync: true, waiting: { settled.apply($0) }, replaying: false) {
         settled.apply($0)
       }!
     }
     if let command = commands.first, command.name == "syncPinsApply" { _ = try SyncPinsApplyRequest(command.args) }
-    return try transact(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable), fromSync: fromSync, waiting: nil, replaying: false) { session in
+    return try transactUnsequenced(commands: commands, origin: origin, durable: commands.contains(where: \.isDurable), fromSync: fromSync, waiting: nil, replaying: false) { session in
       if commands.count == 1 {
         try session.apply(commands[0])
       } else {
@@ -159,25 +194,37 @@ public final class Store: Sendable {
     !commands.isEmpty && commands.allSatisfy { $0.name == "endFromSync" }
   }
 
-  public var queuedFromSyncCount: Int { core.withLock { $0.queuedFromSync.count } }
+  public var queuedFromSyncCount: Int { sequence { core.withLock { $0.queuedFromSync.count } } }
 
-  private func runQueuedFromSync() {
-    let replayer = core.withLock { core -> Bool in
-      if core.replaying || core.queuedFromSync.isEmpty { return false }
-      core.replaying = true
-      return true
+  private func runQueuedFromSync(sequenced: Bool = true) {
+    if sequenced {
+      let replayer = core.withLock { core -> Bool in
+        if core.replaying || core.queuedFromSync.isEmpty { return false }
+        core.replaying = true
+        return true
+      }
+      guard replayer else { return }
     }
-    guard replayer else { return }
-    while let next = core.withLock({ core -> QueuedSyncApply? in
-      guard core.held == nil || core.heldFromSync else { return nil }
-      return core.queuedFromSync.first
-    }) {
+    while true {
       do {
-        if try transact(commands: [], origin: .sync, durable: false, fromSync: true, waiting: nil, replaying: true, next) == nil { break }
+        let replayed: Bool
+        if sequenced {
+          replayed = try withIngress { try replayNextSync() }
+        } else {
+          replayed = try replayNextSync()
+        }
+        if !replayed { break }
       } catch {
-        FileHandle.standardError.write(Data("SolaraStore: a queued sync session failed: \(error)\n".utf8))
+        if let refusal = error as? StorePersistenceRefused {
+          if sequenced { onPersistenceRefusal(refusal.description) }
+          else { sequencing.withLock { $0.persistenceRefusals.append(refusal.description) } }
+        }
+        let message = "SolaraStore: a queued sync session failed: \(error)\n"
+        if sequenced { FileHandle.standardError.write(Data(message.utf8)) }
+        else { sequencing.withLock { $0.syncFailures.append(message) } }
       }
     }
+    guard sequenced else { return }
     let again = core.withLock { core -> Bool in
       core.replaying = false
       return !core.queuedFromSync.isEmpty && (core.held == nil || core.heldFromSync)
@@ -185,21 +232,36 @@ public final class Store: Sendable {
     if again { runQueuedFromSync() }
   }
 
+  private func replayNextSync() throws -> Bool {
+    guard let next = core.withLock({ core -> QueuedSyncApply? in
+      guard core.held == nil || core.heldFromSync else { return nil }
+      return core.queuedFromSync.first
+    }) else { return false }
+    return try transactUnsequenced(commands: [], origin: .sync, durable: false, fromSync: true, waiting: nil, replaying: true, next) != nil
+  }
+
   @discardableResult
   public func transact(commands: [Command] = [], origin: Origin = .native, durable: Bool = false, fromSync: Bool = false, _ body: (Session) throws -> Void) throws -> Commit {
-    try transact(commands: commands, origin: origin, durable: durable, fromSync: fromSync, waiting: nil, replaying: false, body)!
+    try notifyingPersistenceRefusal {
+      try sequence { try transactUnsequenced(commands: commands, origin: origin, durable: durable, fromSync: fromSync, waiting: nil, replaying: false, body)! }
+    }
   }
 
   public func transactWhenFree(_ body: @escaping @Sendable (Session) throws -> Void) throws {
-    _ = try transact(commands: [], origin: .sync, durable: false, fromSync: true, waiting: body, replaying: false, body)
+    try notifyingPersistenceRefusal {
+      try sequence { _ = try transactUnsequenced(commands: [], origin: .sync, durable: false, fromSync: true, waiting: body, replaying: false, body) }
+    }
   }
 
-  private func transact(
+  private func transactUnsequenced(
     commands: [Command], origin: Origin, durable: Bool, fromSync: Bool, waiting: QueuedSyncApply?, replaying: Bool, _ body: (Session) throws -> Void
   ) throws -> Commit? {
-    do {
-      return try transactPersisting(commands: commands, origin: origin, durable: durable, fromSync: fromSync, waiting: waiting, replaying: replaying, body)
-    } catch let refusal as StorePersistenceRefused {
+    try transactPersisting(commands: commands, origin: origin, durable: durable, fromSync: fromSync, waiting: waiting, replaying: replaying, body)
+  }
+
+  private func notifyingPersistenceRefusal<T>(_ operation: () throws -> T) rethrows -> T {
+    do { return try operation() }
+    catch let refusal as StorePersistenceRefused {
       onPersistenceRefusal(refusal.description)
       throw refusal
     }
@@ -209,15 +271,12 @@ public final class Store: Sendable {
     commands: [Command], origin: Origin, durable: Bool, fromSync: Bool, waiting: QueuedSyncApply?, replaying: Bool, _ body: (Session) throws -> Void
   ) throws -> Commit? {
     let now = clock()
-    let tags = syncOrigins
+    let tags = syncOriginsOn.load(ordering: .relaxed)
     let pinned = commands.contains { $0.name == "syncPinsApply" || $0.name == "settlePinChoices" }
     let syncRequest = fromSync || origin == .sync || pinned
     let isolated = (tags && syncRequest) || pinned || waiting != nil || replaying
     let fromSync = tags && syncRequest
-    defer {
-      drain()
-      runQueuedFromSync()
-    }
+    defer { sequencing.withLock { $0.replaySync = true } }
     let commit: Commit? = try core.withLock { core -> Commit? in
       if tags || isolated, let held = core.held, core.heldFromSync != isolated, now - core.heldSince > Store.heldTransactionLimit {
         let heldFromSync = core.heldFromSync
@@ -294,10 +353,10 @@ public final class Store: Sendable {
     if checksInvariants && settled {
       try Invariants.check(session.state)
       let found = Invariants.violations(session.state)
-      if !found.isEmpty { invariantHandler(found, commands) }
+      if !found.isEmpty { sequencing.withLock { $0.invariantReports.append((found, commands)) } }
     }
     let changes = ChangeSet(from: before, to: session.state)
-    let changed = !changes.isEmpty
+    let changed = !changes.isEmpty || before.live != session.state.live
     let rev = changed ? current + 1 : current
     var patch = Patch(rev: rev, changes: changes, state: session.state)
     patch.fromBridge = tags && origin == .bridge
@@ -307,16 +366,141 @@ public final class Store: Sendable {
     let commit = Commit(
       rev: rev, origin: origin, fromSync: fromSync, commands: commands, changes: changes, patch: patch, effects: effects,
       result: session.result, durable: durable, state: changed ? session.state : before)
-    if changed || !effects.isEmpty { delivery.withLock { $0.queue.append(commit) } }
+    if changed || !effects.isEmpty { delivery.withLock { $0.queue.append(.commit(commit)) } }
     return (commit, changed ? patch : nil)
   }
 
   public func patches(since rev: Int) -> [Patch]? {
-    core.withLock { core in
+    sequence { core.withLock { core in
       if rev >= core.rev { return [] }
       let ordered = Array(core.ring[core.ringStart...] + core.ring[..<core.ringStart])
       guard let first = ordered.first, first.rev <= rev + 1 else { return nil }
       return ordered.filter { $0.rev > rev }
+    } }
+  }
+
+  public func enqueueSequenced(_ command: Command, origin: Origin = .engine) {
+    ingress.lock()
+    defer { ingress.unlock() }
+    core.withLock { $0.sequencedCommands.append((command, origin)) }
+  }
+
+  public func sequence<T>(_ operation: () throws -> T) rethrows -> T {
+    try withIngress {
+      drainSequenced()
+      return try operation()
+    }
+  }
+
+  private func withIngress<T>(_ operation: () throws -> T) rethrows -> T {
+    ingress.lock()
+    return try withAcquiredIngress(operation)
+  }
+
+  private func withAcquiredIngress<T>(_ operation: () throws -> T) rethrows -> T {
+    sequencing.withLock { $0.depth += 1 }
+    defer {
+      let completion = sequencing.withLock { sequencing in
+        sequencing.depth -= 1
+        let replay = sequencing.replaySync
+        let outermost = sequencing.depth == 0
+        let refusals = outermost ? sequencing.persistenceRefusals : []
+        let failures = outermost ? sequencing.syncFailures : []
+        let invariants = outermost ? sequencing.invariantReports : []
+        let delivers = replay || sequencing.failedSequenced
+        if outermost {
+          sequencing.replaySync = false
+          sequencing.failedSequenced = false
+          sequencing.persistenceRefusals.removeAll(keepingCapacity: true)
+          sequencing.syncFailures.removeAll(keepingCapacity: true)
+          sequencing.invariantReports.removeAll(keepingCapacity: true)
+        }
+        return (outermost: outermost, replay: replay, delivers: delivers, refusals: refusals, failures: failures, invariants: invariants)
+      }
+      if !completion.outermost && completion.replay { runQueuedFromSync(sequenced: false) }
+      ingress.unlock()
+      if completion.outermost {
+        for report in completion.invariants { invariantHandler(report.found, report.commands) }
+        for message in completion.failures { FileHandle.standardError.write(Data(message.utf8)) }
+        for reason in completion.refusals { onPersistenceRefusal(reason) }
+        if completion.delivers { drain() }
+        if completion.replay { runQueuedFromSync() }
+      }
+    }
+    return try operation()
+  }
+
+  private func drainSequenced() {
+    while let next = core.withLock({ core -> (command: Command, origin: Origin)? in
+      guard core.sequencedHead < core.sequencedCommands.count else {
+        core.sequencedCommands.removeAll(keepingCapacity: true)
+        core.sequencedHead = 0
+        return nil
+      }
+      let next = core.sequencedCommands[core.sequencedHead]
+      core.sequencedHead += 1
+      return next
+    }) {
+      do {
+        _ = try dispatchUnsequenced([next.command], origin: next.origin, fromSync: false)
+      } catch {
+        if let refusal = error as? StorePersistenceRefused {
+          sequencing.withLock { $0.persistenceRefusals.append(refusal.description) }
+        }
+        let observers = sequencedFailures.withLock { $0.map(\.listener) }
+        delivery.withLock { $0.queue.append(.sequencedFailure(next.command, error, observers)) }
+        sequencing.withLock { $0.failedSequenced = true }
+      }
+      if sequencing.withLock({ $0.replaySync }) { runQueuedFromSync(sequenced: false) }
+    }
+  }
+
+  @discardableResult
+  public func observeSequencedFailures(_ listener: @escaping @Sendable (Command, Error) -> Void) -> Int {
+    let id = nextListener.add(1, ordering: .relaxed).newValue
+    sequencedFailures.withLock { $0.append((id, listener)) }
+    return id
+  }
+
+  @discardableResult
+  public func observeLive(tabId: String, _ listener: @escaping @Sendable (LiveChange) -> Void) -> (token: Int, baseline: PageLiveFacts?) {
+    sequence {
+      let baseline = core.withLock { (rev: $0.rev, facts: $0.state.live[tabId]) }
+      let previous = Mutex(baseline.facts)
+      let token = subscribe { commit in
+        guard commit.rev > baseline.rev else { return }
+        let current = commit.state.live[tabId]
+        let before = previous.withLock { previous in
+          let before = previous
+          previous = current
+          return before
+        }
+        if before != current {
+          listener(LiveChange(tabId: tabId, rev: commit.rev, previous: before, current: current, url: commit.state.tabs[tabId]?.url, profileId: commit.state.tabs[tabId]?.profileId))
+        }
+      }
+      return (token, baseline.facts)
+    }
+  }
+
+  @discardableResult
+  public func observeLive(_ listener: @escaping @Sendable (LiveChange) -> Void) -> (token: Int, baseline: [String: PageLiveFacts]) {
+    sequence {
+      let baseline = core.withLock { (rev: $0.rev, facts: $0.state.live) }
+      let previous = Mutex(baseline.facts)
+      let token = subscribe { commit in
+        guard commit.rev > baseline.rev else { return }
+        let current = commit.state.live
+        let before = previous.withLock { previous in
+          let before = previous
+          previous = current
+          return before
+        }
+        for id in Set(before.keys).union(current.keys).sorted() where before[id] != current[id] {
+          listener(LiveChange(tabId: id, rev: commit.rev, previous: before[id], current: current[id], url: commit.state.tabs[id]?.url, profileId: commit.state.tabs[id]?.profileId))
+        }
+      }
+      return (token, baseline.facts)
     }
   }
 
@@ -329,6 +513,7 @@ public final class Store: Sendable {
 
   public func unsubscribe(_ id: Int) {
     listeners.withLock { $0.removeAll { $0.id == id } }
+    sequencedFailures.withLock { $0.removeAll { $0.id == id } }
   }
 
   private func drain() {
@@ -338,14 +523,20 @@ public final class Store: Sendable {
       return true
     }
     guard owner else { return }
-    while let commit = delivery.withLock({ delivery -> Commit? in
+    while let event = delivery.withLock({ delivery -> DeliveryEvent? in
       if delivery.queue.isEmpty {
         delivery.draining = false
         return nil
       }
       return delivery.queue.removeFirst()
     }) {
-      for (_, listener) in listeners.withLock({ $0 }) { listener(commit) }
+      switch event {
+      case .commit(let commit):
+        for (_, listener) in listeners.withLock({ $0 }) { listener(commit) }
+      case .sequencedFailure(let command, let error, let observers):
+        sequencedFailure(command, error)
+        for listener in observers { listener(command, error) }
+      }
     }
   }
 }

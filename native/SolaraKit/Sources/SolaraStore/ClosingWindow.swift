@@ -30,7 +30,11 @@ private func renamedClosingKey<T>(_ current: JSMap<T>, _ old: String, _ new: Str
 extension Session {
   func rememberClosingWindow(_ id: String, before: BrowserState) {
     memory.closingWindowUndos = memory.closingWindowUndos.filter { now - $0.value.closedAt <= 30_000 }
-    memory.closingWindowUndos[id] = ClosingWindowUndo(before: before, after: state, closedAt: now)
+    var before = before
+    before.live = [:]
+    var after = state
+    after.live = [:]
+    memory.closingWindowUndos[id] = ClosingWindowUndo(before: before, after: after, closedAt: now)
     while memory.closingWindowUndos.count > 10 {
       guard let oldest = memory.closingWindowUndos.min(by: { $0.value.closedAt < $1.value.closedAt })?.key else { break }
       memory.closingWindowUndos.removeValue(forKey: oldest)

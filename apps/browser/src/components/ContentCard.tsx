@@ -1,5 +1,5 @@
 import { WebView, type PageEngine } from "@ardia/ardiacore";
-import { tabPool, windowPaneRootsActive } from "@ardia/settings";
+import { nativeToolbarAvailable, tabPool, windowPaneRootsActive, windowShellActive } from "@ardia/settings";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View, type ViewStyle } from "react-native";
 import { useShallow } from "zustand/react/shallow";
@@ -63,7 +63,7 @@ import { CastPicker } from "./media/CastPicker";
 import { DeviceChooser } from "./site/DeviceChooser";
 import { Toolbar, ToolbarBackdrop, urlFieldRight } from "./Toolbar";
 import { AutoHideBackdrop, AutoHideToolbar, useToolbarMode, useToolbarMotion } from "./AutoHideToolbar";
-import { NativeAutoHide, nativeAutoHideAvailable } from "./NativeAutoHide";
+import { NativeAutoHide } from "./NativeAutoHide";
 import { publishPaneChrome, WindowToolbar } from "./WindowToolbar";
 import { revealToolbar } from "./layout/toolbarAutoHide";
 import { NavigationOverlays } from "./layout/SwipeOverlay";
@@ -497,7 +497,7 @@ const TabPane = memo(function TabPane({
           </View>
         </View>
       </Animated.View>
-      {hideBar && (nativeAutoHideAvailable() ? (
+      {hideBar && (windowShellActive(windowId) && nativeToolbarAvailable() ? (
         <NativeAutoHide windowId={windowId} tabId={tabId} mode={mode} pane={frame} extra={bookmarksBar ? BOOKMARKS_BAR_HEIGHT : 0} />
       ) : (
         <AutoHideBackdrop tabId={tabId} mode={mode} motion={motion} />

@@ -1,4 +1,5 @@
 import { breadcrumb } from "@ardia/core";
+import { nativeToolbarAvailable, windowShellActive } from "@ardia/settings";
 import { Hairline } from "@ardia/shell";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
@@ -11,7 +12,6 @@ import { useHistoryMenu } from "./layout/history";
 import { usePages } from "./layout/pageState";
 import { useExtensions } from "./extensions/store";
 import { needsBar, revealToolbar, setToolbarPeek, STRIP_HEIGHT, toolbarMode, useToolbarAutoHide, type ToolbarMode } from "./layout/toolbarAutoHide";
-import { nativeAutoHideAvailable } from "./NativeAutoHide";
 import { Toolbar } from "./Toolbar";
 import { DeveloperStripes } from "./site/DeveloperStripes";
 import { useTabDeveloperMode, useToolbarSiteColor } from "./site/developerMode";
@@ -196,7 +196,7 @@ export function AutoHideToolbar({
   mode: ToolbarMode;
   motion: Pick<ToolbarMotion, "bar" | "fade">;
 }) {
-  if (nativeAutoHideAvailable()) {
+  if (windowShellActive(windowId) && nativeToolbarAvailable()) {
     return (
       <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, top: 0, height: layout.toolbarHeight }}>
         <Toolbar tabId={tabId} geometry={geometry} windowId={windowId} inSplit={inSplit} focused={focused} bare />

@@ -23,10 +23,9 @@ import Testing
 
   @Test func theRowsAreTheRemainingInterfaceSwitchesWithTheirDependencies() {
     let model = model(defaults: scratchDefaults())
-    #expect(model.rows.map(\.name) == [.nativeShell, .shellPanes, .nativeAutoHide, .nativeSidebar, .nativeTopStrip, .nativeSidePanel])
+    #expect(model.rows.map(\.name) == [.nativeShell, .shellPanes, .nativeSidebar, .nativeTopStrip, .nativeSidePanel])
     #expect(!model.rows.contains { $0.name == .nativePagesPool || $0.name == .shellMainTop })
     #expect(row(model, .shellPanes).needs == "Needs Native window.")
-    #expect(row(model, .nativeAutoHide).needs == "Needs Native window.")
     #expect(row(model, .nativeSidebar).needs == nil)
   }
 
@@ -51,18 +50,17 @@ import Testing
     let environment = model(environment: ["ARDIA_NATIVE_SHELL": "0", "ARDIA_SHELL_PANES": "1"], defaults: scratchDefaults())
     #expect(!row(environment, .shellPanes).on)
     #expect(row(environment, .shellPanes).waiting == "Off until Native window is on.")
-    #expect(row(environment, .nativeAutoHide).waiting == "Off until Native window is on.")
     let defaults = scratchDefaults()
-    defaults.set("1", forKey: "ARDIA_NATIVE_AUTOHIDE")
+    defaults.set("1", forKey: "ARDIA_SHELL_PANES")
     defaults.set("0", forKey: "ARDIA_NATIVE_SHELL")
     let saved = model(defaults: defaults)
-    #expect(!row(saved, .nativeAutoHide).on)
-    #expect(!row(saved, .nativeAutoHide).enabled)
-    #expect(row(saved, .nativeAutoHide).waiting == "Off until Native window is on.")
+    #expect(!row(saved, .shellPanes).on)
+    #expect(!row(saved, .shellPanes).enabled)
+    #expect(row(saved, .shellPanes).waiting == "Off until Native window is on.")
     #expect(!saved.pendingRelaunch)
     saved.set(.nativeShell, true)
-    #expect(row(saved, .nativeAutoHide).on)
-    #expect(row(saved, .nativeAutoHide).waiting == nil)
+    #expect(row(saved, .shellPanes).on)
+    #expect(row(saved, .shellPanes).waiting == nil)
     #expect(saved.pendingRelaunch)
   }
 

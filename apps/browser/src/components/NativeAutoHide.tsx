@@ -9,24 +9,12 @@ import { stripesUri } from "./NativeToolbar";
 import { useTabDeveloperMode, useToolbarSiteColor } from "./site/developerMode";
 
 type AutoHideNative = {
-  available(): boolean;
   set(windowId: string, tabId: string, json: string): Promise<void>;
   remove(windowId: string, tabId: string): Promise<void>;
   addListener(event: "onAutoHideEvent", listener: (e: { windowId: string; tabId: string; kind: "reveal" | "peek"; on: boolean }) => void): EventSubscription;
 };
 
 const native = requireOptionalNativeModule<AutoHideNative>("SolaraAutoHide");
-let availability: boolean | null = null;
-
-export function nativeAutoHideAvailable(): boolean {
-  if (availability !== null) return availability;
-  try {
-    availability = !!native?.available();
-  } catch {
-    availability = false;
-  }
-  return availability;
-}
 
 export function NativeAutoHide({ windowId, tabId, mode, pane, extra }: { windowId: string; tabId: string; mode: ToolbarMode; pane: { x: number; y: number; width: number; height: number }; extra: number }) {
   const theme = useTheme();

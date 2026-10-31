@@ -30,6 +30,9 @@
 # - --owner signs with the identity's team when a macOS development profile for its bundle id is installed, else ad
 #   hoc (macos/AdHoc.xcconfig), and says so.
 # Builds into different derived data run in parallel (scripts/agent/locked --help). Run it with run_in_background.
+# A new derived data goes on the external build volume: apps/browser/build-NAME becomes a link to
+# $SOLARA_BUILD_ROOT/build-NAME (default /Volumes/Workbench/solara-builds; set it empty to build on this disk). It fails
+# when that link's volume isn't mounted.
 # Exits 0 when built (or nothing to build), 1 when the build failed, 75 when a lock stayed busy.
 set -uo pipefail
 
@@ -64,6 +67,14 @@ done
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 app_dir="$repo/apps/browser"
 dd="$app_dir/build-$name"
+build_root=${SOLARA_BUILD_ROOT-/Volumes/Workbench/solara-builds}
+if [[ -L "$dd" && ! -d "$dd" ]]; then
+  echo "build-app: $dd links to $(readlink "$dd"), which isn't there (is its volume mounted?)" >&2
+  exit 1
+fi
+if [[ ! -e "$dd" && -n "$build_root" && -d "$(dirname "$build_root")" ]]; then
+  mkdir -p "$build_root/build-$name" && ln -s "$build_root/build-$name" "$dd" || exit 1
+fi
 log="$dd/build-app.log"
 . "$repo/scripts/identity.sh"
 app="$dd/Build/Products/$config/$(ac_identity FULL_PRODUCT_NAME)"

@@ -25,6 +25,7 @@ Thumbs.db
 build/
 !engine/patches/build/
 build-*/
+/apps/browser/build-*
 DerivedData/
 *.xcuserstate
 *.moved-aside

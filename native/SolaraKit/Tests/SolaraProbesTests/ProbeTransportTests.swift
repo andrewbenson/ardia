@@ -13,6 +13,88 @@ struct ProbeTransportTests {
     return try! JSONSerialization.data(withJSONObject: value)
   }
 
+  @Test func replyPublicationConvertsSuccessExpiringDuringWriteToTimeout() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var time: Int64 = 0
+    var gates = 0
+    try ProbeReply.publish(["id": id, "protocol": 1, "result": ["delivered": true]], id: id,
+      expiresAtMs: 100, checkGate: {
+        gates += 1
+        if gates == 2 { time = 100 }
+      }, nowMs: { time }, write: { payload, beforePublication in
+        try files.reply(id: id, data: payload, beforePublication: beforePublication)
+      })
+    let published = try Data(contentsOf: data.appendingPathComponent("probes/outbox/\(id).json"))
+    let object = try #require(JSONSerialization.jsonObject(with: published) as? [String: Any])
+    #expect((object["error"] as? [String: String])?["code"] == "timeout")
+    #expect(object["result"] == nil)
+    #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent("probes/outbox/\(id).json.tmp").path))
+  }
+
+  @Test func replyPublicationSuppressesRevokedGateAfterWriting() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var gates = 0
+    #expect(throws: ProbeFailure.testHooksDenied) {
+      try ProbeReply.publish(["id": id, "protocol": 1, "result": ["delivered": true]], id: id,
+        expiresAtMs: 100, checkGate: {
+          gates += 1
+          if gates == 2 { throw ProbeFailure.testHooksDenied }
+        }, nowMs: { 0 }, write: { payload, beforePublication in
+          try files.reply(id: id, data: payload, beforePublication: beforePublication)
+        })
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: data.appendingPathComponent("probes/outbox").path).isEmpty)
+  }
+
+  @Test func replyPublicationRechecksGateForTimeoutRetry() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var time: Int64 = 0
+    var gates = 0
+    #expect(throws: ProbeFailure.testHooksDenied) {
+      try ProbeReply.publish(["id": id, "protocol": 1, "result": ["delivered": true]], id: id,
+        expiresAtMs: 100, checkGate: {
+          gates += 1
+          if gates == 2 { time = 100 }
+          if gates == 4 { throw ProbeFailure.testHooksDenied }
+        }, nowMs: { time }, write: { payload, beforePublication in
+          try files.reply(id: id, data: payload, beforePublication: beforePublication)
+        })
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: data.appendingPathComponent("probes/outbox").path).isEmpty)
+  }
+
+  @Test func replyPublicationPreservesErrorsAfterExpiry() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try ProbeReply.publish(["id": id, "protocol": 1, "error": ["code": "notReady"]], id: id,
+      expiresAtMs: 100, checkGate: {}, nowMs: { 100 }, write: { payload, beforePublication in
+        try files.reply(id: id, data: payload, beforePublication: beforePublication)
+      })
+    let published = try Data(contentsOf: data.appendingPathComponent("probes/outbox/\(id).json"))
+    let object = try #require(JSONSerialization.jsonObject(with: published) as? [String: Any])
+    #expect((object["error"] as? [String: String])?["code"] == "notReady")
+  }
+
+  @Test func replyPublicationRunsAfterWritingBeforeRename() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let payload = Data("{}".utf8)
+    var checked = false
+    #expect(throws: ProbeFailure.notReady) {
+      try files.reply(id: id, data: payload, beforePublication: {
+        checked = true
+        #expect(try Data(contentsOf: data.appendingPathComponent("probes/outbox/\(id).json.tmp")) == payload)
+        #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent("probes/outbox/\(id).json").path))
+        throw ProbeFailure.notReady
+      })
+    }
+    #expect(checked)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: data.appendingPathComponent("probes/outbox").path).isEmpty)
+  }
+
   @Test func acceptsEnvelope() throws {
     let value = try ProbeRequest.decode(request(), nowMs: 1)
     #expect(value.id == id)
@@ -191,6 +273,36 @@ struct ProbeTransportTests {
   }
 
   private func artifactName() -> String { ".solara-probe-window-\(UUID().uuidString.lowercased()).png" }
+
+  @Test func artifactPublicationRechecksAfterWritingAndRemovesDeniedOutput() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    for failure in [ProbeFailure.timeout, .testHooksDenied, .notReady] {
+      let name = artifactName()
+      var checked = false
+      #expect(throws: failure) {
+        try files.writeArtifact(name: name, data: Data([1, 2, 3]), beforePublication: {
+          checked = true
+          #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent(name).path))
+          #expect(try Data(contentsOf: data.appendingPathComponent(name + ".tmp")) == Data([1, 2, 3]))
+          throw failure
+        })
+      }
+      #expect(checked)
+      #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent(name).path))
+      #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent(name + ".tmp").path))
+    }
+  }
+
+  @Test func artifactPublicationKeepsExistingOutput() throws {
+    let (root, data, files) = try scratch()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let name = artifactName()
+    try files.writeArtifact(name: name, data: Data([1]))
+    #expect(throws: ProbeFailure.testHooksDenied) { try files.writeArtifact(name: name, data: Data([2])) }
+    #expect(try Data(contentsOf: data.appendingPathComponent(name)) == Data([1]))
+    #expect(!FileManager.default.fileExists(atPath: data.appendingPathComponent(name + ".tmp").path))
+  }
 
   @Test func refusesArtifactBeyondCountBudget() throws {
     let (root, data, files) = try scratch()

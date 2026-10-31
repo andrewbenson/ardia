@@ -232,6 +232,7 @@ public final class ProbeFiles {
   }()
 
   private static func isArtifact(_ name: String) -> Bool {
+    let name = name.hasSuffix(".png.tmp") ? String(name.dropLast(4)) : name
     let prefix = ".solara-probe-window-"
     guard name.hasPrefix(prefix), name.hasSuffix(".png") else { return false }
     let id = String(name.dropFirst(prefix.count).dropLast(4))
@@ -277,7 +278,7 @@ public final class ProbeFiles {
     try checkArtifactBudget(adding: 1)
   }
 
-  public func writeArtifact(name: String, data: Data) throws {
+  public func writeArtifact(name: String, data: Data, beforePublication: () throws -> Void = {}) throws {
     let prefix = ".solara-probe-window-"
     guard name.hasPrefix(prefix), name.hasSuffix(".png") else { throw ProbeFailure.invalidArgument }
     let id = String(name.dropFirst(prefix.count).dropLast(4))
@@ -287,9 +288,10 @@ public final class ProbeFiles {
     defer { artifactLock.unlock() }
     try recheck()
     try checkArtifactBudget(adding: Int64(data.count))
-    let fd = openat(dataFD, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+    let temp = name + ".tmp"
+    let fd = openat(dataFD, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
     guard fd >= 0 else { throw ProbeFailure.testHooksDenied }
-    defer { close(fd) }
+    defer { close(fd); unlinkat(dataFD, temp, 0) }
     let written = data.withUnsafeBytes { bytes -> Bool in
       guard let base = bytes.baseAddress else { return false }
       var offset = 0
@@ -301,20 +303,20 @@ public final class ProbeFiles {
       }
       return true
     }
-    guard written else {
-      unlinkat(dataFD, name, 0)
-      throw ProbeFailure.testHooksDenied
-    }
+    guard written else { throw ProbeFailure.testHooksDenied }
+    try recheck()
+    try beforePublication()
+    guard linkat(dataFD, temp, dataFD, name, 0) == 0 else { throw ProbeFailure.testHooksDenied }
   }
 
-  public func reply(id: String, data: Data) throws {
+  public func reply(id: String, data: Data, beforePublication: () throws -> Void = {}) throws {
     guard UUID(uuidString: id) != nil, data.count <= 65_536 else { throw ProbeFailure.invalidArgument }
     try recheck()
     let temp = "\(id).json.tmp"
     let final = "\(id).json"
     let fd = openat(outboxFD, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
     guard fd >= 0 else { throw ProbeFailure.testHooksDenied }
-    defer { close(fd) }
+    defer { close(fd); unlinkat(outboxFD, temp, 0) }
     let written = data.withUnsafeBytes { bytes -> Bool in
       guard let base = bytes.baseAddress else { return false }
       var offset = 0
@@ -325,14 +327,10 @@ public final class ProbeFiles {
       }
       return true
     }
-    do { try recheck() } catch {
-      unlinkat(outboxFD, temp, 0)
-      throw error
-    }
-    guard written, renameat(outboxFD, temp, outboxFD, final) == 0 else {
-      unlinkat(outboxFD, temp, 0)
-      throw ProbeFailure.testHooksDenied
-    }
+    guard written else { throw ProbeFailure.testHooksDenied }
+    try recheck()
+    try beforePublication()
+    guard renameat(outboxFD, temp, outboxFD, final) == 0 else { throw ProbeFailure.testHooksDenied }
     unlinkat(claimedFD, final, 0)
   }
 }

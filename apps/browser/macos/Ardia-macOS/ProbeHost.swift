@@ -22,6 +22,7 @@ final class ProbeHost {
   private var snapshotTasks: [String: Task<Void, Never>] = [:]
   private var cancellations: [String: () -> Void] = [:]
   private var swipeInFlight = false
+  private var polling = false
 
   static func start() {
     guard SolaraProbeHostMarker() == 1 else { return }
@@ -38,9 +39,10 @@ final class ProbeHost {
       files.clearStale()
       let host = ProbeHost(files: files)
       active = host
-      host.timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak host] _ in
+      host.timer = Timer(timeInterval: 0.05, repeats: true) { [weak host] _ in
         MainActor.assumeIsolated { host?.poll() }
       }
+      if let timer = host.timer { RunLoop.main.add(timer, forMode: .common) }
     } catch {
       NSLog("[solara-probe] gate: %@", String(describing: error))
     }
@@ -49,11 +51,16 @@ final class ProbeHost {
   private init(files: ProbeFiles) { self.files = files }
 
   private func poll() {
+    guard !polling else { return }
+    polling = true
+    defer { polling = false }
+    var budget = ProbePollBudget()
     guard Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true,
       ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1",
       ArdiaCoreTestHooksAllowed(), (try? files.recheck()) != nil else { return }
     for (id, data, readError) in files.claim() {
-      let response: [String: Any]
+      var response: [String: Any]
+      var expiresAtMs: Int64?
       do {
         guard Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true,
           ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1",
@@ -62,6 +69,7 @@ final class ProbeHost {
         if let readError { throw readError }
         guard let data else { throw ProbeFailure.invalidEnvelope }
         let request = try ProbeRequest.decode(data, nowMs: Int64(Date().timeIntervalSince1970 * 1000))
+        expiresAtMs = request.expiresAtMs
         guard request.id.caseInsensitiveCompare(id) == .orderedSame else { throw ProbeFailure.invalidEnvelope }
         guard seen.insert(id.lowercased()) else { throw ProbeFailure.duplicate }
         switch request.command {
@@ -72,6 +80,13 @@ final class ProbeHost {
           try swipe(request)
           continue
         case "state.snapshot":
+          if budget.takeSynchronousSnapshot(hasSavedLogin: request.args["savedLogin"] != nil) {
+            _ = try validateSnapshot(request)
+            let snapshot = try snapshot(request, savedLogin: nil)
+            try checkGate(request)
+            response = snapshot
+            break
+          }
           try snapshotRequests.start(id: request.id, expiresAtMs: request.expiresAtMs, checkGate: {
             try self.checkGate()
           }, lookup: {
@@ -81,9 +96,9 @@ final class ProbeHost {
           }, reply: { result in
             switch result {
             case .success(let response):
-              self.reply(response, id: id)
+              self.reply(response, id: id, expiresAtMs: request.expiresAtMs)
             case .failure(let error):
-              self.reply(["id": id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code]], id: id)
+              self.reply(["id": id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code]], id: id, expiresAtMs: request.expiresAtMs)
             }
           })
           continue
@@ -94,8 +109,11 @@ final class ProbeHost {
             let window = WindowHost.window(id: windowId), let content = window.contentView else { throw ProbeFailure.windowGone }
           let artifact = ".solara-probe-window-\(UUID().uuidString.lowercased()).png"
           try files.checkArtifactBudget()
+          try checkAction(request, window: window)
           guard let png = WindowCaptureRead.png(windowId: windowId) else { throw ProbeFailure.notReady }
-          try files.writeArtifact(name: artifact, data: png)
+          try files.writeArtifact(name: artifact, data: png, beforePublication: {
+            try self.checkAction(request, window: window)
+          })
           let scale = window.backingScaleFactor
           response = ["id": id, "protocol": 1, "result": ["artifact": artifact,
             "width": Int(content.bounds.width * scale), "height": Int(content.bounds.height * scale), "scale": scale]]
@@ -105,9 +123,12 @@ final class ProbeHost {
             let area = request.args["area"] as? String, ["sidebar", "topStrip", "downloads"].contains(area),
             let target = request.args["target"] as? String, !target.isEmpty, target.utf8.count <= 512,
             let on = request.args["on"] as? NSNumber, CFGetTypeID(on) == CFBooleanGetTypeID() else { throw ProbeFailure.invalidArgument }
-          guard NativeStoreHandle.store?.state.windows[windowId] != nil else { throw ProbeFailure.windowGone }
+          guard NativeStoreHandle.store?.state.windows[windowId] != nil,
+            let window = WindowHost.window(id: windowId) else { throw ProbeFailure.windowGone }
+          try checkAction(request, window: window)
           guard let sample = HoverLayoutRead.snapshot(windowId: windowId, area: area),
             let targets = sample["targets"] as? [String], targets.count <= 128, targets.contains(target) else { throw ProbeFailure.invalidArgument }
+          try checkAction(request, window: window)
           response = ["id": id, "protocol": 1, "result": ["delivered": HoverLayoutInput.perform(windowId: windowId, area: area, target: target, on: on.boolValue)]]
         default:
           throw ProbeFailure.unsupported
@@ -116,20 +137,28 @@ final class ProbeHost {
         let code = (error as? ProbeFailure)?.code ?? ProbeFailure.invalidEnvelope.code
         response = ["id": id, "protocol": 1, "error": ["code": code]]
       }
-      reply(response, id: id)
+      reply(response, id: id, expiresAtMs: expiresAtMs)
     }
   }
 
-  private func reply(_ response: [String: Any], id: String) {
-    let response: [String: Any] = JSONSerialization.isValidJSONObject(response) ? response :
-      ["id": id, "protocol": 1, "error": ["code": ProbeFailure.invalidEnvelope.code]]
-    let encoded = try? JSONSerialization.data(withJSONObject: response)
-    let output = encoded.flatMap { $0.count <= 65_536 ? $0 : try? JSONSerialization.data(withJSONObject:
-      ["id": id, "protocol": 1, "error": ["code": ProbeFailure.oversized.code]]) }
-    if let output {
-      do { try files.reply(id: id, data: output) }
-      catch { NSLog("[solara-probe] reply: %@", String(describing: error)) }
+  private func reply(_ response: [String: Any], id: String, expiresAtMs: Int64?) {
+    do {
+      try ProbeReply.publish(response, id: id, expiresAtMs: expiresAtMs, checkGate: { try self.checkGate() }, write: { data, beforePublication in
+        try self.files.reply(id: id, data: data, beforePublication: beforePublication)
+      })
+    } catch {
+      NSLog("[solara-probe] reply: %@", String(describing: error))
     }
+  }
+
+  private func checkAction(_ request: ProbeRequest, window: NSWindow) throws {
+    try checkGate(request)
+    let windows = NSApp.windows
+    try ProbeActionAdmission.check(mode: RunLoop.current.currentMode,
+      hasModalWindow: NSApp.modalWindow != nil,
+      hasAttachedSheet: window.attachedSheet != nil || windows.contains { $0.attachedSheet != nil },
+      hasSheetParent: window.sheetParent != nil || windows.contains { $0.sheetParent != nil })
+    try checkGate(request)
   }
 
   private func checkGate(_ request: ProbeRequest? = nil) throws {
@@ -141,7 +170,11 @@ final class ProbeHost {
   }
 
   private func checkSnapshot(_ request: ProbeRequest) throws {
-    try snapshotRequests.check(id: request.id, expiresAtMs: request.expiresAtMs) { try self.checkGate() }
+    if request.args["savedLogin"] == nil {
+      try checkGate(request)
+    } else {
+      try snapshotRequests.check(id: request.id, expiresAtMs: request.expiresAtMs) { try self.checkGate() }
+    }
   }
 
   private func begin(_ request: ProbeRequest) {
@@ -162,10 +195,11 @@ final class ProbeHost {
     let cancel = cancellations.removeValue(forKey: request.id)
     do {
       try checkGate(request)
-      reply(response, id: request.id)
+      reply(response, id: request.id, expiresAtMs: request.expiresAtMs)
     } catch {
       cancel?()
-      reply(["id": request.id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.testHooksDenied.code]], id: request.id)
+      reply(["id": request.id, "protocol": 1, "error": ["code": (error as? ProbeFailure)?.code ?? ProbeFailure.testHooksDenied.code]],
+        id: request.id, expiresAtMs: request.expiresAtMs)
     }
   }
 
@@ -207,13 +241,14 @@ final class ProbeHost {
     }
     guard Int64(Date().timeIntervalSince1970 * 1000) + Int64(previousTime) + 250 < request.expiresAtMs else { throw ProbeFailure.invalidArgument }
     guard !swipeInFlight else { throw ProbeFailure.notReady }
+    try checkAction(request, window: window)
     swipeInFlight = true
     begin(request)
     var failure: ProbeFailure?
     let cancel = SwipeInput.perform(windowNumber: window.windowNumber, x: x, y: y, steps: steps, ignorePreference: ignore.boolValue, shouldContinue: { [weak self] in
       guard let self else { return false }
       do {
-        try checkGate(request)
+        try checkAction(request, window: window)
         guard pending[request.id] != nil else { throw ProbeFailure.timeout }
         return true
       } catch {
@@ -232,7 +267,7 @@ final class ProbeHost {
     if pending[request.id] != nil { cancellations[request.id] = { failure = .timeout; cancel() } }
   }
 
-  private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
+  private func validateSnapshot(_ request: ProbeRequest) throws -> (origin: String, username: String)? {
     try checkSnapshot(request)
     guard Set(request.args.keys).isSubset(of: ["windowId", "dropTargets", "viewFrames", "hitPoint", "reactBlockerStep", "savedLogin", "hoverPresentation", "hoverArea", "textFields", "shortcuts", "shortcutTable", "shortcutTrace", "fields"]),
       request.args["windowId"] == nil || request.args["windowId"] is String else { throw ProbeFailure.invalidArgument }
@@ -288,10 +323,15 @@ final class ProbeHost {
         components.path.isEmpty || components.path == "/", components.query == nil, components.fragment == nil,
         let url = components.url else { throw ProbeFailure.invalidArgument }
       let canonical = url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-      let exists = await SavedLoginRead.exists(origin: canonical, username: username)
-      return ["exists": exists]
+      return (canonical, username)
     }
     return nil
+  }
+
+  private func lookupSavedLogin(_ request: ProbeRequest) async throws -> [String: Any]? {
+    guard let query = try validateSnapshot(request) else { return nil }
+    let exists = await SavedLoginRead.exists(origin: query.origin, username: query.username)
+    return ["exists": exists]
   }
 
   private func snapshot(_ request: ProbeRequest, savedLogin: [String: Any]?) throws -> [String: Any] {

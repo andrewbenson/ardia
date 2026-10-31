@@ -69,6 +69,10 @@ import { expectFocus, findFocus, urlEditFocus } from "./focusClaims";
 
 export function runCommand({ command, arg, windowId: requested }: CommandEvent) {
   switch (command) {
+    case "showOnboarding":
+    case "toolTour":
+    case "videoTour":
+    case "releaseNotes":
     case "sendFeedback":
     case "copyDiagnostics":
     case "recordPerformanceIssue":

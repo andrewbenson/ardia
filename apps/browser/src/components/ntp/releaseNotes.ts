@@ -60,6 +60,12 @@ type State = {
 
 const useReleaseNotes = create<State>(() => ({ pending: null, page: null }));
 
+export const releaseNotesVersions = () => RELEASE_NOTES.map((notes) => notes.version);
+
+export function applyPendingReleaseNotes(pending: Saved["pending"]) {
+  useReleaseNotes.setState({ pending });
+}
+
 export function trackAppVersion(): boolean {
   const version = systemInfo().appVersion;
   if (!version || persistenceRefused()) return false;

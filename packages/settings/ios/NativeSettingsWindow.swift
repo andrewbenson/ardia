@@ -59,6 +59,7 @@ enum NativeSettingsWindow {
   static func install() {
     SettingsProbe.enabled = ProcessInfo.processInfo.environment["ARDIA_BACKGROUND"] == "1"
     NativeOnboarding.register()
+    NativeAppStartup.shared.install()
     SettingsPrewarm.schedule()
     NativeCliControl.shared.startWhenReady()
     NativeAppIntegration.shared.startWhenReady()

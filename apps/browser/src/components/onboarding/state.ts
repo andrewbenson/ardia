@@ -321,8 +321,6 @@ export const defaultBrowserTrialStartedAt = () => readSaved()?.defaultBrowserTri
 export const defaultBrowserCheckInDoneAt = () => readSaved()?.defaultBrowserCheckInDoneAt ?? null;
 export const recordDefaultBrowserCheckInDone = () => save({ defaultBrowserCheckInDoneAt: Date.now() });
 
-export const onboardingCompletedAt = () => readSaved()?.completedAt ?? null;
-
 export const introMusicMuted = () => readSaved()?.introMusicMuted ?? false;
 export const saveIntroMusicMuted = (muted: boolean) => save({ introMusicMuted: muted });
 
@@ -336,7 +334,7 @@ export function startOnboarding(windowId?: string | null, step: OnboardingStep =
   save({ step, sub: 0, source: null, preset: "dia", picked: {} });
 }
 
-function resumeOnboarding(saved: Saved) {
+export function resumeOnboarding(saved: Saved) {
   const id = resolveWindowId(useBrowser.getState(), null);
   if (!id) return;
   const step = saved.step && STEPS.includes(saved.step) && saved.step !== "intro" ? saved.step : "source";

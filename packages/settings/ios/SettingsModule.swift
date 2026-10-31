@@ -6,7 +6,7 @@ public class SettingsModule: Module {
   public func definition() -> ModuleDefinition {
     Name("SolaraSettings")
 
-    Events("onSettingsCall", "onLiveReplica", "onLiveAuthRequest", "onLiveCloseGroup")
+    Events("onAppIntegrationPresentation", "onSettingsCall", "onLiveReplica", "onLiveAuthRequest", "onLiveCloseGroup")
 
     OnCreate {
       _ = NativeLiveEngine.shared
@@ -21,11 +21,46 @@ public class SettingsModule: Module {
       NativeCliControl.active
     }
 
+    AsyncFunction("startAppStartup") { (optionsJSON: String, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      let sink = SettingsEventSink(module: self)
+      MainActor.assumeIsolated {
+        guard let data = optionsJSON.data(using: .utf8),
+          let options = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return reply.reject("ERR_APP_STARTUP", "invalid startup options") }
+        reply.resolve(NativeAppStartup.shared.start(options) { event in
+          sink.module?.sendEvent("onAppIntegrationPresentation", event)
+        })
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("completeAppStartup") {
+      MainActor.assumeIsolated { NativeAppStartup.shared.complete() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("appIntegrationFirstWindow") { (onboardingActive: Bool, promise: Promise) in
+      nonisolated(unsafe) let reply = promise
+      MainActor.assumeIsolated {
+        Task { @MainActor in
+          do {
+            try await NativeAppStartup.shared.firstWindow(onboardingActive: onboardingActive)
+            reply.resolve(nil)
+          } catch {
+            reply.reject("ERR_DEFAULT_BROWSER_OFFER", String(describing: error))
+          }
+        }
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("appIntegrationNotification") { (action: String, tabId: String?, windowId: String?) in
+      MainActor.assumeIsolated { NativeAppStartup.shared.notification(action: action, tabId: tabId, windowId: windowId) }
+    }.runOnQueue(.main)
+
     AsyncFunction("appIntegrationCommand") { (command: String, windowId: String?, promise: Promise) in
       nonisolated(unsafe) let reply = promise
       MainActor.assumeIsolated {
         NativeAppIntegration.shared.startWhenReady()
-        guard NativeAppIntegration.shared.perform(command, windowId: windowId) else {
+        guard NativeAppIntegration.shared.perform(command, windowId: windowId) || NativeAppStartup.shared.perform(command, windowId: windowId) else {
           return reply.reject("ERR_APP_INTEGRATION", "unknown native app integration command: \(command)")
         }
         reply.resolve(nil)
@@ -204,6 +239,7 @@ public class SettingsModule: Module {
           NativeLiveEngine.shared.setEvent(nil)
           NativeLiveEngine.shared.setCloseGroupEvent(nil)
           NativeLiveAuth.shared.setEvent(nil)
+          NativeAppStartup.shared.disconnect()
           SettingsJS.shared.send = nil
           SettingsJS.shared.failAll("JS stopped listening for Settings calls")
         }

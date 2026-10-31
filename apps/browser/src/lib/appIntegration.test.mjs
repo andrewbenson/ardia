@@ -4,42 +4,48 @@ import { after, test } from "node:test";
 
 const appURL = new URL("./appIntegration.ts", import.meta.url).href;
 const f = globalThis.appIntegrationTest = {
-  state: { tabs: { t: {} }, windows: { w: {} }, live: {} },
-  subscriptions: [], loading: [], native: [], startup: [], help: [], focus: [],
+  state: { live: {} }, subscriptions: [], loading: [], native: [], startup: [], help: [], notifications: [], offers: [],
 };
 const fake = (source) => ({ url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true });
 const sources = {
-  "@ardia/settings": `export const nativeAppIntegrationCommand = async (command, windowId) => {
+  "@ardia/settings": `
     const f = globalThis.appIntegrationTest;
-    f.native.push([command, windowId]);
-    await new Promise((resolve) => { f.resolveNative = resolve; });
-  };`,
+    export const hostedKinds = () => ["onboarding"];
+    export const nativeAppIntegrationCommand = async (command, windowId) => {
+      f.native.push([command, windowId]);
+      await new Promise((resolve) => { f.resolveNative = resolve; });
+    };
+    export const onAppIntegrationPresentation = (fn) => { f.presentation = fn; };
+    export const startNativeAppStartup = async (options) => {
+      f.options = options;
+      return await new Promise((resolve) => { f.resolveStartup = resolve; });
+    };
+    export const completeNativeAppStartup = async () => { f.startup.push("complete"); };
+    export const nativeAppIntegrationFirstWindow = async (active) => { f.offers.push(active); };
+    export const nativeAppIntegrationNotification = async (response) => { f.notifications.push(response); };
+  `,
   "@ardia/shell": `
     const f = globalThis.appIntegrationTest;
-    export const onCommand = (fn) => { f.command = fn; };
     export const onNotificationResponse = (fn) => { f.notification = fn; };
     export const setScriptLoading = async (ids) => { f.loading.push(ids); };
-    export const systemInfo = () => ({ isolatedInstance: true });
-    export const readDocument = () => null;
-    export const saveDocument = async () => {};
-    export const isDefaultBrowser = async () => false;
-    export const setAsDefaultBrowser = async () => false;
   `,
-  "../components/onboarding": `
+  "../components/onboarding/state": `
     const f = globalThis.appIntegrationTest;
-    export const maybeStartOnboarding = () => { f.startup.push("onboarding"); };
     export const startOnboarding = (id) => { f.help.push(["onboarding", id]); };
-    export const startToolTour = async (id) => { f.help.push(["tool", id]); };
-    export const openVideoTour = (id) => { f.help.push(["video", id]); };
+    export const resumeOnboarding = (saved) => { f.startup.push(["resume", saved]); f.active = true; };
+    export const useOnboarding = { getState: () => ({ windowId: f.active ? "w" : null }) };
   `,
-  "../components/onboarding/state": `export const onboardingCompletedAt = () => 1; export const useOnboarding = { getState: () => ({ windowId: null }) };`,
-  "../components/ntp/releaseNotes": `export const trackAppVersion = () => { globalThis.appIntegrationTest.startup.push("version"); return true; };`,
+  "../components/onboarding/tour/state": `export const startToolTour = async (id) => { globalThis.appIntegrationTest.help.push(["tool", id]); };`,
+  "../components/ntp/releaseNotes": `
+    export const releaseNotesVersions = () => ["1.0"];
+    export const applyPendingReleaseNotes = (pending) => { globalThis.appIntegrationTest.startup.push(["pending", pending]); };
+  `,
   "../store/browser": `export const useBrowser = { getState: () => globalThis.appIntegrationTest.state, subscribe: (fn) => { globalThis.appIntegrationTest.subscriptions.push(fn); } };`,
-  "./actions": `export const focus = (id) => { globalThis.appIntegrationTest.focus.push(["window", id]); }; export const switchToTab = (id) => { globalThis.appIntegrationTest.focus.push(["tab", id]); };`,
-  "./afterFirstWindow": `export const afterFirstWindow = (fn) => { globalThis.appIntegrationTest.afterWindow = fn; };`,
-  "./defaultBrowserOffer": `export const offerDefaultBrowserAgain = async (deps) => { globalThis.appIntegrationTest.offer = deps; };`,
-  "./releaseNotesPage": `export const openReleaseNotesAfterUpdate = () => { globalThis.appIntegrationTest.startup.push("release"); }; export const openReleaseNotesPage = (id) => { globalThis.appIntegrationTest.help.push(["release", id]); };`,
-  "./webNotifications": `export const handleWebNotificationResponse = (response) => response.data === "web";`,
+  "../store/model": `export const resolveWindowId = () => "w";`,
+  "../store/nativeStore": `export const nativeSafeMode = () => true;`,
+  "./persistLatch": `export const persistenceRefused = () => true;`,
+  "./actions": `export const openUrls = (urls, id) => { globalThis.appIntegrationTest.help.push(["urls", urls, id]); };`,
+  "./webNotifications": `export const handleWebNotificationResponse = (response) => response.id.startsWith("web:");`,
 };
 const hooks = registerHooks({
   resolve(specifier, context, next) {
@@ -47,27 +53,40 @@ const hooks = registerHooks({
     return next(specifier, context);
   },
 });
+globalThis.__DEV__ = true;
 const integration = await import("./appIntegration.ts");
-after(() => { hooks.deregister(); delete globalThis.appIntegrationTest; });
+after(() => { hooks.deregister(); delete globalThis.appIntegrationTest; delete globalThis.__DEV__; });
 
-test("startup retains the JS duties and publishes only script loading", async () => {
-  integration.startAppIntegration();
-  assert.deepEqual(f.startup, ["version", "onboarding", "release"]);
+test("native launch guards and presentation finish before the first-window offer", async () => {
+  integration.startScriptLoading();
+  integration.startAppIntegrationPresentation();
+  integration.startAppIntegrationPresentation();
+  assert.equal("startAppIntegration" in integration, false);
+  assert.deepEqual(f.options, { development: true, persistenceRefused: true, safeMode: true, hostedOnboarding: true, releaseNotesVersions: ["1.0"] });
   assert.deepEqual(f.loading, [[]]);
   assert.equal(f.subscriptions.length, 1);
-  f.afterWindow();
-  assert.equal(f.offer.testInstance, true);
-  assert.equal(f.offer.onboarding, false);
-  for (const command of ["showOnboarding", "toolTour", "videoTour", "releaseNotes"]) f.command({ command, windowId: "w" });
-  assert.deepEqual(f.help, [["onboarding", "w"], ["tool", "w"], ["video", "w"], ["release", "w"]]);
-  f.notification({ action: "click", tabId: "t", windowId: "w" });
-  f.notification({ action: "click", windowId: "w" });
-  f.notification({ action: "close", tabId: "t" });
-  f.notification({ action: "click", tabId: "t", data: "web" });
-  assert.deepEqual(f.focus, [["tab", "t"], ["window", "w"]]);
-  for (const command of ["sendFeedback", "copyDiagnostics", "recordPerformanceIssue", "taskManager"]) f.command({ command, windowId: "w" });
-  assert.deepEqual(f.native, []);
-  assert.equal("diagnostics" in integration, false);
+  const offered = integration.offerNativeDefaultBrowserAfterFirstWindow();
+  await Promise.resolve();
+  assert.deepEqual(f.offers, []);
+  f.resolveStartup({ pendingJSON: '{"version":"1.0","since":1}', onboarding: "resume", savedJSON: '{"startedAt":1,"step":"tabs"}' });
+  await offered;
+  assert.deepEqual(f.startup, [["pending", { version: "1.0", since: 1 }], ["resume", { startedAt: 1, step: "tabs" }], "complete"]);
+  assert.deepEqual(f.offers, [true]);
+});
+
+test("native presentation retains onboarding, tour and unowned URL effects", () => {
+  f.presentation({ action: "showOnboarding", windowId: "w" });
+  f.presentation({ action: "toolTour", windowId: "w" });
+  f.presentation({ action: "openURL", windowId: "w", url: "https://example.com" });
+  assert.deepEqual(f.help, [["onboarding", "w"], ["tool", "w"], ["urls", ["https://example.com"], "w"]]);
+});
+
+test("web response bookkeeping stays in JS and generic responses reach Swift", () => {
+  f.notification({ id: "web:one", action: "click", tabId: "t" });
+  f.notification({ id: "web:one", action: "close", tabId: "t" });
+  const click = { id: "other", action: "click", tabId: "t", windowId: "w" };
+  f.notification(click);
+  assert.deepEqual(f.notifications, [click]);
 });
 
 test("loading coalesces for 100 ms, reads the latest live state, and deduplicates", (t) => {

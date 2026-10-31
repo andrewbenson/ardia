@@ -1,68 +1,78 @@
-import { nativeAppIntegrationCommand } from "@ardia/settings";
 import {
-  isDefaultBrowser,
-  onCommand,
-  onNotificationResponse,
-  readDocument,
-  saveDocument,
-  setAsDefaultBrowser,
-  setScriptLoading,
-  systemInfo,
-  type CommandEvent,
-} from "@ardia/shell";
-import { maybeStartOnboarding, openVideoTour, startOnboarding, startToolTour } from "../components/onboarding";
-import { onboardingCompletedAt, useOnboarding } from "../components/onboarding/state";
-import { trackAppVersion } from "../components/ntp/releaseNotes";
+  completeNativeAppStartup,
+  hostedKinds,
+  nativeAppIntegrationCommand,
+  nativeAppIntegrationFirstWindow,
+  nativeAppIntegrationNotification,
+  onAppIntegrationPresentation,
+  startNativeAppStartup,
+} from "@ardia/settings";
+import { onNotificationResponse, setScriptLoading } from "@ardia/shell";
+import { startOnboarding, resumeOnboarding, useOnboarding } from "../components/onboarding/state";
+import { startToolTour } from "../components/onboarding/tour/state";
+import { applyPendingReleaseNotes, releaseNotesVersions } from "../components/ntp/releaseNotes";
 import { useBrowser } from "../store/browser";
-import { focus, switchToTab } from "./actions";
-import { afterFirstWindow } from "./afterFirstWindow";
-import { offerDefaultBrowserAgain } from "./defaultBrowserOffer";
-import { openReleaseNotesAfterUpdate, openReleaseNotesPage } from "./releaseNotesPage";
+import { nativeSafeMode } from "../store/nativeStore";
+import { resolveWindowId } from "../store/model";
+import { openUrls } from "./actions";
+import { persistenceRefused } from "./persistLatch";
 import { handleWebNotificationResponse } from "./webNotifications";
 
-export function startAppIntegration() {
-  onCommand(runAppCommand);
+let startup: Promise<void> = Promise.resolve();
+let presentationStarted = false;
+
+export function startAppIntegrationPresentation() {
+  if (presentationStarted) return;
+  presentationStarted = true;
+  onAppIntegrationPresentation(({ action, windowId, url }) => {
+    try {
+      switch (action) {
+        case "showOnboarding":
+          if (!hostedKinds().includes("onboarding")) return void console.warn("[appIntegration] native onboarding host is off");
+          if (!resolveWindowId(useBrowser.getState(), windowId)) return void console.warn("[appIntegration] no window for onboarding");
+          return startOnboarding(windowId);
+        case "toolTour":
+          if (!resolveWindowId(useBrowser.getState(), windowId)) return void console.warn("[appIntegration] no window for tool tour");
+          return void startToolTour(windowId).catch((error) => console.warn("[appIntegration] tool tour failed", error));
+        case "openURL":
+          if (url) openUrls([url], windowId);
+      }
+    } catch (error) {
+      console.warn(`[appIntegration] ${action} presentation failed`, error);
+    }
+  });
   onNotificationResponse((response) => {
-    if (handleWebNotificationResponse(response) || response.action !== "click") return;
-    const s = useBrowser.getState();
-    const { tabId, windowId } = response;
-    if (tabId && s.tabs[tabId]) switchToTab(tabId);
-    else if (windowId && s.windows[windowId]) focus(windowId);
+    if (handleWebNotificationResponse(response)) return;
+    void nativeAppIntegrationNotification(response).catch((error) => console.warn("[appIntegration] notification failed", error));
   });
-  startScriptLoading();
-  const updated = trackAppVersion();
-  maybeStartOnboarding();
-  if (updated) openReleaseNotesAfterUpdate();
-  afterFirstWindow(() => {
-    void offerDefaultBrowserAgain({
-      read: readDocument,
-      save: saveDocument,
-      testInstance: systemInfo().isolatedInstance !== false,
-      onboarding: !onboardingCompletedAt() || useOnboarding.getState().windowId !== null,
-      isDefault: isDefaultBrowser,
-      setDefault: setAsDefaultBrowser,
-    }).catch((error) => console.warn("[defaultBrowserOffer]", error));
-  });
+  startup = startNativeAppStartup({
+    development: __DEV__,
+    persistenceRefused: persistenceRefused(),
+    safeMode: nativeSafeMode(),
+    hostedOnboarding: hostedKinds().includes("onboarding"),
+    releaseNotesVersions: releaseNotesVersions(),
+  }).then(async ({ pendingJSON, onboarding, savedJSON }) => {
+    if (pendingJSON !== null) applyPendingReleaseNotes(JSON.parse(pendingJSON));
+    if (onboarding !== "none" && !resolveWindowId(useBrowser.getState(), null)) {
+      console.warn("[appIntegration] no window for automatic onboarding");
+    } else {
+      if (onboarding === "start") startOnboarding();
+      if (onboarding === "resume" && savedJSON) resumeOnboarding(JSON.parse(savedJSON));
+    }
+    await completeNativeAppStartup();
+  }).catch((error) => console.warn("[appIntegration] startup failed", error));
 }
 
-function runAppCommand({ command, windowId }: CommandEvent) {
-  switch (command) {
-    case "showOnboarding":
-      return startOnboarding(windowId);
-    case "toolTour":
-      return void startToolTour(windowId);
-    case "videoTour":
-      return openVideoTour(windowId);
-    case "releaseNotes":
-      return openReleaseNotesPage(windowId);
-  }
+export async function offerNativeDefaultBrowserAfterFirstWindow() {
+  await startup;
+  await nativeAppIntegrationFirstWindow(useOnboarding.getState().windowId !== null);
 }
 
 export async function sendFeedback(windowId?: string | null) {
   await nativeAppIntegrationCommand("sendFeedback", windowId);
 }
 
-function startScriptLoading() {
+export function startScriptLoading() {
   let lastJson = "";
   const push = () => {
     const s = useBrowser.getState();

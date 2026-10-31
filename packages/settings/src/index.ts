@@ -5,6 +5,10 @@ type SettingsCall = { id: number; name: string; args: string };
 type NativeSettingsModule = {
   available(): boolean;
   servicesActive?(): boolean;
+  startAppStartup(optionsJSON: string): Promise<string>;
+  completeAppStartup(): Promise<void>;
+  appIntegrationFirstWindow(onboardingActive: boolean): Promise<void>;
+  appIntegrationNotification(action: string, tabId: string | null, windowId: string | null): Promise<void>;
   appIntegrationCommand(command: AppIntegrationCommand, windowId: string | null): Promise<void>;
   installCli?(reason: string): Promise<Record<string, unknown>>;
   navigate(pane: string | null, profileId: string | null, detail: string | null): Promise<void>;
@@ -22,6 +26,7 @@ type NativeSettingsModule = {
   libraryCommand?(kind: string, engineProfile: string, payload: Record<string, unknown>): Promise<unknown>;
   reply(id: number, resultJSON: string | null, error: string | null): Promise<void>;
   publish(topic: string, json: string): Promise<void>;
+  addListener(event: "onAppIntegrationPresentation", listener: (event: AppIntegrationPresentation) => void): EventSubscription;
   addListener(event: "onSettingsCall", listener: (call: SettingsCall) => void): EventSubscription;
   addListener(event: "onLiveReplica", listener: (replica: LiveReplica) => void): EventSubscription;
   addListener(event: "onLiveAuthRequest", listener: (request: LiveAuthRequest) => void): EventSubscription;
@@ -67,7 +72,28 @@ export function nativeServicesActive(): boolean {
 export const nativeInstallCli = (reason: string) =>
   native?.installCli ? native.installCli(reason) : Promise.reject(new Error("native services are off"));
 
-export type AppIntegrationCommand = "sendFeedback" | "copyDiagnostics" | "recordPerformanceIssue" | "taskManager";
+export type AppIntegrationCommand = "sendFeedback" | "copyDiagnostics" | "recordPerformanceIssue" | "taskManager" | "showOnboarding" | "toolTour" | "videoTour" | "releaseNotes";
+
+export type AppIntegrationPresentation = { action: "showOnboarding" | "toolTour" | "openURL"; windowId?: string | null; url?: string };
+export type AppStartupOptions = { development: boolean; persistenceRefused: boolean; safeMode: boolean; hostedOnboarding: boolean; releaseNotesVersions: string[] };
+export type AppStartupResult = { pendingJSON: string | null; onboarding: "none" | "start" | "resume"; savedJSON: string | null };
+
+export const onAppIntegrationPresentation = (listener: (event: AppIntegrationPresentation) => void): EventSubscription | null =>
+  native?.addListener("onAppIntegrationPresentation", listener) ?? null;
+
+export async function startNativeAppStartup(options: AppStartupOptions): Promise<AppStartupResult> {
+  if (!native) throw new Error("native app startup unavailable");
+  return JSON.parse(await native.startAppStartup(JSON.stringify(options))) as AppStartupResult;
+}
+
+export const completeNativeAppStartup = (): Promise<void> =>
+  native?.completeAppStartup() ?? Promise.reject(new Error("native app startup unavailable"));
+
+export const nativeAppIntegrationFirstWindow = (onboardingActive: boolean): Promise<void> =>
+  native?.appIntegrationFirstWindow(onboardingActive) ?? Promise.reject(new Error("native app startup unavailable"));
+
+export const nativeAppIntegrationNotification = (response: { action: string; tabId?: string | null; windowId?: string | null }): Promise<void> =>
+  native?.appIntegrationNotification(response.action, response.tabId ?? null, response.windowId ?? null) ?? Promise.reject(new Error("native notification routing unavailable"));
 
 export const nativeAppIntegrationCommand = (command: AppIntegrationCommand, windowId?: string | null): Promise<void> =>
   native?.appIntegrationCommand(command, windowId ?? null) ?? Promise.reject(new Error("native app integration unavailable"));
